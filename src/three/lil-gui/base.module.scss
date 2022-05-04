@@ -1,0 +1,522 @@
+@use 'hover';
+
+@mixin touch-vars {
+  @media (pointer: coarse) {
+    &.allowTouchStyles {
+      @content;
+    }
+  }
+  &.forceTouchStyles {
+    @content;
+  }
+}
+
+.gui {
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: 1;
+
+  font-weight: normal;
+  font-style: normal;
+  text-align: left;
+
+  background-color: var(--background-color);
+  color: var(--text-color);
+
+  user-select: none;
+  -webkit-user-select: none;
+
+  // prevent double tap zooming
+  touch-action: manipulation;
+
+  &,
+  & * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  // "Theme" properties
+  // -------------------------------------------------------------------------
+
+  --background-color: #1f1f1f;
+  --text-color: #ebebeb;
+  --title-background-color: #111111;
+  --title-text-color: #ebebeb;
+  --widget-color: #424242;
+  --hover-color: #4f4f4f;
+  --focus-color: #595959;
+  --number-color: #2cc9ff;
+  --string-color: #a2db3c;
+  --font-size: 11px;
+  --input-font-size: 11px;
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial,
+    sans-serif;
+  --font-family-mono: Menlo, Monaco, Consolas, 'Droid Sans Mono', monospace;
+  --padding: 4px;
+  --spacing: 4px;
+  --widget-height: 20px;
+  --name-width: 45%;
+  --slider-knob-width: 2px;
+  --slider-input-width: 27%;
+  --color-input-width: 27%;
+  --slider-input-min-width: 45px;
+  --color-input-min-width: 45px;
+  --folder-indent: 7px;
+  --widget-padding: 0 0 0 3px;
+  --widget-border-radius: 2px;
+  --checkbox-size: calc(0.75 * var(--widget-height));
+  --scrollbar-width: 5px;
+
+  @include touch-vars {
+    --widget-height: 28px;
+    --padding: 6px;
+    --spacing: 6px;
+    --font-size: 13px;
+    --input-font-size: 16px; // < 16px causes zoom on iOS
+    --folder-indent: 10px;
+    --scrollbar-width: 7px;
+    --slider-input-min-width: 50px;
+    --color-input-min-width: 65px;
+  }
+
+  &.autoPlace {
+    max-height: 100%;
+    position: fixed;
+    top: 0;
+    right: 90px;
+    z-index: 1001;
+  }
+
+  // Root Level Folders
+  // -------------------------------------------------------------------------
+
+  &.root > .children > & > .title {
+    border: 0 solid var(--widget-color);
+    border-width: 1px 0;
+    transition: border-color 300ms;
+  }
+
+  &.root > .children > &.closed > .title {
+    border-bottom-color: transparent;
+  }
+
+  // Seperate folders from controllers at the same level
+  & + .controller {
+    border-top: 1px solid var(--widget-color);
+    margin-top: 0;
+    padding-top: var(--spacing);
+  }
+
+  // Nested folders
+  // -------------------------------------------------------------------------
+
+  & & & {
+    > .title {
+      border: none;
+    }
+    > .children {
+      border: none;
+      margin-left: var(--folder-indent);
+      border-left: 2px solid var(--widget-color);
+    }
+  }
+
+  // Don't draw folder + controller seperation rule for when double nested
+  & & .controller {
+    border: none;
+  }
+}
+
+.title {
+  --title-height: calc(var(--widget-height) + var(--spacing) * 1.25);
+
+  height: var(--title-height);
+  line-height: calc(var(--title-height) - 4px);
+
+  font-weight: 600;
+  padding: 0 var(--padding);
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  outline: none;
+
+  // we use an underline to indicate focus, don't underline arrow
+  text-decoration-skip: objects;
+
+  &:before {
+    font-family: 'lil-gui';
+    content: '▾';
+    padding-right: 2px;
+    display: inline-block; // so skip: objects works
+  }
+
+  &:active {
+    background: var(--title-background-color);
+    opacity: 0.75;
+  }
+
+  @include hover.can-hover {
+    body:not(.lil-gui-dragging) &:hover {
+      background: var(--title-background-color);
+      opacity: 0.85;
+    }
+    &:focus {
+      text-decoration: underline var(--focus-color);
+    }
+  }
+}
+
+.root {
+  width: var(--width, 245px);
+  display: flex;
+  flex-direction: column;
+  > .title {
+    background: var(--title-background-color);
+    color: var(--title-text-color);
+  }
+  > .children {
+    overflow-x: hidden;
+    overflow-y: auto;
+    &::-webkit-scrollbar {
+      width: var(--scrollbar-width);
+      height: var(--scrollbar-width);
+      background: var(--background-color);
+    }
+    &::-webkit-scrollbar-thumb {
+      border-radius: var(--scrollbar-width);
+      background: var(--focus-color);
+    }
+  }
+}
+
+.root > .title:focus {
+  text-decoration: none !important;
+}
+
+.closed {
+  > .title:before {
+    content: '▸';
+  }
+  > .children {
+    transform: translateY(-7px);
+    opacity: 0;
+  }
+  &:not(.transition) > .children {
+    display: none;
+  }
+}
+
+.transition > .children {
+  transition-duration: 300ms;
+  transition-property: height, opacity, transform;
+  transition-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+// Empty children
+// -------------------------------------------------------------------------
+
+.children:empty:before {
+  content: 'Empty';
+  padding: 0 var(--padding);
+  margin: var(--spacing) 0;
+  display: block;
+  height: var(--widget-height);
+  font-style: italic;
+  line-height: var(--widget-height);
+  opacity: 0.5;
+}
+
+.controller {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--padding);
+  margin: var(--spacing) 0;
+
+  &.disabled {
+    opacity: 0.5;
+    &,
+    & * {
+      pointer-events: none !important;
+    }
+  }
+
+  // > is used here to avoid styling FunctionController's .name,
+  // which gets put inside of its widget.
+  > .name {
+    min-width: var(--name-width);
+    flex-shrink: 0;
+    white-space: pre;
+    padding-right: var(--spacing);
+    line-height: var(--widget-height);
+  }
+
+  .widget {
+    position: relative; // many w/ pos absolute inside
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: var(--widget-height);
+  }
+}
+
+.controller.string input {
+  color: var(--string-color);
+}
+
+.controller.boolean .widget {
+  cursor: pointer;
+}
+
+.controller.color {
+  .display {
+    width: 100%;
+    height: var(--widget-height);
+    border-radius: var(--widget-border-radius);
+    position: relative;
+    @include hover.on-hover {
+      &:before {
+        content: ' ';
+        display: block;
+        position: absolute;
+        border-radius: var(--widget-border-radius);
+        border: 1px solid #fff9;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+      }
+    }
+  }
+  input[type='color'] {
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+  input[type='text'] {
+    margin-left: var(--spacing);
+    font-family: var(--font-family-mono);
+    min-width: var(--color-input-min-width);
+    width: var(--color-input-width);
+    flex-shrink: 0;
+  }
+}
+
+.controller.option {
+  select {
+    opacity: 0;
+    position: absolute;
+    width: 100%;
+    max-width: 100%;
+  }
+  .display {
+    position: relative;
+    pointer-events: none;
+    border-radius: var(--widget-border-radius);
+    height: var(--widget-height);
+    line-height: var(--widget-height);
+    max-width: 100%;
+    overflow: hidden;
+    word-break: break-all;
+    padding-left: 0.55em;
+    padding-right: 1.75em;
+
+    background: var(--widget-color);
+
+    @include hover.can-hover {
+      &.focus {
+        background: var(--focus-color);
+      }
+    }
+
+    &.active {
+      background: var(--focus-color);
+    }
+
+    &:after {
+      font-family: 'lil-gui';
+      content: '↕';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      padding-right: 0.375em;
+    }
+  }
+  .widget,
+  select {
+    cursor: pointer;
+  }
+  .widget {
+    @include hover.on-hover {
+      .display {
+        background: var(--hover-color);
+      }
+    }
+  }
+}
+
+.controller.number {
+  input {
+    color: var(--number-color);
+  }
+  &.hasSlider input {
+    margin-left: var(--spacing);
+    width: var(--slider-input-width);
+    min-width: var(--slider-input-min-width);
+    flex-shrink: 0;
+  }
+  .slider {
+    width: 100%;
+    height: var(--widget-height);
+    background-color: var(--widget-color);
+    border-radius: var(--widget-border-radius);
+
+    // subtracts width of knob from available width
+    padding-right: var(--slider-knob-width);
+    overflow: hidden;
+    cursor: ew-resize;
+
+    // allows you to scroll gui by touch even if grabbing a slider
+    touch-action: pan-y;
+
+    @include hover.on-hover {
+      background-color: var(--hover-color);
+    }
+    &.active {
+      background-color: var(--focus-color);
+      .fill {
+        opacity: 0.95;
+      }
+    }
+  }
+  .fill {
+    height: 100%;
+    border-right: var(--slider-knob-width) solid var(--number-color);
+    // don't count border width towards width
+    box-sizing: content-box;
+  }
+}
+
+// Disable hover styles and scroll when dragging sliders
+.lil-gui-dragging {
+  .lil-gui {
+    --hover-color: var(--widget-color);
+  }
+  * {
+    cursor: ew-resize !important;
+  }
+}
+
+.lil-gui-dragging.lil-gui-vertical * {
+  cursor: ns-resize !important;
+}
+
+.widget {
+  input {
+    -webkit-tap-highlight-color: transparent;
+    border: 0;
+    outline: none;
+    font-family: var(--font-family);
+    font-size: var(--input-font-size);
+
+    border-radius: var(--widget-border-radius);
+    height: var(--widget-height);
+    background: var(--widget-color);
+    color: var(--text-color);
+    width: 100%;
+    @include hover.can-hover {
+      &:hover {
+        background: var(--hover-color);
+      }
+      &:active {
+        background: var(--focus-color);
+      }
+    }
+    &:disabled {
+      opacity: 1; // override default iOS style, we already dim .controller
+    }
+  }
+
+  input[type='text'],
+  input[type='number'] {
+    padding: var(--widget-padding);
+    &:focus {
+      background: var(--focus-color);
+    }
+  }
+
+  // Hide number spinners
+
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+
+  input[type='checkbox'] {
+    appearance: none;
+    -webkit-appearance: none;
+    height: var(--checkbox-size);
+    width: var(--checkbox-size);
+    border-radius: var(--widget-border-radius);
+    text-align: center;
+    cursor: pointer;
+    &:checked:before {
+      font-family: 'lil-gui';
+      content: '✓';
+      font-size: var(--checkbox-size);
+      line-height: var(--checkbox-size);
+    }
+
+    @include hover.can-hover {
+      &:focus {
+        box-shadow: inset 0 0 0 1px var(--focus-color);
+      }
+    }
+  }
+
+  button {
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+    cursor: pointer;
+
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    color: var(--text-color);
+
+    width: 100%;
+    height: var(--widget-height);
+
+    text-transform: none;
+
+    background: var(--widget-color);
+    border-radius: var(--widget-border-radius);
+
+    border: 1px solid var(--widget-color);
+
+    text-align: center;
+
+    line-height: calc(var(--widget-height) - 4px);
+
+    @include hover.can-hover {
+      &:hover {
+        background: var(--hover-color);
+        border-color: var(--hover-color);
+      }
+      &:focus {
+        border-color: var(--focus-color);
+      }
+    }
+
+    &:active {
+      background: var(--focus-color);
+    }
+  }
+}

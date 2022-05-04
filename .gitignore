@@ -8,3 +8,8 @@ target/
 *.spv
 *.exrc
 website/public
+
+
+# Added by cargo
+
+/target

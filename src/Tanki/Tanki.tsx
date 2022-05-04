@@ -1,6 +1,7 @@
 import { destroyTextureCache } from '@pixi/utils';
 import { Application, Container, Graphics, GraphicsGeometry } from 'pixi.js';
 import { onCleanup } from 'solid-js';
+import { useStats } from '../Stats.provider';
 import { createBody } from './createBody';
 import { createGun } from './createGun';
 
@@ -83,7 +84,10 @@ export default function Tanki() {
     world.addChild(tank);
   });
 
+  const stats = useStats();
+
   ticker.add(() => {
+    stats.begin();
     tanks[0].player(keyboard, mouse, cam);
 
     cam.manipulation(keyboard, mouse);
@@ -101,6 +105,7 @@ export default function Tanki() {
     }
 
     app.renderer.render(world);
+    stats.end();
   });
 
   return <>{app.view}</>;

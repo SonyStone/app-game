@@ -15,6 +15,7 @@ import { collisionExample } from './collisionExample';
 import { isoBasic } from './isoBasic';
 import { offseting } from './pointer';
 import { position } from './position';
+import { useStats } from './Stats.provider';
 import { outlineFilterBlack } from './utils/outlineFilterBlack';
 import { outlineFilterWhite } from './utils/outlineFilterWhite';
 
@@ -29,6 +30,8 @@ export default function Main() {
 
   console.log(`app`, app);
 
+  const stats = useStats();
+
   window.onresize = () => {
     console.log(
       `W.H`,
@@ -39,10 +42,12 @@ export default function Main() {
     // app.screen.height = window.document.body.clientHeight;
     // app.screen.width = window.document.body.clientWidth;
     console.log(`resolution`, app.renderer.resolution);
+    stats.begin();
     app.renderer.resize(
       window.document.body.clientWidth,
       window.document.body.clientHeight
     );
+    stats.end();
   };
 
   const world_container = new Container();
@@ -85,7 +90,7 @@ export default function Main() {
     world_container.addChild(map);
 
     world_container.addChild(isoBasic(app));
-    world_container.addChild(collisionExample(app, world_container));
+    world_container.addChild(collisionExample(app, world_container, stats));
 
     {
       const sprite = Sprite.from('house_1.png');
@@ -107,8 +112,10 @@ export default function Main() {
 
   world_container.position.copyFrom(position);
   const sub1 = offseting(window.document.body).subscribe(([x, y]) => {
+    stats.begin();
     position.set(position.x - x, position.y - y);
     world_container.position.copyFrom(position);
+    stats.end();
   });
 
   const sub2 = fromEvent<WheelEvent>(window, 'wheel').subscribe((event) => {
@@ -131,6 +138,7 @@ export default function Main() {
     destroyTextureCache();
     sub1.unsubscribe();
     sub2.unsubscribe();
+    window.onresize = null;
   });
 
   return <>{app.view}</>;
