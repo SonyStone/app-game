@@ -9,8 +9,7 @@
     "dev": "vite",
     "watch": "rsw watch",
     "rsw": "rsw",
-    "build": "rsw build && yarn fe:build",
-    "fe:build": "vite build",
+    "build": "vite build",
     "serve": "vite preview"
   },
   "author": "",
