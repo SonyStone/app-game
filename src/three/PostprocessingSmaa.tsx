@@ -1,4 +1,4 @@
-import { onCleanup } from 'solid-js';
+import { createEffect, onCleanup } from 'solid-js';
 import {
   BoxGeometry,
   GridHelper,
@@ -13,7 +13,6 @@ import {
 import { useStats } from '../Stats.provider';
 import brick_diffuse from './brick_diffuse.jpg';
 import { useCamera } from './Camera.provider';
-import { OrbitControls } from './controls/OrbitControls';
 import { EffectComposer } from './postprocessing/EffectComposer';
 import { RenderPass } from './postprocessing/RenderPass';
 import { SMAAPass } from './postprocessing/SMAAPass';
@@ -23,11 +22,12 @@ export default function PostprocessingSmaa() {
     <canvas
       style={{
         'touch-action': 'none',
-        'image-rendering': 'pixelated',
+        // 'image-rendering': 'pixelated',
       }}></canvas>
   ) as HTMLCanvasElement;
 
   const renderer = new WebGLRenderer({
+    antialias: true,
     canvas,
   });
   renderer.setPixelRatio(window.devicePixelRatio);
@@ -36,7 +36,7 @@ export default function PostprocessingSmaa() {
 
   //
 
-  const camera = useCamera();
+  const { camera, controls, resize } = useCamera();
 
   const scene = new Scene();
 
@@ -73,23 +73,19 @@ export default function PostprocessingSmaa() {
   );
   composer.addPass(pass);
 
-  function onWindowResize() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
+  createEffect(() => {
+    const { width, height } = resize();
 
     renderer.setSize(width, height);
     composer.setSize(width, height);
-  }
-
-  window.addEventListener('resize', onWindowResize);
+  });
 
   function render() {
-    renderer.render(scene, camera);
+    // renderer.render(scene, camera);
+    composer.render();
   }
-  const controls = new OrbitControls(camera, renderer.domElement);
+
+  controls.init(renderer.domElement);
   controls.addEventListener('change', render);
   controls.screenSpacePanning = true;
 
@@ -109,7 +105,7 @@ export default function PostprocessingSmaa() {
       child.rotation.y += 0.01;
     }
 
-    composer.render();
+    render();
 
     stats.end();
   }
@@ -118,7 +114,6 @@ export default function PostprocessingSmaa() {
     scene.clear();
     renderer.dispose();
     cancelAnimationFrame(id);
-    window.removeEventListener('resize', onWindowResize);
     controls.removeEventListener('change', render);
   });
 

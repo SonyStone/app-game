@@ -233,12 +233,14 @@ function createOrbitControls() {
 
     update = update.bind(this)();
 
-    constructor(
-      readonly camera: PerspectiveCamera | OrthographicCamera,
-      readonly domElement: HTMLElement
-    ) {
-      super();
+    domElement!: HTMLElement;
 
+    constructor(readonly camera: PerspectiveCamera | OrthographicCamera) {
+      super();
+    }
+
+    init(domElement: HTMLElement) {
+      this.domElement = domElement;
       domElement.addEventListener('contextmenu', onContextMenu.bind(this));
 
       domElement.addEventListener('pointerdown', onPointerDown.bind(this));
@@ -1082,7 +1084,7 @@ export class MapControls extends OrbitControls {
     TWO: TOUCH.DOLLY_ROTATE,
   };
 
-  constructor(object: any, domElement: HTMLElement) {
-    super(object, domElement);
+  constructor(object: any) {
+    super(object);
   }
 }

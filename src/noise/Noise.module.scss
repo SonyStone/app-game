@@ -1,0 +1,16 @@
+.noise {
+  --noise-size: 64;
+  background-size: calc(2px * var(--noise-size));
+  pointer-events: none;
+  opacity: 0.012;
+  z-index: 980;
+  animation: fade-in 4s;
+  position: absolute;
+  inset: 0;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}

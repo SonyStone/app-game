@@ -15,9 +15,14 @@ import { collisionExample } from './collisionExample';
 import { isoBasic } from './isoBasic';
 import { offseting } from './pointer';
 import { position } from './position';
-import { useStats } from './Stats.provider';
+import { useStats } from '../Stats.provider';
 import { outlineFilterBlack } from './utils/outlineFilterBlack';
 import { outlineFilterWhite } from './utils/outlineFilterWhite';
+
+import rottentower from './assets/rottentower.png';
+import isometricGrassAndWater from './assets/isometric-grass-and-water';
+
+import house_1 from './assets/house_1.png';
 
 export default function Main() {
   const app = new Application({
@@ -53,7 +58,7 @@ export default function Main() {
   const world_container = new Container();
   app.stage.addChild(world_container);
 
-  const sprite = Sprite.from('rottentower.png');
+  const sprite = Sprite.from(rottentower);
   sprite.position.set(0, 0);
   sprite.scale.set(0.5);
 
@@ -74,8 +79,8 @@ export default function Main() {
   async function load() {
     const map = await new Promise<Container>((resolve) => {
       loader
-        .add('map', './isometric-grass-and-water.json')
-        .add('tiles', './isometric-grass-and-water.png')
+        .add('map', isometricGrassAndWater.map)
+        .add('tiles', isometricGrassAndWater.tiles)
         .load(async (_, resources) => resolve(await loadMap(resources)));
     });
 
@@ -93,7 +98,7 @@ export default function Main() {
     world_container.addChild(collisionExample(app, world_container, stats));
 
     {
-      const sprite = Sprite.from('house_1.png');
+      const sprite = Sprite.from(house_1);
       sprite.position.set(350, 250);
       sprite.scale.set(0.3);
       map.addChild(sprite);
@@ -169,8 +174,6 @@ async function loadMap({ map, tiles }: Dict<LoaderResource>) {
   const container = new Container();
   const g = new Graphics();
   g.lineStyle(1, 0xbbffff, 0.4);
-
-  console.log(`sheet`, sheet);
 
   for (let y = 0; y < mapheight; y++) {
     for (let x = 0; x < mapwidth; x++) {

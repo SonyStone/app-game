@@ -1,24 +1,23 @@
 import { createEffect, onCleanup } from 'solid-js';
 import { Color, GridHelper, Scene, sRGBEncoding, WebGLRenderer } from 'three';
-import s from './SvgLoader.module.scss';
 
 import { useStats } from '../Stats.provider';
 import { useCamera } from './Camera.provider';
-import { OrbitControls } from './controls/OrbitControls';
 import { loadSVG } from './loadSVG';
 import hexagon from './svg/tiger.svg';
+import s from './SvgLoader.module.scss';
 
 export default function SvgLoader() {
   const canvas = (<canvas class={s.canvas}></canvas>) as HTMLCanvasElement;
 
-  const camera = useCamera();
+  const { camera, controls, resize } = useCamera();
 
   const renderer = new WebGLRenderer({ antialias: true, canvas });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputEncoding = sRGBEncoding;
 
-  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.init(renderer.domElement);
 
   const stats = useStats();
 
@@ -30,15 +29,12 @@ export default function SvgLoader() {
   controls.addEventListener('change', render);
   controls.screenSpacePanning = true;
 
-  function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
+  createEffect(() => {
+    const { width, height } = resize();
 
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(width, height);
     render();
-  }
-
-  window.addEventListener('resize', onWindowResize);
+  });
 
   const scene = new Scene();
 
@@ -48,7 +44,7 @@ export default function SvgLoader() {
     render();
   });
 
-  scene.background = new Color(0x555555);
+  scene.background = new Color(0x000000);
 
   const helper = new GridHelper(600, 10);
   scene.add(helper);
@@ -60,7 +56,6 @@ export default function SvgLoader() {
     renderer.dispose();
     controls.dispose();
     scene.clear();
-    window.removeEventListener('resize', onWindowResize);
     controls.removeEventListener('change', render);
   });
 

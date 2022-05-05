@@ -2,6 +2,7 @@ import { Link, RouteDefinition, Routes, useRoutes } from 'solid-app-router';
 import { For, lazy } from 'solid-js';
 
 import s from './App.module.scss';
+import Noise from './noise/Noise';
 import { useStats } from './Stats.provider';
 import { CameraProvider } from './three/Camera.provider';
 import { withProviders } from './utils/withProviders';
@@ -9,8 +10,8 @@ import { withProviders } from './utils/withProviders';
 const routes: (RouteDefinition & { name: string })[] = [
   {
     path: '/',
-    name: 'Main',
-    component: lazy(() => import('./Main')),
+    name: 'isometric',
+    component: lazy(() => import('./isometric/Isometric')),
   },
   {
     path: '/empty',
@@ -62,6 +63,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     name: 'webgl - svg loader',
     component: lazy(() => import('./three/SvgLoader')),
   },
+  {
+    path: '/sprites',
+    name: 'sprites',
+    component: lazy(() => import('./three/Sprites')),
+  },
 ];
 
 export function App() {
@@ -83,6 +89,7 @@ export function App() {
       <main>
         <Routes />
       </main>
+      <Noise />
     </>
   );
 }
