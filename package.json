@@ -10,7 +10,7 @@
     "watch": "rsw watch",
     "rsw": "rsw",
     "build": "rsw build && yarn fe:build",
-    "fe:build": "tsc && vite build",
+    "fe:build": "vite build",
     "serve": "vite preview"
   },
   "author": "",

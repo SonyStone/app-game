@@ -2,4 +2,13 @@
   position: absolute;
   display: flex;
   gap: 8px;
+
+  a {
+    background-color: #ffffff;
+    border-radius: 1000px;
+    padding: 0 0.5em;
+
+    color: black;
+    text-decoration: none;
+  }
 }
