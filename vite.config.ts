@@ -21,4 +21,5 @@ export default defineConfig({
   //   polyfillDynamicImport: false,
   // },
   publicDir: './public',
+  base: 'https://sonystone.github.io/app-game/',
 });
