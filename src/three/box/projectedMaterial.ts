@@ -17,6 +17,8 @@ interface ProjectedMaterialOptions {
   camera: OrthographicCamera | PerspectiveCamera;
   texture: Texture;
   color?: ColorRepresentation;
+  transparent?: boolean;
+  wireframe?: boolean;
 }
 
 type ProjectedMaterial = ShaderMaterial & { isProjectedMaterial: true };
@@ -25,6 +27,8 @@ export default function createProjectedMaterial({
   camera,
   texture,
   color,
+  transparent,
+  wireframe,
 }: ProjectedMaterialOptions): ProjectedMaterial {
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
@@ -49,8 +53,8 @@ export default function createProjectedMaterial({
     },
     vertexShader,
     fragmentShader,
-    transparent: true,
-    // depthWrite: false,
+    transparent: transparent ?? true,
+    wireframe: wireframe ?? false,
   }) as ProjectedMaterial;
 
   material.isProjectedMaterial = true;

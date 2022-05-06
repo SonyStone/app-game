@@ -1,5 +1,5 @@
 import { createEffect, createSignal, onCleanup } from 'solid-js';
-import { PerspectiveCamera } from 'three';
+import { OrthographicCamera, PerspectiveCamera } from 'three';
 
 import { createContextProvider } from '../utils/createContextProvider';
 import { OrbitControls } from './controls/OrbitControls';
@@ -36,8 +36,8 @@ export const [CameraProvider, useCamera] = createContextProvider(() => {
   //   window.innerWidth / 2,
   //   window.innerHeight / 2,
   //   -window.innerHeight / 2,
-  //   -1000,
-  //   1000
+  //   -10000,
+  //   10000
   // );
   camera.position.z = 300;
 
