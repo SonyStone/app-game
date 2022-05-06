@@ -10,16 +10,10 @@ import {
   WebGLRenderer,
 } from 'three';
 
-import house from '../isometric/assets/house_1.png';
 import { useStats } from '../Stats.provider';
 import { useCamera } from './Camera.provider';
 import s from './SvgLoader.module.scss';
-import {
-  createHouse,
-  createIsoProjectCamera,
-  createTiles,
-  loadTexture,
-} from './tiles';
+import { createHouse, createTiles } from './tiles';
 
 export default function Sprites() {
   const canvas = (<canvas class={s.canvas}></canvas>) as HTMLCanvasElement;
