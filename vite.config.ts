@@ -1,4 +1,3 @@
-import { resolve } from 'path';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 
@@ -21,5 +20,4 @@ export default defineConfig({
   //   polyfillDynamicImport: false,
   // },
   publicDir: './public',
-  base: 'https://sonystone.github.io/app-game/',
 });
