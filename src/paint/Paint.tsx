@@ -1,12 +1,16 @@
-import { onMount } from 'solid-js';
-import App from './App';
+import { createApp, MouseState } from './App';
 import DrawShader from './DrawShader';
 import Vec2 from './fungi/Vec2';
 import PostShader from './PostShader';
 import Quads from './Quads2';
 
 export default function Paint() {
-  const canvas = (<canvas></canvas>) as HTMLCanvasElement;
+  const canvas = (
+    <canvas
+      style={{
+        'touch-action': 'none',
+      }}></canvas>
+  ) as HTMLCanvasElement;
 
   let $move = new Vec2(); // Current Mouse Pos
   let $prev = new Vec2(); // Previous Mouse Pos
@@ -20,20 +24,16 @@ export default function Paint() {
   let $bound = new Float32Array(4); // Bounding Area to Draw
   let $segment = new Float32Array(4); // The 2 points of a Segment
 
-  onMount(() => {
-    if (!App.init(canvas)) return;
+  const app = createApp(canvas, on_mouse)!;
+  if (!app) return;
 
-    PostShader.init(); // Shader that uses a unit quad to draw a texture to screen
-    DrawShader.init(); // Shader that draws a brush over a line segment
+  PostShader.init(app.shader); // Shader that uses a unit quad to draw a texture to screen
+  DrawShader.init(app.shader); // Shader that draws a brush over a line segment
 
-    $brush = Quads.unit_corner();
-    $quad = Quads.ndc();
-    $mat_draw = App.shader.new_material('DrawShader');
-    $mat_post = App.shader.new_material('PostRender');
-
-    App.on_mouse = on_mouse;
-    // init_ui();
-  });
+  $brush = Quads.unit_corner(app.buffer, app.mesh);
+  $quad = Quads.ndc(app.buffer, app.mesh);
+  $mat_draw = app.shader.new_material('DrawShader');
+  $mat_post = app.shader.new_material('PostRender');
 
   function on_mouse(state: any, x: number, y: number) {
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -42,8 +42,8 @@ export default function Paint() {
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     switch (state) {
       //case App.MDOWN : break;
-      case App.MUP:
-      case App.MMOVE:
+      case MouseState.MUP:
+      case MouseState.MMOVE:
         // Only render if moved more then one pixel distance.
         if (Vec2.len_sqr($move, $prev) == 0) return;
 
@@ -61,11 +61,11 @@ export default function Paint() {
 
   // This function handles drawing the brush shader onto a custom frame buffer texture
   function draw() {
-    let c = App.gl.ctx; // alias
+    let c = app.gl.ctx; // alias
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Setup
-    App.fbo.bind(App.main_fbo); //.clear( $fbo );	// Load Custom FrameBuffer
+    app.fbo.bind(app.main_fbo); //.clear( $fbo );	// Load Custom FrameBuffer
     c.bindVertexArray($brush.vao.id); // Load Quad
 
     //App.gl.ctx.disable( App.gl.ctx.DEPTH_TEST );
@@ -84,7 +84,7 @@ export default function Paint() {
     c.uniformMatrix4fv(
       $mat_draw.uniforms.get('ortho').loc,
       false,
-      App.ortho_proj
+      app.ortho_proj
     );
     //c.uniform2fv( $mat_draw.uniforms.get( "move" ).loc, $move );
     c.uniform1f($mat_draw.uniforms.get('brush_size').loc, $brush_size);
@@ -93,7 +93,7 @@ export default function Paint() {
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Draw
-    c.drawElements(App.mesh.TRI, $brush.element_cnt, $brush.element_type, 0);
+    c.drawElements(app.mesh.TRI, $brush.element_cnt, $brush.element_type, 0);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Cleanup
@@ -103,9 +103,9 @@ export default function Paint() {
 
   // This function handles rendering the custom frame buffer texture to the screen
   function render() {
-    App.fbo.unbind(); // Unbind any Custom Frame Buffer
-    App.gl.clear(); // Clear Screen Buffer
-    let c = App.gl.ctx; // Alias
+    app.fbo.unbind(); // Unbind any Custom Frame Buffer
+    app.gl.clear(); // Clear Screen Buffer
+    let c = app.gl.ctx; // Alias
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Mesh
@@ -115,12 +115,12 @@ export default function Paint() {
     // SHADER
     c.useProgram($mat_post.shader.program); // Bind Shader
     c.activeTexture(c.TEXTURE0); // Turn on Texture Slot
-    c.bindTexture(c.TEXTURE_2D, App.main_fbo.buffers.color.id); // Bind Texture
+    c.bindTexture(c.TEXTURE_2D, app.main_fbo.buffers.color.id); // Bind Texture
     c.uniform1i($mat_post.uniforms.get('buf_color').loc, 0); // Set Uniform Loc to Texture Slot
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Draw
-    c.drawElements(App.mesh.TRI, $quad.element_cnt, $quad.element_type, 0);
+    c.drawElements(app.mesh.TRI, $quad.element_cnt, $quad.element_type, 0);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Cleanup

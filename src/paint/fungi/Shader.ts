@@ -94,7 +94,7 @@ class Shader {
 
 //#######################################################################################################
 
-export default class ShaderFactory {
+export class ShaderFactory {
   POS_LOC = 0;
   NORM_LOC = 1;
   UV_LOC = 2;

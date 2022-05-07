@@ -38,7 +38,7 @@ let config	= [
 ];
 */
 
-export default class MeshFactory {
+export class MeshFactory {
   PNT = 0;
   LINE = 1;
   LINE_LOOP = 2;

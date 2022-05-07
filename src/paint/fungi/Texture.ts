@@ -4,7 +4,7 @@ export class Texture {
   constructor(readonly name: any, readonly id: any) {}
 }
 
-export default class TextureFactory {
+export class TextureFactory {
   cache = new Map();
 
   constructor(readonly gl: Context) {}

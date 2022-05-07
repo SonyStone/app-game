@@ -1,16 +1,16 @@
-import App from './App';
+import { BufferFactory } from './fungi/Buffer';
+import { MeshFactory } from './fungi/Mesh';
 
 export default {
-  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  unit_corner: () => {
-    let buf_idx = App.buffer.new_element(new Uint16Array([0, 1, 2, 2, 3, 0]));
-    let buf_vert = App.buffer.new_array(
+  unit_corner: (buffer: BufferFactory, mesh: MeshFactory) => {
+    let buf_idx = buffer.new_element(new Uint16Array([0, 1, 2, 2, 3, 0]));
+    let buf_vert = buffer.new_array(
       new Float32Array([
         0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 1, 0,
       ])
     );
 
-    return App.mesh.from_buffer_config(
+    return mesh.from_buffer_config(
       [
         { name: 'indices', buffer: buf_idx },
         {
@@ -27,16 +27,15 @@ export default {
     );
   },
 
-  // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  ndc: () => {
-    let buf_idx = App.buffer.new_element(new Uint16Array([0, 1, 2, 2, 3, 0]));
-    let buf_vert = App.buffer.new_array(
+  ndc: (buffer: BufferFactory, mesh: MeshFactory) => {
+    let buf_idx = buffer.new_element(new Uint16Array([0, 1, 2, 2, 3, 0]));
+    let buf_vert = buffer.new_array(
       new Float32Array([
         -1, 1, 0, 0, 0, -1, -1, 0, 0, 1, 1, -1, 0, 1, 1, 1, 1, 0, 1, 0,
       ])
     );
 
-    let mesh = App.mesh.from_buffer_config(
+    return mesh.from_buffer_config(
       [
         { name: 'indices', buffer: buf_idx },
         {
@@ -51,7 +50,5 @@ export default {
       'PostQuad',
       6
     );
-
-    return mesh;
   },
 };

@@ -15,7 +15,7 @@ class Vao {
   constructor(readonly id: any) {}
 }
 
-export default class VaoFactory {
+export class VaoFactory {
   constructor(readonly gl: Context) {}
 
   // #region CREATION

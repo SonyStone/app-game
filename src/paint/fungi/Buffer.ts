@@ -31,7 +31,7 @@ class Buffer {
   // #endregion //////////////////////////////////////////////////////////////////////////////////////
 }
 
-export default class BufferFactory {
+export class BufferFactory {
   ARRAY = 34962;
   ELEMENT = 34963;
   UNIFORM = 35345;
