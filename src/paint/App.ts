@@ -25,7 +25,7 @@ export interface App {
 
 export function createApp(
   canvas: HTMLCanvasElement,
-  on_mouse: (type: number, x: number, y: number) => void
+  on_mouse: (type: number, x: number, y: number, pressure: number) => void
 ): App {
   console.log('[ Sketch.App 0.1 ]');
 
@@ -56,10 +56,11 @@ export function createApp(
 
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-  function on_mouse_move(e: MouseEvent) {
+  function on_mouse_move(e: PointerEvent) {
     let x = e.pageX - offset_x;
     let y = e.pageY - offset_y;
-    on_mouse!(MouseState.MMOVE, x, y);
+    let pressure = e.pressure;
+    on_mouse!(MouseState.MMOVE, x, y, pressure);
   }
 
   let c = gl.canvas;
@@ -67,8 +68,9 @@ export function createApp(
     if (on_mouse) {
       let x = e.pageX - offset_x;
       let y = e.pageY - offset_y;
+      let pressure = e.pressure;
 
-      on_mouse(MouseState.MDOWN, x, y);
+      on_mouse(MouseState.MDOWN, x, y, pressure);
       c.addEventListener('pointermove', on_mouse_move);
     }
   });
@@ -79,8 +81,9 @@ export function createApp(
 
       let x = e.pageX - offset_x;
       let y = e.pageY - offset_y;
+      let pressure = e.pressure;
 
-      on_mouse(MouseState.MUP, x, y);
+      on_mouse(MouseState.MUP, x, y, pressure);
     }
   });
 

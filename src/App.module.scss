@@ -3,13 +3,15 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  width: calc(100% - 80px);
 
   a,
   button {
     background-color: #ffffff;
     border-radius: 1000px;
     padding: 0 0.5em;
-    line-height: 20px;
+    font-size: 16px;
+    line-height: 1.2em;
 
     color: black;
     border: unset;

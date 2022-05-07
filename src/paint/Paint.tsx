@@ -14,6 +14,7 @@ export default function Paint() {
 
   let $move = new Vec2(); // Current Mouse Pos
   let $prev = new Vec2(); // Previous Mouse Pos
+  let $pressure = 0;
 
   let $brush: any;
   let $quad: any;
@@ -35,11 +36,10 @@ export default function Paint() {
   $mat_draw = app.shader.new_material('DrawShader');
   $mat_post = app.shader.new_material('PostRender');
 
-  function on_mouse(state: any, x: number, y: number) {
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  function on_mouse(state: any, x: number, y: number, pressure: number) {
     $move.setVec(x, y);
+    $pressure = pressure;
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     switch (state) {
       //case App.MDOWN : break;
       case MouseState.MUP:
@@ -53,11 +53,8 @@ export default function Paint() {
         break;
     }
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     $prev.copy($move);
   }
-
-  //#####################################################
 
   // This function handles drawing the brush shader onto a custom frame buffer texture
   function draw() {
@@ -87,7 +84,10 @@ export default function Paint() {
       app.ortho_proj
     );
     //c.uniform2fv( $mat_draw.uniforms.get( "move" ).loc, $move );
-    c.uniform1f($mat_draw.uniforms.get('brush_size').loc, $brush_size);
+    c.uniform1f(
+      $mat_draw.uniforms.get('brush_size').loc,
+      $brush_size * $pressure
+    );
     c.uniform4fv($mat_draw.uniforms.get('bound').loc, $bound);
     c.uniform4fv($mat_draw.uniforms.get('segment').loc, $segment);
 
