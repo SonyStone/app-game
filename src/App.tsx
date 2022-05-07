@@ -65,8 +65,13 @@ const routes: (RouteDefinition & { name: string })[] = [
   },
   {
     path: '/sprites',
-    name: 'sprites',
+    name: 'Sprites',
     component: lazy(() => import('./three/Sprites')),
+  },
+  {
+    path: '/paint',
+    name: 'Paint',
+    component: lazy(() => import('./paint/Paint')),
   },
 ];
 
