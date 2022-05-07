@@ -1,5 +1,12 @@
 import { createEffect, onCleanup } from 'solid-js';
-import { Color, GridHelper, Scene, sRGBEncoding, WebGLRenderer } from 'three';
+import {
+  Camera,
+  Color,
+  GridHelper,
+  Scene,
+  sRGBEncoding,
+  WebGLRenderer,
+} from 'three';
 
 import { useStats } from '../Stats.provider';
 import { useCamera } from './Camera.provider';
@@ -21,20 +28,21 @@ export default function SvgLoader() {
 
   const stats = useStats();
 
+  let currentCamera!: Camera;
+  createEffect(() => {
+    const { width, height } = resize();
+    currentCamera = camera();
+    renderer.setSize(width, height);
+    render();
+  });
+
   function render() {
     stats.begin();
-    renderer.render(scene, camera);
+    renderer.render(scene, currentCamera);
     stats.end();
   }
   controls.addEventListener('change', render);
   controls.screenSpacePanning = true;
-
-  createEffect(() => {
-    const { width, height } = resize();
-
-    renderer.setSize(width, height);
-    render();
-  });
 
   const scene = new Scene();
 
@@ -49,10 +57,7 @@ export default function SvgLoader() {
   const helper = new GridHelper(600, 10);
   scene.add(helper);
 
-  render();
-
   onCleanup(() => {
-    camera.clear();
     renderer.dispose();
     controls.dispose();
     scene.clear();

@@ -11,5 +11,8 @@ void main() {
 
   vec4 outColor = texture2D(pointTexture, uv);
 
+  if (outColor.a < 0.1) /*change threshold to desired output*/
+    discard;
+
   gl_FragColor = outColor;
 }

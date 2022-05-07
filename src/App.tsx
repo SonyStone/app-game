@@ -4,7 +4,7 @@ import { For, lazy } from 'solid-js';
 import s from './App.module.scss';
 import Noise from './noise/Noise';
 import { useStats } from './Stats.provider';
-import { CameraProvider } from './three/Camera.provider';
+import { CameraProvider, useCamera } from './three/Camera.provider';
 import { withProviders } from './utils/withProviders';
 
 const routes: (RouteDefinition & { name: string })[] = [
@@ -74,6 +74,8 @@ export function App() {
   const Routes = useRoutes(routes);
   const stats = useStats();
 
+  const { toggleCamera, cameraType } = useCamera();
+
   stats.showPanel(1);
   stats.dom.style.left = 'unset';
   stats.dom.style.right = '0';
@@ -84,6 +86,8 @@ export function App() {
         <For each={routes}>
           {({ path, name }) => <Link href={path}>{name}</Link>}
         </For>
+
+        <button onClick={toggleCamera}>{cameraType}</button>
       </header>
       {stats.dom}
       <main>

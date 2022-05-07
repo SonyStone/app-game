@@ -9,7 +9,7 @@ import { Pass } from './Pass.js';
 
 export class RenderPass extends Pass {
   scene: Scene;
-  camera: Camera;
+  camera!: Camera;
   overrideMaterial: any;
   clearColor: ColorRepresentation | undefined;
   clearAlpha: number;
@@ -21,7 +21,7 @@ export class RenderPass extends Pass {
 
   constructor(
     scene: Scene,
-    camera: Camera,
+    camera?: Camera,
     overrideMaterial?: any,
     clearColor?: ColorRepresentation,
     clearAlpha?: number
@@ -29,12 +29,16 @@ export class RenderPass extends Pass {
     super();
 
     this.scene = scene;
-    this.camera = camera;
+    if (camera) this.camera = camera;
 
     this.overrideMaterial = overrideMaterial;
 
     this.clearColor = clearColor;
     this.clearAlpha = clearAlpha !== undefined ? clearAlpha : 0;
+  }
+
+  setCamera(camera: Camera): void {
+    this.camera = camera;
   }
 
   render(

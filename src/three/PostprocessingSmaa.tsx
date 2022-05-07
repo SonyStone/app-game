@@ -1,6 +1,7 @@
 import { createEffect, onCleanup } from 'solid-js';
 import {
   BoxGeometry,
+  Camera,
   GridHelper,
   Group,
   Mesh,
@@ -65,7 +66,9 @@ export default function PostprocessingSmaa() {
   // postprocessing
 
   const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
+  const renderPass = new RenderPass(scene);
+
+  composer.addPass(renderPass);
 
   const pass = new SMAAPass(
     window.innerWidth * renderer.getPixelRatio(),
@@ -90,6 +93,15 @@ export default function PostprocessingSmaa() {
   controls.screenSpacePanning = true;
 
   let id: number;
+  let currentCamera!: Camera;
+
+  createEffect(() => {
+    currentCamera = camera();
+    renderPass.setCamera(currentCamera);
+
+    cancelAnimationFrame(id);
+    animate();
+  });
 
   const stats = useStats();
 
@@ -116,8 +128,6 @@ export default function PostprocessingSmaa() {
     cancelAnimationFrame(id);
     controls.removeEventListener('change', render);
   });
-
-  animate();
 
   return canvas;
 }

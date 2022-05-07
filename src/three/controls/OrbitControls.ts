@@ -27,13 +27,6 @@ function createOrbitControls() {
   const update = function (this: OrbitControls) {
     const offset = new Vector3();
 
-    // so camera.up is the orbit axis
-    const quat = new Quaternion().setFromUnitVectors(
-      this.camera.up,
-      new Vector3(0, 1, 0)
-    );
-    const quatInverse = quat.clone().invert();
-
     const lastPosition = new Vector3();
     const lastQuaternion = new Quaternion();
 
@@ -45,7 +38,7 @@ function createOrbitControls() {
       offset.copy(position).sub(this.target);
 
       // rotate offset to "y-axis-is-up" space
-      offset.applyQuaternion(quat);
+      offset.applyQuaternion(this.quat);
 
       // angle from z-axis around y-axis
       spherical.setFromVector3(offset);
@@ -111,7 +104,7 @@ function createOrbitControls() {
       offset.setFromSpherical(spherical);
 
       // rotate offset back to "camera-up-vector-is-up" space
-      offset.applyQuaternion(quatInverse);
+      offset.applyQuaternion(this.quatInverse);
 
       position.copy(this.target).add(offset);
 
@@ -153,6 +146,9 @@ function createOrbitControls() {
   };
 
   class OrbitControls extends EventDispatcher {
+    domElement!: HTMLElement;
+    camera!: PerspectiveCamera | OrthographicCamera;
+
     // Set to false to disable this control
     enabled = true;
 
@@ -225,17 +221,19 @@ function createOrbitControls() {
 
     // for reset
     target0 = this.target.clone();
-    position0 = this.camera.position.clone();
-    zoom0 = this.camera.zoom;
+    position0!: Vector3;
+    zoom0!: number;
+
+    // so camera.up is the orbit axis
+    quat!: Quaternion;
+    quatInverse!: Quaternion;
 
     // the target DOM element for key events
     _domElementKeyEvents: HTMLElement | null = null;
 
     update = update.bind(this)();
 
-    domElement!: HTMLElement;
-
-    constructor(readonly camera: PerspectiveCamera | OrthographicCamera) {
+    constructor() {
       super();
     }
 
@@ -248,6 +246,18 @@ function createOrbitControls() {
       domElement.addEventListener('wheel', onMouseWheel.bind(this), {
         passive: false,
       });
+    }
+
+    setCamera(camera: PerspectiveCamera | OrthographicCamera): void {
+      this.camera = camera;
+      this.position0 = this.camera.position.clone();
+      this.zoom0 = this.camera.zoom;
+
+      this.quat = new Quaternion().setFromUnitVectors(
+        this.camera.up,
+        new Vector3(0, 1, 0)
+      );
+      this.quatInverse = this.quat.clone().invert();
     }
 
     getPolarAngle() {
@@ -1084,7 +1094,7 @@ export class MapControls extends OrbitControls {
     TWO: TOUCH.DOLLY_ROTATE,
   };
 
-  constructor(object: any) {
-    super(object);
+  constructor() {
+    super();
   }
 }

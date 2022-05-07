@@ -1,5 +1,11 @@
-import { createEffect, createSignal, onCleanup } from 'solid-js';
-import { OrthographicCamera, PerspectiveCamera } from 'three';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
+import { Camera, OrthographicCamera, PerspectiveCamera } from 'three';
 
 import { createContextProvider } from '../utils/createContextProvider';
 import { OrbitControls } from './controls/OrbitControls';
@@ -24,34 +30,79 @@ function createResize() {
 }
 
 export const [CameraProvider, useCamera] = createContextProvider(() => {
-  const camera = new PerspectiveCamera(
-    50,
-    window.innerWidth / window.innerHeight,
-    1,
-    10000
-  );
+  const [cameraType, setCameraType] = createSignal<
+    'perspective' | 'orthographic'
+  >('perspective');
 
-  // const camera = new OrthographicCamera(
-  //   -window.innerWidth / 2,
-  //   window.innerWidth / 2,
-  //   window.innerHeight / 2,
-  //   -window.innerHeight / 2,
-  //   -10000,
-  //   10000
-  // );
-  camera.position.z = 300;
+  const cameras = {
+    perspective: new PerspectiveCamera(
+      50,
+      window.innerWidth / window.innerHeight,
+      1,
+      10000
+    ),
+    orthographic: new OrthographicCamera(
+      -window.innerWidth / 2,
+      window.innerWidth / 2,
+      window.innerHeight / 2,
+      -window.innerHeight / 2,
+      -10000,
+      10000
+    ),
+  };
+
+  const controls = new OrbitControls();
+  controls.screenSpacePanning = true;
+
+  const camera = createMemo<PerspectiveCamera | OrthographicCamera>((prev) => {
+    const type = cameraType();
+
+    const currentCamera = cameras[type];
+
+    if (prev) {
+      currentCamera.position.copy(prev.position.clone());
+      currentCamera.lookAt(
+        controls.target.x,
+        controls.target.y,
+        controls.target.z
+      );
+    }
+
+    return currentCamera;
+  });
+
+  onMount(() => {
+    const currentCamera = camera();
+
+    currentCamera.position.z = 300;
+  });
 
   const resize = createResize();
 
   createEffect(() => {
     const { width, height } = resize();
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
+    const currentCamera = camera();
+
+    controls.setCamera(currentCamera);
+
+    if ((currentCamera as PerspectiveCamera).isPerspectiveCamera) {
+      (currentCamera as PerspectiveCamera).aspect = width / height;
+    } else if ((currentCamera as OrthographicCamera).isOrthographicCamera) {
+      (currentCamera as OrthographicCamera).left = -window.innerWidth / 2;
+      (currentCamera as OrthographicCamera).right = window.innerWidth / 2;
+      (currentCamera as OrthographicCamera).top = window.innerHeight / 2;
+      (currentCamera as OrthographicCamera).bottom = -window.innerHeight / 2;
+    }
+
+    currentCamera.updateProjectionMatrix();
   });
 
-  const controls = new OrbitControls(camera);
+  function toggleCamera() {
+    const type = cameraType();
+    type === 'perspective'
+      ? setCameraType('orthographic')
+      : setCameraType('perspective');
+  }
 
-  controls.screenSpacePanning = true;
-
-  return { camera, controls, resize };
+  return { camera, controls, resize, cameraType, toggleCamera };
 });

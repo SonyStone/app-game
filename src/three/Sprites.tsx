@@ -1,6 +1,7 @@
 import { createEffect, onCleanup } from 'solid-js';
 import {
   BoxGeometry,
+  Camera,
   Color,
   GridHelper,
   Mesh,
@@ -30,8 +31,11 @@ export default function Sprites() {
 
   const stats = useStats();
 
+  let currentCamera!: Camera;
+
   createEffect(() => {
     const { width, height } = resize();
+    currentCamera = camera();
     renderer.setSize(width, height);
     render();
   });
@@ -68,20 +72,19 @@ export default function Sprites() {
     const house = createHouse(render);
     house.rotateY(-Math.PI / 4);
     house.scale.setScalar(0.3);
-    house.position.set(550, 25, -100);
+    house.position.set(550, 20, -100);
     scene.add(house);
   }
 
   function render() {
     stats.begin();
 
-    renderer.render(scene, camera);
+    renderer.render(scene, currentCamera);
     stats.end();
   }
+
   controls.addEventListener('change', render);
   controls.screenSpacePanning = true;
-
-  render();
 
   onCleanup(() => {
     renderer.dispose();

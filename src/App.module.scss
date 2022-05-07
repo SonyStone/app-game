@@ -4,12 +4,15 @@
   gap: 8px;
   flex-wrap: wrap;
 
-  a {
+  a,
+  button {
     background-color: #ffffff;
     border-radius: 1000px;
     padding: 0 0.5em;
+    line-height: 20px;
 
     color: black;
+    border: unset;
     text-decoration: none;
   }
 }
