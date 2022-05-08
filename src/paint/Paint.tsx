@@ -1,5 +1,6 @@
 import { createApp, MouseState } from './App';
 import DrawShader from './DrawShader';
+import { Material } from './fungi/Shader';
 import Vec2 from './fungi/Vec2';
 import PostShader from './PostShader';
 import Quads from './Quads2';
@@ -18,8 +19,8 @@ export default function Paint() {
 
   let $brush: any;
   let $quad: any;
-  let $mat_draw: any;
-  let $mat_post: any;
+  let $mat_draw: Material;
+  let $mat_post: Material;
 
   let $brush_size = 10;
   let $bound = new Float32Array(4); // Bounding Area to Draw
@@ -60,14 +61,12 @@ export default function Paint() {
   function draw() {
     let c = app.gl.ctx; // alias
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Setup
     app.fbo.bind(app.main_fbo); //.clear( $fbo );	// Load Custom FrameBuffer
     c.bindVertexArray($brush.vao.id); // Load Quad
 
     //App.gl.ctx.disable( App.gl.ctx.DEPTH_TEST );
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Experiment with Blending Modes to get something that works well
     c['enable'](c.BLEND);
     //c.blendFunc( c.ONE, c.ONE ); //BLEND_ADDITIVE
@@ -75,7 +74,6 @@ export default function Paint() {
     //c.blendFunc( c.ONE, c.ZERO ); // BLEND_OVERRIDE
     //c.blendFunc( c.SRC_ALPHA, c.ONE_MINUS_SRC_ALPHA ); //BLEND_ALPHA
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Load Shader and update uniforms
     c.useProgram($mat_draw.shader.program);
     c.uniformMatrix4fv(
@@ -91,11 +89,9 @@ export default function Paint() {
     c.uniform4fv($mat_draw.uniforms.get('bound').loc, $bound);
     c.uniform4fv($mat_draw.uniforms.get('segment').loc, $segment);
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Draw
     c.drawElements(app.mesh.TRI, $brush.element_cnt, $brush.element_type, 0);
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Cleanup
     c.useProgram(null);
     c.bindVertexArray(null);
@@ -107,37 +103,33 @@ export default function Paint() {
     app.gl.clear(); // Clear Screen Buffer
     let c = app.gl.ctx; // Alias
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Mesh
     c.bindVertexArray($quad.vao.id);
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // SHADER
     c.useProgram($mat_post.shader.program); // Bind Shader
     c.activeTexture(c.TEXTURE0); // Turn on Texture Slot
     c.bindTexture(c.TEXTURE_2D, app.main_fbo.buffers.color.id); // Bind Texture
     c.uniform1i($mat_post.uniforms.get('buf_color').loc, 0); // Set Uniform Loc to Texture Slot
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Draw
     c.drawElements(app.mesh.TRI, $quad.element_cnt, $quad.element_type, 0);
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Cleanup
     c.useProgram(null);
     c.bindVertexArray(null);
   }
-
-  //#####################################################
 
   // The idea is to create a Quad that can cover the area needed
   // to draw a line segment. So first we compute the bounding box
   // for the segment, then we enlarge it by the brush size to make
   // we have all the space we need to draw the brush along the segment
   function compute_draw_bound() {
-    let x_min, x_max, y_min, y_max;
+    let x_min: number;
+    let x_max: number;
+    let y_min: number;
+    let y_max: number;
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Compute the Min and Max Bounds
     if ($prev[0] < $move[0]) {
       x_min = $prev[0];
@@ -155,14 +147,12 @@ export default function Paint() {
       y_max = $prev[1];
     }
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Expand the bounding box by the size of the brush
     x_min = Math.max(x_min - $brush_size, 0);
     y_min = Math.max(y_min - $brush_size, 0);
     x_max += $brush_size;
     y_max += $brush_size;
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     $bound[0] = x_min; // Position (XY)
     $bound[1] = y_min;
     $bound[2] = x_max - x_min; // Scale (W/H)
@@ -172,25 +162,6 @@ export default function Paint() {
     $segment[1] = $prev[1];
     $segment[2] = $move[0]; // Segment Point B
     $segment[3] = $move[1];
-  }
-
-  //#####################################################
-  // function init_ui() {
-  //   elm_on_input('lbl_brush_suze');
-  // }
-
-  function update_mat(id: any, value: any) {
-    switch (id) {
-      case 'lbl_brush_suze':
-        $brush_size = parseFloat(value);
-        break;
-    }
-  }
-
-  function elm_on_input(name: any) {
-    document.getElementById(name)!.addEventListener('input', (e) => {
-      update_mat((e as any).srcElement.id, (e as any).srcElement.value);
-    });
   }
 
   return canvas;

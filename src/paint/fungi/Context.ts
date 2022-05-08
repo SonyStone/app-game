@@ -25,15 +25,15 @@ export default class Context {
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     //Setup some defaults
-    let c = this.ctx;
-    c.cullFace(c.BACK); // Back is also default
-    c.frontFace(c.CCW); // Dont really need to set it, its ccw by default.
-    c.enable(c.DEPTH_TEST); // Shouldn't use this, use something else to add depth detection
-    c.enable(c.CULL_FACE); // Cull back face, so only show triangles that are created clockwise
-    c.depthFunc(c.LEQUAL); // Near things obscure far things
-    c.blendFunc(
-      c.SRC_ALPHA, // Setup default alpha blending
-      c.ONE_MINUS_SRC_ALPHA
+    let ctx = this.ctx;
+    ctx.cullFace(ctx.BACK); // Back is also default
+    ctx.frontFace(ctx.CCW); // Dont really need to set it, its ccw by default.
+    ctx.enable(ctx.DEPTH_TEST); // Shouldn't use this, use something else to add depth detection
+    ctx.enable(ctx.CULL_FACE); // Cull back face, so only show triangles that are created clockwise
+    ctx.depthFunc(ctx.LEQUAL); // Near things obscure far things
+    ctx.blendFunc(
+      ctx.SRC_ALPHA, // Setup default alpha blending
+      ctx.ONE_MINUS_SRC_ALPHA
     );
 
     /*
@@ -49,11 +49,6 @@ export default class Context {
 
   clear() {
     this.ctx.clear(this.ctx.COLOR_BUFFER_BIT | this.ctx.DEPTH_BUFFER_BIT);
-    return this;
-  }
-
-  fit_screen(wp = 1, hp = 1) {
-    this.set_size(window.innerWidth * wp, window.innerHeight * hp);
     return this;
   }
 

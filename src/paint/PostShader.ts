@@ -9,7 +9,7 @@ export default {
   },
   init: (shader: ShaderFactory) => {
     shader.new('PostRender', vertSrc, fragSrc, [
-      { name: 'buf_color', type: 'sampler2D', value: 'null' },
+      { name: 'buf_color', type: 'sampler2D' },
     ]);
     return this;
   },

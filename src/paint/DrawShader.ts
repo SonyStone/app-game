@@ -8,11 +8,11 @@ export default {
   },
   init: (shader: ShaderFactory) => {
     shader.new('DrawShader', vertSrc, fragSrc, [
-      { name: 'ortho', type: 'mat4', value: null },
+      { name: 'ortho', type: 'mat4' },
       //{ name:"move",	type:"vec2", value:null },
-      { name: 'brush_size', type: 'float', value: null },
-      { name: 'bound', type: 'vec4', value: null },
-      { name: 'segment', type: 'vec4', value: null },
+      { name: 'brush_size', type: 'float' },
+      { name: 'bound', type: 'vec4' },
+      { name: 'segment', type: 'vec4' },
     ]);
     return this;
   },

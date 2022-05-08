@@ -1,6 +1,6 @@
 import Colour from './Colour';
 import Context from './Context';
-import { Texture } from './Texture';
+import { TextureFactory } from './Texture';
 
 //#######################################################################################################
 
@@ -8,10 +8,10 @@ class Uniform {
   data: any;
 
   constructor(
-    readonly name: any,
-    readonly type: any,
-    readonly loc: any,
-    data: any = null
+    readonly name: string,
+    readonly type: string,
+    readonly loc: WebGLUniformLocation,
+    data?: any
   ) {
     this.data = !data ? null : this.parse(data);
   }
@@ -55,8 +55,6 @@ class Uniform {
   }
 }
 
-//#######################################################################################################
-
 class Shader {
   name: any;
   program: any = null;
@@ -69,30 +67,34 @@ class Shader {
     cullFace: true,
   };
 
-  constructor(name: any, prog: any) {
+  constructor(name: string, glProgram: WebGLProgram) {
     this.name = name;
-    this.program = prog;
+    this.program = glProgram;
   }
 
-  set_depth_test(v: any) {
-    this.options.depthTest = v;
+  set_depth_test(depthTest: boolean) {
+    this.options.depthTest = depthTest;
     return this;
   }
-  set_blend(v: any) {
+  set_blend(v: boolean) {
     this.options.blend = v;
     return this;
   }
-  set_alpha_coverage(v: any) {
-    this.options.sampleAlphaCoverage = v;
+  set_alpha_coverage(sampleAlphaCoverage: boolean) {
+    this.options.sampleAlphaCoverage = sampleAlphaCoverage;
     return this;
   }
-  set_cullface(v: any) {
-    this.options.cullFace = v;
+  set_cullface(cullFace: boolean) {
+    this.options.cullFace = cullFace;
     return this;
   }
 }
 
-//#######################################################################################################
+interface UniformOption {
+  name: string;
+  type: string;
+  value?: any;
+}
 
 export class ShaderFactory {
   POS_LOC = 0;
@@ -102,69 +104,73 @@ export class ShaderFactory {
   SKIN_IDX_LOC = 8;
   SKIN_WGT_LOC = 9;
 
-  cache = new Map();
+  cache = new Map<string, Shader>();
 
-  constructor(readonly gl: Context, readonly tex: any) {}
+  constructor(readonly gl: Context) {}
 
-  // #region METHODS
+  /**
+   * @param name Shader name
+   * @param src_vert vertix shader
+   * @param src_frag fragment shader
+   * @param uniforms Uniform objects
+   * @param ubos Uniform Buffer Objects
+   * @returns
+   */
   new(
-    name: any,
-    src_vert: any,
-    src_frag: any,
-    uniforms: any = null,
-    ubos: any = null
+    name: string,
+    src_vert: string,
+    src_frag: string,
+    uniforms?: UniformOption[],
+    ubos?: any
   ) {
     // TODO Check if shader exists in cache
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Compile the shader Code, When successful, create struct to wrap the program
-    let prog = this.create_shader(src_vert, src_frag, false);
-    if (!prog) return null;
+    let glProgram = this.create_shader(src_vert, src_frag, false)!;
+    if (!glProgram) {
+      throw new Error(`cannot create shader WebGLProgram`);
+    }
 
-    let sh = new Shader(name, prog);
+    let shader = new Shader(name, glProgram);
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if (uniforms || ubos) {
-      //--------------------------------------
-      if (uniforms) {
-        let i, loc, itm;
-        for (i = 0; i < uniforms.length; i++) {
-          itm = uniforms[i];
-          loc = this.gl.ctx.getUniformLocation(sh.program, itm.name);
+    if (uniforms) {
+      let i: number = 0;
+      let loc: WebGLUniformLocation;
+      let itm: UniformOption;
+      for (; i < uniforms.length; i++) {
+        itm = uniforms[i];
+        loc = this.gl.ctx.getUniformLocation(shader.program, itm.name)!;
 
-          if (loc)
-            sh.uniforms.set(
-              itm.name,
-              new Uniform(itm.name, itm.type, loc, itm.value)
-            );
-          else console.error('add_uniform : Uniform not found %s ', itm.name);
-        }
-      }
-
-      //--------------------------------------
-      if (ubos) {
-        let idx, u;
-        for (u of ubos) {
-          if (!u) {
-            console.log('UBO Object undefined for ', name, ubos);
-            continue;
-          }
-
-          idx = this.gl.ctx.getUniformBlockIndex(sh.program, u.name);
-          if (idx > 1000) {
-            console.log('Ubo not found in shader %s : %s ', name, u.name);
-            continue;
-          }
-          this.gl.ctx.uniformBlockBinding(sh.program, idx, u.bind_point);
-
-          //console.log( "BIND UBO %s to SHADER %s on Index %s to Bind Point %s ", u.name, sh.name, idx, u.bind_point );
+        if (loc) {
+          shader.uniforms.set(
+            itm.name,
+            new Uniform(itm.name, itm.type, loc, itm.value)
+          );
+        } else {
+          throw new Error(`add_uniform : Uniform not found ${itm.name}`);
         }
       }
     }
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    this.cache.set(name, sh);
-    return sh;
+    if (ubos) {
+      let idx: number;
+      let u: any;
+      for (u of ubos) {
+        if (!u) {
+          throw new Error(`UBO Object undefined for ${name} ${ubos}`);
+        }
+
+        idx = this.gl.ctx.getUniformBlockIndex(shader.program, u.name);
+        if (idx > 1000) {
+          throw new Error(`Ubo not found in shader ${name} : ${u.name}`);
+        }
+        this.gl.ctx.uniformBlockBinding(shader.program, idx, u.bind_point);
+      }
+    }
+
+    this.cache.set(name, shader);
+
+    return shader;
   }
 
   get(name: any) {
@@ -172,11 +178,11 @@ export class ShaderFactory {
   }
 
   load_uniforms(o: any) {
-    let name,
-      itm,
-      map = o.uniforms,
-      gl = this.gl,
-      tex_slot = 0;
+    let name;
+    let itm;
+    let map = o.uniforms;
+    let gl = this.gl;
+    let tex_slot = 0;
 
     for ([name, itm] of map) {
       //console.log( itm );
@@ -267,66 +273,76 @@ export class ShaderFactory {
     return this;
   }
 
-  new_material(name: any = null, uniforms: any = null, options: any = null) {
+  new_material(
+    name: string,
+    uniforms: any = null,
+    options: any = null
+  ): Material {
     let sh = this.cache.get(name);
     if (!sh) {
-      console.error('No Shader by the name %s.', name);
-      return null;
+      throw new Error(`No Shader by the name ${name}.`);
     }
 
-    let k,
-      v,
-      mat = new Material(sh);
+    let mat = new Material(sh);
 
     // Copy Uniforms
-    for ([k, v] of sh.uniforms) mat.uniforms.set(k, v.clone());
+    let k;
+    let v;
+    for ([k, v] of sh.uniforms) {
+      mat.uniforms.set(k, v.clone());
+    }
 
     // Copy Options
-    for (k in sh.options) mat.options[k] = sh.options[k];
+    mat.options = { ...sh.options };
 
     // Load in custom Uniform Data if exists
     if (uniforms) {
-      let n;
-      for (n in uniforms) mat.set(n, uniforms[n]);
+      for (let n in uniforms) {
+        mat.set(n, uniforms[n]);
+      }
     }
 
     // Load in custom Option Data if exists
     if (options) {
       let o;
-      for (o in options) mat.options[o] = options[o];
+      for (o in options) {
+        mat.options[o] = options[o];
+      }
     }
 
     return mat;
   }
-  // #endregion //////////////////////////////////////////////////////////////////////////////////////
 
   // #region BINDING
   unbind() {
     this.gl.ctx.useProgram(null);
     return this;
   }
+
   bind(sh: any) {
     this.gl.ctx.useProgram(sh.program);
     return this;
   }
-  // #endregion //////////////////////////////////////////////////////////////////////////////////////
 
   // #region COMPILE SHADER
   // Compile Vertex/Fragment Shaders then Link them as a Program
   create_shader(
-    vert_src: any,
-    frag_src: any,
+    vert_src: string,
+    frag_src: string,
     do_dalidate: boolean = true,
     transFeedbackVars: any = null,
     transFeedbackInterleaved: any = false
   ) {
-    let vert = this.compile_shader(vert_src, this.gl.ctx.VERTEX_SHADER);
-    if (!vert) return null;
+    let vert = this.compile_shader(vert_src, this.gl.ctx.VERTEX_SHADER)!;
+    if (!vert) {
+      throw new Error(`Error creating vertix shader program.`);
+    }
 
-    let frag = this.compile_shader(frag_src, this.gl.ctx.FRAGMENT_SHADER);
+    let frag = this.compile_shader(frag_src, this.gl.ctx.FRAGMENT_SHADER)!;
     if (!frag) {
       this.gl.ctx.deleteShader(vert);
-      return null;
+
+      throw new Error(`Error creating fragment shader program.`);
     }
 
     return this.create_shader_program(
@@ -346,12 +362,13 @@ export class ShaderFactory {
 
     //Get Error data if shader failed compiling
     if (!this.gl.ctx.getShaderParameter(shader, this.gl.ctx.COMPILE_STATUS)) {
-      console.error(
-        'Error compiling shader : ' + src,
-        this.gl.ctx.getShaderInfoLog(shader)
-      );
       this.gl.ctx.deleteShader(shader);
-      return null;
+
+      throw new Error(
+        `Error compiling shader : ${src} \n ${this.gl.ctx.getShaderInfoLog(
+          shader
+        )}`
+      );
     }
 
     return shader;
@@ -359,13 +376,12 @@ export class ShaderFactory {
 
   //Link two compiled shaders to create a program for rendering.
   create_shader_program(
-    vert: any,
-    frag: any,
+    vert: WebGLShader,
+    frag: WebGLShader,
     do_validate = true,
     transFeedbackVars = null,
     transFeedbackInterleaved = false
   ) {
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Link shaders together
     let prog = this.gl.ctx.createProgram()!;
     this.gl.ctx.attachShader(prog, vert);
@@ -376,7 +392,6 @@ export class ShaderFactory {
     //ctx.bindAttribLocation(prog,ATTR_NORMAL_LOC,ATTR_NORMAL_NAME);
     //ctx.bindAttribLocation(prog,ATTR_UV_LOC,ATTR_UV_NAME);
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Need to setup Transform Feedback Varying Vars before linking the program.
     if (transFeedbackVars != null) {
       this.gl.ctx.transformFeedbackVaryings(
@@ -390,7 +405,6 @@ export class ShaderFactory {
 
     this.gl.ctx.linkProgram(prog);
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Check if successful
     if (!this.gl.ctx.getProgramParameter(prog, this.gl.ctx.LINK_STATUS)) {
       console.error(
@@ -401,7 +415,6 @@ export class ShaderFactory {
       return null;
     }
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Only do this for additional debugging.
     if (do_validate) {
       this.gl.ctx.validateProgram(prog);
@@ -415,38 +428,34 @@ export class ShaderFactory {
       }
     }
 
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Can delete the shaders since the program has been made.
     this.gl.ctx.detachShader(prog, vert); // TODO, detaching might cause issues on some browsers, Might only need to delete.
     this.gl.ctx.detachShader(prog, frag);
     this.gl.ctx.deleteShader(frag);
     this.gl.ctx.deleteShader(vert);
+
     return prog;
   }
-  // #endregion //////////////////////////////////////////////////////////////////////////////////////
+  // #endregion
 }
 
-//#######################################################################################################
-
-class Material {
-  uniforms = new Map();
+export class Material {
+  uniforms = new Map<string, any>();
   options: { [key: string]: any } = {
     depthTest: true,
     blend: false,
     sampleAlphaCoverage: false,
     cullFace: true,
   };
+
   constructor(readonly shader: any) {}
 
-  set(u_name: any, data: any) {
+  set(u_name: string, data: any) {
     let u = this.uniforms.get(u_name);
     if (!u) {
-      console.log(
-        'Uniform: %s not found in material %s',
-        u_name,
-        this.shader.name
+      throw new Error(
+        `Uniform: ${u_name} not found in material ${this.shader.name}`
       );
-      return this;
     }
 
     u.set(data);
@@ -456,12 +465,9 @@ class Material {
   get(u_name: any) {
     let u = this.uniforms.get(u_name);
     if (!u) {
-      console.log(
-        'Uniform: %s not found in material %s',
-        u_name,
-        this.shader.name
+      throw new Error(
+        `Uniform: ${u_name} not found in material ${this.shader.name}`
       );
-      return null;
     }
     return u.data;
   }
@@ -470,14 +476,17 @@ class Material {
     this.options.depthTest = v;
     return this;
   }
+
   set_blend(v: any) {
     this.options.blend = v;
     return this;
   }
+
   set_alpha_coverage(v: any) {
     this.options.sampleAlphaCoverage = v;
     return this;
   }
+
   set_cullface(v: any) {
     this.options.cullFace = v;
     return this;

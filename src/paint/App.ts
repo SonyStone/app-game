@@ -1,3 +1,4 @@
+import { onCleanup } from 'solid-js';
 import { BufferFactory } from './fungi/Buffer';
 import Context from './fungi/Context';
 import { Fbo, FboFactory } from './fungi/Fbo';
@@ -30,7 +31,19 @@ export function createApp(
   console.log('[ Sketch.App 0.1 ]');
 
   const gl = new Context(canvas);
-  gl.set_color('#000000').fit_screen().clear();
+  gl.set_color('#000000')
+    .set_size(window.innerWidth, window.innerHeight)
+    .clear();
+
+  function onWindowResize() {
+    gl.set_size(window.innerWidth, window.innerHeight);
+  }
+
+  window.addEventListener('resize', onWindowResize);
+
+  onCleanup(() => {
+    window.removeEventListener('resize', onWindowResize);
+  });
 
   const ortho_proj = new Matrix4();
   ortho_proj.from_ortho(0, gl.width, gl.height, 0, -100, 100);
@@ -38,7 +51,7 @@ export function createApp(
   const buffer = new BufferFactory(gl);
   const texture = new TextureFactory(gl);
   const vao = new VaoFactory(gl);
-  const shader = new ShaderFactory(gl, texture);
+  const shader = new ShaderFactory(gl);
   const mesh = new MeshFactory(gl, vao, buffer, shader);
   const fbo = new FboFactory(gl);
 
@@ -50,11 +63,9 @@ export function createApp(
     ],
   });
 
-  let box = gl.canvas!.getBoundingClientRect();
+  const box = canvas.getBoundingClientRect();
   const offset_x = box.left; // Help get X,Y in relation to the canvas position.
   const offset_y = box.top;
-
-  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
   function on_mouse_move(e: PointerEvent) {
     let x = e.pageX - offset_x;
@@ -63,25 +74,24 @@ export function createApp(
     on_mouse!(MouseState.MMOVE, x, y, pressure);
   }
 
-  let c = gl.canvas;
-  c.addEventListener('pointerdown', (e) => {
+  canvas.addEventListener('pointerdown', (event) => {
     if (on_mouse) {
-      let x = e.pageX - offset_x;
-      let y = e.pageY - offset_y;
-      let pressure = e.pressure;
+      let x = event.pageX - offset_x;
+      let y = event.pageY - offset_y;
+      let pressure = event.pressure;
 
       on_mouse(MouseState.MDOWN, x, y, pressure);
-      c.addEventListener('pointermove', on_mouse_move);
+      canvas.addEventListener('pointermove', on_mouse_move);
     }
   });
 
-  c.addEventListener('pointerup', (e) => {
+  canvas.addEventListener('pointerup', (event) => {
     if (on_mouse) {
-      c.removeEventListener('pointermove', on_mouse_move);
+      canvas.removeEventListener('pointermove', on_mouse_move);
 
-      let x = e.pageX - offset_x;
-      let y = e.pageY - offset_y;
-      let pressure = e.pressure;
+      let x = event.pageX - offset_x;
+      let y = event.pageY - offset_y;
+      let pressure = event.pressure;
 
       on_mouse(MouseState.MUP, x, y, pressure);
     }
