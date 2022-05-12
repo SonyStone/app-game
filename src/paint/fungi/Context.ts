@@ -43,9 +43,7 @@ export default class Context {
 		c.blendFunc( c.SRC_ALPHA, c.ONE_MINUS_SRC_ALPHA ); //BLEND_ALPHA
 		*/
   }
-  // #endregion //////////////////////////////////////////////////////////////////////////////////////
 
-  // #region METHODS
 
   clear() {
     this.ctx.clear(this.ctx.COLOR_BUFFER_BIT | this.ctx.DEPTH_BUFFER_BIT);
@@ -72,5 +70,4 @@ export default class Context {
     this.ctx.clearColor(c[0], c[1], c[2], c[3]);
     return this;
   }
-  // #endregion //////////////////////////////////////////////////////////////////////////////////////
 }

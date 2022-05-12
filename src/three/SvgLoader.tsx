@@ -11,7 +11,7 @@ import {
 import { useStats } from '../Stats.provider';
 import { useCamera } from './Camera.provider';
 import { loadSVG } from './loadSVG';
-import hexagon from './svg/tiger.svg';
+import hexagon from './svg/diogram.drawio.svg';
 import s from './SvgLoader.module.scss';
 
 export default function SvgLoader() {
@@ -52,7 +52,7 @@ export default function SvgLoader() {
     render();
   });
 
-  scene.background = new Color(0x000000);
+  scene.background = new Color(0xf6f6f6);
 
   const helper = new GridHelper(600, 10);
   scene.add(helper);
