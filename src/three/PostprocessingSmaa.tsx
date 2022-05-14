@@ -33,9 +33,6 @@ export default function PostprocessingSmaa() {
   });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
-
-  //
 
   const { camera, controls, resize } = useCamera();
 

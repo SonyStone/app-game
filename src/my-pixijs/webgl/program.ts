@@ -20,7 +20,7 @@ export interface Program {
 }
 
 export function getProgram(
-  gl: WebGLRenderingContextBase,
+  gl: WebGL2RenderingContext,
   vertexSrc: string,
   fragmentSrc: string
 ): Program {
@@ -29,11 +29,11 @@ export function getProgram(
 
   const glPprogram = linkProgram(gl, vertShader, fragShader);
 
-  const attributeData = getAttributeData(glPprogram, gl);
-  const uniformData = getUniformData(glPprogram, gl);
-
   gl.deleteShader(vertShader);
   gl.deleteShader(fragShader);
+
+  const attributeData = getAttributeData(gl, glPprogram);
+  const uniformData = getUniformData(gl, glPprogram);
 
   const program = {
     id: UID++,

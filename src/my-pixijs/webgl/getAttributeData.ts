@@ -1,5 +1,9 @@
+import {
+  GL_DATA_TYPE,
+  GL_STATIC_VARIABLES,
+} from '../../twgl/webgl-static-variables';
 import { mapSize } from './mapSize';
-import { mapType } from './mapType';
+import { GL_TO_GLSL_TYPES } from './mapType';
 
 export interface AttributeData {
   type: string;
@@ -13,34 +17,43 @@ export interface AttributeData {
  * @private
  *
  * @param {WebGLProgram} [program] - the WebGL program
- * @param {WebGLRenderingContext} [gl] - the WebGL context
+ * @param {WebGL2RenderingContext} [gl] - the WebGL context
  *
  * @returns {object} the attribute data for this program
  */
 export function getAttributeData(
-  program: WebGLProgram,
-  gl: WebGLRenderingContextBase
+  gl: WebGL2RenderingContext,
+  program: WebGLProgram
 ): { [key: string]: AttributeData } {
   const attributes: { [key: string]: AttributeData } = {};
 
-  const totalAttributes = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
+  const totalAttributes = gl.getProgramParameter(
+    program,
+    GL_STATIC_VARIABLES.ACTIVE_ATTRIBUTES
+  );
 
-  for (let i = 0; i < totalAttributes; i++) {
+  function getActiveAttribData(program: WebGLProgram, i: number) {
     const attribData = gl.getActiveAttrib(program, i)!;
 
     if (attribData.name.indexOf('gl_') === 0) {
-      continue;
+      return undefined;
     }
 
-    const type = mapType(gl, attribData.type);
-    const data = {
+    const type = GL_TO_GLSL_TYPES[attribData.type as GL_DATA_TYPE];
+    return {
       type,
       name: attribData.name,
       size: mapSize(type),
       location: gl.getAttribLocation(program, attribData.name),
     };
+  }
 
-    attributes[attribData.name] = data;
+  for (let i = 0; i < totalAttributes; i++) {
+    const attrib = getActiveAttribData(program, i);
+
+    if (attrib) {
+      attributes[attrib.name] = attrib;
+    }
   }
 
   return attributes;

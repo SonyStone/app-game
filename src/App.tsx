@@ -4,8 +4,7 @@ import { For, lazy } from 'solid-js';
 import s from './App.module.scss';
 import Noise from './noise/Noise';
 import { useStats } from './Stats.provider';
-import { CameraProvider, useCamera } from './three/Camera.provider';
-import { withProviders } from './utils/withProviders';
+import { useCamera } from './three/Camera.provider';
 
 const routes: (RouteDefinition & { name: string })[] = [
   {
@@ -72,6 +71,16 @@ const routes: (RouteDefinition & { name: string })[] = [
     path: '/paint',
     name: 'Paint',
     component: lazy(() => import('./paint/Paint')),
+  },
+  {
+    path: '/twgl',
+    name: 'twgl',
+    component: lazy(() => import('./twgl/Main')),
+  },
+  {
+    path: '/view-offset',
+    name: 'ViewOffset',
+    component: lazy(() => import('./three/ViewOffset')),
   },
 ];
 

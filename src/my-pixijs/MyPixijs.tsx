@@ -69,25 +69,30 @@ export default function MyPixijs() {
   const { destroy } = setVertexArrayObject(gl, program.attributeData, geometry);
 
   gl.useProgram(program.program);
-  gl.uniform4fv(program.uniformData['u_offset'].location, [0, 0, 0, 0]);
+
+  let vec = new Vector4(0, 0, 0, 0);
+
+  program.uniformData['u_offset'].set(vec.toArray());
+
   program.useProgram();
 
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
-  // draw(gl, DRAW_MODES.TRIANGLES, geometry);
-  draw(gl, DRAW_MODES.LINES, geometry);
+  draw(gl, DRAW_MODES.TRIANGLES, geometry);
+  // draw(gl, DRAW_MODES.LINES, geometry);
 
   onCleanup(() => {
     destroy();
     gl.getExtension('WEBGL_lose_context')?.loseContext();
   });
 
-  let vec = new Vector4(0, 0, 0, 0);
   function move(x: number = 0, y: number = 0, w: number = 0) {
     vec.set(vec.x + x, vec.y + y, 0, vec.w + w);
     gl.useProgram(program.program);
-    gl.uniform4fv(program.uniformData['u_offset'].location, vec.toArray());
+
+    program.uniformData['u_offset'].set(vec.toArray());
+
     gl.clear(gl.COLOR_BUFFER_BIT);
     draw(gl, DRAW_MODES.TRIANGLES, geometry);
   }

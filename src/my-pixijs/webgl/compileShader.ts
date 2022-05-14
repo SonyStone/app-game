@@ -1,3 +1,16 @@
+/**
+ * Loads and compiles a shader.
+ *
+ * Standard function, the same in almost all libraries
+ *
+ * todo: Add a nicer error output
+ * todo: possibly cutting off the first blank lines
+ *
+ * @param gl The WebGLRenderingContext to use.
+ * @param shaderType The type of shader.
+ * @param source The shader source.
+ * @returns The created shader.
+ */
 export function compileShader(
   gl: WebGLRenderingContextBase,
   shaderType: number,
@@ -12,8 +25,12 @@ export function compileShader(
   if (compileStatus) {
     return shader;
   } else {
-    throw new Error(
+    const error = new Error(
       gl.getShaderInfoLog(shader) || 'Unknown error creating shader'
     );
+
+    gl.deleteShader(shader);
+
+    throw error;
   }
 }

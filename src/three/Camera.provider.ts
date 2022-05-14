@@ -5,12 +5,12 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
-import { Camera, OrthographicCamera, PerspectiveCamera } from 'three';
+import { OrthographicCamera, PerspectiveCamera } from 'three';
 
 import { createContextProvider } from '../utils/createContextProvider';
 import { OrbitControls } from './controls/OrbitControls';
 
-function createResize() {
+export function createResize() {
   const [resize, setResize] = createSignal<{ width: number; height: number }>({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -88,10 +88,10 @@ export const [CameraProvider, useCamera] = createContextProvider(() => {
     if ((currentCamera as PerspectiveCamera).isPerspectiveCamera) {
       (currentCamera as PerspectiveCamera).aspect = width / height;
     } else if ((currentCamera as OrthographicCamera).isOrthographicCamera) {
-      (currentCamera as OrthographicCamera).left = -window.innerWidth / 2;
-      (currentCamera as OrthographicCamera).right = window.innerWidth / 2;
-      (currentCamera as OrthographicCamera).top = window.innerHeight / 2;
-      (currentCamera as OrthographicCamera).bottom = -window.innerHeight / 2;
+      (currentCamera as OrthographicCamera).left = -width / 2;
+      (currentCamera as OrthographicCamera).right = width / 2;
+      (currentCamera as OrthographicCamera).top = height / 2;
+      (currentCamera as OrthographicCamera).bottom = -height / 2;
     }
 
     currentCamera.updateProjectionMatrix();

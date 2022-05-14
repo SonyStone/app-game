@@ -1,3 +1,5 @@
+import { GL_DATA_TYPE } from '../../twgl/webgl-static-variables';
+
 function booleanArray(size: number): Array<boolean> {
   const array = new Array(size);
 
@@ -16,65 +18,61 @@ function booleanArray(size: number): Array<boolean> {
  * @private
  */
 export function defaultValue(
-  type: string,
+  type: GL_DATA_TYPE,
   size: number
-): number | Float32Array | Int32Array | Uint32Array | boolean | boolean[] {
+):
+  | number
+  | number[]
+  | Float32Array
+  | Int32Array
+  | Uint32Array
+  | boolean
+  | boolean[] {
   switch (type) {
-    case 'float':
-      return 0;
-
-    case 'vec2':
-      return new Float32Array(2 * size);
-
-    case 'vec3':
-      return new Float32Array(3 * size);
-
-    case 'vec4':
-      return new Float32Array(4 * size);
-
-    case 'int':
-    case 'uint':
-    case 'sampler2D':
-    case 'sampler2DArray':
-      return 0;
-
-    case 'ivec2':
-      return new Int32Array(2 * size);
-
-    case 'ivec3':
-      return new Int32Array(3 * size);
-
-    case 'ivec4':
-      return new Int32Array(4 * size);
-
-    case 'uvec2':
-      return new Uint32Array(2 * size);
-
-    case 'uvec3':
-      return new Uint32Array(3 * size);
-
-    case 'uvec4':
-      return new Uint32Array(4 * size);
-
-    case 'bool':
+    case GL_DATA_TYPE.BOOL:
       return false;
 
-    case 'bvec2':
+    case GL_DATA_TYPE.FLOAT:
+      return 0;
+    case GL_DATA_TYPE.FLOAT_VEC2:
+      return new Float32Array(2 * size);
+    case GL_DATA_TYPE.FLOAT_VEC3:
+      return new Float32Array(3 * size);
+    case GL_DATA_TYPE.FLOAT_VEC4:
+      return new Float32Array(4 * size);
+
+    case GL_DATA_TYPE.INT:
+    case GL_DATA_TYPE.UNSIGNED_INT:
+    case GL_DATA_TYPE.SAMPLER_2D:
+    case GL_DATA_TYPE.SAMPLER_2D_ARRAY:
+      return 0;
+
+    case GL_DATA_TYPE.INT_VEC2:
+      return new Int32Array(2 * size);
+    case GL_DATA_TYPE.INT_VEC3:
+      return new Int32Array(3 * size);
+    case GL_DATA_TYPE.INT_VEC4:
+      return new Int32Array(4 * size);
+
+    case GL_DATA_TYPE.UNSIGNED_INT_VEC2:
+      return new Uint32Array(2 * size);
+    case GL_DATA_TYPE.UNSIGNED_INT_VEC3:
+      return new Uint32Array(3 * size);
+    case GL_DATA_TYPE.UNSIGNED_INT_VEC4:
+      return new Uint32Array(4 * size);
+
+    case GL_DATA_TYPE.BOOL_VEC2:
       return booleanArray(2 * size);
-
-    case 'bvec3':
+    case GL_DATA_TYPE.BOOL_VEC3:
       return booleanArray(3 * size);
-
-    case 'bvec4':
+    case GL_DATA_TYPE.BOOL_VEC4:
       return booleanArray(4 * size);
 
-    case 'mat2':
+    case GL_DATA_TYPE.FLOAT_MAT2:
       return new Float32Array([1, 0, 0, 1]);
-
-    case 'mat3':
+    case GL_DATA_TYPE.FLOAT_MAT3:
       return new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
-
-    case 'mat4':
+    case GL_DATA_TYPE.FLOAT_MAT4:
       return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   }
 

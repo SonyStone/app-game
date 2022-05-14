@@ -1,14 +1,37 @@
+import {
+  GL_DATA_TYPE,
+  GL_STATIC_VARIABLES,
+} from '../../twgl/webgl-static-variables';
 import { defaultValue } from './defaultValue';
-import { mapType } from './mapType';
+import { GL_TO_GLSL_TYPES } from './mapType';
+import { getUniformsSetter } from './uniformsSetters';
 
 export interface UniformData {
   index: number;
   type: string;
   size: number;
   isArray: boolean;
-  value: number | boolean | Float32Array | Int32Array | Uint32Array | boolean[];
+  isStruct: boolean;
+  value:
+    | number
+    | boolean
+    | number[]
+    | boolean[]
+    | Float32Array
+    | Int32Array
+    | Uint32Array;
   name: string;
   location: WebGLUniformLocation;
+  set(
+    v:
+      | number
+      | boolean
+      | number[]
+      | boolean[]
+      | Float32Array
+      | Int32Array
+      | Uint32Array
+  ): void;
 }
 
 /**
@@ -21,31 +44,40 @@ export interface UniformData {
  * @returns {object} the uniform data for this program
  */
 export function getUniformData(
-  program: WebGLProgram,
-  gl: WebGLRenderingContextBase
+  gl: WebGL2RenderingContext,
+  program: WebGLProgram
 ): { [key: string]: UniformData } {
   const uniforms: { [key: string]: UniformData } = {};
 
-  const totalUniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+  const totalUniforms = gl.getProgramParameter(
+    program,
+    GL_STATIC_VARIABLES.ACTIVE_UNIFORMS
+  );
 
-  for (let i = 0; i < totalUniforms; i++) {
+  function getActiveUniformData(program: WebGLProgram, i: number) {
     const uniformData = gl.getActiveUniform(program, i)!;
-
     const name = uniformData.name.replace(/\[.*?\]$/, '');
-
     const isArray = !!uniformData.name.match(/\[.*?\]$/);
+    const isStruct = !!uniformData.name.match(/\./);
+    const type = GL_TO_GLSL_TYPES[uniformData.type as GL_DATA_TYPE];
+    const location = gl.getUniformLocation(program, name)!;
 
-    const type = mapType(gl, uniformData.type);
-
-    uniforms[name] = {
+    return {
       name,
       index: i,
       type,
       size: uniformData.size,
       isArray,
-      value: defaultValue(type, uniformData.size),
-      location: gl.getUniformLocation(program, name)!,
+      isStruct,
+      value: defaultValue(uniformData.type, uniformData.size),
+      location,
+      set: getUniformsSetter(gl, uniformData.type as GL_DATA_TYPE, location),
     };
+  }
+
+  for (let i = 0; i < totalUniforms; i++) {
+    const uniform = getActiveUniformData(program, i);
+    uniforms[uniform.name] = uniform;
   }
 
   return uniforms;
