@@ -93,7 +93,7 @@ export function App() {
 
   return (
     <>
-      <header class={s.header}>
+      <header class={[s.header, s.right].join(' ')}>
         <button
           class={s.toggle}
           onClick={(e) => {
