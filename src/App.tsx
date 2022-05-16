@@ -1,5 +1,5 @@
 import { Link, RouteDefinition, Routes, useRoutes } from 'solid-app-router';
-import { For, lazy } from 'solid-js';
+import { createSignal, For, lazy } from 'solid-js';
 
 import s from './App.module.scss';
 import Noise from './noise/Noise';
@@ -11,16 +11,6 @@ const routes: (RouteDefinition & { name: string })[] = [
     path: '/',
     name: 'isometric',
     component: lazy(() => import('./isometric/Isometric')),
-  },
-  {
-    path: '/empty',
-    name: 'Empty',
-    component: () => (
-      <>
-        <br />
-        Nothing is here
-      </>
-    ),
   },
   {
     path: '/three',
@@ -38,9 +28,9 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import('./Tanki/Tanki')),
   },
   {
-    path: '/ecs',
-    name: 'ECS',
-    component: lazy(() => import('./TestEcs')),
+    path: '/wasm-game-of-life',
+    name: 'Wasm Game Of Life',
+    component: lazy(() => import('./WasmGameOfLife')),
   },
   {
     path: '/my-pixijs',
@@ -82,6 +72,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     name: 'ViewOffset',
     component: lazy(() => import('./three/ViewOffset')),
   },
+  {
+    path: '/:any',
+    name: 'Empty',
+    component: () => <div class={s.nothing}>Nothing is here</div>,
+  },
 ];
 
 export function App() {
@@ -90,6 +85,8 @@ export function App() {
 
   const { toggleCamera, cameraType } = useCamera();
 
+  const [isOpen, setOpen] = createSignal(false);
+
   stats.showPanel(1);
   stats.dom.style.left = 'unset';
   stats.dom.style.right = '0';
@@ -97,11 +94,26 @@ export function App() {
   return (
     <>
       <header class={s.header}>
-        <For each={routes}>
-          {({ path, name }) => <Link href={path}>{name}</Link>}
-        </For>
-
-        <button onClick={toggleCamera}>{cameraType}</button>
+        <button
+          class={s.toggle}
+          onClick={(e) => {
+            setOpen(!isOpen());
+          }}
+          onPointerEnter={(e) => {
+            if (e.pointerType !== 'touch') {
+              setOpen(true);
+            }
+          }}>
+          ⇶
+        </button>
+        <nav
+          class={[s.navigation, isOpen() ? s.open : ''].join(' ')}
+          onPointerLeave={() => setOpen(false)}>
+          <For each={routes}>
+            {({ path, name }) => <Link href={path}>{name}</Link>}
+          </For>
+          <button onClick={toggleCamera}>{cameraType}</button>
+        </nav>
       </header>
       {stats.dom}
       <main>

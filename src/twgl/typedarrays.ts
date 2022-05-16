@@ -94,7 +94,6 @@ export type TypedArray =
  * @param {ArrayBufferView} typedArray a typedArray
  * @return {number} the GL type for array. For example pass in an `Int8Array` and `gl.BYTE` will
  *   be returned. Pass in a `Uint32Array` and `gl.UNSIGNED_INT` will be returned
- * @memberOf module:twgl/typedArray
  */
 export function getGLTypeForTypedArray(typedArray: TypedArray) {
   switch (typedArray.constructor) {
@@ -134,7 +133,6 @@ export type TypedArrayType =
  * @param {ArrayBufferView} typedArrayType a typedArray constructor
  * @return {number} the GL type for type. For example pass in `Int8Array` and `gl.BYTE` will
  *   be returned. Pass in `Uint32Array` and `gl.UNSIGNED_INT` will be returned
- * @memberOf module:twgl/typedArray
  */
 export function getGLTypeForTypedArrayType(typedArrayType: TypedArrayType) {
   switch (typedArrayType) {

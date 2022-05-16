@@ -1,12 +1,12 @@
 import { onCleanup } from 'solid-js';
+
 import init, {
   Cell,
   Universe,
 } from '../wasm_game_of_life/pkg/wasm_game_of_life';
-import { World } from './game/World';
 import { useStats } from './Stats.provider';
 
-export default function TestEcs() {
+export default function WasmGameOfLife() {
   // greet();
 
   const playPauseButton = (<button>▶</button>) as HTMLButtonElement;
@@ -54,7 +54,6 @@ export default function TestEcs() {
       ctx.beginPath();
       ctx.strokeStyle = GRID_COLOR;
 
-      // 垂直线
       for (let i = 0; i <= width; i++) {
         ctx.moveTo(i * (CELL_SIZE + 1) + 1, 0);
         ctx.lineTo(i * (CELL_SIZE + 1) + 1, (CELL_SIZE + 1) * height + 1);
@@ -139,36 +138,6 @@ export default function TestEcs() {
     });
 
     play();
-  });
-
-  const wd = new World({
-    systems: [],
-    entities: [
-      {
-        name: 'Human',
-        props: {
-          position: { x: 10, y: 10 },
-        },
-      },
-      {
-        name: 'Sheep',
-        props: {
-          position: { x: 1, y: 20 },
-        },
-      },
-      {
-        name: 'Plant',
-        props: {
-          position: { x: 3, y: 14 },
-        },
-      },
-      {
-        name: 'tree',
-        props: {
-          position: { x: 30, y: 10 },
-        },
-      },
-    ],
   });
 
   onCleanup(() => {
