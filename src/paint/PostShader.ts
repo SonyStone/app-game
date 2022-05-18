@@ -3,7 +3,7 @@ import { ShaderFactory } from './fungi/Shader';
 import vertSrc from './postShader.vert?raw';
 import fragSrc from './postShader.frag?raw';
 
-export default {
+export const PostShader = {
   new: (shader: ShaderFactory) => {
     return shader.new_material('PostRender');
   },

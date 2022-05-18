@@ -1,4 +1,4 @@
-export default class Vec2 extends Float32Array {
+export class Vec2 extends Float32Array {
   static UP = new Vec2(0, 1);
   static RIGHT = new Vec2(1, 0);
   static LEFT = new Vec2(-1, 0);

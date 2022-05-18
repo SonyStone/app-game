@@ -2,7 +2,7 @@ import fragSrc from './drawShader.frag?raw';
 import vertSrc from './drawShader.vert?raw';
 import { ShaderFactory } from './fungi/Shader';
 
-export default {
+export const DrawShader = {
   new: (shader: ShaderFactory) => {
     return shader.new_material('DrawShader');
   },

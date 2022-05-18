@@ -1,5 +1,5 @@
-import Colour from './Colour';
-import Context from './Context';
+import { Colour } from './Colour';
+import { Context } from './Context';
 import { TextureFactory } from './Texture';
 
 //#######################################################################################################

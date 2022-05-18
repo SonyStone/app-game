@@ -1,5 +1,5 @@
 // copy from three js ?
-export default class Matrix4 extends Float32Array {
+export class Matrix4 extends Float32Array {
   constructor() {
     super(16);
     this[0] = this[5] = this[10] = this[15] = 1;

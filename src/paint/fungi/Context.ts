@@ -1,10 +1,10 @@
-import Colour from './Colour';
+import { Colour } from './Colour';
 
 const ARRAY = 34962;
 const ELEMENT = 34963;
 const UNIFORM = 35345;
 
-export default class Context {
+export class Context {
   // #region MAIN
   ctx: WebGL2RenderingContext;
   width = 0;
@@ -43,7 +43,6 @@ export default class Context {
 		c.blendFunc( c.SRC_ALPHA, c.ONE_MINUS_SRC_ALPHA ); //BLEND_ALPHA
 		*/
   }
-
 
   clear() {
     this.ctx.clear(this.ctx.COLOR_BUFFER_BIT | this.ctx.DEPTH_BUFFER_BIT);

@@ -13,7 +13,7 @@ const COLORS: { [key: string]: string } = {
   darkgray: '#303030',
 };
 
-export default class Colour {
+export class Colour {
   rgba = new Float32Array([0, 0, 0, 1]);
   rgb = new Float32Array(this.rgba.buffer, 0, 3);
 

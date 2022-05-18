@@ -1,4 +1,4 @@
-import Context from './Context';
+import { Context } from './Context';
 
 export class Texture {
   constructor(readonly name: any, readonly id: any) {}

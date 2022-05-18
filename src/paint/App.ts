@@ -1,8 +1,8 @@
 import { onCleanup } from 'solid-js';
 import { BufferFactory } from './fungi/Buffer';
-import Context from './fungi/Context';
+import { Context } from './fungi/Context';
 import { Fbo, FboFactory } from './fungi/Fbo';
-import Matrix4 from './fungi/Mat4';
+import { Matrix4 } from './fungi/Mat4';
 import { MeshFactory } from './fungi/Mesh';
 import { ShaderFactory } from './fungi/Shader';
 import { TextureFactory } from './fungi/Texture';
@@ -71,7 +71,7 @@ export function createApp(
     let x = e.pageX - offset_x;
     let y = e.pageY - offset_y;
     let pressure = e.pressure;
-    on_mouse!(MouseState.MMOVE, x, y, pressure);
+    on_mouse(MouseState.MMOVE, x, y, pressure);
   }
 
   canvas.addEventListener('pointerdown', (event) => {

@@ -1,9 +1,10 @@
 import { createApp, MouseState } from './App';
-import DrawShader from './DrawShader';
+import { DrawShader } from './DrawShader';
+import { Mesh } from './fungi/Mesh';
 import { Material } from './fungi/Shader';
-import Vec2 from './fungi/Vec2';
-import PostShader from './PostShader';
-import Quads from './Quads2';
+import { Vec2 } from './fungi/Vec2';
+import { PostShader } from './PostShader';
+import { Quads } from './Quads2';
 
 export default function Paint() {
   const canvas = (
@@ -12,30 +13,6 @@ export default function Paint() {
         'touch-action': 'none',
       }}></canvas>
   ) as HTMLCanvasElement;
-
-  let $move = new Vec2(); // Current Mouse Pos
-  let $prev = new Vec2(); // Previous Mouse Pos
-  let $pressure = 0;
-
-  let $brush: any;
-  let $quad: any;
-  let $mat_draw: Material;
-  let $mat_post: Material;
-
-  let $brush_size = 10;
-  let $bound = new Float32Array(4); // Bounding Area to Draw
-  let $segment = new Float32Array(4); // The 2 points of a Segment
-
-  const app = createApp(canvas, on_mouse)!;
-  if (!app) return;
-
-  PostShader.init(app.shader); // Shader that uses a unit quad to draw a texture to screen
-  DrawShader.init(app.shader); // Shader that draws a brush over a line segment
-
-  $brush = Quads.unit_corner(app.buffer, app.mesh);
-  $quad = Quads.ndc(app.buffer, app.mesh);
-  $mat_draw = app.shader.new_material('DrawShader');
-  $mat_post = app.shader.new_material('PostRender');
 
   function on_mouse(state: any, x: number, y: number, pressure: number) {
     $move.setVec(x, y);
@@ -57,13 +34,32 @@ export default function Paint() {
     $prev.copy($move);
   }
 
+  const app = createApp(canvas, on_mouse);
+
+  const $move = new Vec2(); // Current Mouse Pos
+  const $prev = new Vec2(); // Previous Mouse Pos
+  let $pressure = 0;
+
+  const $brush: Mesh = Quads.unit_corner(app.buffer, app.mesh);
+  const $quad: Mesh = Quads.ndc(app.buffer, app.mesh);
+
+  DrawShader.init(app.shader); // Shader that draws a brush over a line segment
+  const $mat_draw: Material = app.shader.new_material('DrawShader');
+
+  PostShader.init(app.shader); // Shader that uses a unit quad to draw a texture to screen
+  let $mat_post: Material = app.shader.new_material('PostRender');
+
+  let $brush_size = 10;
+  let $bound = new Float32Array(4); // Bounding Area to Draw
+  let $segment = new Float32Array(4); // The 2 points of a Segment
+
   // This function handles drawing the brush shader onto a custom frame buffer texture
   function draw() {
     let c = app.gl.ctx; // alias
 
     // Setup
     app.fbo.bind(app.main_fbo); //.clear( $fbo );	// Load Custom FrameBuffer
-    c.bindVertexArray($brush.vao.id); // Load Quad
+    c.bindVertexArray($brush.vao?.id); // Load Quad
 
     //App.gl.ctx.disable( App.gl.ctx.DEPTH_TEST );
 
@@ -104,7 +100,7 @@ export default function Paint() {
     let c = app.gl.ctx; // Alias
 
     // Mesh
-    c.bindVertexArray($quad.vao.id);
+    c.bindVertexArray($quad.vao?.id);
 
     // SHADER
     c.useProgram($mat_post.shader.program); // Bind Shader

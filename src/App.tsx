@@ -73,6 +73,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import('./three/ViewOffset')),
   },
   {
+    path: '/game-ecs',
+    name: 'Game ECS',
+    component: lazy(() => import('./game-ecs/Index')),
+  },
+  {
     path: '/:any',
     name: 'Empty',
     component: () => <div class={s.nothing}>Nothing is here</div>,

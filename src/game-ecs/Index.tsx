@@ -26,7 +26,32 @@ class Store {
 
 // const Renderable = { ...Position, ...Shape }
 
+interface Entity {
+  [key: string]: any;
+}
+
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface Position {
+  position: Point;
+}
+
+interface Shape {
+  shape: string;
+}
+
 export default function Main() {
+  const entites: Entity = [
+    {
+      position: { x: 3, y: 3 },
+    },
+    {},
+    {},
+  ];
+
   const wd = new World({
     systems: [],
     entities: [

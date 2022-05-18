@@ -1,7 +1,7 @@
 import { BufferFactory } from './fungi/Buffer';
 import { MeshFactory } from './fungi/Mesh';
 
-export default {
+export const Quads = {
   unit_corner: (buffer: BufferFactory, mesh: MeshFactory) => {
     let buf_idx = buffer.new_element(new Uint16Array([0, 1, 2, 2, 3, 0]));
     let buf_vert = buffer.new_array(

@@ -1,10 +1,13 @@
-import Context from './Context';
+import { BufferFactory } from './Buffer';
+import { Context } from './Context';
+import { ShaderFactory } from './Shader';
+import { Vao, VaoFactory } from './Vao';
 
 const USHORT = 5123;
 const UINT = 5125;
 
-class Mesh {
-  vao = null;
+export class Mesh {
+  vao?: Vao = undefined;
   element_cnt = 0;
   element_type = 0;
   instance_cnt = 0;
@@ -13,30 +16,6 @@ class Mesh {
 
   constructor(readonly name: string) {}
 }
-
-/*
-this.mesh 	= App.mesh.from_buffer_config([
-	{ name: "indices", buffer: buf_idx },
-	{ name: "vertices", buffer: verts, attrib_loc:0, size:3, stride_len:0, offset:0 },
-	{ name: "quad", buffer: buf_vert, interleaved: [
-		{ attrib_loc:0, size:3, stride_len:8 * 4, offset:0 * 4 },
-		{ attrib_loc:1, size:3, stride_len:8 * 4, offset:3 * 4 },
-		{ attrib_loc:2, size:2, stride_len:8 * 4, offset:6 * 4 },
-	]},
-	{ name: "inst", buffer: this.buf, instanced:true, interleaved: this.data.generate_config( 6, true ) },
-], "PointShapes", 6 );
-let config	= [
-	// Static Mesh
-	{ name:"indices",	data:geo.idx,	size:1, is_index:true, },
-	{ name:"vertices",	data:geo.vert,	size:4, attrib_loc:App.shader.POS_LOC, },
-	{ name:"color",		data:geo.color,	size:3, attrib_loc:App.shader.COLOR_LOC, },
-	// Mesh Instances
-	{ name:"rot",	data:bv.rot_buffer,	size:4, attrib_loc:10, is_static:false,	instanced:true, },
-	{ name:"pos",	data:bv.pos_buffer,	size:3, attrib_loc:11, is_static:false,	instanced:true, },
-	{ name:"scl",	data:bv.scl_buffer,	size:3, attrib_loc:12, is_static:false,	instanced:true, },
-	{ name:"len",	data:len_buf,		size:1, attrib_loc:13, is_static:true,	instanced:true, },
-];
-*/
 
 export class MeshFactory {
   PNT = 0;
@@ -48,9 +27,9 @@ export class MeshFactory {
 
   constructor(
     readonly gl: Context,
-    readonly vao: any,
-    readonly buffer: any,
-    readonly shader: any
+    readonly vao: VaoFactory,
+    readonly buffer: BufferFactory,
+    readonly shader: ShaderFactory
   ) {}
 
   new(name: string) {

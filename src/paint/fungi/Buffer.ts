@@ -1,4 +1,4 @@
-import Context from './Context';
+import { Context } from './Context';
 
 const ARRAY = 34962;
 const ELEMENT = 34963;
