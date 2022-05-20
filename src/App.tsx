@@ -78,6 +78,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import('./game-ecs/Index')),
   },
   {
+    path: '/gpu-text-rendering',
+    name: 'GPU Text Rendering',
+    component: lazy(() => import('./gpu-text-rendering/Index')),
+  },
+  {
     path: '/:any',
     name: 'Empty',
     component: () => <div class={s.nothing}>Nothing is here</div>,

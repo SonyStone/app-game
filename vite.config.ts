@@ -1,3 +1,4 @@
+import { resolve } from 'path';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 
@@ -10,4 +11,9 @@ export default defineConfig({
     rust(),
   ],
   publicDir: './public',
+  resolve: {
+    alias: {
+      '@utils': resolve(__dirname, './src/utils'),
+    },
+  },
 });

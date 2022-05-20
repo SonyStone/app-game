@@ -24,10 +24,7 @@ export interface App {
   mesh: MeshFactory;
 }
 
-export function createApp(
-  canvas: HTMLCanvasElement,
-  on_mouse: (type: number, x: number, y: number, pressure: number) => void
-): App {
+export function createApp(canvas: HTMLCanvasElement): App {
   console.log('[ Sketch.App 0.1 ]');
 
   const gl = new Context(canvas);
@@ -61,40 +58,6 @@ export function createApp(
     buffers: [
       { attach: 0, name: 'color', type: 'color', mode: 'tex', pixel: 'byte' },
     ],
-  });
-
-  const box = canvas.getBoundingClientRect();
-  const offset_x = box.left; // Help get X,Y in relation to the canvas position.
-  const offset_y = box.top;
-
-  function on_mouse_move(e: PointerEvent) {
-    let x = e.pageX - offset_x;
-    let y = e.pageY - offset_y;
-    let pressure = e.pressure;
-    on_mouse(MouseState.MMOVE, x, y, pressure);
-  }
-
-  canvas.addEventListener('pointerdown', (event) => {
-    if (on_mouse) {
-      let x = event.pageX - offset_x;
-      let y = event.pageY - offset_y;
-      let pressure = event.pressure;
-
-      on_mouse(MouseState.MDOWN, x, y, pressure);
-      canvas.addEventListener('pointermove', on_mouse_move);
-    }
-  });
-
-  canvas.addEventListener('pointerup', (event) => {
-    if (on_mouse) {
-      canvas.removeEventListener('pointermove', on_mouse_move);
-
-      let x = event.pageX - offset_x;
-      let y = event.pageY - offset_y;
-      let pressure = event.pressure;
-
-      on_mouse(MouseState.MUP, x, y, pressure);
-    }
   });
 
   return {

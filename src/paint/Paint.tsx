@@ -1,8 +1,11 @@
-import { createApp, MouseState } from './App';
+import { createPointerData } from '@utils/create-pointer-data';
+import * as v2 from '@utils/math/v2';
+import { createEffect } from 'solid-js';
+
+import { createApp } from './App';
 import { DrawShader } from './DrawShader';
 import { Mesh } from './fungi/Mesh';
 import { Material } from './fungi/Shader';
-import { Vec2 } from './fungi/Vec2';
 import { PostShader } from './PostShader';
 import { Quads } from './Quads2';
 
@@ -14,31 +17,17 @@ export default function Paint() {
       }}></canvas>
   ) as HTMLCanvasElement;
 
-  function on_mouse(state: any, x: number, y: number, pressure: number) {
-    $move.setVec(x, y);
-    $pressure = pressure;
+  const pointer = createPointerData(canvas);
 
-    switch (state) {
-      //case App.MDOWN : break;
-      case MouseState.MUP:
-      case MouseState.MMOVE:
-        // Only render if moved more then one pixel distance.
-        if (Vec2.len_sqr($move, $prev) == 0) return;
+  createEffect(() => {
+    const data = pointer();
 
-        compute_draw_bound(); // Compute the Drawing Area
-        draw(); // Draw into Custom Frame buffer texture
-        render(); // Render Texture to Screen
-        break;
-    }
+    compute_draw_bound(data.prev, data.move); // Compute the Drawing Area
+    draw(data.pressure); // Draw into Custom Frame buffer texture
+    render(); // Render Texture to Screen
+  });
 
-    $prev.copy($move);
-  }
-
-  const app = createApp(canvas, on_mouse);
-
-  const $move = new Vec2(); // Current Mouse Pos
-  const $prev = new Vec2(); // Previous Mouse Pos
-  let $pressure = 0;
+  const app = createApp(canvas);
 
   const $brush: Mesh = Quads.unit_corner(app.buffer, app.mesh);
   const $quad: Mesh = Quads.ndc(app.buffer, app.mesh);
@@ -54,7 +43,7 @@ export default function Paint() {
   let $segment = new Float32Array(4); // The 2 points of a Segment
 
   // This function handles drawing the brush shader onto a custom frame buffer texture
-  function draw() {
+  function draw(pressure: number) {
     let c = app.gl.ctx; // alias
 
     // Setup
@@ -80,7 +69,7 @@ export default function Paint() {
     //c.uniform2fv( $mat_draw.uniforms.get( "move" ).loc, $move );
     c.uniform1f(
       $mat_draw.uniforms.get('brush_size').loc,
-      $brush_size * $pressure
+      $brush_size * pressure
     );
     c.uniform4fv($mat_draw.uniforms.get('bound').loc, $bound);
     c.uniform4fv($mat_draw.uniforms.get('segment').loc, $segment);
@@ -120,27 +109,27 @@ export default function Paint() {
   // to draw a line segment. So first we compute the bounding box
   // for the segment, then we enlarge it by the brush size to make
   // we have all the space we need to draw the brush along the segment
-  function compute_draw_bound() {
+  function compute_draw_bound(prev: v2.Vec2, move: v2.Vec2) {
     let x_min: number;
     let x_max: number;
     let y_min: number;
     let y_max: number;
 
     // Compute the Min and Max Bounds
-    if ($prev[0] < $move[0]) {
-      x_min = $prev[0];
-      x_max = $move[0];
+    if (prev[0] < move[0]) {
+      x_min = prev[0];
+      x_max = move[0];
     } else {
-      x_min = $move[0];
-      x_max = $prev[0];
+      x_min = move[0];
+      x_max = prev[0];
     }
 
-    if ($prev[1] < $move[1]) {
-      y_min = $prev[1];
-      y_max = $move[1];
+    if (prev[1] < move[1]) {
+      y_min = prev[1];
+      y_max = move[1];
     } else {
-      y_min = $move[1];
-      y_max = $prev[1];
+      y_min = move[1];
+      y_max = prev[1];
     }
 
     // Expand the bounding box by the size of the brush
@@ -154,10 +143,10 @@ export default function Paint() {
     $bound[2] = x_max - x_min; // Scale (W/H)
     $bound[3] = y_max - y_min;
 
-    $segment[0] = $prev[0]; // Segment Point A
-    $segment[1] = $prev[1];
-    $segment[2] = $move[0]; // Segment Point B
-    $segment[3] = $move[1];
+    $segment[0] = prev[0]; // Segment Point A
+    $segment[1] = prev[1];
+    $segment[2] = move[0]; // Segment Point B
+    $segment[3] = move[1];
   }
 
   return canvas;
