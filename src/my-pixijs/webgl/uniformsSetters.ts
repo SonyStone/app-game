@@ -1,4 +1,4 @@
-import { GL_DATA_TYPE } from '../../twgl/webgl-static-variables';
+import { GL_DATA_TYPE } from '@webgl/static-variables';
 
 const setters = {
   // * float

@@ -1,3 +1,4 @@
+import { GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@webgl/static-variables';
 import { Colour } from './Colour';
 
 const ARRAY = 34962;
@@ -26,14 +27,14 @@ export class Context {
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     //Setup some defaults
     let ctx = this.ctx;
-    ctx.cullFace(ctx.BACK); // Back is also default
-    ctx.frontFace(ctx.CCW); // Dont really need to set it, its ccw by default.
-    ctx.enable(ctx.DEPTH_TEST); // Shouldn't use this, use something else to add depth detection
-    ctx.enable(ctx.CULL_FACE); // Cull back face, so only show triangles that are created clockwise
-    ctx.depthFunc(ctx.LEQUAL); // Near things obscure far things
+    ctx.cullFace(GL_STATIC_VARIABLES.BACK); // Back is also default
+    ctx.frontFace(GL_STATIC_VARIABLES.CCW); // Dont really need to set it, its ccw by default.
+    ctx.enable(GL_STATIC_VARIABLES.DEPTH_TEST); // Shouldn't use this, use something else to add depth detection
+    ctx.enable(GL_STATIC_VARIABLES.CULL_FACE); // Cull back face, so only show triangles that are created clockwise
+    ctx.depthFunc(GL_STATIC_VARIABLES.LEQUAL); // Near things obscure far things
     ctx.blendFunc(
-      ctx.SRC_ALPHA, // Setup default alpha blending
-      ctx.ONE_MINUS_SRC_ALPHA
+      GL_STATIC_VARIABLES.SRC_ALPHA, // Setup default alpha blending
+      GL_STATIC_VARIABLES.ONE_MINUS_SRC_ALPHA
     );
 
     /*
@@ -45,7 +46,9 @@ export class Context {
   }
 
   clear() {
-    this.ctx.clear(this.ctx.COLOR_BUFFER_BIT | this.ctx.DEPTH_BUFFER_BIT);
+    this.ctx.clear(
+      GL_CLEAR_MASK.COLOR_BUFFER_BIT | GL_CLEAR_MASK.DEPTH_BUFFER_BIT
+    );
     return this;
   }
 

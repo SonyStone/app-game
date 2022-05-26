@@ -14,6 +14,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@utils': resolve(__dirname, './src/utils'),
+      '@webgl': resolve(__dirname, './src/libs/webgl'),
     },
   },
 });

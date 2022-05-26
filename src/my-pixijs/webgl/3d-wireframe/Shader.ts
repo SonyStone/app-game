@@ -1,3 +1,5 @@
+import { GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
+
 import { Mat4 } from './Mat4';
 
 export class Shader {
@@ -190,7 +192,7 @@ export class Shader {
     gl.attachShader(program, fragmentShader);
     gl.linkProgram(program);
 
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    if (!gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.LINK_STATUS)) {
       throw (
         'Shader.createProgram > Program link error: ' +
         gl.getProgramInfoLog(program)

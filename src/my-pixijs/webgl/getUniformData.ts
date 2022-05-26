@@ -1,7 +1,4 @@
-import {
-  GL_DATA_TYPE,
-  GL_STATIC_VARIABLES,
-} from '../../twgl/webgl-static-variables';
+import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
 import { defaultValue } from './defaultValue';
 import { GL_TO_GLSL_TYPES } from './mapType';
 import { getUniformsSetter } from './uniformsSetters';
@@ -51,7 +48,7 @@ export function getUniformData(
 
   const totalUniforms = gl.getProgramParameter(
     program,
-    GL_STATIC_VARIABLES.ACTIVE_UNIFORMS
+    GL_PROGRAM_PARAMETER.ACTIVE_UNIFORMS
   );
 
   function getActiveUniformData(program: WebGLProgram, i: number) {

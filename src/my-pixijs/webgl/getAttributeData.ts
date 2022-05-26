@@ -1,7 +1,5 @@
-import {
-  GL_DATA_TYPE,
-  GL_STATIC_VARIABLES,
-} from '../../twgl/webgl-static-variables';
+import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
+
 import { mapSize } from './mapSize';
 import { GL_TO_GLSL_TYPES } from './mapType';
 
@@ -29,7 +27,7 @@ export function getAttributeData(
 
   const totalAttributes = gl.getProgramParameter(
     program,
-    GL_STATIC_VARIABLES.ACTIVE_ATTRIBUTES
+    GL_PROGRAM_PARAMETER.ACTIVE_ATTRIBUTES
   );
 
   function getActiveAttribData(program: WebGLProgram, i: number) {

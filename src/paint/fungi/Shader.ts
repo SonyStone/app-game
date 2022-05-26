@@ -1,6 +1,10 @@
+import {
+  GL_PROGRAM_PARAMETER,
+  GL_STATIC_VARIABLES,
+} from '@webgl/static-variables';
+
 import { Colour } from './Colour';
 import { Context } from './Context';
-import { TextureFactory } from './Texture';
 
 //#######################################################################################################
 
@@ -240,22 +244,22 @@ export class ShaderFactory {
           //	else		itm.data = tmp;
           //}
           //console.log( itm.data.id );
-          gl.ctx.activeTexture(gl.ctx.TEXTURE0 + tex_slot);
-          gl.ctx.bindTexture(gl.ctx.TEXTURE_2D, itm.data.id);
+          gl.ctx.activeTexture(GL_STATIC_VARIABLES.TEXTURE0 + tex_slot);
+          gl.ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, itm.data.id);
           gl.ctx.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
 
         case 'sampler2DArray':
-          gl.ctx.activeTexture(gl.ctx.TEXTURE0 + tex_slot);
-          gl.ctx.bindTexture(gl.ctx.TEXTURE_2D_ARRAY, itm.data);
+          gl.ctx.activeTexture(GL_STATIC_VARIABLES.TEXTURE0 + tex_slot);
+          gl.ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D_ARRAY, itm.data);
           gl.ctx.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
 
         case 'samplerCube':
-          gl.ctx.activeTexture(gl.ctx.TEXTURE0 + tex_slot);
-          gl.ctx.bindTexture(gl.ctx.TEXTURE_CUBE_MAP, itm.data);
+          gl.ctx.activeTexture(GL_STATIC_VARIABLES.TEXTURE0 + tex_slot);
+          gl.ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP, itm.data);
           gl.ctx.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
@@ -333,12 +337,18 @@ export class ShaderFactory {
     transFeedbackVars: any = null,
     transFeedbackInterleaved: any = false
   ) {
-    let vert = this.compile_shader(vert_src, this.gl.ctx.VERTEX_SHADER)!;
+    let vert = this.compile_shader(
+      vert_src,
+      GL_STATIC_VARIABLES.VERTEX_SHADER
+    )!;
     if (!vert) {
       throw new Error(`Error creating vertix shader program.`);
     }
 
-    let frag = this.compile_shader(frag_src, this.gl.ctx.FRAGMENT_SHADER)!;
+    let frag = this.compile_shader(
+      frag_src,
+      GL_STATIC_VARIABLES.FRAGMENT_SHADER
+    )!;
     if (!frag) {
       this.gl.ctx.deleteShader(vert);
 
@@ -361,7 +371,12 @@ export class ShaderFactory {
     this.gl.ctx.compileShader(shader);
 
     //Get Error data if shader failed compiling
-    if (!this.gl.ctx.getShaderParameter(shader, this.gl.ctx.COMPILE_STATUS)) {
+    if (
+      !this.gl.ctx.getShaderParameter(
+        shader,
+        GL_STATIC_VARIABLES.COMPILE_STATUS
+      )
+    ) {
       this.gl.ctx.deleteShader(shader);
 
       throw new Error(
@@ -398,15 +413,17 @@ export class ShaderFactory {
         prog,
         transFeedbackVars,
         transFeedbackInterleaved
-          ? this.gl.ctx.INTERLEAVED_ATTRIBS
-          : this.gl.ctx.SEPARATE_ATTRIBS
+          ? GL_STATIC_VARIABLES.INTERLEAVED_ATTRIBS
+          : GL_STATIC_VARIABLES.SEPARATE_ATTRIBS
       );
     }
 
     this.gl.ctx.linkProgram(prog);
 
     // Check if successful
-    if (!this.gl.ctx.getProgramParameter(prog, this.gl.ctx.LINK_STATUS)) {
+    if (
+      !this.gl.ctx.getProgramParameter(prog, GL_PROGRAM_PARAMETER.LINK_STATUS)
+    ) {
       console.error(
         'Error creating shader program.',
         this.gl.ctx.getProgramInfoLog(prog)
@@ -418,7 +435,12 @@ export class ShaderFactory {
     // Only do this for additional debugging.
     if (do_validate) {
       this.gl.ctx.validateProgram(prog);
-      if (!this.gl.ctx.getProgramParameter(prog, this.gl.ctx.VALIDATE_STATUS)) {
+      if (
+        !this.gl.ctx.getProgramParameter(
+          prog,
+          GL_PROGRAM_PARAMETER.VALIDATE_STATUS
+        )
+      ) {
         console.error(
           'Error validating program',
           this.gl.ctx.getProgramInfoLog(prog)

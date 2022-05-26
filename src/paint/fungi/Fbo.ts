@@ -1,3 +1,4 @@
+import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
 import { Context } from './Context';
 
 export class Fbo {
@@ -20,7 +21,7 @@ export class FboFactory {
     let ctx = this.gl.ctx;
     let fbo = new Fbo(ctx.createFramebuffer(), config.width, config.height);
 
-    ctx.bindFramebuffer(ctx.FRAMEBUFFER, fbo.id);
+    ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, fbo.id);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Create Textures / Render Buffers
@@ -55,51 +56,54 @@ export class FboFactory {
 
     //Check if the Frame has been setup Correctly.
     switch (ctx.checkFramebufferStatus(ctx.FRAMEBUFFER)) {
-      case ctx.FRAMEBUFFER_COMPLETE:
+      case GL_STATIC_VARIABLES.FRAMEBUFFER_COMPLETE:
         break;
-      case ctx.FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
+      case GL_STATIC_VARIABLES.FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
         console.log(
           'FRAMEBUFFER_INCOMPLETE_ATTACHMENT: The attachment types are mismatched or not all framebuffer attachment points are framebuffer attachment complete.'
         );
         break;
-      case ctx.FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
+      case GL_STATIC_VARIABLES.FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
         console.log('FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT');
         break;
-      case ctx.FRAMEBUFFER_INCOMPLETE_DIMENSIONS:
+      case GL_STATIC_VARIABLES.FRAMEBUFFER_INCOMPLETE_DIMENSIONS:
         console.log('FRAMEBUFFER_INCOMPLETE_DIMENSIONS');
         break;
-      case ctx.FRAMEBUFFER_UNSUPPORTED:
+      case GL_STATIC_VARIABLES.FRAMEBUFFER_UNSUPPORTED:
         console.log('FRAMEBUFFER_UNSUPPORTED');
         break;
-      case ctx.FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
+      case GL_STATIC_VARIABLES.FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
         console.log('FRAMEBUFFER_INCOMPLETE_MULTISAMPLE');
         break;
-      case ctx.RENDERBUFFER_SAMPLES:
+      case GL_STATIC_VARIABLES.RENDERBUFFER_SAMPLES:
         console.log('RENDERBUFFER_SAMPLES');
         break;
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Cleanup
-    ctx.bindFramebuffer(ctx.FRAMEBUFFER, null);
-    ctx.bindRenderbuffer(ctx.RENDERBUFFER, null);
-    ctx.bindTexture(ctx.TEXTURE_2D, null);
+    ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
+    ctx.bindRenderbuffer(GL_STATIC_VARIABLES.RENDERBUFFER, null);
+    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, null);
     return fbo;
   }
 
   // #region MISC
   bind(o: any) {
-    this.gl.ctx.bindFramebuffer(this.gl.ctx.FRAMEBUFFER, o.id);
+    this.gl.ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, o.id);
     return this;
   }
   unbind() {
-    this.gl.ctx.bindFramebuffer(this.gl.ctx.FRAMEBUFFER, null);
+    this.gl.ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
     return this;
   }
   clear() {
     let ctx = this.gl.ctx;
     //ctx.bindFramebuffer( ctx.FRAMEBUFFER, fbo.id );
-    ctx.clear(ctx.COLOR_BUFFER_BIT | ctx.DEPTH_BUFFER_BIT);
+    ctx.clear(
+      GL_STATIC_VARIABLES.COLOR_BUFFER_BIT |
+        GL_STATIC_VARIABLES.DEPTH_BUFFER_BIT
+    );
     return this;
   }
 
@@ -107,8 +111,8 @@ export class FboFactory {
     let ctx = this.gl.ctx;
 
     //bind the two Frame Buffers
-    ctx.bindFramebuffer(ctx.READ_FRAMEBUFFER, fboRead.id);
-    ctx.bindFramebuffer(ctx.DRAW_FRAMEBUFFER, fboWrite.id);
+    ctx.bindFramebuffer(GL_STATIC_VARIABLES.READ_FRAMEBUFFER, fboRead.id);
+    ctx.bindFramebuffer(GL_STATIC_VARIABLES.DRAW_FRAMEBUFFER, fboWrite.id);
 
     //Clear Frame buffer being copied to.
     ctx.clearBufferfv(ctx.COLOR, 0, [0.0, 0.0, 0.0, 1.0]);
@@ -123,13 +127,14 @@ export class FboFactory {
       0,
       fboWrite.width,
       fboWrite.height,
-      ctx.COLOR_BUFFER_BIT | ctx.DEPTH_BUFFER_BIT,
-      ctx.NEAREST
+      GL_STATIC_VARIABLES.COLOR_BUFFER_BIT |
+        GL_STATIC_VARIABLES.DEPTH_BUFFER_BIT,
+      GL_STATIC_VARIABLES.NEAREST
     );
 
     //Unbind
-    ctx.bindFramebuffer(ctx.READ_FRAMEBUFFER, null);
-    ctx.bindFramebuffer(ctx.DRAW_FRAMEBUFFER, null);
+    ctx.bindFramebuffer(GL_STATIC_VARIABLES.READ_FRAMEBUFFER, null);
+    ctx.bindFramebuffer(GL_STATIC_VARIABLES.DRAW_FRAMEBUFFER, null);
 
     return this;
   }
@@ -156,22 +161,22 @@ export class FboFactory {
     let ctx = this.gl.ctx;
     let buf = {
       id: ctx.createRenderbuffer(),
-      attach: ctx.COLOR_ATTACHMENT0 + cAttachNum,
+      attach: GL_STATIC_VARIABLES.COLOR_ATTACHMENT0 + cAttachNum,
       type: 'multi',
     };
 
-    ctx.bindRenderbuffer(ctx.RENDERBUFFER, buf.id); // Bind Buffer
+    ctx.bindRenderbuffer(GL_STATIC_VARIABLES.RENDERBUFFER, buf.id); // Bind Buffer
     ctx.renderbufferStorageMultisample(
-      ctx.RENDERBUFFER,
+      GL_STATIC_VARIABLES.RENDERBUFFER,
       sample_size,
-      ctx.RGBA8,
+      GL_STATIC_VARIABLES.RGBA8,
       w,
       h
     ); // Set Data Size
     ctx.framebufferRenderbuffer(
-      ctx.FRAMEBUFFER,
+      GL_STATIC_VARIABLES.FRAMEBUFFER,
       buf.attach,
-      ctx.RENDERBUFFER,
+      GL_STATIC_VARIABLES.RENDERBUFFER,
       buf.id
     ); // Bind buf to color attachment
 
@@ -183,49 +188,49 @@ export class FboFactory {
     let ctx = this.gl.ctx;
     let buf = {
       id: ctx.createTexture(),
-      attach: ctx.COLOR_ATTACHMENT0 + cAttachNum,
+      attach: GL_STATIC_VARIABLES.COLOR_ATTACHMENT0 + cAttachNum,
       type: 'tex',
     };
 
-    ctx.bindTexture(ctx.TEXTURE_2D, buf.id);
+    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, buf.id);
 
     switch (pixel) {
       case 'byte':
         ctx.texImage2D(
-          ctx.TEXTURE_2D,
+          GL_STATIC_VARIABLES.TEXTURE_2D,
           0,
-          ctx.RGBA,
+          GL_STATIC_VARIABLES.RGBA,
           w,
           h,
           0,
-          ctx.RGBA,
-          ctx.UNSIGNED_BYTE,
+          GL_STATIC_VARIABLES.RGBA,
+          GL_STATIC_VARIABLES.UNSIGNED_BYTE,
           null
         );
         break;
       case 'f16':
         ctx.texImage2D(
-          ctx.TEXTURE_2D,
+          GL_STATIC_VARIABLES.TEXTURE_2D,
           0,
-          ctx.RGBA16F,
+          GL_STATIC_VARIABLES.RGBA16F,
           w,
           h,
           0,
-          ctx.RGBA,
-          ctx.FLOAT,
+          GL_STATIC_VARIABLES.RGBA,
+          GL_STATIC_VARIABLES.FLOAT,
           null
         );
         break;
       case 'f32':
         ctx.texImage2D(
-          ctx.TEXTURE_2D,
+          GL_STATIC_VARIABLES.TEXTURE_2D,
           0,
-          ctx.RGBA32F,
+          GL_STATIC_VARIABLES.RGBA32F,
           w,
           h,
           0,
-          ctx.RGBA,
-          ctx.FLOAT,
+          GL_STATIC_VARIABLES.RGBA,
+          GL_STATIC_VARIABLES.FLOAT,
           null
         );
         console.log('ep');
@@ -237,10 +242,26 @@ export class FboFactory {
     //ctx.texParameteri( ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, ctx.LINEAR ); //NEAREST
 
     //ctx.texImage2D( ctx.TEXTURE_2D, 0, ctx.RGBA16F, w, h, 0, ctx.RGBA, ctx.FLOAT, null );
-    ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, ctx.NEAREST);
-    ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, ctx.NEAREST);
-    ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S, ctx.CLAMP_TO_EDGE);
-    ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, ctx.CLAMP_TO_EDGE);
+    ctx.texParameteri(
+      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
+      GL_STATIC_VARIABLES.NEAREST
+    );
+    ctx.texParameteri(
+      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
+      GL_STATIC_VARIABLES.NEAREST
+    );
+    ctx.texParameteri(
+      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_STATIC_VARIABLES.TEXTURE_WRAP_S,
+      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
+    );
+    ctx.texParameteri(
+      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_STATIC_VARIABLES.TEXTURE_WRAP_T,
+      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
+    );
 
     //ctx.texImage2D(ctx.TEXTURE_2D, 0, ctx.RGBA16F, w, h, 0, ctx.RGBA, ctx.FLOAT, null);
     //ctx.texImage2D( ctx.TEXTURE_2D, 0, ctx.RGBA32F, w, h, 0, ctx.RGBA, ctx.FLOAT, null );
@@ -255,9 +276,9 @@ export class FboFactory {
     //ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, ctx.CLAMP_TO_EDGE);	//Stretch image to Y position
 
     ctx.framebufferTexture2D(
-      ctx.FRAMEBUFFER,
+      GL_STATIC_VARIABLES.FRAMEBUFFER,
       buf.attach,
-      ctx.TEXTURE_2D,
+      GL_STATIC_VARIABLES.TEXTURE_2D,
       buf.id,
       0
     );
@@ -290,12 +311,17 @@ export class FboFactory {
     let ctx = this.gl.ctx;
     let buf = { id: ctx.createRenderbuffer(), type: 'render' };
 
-    ctx.bindRenderbuffer(ctx.RENDERBUFFER, buf.id);
-    ctx.renderbufferStorage(ctx.RENDERBUFFER, ctx.DEPTH_COMPONENT16, w, h);
+    ctx.bindRenderbuffer(GL_STATIC_VARIABLES.RENDERBUFFER, buf.id);
+    ctx.renderbufferStorage(
+      GL_STATIC_VARIABLES.RENDERBUFFER,
+      GL_STATIC_VARIABLES.DEPTH_COMPONENT16,
+      w,
+      h
+    );
     ctx.framebufferRenderbuffer(
-      ctx.FRAMEBUFFER,
-      ctx.DEPTH_ATTACHMENT,
-      ctx.RENDERBUFFER,
+      GL_STATIC_VARIABLES.FRAMEBUFFER,
+      GL_STATIC_VARIABLES.DEPTH_ATTACHMENT,
+      GL_STATIC_VARIABLES.RENDERBUFFER,
       buf.id
     ); //Attach buffer to frame
 
@@ -307,18 +333,18 @@ export class FboFactory {
     let ctx = this.gl.ctx;
     let buf = { id: ctx.createRenderbuffer(), type: 'multi' };
 
-    ctx.bindRenderbuffer(ctx.RENDERBUFFER, buf.id);
+    ctx.bindRenderbuffer(GL_STATIC_VARIABLES.RENDERBUFFER, buf.id);
     ctx.renderbufferStorageMultisample(
-      ctx.RENDERBUFFER,
+      GL_STATIC_VARIABLES.RENDERBUFFER,
       4,
-      ctx.DEPTH_COMPONENT16,
+      GL_STATIC_VARIABLES.DEPTH_COMPONENT16,
       w,
       h
     ); //DEPTH_COMPONENT24
     ctx.framebufferRenderbuffer(
-      ctx.FRAMEBUFFER,
-      ctx.DEPTH_ATTACHMENT,
-      ctx.RENDERBUFFER,
+      GL_STATIC_VARIABLES.FRAMEBUFFER,
+      GL_STATIC_VARIABLES.DEPTH_ATTACHMENT,
+      GL_STATIC_VARIABLES.RENDERBUFFER,
       buf.id
     ); //Attach buffer to frame
 
@@ -331,18 +357,40 @@ export class FboFactory {
     let ctx = this.gl.ctx;
     let buf = { id: ctx.createTexture(), type: 'tex' };
 
-    ctx.bindTexture(ctx.TEXTURE_2D, buf.id);
+    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, buf.id);
     //ctx.pixelStorei(ctx.UNPACK_FLIP_Y_WEBGL, false);
-    ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, ctx.NEAREST);
-    ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, ctx.NEAREST);
-    ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S, ctx.CLAMP_TO_EDGE);
-    ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, ctx.CLAMP_TO_EDGE);
-    ctx.texStorage2D(ctx.TEXTURE_2D, 1, ctx.DEPTH_COMPONENT16, w, h);
+    ctx.texParameteri(
+      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
+      GL_STATIC_VARIABLES.NEAREST
+    );
+    ctx.texParameteri(
+      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
+      GL_STATIC_VARIABLES.NEAREST
+    );
+    ctx.texParameteri(
+      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_STATIC_VARIABLES.TEXTURE_WRAP_S,
+      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
+    );
+    ctx.texParameteri(
+      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_STATIC_VARIABLES.TEXTURE_WRAP_T,
+      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
+    );
+    ctx.texStorage2D(
+      GL_STATIC_VARIABLES.TEXTURE_2D,
+      1,
+      GL_STATIC_VARIABLES.DEPTH_COMPONENT16,
+      w,
+      h
+    );
 
     ctx.framebufferTexture2D(
-      ctx.FRAMEBUFFER,
-      ctx.DEPTH_ATTACHMENT,
-      ctx.TEXTURE_2D,
+      GL_STATIC_VARIABLES.FRAMEBUFFER,
+      GL_STATIC_VARIABLES.DEPTH_ATTACHMENT,
+      GL_STATIC_VARIABLES.TEXTURE_2D,
       buf.id,
       0
     );

@@ -1,9 +1,16 @@
-export type ExtWebGLProgram = WebGLProgram & {
-  attributes?: { [key: string]: number },
-  uniforms?: { [key: string]: WebGLUniformLocation }
-}
+import { GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
 
-export function createProgram(gl: WebGLRenderingContext, vid: string, fid: string, defines?: string): ExtWebGLProgram | undefined {
+export type ExtWebGLProgram = WebGLProgram & {
+  attributes?: { [key: string]: number };
+  uniforms?: { [key: string]: WebGLUniformLocation };
+};
+
+export function createProgram(
+  gl: WebGLRenderingContext,
+  vid: string,
+  fid: string,
+  defines?: string
+): ExtWebGLProgram | undefined {
   var vshader = compileShaderFromString(gl, vid, gl.VERTEX_SHADER, defines);
   var fshader = compileShaderFromString(gl, fid, gl.FRAGMENT_SHADER, defines);
 
@@ -16,15 +23,25 @@ export function createProgram(gl: WebGLRenderingContext, vid: string, fid: strin
   gl.attachShader(program, fshader);
   gl.linkProgram(program);
 
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.log("Could not link program for shaders " + vid + " and " + fid + ": " + gl.getProgramInfoLog(program));
+  if (!gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.LINK_STATUS)) {
+    console.log(
+      'Could not link program for shaders ' +
+        vid +
+        ' and ' +
+        fid +
+        ': ' +
+        gl.getProgramInfoLog(program)
+    );
     gl.deleteProgram(program);
     return;
   }
 
   //var translatedSource = gl.getExtension("WEBGL_debug_shaders").getTranslatedShaderSource(fshader);
 
-  var nattrib = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
+  var nattrib = gl.getProgramParameter(
+    program,
+    GL_PROGRAM_PARAMETER.ACTIVE_ATTRIBUTES
+  );
 
   program.attributes = {};
 
@@ -33,7 +50,10 @@ export function createProgram(gl: WebGLRenderingContext, vid: string, fid: strin
     program.attributes[name] = gl.getAttribLocation(program, name);
   }
 
-  var nuniforms = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+  var nuniforms = gl.getProgramParameter(
+    program,
+    GL_PROGRAM_PARAMETER.ACTIVE_UNIFORMS
+  );
 
   program.uniforms = {};
   for (var i = 0; i < nuniforms; i++) {
@@ -44,9 +64,14 @@ export function createProgram(gl: WebGLRenderingContext, vid: string, fid: strin
   return program;
 }
 
-export function compileShaderFromString(gl: WebGLRenderingContext, src: string, shaderType: number, defines?: string): WebGLShader | undefined {
+export function compileShaderFromString(
+  gl: WebGLRenderingContext,
+  src: string,
+  shaderType: number,
+  defines?: string
+): WebGLShader | undefined {
   if (defines != null) {
-    src = src.replace("//insertdefines", defines);
+    src = src.replace('//insertdefines', defines);
   }
 
   const shader = gl.createShader(shaderType)!;
@@ -54,7 +79,7 @@ export function compileShaderFromString(gl: WebGLRenderingContext, src: string, 
   gl.shaderSource(shader, src);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.log("Failed to compile shader:\n" + gl.getShaderInfoLog(shader));
+    console.log('Failed to compile shader:\n' + gl.getShaderInfoLog(shader));
     return;
   }
   return shader;

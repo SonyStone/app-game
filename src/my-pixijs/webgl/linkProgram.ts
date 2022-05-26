@@ -1,3 +1,5 @@
+import { GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
+
 export function linkProgram(
   gl: WebGLRenderingContextBase,
   vertShader: WebGLShader,
@@ -10,7 +12,10 @@ export function linkProgram(
 
   gl.linkProgram(program);
 
-  const linkStatus = gl.getProgramParameter(program, gl.LINK_STATUS);
+  const linkStatus = gl.getProgramParameter(
+    program,
+    GL_PROGRAM_PARAMETER.LINK_STATUS
+  );
 
   if (linkStatus) {
     return program;
