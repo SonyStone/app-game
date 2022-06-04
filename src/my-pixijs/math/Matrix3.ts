@@ -222,9 +222,11 @@ export class Matrix3 {
     tmp = m[1];
     m[1] = m[3];
     m[3] = tmp;
+
     tmp = m[2];
     m[2] = m[6];
     m[6] = tmp;
+
     tmp = m[5];
     m[5] = m[7];
     m[7] = tmp;
@@ -301,19 +303,21 @@ export class Matrix3 {
 
     const te = this.elements;
 
-    const a11 = te[0],
-      a12 = te[3],
-      a13 = te[6];
-    const a21 = te[1],
-      a22 = te[4],
-      a23 = te[7];
+    const a11 = te[0];
+    const a12 = te[3];
+    const a13 = te[6];
+
+    const a21 = te[1];
+    const a22 = te[4];
+    const a23 = te[7];
 
     te[0] = c * a11 + s * a21;
-    te[3] = c * a12 + s * a22;
-    te[6] = c * a13 + s * a23;
-
     te[1] = -s * a11 + c * a21;
+
+    te[3] = c * a12 + s * a22;
     te[4] = -s * a12 + c * a22;
+
+    te[6] = c * a13 + s * a23;
     te[7] = -s * a13 + c * a23;
 
     return this;

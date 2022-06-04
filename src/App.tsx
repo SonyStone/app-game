@@ -83,6 +83,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import('./gpu-text-rendering/Index')),
   },
   {
+    path: '/geometric-algebra',
+    name: 'Geometric Algebra',
+    component: lazy(() => import('./geometric-algebra/GeometricAlgebra')),
+  },
+  {
     path: '/:any',
     name: 'Empty',
     component: () => <div class={s.nothing}>Nothing is here</div>,

@@ -1,14 +1,7 @@
+import * as m4 from '@webgl/math/m4';
+import * as m3 from '@webgl/math/m3';
+import * as m2 from '@webgl/math/m2';
 import { GL_DATA_TYPE } from '@webgl/static-variables';
-
-function booleanArray(size: number): Array<boolean> {
-  const array = new Array(size);
-
-  for (let i = 0; i < array.length; i++) {
-    array[i] = false;
-  }
-
-  return array;
-}
 
 /**
  * @method defaultValue
@@ -69,12 +62,22 @@ export function defaultValue(
       return booleanArray(4 * size);
 
     case GL_DATA_TYPE.FLOAT_MAT2:
-      return new Float32Array([1, 0, 0, 1]);
+      return m2.identity();
     case GL_DATA_TYPE.FLOAT_MAT3:
-      return new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+      return m3.identity();
     case GL_DATA_TYPE.FLOAT_MAT4:
-      return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+      return m4.identity();
   }
 
   throw new Error(`Wrong type "${type}"`);
+}
+
+function booleanArray(size: number): Array<boolean> {
+  const array = new Array(size);
+
+  for (let i = 0; i < array.length; i++) {
+    array[i] = false;
+  }
+
+  return array;
 }

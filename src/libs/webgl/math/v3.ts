@@ -160,7 +160,6 @@ export function max(a: Vec3, b: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
  * @param {Vec3} b Operand vector.
  * @param {Vec3} [dst] vector to hold result. If not new one is created.
  * @return {Vec3} The min components vector.
- * @memberOf module:twgl/v3
  */
 export function min(a: Vec3, b: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
   dst[0] = Math.min(a[0], b[0]);
@@ -176,7 +175,6 @@ export function min(a: Vec3, b: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
  * @param {number} k The scalar.
  * @param {Vec3} [dst] vector to hold result. If not new one is created.
  * @return {Vec3} The scaled vector.
- * @memberOf module:twgl/v3
  */
 export function mulScalar(
   v: Vec3,
@@ -196,7 +194,6 @@ export function mulScalar(
  * @param {number} k The scalar.
  * @param {Vec3} [dst] vector to hold result. If not new one is created.
  * @return {Vec3} The scaled vector.
- * @memberOf module:twgl/v3
  */
 export function divScalar(
   v: Vec3,
@@ -217,7 +214,6 @@ export function divScalar(
  * @param {Vec3} b Operand vector.
  * @param {Vec3} [dst] vector to hold result. If not new one is created.
  * @return {Vec3} The vector of a cross b.
- * @memberOf module:twgl/v3
  */
 export function cross(a: Vec3, b: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
   const t1 = a[2] * b[0] - a[0] * b[2];
@@ -235,7 +231,6 @@ export function cross(a: Vec3, b: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
  * @param {Vec3} a Operand vector.
  * @param {Vec3} b Operand vector.
  * @return {number} dot product
- * @memberOf module:twgl/v3
  */
 export function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -245,7 +240,6 @@ export function dot(a: Vec3, b: Vec3): number {
  * Computes the length of vector
  * @param {Vec3} v vector.
  * @return {number} length of vector.
- * @memberOf module:twgl/v3
  */
 export function length(v: Vec3): number {
   return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
@@ -255,7 +249,6 @@ export function length(v: Vec3): number {
  * Computes the square of the length of vector
  * @param {Vec3} v vector.
  * @return {number} square of the length of vector.
- * @memberOf module:twgl/v3
  */
 export function lengthSq(v: Vec3): number {
   return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
@@ -266,7 +259,6 @@ export function lengthSq(v: Vec3): number {
  * @param {Vec3} a vector.
  * @param {Vec3} b vector.
  * @return {number} distance between a and b
- * @memberOf module:twgl/v3
  */
 export function distance(a: Vec3, b: Vec3): number {
   const dx = a[0] - b[0];
@@ -280,7 +272,6 @@ export function distance(a: Vec3, b: Vec3): number {
  * @param {Vec3} a vector.
  * @param {Vec3} b vector.
  * @return {number} square of the distance between a and b
- * @memberOf module:twgl/v3
  */
 export function distanceSq(a: Vec3, b: Vec3): number {
   const dx = a[0] - b[0];
@@ -294,7 +285,6 @@ export function distanceSq(a: Vec3, b: Vec3): number {
  * @param {Vec3} a The vector.
  * @param {Vec3} [dst] vector to hold result. If not new one is created.
  * @return {Vec3} The normalized vector.
- * @memberOf module:twgl/v3
  */
 export function normalize(a: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
   const lenSq = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
@@ -317,7 +307,6 @@ export function normalize(a: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
  * @param {Vec3} v The vector.
  * @param {Vec3} [dst] vector to hold result. If not new one is created.
  * @return {Vec3} -v.
- * @memberOf module:twgl/v3
  */
 export function negate(v: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
   dst[0] = -v[0];
@@ -332,7 +321,6 @@ export function negate(v: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
  * @param {Vec3} v The vector.
  * @param {Vec3} [dst] vector to hold result. If not new one is created.
  * @return {Vec3} A copy of v.
- * @memberOf module:twgl/v3
  */
 export function copy(v: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
   dst[0] = v[0];
@@ -350,7 +338,6 @@ export function copy(v: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
  * @param {Vec3} [dst] vector to hold result. If not new one is created.
  * @return {Vec3} The vector of products of entries of a and
  *     b.
- * @memberOf module:twgl/v3
  */
 export function multiply(a: Vec3, b: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
   dst[0] = a[0] * b[0];
@@ -368,7 +355,6 @@ export function multiply(a: Vec3, b: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
  * @param {Vec3} [dst] vector to hold result. If not new one is created.
  * @return {Vec3} The vector of quotients of entries of a and
  *     b.
- * @memberOf module:twgl/v3
  */
 export function divide(a: Vec3, b: Vec3, dst: Vec3 = new VecType(3)): Vec3 {
   dst[0] = a[0] / b[0];

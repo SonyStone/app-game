@@ -59,14 +59,17 @@ export function negate(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   dst[1] = -m[1];
   dst[2] = -m[2];
   dst[3] = -m[3];
+
   dst[4] = -m[4];
   dst[5] = -m[5];
   dst[6] = -m[6];
   dst[7] = -m[7];
+
   dst[8] = -m[8];
   dst[9] = -m[9];
   dst[10] = -m[10];
   dst[11] = -m[11];
+
   dst[12] = -m[12];
   dst[13] = -m[13];
   dst[14] = -m[14];
@@ -87,14 +90,17 @@ export function copy(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   dst[1] = m[1];
   dst[2] = m[2];
   dst[3] = m[3];
+
   dst[4] = m[4];
   dst[5] = m[5];
   dst[6] = m[6];
   dst[7] = m[7];
+
   dst[8] = m[8];
   dst[9] = m[9];
   dst[10] = m[10];
   dst[11] = m[11];
+
   dst[12] = m[12];
   dst[13] = m[13];
   dst[14] = m[14];
@@ -115,14 +121,17 @@ export function identity(dst: Mat4 = new MatType(16)): Mat4 {
   dst[1] = 0;
   dst[2] = 0;
   dst[3] = 0;
+
   dst[4] = 0;
   dst[5] = 1;
   dst[6] = 0;
   dst[7] = 0;
+
   dst[8] = 0;
   dst[9] = 0;
   dst[10] = 1;
   dst[11] = 0;
+
   dst[12] = 0;
   dst[13] = 0;
   dst[14] = 0;
@@ -172,14 +181,17 @@ export function transpose(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   const m01 = m[0 * 4 + 1];
   const m02 = m[0 * 4 + 2];
   const m03 = m[0 * 4 + 3];
+
   const m10 = m[1 * 4 + 0];
   const m11 = m[1 * 4 + 1];
   const m12 = m[1 * 4 + 2];
   const m13 = m[1 * 4 + 3];
+
   const m20 = m[2 * 4 + 0];
   const m21 = m[2 * 4 + 1];
   const m22 = m[2 * 4 + 2];
   const m23 = m[2 * 4 + 3];
+
   const m30 = m[3 * 4 + 0];
   const m31 = m[3 * 4 + 1];
   const m32 = m[3 * 4 + 2];
@@ -189,14 +201,17 @@ export function transpose(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   dst[1] = m10;
   dst[2] = m20;
   dst[3] = m30;
+
   dst[4] = m01;
   dst[5] = m11;
   dst[6] = m21;
   dst[7] = m31;
+
   dst[8] = m02;
   dst[9] = m12;
   dst[10] = m22;
   dst[11] = m32;
+
   dst[12] = m03;
   dst[13] = m13;
   dst[14] = m23;
@@ -217,38 +232,47 @@ export function inverse(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   const m01 = m[0 * 4 + 1];
   const m02 = m[0 * 4 + 2];
   const m03 = m[0 * 4 + 3];
+
   const m10 = m[1 * 4 + 0];
   const m11 = m[1 * 4 + 1];
   const m12 = m[1 * 4 + 2];
   const m13 = m[1 * 4 + 3];
+
   const m20 = m[2 * 4 + 0];
   const m21 = m[2 * 4 + 1];
   const m22 = m[2 * 4 + 2];
   const m23 = m[2 * 4 + 3];
+
   const m30 = m[3 * 4 + 0];
   const m31 = m[3 * 4 + 1];
   const m32 = m[3 * 4 + 2];
   const m33 = m[3 * 4 + 3];
+
   const tmp_0 = m22 * m33;
   const tmp_1 = m32 * m23;
   const tmp_2 = m12 * m33;
   const tmp_3 = m32 * m13;
+
   const tmp_4 = m12 * m23;
   const tmp_5 = m22 * m13;
   const tmp_6 = m02 * m33;
   const tmp_7 = m32 * m03;
+
   const tmp_8 = m02 * m23;
   const tmp_9 = m22 * m03;
   const tmp_10 = m02 * m13;
   const tmp_11 = m12 * m03;
+
   const tmp_12 = m20 * m31;
   const tmp_13 = m30 * m21;
   const tmp_14 = m10 * m31;
   const tmp_15 = m30 * m11;
+
   const tmp_16 = m10 * m21;
   const tmp_17 = m20 * m11;
   const tmp_18 = m00 * m31;
   const tmp_19 = m30 * m01;
+
   const tmp_20 = m00 * m21;
   const tmp_21 = m20 * m01;
   const tmp_22 = m00 * m11;
@@ -259,16 +283,19 @@ export function inverse(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
     tmp_3 * m21 +
     tmp_4 * m31 -
     (tmp_1 * m11 + tmp_2 * m21 + tmp_5 * m31);
+
   const t1 =
     tmp_1 * m01 +
     tmp_6 * m21 +
     tmp_9 * m31 -
     (tmp_0 * m01 + tmp_7 * m21 + tmp_8 * m31);
+
   const t2 =
     tmp_2 * m01 +
     tmp_7 * m11 +
     tmp_10 * m31 -
     (tmp_3 * m01 + tmp_6 * m11 + tmp_11 * m31);
+
   const t3 =
     tmp_5 * m01 +
     tmp_8 * m11 +
@@ -281,6 +308,7 @@ export function inverse(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   dst[1] = d * t1;
   dst[2] = d * t2;
   dst[3] = d * t3;
+
   dst[4] =
     d *
     (tmp_1 * m10 +
@@ -305,6 +333,7 @@ export function inverse(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
       tmp_9 * m10 +
       tmp_10 * m20 -
       (tmp_5 * m00 + tmp_8 * m10 + tmp_11 * m20));
+
   dst[8] =
     d *
     (tmp_12 * m13 +
@@ -329,6 +358,7 @@ export function inverse(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
       tmp_20 * m13 +
       tmp_23 * m23 -
       (tmp_16 * m03 + tmp_21 * m13 + tmp_22 * m23));
+
   dst[12] =
     d *
     (tmp_14 * m22 +
@@ -370,30 +400,37 @@ export function multiply(a: Mat4, b: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   const a01 = a[1];
   const a02 = a[2];
   const a03 = a[3];
+
   const a10 = a[4 + 0];
   const a11 = a[4 + 1];
   const a12 = a[4 + 2];
   const a13 = a[4 + 3];
+
   const a20 = a[8 + 0];
   const a21 = a[8 + 1];
   const a22 = a[8 + 2];
   const a23 = a[8 + 3];
+
   const a30 = a[12 + 0];
   const a31 = a[12 + 1];
   const a32 = a[12 + 2];
   const a33 = a[12 + 3];
+
   const b00 = b[0];
   const b01 = b[1];
   const b02 = b[2];
   const b03 = b[3];
+
   const b10 = b[4 + 0];
   const b11 = b[4 + 1];
   const b12 = b[4 + 2];
   const b13 = b[4 + 3];
+
   const b20 = b[8 + 0];
   const b21 = b[8 + 1];
   const b22 = b[8 + 2];
   const b23 = b[8 + 3];
+
   const b30 = b[12 + 0];
   const b31 = b[12 + 1];
   const b32 = b[12 + 2];
@@ -403,14 +440,17 @@ export function multiply(a: Mat4, b: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   dst[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
   dst[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
   dst[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
+
   dst[4] = a00 * b10 + a10 * b11 + a20 * b12 + a30 * b13;
   dst[5] = a01 * b10 + a11 * b11 + a21 * b12 + a31 * b13;
   dst[6] = a02 * b10 + a12 * b11 + a22 * b12 + a32 * b13;
   dst[7] = a03 * b10 + a13 * b11 + a23 * b12 + a33 * b13;
+
   dst[8] = a00 * b20 + a10 * b21 + a20 * b22 + a30 * b23;
   dst[9] = a01 * b20 + a11 * b21 + a21 * b22 + a31 * b23;
   dst[10] = a02 * b20 + a12 * b21 + a22 * b22 + a32 * b23;
   dst[11] = a03 * b20 + a13 * b21 + a23 * b22 + a33 * b23;
+
   dst[12] = a00 * b30 + a10 * b31 + a20 * b32 + a30 * b33;
   dst[13] = a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33;
   dst[14] = a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33;
@@ -439,15 +479,18 @@ export function setTranslation(
     dst[1] = a[1];
     dst[2] = a[2];
     dst[3] = a[3];
+
     dst[4] = a[4];
     dst[5] = a[5];
     dst[6] = a[6];
     dst[7] = a[7];
+
     dst[8] = a[8];
     dst[9] = a[9];
     dst[10] = a[10];
     dst[11] = a[11];
   }
+
   dst[12] = v[0];
   dst[13] = v[1];
   dst[14] = v[2];
@@ -461,13 +504,16 @@ export function setTranslation(
  * @param {Mat4} m The matrix.
  * @param {v3.Vec3} [dst] vector to hold result. If not passed a new one is created.
  * @return {v3.Vec3} The translation component of m.
- * @memberOf m4
  */
-export function getTranslation(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
+export function getTranslation(
+  m: Mat4,
+  dst: v3.Vec3 = new MatType(3)
+): v3.Vec3 {
   dst = dst || v3.create();
   dst[0] = m[12];
   dst[1] = m[13];
   dst[2] = m[14];
+
   return dst;
 }
 
@@ -805,18 +851,22 @@ export function translate(
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
+
   const m00 = m[0];
   const m01 = m[1];
   const m02 = m[2];
   const m03 = m[3];
+
   const m10 = m[1 * 4 + 0];
   const m11 = m[1 * 4 + 1];
   const m12 = m[1 * 4 + 2];
   const m13 = m[1 * 4 + 3];
+
   const m20 = m[2 * 4 + 0];
   const m21 = m[2 * 4 + 1];
   const m22 = m[2 * 4 + 2];
   const m23 = m[2 * 4 + 3];
+
   const m30 = m[3 * 4 + 0];
   const m31 = m[3 * 4 + 1];
   const m32 = m[3 * 4 + 2];
@@ -827,10 +877,12 @@ export function translate(
     dst[1] = m01;
     dst[2] = m02;
     dst[3] = m03;
+
     dst[4] = m10;
     dst[5] = m11;
     dst[6] = m12;
     dst[7] = m13;
+
     dst[8] = m20;
     dst[9] = m21;
     dst[10] = m22;
@@ -863,14 +915,17 @@ export function rotationX(
   dst[1] = 0;
   dst[2] = 0;
   dst[3] = 0;
+
   dst[4] = 0;
   dst[5] = c;
   dst[6] = s;
   dst[7] = 0;
+
   dst[8] = 0;
   dst[9] = -s;
   dst[10] = c;
   dst[11] = 0;
+
   dst[12] = 0;
   dst[13] = 0;
   dst[14] = 0;

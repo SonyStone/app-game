@@ -1,8 +1,8 @@
+import * as v4 from '@webgl/math/v4';
 import { BUFFER_TYPE, DRAW_MODES } from 'pixi.js';
 import { onCleanup } from 'solid-js';
-import { Vector4 } from 'three';
-import { main } from './graphics';
 
+import { main } from './graphics';
 import { draw } from './webgl/draw';
 import { BUFFER_USAGE, getGeometry } from './webgl/geometry';
 import { getProgram } from './webgl/program';
@@ -70,9 +70,9 @@ export default function MyPixijs() {
 
   gl.useProgram(program.program);
 
-  let vec = new Vector4(0, 0, 0, 0);
+  let vec4 = v4.create();
 
-  program.uniformData['u_offset'].set(vec.toArray());
+  program.uniformData['u_offset'].set(vec4);
 
   program.useProgram();
 
@@ -88,10 +88,10 @@ export default function MyPixijs() {
   });
 
   function move(x: number = 0, y: number = 0, w: number = 0) {
-    vec.set(vec.x + x, vec.y + y, 0, vec.w + w);
+    v4.set(v4.x(vec4) + x, v4.y(vec4) + y, 0, v4.w(vec4) + w, vec4);
     gl.useProgram(program.program);
 
-    program.uniformData['u_offset'].set(vec.toArray());
+    program.uniformData['u_offset'].set(vec4);
 
     gl.clear(gl.COLOR_BUFFER_BIT);
     draw(gl, DRAW_MODES.TRIANGLES, geometry);

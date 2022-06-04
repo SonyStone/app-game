@@ -1,7 +1,8 @@
-import { compileShader } from './compileShader';
-import { getAttributeData, AttributeData } from './getAttributeData';
+import { compileShader } from '@webgl/compileShader';
+import { linkProgram } from '@webgl/linkProgram';
+
+import { AttributeData, getAttributeData } from './getAttributeData';
 import { getUniformData, UniformData } from './getUniformData';
-import { linkProgram } from './linkProgram';
 
 let UID = 0;
 

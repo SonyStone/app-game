@@ -1,0 +1,40 @@
+.wrapper {
+  transform: scale(0.8);
+  transform-origin: top left;
+  color: black;
+  font-size: 0.125px;
+}
+
+.example {
+  transform-origin: center;
+
+  transform: scale(0.9);
+
+  polyline {
+    fill: none;
+    stroke: currentcolor;
+    stroke-width: 0.02px;
+    stroke-linecap: round;
+  }
+
+  text {
+    fill: currentcolor;
+    background-color: white;
+  }
+}
+
+.red {
+  color: red;
+}
+
+.green {
+  color: green;
+}
+
+.blue {
+  color: blue;
+}
+
+.dot {
+  stroke-dasharray: 0.1 0.05;
+}

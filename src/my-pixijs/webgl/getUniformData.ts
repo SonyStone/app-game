@@ -1,5 +1,5 @@
 import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
-import { defaultValue } from './defaultValue';
+import { defaultValue } from '@webgl/defaultValue';
 import { GL_TO_GLSL_TYPES } from './mapType';
 import { getUniformsSetter } from './uniformsSetters';
 

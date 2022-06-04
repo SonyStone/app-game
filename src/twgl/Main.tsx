@@ -1,12 +1,12 @@
+import { compileShader } from '@webgl/compileShader';
+import { linkProgram } from '@webgl/linkProgram';
+import * as m4 from '@webgl/math/m4';
 import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
 import { createEffect, onCleanup } from 'solid-js';
 
-import { compileShader } from '../my-pixijs/webgl/compileShader';
 import { getAttributeData } from '../my-pixijs/webgl/getAttributeData';
 import { getUniformData } from '../my-pixijs/webgl/getUniformData';
-import { linkProgram } from '../my-pixijs/webgl/linkProgram';
 import { useCamera } from '../three/Camera.provider';
-import * as m4 from './m4';
 import fragmentSrc from './shaders/frag_shader.frag?raw';
 import vertexSrc from './shaders/vert_shader.vert?raw';
 
