@@ -1,5 +1,16 @@
+import {
+  delay,
+  mapTo,
+  merge,
+  of,
+  startWith,
+  Subject,
+  switchMap,
+  takeUntil,
+  tap,
+} from 'rxjs';
 import { Link, RouteDefinition, Routes, useRoutes } from 'solid-app-router';
-import { createSignal, For, lazy } from 'solid-js';
+import { createSignal, For, from, lazy } from 'solid-js';
 
 import s from './App.module.scss';
 import Noise from './noise/Noise';
@@ -99,7 +110,43 @@ const routes: (RouteDefinition & { name: string })[] = [
   },
 ];
 
-function toggleSIdenav() {}
+function toggleSidenav() {
+  const onLeave$ = new Subject<void>();
+  const onEnter$ = new Subject<void>();
+  const onClose$ = new Subject<void>();
+  const onOpen$ = new Subject<void>();
+
+  const isOpen = from(
+    merge(
+      onOpen$.pipe(mapTo(true)),
+      onClose$.pipe(mapTo(false)),
+      onEnter$.pipe(mapTo(true)),
+      onLeave$.pipe(
+        switchMap((e) => of(e).pipe(delay(1000), takeUntil(onEnter$))),
+        mapTo(false)
+      )
+    ).pipe(startWith(false))
+  );
+
+  return {
+    isOpen,
+    toggle() {
+      isOpen() ? onClose$.next() : onOpen$.next();
+    },
+    open() {
+      onOpen$.next();
+    },
+    close() {
+      onClose$.next();
+    },
+    leave() {
+      onLeave$.next();
+    },
+    enter() {
+      onEnter$.next();
+    },
+  };
+}
 
 export function App() {
   const Routes = useRoutes(routes);
@@ -107,7 +154,7 @@ export function App() {
 
   const { toggleCamera, cameraType } = useCamera();
 
-  const [isOpen, setOpen] = createSignal(false);
+  const { isOpen, toggle, leave, enter } = toggleSidenav();
 
   stats.showPanel(1);
   stats.dom.style.left = 'unset';
@@ -116,21 +163,13 @@ export function App() {
   return (
     <>
       <header class={[s.header, s.right].join(' ')}>
-        <button
-          class={s.toggle}
-          onClick={(e) => {
-            setOpen(!isOpen());
-          }}
-          onPointerEnter={(e) => {
-            if (e.pointerType !== 'touch') {
-              setOpen(true);
-            }
-          }}>
+        <button class={s.toggle} onClick={toggle} onPointerEnter={enter}>
           ⇶
         </button>
         <nav
           class={[s.navigation, isOpen() ? s.open : ''].join(' ')}
-          onPointerLeave={() => setOpen(false)}>
+          onPointerLeave={leave}
+          onPointerEnter={enter}>
           <For each={routes}>
             {({ path, name }) => <Link href={path}>{name}</Link>}
           </For>
