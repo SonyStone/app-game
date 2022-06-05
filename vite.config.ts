@@ -1,12 +1,14 @@
 import { resolve } from 'path';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
+import solidSvg from 'vite-plugin-solid-svg';
 
 import rust from './rollup-plugin-rust';
 
 export default defineConfig({
   plugins: [
     solidPlugin(),
+    solidSvg(),
     // vitePluginWasmPack('./wasm_game_of_life'),
     rust(),
   ],

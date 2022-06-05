@@ -53,6 +53,42 @@ function reduceIndices(indices: number[]) {
 
 const MAX_DIMENSIONS = 36;
 
+/**
+ *
+ * @param p number of positive dimensions.
+ * @param q optional number of negative dimensions.
+ * @param r optional number of zero dimensions.
+ * @param baseType type of number array store @default Float32Array
+ * @param unroll
+ *
+ * @example
+ * // Basic
+ * const Hyper   = Algebra(1);       // Hyperbolic numbers.
+ * const Complex = Algebra(0,1);     // Complex numbers.
+ * const Dual    = Algebra(0,0,1);   // Dual numbers.
+ * const H       = Algebra(0,2);     // Quaternions.
+ *
+ * // Clifford
+ * const Cl2 = Algebra(2);           // Clifford algebra for 2D vector space.
+ * const Cl3 = Algebra(3);           // Clifford algebra for 3D vector space.
+ * const timeSpace = Algebra(1,3);   // Clifford algebra for timespace vectors.
+ *
+ * // SubAlgebras
+ * const Complex = Algebra({p:3,basis:['1','e123']});        // Complex Numbers as subalgebra of Cl3
+ * const H = Algebra({p:3,basis:['1','e12','e13','e23']});   // Quaternions as even subalgebra of Cl3
+ *
+ * // Geometric
+ * const PGA2D = Algebra(2,0,1);     // Projective Euclidean 2D plane. (dual)
+ * const PGA3D = Algebra(3,0,1);     // Projective Euclidean 3D space. (dual)
+ * const CGA2D = Algebra(3,1);       // conformal 2D space.
+ * const CGA3D = Algebra(4,1);       // Conformal 3D space.
+ *
+ * // High-Dimensional GA
+ * const DCGA3D = Algebra(6,2);      // Double Conformal 3D Space.
+ * const TCGA3D = Algebra(9,3);      // Triple Conformal 3D Space.
+ * const DCGSTA = Algebra(4,8);      // Double Conformal Geometric Space Time Algebra.
+ * const QCGA   = Algebra(9,6);      // Quadric Conformal Geometric Algebra.
+ */
 export default function Algebra(
   p: number,
   q = 0,
@@ -61,15 +97,19 @@ export default function Algebra(
   unroll = true
 ): typeof AlgebraElement {
   const metric: number[] = [];
+
   for (let i = 0; i < r; ++i) {
     metric.push(0);
   }
+
   for (let i = 0; i < p; ++i) {
     metric.push(1);
   }
+
   for (let i = 0; i < q; ++i) {
     metric.push(-1);
   }
+
   const dimensions = p + q + r;
   const size = 1 << dimensions;
   const indexMask = size - 1;
@@ -112,6 +152,7 @@ export default function Algebra(
 
   // This could be turned into a bit array if memory becomes an issue
   const mulTable: number[][] = [];
+
   for (let i = 0; i < size; ++i) {
     const row: number[] = [];
     for (let j = 0; j < size; ++j) {
@@ -122,6 +163,7 @@ export default function Algebra(
 
   // Mapping from bit-field indices to ganja.js lexicographic order
   const indexString: [number, string][] = [];
+
   for (let i = 0; i < size; ++i) {
     let str = '';
     for (let j = 0; j < dimensions; ++j) {
@@ -131,6 +173,7 @@ export default function Algebra(
     }
     indexString.push([i, str]);
   }
+
   function cmp(a: [any, string], b: [any, string]) {
     if (a[1].length < b[1].length) {
       return -1;
@@ -146,6 +189,7 @@ export default function Algebra(
     }
     return 0;
   }
+
   indexString.sort(cmp);
 
   class AlgebraClass extends baseType {
@@ -1004,9 +1048,11 @@ export default function Algebra(
   }
 
   const mulLines: string[] = [];
+
   for (let i = 0; i < size; ++i) {
     mulLines.push(`res[${i}]=`);
   }
+
   const wedgeLines = [...mulLines];
   const veeLines = [...mulLines];
   const dotLines = [...mulLines];
@@ -1114,30 +1160,37 @@ export default function Algebra(
   type binaryOp = (other: AlgebraElement) => AlgebraElement;
   const prelude = 'const res=new this.constructor();\nconst t=this;\n';
   const finale = '\nreturn res;';
+
   Result.prototype.add = new Function(
     'o',
     prelude + addInner + finale
   ) as binaryOp;
+
   Result.prototype.sub = new Function(
     'o',
     prelude + subInner + finale
   ) as binaryOp;
+
   Result.prototype.mul = new Function(
     'o',
     prelude + mulLines.join('\n') + finale
   ) as binaryOp;
+
   Result.prototype.wedge = new Function(
     'o',
     prelude + wedgeLines.join('\n') + finale
   ) as binaryOp;
+
   Result.prototype.vee = new Function(
     'o',
     prelude + veeLines.join('\n') + finale
   ) as binaryOp;
+
   Result.prototype.dot = new Function(
     'o',
     prelude + dotLines.join('\n') + finale
   ) as binaryOp;
+
   Result.prototype.dotL = new Function(
     'o',
     prelude + dotLeftLines.join('\n') + finale
@@ -1155,9 +1208,11 @@ export default function Algebra(
   Result.prototype.lwedge = function (other: AlgebraElement) {
     return other.wedge(this);
   };
+
   Result.prototype.lvee = function (other: AlgebraElement) {
     return other.vee(this);
   };
+
   Result.prototype.ldotL = function (other: AlgebraElement) {
     return other.dotL(this);
   };

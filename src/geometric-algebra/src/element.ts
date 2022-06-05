@@ -192,18 +192,26 @@ export declare class AlgebraElement extends ElementBaseType {
   vee(other: AlgebraElement): AlgebraElement;
   lvee(other: AlgebraElement): AlgebraElement;
   rotorMean(other: AlgebraElement): AlgebraElement;
-  // Contractions
+  /** Contractions */
   contract(
     other: AlgebraElement,
     criterion: (r: number, s: number) => number
   ): AlgebraElement;
-  dot(other: AlgebraElement): AlgebraElement; // Symmetric contraction
-  dotL(other: AlgebraElement): AlgebraElement; // Left contraction
-  ldotL(other: AlgebraElement): AlgebraElement; // Left contraction
-  dotR(other: AlgebraElement): AlgebraElement; // Right contraction
-  ldotR(other: AlgebraElement): AlgebraElement; // Right contraction
-  star(): AlgebraElement; // Dischord dual
-  star(other: AlgebraElement): AlgebraElement; // Scalar product
+
+  /** Symmetric contraction */
+  dot(other: AlgebraElement): AlgebraElement;
+  /** Left contraction */
+  dotL(other: AlgebraElement): AlgebraElement;
+  /** Left contraction */
+  ldotL(other: AlgebraElement): AlgebraElement;
+  /** Right contraction */
+  dotR(other: AlgebraElement): AlgebraElement;
+  /** Right contraction */
+  ldotR(other: AlgebraElement): AlgebraElement;
+  /** Dischord dual */
+  star(): AlgebraElement;
+  /** Scalar product */
+  star(other: AlgebraElement): AlgebraElement;
 
   // Subsets
   imag(): AlgebraElement;
@@ -227,6 +235,8 @@ export declare class AlgebraElement extends ElementBaseType {
   static zero(): AlgebraElement;
   static scalar(magnitude?: number): AlgebraElement;
   static pseudoscalar(magnitude?: number): AlgebraElement;
+
+  /** ? What is this? */
   static basisBlade(...indices: number[]): AlgebraElement;
   static fromVector(values: Iterable<number>, grade?: number): AlgebraElement;
   static fromRotor(values: Iterable<number>): AlgebraElement;
@@ -241,6 +251,7 @@ export declare class AlgebraElement extends ElementBaseType {
 export function equals(a: AlgebraElement, b: AlgebraElement): boolean {
   return a.equals(b);
 }
+
 export function closeTo(
   a: AlgebraElement,
   b: AlgebraElement,
@@ -253,12 +264,15 @@ export function closeTo(
 export function hasNaN(element: AlgebraElement): boolean {
   return element.hasNaN();
 }
+
 export function hasInfinity(element: AlgebraElement): boolean {
   return element.hasInfinity();
 }
+
 export function isNil(element: AlgebraElement, tolerance?: number): boolean {
   return element.isNil(tolerance);
 }
+
 export function isGrade(
   element: AlgebraElement,
   grade: number,
@@ -271,6 +285,7 @@ export function isGrade(
 export function norm(element: AlgebraElement): number {
   return element.norm();
 }
+
 export function vnorm(element: AlgebraElement): number {
   return element.vnorm();
 }
@@ -279,39 +294,50 @@ export function vnorm(element: AlgebraElement): number {
 export function neg(element: AlgebraElement): AlgebraElement {
   return element.neg();
 }
+
 export function cwAbs(element: AlgebraElement): AlgebraElement {
   return element.cwAbs();
 }
+
 export function involute(element: AlgebraElement): AlgebraElement {
   return element.involute();
 }
+
 export function rev(element: AlgebraElement): AlgebraElement {
   return element.rev();
 }
+
 export function conjugate(element: AlgebraElement): AlgebraElement {
   return element.conjugate();
 }
+
 export function inverse(element: AlgebraElement): AlgebraElement {
   return element.inverse();
 }
+
 export function square(element: AlgebraElement): AlgebraElement {
   return element.square();
 }
+
 export function normalize(
   element: AlgebraElement,
   newNorm?: number
 ): AlgebraElement {
   return element.normalize(newNorm);
 }
+
 export function rotorNormalize(element: AlgebraElement): AlgebraElement {
   return element.rotorNormalize();
 }
+
 export function sqrt(element: AlgebraElement): AlgebraElement {
   return element.sqrt();
 }
+
 export function rotorSqrt(element: AlgebraElement): AlgebraElement {
   return element.rotorSqrt();
 }
+
 export function exp(
   element: AlgebraElement,
   forceTaylor?: boolean,
@@ -319,18 +345,23 @@ export function exp(
 ): AlgebraElement {
   return element.exp(forceTaylor, numTaylorTerms);
 }
+
 export function bivectorExp(element: AlgebraElement): AlgebraElement {
   return element.bivectorExp();
 }
+
 export function log(element: AlgebraElement): AlgebraElement {
   return element.log();
 }
+
 export function rotorLog(element: AlgebraElement): AlgebraElement {
   return element.rotorLog();
 }
+
 export function clone(element: AlgebraElement) {
   return element.clone();
 }
+
 // Dual Zoo
 export function dual(element: AlgebraElement): AlgebraElement {
   return element.dual();

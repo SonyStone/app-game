@@ -5,19 +5,14 @@ import {
   from as rxFrom,
   interval,
   map,
-  Observable,
   ObservableInput,
   of,
-  pipe,
-  scheduled,
-  startWith,
   switchMap,
   tap,
-  timer,
 } from 'rxjs';
 import { createMemo, createSignal, from, observable } from 'solid-js';
-import { ganja } from './align';
 
+import { ganja } from './align';
 import s from './GeometricAlgebra.module.scss';
 
 const p = (v: number[] | Float32Array) => v.join(',');
