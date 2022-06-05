@@ -88,11 +88,18 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import('./geometric-algebra/GeometricAlgebra')),
   },
   {
+    path: '/player',
+    name: 'Player',
+    component: lazy(() => import('./player/App')),
+  },
+  {
     path: '/:any',
     name: 'Empty',
     component: () => <div class={s.nothing}>Nothing is here</div>,
   },
 ];
+
+function toggleSIdenav() {}
 
 export function App() {
   const Routes = useRoutes(routes);

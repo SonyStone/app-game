@@ -1,0 +1,84 @@
+.host {
+  display: block;
+  // position: relative;
+  // width: 800px;
+  // height: 50px;
+  // background-color: blue;
+  touch-action: none;
+  position: relative;
+
+  --color-7-middlegray: #777;
+  --color-8-uppergray: #888;
+}
+
+.sliderThumb {
+  display: block;
+  top: -10%;
+  left: 1px;
+  position: absolute;
+  background-color: white;
+  z-index: 1;
+
+  input {
+  }
+}
+
+.sliderDragZone {
+  cursor: e-resize;
+  fill: #ddd;
+  transition: fill 0.2s ease;
+  &:hover {
+    fill: #d4d4d4;
+  }
+}
+
+.ruler {
+  stroke-width: 0.5px;
+  stroke: var(--color-7-middlegray);
+}
+
+.slider {
+  cursor: e-resize;
+  // pointer-events: none;
+  rect {
+    fill: #00000000;
+    transition: fill 0.2s ease;
+    &:hover {
+      fill: #00000020;
+    }
+  }
+  line,
+  path {
+    stroke-width: 1px;
+    stroke: black;
+    fill: none;
+  }
+}
+
+text {
+  font-size: 12px;
+  fill: var(--color-8-uppergray);
+  pointer-events: none;
+  user-select: none;
+}
+
+.line {
+  // cursor: e-resize;
+  stroke-width: 10px;
+  stroke: orange;
+  transition: stroke 0.2s ease;
+  stroke-linecap: round;
+  &:hover {
+    stroke: red;
+  }
+}
+
+.keyframe {
+  fill: yellow;
+  stroke: orange;
+  stroke-width: 2px;
+  transition: fill 0.2s ease;
+  &:hover {
+    fill: red;
+  }
+}

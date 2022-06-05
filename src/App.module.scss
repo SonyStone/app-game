@@ -4,6 +4,7 @@
   gap: 8px;
   flex-wrap: wrap;
   width: calc(100% - 80px);
+  z-index: 1;
 }
 
 .toggle {
