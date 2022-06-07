@@ -59,7 +59,7 @@ export default function App() {
 
         return (
           <div>
-            <ErrorBoundary fallback={<div>Error in App</div>}>
+            <ErrorBoundary fallback={<div>Error in the App</div>}>
               <div class={s.App}>
                 <Player
                   onWheel={(event) => {

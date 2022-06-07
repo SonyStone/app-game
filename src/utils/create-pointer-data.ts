@@ -1,4 +1,4 @@
-import * as v2 from '@utils/math/v2';
+import * as v2 from '@webgl/math/v2';
 import { createMemo } from 'solid-js';
 
 import { createPointerStream } from './create-pointer-stream';

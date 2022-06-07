@@ -1,5 +1,5 @@
 import { createPointerData } from '@utils/create-pointer-data';
-import * as v2 from '@utils/math/v2';
+import * as v2 from '@webgl/math/v2';
 import { createEffect } from 'solid-js';
 
 import { createApp } from './App';

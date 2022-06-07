@@ -9,7 +9,7 @@ import {
   takeUntil,
   timer,
 } from 'rxjs';
-import { createEffect, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 import { JSX as JSXRuntime } from 'solid-js/jsx-runtime';
 
 import { Dimensions } from './interfaces/Dimensions.interface';
@@ -77,19 +77,28 @@ export default function Video(props: Partial<Props>) {
           }
         });
 
-        createEffect(() => {
-          // console.log(`props.play`, props.play);
-          props.play ? video.play() : video.pause();
-        });
-
         const [{ frameSize, currentFrame }, { setCurrentFrame }] =
           useVideoContext();
 
+        const [isPaused, setPaused] = createSignal(false);
+
         createEffect(() => {
-          // ! Тут глюк с предидущем кадром
-          if (!props.play) {
+          if (isPaused()) {
+            // ! Тут глюк с предидущем кадром
             const timeInt = currentFrame() * frameSize();
             video.currentTime = timeInt / VIDEO_TIME_PRECISION;
+          }
+        });
+
+        createEffect(() => {
+          const isPlay = props.play;
+
+          if (isPlay) {
+            video.play();
+            setPaused(false);
+          } else {
+            video.pause();
+            setPaused(true);
           }
         });
 

@@ -7,10 +7,9 @@ import {
   Subject,
   switchMap,
   takeUntil,
-  tap,
 } from 'rxjs';
 import { Link, RouteDefinition, Routes, useRoutes } from 'solid-app-router';
-import { createSignal, For, from, lazy } from 'solid-js';
+import { ErrorBoundary, For, from, lazy } from 'solid-js';
 
 import s from './App.module.scss';
 import Noise from './noise/Noise';
@@ -178,7 +177,9 @@ export function App() {
       </header>
       {stats.dom}
       <main>
-        <Routes />
+        <ErrorBoundary fallback={<div>Error in the App</div>}>
+          <Routes />
+        </ErrorBoundary>
       </main>
       <Noise />
     </>
