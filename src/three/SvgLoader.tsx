@@ -11,7 +11,7 @@ import {
 import { useStats } from '../Stats.provider';
 import { useCamera } from './Camera.provider';
 import { loadSVG } from './loadSVG';
-import hexagon from './svg/diogram.drawio.svg';
+import hexagon from './svg/diogram.drawio.svg?url';
 import s from './SvgLoader.module.scss';
 
 export default function SvgLoader() {

@@ -8,7 +8,7 @@ import {
   ShapeGeometry,
 } from 'three';
 import { SVGLoader } from './loaders/SVGLoader';
-import hexagon from './svg/hexagon.svg';
+import hexagon from './svg/hexagon.svg?url';
 
 const guiData = {
   currentURL: hexagon,
