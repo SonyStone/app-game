@@ -1,26 +1,27 @@
 import {
   animationFrameScheduler,
-  distinctUntilChanged,
+  EMPTY,
   fromEvent,
   map,
+  mapTo,
   merge,
-  Observable,
+  ObservableInput,
+  startWith,
   switchMap,
   takeUntil,
   timer,
 } from 'rxjs';
-import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import { createEffect, createMemo, from, Show } from 'solid-js';
 import { JSX as JSXRuntime } from 'solid-js/jsx-runtime';
 
 import { Dimensions } from './interfaces/Dimensions.interface';
 import { Frame } from './interfaces/Frame';
 import {
-  toVideoTime,
-  VIDEO_TIME_PRECISION,
+  frameToVideoTime,
   VideoTime,
+  videoTimeToFrame,
 } from './interfaces/VideoTime';
 import s from './Player.module.scss';
-import { useVideoContext } from './VideoContext.provider';
 
 declare module 'solid-js' {
   namespace JSX {
@@ -32,22 +33,38 @@ declare module 'solid-js' {
 
 interface Props extends JSXRuntime.VideoHTMLAttributes<HTMLVideoElement> {
   src: string;
+  // currentTime: number;
+  currentFrame: Frame;
   frameSize: VideoTime;
+  onCurrentFrame(value: Frame): void;
   onDimentions(value: Dimensions): void;
   onTotalFrames(value: Frame): void;
   play: boolean;
   volume: number;
+  playbackRate: number;
 }
 
-export default function Video(props: Partial<Props>) {
+export default function Video(props: Props) {
   return (
     <Show when={props.src}>
       {(src) => {
+        const volume = createMemo<number>((volume) => {
+          volume = props.volume ?? volume;
+
+          return volume >= 1 ? 1 : volume <= 0 ? 0 : volume;
+        }, 0);
+
+        const playbackRate = createMemo<number>((playbackRate) => {
+          playbackRate = props.playbackRate ?? playbackRate;
+
+          return playbackRate;
+        }, 0);
+
         const video: HTMLVideoElement = (
           <video
-            class={s.video}
+            {...props}
             src={src}
-            volume={0}
+            class={s.video}
             attr:type="video/mp4"
             // onVolumeChange={props.onVolumeChange}
             onLoadedMetadata={() => {
@@ -56,66 +73,80 @@ export default function Video(props: Partial<Props>) {
                 width: video.videoWidth,
               });
             }}
-            onDurationChange={function () {
-              if (props.onTotalFrames && props.frameSize) {
-                const time = toVideoTime(video.duration);
-                const frameSize = props.frameSize;
-                const totalFrames = Math.floor(time / frameSize) as Frame;
-
-                props.onTotalFrames(totalFrames);
+            onDurationChange={() => {
+              if (props.onTotalFrames) {
+                props.onTotalFrames(
+                  videoTimeToFrame(video.duration, props.frameSize)
+                );
               }
-            }}
-            {...props}></video>
+            }}></video>
         ) as HTMLVideoElement;
 
-        // video.setAttribute('type', 'video/mp4');
+        const play$ = fromEvent(video, 'play');
+        const pause$ = fromEvent(video, 'pause');
 
+        const isPlaying$ = merge(
+          play$.pipe(mapTo(true)),
+          pause$.pipe(mapTo(false))
+        ).pipe(startWith(!video.paused));
+
+        const continuousUpdate = () =>
+          timer(0, 0, animationFrameScheduler).pipe(
+            map(() => video.currentTime),
+            startWith(video.currentTime)
+          );
+
+        // fierd on set current frame
+        const seeked$ = fromEvent(video, 'seeked').pipe(
+          map(() => video.currentTime)
+        );
+
+        const time$ = isPlaying$.pipe(
+          switchMap((isPlaying) => (isPlaying ? continuousUpdate() : EMPTY))
+        );
+
+        const time = from(merge(time$, seeked$));
+        const frame = createMemo(() =>
+          videoTimeToFrame(time(), props.frameSize)
+        );
+
+        let _frame: Frame;
         createEffect(() => {
-          const volume = props.volume;
-          if (volume! >= 0 && volume! <= 1) {
-            video.volume = volume!;
+          _frame = frame();
+          if (_frame) {
+            props.onCurrentFrame(_frame);
           }
         });
 
-        const [{ frameSize, currentFrame }, { setCurrentFrame }] =
-          useVideoContext();
-
-        const [isPaused, setPaused] = createSignal(false);
-
         createEffect(() => {
-          if (isPaused()) {
-            // ! Тут глюк с предидущем кадром
-            const timeInt = currentFrame() * frameSize();
-            video.currentTime = timeInt / VIDEO_TIME_PRECISION;
+          const _currentFrame = props.currentFrame;
+
+          if (_currentFrame && _frame !== _currentFrame) {
+            console.log(`_frame`, _currentFrame, _frame);
+            video.currentTime = frameToVideoTime(
+              _currentFrame,
+              props.frameSize
+            );
           }
         });
 
         createEffect(() => {
-          const isPlay = props.play;
+          video.volume = volume();
+        });
 
-          if (isPlay) {
+        createEffect(() => {
+          video.playbackRate = playbackRate();
+        });
+
+        createEffect(() => {
+          if (props.play) {
+            console.log(`▶`);
             video.play();
-            setPaused(false);
           } else {
+            console.log(`⏸`);
             video.pause();
-            setPaused(true);
           }
         });
-
-        const subscription = merge(
-          videoPlaying(video)
-          // fromEvent(video, 'seeked')
-        )
-          .pipe(
-            map(() => {
-              const timeInt = video.currentTime * VIDEO_TIME_PRECISION;
-              return Math.floor(timeInt / frameSize()) as Frame;
-            }),
-            distinctUntilChanged()
-          )
-          .subscribe((frame) => setCurrentFrame(frame));
-
-        onCleanup(() => subscription.unsubscribe());
 
         return video;
       }}
@@ -123,12 +154,8 @@ export default function Video(props: Partial<Props>) {
   );
 }
 
-function videoPlaying(video: HTMLVideoElement): Observable<number> {
-  return fromEvent(video, 'play').pipe(
-    switchMap(() =>
-      timer(0, 0, animationFrameScheduler).pipe(
-        takeUntil(fromEvent(video, 'pause'))
-      )
-    )
+function continuousUpdate(until: ObservableInput<any>) {
+  return switchMap(() =>
+    timer(0, 0, animationFrameScheduler).pipe(takeUntil(until))
   );
 }

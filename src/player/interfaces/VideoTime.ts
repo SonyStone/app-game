@@ -1,4 +1,5 @@
-import { Brand } from "./Brand.type";
+import { Brand } from './Brand.type';
+import { Frame } from './Frame';
 
 /**
  * Время в ролике в секундах `float`. Милисекунду — число после запятой.
@@ -6,7 +7,7 @@ import { Brand } from "./Brand.type";
  * * `currentTime`
  * * `duration`
  */
-export type VideoTime = Brand<number, 'VideoTime'>;
+export type VideoTime = Brand<number, 'VideoTime'> | number;
 
 /**
  * Так как `video.currentTime` всегда возвращает
@@ -20,9 +21,17 @@ export function toVideoTime(time: number): VideoTime {
 }
 
 export function fromVideoTime(time: VideoTime): number {
-  return time / VIDEO_TIME_PRECISION as VideoTime;
+  return (time / VIDEO_TIME_PRECISION) as VideoTime;
 }
 
 export function getFrameSize(fps: number): VideoTime {
   return Math.floor(VIDEO_TIME_PRECISION / fps) as VideoTime;
+}
+
+export function videoTimeToFrame(time: VideoTime, frameSize: number): Frame {
+  return Math.floor((time * VIDEO_TIME_PRECISION) / frameSize) as Frame;
+}
+
+export function frameToVideoTime(frame: Frame, frameSize: number): VideoTime {
+  return ((frame * frameSize) / VIDEO_TIME_PRECISION) as VideoTime;
 }

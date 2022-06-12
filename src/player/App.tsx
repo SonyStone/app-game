@@ -24,42 +24,48 @@ import { useVideoContext, VideoContextProvider } from './VideoContext.provider';
 
 export default function App() {
   return (
-    <VideoContextProvider>
-      {() => {
-        const [
-          {
-            currentTime,
-            currentFrame,
-            totalFrames,
-            brushSize,
-            brushColor,
-            brushComposite,
-            volume,
-            src,
-            fps,
-            play,
-            frameSize,
-          },
-          {
-            setCurrentFrame,
-            setTotalFrames,
-            setBrushSize,
-            setBrushColor,
-            setBrushComposite,
-            setVolume,
-            setSrc,
-            setFps,
-            setPlay,
-          },
-        ] = useVideoContext();
+    <ErrorBoundary
+      fallback={(error) => {
+        console.error(error);
+        return <div>Error in the Player</div>;
+      }}>
+      <VideoContextProvider>
+        {() => {
+          const [
+            {
+              currentTimecode,
+              currentFrame,
+              totalFrames,
+              brushSize,
+              brushColor,
+              brushComposite,
+              volume,
+              playbackRate,
+              src,
+              fps,
+              play,
+              frameSize,
+            },
+            {
+              setCurrentFrame,
+              setTotalFrames,
+              setBrushSize,
+              setBrushColor,
+              setBrushComposite,
+              setVolume,
+              setPlaybackRate,
+              setSrc,
+              setFps,
+              setPlay,
+            },
+          ] = useVideoContext();
 
-        onHold;
+          onHold;
 
-        const [resize, setResize] = createSignal({ height: 0, width: 0 });
+          const [resize, setResize] = createSignal({ height: 0, width: 0 });
 
-        return (
-          <div>
-            <ErrorBoundary fallback={<div>Error in the App</div>}>
+          return (
+            <div>
               <div class={s.App}>
                 <Player
                   onWheel={(event) => {
@@ -74,7 +80,10 @@ export default function App() {
                     src={src()}
                     play={play()}
                     volume={volume()}
+                    playbackRate={playbackRate()}
                     onDimentions={setResize}
+                    currentFrame={currentFrame()}
+                    frameSize={frameSize()}
                     onWaiting={() =>
                       console.log(
                         `Playback has stopped because of a temporary lack of data`
@@ -84,7 +93,7 @@ export default function App() {
                     // onPause={() => setPlay(false)}
                     // onPlay={() => setPlay(true)}
                     onTotalFrames={setTotalFrames}
-                    frameSize={frameSize()}></Video>
+                    onCurrentFrame={setCurrentFrame}></Video>
                 </Player>
                 <div class={s.player}>
                   <div class={s.action_start}>
@@ -124,7 +133,20 @@ export default function App() {
                       max={1}
                       step={0.01}
                       value={volume()}
-                      onChange={(e) => setVolume((e.target as any).value)}
+                      onChange={(e) =>
+                        setVolume(parseFloat((e.target as any).value))
+                      }
+                    />
+
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={10}
+                      step={0.01}
+                      value={playbackRate()}
+                      onChange={(e) =>
+                        setPlaybackRate(parseFloat((e.target as any).value))
+                      }
                     />
                   </div>
 
@@ -189,7 +211,7 @@ export default function App() {
                   </div>
 
                   <span>
-                    Time: <span class={s.code}>{currentTime()}</span>
+                    Time: <span class={s.code}>{currentTimecode()}</span>
                   </span>
                   <span>
                     Frame:{' '}
@@ -216,10 +238,10 @@ export default function App() {
                   </div>
                 </div>
               </div>
-            </ErrorBoundary>
-          </div>
-        );
-      }}
-    </VideoContextProvider>
+            </div>
+          );
+        }}
+      </VideoContextProvider>
+    </ErrorBoundary>
   );
 }

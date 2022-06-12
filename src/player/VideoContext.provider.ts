@@ -6,9 +6,14 @@ import { getFrameSize, VIDEO_TIME_PRECISION } from './interfaces/VideoTime';
 import { createContextProvider } from './utils/createContextProvider';
 
 function createVideoContext(props: {}) {
-  const [currentFrame, setCurrentFrame] = createSignal<Frame>(0 as Frame);
+  const [currentFrame, setCurrentFrame] = createSignal<Frame>(0 as Frame, {
+    equals(prev, next) {
+      return prev === next;
+    },
+  });
   const [totalFrames, setTotalFrames] = createSignal<Frame>(0 as Frame);
   const [volume, setVolume] = createSignal(0);
+  const [playbackRate, setPlaybackRate] = createSignal(1);
   const [brushSize, setBrushSize] = createSignal(20);
   const [brushColor, setBrushColor] = createSignal('#ffffff');
   const [brushComposite, setBrushComposite] = createSignal(
@@ -19,18 +24,19 @@ function createVideoContext(props: {}) {
   const [play, setPlay] = createSignal(false);
 
   const frameSize = createMemo(() => getFrameSize(fps()));
-  const currentTime = createMemo(() =>
+  const currentTimecode = createMemo(() =>
     framesToTimecode(currentFrame(), frameSize())
   );
 
   return [
     {
       brushComposite,
-      currentTime,
+      currentTimecode,
       currentFrame,
       totalFrames,
       brushSize,
       volume,
+      playbackRate,
       brushColor,
       src,
       fps,
@@ -43,6 +49,7 @@ function createVideoContext(props: {}) {
       setTotalFrames,
       setBrushSize,
       setVolume,
+      setPlaybackRate,
       setBrushColor,
       setSrc,
       setFps,
