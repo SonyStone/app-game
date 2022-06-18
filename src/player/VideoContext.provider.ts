@@ -1,4 +1,5 @@
 import { createMemo, createSignal } from 'solid-js';
+import { EXAMPLE_VIDEOS } from './example-videos';
 import { Brand } from './interfaces/Brand.type';
 import { COMPOSITE_OPERATIONS } from './interfaces/CompositeOperations';
 import { Frame } from './interfaces/Frame';
@@ -19,7 +20,7 @@ function createVideoContext(props: {}) {
   const [brushComposite, setBrushComposite] = createSignal(
     COMPOSITE_OPERATIONS[0]
   );
-  const [src, setSrc] = createSignal('https://i.imgur.com/Iza6kFw.mp4');
+  const [src, setSrc] = createSignal(EXAMPLE_VIDEOS[2].value);
   const [fps, setFps] = createSignal(24);
   const [play, setPlay] = createSignal(false);
 
@@ -27,6 +28,8 @@ function createVideoContext(props: {}) {
   const currentTimecode = createMemo(() =>
     framesToTimecode(currentFrame(), frameSize())
   );
+
+  console.log(`create VideoContext`);
 
   return [
     {
@@ -64,14 +67,17 @@ export const [VideoContextProvider, useVideoContext] =
 export type Timecode = Brand<string, 'Timecode'>;
 
 export function framesToTimecode(frame: Frame, frameSize: number): Timecode {
-  const time = (frame * frameSize) / VIDEO_TIME_PRECISION;
+  const absFrame = Math.abs(frame);
+  const suffix = frame < 0 ? '-' : ' ';
+  const time = (absFrame * frameSize) / VIDEO_TIME_PRECISION;
 
   const hours = Math.floor(time / 3600) % 24;
   const minutes = Math.floor(time / 60) % 60;
   const seconds = Math.floor(time % 60);
-  const frames = Math.floor(frame % (VIDEO_TIME_PRECISION / frameSize));
+  const frames = Math.floor(absFrame % (VIDEO_TIME_PRECISION / frameSize));
 
   const result =
+    suffix +
     formatTimeItem(hours) +
     ':' +
     formatTimeItem(minutes) +

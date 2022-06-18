@@ -188,3 +188,7 @@ button {
 input[type='color'] {
   height: unset;
 }
+
+input[type='range'] {
+  touch-action: none;
+}

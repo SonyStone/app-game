@@ -1,3 +1,4 @@
+import { createSubscription } from '@utils/create-subscription';
 import {
   animationFrameScheduler,
   fromEvent,
@@ -6,7 +7,6 @@ import {
   takeUntil,
   timer,
 } from 'rxjs';
-import { onCleanup } from 'solid-js';
 
 declare module 'solid-js' {
   namespace JSX {
@@ -32,7 +32,7 @@ export function onHold(
     switchMapTo(timer(250, 50, animationFrameScheduler).pipe(takeUntil(end$)))
   );
 
-  const subscription = frameByFrame.subscribe((event) => setDrag(event));
+  const subscription = createSubscription();
 
-  onCleanup(() => subscription.unsubscribe());
+  subscription.add(frameByFrame.subscribe((event) => setDrag(event)));
 }
