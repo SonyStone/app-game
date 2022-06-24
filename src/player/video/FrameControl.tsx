@@ -5,13 +5,11 @@ import {
   filter,
   fromEvent,
   map,
-  mapTo,
   merge,
   startWith,
   switchMap,
-  tap,
 } from 'rxjs';
-import { createEffect, createMemo, untrack } from 'solid-js';
+import { createEffect } from 'solid-js';
 
 import { Frame } from '../interfaces/Frame';
 import {
@@ -21,16 +19,19 @@ import {
 } from '../interfaces/VideoTime';
 import { mediaCurrentTime } from '../utils/mediaCurrentTime';
 import { useIsPlayingContext } from './IsPlaying.provider';
+import { useMediaContext } from './Video';
 
 interface Props {
-  media: HTMLMediaElement;
-  frameSize?: VideoTime;
-  currentFrame?: Frame;
-  onCurrentFrame?(value: Frame): void;
+  frameSize: VideoTime;
+  currentFrame: Frame;
+  onCurrentFrame(value: Frame): void;
 }
 
 export function FrameControl(props: Props) {
-  const media = props.media;
+  const media = useMediaContext();
+
+  let currentFrame = 0;
+  let frameSize = 0;
 
   function setLocalFrame(frame: Frame): void {
     media.currentTime = frameToVideoTime(frame, frameSize);
@@ -39,9 +40,6 @@ export function FrameControl(props: Props) {
   function getLocalFrame(): Frame {
     return videoTimeToFrame(media.currentTime, frameSize);
   }
-
-  let currentFrame = 0;
-  let frameSize = 0;
 
   createEffect(() => {
     frameSize = props.frameSize ?? 0;
@@ -70,18 +68,13 @@ export function FrameControl(props: Props) {
   const localCurrentFrame$ = merge(playingTime$, seekedTime$).pipe(
     map(getLocalFrame),
     distinctUntilChanged(),
-    filter((localFrame) => currentFrame !== localFrame)
+    filter(
+      (localFrame) => !Number.isNaN(localFrame) && currentFrame !== localFrame
+    )
   );
 
-  createEffect(() => {
-    const onCurrentFrame = props.onCurrentFrame;
-    if (!onCurrentFrame) {
-      return;
-    }
-
-    const subscription = createSubscription();
-    subscription.add(localCurrentFrame$.subscribe(onCurrentFrame));
-  });
+  const subscription = createSubscription();
+  subscription.add(localCurrentFrame$.subscribe(props.onCurrentFrame));
 
   return undefined;
 }

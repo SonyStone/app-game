@@ -1,16 +1,17 @@
 import { createEventEffect } from '@utils/create-event-effect';
 import { createEffect } from 'solid-js';
 
+import { useMediaContext } from './Video';
+
 export interface PlaybackRateProps {
-  media: HTMLMediaElement;
-  playbackRate?: number;
-  onPlaybackRateChange?(value: number): void;
+  playbackRate: number;
+  onPlaybackRateChange(value: number): void;
 }
 
 export function PlaybackRateControl(
   props: PlaybackRateProps
 ): HTMLMediaElement {
-  const media = props.media;
+  const media = useMediaContext();
 
   let playbackRate = media.playbackRate;
 
@@ -28,7 +29,7 @@ export function PlaybackRateControl(
   });
 
   createEventEffect(media, 'ratechange', () => {
-    props.onPlaybackRateChange?.(media.playbackRate);
+    props.onPlaybackRateChange(media.playbackRate);
   });
 
   return media;

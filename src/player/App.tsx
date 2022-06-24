@@ -1,10 +1,18 @@
-import { createSignal, ErrorBoundary } from 'solid-js';
+import { createSignal, ErrorBoundary, onMount } from 'solid-js';
 
 import s from './App.module.scss';
 import { Controls } from './Controls';
 import { Frame } from './interfaces/Frame';
 import Player from './Player';
+import Dimentions from './video/Dimentions';
+import { FrameControl } from './video/FrameControl';
+import { IsPlayingProvider } from './video/IsPlaying.provider';
+import { PlaybackRateControl } from './video/PlaybackRateControl';
+import { PlayControl } from './video/PlayControl';
+import TotalFrames from './video/TotalFrames';
 import Video from './video/Video';
+import { VideoControls } from './video/VideoControls';
+import { VolumeControl } from './video/VolumeControl';
 import { useVideoContext, VideoContextProvider } from './VideoContext.provider';
 
 export default function App() {
@@ -45,26 +53,31 @@ export function VideoApp() {
           {/* <Canvas size={resize()}></Canvas> */}
           <Video
             src={src()}
-            play={play()}
-            onPlay={setPlay}
-            volume={volume()}
-            onVolumeChange={setVolume}
-            playbackRate={playbackRate()}
-            onPlaybackRateChange={setPlaybackRate}
-            onDimentions={setResize}
-            currentFrame={currentFrame()}
-            onCurrentFrame={setCurrentFrame}
-            frameSize={frameSize()}
             onWaiting={() =>
               console.log(
                 `Playback has stopped because of a temporary lack of data`
               )
-            }
-            // onVolumeChange={(e) => setVolume((e.target as any).value)}
-            // onPause={() => setPlay(false)}
-            // onPlay={() => setPlay(true)}
-
-            onTotalFrames={setTotalFrames}></Video>
+            }>
+            <TotalFrames
+              frameSize={frameSize()}
+              onTotalFrames={setTotalFrames}
+            />
+            <Dimentions onDimentions={setResize} />
+            <IsPlayingProvider>
+              <PlayControl play={play()} onPlay={setPlay} />
+              <FrameControl
+                currentFrame={currentFrame()}
+                onCurrentFrame={setCurrentFrame}
+                frameSize={frameSize()}
+              />
+            </IsPlayingProvider>
+            <VideoControls />
+            <VolumeControl volume={volume()} onVolumeChange={setVolume} />
+            <PlaybackRateControl
+              playbackRate={playbackRate()}
+              onPlaybackRateChange={setPlaybackRate}
+            />
+          </Video>
         </Player>
         <Controls />
       </div>

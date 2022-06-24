@@ -1,10 +1,15 @@
 import { createEventEffect } from '@utils/create-event-effect';
 import { createEffect, createMemo } from 'solid-js';
 
-import { VolumeProps } from './Props';
+import { useMediaContext } from './Video';
+
+interface VolumeProps {
+  volume: number;
+  onVolumeChange(value: number): void;
+}
 
 export function VolumeControl(props: VolumeProps) {
-  const media = props.media;
+  const media = useMediaContext();
 
   const volume = createMemo<number>((volume) => {
     volume = props.volume ?? volume;
@@ -16,15 +21,8 @@ export function VolumeControl(props: VolumeProps) {
     media.volume = volume();
   });
 
-  createEffect(() => {
-    const onVolumeChange = props.onVolumeChange;
-    if (!onVolumeChange) {
-      return;
-    }
-
-    createEventEffect(media, 'volumechange', () => {
-      props.onVolumeChange?.(media.volume);
-    });
+  createEventEffect(media, 'volumechange', () => {
+    props.onVolumeChange(media.volume);
   });
 
   return undefined;

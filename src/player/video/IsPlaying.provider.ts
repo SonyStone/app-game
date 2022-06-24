@@ -8,12 +8,12 @@ import {
   startWith,
 } from 'rxjs';
 
-interface Props {
-  media: HTMLMediaElement;
-}
+import { useMediaContext } from './Video';
+
+interface Props {}
 
 function createIsPlayingContext(props: Props) {
-  const media = props.media;
+  const media = useMediaContext();
 
   const play$ = fromEvent(media, 'play');
   const pause$ = fromEvent(media, 'pause');

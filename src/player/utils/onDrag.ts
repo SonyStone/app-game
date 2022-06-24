@@ -1,4 +1,4 @@
-import { onCleanup } from 'solid-js';
+import { createSubscription } from '@utils/create-subscription';
 
 import { pointerdrag } from '../events/pointer';
 
@@ -15,8 +15,5 @@ export function onDrag(
   accessor: () => (event: PointerEvent) => void
 ) {
   const setDrag = accessor();
-  const subscription = pointerdrag(element).subscribe((event) =>
-    setDrag(event)
-  );
-  onCleanup(() => subscription.unsubscribe());
+  createSubscription(pointerdrag(element).subscribe(setDrag));
 }

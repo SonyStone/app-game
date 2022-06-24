@@ -160,7 +160,9 @@ export function Controls() {
             setRewind(parseFloat((e.target as any).value));
           }}
           onPointerUp={(e) => {
-            setRewind(0);
+            setTimeout(() => {
+              setRewind(0);
+            }, 0);
           }}
         />
       </div>

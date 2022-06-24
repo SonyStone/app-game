@@ -7,12 +7,8 @@ import { getFrameSize, VIDEO_TIME_PRECISION } from './interfaces/VideoTime';
 import { createContextProvider } from './utils/createContextProvider';
 
 function createVideoContext(props: {}) {
-  const [currentFrame, setCurrentFrame] = createSignal<Frame>(0 as Frame, {
-    equals(prev, next) {
-      return prev === next;
-    },
-  });
-  const [totalFrames, setTotalFrames] = createSignal<Frame>(0 as Frame);
+  const [currentFrame, setCurrentFrame] = createSignal<Frame>(0);
+  const [totalFrames, setTotalFrames] = createSignal<Frame>(0);
   const [volume, setVolume] = createSignal(0);
   const [playbackRate, setPlaybackRate] = createSignal(1);
   const [brushSize, setBrushSize] = createSignal(20);

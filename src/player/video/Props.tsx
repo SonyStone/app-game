@@ -3,12 +3,6 @@ import { Dimensions } from '../interfaces/Dimensions.interface';
 import { Frame } from '../interfaces/Frame';
 import { VideoTime } from '../interfaces/VideoTime';
 
-export interface VolumeProps {
-  media: HTMLMediaElement;
-  volume?: number;
-  onVolumeChange?(value: number): void;
-}
-
 export interface Props
   extends Omit<
     JSXRuntime.VideoHTMLAttributes<HTMLVideoElement>,

@@ -2,15 +2,15 @@ import { createSubscription } from '@utils/create-subscription';
 import { createEffect } from 'solid-js';
 
 import { useIsPlayingContext } from './IsPlaying.provider';
+import { useMediaContext } from './Video';
 
 interface Props {
-  media: HTMLMediaElement;
-  play?: boolean;
-  onPlay?(value: boolean): void;
+  play: boolean;
+  onPlay(value: boolean): void;
 }
 
 export function PlayControl(props: Props) {
-  const media = props.media;
+  const media = useMediaContext();
 
   createEffect(() => {
     if (props.play) {
@@ -23,13 +23,7 @@ export function PlayControl(props: Props) {
   const isPlaying$ = useIsPlayingContext();
   const subscription = createSubscription();
 
-  createEffect(() => {
-    const onPlay = props.onPlay;
-    if (!onPlay) {
-      return;
-    }
-    subscription.add(isPlaying$.subscribe(onPlay));
-  });
+  subscription.add(isPlaying$.subscribe(props.onPlay));
 
   return undefined;
 }

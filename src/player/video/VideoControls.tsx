@@ -1,9 +1,9 @@
 import { createEventEffect } from '@utils/create-event-effect';
 
-import { Props } from './Props';
+import { useVideoContext } from './Video';
 
-export function VideoControls(props: Props) {
-  const video = props.children as HTMLVideoElement;
+export function VideoControls(props: any) {
+  const video = useVideoContext();
 
   console.log(`🔴 VideoControls created!`, video);
 
