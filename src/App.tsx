@@ -153,7 +153,7 @@ export function App() {
 
   const { toggleCamera, cameraType } = useCamera();
 
-  const { isOpen, toggle, leave, enter } = toggleSidenav();
+  const { isOpen, toggle } = toggleSidenav();
 
   stats.showPanel(1);
   stats.dom.style.left = 'unset';
@@ -162,13 +162,10 @@ export function App() {
   return (
     <>
       <header class={[s.header, s.right].join(' ')}>
-        <button class={s.toggle} onClick={toggle} onPointerEnter={enter}>
+        <button class={s.toggle} onClick={toggle}>
           ⇶
         </button>
-        <nav
-          class={[s.navigation, isOpen() ? s.open : ''].join(' ')}
-          onPointerLeave={leave}
-          onPointerEnter={enter}>
+        <nav class={[s.navigation, isOpen() ? s.open : ''].join(' ')}>
           <For each={routes}>
             {({ path, name }) => <Link href={path}>{name}</Link>}
           </For>
