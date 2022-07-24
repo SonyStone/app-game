@@ -1,9 +1,11 @@
+import { GL_BUFFER_TYPE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+
 export function processPageData(
   gl: WebGLRenderingContext,
   canvas: HTMLCanvasElement,
   pageData: any
 ) {
-  console.log("Loaded " + pageData.length + " page(s)");
+  console.log('Loaded ' + pageData.length + ' page(s)');
 
   computePageLocations(canvas, pageData);
   const pageVerts = new Float32Array(pageData.length * 6 * 2);
@@ -28,14 +30,23 @@ export function processPageData(
     pageVerts[j + 11] = y1;
   }
   const pageBuffer = gl.createBuffer()!;
-  gl.bindBuffer(gl.ARRAY_BUFFER, pageBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, pageVerts, gl.STATIC_DRAW);
+  gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, pageBuffer);
+  gl.bufferData(
+    GL_BUFFER_TYPE.ARRAY_BUFFER,
+    pageVerts,
+    GL_STATIC_VARIABLES.STATIC_DRAW
+  );
 
   return { pageBuffer, pageData };
 }
 
 function computePageLocations(canvas: HTMLCanvasElement, pageData: any) {
-  const cols = Math.floor(Math.sqrt(pageData.length / canvas.height * canvas.width / pageData[0].width * pageData[0].height));
+  const cols = Math.floor(
+    Math.sqrt(
+      (((pageData.length / canvas.height) * canvas.width) / pageData[0].width) *
+        pageData[0].height
+    )
+  );
 
   for (let i = 0; i < pageData.length; i++) {
     const page = pageData[i];
@@ -46,5 +57,4 @@ function computePageLocations(canvas: HTMLCanvasElement, pageData: any) {
     page.x *= gap;
     page.y *= gap;
   }
-
 }

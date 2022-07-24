@@ -1,6 +1,8 @@
 import {
   GL_PROGRAM_PARAMETER,
+  GL_SHADER_TYPE,
   GL_STATIC_VARIABLES,
+  GL_TEXTURES,
 } from '@webgl/static-variables';
 
 import { Colour } from './Colour';
@@ -244,22 +246,22 @@ export class ShaderFactory {
           //	else		itm.data = tmp;
           //}
           //console.log( itm.data.id );
-          gl.ctx.activeTexture(GL_STATIC_VARIABLES.TEXTURE0 + tex_slot);
-          gl.ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, itm.data.id);
+          gl.ctx.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
+          gl.ctx.bindTexture(GL_TEXTURES.TEXTURE_2D, itm.data.id);
           gl.ctx.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
 
         case 'sampler2DArray':
-          gl.ctx.activeTexture(GL_STATIC_VARIABLES.TEXTURE0 + tex_slot);
-          gl.ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D_ARRAY, itm.data);
+          gl.ctx.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
+          gl.ctx.bindTexture(GL_TEXTURES.TEXTURE_2D_ARRAY, itm.data);
           gl.ctx.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
 
         case 'samplerCube':
-          gl.ctx.activeTexture(GL_STATIC_VARIABLES.TEXTURE0 + tex_slot);
-          gl.ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP, itm.data);
+          gl.ctx.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
+          gl.ctx.bindTexture(GL_TEXTURES.TEXTURE_CUBE_MAP, itm.data);
           gl.ctx.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
@@ -337,18 +339,12 @@ export class ShaderFactory {
     transFeedbackVars: any = null,
     transFeedbackInterleaved: any = false
   ) {
-    let vert = this.compile_shader(
-      vert_src,
-      GL_STATIC_VARIABLES.VERTEX_SHADER
-    )!;
+    let vert = this.compile_shader(vert_src, GL_SHADER_TYPE.VERTEX_SHADER)!;
     if (!vert) {
       throw new Error(`Error creating vertix shader program.`);
     }
 
-    let frag = this.compile_shader(
-      frag_src,
-      GL_STATIC_VARIABLES.FRAGMENT_SHADER
-    )!;
+    let frag = this.compile_shader(frag_src, GL_SHADER_TYPE.FRAGMENT_SHADER)!;
     if (!frag) {
       this.gl.ctx.deleteShader(vert);
 

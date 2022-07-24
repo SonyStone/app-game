@@ -1,4 +1,4 @@
-import { createContextProvider } from '@utils/createContextProvider';
+import createContextProvider from '@utils/createContextProvider';
 
 import { Props } from './Props';
 import s from './Video.module.scss';

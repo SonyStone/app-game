@@ -23,11 +23,6 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import('./isometric/Isometric')),
   },
   {
-    path: '/three',
-    name: 'Three',
-    component: lazy(() => import('./Three')),
-  },
-  {
     path: '/three-pixi',
     name: 'ThreePixi',
     component: lazy(() => import('./ThreePixi')),
@@ -66,6 +61,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     path: '/sprites',
     name: 'Sprites',
     component: lazy(() => import('./three/Sprites')),
+  },
+  {
+    path: '/three',
+    name: 'Three',
+    component: lazy(() => import('./three/Three')),
   },
   {
     path: '/paint',
@@ -174,7 +174,11 @@ export function App() {
       </header>
       {stats.dom}
       <main>
-        <ErrorBoundary fallback={<div>Error in the App</div>}>
+        <ErrorBoundary
+          fallback={(error) => {
+            console.error(error);
+            return <div>Error in the App</div>;
+          }}>
           <Routes />
         </ErrorBoundary>
       </main>

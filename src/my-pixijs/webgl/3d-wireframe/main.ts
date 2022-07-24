@@ -1,13 +1,21 @@
-const RADTODEG = 180 / Math.PI;
-const DEGTORAD = Math.PI / 180;
+import { DEG_TO_RAD } from '@webgl/math/constants';
+import * as m4 from '@webgl/math/m4';
+import { create, setFromSpherical, setFromVec3 } from '@webgl/math/spherical';
+import { clamp } from '@webgl/math/utils/clamp';
+import * as v2 from '@webgl/math/v2';
+import * as v3 from '@webgl/math/v3';
+import {
+  GL_BUFFER_TYPE,
+  GL_CLEAR_MASK,
+  GL_DATA_TYPE,
+  GL_DRAW_ARRAYS_MODE,
+} from '@webgl/static-variables';
+import { Accessor, createSignal, onCleanup } from 'solid-js';
 
-import vertexShader from './vert_shader.vert?raw';
-import fragmentShader from './frag_shader.frag?raw';
-
-import { Mat4 } from './Mat4';
-import { Shader } from './Shader';
-import { onCleanup } from 'solid-js';
 import { useStats } from '../../../Stats.provider';
+import fragmentShader from './frag_shader.frag?raw';
+import { Shader } from './Shader';
+import vertexShader from './vert_shader.vert?raw';
 
 function createWireframe(
   gl: WebGL2RenderingContext,
@@ -18,22 +26,22 @@ function createWireframe(
     vertexShader,
     fragmentShader,
     uniforms: {
-      uTransform: {
-        type: gl.FLOAT_MAT4,
-        value: Mat4.identity(),
+      cameraPosition: {
+        type: GL_DATA_TYPE.FLOAT_MAT4,
+        value: m4.identity(),
       },
-      uViewProjection: {
-        type: gl.FLOAT_MAT4,
-        value: Mat4.identity(),
+      cameraProjection: {
+        type: GL_DATA_TYPE.FLOAT_MAT4,
+        value: m4.identity(),
       },
       uColor: {
-        type: gl.FLOAT_VEC3,
+        type: GL_DATA_TYPE.FLOAT_VEC3,
         value: color,
       },
     },
     attributes: {
       aPosition: {
-        type: gl.ARRAY_BUFFER,
+        type: GL_BUFFER_TYPE.ARRAY_BUFFER,
         itemSize: 3,
         itemCount: vertices.length / 3,
         value: vertices.slice(0),
@@ -57,46 +65,29 @@ export interface Context {
 
   renderTime: number;
   renderDeltaTime: number;
+
+  transition: Accessor<number>;
 }
 
 export function main(context: Context) {
   const tmp = [
-    Mat4.identity(),
-    Mat4.identity(),
-    Mat4.identity(),
-    Mat4.identity(),
-    Mat4.identity(),
-    Mat4.identity(),
+    m4.identity(),
+    m4.identity(),
+    m4.identity(),
+    m4.identity(),
+    m4.identity(),
+    m4.identity(),
   ];
-  const { mouse } = context;
+
   window.dispatchEvent(new Event('resize'));
   const gl = context.gl;
 
-  let fov = 75 * DEGTORAD;
+  let fov = 75 * DEG_TO_RAD;
 
   const zNear = 0.1;
   const zFar = 2000;
 
-  function getCameraMatrixAnim01(time: number) {
-    return [
-      //Mat4.rotateX(15 * DEGTORAD),
-      Mat4.rotateY(-10 * DEGTORAD),
-      Mat4.rotateY(Math.sin(time * 0.0003) * 0.13),
-      Mat4.translate(0.6, 1.8, 2.0),
-      //Mat4.translate(0, 1.5, 4.5),
-      Mat4.translate(0, 0, 1.0),
-      Mat4.rotateY(Math.sin(time * 0.0003) * 0.2),
-      Mat4.rotateY(-15 * DEGTORAD),
-      Mat4.rotateX(10 * DEGTORAD),
-      //Mat4.translate(0, 0, 2 * (1 - 2 * mouse.y / canvas.height)),
-    ];
-  }
-
-  const cameraFunc = getCameraMatrixAnim01;
-  // fov = 0.1 * DEGTORAD;
-  // const cameraFunc = getCameraMatrixOverhead;
-
-  const cameraMatrix = Mat4.identity();
+  const cameraMatrix = m4.identity();
   const box = [
     0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5,
     0.5, -0.5, -0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5,
@@ -114,7 +105,7 @@ export function main(context: Context) {
     z: number
   ) {
     return applyMatToPoints(
-      Mat4.multiplyArray([Mat4.translate(x, y, z), Mat4.scale(w, h, d)]),
+      m4.multiplyArray([m4.translation([x, y, z]), m4.scaling([w, h, d])]),
       box
     );
   }
@@ -137,18 +128,11 @@ export function main(context: Context) {
   const shelves: any[] = [];
 
   // north west
-  //rails.push(makeBox(0.01, 1.8, 0.02, -0.805, 1.50, -0.49-0.20));
-  //rails.push(makeBox(0.01, 1.8, 0.02, -0.805, 1.50, -0.91));
-  //rails.push(makeBox(0.01, 1.8, 0.02, -0.805, 1.50, -0.89));
   rails.push(makeBox(0.01, 1.8, 0.02, -0.805, 1.5, -0.79));
   rails.push(makeBox(0.01, 1.8, 0.02, -0.805, 1.5, -0.19));
-  //rails.push(makeBox(0.01, 1.8, 0.02, -0.805, 1.50, -0.49));
-  //rails.push(makeBox(0.01, 1.8, 0.02, -0.805, 1.50, -0.49+0.20));
   shelves.push(makeBox(0.6, 0.02, 0.8, -0.49, 1.0, -0.49));
   shelves.push(makeBox(0.6, 0.02, 0.8, -0.49, 1.4, -0.49));
   shelves.push(makeBox(0.6, 0.02, 0.8, -0.49, 2.0, -0.49));
-
-  //shelves.push(makeBox(0.61, 0.02, 2.443, -0.49, 2.00, 0));
 
   // south west
   rails.push(makeBox(0.01, 1.8, 0.02, -0.805, 1.5, 0.31 - 0.2));
@@ -168,9 +152,7 @@ export function main(context: Context) {
     const gl = context.gl;
 
     gl.clearColor(0.0, 0.0, 0.0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-
-    // console.log(`main`);
+    gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT);
 
     drawPoints(gl, shader, room, [0.3, 0.3, 0.3]);
     drawPoints(gl, shader, roomDoor, [0.7, 0.7, 0.7]);
@@ -181,6 +163,152 @@ export function main(context: Context) {
 
     gl.flush();
   }
+
+  function createOrthographicProjection(dst = m4.identity()) {
+    const near = -5000.1;
+    const far = 2000;
+
+    const size = 600;
+    const left = -gl.canvas.clientWidth / size;
+    const right = gl.canvas.clientWidth / size;
+    const bottom = -gl.canvas.clientHeight / size;
+    const top = gl.canvas.clientHeight / size;
+
+    return m4.ortho(left, right, bottom, top, near, far, dst);
+  }
+
+  function createPerspectiveProjection(dst = m4.identity()) {
+    const fov = 60 * DEG_TO_RAD;
+    const near = 0.1;
+    const far = 2000;
+    const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+
+    return m4.perspective(fov, aspect, near, far, dst);
+  }
+
+  const element: HTMLElement = context.canvas;
+
+  const [time, setTime] = createSignal(0);
+
+  // --- wheel start
+  let scale = 1;
+  const offset = v3.create(0.6, 1.8, 2.0);
+  const spherical = setFromVec3(offset);
+  const dollyScale = Math.pow(0.95, 1);
+
+  const onMouseWheel = (event: WheelEvent) => {
+    event.preventDefault();
+    if (event.deltaY < 0) {
+      scale *= dollyScale;
+    } else if (event.deltaY > 0) {
+      scale /= dollyScale;
+    }
+
+    spherical.radius *= scale;
+    spherical.radius = clamp(spherical.radius, 0, 100);
+
+    setFromSpherical(spherical, offset);
+    setTime(time() + 1);
+
+    scale = 1;
+  };
+
+  element.addEventListener('wheel', onMouseWheel, {
+    passive: false,
+  });
+  onCleanup(() => {
+    element.removeEventListener('wheel', onMouseWheel);
+  });
+  // --- wheel end
+
+  // --- pointer start
+
+  const rotateStart = v2.create();
+  const rotateEnd = v2.create();
+  const rotateDelta = v2.create();
+  const sphericalDelta = create();
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (event.pointerType === 'touch') {
+    } else {
+      v2.set(event.clientX, event.clientY, rotateEnd);
+
+      v2.subtract(rotateEnd, rotateStart, rotateDelta);
+
+      // rotateLeft
+      {
+        const angle = (2 * Math.PI * rotateDelta[0]) / element.clientHeight;
+        sphericalDelta.theta -= angle;
+      }
+
+      // rotateUp
+      {
+        const angle = (2 * Math.PI * rotateDelta[1]) / element.clientHeight;
+        sphericalDelta.phi -= angle;
+      }
+
+      v2.copy(rotateEnd, rotateStart);
+    }
+
+    spherical.theta += sphericalDelta.theta;
+    spherical.phi += sphericalDelta.phi;
+
+    setFromSpherical(spherical, offset);
+
+    sphericalDelta.radius = 0;
+    sphericalDelta.phi = 0;
+    sphericalDelta.theta = 0;
+
+    setTime(time() + 1);
+  };
+
+  const onPointerUp = (event: PointerEvent) => {
+    element.removeEventListener('pointermove', onPointerMove);
+    element.removeEventListener('pointerup', onPointerUp);
+  };
+
+  const onPointerDown = (event: PointerEvent) => {
+    element.addEventListener('pointermove', onPointerMove);
+    element.addEventListener('pointerup', onPointerUp);
+
+    if (event.pointerType === 'touch') {
+    } else {
+      v2.set(event.clientX, event.clientY, rotateStart);
+    }
+  };
+
+  element.addEventListener('pointerdown', onPointerDown, {
+    passive: false,
+  });
+  onCleanup(() => {
+    element.removeEventListener('pointerdown', onPointerDown);
+    element.removeEventListener('pointermove', onPointerMove);
+    element.removeEventListener('pointerup', onPointerUp);
+  });
+  // --- pointer end
+
+  function createPosition(time: number, dst = m4.identity()) {
+    m4.identity(dst);
+    m4.translate(dst, offset, dst);
+    // m4.translate(dst, [0, 0, 1.0], dst);
+    m4.lookAt(offset, [0, 0, 0], [0, 1, 0], dst);
+    // m4.rotateY(dst, -Math.sin(time * 0.0003) * 0.2, dst);
+    // m4.rotateY(dst, 15 * DEG_TO_RAD, dst);
+    // m4.rotateX(dst, -10 * DEG_TO_RAD, dst);
+
+    return dst;
+  }
+
+  const camera = {
+    projection: m4.transition(
+      createOrthographicProjection(),
+      createPerspectiveProjection(),
+      context.transition()
+    ),
+    transform: createPosition(0),
+  };
+
+  const cameraInversePosition = m4.identity();
   function update(context: Context) {
     const time = context.renderTime;
     const mouse = context.mouse;
@@ -188,31 +316,18 @@ export function main(context: Context) {
 
     updateViewportSize(context);
 
-    Mat4.multiplyArray(cameraFunc(time), cameraMatrix);
-
-    Mat4.multiplyArray(
-      [
-        Mat4.translate(0, 0, 0, tmp[0]),
-        Mat4.scale(1.0, 1.0, 1.0, tmp[1]),
-        //Mat4.scale(10, 10, 10, tmp[1]),
-        //Mat4.rotateX(time * 0.005, tmp[2]),
-        //Mat4.rotateY(time * 0.005, tmp[3]),
-        //Mat4.rotateZ(time * 0.0005, tmp[4]),
-        //Mat4.translate(1 - (512 + 20) * factX, 1 - (512 + 20) * factY, 0),
-        //Mat4.scale(512 * factX, 512 * factY, 1),
-      ],
-      (shader as any).uTransform.value
+    shader.cameraPosition.value = m4.inverse(
+      createPosition(time, camera.transform),
+      cameraInversePosition
     );
 
-    const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-
-    Mat4.multiplyArray(
-      [
-        Mat4.perspective(fov, aspect, zNear, zFar),
-        Mat4.inverse(cameraMatrix, tmp[1]),
-      ],
-      (shader as any).uViewProjection.value
+    camera.projection = m4.transition(
+      createOrthographicProjection(),
+      createPerspectiveProjection(),
+      context.transition()
     );
+
+    shader.cameraProjection.value = camera.projection;
   }
 
   let id: number;
@@ -236,26 +351,11 @@ export function main(context: Context) {
     stats.end();
   }
 
-  id = requestAnimationFrame(handleRaf);
+  handleRaf(0);
 
   onCleanup(() => {
     cancelAnimationFrame(id);
   });
-}
-
-function getCameraMatrixOverhead(time: number) {
-  return [
-    //Mat4.rotateX(15 * DEGTORAD),
-    //Mat4.rotateY(-10 * DEGTORAD),
-    //Mat4.rotateY(Math.sin(time * 0.0003) * 0.13),
-    Mat4.translate(0.0, 2000.0, 0.0),
-    //Mat4.translate(0, 1.5, 4.5),
-    //Mat4.translate(0, 0, 1.0),
-    //Mat4.rotateY(Math.sin(time * 0.0003) * 0.2),
-    //Mat4.rotateY(-15 * DEGTORAD),
-    Mat4.rotateX(90 * DEGTORAD),
-    //Mat4.translate(0, 0, 2 * (1 - 2 * mouse.y / canvas.height)),
-  ];
 }
 
 function drawPoints(
@@ -273,17 +373,25 @@ function drawPoints(
   }
   shader.bind();
 
-  gl.drawArrays(gl.LINE_STRIP, 0, shader.attributes.aPosition.value.length / 3);
+  gl.drawArrays(
+    GL_DRAW_ARRAYS_MODE.LINE_STRIP,
+    0,
+    shader.attributes.aPosition.value.length / 3
+  );
 }
 
-function applyMatToPoints(mat: number[], points: number[], r?: number[]) {
+function applyMatToPoints(
+  mat: number[] | Float32Array,
+  points: number[],
+  r?: number[]
+) {
   r = r || [];
   const v = [];
   for (let i = 0; i < points.length; i += 3) {
     v[0] = points[i + 0];
     v[1] = points[i + 1];
     v[2] = points[i + 2];
-    Mat4.applyVec3(mat, v, v);
+    m4.transformPoint(mat, v, v);
     r[i + 0] = v[0];
     r[i + 1] = v[1];
     r[i + 2] = v[2];
@@ -304,5 +412,5 @@ function updateViewportSize(context: Context) {
   }
 }
 function drawQuad(gl: WebGL2RenderingContext) {
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  gl.drawArrays(GL_DRAW_ARRAYS_MODE.TRIANGLE_STRIP, 0, 4);
 }

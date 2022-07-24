@@ -1,4 +1,10 @@
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import {
+  GL_CLEAR_MASK,
+  GL_DATA_TYPE,
+  GL_STATIC_VARIABLES,
+  GL_TEXTURES,
+} from '@webgl/static-variables';
+
 import { Context } from './Context';
 
 export class Fbo {
@@ -84,7 +90,7 @@ export class FboFactory {
     // Cleanup
     ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
     ctx.bindRenderbuffer(GL_STATIC_VARIABLES.RENDERBUFFER, null);
-    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, null);
+    ctx.bindTexture(GL_TEXTURES.TEXTURE_2D, null);
     return fbo;
   }
 
@@ -100,10 +106,7 @@ export class FboFactory {
   clear() {
     let ctx = this.gl.ctx;
     //ctx.bindFramebuffer( ctx.FRAMEBUFFER, fbo.id );
-    ctx.clear(
-      GL_STATIC_VARIABLES.COLOR_BUFFER_BIT |
-        GL_STATIC_VARIABLES.DEPTH_BUFFER_BIT
-    );
+    ctx.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT | GL_CLEAR_MASK.DEPTH_BUFFER_BIT);
     return this;
   }
 
@@ -127,9 +130,8 @@ export class FboFactory {
       0,
       fboWrite.width,
       fboWrite.height,
-      GL_STATIC_VARIABLES.COLOR_BUFFER_BIT |
-        GL_STATIC_VARIABLES.DEPTH_BUFFER_BIT,
-      GL_STATIC_VARIABLES.NEAREST
+      GL_CLEAR_MASK.COLOR_BUFFER_BIT | GL_CLEAR_MASK.DEPTH_BUFFER_BIT,
+      GL_TEXTURES.NEAREST
     );
 
     //Unbind
@@ -192,12 +194,12 @@ export class FboFactory {
       type: 'tex',
     };
 
-    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, buf.id);
+    ctx.bindTexture(GL_TEXTURES.TEXTURE_2D, buf.id);
 
     switch (pixel) {
       case 'byte':
         ctx.texImage2D(
-          GL_STATIC_VARIABLES.TEXTURE_2D,
+          GL_TEXTURES.TEXTURE_2D,
           0,
           GL_STATIC_VARIABLES.RGBA,
           w,
@@ -210,27 +212,27 @@ export class FboFactory {
         break;
       case 'f16':
         ctx.texImage2D(
-          GL_STATIC_VARIABLES.TEXTURE_2D,
+          GL_TEXTURES.TEXTURE_2D,
           0,
           GL_STATIC_VARIABLES.RGBA16F,
           w,
           h,
           0,
           GL_STATIC_VARIABLES.RGBA,
-          GL_STATIC_VARIABLES.FLOAT,
+          GL_DATA_TYPE.FLOAT,
           null
         );
         break;
       case 'f32':
         ctx.texImage2D(
-          GL_STATIC_VARIABLES.TEXTURE_2D,
+          GL_TEXTURES.TEXTURE_2D,
           0,
           GL_STATIC_VARIABLES.RGBA32F,
           w,
           h,
           0,
           GL_STATIC_VARIABLES.RGBA,
-          GL_STATIC_VARIABLES.FLOAT,
+          GL_DATA_TYPE.FLOAT,
           null
         );
         console.log('ep');
@@ -243,24 +245,24 @@ export class FboFactory {
 
     //ctx.texImage2D( ctx.TEXTURE_2D, 0, ctx.RGBA16F, w, h, 0, ctx.RGBA, ctx.FLOAT, null );
     ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_2D,
-      GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
-      GL_STATIC_VARIABLES.NEAREST
+      GL_TEXTURES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_MAG_FILTER,
+      GL_TEXTURES.NEAREST
     );
     ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_2D,
-      GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
-      GL_STATIC_VARIABLES.NEAREST
+      GL_TEXTURES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_MIN_FILTER,
+      GL_TEXTURES.NEAREST
     );
     ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_2D,
-      GL_STATIC_VARIABLES.TEXTURE_WRAP_S,
-      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
+      GL_TEXTURES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_WRAP_S,
+      GL_TEXTURES.CLAMP_TO_EDGE
     );
     ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_2D,
-      GL_STATIC_VARIABLES.TEXTURE_WRAP_T,
-      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
+      GL_TEXTURES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_WRAP_T,
+      GL_TEXTURES.CLAMP_TO_EDGE
     );
 
     //ctx.texImage2D(ctx.TEXTURE_2D, 0, ctx.RGBA16F, w, h, 0, ctx.RGBA, ctx.FLOAT, null);
@@ -278,7 +280,7 @@ export class FboFactory {
     ctx.framebufferTexture2D(
       GL_STATIC_VARIABLES.FRAMEBUFFER,
       buf.attach,
-      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_2D,
       buf.id,
       0
     );
@@ -357,30 +359,30 @@ export class FboFactory {
     let ctx = this.gl.ctx;
     let buf = { id: ctx.createTexture(), type: 'tex' };
 
-    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, buf.id);
+    ctx.bindTexture(GL_TEXTURES.TEXTURE_2D, buf.id);
     //ctx.pixelStorei(ctx.UNPACK_FLIP_Y_WEBGL, false);
     ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_2D,
-      GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
-      GL_STATIC_VARIABLES.NEAREST
+      GL_TEXTURES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_MAG_FILTER,
+      GL_TEXTURES.NEAREST
     );
     ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_2D,
-      GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
-      GL_STATIC_VARIABLES.NEAREST
+      GL_TEXTURES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_MIN_FILTER,
+      GL_TEXTURES.NEAREST
     );
     ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_2D,
-      GL_STATIC_VARIABLES.TEXTURE_WRAP_S,
-      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
+      GL_TEXTURES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_WRAP_S,
+      GL_TEXTURES.CLAMP_TO_EDGE
     );
     ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_2D,
-      GL_STATIC_VARIABLES.TEXTURE_WRAP_T,
-      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
+      GL_TEXTURES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_WRAP_T,
+      GL_TEXTURES.CLAMP_TO_EDGE
     );
     ctx.texStorage2D(
-      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_2D,
       1,
       GL_STATIC_VARIABLES.DEPTH_COMPONENT16,
       w,
@@ -390,7 +392,7 @@ export class FboFactory {
     ctx.framebufferTexture2D(
       GL_STATIC_VARIABLES.FRAMEBUFFER,
       GL_STATIC_VARIABLES.DEPTH_ATTACHMENT,
-      GL_STATIC_VARIABLES.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_2D,
       buf.id,
       0
     );

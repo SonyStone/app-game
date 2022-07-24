@@ -1,3 +1,5 @@
+import { GL_STATIC_VARIABLES, GL_TEXTURES } from '@webgl/static-variables';
+
 // ! Недоделано ! Нет getTexture
 export class Texture {
   gl: WebGL2RenderingContext;
@@ -17,27 +19,27 @@ export class Texture {
     this.params = opts.params || [
       {
         type: 'i',
-        target: gl.TEXTURE_2D,
-        name: gl.TEXTURE_WRAP_S,
-        value: gl.MIRRORED_REPEAT,
+        target: GL_TEXTURES.TEXTURE_2D,
+        name: GL_TEXTURES.TEXTURE_WRAP_S,
+        value: GL_TEXTURES.MIRRORED_REPEAT,
       },
       {
         type: 'i',
-        target: gl.TEXTURE_2D,
-        name: gl.TEXTURE_WRAP_T,
-        value: gl.MIRRORED_REPEAT,
+        target: GL_TEXTURES.TEXTURE_2D,
+        name: GL_TEXTURES.TEXTURE_WRAP_T,
+        value: GL_TEXTURES.MIRRORED_REPEAT,
       },
       {
         type: 'i',
-        target: gl.TEXTURE_2D,
-        name: gl.TEXTURE_MIN_FILTER,
-        value: gl.LINEAR,
+        target: GL_TEXTURES.TEXTURE_2D,
+        name: GL_TEXTURES.TEXTURE_MIN_FILTER,
+        value: GL_TEXTURES.LINEAR,
       },
       {
         type: 'i',
-        target: gl.TEXTURE_2D,
-        name: gl.TEXTURE_MAG_FILTER,
-        value: gl.LINEAR,
+        target: GL_TEXTURES.TEXTURE_2D,
+        name: GL_TEXTURES.TEXTURE_MAG_FILTER,
+        value: GL_TEXTURES.LINEAR,
       },
     ];
     this._glTexture = undefined;
@@ -69,14 +71,14 @@ export class Texture {
   bindTexture() {
     var gl = this.gl;
     if (this._glTexture === undefined) this._glTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, this._glTexture);
+    gl.bindTexture(GL_TEXTURES.TEXTURE_2D, this._glTexture);
     if (this.image) {
       gl.texImage2D(
-        gl.TEXTURE_2D,
+        GL_TEXTURES.TEXTURE_2D,
         0,
-        gl.RGBA,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
+        GL_STATIC_VARIABLES.RGBA,
+        GL_STATIC_VARIABLES.RGBA,
+        GL_STATIC_VARIABLES.UNSIGNED_BYTE,
         this.image
       );
     } else {
@@ -84,14 +86,14 @@ export class Texture {
         this.data = new Uint8Array(this.width * this.height * 4);
       }
       gl.texImage2D(
-        gl.TEXTURE_2D,
+        GL_TEXTURES.TEXTURE_2D,
         0,
-        gl.RGBA,
+        GL_STATIC_VARIABLES.RGBA,
         this.width,
         this.height,
         0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
+        GL_STATIC_VARIABLES.RGBA,
+        GL_STATIC_VARIABLES.UNSIGNED_BYTE,
         this.data
       );
     }
@@ -108,11 +110,11 @@ export class Texture {
     var gl = this.gl;
     if (this.framebuffer === undefined) {
       this.framebuffer = gl.createFramebuffer();
-      gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+      gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, this.framebuffer);
       gl.framebufferTexture2D(
-        gl.FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D,
+        GL_STATIC_VARIABLES.FRAMEBUFFER,
+        GL_STATIC_VARIABLES.COLOR_ATTACHMENT0,
+        GL_TEXTURES.TEXTURE_2D,
         this.getTexture(),
         0
       );
@@ -122,22 +124,22 @@ export class Texture {
 
   bindFramebuffer() {
     var gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.getFramebuffer());
+    gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, this.getFramebuffer());
     gl.viewport(0, 0, this.width, this.height);
   }
 
   unbindFramebuffer() {
     var gl = this.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   }
 
   setData(data) {
     var gl = this.gl;
     this.data = data || this.data;
-    gl.bindTexture(gl.TEXTURE_2D, this.getTexture());
+    gl.bindTexture(GL_TEXTURES.TEXTURE_2D, this.getTexture());
     gl.texSubImage2D(
-      gl.TEXTURE_2D,
+      GL_TEXTURES.TEXTURE_2D,
       0,
       0,
       0,
@@ -147,11 +149,11 @@ export class Texture {
       gl.UNSIGNED_BYTE,
       this.data
     );
-    if (gl.framebuffer)
+    if (gl.FRAMEBUFFER)
       gl.framebufferTexture2D(
-        gl.FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D,
+        GL_STATIC_VARIABLES.FRAMEBUFFER,
+        GL_STATIC_VARIABLES.COLOR_ATTACHMENT0,
+        GL_TEXTURES.TEXTURE_2D,
         this.getTexture(),
         0
       );
@@ -167,8 +169,8 @@ export class Texture {
       0,
       this.width,
       this.height,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
+      GL_STATIC_VARIABLES.RGBA,
+      GL_STATIC_VARIABLES.UNSIGNED_BYTE,
       this.data
     );
     return this.data;

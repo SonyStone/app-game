@@ -4,7 +4,7 @@ import { Brand } from './interfaces/Brand.type';
 import { COMPOSITE_OPERATIONS } from './interfaces/CompositeOperations';
 import { Frame } from './interfaces/Frame';
 import { getFrameSize, VIDEO_TIME_PRECISION } from './interfaces/VideoTime';
-import { createContextProvider } from './utils/createContextProvider';
+import createContextProvider from '@utils/createContextProvider';
 
 function createVideoContext(props: {}) {
   const [currentFrame, setCurrentFrame] = createSignal<Frame>(0);

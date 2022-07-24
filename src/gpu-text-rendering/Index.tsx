@@ -1,28 +1,27 @@
+import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { onCleanup } from 'solid-js';
+
+import atlas from './atlas.bmp?url';
+import atlasverts from './atlasverts.bmp?url';
 import { createProgram } from './createProgram';
 import { drawScene } from './drawScene';
+import glyphfs from './glyphfs.frag?raw';
+import glyphs from './glyphs.bmp?url';
+import glyphvs from './glyphvs.vert?raw';
+import imagefs from './imagefs.frag?raw';
+import imageverts from './imageverts.bmp?url';
+import imagevs from './imagevs.vert?raw';
+import pagefs from './pagefs.frag?raw';
+import pages from './pages.json?url';
+import pagevs from './pagevs.vert?raw';
+import { processAtlas } from './processAtlas';
+import { processAtlasVertices } from './processAtlasVertices';
+import { processGlyphs } from './processGlyphs';
 import { processImageVertices } from './processImageVertices';
 import { processPageData } from './processPageData';
 import { requestFile } from './requestFile';
-import { unpackBmp } from './unpackBmp';
-
-import imagevs from './imagevs.vert?raw';
-import imagefs from './imagefs.frag?raw';
-import glyphvs from './glyphvs.vert?raw';
-import glyphfs from './glyphfs.frag?raw';
-import pagevs from './pagevs.vert?raw';
-import pagefs from './pagefs.frag?raw';
-import glyphs from './glyphs.bmp?url';
-import atlas from './atlas.bmp?url';
-import atlasverts from './atlasverts.bmp?url';
-import pages from './pages.json?url';
-import imageverts from './imageverts.bmp?url';
-
-import { processGlyphs } from './processGlyphs';
-import { processAtlas } from './processAtlas';
-import { processAtlasVertices } from './processAtlasVertices';
-
 import s from './style.module.scss';
-import { onCleanup } from 'solid-js';
+import { unpackBmp } from './unpackBmp';
 
 export default function GpuTextRendering() {
   const canvas = (
@@ -228,9 +227,12 @@ function initGl(canvas: HTMLCanvasElement):
     // document.getElementById('frametime')!.style.display = 'inline';
   }
 
-  gl.disable(gl.DEPTH_TEST);
+  gl.disable(GL_STATIC_VARIABLES.DEPTH_TEST);
 
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.blendFunc(
+    GL_STATIC_VARIABLES.SRC_ALPHA,
+    GL_STATIC_VARIABLES.ONE_MINUS_SRC_ALPHA
+  );
 
   gl.viewport(0, 0, canvas.width, canvas.height);
 

@@ -1,6 +1,12 @@
-import { GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
-
-import { Mat4 } from './Mat4';
+import * as m4 from '@webgl/math/m4';
+import {
+  GL_BUFFER_TYPE,
+  GL_DATA_TYPE,
+  GL_PROGRAM_PARAMETER,
+  GL_SHADER_TYPE,
+  GL_STATIC_VARIABLES,
+  GL_TEXTURES,
+} from '@webgl/static-variables';
 
 export class Shader {
   gl: WebGL2RenderingContext;
@@ -8,6 +14,8 @@ export class Shader {
   nextTexture: number;
   attributes: any;
   uniforms: any;
+
+  [key: string]: any;
 
   constructor(gl: WebGL2RenderingContext, opts: any) {
     this.gl = gl;
@@ -42,8 +50,8 @@ export class Shader {
       this.uniforms[name] = uniform;
     }
 
-    if ((this as any)[name] === undefined) {
-      (this as any)[name] = uniform;
+    if (this[name] === undefined) {
+      this[name] = uniform;
     }
 
     if (uniform.location === undefined) {
@@ -51,27 +59,27 @@ export class Shader {
     }
 
     switch (uniform.type) {
-      case gl.FLOAT:
+      case GL_DATA_TYPE.FLOAT:
         gl.uniform1f(uniform.location, uniform.value);
         break;
-      case gl.FLOAT_VEC2:
+      case GL_DATA_TYPE.FLOAT_VEC2:
         gl.uniform2fv(uniform.location, uniform.value);
         break;
-      case gl.FLOAT_VEC3:
+      case GL_DATA_TYPE.FLOAT_VEC3:
         gl.uniform3fv(uniform.location, uniform.value);
         break;
-      case gl.FLOAT_VEC4:
+      case GL_DATA_TYPE.FLOAT_VEC4:
         gl.uniform4fv(uniform.location, uniform.value);
         break;
-      case gl.FLOAT_MAT2:
+      case GL_DATA_TYPE.FLOAT_MAT2:
         uniform.value = uniform.value || [1, 0, 0, 1];
         gl.uniformMatrix2fv(uniform.location, false, uniform.value);
         break;
-      case gl.FLOAT_MAT4:
-        uniform.value = uniform.value || Mat4.identity();
+      case GL_DATA_TYPE.FLOAT_MAT4:
+        uniform.value = uniform.value || m4.identity();
         gl.uniformMatrix4fv(uniform.location, false, uniform.value);
         break;
-      case gl.TEXTURE_2D:
+      case GL_TEXTURES.TEXTURE_2D:
         if (uniform.textureNum === undefined) {
           uniform.textureNum = this.nextTexture++;
         }
@@ -93,7 +101,7 @@ export class Shader {
     const gl = this.gl;
     const program = this.program;
 
-    (this as any)[name] = attribute;
+    this[name] = attribute;
     attribute.location = gl.getAttribLocation(program, name);
 
     switch (attribute.type) {
@@ -101,12 +109,12 @@ export class Shader {
         attribute.buffer = gl.createBuffer();
         //attribute.buffer.itemSize = attribute.itemSize;
         //attribute.buffer.itemCount = attribute.itemCount;
-        gl.bindBuffer(gl.ARRAY_BUFFER, attribute.buffer);
+        gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, attribute.buffer);
         attribute.value =
           attribute.value ||
           new Array(attribute.itemSize * attribute.itemCount);
         gl.bufferData(
-          gl.ARRAY_BUFFER,
+          GL_BUFFER_TYPE.ARRAY_BUFFER,
           new Float32Array(attribute.value),
           gl.STATIC_DRAW
         );
@@ -114,7 +122,7 @@ export class Shader {
         gl.vertexAttribPointer(
           attribute.location,
           attribute.itemSize,
-          gl.FLOAT,
+          GL_DATA_TYPE.FLOAT,
           false,
           0,
           0
@@ -132,8 +140,8 @@ export class Shader {
     const uniform = this.uniforms[name];
     this.addUniform(name, uniform);
     switch (uniform.type) {
-      case gl.TEXTURE_2D:
-        gl.bindTexture(gl.TEXTURE_2D, uniform.texture.glTexture);
+      case GL_TEXTURES.TEXTURE_2D:
+        gl.bindTexture(GL_TEXTURES.TEXTURE_2D, uniform.texture.glTexture);
         break;
     }
   }
@@ -142,18 +150,18 @@ export class Shader {
     const attribute = this.attributes[name];
 
     switch (attribute.type) {
-      case gl.ARRAY_BUFFER:
-        gl.bindBuffer(gl.ARRAY_BUFFER, attribute.buffer);
+      case GL_BUFFER_TYPE.ARRAY_BUFFER:
+        gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, attribute.buffer);
         gl.bufferData(
-          gl.ARRAY_BUFFER,
+          GL_BUFFER_TYPE.ARRAY_BUFFER,
           new Float32Array(attribute.value),
-          gl.STATIC_DRAW
+          GL_STATIC_VARIABLES.STATIC_DRAW
         );
         //gl.enableVertexAttribArray(attribute.location);
         gl.vertexAttribPointer(
           attribute.location,
           attribute.itemSize,
-          gl.FLOAT,
+          GL_DATA_TYPE.FLOAT,
           false,
           0,
           0
@@ -178,12 +186,12 @@ export class Shader {
 
   createProgram(vertexShaderSource: string, fragmentShaderSource: string) {
     const gl = this.gl;
-    const vertexShader = gl.createShader(gl.VERTEX_SHADER)!;
+    const vertexShader = gl.createShader(GL_SHADER_TYPE.VERTEX_SHADER)!;
 
     gl.shaderSource(vertexShader, vertexShaderSource);
     gl.compileShader(vertexShader);
 
-    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)!;
+    const fragmentShader = gl.createShader(GL_SHADER_TYPE.FRAGMENT_SHADER)!;
     gl.shaderSource(fragmentShader, fragmentShaderSource);
     gl.compileShader(fragmentShader);
 

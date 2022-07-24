@@ -1,5 +1,5 @@
 import { createEffect, createSignal, onCleanup } from 'solid-js';
-import { createContextProvider } from './createContextProvider';
+import createContextProvider from '@utils/createContextProvider';
 
 export type ResizeHandler = (
   size: { width: number; height: number },
@@ -23,7 +23,6 @@ export function createResizeObserver<T extends Element>(props: {
   onResize: ResizeHandler;
   refs?: T | T[] | (() => T | T[]);
 }): (arg: T) => void {
-
   const [otherRefs, setOtherRefs] = createSignal<T[]>([]);
 
   const refCallback = (e: T) => setOtherRefs((l: T[]) => l.concat(e));
@@ -79,7 +78,6 @@ export function createResizeObserver<T extends Element>(props: {
 
   return refCallback;
 }
-
 
 export const [ResizeObserverProvider, useResizeObserverContext] =
   createContextProvider(createResizeObserver);

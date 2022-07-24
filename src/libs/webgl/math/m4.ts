@@ -459,6 +459,15 @@ export function multiply(a: Mat4, b: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   return dst;
 }
 
+export function multiplyArray(arr: Mat4[], dst: Mat4 = new MatType(16)): Mat4 {
+  let input = identity();
+  for (let i = 0; i < arr.length; i++) {
+    input = multiply(input, arr[i], dst);
+  }
+
+  return dst;
+}
+
 /**
  * Sets the translation component of a 4-by-4 matrix to the given
  * vector.
@@ -1438,6 +1447,37 @@ export function transformNormal(
   dst[0] = v0 * mi[0 * 4 + 0] + v1 * mi[0 * 4 + 1] + v2 * mi[0 * 4 + 2];
   dst[1] = v0 * mi[1 * 4 + 0] + v1 * mi[1 * 4 + 1] + v2 * mi[1 * 4 + 2];
   dst[2] = v0 * mi[2 * 4 + 0] + v1 * mi[2 * 4 + 1] + v2 * mi[2 * 4 + 2];
+
+  return dst;
+}
+
+export function transition(
+  m1: Mat4,
+  m2: Mat4,
+  value: number,
+  dst: Mat4 = new MatType(16)
+) {
+  const start = 1 - value;
+  const end = value;
+  dst[0] = m1[0] * start + m2[0] * end;
+  dst[1] = m1[1] * start + m2[1] * end;
+  dst[2] = m1[2] * start + m2[2] * end;
+  dst[3] = m1[3] * start + m2[3] * end;
+
+  dst[4] = m1[4] * start + m2[4] * end;
+  dst[5] = m1[5] * start + m2[5] * end;
+  dst[6] = m1[6] * start + m2[6] * end;
+  dst[7] = m1[7] * start + m2[7] * end;
+
+  dst[8] = m1[8] * start + m2[8] * end;
+  dst[9] = m1[9] * start + m2[9] * end;
+  dst[10] = m1[10] * start + m2[10] * end;
+  dst[11] = m1[11] * start + m2[11] * end;
+
+  dst[12] = m1[12] * start + m2[12] * end;
+  dst[13] = m1[13] * start + m2[13] * end;
+  dst[14] = m1[14] * start + m2[14] * end;
+  dst[15] = m1[15] * start + m2[15] * end;
 
   return dst;
 }

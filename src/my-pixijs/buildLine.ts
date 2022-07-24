@@ -535,7 +535,7 @@ function buildNonNativeLine(
 }
 
 /**
- * Builds a line to draw using the gl.drawArrays(gl.LINES) method
+ * Builds a line to draw using the gl.drawArrays(LINES) method
  *
  * Ignored from docs since it is not directly exposed.
  *

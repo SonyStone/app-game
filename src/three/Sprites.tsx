@@ -17,7 +17,7 @@ import s from './SvgLoader.module.scss';
 import { createHouse, createTiles } from './tiles';
 
 export default function Sprites() {
-  const canvas = (<canvas class={s.canvas}></canvas>) as HTMLCanvasElement;
+  const canvas = (<canvas class={s.canvas} />) as HTMLCanvasElement;
 
   const { camera, controls, resize } = useCamera();
 
@@ -93,5 +93,5 @@ export default function Sprites() {
     controls.removeEventListener('change', render);
   });
 
-  return <>{canvas}</>;
+  return canvas;
 }

@@ -1,4 +1,8 @@
-import { GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
+import {
+  GL_PROGRAM_PARAMETER,
+  GL_SHADER_TYPE,
+  GL_STATIC_VARIABLES,
+} from '@webgl/static-variables';
 
 export type ExtWebGLProgram = WebGLProgram & {
   attributes?: { [key: string]: number };
@@ -11,8 +15,18 @@ export function createProgram(
   fid: string,
   defines?: string
 ): ExtWebGLProgram | undefined {
-  var vshader = compileShaderFromString(gl, vid, gl.VERTEX_SHADER, defines);
-  var fshader = compileShaderFromString(gl, fid, gl.FRAGMENT_SHADER, defines);
+  var vshader = compileShaderFromString(
+    gl,
+    vid,
+    GL_SHADER_TYPE.VERTEX_SHADER,
+    defines
+  );
+  var fshader = compileShaderFromString(
+    gl,
+    fid,
+    GL_SHADER_TYPE.FRAGMENT_SHADER,
+    defines
+  );
 
   if (vshader == null || fshader == null) {
     return;
@@ -78,7 +92,7 @@ export function compileShaderFromString(
 
   gl.shaderSource(shader, src);
   gl.compileShader(shader);
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+  if (!gl.getShaderParameter(shader, GL_STATIC_VARIABLES.COMPILE_STATUS)) {
     console.log('Failed to compile shader:\n' + gl.getShaderInfoLog(shader));
     return;
   }

@@ -1,14 +1,11 @@
-import { UnpackedBMP } from "./unpackBmp";
+import { GL_BUFFER_TYPE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+
+import { UnpackedBMP } from './unpackBmp';
 
 const int16PerGlyph = 10;
 const int16PerVertex = 6; // const
 
-export function processGlyphs(
-  gl: WebGLRenderingContext,
-  data: UnpackedBMP,
-) {
-
-
+export function processGlyphs(gl: WebGLRenderingContext, data: UnpackedBMP) {
   const uposition = new Int16Array(data.buf, 0);
   const position = new Int16Array(data.buf, 0);
   const curvesMin = new Uint16Array(data.buf, 4);
@@ -17,7 +14,7 @@ export function processGlyphs(
   const color = new Uint16Array(data.buf, 16);
 
   const numGlyphs = data.buf.byteLength / (2 * int16PerGlyph);
-  console.log("Loaded " + numGlyphs + " glyphs");
+  console.log('Loaded ' + numGlyphs + ' glyphs');
 
   const vbuf = new ArrayBuffer(numGlyphs * 6 * int16PerVertex * 2);
   const oPosition = new Int16Array(vbuf, 0);
@@ -29,23 +26,27 @@ export function processGlyphs(
     y: new Float32Array(numGlyphs),
   }; // for auto zoom
 
-
-  let src = 0
+  let src = 0;
   let dst = 0;
   for (var i = 0; i < numGlyphs; i++) {
-
     // delta decode
     if (i > 0) {
       position[src + 0] += position[src - int16PerGlyph + 0];
       position[src + 1] += position[src - int16PerGlyph + 1];
     }
 
-    positions.x[i] = (uposition[src + 0] + 0.5 * (deltaNext[src + 0] + deltaPrev[src + 0])) / 32767 + 0.5;
-    positions.y[i] = (uposition[src + 1] + 0.5 * (deltaNext[src + 1] + deltaPrev[src + 1])) / 32767 + 0.5;
+    positions.x[i] =
+      (uposition[src + 0] + 0.5 * (deltaNext[src + 0] + deltaPrev[src + 0])) /
+        32767 +
+      0.5;
+    positions.y[i] =
+      (uposition[src + 1] + 0.5 * (deltaNext[src + 1] + deltaPrev[src + 1])) /
+        32767 +
+      0.5;
 
     // output tri strip quad
     for (var j = 0; j < 6; j++) {
-      var k = (j < 4) ? j : 6 - j; // 0, 1, 2, 3, 2, 1
+      var k = j < 4 ? j : 6 - j; // 0, 1, 2, 3, 2, 1
       //var k = Math.min(3, Math.max(0, j - 1));		// 0, 0, 1, 2, 3, 3
 
       oPosition[dst + 0] = position[src + 0];
@@ -78,13 +79,17 @@ export function processGlyphs(
   }
 
   const glyphBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, glyphBuffer);
-  gl.bufferData(gl.ARRAY_BUFFER, vbuf, gl.STATIC_DRAW);
-  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, glyphBuffer);
+  gl.bufferData(
+    GL_BUFFER_TYPE.ARRAY_BUFFER,
+    vbuf,
+    GL_STATIC_VARIABLES.STATIC_DRAW
+  );
+  gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, null);
 
   return glyphBuffer;
 }
 
 function ushortWithFlag(x: number, flag: boolean | number) {
-  return (x | 0) * 2 + (flag ? 1 : 0)
+  return (x | 0) * 2 + (flag ? 1 : 0);
 }

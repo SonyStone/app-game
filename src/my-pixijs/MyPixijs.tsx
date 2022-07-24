@@ -1,10 +1,15 @@
 import * as v4 from '@webgl/math/v4';
-import { BUFFER_TYPE, DRAW_MODES } from 'pixi.js';
+import {
+  GL_BUFFER_TYPE,
+  GL_BUFFER_USAGE,
+  GL_CLEAR_MASK,
+} from '@webgl/static-variables';
+import { DRAW_MODES } from 'pixi.js';
 import { onCleanup } from 'solid-js';
 
 import { main } from './graphics';
 import { draw } from './webgl/draw';
-import { BUFFER_USAGE, getGeometry } from './webgl/geometry';
+import { getGeometry } from './webgl/geometry';
 import { getProgram } from './webgl/program';
 import fragmentSrc from './webgl/shaders/frag_shader.frag?raw';
 import vertexSrc from './webgl/shaders/vert_shader.vert?raw';
@@ -40,8 +45,8 @@ export default function MyPixijs() {
         //    0,    0,   0,
         // ]),
         data: new Float32Array(p),
-        type: BUFFER_TYPE.ARRAY_BUFFER,
-        usage: BUFFER_USAGE.STATIC_DRAW,
+        type: GL_BUFFER_TYPE.ARRAY_BUFFER,
+        usage: GL_BUFFER_USAGE.STATIC_DRAW,
       },
       3
     )
@@ -78,7 +83,7 @@ export default function MyPixijs() {
 
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
   gl.clearColor(0.0, 0.0, 0.0, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT);
   draw(gl, DRAW_MODES.TRIANGLES, geometry);
   // draw(gl, DRAW_MODES.LINES, geometry);
 
@@ -93,7 +98,7 @@ export default function MyPixijs() {
 
     program.uniformData['u_offset'].set(vec4);
 
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT);
     draw(gl, DRAW_MODES.TRIANGLES, geometry);
   }
 

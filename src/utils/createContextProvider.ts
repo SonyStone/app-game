@@ -6,8 +6,11 @@ import {
 } from 'solid-js';
 
 /**
- * Create the context provider component & useContext function with types inferred from the factory function.
- * @param factoryFn Factory function will run when the provider component in executed. It takes the provider component `props` as it's argument, and what it returns will be available in the contexts for all the underlying components.
+ * Create the context provider component & useContext function with types
+ * inferred from the factory function.
+ * @param factoryFn Factory function will run when the provider component in executed.
+ * It takes the provider component `props` as it's argument, and what it returns will be
+ * available in the contexts for all the underlying components.
  * @returns tuple of `[provider component, useContext function]`
  * @example
  * ```tsx
@@ -25,10 +28,11 @@ import {
  * ctx?.count() // => 1
  * ```
  */
-export const createContextProvider = <T, P extends Record<string, any>>(
+export default function createContextProvider<T, P extends Record<string, any>>(
   factoryFn: <A>(props: P) => T
-): [provider: Component<P>, useContext: () => T] => {
+): [provider: Component<P>, useContext: () => T] {
   const ctx = createContext<any>();
+
   const Provider: Component<any> = (props) =>
     createComponent(ctx.Provider, {
       value: factoryFn(props),
@@ -39,4 +43,4 @@ export const createContextProvider = <T, P extends Record<string, any>>(
 
   const useProvider = () => useContext(ctx);
   return [Provider, useProvider];
-};
+}

@@ -1,3 +1,10 @@
+import {
+  GL_BUFFER_TYPE,
+  GL_CLEAR_MASK,
+  GL_STATIC_VARIABLES,
+  GL_TEXTURES,
+} from '@webgl/static-variables';
+
 import { ExtWebGLProgram } from './createProgram';
 import { getImageTexture } from './getImageTexture';
 import { ExtWebGLTexture } from './processAtlas';
@@ -109,7 +116,7 @@ export function drawScene(
   setCanvasSize(canvas);
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(160 / 255, 169 / 255, 175 / 255, 1.0);
-  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT);
 
   if (timerQuery) {
     if (waitingForTimer) {
@@ -140,7 +147,7 @@ export function drawScene(
 
   // Draw page backgrounds
   gl.useProgram(pageProgram);
-  gl.disable(gl.BLEND);
+  gl.disable(GL_STATIC_VARIABLES.BLEND);
   var aspect = canvas.height / canvas.width;
   gl.uniform2f(pageProgram.uniforms!.uPositionMul, aspect / zoomx, 1 / zoomy);
   gl.uniform2f(
@@ -148,7 +155,7 @@ export function drawScene(
     (aspect * -animTransform.x) / zoomx,
     -animTransform.y / zoomy
   );
-  gl.bindBuffer(gl.ARRAY_BUFFER, pageBuffer);
+  gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, pageBuffer);
   enableAttributes(gl, pageProgram);
   gl.vertexAttribPointer(
     pageProgram.attributes!.aPosition,
@@ -158,20 +165,20 @@ export function drawScene(
     0,
     0
   );
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, pageData.length * 6);
+  gl.drawArrays(GL_STATIC_VARIABLES.TRIANGLE_STRIP, 0, pageData.length * 6);
   disableAttributes(gl, pageProgram);
 
   // Draw images
   if (imageBuffer) {
     gl.useProgram(imageProgram);
-    gl.bindBuffer(gl.ARRAY_BUFFER, imageBuffer);
-    gl.enable(gl.BLEND);
+    gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, imageBuffer);
+    gl.enable(GL_STATIC_VARIABLES.BLEND);
     enableAttributes(gl, imageProgram);
     var bytesPerImageVertex = 10;
     gl.vertexAttribPointer(
       imageProgram.attributes!.aPosition,
       2,
-      gl.UNSIGNED_SHORT,
+      GL_STATIC_VARIABLES.UNSIGNED_SHORT,
       true,
       bytesPerImageVertex,
       0
@@ -179,7 +186,7 @@ export function drawScene(
     gl.vertexAttribPointer(
       imageProgram.attributes!.aTexCoord,
       2,
-      gl.UNSIGNED_SHORT,
+      GL_STATIC_VARIABLES.UNSIGNED_SHORT,
       true,
       bytesPerImageVertex,
       4
@@ -201,7 +208,7 @@ export function drawScene(
       9
     );
 
-    gl.activeTexture(gl.TEXTURE0);
+    gl.activeTexture(GL_TEXTURES.TEXTURE0);
     gl.uniform1i(imageProgram.uniforms!.uSampler, 0);
 
     for (var i = 0; i < pageData.length; i++) {
@@ -214,8 +221,12 @@ export function drawScene(
             var img = images[j];
             var handle = getImageTexture(gl, img.filename);
             if (handle) {
-              gl.bindTexture(gl.TEXTURE_2D, handle);
-              gl.drawArrays(gl.TRIANGLE_STRIP, img.vertexOffset, img.numVerts);
+              gl.bindTexture(GL_TEXTURES.TEXTURE_2D, handle);
+              gl.drawArrays(
+                GL_STATIC_VARIABLES.TRIANGLE_STRIP,
+                img.vertexOffset,
+                img.numVerts
+              );
             }
           }
         }
@@ -231,18 +242,18 @@ export function drawScene(
     : glyphProgram;
 
   gl.useProgram(prog);
-  gl.bindBuffer(gl.ARRAY_BUFFER, glyphBuffer);
-  gl.enable(gl.BLEND);
+  gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, glyphBuffer);
+  gl.enable(GL_STATIC_VARIABLES.BLEND);
 
   enableAttributes(gl, prog);
   doGlyphVertexAttribPointers(gl, prog);
 
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, atlasTexture);
+  gl.activeTexture(GL_TEXTURES.TEXTURE0);
+  gl.bindTexture(GL_TEXTURES.TEXTURE_2D, atlasTexture);
   gl.uniform1i(prog.uniforms!.uAtlasSampler, 0);
 
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D, preAtlasTexture);
+  gl.activeTexture(GL_TEXTURES.TEXTURE1);
+  gl.bindTexture(GL_TEXTURES.TEXTURE_2D, preAtlasTexture);
   gl.uniform1i(prog.uniforms!.uRasteredAtlasSampler, 1);
 
   gl.uniform2f(
@@ -264,7 +275,7 @@ export function drawScene(
     var page = pageData[i];
     if (setPageUniforms(gl, canvas, prog, page, zoomx, zoomy)) {
       gl.drawArrays(
-        gl.TRIANGLES,
+        GL_STATIC_VARIABLES.TRIANGLES,
         page.beginVertex,
         page.endVertex - page.beginVertex
       );
@@ -424,7 +435,7 @@ function doGlyphVertexAttribPointers(
   gl.vertexAttribPointer(
     prog.attributes!.aPosition,
     2,
-    gl.SHORT,
+    GL_STATIC_VARIABLES.SHORT,
     true,
     stride,
     0
@@ -432,7 +443,7 @@ function doGlyphVertexAttribPointers(
   gl.vertexAttribPointer(
     prog.attributes!.aCurvesMin,
     2,
-    gl.UNSIGNED_SHORT,
+    GL_STATIC_VARIABLES.UNSIGNED_SHORT,
     false,
     stride,
     2 * 2
@@ -440,7 +451,7 @@ function doGlyphVertexAttribPointers(
   gl.vertexAttribPointer(
     prog.attributes!.aColor,
     4,
-    gl.UNSIGNED_BYTE,
+    GL_STATIC_VARIABLES.UNSIGNED_BYTE,
     true,
     stride,
     4 * 2

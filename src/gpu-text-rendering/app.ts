@@ -1,3 +1,5 @@
+import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
+
 var canvas;
 var gl;
 var glext;
@@ -16,22 +18,17 @@ var preAtlasTexture;
 var positions = { x: [], y: [] }; // for auto zoom
 var mustRenderNextFrame = false;
 
-
-
-
-
-
 var transform = {
   x: 0.5,
   y: 0.5,
-  zoom: 2
-}
+  zoom: 2,
+};
 
 var animTransform = {
   x: 0,
   y: 0,
-  zoom: 2
-}
+  zoom: 2,
+};
 
 var lastAnimationTimestamp;
 var animationDuration = 60;
@@ -45,7 +42,7 @@ function mix(b, a, t) {
 
 function log(s) {
   console.log(s);
-  document.getElementById("loadinginfo").textContent += s + "\n";
+  document.getElementById('loadinginfo').textContent += s + '\n';
 }
 
 function approxEqual(a, b) {
@@ -107,12 +104,6 @@ function forceAnimationChange() {
   mustRenderNextFrame = true;
 }
 
-
-
-
-
-
-
 function transposeBytes(buf, innerDim) {
   var inputArray = new Uint8Array(buf);
   var outputArray = new Uint8Array(inputArray.length);
@@ -132,19 +123,33 @@ function boxesIntersect(a, b) {
   return a.x0 < b.x1 && a.y0 < b.y1 && a.x1 > b.x0 && a.y1 > b.y0;
 }
 
-
-
 function doGlyphVertexAttribPointers(prog) {
   var stride = int16PerVertex * 2;
-  gl.vertexAttribPointer(prog.attributes.aPosition, 2, gl.SHORT, true, stride, 0);
-  gl.vertexAttribPointer(prog.attributes.aCurvesMin, 2, gl.UNSIGNED_SHORT, false, stride, 2 * 2);
-  gl.vertexAttribPointer(prog.attributes.aColor, 4, gl.UNSIGNED_BYTE, true, stride, 4 * 2);
+  gl.vertexAttribPointer(
+    prog.attributes.aPosition,
+    2,
+    GL_STATIC_VARIABLES.SHORT,
+    true,
+    stride,
+    0
+  );
+  gl.vertexAttribPointer(
+    prog.attributes.aCurvesMin,
+    2,
+    GL_STATIC_VARIABLES.UNSIGNED_SHORT,
+    false,
+    stride,
+    2 * 2
+  );
+  gl.vertexAttribPointer(
+    prog.attributes.aColor,
+    4,
+    GL_STATIC_VARIABLES.UNSIGNED_BYTE,
+    true,
+    stride,
+    4 * 2
+  );
 }
-
-
-
-
-
 
 function setCanvasSize() {
   var devicePixelRatio = window.devicePixelRatio || 1;
@@ -152,7 +157,7 @@ function setCanvasSize() {
     devicePixelRatio *= window.innerWidth / window.outerWidth;
   }
 
-  var e = document.getElementById("canvaswrap");
+  var e = document.getElementById('canvaswrap');
   var w = Math.round(e.clientWidth * devicePixelRatio);
   var h = Math.round(e.clientHeight * devicePixelRatio);
 
@@ -170,17 +175,17 @@ function setPageUniforms(program, page, zoomx, zoomy) {
   var translateY = page.y + animTransform.y;
 
   var pageNdc = {
-    x0: (0 - translateX) / zoomx * canvas.height / canvas.width,
-    x1: (1 - translateX) / zoomx * canvas.height / canvas.width,
+    x0: (((0 - translateX) / zoomx) * canvas.height) / canvas.width,
+    x1: (((1 - translateX) / zoomx) * canvas.height) / canvas.width,
     y0: (0 - translateY) / zoomy,
     y1: (1 - translateY) / zoomy,
-  }
+  };
   var viewportNdc = {
     x0: -1,
     x1: 1,
     y0: -1,
     y1: 1,
-  }
+  };
   if (!boxesIntersect(pageNdc, viewportNdc)) {
     return false;
   }
@@ -188,13 +193,22 @@ function setPageUniforms(program, page, zoomx, zoomy) {
   var aspect = canvas.height / canvas.width;
 
   gl.uniform2f(program.uniforms.uPositionMul, aspect / zoomx, 1 / zoomy);
-  gl.uniform2f(program.uniforms.uPositionAdd, aspect * -translateX / zoomx, -translateY / zoomy);
+  gl.uniform2f(
+    program.uniforms.uPositionAdd,
+    (aspect * -translateX) / zoomx,
+    -translateY / zoomy
+  );
 
   return true;
 }
 
 function computePageLocations() {
-  var cols = Math.floor(Math.sqrt(pageData.length / canvas.height * canvas.width / pageData[0].width * pageData[0].height));
+  var cols = Math.floor(
+    Math.sqrt(
+      (((pageData.length / canvas.height) * canvas.width) / pageData[0].width) *
+        pageData[0].height
+    )
+  );
 
   for (var i = 0; i < pageData.length; i++) {
     var page = pageData[i];
@@ -205,9 +219,7 @@ function computePageLocations() {
     page.x *= gap;
     page.y *= gap;
   }
-
 }
-
 
 var lastAutoChange = -1e6;
 var panFromX = 0,
@@ -215,21 +227,10 @@ var panFromX = 0,
   panToX = 0,
   panToY = 0;
 
-
-
-
-
-
-
 var prevPinchDiff = -1;
 
-
-
-
-
-
 function fullscreen() {
-  var e = document.getElementById("canvaswrap")
+  var e = document.getElementById('canvaswrap');
   if (e.requestFullscreen) {
     e.requestFullscreen();
   } else if (e.webkitRequestFullScreen) {
@@ -242,5 +243,3 @@ function fullscreen() {
 
   forceAnimationChange();
 }
-
-

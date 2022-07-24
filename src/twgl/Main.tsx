@@ -1,7 +1,15 @@
 import { compileShader } from '@webgl/compileShader';
 import { linkProgram } from '@webgl/linkProgram';
+import { DEG_TO_RAD } from '@webgl/math/constants';
 import * as m4 from '@webgl/math/m4';
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import {
+  GL_BUFFER_TYPE,
+  GL_CLEAR_MASK,
+  GL_DATA_TYPE,
+  GL_SHADER_TYPE,
+  GL_STATIC_VARIABLES,
+  GL_TEXTURES,
+} from '@webgl/static-variables';
 import { createEffect, onCleanup } from 'solid-js';
 
 import { getAttributeData } from '../my-pixijs/webgl/getAttributeData';
@@ -35,8 +43,6 @@ interface VertexArray {
   indices: State;
 }
 
-const DEG_2_RAD = Math.PI / 180;
-const RAD_2_DEG = 180 / Math.PI;
 /**
  * create
  */
@@ -85,8 +91,8 @@ export default function main() {
       u_shininess: 50,
       u_specularFactor: 1,
       u_diffuse: {
-        min: GL_STATIC_VARIABLES.NEAREST,
-        mag: GL_STATIC_VARIABLES.NEAREST,
+        min: GL_TEXTURES.NEAREST,
+        mag: GL_TEXTURES.NEAREST,
         src: [
           255, 255, 255, 255, 192, 192, 192, 255, 192, 192, 192, 255, 255, 255,
           255, 255,
@@ -111,36 +117,36 @@ export default function main() {
   const positionBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
   gl.bufferData(
-    gl.ARRAY_BUFFER,
+    GL_BUFFER_TYPE.ARRAY_BUFFER,
     new Float32Array(scene.arrays.a_position),
-    gl.STATIC_DRAW
+    GL_STATIC_VARIABLES.STATIC_DRAW
   );
   const normalBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
   gl.bufferData(
-    gl.ARRAY_BUFFER,
+    GL_BUFFER_TYPE.ARRAY_BUFFER,
     new Float32Array(scene.arrays.a_normal),
-    gl.STATIC_DRAW
+    GL_STATIC_VARIABLES.STATIC_DRAW
   );
   const texcoordBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
   gl.bufferData(
-    gl.ARRAY_BUFFER,
+    GL_BUFFER_TYPE.ARRAY_BUFFER,
     new Float32Array(scene.arrays.a_texcoord),
-    gl.STATIC_DRAW
+    GL_STATIC_VARIABLES.STATIC_DRAW
   );
   const indicesBuffer = gl.createBuffer();
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesBuffer);
+  gl.bindBuffer(GL_BUFFER_TYPE.ELEMENT_ARRAY_BUFFER, indicesBuffer);
   gl.bufferData(
-    gl.ELEMENT_ARRAY_BUFFER,
+    GL_BUFFER_TYPE.ELEMENT_ARRAY_BUFFER,
     new Uint16Array(scene.arrays.indices),
-    gl.STATIC_DRAW
+    GL_STATIC_VARIABLES.STATIC_DRAW
   );
 
   const tex = gl.createTexture();
-  gl.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, tex);
+  gl.bindTexture(GL_TEXTURES.TEXTURE_2D, tex);
   gl.texImage2D(
-    GL_STATIC_VARIABLES.TEXTURE_2D,
+    GL_TEXTURES.TEXTURE_2D,
     0,
     GL_STATIC_VARIABLES.RGBA,
     2,
@@ -151,13 +157,13 @@ export default function main() {
     new Uint8Array(scene.uniforms.u_diffuse.src)
   );
   gl.texParameteri(
-    GL_STATIC_VARIABLES.TEXTURE_2D,
-    GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
+    GL_TEXTURES.TEXTURE_2D,
+    GL_TEXTURES.TEXTURE_MIN_FILTER,
     scene.uniforms.u_diffuse.min
   );
   gl.texParameteri(
-    GL_STATIC_VARIABLES.TEXTURE_2D,
-    GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
+    GL_TEXTURES.TEXTURE_2D,
+    GL_TEXTURES.TEXTURE_MAG_FILTER,
     scene.uniforms.u_diffuse.mag
   );
 
@@ -169,8 +175,8 @@ export default function main() {
   // set (BuffersAndAttributes / VertexArrayObject)
   // set uniforms
 
-  gl.enable(gl.DEPTH_TEST);
-  gl.enable(gl.CULL_FACE);
+  gl.enable(GL_STATIC_VARIABLES.DEPTH_TEST);
+  gl.enable(GL_STATIC_VARIABLES.CULL_FACE);
 
   const eye = [1, 4, -6];
   const target = [0, 0, 0];
@@ -198,10 +204,10 @@ export default function main() {
   uniforms.u_diffuse.set(0);
   uniforms.u_viewInverse.set(camera);
 
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.activeTexture(GL_TEXTURES.TEXTURE0);
+  gl.bindTexture(GL_TEXTURES.TEXTURE_2D, tex);
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, positionBuffer);
   gl.vertexAttribPointer(
     attributes.a_position.location,
     3,
@@ -212,31 +218,36 @@ export default function main() {
   );
   gl.enableVertexAttribArray(attributes.a_position.location);
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+  gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, normalBuffer);
   gl.vertexAttribPointer(
     attributes.a_normal.location,
     3,
-    gl.FLOAT,
+    GL_DATA_TYPE.FLOAT,
     false,
     0,
     0
   );
   gl.enableVertexAttribArray(attributes.a_normal.location);
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
+  gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, texcoordBuffer);
   gl.vertexAttribPointer(
     attributes.a_texcoord.location,
     2,
-    gl.FLOAT,
+    GL_DATA_TYPE.FLOAT,
     false,
     0,
     0
   );
   gl.enableVertexAttribArray(attributes.a_texcoord.location);
 
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indicesBuffer);
+  gl.bindBuffer(GL_BUFFER_TYPE.ELEMENT_ARRAY_BUFFER, indicesBuffer);
 
-  gl.drawElements(gl.TRIANGLES, 6 * 6, gl.UNSIGNED_SHORT, 0);
+  gl.drawElements(
+    GL_STATIC_VARIABLES.TRIANGLES,
+    6 * 6,
+    GL_STATIC_VARIABLES.UNSIGNED_SHORT,
+    0
+  );
 
   const cameraObj = useCamera();
   let cameraType: ReturnType<typeof cameraObj.cameraType>;
@@ -254,7 +265,7 @@ export default function main() {
       const near = 0.5;
       const fov = 50;
       const zoom = 1;
-      let top = (near * Math.tan(DEG_2_RAD * 0.5 * fov)) / zoom;
+      let top = (near * Math.tan(DEG_TO_RAD * 0.5 * fov)) / zoom;
       let height = 2 * top;
       let width = aspect * height;
       let left = -0.5 * width;
@@ -291,7 +302,7 @@ export default function main() {
     canvas.height = resize.height;
 
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT | GL_CLEAR_MASK.DEPTH_BUFFER_BIT);
 
     world = m4.rotationY(time, world);
 
@@ -300,7 +311,12 @@ export default function main() {
     uniforms.u_worldInverseTranspose.set(m4.transpose(m4.inverse(world)));
     uniforms.u_worldViewProjection.set(m4.multiply(viewProjection, world));
 
-    gl.drawElements(gl.TRIANGLES, 6 * 6, gl.UNSIGNED_SHORT, 0);
+    gl.drawElements(
+      GL_STATIC_VARIABLES.TRIANGLES,
+      6 * 6,
+      GL_STATIC_VARIABLES.UNSIGNED_SHORT,
+      0
+    );
 
     id = requestAnimationFrame(render);
   }
@@ -319,12 +335,12 @@ function createProgram(gl: WebGL2RenderingContext | WebGLRenderingContext) {
     shaders(vertexSrc: string, fragmentSrc: string) {
       const vertShader = compileShader(
         gl,
-        GL_STATIC_VARIABLES.VERTEX_SHADER,
+        GL_SHADER_TYPE.VERTEX_SHADER,
         vertexSrc
       );
       const fragShader = compileShader(
         gl,
-        GL_STATIC_VARIABLES.FRAGMENT_SHADER,
+        GL_SHADER_TYPE.FRAGMENT_SHADER,
         fragmentSrc
       );
 

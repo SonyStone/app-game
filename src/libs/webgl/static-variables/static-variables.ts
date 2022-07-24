@@ -1,3 +1,6 @@
+/**
+ * @deprecated
+ */
 export enum GL_STATIC_VARIABLES {
   ACTIVE_ATTRIBUTES = 35721,
   ACTIVE_TEXTURE = 34016,
@@ -537,8 +540,17 @@ export enum GL_STATIC_VARIABLES {
   UNSIGNED_INT_VEC4 = 36296,
   UNSIGNED_NORMALIZED = 35863,
   UNSIGNED_SHORT = 5123,
+
+  /**
+   * `GL_UNSIGNED_SHORT_R_G_B_A` where each RGBA values can have a value of 4 bit each (well that is 2^4)
+   */
   UNSIGNED_SHORT_4_4_4_4 = 32819,
   UNSIGNED_SHORT_5_5_5_1 = 32820,
+
+  /**
+   * GL_UNSIGNED_SHORT_R_G_B. You can see that their is no Alpha value available here so that is a major difference.
+   * RGB values can also have greater values since they are 5 6 and 5 bits respectively.
+   */
   UNSIGNED_SHORT_5_6_5 = 33635,
   VALIDATE_STATUS = 35715,
   VENDOR = 7936,
@@ -557,197 +569,4 @@ export enum GL_STATIC_VARIABLES {
   VIEWPORT = 2978,
   WAIT_FAILED = 37149,
   ZERO = 0,
-}
-
-/**
- * # Types
- *
- * A shader can aggregate these using arrays and structures to build
- * more complex types. There are no pointer types.
- *
- * # Structures and Arrays
- *
- * * Structures
- * ```glsl
- * struct type-name {
- *    members
- * } struct-name[]; // optional variable declaration,
- *                  // optionally an array
- * ```
- *
- * * Arrays
- * ```glsl
- * float foo[3];
- * ```
- * Structures, blocks, and structure members can be arrays.
- * Only 1-dimensional arrays supported.
- */
-export enum GL_DATA_TYPE {
-  // * Basic Types
-  /** @param bool Boolean */
-  BOOL = GL_STATIC_VARIABLES.BOOL,
-
-  /** @param int signed integer */
-  INT = GL_STATIC_VARIABLES.INT,
-
-  /**  @param uint unsigned integer */
-  UNSIGNED_INT = GL_STATIC_VARIABLES.UNSIGNED_INT,
-
-  /** @param float floating scalar */
-  FLOAT = GL_STATIC_VARIABLES.FLOAT,
-
-  // * vectors
-  /** @param vec2 2-component floating point vector */
-  FLOAT_VEC2 = GL_STATIC_VARIABLES.FLOAT_VEC2,
-
-  /** @param vec3 3-component floating point vector */
-  FLOAT_VEC3 = GL_STATIC_VARIABLES.FLOAT_VEC3,
-
-  /** @param vec4 4-component floating point vector */
-  FLOAT_VEC4 = GL_STATIC_VARIABLES.FLOAT_VEC4,
-
-  /** @param bvec2 Boolean vector */
-  BOOL_VEC2 = GL_STATIC_VARIABLES.BOOL_VEC2,
-
-  /** @param bvec3 Boolean vector */
-  BOOL_VEC3 = GL_STATIC_VARIABLES.BOOL_VEC3,
-
-  /** @param bvec4 Boolean vector */
-  BOOL_VEC4 = GL_STATIC_VARIABLES.BOOL_VEC4,
-
-  /** @param ivec2 signed integer vector */
-  INT_VEC2 = GL_STATIC_VARIABLES.INT_VEC2,
-
-  /** @param ivec3 signed integer vector */
-  INT_VEC3 = GL_STATIC_VARIABLES.INT_VEC3,
-
-  /** @param ivec4 signed integer vector */
-  INT_VEC4 = GL_STATIC_VARIABLES.INT_VEC4,
-
-  /** @param uvec2 unsigned integer vector */
-  UNSIGNED_INT_VEC2 = GL_STATIC_VARIABLES.UNSIGNED_INT_VEC2,
-
-  /** @param uvec3 unsigned integer vector */
-  UNSIGNED_INT_VEC3 = GL_STATIC_VARIABLES.UNSIGNED_INT_VEC3,
-
-  /** @param uvec4 unsigned integer vector */
-  UNSIGNED_INT_VEC4 = GL_STATIC_VARIABLES.UNSIGNED_INT_VEC4,
-
-  // * mat2
-  /** @param mat2 2x2 float matrix */
-  FLOAT_MAT2 = GL_STATIC_VARIABLES.FLOAT_MAT2,
-
-  /** @param mat2 2x3 float matrix */
-  FLOAT_MAT2x3 = GL_STATIC_VARIABLES.FLOAT_MAT2x3,
-
-  /** @param mat2 2x4 float matrix */
-  FLOAT_MAT2x4 = GL_STATIC_VARIABLES.FLOAT_MAT2x4,
-
-  // * mat3
-  /** @param mat3 3x2 float matrix */
-  FLOAT_MAT3x2 = GL_STATIC_VARIABLES.FLOAT_MAT3x2,
-
-  /** @param mat3 3x3 float matrix */
-  FLOAT_MAT3 = GL_STATIC_VARIABLES.FLOAT_MAT3,
-
-  /** @param mat3 3x4 float matrix */
-  FLOAT_MAT3x4 = GL_STATIC_VARIABLES.FLOAT_MAT3x4,
-
-  // * mat4
-  /** @param mat4 4x4 float matrix */
-  FLOAT_MAT4x2 = GL_STATIC_VARIABLES.FLOAT_MAT4x2,
-
-  /** @param mat4 4x4 float matrix */
-  FLOAT_MAT4x3 = GL_STATIC_VARIABLES.FLOAT_MAT4x3,
-
-  /** @param mat4 4x4 float matrix */
-  FLOAT_MAT4 = GL_STATIC_VARIABLES.FLOAT_MAT4,
-
-  // * Floating Point Sampler Types (opaque)
-  /** @param sampler2D access a 2D texture */
-  SAMPLER_2D = GL_STATIC_VARIABLES.SAMPLER_2D,
-
-  /** @param sampler3D access a 3D texture */
-  SAMPLER_3D = GL_STATIC_VARIABLES.SAMPLER_3D,
-
-  /** @param samplerCube access cube mapped texture */
-  SAMPLER_CUBE = GL_STATIC_VARIABLES.SAMPLER_CUBE,
-
-  /** @param samplerCubeShadow access cube map depth texture with comparison */
-  SAMPLER_CUBE_SHADOW = GL_STATIC_VARIABLES.SAMPLER_CUBE_SHADOW,
-
-  /** @param sampler2DArray access 2D array texture */
-  SAMPLER_2D_ARRAY = GL_STATIC_VARIABLES.SAMPLER_2D_ARRAY,
-
-  /** @param sampler2DArrayShadow access 2D array texture */
-  SAMPLER_2D_ARRAY_SHADOW = GL_STATIC_VARIABLES.SAMPLER_2D_ARRAY_SHADOW,
-
-  // * Signed Integer Sampler Types (opaque)
-  /** @param isampler2D access an integer 2D texture */
-  INT_SAMPLER_2D = GL_STATIC_VARIABLES.INT_SAMPLER_2D,
-
-  /** @param isampler3D access an integer 3D texture */
-  INT_SAMPLER_3D = GL_STATIC_VARIABLES.INT_SAMPLER_3D,
-
-  /** @param isamplerCube access integer cube mapped texture */
-  INT_SAMPLER_CUBE = GL_STATIC_VARIABLES.INT_SAMPLER_CUBE,
-
-  /** @param isampler2DArray access integer 2D array texture */
-  INT_SAMPLER_2D_ARRAY = GL_STATIC_VARIABLES.INT_SAMPLER_2D_ARRAY,
-
-  // * Unsigned Integer Sampler Types (opaque)
-  /** @param usampler2D access unsigned integer 2D texture */
-  UNSIGNED_INT_SAMPLER_2D = GL_STATIC_VARIABLES.UNSIGNED_INT_SAMPLER_2D,
-
-  /** @param usampler3D access unsigned integer 3D texture */
-  UNSIGNED_INT_SAMPLER_3D = GL_STATIC_VARIABLES.UNSIGNED_INT_SAMPLER_3D,
-
-  /** @param usamplerCube access unsigned integer cube mapped texture */
-  UNSIGNED_INT_SAMPLER_CUBE = GL_STATIC_VARIABLES.UNSIGNED_INT_SAMPLER_CUBE,
-
-  /** @param usampler2DArray access unsigned integer 2D array texture */
-  UNSIGNED_INT_SAMPLER_2D_ARRAY = GL_STATIC_VARIABLES.UNSIGNED_INT_SAMPLER_2D_ARRAY,
-}
-
-export enum GL_PROGRAM_PARAMETER {
-  /** Returns a `GLboolean` indicating whether or not the program is flagged for deletion. */
-  DELETE_STATUS = GL_STATIC_VARIABLES.DELETE_STATUS,
-
-  /** Returns a `GLboolean` indicating whether or not the last link operation was successful. */
-  LINK_STATUS = GL_STATIC_VARIABLES.LINK_STATUS,
-
-  /** Returns a `GLboolean` indicating whether or not the last validation operation was successful. */
-  VALIDATE_STATUS = GL_STATIC_VARIABLES.VALIDATE_STATUS,
-
-  /** Returns a `GLint` indicating the number of attached shaders to a program. */
-  ATTACHED_SHADERS = GL_STATIC_VARIABLES.ATTACHED_SHADERS,
-
-  /** Returns a `GLint` indicating the number of active attribute variables to a program. */
-  ACTIVE_ATTRIBUTES = GL_STATIC_VARIABLES.ACTIVE_ATTRIBUTES,
-
-  /** Returns a GLint indicating the number of active uniform variables to a program. */
-  ACTIVE_UNIFORMS = GL_STATIC_VARIABLES.ACTIVE_UNIFORMS,
-
-  // When using a WebGL 2 context, the following values are available additionally:
-
-  /** Returns a `GLenum` indicating the buffer mode when transform feedback is active. May be `gl.SEPARATE_ATTRIBS` or `gl.INTERLEAVED_ATTRIBS.` */
-  TRANSFORM_FEEDBACK_BUFFER_MODE = GL_STATIC_VARIABLES.TRANSFORM_FEEDBACK_BUFFER_MODE,
-
-  /** Returns a `GLint` indicating the number of varying variables to capture in transform feedback mode. */
-  TRANSFORM_FEEDBACK_VARYINGS = GL_STATIC_VARIABLES.TRANSFORM_FEEDBACK_VARYINGS,
-
-  /** Returns a `GLint` indicating the number of uniform blocks containing active uniforms. */
-  ACTIVE_UNIFORM_BLOCKS = GL_STATIC_VARIABLES.ACTIVE_UNIFORM_BLOCKS,
-}
-
-/**
- * A GLbitfield bitwise OR mask that indicates the buffers to be cleared. Possible values are:
- */
-export enum GL_CLEAR_MASK {
-  /** mask that indicates the buffers to be cleared */
-  COLOR_BUFFER_BIT = GL_STATIC_VARIABLES.COLOR_BUFFER_BIT,
-  /** mask that indicates the buffers to be cleared */
-  DEPTH_BUFFER_BIT = GL_STATIC_VARIABLES.DEPTH_BUFFER_BIT,
-  /** mask that indicates the buffers to be cleared */
-  STENCIL_BUFFER_BIT = GL_STATIC_VARIABLES.STENCIL_BUFFER_BIT,
 }

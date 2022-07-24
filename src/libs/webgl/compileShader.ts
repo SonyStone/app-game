@@ -1,3 +1,5 @@
+import { GL_STATIC_VARIABLES } from './static-variables';
+
 /**
  * Loads and compiles a shader.
  *
@@ -20,7 +22,10 @@ export function compileShader(
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
 
-  const compileStatus = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+  const compileStatus = gl.getShaderParameter(
+    shader,
+    GL_STATIC_VARIABLES.COMPILE_STATUS
+  );
 
   if (compileStatus) {
     return shader;

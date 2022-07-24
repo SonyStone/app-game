@@ -1,3 +1,4 @@
+import { DEG_TO_RAD, RAD_TO_DEG } from '@webgl/math/constants';
 import { Quaternion } from './Quaternion';
 
 const _lut: string[] = [];
@@ -6,30 +7,6 @@ for (let i = 0; i < 256; i++) {
 }
 
 let _seed = 1234567;
-
-/**
- * Two Pi.
- *
- * @static
- * @member {number}
- */
-export const PI_2 = Math.PI * 2;
-
-/**
- * Conversion factor for converting degrees to radians.
- *
- * @static
- * @member {number}
- */
-export const DEG_TO_RAD = Math.PI / 180;
-
-/**
- * Conversion factor for converting radians to degrees.
- *
- * @static
- * @member {number} RAD_TO_DEG
- */
-export const RAD_TO_DEG = 180 / Math.PI;
 
 // http://stackoverflow.com/questions/105034/how-to-create-a-guid-uuid-in-javascript/21963136#21963136
 export function generateUUID(): string {

@@ -7,8 +7,9 @@ import {
 } from 'solid-js';
 import { OrthographicCamera, PerspectiveCamera } from 'three';
 
-import { createContextProvider } from '../utils/createContextProvider';
+import createContextProvider from '@utils/createContextProvider';
 import { OrbitControls } from './controls/OrbitControls';
+import { copy } from './utils/object3d';
 
 export function createResize() {
   const [resize, setResize] = createSignal<{ width: number; height: number }>({
@@ -60,12 +61,7 @@ export const [CameraProvider, useCamera] = createContextProvider(() => {
     const currentCamera = cameras[type];
 
     if (prev) {
-      currentCamera.position.copy(prev.position.clone());
-      currentCamera.lookAt(
-        controls.target.x,
-        controls.target.y,
-        controls.target.z
-      );
+      copy(currentCamera, prev);
     }
 
     return currentCamera;

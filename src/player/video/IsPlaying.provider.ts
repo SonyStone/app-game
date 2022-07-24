@@ -1,4 +1,4 @@
-import { createContextProvider } from '@utils/createContextProvider';
+import createContextProvider from '@utils/createContextProvider';
 import {
   distinctUntilChanged,
   fromEvent,

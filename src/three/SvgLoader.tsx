@@ -10,6 +10,7 @@ import {
 
 import { useStats } from '../Stats.provider';
 import { useCamera } from './Camera.provider';
+import Controls from './Controls';
 import { loadSVG } from './loadSVG';
 import hexagon from './svg/diogram.drawio.svg?url';
 import s from './SvgLoader.module.scss';
@@ -77,6 +78,8 @@ export default function SvgLoader() {
         <StringController name="string"></StringController>
         <FunctionController name="function"></FunctionController>
       </GUI> */}
+
+      <Controls></Controls>
       {canvas}
     </>
   );

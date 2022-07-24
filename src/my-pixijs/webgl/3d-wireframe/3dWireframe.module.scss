@@ -1,0 +1,12 @@
+.canvas {
+  touch-action: none;
+}
+
+.controls {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 300px;
+  width: 300px;
+  background-color: #fff;
+}

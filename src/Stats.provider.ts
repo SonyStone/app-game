@@ -1,4 +1,4 @@
-import { createContextProvider } from './utils/createContextProvider';
+import createContextProvider from '@utils/createContextProvider';
 import Stats from 'stats.js';
 
 export const [StatsProvider, useStats] = createContextProvider(() => {

@@ -23,7 +23,12 @@ export const EXAMPLE_VIDEOS = [
   },
   {
     value:
-      '  https://download.blender.org/demo/movies/BBB/bbb_sunflower_2160p_60fps_normal.mp4',
+      'https://download.blender.org/demo/movies/BBB/bbb_sunflower_2160p_60fps_normal.mp4',
     name: 'bbb_sunflower_2160p_60fps_normal',
+  },
+  {
+    value:
+      'https://leonardo.osnova.io/5f0a32e1-a144-53ca-b56b-c13c633d6b30/-/format/mp4/',
+    name: 'magical cat',
   },
 ];
