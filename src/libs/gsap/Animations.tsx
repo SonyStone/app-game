@@ -14,7 +14,7 @@ import { Box, Slider } from './Box';
 import { back, bounce, linear } from './core/easing-2';
 import { clamp, round } from './core/utils';
 
-const width = 400;
+const width = 80;
 const step = 0.01;
 
 export default function () {
@@ -63,7 +63,7 @@ export default function () {
       </button>
       <div>speed: {speed()}</div>
       <input
-        style={{ width: `${width}px` }}
+        style={{ width: `${width}vw` }}
         type="range"
         value={speed()}
         min={-2}
@@ -73,7 +73,7 @@ export default function () {
       />
       <div>time: {time()}</div>
       <input
-        style={{ width: `${width}px` }}
+        style={{ width: `${width}vw` }}
         type="range"
         value={time()}
         min={0}

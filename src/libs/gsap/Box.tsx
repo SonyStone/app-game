@@ -5,7 +5,7 @@ export function Box(props: { time: number; width: number }) {
     <div
       class={[s.box, s.orange].join(' ')}
       style={{
-        transform: `translate(${props.time * props.width}px, 0px)`,
+        transform: `translate(${props.time * props.width}vw, 0px)`,
       }}></div>
   );
 }
@@ -13,7 +13,7 @@ export function Box(props: { time: number; width: number }) {
 export function Slider(props: { time: number; width: number }) {
   return (
     <input
-      style={{ width: `${props.width}px` }}
+      style={{ width: `${props.width}vw` }}
       type="range"
       value={props.time}
       disabled
