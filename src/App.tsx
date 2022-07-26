@@ -103,6 +103,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import('./player/App')),
   },
   {
+    path: '/animations',
+    name: 'Animations',
+    component: lazy(() => import('./libs/gsap/Animations')),
+  },
+  {
     path: '/:any',
     name: 'Empty',
     component: () => <div class={s.nothing}>Nothing is here</div>,
