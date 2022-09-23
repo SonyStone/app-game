@@ -3,9 +3,9 @@ import { onCleanup } from "solid-js";
 
 import Sky from './assets/sky.png?url';
 import Platform from './assets/platform.png?url';
-import Star from './assets/star.png';
-import Bomb from './assets/bomb.png';
-import Dude from './assets/dude.png';
+import Star from './assets/star.png?url';
+import Bomb from './assets/bomb.png?url';
+import Dude from './assets/dude.png?url';
 
 export default function () {
 
