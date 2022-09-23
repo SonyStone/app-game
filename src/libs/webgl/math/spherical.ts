@@ -23,34 +23,27 @@ export function create(radius = 0, theta = 0, phi = 0) {
   };
 }
 
-export function setFromVec3(
-  [x, y, z]: v3.Vec3 = v3.create(),
-  dst = create()
-): Spherical {
+export function setFromVec3(spherical: Spherical, [x, y, z]: v3.Vec3) {
   const radius = Math.sqrt(x * x + y * y + z * z);
 
-  dst.radius = radius;
+  spherical.radius = radius;
 
   if (radius === 0) {
-    dst.theta = 0;
-    dst.phi;
+    spherical.theta = 0;
+    spherical.phi;
   } else {
-    dst.theta = Math.atan2(x, z);
-    dst.phi = Math.acos(clamp(y / radius, -1, 1));
+    spherical.theta = Math.atan2(x, z);
+    spherical.phi = Math.acos(clamp(y / radius, -1, 1));
   }
-
-  return dst;
 }
 
 export function setFromSpherical(
-  { radius, phi, theta }: Spherical,
-  dst: v3.Vec3 = v3.create()
+  v: v3.Vec3,
+  { radius, phi, theta }: Spherical
 ) {
   const sinPhiRadius = Math.sin(phi) * radius;
 
-  dst[0] = sinPhiRadius * Math.sin(theta);
-  dst[1] = Math.cos(phi) * radius;
-  dst[2] = sinPhiRadius * Math.cos(theta);
-
-  return dst;
+  v[0] = sinPhiRadius * Math.sin(theta);
+  v[1] = Math.cos(phi) * radius;
+  v[2] = sinPhiRadius * Math.cos(theta);
 }

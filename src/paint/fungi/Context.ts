@@ -1,10 +1,6 @@
 import { GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@webgl/static-variables';
 import { Colour } from './Colour';
 
-const ARRAY = 34962;
-const ELEMENT = 34963;
-const UNIFORM = 35345;
-
 export class Context {
   // #region MAIN
   ctx: WebGL2RenderingContext;

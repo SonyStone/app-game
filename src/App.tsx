@@ -1,3 +1,4 @@
+import { createCookieStorage } from '@solid-primitives/storage';
 import {
   delay,
   mapTo,
@@ -68,6 +69,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import('./three/Three')),
   },
   {
+    path: '/solid-three',
+    name: 'SolidThree',
+    component: lazy(() => import('./three/Solid-Three')),
+  },
+  {
     path: '/paint',
     name: 'Paint',
     component: lazy(() => import('./paint/Paint')),
@@ -106,6 +112,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     path: '/animations',
     name: 'Animations',
     component: lazy(() => import('./libs/gsap/Animations')),
+  },
+  {
+    path: '/phaser-game',
+    name: 'Phaser Game',
+    component: lazy(() => import('./phaser/Game')),
   },
   {
     path: '/:any',
@@ -163,6 +174,14 @@ export function App() {
   stats.showPanel(1);
   stats.dom.style.left = 'unset';
   stats.dom.style.right = '0';
+
+  interface UserCreadential {
+    uid: string;
+    token: string;
+  }
+  const [storage, setStorage, { remove, clear }] =
+    createCookieStorage<string>();
+  const uid = storage.uid;
 
   return (
     <>

@@ -22,7 +22,7 @@ export class Shader {
     if (opts.program) {
       this.program = opts.program;
     } else if (opts.vertexShader && opts.fragmentShader) {
-      this.program = this.createProgram(opts.vertexShader, opts.fragmentShader);
+      this.program = createProgram(gl, opts.vertexShader, opts.fragmentShader);
     } else {
       throw new Error('No shader program or sources found.');
     }
@@ -35,13 +35,23 @@ export class Shader {
     for (const name in attributes) {
       this.addAttribute(name, attributes[name]);
     }
-    const uniforms = (this.uniforms = opts.uniforms || []);
-    for (const name in uniforms) {
-      this.addUniform(name, uniforms[name]);
-    }
+    // const uniforms = (this.uniforms = opts.uniforms || []);
+    // for (const name in uniforms) {
+    //   this.addUniform(name, uniforms[name]);
+    // }
   }
 
-  addUniform(name: string, uniform: any) {
+  addUniform(
+    name: string,
+    uniform: {
+      value: any;
+      location?: WebGLUniformLocation | null;
+      type: GL_DATA_TYPE | GL_TEXTURES;
+      textureNum?: number;
+      texture?: any;
+      bind?(): void;
+    }
+  ) {
     //console.info('Shader.addUniform("%s", uniform);', name, uniform);
     const gl = this.gl;
     const program = this.program;
@@ -60,17 +70,39 @@ export class Shader {
 
     switch (uniform.type) {
       case GL_DATA_TYPE.FLOAT:
+        // gl.uniform1fv(location, []); ← alternative
         gl.uniform1f(uniform.location, uniform.value);
         break;
       case GL_DATA_TYPE.FLOAT_VEC2:
         gl.uniform2fv(uniform.location, uniform.value);
+        // gl.uniform2f(location, x, y)
         break;
       case GL_DATA_TYPE.FLOAT_VEC3:
         gl.uniform3fv(uniform.location, uniform.value);
+        // gl.uniform2f(location, x, y, z)
         break;
       case GL_DATA_TYPE.FLOAT_VEC4:
         gl.uniform4fv(uniform.location, uniform.value);
+        // gl.uniform2f(location, x, y, z, w)
         break;
+
+      case GL_DATA_TYPE.INT:
+        gl.uniform1i(uniform.location, uniform.value);
+        // gl.uniform1iv(location, []);
+        break;
+      case GL_DATA_TYPE.INT_VEC2:
+        // gl.uniform2i(location, x, y);
+        gl.uniform2iv(uniform.location, uniform.value);
+        break;
+      case GL_DATA_TYPE.INT_VEC3:
+        // gl.uniform3i(location, x, y, z);
+        gl.uniform3iv(uniform.location, uniform.value);
+        break;
+      case GL_DATA_TYPE.INT_VEC4:
+        // gl.uniform4i(location, x, y, z, w);
+        gl.uniform4iv(uniform.location, uniform.value);
+        break;
+
       case GL_DATA_TYPE.FLOAT_MAT2:
         uniform.value = uniform.value || [1, 0, 0, 1];
         gl.uniformMatrix2fv(uniform.location, false, uniform.value);
@@ -79,6 +111,7 @@ export class Shader {
         uniform.value = uniform.value || m4.identity();
         gl.uniformMatrix4fv(uniform.location, false, uniform.value);
         break;
+
       case GL_TEXTURES.TEXTURE_2D:
         if (uniform.textureNum === undefined) {
           uniform.textureNum = this.nextTexture++;
@@ -134,8 +167,9 @@ export class Shader {
         );
     }
   }
+
   bindUniform(name: string) {
-    //console.info('Shader.bindUniform("%s");', name);
+    // console.info('Shader.bindUniform("%s");', name);
     const gl = this.gl;
     const uniform = this.uniforms[name];
     this.addUniform(name, uniform);
@@ -145,6 +179,7 @@ export class Shader {
         break;
     }
   }
+
   bindAttribute(name: string) {
     const gl = this.gl;
     const attribute = this.attributes[name];
@@ -183,29 +218,33 @@ export class Shader {
       this.bindAttribute(aName);
     }
   }
+}
 
-  createProgram(vertexShaderSource: string, fragmentShaderSource: string) {
-    const gl = this.gl;
-    const vertexShader = gl.createShader(GL_SHADER_TYPE.VERTEX_SHADER)!;
+export function createProgram(
+  gl: WebGL2RenderingContext,
+  vertexShaderSource: string,
+  fragmentShaderSource: string
+) {
+  console.log(`createProgram`);
+  const vertexShader = gl.createShader(GL_SHADER_TYPE.VERTEX_SHADER)!;
 
-    gl.shaderSource(vertexShader, vertexShaderSource);
-    gl.compileShader(vertexShader);
+  gl.shaderSource(vertexShader, vertexShaderSource);
+  gl.compileShader(vertexShader);
 
-    const fragmentShader = gl.createShader(GL_SHADER_TYPE.FRAGMENT_SHADER)!;
-    gl.shaderSource(fragmentShader, fragmentShaderSource);
-    gl.compileShader(fragmentShader);
+  const fragmentShader = gl.createShader(GL_SHADER_TYPE.FRAGMENT_SHADER)!;
+  gl.shaderSource(fragmentShader, fragmentShaderSource);
+  gl.compileShader(fragmentShader);
 
-    const program = (this.program = gl.createProgram()!);
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
+  const program = gl.createProgram()!;
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
 
-    if (!gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.LINK_STATUS)) {
-      throw (
-        'Shader.createProgram > Program link error: ' +
-        gl.getProgramInfoLog(program)
-      );
-    }
-    return program;
+  if (!gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.LINK_STATUS)) {
+    throw (
+      'Shader.createProgram > Program link error: ' +
+      gl.getProgramInfoLog(program)
+    );
   }
+  return program;
 }

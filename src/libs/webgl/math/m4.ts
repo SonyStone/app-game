@@ -33,7 +33,7 @@ let MatType = Float32Array;
  * @typedef {(number[]|Float32Array)} Mat4
  * @memberOf m4
  */
-type Mat4 = number[] | Float32Array;
+export type Mat4 = number[] | Float32Array;
 
 /**
  * Sets the type this library creates for a Mat4
@@ -480,9 +480,8 @@ export function multiplyArray(arr: Mat4[], dst: Mat4 = new MatType(16)): Mat4 {
 export function setTranslation(
   a: Mat4,
   v: v3.Vec3,
-  dst: Mat4 = new MatType(16)
+  dst: Mat4 = identity()
 ): Mat4 {
-  dst = dst || identity();
   if (a !== dst) {
     dst[0] = a[0];
     dst[1] = a[1];
@@ -514,11 +513,7 @@ export function setTranslation(
  * @param {v3.Vec3} [dst] vector to hold result. If not passed a new one is created.
  * @return {v3.Vec3} The translation component of m.
  */
-export function getTranslation(
-  m: Mat4,
-  dst: v3.Vec3 = new MatType(3)
-): v3.Vec3 {
-  dst = dst || v3.create();
+export function getTranslation(m: Mat4, dst: v3.Vec3 = v3.create()): v3.Vec3 {
   dst[0] = m[12];
   dst[1] = m[13];
   dst[2] = m[14];
@@ -537,9 +532,8 @@ export function getTranslation(
 export function getAxis(
   m: Mat4,
   axis: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  dst = dst || v3.create();
+  dst: v3.Vec3 = v3.create()
+): v3.Vec3 {
   const off = axis * 4;
   dst[0] = m[off + 0];
   dst[1] = m[off + 1];
@@ -965,6 +959,7 @@ export function rotateX(
   const m21 = m[9];
   const m22 = m[10];
   const m23 = m[11];
+
   const c = Math.cos(angleInRadians);
   const s = Math.sin(angleInRadians);
 
@@ -1356,18 +1351,17 @@ export function scale(m: Mat4, v: v3.Vec3, dst: Mat4 = new MatType(16)): Mat4 {
  * Takes a 4-by-4 matrix and a vector with 3 entries,
  * interprets the vector as a point, transforms that point by the matrix, and
  * returns the result as a vector with 3 entries.
- * @param {Mat4} m The matrix.
- * @param {v3.Vec3} v The point.
- * @param {v3.Vec3} [dst] optional vec3 to store result. If not passed a new one is created.
- * @return {v3.Vec3} The transformed point.
+ * @param m The matrix.
+ * @param v The point.
+ * @param dst optional vec3 to store result. If not passed a new one is created.
+ * @return The transformed point.
  * @memberOf m4
  */
 export function transformPoint(
   m: Mat4,
   v: v3.Vec3,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  dst = dst || v3.create();
+  dst: v3.Vec3 = v3.create()
+): v3.Vec3 {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -1394,19 +1388,17 @@ export function transformPoint(
  * is parallel-preserving, i.e. any combination of rotation, scaling and
  * translation, but not a perspective distortion. Returns a vector with 3
  * entries.
- * @param {Mat4} m The matrix.
- * @param {v3.Vec3} v The direction.
- * @param {v3.Vec3} [dst] optional Vec3 to store result. If not passed a new one is created.
- * @return {v3.Vec3} The transformed direction.
+ * @param m The matrix.
+ * @param v The direction.
+ * @param dst optional Vec3 to store result. If not passed a new one is created.
+ * @return The transformed direction.
  * @memberOf m4
  */
 export function transformDirection(
   m: Mat4,
   v: v3.Vec3,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  dst = dst || v3.create();
-
+  dst: v3.Vec3 = v3.create()
+): v3.Vec3 {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -1427,18 +1419,17 @@ export function transformDirection(
  * matrix is parallel-preserving, i.e. any combination of rotation, scaling and
  * translation, but not a perspective distortion.  Returns a vector with 3
  * entries.
- * @param {Mat4} m The matrix.
- * @param {v3.Vec3} v The normal.
- * @param {v3.Vec3} [dst] The direction. If not passed a new one is created.
- * @return {v3.Vec3} The transformed normal.
+ * @param m The matrix.
+ * @param v The normal.
+ * @param dst The direction. If not passed a new one is created.
+ * @return The transformed normal.
  * @memberOf m4
  */
 export function transformNormal(
   m: Mat4,
   v: v3.Vec3,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  dst = dst || v3.create();
+  dst: v3.Vec3 = v3.create()
+): v3.Vec3 {
   const mi = inverse(m);
   const v0 = v[0];
   const v1 = v[1];

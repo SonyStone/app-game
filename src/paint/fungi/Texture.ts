@@ -1,3 +1,4 @@
+import { GL_STATIC_VARIABLES } from '@webgl/static-variables/static-variables';
 import { Context } from './Context';
 
 export class Texture {
@@ -38,36 +39,60 @@ export class TextureFactory {
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Flip the texture by the Y Position, So 0,0 is bottom left corner.
-    if (do_yflip) ctx.pixelStorei(ctx.UNPACK_FLIP_Y_WEBGL, true);
+    if (do_yflip)
+      ctx.pixelStorei(GL_STATIC_VARIABLES.UNPACK_FLIP_Y_WEBGL, true);
 
     // Bind texture, then Push image to GPU.
-    ctx.bindTexture(ctx.TEXTURE_2D, tex.id);
+    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, tex.id);
     ctx.texImage2D(
-      ctx.TEXTURE_2D,
+      GL_STATIC_VARIABLES.TEXTURE_2D,
       0,
-      ctx.RGBA,
-      ctx.RGBA,
-      ctx.UNSIGNED_BYTE,
+      GL_STATIC_VARIABLES.RGBA,
+      GL_STATIC_VARIABLES.RGBA,
+      GL_STATIC_VARIABLES.UNSIGNED_BYTE,
       img
     );
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if (use_mips) {
-      ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, ctx.LINEAR); // Setup up scaling
       ctx.texParameteri(
-        ctx.TEXTURE_2D,
-        ctx.TEXTURE_MIN_FILTER,
-        ctx.LINEAR_MIPMAP_NEAREST
+        GL_STATIC_VARIABLES.TEXTURE_2D,
+        GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
+        GL_STATIC_VARIABLES.LINEAR
+      ); // Setup up scaling
+      ctx.texParameteri(
+        GL_STATIC_VARIABLES.TEXTURE_2D,
+        GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
+        GL_STATIC_VARIABLES.LINEAR_MIPMAP_NEAREST
       ); // Setup down scaling
-      ctx.generateMipmap(ctx.TEXTURE_2D); //Precalc different sizes of texture for better quality rendering.
+      ctx.generateMipmap(GL_STATIC_VARIABLES.TEXTURE_2D); //Precalc different sizes of texture for better quality rendering.
     } else {
-      let filter = filter_mode == 0 ? ctx.LINEAR : ctx.NEAREST,
-        wrap = wrap_mode == 0 ? ctx.REPEAT : ctx.CLAMP_TO_EDGE;
+      let filter =
+          filter_mode == 0
+            ? GL_STATIC_VARIABLES.LINEAR
+            : GL_STATIC_VARIABLES.NEAREST,
+        wrap = wrap_mode == 0 ? ctx.REPEAT : GL_STATIC_VARIABLES.CLAMP_TO_EDGE;
 
-      ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, filter);
-      ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, filter);
-      ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S, wrap);
-      ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, wrap);
+      ctx.texParameteri(
+        GL_STATIC_VARIABLES.TEXTURE_2D,
+        GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
+        filter
+      );
+      ctx.texParameteri(
+        GL_STATIC_VARIABLES.TEXTURE_2D,
+        GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
+        filter
+      );
+      ctx.texParameteri(
+        GL_STATIC_VARIABLES.TEXTURE_2D,
+        GL_STATIC_VARIABLES.TEXTURE_WRAP_S,
+        wrap
+      );
+      ctx.texParameteri(
+        GL_STATIC_VARIABLES.TEXTURE_2D,
+        GL_STATIC_VARIABLES.TEXTURE_WRAP_T,
+        wrap
+      );
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -94,43 +119,51 @@ export class TextureFactory {
     //	TEXTURE_CUBE_MAP_POSITIVE_Z - Back	:: TEXTURE_CUBE_MAP_NEGATIVE_Z - Front
 
     let tex = ctx.createTexture();
-    ctx.bindTexture(ctx.TEXTURE_CUBE_MAP, tex);
+    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP, tex);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // push image to specific spot in the cube map.
     for (let i = 0; i < 6; i++) {
       ctx.texImage2D(
-        ctx.TEXTURE_CUBE_MAP_POSITIVE_X + i,
+        GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP_POSITIVE_X + i,
         0,
-        ctx.RGBA,
-        ctx.RGBA,
-        ctx.UNSIGNED_BYTE,
+        GL_STATIC_VARIABLES.RGBA,
+        GL_STATIC_VARIABLES.RGBA,
+        GL_STATIC_VARIABLES.UNSIGNED_BYTE,
         img_ary[i]
       );
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    ctx.texParameteri(ctx.TEXTURE_CUBE_MAP, ctx.TEXTURE_MAG_FILTER, ctx.LINEAR); // Setup up scaling
-    ctx.texParameteri(ctx.TEXTURE_CUBE_MAP, ctx.TEXTURE_MIN_FILTER, ctx.LINEAR); // Setup down scaling
     ctx.texParameteri(
-      ctx.TEXTURE_CUBE_MAP,
-      ctx.TEXTURE_WRAP_S,
-      ctx.CLAMP_TO_EDGE
+      GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP,
+      GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
+      GL_STATIC_VARIABLES.LINEAR
+    ); // Setup up scaling
+    ctx.texParameteri(
+      GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP,
+      GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
+      GL_STATIC_VARIABLES.LINEAR
+    ); // Setup down scaling
+    ctx.texParameteri(
+      GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP,
+      GL_STATIC_VARIABLES.TEXTURE_WRAP_S,
+      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
     ); // Stretch image to X position
     ctx.texParameteri(
-      ctx.TEXTURE_CUBE_MAP,
-      ctx.TEXTURE_WRAP_T,
-      ctx.CLAMP_TO_EDGE
+      GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP,
+      GL_STATIC_VARIABLES.TEXTURE_WRAP_T,
+      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
     ); // Stretch image to Y position
     ctx.texParameteri(
-      ctx.TEXTURE_CUBE_MAP,
-      ctx.TEXTURE_WRAP_R,
-      ctx.CLAMP_TO_EDGE
+      GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP,
+      GL_STATIC_VARIABLES.TEXTURE_WRAP_R,
+      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
     ); // Stretch image to Z position
-    if (use_mips) ctx.generateMipmap(ctx.TEXTURE_CUBE_MAP);
+    if (use_mips) ctx.generateMipmap(GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    ctx.bindTexture(ctx.TEXTURE_CUBE_MAP, null);
+    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP, null);
     this.cache.set(name, tex);
 
     return tex;

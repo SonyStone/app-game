@@ -1,17 +1,11 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onCleanup,
-} from 'solid-js';
+import { createEffect, createSignal, For, onCleanup } from 'solid-js';
 
 import PauseIcon from '../../player/icons/pause.svg';
 import PlayIcon from '../../player/icons/play.svg';
 import { useStats } from '../../Stats.provider';
 import s from './Animations.module.scss';
 import { Box, Slider } from './Box';
-import { back, bounce, linear } from './core/easing-2';
+import { back, bounce, circ, expo, linear, sine } from './core/easing-2';
 import { clamp, round } from './core/utils';
 
 const width = 80;
@@ -24,7 +18,10 @@ export default function () {
 
   let id: number;
   let frame: number = 0;
+
   let spd: number = 0;
+  let step: number = 1;
+  let wait = 10;
 
   createEffect(() => {
     spd = speed();
@@ -34,8 +31,24 @@ export default function () {
   function tick(timestamp: number) {
     id = requestAnimationFrame(tick);
     stats.begin();
-    frame = round(frame + spd / 60 / 2.5) % 1;
-    setTime(round(frame < 0 ? 1 + frame : frame));
+
+    frame = round(frame + (step * spd) / 60 / 2.5);
+    frame = frame < 0 ? 1 + frame : frame;
+
+    if (frame > 1) {
+      --wait;
+      frame = 1;
+
+      if (wait < 0) {
+        wait = 20;
+        // step = -1;
+        frame = 0;
+      }
+    }
+
+    frame = round(frame);
+
+    setTime(frame);
 
     stats.end();
   }
@@ -127,6 +140,42 @@ export default function () {
             {
               name: 'bounce.inOut',
               fn: () => bounce.inOut(time()),
+            },
+            {
+              name: 'circ.out',
+              fn: () => circ.out(time()),
+            },
+            {
+              name: 'circ.in',
+              fn: () => circ.in(time()),
+            },
+            {
+              name: 'circ.inOut',
+              fn: () => circ.inOut(time()),
+            },
+            {
+              name: 'expo.out',
+              fn: () => expo.out(time()),
+            },
+            {
+              name: 'expo.in',
+              fn: () => expo.in(time()),
+            },
+            {
+              name: 'expo.inOut',
+              fn: () => expo.inOut(time()),
+            },
+            {
+              name: 'sine.out',
+              fn: () => sine.out(time()),
+            },
+            {
+              name: 'sine.in',
+              fn: () => sine.in(time()),
+            },
+            {
+              name: 'sine.inOut',
+              fn: () => sine.inOut(time()),
             },
           ]}>
           {(item) => (

@@ -1,10 +1,8 @@
+import { GL_STATIC_VARIABLES } from '@webgl/static-variables/static-variables';
 import { BufferFactory } from './Buffer';
 import { Context } from './Context';
 import { ShaderFactory } from './Shader';
 import { Vao, VaoFactory } from './Vao';
-
-const USHORT = 5123;
-const UINT = 5125;
 
 export class Mesh {
   vao?: Vao = undefined;
@@ -74,8 +72,10 @@ export class MeshFactory {
       mesh.buffers.set('indices', buf);
       config.push({ buffer: buf });
 
-      if (idx instanceof Uint16Array) mesh.element_type = USHORT;
-      else if (idx instanceof Uint32Array) mesh.element_type = UINT;
+      if (idx instanceof Uint16Array)
+        mesh.element_type = GL_STATIC_VARIABLES.UNSIGNED_SHORT;
+      else if (idx instanceof Uint32Array)
+        mesh.element_type = GL_STATIC_VARIABLES.UNSIGNED_INT;
     }
 
     if (norm) {
@@ -127,7 +127,7 @@ export class MeshFactory {
       m.buffers.set(i.name, i.buffer); // Save Buffer to Mesh
       if (i.instanced) m.instanced = true; // Is there instanced Data being used?
 
-      if (i.buffer.type == this.buffer.ELEMENT)
+      if (i.buffer.type == GL_STATIC_VARIABLES.ELEMENT_ARRAY_BUFFER)
         // What Data Type is the Element Buffer
         m.element_type = i.buffer.data_type;
     }
@@ -156,10 +156,10 @@ export class MeshFactory {
         o.data_type // Indices can be imported as different Int types.
       ) {
         case 'uint16':
-          mesh.element_type = USHORT;
+          mesh.element_type = GL_STATIC_VARIABLES.UNSIGNED_SHORT;
           break;
         case 'uint32':
-          mesh.element_type = UINT;
+          mesh.element_type = GL_STATIC_VARIABLES.UNSIGNED_INT;
           break;
         default:
           console.error('Unknown Array Type when Adding Indices', o.data_type);
@@ -289,8 +289,10 @@ export class MeshFactory {
       if (i.is_index) {
         buf = this.buffer.new_element(i.data, i.is_static ?? true);
 
-        if (i.data instanceof Uint16Array) mesh.element_type = USHORT;
-        else if (i.data instanceof Uint32Array) mesh.element_type = UINT;
+        if (i.data instanceof Uint16Array)
+          mesh.element_type = GL_STATIC_VARIABLES.UNSIGNED_SHORT;
+        else if (i.data instanceof Uint32Array)
+          mesh.element_type = GL_STATIC_VARIABLES.UNSIGNED_INT;
       } else {
         buf = this.buffer.new_array(i.data, i.size, i.is_static ?? true);
       }

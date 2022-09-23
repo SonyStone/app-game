@@ -118,7 +118,7 @@ export class FboFactory {
     ctx.bindFramebuffer(GL_STATIC_VARIABLES.DRAW_FRAMEBUFFER, fboWrite.id);
 
     //Clear Frame buffer being copied to.
-    ctx.clearBufferfv(ctx.COLOR, 0, [0.0, 0.0, 0.0, 1.0]);
+    ctx.clearBufferfv(GL_STATIC_VARIABLES.COLOR, 0, [0.0, 0.0, 0.0, 1.0]);
 
     //Transfer Pixels from one FrameBuffer to the Next
     ctx.blitFramebuffer(

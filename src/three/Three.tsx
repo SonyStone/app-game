@@ -16,6 +16,7 @@ import {
 
 import { useStats } from '../Stats.provider';
 import { useCamera } from './Camera.provider';
+import { ParentProvider, useParent } from './parent.provider';
 import s from './SvgLoader.module.scss';
 
 export default function Three() {

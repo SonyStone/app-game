@@ -1,19 +1,13 @@
-import { Context } from './Context';
+import { GL_BUFFER_TYPE } from '@webgl/static-variables/buffer';
+import { GL_STATIC_VARIABLES } from '@webgl/static-variables/static-variables';
 
-const ARRAY = 34962;
-const ELEMENT = 34963;
-const UNIFORM = 35345;
-const STATIC = 35044;
-const DYNAMIC = 35048;
-const USHORT = 5123;
-const UINT = 5125;
-const FLOAT = 5126;
+import { Context } from './Context';
 
 class Buffer {
   // #region MAIN
   id: any = null; // Buffer GL ID
   type: any = null; // Buffer Type
-  data_type: number = FLOAT; // Data Type Used
+  data_type: number = GL_STATIC_VARIABLES.FLOAT; // Data Type Used
   usage = 0; // Is it static or dynamic
   capacity = 0; // Capacity in bytes of the gpu buffer
   byte_len = 0; // How Many Bytes Currently Posted to the GPU
@@ -26,21 +20,14 @@ class Buffer {
   constructor(id: any, type: any, is_static = true) {
     this.id = id;
     this.type = type;
-    this.usage = is_static ? STATIC : DYNAMIC;
+    this.usage = is_static
+      ? GL_STATIC_VARIABLES.STATIC_DRAW
+      : GL_STATIC_VARIABLES.DYNAMIC_DRAW;
   }
   // #endregion //////////////////////////////////////////////////////////////////////////////////////
 }
 
 export class BufferFactory {
-  ARRAY = 34962;
-  ELEMENT = 34963;
-  UNIFORM = 35345;
-  STATIC = 35044;
-  DYNAMIC = 35048;
-  USHORT = 5123;
-  UINT = 5125;
-  FLOAT = 5126;
-
   constructor(readonly gl: Context) {}
 
   // #region CREATE
@@ -58,8 +45,10 @@ export class BufferFactory {
       if (unbind) this.gl.ctx.bindBuffer(buf.type, null);
 
       buf.byte_len = buf.capacity = t_ary.byteLength;
-      if (t_ary instanceof Uint16Array) buf.data_type = USHORT;
-      else if (t_ary instanceof Uint32Array) buf.data_type = UINT;
+      if (t_ary instanceof Uint16Array)
+        buf.data_type = GL_STATIC_VARIABLES.UNSIGNED_SHORT;
+      else if (t_ary instanceof Uint32Array)
+        buf.data_type = GL_STATIC_VARIABLES.UNSIGNED_INT;
     }
 
     return buf;
@@ -92,13 +81,28 @@ export class BufferFactory {
   }
 
   new_uniform(t_ary: any = null, is_static = true, unbind = true) {
-    return this.from_type_array(UNIFORM, t_ary, is_static, unbind);
+    return this.from_type_array(
+      GL_STATIC_VARIABLES.UNIFORM_BUFFER,
+      t_ary,
+      is_static,
+      unbind
+    );
   }
   new_element(t_ary: any = null, is_static = true, unbind = true) {
-    return this.from_type_array(ELEMENT, t_ary, is_static, unbind);
+    return this.from_type_array(
+      GL_STATIC_VARIABLES.ELEMENT_ARRAY_BUFFER,
+      t_ary,
+      is_static,
+      unbind
+    );
   }
   new_array(t_ary: any = null, comp_len = 3, is_static = true, unbind = true) {
-    let buf = this.from_type_array(ARRAY, t_ary, is_static, unbind);
+    let buf = this.from_type_array(
+      GL_BUFFER_TYPE.ARRAY_BUFFER,
+      t_ary,
+      is_static,
+      unbind
+    );
     buf.component_len = comp_len;
     return buf;
   }
@@ -112,7 +116,7 @@ export class BufferFactory {
     unbind = true
   ) {
     return this.from_bin(
-      ELEMENT,
+      GL_STATIC_VARIABLES.ELEMENT_ARRAY_BUFFER,
       data_view,
       byte_offset,
       byte_size,
@@ -131,7 +135,7 @@ export class BufferFactory {
     unbind = true
   ) {
     return this.from_bin(
-      ARRAY,
+      GL_BUFFER_TYPE.ARRAY_BUFFER,
       data_view,
       byte_offset,
       byte_size,
@@ -142,7 +146,11 @@ export class BufferFactory {
   }
 
   new_empty_array(byte_size: any, is_static = true, unbind = true) {
-    let buf = new Buffer(this.gl.ctx.createBuffer(), ARRAY, is_static);
+    let buf = new Buffer(
+      this.gl.ctx.createBuffer(),
+      GL_BUFFER_TYPE.ARRAY_BUFFER,
+      is_static
+    );
 
     this.gl.ctx.bindBuffer(buf.type, buf.id);
     this.gl.ctx.bufferData(buf.type, byte_size, buf.usage);
@@ -159,9 +167,12 @@ export class BufferFactory {
     this.gl.ctx.bindBuffer(buf.type, buf.id);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if (type_ary instanceof Float32Array) buf.data_type = FLOAT;
-    else if (type_ary instanceof Uint16Array) buf.data_type = USHORT;
-    else if (type_ary instanceof Uint32Array) buf.data_type = UINT;
+    if (type_ary instanceof Float32Array)
+      buf.data_type = GL_STATIC_VARIABLES.FLOAT;
+    else if (type_ary instanceof Uint16Array)
+      buf.data_type = GL_STATIC_VARIABLES.UNSIGNED_SHORT;
+    else if (type_ary instanceof Uint32Array)
+      buf.data_type = GL_STATIC_VARIABLES.UNSIGNED_INT;
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // if the data size is of capacity on the gpu, can set it up as sub data.
@@ -189,15 +200,15 @@ export class BufferFactory {
 
   // #region UNBIND
   unbind_array() {
-    this.gl.ctx.bindBuffer(ARRAY, null);
+    this.gl.ctx.bindBuffer(GL_STATIC_VARIABLES.ARRAY_BUFFER, null);
     return this;
   }
   unbind_element() {
-    this.gl.ctx.bindBuffer(ELEMENT, null);
+    this.gl.ctx.bindBuffer(GL_STATIC_VARIABLES.ELEMENT_ARRAY_BUFFER, null);
     return this;
   }
   unbind_uniform() {
-    this.gl.ctx.bindBuffer(UNIFORM, null);
+    this.gl.ctx.bindBuffer(GL_STATIC_VARIABLES.UNIFORM_BUFFER, null);
     return this;
   }
   // #endregion //////////////////////////////////////////////////////////////////////////////////////

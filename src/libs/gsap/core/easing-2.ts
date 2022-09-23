@@ -1,3 +1,5 @@
+import { cos, HALF_PI, sqrt } from './utils';
+
 export const linear = (p: number) => p;
 
 const easeOut = (overshoot: number) => (p: number) =>
@@ -42,3 +44,8 @@ export const bounce = ((n, c) => {
 
   return ease((p) => 1 - easeOut(1 - p), easeOut);
 })(7.5625, 2.75);
+
+export const circ = ease((p: number) => -(sqrt(1 - p * p) - 1));
+export const expo = ease((p: number) => (p ? 2 ** (10 * (p - 1)) : 0));
+export const sine = ease((p: number) => (p === 1 ? 1 : -cos(p * HALF_PI) + 1));
+// export const elastic = ease((p: number) => );

@@ -44,42 +44,42 @@ export default function Paint() {
 
   // This function handles drawing the brush shader onto a custom frame buffer texture
   function draw(pressure: number) {
-    let c = app.gl.ctx; // alias
+    let ctx = app.gl.ctx; // alias
 
     // Setup
     app.fbo.bind(app.main_fbo); //.clear( $fbo );	// Load Custom FrameBuffer
-    c.bindVertexArray($brush.vao?.id); // Load Quad
+    ctx.bindVertexArray($brush.vao?.id); // Load Quad
 
     //App.gl.ctx.disable( App.gl.ctx.DEPTH_TEST );
 
     // Experiment with Blending Modes to get something that works well
-    c['enable'](c.BLEND);
+    ctx['enable'](ctx.BLEND);
     //c.blendFunc( c.ONE, c.ONE ); //BLEND_ADDITIVE
-    c.blendFunc(c.SRC_ALPHA, c.ONE); // BLEND_ALPHA_ADDITIVE
+    ctx.blendFunc(ctx.SRC_ALPHA, ctx.ONE); // BLEND_ALPHA_ADDITIVE
     //c.blendFunc( c.ONE, c.ZERO ); // BLEND_OVERRIDE
     //c.blendFunc( c.SRC_ALPHA, c.ONE_MINUS_SRC_ALPHA ); //BLEND_ALPHA
 
     // Load Shader and update uniforms
-    c.useProgram($mat_draw.shader.program);
-    c.uniformMatrix4fv(
+    ctx.useProgram($mat_draw.shader.program);
+    ctx.uniformMatrix4fv(
       $mat_draw.uniforms.get('ortho').loc,
       false,
       app.ortho_proj
     );
     //c.uniform2fv( $mat_draw.uniforms.get( "move" ).loc, $move );
-    c.uniform1f(
+    ctx.uniform1f(
       $mat_draw.uniforms.get('brush_size').loc,
       $brush_size * pressure
     );
-    c.uniform4fv($mat_draw.uniforms.get('bound').loc, $bound);
-    c.uniform4fv($mat_draw.uniforms.get('segment').loc, $segment);
+    ctx.uniform4fv($mat_draw.uniforms.get('bound').loc, $bound);
+    ctx.uniform4fv($mat_draw.uniforms.get('segment').loc, $segment);
 
     // Draw
-    c.drawElements(app.mesh.TRI, $brush.element_cnt, $brush.element_type, 0);
+    ctx.drawElements(app.mesh.TRI, $brush.element_cnt, $brush.element_type, 0);
 
     // Cleanup
-    c.useProgram(null);
-    c.bindVertexArray(null);
+    ctx.useProgram(null);
+    ctx.bindVertexArray(null);
   }
 
   // This function handles rendering the custom frame buffer texture to the screen

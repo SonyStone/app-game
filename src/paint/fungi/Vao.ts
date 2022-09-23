@@ -1,3 +1,4 @@
+import { GL_STATIC_VARIABLES } from '@webgl/static-variables/static-variables';
 import { Context } from './Context';
 
 export class Vao {
@@ -31,7 +32,7 @@ export class VaoFactory {
           this.gl.ctx.vertexAttribPointer(
             itm.attrib_loc,
             buf.component_len,
-            this.gl.ctx.FLOAT,
+            GL_STATIC_VARIABLES.FLOAT,
             false,
             buf.stride_len,
             buf.offset
@@ -46,7 +47,7 @@ export class VaoFactory {
           this.gl.ctx.vertexAttribPointer(
             spec.attrib_loc,
             spec.size,
-            this.gl.ctx.FLOAT,
+            GL_STATIC_VARIABLES.FLOAT,
             false,
             spec.stride_len,
             spec.offset
@@ -60,8 +61,8 @@ export class VaoFactory {
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Close VAO in the proper order, VAO first then Buffers
     this.gl.ctx.bindVertexArray(null);
-    this.gl.ctx.bindBuffer(34962, null); // Array Buffer
-    this.gl.ctx.bindBuffer(34963, null); // Element Array Buffer
+    this.gl.ctx.bindBuffer(GL_STATIC_VARIABLES.ARRAY_BUFFER, null); // Array Buffer
+    this.gl.ctx.bindBuffer(GL_STATIC_VARIABLES.ELEMENT_ARRAY_BUFFER, null); // Element Array Buffer
 
     return vao;
   }
@@ -78,8 +79,8 @@ export class VaoFactory {
   }
   unbind_all() {
     this.gl.ctx.bindVertexArray(null);
-    this.gl.ctx.bindBuffer(34962, null); // Array Buffer
-    this.gl.ctx.bindBuffer(34963, null); // Element Array Buffer
+    this.gl.ctx.bindBuffer(GL_STATIC_VARIABLES.ARRAY_BUFFER, null); // Array Buffer
+    this.gl.ctx.bindBuffer(GL_STATIC_VARIABLES.ELEMENT_ARRAY_BUFFER, null); // Element Array Buffer
     return this;
   }
   // #endregion //////////////////////////////////////////////////////////////////////////////////////
