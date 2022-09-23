@@ -19,6 +19,9 @@ export default defineConfig({
       '@webgl': resolve(__dirname, './src/libs/webgl'),
     },
   },
+  build: {
+    assetsInlineLimit: 0,
+  },
   test: {
     environment: 'jsdom',
     transformMode: {
