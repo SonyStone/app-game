@@ -28,13 +28,9 @@ export default function () {
       create: create,
       update: update
     }
-
   }
 
-
   const game = new Game(config);
-
-
 
   onCleanup(() => {
     game.destroy(true);
@@ -136,37 +132,35 @@ function create (this: Phaser.Scene) {
   }
 }
 
-function hitBomb(this: Phaser.Scene, player: any, bomb: any)
-{
-    this.physics.pause();
+function hitBomb(this: Phaser.Scene, player: any, bomb: any) {
+  this.physics.pause();
 
-    player.setTint(0xff0000);
+  player.setTint(0xff0000);
 
-    player.anims.play('turn');
+  player.anims.play('turn');
 
-    gameOver = true;
+  gameOver = true;
 }
 
-function collectStar(player: any, star: any)
-{
-    star.disableBody(true, true);
-    score += 10;
-    scoreText.setText('Score: ' + score);
+function collectStar(player: any, star: any) {
+  star.disableBody(true, true);
+  score += 10;
+  scoreText.setText('Score: ' + score);
 
-    if (stars.countActive(true) === 0) {
-      stars.children.iterate((child) => {
+  if (stars.countActive(true) === 0) {
+    stars.children.iterate((child) => {
 
-        (child as any).enableBody(true, (child as any).x, 0, true, true);
-        return null;
-      });
+      (child as any).enableBody(true, (child as any).x, 0, true, true);
+      return null;
+    });
 
-      var x = (player.x < 400) ? Phaser.Math.Between(400, 800) : Phaser.Math.Between(0, 400);
+    var x = (player.x < 400) ? Phaser.Math.Between(400, 800) : Phaser.Math.Between(0, 400);
 
-      var bomb = bombs.create(x, 16, 'bomb');
-      bomb.setBounce(1);
-      bomb.setCollideWorldBounds(true);
-      bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
-    }
+    var bomb = bombs.create(x, 16, 'bomb');
+    bomb.setBounce(1);
+    bomb.setCollideWorldBounds(true);
+    bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+  }
 }
 
 let cursors: Types.Input.Keyboard.CursorKeys | undefined;

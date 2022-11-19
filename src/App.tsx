@@ -29,6 +29,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import('./ThreePixi')),
   },
   {
+    path: '/3d-rpg',
+    name: '3D RPG',
+    component: lazy(() => import('./3d-rpg/Main')),
+  },
+  {
     path: '/tanki',
     name: 'Tanki',
     component: lazy(() => import('./Tanki/Tanki')),
