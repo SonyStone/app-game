@@ -1,5 +1,5 @@
-import { GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@webgl/static-variables';
-import { Colour } from './Colour';
+import { GL_CLEAR_MASK, GL_STATIC_VARIABLES } from "@webgl/static-variables";
+import { Colour } from "./Colour";
 
 export class Context {
   // #region MAIN
@@ -10,9 +10,9 @@ export class Context {
   constructor(readonly canvas: HTMLCanvasElement) {
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // WebGL Context
-    this.ctx = canvas.getContext('webgl2', { alpha: false })!; //getContext( 'webgl2', { antialias: false, xrCompatible:true } ); //premultipliedAlpha: true
+    this.ctx = canvas.getContext("webgl2", { alpha: false })!; //getContext( 'webgl2', { antialias: false, xrCompatible:true } ); //premultipliedAlpha: true
     if (!this.ctx) {
-      console.error('WebGL context is not available.');
+      console.error("WebGL context is not available.");
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -22,7 +22,7 @@ export class Context {
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     //Setup some defaults
-    let ctx = this.ctx;
+    const ctx = this.ctx;
     ctx.cullFace(GL_STATIC_VARIABLES.BACK); // Back is also default
     ctx.frontFace(GL_STATIC_VARIABLES.CCW); // Dont really need to set it, its ccw by default.
     ctx.enable(GL_STATIC_VARIABLES.DEPTH_TEST); // Shouldn't use this, use something else to add depth detection
@@ -50,10 +50,10 @@ export class Context {
 
   set_size(w = 500, h = 500) {
     // set the size of the canvas, on chrome we need to set it 3 ways to make it work perfectly.
-    this.ctx.canvas.style.width = w + 'px';
-    this.ctx.canvas.style.height = h + 'px';
-    this.ctx.canvas.width = w;
-    this.ctx.canvas.height = h;
+    this.canvas.style.width = w + "px";
+    this.canvas.style.height = h + "px";
+    this.canvas.width = w;
+    this.canvas.height = h;
 
     // when updating the canvas size, must reset the viewport of the canvas
     // else the resolution webgl renders at will not change

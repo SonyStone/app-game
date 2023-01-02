@@ -1,4 +1,4 @@
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect, onCleanup } from "solid-js";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -12,12 +12,11 @@ import {
   Scene,
   Vector3,
   WebGLRenderer,
-} from 'three';
+} from "three";
 
-import { useStats } from '../Stats.provider';
-import { useCamera } from './Camera.provider';
-import { ParentProvider, useParent } from './parent.provider';
-import s from './SvgLoader.module.scss';
+import { useStats } from "../Stats.provider";
+import { useCamera } from "./Camera.provider";
+import s from "./SvgLoader.module.scss";
 
 export default function Three() {
   const canvas = (<canvas class={s.canvas}></canvas>) as HTMLCanvasElement;
@@ -103,7 +102,7 @@ export default function Three() {
     render();
   });
 
-  controls.addEventListener('change', render);
+  controls.addEventListener("change", render);
 
   function render() {
     stats.begin();
@@ -116,7 +115,7 @@ export default function Three() {
     renderer.dispose();
     controls.dispose();
     scene.clear();
-    controls.removeEventListener('change', render);
+    controls.removeEventListener("change", render);
     cancelAnimationFrame(id);
   });
 

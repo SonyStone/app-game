@@ -45,6 +45,11 @@ export enum GL_DATA_TYPE {
   UNSIGNED_INT = GL_STATIC_VARIABLES.UNSIGNED_INT,
 
   /**
+   *  @param uint unsigned short
+   */
+  UNSIGNED_SHORT = GL_STATIC_VARIABLES.UNSIGNED_SHORT,
+
+  /**
    * @param float floating scalar
    */
   FLOAT = GL_STATIC_VARIABLES.FLOAT,

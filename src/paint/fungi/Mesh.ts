@@ -1,38 +1,65 @@
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables/static-variables';
-import { BufferFactory } from './Buffer';
-import { Context } from './Context';
-import { ShaderFactory } from './Shader';
-import { Vao, VaoFactory } from './Vao';
+import { GL_BUFFER_TYPE } from "@webgl/static-variables";
+import { GL_STATIC_VARIABLES } from "@webgl/static-variables/static-variables";
+import { IBuffer } from "./Buffer";
+import { Context } from "./Context";
+import { create_vao } from "./Vao";
 
-export class Mesh {
-  vao?: Vao = undefined;
-  element_cnt = 0;
-  element_type = 0;
-  instance_cnt = 0;
-  instanced = false;
-  buffers = new Map();
-
-  constructor(readonly name: string) {}
+export interface IMesh {
+  vao: WebGLVertexArrayObject;
+  element_cnt: number;
+  element_type: number;
+  instance_cnt: number;
+  instanced: boolean;
+  buffers: Map<string, IBuffer>;
+  name: string;
 }
 
-export class MeshFactory {
-  PNT = 0;
-  LINE = 1;
-  LINE_LOOP = 2;
-  LINE_STRIP = 3;
-  TRI = 4;
-  TRI_STRIP = 5;
+export function from_buffer_config(
+  ctx: WebGL2RenderingContext,
+  config: {
+    name: string;
+    buffer: IBuffer;
+    interleaved?: any[];
+    instanced?: boolean;
+  }[],
+  name: string,
+  element_cnt = 0,
+  instance_cnt = 0
+): IMesh {
+  const buffers = new Map();
+  let instanced = false;
+  let element_type = 0;
 
-  constructor(
-    readonly gl: Context,
-    readonly vao: VaoFactory,
-    readonly buffer: BufferFactory,
-    readonly shader: ShaderFactory
-  ) {}
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  // Basic Configuration
+  for (const i of config) {
+    buffers.set(i.name, i.buffer); // Save Buffer to Mesh
+    if (i.instanced) {
+      instanced = true; // Is there instanced Data being used?
+    }
 
-  new(name: string) {
-    return new Mesh(name);
+    if (i.buffer.type == GL_BUFFER_TYPE.ELEMENT_ARRAY_BUFFER) {
+      // What Data Type is the Element Buffer
+      element_type = i.buffer.data_type;
+    }
   }
+
+  return {
+    name,
+    vao: create_vao(ctx, config),
+    element_cnt,
+    element_type,
+    instance_cnt,
+    instanced,
+    buffers,
+  };
+}
+
+class MeshFactory {
+  constructor(readonly gl: Context) // readonly vao: VaoFactory,
+  // readonly buffer: BufferFactory,
+  // readonly shader: ShaderFactory
+  {}
 
   draw(m: any, draw_mode = 0, do_bind = true) {
     if (do_bind) this.gl.ctx.bindVertexArray(m.vao.id);
@@ -64,12 +91,12 @@ export class MeshFactory {
       buf = this.buffer.new_array(vert, vert_comp_len, true, true),
       config: any[] = [{ buffer: buf, attrib_loc: this.shader.POS_LOC }];
 
-    mesh.buffers.set('vertices', buf);
+    mesh.buffers.set("vertices", buf);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if (idx) {
       buf = this.buffer.new_element(idx, true, true);
-      mesh.buffers.set('indices', buf);
+      mesh.buffers.set("indices", buf);
       config.push({ buffer: buf });
 
       if (idx instanceof Uint16Array)
@@ -80,29 +107,29 @@ export class MeshFactory {
 
     if (norm) {
       buf = this.buffer.new_array(norm, 3, true, true);
-      mesh.buffers.set('normal', buf);
+      mesh.buffers.set("normal", buf);
       config.push({ buffer: buf, attrib_loc: this.shader.NORM_LOC });
     }
 
     if (uv) {
       buf = this.buffer.new_array(uv, 2, true, true);
-      mesh.buffers.set('uv', buf);
+      mesh.buffers.set("uv", buf);
       config.push({ buffer: buf, attrib_loc: this.shader.UV_LOC });
     }
 
     if (color) {
       buf = this.buffer.new_array(color, is_rgba ? 4 : 3, true, true);
-      mesh.buffers.set('color', buf);
+      mesh.buffers.set("color", buf);
       config.push({ buffer: buf, attrib_loc: this.shader.COLOR_LOC });
     }
 
     if (b_idx && b_wgt) {
       buf = this.buffer.new_array(b_idx, bone_limit, true, true);
-      mesh.buffers.set('skin_idx', buf);
+      mesh.buffers.set("skin_idx", buf);
       config.push({ buffer: buf, attrib_loc: this.shader.SKIN_IDX_LOC });
 
       buf = this.buffer.new_array(b_wgt, bone_limit, true, true);
-      mesh.buffers.set('skin_wgt', buf);
+      mesh.buffers.set("skin_wgt", buf);
       config.push({ buffer: buf, attrib_loc: this.shader.SKIN_WGT_LOC });
     }
 
@@ -110,35 +137,6 @@ export class MeshFactory {
     mesh.vao = this.vao.new(config);
     mesh.element_cnt = idx ? idx.length : vert.length / vert_comp_len;
     return mesh;
-  }
-
-  from_buffer_config(
-    config: any,
-    name: any,
-    element_cnt = 0,
-    instance_cnt = 0
-  ) {
-    let i,
-      m = new Mesh(name);
-
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Basic Configuration
-    for (i of config) {
-      m.buffers.set(i.name, i.buffer); // Save Buffer to Mesh
-      if (i.instanced) m.instanced = true; // Is there instanced Data being used?
-
-      if (i.buffer.type == GL_STATIC_VARIABLES.ELEMENT_ARRAY_BUFFER)
-        // What Data Type is the Element Buffer
-        m.element_type = i.buffer.data_type;
-    }
-
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Final Configuration
-    m.element_cnt = element_cnt;
-    m.instance_cnt = instance_cnt;
-    m.vao = this.vao.new(config);
-
-    return m;
   }
 
   from_bin(name: any, json: any, bin: any, load_skin = false) {
@@ -155,14 +153,14 @@ export class MeshFactory {
       switch (
         o.data_type // Indices can be imported as different Int types.
       ) {
-        case 'uint16':
+        case "uint16":
           mesh.element_type = GL_STATIC_VARIABLES.UNSIGNED_SHORT;
           break;
-        case 'uint32':
+        case "uint32":
           mesh.element_type = GL_STATIC_VARIABLES.UNSIGNED_INT;
           break;
         default:
-          console.error('Unknown Array Type when Adding Indices', o.data_type);
+          console.error("Unknown Array Type when Adding Indices", o.data_type);
           return null;
       }
 
@@ -175,7 +173,7 @@ export class MeshFactory {
         false
       );
       buf.data_type = mesh.element_type;
-      mesh.buffers.set('indices', buf);
+      mesh.buffers.set("indices", buf);
       config.push({ buffer: buf });
     }
 
@@ -190,7 +188,7 @@ export class MeshFactory {
       true,
       false
     );
-    mesh.buffers.set('vertices', buf);
+    mesh.buffers.set("vertices", buf);
     config.push({ buffer: buf, attrib_loc: this.shader.POS_LOC });
 
     if (json.normal) {
@@ -203,7 +201,7 @@ export class MeshFactory {
         true,
         false
       );
-      mesh.buffers.set('normal', buf);
+      mesh.buffers.set("normal", buf);
       config.push({ buffer: buf, attrib_loc: this.shader.NORM_LOC });
     }
 
@@ -217,7 +215,7 @@ export class MeshFactory {
         true,
         false
       );
-      mesh.buffers.set('uv', buf);
+      mesh.buffers.set("uv", buf);
       config.push({ buffer: buf, attrib_loc: this.shader.UV_LOC });
     }
 
@@ -233,14 +231,14 @@ export class MeshFactory {
 
       let jnt_int_ary: any;
       switch (json.joints.data_type) {
-        case 'uint8':
+        case "uint8":
           jnt_int_ary = new Uint8Array(
             bin,
             o.byte_offset,
             o.element_cnt * o.component_len
           );
           break;
-        case 'uint16':
+        case "uint16":
           jnt_int_ary = new Uint16Array(
             bin,
             o.byte_offset,
@@ -248,13 +246,13 @@ export class MeshFactory {
           );
           break;
         default:
-          console.error('Joint Index Buffer Data Type Unknown');
+          console.error("Joint Index Buffer Data Type Unknown");
           break;
       }
 
       let data = new Float32Array(jnt_int_ary);
       buf = this.buffer.new_array(data, o.component_len, true, false);
-      mesh.buffers.set('skin_idx', buf);
+      mesh.buffers.set("skin_idx", buf);
       config.push({ buffer: buf, attrib_loc: this.shader.SKIN_IDX_LOC });
 
       o = json.weights;
@@ -266,7 +264,7 @@ export class MeshFactory {
         true,
         false
       );
-      mesh.buffers.set('skin_wgt', buf);
+      mesh.buffers.set("skin_wgt", buf);
       config.push({ buffer: buf, attrib_loc: this.shader.SKIN_WGT_LOC });
     }
 

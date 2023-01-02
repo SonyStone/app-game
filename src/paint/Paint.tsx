@@ -1,20 +1,72 @@
-import { createPointerData } from '@utils/create-pointer-data';
-import * as v2 from '@webgl/math/v2';
-import { createEffect } from 'solid-js';
+import { createPointerData } from "@utils/create-pointer-data";
+import * as m4 from "@webgl/math/mut-m4";
+import * as v2 from "@webgl/math/v2";
+import {
+  GL_DRAW_ARRAYS_MODE,
+  GL_STATIC_VARIABLES,
+  GL_TEXTURES,
+} from "@webgl/static-variables";
+import { createEffect, onCleanup } from "solid-js";
+import { IMesh } from "./fungi/Mesh";
+import { IMaterial, new_material, new_shader } from "./fungi/Shader";
+import { brush_quad_unit_corner, post_quad_ndc } from "./Quads2";
 
-import { createApp } from './App';
-import { DrawShader } from './DrawShader';
-import { Mesh } from './fungi/Mesh';
-import { Material } from './fungi/Shader';
-import { PostShader } from './PostShader';
-import { Quads } from './Quads2';
+import drawShaderFragSrc from "./drawShader.frag?raw";
+import drawShaderVertSrc from "./drawShader.vert?raw";
+
+import { Context } from "./fungi/Context";
+import { FramebufferObjectFactory } from "./fungi/Fbo";
+import postShaderFragSrc from "./postShader.frag?raw";
+import postShaderVertSrc from "./postShader.vert?raw";
+
+function createCheckerTexture(gl: WebGL2RenderingContext) {
+  const id = gl.createTexture();
+  gl.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, id);
+
+  gl.texImage2D(
+    GL_TEXTURES.TEXTURE_2D,
+    0, // mip level
+    GL_STATIC_VARIABLES.LUMINANCE, // internal format
+    4, // width
+    4, // height
+    0, // border
+    GL_STATIC_VARIABLES.LUMINANCE, // format
+    GL_STATIC_VARIABLES.UNSIGNED_BYTE, // type
+    new Uint8Array([
+      // data
+      192, 128, 192, 128, 128, 192, 128, 192, 192, 128, 192, 128, 128, 192, 128,
+      192,
+    ])
+  );
+  gl.texParameteri(
+    GL_TEXTURES.TEXTURE_2D,
+    GL_TEXTURES.TEXTURE_MIN_FILTER,
+    GL_TEXTURES.NEAREST
+  );
+  gl.texParameteri(
+    GL_TEXTURES.TEXTURE_2D,
+    GL_TEXTURES.TEXTURE_MAG_FILTER,
+    GL_TEXTURES.NEAREST
+  );
+  gl.texParameteri(
+    GL_TEXTURES.TEXTURE_2D,
+    GL_TEXTURES.TEXTURE_WRAP_S,
+    GL_TEXTURES.CLAMP_TO_EDGE
+  );
+  gl.texParameteri(
+    GL_TEXTURES.TEXTURE_2D,
+    GL_TEXTURES.TEXTURE_WRAP_T,
+    GL_TEXTURES.CLAMP_TO_EDGE
+  );
+}
 
 export default function Paint() {
   const canvas = (
     <canvas
       style={{
-        'touch-action': 'none',
-      }}></canvas>
+        "touch-action": "none",
+      }}
+    ></canvas>
   ) as HTMLCanvasElement;
 
   const pointer = createPointerData(canvas);
@@ -22,87 +74,138 @@ export default function Paint() {
   createEffect(() => {
     const data = pointer();
 
-    compute_draw_bound(data.prev, data.move); // Compute the Drawing Area
-    draw(data.pressure); // Draw into Custom Frame buffer texture
-    render(); // Render Texture to Screen
+    // Compute the Drawing Area
+    compute_draw_bound(data.prev, data.move);
+
+    console.log(`update`, ctx.width, ctx.height);
+
+    // Draw into Custom Frame buffer texture
+    draw(data.pressure);
+
+    // Render Texture to Screen
+    render();
   });
 
-  const app = createApp(canvas);
+  const ctx = new Context(canvas);
+  ctx
+    .set_color("#4f5f8f")
+    .set_size(window.innerWidth, window.innerHeight)
+    .clear();
 
-  const $brush: Mesh = Quads.unit_corner(app.buffer, app.mesh);
-  const $quad: Mesh = Quads.ndc(app.buffer, app.mesh);
+  const gl = ctx.ctx;
 
-  DrawShader.init(app.shader); // Shader that draws a brush over a line segment
-  const $mat_draw: Material = app.shader.new_material('DrawShader');
+  const fbo = new FramebufferObjectFactory(gl);
+  // full screan texture
+  const main_fbo = fbo.new({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    buffers: [
+      { attach: 0, name: "color", type: "color", mode: "tex", pixel: "byte" },
+    ],
+  });
 
-  PostShader.init(app.shader); // Shader that uses a unit quad to draw a texture to screen
-  let $mat_post: Material = app.shader.new_material('PostRender');
+  const ortho_proj = m4.identity();
+  m4.ortho(ortho_proj, 0, ctx.width, ctx.height, 0, -100, 100);
 
-  let $brush_size = 10;
-  let $bound = new Float32Array(4); // Bounding Area to Draw
-  let $segment = new Float32Array(4); // The 2 points of a Segment
+  // { mesh, shader, material }
+  const brush: IMesh = brush_quad_unit_corner(gl);
+  // Shader that draws a brush over a line segment
+
+  const mat_draw: IMaterial = new_material(
+    new_shader(gl, "DrawShader", drawShaderVertSrc, drawShaderFragSrc, [
+      { name: "ortho", type: "mat4" },
+      { name: "brush_size", type: "float" },
+      { name: "bound", type: "vec4" },
+      { name: "segment", type: "vec4" },
+    ])
+  );
+
+  const quad: IMesh = post_quad_ndc(gl);
+  // Shader that uses a unit quad to draw a texture to screen
+  const mat_post: IMaterial = new_material(
+    new_shader(gl, "PostRender", postShaderVertSrc, postShaderFragSrc, [
+      { name: "buf_color", type: "sampler2D" },
+    ])
+  );
+
+  let brush_size = 20;
+  const bound = new Float32Array(4); // Bounding Area to Draw
+  const segment = new Float32Array(4); // The 2 points of a Segment
+
+  function onWindowResize() {
+    ctx.set_size(window.innerWidth, window.innerHeight);
+    m4.ortho(ortho_proj, 0, ctx.width, ctx.height, 0, -100, 100);
+  }
+
+  window.addEventListener("resize", onWindowResize);
+
+  onCleanup(() => {
+    window.removeEventListener("resize", onWindowResize);
+  });
 
   // This function handles drawing the brush shader onto a custom frame buffer texture
   function draw(pressure: number) {
-    let ctx = app.gl.ctx; // alias
-
     // Setup
-    app.fbo.bind(app.main_fbo); //.clear( $fbo );	// Load Custom FrameBuffer
-    ctx.bindVertexArray($brush.vao?.id); // Load Quad
 
-    //App.gl.ctx.disable( App.gl.ctx.DEPTH_TEST );
+    // gl.disable(GL_STATIC_VARIABLES.DEPTH_TEST);
 
     // Experiment with Blending Modes to get something that works well
-    ctx['enable'](ctx.BLEND);
-    //c.blendFunc( c.ONE, c.ONE ); //BLEND_ADDITIVE
-    ctx.blendFunc(ctx.SRC_ALPHA, ctx.ONE); // BLEND_ALPHA_ADDITIVE
-    //c.blendFunc( c.ONE, c.ZERO ); // BLEND_OVERRIDE
-    //c.blendFunc( c.SRC_ALPHA, c.ONE_MINUS_SRC_ALPHA ); //BLEND_ALPHA
+    gl.enable(GL_STATIC_VARIABLES.BLEND);
+    // gl.blendFunc(GL_STATIC_VARIABLES.ONE, GL_STATIC_VARIABLES.ONE); //BLEND_ADDITIVE
+    gl.blendFunc(GL_STATIC_VARIABLES.SRC_ALPHA, gl.ONE); // BLEND_ALPHA_ADDITIVE
+    // gl.blendFunc( GL_STATIC_VARIABLES.ONE, GL_STATIC_VARIABLES.ZERO ); // BLEND_OVERRIDE
+    // gl.blendFunc(
+    //   GL_STATIC_VARIABLES.SRC_ALPHA,
+    //   GL_STATIC_VARIABLES.ONE_MINUS_SRC_ALPHA
+    // ); //BLEND_ALPHA
 
     // Load Shader and update uniforms
-    ctx.useProgram($mat_draw.shader.program);
-    ctx.uniformMatrix4fv(
-      $mat_draw.uniforms.get('ortho').loc,
-      false,
-      app.ortho_proj
-    );
-    //c.uniform2fv( $mat_draw.uniforms.get( "move" ).loc, $move );
-    ctx.uniform1f(
-      $mat_draw.uniforms.get('brush_size').loc,
-      $brush_size * pressure
-    );
-    ctx.uniform4fv($mat_draw.uniforms.get('bound').loc, $bound);
-    ctx.uniform4fv($mat_draw.uniforms.get('segment').loc, $segment);
+    gl.useProgram(mat_draw.shader.program);
+    gl.uniformMatrix4fv(mat_draw.uniforms["ortho"].loc, false, ortho_proj);
+    gl.uniform1f(mat_draw.uniforms["brush_size"].loc, brush_size * pressure);
+    gl.uniform4fv(mat_draw.uniforms["bound"].loc, bound);
+    gl.uniform4fv(mat_draw.uniforms["segment"].loc, segment);
 
+    fbo.bind(main_fbo); //.clear( $fbo );	// Load Custom FrameBuffer
+    gl.bindVertexArray(brush.vao); // Load Quad
     // Draw
-    ctx.drawElements(app.mesh.TRI, $brush.element_cnt, $brush.element_type, 0);
+    gl.drawElements(
+      GL_DRAW_ARRAYS_MODE.TRIANGLES,
+      brush.element_cnt,
+      brush.element_type,
+      0
+    );
 
     // Cleanup
-    ctx.useProgram(null);
-    ctx.bindVertexArray(null);
+    gl.useProgram(null);
+    gl.bindVertexArray(null);
   }
 
   // This function handles rendering the custom frame buffer texture to the screen
   function render() {
-    app.fbo.unbind(); // Unbind any Custom Frame Buffer
-    app.gl.clear(); // Clear Screen Buffer
-    let c = app.gl.ctx; // Alias
+    fbo.unbind(); // Unbind any Custom Frame Buffer
+    ctx.clear(); // Clear Screen Buffer
 
     // Mesh
-    c.bindVertexArray($quad.vao?.id);
+    gl.bindVertexArray(quad.vao);
 
     // SHADER
-    c.useProgram($mat_post.shader.program); // Bind Shader
-    c.activeTexture(c.TEXTURE0); // Turn on Texture Slot
-    c.bindTexture(c.TEXTURE_2D, app.main_fbo.buffers.color.id); // Bind Texture
-    c.uniform1i($mat_post.uniforms.get('buf_color').loc, 0); // Set Uniform Loc to Texture Slot
+    gl.useProgram(mat_post.shader.program); // Bind Shader
+    gl.activeTexture(GL_STATIC_VARIABLES.TEXTURE0); // Turn on Texture Slot
+    gl.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, main_fbo.buffers.color.id); // Bind Texture
+    gl.uniform1i(mat_post.uniforms["buf_color"].loc, 0); // Set Uniform Loc to Texture Slot
 
     // Draw
-    c.drawElements(app.mesh.TRI, $quad.element_cnt, $quad.element_type, 0);
+    gl.drawElements(
+      GL_DRAW_ARRAYS_MODE.TRIANGLES,
+      quad.element_cnt,
+      quad.element_type,
+      0
+    );
 
     // Cleanup
-    c.useProgram(null);
-    c.bindVertexArray(null);
+    gl.useProgram(null);
+    gl.bindVertexArray(null);
   }
 
   // The idea is to create a Quad that can cover the area needed
@@ -133,20 +236,20 @@ export default function Paint() {
     }
 
     // Expand the bounding box by the size of the brush
-    x_min = Math.max(x_min - $brush_size, 0);
-    y_min = Math.max(y_min - $brush_size, 0);
-    x_max += $brush_size;
-    y_max += $brush_size;
+    x_min = Math.max(x_min - brush_size, 0);
+    y_min = Math.max(y_min - brush_size, 0);
+    x_max += brush_size;
+    y_max += brush_size;
 
-    $bound[0] = x_min; // Position (XY)
-    $bound[1] = y_min;
-    $bound[2] = x_max - x_min; // Scale (W/H)
-    $bound[3] = y_max - y_min;
+    bound[0] = x_min; // Position (XY)
+    bound[1] = y_min;
+    bound[2] = x_max - x_min; // Scale (W/H)
+    bound[3] = y_max - y_min;
 
-    $segment[0] = prev[0]; // Segment Point A
-    $segment[1] = prev[1];
-    $segment[2] = move[0]; // Segment Point B
-    $segment[3] = move[1];
+    segment[0] = prev[0]; // Segment Point A
+    segment[1] = prev[1];
+    segment[2] = move[0]; // Segment Point B
+    segment[3] = move[1];
   }
 
   return canvas;

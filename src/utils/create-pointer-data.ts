@@ -1,7 +1,7 @@
-import * as v2 from '@webgl/math/v2';
-import { createMemo } from 'solid-js';
+import * as v2 from "@webgl/math/v2";
+import { createMemo } from "solid-js";
 
-import { createPointerStream } from './create-pointer-stream';
+import { createPointerStream } from "./create-pointer-stream";
 
 export function createPointerData(element: HTMLElement) {
   const pointer$ = createPointerStream(element);
@@ -19,7 +19,9 @@ export function createPointerData(element: HTMLElement) {
   return createMemo(
     () => {
       const event = pointer$();
-      if (!event) return pointerData;
+      if (!event) {
+        return pointerData;
+      }
 
       const box = element.getBoundingClientRect();
       const offset_x = box.left; // Help get X,Y in relation to the canvas position.
@@ -28,13 +30,13 @@ export function createPointerData(element: HTMLElement) {
       const y = event.pageY - offset_y;
 
       switch (event?.type) {
-        case 'pointerdown':
+        case "pointerdown":
           v2.set(x, y, pointerData.start);
           v2.set(x, y, pointerData.prev);
           v2.set(x, y, pointerData.move);
           pointerData.distance = 0;
           break;
-        case 'pointermove':
+        case "pointermove":
           v2.copy(pointerData.move, pointerData.prev);
           v2.set(x, y, pointerData.move);
           pointerData.distance = v2.distanceSq(
@@ -52,7 +54,7 @@ export function createPointerData(element: HTMLElement) {
           break;
       }
 
-      if (event.pointerType === 'pen') {
+      if (event.pointerType === "pen") {
         pointerData.pressure = event.pressure;
         v2.set(event.tiltX, event.tiltY, pointerData.tilt);
         v2.set(

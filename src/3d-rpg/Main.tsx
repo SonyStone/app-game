@@ -32,6 +32,7 @@ import run from "./assets/run.fbx?url";
 import pushButton from "./assets/push-button.fbx?url";
 import stumbleBackwards from "./assets/stumble-backwards.fbx?url";
 import { For, onCleanup } from "solid-js";
+import JoyStick from "./JoyStick";
 
 enum Modes {
   NONE,
@@ -284,6 +285,7 @@ export default function Main() {
           </For>
         </select>
       </div>
+        <JoyStick maxRadius={10} onMove={() => {}}/>
     </>
   );
 }

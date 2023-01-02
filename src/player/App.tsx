@@ -1,19 +1,19 @@
-import { createSignal, ErrorBoundary, onMount } from 'solid-js';
+import { createSignal, ErrorBoundary, onMount } from "solid-js";
 
-import s from './App.module.scss';
-import { Controls } from './Controls';
-import { Frame } from './interfaces/Frame';
-import Player from './Player';
-import Dimentions from './video/Dimentions';
-import { FrameControl } from './video/FrameControl';
-import { IsPlayingProvider } from './video/IsPlaying.provider';
-import { PlaybackRateControl } from './video/PlaybackRateControl';
-import { PlayControl } from './video/PlayControl';
-import TotalFrames from './video/TotalFrames';
-import Video from './video/Video';
-import { VideoControls } from './video/VideoControls';
-import { VolumeControl } from './video/VolumeControl';
-import { useVideoContext, VideoContextProvider } from './VideoContext.provider';
+import s from "./App.module.scss";
+import { Controls } from "./Controls";
+import { Frame } from "./interfaces/Frame";
+import Player from "./Player";
+import Dimentions from "./video/Dimentions";
+import { FrameControl } from "./video/FrameControl";
+import { IsPlayingProvider } from "./video/IsPlaying.provider";
+import { PlaybackRateControl } from "./video/PlaybackRateControl";
+import { PlayControl } from "./video/PlayControl";
+import TotalFrames from "./video/TotalFrames";
+import Video from "./video/Video";
+import { VideoControls } from "./video/VideoControls";
+import { VolumeControl } from "./video/VolumeControl";
+import { useVideoContext, VideoContextProvider } from "./VideoContext.provider";
 
 export default function App() {
   return (
@@ -21,7 +21,8 @@ export default function App() {
       fallback={(error) => {
         console.error(error);
         return <div>Error in the Player</div>;
-      }}>
+      }}
+    >
       <VideoContextProvider>
         <VideoApp></VideoApp>
       </VideoContextProvider>
@@ -37,7 +38,10 @@ export function VideoApp() {
 
   const [resize, setResize] = createSignal({ height: 0, width: 0 });
 
-  console.log(`created App`);
+  const [get, set] = createSignal(1);
+  const asd = <div>{get()}</div>;
+
+  console.log(`created App`, asd);
 
   return (
     <div>
@@ -49,7 +53,8 @@ export function VideoApp() {
             } else {
               setCurrentFrame((currentFrame() - 1) as Frame);
             }
-          }}>
+          }}
+        >
           {/* <Canvas size={resize()}></Canvas> */}
           <Video
             src={src()}
@@ -57,7 +62,8 @@ export function VideoApp() {
               console.log(
                 `Playback has stopped because of a temporary lack of data`
               )
-            }>
+            }
+          >
             <TotalFrames
               frameSize={frameSize()}
               onTotalFrames={setTotalFrames}

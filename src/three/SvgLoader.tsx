@@ -1,19 +1,32 @@
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect, onCleanup } from "solid-js";
 import {
+  AmbientLight,
   Camera,
   Color,
   GridHelper,
+  Group,
+  Mesh,
+  MeshBasicMaterial,
+  MeshPhongMaterial,
+  PointLight,
   Scene,
   sRGBEncoding,
   WebGLRenderer,
-} from 'three';
+} from "three";
 
-import { useStats } from '../Stats.provider';
-import { useCamera } from './Camera.provider';
-import Controls from './Controls';
-import { loadSVG } from './loadSVG';
-import hexagon from './svg/diogram.drawio.svg?url';
-import s from './SvgLoader.module.scss';
+import { useStats } from "../Stats.provider";
+import { useCamera } from "./Camera.provider";
+import Controls from "./Controls";
+import { loadSVG } from "./loadSVG";
+import hexagon from "./svg/diogram.drawio.svg?url";
+import s from "./SvgLoader.module.scss";
+
+import a from "./airboat.obj?raw";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
+import { VertexNormalsHelper } from "three/examples/jsm/helpers/VertexNormalsHelper";
+
+const loader = new OBJLoader();
+const obj = loader.parse(a);
 
 export default function SvgLoader() {
   const canvas = (<canvas class={s.canvas}></canvas>) as HTMLCanvasElement;
@@ -42,7 +55,7 @@ export default function SvgLoader() {
     renderer.render(scene, currentCamera);
     stats.end();
   }
-  controls.addEventListener('change', render);
+  controls.addEventListener("change", render);
   controls.screenSpacePanning = true;
 
   const scene = new Scene();
@@ -58,11 +71,32 @@ export default function SvgLoader() {
   const helper = new GridHelper(600, 10);
   scene.add(helper);
 
+  {
+    const g = new Group();
+    const light = new PointLight(0xffffff, 0.5);
+    // light.matrix.setPosition(10, 10, 10);
+    light.translateY(10);
+    g.add(light);
+    const material = new MeshPhongMaterial();
+    (obj.children as Mesh[]).forEach((mesh) => {
+      mesh.geometry.computeVertexNormals();
+      // const helper = new VertexNormalsHelper(mesh, 0.5, 0xff0000);
+      // g.add(helper);
+    });
+    g.add(obj);
+
+    g.scale.set(3, 3, 3);
+    g.rotateY(45);
+    g.translateX(90);
+
+    scene.add(g);
+  }
+
   onCleanup(() => {
     renderer.dispose();
     controls.dispose();
     scene.clear();
-    controls.removeEventListener('change', render);
+    controls.removeEventListener("change", render);
   });
 
   return (
