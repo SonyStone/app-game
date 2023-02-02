@@ -119,7 +119,6 @@ function create_shader_program(
   ctx: WebGL2RenderingContext,
   vert: WebGLShader,
   frag: WebGLShader,
-  do_validate = true,
   transFeedbackVars = null,
   transFeedbackInterleaved = false
 ): WebGLProgram {
@@ -155,15 +154,6 @@ function create_shader_program(
     ctx.deleteProgram(prog);
   }
 
-  // Only do this for additional debugging.
-  if (do_validate) {
-    ctx.validateProgram(prog);
-    if (!ctx.getProgramParameter(prog, GL_PROGRAM_PARAMETER.VALIDATE_STATUS)) {
-      console.error("Error validating program", ctx.getProgramInfoLog(prog));
-      ctx.deleteProgram(prog);
-    }
-  }
-
   // Can delete the shaders since the program has been made.
   ctx.detachShader(prog, vert); // TODO, detaching might cause issues on some browsers, Might only need to delete.
   ctx.detachShader(prog, frag);
@@ -173,8 +163,17 @@ function create_shader_program(
   return prog;
 }
 
+// Only do this for additional debugging.
+function validate_program(gl: WebGL2RenderingContext, prog: WebGLProgram) {
+  gl.validateProgram(prog);
+  if (!gl.getProgramParameter(prog, GL_PROGRAM_PARAMETER.VALIDATE_STATUS)) {
+    console.error("Error validating program", gl.getProgramInfoLog(prog));
+    gl.deleteProgram(prog);
+  }
+}
+
 /** Compile Vertex/Fragment Shaders then Link them as a Program */
-function create_shader(
+export function create_shader(
   ctx: WebGL2RenderingContext,
   vert_src: string,
   frag_src: string,
@@ -194,14 +193,17 @@ function create_shader(
     throw new Error(`Error creating fragment shader program.`);
   }
 
-  return create_shader_program(
+  const prog = create_shader_program(
     ctx,
     vert,
     frag,
-    do_dalidate,
     transFeedbackVars,
     transFeedbackInterleaved
   );
+
+  do_dalidate && validate_program(ctx, prog);
+
+  return prog;
 }
 
 /**
@@ -223,10 +225,7 @@ export function new_shader(
   // TODO Check if shader exists in cache
 
   // Compile the shader Code, When successful, create struct to wrap the program
-  let program = create_shader(ctx, src_vert, src_frag, false)!;
-  if (!program) {
-    throw new Error(`cannot create shader WebGLProgram`);
-  }
+  let program = create_shader(ctx, src_vert, src_frag, true)!;
 
   const uniforms: { [key: string]: IUniform } = {};
 

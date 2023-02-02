@@ -118,6 +118,21 @@ export default function Main() {
   } = {} as any;
   let cameraFade = 0;
 
+  function playerControl(forward: number, turn: number) {
+    //console.log(`playerControl(${forward}), ${turn}`);
+
+    if (forward > 0) {
+      if (player.action != girlWalk) action(girlWalk);
+    } else {
+      if (player.action == girlWalk) action(lookAround);
+    }
+    if (forward == 0 && turn == 0) {
+      delete player.move;
+    } else {
+      player.move = { forward, turn };
+    }
+  }
+
   function createCameras(parent: Group) {
     const front = new Object3D();
     front.position.set(112, 100, 200);
@@ -162,7 +177,14 @@ export default function Main() {
     environmentProxy = env;
   }
 
-  const anims = [gatherObjects, lookAround, pushButton, run, stumbleBackwards];
+  const anims = [
+    gatherObjects,
+    lookAround,
+    pushButton,
+    run,
+    stumbleBackwards,
+    girlWalk,
+  ];
 
   function loadNextAnim(loader: FBXLoader) {
     // let anim = anims.pop()!;
@@ -190,10 +212,10 @@ export default function Main() {
       player.mixer.update(dt);
     }
 
-    // if (player.move!=undefined){
-    // 	movePlayer(dt);
-    // 	player.object.rotateY(this.player.move.turn*dt);
-    // }
+    if (player.move != undefined) {
+      if (player.move.forward > 0) player.object.translateZ(dt * 100);
+      player.object.rotateY(player.move.turn * dt);
+    }
 
     if (player.cameras != undefined && player.cameras.active != undefined) {
       camera.position.lerp(
@@ -285,7 +307,7 @@ export default function Main() {
           </For>
         </select>
       </div>
-        <JoyStick maxRadius={10} onMove={() => {}}/>
+      <JoyStick maxRadius={30} onMove={playerControl} />
     </>
   );
 }

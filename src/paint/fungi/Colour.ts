@@ -1,16 +1,16 @@
 const NORMALIZE_RGB = 1 / 255.0;
 const COLORS: { [key: string]: string } = {
-  black: '#000000',
-  white: '#ffffff',
-  red: '#ff0000',
-  green: '#00ff00',
-  blue: '#0000ff',
-  fuchsia: '#ff00ff',
-  cyan: '#00ffff',
-  yellow: '#ffff00',
-  orange: '#ff8000',
-  gray: '#808080',
-  darkgray: '#303030',
+  black: "#000000",
+  white: "#ffffff",
+  red: "#ff0000",
+  green: "#00ff00",
+  blue: "#0000ff",
+  fuchsia: "#ff00ff",
+  cyan: "#00ffff",
+  yellow: "#ffff00",
+  orange: "#ff8000",
+  gray: "#808080",
+  darkgray: "#303030",
 };
 
 export class Colour {
@@ -18,14 +18,16 @@ export class Colour {
   rgb = new Float32Array(this.rgba.buffer, 0, 3);
 
   constructor(c?: string) {
-    if (c) this.set(c);
+    if (c) {
+      this.set(c);
+    }
   }
 
   alpha(v: number) {
     this.rgba[3] = v;
     return this;
   }
-  set(c: string | any) {
+  set(c: string | any): this {
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Handle Numeric Form
     if (!isNaN(c)) {
@@ -38,12 +40,12 @@ export class Colour {
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Handle String Form
-    if (typeof c == 'string') {
+    if (typeof c == "string") {
       let cc = c;
-      if (cc.charAt(0) != '#') cc = COLORS[c];
-      if (!cc || cc.charAt(0) != '#') {
-        console.error('Color Unknown: ', c);
-        return;
+      if (cc.charAt(0) != "#") cc = COLORS[c];
+      if (!cc || cc.charAt(0) != "#") {
+        console.error("Color Unknown: ", c);
+        return this;
       }
 
       this.rgba[0] = parseInt(cc[1] + cc[2], 16) * NORMALIZE_RGB;
