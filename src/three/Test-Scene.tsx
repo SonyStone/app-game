@@ -1,10 +1,6 @@
 import { createSignal, For } from "solid-js";
 import { Cube } from "./elements";
 
-const Asd = () => <div></div>
-
-cosnt AsdLazy = () => import('./s')
-
 export default function TestScene() {
   const [y, setY] = createSignal(20);
 
