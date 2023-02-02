@@ -1,5 +1,6 @@
 import {
   AmbientLight,
+  AnimationAction,
   AnimationClip,
   AnimationMixer,
   BoxBufferGeometry,
@@ -113,9 +114,15 @@ export default function Main() {
       collect: Object3D;
       active: Object3D;
     };
-    walk: AnimationClip;
-    [key: string]: any;
-  } = {} as any;
+    animationClips: { [key: string]: AnimationClip };
+    animationActions: { [key: string]: AnimationAction };
+    // [key: string]: any;
+    action: string;
+    move?: { forward: number; turn: number };
+  } = {
+    animationClips: {},
+    animationActions: {},
+  } as any;
   let cameraFade = 0;
 
   function playerControl(forward: number, turn: number) {
@@ -163,16 +170,16 @@ export default function Main() {
     env.name = "Environment";
     scene.add(env);
 
-    const geometry = new BoxBufferGeometry(150, 150, 150);
-    const material = new MeshBasicMaterial({ color: 0xffff00 });
+    // const geometry = new BoxBufferGeometry(150, 150, 150);
+    // const material = new MeshBasicMaterial({ color: 0xffff00 });
 
-    for (let x = -1000; x < 1000; x += 300) {
-      for (let z = -1000; z < 1000; z += 300) {
-        const block = new Mesh(geometry, material);
-        block.position.set(x, 75, z);
-        env.add(block);
-      }
-    }
+    // for (let x = -1000; x < 1000; x += 300) {
+    //   for (let z = -1000; z < 1000; z += 300) {
+    //     const block = new Mesh(geometry, material);
+    //     block.position.set(x, 75, z);
+    //     env.add(block);
+    //   }
+    // }
 
     environmentProxy = env;
   }
@@ -192,7 +199,12 @@ export default function Main() {
     Promise.all(
       anims.map((anim) =>
         loader.loadAsync(anim).then((object) => {
-          player[anim] = object.animations[0];
+          const clip = object.animations[0];
+          player.animationClips[anim] = clip;
+          player.animationActions[anim] = player.mixer.clipAction(
+            clip,
+            player.root
+          );
         })
       )
     ).then(() => {
@@ -233,12 +245,15 @@ export default function Main() {
   }
 
   function action(name: string) {
-    const anim = player[name];
-    const action = player.mixer.clipAction(anim, player.root);
-    player.mixer.stopAllAction();
+    if (player.action == name) return;
+
+    const actionToPlay = player.animationActions[name];
+    const current = player.animationActions[player.action];
+    current?.fadeOut(0.5);
+
     player.action = name;
-    action.fadeIn(0.5);
-    action.play();
+
+    actionToPlay.reset().fadeIn(0.5).play();
   }
 
   loader.loadAsync(girlWalk).then((object) => {
@@ -257,12 +272,12 @@ export default function Main() {
 
     scene.add(object);
     player.object = object;
-    player.walk = object.animations[0];
-
-    // joystick = new JoyStick({
-    //     onMove: game.playerControl,
-    //     game: game
-    // });
+    const clip = object.animations[0];
+    player.animationClips[girlWalk] = clip;
+    player.animationActions[girlWalk] = player.mixer.clipAction(
+      clip,
+      player.root
+    );
 
     createCameras(object);
     loadNextAnim(loader);
