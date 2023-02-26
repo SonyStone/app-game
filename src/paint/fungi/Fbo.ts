@@ -205,12 +205,18 @@ export class FramebufferObjectFactory {
     return fbo;
   }
 
-  // #region MISC
+  /**
+   *
+   * `gl.bindFramebuffer(FRAMEBUFFER, fbo_id)`
+   */
   bind(o: any) {
     this.ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, o.id);
     return this;
   }
 
+  /**
+   * `gl.bindFramebuffer(FRAMEBUFFER, null)`
+   */
   unbind() {
     this.ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
     return this;

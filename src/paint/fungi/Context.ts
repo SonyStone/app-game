@@ -3,29 +3,32 @@ import { Colour } from "./Colour";
 
 export class Context {
   // #region MAIN
-  ctx: WebGL2RenderingContext;
+  gl: WebGL2RenderingContext;
   width = 0;
   height = 0;
 
   constructor(readonly canvas: HTMLCanvasElement) {
-    this.ctx = create_webgl_context(canvas);
-    setup_some_webgl_defaults(this.ctx);
+    this.gl = create_webgl_context(canvas);
+    setup_some_webgl_defaults(this.gl);
   }
 
+  /**
+   * Clear Screen Buffer
+   */
   clear() {
-    clear_webgl(this.ctx);
+    clear_webgl(this.gl);
     return this;
   }
 
   set_size(w = 500, h = 500) {
-    set_size(this.ctx, this.canvas, w, h);
+    set_size(this.gl, this.canvas, w, h);
     this.width = w;
     this.height = h;
     return this;
   }
 
   set_color(hex: string) {
-    set_clear_color(this.ctx, hex);
+    set_clear_color(this.gl, hex);
     return this;
   }
 }
@@ -46,7 +49,12 @@ export function create_webgl_context(
   return gl;
 }
 
-export function setup_some_webgl_defaults(gl: WebGL2RenderingContext) {
+export function setup_some_webgl_defaults(
+  gl: Pick<
+    WebGL2RenderingContext,
+    "cullFace" | "frontFace" | "enable" | "depthFunc" | "blendFunc"
+  >
+) {
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   //Load Extension
   //gl.ctx.getExtension("EXT_color_buffer_float");	//Needed for Deferred Lighting
@@ -72,18 +80,24 @@ export function setup_some_webgl_defaults(gl: WebGL2RenderingContext) {
   */
 }
 
-export function clear_webgl(gl: WebGL2RenderingContext) {
+/**
+ * Clear Screen Buffer
+ */
+export function clear_webgl(gl: Pick<WebGL2RenderingContext, "clear">) {
   gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT | GL_CLEAR_MASK.DEPTH_BUFFER_BIT);
 }
 
 const colour = new Colour();
-export function set_clear_color(gl: WebGL2RenderingContext, hex: string) {
+export function set_clear_color(
+  gl: Pick<WebGL2RenderingContext, "clearColor">,
+  hex: string
+) {
   const c = colour.set(hex).rgba;
   gl.clearColor(c[0], c[1], c[2], c[3]);
 }
 
 export function update_webgl_viewport(
-  gl: WebGL2RenderingContext,
+  gl: Pick<WebGL2RenderingContext, "viewport">,
   width: number,
   height: number
 ) {
@@ -93,7 +107,7 @@ export function update_webgl_viewport(
 }
 
 export function set_size(
-  gl: WebGL2RenderingContext,
+  gl: Pick<WebGL2RenderingContext, "viewport">,
   canvas: HTMLCanvasElement,
   w = 500,
   h = 500

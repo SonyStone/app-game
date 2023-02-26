@@ -31,6 +31,7 @@
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-prettier": "^4.2.1",
     "eslint-plugin-solid": "^0.7.0",
+    "fflate": "^0.7.4",
     "fs-extra": "^10.0.1",
     "glob": "^7.2.0",
     "jsdom": "^19.0.0",

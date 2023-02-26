@@ -1,10 +1,7 @@
 import {
-  AmbientLight,
   AnimationAction,
   AnimationClip,
   AnimationMixer,
-  BoxBufferGeometry,
-  BoxGeometry,
   Clock,
   Color,
   DirectionalLight,
@@ -14,7 +11,6 @@ import {
   HemisphereLight,
   Material,
   Mesh,
-  MeshBasicMaterial,
   MeshPhongMaterial,
   Object3D,
   PerspectiveCamera,
@@ -26,13 +22,13 @@ import {
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
 import s from "./Main.module.scss";
 
-import girlWalk from "./assets/girl-walk.fbx?url";
-import gatherObjects from "./assets/gather-objects.fbx?url";
-import lookAround from "./assets/look-around.fbx?url";
-import run from "./assets/run.fbx?url";
-import pushButton from "./assets/push-button.fbx?url";
-import stumbleBackwards from "./assets/stumble-backwards.fbx?url";
 import { For, onCleanup } from "solid-js";
+import gatherObjects from "./assets/gather-objects.fbx?url";
+import girlWalk from "./assets/girl-walk.fbx?url";
+import lookAround from "./assets/look-around.fbx?url";
+import pushButton from "./assets/push-button.fbx?url";
+import run from "./assets/run.fbx?url";
+import stumbleBackwards from "./assets/stumble-backwards.fbx?url";
 import JoyStick from "./JoyStick";
 
 enum Modes {

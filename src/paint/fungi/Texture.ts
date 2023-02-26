@@ -1,5 +1,5 @@
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables/static-variables';
-import { Context } from './Context';
+import { GL_STATIC_VARIABLES } from "@webgl/static-variables/static-variables";
+import { Context } from "./Context";
 
 export class Texture {
   constructor(readonly name: any, readonly id: any) {}
@@ -22,7 +22,7 @@ export class TextureFactory {
     wrap_mode = 0,
     filter_mode = 0
   ) {
-    let tex = new Texture(name, this.gl.ctx.createTexture());
+    let tex = new Texture(name, this.gl.gl.createTexture());
     this.cache.set(name, tex);
     return this.update(tex, img, do_yflip, use_mips, wrap_mode, filter_mode);
   }
@@ -35,7 +35,7 @@ export class TextureFactory {
     wrap_mode = 0,
     filter_mode = 0
   ) {
-    let ctx = this.gl.ctx;
+    let ctx = this.gl.gl;
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Flip the texture by the Y Position, So 0,0 is bottom left corner.
@@ -108,7 +108,7 @@ export class TextureFactory {
   // pos_x.jpg, neg_x.jpg, pos_y.jpg, neg_y.jpg, pos_z.jpg, neg_z.jpg
   new_cube(name: any, img_ary: any, use_mips = false) {
     if (img_ary.length != 6) return null;
-    let ctx = this.gl.ctx;
+    let ctx = this.gl.gl;
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Cube Constants values increment, so easy to start with right and just add 1 in a loop

@@ -34,6 +34,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import("./3d-rpg/Main")),
   },
   {
+    path: "/3d-rpg-tests",
+    name: "3D RPG Tests",
+    component: lazy(() => import("./3d-rpg/load-fbx-test")),
+  },
+  {
     path: "/tanki",
     name: "Tanki",
     component: lazy(() => import("./Tanki/Tanki")),
@@ -81,7 +86,7 @@ const routes: (RouteDefinition & { name: string })[] = [
   {
     path: "/paint",
     name: "Paint",
-    component: lazy(() => import("./paint/PaintPage")),
+    component: lazy(() => import("./paint/paint-page")),
   },
   {
     path: "/twgl",

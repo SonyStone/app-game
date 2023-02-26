@@ -1,29 +1,31 @@
-import { resolve } from 'path';
-import { defineConfig } from 'vite';
-import solidPlugin from 'vite-plugin-solid';
-import solidSvg from 'vite-plugin-solid-svg';
+import { resolve } from "path";
+import { defineConfig } from "vite";
+import viteFBXPlugin from "./vite-fbx-plugin";
+import solidPlugin from "vite-plugin-solid";
+import solidSvg from "vite-plugin-solid-svg";
 
-import rust from './rollup-plugin-rust';
+import rust from "./rollup-plugin-rust";
 
 export default defineConfig({
   plugins: [
     solidPlugin(),
     solidSvg(),
+    viteFBXPlugin(),
     // vitePluginWasmPack('./wasm_game_of_life'),
     rust(),
   ],
-  publicDir: './public',
+  publicDir: "./public",
   resolve: {
     alias: {
-      '@utils': resolve(__dirname, './src/utils'),
-      '@webgl': resolve(__dirname, './src/libs/webgl'),
+      "@utils": resolve(__dirname, "./src/utils"),
+      "@webgl": resolve(__dirname, "./src/libs/webgl"),
     },
   },
   build: {
     assetsInlineLimit: 0,
-},
+  },
   test: {
-    environment: 'jsdom',
+    environment: "jsdom",
     transformMode: {
       web: [/\.[jt]sx?$/],
     },

@@ -13,28 +13,41 @@ import { IBuffer } from "./Buffer";
  * ```
  **/
 export function create_vao(
-  ctx: WebGL2RenderingContext,
+  gl: Pick<
+    WebGL2RenderingContext,
+    | "createVertexArray"
+    | "bindVertexArray"
+    | "bindBuffer"
+    | "enableVertexAttribArray"
+    | "vertexAttribPointer"
+    | "vertexAttribDivisor"
+  >,
   config: {
     buffer: IBuffer;
-    interleaved?: any[];
+    interleaved?: {
+      attrib_loc: number;
+      size: number;
+      stride_len: number;
+      offset: number;
+    }[];
     attrib_loc?: any;
     instanced?: boolean;
   }[]
 ) {
   // Create Vao
-  const vao = ctx.createVertexArray()!;
-  ctx.bindVertexArray(vao);
+  const vao = gl.createVertexArray()!;
+  gl.bindVertexArray(vao);
 
   // Bind Buffer to VAO
   for (const itm of config) {
     const buf = itm.buffer;
-    ctx.bindBuffer(buf.type, buf.id);
+    gl.bindBuffer(buf.type, buf.id);
 
     if (!itm.interleaved) {
       // Only Array Buffers have Attribute Loc.
       if (itm.attrib_loc !== undefined && itm.attrib_loc !== null) {
-        ctx.enableVertexAttribArray(itm.attrib_loc);
-        ctx.vertexAttribPointer(
+        gl.enableVertexAttribArray(itm.attrib_loc);
+        gl.vertexAttribPointer(
           itm.attrib_loc,
           buf.component_len,
           GL_DATA_TYPE.FLOAT,
@@ -43,13 +56,13 @@ export function create_vao(
           buf.offset
         );
         if (itm.instanced) {
-          ctx.vertexAttribDivisor(itm.attrib_loc, 1);
+          gl.vertexAttribDivisor(itm.attrib_loc, 1);
         }
       }
     } else {
       for (const spec of itm.interleaved) {
-        ctx.enableVertexAttribArray(spec.attrib_loc);
-        ctx.vertexAttribPointer(
+        gl.enableVertexAttribArray(spec.attrib_loc);
+        gl.vertexAttribPointer(
           spec.attrib_loc,
           spec.size,
           GL_DATA_TYPE.FLOAT,
@@ -58,14 +71,14 @@ export function create_vao(
           spec.offset
         );
         if (itm.instanced) {
-          ctx.vertexAttribDivisor(spec.attrib_loc, 1);
+          gl.vertexAttribDivisor(spec.attrib_loc, 1);
         }
       }
     }
   }
 
   // cleanup
-  unbind_all(ctx);
+  unbind_all(gl);
 
   return vao;
 }
@@ -78,7 +91,9 @@ function unbind(ctx: WebGL2RenderingContext) {
   ctx.bindVertexArray(null);
 }
 
-function unbind_all(ctx: WebGL2RenderingContext) {
+function unbind_all(
+  ctx: Pick<WebGL2RenderingContext, "bindVertexArray" | "bindBuffer">
+) {
   // Close VAO in the proper order, VAO first then Buffers
   ctx.bindVertexArray(null);
   ctx.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, null); // Array Buffer

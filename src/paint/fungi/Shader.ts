@@ -94,7 +94,15 @@ interface UniformOption {
 
 /** Create a shader by passing in its code and what type */
 function compile_shader(
-  ctx: WebGL2RenderingContext,
+  ctx: Pick<
+    WebGL2RenderingContext,
+    | "createShader"
+    | "shaderSource"
+    | "compileShader"
+    | "getShaderParameter"
+    | "deleteShader"
+    | "getShaderInfoLog"
+  >,
   src: string,
   type: number
 ): WebGLShader {
@@ -116,16 +124,27 @@ function compile_shader(
 
 /** Link two compiled shaders to create a program for rendering. */
 function create_shader_program(
-  ctx: WebGL2RenderingContext,
+  gl: Pick<
+    WebGL2RenderingContext,
+    | "createProgram"
+    | "attachShader"
+    | "deleteProgram"
+    | "transformFeedbackVaryings"
+    | "linkProgram"
+    | "getProgramParameter"
+    | "getProgramInfoLog"
+    | "detachShader"
+    | "deleteShader"
+  >,
   vert: WebGLShader,
   frag: WebGLShader,
   transFeedbackVars = null,
   transFeedbackInterleaved = false
 ): WebGLProgram {
   // Link shaders together
-  const prog = ctx.createProgram()!;
-  ctx.attachShader(prog, vert);
-  ctx.attachShader(prog, frag);
+  const prog = gl.createProgram()!;
+  gl.attachShader(prog, vert);
+  gl.attachShader(prog, frag);
 
   //Force predefined locations for specific attributes. If the attibute isn't used in the shader its location will default to -1
   //ctx.bindAttribLocation(prog,ATTR_POSITION_LOC,ATTR_POSITION_NAME);
@@ -134,7 +153,7 @@ function create_shader_program(
 
   // Need to setup Transform Feedback Varying Vars before linking the program.
   if (transFeedbackVars != null) {
-    ctx.transformFeedbackVaryings(
+    gl.transformFeedbackVaryings(
       prog,
       transFeedbackVars,
       transFeedbackInterleaved
@@ -143,28 +162,34 @@ function create_shader_program(
     );
   }
 
-  ctx.linkProgram(prog);
+  gl.linkProgram(prog);
 
   // Check if successful
-  if (!ctx.getProgramParameter(prog, GL_PROGRAM_PARAMETER.LINK_STATUS)) {
-    console.error(
-      "Error creating shader program.",
-      ctx.getProgramInfoLog(prog)
-    );
-    ctx.deleteProgram(prog);
+  if (!gl.getProgramParameter(prog, GL_PROGRAM_PARAMETER.LINK_STATUS)) {
+    console.error("Error creating shader program.", gl.getProgramInfoLog(prog));
+    gl.deleteProgram(prog);
   }
 
   // Can delete the shaders since the program has been made.
-  ctx.detachShader(prog, vert); // TODO, detaching might cause issues on some browsers, Might only need to delete.
-  ctx.detachShader(prog, frag);
-  ctx.deleteShader(frag);
-  ctx.deleteShader(vert);
+  gl.detachShader(prog, vert); // TODO, detaching might cause issues on some browsers, Might only need to delete.
+  gl.detachShader(prog, frag);
+  gl.deleteShader(frag);
+  gl.deleteShader(vert);
 
   return prog;
 }
 
 // Only do this for additional debugging.
-function validate_program(gl: WebGL2RenderingContext, prog: WebGLProgram) {
+function validate_program(
+  gl: Pick<
+    WebGL2RenderingContext,
+    | "validateProgram"
+    | "getProgramParameter"
+    | "getProgramInfoLog"
+    | "deleteProgram"
+  >,
+  prog: WebGLProgram
+) {
   gl.validateProgram(prog);
   if (!gl.getProgramParameter(prog, GL_PROGRAM_PARAMETER.VALIDATE_STATUS)) {
     console.error("Error validating program", gl.getProgramInfoLog(prog));
@@ -174,34 +199,51 @@ function validate_program(gl: WebGL2RenderingContext, prog: WebGLProgram) {
 
 /** Compile Vertex/Fragment Shaders then Link them as a Program */
 export function create_shader(
-  ctx: WebGL2RenderingContext,
+  gl: Pick<
+    WebGL2RenderingContext,
+    | "createShader"
+    | "compileShader"
+    | "deleteShader"
+    | "getShaderInfoLog"
+    | "getShaderParameter"
+    | "shaderSource"
+    | "createProgram"
+    | "attachShader"
+    | "transformFeedbackVaryings"
+    | "linkProgram"
+    | "getProgramParameter"
+    | "getProgramInfoLog"
+    | "deleteProgram"
+    | "detachShader"
+    | "validateProgram"
+  >,
   vert_src: string,
   frag_src: string,
   do_dalidate: boolean = true,
   transFeedbackVars: any = null,
   transFeedbackInterleaved: any = false
 ) {
-  let vert = compile_shader(ctx, vert_src, GL_SHADER_TYPE.VERTEX_SHADER)!;
+  let vert = compile_shader(gl, vert_src, GL_SHADER_TYPE.VERTEX_SHADER)!;
   if (!vert) {
     throw new Error(`Error creating vertix shader program.`);
   }
 
-  let frag = compile_shader(ctx, frag_src, GL_SHADER_TYPE.FRAGMENT_SHADER)!;
+  let frag = compile_shader(gl, frag_src, GL_SHADER_TYPE.FRAGMENT_SHADER)!;
   if (!frag) {
-    ctx.deleteShader(vert);
+    gl.deleteShader(vert);
 
     throw new Error(`Error creating fragment shader program.`);
   }
 
   const prog = create_shader_program(
-    ctx,
+    gl,
     vert,
     frag,
     transFeedbackVars,
     transFeedbackInterleaved
   );
 
-  do_dalidate && validate_program(ctx, prog);
+  do_dalidate && validate_program(gl, prog);
 
   return prog;
 }
@@ -212,10 +254,54 @@ export function create_shader(
  * @param src_frag fragment shader
  * @param uniforms Uniform objects
  * @param ubos Uniform Buffer Objects
- * @returns
+ *
+ * is using
+ * ```typescript
+ * gl: Pick<
+ *  WebGL2RenderingContext,
+ *  | "createShader"
+ *  | "compileShader"
+ *  | "deleteShader"
+ *  | "getShaderInfoLog"
+ *  | "getShaderParameter"
+ *  | "shaderSource"
+ *  | "createProgram"
+ *  | "attachShader"
+ *  | "transformFeedbackVaryings"
+ *  | "linkProgram"
+ *  | "getProgramParameter"
+ *  | "getProgramInfoLog"
+ *  | "deleteProgram"
+ *  | "detachShader"
+ *  | "validateProgram"
+ *  | "getUniformLocation"
+ *  | "getUniformBlockIndex"
+ *  | "uniformBlockBinding"
+ * >
+ * ```
  */
 export function new_shader(
-  ctx: WebGL2RenderingContext,
+  gl: Pick<
+    WebGL2RenderingContext,
+    | "createShader"
+    | "compileShader"
+    | "deleteShader"
+    | "getShaderInfoLog"
+    | "getShaderParameter"
+    | "shaderSource"
+    | "createProgram"
+    | "attachShader"
+    | "transformFeedbackVaryings"
+    | "linkProgram"
+    | "getProgramParameter"
+    | "getProgramInfoLog"
+    | "deleteProgram"
+    | "detachShader"
+    | "validateProgram"
+    | "getUniformLocation"
+    | "getUniformBlockIndex"
+    | "uniformBlockBinding"
+  >,
   name: string,
   src_vert: string,
   src_frag: string,
@@ -225,14 +311,14 @@ export function new_shader(
   // TODO Check if shader exists in cache
 
   // Compile the shader Code, When successful, create struct to wrap the program
-  let program = create_shader(ctx, src_vert, src_frag, true)!;
+  let program = create_shader(gl, src_vert, src_frag, true)!;
 
   const uniforms: { [key: string]: IUniform } = {};
 
   if (uniformOptions) {
     for (let i = 0; i < uniformOptions.length; i++) {
       const itm = uniformOptions[i];
-      const loc = ctx.getUniformLocation(program, itm.name)!;
+      const loc = gl.getUniformLocation(program, itm.name)!;
 
       if (loc) {
         uniforms[itm.name] = create_uniform(itm.name, itm.type, loc, itm.value);
@@ -250,17 +336,20 @@ export function new_shader(
         throw new Error(`UBO Object undefined for ${name} ${ubos}`);
       }
 
-      const idx = ctx.getUniformBlockIndex(shader.program, u.name);
+      const idx = gl.getUniformBlockIndex(shader.program, u.name);
       if (idx > 1000) {
         throw new Error(`Ubo not found in shader ${name} : ${u.name}`);
       }
-      ctx.uniformBlockBinding(shader.program, idx, u.bind_point);
+      gl.uniformBlockBinding(shader.program, idx, u.bind_point);
     }
   }
 
   return shader;
 }
 
+/**
+ * not using gl context
+ */
 export function new_material(
   sh: IShader,
   uniforms: any = null,
@@ -308,7 +397,7 @@ class ShaderFactory {
 
   cache = new Map<string, IShader>();
 
-  constructor(readonly gl: Context) {}
+  constructor(readonly ctx: Context) {}
 
   get(name: any) {
     return this.cache.get(name);
@@ -318,55 +407,71 @@ class ShaderFactory {
     let name;
     let itm;
     let map = o.uniforms;
-    let gl = this.gl;
+    let ctx = this.ctx;
+    const gl: Pick<
+      WebGL2RenderingContext,
+      | "uniform1f"
+      | "uniform1fv"
+      | "uniform2fv"
+      | "uniform3fv"
+      | "uniform3iv"
+      | "uniform4fv"
+      | "uniform1i"
+      | "uniformMatrix4fv"
+      | "uniformMatrix3fv"
+      | "uniformMatrix2x4fv"
+      | "uniformMatrix3x4fv"
+      | "activeTexture"
+      | "bindTexture"
+    > = ctx.gl;
     let tex_slot = 0;
 
     for ([name, itm] of map) {
       //console.log( itm );
       switch (itm.type) {
         case "float":
-          gl.ctx.uniform1f(itm.loc, itm.data);
+          gl.uniform1f(itm.loc, itm.data);
           break;
         case "afloat":
-          gl.ctx.uniform1fv(itm.loc, itm.data);
+          gl.uniform1fv(itm.loc, itm.data);
           break;
         case "vec2":
-          gl.ctx.uniform2fv(itm.loc, itm.data);
+          gl.uniform2fv(itm.loc, itm.data);
           break;
 
         case "rgb":
-          gl.ctx.uniform3fv(itm.loc, itm.data.rgb);
+          gl.uniform3fv(itm.loc, itm.data.rgb);
           break;
         case "vec3":
-          gl.ctx.uniform3fv(itm.loc, itm.data);
+          gl.uniform3fv(itm.loc, itm.data);
           break;
         case "ivec3":
-          gl.ctx.uniform3iv(itm.loc, itm.data);
+          gl.uniform3iv(itm.loc, itm.data);
           break;
 
         case "rgba":
-          gl.ctx.uniform4fv(itm.loc, itm.data.rgba);
+          gl.uniform4fv(itm.loc, itm.data.rgba);
           break;
         case "vec4":
-          gl.ctx.uniform4fv(itm.loc, itm.data);
+          gl.uniform4fv(itm.loc, itm.data);
           break;
 
         case "int":
-          gl.ctx.uniform1i(itm.loc, itm.data);
+          gl.uniform1i(itm.loc, itm.data);
           break;
 
         //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         case "mat4":
-          gl.ctx.uniformMatrix4fv(itm.loc, false, itm.data);
+          gl.uniformMatrix4fv(itm.loc, false, itm.data);
           break;
         case "mat3":
-          gl.ctx.uniformMatrix3fv(itm.loc, false, itm.data);
+          gl.uniformMatrix3fv(itm.loc, false, itm.data);
           break;
         case "mat2x4":
-          gl.ctx.uniformMatrix2x4fv(itm.loc, false, itm.data);
+          gl.uniformMatrix2x4fv(itm.loc, false, itm.data);
           break;
         case "mat3x4":
-          gl.ctx.uniformMatrix3x4fv(itm.loc, false, itm.data);
+          gl.uniformMatrix3x4fv(itm.loc, false, itm.data);
           break;
 
         //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -377,23 +482,23 @@ class ShaderFactory {
           //	else		itm.data = tmp;
           //}
           //console.log( itm.data.id );
-          gl.ctx.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
-          gl.ctx.bindTexture(GL_TEXTURES.TEXTURE_2D, itm.data.id);
-          gl.ctx.uniform1i(itm.loc, tex_slot);
+          gl.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
+          gl.bindTexture(GL_TEXTURES.TEXTURE_2D, itm.data.id);
+          gl.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
 
         case "sampler2DArray":
-          gl.ctx.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
-          gl.ctx.bindTexture(GL_TEXTURES.TEXTURE_2D_ARRAY, itm.data);
-          gl.ctx.uniform1i(itm.loc, tex_slot);
+          gl.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
+          gl.bindTexture(GL_TEXTURES.TEXTURE_2D_ARRAY, itm.data);
+          gl.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
 
         case "samplerCube":
-          gl.ctx.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
-          gl.ctx.bindTexture(GL_TEXTURES.TEXTURE_CUBE_MAP, itm.data);
-          gl.ctx.uniform1i(itm.loc, tex_slot);
+          gl.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
+          gl.bindTexture(GL_TEXTURES.TEXTURE_CUBE_MAP, itm.data);
+          gl.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
 
@@ -412,12 +517,12 @@ class ShaderFactory {
 
   // #region BINDING
   unbind() {
-    this.gl.ctx.useProgram(null);
+    this.ctx.gl.useProgram(null);
     return this;
   }
 
   bind(sh: any) {
-    this.gl.ctx.useProgram(sh.program);
+    this.ctx.gl.useProgram(sh.program);
     return this;
   }
 }

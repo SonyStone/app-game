@@ -6,5 +6,5 @@ export type TypedArray =
   | Uint16Array
   | Int32Array
   | Uint32Array
-  | Float32Array
-  | ArrayBufferView;
+  | Float32Array;
+// | ArrayBufferView;

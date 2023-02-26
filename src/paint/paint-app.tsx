@@ -4,26 +4,25 @@ import * as v2 from "@webgl/math/v2";
 import {
   GL_DRAW_ARRAYS_MODE,
   GL_STATIC_VARIABLES,
-  GL_TEXTURES,
 } from "@webgl/static-variables";
 import { createEffect, onCleanup } from "solid-js";
 import { IMesh } from "./fungi/Mesh";
-import {
-  create_shader,
-  IMaterial,
-  new_material,
-  new_shader,
-} from "./fungi/Shader";
-import { brush_quad_unit_corner, post_quad_ndc } from "./Quads2";
+import { IMaterial, new_material, new_shader } from "./fungi/Shader";
+import { brush_quad_unit_corner, post_quad_ndc } from "./quads-2";
 
-import drawShaderFragSrc from "./drawShader.frag?raw";
-import drawShaderVertSrc from "./drawShader.vert?raw";
+import drawShaderFragSrc from "./draw-shader.frag?raw";
+import drawShaderVertSrc from "./draw-shader.vert?raw";
 
 import { Context } from "./fungi/Context";
+import { create_shader_program } from "./fungi/create-shader-program";
 import { FramebufferObjectFactory } from "./fungi/Fbo";
-import postShaderFragSrc from "./postShader.frag?raw";
-import postShaderVertSrc from "./postShader.vert?raw";
-import { create_program } from "./fungi/createProgram";
+import postShaderFragSrc from "./post-shader.frag?raw";
+import postShaderVertSrc from "./post-shader.vert?raw";
+
+import wireframeShaderFragSrc from "./wireframe-shader.frag?raw";
+import wireframeShaderVertSrc from "./wireframe-shader.vert?raw";
+import { createEventListener } from "@solid-primitives/event-listener";
+import { create_mesh } from "./fungi/create-vao";
 
 export default function Paint() {
   const canvas = (
@@ -57,9 +56,10 @@ export default function Paint() {
     .set_size(window.innerWidth, window.innerHeight)
     .clear();
 
-  const gl = ctx.ctx;
+  const gl = ctx.gl;
 
   const fbo = new FramebufferObjectFactory(gl);
+
   // full screan texture
   const main_fbo = fbo.new({
     width: window.innerWidth,
@@ -73,19 +73,12 @@ export default function Paint() {
   m4.ortho(ortho_proj, 0, ctx.width, ctx.height, 0, -100, 100);
 
   // { mesh, shader, material }
-  const brush: IMesh = brush_quad_unit_corner(gl);
+  const brush = create_mesh(gl);
+
   // Shader that draws a brush over a line segment
 
-  const mat_draw: IMaterial = new_material(
-    new_shader(gl, "DrawShader", drawShaderVertSrc, drawShaderFragSrc, [
-      { name: "ortho", type: "mat4" },
-      { name: "brush_size", type: "float" },
-      { name: "bound", type: "vec4" },
-      { name: "segment", type: "vec4" },
-    ])
-  );
-
-  const drawShader = create_program(
+  // shader to draw brush on the quad
+  const drawShader = create_shader_program(
     gl,
     drawShaderVertSrc,
     drawShaderFragSrc,
@@ -98,23 +91,28 @@ export default function Paint() {
   );
 
   const quad: IMesh = post_quad_ndc(gl);
+
   // Shader that uses a unit quad to draw a texture to screen
-  const mat_post: IMaterial = new_material(
-    new_shader(gl, "PostRender", postShaderVertSrc, postShaderFragSrc, [
-      { name: "buf_color", type: "sampler2D" },
-    ])
+  const postSahder = create_shader_program(
+    gl,
+    postShaderVertSrc,
+    postShaderFragSrc,
+    (uniform) => ({
+      buf_color: uniform.name("buf_color").sampler2D,
+    })
   );
 
-  function onWindowResize() {
-    ctx.set_size(window.innerWidth, window.innerHeight);
-    m4.ortho(ortho_proj, 0, ctx.width, ctx.height, 0, -100, 100);
-  }
-
-  window.addEventListener("resize", onWindowResize);
-
-  onCleanup(() => {
-    window.removeEventListener("resize", onWindowResize);
-  });
+  const wireFrameSahder = create_shader_program(
+    gl,
+    drawShaderVertSrc,
+    wireframeShaderFragSrc,
+    (uniform) => ({
+      ortho: uniform.name("ortho").mat4,
+      brush_size: uniform.name("brush_size").float,
+      bound: uniform.name("bound").vec4,
+      segment: uniform.name("segment").vec4,
+    })
+  );
 
   // This function handles drawing the brush shader onto a custom frame buffer texture
   function draw(pressure: number) {
@@ -139,30 +137,22 @@ export default function Paint() {
     drawShader.uniforms.bound(draw_bound.bound);
     drawShader.uniforms.segment(draw_bound.segment);
 
-    gl.useProgram(mat_draw.shader.program);
-    gl.uniformMatrix4fv(mat_draw.uniforms["ortho"].loc, false, ortho_proj);
-    gl.uniform1f(
-      mat_draw.uniforms["brush_size"].loc,
-      draw_bound.brush_size * pressure
-    );
-    gl.uniform4fv(mat_draw.uniforms["bound"].loc, draw_bound.bound);
-    gl.uniform4fv(mat_draw.uniforms["segment"].loc, draw_bound.segment);
+    // wireFrameSahder.useProgram();
+    // wireFrameSahder.uniforms.ortho(ortho_proj);
+    // wireFrameSahder.uniforms.brush_size(draw_bound.brush_size * pressure);
+    // wireFrameSahder.uniforms.bound(draw_bound.bound);
+    // wireFrameSahder.uniforms.segment(draw_bound.segment);
 
     fbo.bind(main_fbo); //.clear( $fbo );	// Load Custom FrameBuffer
-    gl.bindVertexArray(brush.vao); // Load Quad
-    // Draw
-    gl.drawElements(
-      GL_DRAW_ARRAYS_MODE.TRIANGLES,
-      brush.element_cnt,
-      brush.element_type,
-      0
-    );
+    brush.bindVertexArray(); // Load Quad
 
-    drawShader.clearProgram();
+    // Draw
+    brush.draw();
 
     // Cleanup
-    gl.useProgram(null);
-    gl.bindVertexArray(null);
+    // wireFrameSahder.clearProgram();
+    drawShader.clearProgram();
+    brush.clearVertexArray();
   }
 
   // This function handles rendering the custom frame buffer texture to the screen
@@ -170,14 +160,13 @@ export default function Paint() {
     fbo.unbind(); // Unbind any Custom Frame Buffer
     ctx.clear(); // Clear Screen Buffer
 
-    // Mesh
-    gl.bindVertexArray(quad.vao);
-
     // SHADER
-    gl.useProgram(mat_post.shader.program); // Bind Shader
+    postSahder.useProgram();
     gl.activeTexture(GL_STATIC_VARIABLES.TEXTURE0); // Turn on Texture Slot
     gl.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, main_fbo.buffers.color.id); // Bind Texture
-    gl.uniform1i(mat_post.uniforms["buf_color"].loc, 0); // Set Uniform Loc to Texture Slot
+    postSahder.uniforms.buf_color(0);
+    // Mesh
+    gl.bindVertexArray(quad.vao);
 
     // Draw
     gl.drawElements(
@@ -188,9 +177,25 @@ export default function Paint() {
     );
 
     // Cleanup
-    gl.useProgram(null);
+    postSahder.clearProgram();
+
+    // wireFrameSahder.useProgram();
+    // wireFrameSahder.uniforms.ortho(ortho_proj);
+    // gl.drawArrays(GL_DRAW_ARRAYS_MODE.LINES, 0, quad.element_cnt);
+
     gl.bindVertexArray(null);
   }
+
+  createEventListener(
+    window,
+    "resize",
+    () => {
+      ctx.set_size(window.innerWidth, window.innerHeight);
+      m4.ortho(ortho_proj, 0, ctx.width, ctx.height, 0, -100, 100);
+      render();
+    },
+    { passive: true }
+  );
 
   return canvas;
 }
