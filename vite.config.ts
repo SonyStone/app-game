@@ -1,6 +1,5 @@
 import { resolve } from "path";
 import { defineConfig } from "vite";
-import viteFBXPlugin from "./vite-fbx-plugin";
 import solidPlugin from "vite-plugin-solid";
 import solidSvg from "vite-plugin-solid-svg";
 
@@ -10,7 +9,7 @@ export default defineConfig({
   plugins: [
     solidPlugin(),
     solidSvg(),
-    viteFBXPlugin(),
+    // viteFBXPlugin(),
     // vitePluginWasmPack('./wasm_game_of_life'),
     rust(),
   ],
