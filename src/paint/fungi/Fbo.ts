@@ -51,7 +51,20 @@ export interface IFramebufferObject {
 export class FramebufferMap {
   buffers: { [key: string]: any } = {};
   constructor(
-    readonly ctx: WebGL2RenderingContext,
+    readonly gl: Pick<
+      WebGL2RenderingContext,
+      | "createRenderbuffer"
+      | "bindRenderbuffer"
+      | "renderbufferStorage"
+      | "renderbufferStorageMultisample"
+      | "framebufferRenderbuffer"
+      | "createTexture"
+      | "bindTexture"
+      | "texImage2D"
+      | "texParameteri"
+      | "framebufferTexture2D"
+      | "texStorage2D"
+    >,
     readonly id: WebGLFramebuffer,
     readonly width: number,
     readonly height: number
@@ -63,7 +76,7 @@ export class FramebufferMap {
       case "multi": {
         const buf = {
           id: create_color_multisample(
-            this.ctx,
+            this.gl,
             this.width,
             this.height,
             attach
@@ -77,7 +90,7 @@ export class FramebufferMap {
       case "tex": {
         const buf = {
           id: create_color_tex(
-            this.ctx,
+            this.gl,
             this.width,
             this.height,
             attach,
@@ -99,7 +112,7 @@ export class FramebufferMap {
     switch (ci.mode) {
       case "multi": {
         const buf = {
-          id: create_depth_multisample(this.ctx, this.width, this.height),
+          id: create_depth_multisample(this.gl, this.width, this.height),
           type: "multi",
         };
         this.buffers["depth"] = buf;
@@ -107,7 +120,7 @@ export class FramebufferMap {
       }
       case "tex": {
         const buf = {
-          id: create_depth_tex(this.ctx, this.width, this.height),
+          id: create_depth_tex(this.gl, this.width, this.height),
           type: "tex",
         };
         this.buffers["depth"] = buf;
@@ -115,7 +128,7 @@ export class FramebufferMap {
       }
       case "render": {
         const buf = {
-          id: create_depth_render(this.ctx, this.width, this.height),
+          id: create_depth_render(this.gl, this.width, this.height),
           type: "render",
         };
         this.buffers["depth"] = buf;
@@ -129,8 +142,10 @@ export class FramebufferMap {
 }
 
 /** Check if the Frame has been setup Correctly. */
-function checkFramebufferStatus(ctx: WebGL2RenderingContext) {
-  switch (ctx.checkFramebufferStatus(ctx.FRAMEBUFFER)) {
+function checkFramebufferStatus(
+  gl: Pick<WebGL2RenderingContext, "checkFramebufferStatus">
+) {
+  switch (gl.checkFramebufferStatus(GL_STATIC_VARIABLES.FRAMEBUFFER)) {
     case GL_STATIC_VARIABLES.FRAMEBUFFER_COMPLETE:
       break;
     case GL_STATIC_VARIABLES.FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
@@ -157,21 +172,44 @@ function checkFramebufferStatus(ctx: WebGL2RenderingContext) {
 }
 
 export class FramebufferObjectFactory {
-  constructor(private readonly ctx: WebGL2RenderingContext) {
-    ctx.getExtension("EXT_color_buffer_float"); // Need it to use Float Frame Buffers
+  constructor(
+    private readonly gl: Pick<
+      WebGL2RenderingContext,
+      | "createFramebuffer"
+      | "getExtension"
+      | "bindFramebuffer"
+      | "createRenderbuffer"
+      | "bindRenderbuffer"
+      | "renderbufferStorage"
+      | "renderbufferStorageMultisample"
+      | "framebufferRenderbuffer"
+      | "createTexture"
+      | "bindTexture"
+      | "texImage2D"
+      | "texParameteri"
+      | "framebufferTexture2D"
+      | "texStorage2D"
+      | "drawBuffers"
+      | "checkFramebufferStatus"
+      | "clear"
+      | "clearBufferfv"
+      | "blitFramebuffer"
+    >
+  ) {
+    gl.getExtension("EXT_color_buffer_float"); // Need it to use Float Frame Buffers
   }
 
   new(config: any): FramebufferMap {
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Create Frame Buffer Object
-    const ctx = this.ctx;
-    const framebufferId = ctx.createFramebuffer()!;
+    const gl = this.gl;
+    const framebufferId = gl.createFramebuffer()!;
     const width = config.width;
     const height = config.height;
 
-    ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, framebufferId);
+    gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, framebufferId);
 
-    const fbo = new FramebufferMap(ctx, framebufferId, width, height);
+    const fbo = new FramebufferMap(gl, framebufferId, width, height);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Create Textures / Render Buffers
@@ -193,15 +231,15 @@ export class FramebufferObjectFactory {
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     //Assign which buffers are going to be written too
-    ctx.drawBuffers(attach_ary);
+    gl.drawBuffers(attach_ary);
 
-    checkFramebufferStatus(ctx);
+    checkFramebufferStatus(gl);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Cleanup
-    ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
-    ctx.bindRenderbuffer(GL_STATIC_VARIABLES.RENDERBUFFER, null);
-    ctx.bindTexture(GL_TEXTURES.TEXTURE_2D, null);
+    gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
+    gl.bindRenderbuffer(GL_STATIC_VARIABLES.RENDERBUFFER, null);
+    gl.bindTexture(GL_TEXTURES.TEXTURE_2D, null);
     return fbo;
   }
 
@@ -210,7 +248,7 @@ export class FramebufferObjectFactory {
    * `gl.bindFramebuffer(FRAMEBUFFER, fbo_id)`
    */
   bind(o: any) {
-    this.ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, o.id);
+    this.gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, o.id);
     return this;
   }
 
@@ -218,29 +256,29 @@ export class FramebufferObjectFactory {
    * `gl.bindFramebuffer(FRAMEBUFFER, null)`
    */
   unbind() {
-    this.ctx.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
+    this.gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
     return this;
   }
 
   clear() {
-    let ctx = this.ctx;
+    let gl = this.gl;
     //ctx.bindFramebuffer( ctx.FRAMEBUFFER, fbo.id );
-    ctx.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT | GL_CLEAR_MASK.DEPTH_BUFFER_BIT);
+    gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT | GL_CLEAR_MASK.DEPTH_BUFFER_BIT);
     return this;
   }
 
   blit(fboRead: any, fboWrite: any) {
-    let ctx = this.ctx;
+    let gl = this.gl;
 
     //bind the two Frame Buffers
-    ctx.bindFramebuffer(GL_STATIC_VARIABLES.READ_FRAMEBUFFER, fboRead.id);
-    ctx.bindFramebuffer(GL_STATIC_VARIABLES.DRAW_FRAMEBUFFER, fboWrite.id);
+    gl.bindFramebuffer(GL_STATIC_VARIABLES.READ_FRAMEBUFFER, fboRead.id);
+    gl.bindFramebuffer(GL_STATIC_VARIABLES.DRAW_FRAMEBUFFER, fboWrite.id);
 
     //Clear Frame buffer being copied to.
-    ctx.clearBufferfv(GL_STATIC_VARIABLES.COLOR, 0, [0.0, 0.0, 0.0, 1.0]);
+    gl.clearBufferfv(GL_STATIC_VARIABLES.COLOR, 0, [0.0, 0.0, 0.0, 1.0]);
 
     //Transfer Pixels from one FrameBuffer to the Next
-    ctx.blitFramebuffer(
+    gl.blitFramebuffer(
       0,
       0,
       fboRead.width,
@@ -254,8 +292,8 @@ export class FramebufferObjectFactory {
     );
 
     //Unbind
-    ctx.bindFramebuffer(GL_STATIC_VARIABLES.READ_FRAMEBUFFER, null);
-    ctx.bindFramebuffer(GL_STATIC_VARIABLES.DRAW_FRAMEBUFFER, null);
+    gl.bindFramebuffer(GL_STATIC_VARIABLES.READ_FRAMEBUFFER, null);
+    gl.bindFramebuffer(GL_STATIC_VARIABLES.DRAW_FRAMEBUFFER, null);
 
     return this;
   }

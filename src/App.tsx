@@ -74,6 +74,11 @@ const routes: (RouteDefinition & { name: string })[] = [
     component: lazy(() => import("./three/Sprites")),
   },
   {
+    path: "/babylon",
+    name: "Babylon.js",
+    component: lazy(() => import("./babylonjs/index")),
+  },
+  {
     path: "/three",
     name: "Three",
     component: lazy(() => import("./three/Three")),

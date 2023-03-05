@@ -5,6 +5,10 @@ import {
   GL_STATIC_VARIABLES,
   GL_TEXTURES,
 } from "@webgl/static-variables";
+import {
+  GL_TEXTURE_TARGET,
+  GL_TEXTURE_UNIT,
+} from "@webgl/static-variables/textures";
 
 import { Colour } from "./Colour";
 import { Context } from "./Context";
@@ -104,7 +108,7 @@ function compile_shader(
     | "getShaderInfoLog"
   >,
   src: string,
-  type: number
+  type: GL_SHADER_TYPE
 ): WebGLShader {
   const shader = ctx.createShader(type)!;
   ctx.shaderSource(shader, src);
@@ -482,22 +486,22 @@ class ShaderFactory {
           //	else		itm.data = tmp;
           //}
           //console.log( itm.data.id );
-          gl.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
-          gl.bindTexture(GL_TEXTURES.TEXTURE_2D, itm.data.id);
+          gl.activeTexture(GL_TEXTURE_UNIT.TEXTURE0 + tex_slot);
+          gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, itm.data.id);
           gl.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
 
         case "sampler2DArray":
-          gl.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
+          gl.activeTexture(GL_TEXTURE_UNIT.TEXTURE0 + tex_slot);
           gl.bindTexture(GL_TEXTURES.TEXTURE_2D_ARRAY, itm.data);
           gl.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;
 
         case "samplerCube":
-          gl.activeTexture(GL_TEXTURES.TEXTURE0 + tex_slot);
-          gl.bindTexture(GL_TEXTURES.TEXTURE_CUBE_MAP, itm.data);
+          gl.activeTexture(GL_TEXTURE_UNIT.TEXTURE0 + tex_slot);
+          gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_CUBE_MAP, itm.data);
           gl.uniform1i(itm.loc, tex_slot);
           tex_slot++;
           break;

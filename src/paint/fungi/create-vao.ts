@@ -15,7 +15,20 @@ function getWireframeIndex(array: Uint16Array) {
   return new Uint16Array(indices);
 }
 
-export function create_mesh(gl: WebGL2RenderingContext) {
+export function create_mesh(
+  gl: Pick<
+    WebGL2RenderingContext,
+    | "createBuffer"
+    | "bindBuffer"
+    | "bufferData"
+    | "createVertexArray"
+    | "bindVertexArray"
+    | "enableVertexAttribArray"
+    | "vertexAttribPointer"
+    | "vertexAttribDivisor"
+    | "drawElements"
+  >
+) {
   const indices = new Uint16Array([0, 1, 2, 2, 3, 0]);
   const wireframeIndices = getWireframeIndex(indices);
 
@@ -49,8 +62,6 @@ export function create_mesh(gl: WebGL2RenderingContext) {
   ];
 
   const element_cnt = config[0].buffer.length;
-
-  console.log(`i`, indices);
 
   let element_type = 0;
   for (const i of config) {

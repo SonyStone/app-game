@@ -3,12 +3,16 @@ import {
   GL_CLEAR_MASK,
   GL_STATIC_VARIABLES,
   GL_TEXTURES,
-} from '@webgl/static-variables';
+} from "@webgl/static-variables";
+import {
+  GL_TEXTURE_TARGET,
+  GL_TEXTURE_UNIT,
+} from "@webgl/static-variables/textures";
 
-import { ExtWebGLProgram } from './createProgram';
-import { getImageTexture } from './getImageTexture';
-import { ExtWebGLTexture } from './processAtlas';
-import { mustRenderNextFrame } from './renderNextFrame';
+import { ExtWebGLProgram } from "./createProgram";
+import { getImageTexture } from "./getImageTexture";
+import { ExtWebGLTexture } from "./processAtlas";
+import { mustRenderNextFrame } from "./renderNextFrame";
 
 const transform = {
   x: 0.5,
@@ -59,16 +63,16 @@ export function drawScene(
     return;
   }
   var firstFrame =
-    document.getElementById('loadinginfo')!.style.visibility != 'hidden';
+    document.getElementById("loadinginfo")!.style.visibility != "hidden";
   if (firstFrame) {
-    document.getElementById('loadinginfo')!.style.visibility = 'hidden';
-    canvas.style.display = 'block'; // force reflow on ios
+    document.getElementById("loadinginfo")!.style.visibility = "hidden";
+    canvas.style.display = "block"; // force reflow on ios
   }
 
   var zoomx = animTransform.zoom;
   var zoomy = (zoomx * pageData[0].width) / pageData[0].height;
 
-  var autoPan = (document.getElementById('autopan')! as HTMLInputElement)
+  var autoPan = (document.getElementById("autopan")! as HTMLInputElement)
     .checked;
   if (autoPan) {
     var interval = 14000;
@@ -133,7 +137,7 @@ export function drawScene(
             glext.QUERY_RESULT_EXT
           );
           (
-            document.getElementById('frametime')! as HTMLInputElement
+            document.getElementById("frametime")! as HTMLInputElement
           ).value = `${elapsed / 1e6}`;
         }
         waitingForTimer = false;
@@ -208,7 +212,7 @@ export function drawScene(
       9
     );
 
-    gl.activeTexture(GL_TEXTURES.TEXTURE0);
+    gl.activeTexture(GL_TEXTURE_UNIT.TEXTURE0);
     gl.uniform1i(imageProgram.uniforms!.uSampler, 0);
 
     for (var i = 0; i < pageData.length; i++) {
@@ -221,7 +225,7 @@ export function drawScene(
             var img = images[j];
             var handle = getImageTexture(gl, img.filename);
             if (handle) {
-              gl.bindTexture(GL_TEXTURES.TEXTURE_2D, handle);
+              gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, handle);
               gl.drawArrays(
                 GL_STATIC_VARIABLES.TRIANGLE_STRIP,
                 img.vertexOffset,
@@ -236,7 +240,7 @@ export function drawScene(
   }
 
   // Draw glyphs
-  const prog = (document.getElementById('vectoronly') as HTMLInputElement)
+  const prog = (document.getElementById("vectoronly") as HTMLInputElement)
     .checked
     ? glyphProgramNoRast
     : glyphProgram;
@@ -248,12 +252,12 @@ export function drawScene(
   enableAttributes(gl, prog);
   doGlyphVertexAttribPointers(gl, prog);
 
-  gl.activeTexture(GL_TEXTURES.TEXTURE0);
-  gl.bindTexture(GL_TEXTURES.TEXTURE_2D, atlasTexture);
+  gl.activeTexture(GL_TEXTURE_UNIT.TEXTURE0);
+  gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, atlasTexture);
   gl.uniform1i(prog.uniforms!.uAtlasSampler, 0);
 
-  gl.activeTexture(GL_TEXTURES.TEXTURE1);
-  gl.bindTexture(GL_TEXTURES.TEXTURE_2D, preAtlasTexture);
+  gl.activeTexture(GL_TEXTURE_UNIT.TEXTURE1);
+  gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, preAtlasTexture);
   gl.uniform1i(prog.uniforms!.uRasteredAtlasSampler, 1);
 
   gl.uniform2f(
@@ -268,7 +272,7 @@ export function drawScene(
   );
   gl.uniform1i(
     prog.uniforms!.uDebug,
-    (document.getElementById('showgrids') as HTMLInputElement).checked ? 1 : 0
+    (document.getElementById("showgrids") as HTMLInputElement).checked ? 1 : 0
   );
 
   for (var i = 0; i < pageData.length; i++) {
@@ -375,7 +379,7 @@ function setCanvasSize(canvas: HTMLCanvasElement) {
     devicePixelRatio *= window.innerWidth / window.outerWidth;
   }
 
-  var e = document.getElementById('canvaswrap') as HTMLDivElement;
+  var e = document.getElementById("canvaswrap") as HTMLDivElement;
   var w = Math.round(e.clientWidth * devicePixelRatio);
   var h = Math.round(e.clientHeight * devicePixelRatio);
 

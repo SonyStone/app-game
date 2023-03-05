@@ -1,4 +1,4 @@
-import { Vec3 } from './v3';
+import { Vec3 } from "./v3";
 
 /**
  *
@@ -21,7 +21,7 @@ import { Vec3 } from './v3';
  *
  *     v3.cross(v1, v2, v1);  // Puts the cross product of v1 x v2 in v1
  */
-let VecType = Float32Array;
+export let VecType = Float32Array;
 
 /**
  * A JavaScript array with 3 values or a Float32Array with 3 values.
@@ -372,6 +372,13 @@ export function multiply(a: Vec2, b: Vec2, dst: Vec2 = new VecType(2)): Vec2 {
 export function divide(a: Vec2, b: Vec2, dst: Vec2 = new VecType(2)): Vec2 {
   dst[0] = a[0] / b[0];
   dst[1] = a[1] / b[1];
+
+  return dst;
+}
+
+export function fromAngle(angle: number, dst: Vec2 = new VecType(2)): Vec2 {
+  dst[0] = Math.cos(angle);
+  dst[1] = Math.sin(angle);
 
   return dst;
 }

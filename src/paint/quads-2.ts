@@ -61,7 +61,6 @@ export function post_quad_ndc(
     | "vertexAttribPointer"
     | "vertexAttribDivisor"
     | "createBuffer"
-    | "bindBuffer"
     | "bufferData"
   >
 ): IMesh {

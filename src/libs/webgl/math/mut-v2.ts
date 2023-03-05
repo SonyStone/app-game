@@ -1,72 +1,18 @@
-import { Vec3 } from './v3';
+import { Vec3 } from "./v3";
+import {
+  DOWN,
+  LEFT,
+  RIGHT,
+  setDefaultType,
+  UP,
+  Vec2,
+  VecType,
+  ZERO,
+} from "./v2";
 
-/**
- *
- * Vec2 math math functions.
- *
- * Almost all functions take an optional `dst` argument. If it is not passed in the
- * functions will create a new Vec2. In other words you can do this
- *
- *     var v = v3.cross(v1, v2);  // Creates a new Vec2 with the cross product of v1 x v2.
- *
- * or
- *
- *     var v = v2.create();
- *     v3.cross(v1, v2, v);  // Puts the cross product of v1 x v2 in v
- *
- * The first style is often easier but depending on where it's used it generates garbage where
- * as there is almost never allocation with the second style.
- *
- * It is always save to pass any vector as the destination. So for example
- *
- *     v3.cross(v1, v2, v1);  // Puts the cross product of v1 x v2 in v1
- */
-let VecType = Float32Array;
+export type { Vec2 };
 
-/**
- * A JavaScript array with 3 values or a Float32Array with 3 values.
- * When created by the library will create the default type which is `Float32Array`
- * but can be set by calling {@link setDefaultType}.
- * @typedef {(number[]|Float32Array)} Vec2
- */
-export type Vec2 = number[] | Float32Array;
-
-/**
- * Sets the type this library creates for a Vec2
- * @param {constructor} ctor the constructor for the type. Either `Float32Array` or `Array`
- * @return {constructor} previous constructor for Vec2
- */
-export function setDefaultType(ctor: typeof VecType) {
-  const oldType = VecType;
-  VecType = ctor;
-  return oldType;
-}
-
-/** ↑ */
-export const UP = create(0, 1);
-/** → */
-export const RIGHT = create(1, 0);
-/** ← */
-export const LEFT = create(-1, 0);
-/** ↓ */
-export const DOWN = create(0, -1);
-/** ◌ */
-export const ZERO = create(0, 0);
-
-/**
- * Creates a Vec2; may be called with x, y, z to set initial values.
- * @param x Initial x value.
- * @param y Initial y value.
- * @return the created vector
- */
-export function create(x: number = 0, y: number = 0): Vec2 {
-  const dst = new VecType(2);
-
-  dst[0] = x;
-  dst[1] = y;
-
-  return dst;
-}
+export { UP, RIGHT, LEFT, DOWN, ZERO, setDefaultType };
 
 /**
  * Creates a Vec2; may be called with x, y, z to set initial values.
@@ -154,7 +100,7 @@ export function min(a: Vec2, b: Vec2) {
  * @param v __mut__ The vector → The scaled vector.
  * @param k The scalar.
  */
-export function mulScalar(v: Vec2, k: number): Vec2 {
+export function mulScalar(v: Vec2, k: number) {
   v[0] *= k;
   v[1] *= k;
 }
@@ -292,4 +238,13 @@ export function multiply(a: Vec2, b: Vec2) {
 export function divide(a: Vec2, b: Vec2) {
   a[0] /= b[0];
   a[1] /= b[1];
+}
+
+export function fromAngle(v: Vec2, angle: number): void {
+  v[0] = Math.cos(angle);
+  v[1] = Math.sin(angle);
+}
+
+export function angleTo(vec1: Vec2, vec2: Vec2) {
+  return Math.atan2(vec1[1] - vec2[1], vec1[0] - vec2[0]);
 }

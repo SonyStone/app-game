@@ -4,54 +4,69 @@ import {
   GL_STATIC_VARIABLES,
   GL_TEXTURES,
 } from "@webgl/static-variables";
+import {
+  GL_PIXEL_FORMAT,
+  GL_TEXTURE_MAG_FILTER,
+  GL_TEXTURE_MIN_FILTER,
+  GL_TEXTURE_PARAMETER_NAME,
+  GL_TEXTURE_TARGET,
+  GL_TEXTURE_WRAP_MODE,
+} from "@webgl/static-variables/textures";
 
 export function create_color_tex(
-  ctx: WebGL2RenderingContext,
+  gl: Pick<
+    WebGL2RenderingContext,
+    | "createTexture"
+    | "bindTexture"
+    | "texImage2D"
+    | "texParameteri"
+    | "framebufferTexture2D"
+  >,
   w: number,
   h: number,
   attach: COLOR_ATTACHMENT,
   pixel = "byte"
 ): WebGLTexture {
-  const id = ctx.createTexture()!;
+  const id = gl.createTexture()!;
 
-  ctx.bindTexture(GL_TEXTURES.TEXTURE_2D, id);
+  gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, id);
 
   switch (pixel) {
     case "byte":
-      ctx.texImage2D(
-        GL_TEXTURES.TEXTURE_2D,
+      gl.texImage2D(
+        GL_TEXTURE_TARGET.TEXTURE_2D,
         0,
-        GL_STATIC_VARIABLES.RGBA,
+        GL_PIXEL_FORMAT.RGBA,
         w,
         h,
         0,
-        GL_STATIC_VARIABLES.RGBA,
-        GL_STATIC_VARIABLES.UNSIGNED_BYTE,
+        GL_PIXEL_FORMAT.RGBA,
+        GL_DATA_TYPE.UNSIGNED_BYTE,
         null
       );
       break;
     case "f16":
-      ctx.texImage2D(
-        GL_TEXTURES.TEXTURE_2D,
+      gl.texImage2D(
+        GL_TEXTURE_TARGET.TEXTURE_2D,
         0,
         GL_STATIC_VARIABLES.RGBA16F,
         w,
         h,
         0,
-        GL_STATIC_VARIABLES.RGBA,
+        GL_PIXEL_FORMAT.RGBA,
         GL_DATA_TYPE.FLOAT,
         null
       );
       break;
     case "f32":
-      ctx.texImage2D(
-        GL_TEXTURES.TEXTURE_2D,
+      gl.texImage2D(
+        GL_TEXTURE_TARGET.TEXTURE_2D,
         0,
         GL_STATIC_VARIABLES.RGBA32F,
         w,
         h,
         0,
-        GL_STATIC_VARIABLES.RGBA,
+        GL_PIXEL_FORMAT.RGBA,
         GL_DATA_TYPE.FLOAT,
         null
       );
@@ -71,25 +86,25 @@ export function create_color_tex(
   // * TEXTURE_WRAP_S
   // * TEXTURE_WRAP_T
   // * TEXTURE_WRAP_R
-  ctx.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_MIN_FILTER,
-    GL_TEXTURES.NEAREST
+  gl.texParameteri(
+    GL_TEXTURE_TARGET.TEXTURE_2D,
+    GL_TEXTURE_PARAMETER_NAME.TEXTURE_MIN_FILTER,
+    GL_TEXTURE_MIN_FILTER.NEAREST
   );
-  ctx.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_MAG_FILTER,
-    GL_TEXTURES.NEAREST
+  gl.texParameteri(
+    GL_TEXTURE_TARGET.TEXTURE_2D,
+    GL_TEXTURE_PARAMETER_NAME.TEXTURE_MAG_FILTER,
+    GL_TEXTURE_MAG_FILTER.NEAREST
   );
-  ctx.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_WRAP_S,
-    GL_TEXTURES.CLAMP_TO_EDGE
+  gl.texParameteri(
+    GL_TEXTURE_TARGET.TEXTURE_2D,
+    GL_TEXTURE_PARAMETER_NAME.TEXTURE_WRAP_S,
+    GL_TEXTURE_WRAP_MODE.CLAMP_TO_EDGE
   );
-  ctx.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_WRAP_T,
-    GL_TEXTURES.CLAMP_TO_EDGE
+  gl.texParameteri(
+    GL_TEXTURE_TARGET.TEXTURE_2D,
+    GL_TEXTURE_PARAMETER_NAME.TEXTURE_WRAP_T,
+    GL_TEXTURE_WRAP_MODE.CLAMP_TO_EDGE
   );
 
   //ctx.texImage2D(ctx.TEXTURE_2D, 0, ctx.RGBA16F, w, h, 0, ctx.RGBA, ctx.FLOAT, null);
@@ -104,10 +119,10 @@ export function create_color_tex(
   //ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S, ctx.CLAMP_TO_EDGE);	//Stretch image to X position
   //ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, ctx.CLAMP_TO_EDGE);	//Stretch image to Y position
 
-  ctx.framebufferTexture2D(
+  gl.framebufferTexture2D(
     GL_STATIC_VARIABLES.FRAMEBUFFER,
     attach,
-    GL_TEXTURES.TEXTURE_2D,
+    GL_TEXTURE_TARGET.TEXTURE_2D,
     id,
     0
   );

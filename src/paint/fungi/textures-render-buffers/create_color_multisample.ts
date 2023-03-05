@@ -1,21 +1,31 @@
-import { COLOR_ATTACHMENT, GL_STATIC_VARIABLES } from "@webgl/static-variables";
+import {
+  COLOR_ATTACHMENT,
+  GL_FRAMEBUFFER_OBJECT,
+  GL_STATIC_VARIABLES,
+} from "@webgl/static-variables";
 
 export function create_color_multisample(
-  ctx: WebGL2RenderingContext,
+  gl: Pick<
+    WebGL2RenderingContext,
+    | "createRenderbuffer"
+    | "bindRenderbuffer"
+    | "renderbufferStorageMultisample"
+    | "framebufferRenderbuffer"
+  >,
   w: number,
   h: number,
   attach: COLOR_ATTACHMENT,
   sample_size = 4
 ): WebGLRenderbuffer {
   //NOTE, Only sampleSize of 4 works, any other value crashes.
-  const id = ctx.createRenderbuffer()!;
+  const id = gl.createRenderbuffer()!;
 
   // Bind Buffer
-  ctx.bindRenderbuffer(GL_STATIC_VARIABLES.RENDERBUFFER, id);
+  gl.bindRenderbuffer(GL_FRAMEBUFFER_OBJECT.RENDERBUFFER, id);
 
   // Set Data Size
-  ctx.renderbufferStorageMultisample(
-    GL_STATIC_VARIABLES.RENDERBUFFER,
+  gl.renderbufferStorageMultisample(
+    GL_FRAMEBUFFER_OBJECT.RENDERBUFFER,
     sample_size,
     GL_STATIC_VARIABLES.RGBA8,
     w,
@@ -23,10 +33,10 @@ export function create_color_multisample(
   );
 
   // Bind buf to color attachment
-  ctx.framebufferRenderbuffer(
-    GL_STATIC_VARIABLES.FRAMEBUFFER,
+  gl.framebufferRenderbuffer(
+    GL_FRAMEBUFFER_OBJECT.FRAMEBUFFER,
     attach,
-    GL_STATIC_VARIABLES.RENDERBUFFER,
+    GL_FRAMEBUFFER_OBJECT.RENDERBUFFER,
     id
   );
 

@@ -3,6 +3,7 @@ precision mediump float;
 
 uniform mediump float brush_size;
 uniform vec4 segment;
+
 in vec2 frag_pos;
 out vec4 out_color;
 

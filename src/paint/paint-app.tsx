@@ -5,10 +5,9 @@ import {
   GL_DRAW_ARRAYS_MODE,
   GL_STATIC_VARIABLES,
 } from "@webgl/static-variables";
-import { createEffect, onCleanup } from "solid-js";
+import { createEffect } from "solid-js";
 import { IMesh } from "./fungi/Mesh";
-import { IMaterial, new_material, new_shader } from "./fungi/Shader";
-import { brush_quad_unit_corner, post_quad_ndc } from "./quads-2";
+import { post_quad_ndc } from "./quads-2";
 
 import drawShaderFragSrc from "./draw-shader.frag?raw";
 import drawShaderVertSrc from "./draw-shader.vert?raw";
@@ -19,10 +18,10 @@ import { FramebufferObjectFactory } from "./fungi/Fbo";
 import postShaderFragSrc from "./post-shader.frag?raw";
 import postShaderVertSrc from "./post-shader.vert?raw";
 
-import wireframeShaderFragSrc from "./wireframe-shader.frag?raw";
-import wireframeShaderVertSrc from "./wireframe-shader.vert?raw";
 import { createEventListener } from "@solid-primitives/event-listener";
 import { create_mesh } from "./fungi/create-vao";
+import { WebGL2DebugWrapper } from "./gl-debug-wrapper";
+import wireframeShaderFragSrc from "./wireframe-shader.frag?raw";
 
 export default function Paint() {
   const canvas = (
@@ -56,7 +55,8 @@ export default function Paint() {
     .set_size(window.innerWidth, window.innerHeight)
     .clear();
 
-  const gl = ctx.gl;
+  // const gl = ctx.gl;
+  const gl = new WebGL2DebugWrapper(ctx.gl);
 
   const fbo = new FramebufferObjectFactory(gl);
 
@@ -108,11 +108,11 @@ export default function Paint() {
     wireframeShaderFragSrc,
     (uniform) => ({
       ortho: uniform.name("ortho").mat4,
-      brush_size: uniform.name("brush_size").float,
       bound: uniform.name("bound").vec4,
-      segment: uniform.name("segment").vec4,
     })
   );
+
+  console.log(`gl_debug`, gl._state);
 
   // This function handles drawing the brush shader onto a custom frame buffer texture
   function draw(pressure: number) {
@@ -123,7 +123,7 @@ export default function Paint() {
     // Experiment with Blending Modes to get something that works well
     gl.enable(GL_STATIC_VARIABLES.BLEND);
     // gl.blendFunc(GL_STATIC_VARIABLES.ONE, GL_STATIC_VARIABLES.ONE); //BLEND_ADDITIVE
-    gl.blendFunc(GL_STATIC_VARIABLES.SRC_ALPHA, gl.ONE); // BLEND_ALPHA_ADDITIVE
+    gl.blendFunc(GL_STATIC_VARIABLES.SRC_ALPHA, GL_STATIC_VARIABLES.ONE); // BLEND_ALPHA_ADDITIVE
     // gl.blendFunc( GL_STATIC_VARIABLES.ONE, GL_STATIC_VARIABLES.ZERO ); // BLEND_OVERRIDE
     // gl.blendFunc(
     //   GL_STATIC_VARIABLES.SRC_ALPHA,

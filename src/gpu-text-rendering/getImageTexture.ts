@@ -1,6 +1,13 @@
-import { GL_STATIC_VARIABLES, GL_TEXTURES } from '@webgl/static-variables';
+import { GL_STATIC_VARIABLES, GL_TEXTURES } from "@webgl/static-variables";
+import {
+  GL_TEXTURE_MAG_FILTER,
+  GL_TEXTURE_MIN_FILTER,
+  GL_TEXTURE_PARAMETER_NAME,
+  GL_TEXTURE_TARGET,
+  GL_TEXTURE_WRAP_MODE,
+} from "@webgl/static-variables/textures";
 
-import { forceAnimationChange } from './renderNextFrame';
+import { forceAnimationChange } from "./renderNextFrame";
 
 const imageTextures: any = {};
 
@@ -9,7 +16,7 @@ export function getImageTexture(gl: WebGLRenderingContext, filename: string) {
   if (!handle) {
     handle = gl.createTexture();
     var img = new Image();
-    img.src = 'images/' + filename;
+    img.src = "images/" + filename;
     img.onload = function () {
       imageTextureReady(gl, handle, img);
     };
@@ -29,12 +36,12 @@ function imageTextureReady(
   handle: WebGLTexture,
   image: HTMLImageElement
 ) {
-  gl.bindTexture(GL_TEXTURES.TEXTURE_2D, handle);
+  gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, handle);
   gl.pixelStorei(GL_STATIC_VARIABLES.UNPACK_FLIP_Y_WEBGL, false);
   gl.pixelStorei(GL_STATIC_VARIABLES.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); // TODO: should be true for proper mipmap
   //gl.pixelStorei(GL_STATIC_VARIABLES.UNPACK_COLORSPACE_CONVERSION_WEBGL, GL_STATIC_VARIABLES.NONE);
   gl.texImage2D(
-    GL_TEXTURES.TEXTURE_2D,
+    GL_TEXTURE_TARGET.TEXTURE_2D,
     0,
     GL_STATIC_VARIABLES.RGBA,
     GL_STATIC_VARIABLES.RGBA,
@@ -45,28 +52,28 @@ function imageTextureReady(
     GL_STATIC_VARIABLES.GENERATE_MIPMAP_HINT,
     GL_STATIC_VARIABLES.FASTEST
   );
-  gl.generateMipmap(GL_TEXTURES.TEXTURE_2D);
+  gl.generateMipmap(GL_TEXTURE_TARGET.TEXTURE_2D);
   gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_MAG_FILTER,
-    GL_TEXTURES.LINEAR
+    GL_TEXTURE_TARGET.TEXTURE_2D,
+    GL_TEXTURE_PARAMETER_NAME.TEXTURE_MAG_FILTER,
+    GL_TEXTURE_MAG_FILTER.LINEAR
   );
   gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_MIN_FILTER,
-    GL_TEXTURES.LINEAR_MIPMAP_LINEAR
+    GL_TEXTURE_TARGET.TEXTURE_2D,
+    GL_TEXTURE_PARAMETER_NAME.TEXTURE_MIN_FILTER,
+    GL_TEXTURE_MIN_FILTER.LINEAR_MIPMAP_LINEAR
   );
   gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_WRAP_S,
-    GL_TEXTURES.CLAMP_TO_EDGE
+    GL_TEXTURE_TARGET.TEXTURE_2D,
+    GL_TEXTURE_PARAMETER_NAME.TEXTURE_WRAP_S,
+    GL_TEXTURE_WRAP_MODE.CLAMP_TO_EDGE
   );
   gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_WRAP_T,
-    GL_TEXTURES.CLAMP_TO_EDGE
+    GL_TEXTURE_TARGET.TEXTURE_2D,
+    GL_TEXTURE_PARAMETER_NAME.TEXTURE_WRAP_T,
+    GL_TEXTURE_WRAP_MODE.CLAMP_TO_EDGE
   );
-  gl.bindTexture(GL_TEXTURES.TEXTURE_2D, null);
+  gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, null);
   (handle as any).ready = true;
   forceAnimationChange();
 }
@@ -79,8 +86,8 @@ function resizeImageToPowerOfTwo(image: HTMLImageElement) {
     return image;
   }
 
-  var cv = document.createElement('canvas') as HTMLCanvasElement;
-  var ctx = cv.getContext('2d')!;
+  var cv = document.createElement("canvas") as HTMLCanvasElement;
+  var ctx = cv.getContext("2d")!;
   cv.width = width;
   cv.height = height;
   ctx.drawImage(image, 0, 0, width, height);

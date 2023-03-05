@@ -1,4 +1,4 @@
-import * as v3 from './mut-v3';
+import * as v3 from "./mut-v3";
 
 /**
  * 4x4 Matrix math math functions.
@@ -464,13 +464,13 @@ export function getTranslation(v: v3.Vec3, m: Mat4) {
  * @return The axis component of m.
  */
 export function getAxis(m: Mat4, axis: number): v3.Vec3 {
-  const dst = v3.create();
+  const v = v3.create();
 
   const off = axis * 4;
-  dst[0] = m[off + 0];
-  dst[1] = m[off + 1];
-  dst[2] = m[off + 2];
-  return dst;
+  v[0] = m[off + 0];
+  v[1] = m[off + 1];
+  v[2] = m[off + 2];
+  return v;
 }
 
 /**
@@ -717,7 +717,7 @@ export function lookAt(m: Mat4, eye: v3.Vec3, target: v3.Vec3, up: v3.Vec3) {
  * @param v The vector by
  *     which to translate.
  */
-export function translate(m: Mat4, v: v3.Vec3): Mat4 {
+export function translate(m: Mat4, v: v3.Vec3): void {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -746,8 +746,6 @@ export function translate(m: Mat4, v: v3.Vec3): Mat4 {
   m[13] = m01 * v0 + m11 * v1 + m21 * v2 + m31;
   m[14] = m02 * v0 + m12 * v1 + m22 * v2 + m32;
   m[15] = m03 * v0 + m13 * v1 + m23 * v2 + m33;
-
-  return m;
 }
 
 /**
@@ -989,7 +987,7 @@ export function transformPoint(v: v3.Vec3, m: Mat4) {
  * @param m __mut__ The matrix to be transformed.
  * @param v The direction.
  */
-export function transformDirection(m: Mat4, v: v3.Vec3): Mat4 {
+export function transformDirection(m: Mat4, v: v3.Vec3): void {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -997,8 +995,6 @@ export function transformDirection(m: Mat4, v: v3.Vec3): Mat4 {
   m[0] = v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0];
   m[1] = v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1];
   m[2] = v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2];
-
-  return m;
 }
 
 let mi = identity();

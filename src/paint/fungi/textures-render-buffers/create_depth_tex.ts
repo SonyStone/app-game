@@ -2,7 +2,14 @@ import { GL_STATIC_VARIABLES, GL_TEXTURES } from "@webgl/static-variables";
 
 // Create a Depth Texture Buffer
 export function create_depth_tex(
-  ctx: WebGL2RenderingContext,
+  ctx: Pick<
+    WebGL2RenderingContext,
+    | "createTexture"
+    | "bindTexture"
+    | "texParameteri"
+    | "texStorage2D"
+    | "framebufferTexture2D"
+  >,
   w: number,
   h: number
 ): WebGLTexture {

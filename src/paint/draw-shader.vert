@@ -1,7 +1,6 @@
 #version 300 es
 layout(location = 0) in vec3 a_pos;
 
-uniform mediump float brush_size;
 uniform mat4 ortho;      // Ortho Proj helps deal with things at a pixel level
 uniform vec4 bound;  	// xy = Position, zw = Scale
 out vec2 frag_pos;
