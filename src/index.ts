@@ -5,10 +5,10 @@ import './index.scss';
 import { Router } from '@solidjs/router';
 import { createApp } from 'solid-utils';
 
+import { CameraProvider } from '@packages/three-examples/Camera.provider';
 import { MetaProvider } from '@solidjs/meta';
 import { App } from './App';
 import { StatsProvider } from './Stats.provider';
-import { CameraProvider } from './three/Camera.provider';
 
 createApp(App)
   .use(MetaProvider)

@@ -1,8 +1,8 @@
+import { useCamera } from '@packages/three-examples/Camera.provider';
 import { Title } from '@solidjs/meta';
 import { Link } from '@solidjs/router';
 import { For } from 'solid-js';
 import { routes } from './routes';
-import { useCamera } from './three/Camera.provider';
 
 export default function HomePage() {
   const { toggleCamera, cameraType } = useCamera();

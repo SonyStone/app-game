@@ -63,45 +63,45 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   {
     path: '/my-pixijs',
     name: 'My Pixijs',
-    component: lazy(() => import('./my-pixijs/MyPixijs'))
+    component: lazy(() => import('@packages/pixijs-research/MyPixijs'))
   },
   {
     path: '/3d-wireframe',
     name: '3d Wireframe',
-    component: lazy(() => import('./my-pixijs/webgl/3d-wireframe/3dWireframe'))
+    component: lazy(() => import('@packages/pixijs-research/webgl/3d-wireframe/3dWireframe'))
   },
   {
     path: '/webgl_postprocessing_smaa',
     name: 'webgl - postprocessing smaa',
     Preview: () => <Thumbnail link="/webgl_postprocessing_smaa" thumbnail={smaaThumbnail} name="SMAA" />,
-    component: lazy(() => import('./three/PostprocessingSmaa'))
+    component: lazy(() => import('@packages/three-examples/PostprocessingSmaa'))
   },
   {
     path: '/webgl_loader_svg',
     name: 'webgl - svg loader',
     Preview: () => <Thumbnail link="/webgl_loader_svg" thumbnail={svgLoaderThumbnail} name="SVG Loader" />,
-    component: lazy(() => import('./three/SvgLoader'))
+    component: lazy(() => import('@packages/three-examples/SvgLoader'))
   },
   {
     path: '/sprites',
     name: 'Sprites',
     Preview: () => <Thumbnail link="/sprites" thumbnail={spritesThumbnail} name="Sprites" />,
-    component: lazy(() => import('./three/Sprites'))
+    component: lazy(() => import('@packages/three-examples/Sprites'))
   },
   {
     path: '/babylon',
     name: 'Babylon.js',
-    component: lazy(() => import('./babylonjs/index'))
+    component: lazy(() => import('@packages/babylonjs-examples/index'))
   },
   {
     path: '/three',
     name: 'Three',
-    component: lazy(() => import('./three/Three'))
+    component: lazy(() => import('@packages/three-examples/Three'))
   },
   {
     path: '/solid-three',
     name: 'SolidThree',
-    component: lazy(() => import('./three/Solid-Three'))
+    component: lazy(() => import('@packages/three-examples/Solid-Three'))
   },
   {
     path: '/paint',
@@ -112,12 +112,12 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
     path: '/twgl',
     name: 'twgl',
     Preview: () => <Thumbnail link="/twgl" thumbnail={twglThumbnail} name="twgl" />,
-    component: lazy(() => import('./twgl/Main'))
+    component: lazy(() => import('@packages/twgl-examples/Main'))
   },
   {
     path: '/view-offset',
     name: 'ViewOffset',
-    component: lazy(() => import('./three/ViewOffset'))
+    component: lazy(() => import('@packages/three-examples/ViewOffset'))
   },
   {
     path: '/game-ecs',
@@ -137,18 +137,18 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   {
     path: '/player',
     name: 'Player',
-    component: lazy(() => import('./player/App'))
+    component: lazy(() => import('@packages/film-annotation-player/App'))
   },
   {
     path: '/animations',
     name: 'Animations',
-    component: lazy(() => import('./libs/gsap/Animations'))
+    component: lazy(() => import('@packages/gsap/Animations'))
   },
   {
     path: '/phaser-game',
     name: 'Phaser Game',
     Preview: () => <Thumbnail link="/phaser-game" thumbnail={phaserThumbnail} name="Phaser" />,
-    component: lazy(() => import('./phaser/Game'))
+    component: lazy(() => import('@packages/phaser-examples/phaser/Game'))
   },
   {
     path: '/100-world-bodies',
