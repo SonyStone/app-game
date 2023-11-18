@@ -106,7 +106,7 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   {
     path: '/paint',
     name: 'Paint',
-    component: lazy(() => import('./paint/paint-page'))
+    component: lazy(() => import('@packages/paint/paint-page'))
   },
   {
     path: '/twgl',

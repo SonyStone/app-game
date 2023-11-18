@@ -28,7 +28,7 @@ export default defineConfig({
   publicDir: './public',
   resolve: {
     alias: {
-      '@utils': resolve(root, 'utils'),
+      '@utils': resolve(packages, 'solid-utils'),
       '@webgl': resolve(root, 'libs', 'webgl'),
       '@packages': resolve(packages),
       '@/ldtk-ts': resolve(packages, 'ldtk-ts')
