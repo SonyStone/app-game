@@ -1,8 +1,12 @@
-import { Point, SHAPES } from '@pixi/math';
-
-import type { Polygon } from '@pixi/math';
-import { GraphicsData, GraphicsGeometry } from './graphics.interface';
-import { GRAPHICS_CURVES, LINE_CAP, LINE_JOIN } from 'pixi.js';
+import { GraphicsData, GraphicsGeometry } from "./graphics.interface";
+import {
+  GRAPHICS_CURVES,
+  LINE_CAP,
+  LINE_JOIN,
+  Point,
+  Polygon,
+  SHAPES,
+} from "pixi.js";
 
 /**
  * Buffers vertices to draw a square cap.

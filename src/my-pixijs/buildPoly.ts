@@ -1,7 +1,5 @@
-import { earcut } from '@pixi/utils';
-
-import type { Polygon } from '@pixi/math';
-import { GraphicsData, GraphicsGeometry } from './graphics.interface';
+import { Polygon, utils } from "pixi.js";
+import { GraphicsData, GraphicsGeometry } from "./graphics.interface";
 
 /**
  * Builds a polygon to draw
@@ -37,7 +35,7 @@ export const buildPoly = {
       }
 
       // sort color
-      const triangles = earcut(points, holeArray, 2);
+      const triangles = utils.earcut(points, holeArray, 2);
 
       if (!triangles) {
         return;

@@ -1,21 +1,15 @@
 import { Graphics } from "pixi.js";
 
-export function createBox(): Graphics {
-	const size: any = { height: 45, width: 45};
+export const createBox = (height = 45, width = 45) =>
+  new Graphics()
+    .lineStyle(3, 0x2b2b2b, 1)
 
-  const g = new Graphics();
+    .beginFill(0x9c9c9c)
+    .drawRect(-height / 2, -width / 2, height, width)
 
-  g.lineStyle(3, 0x2B2B2B, 1);
+    .moveTo(height / 2, width / 2)
+    .lineTo(-height / 2, -width / 2)
 
-  g.beginFill(0x9C9C9C);
-  g.drawRect(-size.height / 2, -size.width / 2, size.height, size.width);
-
-  g.moveTo(size.height / 2, size.width / 2);
-  g.lineTo(-size.height / 2, -size.width / 2);
-
-  g.moveTo(-size.height / 2, size.width / 2);
-  g.lineTo(size.height / 2, -size.width / 2);
-  g.endFill();
-
-  return g;
-}
+    .moveTo(-height / 2, width / 2)
+    .lineTo(height / 2, -width / 2)
+    .endFill();

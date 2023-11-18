@@ -1,6 +1,5 @@
-import { destroyTextureCache } from '@pixi/utils';
-import { Container, Renderer, Sprite, Texture } from 'pixi.js';
-import { onCleanup } from 'solid-js';
+import { Container, Renderer, Sprite, Texture, utils } from "pixi.js";
+import { onCleanup } from "solid-js";
 import {
   BoxGeometry,
   Mesh,
@@ -8,8 +7,8 @@ import {
   PerspectiveCamera,
   Scene,
   WebGLRenderer,
-} from 'three';
-import { useStats } from './Stats.provider';
+} from "three";
+import { useStats } from "./Stats.provider";
 
 function createApplication() {
   // const renderer =
@@ -31,7 +30,7 @@ export default function ThreePixi() {
   // Pixi.js
   const pixi = (function () {
     const { renderer, stage } = createApplication();
-    const texture = Texture.from('bunny.png');
+    const texture = Texture.from("bunny.png");
     const sprite = new Sprite(texture);
     stage.addChild(sprite);
 
@@ -55,7 +54,7 @@ export default function ThreePixi() {
     onCleanup(() => {
       stage.destroy();
       renderer.destroy();
-      destroyTextureCache();
+      utils.destroyTextureCache();
       cancelAnimationFrame(id);
     });
 

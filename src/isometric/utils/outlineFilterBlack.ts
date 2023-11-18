@@ -1,3 +1,3 @@
-import { OutlineFilter } from 'pixi-filters';
+// import { OutlineFilter } from 'pixi-filters';
 
-export const outlineFilterBlack = new OutlineFilter(2, 0x000000);
+// export const outlineFilterBlack = new OutlineFilter(2, 0x000000);

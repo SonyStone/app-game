@@ -1,19 +1,17 @@
-import { AFFINE, Sprite2d } from 'pixi-projection';
-import { Application, Container, Graphics, Texture } from 'pixi.js';
-import { outlineFilterBlack } from './utils/outlineFilterBlack';
+import { Application, Container, Graphics, Texture } from "pixi.js";
 
 export function isoBasic(app: Application): Container {
   // === FIRST PART ===
   // just simple rotation
   const container = new Container();
 
-  const sprite = createFlowerTop(app);
+  // const sprite = createFlowerTop(app);
 
   let step = 0;
 
   app.ticker.add((delta) => {
     step += delta;
-    sprite.rotation = step * 0.1;
+    // sprite.rotation = step * 0.1;
   });
 
   // === SECOND PART ===
@@ -26,11 +24,11 @@ export function isoBasic(app: Application): Container {
     app.screen.height / 2
   );
 
-  const sprite2 = createFlowerTop2();
+  // const sprite2 = createFlowerTop2();
 
-  app.ticker.add(() => {
-    sprite2.rotation = step * 0.1;
-  });
+  // app.ticker.add(() => {
+  //   sprite2.rotation = step * 0.1;
+  // });
 
   // === THIRD PART ===
   // Better isometry plane.
@@ -42,17 +40,17 @@ export function isoBasic(app: Application): Container {
   const isoScalingContainer = new Container();
   isoScalingContainer.scale.y = 0.5;
 
-  const sprite3 = createEggHeadSprite();
-  sprite3.rotation = (Math.PI / 4) * 3;
+  // const sprite3 = createEggHeadSprite();
+  // sprite3.rotation = (Math.PI / 4) * 3;
 
   app.ticker.add(() => {
     const radius = 100;
     const speed = 0.005;
 
-    sprite3.position.set(
-      Math.cos(step * speed) * radius,
-      Math.sin(step * speed) * radius
-    );
+    // sprite3.position.set(
+    //   Math.cos(step * speed) * radius,
+    //   Math.sin(step * speed) * radius
+    // );
   });
 
   // scalingContainer.addChild(sprite2);
@@ -89,32 +87,32 @@ function drawGrid(): Graphics {
   return g;
 }
 
-function createEggHeadSprite(): Sprite2d {
-  const sprite3 = new Sprite2d(Texture.from('./eggHead.png'));
-  sprite3.anchor.set(0.5, 1.0);
-  sprite3.proj.affine = AFFINE.AXIS_X;
-  sprite3.scale.set(0.5, 0.5); // make it small but tall!
-  // not-proportional scale can't work without special flag `scaleAfterAffine`
-  // fortunately, its `true` by default
+// function createEggHeadSprite(): Sprite2d {
+//   const sprite3 = new Sprite2d(Texture.from('./eggHead.png'));
+//   sprite3.anchor.set(0.5, 1.0);
+//   sprite3.proj.affine = AFFINE.AXIS_X;
+//   sprite3.scale.set(0.5, 0.5); // make it small but tall!
+//   // not-proportional scale can't work without special flag `scaleAfterAffine`
+//   // fortunately, its `true` by default
 
-  sprite3.filters = [outlineFilterBlack];
+//   sprite3.filters = [outlineFilterBlack];
 
-  return sprite3;
-}
+//   return sprite3;
+// }
 
-function createFlowerTop2(): Sprite2d {
-  const sprite2 = new Sprite2d(Texture.from('./flowerTop.png'));
-  sprite2.anchor.set(0.5, 1.0);
-  sprite2.proj.affine = AFFINE.AXIS_X;
+// function createFlowerTop2(): Sprite2d {
+//   const sprite2 = new Sprite2d(Texture.from('./flowerTop.png'));
+//   sprite2.anchor.set(0.5, 1.0);
+//   sprite2.proj.affine = AFFINE.AXIS_X;
 
-  return sprite2;
-}
+//   return sprite2;
+// }
 
-function createFlowerTop(app: Application): Sprite2d {
-  const sprite = new Sprite2d(Texture.from('./flowerTop.png'));
-  sprite.anchor.set(0.5, 1.0);
-  sprite.proj.affine = AFFINE.AXIS_X; // return to affine after rotating
-  sprite.position.set((app.screen.width * 1) / 8, app.screen.height / 2);
+// function createFlowerTop(app: Application): Sprite2d {
+//   const sprite = new Sprite2d(Texture.from('./flowerTop.png'));
+//   sprite.anchor.set(0.5, 1.0);
+//   sprite.proj.affine = AFFINE.AXIS_X; // return to affine after rotating
+//   sprite.position.set((app.screen.width * 1) / 8, app.screen.height / 2);
 
-  return sprite;
-}
+//   return sprite;
+// }

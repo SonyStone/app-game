@@ -27,7 +27,9 @@
     "baseUrl": "./",                                  /* Specify the base directory to resolve non-relative module names. */
     "paths": {
       "@utils/*": ["./src/utils/*"],
-      "@webgl/*": ["./src/libs/webgl/*"]
+      "@webgl/*": ["./src/libs/webgl/*"],
+      "@packages/*": ["./packages/*"],
+      "@/ldtk-ts/*": ["./packages/ldtk-ts/*"]
     },                                      /* Specify a set of entries that re-map imports to additional lookup locations. */
     // "rootDirs": [],                                   /* Allow multiple folders to be treated as one when resolving modules. */
     // "typeRoots": [],                                  /* Specify multiple folders that act like `./node_modules/@types`. */

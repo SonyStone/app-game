@@ -1,135 +1,101 @@
-import { Container, Graphics } from 'pixi.js';
-
-import { Vector2d } from '../math/vector2d';
-import { Locator } from './locator';
+import * as m3 from "@webgl/math/mut-m3";
+import * as v2 from "@webgl/math/mut-v2";
+import { Container, Graphics, IPointData, Point, Transform } from "pixi.js";
+import { Key } from "ts-keycode-enum";
+import "@pixi/math-extras";
 
 // import * as Color from 'color-js';
 
-export class Tank extends Container {
-  public pull: Vector2d;
-  // public position: Vector2d = new Vector2d();
-  // public color = Utils.HSBtoRGB(360, 75, 75);
-  public color = 0xbf3030;
-  // public color: number = Color({hue: 0, saturation: 75, lightness: 75}).getValue();
-  public direction: Vector2d = new Vector2d();
+export function angleTo(vec1: IPointData, vec2: IPointData) {
+  return Math.atan2(vec1.y - vec2.y, vec1.x - vec2.x);
+}
 
-  // public rotation: number = 0;
-  public speed = 5;
+const anglePoint = new Point();
+export function fromAngle(angle: number): Point {
+  return anglePoint.set(Math.cos(angle), Math.sin(angle));
+}
 
-  public positionRotation = 0;
-  public target: Vector2d = new Vector2d();
-  public targetRotation = 0;
+const tankBody = () =>
+  new Graphics()
+    .lineStyle(2, 0x191919, 1)
+    .beginFill(0xbf3030)
+    .drawRect(-20, -15, 40, 30)
+    .endFill()
 
-  public body = this.getBody();
-  public gun = this.getGun();
-  public boundingBox = new Graphics();
+    .moveTo(-20, 15)
+    .lineTo(20, 0.5)
+    .lineTo(20, -0.5)
+    .lineTo(-20, -15);
 
-  constructor() {
-    super();
-    this.interactive = true;
-    this.pull = new Vector2d();
-    const locator = new Locator().setTransform(0, 0, 10, 10);
+const tankGun = () =>
+  new Graphics()
+    .beginFill(0xbf3030)
+    .lineStyle(2, 0x191919, 1)
+    .drawRect(0, -10 / 2, 30, 10)
+    .closePath()
 
-    this.addChild(this.body);
-    this.addChild(this.gun);
-    this.addChild(this.boundingBox);
-    this.gun.addChild(locator);
-  }
+    .drawCircle(0, 0, 10)
+    .closePath()
+    .endFill();
 
-  public player(keyboard, mouse, camera) {
-    this.targetRotation =
-      Vector2d.angleTo(
-        this.target.set(mouse),
-        camera.targeting(this.position)
-        // this.position.mult(camera.zoom).rotate(camera.rotation).add(camera.position)
-      ) - camera.rotation;
+export const createPull = () => {
+  const pull = new Transform();
+  pull.position.set(0, 0);
+  const distance = 18;
+  const direction = new Point(0, 0);
 
-    let speed = 0;
-    if (keyboard.up.pressed || keyboard.w.pressed) {
-      this.direction = this.direction.add(
-        Vector2d.fromAngle(-Math.PI / 2 - camera.rotation)
+  return {
+    updatePull(objectToMove: Transform, keyboard: Set<Key>, camera: Transform) {
+      direction.set(0, 0);
+
+      if (keyboard.has(Key.UpArrow) || keyboard.has(Key.W)) {
+        const up = -Math.PI / 2 - camera.rotation;
+        direction.add(fromAngle(up), direction);
+      }
+      if (keyboard.has(Key.DownArrow) || keyboard.has(Key.S)) {
+        const down = Math.PI / 2 - camera.rotation;
+        direction.add(fromAngle(down), direction);
+      }
+      if (keyboard.has(Key.LeftArrow) || keyboard.has(Key.A)) {
+        const left = Math.PI - camera.rotation;
+        direction.add(fromAngle(left), direction);
+      }
+      if (keyboard.has(Key.RightArrow) || keyboard.has(Key.D)) {
+        const right = 0 - camera.rotation;
+        direction.add(fromAngle(right), direction);
+      }
+
+      let speed = 0;
+      if (direction.x !== 0 || direction.y !== 0) {
+        direction.normalize(direction);
+        // direction.multiplyScalar(50, direction);
+        speed = 5;
+      }
+
+      pull.position.add(direction.multiplyScalar(speed), pull.position);
+
+      // console.log(`pull`, pull.position.x, direction.x);
+
+      // console.log(`pull`, pull.position.x);
+      const rotation = angleTo(pull.position, objectToMove.position);
+      objectToMove.position.set(
+        pull.position.x - Math.cos(rotation) * distance,
+        pull.position.y - Math.sin(rotation) * distance
       );
-      speed = this.speed;
-    }
-    if (keyboard.down.pressed || keyboard.s.pressed) {
-      this.direction = this.direction.add(
-        Vector2d.fromAngle(Math.PI / 2 - camera.rotation)
-      );
-      speed = this.speed;
-    }
-    if (keyboard.left.pressed || keyboard.a.pressed) {
-      this.direction = this.direction.add(
-        Vector2d.fromAngle(Math.PI - camera.rotation)
-      );
-      speed = this.speed;
-    }
-    if (keyboard.right.pressed || keyboard.d.pressed) {
-      this.direction = this.direction.add(
-        Vector2d.fromAngle(0 - camera.rotation)
-      );
-      speed = this.speed;
-    }
-    this.direction = this.direction.normalize();
-    this.pull = this.pull.add(this.direction.mult(speed));
-    // this.direction.setZero();
-  }
+      objectToMove.rotation = rotation;
+    },
+  };
+};
 
-  public update() {
-    this.positionRotation = Vector2d.angleTo(this.pull, this.position);
-    this.position.x = this.pull.x - Math.cos(this.positionRotation) * 18;
-    this.position.y = this.pull.y - Math.sin(this.positionRotation) * 18;
-    this.body.rotation = this.positionRotation;
-    this.gun.rotation = this.targetRotation;
+export function createTank() {
+  const container = new Container();
+  container.addChild(tankBody());
+  container.addChild(tankGun());
 
-    this.updateBoundingBox(this.boundingBox);
-  }
+  return container;
+}
 
-  public toString() {
-    return (
-      `position: ${this.position.x.toFixed(2)}, ${this.position.y.toFixed(
-        2
-      )}\n` +
-      `pull: ${this.pull.toString()}\n` +
-      `direction: ${this.direction.toString()}\n` +
-      `targetRotation: ${this.targetRotation.toFixed(2)}\n` +
-      `positionRotation: ${this.positionRotation.toFixed(2)}\n` +
-      `rotation: ${this.rotation.toFixed(2)}\n`
-    );
-  }
-
-  private getBody(): Graphics {
-    return new Graphics()
-      .lineStyle(2, 0x191919, 1)
-      .beginFill(0xbf3030)
-      .drawRect(-20, -15, 40, 30)
-      .endFill()
-
-      .moveTo(-20, 15)
-      .lineTo(20, 0.5)
-      .lineTo(20, -0.5)
-      .lineTo(-20, -15);
-  }
-
-  private getGun(): Graphics {
-    return new Graphics()
-      .beginFill(0xbf3030)
-      .lineStyle(2, 0x191919, 1)
-      .drawRect(0, -10 / 2, 30, 10)
-      .closePath()
-
-      .drawCircle(0, 0, 10)
-      .closePath()
-      .endFill();
-  }
-
-  private updateBoundingBox(g: Graphics): void {
-    g.clear();
-    const bounds = this.getLocalBounds();
-    g.lineStyle(0.5, 0xff0000, 1)
-      .moveTo(bounds.left, bounds.bottom)
-      .lineTo(bounds.left, bounds.top)
-      .lineTo(bounds.right, bounds.top)
-      .lineTo(bounds.right, bounds.bottom)
-      .closePath();
-  }
+function setPixiMatrix(t: Transform, m2: m3.Mat3) {
+  t.localTransform.set(m2[0], m2[1], m2[3], m2[4], m2[6], m2[7]);
+  t.setFromMatrix(t.localTransform);
 }

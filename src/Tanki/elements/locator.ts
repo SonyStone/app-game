@@ -1,35 +1,22 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics } from "pixi.js";
 
-export class Locator extends Container {
-  public length: number;
-  // public width: number;
-  public thickness: number;
+const width = 0.1;
+const red_x = 0xff0000;
+const blue_y = 0x0000ff;
+const locator = () =>
+  new Graphics()
+    .lineStyle(width, red_x, 1)
+    .moveTo(0, 0)
+    .lineTo(1, 0)
 
-  constructor(
-    // length?: number,
-    // width?: number,
-    thickness ?: number,
-  ) {
-    super();
-    this.length = length || 1;
-    // this.w
-    this.thickness = thickness || 0.1;
+    .lineStyle(width, blue_y, 1)
+    .moveTo(0, 0)
+    .lineTo(0, 1);
 
-    this.addChild(this.setLocator());
+export function createLocator() {
+  const container = new Container();
 
-    return this;
-  }
+  container.addChild(locator());
 
-  private setLocator(): Graphics {
-    const context = new Graphics;
-    context
-      .lineStyle(0.1, 0xFF0000, 1)
-      .moveTo(this.x, this.y)
-      .lineTo(1, this.y)
-
-      .lineStyle(0.1, 0x0000FF, 1)
-      .moveTo(this.x, this.y)
-      .lineTo(this.x, 1);
-    return context;
-  }
+  return container;
 }
