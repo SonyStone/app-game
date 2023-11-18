@@ -35,7 +35,8 @@ export default defineConfig({
     }
   },
   build: {
-    assetsInlineLimit: 0
+    assetsInlineLimit: 0,
+    chunkSizeWarningLimit: 5000
   },
   test: {
     environment: 'jsdom',
