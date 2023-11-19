@@ -1,26 +1,17 @@
-import {
-  Application,
-  Container,
-  Graphics,
-  Sprite,
-  Spritesheet,
-  utils,
-  Assets,
-  Texture,
-} from "pixi.js";
-import { fromEvent } from "rxjs";
-import { onCleanup } from "solid-js";
+import { Application, Assets, Container, Graphics, Sprite, Texture, utils } from 'pixi.js';
+import { fromEvent } from 'rxjs';
+import { onCleanup } from 'solid-js';
 
-import { collisionExample } from "./collisionExample";
-import { isoBasic } from "./isoBasic";
-import { offseting } from "./pointer";
-import { position } from "./position";
-import { useStats } from "../Stats.provider";
+import { useStats } from '../../../src/Stats.provider';
+import { collisionExample } from './collisionExample';
+import { isoBasic } from './isoBasic';
+import { offseting } from './pointer';
+import { position } from './position';
 
-import rottentower from "./assets/rottentower.png";
-import isometricGrassAndWater from "./assets/isometric-grass-and-water";
+import isometricGrassAndWater from './assets/isometric-grass-and-water';
+import rottentower from './assets/rottentower.png';
 
-import house_1 from "./assets/house_1.png";
+import house_1 from './assets/house_1.png';
 
 export default function Main() {
   const app = new Application({
@@ -36,20 +27,13 @@ export default function Main() {
   const stats = useStats();
 
   window.onresize = () => {
-    console.log(
-      `W.H`,
-      window.document.body.clientWidth,
-      window.document.body.clientHeight
-    );
+    console.log(`W.H`, window.document.body.clientWidth, window.document.body.clientHeight);
     // app.renderer.resolution = window.devicePixelRatio || 1;
     // app.screen.height = window.document.body.clientHeight;
     // app.screen.width = window.document.body.clientWidth;
     console.log(`resolution`, app.renderer.resolution);
     stats.begin();
-    app.renderer.resize(
-      window.document.body.clientWidth,
-      window.document.body.clientHeight
-    );
+    app.renderer.resize(window.document.body.clientWidth, window.document.body.clientHeight);
     stats.end();
   };
 
@@ -69,14 +53,14 @@ export default function Main() {
   }
 
   sprite.interactive = true;
-  sprite.on("pointerover", filterOn).on("pointerout", filterOff);
+  sprite.on('pointerover', filterOn).on('pointerout', filterOff);
   filterOff();
 
   async function load() {
-    Assets.add("map", isometricGrassAndWater.map);
-    Assets.add("tiles", isometricGrassAndWater.tiles);
+    Assets.add('map', isometricGrassAndWater.map);
+    Assets.add('tiles', isometricGrassAndWater.tiles);
 
-    const assets = await Assets.load<Texture>(["map", "tiles"]);
+    const assets = await Assets.load<Texture>(['map', 'tiles']);
     const map = await loadMap(assets);
 
     // map.scale.y = 2;
@@ -99,10 +83,10 @@ export default function Main() {
       map.addChild(sprite);
       sprite.interactive = true;
       sprite
-        .on("pointerover", () => {
+        .on('pointerover', () => {
           // sprite.filters = [outlineFilterWhite];
         })
-        .on("pointerout", () => {
+        .on('pointerout', () => {
           sprite.filters = [];
         });
     }
@@ -118,17 +102,11 @@ export default function Main() {
     stats.end();
   });
 
-  const sub2 = fromEvent<WheelEvent>(window, "wheel").subscribe((event) => {
+  const sub2 = fromEvent<WheelEvent>(window, 'wheel').subscribe((event) => {
     if (event.deltaY < 0) {
-      world_container.scale.set(
-        world_container.scale.x * 1.25,
-        world_container.scale.y * 1.25
-      );
+      world_container.scale.set(world_container.scale.x * 1.25, world_container.scale.y * 1.25);
     } else {
-      world_container.scale.set(
-        world_container.scale.x / 1.25,
-        world_container.scale.y / 1.25
-      );
+      world_container.scale.set(world_container.scale.x / 1.25, world_container.scale.y / 1.25);
     }
   });
 

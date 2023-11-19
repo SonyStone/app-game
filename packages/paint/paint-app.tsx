@@ -1,33 +1,30 @@
-import { createPointerData } from "@utils/create-pointer-data";
-import * as m4 from "@webgl/math/mut-m4";
-import * as v2 from "@webgl/math/v2";
-import {
-  GL_DRAW_ARRAYS_MODE,
-  GL_STATIC_VARIABLES,
-} from "@webgl/static-variables";
-import { createEffect } from "solid-js";
-import { IMesh } from "./fungi/Mesh";
-import { post_quad_ndc } from "./quads-2";
+import { createPointerData } from '@utils/create-pointer-data';
+import * as m4 from '@webgl/math/mut-m4';
+import * as v2 from '@webgl/math/v2';
+import { GL_DRAW_ARRAYS_MODE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { createEffect } from 'solid-js';
+import { IMesh } from './fungi/Mesh';
+import { post_quad_ndc } from './quads-2';
 
-import drawShaderFragSrc from "./draw-shader.frag?raw";
-import drawShaderVertSrc from "./draw-shader.vert?raw";
+import drawShaderFragSrc from './draw-shader.frag?raw';
+import drawShaderVertSrc from './draw-shader.vert?raw';
 
-import { Context } from "./fungi/Context";
-import { create_shader_program } from "./fungi/create-shader-program";
-import { FramebufferObjectFactory } from "./fungi/Fbo";
-import postShaderFragSrc from "./post-shader.frag?raw";
-import postShaderVertSrc from "./post-shader.vert?raw";
+import { Context } from './fungi/Context';
+import { create_shader_program } from './fungi/create-shader-program';
+import { FramebufferObjectFactory } from './fungi/Fbo';
+import postShaderFragSrc from './post-shader.frag?raw';
+import postShaderVertSrc from './post-shader.vert?raw';
 
-import { createEventListener } from "@solid-primitives/event-listener";
-import { create_mesh } from "./fungi/create-vao";
-import { WebGL2DebugWrapper } from "./gl-debug-wrapper";
-import wireframeShaderFragSrc from "./wireframe-shader.frag?raw";
+import { createWindowSize } from '@solid-primitives/resize-observer';
+import { create_mesh } from './fungi/create-vao';
+import { WebGL2DebugWrapper } from './gl-debug-wrapper';
+import wireframeShaderFragSrc from './wireframe-shader.frag?raw';
 
 export default function Paint() {
   const canvas = (
     <canvas
       style={{
-        "touch-action": "none",
+        'touch-action': 'none'
       }}
     ></canvas>
   ) as HTMLCanvasElement;
@@ -50,10 +47,7 @@ export default function Paint() {
   });
 
   const ctx = new Context(canvas);
-  ctx
-    .set_color("#4f5f8f")
-    .set_size(window.innerWidth, window.innerHeight)
-    .clear();
+  ctx.set_color('#4f5f8f').set_size(window.innerWidth, window.innerHeight).clear();
 
   // const gl = ctx.gl;
   const gl = new WebGL2DebugWrapper(ctx.gl);
@@ -64,9 +58,7 @@ export default function Paint() {
   const main_fbo = fbo.new({
     width: window.innerWidth,
     height: window.innerHeight,
-    buffers: [
-      { attach: 0, name: "color", type: "color", mode: "tex", pixel: "byte" },
-    ],
+    buffers: [{ attach: 0, name: 'color', type: 'color', mode: 'tex', pixel: 'byte' }]
   });
 
   const ortho_proj = m4.identity();
@@ -78,39 +70,24 @@ export default function Paint() {
   // Shader that draws a brush over a line segment
 
   // shader to draw brush on the quad
-  const drawShader = create_shader_program(
-    gl,
-    drawShaderVertSrc,
-    drawShaderFragSrc,
-    (uniform) => ({
-      ortho: uniform.name("ortho").mat4,
-      brush_size: uniform.name("brush_size").float,
-      bound: uniform.name("bound").vec4,
-      segment: uniform.name("segment").vec4,
-    })
-  );
+  const drawShader = create_shader_program(gl, drawShaderVertSrc, drawShaderFragSrc, (uniform) => ({
+    ortho: uniform.name('ortho').mat4,
+    brush_size: uniform.name('brush_size').float,
+    bound: uniform.name('bound').vec4,
+    segment: uniform.name('segment').vec4
+  }));
 
   const quad: IMesh = post_quad_ndc(gl);
 
   // Shader that uses a unit quad to draw a texture to screen
-  const postSahder = create_shader_program(
-    gl,
-    postShaderVertSrc,
-    postShaderFragSrc,
-    (uniform) => ({
-      buf_color: uniform.name("buf_color").sampler2D,
-    })
-  );
+  const postSahder = create_shader_program(gl, postShaderVertSrc, postShaderFragSrc, (uniform) => ({
+    buf_color: uniform.name('buf_color').sampler2D
+  }));
 
-  const wireFrameSahder = create_shader_program(
-    gl,
-    drawShaderVertSrc,
-    wireframeShaderFragSrc,
-    (uniform) => ({
-      ortho: uniform.name("ortho").mat4,
-      bound: uniform.name("bound").vec4,
-    })
-  );
+  const wireFrameSahder = create_shader_program(gl, drawShaderVertSrc, wireframeShaderFragSrc, (uniform) => ({
+    ortho: uniform.name('ortho').mat4,
+    bound: uniform.name('bound').vec4
+  }));
 
   console.log(`gl_debug`, gl._state);
 
@@ -169,12 +146,7 @@ export default function Paint() {
     gl.bindVertexArray(quad.vao);
 
     // Draw
-    gl.drawElements(
-      GL_DRAW_ARRAYS_MODE.TRIANGLES,
-      quad.element_cnt,
-      quad.element_type,
-      0
-    );
+    gl.drawElements(GL_DRAW_ARRAYS_MODE.TRIANGLES, quad.element_cnt, quad.element_type, 0);
 
     // Cleanup
     postSahder.clearProgram();
@@ -186,16 +158,13 @@ export default function Paint() {
     gl.bindVertexArray(null);
   }
 
-  createEventListener(
-    window,
-    "resize",
-    () => {
-      ctx.set_size(window.innerWidth, window.innerHeight);
-      m4.ortho(ortho_proj, 0, ctx.width, ctx.height, 0, -100, 100);
-      render();
-    },
-    { passive: true }
-  );
+  const size = createWindowSize();
+
+  createEffect(() => {
+    ctx.set_size(size.width, size.height);
+    m4.ortho(ortho_proj, 0, ctx.width, ctx.height, 0, -100, 100);
+    render();
+  });
 
   return canvas;
 }
@@ -256,6 +225,6 @@ function create_draw_bound() {
     brush_size,
     bound,
     segment,
-    compute_draw_bound,
+    compute_draw_bound
   };
 }

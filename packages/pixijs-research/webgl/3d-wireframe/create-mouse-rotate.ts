@@ -1,5 +1,5 @@
-import { createSignal, onCleanup } from 'solid-js';
 import * as v2 from '@webgl/math/mut-v2';
+import { createSignal, onCleanup } from 'solid-js';
 
 export function createMouseRotate(element: HTMLElement) {
   const rotateStart = v2.create();
@@ -57,7 +57,7 @@ export function createMouseRotate(element: HTMLElement) {
   };
 
   element.addEventListener('pointerdown', onPointerDown, {
-    passive: false,
+    passive: false
   });
 
   onCleanup(() => {
@@ -70,6 +70,6 @@ export function createMouseRotate(element: HTMLElement) {
     theta,
     setTheta,
     phi,
-    setPhi,
+    setPhi
   };
 }

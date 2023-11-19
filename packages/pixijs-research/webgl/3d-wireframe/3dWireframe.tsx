@@ -2,10 +2,10 @@ import * as m4 from '@webgl/math/mut-m4';
 import { create, setFromSpherical, setFromVec3 } from '@webgl/math/spherical';
 import { clamp } from '@webgl/math/utils/clamp';
 import * as v3 from '@webgl/math/v3';
-import { createEffect, createMemo, createSignal, For, lazy } from 'solid-js';
+import { For, createEffect, createMemo, createSignal } from 'solid-js';
 
-import { round } from '../../../libs/gsap/core/utils';
-import { useCamera } from '../../../three/Camera.provider';
+import { round } from '@packages/gsap/core/utils';
+import { useCamera } from '@packages/three-examples/Camera.provider';
 import s from './3dWireframe.module.scss';
 import { Main } from './main';
 
@@ -24,9 +24,7 @@ export default function Wireframe() {
 
   const { cameraType } = useCamera();
 
-  const [transition, setTransition] = createSignal(
-    cameraType() === 'perspective' ? 1 : 0
-  );
+  const [transition, setTransition] = createSignal(cameraType() === 'perspective' ? 1 : 0);
 
   createEffect(() => {
     setTransition(cameraType() === 'perspective' ? 1 : 0);
@@ -42,7 +40,7 @@ export default function Wireframe() {
         inversePosition: m4.identity(),
         target: v3.create(0, 0, 0),
         offset: v3.create(0.6, 1.8, 2.0),
-        spherical: create(),
+        spherical: create()
       };
 
       setFromVec3(c.spherical, c.offset);
@@ -66,7 +64,7 @@ export default function Wireframe() {
     transition,
 
     camera,
-    setCamera,
+    setCamera
   };
 
   return (
@@ -81,9 +79,7 @@ export default function Wireframe() {
           value={transition()}
           onInput={(e) => setTransition(parseFloat((e.target as any).value))}
           onwheel={(e) => {
-            setTransition(
-              clamp(transition() + (e.deltaY > 0 ? 0.1 : -0.1), 0, 1.25)
-            );
+            setTransition(clamp(transition() + (e.deltaY > 0 ? 0.1 : -0.1), 0, 1.25));
           }}
         />
         <For each={['x', 'y', 'z']}>
@@ -106,7 +102,8 @@ export default function Wireframe() {
                   }}
                   onwheel={(e) => {
                     setValue(value() + (e.deltaY > 0 ? 0.1 : -0.1));
-                  }}></input>
+                  }}
+                ></input>
               </div>
             );
           }}
@@ -132,7 +129,8 @@ export default function Wireframe() {
                   }}
                   onwheel={(e) => {
                     setValue(value() + (e.deltaY > 0 ? 0.1 : -0.1));
-                  }}></input>
+                  }}
+                ></input>
               </div>
             );
           }}
@@ -160,7 +158,8 @@ export default function Wireframe() {
                   }}
                   onwheel={(e) => {
                     setValue(value() + (e.deltaY > 0 ? 0.1 : -0.1));
-                  }}></input>
+                  }}
+                ></input>
               </div>
             );
           }}

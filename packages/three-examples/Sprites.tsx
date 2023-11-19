@@ -7,11 +7,11 @@ import {
   Mesh,
   MeshBasicMaterial,
   Scene,
-  sRGBEncoding,
   WebGLRenderer,
+  sRGBEncoding
 } from 'three';
 
-import { useStats } from '../Stats.provider';
+import { useStats } from '../../src/Stats.provider';
 import { useCamera } from './Camera.provider';
 import s from './SvgLoader.module.scss';
 import { createHouse, createTiles } from './tiles';

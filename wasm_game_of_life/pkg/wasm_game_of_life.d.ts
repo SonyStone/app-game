@@ -1,57 +1,57 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
-* @param {string} name
-*/
+ * @param {string} name
+ */
 export function greet(name: string): void;
 /**
-*
-* * Cell
-* 
-*/
-export enum Cell {
+ *
+ * * Cell
+ *
+ */
+export const enum Cell {
   Dead,
-  Alive,
+  Alive
 }
 /**
-*/
+ */
 export class Universe {
   free(): void;
-/**
-* @returns {number}
-*/
+  /**
+   * @returns {number}
+   */
   width(): number;
-/**
-* @param {number} width
-*/
+  /**
+   * @param {number} width
+   */
   set_width(width: number): void;
-/**
-* @returns {number}
-*/
+  /**
+   * @returns {number}
+   */
   height(): number;
-/**
-* @param {number} height
-*/
+  /**
+   * @param {number} height
+   */
   set_height(height: number): void;
-/**
-* @returns {number}
-*/
+  /**
+   * @returns {number}
+   */
   cells(): number;
-/**
-* @param {number} row
-* @param {number} column
-*/
+  /**
+   * @param {number} row
+   * @param {number} column
+   */
   toggle_cell(row: number, column: number): void;
-/**
-* @returns {Universe}
-*/
+  /**
+   * @returns {Universe}
+   */
   static new(): Universe;
-/**
-* @returns {string}
-*/
+  /**
+   * @returns {string}
+   */
   render(): string;
-/**
-*/
+  /**
+   */
   tick(): void;
 }
 
@@ -77,11 +77,11 @@ export interface InitOutput {
 }
 
 /**
-* If `module_or_path` is {RequestInfo} or {URL}, makes a request and
-* for everything else, calls `WebAssembly.instantiate` directly.
-*
-* @param {InitInput | Promise<InitInput>} module_or_path
-*
-* @returns {Promise<InitOutput>}
-*/
-export default function init (module_or_path?: InitInput | Promise<InitInput>): Promise<InitOutput>;
+ * If `module_or_path` is {RequestInfo} or {URL}, makes a request and
+ * for everything else, calls `WebAssembly.instantiate` directly.
+ *
+ * @param {InitInput | Promise<InitInput>} module_or_path
+ *
+ * @returns {Promise<InitOutput>}
+ */
+export default function init(module_or_path?: InitInput | Promise<InitInput>): Promise<InitOutput>;

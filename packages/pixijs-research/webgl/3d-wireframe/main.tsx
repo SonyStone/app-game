@@ -5,7 +5,7 @@ import { setFromSpherical, Spherical } from '@webgl/math/spherical';
 import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@webgl/static-variables';
 import { Accessor, createEffect, onCleanup, onMount, Setter } from 'solid-js';
 
-import { useStats } from '../../../Stats.provider';
+import { useStats } from '../../../../src/Stats.provider';
 import { createMouseRotate } from './create-mouse-rotate';
 import { createMouseWheelZoom } from './create-mouse-wheel-zoom';
 import { createImage } from './image/create-image';
@@ -47,22 +47,14 @@ export function Main(prop: { ctx: Context }) {
   const camera = ctx.camera();
 
   const box = [
-    0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5,
-    0.5, -0.5, -0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5,
-    0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5,
-    -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5,
+    0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, -0.5, 0.5,
+    0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5,
+    0.5, -0.5, -0.5, 0.5, 0.5, -0.5
   ];
 
   const shader = createWireframe(gl, box, [1, 0, 1]);
 
-  function makeBox(
-    w: number,
-    h: number,
-    d: number,
-    x: number,
-    y: number,
-    z: number
-  ) {
+  function makeBox(w: number, h: number, d: number, x: number, y: number, z: number) {
     const m = m4.identity();
     m4.translate(m, [x, y, z]);
     m4.scale(m, [w, h, d]);
@@ -122,12 +114,7 @@ export function Main(prop: { ctx: Context }) {
     // Update Camera Projection
     setOrthographicProjection(camera.orthographicProjection, gl.canvas);
     setPerspectiveProjection(camera.perspectiveProjection, gl.canvas);
-    m4.transition(
-      camera.projection,
-      camera.orthographicProjection,
-      camera.perspectiveProjection,
-      value
-    );
+    m4.transition(camera.projection, camera.orthographicProjection, camera.perspectiveProjection, value);
 
     m4.identity(camera_m);
     m4.multiply(camera_m, camera.projection);
@@ -175,9 +162,7 @@ export function Main(prop: { ctx: Context }) {
       drawPoints(gl, shader, roomDoor, [0.7, 0.7, 0.7]);
       drawPoints(gl, shader, balconyDoor, [0.7, 0.7, 0.7]);
 
-      shelves.forEach((shelf) =>
-        drawPoints(gl, shader, shelf, [0.3, 0.8, 0.8])
-      );
+      shelves.forEach((shelf) => drawPoints(gl, shader, shelf, [0.3, 0.8, 0.8]));
 
       rails.forEach((rail) => drawPoints(gl, shader, rail, [0.8, 0.3, 0.8]));
 
@@ -217,29 +202,16 @@ export function Main(prop: { ctx: Context }) {
   return <></>;
 }
 
-function drawPoints(
-  gl: WebGL2RenderingContext,
-  shader: any,
-  points: number[],
-  color: number[]
-) {
+function drawPoints(gl: WebGL2RenderingContext, shader: any, points: number[], color: number[]) {
   shader.aPosition.set(new Float32Array(points));
   shader.uColor.set(color);
 
   shader.bind();
 
-  gl.drawArrays(
-    GL_DRAW_ARRAYS_MODE.LINE_STRIP,
-    0,
-    shader.aPosition.value.length / 3
-  );
+  gl.drawArrays(GL_DRAW_ARRAYS_MODE.LINE_STRIP, 0, shader.aPosition.value.length / 3);
 }
 
-function applyMatToPoints(
-  mat: number[] | Float32Array,
-  points: number[],
-  r?: number[]
-) {
+function applyMatToPoints(mat: number[] | Float32Array, points: number[], r?: number[]) {
   r = r || [];
   const v = [];
   for (let i = 0; i < points.length; i += 3) {
@@ -257,10 +229,7 @@ function applyMatToPoints(
 // WebGL Helpers
 function updateViewportSize(context: Context) {
   const gl = context.gl;
-  if (
-    context.viewportWidth !== gl.drawingBufferWidth ||
-    context.viewportHeight !== gl.drawingBufferHeight
-  ) {
+  if (context.viewportWidth !== gl.drawingBufferWidth || context.viewportHeight !== gl.drawingBufferHeight) {
     context.viewportWidth = gl.drawingBufferWidth;
     context.viewportHeight = gl.drawingBufferHeight;
   }

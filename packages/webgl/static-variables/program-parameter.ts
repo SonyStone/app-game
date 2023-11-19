@@ -1,6 +1,6 @@
-import { GL_STATIC_VARIABLES as GL_CONST } from "./static-variables";
+import { GL_STATIC_VARIABLES as GL_CONST } from './static-variables';
 
-export enum GL_PROGRAM_PARAMETER {
+export const enum GL_PROGRAM_PARAMETER {
   /** Returns a `GLboolean` indicating whether or not the program is flagged for deletion. */
   DELETE_STATUS = GL_CONST.DELETE_STATUS,
 
@@ -28,5 +28,5 @@ export enum GL_PROGRAM_PARAMETER {
   TRANSFORM_FEEDBACK_VARYINGS = GL_CONST.TRANSFORM_FEEDBACK_VARYINGS,
 
   /** Returns a `GLint` indicating the number of uniform blocks containing active uniforms. */
-  ACTIVE_UNIFORM_BLOCKS = GL_CONST.ACTIVE_UNIFORM_BLOCKS,
+  ACTIVE_UNIFORM_BLOCKS = GL_CONST.ACTIVE_UNIFORM_BLOCKS
 }

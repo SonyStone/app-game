@@ -1,4 +1,4 @@
-export enum KeyCode {
+export const enum KeyCode {
   KeyA = 'KeyA',
   KeyB = 'KeyB',
   KeyC = 'KeyC',

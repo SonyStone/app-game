@@ -3,20 +3,17 @@ import {
   BoxGeometry,
   Group,
   Mesh,
-  MeshBasicMaterial,
   NearestFilter,
   OrthographicCamera,
   PlaneGeometry,
   Texture,
-  TextureLoader,
+  TextureLoader
 } from 'three';
 
-import isometricGrassAndWater, {
-  TilesMap,
-} from '../isometric/assets/isometric-grass-and-water';
 import createProjectedMaterial, { project } from './box/projectedMaterial';
+import isometricGrassAndWater, { TilesMap } from './isometric/assets/isometric-grass-and-water';
 
-import house from '../isometric/assets/house_1.png';
+import house from './isometric/assets/house_1.png';
 
 export function loadTexture(path: string): Promise<Texture> {
   return new TextureLoader().loadAsync(path).then((texture) => {
@@ -34,18 +31,8 @@ interface IsoProjectCameraOptions {
   height: number;
 }
 
-export function createIsoProjectCamera({
-  width,
-  height,
-}: IsoProjectCameraOptions) {
-  const isoProjectCamera = new OrthographicCamera(
-    0,
-    width,
-    0,
-    -height,
-    0,
-    height * 2
-  );
+export function createIsoProjectCamera({ width, height }: IsoProjectCameraOptions) {
+  const isoProjectCamera = new OrthographicCamera(0, width, 0, -height, 0, height * 2);
   // isoProjectCamera.rotateY(Math.PI / 4);
   isoProjectCamera.rotateX((-30 * Math.PI) / 180);
 
@@ -67,12 +54,12 @@ export function createTilesPlane(render: () => void): Group {
 
     const camera = createIsoProjectCamera({
       width: imagewidth,
-      height: imageheight,
+      height: imageheight
     });
 
     const material = createProjectedMaterial({
       camera,
-      texture,
+      texture
     });
 
     const geometry = new PlaneGeometry(imagewidth, imageheight * 2);
@@ -101,13 +88,13 @@ export function createHouse(render: () => void): Group {
 
     const camera = createIsoProjectCamera({
       width,
-      height,
+      height
     });
 
     {
       const material = createProjectedMaterial({
         camera,
-        texture,
+        texture
       });
 
       const geometry = new PlaneGeometry(width, height * 2);
@@ -123,7 +110,7 @@ export function createHouse(render: () => void): Group {
       const material = createProjectedMaterial({
         camera,
         texture,
-        transparent: true,
+        transparent: true
       });
 
       const height = 270;
@@ -141,7 +128,7 @@ export function createHouse(render: () => void): Group {
       const material = createProjectedMaterial({
         camera,
         texture,
-        transparent: true,
+        transparent: true
       });
 
       // const material = new MeshBasicMaterial({
@@ -176,13 +163,13 @@ export function createTiles(render: () => void): Group {
 
     const camera = createIsoProjectCamera({
       width: imagewidth,
-      height: imageheight,
+      height: imageheight
     });
 
     function createSprite(x: number, y: number): Mesh {
       const material = createProjectedMaterial({
         camera,
-        texture,
+        texture
       });
       const geometry = new PlaneGeometry(64, 64 * 2);
       geometry.rotateX(-Math.PI / 2);
@@ -207,7 +194,7 @@ export function createTiles(render: () => void): Group {
       // .slice(0, 20)
       .map(([key, frame]) => ({
         x: frame.frame.x + tileWidthHalf,
-        y: frame.frame.y * 2 + tileheight * 2,
+        y: frame.frame.y * 2 + tileheight * 2
       }));
 
     let i = 0;

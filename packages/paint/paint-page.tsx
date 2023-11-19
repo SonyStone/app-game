@@ -1,5 +1,4 @@
-import DebugWebgl from "./debug-webgl";
-import PaintApp from "./paint-app";
+import PaintApp from './paint-app';
 
 export default function () {
   return (

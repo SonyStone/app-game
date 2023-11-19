@@ -40,7 +40,7 @@ const gl = undefined; /* eslint-disable-line */
  * @property {number} FLOAT_32_UNSIGNED_INT_24_8_REV=36269
  * @property {number} HALF_FLOAT=36193
  */
-export enum DATA_TYPE {
+export const enum DATA_TYPE {
   BYTE = 0x1400,
   UNSIGNED_BYTE = 0x1401,
   SHORT = 0x1402,
@@ -56,7 +56,7 @@ export enum DATA_TYPE {
   UNSIGNED_INT_10F_11F_11F_REV = 0x8c3b,
   UNSIGNED_INT_5_9_9_9_REV = 0x8c3e,
   FLOAT_32_UNSIGNED_INT_24_8_REV = 0x8dad,
-  UNSIGNED_INT_24_8 = 0x84fa,
+  UNSIGNED_INT_24_8 = 0x84fa
 }
 
 const glTypeToTypedArray = {
@@ -75,7 +75,7 @@ const glTypeToTypedArray = {
   [DATA_TYPE.UNSIGNED_INT_10F_11F_11F_REV]: Uint32Array,
   [DATA_TYPE.UNSIGNED_INT_5_9_9_9_REV]: Uint32Array,
   [DATA_TYPE.FLOAT_32_UNSIGNED_INT_24_8_REV]: Uint32Array,
-  [DATA_TYPE.UNSIGNED_INT_24_8]: Uint32Array,
+  [DATA_TYPE.UNSIGNED_INT_24_8]: Uint32Array
 };
 
 export type TypedArray =
@@ -174,14 +174,8 @@ export function getTypedArrayTypeForGLType(type: DATA_TYPE) {
 export const isArrayBuffer =
   typeof SharedArrayBuffer !== 'undefined'
     ? function isArrayBufferOrSharedArrayBuffer(a: any): a is ArrayBufferView {
-        return (
-          a?.buffer &&
-          (a.buffer instanceof ArrayBuffer ||
-            a.buffer instanceof SharedArrayBuffer)
-        );
+        return a?.buffer && (a.buffer instanceof ArrayBuffer || a.buffer instanceof SharedArrayBuffer);
       }
-    : function isArrayBuffer(
-        a: ArrayBufferView | number[] | any
-      ): a is ArrayBufferView {
+    : function isArrayBuffer(a: ArrayBufferView | number[] | any): a is ArrayBufferView {
         return a?.buffer && a.buffer instanceof ArrayBuffer;
       };

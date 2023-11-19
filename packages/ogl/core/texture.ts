@@ -11,9 +11,91 @@ function isPowerOf2(value) {
 
 let ID = 1;
 
+export type CompressedImage = {
+  isCompressedTexture?: boolean;
+  data: Uint8Array;
+  width: number;
+  height: number;
+}[];
+
+export type ImageRepresentation =
+  | HTMLImageElement
+  | HTMLVideoElement
+  | HTMLImageElement[]
+  | ArrayBufferView
+  | CompressedImage;
+
+export interface TextureOptions {
+  image: ImageRepresentation;
+  target: number;
+  type: number;
+  format: number;
+  internalFormat: number;
+  wrapS: number;
+  wrapT: number;
+  generateMipmaps: boolean;
+  minFilter: number;
+  magFilter: number;
+  premultiplyAlpha: boolean;
+  unpackAlignment: number;
+  flipY: boolean;
+  anisotropy: number;
+  level: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * A surface, reflection, or refraction map.
+ * @see {@link https://github.com/oframe/ogl/blob/master/src/core/Texture.js | Source}
+ */
 export class Texture {
+  gl: OGLRenderingContext;
+  id: number;
+
+  image?: ImageRepresentation;
+  target: number;
+  type: number;
+  format: number;
+  internalFormat: number;
+  minFilter: number;
+  magFilter: number;
+  wrapS: number;
+  wrapT: number;
+  generateMipmaps: boolean;
+  premultiplyAlpha: boolean;
+  unpackAlignment: number;
+  flipY: boolean;
+  anisotropy: number;
+  level: number;
+  width: number;
+  height: number;
+  texture: WebGLTexture;
+
+  store: {
+    image?: ImageRepresentation | null;
+  };
+
+  glState: RenderState;
+
+  state: {
+    minFilter: number;
+    magFilter: number;
+    wrapS: number;
+    wrapT: number;
+    anisotropy: number;
+  };
+
+  needsUpdate: boolean;
+  onUpdate?: () => void;
+
+  // Set from texture loader
+  ext?: string;
+  name?: string;
+  loaded?: Promise<Texture>;
+
   constructor(
-    gl,
+    gl: OGLRenderingContext,
     {
       image,
       target = gl.TEXTURE_2D,
@@ -32,7 +114,7 @@ export class Texture {
       level = 0,
       width, // used for RenderTargets or Data Textures
       height = width
-    } = {}
+    }: Partial<TextureOptions> = {}
   ) {
     this.gl = gl;
     this.id = ID++;
@@ -72,14 +154,14 @@ export class Texture {
     this.state.anisotropy = 0;
   }
 
-  bind() {
+  bind(): void {
     // Already bound to active texture unit
     if (this.glState.textureUnits[this.glState.activeTextureUnit] === this.id) return;
     this.gl.bindTexture(this.target, this.texture);
     this.glState.textureUnits[this.glState.activeTextureUnit] = this.id;
   }
 
-  update(textureUnit = 0) {
+  update(textureUnit: number = 0): void {
     const needsUpdate = !(this.image === this.store.image && !this.needsUpdate);
 
     // Make sure that texture is bound to its texture unit

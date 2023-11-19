@@ -13,6 +13,9 @@ import svgLoaderThumbnail from './chrome_2023-11-18_16-04-46.png?url';
 import skinningThumbnail from './chrome_2023-11-18_16-10-52.png?url';
 import multipleLayersThumbnail from './chrome_2023-11-18_16-15-13.png?url';
 import baseTileSizeThumbnail from './chrome_2023-11-18_16-19-18.png?url';
+import breakoutThumbnail from './chrome_2023-11-19_07-21-24.png?url';
+import worldBodiesThumbnail from './chrome_2023-11-19_07-23-34.png?url';
+import wireframeThumbnail from './chrome_2023-11-19_07-29-37.png?url';
 
 function Thumbnail(props: { thumbnail: string; link: string; name?: string }) {
   return (
@@ -68,6 +71,7 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   {
     path: '/3d-wireframe',
     name: '3d Wireframe',
+    Preview: () => <Thumbnail link="/3d-wireframe" thumbnail={wireframeThumbnail} name="3d Wireframe" />,
     component: lazy(() => import('@packages/pixijs-research/webgl/3d-wireframe/3dWireframe'))
   },
   {
@@ -153,19 +157,14 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   {
     path: '/100-world-bodies',
     name: '100 world bodies',
+
+    Preview: () => <Thumbnail link="/100-world-bodies" thumbnail={worldBodiesThumbnail} name="100 world bodies" />,
     component: lazy(() => import('@packages/phaser-examples/physics/matterjs/100 world bodies'))
   },
   {
     path: 'bevy-examples/breakout',
     name: 'breakout',
-    Preview: () => (
-      <Link
-        class="aspect-square w-full p-2 bg-blueGray border border-solid rounded-2 flex"
-        href="bevy-examples/breakout"
-      >
-        <div class="flex bg-white rounded-1 w-full h-full  place-content-center place-items-center">breakout</div>
-      </Link>
-    ),
+    Preview: () => <Thumbnail link="bevy-examples/breakout" thumbnail={breakoutThumbnail} name="Breakout" />,
     component: lazy(() => import('@packages/bevy-examples/breakout'))
   },
   {
@@ -179,6 +178,12 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
     name: 'skinning',
     Preview: () => <Thumbnail link="/ogl-examples/skinning" thumbnail={skinningThumbnail} name="Skinning" />,
     component: lazy(() => import('@packages/ogl-examples/skinning'))
+  },
+  {
+    path: '/ogl-examples/draw-modes',
+    name: 'draw-modes',
+    // Preview: () => <Thumbnail link="/ogl-examples/draw-modes" thumbnail={skinningThumbnail} name="Draw Modes" />,
+    component: lazy(() => import('@packages/ogl-examples/draw-modes/draw-modes'))
   },
   {
     path: '/ldtk-ts-exampless',

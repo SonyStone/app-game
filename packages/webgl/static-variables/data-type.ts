@@ -1,7 +1,7 @@
-import { GL_STATIC_VARIABLES as GL_CONST } from "./static-variables";
+import { GL_STATIC_VARIABLES as GL_CONST } from './static-variables';
 
 enum SDF {
-  ASDAS,
+  ASDAS
 }
 
 /**
@@ -27,7 +27,7 @@ enum SDF {
  * Structures, blocks, and structure members can be arrays.
  * Only 1-dimensional arrays supported.
  */
-export enum GL_DATA_TYPE {
+export const enum GL_DATA_TYPE {
   // * Basic Types
   /**
    * @param bool Boolean
@@ -253,5 +253,5 @@ export enum GL_DATA_TYPE {
   /**
    * @param usampler2DArray access unsigned integer 2D array texture
    */
-  UNSIGNED_INT_SAMPLER_2D_ARRAY = GL_CONST.UNSIGNED_INT_SAMPLER_2D_ARRAY,
+  UNSIGNED_INT_SAMPLER_2D_ARRAY = GL_CONST.UNSIGNED_INT_SAMPLER_2D_ARRAY
 }

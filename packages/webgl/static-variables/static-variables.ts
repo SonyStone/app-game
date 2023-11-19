@@ -1,7 +1,8 @@
 /**
  * @deprecated
  */
-export enum GL_STATIC_VARIABLES {
+export const enum GL_STATIC_VARIABLES {
+  /** Returns a `GLint` indicating the number of active attribute variables to a program. */
   ACTIVE_ATTRIBUTES = 35721,
   ACTIVE_TEXTURE = 34016,
   ACTIVE_UNIFORMS = 35718,
@@ -14,6 +15,12 @@ export enum GL_STATIC_VARIABLES {
   ALWAYS = 519,
   ANY_SAMPLES_PASSED = 35887,
   ANY_SAMPLES_PASSED_CONSERVATIVE = 36202,
+
+  /**
+   * buffer type for using attribute data
+   *
+   * Buffer containing vertex attributes, such as vertex coordinates, texture coordinate data, or vertex color data.
+   */
   ARRAY_BUFFER = 34962,
   ARRAY_BUFFER_BINDING = 34964,
   ATTACHED_SHADERS = 35717,
@@ -568,5 +575,5 @@ export enum GL_STATIC_VARIABLES {
   VERTEX_SHADER = 35633,
   VIEWPORT = 2978,
   WAIT_FAILED = 37149,
-  ZERO = 0,
+  ZERO = 0
 }

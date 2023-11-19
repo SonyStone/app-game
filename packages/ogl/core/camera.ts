@@ -1,13 +1,56 @@
-import { Mat4 } from '../math/Mat4.js';
-import { Vec3 } from '../math/Vec3.js';
-import { Transform } from './Transform.js';
+import { Mat4 } from '../math/mat-4';
+import { Vec3, Vec3Tuple } from '../math/vec-3';
+import { Transform } from './transform';
+
+export interface CameraOptions {
+  near: number;
+  far: number;
+  fov: number;
+  aspect: number;
+  left: number;
+  right: number;
+  bottom: number;
+  top: number;
+  zoom: number;
+}
+
+export interface PerspectiveOptions extends Pick<CameraOptions, 'near' | 'far' | 'fov' | 'aspect'> {}
+
+export interface OrthographicOptions
+  extends Pick<CameraOptions, 'near' | 'far' | 'left' | 'right' | 'bottom' | 'top' | 'zoom'> {}
+
+export type CameraType = 'perspective' | 'orthographic';
 
 const tempMat4 = /* @__PURE__ */ new Mat4();
 const tempVec3a = /* @__PURE__ */ new Vec3();
 const tempVec3b = /* @__PURE__ */ new Vec3();
 
 export class Camera extends Transform {
-  constructor(gl, { near = 0.1, far = 100, fov = 45, aspect = 1, left, right, bottom, top, zoom = 1 } = {}) {
+  projectionMatrix: Mat4;
+  viewMatrix: Mat4;
+  projectionViewMatrix: Mat4;
+  worldPosition: Vec3;
+
+  type: CameraType;
+
+  near!: number;
+  far!: number;
+  fov!: number;
+  aspect!: number;
+  left!: number;
+  right!: number;
+  bottom!: number;
+  top!: number;
+  zoom!: number;
+
+  frustum!: (Vec3 & {
+    constant: number;
+  })[];
+
+  constructor(
+    gl: OGLRenderingContext,
+    { near = 0.1, far = 100, fov = 45, aspect = 1, left, right, bottom, top, zoom = 1 }: Partial<CameraOptions> = {}
+  ) {
     super();
 
     Object.assign(this, { near, far, fov, aspect, left, right, bottom, top, zoom });
@@ -24,7 +67,12 @@ export class Camera extends Transform {
     else this.perspective();
   }
 
-  perspective({ near = this.near, far = this.far, fov = this.fov, aspect = this.aspect } = {}) {
+  perspective({
+    near = this.near,
+    far = this.far,
+    fov = this.fov,
+    aspect = this.aspect
+  }: Partial<PerspectiveOptions> = {}): this {
     Object.assign(this, { near, far, fov, aspect });
     this.projectionMatrix.fromPerspective({ fov: fov * (Math.PI / 180), aspect, near, far });
     this.type = 'perspective';
@@ -39,7 +87,7 @@ export class Camera extends Transform {
     bottom = this.bottom || -1,
     top = this.top || 1,
     zoom = this.zoom
-  } = {}) {
+  }: Partial<OrthographicOptions> = {}): this {
     Object.assign(this, { near, far, left, right, bottom, top, zoom });
     left /= zoom;
     right /= zoom;
@@ -50,7 +98,7 @@ export class Camera extends Transform {
     return this;
   }
 
-  updateMatrixWorld() {
+  updateMatrixWorld(): this {
     super.updateMatrixWorld();
     this.viewMatrix.inverse(this.worldMatrix);
     this.worldMatrix.getTranslation(this.worldPosition);
@@ -60,26 +108,26 @@ export class Camera extends Transform {
     return this;
   }
 
-  lookAt(target) {
+  lookAt(target: Vec3 | Vec3Tuple): this {
     super.lookAt(target, true);
     return this;
   }
 
   // Project 3D coordinate to 2D point
-  project(v) {
+  project(v: Vec3): this {
     v.applyMatrix4(this.viewMatrix);
     v.applyMatrix4(this.projectionMatrix);
     return this;
   }
 
   // Unproject 2D point to 3D coordinate
-  unproject(v) {
+  unproject(v: Vec3): this {
     v.applyMatrix4(tempMat4.inverse(this.projectionMatrix));
     v.applyMatrix4(this.worldMatrix);
     return this;
   }
 
-  updateFrustum() {
+  updateFrustum(): void {
     if (!this.frustum) {
       this.frustum = [new Vec3(), new Vec3(), new Vec3(), new Vec3(), new Vec3(), new Vec3()];
     }
@@ -99,7 +147,7 @@ export class Camera extends Transform {
     }
   }
 
-  frustumIntersectsMesh(node, worldMatrix = node.worldMatrix) {
+  frustumIntersectsMesh(node: Mesh, worldMatrix: Mat4 = node.worldMatrix): boolean {
     // If no position attribute, treat as frustumCulled false
     if (!node.geometry.attributes.position) return true;
 
@@ -116,7 +164,7 @@ export class Camera extends Transform {
     return this.frustumIntersectsSphere(center, radius);
   }
 
-  frustumIntersectsSphere(center, radius) {
+  frustumIntersectsSphere(center: Vec3, radius: number): boolean {
     const normal = tempVec3b;
 
     for (let i = 0; i < 6; i++) {

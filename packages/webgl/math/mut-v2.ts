@@ -1,18 +1,23 @@
-import { Vec3 } from "./v3";
-import {
-  DOWN,
-  LEFT,
-  RIGHT,
-  setDefaultType,
-  UP,
-  Vec2,
-  VecType,
-  ZERO,
-} from "./v2";
+import { DOWN, LEFT, RIGHT, setDefaultType, UP, Vec2, VecType, ZERO } from './v2';
+import { Vec3 } from './v3';
 
 export type { Vec2 };
-
 export { UP, RIGHT, LEFT, DOWN, ZERO, setDefaultType };
+
+/**
+ * Creates a Vec2; may be called with x, y, z to set initial values.
+ * @param {number} [x] Initial x value.
+ * @param {number} [y] Initial y value.
+ * @return {Vec2} the created vector
+ */
+export function create(x: number = 0, y: number = 0): Vec2 {
+  const dst = new VecType(2);
+
+  dst[0] = x;
+  dst[1] = y;
+
+  return dst;
+}
 
 /**
  * Creates a Vec2; may be called with x, y, z to set initial values.
