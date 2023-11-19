@@ -8,13 +8,13 @@ import {
   PerspectiveCamera,
   Scene,
   TextureLoader,
-  WebGLRenderer,
+  WebGLRenderer
 } from 'three';
 
-import { useStats } from '../Stats.provider';
+import { useStats } from '../../src/Stats.provider';
 import { createResize } from './Camera.provider';
-import { OrbitControls } from './controls/OrbitControls';
 import brick_diffuse from './brick_diffuse.jpg';
+import { OrbitControls } from './controls/OrbitControls';
 
 import SharedWorker from './view-offset.worker?sharedworker';
 
@@ -22,8 +22,9 @@ export default function ViewOffset() {
   const canvas = (
     <canvas
       style={{
-        'touch-action': 'none',
-      }}></canvas>
+        'touch-action': 'none'
+      }}
+    ></canvas>
   ) as HTMLCanvasElement;
 
   const sharedWorker = new SharedWorker();
@@ -37,12 +38,7 @@ export default function ViewOffset() {
   const stats = useStats();
   const resize = createResize();
 
-  const camera = new PerspectiveCamera(
-    50,
-    window.innerWidth / window.innerHeight,
-    1,
-    10000
-  );
+  const camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
   camera.position.z = 300;
 
   const controls = new OrbitControls();
@@ -72,7 +68,7 @@ export default function ViewOffset() {
     const geometry = new BoxGeometry(120, 120, 120);
     const material1 = new MeshBasicMaterial({
       color: 0xffffff,
-      wireframe: true,
+      wireframe: true
     });
 
     const mesh1 = new Mesh(geometry, material1);
@@ -102,14 +98,7 @@ export default function ViewOffset() {
     const fullWidth = 1920 + 2560 + 1920;
     const fullHeight = 1440; //+ 1200;
 
-    camera.setViewOffset(
-      fullWidth,
-      fullHeight,
-      window.screenX + 1920,
-      window.screenY,
-      width,
-      height
-    );
+    camera.setViewOffset(fullWidth, fullHeight, window.screenX + 1920, window.screenY, width, height);
 
     renderer.render(scene, camera);
     stats.end();
@@ -122,9 +111,7 @@ export default function ViewOffset() {
     camera.matrixWorld.fromArray(message.data.matrixWorld);
     camera.matrixWorldInverse.fromArray(message.data.matrixWorldInverse);
     camera.projectionMatrix.fromArray(message.data.projectionMatrix);
-    camera.projectionMatrixInverse.fromArray(
-      message.data.projectionMatrixInverse
-    );
+    camera.projectionMatrixInverse.fromArray(message.data.projectionMatrixInverse);
     camera.position.fromArray(message.data.position);
     camera.quaternion.fromArray(message.data.quaternion);
     // camera.updateProjectionMatrix();
@@ -139,7 +126,7 @@ export default function ViewOffset() {
       projectionMatrix: camera.projectionMatrix.toArray(),
       projectionMatrixInverse: camera.projectionMatrixInverse.toArray(),
       position: camera.position.toArray(),
-      quaternion: camera.quaternion.toArray(),
+      quaternion: camera.quaternion.toArray()
     };
 
     sharedWorker.port.postMessage(cameraData);

@@ -8,10 +8,10 @@ import {
   MeshBasicMaterial,
   Scene,
   TextureLoader,
-  WebGLRenderer,
+  WebGLRenderer
 } from 'three';
 
-import { useStats } from '../Stats.provider';
+import { useStats } from '../../src/Stats.provider';
 import brick_diffuse from './brick_diffuse.jpg';
 import { useCamera } from './Camera.provider';
 import { EffectComposer } from './postprocessing/EffectComposer';
@@ -22,14 +22,15 @@ export default function PostprocessingSmaa() {
   const canvas = (
     <canvas
       style={{
-        'touch-action': 'none',
+        'touch-action': 'none'
         // 'image-rendering': 'pixelated',
-      }}></canvas>
+      }}
+    ></canvas>
   ) as HTMLCanvasElement;
 
   const renderer = new WebGLRenderer({
     antialias: true,
-    canvas,
+    canvas
   });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);

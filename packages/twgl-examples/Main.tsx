@@ -8,13 +8,13 @@ import {
   GL_DATA_TYPE,
   GL_SHADER_TYPE,
   GL_STATIC_VARIABLES,
-  GL_TEXTURES,
+  GL_TEXTURES
 } from '@webgl/static-variables';
 import { createEffect, onCleanup } from 'solid-js';
 
-import { getAttributeData } from '../my-pixijs/webgl/getAttributeData';
-import { getUniformData } from '../my-pixijs/webgl/getUniformData';
-import { useCamera } from '../three/Camera.provider';
+import { getAttributeData } from '@packages/pixijs-research/webgl/getAttributeData';
+import { getUniformData } from '@packages/pixijs-research/webgl/getUniformData';
+import { useCamera } from '@packages/three-examples/Camera.provider';
 import fragmentSrc from './shaders/frag_shader.frag?raw';
 import vertexSrc from './shaders/vert_shader.vert?raw';
 
@@ -66,22 +66,21 @@ export default function main() {
 
         1, 1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1,
 
-        -1, 1, -1, 1, 1, -1, 1, -1, -1, -1, -1, -1,
+        -1, 1, -1, 1, 1, -1, 1, -1, -1, -1, -1, -1
       ],
       a_normal: [
-        1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,
-        0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
-        -1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
-        0, 0, -1,
+        1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+        0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+        -1
       ],
       a_texcoord: [
-        1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1,
-        1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1,
+        1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0,
+        1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1
       ],
       indices: [
-        0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12,
-        14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22, 20, 22, 23,
-      ],
+        0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21,
+        22, 20, 22, 23
+      ]
     },
     uniforms: {
       u_lightWorldPos: [1, 8, -10],
@@ -93,12 +92,9 @@ export default function main() {
       u_diffuse: {
         min: GL_TEXTURES.NEAREST,
         mag: GL_TEXTURES.NEAREST,
-        src: [
-          255, 255, 255, 255, 192, 192, 192, 255, 192, 192, 192, 255, 255, 255,
-          255, 255,
-        ],
-      },
-    },
+        src: [255, 255, 255, 255, 192, 192, 192, 255, 192, 192, 192, 255, 255, 255, 255, 255]
+      }
+    }
   };
 
   const gl = canvas.getContext('webgl2')!;
@@ -123,11 +119,7 @@ export default function main() {
   );
   const normalBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
-  gl.bufferData(
-    GL_BUFFER_TYPE.ARRAY_BUFFER,
-    new Float32Array(scene.arrays.a_normal),
-    GL_STATIC_VARIABLES.STATIC_DRAW
-  );
+  gl.bufferData(GL_BUFFER_TYPE.ARRAY_BUFFER, new Float32Array(scene.arrays.a_normal), GL_STATIC_VARIABLES.STATIC_DRAW);
   const texcoordBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, texcoordBuffer);
   gl.bufferData(
@@ -156,16 +148,8 @@ export default function main() {
     GL_STATIC_VARIABLES.UNSIGNED_BYTE,
     new Uint8Array(scene.uniforms.u_diffuse.src)
   );
-  gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_MIN_FILTER,
-    scene.uniforms.u_diffuse.min
-  );
-  gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_MAG_FILTER,
-    scene.uniforms.u_diffuse.mag
-  );
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MIN_FILTER, scene.uniforms.u_diffuse.min);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MAG_FILTER, scene.uniforms.u_diffuse.mag);
 
   // buffers
   // textures
@@ -208,46 +192,20 @@ export default function main() {
   gl.bindTexture(GL_TEXTURES.TEXTURE_2D, tex);
 
   gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, positionBuffer);
-  gl.vertexAttribPointer(
-    attributes.a_position.location,
-    3,
-    gl.FLOAT,
-    false,
-    0,
-    0
-  );
+  gl.vertexAttribPointer(attributes.a_position.location, 3, gl.FLOAT, false, 0, 0);
   gl.enableVertexAttribArray(attributes.a_position.location);
 
   gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, normalBuffer);
-  gl.vertexAttribPointer(
-    attributes.a_normal.location,
-    3,
-    GL_DATA_TYPE.FLOAT,
-    false,
-    0,
-    0
-  );
+  gl.vertexAttribPointer(attributes.a_normal.location, 3, GL_DATA_TYPE.FLOAT, false, 0, 0);
   gl.enableVertexAttribArray(attributes.a_normal.location);
 
   gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, texcoordBuffer);
-  gl.vertexAttribPointer(
-    attributes.a_texcoord.location,
-    2,
-    GL_DATA_TYPE.FLOAT,
-    false,
-    0,
-    0
-  );
+  gl.vertexAttribPointer(attributes.a_texcoord.location, 2, GL_DATA_TYPE.FLOAT, false, 0, 0);
   gl.enableVertexAttribArray(attributes.a_texcoord.location);
 
   gl.bindBuffer(GL_BUFFER_TYPE.ELEMENT_ARRAY_BUFFER, indicesBuffer);
 
-  gl.drawElements(
-    GL_STATIC_VARIABLES.TRIANGLES,
-    6 * 6,
-    GL_STATIC_VARIABLES.UNSIGNED_SHORT,
-    0
-  );
+  gl.drawElements(GL_STATIC_VARIABLES.TRIANGLES, 6 * 6, GL_STATIC_VARIABLES.UNSIGNED_SHORT, 0);
 
   const cameraObj = useCamera();
   let cameraType: ReturnType<typeof cameraObj.cameraType>;
@@ -270,15 +228,7 @@ export default function main() {
       let width = aspect * height;
       let left = -0.5 * width;
 
-      projection = m4.makePerspective(
-        left,
-        left + width,
-        top - height,
-        top,
-        near,
-        far,
-        projection
-      );
+      projection = m4.makePerspective(left, left + width, top - height, top, near, far, projection);
       projectionInverse = m4.inverse(projection, projectionInverse);
     } else {
       let zoom = 200;
@@ -311,12 +261,7 @@ export default function main() {
     uniforms.u_worldInverseTranspose.set(m4.transpose(m4.inverse(world)));
     uniforms.u_worldViewProjection.set(m4.multiply(viewProjection, world));
 
-    gl.drawElements(
-      GL_STATIC_VARIABLES.TRIANGLES,
-      6 * 6,
-      GL_STATIC_VARIABLES.UNSIGNED_SHORT,
-      0
-    );
+    gl.drawElements(GL_STATIC_VARIABLES.TRIANGLES, 6 * 6, GL_STATIC_VARIABLES.UNSIGNED_SHORT, 0);
 
     id = requestAnimationFrame(render);
   }
@@ -333,16 +278,8 @@ export default function main() {
 function createProgram(gl: WebGL2RenderingContext | WebGLRenderingContext) {
   return {
     shaders(vertexSrc: string, fragmentSrc: string) {
-      const vertShader = compileShader(
-        gl,
-        GL_SHADER_TYPE.VERTEX_SHADER,
-        vertexSrc
-      );
-      const fragShader = compileShader(
-        gl,
-        GL_SHADER_TYPE.FRAGMENT_SHADER,
-        fragmentSrc
-      );
+      const vertShader = compileShader(gl, GL_SHADER_TYPE.VERTEX_SHADER, vertexSrc);
+      const fragShader = compileShader(gl, GL_SHADER_TYPE.FRAGMENT_SHADER, fragmentSrc);
 
       const program = linkProgram(gl, vertShader, fragShader);
 
@@ -350,6 +287,6 @@ function createProgram(gl: WebGL2RenderingContext | WebGLRenderingContext) {
       gl.deleteShader(fragShader);
 
       return program;
-    },
+    }
   };
 }

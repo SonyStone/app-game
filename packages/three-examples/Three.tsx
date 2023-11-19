@@ -1,4 +1,4 @@
-import { createEffect, onCleanup } from "solid-js";
+import { createEffect, onCleanup } from 'solid-js';
 import {
   BoxGeometry,
   BufferGeometry,
@@ -11,12 +11,12 @@ import {
   Object3D,
   Scene,
   Vector3,
-  WebGLRenderer,
-} from "three";
+  WebGLRenderer
+} from 'three';
 
-import { useStats } from "../Stats.provider";
-import { useCamera } from "./Camera.provider";
-import s from "./SvgLoader.module.scss";
+import { useStats } from '../../src/Stats.provider';
+import { useCamera } from './Camera.provider';
+import s from './SvgLoader.module.scss';
 
 export default function Three() {
   const canvas = (<canvas class={s.canvas}></canvas>) as HTMLCanvasElement;
@@ -28,7 +28,7 @@ export default function Three() {
   const renderer = new WebGLRenderer({
     alpha: true,
     antialias: true,
-    canvas,
+    canvas
   });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -63,11 +63,7 @@ export default function Three() {
 
   {
     const material = new LineBasicMaterial({ color: 0x0000ff });
-    const points = [
-      new Vector3(-500, 0, 0),
-      new Vector3(0, 500, 0),
-      new Vector3(500, 0, 0),
-    ];
+    const points = [new Vector3(-500, 0, 0), new Vector3(0, 500, 0), new Vector3(500, 0, 0)];
 
     const geometry = new BufferGeometry().setFromPoints(points);
     const line = new Line(geometry, material);
@@ -102,7 +98,7 @@ export default function Three() {
     render();
   });
 
-  controls.addEventListener("change", render);
+  controls.addEventListener('change', render);
 
   function render() {
     stats.begin();
@@ -115,7 +111,7 @@ export default function Three() {
     renderer.dispose();
     controls.dispose();
     scene.clear();
-    controls.removeEventListener("change", render);
+    controls.removeEventListener('change', render);
     cancelAnimationFrame(id);
   });
 

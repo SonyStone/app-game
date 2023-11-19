@@ -1,8 +1,8 @@
 import { createEffect, createSignal, For, onCleanup } from 'solid-js';
 
-import PauseIcon from '../../player/icons/pause.svg';
-import PlayIcon from '../../player/icons/play.svg';
-import { useStats } from '../../Stats.provider';
+import PauseIcon from '@packages/film-annotation-player/icons/pause.svg';
+import PlayIcon from '@packages/film-annotation-player/icons/play.svg';
+import { useStats } from '../../src/Stats.provider';
 import s from './Animations.module.scss';
 import { Box, Slider } from './Box';
 import { back, bounce, circ, expo, linear, sine } from './core/easing-2';
@@ -71,9 +71,7 @@ export default function () {
   return (
     <>
       <h1>Ease Animations</h1>
-      <button onClick={() => setPlay(!play())}>
-        {play() ? <PauseIcon /> : <PlayIcon />}
-      </button>
+      <button onClick={() => setPlay(!play())}>{play() ? <PauseIcon /> : <PlayIcon />}</button>
       <div>speed: {speed()}</div>
       <input
         style={{ width: `${width}vw` }}
@@ -115,69 +113,70 @@ export default function () {
           each={[
             {
               name: 'linear',
-              fn: () => linear(time()),
+              fn: () => linear(time())
             },
             {
               name: 'back.out',
-              fn: () => back.out(time()),
+              fn: () => back.out(time())
             },
             {
               name: 'back.in',
-              fn: () => back.in(time()),
+              fn: () => back.in(time())
             },
             {
               name: 'back.inOut',
-              fn: () => back.inOut(time()),
+              fn: () => back.inOut(time())
             },
             {
               name: 'bounce.out',
-              fn: () => bounce.out(time()),
+              fn: () => bounce.out(time())
             },
             {
               name: 'bounce.in',
-              fn: () => bounce.in(time()),
+              fn: () => bounce.in(time())
             },
             {
               name: 'bounce.inOut',
-              fn: () => bounce.inOut(time()),
+              fn: () => bounce.inOut(time())
             },
             {
               name: 'circ.out',
-              fn: () => circ.out(time()),
+              fn: () => circ.out(time())
             },
             {
               name: 'circ.in',
-              fn: () => circ.in(time()),
+              fn: () => circ.in(time())
             },
             {
               name: 'circ.inOut',
-              fn: () => circ.inOut(time()),
+              fn: () => circ.inOut(time())
             },
             {
               name: 'expo.out',
-              fn: () => expo.out(time()),
+              fn: () => expo.out(time())
             },
             {
               name: 'expo.in',
-              fn: () => expo.in(time()),
+              fn: () => expo.in(time())
             },
             {
               name: 'expo.inOut',
-              fn: () => expo.inOut(time()),
+              fn: () => expo.inOut(time())
             },
             {
               name: 'sine.out',
-              fn: () => sine.out(time()),
+              fn: () => sine.out(time())
             },
             {
               name: 'sine.in',
-              fn: () => sine.in(time()),
+              fn: () => sine.in(time())
             },
             {
               name: 'sine.inOut',
-              fn: () => sine.inOut(time()),
-            },
-          ]}>
+              fn: () => sine.inOut(time())
+            }
+          ]}
+        >
           {(item) => (
             <div class={s.example}>
               <div>{item.name}:</div>

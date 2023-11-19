@@ -95,7 +95,7 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   {
     path: '/babylon',
     name: 'Babylon.js',
-    component: lazy(() => import('@packages/babylonjs-examples/index'))
+    component: lazy(() => import('@packages/babylonjs-examples/babylon-example'))
   },
   {
     path: '/three',
