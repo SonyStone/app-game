@@ -11,8 +11,59 @@ const tempVec3 = /* @__PURE__ */ new Vec3();
 const tempVec2a = /* @__PURE__ */ new Vec2();
 const tempVec2b = /* @__PURE__ */ new Vec2();
 
+import type { Camera } from '../core/camera';
+import { Mat4 } from '../math/mat-4';
+
+export type ZoomStyle = 'dolly' | 'fov';
+
+export interface OrbitOptions {
+  element: HTMLElement | Document;
+  enabled: boolean;
+  target: Vec3;
+  ease: number;
+  inertia: number;
+  enableRotate: boolean;
+  rotateSpeed: number;
+  autoRotate: boolean;
+  autoRotateSpeed: number;
+  enableZoom: boolean;
+  zoomSpeed: number;
+  zoomStyle: ZoomStyle;
+  enablePan: boolean;
+  panSpeed: number;
+  minPolarAngle: number;
+  maxPolarAngle: number;
+  minAzimuthAngle: number;
+  maxAzimuthAngle: number;
+  minDistance: number;
+  maxDistance: number;
+}
+
+/**
+ * Orbit controls based on the three.js `OrbitControls` class, rewritten using ES6 with some
+ * additions and subtractions.
+ * @see {@link https://github.com/oframe/ogl/blob/master/src/extras/Orbit.js | Source}
+ * @see {@link https://github.com/mrdoob/three.js/blob/master/examples/jsm/controls/OrbitControls.js | `OrbitControls` Source}
+ */
 export function Orbit(
-  object,
+  this: {
+    enabled: boolean;
+    target: Vec3;
+    zoomStyle: ZoomStyle;
+
+    minDistance: number;
+    maxDistance: number;
+
+    offset: Vec3;
+    mouseButtons: { ORBIT: 0; ZOOM: 1; PAN: 2 };
+
+    update(): void;
+
+    forcePosition(): void;
+
+    remove(): void;
+  },
+  object: Camera,
   {
     element = document,
     enabled = true,
@@ -34,7 +85,7 @@ export function Orbit(
     maxAzimuthAngle = Infinity,
     minDistance = 0,
     maxDistance = Infinity
-  } = {}
+  }: Partial<OrbitOptions> = {}
 ) {
   this.enabled = enabled;
   this.target = target;
@@ -127,20 +178,20 @@ export function Orbit(
     return Math.pow(0.95, zoomSpeed);
   }
 
-  function panLeft(distance, m) {
+  function panLeft(distance: number, m: Mat4) {
     tempVec3.set(m[0], m[1], m[2]);
     tempVec3.multiply(-distance);
     panDelta.add(tempVec3);
   }
 
-  function panUp(distance, m) {
+  function panUp(distance: number, m: Mat4) {
     tempVec3.set(m[4], m[5], m[6]);
     tempVec3.multiply(distance);
     panDelta.add(tempVec3);
   }
 
-  const pan = (deltaX, deltaY) => {
-    let el = element === document ? document.body : element;
+  const pan = (deltaX: number, deltaY: number) => {
+    const el = element === document ? document.body : (element as HTMLElement);
     tempVec3.copy(object.position).sub(this.target);
     let targetDistance = tempVec3.distance();
     targetDistance *= Math.tan((((object.fov || 45) / 2) * Math.PI) / 180.0);
@@ -148,12 +199,14 @@ export function Orbit(
     panUp((2 * deltaY * targetDistance) / el.clientHeight, object.matrix);
   };
 
-  const dolly = (dollyScale) => {
-    if (this.zoomStyle === 'dolly') sphericalDelta.radius /= dollyScale;
-    else {
+  const dolly = (dollyScale: number) => {
+    if (this.zoomStyle === 'dolly') {
+      sphericalDelta.radius /= dollyScale;
+    } else {
       object.fov /= dollyScale;
-      if (object.type === 'orthographic') object.orthographic();
-      else object.perspective();
+      if (object.type === 'orthographic') {
+        object.orthographic();
+      } else object.perspective();
     }
   };
 
@@ -162,16 +215,16 @@ export function Orbit(
     sphericalDelta.theta -= angle;
   }
 
-  function handleMoveRotate(x, y) {
+  function handleMoveRotate(x: number, y: number) {
     tempVec2a.set(x, y);
     tempVec2b.sub(tempVec2a, rotateStart).multiply(rotateSpeed);
-    let el = element === document ? document.body : element;
+    const el = element === document ? document.body : (element as HTMLElement);
     sphericalDelta.theta -= (2 * Math.PI * tempVec2b.x) / el.clientHeight;
     sphericalDelta.phi -= (2 * Math.PI * tempVec2b.y) / el.clientHeight;
     rotateStart.copy(tempVec2a);
   }
 
-  function handleMouseMoveDolly(e) {
+  function handleMouseMoveDolly(e: MouseEvent) {
     tempVec2a.set(e.clientX, e.clientY);
     tempVec2b.sub(tempVec2a, dollyStart);
     if (tempVec2b.y > 0) {
@@ -182,14 +235,14 @@ export function Orbit(
     dollyStart.copy(tempVec2a);
   }
 
-  function handleMovePan(x, y) {
+  function handleMovePan(x: number, y: number) {
     tempVec2a.set(x, y);
     tempVec2b.sub(tempVec2a, panStart).multiply(panSpeed);
     pan(tempVec2b.x, tempVec2b.y);
     panStart.copy(tempVec2a);
   }
 
-  function handleTouchStartDollyPan(e) {
+  function handleTouchStartDollyPan(e: TouchEvent) {
     if (enableZoom) {
       let dx = e.touches[0].pageX - e.touches[1].pageX;
       let dy = e.touches[0].pageY - e.touches[1].pageY;
@@ -204,7 +257,7 @@ export function Orbit(
     }
   }
 
-  function handleTouchMoveDollyPan(e) {
+  function handleTouchMoveDollyPan(e: TouchEvent) {
     if (enableZoom) {
       let dx = e.touches[0].pageX - e.touches[1].pageX;
       let dy = e.touches[0].pageY - e.touches[1].pageY;
@@ -222,7 +275,7 @@ export function Orbit(
     }
   }
 
-  const onMouseDown = (e) => {
+  const onMouseDown = (e: MouseEvent) => {
     if (!this.enabled) return;
 
     switch (e.button) {
@@ -249,7 +302,7 @@ export function Orbit(
     }
   };
 
-  const onMouseMove = (e) => {
+  const onMouseMove = (e: MouseEvent) => {
     if (!this.enabled) return;
 
     switch (state) {
@@ -274,7 +327,7 @@ export function Orbit(
     state = STATE.NONE;
   };
 
-  const onMouseWheel = (e) => {
+  const onMouseWheel = (e: WheelEvent) => {
     if (!this.enabled || !enableZoom || (state !== STATE.NONE && state !== STATE.ROTATE)) return;
     e.stopPropagation();
     e.preventDefault();
@@ -286,7 +339,7 @@ export function Orbit(
     }
   };
 
-  const onTouchStart = (e) => {
+  const onTouchStart = (e: TouchEvent) => {
     if (!this.enabled) return;
     e.preventDefault();
 
@@ -306,7 +359,7 @@ export function Orbit(
     }
   };
 
-  const onTouchMove = (e) => {
+  const onTouchMove = (e: TouchEvent) => {
     if (!this.enabled) return;
     e.preventDefault();
     e.stopPropagation();
@@ -330,27 +383,27 @@ export function Orbit(
     state = STATE.NONE;
   };
 
-  const onContextMenu = (e) => {
+  const onContextMenu = (e: Event) => {
     if (!this.enabled) return;
     e.preventDefault();
   };
 
   function addHandlers() {
     element.addEventListener('contextmenu', onContextMenu, false);
-    element.addEventListener('mousedown', onMouseDown, false);
-    element.addEventListener('wheel', onMouseWheel, { passive: false });
-    element.addEventListener('touchstart', onTouchStart, { passive: false });
+    element.addEventListener('mousedown', onMouseDown as (e: Event) => void, false);
+    element.addEventListener('wheel', onMouseWheel as (e: Event) => void, { passive: false });
+    element.addEventListener('touchstart', onTouchStart as (e: Event) => void, { passive: false });
     element.addEventListener('touchend', onTouchEnd, false);
-    element.addEventListener('touchmove', onTouchMove, { passive: false });
+    element.addEventListener('touchmove', onTouchMove as (e: Event) => void, { passive: false });
   }
 
   this.remove = function () {
     element.removeEventListener('contextmenu', onContextMenu);
-    element.removeEventListener('mousedown', onMouseDown);
-    element.removeEventListener('wheel', onMouseWheel);
-    element.removeEventListener('touchstart', onTouchStart);
+    element.removeEventListener('mousedown', onMouseDown as (e: Event) => void);
+    element.removeEventListener('wheel', onMouseWheel as (e: Event) => void);
+    element.removeEventListener('touchstart', onTouchStart as (e: Event) => void);
     element.removeEventListener('touchend', onTouchEnd);
-    element.removeEventListener('touchmove', onTouchMove);
+    element.removeEventListener('touchmove', onTouchMove as (e: Event) => void);
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('mouseup', onMouseUp);
   };

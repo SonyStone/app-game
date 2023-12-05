@@ -1,3 +1,7 @@
+import { Mat4Tuple } from 'ogl';
+import { Mat3, Mat3Tuple } from '../mat-3';
+import { Mat4 } from '../mat-4';
+import { Quat, QuatTuple } from '../quat';
 import type { Vec3, Vec3Tuple } from '../vec-3';
 
 const EPSILON = 0.000001;
@@ -273,7 +277,7 @@ export function lerp<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b:
  * @param {mat4} m matrix to transform with
  * @returns {vec3} out
  */
-export function transformMat4<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, m): T {
+export function transformMat4<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, m: Mat4 | Mat4Tuple): T {
   let x = a[0],
     y = a[1],
     z = a[2];
@@ -290,7 +294,7 @@ export function transformMat4<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple |
  * Same as above but doesn't apply translation.
  * Useful for rays.
  */
-export function scaleRotateMat4<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, m): T {
+export function scaleRotateMat4<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, m: Mat4 | Mat4Tuple): T {
   let x = a[0];
   let y = a[1];
   let z = a[2];
@@ -312,7 +316,7 @@ export function scaleRotateMat4<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple
  * @param {mat3} m the 3x3 matrix to transform with
  * @returns {vec3} out
  */
-export function transformMat3<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, m): T {
+export function transformMat3<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, m: Mat3 | Mat3Tuple): T {
   let x = a[0],
     y = a[1],
     z = a[2];
@@ -331,7 +335,7 @@ export function transformMat3<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple |
  * @param {quat} q quaternion to transform with
  * @returns {vec3} out
  */
-export function transformQuat<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, q): T {
+export function transformQuat<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, q: Quat | QuatTuple): T {
   // benchmarks: https://jsperf.com/quaternion-transform-vec3-implementations-fixed
 
   let x = a[0],

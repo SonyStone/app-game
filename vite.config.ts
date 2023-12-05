@@ -23,7 +23,8 @@ export default defineConfig({
     // rust()
   ],
   server: {
-    port: 3200
+    port: 3200,
+    host: '0.0.0.0'
   },
   publicDir: './public',
   resolve: {

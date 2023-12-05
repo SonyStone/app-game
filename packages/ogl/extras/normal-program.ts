@@ -1,38 +1,21 @@
 import { Program } from '../core/program';
 
-const vertex = /* glsl */ `
-    precision highp float;
-    precision highp int;
+import fragment from './normal-program.frag';
+import vertex from './normal-program.vert';
 
-    attribute vec3 position;
-    attribute vec3 normal;
+import type { ProgramOptions } from '../core/program';
+import type { OGLRenderingContext } from '../core/renderer';
 
-    uniform mat3 normalMatrix;
-    uniform mat4 modelViewMatrix;
-    uniform mat4 projectionMatrix;
-
-    varying vec3 vNormal;
-
-    void main() {
-        vNormal = normalize(normalMatrix * normal);
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-`;
-
-const fragment = /* glsl */ `
-    precision highp float;
-    precision highp int;
-
-    varying vec3 vNormal;
-
-    void main() {
-        gl_FragColor.rgb = normalize(vNormal);
-        gl_FragColor.a = 1.0;
-    }
-`;
-
-export function NormalProgram(gl) {
+/**
+ * A normal program.
+ * @see {@link https://github.com/oframe/ogl/blob/master/src/extras/NormalProgram.js | Source}
+ */
+export function NormalProgram(
+  gl: OGLRenderingContext,
+  options?: Partial<Omit<ProgramOptions, 'vertex' | 'fragment' | 'cullFace'>>
+) {
   return new Program(gl, {
+    ...options,
     vertex: vertex,
     fragment: fragment,
     cullFace: false

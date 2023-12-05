@@ -1,4 +1,4 @@
-import { Texture } from '../core/Texture';
+import { Texture } from '../core/texture';
 import { KTXTexture } from './KTX-texture';
 
 // For compressed textures, generate using https://github.com/TimvanScherpenzeel/texture-compressor

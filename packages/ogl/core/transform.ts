@@ -2,6 +2,7 @@ import { Euler } from '../math/euler';
 import { Mat4 } from '../math/mat-4';
 import { Quat } from '../math/quat';
 import { Vec3, Vec3Tuple } from '../math/vec-3';
+import { Mesh } from './mesh';
 
 /**
  * The base class for most objects and provides a set of properties and methods for manipulating
@@ -12,88 +13,73 @@ export class Transform {
    * The parent.
    * @see {@link https://en.wikipedia.org/wiki/Scene_graph | scene graph}.
    */
-  parent: Transform | null;
+  parent: Transform | null = null;
 
   /**
    * An array with the children.
    */
-  children: Transform[];
+  children: Transform[] = [];
 
   /**
    * The visibility.
    */
-  visible: boolean;
+  visible: boolean = true;
 
   /**
    * The local transform matrix.
    */
-  matrix: Mat4;
+  matrix: Mat4 = new Mat4();
 
   /**
    * The world transform matrix.
    */
-  worldMatrix: Mat4;
+  worldMatrix: Mat4 = new Mat4();
 
   /**
    * When set, it updates the local transform matrix every frame and also updates the worldMatrix
    * property.
    * @defaultValue `true`
    */
-  matrixAutoUpdate: boolean;
+  matrixAutoUpdate: boolean = true;
 
   /**
    * When set, it updates the world transform matrix in that frame and resets this property to
    * false.
    * @defaultValue `false`
    */
-  worldMatrixNeedsUpdate: boolean;
+  worldMatrixNeedsUpdate: boolean = false;
 
   /**
    * The local position.
    */
-  position: Vec3;
+  position: Vec3 = new Vec3();
 
   /**
    * The local rotation as a {@link Quat | Quaternion}.
    */
-  quaternion: Quat;
+  quaternion: Quat = new Quat();
 
   /**
    * The local scale.
    * @defaultValue `new Vec3(1)`
    */
-  scale: Vec3;
+  scale: Vec3 = new Vec3(1);
 
   /**
    * The local rotation as {@link Euler | Euler angles}.
    */
-  rotation: Euler;
+  rotation: Euler = new Euler();
 
   /**
    * Up vector used by the {@link lookAt | lookAt} method.
    * @defaultValue `new Vec3(0, 1, 0)`
    */
-  up: Vec3;
+  up: Vec3 = new Vec3(0, 1, 0);
 
   /**
    * Creates a new transform object.
    */
   constructor() {
-    this.parent = null;
-    this.children = [];
-    this.visible = true;
-
-    this.matrix = new Mat4();
-    this.worldMatrix = new Mat4();
-    this.matrixAutoUpdate = true;
-    this.worldMatrixNeedsUpdate = false;
-
-    this.position = new Vec3();
-    this.quaternion = new Quat();
-    this.scale = new Vec3(1);
-    this.rotation = new Euler();
-    this.up = new Vec3(0, 1, 0);
-
     this.rotation.onChange = () => this.quaternion.fromEuler(this.rotation);
     this.quaternion.onChange = () => this.rotation.fromQuaternion(this.quaternion);
   }
@@ -158,7 +144,7 @@ export class Transform {
    * Executes the callback on this transform object and all descendants.
    * @param {Function} callback The callback.
    */
-  traverse(callback: (node: Transform) => boolean | void): void {
+  traverse(callback: (node: Transform | Mesh) => boolean | void): void {
     // Return true in callback to stop traversing children
     if (callback(this)) return;
     for (let i = 0, l = this.children.length; i < l; i++) {

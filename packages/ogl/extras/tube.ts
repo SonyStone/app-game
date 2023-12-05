@@ -1,6 +1,6 @@
-import { Geometry } from '../core/Geometry';
-import { Vec2 } from '../math/Vec2';
-import { Vec3 } from '../math/Vec3';
+import { Geometry } from '../core/geometry';
+import { Vec2 } from '../math/vec-2';
+import { Vec3 } from '../math/vec-3';
 
 // helper variables
 const vertex = /* @__PURE__ */ new Vec3();

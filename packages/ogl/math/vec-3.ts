@@ -1,4 +1,7 @@
+import { Mat3Tuple } from 'ogl';
 import * as Vec3Func from './functions/vec-3-func';
+import { Mat3 } from './mat-3';
+import { Mat4 } from './mat-4';
 import type { Quat, QuatTuple } from './quat';
 
 export type Vec3Tuple = [x: number, y: number, z: number];
@@ -143,17 +146,17 @@ export class Vec3 extends Array<number> implements Vec3Tuple {
     return Vec3Func.exactEquals(this, v);
   }
 
-  applyMatrix3(mat3) {
+  applyMatrix3(mat3: Mat3 | Mat3Tuple) {
     Vec3Func.transformMat3(this, this, mat3);
     return this;
   }
 
-  applyMatrix4(mat4) {
+  applyMatrix4(mat4: Mat4) {
     Vec3Func.transformMat4(this, this, mat4);
     return this;
   }
 
-  scaleRotateMatrix4(mat4) {
+  scaleRotateMatrix4(mat4: Mat4) {
     Vec3Func.scaleRotateMat4(this, this, mat4);
     return this;
   }
@@ -176,7 +179,7 @@ export class Vec3 extends Array<number> implements Vec3Tuple {
     return new Vec3(this[0], this[1], this[2]);
   }
 
-  fromArray(a: number[], o = 0) {
+  fromArray(a: number[] | Float32Array | Uint32Array | Uint16Array, o = 0) {
     this[0] = a[o];
     this[1] = a[o + 1];
     this[2] = a[o + 2];
@@ -190,7 +193,7 @@ export class Vec3 extends Array<number> implements Vec3Tuple {
     return a;
   }
 
-  transformDirection(mat4) {
+  transformDirection(mat4: Mat4) {
     const x = this[0];
     const y = this[1];
     const z = this[2];

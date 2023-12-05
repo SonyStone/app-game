@@ -2,6 +2,7 @@ import { Link, RouteDefinition } from '@solidjs/router';
 import { Component, JSX, Show, lazy } from 'solid-js';
 import s from './App.module.scss';
 
+import multitouchThumbnail from '@packages/hammer-examples/thumbnail.png';
 import rpgThumbnail from './2023-11-18_15-27-57.png?url';
 import spritesThumbnail from './chrome_2023-11-18_14-44-26.png?url';
 import gameOfLifeThumbnail from './chrome_2023-11-18_15-20-36.png?url';
@@ -17,10 +18,12 @@ import breakoutThumbnail from './chrome_2023-11-19_07-21-24.png?url';
 import worldBodiesThumbnail from './chrome_2023-11-19_07-23-34.png?url';
 import wireframeThumbnail from './chrome_2023-11-19_07-29-37.png?url';
 
-function Thumbnail(props: { thumbnail: string; link: string; name?: string }) {
+function Thumbnail(props: { thumbnail?: string; href: string; name?: string }) {
   return (
-    <Link class="aspect-square w-full p-2 relative bg-slate-200 rounded-2 flex" href={props.link}>
-      <img class="rounded-1 object-cover" src={props.thumbnail} />
+    <Link class="aspect-square w-full p-2 relative bg-slate-200 rounded-2 flex" href={props.href}>
+      <Show when={!!props.thumbnail}>
+        <img class="rounded-1 object-cover" src={props.thumbnail} />
+      </Show>
       <Show when={!!props.name}>
         <span class="absolute bottom-0 start-0 px-2 pb-2 max-w-full rounded-se-2 text-2xl leading-6 truncate bg-slate-200">
           {props.name}
@@ -30,7 +33,10 @@ function Thumbnail(props: { thumbnail: string; link: string; name?: string }) {
   );
 }
 
-export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: Component })[] = [
+export const routes: (RouteDefinition & {
+  name: string | JSX.Element;
+  Preview?: Component<{ name: string; path: string }>;
+})[] = [
   {
     path: '/',
     name: 'home',
@@ -44,7 +50,7 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   {
     path: '/3d-rpg',
     name: '3D RPG',
-    Preview: () => <Thumbnail link="/3d-rpg" thumbnail={rpgThumbnail} name="3D RPG" />,
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={rpgThumbnail} name={props.name} />,
     component: lazy(() => import('./3d-rpg/Main'))
   },
   {
@@ -59,8 +65,8 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   },
   {
     path: '/wasm-game-of-life',
-    name: 'Wasm Game Of Life',
-    Preview: () => <Thumbnail link="/wasm-game-of-life" thumbnail={gameOfLifeThumbnail} name="Game Of Life" />,
+    name: 'Game Of Life',
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={gameOfLifeThumbnail} name={props.name} />,
     component: lazy(() => import('./WasmGameOfLife'))
   },
   {
@@ -71,25 +77,25 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   {
     path: '/3d-wireframe',
     name: '3d Wireframe',
-    Preview: () => <Thumbnail link="/3d-wireframe" thumbnail={wireframeThumbnail} name="3d Wireframe" />,
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={wireframeThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/pixijs-research/webgl/3d-wireframe/3dWireframe'))
   },
   {
     path: '/webgl_postprocessing_smaa',
-    name: 'webgl - postprocessing smaa',
-    Preview: () => <Thumbnail link="/webgl_postprocessing_smaa" thumbnail={smaaThumbnail} name="SMAA" />,
+    name: 'SMAA',
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={smaaThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/three-examples/PostprocessingSmaa'))
   },
   {
     path: '/webgl_loader_svg',
-    name: 'webgl - svg loader',
-    Preview: () => <Thumbnail link="/webgl_loader_svg" thumbnail={svgLoaderThumbnail} name="SVG Loader" />,
+    name: 'SVG Loader',
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={svgLoaderThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/three-examples/SvgLoader'))
   },
   {
     path: '/sprites',
     name: 'Sprites',
-    Preview: () => <Thumbnail link="/sprites" thumbnail={spritesThumbnail} name="Sprites" />,
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={spritesThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/three-examples/Sprites'))
   },
   {
@@ -115,7 +121,7 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   {
     path: '/twgl',
     name: 'twgl',
-    Preview: () => <Thumbnail link="/twgl" thumbnail={twglThumbnail} name="twgl" />,
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={twglThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/twgl-examples/Main'))
   },
   {
@@ -150,34 +156,52 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
   },
   {
     path: '/phaser-game',
-    name: 'Phaser Game',
-    Preview: () => <Thumbnail link="/phaser-game" thumbnail={phaserThumbnail} name="Phaser" />,
+    name: 'Phaser',
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={phaserThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/phaser-examples/phaser/Game'))
   },
   {
     path: '/100-world-bodies',
     name: '100 world bodies',
 
-    Preview: () => <Thumbnail link="/100-world-bodies" thumbnail={worldBodiesThumbnail} name="100 world bodies" />,
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={worldBodiesThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/phaser-examples/physics/matterjs/100 world bodies'))
   },
   {
     path: 'bevy-examples/breakout',
-    name: 'breakout',
-    Preview: () => <Thumbnail link="bevy-examples/breakout" thumbnail={breakoutThumbnail} name="Breakout" />,
+    name: 'Breakout',
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={breakoutThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/bevy-examples/breakout'))
   },
   {
     path: '/ogl-examples/polylines',
-    name: 'polylines',
-    Preview: () => <Thumbnail link="/ogl-examples/polylines" thumbnail={polylinesThumbnail} name="Polylines" />,
+    name: 'Polylines',
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={polylinesThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/ogl-examples/polylines'))
   },
   {
     path: '/ogl-examples/skinning',
     name: 'skinning',
-    Preview: () => <Thumbnail link="/ogl-examples/skinning" thumbnail={skinningThumbnail} name="Skinning" />,
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={skinningThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/ogl-examples/skinning'))
+  },
+  {
+    path: '/ogl-examples/msdf-text',
+    name: 'MSDF Text',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/ogl-examples/msdf-text/msdf-text'))
+  },
+  {
+    path: '/ogl-examples/sort-transparency',
+    name: 'Sort Transparency',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/ogl-examples/sort-transparency/sort-transparency'))
+  },
+  {
+    path: '/ogl-examples/helpers',
+    name: 'Helpers',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/ogl-examples/helpers/helpers'))
   },
   {
     path: '/ogl-examples/draw-modes',
@@ -191,28 +215,34 @@ export const routes: (RouteDefinition & { name: string | JSX.Element; Preview?: 
     component: lazy(() => import('@packages/ldtk-ts-examples/example'))
   },
   {
+    path: '/hammer-multitouch',
+    name: 'Hammer Multitouch',
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={multitouchThumbnail} name={props.name} />,
+    component: lazy(() => import('@packages/hammer-examples/multitouch'))
+  },
+  {
     path: '/phaser-examples/tilemap/layer-with-multiple-layers',
-    name: 'layer-with-multiple-layers',
-    Preview: () => (
-      <Thumbnail
-        link="/phaser-examples/tilemap/layer-with-multiple-layers"
-        thumbnail={multipleLayersThumbnail}
-        name="Multiple Layers"
-      />
-    ),
+    name: 'Multiple Layers',
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={multipleLayersThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/phaser-examples/tilemap/layer-with-multiple-layers'))
   },
   {
     path: '/phaser-examples/tilemap/base-tile-size',
     name: 'Base Tile Size',
-    Preview: () => (
-      <Thumbnail
-        link="/phaser-examples/tilemap/base-tile-size"
-        thumbnail={baseTileSizeThumbnail}
-        name="Base Tile Size"
-      />
-    ),
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={baseTileSizeThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/phaser-examples/tilemap/base-tile-size'))
+  },
+  {
+    path: '/game-shaders-for-beginners',
+    name: 'Game Shaders For Beginners',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/game-shaders-for-beginners/game-shaders-for-beginners'))
+  },
+  {
+    path: '/webxr-vr-teleport',
+    name: 'WebXR VR Teleport',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/three-examples/webxr-vr-teleport/webxr-vr-teleport'))
   },
   {
     path: '/:any',

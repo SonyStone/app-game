@@ -2,8 +2,39 @@ import { Camera } from '../core/camera';
 import { Program } from '../core/program';
 import { RenderTarget } from '../core/render-target';
 
+import defaultFragment from './shadow.frag';
+import defaultVertex from './shadow.vert';
+
+import { Mesh } from '../core/mesh';
+import type { OGLRenderingContext } from '../core/renderer';
+import type { Transform } from '../core/transform';
+
+export interface ShadowOptions {
+  light: Camera;
+  width: number;
+  height: number;
+}
+
+/**
+ * Shadow map.
+ * @see {@link https://github.com/oframe/ogl/blob/master/src/extras/Shadow.js | Source}
+ */
 export class Shadow {
-  constructor(gl, { light = new Camera(gl), width = 1024, height = width }) {
+  gl: OGLRenderingContext;
+
+  light: Camera;
+
+  target: RenderTarget;
+  targetUniform: { value: RenderTarget['texture'] | null };
+
+  depthProgram: Program;
+
+  castMeshes: Mesh[];
+
+  constructor(
+    gl: OGLRenderingContext,
+    { light = new Camera(gl), width = 1024, height = width }: Partial<ShadowOptions>
+  ) {
     this.gl = gl;
 
     this.light = light;
@@ -29,7 +60,16 @@ export class Shadow {
     uniformProjection = 'shadowProjectionMatrix',
     uniformView = 'shadowViewMatrix',
     uniformTexture = 'tShadow'
-  }) {
+  }: {
+    mesh: Mesh;
+    receive?: boolean;
+    cast?: boolean;
+    vertex?: string;
+    fragment?: string;
+    uniformProjection?: string;
+    uniformView?: string;
+    uniformTexture?: string;
+  }): void {
     // Add uniforms to existing program
     if (receive && !mesh.program.uniforms[uniformProjection]) {
       mesh.program.uniforms[uniformProjection] = { value: this.light.projectionMatrix };
@@ -37,43 +77,50 @@ export class Shadow {
       mesh.program.uniforms[uniformTexture] = this.targetUniform;
     }
 
-    if (!cast) return;
+    if (!cast) {
+      return;
+    }
     this.castMeshes.push(mesh);
 
     // Store program for when switching between depth override
-    mesh.colorProgram = mesh.program;
+    (mesh as any).colorProgram = mesh.program;
 
     // Check if depth program already attached
-    if (mesh.depthProgram) return;
+    if ((mesh as any).depthProgram) {
+      return;
+    }
 
     // Use global depth override if nothing custom passed in
     if (vertex === defaultVertex && fragment === defaultFragment) {
-      mesh.depthProgram = this.depthProgram;
+      (mesh as any).depthProgram = this.depthProgram;
       return;
     }
 
     // Create custom override program
-    mesh.depthProgram = new Program(this.gl, {
+    (mesh as any).depthProgram = new Program(this.gl, {
       vertex,
       fragment,
       cullFace: false
     });
   }
 
-  setSize({ width = 1024, height = width }) {
+  setSize({ width = 1024, height = width }: { width?: number; height?: number }): void {
     this.target = new RenderTarget(this.gl, { width, height });
     this.targetUniform.value = this.target.texture;
   }
 
-  render({ scene }) {
+  render({ scene }: { scene: Transform }): void {
     // For depth render, replace program with depth override.
     // Hide meshes not casting shadows.
     scene.traverse((node) => {
-      if (!node.draw) return;
-      if (!!~this.castMeshes.indexOf(node)) {
-        node.program = node.depthProgram;
+      if (!isMesh(node)) {
+        return;
+      }
+
+      if (!!~this.castMeshes.indexOf(node as Mesh)) {
+        node.program = (node as any).depthProgram;
       } else {
-        node.isForceVisibility = node.visible;
+        (node as any).isForceVisibility = node.visible;
         node.visible = false;
       }
     });
@@ -87,38 +134,19 @@ export class Shadow {
 
     // Then switch the program back to the normal one
     scene.traverse((node) => {
-      if (!node.draw) return;
+      if (!isMesh(node)) {
+        return;
+      }
+
       if (!!~this.castMeshes.indexOf(node)) {
-        node.program = node.colorProgram;
+        node.program = (node as any).colorProgram;
       } else {
-        node.visible = node.isForceVisibility;
+        node.visible = (node as any).isForceVisibility;
       }
     });
   }
 }
 
-const defaultVertex = /* glsl */ `
-    attribute vec3 position;
-    attribute vec2 uv;
-
-    uniform mat4 modelViewMatrix;
-    uniform mat4 projectionMatrix;
-
-    void main() {
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-`;
-
-const defaultFragment = /* glsl */ `
-    precision highp float;
-
-    vec4 packRGBA (float v) {
-        vec4 pack = fract(vec4(1.0, 255.0, 65025.0, 16581375.0) * v);
-        pack -= pack.yzww * vec2(1.0 / 255.0, 0.0).xxxy;
-        return pack;
-    }
-
-    void main() {
-        gl_FragColor = packRGBA(gl_FragCoord.z);
-    }
-`;
+function isMesh(node: Transform | Mesh): node is Mesh {
+  return !!(node as Mesh).draw;
+}

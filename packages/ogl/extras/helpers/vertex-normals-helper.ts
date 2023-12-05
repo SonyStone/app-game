@@ -1,19 +1,36 @@
+import type { Camera } from '../../core/camera';
 import { Geometry } from '../../core/geometry';
 import { Mesh } from '../../core/mesh';
 import { Program } from '../../core/program';
+import { Color } from '../../math/color';
 import { Mat3 } from '../../math/mat-3';
-import { Vec3 } from '../../math/vec-3';
 
+import fragment from './vertex-normals-helper.frag';
+import vertex from './vertex-normals-helper.vert';
+
+export interface FaceNormalsHelperOptions {
+  size: number;
+  color: Color;
+}
+
+/**
+ * Face normals helper.
+ * @see {@link https://github.com/oframe/ogl/blob/master/src/extras/helpers/FaceNormalsHelper.js | Source}
+ */
 export class VertexNormalsHelper extends Mesh {
-  constructor(object, { size = 0.1, color = new Vec3(0.86, 0.16, 0.86), ...meshProps } = {}) {
+  constructor(
+    readonly object: Mesh,
+    { size = 0.1, color = new Color(0.86, 0.16, 0.86), ...meshProps }: Partial<FaceNormalsHelperOptions> = {}
+  ) {
     const gl = object.gl;
-    const nNormals = object.geometry.attributes.normal.count;
+    const nNormals = object.geometry.attributes.normal.count!;
     const positionsArray = new Float32Array(nNormals * 2 * 3);
     const normalsArray = new Float32Array(nNormals * 2 * 3);
     const sizeArray = new Float32Array(nNormals * 2);
 
-    const normalData = object.geometry.attributes.normal.data;
-    const positionData = object.geometry.attributes.position.data;
+    const normalData = object.geometry.attributes.normal.data!;
+    const positionData = object.geometry.attributes.position.data!;
+
     const sizeData = new Float32Array([0, size]);
 
     for (let i = 0; i < nNormals; i++) {
@@ -49,38 +66,10 @@ export class VertexNormalsHelper extends Mesh {
     });
 
     super(gl, { ...meshProps, mode: gl.LINES, geometry, program });
-
-    this.object = object;
   }
 
-  draw(arg) {
+  draw(arg: { camera?: Camera } = {}) {
     this.program.uniforms.worldNormalMatrix.value.getNormalMatrix(this.object.worldMatrix);
     super.draw(arg);
   }
 }
-
-const vertex = /* glsl */ `
-attribute vec3 position;
-attribute vec3 normal;
-attribute float size;
-
-uniform mat4 viewMatrix;
-uniform mat4 projectionMatrix;
-uniform mat4 objectWorldMatrix;
-uniform mat3 worldNormalMatrix;
-
-void main() {
-    vec3 n = normalize(worldNormalMatrix * normal) * size;
-    vec3 p = (objectWorldMatrix * vec4(position, 1.0)).xyz;
-    gl_Position = projectionMatrix * viewMatrix * vec4(p + n, 1.0);
-}
-`;
-
-const fragment = /* glsl */ `
-precision highp float;
-uniform vec3 color;
-
-void main() {    
-    gl_FragColor = vec4(color, 1.0);
-}
-`;

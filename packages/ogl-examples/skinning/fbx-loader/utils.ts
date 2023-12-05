@@ -1,10 +1,7 @@
 export function isFbxFormatBinary(buffer: ArrayBuffer) {
   const CORRECT = 'Kaydara\u0020FBX\u0020Binary\u0020\u0020\0';
 
-  return (
-    buffer.byteLength >= CORRECT.length &&
-    CORRECT === convertArrayBufferToString(buffer, 0, CORRECT.length)
-  );
+  return buffer.byteLength >= CORRECT.length && CORRECT === convertArrayBufferToString(buffer, 0, CORRECT.length);
 }
 
 export function isFbxFormatASCII(text: string) {
@@ -28,7 +25,7 @@ export function isFbxFormatASCII(text: string) {
     'r',
     'y',
     '\\',
-    '\\',
+    '\\'
   ];
 
   let cursor = 0;
@@ -59,16 +56,14 @@ export function getFbxVersion(text: string) {
     return version;
   }
 
-  throw new Error(
-    'FBX parser: Cannot find the version number for the file given.'
-  );
+  throw new Error('FBX parser: Cannot find the version number for the file given.');
 }
 
 export function convertArrayBufferToString(
   buffer: ArrayBuffer,
   from: number = 0,
   to: number = buffer.byteLength
-) {
+): string {
   return new TextDecoder().decode(new Uint8Array(buffer, from, to));
 }
 

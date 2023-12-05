@@ -17,7 +17,7 @@ export default function HomePage() {
           <For each={routes}>
             {({ path, name, Preview }) =>
               Preview ? (
-                <Preview />
+                <Preview path={path} name={name as string} />
               ) : (
                 <Link class="aspect-square w-full text-2xl p-2 bg-white border border-solid rounded" href={path}>
                   {name}

@@ -1,7 +1,7 @@
 // https://github.com/mrdoob/three.js/blob/master/src/geometries/TorusGeometry.js
 
-import { Geometry } from '../core/Geometry';
-import { Vec3 } from '../math/Vec3';
+import { Geometry } from '../core/geometry';
+import { Vec3 } from '../math/vec-3';
 
 export class Torus extends Geometry {
   constructor(

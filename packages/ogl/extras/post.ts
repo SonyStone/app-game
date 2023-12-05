@@ -3,6 +3,8 @@ import { Program } from '../core/program';
 import { RenderTarget } from '../core/render-target';
 import { Triangle } from './triangle';
 
+import defaultFragment from './post.frag';
+import defaultVertex from './post.vert';
 export class Post {
   constructor(
     gl,
@@ -134,26 +136,3 @@ export class Post {
     this.uniform.value = this.fbo.read.texture;
   }
 }
-
-const defaultVertex = /* glsl */ `
-    attribute vec2 uv;
-    attribute vec2 position;
-
-    varying vec2 vUv;
-
-    void main() {
-        vUv = uv;
-        gl_Position = vec4(position, 0, 1);
-    }
-`;
-
-const defaultFragment = /* glsl */ `
-    precision highp float;
-
-    uniform sampler2D tMap;
-    varying vec2 vUv;
-
-    void main() {
-        gl_FragColor = texture2D(tMap, vUv);
-    }
-`;

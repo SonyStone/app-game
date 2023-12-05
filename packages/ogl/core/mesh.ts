@@ -1,3 +1,4 @@
+import { GL_DRAW_ARRAYS_MODE } from '@webgl/static-variables';
 import { Mat3 } from '../math/mat-3';
 import { Mat4 } from '../math/mat-4';
 import type { Vec2 } from '../math/vec-2';
@@ -36,8 +37,7 @@ export interface RaycastHit {
  * @see {@link https://github.com/oframe/ogl/blob/master/src/core/Mesh.js | Source}
  */
 export class Mesh<TGeometry extends Geometry = Geometry, TProgram extends Program = Program> extends Transform {
-  gl: OGLRenderingContext;
-  id: number;
+  id: number = ID++;
   geometry: TGeometry;
   program: TProgram;
   mode: GLenum;
@@ -45,23 +45,27 @@ export class Mesh<TGeometry extends Geometry = Geometry, TProgram extends Progra
   frustumCulled: boolean;
 
   renderOrder: number;
-  modelViewMatrix: Mat4;
-  normalMatrix: Mat3;
-  beforeRenderCallbacks: MeshRenderCallback[];
-  afterRenderCallbacks: MeshRenderCallback[];
+  modelViewMatrix: Mat4 = new Mat4();
+  normalMatrix: Mat3 = new Mat3();
+  beforeRenderCallbacks: MeshRenderCallback[] = [];
+  afterRenderCallbacks: MeshRenderCallback[] = [];
 
   hit?: Partial<RaycastHit>; // Set from raycaster
 
   zDepth?: number;
 
   constructor(
-    gl: OGLRenderingContext,
-    { geometry, program, mode = gl.TRIANGLES, frustumCulled = true, renderOrder = 0 }: Partial<MeshOptions> = {}
+    readonly gl: OGLRenderingContext,
+    {
+      geometry,
+      program,
+      mode = GL_DRAW_ARRAYS_MODE.TRIANGLES,
+      frustumCulled = true,
+      renderOrder = 0
+    }: Partial<MeshOptions> = {}
   ) {
     super();
     if (!gl.canvas) console.error('gl not passed as first argument to Mesh');
-    this.gl = gl;
-    this.id = ID++;
     this.geometry = geometry as TGeometry;
     this.program = program as TProgram;
     this.mode = mode;
@@ -71,10 +75,6 @@ export class Mesh<TGeometry extends Geometry = Geometry, TProgram extends Progra
 
     // Override sorting to force an order
     this.renderOrder = renderOrder;
-    this.modelViewMatrix = new Mat4();
-    this.normalMatrix = new Mat3();
-    this.beforeRenderCallbacks = [];
-    this.afterRenderCallbacks = [];
   }
 
   onBeforeRender(f: MeshRenderCallback): this {

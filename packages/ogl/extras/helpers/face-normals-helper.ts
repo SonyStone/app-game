@@ -6,6 +6,10 @@ import { Vec3 } from '../../math/vec-3';
 
 import { Color } from '../../math/color';
 
+import { Camera } from '../../core/camera';
+import fragment from './face-normals-helper.frag';
+import vertex from './face-normals-helper.vert';
+
 const vA = /* @__PURE__ */ new Vec3();
 const vB = /* @__PURE__ */ new Vec3();
 const vC = /* @__PURE__ */ new Vec3();
@@ -23,17 +27,17 @@ export interface FaceNormalsHelperOptions {
  */
 export class FaceNormalsHelper extends Mesh {
   constructor(
-    object: Mesh,
+    readonly object: Mesh,
     { size = 0.1, color = new Color(0.15, 0.86, 0.86), ...meshProps }: Partial<FaceNormalsHelperOptions> = {}
   ) {
     const gl = object.gl;
 
-    const positionData = object.geometry.attributes.position.data;
+    const positionData = object.geometry.attributes.position.data!;
     const sizeData = new Float32Array([0, size]);
 
-    const indexAttr = object.geometry.attributes.index;
-    const getIndex = indexAttr ? (i) => indexAttr.data[i] : (i) => i;
-    const numVertices = indexAttr ? indexAttr.data.length : Math.floor(positionData.length / 3);
+    const indexAttr = object.geometry.attributes.index!;
+    const getIndex = indexAttr ? (i: number) => indexAttr.data![i] : (i: number) => i;
+    const numVertices = indexAttr ? indexAttr.data!.length : Math.floor(positionData.length / 3);
 
     const nNormals = Math.floor(numVertices / 3);
     const positionsArray = new Float32Array(nNormals * 2 * 3);
@@ -81,38 +85,10 @@ export class FaceNormalsHelper extends Mesh {
     });
 
     super(gl, { ...meshProps, mode: gl.LINES, geometry, program });
-
-    this.object = object;
   }
 
-  draw(arg) {
+  draw(arg: { camera?: Camera } = {}): void {
     this.program.uniforms.worldNormalMatrix.value.getNormalMatrix(this.object.worldMatrix);
     super.draw(arg);
   }
 }
-
-const vertex = /* glsl */ `
-attribute vec3 position;
-attribute vec3 normal;
-attribute float size;
-
-uniform mat4 viewMatrix;
-uniform mat4 projectionMatrix;
-uniform mat4 objectWorldMatrix;
-uniform mat3 worldNormalMatrix;
-
-void main() {
-    vec3 n = normalize(worldNormalMatrix * normal) * size;
-    vec3 p = (objectWorldMatrix * vec4(position, 1.0)).xyz;
-    gl_Position = projectionMatrix * viewMatrix * vec4(p + n, 1.0);
-}
-`;
-
-const fragment = /* glsl */ `
-precision highp float;
-uniform vec3 color;
-
-void main() {    
-    gl_FragColor = vec4(color, 1.0);
-}
-`;

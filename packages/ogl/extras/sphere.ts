@@ -1,9 +1,27 @@
-import { Geometry } from '../core/Geometry';
-import { Vec3 } from '../math/Vec3';
+import { Geometry } from '../core/geometry';
+import { Vec3 } from '../math/vec-3';
 
+import type { AttributeMap } from '../core/geometry';
+import type { OGLRenderingContext } from '../core/renderer';
+
+export interface SphereOptions {
+  radius: number;
+  widthSegments: number;
+  heightSegments: number;
+  phiStart: number;
+  phiLength: number;
+  thetaStart: number;
+  thetaLength: number;
+  attributes: AttributeMap;
+}
+
+/**
+ * A sphere geometry.
+ * @see {@link https://github.com/oframe/ogl/blob/master/src/extras/Sphere.js | Source}
+ */
 export class Sphere extends Geometry {
   constructor(
-    gl,
+    gl: OGLRenderingContext,
     {
       radius = 0.5,
       widthSegments = 16,
@@ -13,7 +31,7 @@ export class Sphere extends Geometry {
       thetaStart = 0,
       thetaLength = Math.PI,
       attributes = {}
-    } = {}
+    }: Partial<SphereOptions> = {}
   ) {
     const wSegs = widthSegments;
     const hSegs = heightSegments;

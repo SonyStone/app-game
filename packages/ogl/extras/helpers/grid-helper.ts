@@ -1,10 +1,28 @@
 import { Geometry } from '../../core/geometry';
 import { Mesh } from '../../core/mesh';
 import { Program } from '../../core/program';
-import { Vec3 } from '../../math/vec-3';
 
+import type { OGLRenderingContext } from '../../core/renderer';
+import { Color } from '../../math/color';
+
+import fragment from './grid-helper.frag';
+import vertex from './grid-helper.vert';
+
+export interface GridHelperOptions {
+  size: number;
+  divisions: number;
+  color: Color;
+}
+
+/**
+ * Grid helper.
+ * @see {@link https://github.com/oframe/ogl/blob/master/src/extras/helpers/GridHelper.js | Source}
+ */
 export class GridHelper extends Mesh {
-  constructor(gl, { size = 10, divisions = 10, color = new Vec3(0.75, 0.75, 0.75), ...meshProps } = {}) {
+  constructor(
+    gl: OGLRenderingContext,
+    { size = 10, divisions = 10, color = new Color(0.75, 0.75, 0.75), ...meshProps }: Partial<GridHelperOptions> = {}
+  ) {
     const numVertices = (size + 1) * 2 * 2;
     const vertices = new Float32Array(numVertices * 3);
 
@@ -31,22 +49,3 @@ export class GridHelper extends Mesh {
     super(gl, { ...meshProps, mode: gl.LINES, geometry, program });
   }
 }
-
-const vertex = /* glsl */ `
-attribute vec3 position;
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
-
-void main() {    
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
-
-const fragment = /* glsl */ `
-precision highp float;
-uniform vec3 color;
-
-void main() {    
-    gl_FragColor = vec4(color, 1.0);
-}
-`;

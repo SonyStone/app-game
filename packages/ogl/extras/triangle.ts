@@ -1,4 +1,4 @@
-import { Geometry } from '../core/Geometry';
+import { Geometry } from '../core/geometry';
 
 export class Triangle extends Geometry {
   constructor(gl, { attributes = {} } = {}) {
