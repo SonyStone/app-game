@@ -1,21 +1,27 @@
 import { Vec2Tuple } from 'ogl';
 import { HammerInput } from '../pointerevent';
+import simpleCloneInputData, { ClonedInputData } from './simple-clone-input-data';
 
 export function createComputeDelta() {
-  // jscs throwing error on defalut destructured values and without defaults tests fail
-  let offset: Vec2Tuple = [0, 0];
-  let prevDelta: Vec2Tuple = [0, 0];
-  let offsetDelta: Vec2Tuple = [0, 0];
-  let prevInput: HammerInput;
+  const session: {
+    offsetDelta: Vec2Tuple;
+    prevDelta: Vec2Tuple;
+    prevInput?: ClonedInputData;
+  } = {
+    offsetDelta: [0, 0],
+    prevDelta: [0, 0],
+    prevInput: undefined
+  };
 
   function computeDelta(center: Vec2Tuple, eventType: HammerInput['eventType']) {
-    offset = [0, 0];
-    prevDelta = [0, 0];
+    let offset = session.offsetDelta;
+    let prevDelta = session.prevDelta;
+    let prevInput = session.prevInput;
 
-    if (prevInput && (eventType === 'start' || prevInput?.eventType === 'end')) {
-      prevDelta = [prevInput.delta?.[0] || 0, prevInput.delta?.[1] || 0];
+    if (eventType === 'start' || prevInput?.eventType === 'end') {
+      prevDelta = session.prevDelta = [prevInput?.delta?.[0] || 0, prevInput?.delta?.[1] || 0];
 
-      offset = offsetDelta = [center[0], center[1]];
+      offset = session.offsetDelta = [center[0], center[1]];
     }
 
     const delta = [prevDelta[0] + (center[0] - offset[0]), prevDelta[1] + (center[1] - offset[1])] as Vec2Tuple;
@@ -23,5 +29,15 @@ export function createComputeDelta() {
     return delta;
   }
 
-  return computeDelta;
+  return {
+    computeDelta,
+    saveInput(input: HammerInput) {
+      session.prevInput = simpleCloneInputData(input);
+    },
+    clear() {
+      session.offsetDelta = [0, 0];
+      session.prevDelta = [0, 0];
+      session.prevInput = undefined;
+    }
+  };
 }

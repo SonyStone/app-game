@@ -4,6 +4,7 @@ import { now, round } from '../utils/utils-consts';
 import getCenter from './get-center';
 
 export interface ClonedInputData {
+  eventType: HammerInput['eventType'];
   timeStamp: number;
   pointers: Vec2Tuple[];
   center: Vec2Tuple;
@@ -16,7 +17,7 @@ export interface ClonedInputData {
  * @param {Object} input
  * @returns {Object} clonedInputData
  */
-export default function simpleCloneInputData(input: HammerInput): ClonedInputData {
+export default function simpleCloneInputData(input: HammerInput | ClonedInputData): ClonedInputData {
   // make a simple copy of the pointers because we will get a reference if we don't
   // we only need clientXY for the calculations
   let pointers: Vec2Tuple[] = [];
@@ -27,7 +28,8 @@ export default function simpleCloneInputData(input: HammerInput): ClonedInputDat
   }
 
   return {
-    timeStamp: now(),
+    eventType: input.eventType,
+    timeStamp: input.timeStamp,
     pointers,
     center: getCenter(pointers),
     delta: [input.delta[0], input.delta[1]]

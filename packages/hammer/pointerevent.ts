@@ -17,47 +17,78 @@ const POINTER_INPUT_MAP = {
   pointerout: INPUT_CANCEL
 };
 
+type InputEvent = PointerEvent & MouseEvent & TouchEvent;
+
+export type MinimumInputEvent = Pick<InputEvent, 'type' | 'pointerId' | 'clientX' | 'clientY' | 'pointerType'> &
+  Partial<Pick<InputEvent, 'tiltX' | 'tiltY' | 'pressure' | 'width' | 'height'>> &
+  Partial<{ altitudeAngle: number; azimuthAngle: number }>;
+
 export interface HammerInput {
   eventType: 'start' | 'move' | 'end' | 'cancel';
   isFirst: boolean;
   isFinal: boolean;
   timeStamp: number;
+  /** delta time from first input */
+  deltaTime?: number;
+
+  /** start center */
   start: Vec2Tuple;
+
   center: Vec2Tuple;
   pointers: Vec2Tuple[];
-  changedPointers: PointerEvent[];
-  pointerType: PointerEvent['pointerType'];
-  deltaTime?: number;
+  changedPointers: MinimumInputEvent[];
+  pointerType: MinimumInputEvent['pointerType'];
   angle?: number;
   distance?: number;
+
+  /** Movement of the X and Y axises. */
   delta: Vec2Tuple;
+
+  /** Scaling that has been done when multi-touch. 1 on a single touch. */
   scale?: number;
+
+  /** Rotation that has been done when multi-touch. 0 on a single touch. */
   rotation?: number;
+
+  /** pressure that has been done with stylus. 1 with a mouse */
+  pressure?: number;
+
+  /** tilt that has been done with stylus. [0, 0] with a mouse */
+  tilt: Vec2Tuple;
+
+  altitudeAngle: number;
+
+  azimuthAngle: number;
+
+  /** a finger wheel on an airbrush stylus */
+  // tangentialPressure: number;
+
+  /**  */
   offsetDirection?: DIRECTION;
   overallVelocity: Vec2Tuple;
 }
 
-type ExtPointerEvent = PointerEvent & {
-  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'pointerout';
-  pointerType: 'mouse' | 'pan' | 'touch';
-};
+interface EventsHandlerOptions {
+  now: () => number;
+}
 
-const store: { [key: number]: ExtPointerEvent } = {};
+export const DEFAULT_ALTITUDE_ANGLE = Math.PI / 2;
 
 /**
  * Pointer events input
  * handle mouse events
  */
-export function createPointerEventsHandler() {
-  let pointersMap = new Map<number, PointerEvent>();
-  let firstInput: HammerInput | undefined = undefined;
+export function createPointerEventsHandler(
+  options: EventsHandlerOptions = {
+    now: Date.now
+  }
+) {
+  let pointersMap = new Map<number, MinimumInputEvent>();
+  let firstInput: ClonedInputData | undefined = undefined;
   let firstMultiple: ClonedInputData | undefined = undefined;
-  let offsetDelta = [0, 0] as Vec2Tuple;
-  let prevDelta = [0, 0] as Vec2Tuple;
-  let prevInput = undefined;
   const computeDelta = createComputeDelta();
 
-  function pointerEventInputHandler(event: PointerEvent) {
+  function pointerEventInputHandler(event: MinimumInputEvent) {
     const eventType = getEventType(event);
     const removePointer = getRemovePointer(pointersMap, event, eventType);
     const changedPointers = [event];
@@ -68,29 +99,58 @@ export function createPointerEventsHandler() {
     if (isFirst) {
       firstInput = undefined;
       firstMultiple = undefined;
-      offsetDelta = [0, 0] as Vec2Tuple;
-      prevDelta = [0, 0] as Vec2Tuple;
-      prevInput = undefined;
+      computeDelta.clear();
     }
 
     if (pointersLen === 1) {
       firstMultiple = undefined;
     }
 
-    const offsetCenter = firstMultiple ? firstMultiple.center : firstInput?.center ?? ([0, 0] as Vec2Tuple);
-
     const pointers = [...pointersMap.values()].map((event) => [event.clientX, event.clientY] as Vec2Tuple);
-    const timeStamp = performance.now();
-    const deltaTime = timeStamp - (firstInput?.timeStamp ?? 0);
-
     const center = getCenter(pointers);
-    const start = firstInput?.center ?? center;
+    const timeStamp = options.now();
+    const delta = computeDelta.computeDelta(center, eventType);
+
+    // store the first input to calculate the distance and direction
+    if (!firstInput) {
+      firstInput = simpleCloneInputData({
+        eventType,
+        timeStamp,
+        pointers,
+        center,
+        delta
+      });
+    }
+
+    // to compute scale and rotation we need to store the multiple touches
+    if (pointers.length > 1 && !firstMultiple) {
+      firstMultiple = simpleCloneInputData({
+        eventType,
+        timeStamp,
+        pointers,
+        center,
+        delta
+      });
+    } else if (pointers.length === 1) {
+      firstMultiple = undefined;
+    }
+
+    const offsetCenter = firstMultiple ? firstMultiple.center : firstInput?.center;
+
+    const deltaTime = timeStamp - firstInput.timeStamp;
+
+    const start = firstInput.center;
     const angle = getAngle(offsetCenter, center);
     const distance = getDistance(offsetCenter, center);
 
-    const delta = computeDelta(center, eventType);
     const offsetDirection = getDirection(delta);
     const overallVelocity = getVelocity(deltaTime, delta);
+
+    const pressure = event.pressure;
+    const tilt = [event.tiltX, event.tiltY] as Vec2Tuple;
+
+    const altitudeAngle = event.altitudeAngle ?? DEFAULT_ALTITUDE_ANGLE;
+    const azimuthAngle = event.azimuthAngle ?? 0;
 
     const scale = firstMultiple ? getScale(firstMultiple.pointers, pointers) : 1;
     const rotation = firstMultiple ? getRotation(firstMultiple.pointers, pointers) : 0;
@@ -110,27 +170,19 @@ export function createPointerEventsHandler() {
       offsetDirection,
       overallVelocity,
       pointerType: event.pointerType,
+      altitudeAngle,
+      azimuthAngle,
       rotation,
-      scale
+      scale,
+      pressure,
+      tilt
     };
 
-    // store the first input to calculate the distance and direction
-    if (!firstInput) {
-      firstInput = input;
-    }
-
-    // to compute scale and rotation we need to store the multiple touches
-    if (pointersLen > 1 && !firstMultiple) {
-      firstMultiple = simpleCloneInputData(input);
-    } else if (pointersLen === 1) {
-      firstMultiple = undefined;
-    }
+    computeDelta.saveInput(input);
 
     if (removePointer) {
       pointersMap.delete(event.pointerId);
     }
-
-    prevInput = input;
 
     return input;
   }
@@ -138,7 +190,7 @@ export function createPointerEventsHandler() {
   return pointerEventInputHandler;
 }
 
-function getEventType(event: PointerEvent) {
+function getEventType(event: Pick<MinimumInputEvent, 'type'>) {
   let event_type: HammerInput['eventType'] = 'cancel';
   switch (event.type) {
     case 'pointerdown': {
@@ -169,9 +221,9 @@ function getEventType(event: PointerEvent) {
   return event_type;
 }
 
-function getRemovePointer(
-  pointersMap: Map<number, PointerEvent>,
-  event: PointerEvent,
+function getRemovePointer<T extends Pick<MinimumInputEvent, 'pointerId'>>(
+  pointersMap: Map<number, T>,
+  event: T,
   eventType: HammerInput['eventType']
 ) {
   let remove_pointer = false;
@@ -188,10 +240,12 @@ function getRemovePointer(
       break;
     }
     case 'end': {
+      pointersMap.set(event.pointerId, event);
       remove_pointer = true;
       break;
     }
     case 'cancel': {
+      pointersMap.set(event.pointerId, event);
       remove_pointer = true;
       break;
     }

@@ -1,0 +1,170 @@
+<svg version="1.1"
+     width="300"
+     height="200"
+     xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%"
+        height="100%"
+        fill="white" />
+
+  <ellipse rx="80"
+           ry="40"
+           cx="150"
+           cy="100"
+           stroke-width="1"
+           fill="none"
+           stroke="black" />
+
+  <circle cx="90"
+          cy="100"
+          r="20"
+          fill="none"
+          stroke="black"
+          stroke-width="0.75"
+          stroke-dasharray="4 1" />
+
+  <line x1="0"
+        y1="50%"
+        x2="100%"
+        y2="50%"
+        stroke="black"
+        stroke-width="0.5" />
+  <line x1="50%"
+        y1="0"
+        x2="50%"
+        y2="100%"
+        stroke="black"
+        stroke-width="0.5" />
+
+  <line x1="230"
+        y1="140"
+        x2="230"
+        y2="50%"
+        stroke="green"
+        stroke-width="0.5"
+        stroke-dasharray="4 1" />
+
+
+  <text x="232"
+        y="125"
+        text-anchor="start"
+        fill="green"
+        font-size="12">b (ry)</text>
+
+  <line x1="90"
+        y1="120"
+        x2="90"
+        y2="50%"
+        stroke="green"
+        stroke-width="0.5"
+        stroke-dasharray="4 1" />
+
+  <text x="92"
+        y="112"
+        text-anchor="start"
+        fill="green"
+        font-size="8">a-c</text>
+
+  <text x="20"
+        y="180"
+        text-anchor="start"
+        fill="green"
+        font-size="12">a²=b²+c²</text>
+
+  <line x1="230"
+        y1="140"
+        x2="50%"
+        y2="140"
+        stroke="red"
+        stroke-width="0.5"
+        stroke-dasharray="4 1" />
+
+  <text x="180"
+        y="150"
+        fill="red"
+        text-anchor="start"
+        font-size="12">a (rx)</text>
+
+  <line x1="210"
+        y1="102"
+        x2="50%"
+        y2="102"
+        stroke="red"
+        stroke-width="0.5"
+        stroke-dasharray="4 1" />
+
+  <text x="180"
+        y="110"
+        fill="red"
+        text-anchor="start"
+        font-size="12">c</text>
+
+
+
+  <g transform="translate(90 100)">
+    <circle cx="0"
+            cy="0"
+            r="1.5"
+            fill="white"
+            stroke="black"
+            stroke-width="1" />
+
+    <text x="2"
+          y="-3"
+          text-anchor="start"
+          font-size="12">F₁</text>
+  </g>
+
+
+  <g transform="translate(210 100)">
+    <circle cx="0"
+            cy="0"
+            r="1.5"
+            fill="white"
+            stroke="black"
+            stroke-width="1" />
+
+    <text x="2"
+          y="-3"
+          text-anchor="start"
+          font-size="12">F₂</text>
+  </g>
+
+  <g transform="translate(150 100)">
+    <circle cx="0"
+            cy="0"
+            r="2"
+            fill="white"
+            stroke="black"
+            stroke-width="1" />
+
+    <text x="2"
+          y="-2"
+          text-anchor="start"
+          font-size="12">center</text>
+  </g>
+
+  <g transform="translate(150 60)">
+    <circle cx="0"
+            cy="0"
+            r="2"
+            fill="white"
+            stroke="black"
+            stroke-width="1" />
+
+
+  </g>
+
+  <g transform="translate(230 100)">
+    <circle cx="0"
+            cy="0"
+            r="2"
+            fill="white"
+            stroke="black"
+            stroke-width="1" />
+
+
+  </g>
+
+
+
+</svg>

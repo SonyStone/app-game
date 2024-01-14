@@ -40,11 +40,13 @@ export const routes: (RouteDefinition & {
   {
     path: '/',
     name: 'home',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./home-page'))
   },
   {
     path: '/three-pixi',
     name: 'ThreePixi',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./ThreePixi'))
   },
   {
@@ -56,11 +58,13 @@ export const routes: (RouteDefinition & {
   {
     path: '/3d-rpg-tests',
     name: '3D RPG Tests',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./3d-rpg/load-fbx-test'))
   },
   {
     path: '/tanki',
     name: 'Tanki',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./Tanki/Tanki'))
   },
   {
@@ -101,21 +105,25 @@ export const routes: (RouteDefinition & {
   {
     path: '/babylon',
     name: 'Babylon.js',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/babylonjs-examples/babylon-example'))
   },
   {
     path: '/three',
     name: 'Three',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/three-examples/Three'))
   },
   {
     path: '/solid-three',
     name: 'SolidThree',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/three-examples/Solid-Three'))
   },
   {
     path: '/paint',
     name: 'Paint',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/paint/paint-page'))
   },
   {
@@ -127,31 +135,37 @@ export const routes: (RouteDefinition & {
   {
     path: '/view-offset',
     name: 'ViewOffset',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/three-examples/ViewOffset'))
   },
   {
     path: '/game-ecs',
     name: 'Game ECS',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./game-ecs/Index'))
   },
   {
     path: '/gpu-text-rendering',
     name: 'GPU Text Rendering',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./gpu-text-rendering/Index'))
   },
   {
     path: '/geometric-algebra',
     name: 'Geometric Algebra',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./geometric-algebra/GeometricAlgebra'))
   },
   {
     path: '/player',
     name: 'Player',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/film-annotation-player/App'))
   },
   {
     path: '/animations',
     name: 'Animations',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/gsap/Animations'))
   },
   {
@@ -183,7 +197,7 @@ export const routes: (RouteDefinition & {
     path: '/ogl-examples/skinning',
     name: 'skinning',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={skinningThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/skinning'))
+    component: lazy(() => import('@packages/ogl-examples/skinning/skinning'))
   },
   {
     path: '/ogl-examples/msdf-text',
@@ -206,12 +220,19 @@ export const routes: (RouteDefinition & {
   {
     path: '/ogl-examples/draw-modes',
     name: 'draw-modes',
-    // Preview: () => <Thumbnail link="/ogl-examples/draw-modes" thumbnail={skinningThumbnail} name="Draw Modes" />,
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/ogl-examples/draw-modes/draw-modes'))
+  },
+  {
+    path: '/ogl-examples/load-gltf',
+    name: 'Load glTF',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/ogl-examples/load-gltf/load-gltf'))
   },
   {
     path: '/ldtk-ts-exampless',
     name: 'ldtk-ts example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/ldtk-ts-examples/example'))
   },
   {
@@ -247,6 +268,7 @@ export const routes: (RouteDefinition & {
   {
     path: '/:any',
     name: 'Empty',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: () => <div class={s.nothing}>Nothing is here</div>
   }
 ];

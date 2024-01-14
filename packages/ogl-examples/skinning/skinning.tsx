@@ -5,20 +5,17 @@ import snoutRigSrc from './snout-rig.json?url';
 import snoutShadowSrc from './snout-shadow.jpg?url';
 import snoutSrc from './snout.jpg?url';
 
-import mariaWProp from './Maria WProp J J Ong.fbx?url';
-
 import meshFragment from './mesh.frag?raw';
 import meshVertex from './mesh.vert?raw';
 
-import { onCleanup } from 'solid-js';
-import { parse } from './fbx-loader';
+import { createSignal, onCleanup } from 'solid-js';
+import { Timeline } from '../../sequence-editor/timeline';
 import shadowFragment from './shadow.frag?raw';
 import shadowVertex from './shadow.vert?raw';
 
 export default function App() {
   const renderer = new Renderer({ dpr: 2 });
   const gl = renderer.gl;
-  document.body.appendChild(gl.canvas);
   gl.clearColor(1, 1, 1, 1);
 
   const camera = new Camera(gl, { fov: 35 });
@@ -36,14 +33,10 @@ export default function App() {
   const scene = new Transform();
 
   let skin: Skin;
-  let animation: Animation;
+  const [animation, setAnimation] = createSignal<Animation | undefined>(undefined);
 
   loadModel();
   async function loadModel() {
-    const data2 = await (await (await fetch(mariaWProp)).blob()).arrayBuffer();
-
-    parse(data2, gl);
-
     const data = await (await fetch(snoutRigSrc)).json();
     // Rig JSON data format
     // format is the same as regular model json, with the addition of the rig object
@@ -84,8 +77,6 @@ export default function App() {
     //     ]
     // }
 
-    console.log(`geometry`, data);
-
     const geometry = new Geometry(gl, {
       position: { size: 3, data: new Float32Array(data.position) },
       uv: { size: 2, data: new Float32Array(data.uv) },
@@ -118,7 +109,7 @@ export default function App() {
 
     // Helper function to add animation to skin's bones.
     // The Animation class can be used directly for any hierarchy - is not solely for bones.
-    animation = skin.addAnimation(animationData);
+    setAnimation(skin.addAnimation(animationData));
   }
 
   // Added baked occlusion on the floor to help ground the character
@@ -153,8 +144,8 @@ export default function App() {
     // Control animation but updating the elapsed value.
     // It uses modulo to repeat the animation range,
     // so below is playing a never-ending loop.
-    if (animation) {
-      animation.elapsed += 0.05;
+    if (animation()) {
+      animation()!.elapsed += 0.05;
     }
 
     // Calling 'update' updates the bones with all of the
@@ -173,5 +164,10 @@ export default function App() {
     window.removeEventListener('resize', resize, false);
   });
 
-  return <></>;
+  return (
+    <>
+      {gl.canvas}
+      <Timeline animation={animation()} />
+    </>
+  );
 }
