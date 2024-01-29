@@ -338,6 +338,3 @@ function StylusPen(props: ComponentProps<'g'>) {
     </g>
   );
 }
-function computed(arg0: () => number) {
-  throw new Error('Function not implemented.');
-}
