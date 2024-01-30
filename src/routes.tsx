@@ -3,20 +3,20 @@ import { Component, JSX, Show, lazy } from 'solid-js';
 import s from './App.module.scss';
 
 import multitouchThumbnail from '@packages/hammer-examples/thumbnail.png';
-import rpgThumbnail from './2023-11-18_15-27-57.png?url';
-import spritesThumbnail from './chrome_2023-11-18_14-44-26.png?url';
-import gameOfLifeThumbnail from './chrome_2023-11-18_15-20-36.png?url';
-import twglThumbnail from './chrome_2023-11-18_15-44-48.png?url';
-import phaserThumbnail from './chrome_2023-11-18_15-46-29.png?url';
-import polylinesThumbnail from './chrome_2023-11-18_15-48-40.png?url';
-import smaaThumbnail from './chrome_2023-11-18_16-03-08.png?url';
-import svgLoaderThumbnail from './chrome_2023-11-18_16-04-46.png?url';
-import skinningThumbnail from './chrome_2023-11-18_16-10-52.png?url';
-import multipleLayersThumbnail from './chrome_2023-11-18_16-15-13.png?url';
-import baseTileSizeThumbnail from './chrome_2023-11-18_16-19-18.png?url';
-import breakoutThumbnail from './chrome_2023-11-19_07-21-24.png?url';
-import worldBodiesThumbnail from './chrome_2023-11-19_07-23-34.png?url';
-import wireframeThumbnail from './chrome_2023-11-19_07-29-37.png?url';
+import baseTileSizeThumbnail from './thumbnail/base-tile-size-thumbnail.png?url';
+import breakoutThumbnail from './thumbnail/breakout-thumbnail.png?url';
+import gameOfLifeThumbnail from './thumbnail/chrome_2023-11-18_15-20-36.png?url';
+import twglThumbnail from './thumbnail/chrome_2023-11-18_15-44-48.png?url';
+import phaserThumbnail from './thumbnail/chrome_2023-11-18_15-46-29.png?url';
+import polylinesThumbnail from './thumbnail/chrome_2023-11-18_15-48-40.png?url';
+import smaaThumbnail from './thumbnail/chrome_2023-11-18_16-03-08.png?url';
+import svgLoaderThumbnail from './thumbnail/chrome_2023-11-18_16-04-46.png?url';
+import skinningThumbnail from './thumbnail/chrome_2023-11-18_16-10-52.png?url';
+import multipleLayersThumbnail from './thumbnail/multiple-layers-thumbnail.png?url';
+import rpgThumbnail from './thumbnail/rpg-thumbnail.png?url';
+import spritesThumbnail from './thumbnail/sprites-thumbnail.png?url';
+import wireframeThumbnail from './thumbnail/wireframe-thumbnail.png?url';
+import worldBodiesThumbnail from './thumbnail/world-rodies-thumbnail.png?url';
 
 function Thumbnail(props: { thumbnail?: string; href: string; name?: string }) {
   return (
@@ -264,6 +264,12 @@ export const routes: (RouteDefinition & {
     name: 'WebXR VR Teleport',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/three-examples/webxr-vr-teleport/webxr-vr-teleport'))
+  },
+  {
+    path: '/rpg-game',
+    name: 'RPG Game',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/phaser-examples/rpg/rpg-game'))
   },
   {
     path: '/:any',
