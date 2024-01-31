@@ -49,8 +49,10 @@ export default function () {
     }
 
     tilemap!: Phaser.Tilemaps.Tilemap;
-    marker!: Phaser.GameObjects.Container;
-    markerTween!: Phaser.Tweens.TweenChain;
+    marker!: {
+      setPosition(x: number, y: number): void;
+      remove(): void;
+    };
 
     create() {
       const cloudCityTilemap = this.make.tilemap({ key: CLOUD_CITY_TILED_JSON });
@@ -84,46 +86,7 @@ export default function () {
         numberOfDirections: 8
       };
 
-      {
-        const marker = this.add.graphics();
-        marker.lineStyle(3, 0xffffdd, 1);
-        const width = this.tilemap.tileWidth * layer.scaleX;
-        const height = this.tilemap.tileHeight * layer.scaleY;
-        marker.strokeRect(-width / 2, -height / 2, width, height);
-        marker.setPosition(width / 2, height / 2);
-        // marker.visible = false;
-
-        marker.displayOriginX = 1000;
-        marker.alpha = 1;
-        marker.blendMode = Phaser.BlendModes.ADD;
-        marker.postFX.addBloom();
-
-        const markerContainer = this.add.container();
-        markerContainer.add(marker);
-        markerContainer.setVisible(false);
-        markerContainer.setDepth(10);
-
-        this.marker = markerContainer;
-
-        const markerTween = this.tweens.chain({
-          targets: marker,
-          tweens: [
-            {
-              scale: { from: 1.2, to: 1 },
-              alpha: { from: 0, to: 1 },
-              duration: 350
-            },
-            {
-              alpha: { from: 1, to: 0 },
-              duration: 150
-            }
-          ],
-          repeat: -1
-        });
-        markerTween.pause();
-
-        this.markerTween = markerTween;
-      }
+      this.marker = createMarker({ ...this, layer });
 
       {
         const KeyCodes = Phaser.Input.Keyboard.KeyCodes;
@@ -153,9 +116,6 @@ export default function () {
       if (tileXY) {
         const worldXY = this.tilemap.tileToWorldXY(tileXY.x, tileXY.y)!;
         this.marker.setPosition(worldXY.x, worldXY.y);
-        this.marker.setVisible(true);
-        this.markerTween.restart();
-        this.markerTween.play();
         this.gridEngine
           .moveTo(
             PLAYER,
@@ -166,8 +126,7 @@ export default function () {
           )
           .subscribe((e) => {
             if (e.result === MoveToResult.SUCCESS) {
-              this.marker.setVisible(false);
-              this.markerTween.pause();
+              this.marker.remove();
             }
           });
       }
@@ -253,4 +212,89 @@ function getDirection(up: boolean, right: boolean, down: boolean, left: boolean)
   }
 
   return Direction.NONE;
+}
+
+function createMarker(props: {
+  tweens: Phaser.Tweens.TweenManager;
+  add: Phaser.GameObjects.GameObjectFactory;
+  tilemap: Phaser.Tilemaps.Tilemap;
+  layer: Phaser.Tilemaps.TilemapLayer;
+}) {
+  const markers = [0, 100, 200];
+  const markerContainer = props.add.container();
+  // const markerTweens: Phaser.Tweens.TweenChain[] = [];
+  const markerTweens: Phaser.Tweens.Tween[] = [];
+  for (const iterator of markers) {
+    const marker = props.add.graphics();
+    marker.lineStyle(3, 0xffffdd, 1);
+    const width = props.tilemap.tileWidth * props.layer.scaleX;
+    const height = props.tilemap.tileHeight * props.layer.scaleY;
+    const x = width / 2;
+    const y = height / 2;
+    marker.strokeRect(-x, -y, width, height);
+    marker.setPosition(x, y);
+
+    marker.displayOriginX = 1000;
+    marker.alpha = 0;
+    marker.blendMode = Phaser.BlendModes.ADD;
+    // marker.postFX.addBloom();
+    markerContainer.add(marker);
+
+    const markerTween = props.tweens.add({
+      targets: marker,
+      delay: iterator,
+      paused: true,
+      scale: { from: 1.2, to: 0.8 },
+      y: { from: -20, to: y + 10 },
+      alpha: { from: 0, to: 1 },
+      ease: 'quad.out',
+      duration: 550,
+      repeat: -1
+    });
+
+    markerTweens.push(markerTween);
+  }
+
+  markerContainer.setVisible(false);
+  markerContainer.setDepth(10);
+
+  const show = props.tweens.add({
+    targets: markerContainer,
+    paused: true,
+    alpha: { from: 0, to: 1 },
+    onStart() {
+      for (const tween of markerTweens) {
+        tween.restart();
+      }
+    },
+    ease: 'quad.out',
+    duration: 250,
+    persist: true
+  });
+  const hide = props.tweens.add({
+    targets: markerContainer,
+    paused: true,
+    alpha: { from: 1, to: 0 },
+    onComplete() {
+      markerContainer.setVisible(false);
+      for (const tween of markerTweens) {
+        tween.pause();
+      }
+    },
+    ease: 'quad.out',
+    duration: 250,
+    persist: true
+  });
+
+  return {
+    setPosition(x: number, y: number) {
+      markerContainer.setVisible(true);
+      markerContainer.setPosition(x, y);
+
+      show.restart();
+    },
+    remove() {
+      hide.restart();
+    }
+  };
 }
