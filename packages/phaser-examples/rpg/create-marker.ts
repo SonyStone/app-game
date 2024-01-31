@@ -42,7 +42,7 @@ export function createMarker(props: {
 
   markerContainer.setVisible(false);
   markerContainer.setDepth(10);
-  markerContainer.postFX.addBloom();
+  // markerContainer.postFX.addBloom();
   markerContainer.blendMode = Phaser.BlendModes.ADD;
 
   const show = props.tweens.add({

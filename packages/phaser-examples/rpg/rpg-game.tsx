@@ -8,6 +8,8 @@ import { CLOUD_CITY, CLOUD_CITY_TILED_JSON, CLOUD_CITY_TILESET_IMAGE, PLAYER } f
 import { createMarker } from './create-marker';
 
 const LAYER = 'layer1';
+const ANIMATED_LAYER = 'clouds_1';
+const ANIMATED_LAYER_2 = 'clouds_2';
 
 export default function () {
   const canvas = (<canvas> </canvas>) as HTMLCanvasElement;
@@ -56,7 +58,7 @@ export default function () {
     };
 
     create() {
-      const cloudCityTilemap = this.make.tilemap({ key: CLOUD_CITY_TILED_JSON });
+      const cloudCityTilemap = this.make.tilemap({ key: CLOUD_CITY_TILED_JSON, insertNull: true });
       const tiles = cloudCityTilemap.addTilesetImage(CLOUD_CITY, CLOUD_CITY_TILESET_IMAGE)!;
       for (let i = 0; i < cloudCityTilemap.layers.length; i++) {
         const layer = cloudCityTilemap.createLayer(i, CLOUD_CITY, 0, 0)!;
@@ -67,12 +69,11 @@ export default function () {
       const layer = cloudCityTilemap.createBlankLayer(LAYER, tiles)!;
       layer.scale = 3;
 
-      console.log(`cloudCityTilemap`, cloudCityTilemap);
-
       const playerSprite = this.add.sprite(0, 0, PLAYER);
       playerSprite.setDepth(2);
       playerSprite.scale = 3;
       this.cameras.main.startFollow(playerSprite);
+      this.cameras.main.setFollowOffset(-26, 0);
       this.cameras.main.roundPixels = true;
 
       const gridEngineConfig: GridEngineConfig = {
@@ -88,6 +89,11 @@ export default function () {
       };
 
       this.marker = createMarker({ ...this, layer });
+
+      createWaveAnimation({
+        tweens: this.tweens,
+        tilemap: cloudCityTilemap
+      });
 
       {
         const KeyCodes = Phaser.Input.Keyboard.KeyCodes;
@@ -213,4 +219,53 @@ function getDirection(up: boolean, right: boolean, down: boolean, left: boolean)
   }
 
   return Direction.NONE;
+}
+
+function createWaveAnimation(props: { tilemap: Phaser.Tilemaps.Tilemap; tweens: Phaser.Tweens.TweenManager }) {
+  {
+    const layers = [ANIMATED_LAYER, ANIMATED_LAYER_2].map((layerName) => props.tilemap.getLayer(layerName));
+
+    for (let layerIndex = 0; layerIndex < layers.length; layerIndex++) {
+      const data = layers[layerIndex]?.data!;
+
+      for (let xIndex = 0; xIndex < data.length; xIndex++) {
+        const row = data[xIndex];
+        for (let yIndex = 0; yIndex < row.length; yIndex++) {
+          const tile = row[yIndex];
+          if (!tile) {
+            continue;
+          }
+          const tween = props.tweens.add({
+            targets: tile,
+            pixelY: { from: tile.pixelY, to: tile.pixelY - 2 },
+            ease: 'sine.inout',
+            duration: 1000 * (3 + layerIndex),
+            repeat: -1,
+            yoyo: true,
+            paused: true
+          });
+          tween.seek(yIndex * 1000 + layerIndex * 800);
+          tween.play();
+        }
+      }
+    }
+  }
+  // {
+  //   const layerToAnimate = props.tilemap.getLayer(ANIMATED_LAYER);
+  //   const tiles = layerToAnimate?.data.flat().filter((v) => !!v)!;
+
+  //   for (const tile of tiles) {
+  //     const tween = props.tweens.add({
+  //       targets: tile,
+  //       pixelY: { from: tile.pixelY, to: tile.pixelY - 2 },
+  //       ease: 'sine.inout',
+  //       duration: (Math.random() + 1000) * 3,
+  //       repeat: -1,
+  //       yoyo: true,
+  //       paused: true
+  //     });
+  //     tween.seek(Math.random() * 3000);
+  //     tween.play();
+  //   }
+  // }
 }
