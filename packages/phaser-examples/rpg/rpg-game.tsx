@@ -1,4 +1,4 @@
-import GridEngine, { Direction, GridEngineConfig } from 'grid-engine';
+import GridEngine, { Direction, GridEngineConfig, MoveToResult, NoPathFoundStrategy } from 'grid-engine';
 import Phaser, { Game, Scene } from 'phaser';
 import { onCleanup } from 'solid-js';
 import characters from './characters.png?url';
@@ -19,9 +19,19 @@ export default function () {
   };
 
   class GameScene extends Scene {
-    // private gridControls!: GridControls;
-    // private gridPhysics!: GridPhysics;
     private gridEngine!: GridEngine;
+    private keyboardKeys!: {
+      up1: Phaser.Input.Keyboard.Key;
+      up2: Phaser.Input.Keyboard.Key;
+      down1: Phaser.Input.Keyboard.Key;
+      down2: Phaser.Input.Keyboard.Key;
+      left1: Phaser.Input.Keyboard.Key;
+      left2: Phaser.Input.Keyboard.Key;
+      right1: Phaser.Input.Keyboard.Key;
+      right2: Phaser.Input.Keyboard.Key;
+      space: Phaser.Input.Keyboard.Key;
+      shift: Phaser.Input.Keyboard.Key;
+    };
 
     constructor() {
       super(sceneConfig);
@@ -39,7 +49,8 @@ export default function () {
     }
 
     tilemap!: Phaser.Tilemaps.Tilemap;
-    marker!: Phaser.GameObjects.Graphics;
+    marker!: Phaser.GameObjects.Container;
+    markerTween!: Phaser.Tweens.TweenChain;
 
     create() {
       const cloudCityTilemap = this.make.tilemap({ key: CLOUD_CITY_TILED_JSON });
@@ -52,6 +63,8 @@ export default function () {
       this.tilemap = cloudCityTilemap;
       const layer = cloudCityTilemap.createBlankLayer(LAYER, tiles)!;
       layer.scale = 3;
+
+      console.log(`cloudCityTilemap`, cloudCityTilemap);
 
       const playerSprite = this.add.sprite(0, 0, PLAYER);
       playerSprite.setDepth(2);
@@ -71,13 +84,63 @@ export default function () {
         numberOfDirections: 8
       };
 
-      const marker = this.add.graphics();
-      marker.lineStyle(2, 0x000000, 1);
-      marker.strokeRect(0, 0, this.tilemap.tileWidth * layer.scaleX, this.tilemap.tileHeight * layer.scaleY);
-      marker.visible = false;
-      this.marker = marker;
+      {
+        const marker = this.add.graphics();
+        marker.lineStyle(3, 0xffffdd, 1);
+        const width = this.tilemap.tileWidth * layer.scaleX;
+        const height = this.tilemap.tileHeight * layer.scaleY;
+        marker.strokeRect(-width / 2, -height / 2, width, height);
+        marker.setPosition(width / 2, height / 2);
+        // marker.visible = false;
 
-      console.log(`forwardButtonDown`, this.input.activePointer.leftButtonDown());
+        marker.displayOriginX = 1000;
+        marker.alpha = 1;
+        marker.blendMode = Phaser.BlendModes.ADD;
+        marker.postFX.addBloom();
+
+        const markerContainer = this.add.container();
+        markerContainer.add(marker);
+        markerContainer.setVisible(false);
+        markerContainer.setDepth(10);
+
+        this.marker = markerContainer;
+
+        const markerTween = this.tweens.chain({
+          targets: marker,
+          tweens: [
+            {
+              scale: { from: 1.2, to: 1 },
+              alpha: { from: 0, to: 1 },
+              duration: 350
+            },
+            {
+              alpha: { from: 1, to: 0 },
+              duration: 150
+            }
+          ],
+          repeat: -1
+        });
+        markerTween.pause();
+
+        this.markerTween = markerTween;
+      }
+
+      {
+        const KeyCodes = Phaser.Input.Keyboard.KeyCodes;
+        const keyboardKeys = this.input.keyboard!.addKeys({
+          up1: KeyCodes.UP,
+          up2: KeyCodes.W,
+          down1: KeyCodes.DOWN,
+          down2: KeyCodes.S,
+          left1: KeyCodes.LEFT,
+          left2: KeyCodes.A,
+          right1: KeyCodes.RIGHT,
+          right2: KeyCodes.D,
+          space: KeyCodes.SPACE,
+          shift: KeyCodes.SHIFT
+        }) as any;
+        this.keyboardKeys = keyboardKeys;
+      }
 
       this.input.addListener('pointerdown', this.pointerdownHandler);
 
@@ -86,50 +149,41 @@ export default function () {
 
     pointerdownHandler = (event: Phaser.Input.Pointer) => {
       const tileXY = this.tilemap.worldToTileXY(event.worldX, event.worldY);
+
       if (tileXY) {
         const worldXY = this.tilemap.tileToWorldXY(tileXY.x, tileXY.y)!;
         this.marker.setPosition(worldXY.x, worldXY.y);
-        this.marker.visible = true;
-        this.gridEngine.moveTo(PLAYER, { x: tileXY.x, y: tileXY.y }, {});
+        this.marker.setVisible(true);
+        this.markerTween.restart();
+        this.markerTween.play();
+        this.gridEngine
+          .moveTo(
+            PLAYER,
+            { x: tileXY.x, y: tileXY.y },
+            {
+              noPathFoundStrategy: NoPathFoundStrategy.CLOSEST_REACHABLE
+            }
+          )
+          .subscribe((e) => {
+            if (e.result === MoveToResult.SUCCESS) {
+              this.marker.setVisible(false);
+              this.markerTween.pause();
+            }
+          });
       }
     };
 
     update(_time: number, delta: number) {
-      const cursors = this.input.keyboard!.createCursorKeys();
-
-      const keyBindings = {
-        up: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-        down: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-        left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-        right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D)
-      };
-
-      const isLeft = cursors.left.isDown || keyBindings.left.isDown;
-      const isRight = cursors.right.isDown || keyBindings.right.isDown;
-      const isUp = cursors.up.isDown || keyBindings.up.isDown;
-      const isDown = cursors.down.isDown || keyBindings.down.isDown;
-
-      const direction = getDirection(isUp, isRight, isDown, isLeft);
-
+      const left = this.keyboardKeys.left1.isDown || this.keyboardKeys.left2.isDown;
+      const right = this.keyboardKeys.right1.isDown || this.keyboardKeys.right2.isDown;
+      const up = this.keyboardKeys.up1.isDown || this.keyboardKeys.up2.isDown;
+      const down = this.keyboardKeys.down1.isDown || this.keyboardKeys.down2.isDown;
+      const direction = getDirection(up, right, down, left);
       this.gridEngine.move(PLAYER, direction);
     }
 
     destroy() {
-      console.log(`destroy??`);
       this.input.removeListener('pointerdown', this.pointerdownHandler);
-    }
-
-    private createPlayerAnimation(name: string, startFrame: number, endFrame: number) {
-      this.anims.create({
-        key: name,
-        frames: this.anims.generateFrameNumbers(PLAYER, {
-          start: startFrame,
-          end: endFrame
-        }),
-        frameRate: 10,
-        repeat: -1,
-        yoyo: true
-      });
     }
   }
 
