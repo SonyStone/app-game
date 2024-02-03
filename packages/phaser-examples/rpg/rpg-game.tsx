@@ -1,13 +1,14 @@
-import GridEngine, { Direction, GridEngineConfig, MoveToResult, NoPathFoundStrategy } from 'grid-engine';
+import GridEngine, { Direction, MoveToResult, NoPathFoundStrategy } from 'grid-engine';
 import Phaser, { Game, Scene } from 'phaser';
 import { onCleanup } from 'solid-js';
-import characters from './characters.png?url';
+
 import cloudCityMap from './cloud-city-map.json?url';
 
 import cloudCityTileset from './cloud_tileset/cloud_tileset.png?url';
-import { CLOUD_CITY, CLOUD_CITY_TILED_JSON, CLOUD_CITY_TILESET_IMAGE, PLAYER } from './constants';
+import { CLOUD_CITY, CLOUD_CITY_TILED_JSON, CLOUD_CITY_TILESET_IMAGE } from './constants';
 import { createBGClouds, loadBGClouds } from './create-bg-clouds';
 import { createMarker } from './create-marker';
+import { createPlayer } from './create-player';
 import { createWaveAnimation } from './create-wave-animation';
 
 const LAYER = 'layer1';
@@ -23,7 +24,7 @@ export default function () {
   };
 
   class GameScene extends Scene {
-    private gridEngine!: GridEngine;
+    gridEngine!: GridEngine;
     private keyboardKeys!: {
       up1: Phaser.Input.Keyboard.Key;
       up2: Phaser.Input.Keyboard.Key;
@@ -46,12 +47,7 @@ export default function () {
       this.load.tilemapTiledJSON(CLOUD_CITY_TILED_JSON, cloudCityMap);
 
       loadBGClouds({ load: this.load });
-
-      // load player
-      this.load.spritesheet(PLAYER, characters, {
-        frameWidth: 26,
-        frameHeight: 36
-      });
+      this.player.loadPlayer(this);
     }
 
     tilemap!: Phaser.Tilemaps.Tilemap;
@@ -59,38 +55,25 @@ export default function () {
       setPosition(x: number, y: number): void;
       remove(): void;
     };
+    player = createPlayer();
 
     create() {
       const cloudCityTilemap = this.make.tilemap({ key: CLOUD_CITY_TILED_JSON, insertNull: true });
       const tiles = cloudCityTilemap.addTilesetImage(CLOUD_CITY, CLOUD_CITY_TILESET_IMAGE)!;
-      for (let i = 0; i < cloudCityTilemap.layers.length; i++) {
-        const layer = cloudCityTilemap.createLayer(i, CLOUD_CITY, 0, 0)!;
-        layer.setDepth(i + 1);
-        layer.scale = 3;
+      for (let layerIndex = 0; layerIndex < cloudCityTilemap.layers.length; layerIndex++) {
+        const tilemapLayer = cloudCityTilemap.createLayer(layerIndex, CLOUD_CITY, 0, 0)!;
+        tilemapLayer.setDepth(layerIndex);
+        tilemapLayer.scale = 3;
       }
       this.tilemap = cloudCityTilemap;
       const layer = cloudCityTilemap.createBlankLayer(LAYER, tiles)!;
       layer.scale = 3;
 
-      const playerSprite = this.add.sprite(0, 0, PLAYER);
-      playerSprite.setDepth(3);
-      playerSprite.scale = 3;
-      this.cameras.main.startFollow(playerSprite);
-      this.cameras.main.setFollowOffset(-26, 0);
-      this.cameras.main.roundPixels = true;
-
-      const gridEngineConfig: GridEngineConfig = {
-        characters: [
-          {
-            id: PLAYER,
-            sprite: playerSprite,
-            walkingAnimationMapping: 6,
-            startPosition: { x: 8, y: 8 }
-          }
-        ],
-        numberOfDirections: 8
-      };
-
+      this.player.create({
+        ...this,
+        tilemap: cloudCityTilemap,
+        camera: this.cameras.main
+      });
       this.marker = createMarker({ ...this, layer });
 
       createBGClouds({
@@ -121,8 +104,6 @@ export default function () {
       }
 
       this.input.addListener('pointerdown', this.pointerdownHandler);
-
-      this.gridEngine.create(cloudCityTilemap, gridEngineConfig);
     }
 
     pointerdownHandler = (event: Phaser.Input.Pointer) => {
@@ -133,7 +114,7 @@ export default function () {
         this.marker.setPosition(worldXY.x, worldXY.y);
         this.gridEngine
           .moveTo(
-            PLAYER,
+            this.player.charId,
             { x: tileXY.x, y: tileXY.y },
             {
               noPathFoundStrategy: NoPathFoundStrategy.CLOSEST_REACHABLE
@@ -153,7 +134,7 @@ export default function () {
       const up = this.keyboardKeys.up1.isDown || this.keyboardKeys.up2.isDown;
       const down = this.keyboardKeys.down1.isDown || this.keyboardKeys.down2.isDown;
       const direction = getDirection(up, right, down, left);
-      this.gridEngine.move(PLAYER, direction);
+      this.gridEngine.move(this.player.charId, direction);
     }
 
     destroy() {
