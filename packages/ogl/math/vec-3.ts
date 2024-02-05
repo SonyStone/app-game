@@ -3,10 +3,10 @@ import { Mat3, Mat3Tuple } from './mat-3';
 import { Mat4 } from './mat-4';
 import type { Quat, QuatTuple } from './quat';
 
-export type Vec3Tuple = [x: number, y: number, z: number] | number[];
+export type Vec3Tuple = [x: number, y: number, z: number] | number[] | Float32Array;
 
 // @ts-ignore
-export class Vec3 extends Array<number> implements Vec3Tuple {
+export class Vec3 extends Array implements Vec3Tuple {
   constructor(x: number = 0, y: number = x, z: number = x) {
     // @ts-ignore
     super(x, y, z);
@@ -38,19 +38,19 @@ export class Vec3 extends Array<number> implements Vec3Tuple {
   }
 
   set(x: number | Vec3 | Vec3Tuple, y: number = x as number, z: number = x as number): this {
-    if ((x as Vec3 | Vec3Tuple).length) {
-      return this.copy(x as Vec3 | Vec3Tuple);
+    if ((x as Vec3Tuple).length) {
+      return this.copy(x as Vec3Tuple);
     }
     Vec3Func.set(this, x as number, y, z);
     return this;
   }
 
-  copy(v: Vec3 | Vec3Tuple): this {
+  copy(v: Vec3Tuple): this {
     Vec3Func.copy(this, v);
     return this;
   }
 
-  add(va: Vec3 | Vec3Tuple, vb?: Vec3 | Vec3Tuple): this {
+  add(va: Vec3Tuple, vb?: Vec3 | Vec3Tuple): this {
     if (vb) {
       Vec3Func.add(this, va, vb);
     } else {

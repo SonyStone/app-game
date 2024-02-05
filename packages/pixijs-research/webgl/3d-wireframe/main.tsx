@@ -1,9 +1,8 @@
+import { m4, v3 } from '@webgl/math';
 import { DEG_TO_RAD } from '@webgl/math/constants';
-import * as m4 from '@webgl/math/m4';
-import * as v3 from '@webgl/math/mut-v3';
-import { setFromSpherical, Spherical } from '@webgl/math/spherical';
+import { Spherical, setFromSpherical } from '@webgl/math/spherical';
 import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@webgl/static-variables';
-import { Accessor, createEffect, onCleanup, onMount, Setter } from 'solid-js';
+import { Accessor, Setter, createEffect, onCleanup, onMount } from 'solid-js';
 
 import { useStats } from '../../../../src/Stats.provider';
 import { createMouseRotate } from './create-mouse-rotate';
@@ -112,8 +111,8 @@ export function Main(prop: { ctx: Context }) {
     shader.camera.set(camera.inversePosition);
 
     // Update Camera Projection
-    setOrthographicProjection(camera.orthographicProjection, gl.canvas);
-    setPerspectiveProjection(camera.perspectiveProjection, gl.canvas);
+    setOrthographicProjection(camera.orthographicProjection, gl.canvas as HTMLCanvasElement);
+    setPerspectiveProjection(camera.perspectiveProjection, gl.canvas as HTMLCanvasElement);
     m4.transition(camera.projection, camera.orthographicProjection, camera.perspectiveProjection, value);
 
     m4.identity(camera_m);
