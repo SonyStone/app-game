@@ -2,8 +2,8 @@ import { Camera } from '../core/camera';
 import { Program } from '../core/program';
 import { RenderTarget } from '../core/render-target';
 
-import defaultFragment from './shadow.frag';
-import defaultVertex from './shadow.vert';
+import defaultFragment from './shadow.frag?raw';
+import defaultVertex from './shadow.vert?raw';
 
 import { Mesh } from '../core/mesh';
 import type { OGLRenderingContext } from '../core/renderer';

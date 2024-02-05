@@ -1,18 +1,12 @@
-import {
-  GL_CLEAR_MASK,
-  GL_STATIC_VARIABLES,
-  GL_TEXTURES,
-} from "@webgl/static-variables";
+import { GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@webgl/static-variables';
 
-import { create_color_multisample } from "./textures-render-buffers/create_color_multisample";
-import { create_color_tex } from "./textures-render-buffers/create_color_tex";
-import { create_depth_multisample } from "./textures-render-buffers/create_depth_multisample";
-import { create_depth_render } from "./textures-render-buffers/create_depth_render";
-import { create_depth_tex } from "./textures-render-buffers/create_depth_tex";
-import {
-  ColorAttachmentNumber,
-  get_color_attachment_number,
-} from "./textures-render-buffers/get_color_attachment_number";
+import { GL_TEXTURE_MAG_FILTER, GL_TEXTURE_TARGET } from '@webgl/static-variables/textures';
+import { createColorMultisample } from './textures-render-buffers/create-color-multisample';
+import { createColorTex } from './textures-render-buffers/create-color-tex';
+import { createDepthMultisample } from './textures-render-buffers/create-depth-multisample';
+import { createDepthRender } from './textures-render-buffers/create-depth-render';
+import { createDepthTex } from './textures-render-buffers/create-depth-tex';
+import { ColorAttachmentNumber, getColorAttachmentNumber } from './textures-render-buffers/get-color-attachment-number';
 
 /**
  * mk_color_multisample
@@ -20,10 +14,10 @@ import {
  */
 interface TextureBuffer {
   name: string;
-  type: "color";
-  mode: "multi" | "tex";
+  type: 'color';
+  mode: 'multi' | 'tex';
   attach: ColorAttachmentNumber;
-  pixel: "byte" | "f16" | "f32";
+  pixel: 'byte' | 'f16' | 'f32';
 }
 
 /**
@@ -32,15 +26,15 @@ interface TextureBuffer {
  * mk_depth_tex -- a Depth Texture Buffer
  */
 interface RenderBuffer {
-  type: "depth";
-  mode: "multi" | "tex" | "render";
+  type: 'depth';
+  mode: 'multi' | 'tex' | 'render';
 }
 
 export interface IFramebufferObject {
   buffers: {
     [key: string]: {
-      type: "color" | "depth";
-      mode: "multi" | "tex";
+      type: 'color' | 'depth';
+      mode: 'multi' | 'tex';
     };
   };
   id: WebGLFramebuffer;
@@ -51,152 +45,175 @@ export interface IFramebufferObject {
 export class FramebufferMap {
   buffers: { [key: string]: any } = {};
   constructor(
-    readonly gl: Pick<
-      WebGL2RenderingContext,
-      | "createRenderbuffer"
-      | "bindRenderbuffer"
-      | "renderbufferStorage"
-      | "renderbufferStorageMultisample"
-      | "framebufferRenderbuffer"
-      | "createTexture"
-      | "bindTexture"
-      | "texImage2D"
-      | "texParameteri"
-      | "framebufferTexture2D"
-      | "texStorage2D"
-    >,
+    readonly gl: WebGL2RenderingContext,
     readonly id: WebGLFramebuffer,
     readonly width: number,
     readonly height: number
   ) {}
 
-  create_color(ci: TextureBuffer) {
-    const attach = get_color_attachment_number(ci.attach);
+  createColor(ci: TextureBuffer) {
+    const attach = getColorAttachmentNumber(ci.attach);
     switch (ci.mode) {
-      case "multi": {
+      case 'multi': {
         const buf = {
-          id: create_color_multisample(
-            this.gl,
-            this.width,
-            this.height,
-            attach
-          ),
+          id: createColorMultisample(this.gl, this.width, this.height, attach),
           attach,
-          type: "multi",
+          type: 'multi'
         };
         this.buffers[ci.name] = buf;
         return buf;
       }
-      case "tex": {
+      case 'tex': {
         const buf = {
-          id: create_color_tex(
-            this.gl,
-            this.width,
-            this.height,
-            attach,
-            ci.pixel
-          ),
+          id: createColorTex(this.gl, this.width, this.height, attach, ci.pixel),
           attach,
-          type: "tex",
+          type: 'tex'
         };
         this.buffers[ci.name] = buf;
         return buf;
       }
       default: {
-        throw new Error("Not supported TextureBuffer mode");
+        throw new Error('Not supported TextureBuffer mode');
       }
     }
   }
 
-  create_depth(ci: RenderBuffer) {
+  createDepth(ci: RenderBuffer) {
     switch (ci.mode) {
-      case "multi": {
+      case 'multi': {
         const buf = {
-          id: create_depth_multisample(this.gl, this.width, this.height),
-          type: "multi",
+          id: createDepthMultisample(this.gl, this.width, this.height),
+          type: 'multi'
         };
-        this.buffers["depth"] = buf;
+        this.buffers['depth'] = buf;
         return buf;
       }
-      case "tex": {
+      case 'tex': {
         const buf = {
-          id: create_depth_tex(this.gl, this.width, this.height),
-          type: "tex",
+          id: createDepthTex(this.gl, this.width, this.height),
+          type: 'tex'
         };
-        this.buffers["depth"] = buf;
+        this.buffers['depth'] = buf;
         return buf;
       }
-      case "render": {
+      case 'render': {
         const buf = {
-          id: create_depth_render(this.gl, this.width, this.height),
-          type: "render",
+          id: createDepthRender(this.gl, this.width, this.height),
+          type: 'render'
         };
-        this.buffers["depth"] = buf;
+        this.buffers['depth'] = buf;
         return buf;
       }
       default: {
-        throw new Error("Not supported RenderBuffer mode");
+        throw new Error('Not supported RenderBuffer mode');
       }
     }
   }
 }
 
 /** Check if the Frame has been setup Correctly. */
-function checkFramebufferStatus(
-  gl: Pick<WebGL2RenderingContext, "checkFramebufferStatus">
-) {
+function checkFramebufferStatus(gl: Pick<WebGL2RenderingContext, 'checkFramebufferStatus'>) {
   switch (gl.checkFramebufferStatus(GL_STATIC_VARIABLES.FRAMEBUFFER)) {
     case GL_STATIC_VARIABLES.FRAMEBUFFER_COMPLETE:
       break;
     case GL_STATIC_VARIABLES.FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
       console.log(
-        "FRAMEBUFFER_INCOMPLETE_ATTACHMENT: The attachment types are mismatched or not all framebuffer attachment points are framebuffer attachment complete."
+        'FRAMEBUFFER_INCOMPLETE_ATTACHMENT: The attachment types are mismatched or not all framebuffer attachment points are framebuffer attachment complete.'
       );
       break;
     case GL_STATIC_VARIABLES.FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
-      console.log("FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT");
+      console.log('FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT');
       break;
     case GL_STATIC_VARIABLES.FRAMEBUFFER_INCOMPLETE_DIMENSIONS:
-      console.log("FRAMEBUFFER_INCOMPLETE_DIMENSIONS");
+      console.log('FRAMEBUFFER_INCOMPLETE_DIMENSIONS');
       break;
     case GL_STATIC_VARIABLES.FRAMEBUFFER_UNSUPPORTED:
-      console.log("FRAMEBUFFER_UNSUPPORTED");
+      console.log('FRAMEBUFFER_UNSUPPORTED');
       break;
     case GL_STATIC_VARIABLES.FRAMEBUFFER_INCOMPLETE_MULTISAMPLE:
-      console.log("FRAMEBUFFER_INCOMPLETE_MULTISAMPLE");
+      console.log('FRAMEBUFFER_INCOMPLETE_MULTISAMPLE');
       break;
     case GL_STATIC_VARIABLES.RENDERBUFFER_SAMPLES:
-      console.log("RENDERBUFFER_SAMPLES");
+      console.log('RENDERBUFFER_SAMPLES');
       break;
   }
 }
 
+/**
+ * [WebGL Framebuffers](https://webglfundamentals.org/webgl/lessons/webgl-framebuffers.html)
+ * [WebGL Rendering to a Texture](https://webglfundamentals.org/webgl/lessons/webgl-render-to-texture.html)
+ * @param gl
+ * @param config
+ * @returns FramebufferMap
+ */
+export const createFramebufferMap = (
+  gl: WebGL2RenderingContext,
+  config: {
+    width: number;
+    height: number;
+    buffers: (TextureBuffer | RenderBuffer)[];
+  }
+): FramebufferMap => {
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  // Create Frame Buffer Object
+  const framebufferId = gl.createFramebuffer()!;
+  const width = config.width;
+  const height = config.height;
+
+  gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, framebufferId);
+
+  const fbo = new FramebufferMap(gl, framebufferId, width, height);
+
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  // Create Textures / Render Buffers
+
+  // Need to get a list of Attachment Points for the Buffers in the FBO
+  const attachArray = [];
+
+  for (const i of config.buffers) {
+    switch (i.type) {
+      case 'color':
+        const buf = fbo.createColor(i);
+        attachArray.push(buf.attach);
+        break;
+      case 'depth':
+        fbo.createDepth(i);
+        break;
+    }
+  }
+
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //Assign which buffers are going to be written too
+  gl.drawBuffers(attachArray);
+
+  checkFramebufferStatus(gl);
+
+  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  // Cleanup
+  gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
+  gl.bindRenderbuffer(GL_STATIC_VARIABLES.RENDERBUFFER, null);
+  gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, null);
+  return fbo;
+};
+
+/**
+ *
+ * `gl.bindFramebuffer(FRAMEBUFFER, fbo_id)`
+ */
+export const bindFramebuffer = (gl: WebGL2RenderingContext, o: any) => {
+  gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, o.id);
+};
+
+/**
+ * `gl.bindFramebuffer(FRAMEBUFFER, null)`
+ */
+export const unbindFramebuffer = (gl: WebGL2RenderingContext) => {
+  gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
+};
+
 export class FramebufferObjectFactory {
-  constructor(
-    private readonly gl: Pick<
-      WebGL2RenderingContext,
-      | "createFramebuffer"
-      | "getExtension"
-      | "bindFramebuffer"
-      | "createRenderbuffer"
-      | "bindRenderbuffer"
-      | "renderbufferStorage"
-      | "renderbufferStorageMultisample"
-      | "framebufferRenderbuffer"
-      | "createTexture"
-      | "bindTexture"
-      | "texImage2D"
-      | "texParameteri"
-      | "framebufferTexture2D"
-      | "texStorage2D"
-      | "drawBuffers"
-      | "checkFramebufferStatus"
-      | "clear"
-      | "clearBufferfv"
-      | "blitFramebuffer"
-    >
-  ) {
-    gl.getExtension("EXT_color_buffer_float"); // Need it to use Float Frame Buffers
+  constructor(private readonly gl: WebGL2RenderingContext) {
+    gl.getExtension('EXT_color_buffer_float'); // Need it to use Float Frame Buffers
   }
 
   new(config: any): FramebufferMap {
@@ -219,12 +236,12 @@ export class FramebufferObjectFactory {
 
     for (const i of config.buffers) {
       switch (i.type) {
-        case "color":
-          const buf = fbo.create_color(i);
+        case 'color':
+          const buf = fbo.createColor(i);
           attach_ary.push(buf.attach);
           break;
-        case "depth":
-          fbo.create_depth(i);
+        case 'depth':
+          fbo.createDepth(i);
           break;
       }
     }
@@ -239,7 +256,7 @@ export class FramebufferObjectFactory {
     // Cleanup
     gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, null);
     gl.bindRenderbuffer(GL_STATIC_VARIABLES.RENDERBUFFER, null);
-    gl.bindTexture(GL_TEXTURES.TEXTURE_2D, null);
+    gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, null);
     return fbo;
   }
 
@@ -288,7 +305,7 @@ export class FramebufferObjectFactory {
       fboWrite.width,
       fboWrite.height,
       GL_CLEAR_MASK.COLOR_BUFFER_BIT | GL_CLEAR_MASK.DEPTH_BUFFER_BIT,
-      GL_TEXTURES.NEAREST
+      GL_TEXTURE_MAG_FILTER.NEAREST
     );
 
     //Unbind

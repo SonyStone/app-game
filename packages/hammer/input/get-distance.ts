@@ -1,4 +1,4 @@
-import type { Vec2Tuple } from 'ogl';
+import { Vec2Tuple } from '@packages/ogl/math/vec-2';
 
 /**
  * @private

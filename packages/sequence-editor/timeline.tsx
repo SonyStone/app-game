@@ -1,6 +1,6 @@
 import { createPointerEventsHandler } from '@packages/hammer/pointerevent';
+import { Animation, AnimationFrame, Vec2 } from '@packages/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { Animation, AnimationFrame, Vec2 } from 'ogl';
 import { For, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import GraphEditorToggle from './graph-editor-toggle';

@@ -1,4 +1,5 @@
-import { Mat4Tuple, Vec3Tuple } from 'ogl';
+import { Mat4Tuple } from '@packages/ogl/math/mat-4';
+import { Vec3Tuple } from '@packages/ogl/math/vec-3';
 
 export interface FBXTree {
   Connections: {
@@ -118,11 +119,11 @@ export interface Model {
     flag: string;
     value: 0;
   };
-  RotationOrder?: { type: 'enum', value: number };
+  RotationOrder?: { type: 'enum'; value: number };
   InheritType: { type: 'enum'; type2: string; flag: string; value: number | string };
-  GeometricTranslation?: { type: any, value: Vec3Tuple },
-  GeometricRotation?: { type: any, value: Vec3Tuple },
-  GeometricScaling?: { type: any, value: Vec3Tuple },
+  GeometricTranslation?: { type: any; value: Vec3Tuple };
+  GeometricRotation?: { type: any; value: Vec3Tuple };
+  GeometricScaling?: { type: any; value: Vec3Tuple };
   Lcl_Rotation: {
     type: 'Lcl_Rotation';
     type2: '';

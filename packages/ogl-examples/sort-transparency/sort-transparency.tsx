@@ -1,5 +1,5 @@
+import { Camera, Color, Mesh, Orbit, Plane, Program, Renderer, Texture, Transform } from '@packages/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { Camera, Color, Mesh, Orbit, Plane, Program, Renderer, Texture, Transform } from 'ogl';
 import { createEffect, onCleanup } from 'solid-js';
 
 import leaf from './leaf.jpg?url';
@@ -18,7 +18,7 @@ export default function SortTransparency() {
   camera.position.set(0, 0, 7);
   camera.rotation.z = -0.3;
 
-  const controls = new Orbit(camera);
+  const controls = new (Orbit as any)(camera);
 
   const resize = createWindowSize();
 

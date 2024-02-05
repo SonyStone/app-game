@@ -1,5 +1,5 @@
+import { Camera, GLTF, GLTFLoader, Orbit, Program, Renderer, TextureLoader, Transform, Vec3 } from '@packages/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { Camera, GLTF, GLTFLoader, Orbit, Program, Renderer, TextureLoader, Transform, Vec3 } from 'ogl';
 import { createEffect, onCleanup } from 'solid-js';
 
 import hershel from './hershel.glb?url';
@@ -18,7 +18,7 @@ export default function loadGltf() {
   const camera = new Camera(gl, { near: 1, far: 1000 });
   // camera.position.set(60, 25, -60);
   camera.position.set(30, 15, -30);
-  const controls = new Orbit(camera);
+  const controls = new (Orbit as any)(camera);
   // controls.target.y = 25;
 
   const resize = createWindowSize();

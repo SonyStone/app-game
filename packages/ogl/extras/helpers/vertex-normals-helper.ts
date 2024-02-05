@@ -5,8 +5,8 @@ import { Program } from '../../core/program';
 import { Color } from '../../math/color';
 import { Mat3 } from '../../math/mat-3';
 
-import fragment from './vertex-normals-helper.frag';
-import vertex from './vertex-normals-helper.vert';
+import fragment from './vertex-normals-helper.frag?raw';
+import vertex from './vertex-normals-helper.vert?raw';
 
 export interface FaceNormalsHelperOptions {
   size: number;

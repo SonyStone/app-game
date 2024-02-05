@@ -11,7 +11,7 @@ import {
   Sphere,
   Transform,
   VertexNormalsHelper
-} from 'ogl';
+} from '@packages/ogl';
 
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect, onCleanup } from 'solid-js';
@@ -26,7 +26,7 @@ export default function Helpers() {
   const camera = new Camera(gl, { fov: 35 });
   camera.position.set(1, 1, 7);
   camera.lookAt([0, 0, 0]);
-  const controls = new Orbit(camera);
+  const controls = new (Orbit as any)(camera);
 
   const resize = createWindowSize();
 

@@ -1,4 +1,10 @@
-export type QuatTuple = [x: number, y: number, z: number, w: number];
+import { AttributeData } from '../core/geometry';
+import { Euler } from './euler';
+import * as QuatFunc from './functions/quat-func';
+import { Mat3, Mat3Tuple } from './mat-3';
+import { Vec3, Vec3Tuple } from './vec-3';
+
+export type QuatTuple = [x: number, y: number, z: number, w: number] | number[];
 
 // @ts-ignore
 export class Quat extends Array implements QuatTuple {
@@ -47,98 +53,100 @@ export class Quat extends Array implements QuatTuple {
   }
 
   identity(): this {
-    QuatFunc.identity(this);
+    QuatFunc.identity(this as any as QuatTuple);
     this.onChange();
     return this;
   }
 
-  set(x, y, z, w) {
-    if (x.length) return this.copy(x);
-    QuatFunc.set(this, x, y, z, w);
+  set(x: number | Quat | QuatTuple, y: number, z: number, w: number): this {
+    if ((x as number[]).length) {
+      return this.copy(x as Quat);
+    }
+    QuatFunc.set(this, x as number, y, z, w);
     this.onChange();
     return this;
   }
 
-  rotateX(a) {
-    QuatFunc.rotateX(this, this, a);
+  rotateX(a: number): this {
+    QuatFunc.rotateX(this as any as QuatTuple, this as any as QuatTuple, a);
     this.onChange();
     return this;
   }
 
-  rotateY(a) {
-    QuatFunc.rotateY(this, this, a);
+  rotateY(a: number): this {
+    QuatFunc.rotateY(this as any as QuatTuple, this as any as QuatTuple, a);
     this.onChange();
     return this;
   }
 
-  rotateZ(a) {
-    QuatFunc.rotateZ(this, this, a);
+  rotateZ(a: number): this {
+    QuatFunc.rotateZ(this as any as QuatTuple, this as any as QuatTuple, a);
     this.onChange();
     return this;
   }
 
-  inverse(q = this) {
-    QuatFunc.invert(this, q);
+  inverse(q: Quat = this): this {
+    QuatFunc.invert(this as any as QuatTuple, q as any as QuatTuple);
     this.onChange();
     return this;
   }
 
-  conjugate(q = this) {
-    QuatFunc.conjugate(this, q);
+  conjugate(q: Quat = this): this {
+    QuatFunc.conjugate(this as any as QuatTuple, q as any as QuatTuple);
     this.onChange();
     return this;
   }
 
-  copy(q) {
-    QuatFunc.copy(this, q);
+  copy(q: Quat): this {
+    QuatFunc.copy(this as any as QuatTuple, q as any as QuatTuple);
     this.onChange();
     return this;
   }
 
-  normalize(q = this) {
-    QuatFunc.normalize(this, q);
+  normalize(q: Quat = this): this {
+    QuatFunc.normalize(this as any as QuatTuple, q as any as QuatTuple);
     this.onChange();
     return this;
   }
 
-  multiply(qA, qB) {
+  multiply(qA: Quat, qB?: Quat): this {
     if (qB) {
-      QuatFunc.multiply(this, qA, qB);
+      QuatFunc.multiply(this as any as QuatTuple, qA as any as QuatTuple, qB as any as QuatTuple);
     } else {
-      QuatFunc.multiply(this, this, qA);
+      QuatFunc.multiply(this as any as QuatTuple, this as any as QuatTuple, qA as any as QuatTuple);
     }
     this.onChange();
     return this;
   }
 
-  dot(v) {
-    return QuatFunc.dot(this, v);
+  dot(v: Quat): number {
+    return QuatFunc.dot(this as any as QuatTuple, v as any as QuatTuple);
   }
 
-  fromMatrix3(matrix3) {
-    QuatFunc.fromMat3(this, matrix3);
+  fromMatrix3(matrix3: Mat3): this {
+    QuatFunc.fromMat3(this as any as QuatTuple, matrix3 as any as Mat3Tuple);
     this.onChange();
     return this;
   }
 
-  fromEuler(euler) {
-    QuatFunc.fromEuler(this, euler, euler.order);
+  fromEuler(euler: Euler): this {
+    QuatFunc.fromEuler(this as any as QuatTuple, euler as any as Vec3Tuple, euler.order);
     return this;
   }
 
-  fromAxisAngle(axis, a) {
+  fromAxisAngle(axis: Vec3, a: number): this {
     QuatFunc.setAxisAngle(this, axis, a);
     this.onChange();
     return this;
   }
 
-  slerp(q, t) {
-    QuatFunc.slerp(this, this, q, t);
+  slerp(q: Quat, t: number): this {
+    QuatFunc.slerp(this as any as QuatTuple, this as any as QuatTuple, q as any as QuatTuple, t);
     this.onChange();
     return this;
   }
 
-  fromArray(a, o = 0) {
+  fromArray(a: number[] | AttributeData, o: number = 0): this {
     this[0] = a[o];
     this[1] = a[o + 1];
     this[2] = a[o + 2];
@@ -147,7 +155,7 @@ export class Quat extends Array implements QuatTuple {
     return this;
   }
 
-  toArray(a = [], o = 0) {
+  toArray<T extends number[] | AttributeData>(a: T = [] as any as T, o: number = 0): T {
     a[o] = this[0];
     a[o + 1] = this[1];
     a[o + 2] = this[2];

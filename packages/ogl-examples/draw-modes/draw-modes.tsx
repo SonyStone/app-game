@@ -1,4 +1,4 @@
-import { Camera, Geometry, Mesh, Program, Renderer, Transform } from 'ogl';
+import { Camera, Geometry, Mesh, Program, Renderer, Transform } from '@packages/ogl';
 
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { effect } from 'solid-js/web';

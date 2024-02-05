@@ -66,7 +66,9 @@ export class Program {
       depthFunc = gl.LESS
     }: Partial<ProgramOptions> = {}
   ) {
-    if (!gl.canvas) console.error('gl not passed as first argument to Program');
+    if (!gl.canvas) {
+      console.error('gl not passed as first argument to Program');
+    }
     this.gl = gl;
     this.uniforms = uniforms;
     this.id = ID++;
@@ -90,8 +92,11 @@ export class Program {
 
     // set default blendFunc if transparent flagged
     if (this.transparent && !this.blendFunc.src) {
-      if (this.gl.renderer.premultipliedAlpha) this.setBlendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
-      else this.setBlendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+      if (this.gl.renderer.premultipliedAlpha) {
+        this.setBlendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
+      } else {
+        this.setBlendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+      }
     }
 
     // compile vertex shader and log errors
@@ -158,7 +163,9 @@ export class Program {
     this.blendFunc.dst = dst;
     this.blendFunc.srcAlpha = srcAlpha;
     this.blendFunc.dstAlpha = dstAlpha;
-    if (src) this.transparent = true;
+    if (src) {
+      this.transparent = true;
+    }
   }
 
   setBlendEquation(modeRGB: GLenum, modeAlpha: GLenum): void {
@@ -167,26 +174,38 @@ export class Program {
   }
 
   applyState(): void {
-    if (this.depthTest) this.gl.renderer.enable(this.gl.DEPTH_TEST);
-    else this.gl.renderer.disable(this.gl.DEPTH_TEST);
+    if (this.depthTest) {
+      this.gl.renderer.enable(this.gl.DEPTH_TEST);
+    } else {
+      this.gl.renderer.disable(this.gl.DEPTH_TEST);
+    }
 
-    if (this.cullFace) this.gl.renderer.enable(this.gl.CULL_FACE);
-    else this.gl.renderer.disable(this.gl.CULL_FACE);
+    if (this.cullFace) {
+      this.gl.renderer.enable(this.gl.CULL_FACE);
+    } else {
+      this.gl.renderer.disable(this.gl.CULL_FACE);
+    }
 
-    if (this.blendFunc.src) this.gl.renderer.enable(this.gl.BLEND);
-    else this.gl.renderer.disable(this.gl.BLEND);
+    if (this.blendFunc.src) {
+      this.gl.renderer.enable(this.gl.BLEND);
+    } else {
+      this.gl.renderer.disable(this.gl.BLEND);
+    }
 
-    if (this.cullFace) this.gl.renderer.setCullFace(this.cullFace);
+    if (this.cullFace) {
+      this.gl.renderer.setCullFace(this.cullFace);
+    }
     this.gl.renderer.setFrontFace(this.frontFace);
     this.gl.renderer.setDepthMask(this.depthWrite);
     this.gl.renderer.setDepthFunc(this.depthFunc);
-    if (this.blendFunc.src)
+    if (this.blendFunc.src) {
       this.gl.renderer.setBlendFunc(
         this.blendFunc.src,
         this.blendFunc.dst,
         this.blendFunc.srcAlpha!,
         this.blendFunc.dstAlpha!
       );
+    }
     this.gl.renderer.setBlendEquation(this.blendEquation.modeRGB, this.blendEquation.modeAlpha!);
   }
 
@@ -205,7 +224,9 @@ export class Program {
       let uniform = this.uniforms[activeUniform.uniformName];
 
       for (const component of activeUniform.nameComponents) {
-        if (!uniform) break;
+        if (!uniform) {
+          break;
+        }
 
         if (component in uniform) {
           uniform = uniform[component];
@@ -263,61 +284,69 @@ function setUniform(
   gl: OGLRenderingContext,
   type: number,
   location: WebGLUniformLocation,
-  value: Float32Array[] | Float32Array
+  value: Float32Array[] | Float32Array | number[] | number
 ) {
-  value = value.length ? flatten(value) : value;
+  value = (value as Float32Array[] | Float32Array | number[]).length
+    ? flatten(value as Float32Array[] | Float32Array | number[])
+    : value;
   const setValue = gl.renderer.state.uniformLocations.get(location);
 
   // Avoid redundant uniform commands
-  if (value.length) {
-    if (setValue === undefined || setValue.length !== value.length) {
+  if ((value as Float32Array | number[]).length) {
+    if (setValue === undefined || (setValue as Array<number>).length !== (value as Float32Array | number[]).length) {
       // clone array to store as cache
-      gl.renderer.state.uniformLocations.set(location, value.slice(0));
+      gl.renderer.state.uniformLocations.set(location, (value as Float32Array | number[]).slice(0));
     } else {
-      if (arraysEqual(setValue, value)) {
+      if (arraysEqual(setValue as number[], value as Float32Array | number[])) {
         return;
       }
 
       // Update cached array values
-      setValue.set ? setValue.set(value) : setArray(setValue, value);
+      (setValue as Float32Array).set
+        ? (setValue as Float32Array).set(value as Float32Array | number[])
+        : setArray(setValue as number[], value as Float32Array | number[]);
       gl.renderer.state.uniformLocations.set(location, setValue);
     }
   } else {
     if (setValue === value) {
       return;
     }
-    gl.renderer.state.uniformLocations.set(location, value);
+    gl.renderer.state.uniformLocations.set(location, value as number);
   }
 
   switch (type) {
     case GL_DATA_TYPE.FLOAT:
-      return value.length ? gl.uniform1fv(location, value) : gl.uniform1f(location, value); // FLOAT
+      return (value as Float32Array | number[]).length
+        ? gl.uniform1fv(location, value as Float32Array | number[])
+        : gl.uniform1f(location, value as number); // FLOAT
     case GL_DATA_TYPE.FLOAT_VEC2:
-      return gl.uniform2fv(location, value);
+      return gl.uniform2fv(location, value as Float32Array);
     case GL_DATA_TYPE.FLOAT_VEC3:
-      return gl.uniform3fv(location, value);
+      return gl.uniform3fv(location, value as Float32Array);
     case GL_DATA_TYPE.FLOAT_VEC4:
-      return gl.uniform4fv(location, value);
+      return gl.uniform4fv(location, value as Float32Array);
     case GL_DATA_TYPE.BOOL:
     case GL_DATA_TYPE.INT:
     case GL_DATA_TYPE.SAMPLER_2D:
     case GL_DATA_TYPE.SAMPLER_CUBE:
-      return value.length ? gl.uniform1iv(location, value) : gl.uniform1i(location, value); // SAMPLER_CUBE
+      return (value as Float32Array | number[]).length
+        ? gl.uniform1iv(location, value as Float32Array | number[])
+        : gl.uniform1i(location, value as number); // SAMPLER_CUBE
     case GL_DATA_TYPE.BOOL_VEC2: // BOOL_VEC2
     case GL_DATA_TYPE.INT_VEC2:
-      return gl.uniform2iv(location, value); // INT_VEC2
+      return gl.uniform2iv(location, value as Float32Array); // INT_VEC2
     case GL_DATA_TYPE.BOOL_VEC3: // BOOL_VEC3
     case GL_DATA_TYPE.INT_VEC3:
-      return gl.uniform3iv(location, value); // INT_VEC3
+      return gl.uniform3iv(location, value as Float32Array); // INT_VEC3
     case GL_DATA_TYPE.BOOL_VEC4: // BOOL_VEC4
     case GL_DATA_TYPE.INT_VEC4:
-      return gl.uniform4iv(location, value); // INT_VEC4
+      return gl.uniform4iv(location, value as Float32Array); // INT_VEC4
     case GL_DATA_TYPE.FLOAT_MAT2:
-      return gl.uniformMatrix2fv(location, false, value); // FLOAT_MAT2
+      return gl.uniformMatrix2fv(location, false, value as Float32Array); // FLOAT_MAT2
     case GL_DATA_TYPE.FLOAT_MAT3:
-      return gl.uniformMatrix3fv(location, false, value); // FLOAT_MAT3
+      return gl.uniformMatrix3fv(location, false, value as Float32Array); // FLOAT_MAT3
     case GL_DATA_TYPE.FLOAT_MAT4:
-      return gl.uniformMatrix4fv(location, false, value); // FLOAT_MAT4
+      return gl.uniformMatrix4fv(location, false, value as Float32Array); // FLOAT_MAT4
   }
 }
 
@@ -336,7 +365,7 @@ function addLineNumbers(string?: string) {
 // cache of typed arrays used to flatten uniform arrays
 const arrayCacheF32: { [key: number]: Float32Array } = {};
 
-function flatten(a: Float32Array[] | Float32Array): Float32Array {
+function flatten(a: Float32Array[] | Float32Array | number[]): Float32Array {
   const arrayLen = a.length;
   const valueLen = (a[0] as Float32Array).length;
   if (valueLen === undefined) {
@@ -344,20 +373,30 @@ function flatten(a: Float32Array[] | Float32Array): Float32Array {
   }
   const length = arrayLen * valueLen;
   let value = arrayCacheF32[length];
-  if (!value) arrayCacheF32[length] = value = new Float32Array(length);
-  for (let i = 0; i < arrayLen; i++) value.set(a[i], i * valueLen);
+  if (!value) {
+    arrayCacheF32[length] = value = new Float32Array(length);
+  }
+
+  for (let i = 0; i < arrayLen; i++) {
+    value.set((a as Float32Array[])[i], i * valueLen);
+  }
+
   return value;
 }
 
-function arraysEqual(a: Float32Array, b: Float32Array) {
-  if (a.length !== b.length) return false;
+function arraysEqual(a: Float32Array | number[], b: Float32Array | number[]) {
+  if (a.length !== b.length) {
+    return false;
+  }
   for (let i = 0, l = a.length; i < l; i++) {
-    if (a[i] !== b[i]) return false;
+    if (a[i] !== b[i]) {
+      return false;
+    }
   }
   return true;
 }
 
-function setArray(a: Float32Array, b: Float32Array) {
+function setArray(a: Float32Array | number[], b: Float32Array | number[]) {
   for (let i = 0, l = a.length; i < l; i++) {
     a[i] = b[i];
   }

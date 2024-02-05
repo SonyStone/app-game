@@ -1,25 +1,58 @@
-import { Geometry } from '../core/geometry';
+import { AttributeMap, Geometry } from '../core/geometry';
 import { Mesh } from '../core/mesh';
 import { Program } from '../core/program';
+import { OGLRenderingContext } from '../core/renderer';
 import { Color } from '../math/color';
 import { Vec2 } from '../math/vec-2';
 import { Vec3 } from '../math/vec-3';
 
-import defaultFragment from './polyline.frag';
-import defaultVertex from './polyline.vert';
+import defaultFragment from './polyline.frag?raw';
+import defaultVertex from './polyline.vert?raw';
 
 const tmp = /* @__PURE__ */ new Vec3();
 
+export interface PolylineOptions {
+  points: Vec3[];
+  vertex?: string;
+  fragment?: string;
+  uniforms?: Record<string, any>;
+  attributes?: AttributeMap;
+}
+
+/**
+ * A polyline mesh.
+ * @see {@link https://github.com/oframe/ogl/blob/master/src/extras/Polyline.js | Source}
+ */
 export class Polyline {
+  gl: OGLRenderingContext;
+  points: Vec3[];
+  count: number;
+
+  position: Float32Array;
+  prev: Float32Array;
+  next: Float32Array;
+
+  geometry: Geometry;
+
+  resolution?: { value: Vec2 };
+  dpr?: { value: number };
+  thickness?: { value: number };
+  color?: { value: Color };
+  miter?: { value: number };
+
+  program: Program;
+
+  mesh: Mesh;
+
   constructor(
-    gl,
+    gl: OGLRenderingContext,
     {
       points, // Array of Vec3s
       vertex = defaultVertex,
       fragment = defaultFragment,
       uniforms = {},
       attributes = {} // For passing in custom attribs
-    }
+    }: PolylineOptions
   ) {
     this.gl = gl;
     this.points = points;
@@ -118,7 +151,11 @@ export class Polyline {
   // Only need to call if not handling resolution uniforms manually
   resize() {
     // Update automatic uniforms if not overridden
-    if (this.resolution) this.resolution.value.set(this.gl.canvas.width, this.gl.canvas.height);
-    if (this.dpr) this.dpr.value = this.gl.renderer.dpr;
+    if (this.resolution) {
+      this.resolution.value.set(this.gl.canvas.width, this.gl.canvas.height);
+    }
+    if (this.dpr) {
+      this.dpr.value = this.gl.renderer.dpr;
+    }
   }
 }

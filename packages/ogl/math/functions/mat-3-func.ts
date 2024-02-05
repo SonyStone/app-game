@@ -1,3 +1,8 @@
+import { Mat3Tuple } from '../mat-3';
+import { Mat4Tuple } from '../mat-4';
+import { QuatTuple } from '../quat';
+import { Vec2Tuple } from '../vec-2';
+
 const EPSILON = 0.000001;
 
 /**
@@ -7,7 +12,7 @@ const EPSILON = 0.000001;
  * @param {mat4} a   the source 4x4 matrix
  * @returns {mat3} out
  */
-export function fromMat4(out, a) {
+export function fromMat4(out: Mat3Tuple, a: Mat4Tuple): Mat3Tuple {
   out[0] = a[0];
   out[1] = a[1];
   out[2] = a[2];
@@ -28,7 +33,7 @@ export function fromMat4(out, a) {
  *
  * @returns {mat3} out
  */
-export function fromQuat(out, q) {
+export function fromQuat(out: Mat3Tuple, q: QuatTuple): Mat3Tuple {
   let x = q[0],
     y = q[1],
     z = q[2],
@@ -69,7 +74,7 @@ export function fromQuat(out, q) {
  * @param {mat3} a the source matrix
  * @returns {mat3} out
  */
-export function copy(out, a) {
+export function copy(out: Mat3Tuple, a: Mat3Tuple): Mat3Tuple {
   out[0] = a[0];
   out[1] = a[1];
   out[2] = a[2];
@@ -88,7 +93,18 @@ export function copy(out, a) {
  * @param {mat3} out the receiving matrix
  * @returns {mat3} out
  */
-export function set(out, m00, m01, m02, m10, m11, m12, m20, m21, m22) {
+export function set(
+  out: Mat3Tuple,
+  m00: number,
+  m01: number,
+  m02: number,
+  m10: number,
+  m11: number,
+  m12: number,
+  m20: number,
+  m21: number,
+  m22: number
+): Mat3Tuple {
   out[0] = m00;
   out[1] = m01;
   out[2] = m02;
@@ -107,7 +123,7 @@ export function set(out, m00, m01, m02, m10, m11, m12, m20, m21, m22) {
  * @param {mat3} out the receiving matrix
  * @returns {mat3} out
  */
-export function identity(out) {
+export function identity(out: Mat3Tuple): Mat3Tuple {
   out[0] = 1;
   out[1] = 0;
   out[2] = 0;
@@ -127,7 +143,7 @@ export function identity(out) {
  * @param {mat3} a the source matrix
  * @returns {mat3} out
  */
-export function transpose(out, a) {
+export function transpose(out: Mat3Tuple, a: Mat3Tuple): Mat3Tuple {
   // If we are transposing ourselves we can skip a few steps but have to cache some values
   if (out === a) {
     let a01 = a[1],
@@ -161,7 +177,7 @@ export function transpose(out, a) {
  * @param {mat3} a the source matrix
  * @returns {mat3} out
  */
-export function invert(out, a) {
+export function invert(out: Mat3Tuple, a: Mat3Tuple): Mat3Tuple {
   let a00 = a[0],
     a01 = a[1],
     a02 = a[2];
@@ -180,7 +196,7 @@ export function invert(out, a) {
   let det = a00 * b01 + a01 * b11 + a02 * b21;
 
   if (!det) {
-    return null;
+    return out;
   }
   det = 1.0 / det;
 
@@ -202,16 +218,16 @@ export function invert(out, a) {
  * @param {mat3} a the source matrix
  * @returns {Number} determinant of a
  */
-export function determinant(a) {
-  let a00 = a[0],
-    a01 = a[1],
-    a02 = a[2];
-  let a10 = a[3],
-    a11 = a[4],
-    a12 = a[5];
-  let a20 = a[6],
-    a21 = a[7],
-    a22 = a[8];
+export function determinant(a: Mat3Tuple): number {
+  let a00 = a[0];
+  let a01 = a[1];
+  let a02 = a[2];
+  let a10 = a[3];
+  let a11 = a[4];
+  let a12 = a[5];
+  let a20 = a[6];
+  let a21 = a[7];
+  let a22 = a[8];
 
   return a00 * (a22 * a11 - a12 * a21) + a01 * (-a22 * a10 + a12 * a20) + a02 * (a21 * a10 - a11 * a20);
 }
@@ -224,7 +240,7 @@ export function determinant(a) {
  * @param {mat3} b the second operand
  * @returns {mat3} out
  */
-export function multiply(out, a, b) {
+export function multiply(out: Mat3Tuple, a: Mat3Tuple, b: Mat3Tuple): Mat3Tuple {
   let a00 = a[0],
     a01 = a[1],
     a02 = a[2];
@@ -267,7 +283,7 @@ export function multiply(out, a, b) {
  * @param {vec2} v vector to translate by
  * @returns {mat3} out
  */
-export function translate(out, a, v) {
+export function translate(out: Mat3Tuple, a: Mat3Tuple, v: Vec2Tuple): Mat3Tuple {
   let a00 = a[0],
     a01 = a[1],
     a02 = a[2],
@@ -302,7 +318,7 @@ export function translate(out, a, v) {
  * @param {Number} rad the angle to rotate the matrix by
  * @returns {mat3} out
  */
-export function rotate(out, a, rad) {
+export function rotate(out: Mat3Tuple, a: Mat3Tuple, rad: number): Mat3Tuple {
   let a00 = a[0],
     a01 = a[1],
     a02 = a[2],
@@ -337,7 +353,7 @@ export function rotate(out, a, rad) {
  * @param {vec2} v the vec2 to scale the matrix by
  * @returns {mat3} out
  **/
-export function scale(out, a, v) {
+export function scale(out: Mat3Tuple, a: Mat3Tuple, v: Vec2Tuple): Mat3Tuple {
   let x = v[0],
     y = v[1];
 
@@ -363,7 +379,7 @@ export function scale(out, a, v) {
  *
  * @returns {mat3} out
  */
-export function normalFromMat4(out, a) {
+export function normalFromMat4(out: Mat3Tuple, a: Mat4Tuple): Mat3Tuple {
   let a00 = a[0],
     a01 = a[1],
     a02 = a[2],
@@ -398,8 +414,9 @@ export function normalFromMat4(out, a) {
   let det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
 
   if (!det) {
-    return null;
+    return out;
   }
+
   det = 1.0 / det;
 
   out[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det;
@@ -425,7 +442,7 @@ export function normalFromMat4(out, a) {
  * @param {number} height Height of gl context
  * @returns {mat3} out
  */
-export function projection(out, width, height) {
+export function projection(out: Mat3Tuple, width: number, height: number): Mat3Tuple {
   out[0] = 2 / width;
   out[1] = 0;
   out[2] = 0;
@@ -446,7 +463,7 @@ export function projection(out, width, height) {
  * @param {mat3} b the second operand
  * @returns {mat3} out
  */
-export function add(out, a, b) {
+export function add(out: Mat3Tuple, a: Mat3Tuple, b: Mat3Tuple): Mat3Tuple {
   out[0] = a[0] + b[0];
   out[1] = a[1] + b[1];
   out[2] = a[2] + b[2];
@@ -467,7 +484,7 @@ export function add(out, a, b) {
  * @param {mat3} b the second operand
  * @returns {mat3} out
  */
-export function subtract(out, a, b) {
+export function subtract(out: Mat3Tuple, a: Mat3Tuple, b: Mat3Tuple): Mat3Tuple {
   out[0] = a[0] - b[0];
   out[1] = a[1] - b[1];
   out[2] = a[2] - b[2];
@@ -488,7 +505,7 @@ export function subtract(out, a, b) {
  * @param {Number} b amount to scale the matrix's elements by
  * @returns {mat3} out
  */
-export function multiplyScalar(out, a, b) {
+export function multiplyScalar(out: Mat3Tuple, a: Mat3Tuple, b: number): Mat3Tuple {
   out[0] = a[0] * b;
   out[1] = a[1] * b;
   out[2] = a[2] * b;

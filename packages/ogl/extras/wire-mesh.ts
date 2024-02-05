@@ -3,8 +3,8 @@ import { Mesh } from '../core/mesh';
 import { Program } from '../core/program';
 import { Color } from '../math/color';
 
-import fragment from './wire-mesh.frag';
-import vertex from './wire-mesh.vert';
+import fragment from './wire-mesh.frag?raw';
+import vertex from './wire-mesh.vert?raw';
 
 import type { MeshOptions } from '../core/mesh';
 import type { OGLRenderingContext } from '../core/renderer';
@@ -15,7 +15,6 @@ export interface WireMeshOptions extends MeshOptions {
 
 /**
  * A wireframe mesh.
- * @see {@link https://github.com/oframe/ogl/blob/master/src/extras/WireMesh.js | Source}
  */
 export class WireMesh extends Mesh {
   constructor(

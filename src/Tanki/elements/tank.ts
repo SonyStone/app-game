@@ -1,8 +1,7 @@
-import * as m3 from "@webgl/math/mut-m3";
-import * as v2 from "@webgl/math/mut-v2";
-import { Container, Graphics, IPointData, Point, Transform } from "pixi.js";
-import { Key } from "ts-keycode-enum";
-import "@pixi/math-extras";
+import '@pixi/math-extras';
+import * as m3 from '@webgl/math/m3';
+import { Container, Graphics, IPointData, Point, Transform } from 'pixi.js';
+import { Key } from 'ts-keycode-enum';
 
 // import * as Color from 'color-js';
 
@@ -83,7 +82,7 @@ export const createPull = () => {
         pull.position.y - Math.sin(rotation) * distance
       );
       objectToMove.rotation = rotation;
-    },
+    }
   };
 };
 

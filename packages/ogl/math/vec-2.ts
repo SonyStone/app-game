@@ -1,9 +1,10 @@
 import { AttributeData } from '../core/geometry';
 import * as Vec2Func from './functions/vec-2-func';
-import { Mat3 } from './mat-3';
-import { Mat4 } from './mat-4';
+import { Mat3Tuple } from './mat-3';
+import { Mat4Tuple } from './mat-4';
 
-export type Vec2Tuple = [x: number, y: number];
+export type Vec2Tuple = [x: number, y: number] | number[];
+
 export class Vec2 extends Array {
   constructor(x = 0, y = x) {
     // @ts-ignore
@@ -28,7 +29,7 @@ export class Vec2 extends Array {
     this[1] = v;
   }
 
-  set(x: number | Vec2 | Vec2Tuple, y: number = x as number) {
+  set(x: number | Vec2Tuple, y: number = x as number) {
     if (Array.isArray(x)) {
       return this.copy(x);
     }
@@ -36,13 +37,13 @@ export class Vec2 extends Array {
     return this;
   }
 
-  copy(v: Vec2 | Vec2Tuple): this {
+  copy(v: Vec2Tuple): this {
     Vec2Func.copy(this, v);
     return this;
   }
 
   /** va + vb */
-  add(va: Vec2, vb?: Vec2): this {
+  add(va: Vec2Tuple, vb?: Vec2Tuple): this {
     if (vb) {
       Vec2Func.add(this, va, vb);
     } else {
@@ -51,7 +52,7 @@ export class Vec2 extends Array {
     return this;
   }
 
-  sub(va: Vec2, vb?: Vec2): this {
+  sub(va: Vec2Tuple, vb?: Vec2Tuple): this {
     if (vb) {
       Vec2Func.subtract(this, va, vb);
     } else {
@@ -60,7 +61,7 @@ export class Vec2 extends Array {
     return this;
   }
 
-  multiply(v: Vec2 | number): this {
+  multiply(v: Vec2Tuple | number): this {
     if (Array.isArray(v)) {
       Vec2Func.multiply(this, this, v);
     } else {
@@ -69,7 +70,7 @@ export class Vec2 extends Array {
     return this;
   }
 
-  divide(v: Vec2 | number): this {
+  divide(v: Vec2Tuple | number): this {
     if (Array.isArray(v)) {
       Vec2Func.divide(this, this, v);
     } else {
@@ -78,7 +79,7 @@ export class Vec2 extends Array {
     return this;
   }
 
-  inverse(v: Vec2 | Vec2Tuple = this): this {
+  inverse(v: Vec2Tuple = this): this {
     Vec2Func.inverse(this, v);
     return this;
   }
@@ -88,7 +89,7 @@ export class Vec2 extends Array {
     return Vec2Func.length(this);
   }
 
-  distance(v?: Vec2): number {
+  distance(v?: Vec2Tuple): number {
     if (v) {
       return Vec2Func.distance(this, v);
     } else {
@@ -100,17 +101,17 @@ export class Vec2 extends Array {
     return this.squaredDistance();
   }
 
-  squaredDistance(v?: Vec2): number {
+  squaredDistance(v?: Vec2Tuple): number {
     if (v) return Vec2Func.squaredDistance(this, v);
     else return Vec2Func.squaredLength(this);
   }
 
-  negate(v: Vec2 = this): this {
+  negate(v: Vec2Tuple = this): this {
     Vec2Func.negate(this, v);
     return this;
   }
 
-  cross(va: Vec2, vb?: Vec2): number {
+  cross(va: Vec2Tuple, vb?: Vec2Tuple): number {
     if (vb) {
       return Vec2Func.cross(va, vb);
     }
@@ -127,25 +128,25 @@ export class Vec2 extends Array {
     return this;
   }
 
-  dot(v: Vec2): number {
+  dot(v: Vec2Tuple): number {
     return Vec2Func.dot(this, v);
   }
 
-  equals(v: Vec2): boolean {
+  equals(v: Vec2Tuple): boolean {
     return Vec2Func.exactEquals(this, v);
   }
 
-  applyMatrix3(mat3: Mat3): this {
+  applyMatrix3(mat3: Mat3Tuple): this {
     Vec2Func.transformMat3(this, this, mat3);
     return this;
   }
 
-  applyMatrix4(mat4: Mat4): this {
+  applyMatrix4(mat4: Mat4Tuple): this {
     Vec2Func.transformMat4(this, this, mat4);
     return this;
   }
 
-  lerp(v: Vec2, a: number): this {
+  lerp(v: Vec2Tuple, a: number): this {
     Vec2Func.lerp(this, this, v, a);
     return this;
   }

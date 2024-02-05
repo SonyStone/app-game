@@ -189,37 +189,37 @@ export const routes: (RouteDefinition & {
   },
   {
     path: '/ogl-examples/polylines',
-    name: 'Polylines',
+    name: 'OGL Polylines',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={polylinesThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/ogl-examples/polylines'))
   },
   {
     path: '/ogl-examples/skinning',
-    name: 'skinning',
+    name: 'OGL skinning',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={skinningThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/ogl-examples/skinning/skinning'))
   },
   {
     path: '/ogl-examples/msdf-text',
-    name: 'MSDF Text',
+    name: 'OGL MSDF Text',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/ogl-examples/msdf-text/msdf-text'))
   },
   {
     path: '/ogl-examples/sort-transparency',
-    name: 'Sort Transparency',
+    name: 'OGL Sort Transparency',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/ogl-examples/sort-transparency/sort-transparency'))
   },
   {
     path: '/ogl-examples/helpers',
-    name: 'Helpers',
+    name: 'OGL Helpers',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/ogl-examples/helpers/helpers'))
   },
   {
     path: '/ogl-examples/draw-modes',
-    name: 'draw-modes',
+    name: 'OGL Draw modes',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/ogl-examples/draw-modes/draw-modes'))
   },
@@ -270,6 +270,24 @@ export const routes: (RouteDefinition & {
     name: 'RPG Game',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/phaser-examples/rpg/rpg-game'))
+  },
+  {
+    path: '/webgl-state-diagram',
+    name: 'WebGL State Diagram',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/webgl-state-diagram/webgl-state-diagram'))
+  },
+  {
+    path: '/ogl-paint',
+    name: 'OGL paint',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/ogl-examples/paint/paint'))
+  },
+  {
+    path: '/ogl-flowmap',
+    name: 'OGL Flowmap',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/ogl-examples/flowmap/flowmap'))
   },
   {
     path: '/:any',

@@ -49,43 +49,72 @@ export function setDefaultType(ctor: typeof MatType) {
 
 /**
  * Negates a matrix.
- * @param {Mat4} m The matrix.
+ * @param {Mat4} m __mut__ The matrix.
  * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
  * @return {Mat4} -m.
  * @memberOf m4
  */
-export function negate(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
-  dst[0] = -m[0];
-  dst[1] = -m[1];
-  dst[2] = -m[2];
-  dst[3] = -m[3];
+export const negate = (m: Mat4): Mat4 => {
+  m[0] = -m[0];
+  m[1] = -m[1];
+  m[2] = -m[2];
+  m[3] = -m[3];
 
-  dst[4] = -m[4];
-  dst[5] = -m[5];
-  dst[6] = -m[6];
-  dst[7] = -m[7];
+  m[4] = -m[4];
+  m[5] = -m[5];
+  m[6] = -m[6];
+  m[7] = -m[7];
 
-  dst[8] = -m[8];
-  dst[9] = -m[9];
-  dst[10] = -m[10];
-  dst[11] = -m[11];
+  m[8] = -m[8];
+  m[9] = -m[9];
+  m[10] = -m[10];
+  m[11] = -m[11];
 
-  dst[12] = -m[12];
-  dst[13] = -m[13];
-  dst[14] = -m[14];
-  dst[15] = -m[15];
+  m[12] = -m[12];
+  m[13] = -m[13];
+  m[14] = -m[14];
+  m[15] = -m[15];
 
-  return dst;
-}
+  return m;
+};
+
+/**
+ * Copies from `b` to `a` matrix.
+ * @param a __mut__ The matrix. If not passed a new one is created.
+ * @param b The matrix.
+ */
+export const copy = (a: Mat4, b: Mat4): Mat4 => {
+  a[0] = b[0];
+  a[1] = b[1];
+  a[2] = b[2];
+  a[3] = b[3];
+
+  a[4] = b[4];
+  a[5] = b[5];
+  a[6] = b[6];
+  a[7] = b[7];
+
+  a[8] = b[8];
+  a[9] = b[9];
+  a[10] = b[10];
+  a[11] = b[11];
+
+  a[12] = b[12];
+  a[13] = b[13];
+  a[14] = b[14];
+  a[15] = b[15];
+
+  return a;
+};
 
 /**
  * Copies a matrix.
- * @param {Mat4} m The matrix.
- * @param {Mat4} [dst] The matrix. If not passed a new one is created.
- * @return {Mat4} A copy of m.
- * @memberOf m4
+ * @param m __mut__ The matrix.
+ * @return A copy of m.
  */
-export function copy(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
+export const clone = (m: Mat4): Mat4 => {
+  const dst: Mat4 = new MatType(16);
+
   dst[0] = m[0];
   dst[1] = m[1];
   dst[2] = m[2];
@@ -107,146 +136,95 @@ export function copy(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   dst[15] = m[15];
 
   return dst;
-}
+};
 
 /**
  * Creates an n-by-n identity matrix.
  *
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} An n-by-n identity matrix.
- * @memberOf m4
+ * @param m __mut__ The matrix.
+ * @return An n-by-n identity matrix.
  */
-export function identity(dst: Mat4 = new MatType(16)): Mat4 {
-  dst[0] = 1;
-  dst[1] = 0;
-  dst[2] = 0;
-  dst[3] = 0;
+export function identity(m: Mat4 = new MatType(16)): Mat4 {
+  m[0] = 1;
+  m[1] = 0;
+  m[2] = 0;
+  m[3] = 0;
 
-  dst[4] = 0;
-  dst[5] = 1;
-  dst[6] = 0;
-  dst[7] = 0;
+  m[4] = 0;
+  m[5] = 1;
+  m[6] = 0;
+  m[7] = 0;
 
-  dst[8] = 0;
-  dst[9] = 0;
-  dst[10] = 1;
-  dst[11] = 0;
+  m[8] = 0;
+  m[9] = 0;
+  m[10] = 1;
+  m[11] = 0;
 
-  dst[12] = 0;
-  dst[13] = 0;
-  dst[14] = 0;
-  dst[15] = 1;
+  m[12] = 0;
+  m[13] = 0;
+  m[14] = 0;
+  m[15] = 1;
 
-  return dst;
+  return m;
 }
 
 /**
- * Takes the transpose of a matrix.
- * @param {Mat4} m The matrix.
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The transpose of m.
- * @memberOf m4
+ * Make the transpose of a matrix.
+ * @param m __mut__ The matrix.
  */
-export function transpose(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
-  if (dst === m) {
-    let t;
+export function transpose(m: Mat4) {
+  let t;
 
-    t = m[1];
-    m[1] = m[4];
-    m[4] = t;
+  t = m[1];
+  m[1] = m[4];
+  m[4] = t;
 
-    t = m[2];
-    m[2] = m[8];
-    m[8] = t;
+  t = m[2];
+  m[2] = m[8];
+  m[8] = t;
 
-    t = m[3];
-    m[3] = m[12];
-    m[12] = t;
+  t = m[3];
+  m[3] = m[12];
+  m[12] = t;
 
-    t = m[6];
-    m[6] = m[9];
-    m[9] = t;
+  t = m[6];
+  m[6] = m[9];
+  m[9] = t;
 
-    t = m[7];
-    m[7] = m[13];
-    m[13] = t;
+  t = m[7];
+  m[7] = m[13];
+  m[13] = t;
 
-    t = m[11];
-    m[11] = m[14];
-    m[14] = t;
-    return dst;
-  }
-
-  const m00 = m[0 * 4 + 0];
-  const m01 = m[0 * 4 + 1];
-  const m02 = m[0 * 4 + 2];
-  const m03 = m[0 * 4 + 3];
-
-  const m10 = m[1 * 4 + 0];
-  const m11 = m[1 * 4 + 1];
-  const m12 = m[1 * 4 + 2];
-  const m13 = m[1 * 4 + 3];
-
-  const m20 = m[2 * 4 + 0];
-  const m21 = m[2 * 4 + 1];
-  const m22 = m[2 * 4 + 2];
-  const m23 = m[2 * 4 + 3];
-
-  const m30 = m[3 * 4 + 0];
-  const m31 = m[3 * 4 + 1];
-  const m32 = m[3 * 4 + 2];
-  const m33 = m[3 * 4 + 3];
-
-  dst[0] = m00;
-  dst[1] = m10;
-  dst[2] = m20;
-  dst[3] = m30;
-
-  dst[4] = m01;
-  dst[5] = m11;
-  dst[6] = m21;
-  dst[7] = m31;
-
-  dst[8] = m02;
-  dst[9] = m12;
-  dst[10] = m22;
-  dst[11] = m32;
-
-  dst[12] = m03;
-  dst[13] = m13;
-  dst[14] = m23;
-  dst[15] = m33;
-
-  return dst;
+  t = m[11];
+  m[11] = m[14];
+  m[14] = t;
 }
 
 /**
  * Computes the inverse of a 4-by-4 matrix.
- * @param {Mat4} m The matrix.
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The inverse of m.
- * @memberOf m4
+ * @param m __mut__ The matrix.
+ * @return The inverse of m.
  */
-export function inverse(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
-  const m00 = m[0 * 4 + 0];
-  const m01 = m[0 * 4 + 1];
-  const m02 = m[0 * 4 + 2];
-  const m03 = m[0 * 4 + 3];
+export function inverse(m: Mat4) {
+  const m00 = m[0];
+  const m01 = m[1];
+  const m02 = m[2];
+  const m03 = m[3];
 
-  const m10 = m[1 * 4 + 0];
-  const m11 = m[1 * 4 + 1];
-  const m12 = m[1 * 4 + 2];
-  const m13 = m[1 * 4 + 3];
+  const m10 = m[4];
+  const m11 = m[5];
+  const m12 = m[6];
+  const m13 = m[7];
 
-  const m20 = m[2 * 4 + 0];
-  const m21 = m[2 * 4 + 1];
-  const m22 = m[2 * 4 + 2];
-  const m23 = m[2 * 4 + 3];
+  const m20 = m[8];
+  const m21 = m[9];
+  const m22 = m[10];
+  const m23 = m[11];
 
-  const m30 = m[3 * 4 + 0];
-  const m31 = m[3 * 4 + 1];
-  const m32 = m[3 * 4 + 2];
-  const m33 = m[3 * 4 + 3];
+  const m30 = m[12];
+  const m31 = m[13];
+  const m32 = m[14];
+  const m33 = m[15];
 
   const tmp_0 = m22 * m33;
   const tmp_1 = m32 * m23;
@@ -278,124 +256,43 @@ export function inverse(m: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   const tmp_22 = m00 * m11;
   const tmp_23 = m10 * m01;
 
-  const t0 =
-    tmp_0 * m11 +
-    tmp_3 * m21 +
-    tmp_4 * m31 -
-    (tmp_1 * m11 + tmp_2 * m21 + tmp_5 * m31);
+  const t0 = tmp_0 * m11 + tmp_3 * m21 + tmp_4 * m31 - (tmp_1 * m11 + tmp_2 * m21 + tmp_5 * m31);
 
-  const t1 =
-    tmp_1 * m01 +
-    tmp_6 * m21 +
-    tmp_9 * m31 -
-    (tmp_0 * m01 + tmp_7 * m21 + tmp_8 * m31);
+  const t1 = tmp_1 * m01 + tmp_6 * m21 + tmp_9 * m31 - (tmp_0 * m01 + tmp_7 * m21 + tmp_8 * m31);
 
-  const t2 =
-    tmp_2 * m01 +
-    tmp_7 * m11 +
-    tmp_10 * m31 -
-    (tmp_3 * m01 + tmp_6 * m11 + tmp_11 * m31);
+  const t2 = tmp_2 * m01 + tmp_7 * m11 + tmp_10 * m31 - (tmp_3 * m01 + tmp_6 * m11 + tmp_11 * m31);
 
-  const t3 =
-    tmp_5 * m01 +
-    tmp_8 * m11 +
-    tmp_11 * m21 -
-    (tmp_4 * m01 + tmp_9 * m11 + tmp_10 * m21);
+  const t3 = tmp_5 * m01 + tmp_8 * m11 + tmp_11 * m21 - (tmp_4 * m01 + tmp_9 * m11 + tmp_10 * m21);
 
   const d = 1.0 / (m00 * t0 + m10 * t1 + m20 * t2 + m30 * t3);
 
-  dst[0] = d * t0;
-  dst[1] = d * t1;
-  dst[2] = d * t2;
-  dst[3] = d * t3;
+  m[0] = d * t0;
+  m[1] = d * t1;
+  m[2] = d * t2;
+  m[3] = d * t3;
 
-  dst[4] =
-    d *
-    (tmp_1 * m10 +
-      tmp_2 * m20 +
-      tmp_5 * m30 -
-      (tmp_0 * m10 + tmp_3 * m20 + tmp_4 * m30));
-  dst[5] =
-    d *
-    (tmp_0 * m00 +
-      tmp_7 * m20 +
-      tmp_8 * m30 -
-      (tmp_1 * m00 + tmp_6 * m20 + tmp_9 * m30));
-  dst[6] =
-    d *
-    (tmp_3 * m00 +
-      tmp_6 * m10 +
-      tmp_11 * m30 -
-      (tmp_2 * m00 + tmp_7 * m10 + tmp_10 * m30));
-  dst[7] =
-    d *
-    (tmp_4 * m00 +
-      tmp_9 * m10 +
-      tmp_10 * m20 -
-      (tmp_5 * m00 + tmp_8 * m10 + tmp_11 * m20));
+  m[4] = d * (tmp_1 * m10 + tmp_2 * m20 + tmp_5 * m30 - (tmp_0 * m10 + tmp_3 * m20 + tmp_4 * m30));
+  m[5] = d * (tmp_0 * m00 + tmp_7 * m20 + tmp_8 * m30 - (tmp_1 * m00 + tmp_6 * m20 + tmp_9 * m30));
+  m[6] = d * (tmp_3 * m00 + tmp_6 * m10 + tmp_11 * m30 - (tmp_2 * m00 + tmp_7 * m10 + tmp_10 * m30));
+  m[7] = d * (tmp_4 * m00 + tmp_9 * m10 + tmp_10 * m20 - (tmp_5 * m00 + tmp_8 * m10 + tmp_11 * m20));
 
-  dst[8] =
-    d *
-    (tmp_12 * m13 +
-      tmp_15 * m23 +
-      tmp_16 * m33 -
-      (tmp_13 * m13 + tmp_14 * m23 + tmp_17 * m33));
-  dst[9] =
-    d *
-    (tmp_13 * m03 +
-      tmp_18 * m23 +
-      tmp_21 * m33 -
-      (tmp_12 * m03 + tmp_19 * m23 + tmp_20 * m33));
-  dst[10] =
-    d *
-    (tmp_14 * m03 +
-      tmp_19 * m13 +
-      tmp_22 * m33 -
-      (tmp_15 * m03 + tmp_18 * m13 + tmp_23 * m33));
-  dst[11] =
-    d *
-    (tmp_17 * m03 +
-      tmp_20 * m13 +
-      tmp_23 * m23 -
-      (tmp_16 * m03 + tmp_21 * m13 + tmp_22 * m23));
+  m[8] = d * (tmp_12 * m13 + tmp_15 * m23 + tmp_16 * m33 - (tmp_13 * m13 + tmp_14 * m23 + tmp_17 * m33));
+  m[9] = d * (tmp_13 * m03 + tmp_18 * m23 + tmp_21 * m33 - (tmp_12 * m03 + tmp_19 * m23 + tmp_20 * m33));
+  m[10] = d * (tmp_14 * m03 + tmp_19 * m13 + tmp_22 * m33 - (tmp_15 * m03 + tmp_18 * m13 + tmp_23 * m33));
+  m[11] = d * (tmp_17 * m03 + tmp_20 * m13 + tmp_23 * m23 - (tmp_16 * m03 + tmp_21 * m13 + tmp_22 * m23));
 
-  dst[12] =
-    d *
-    (tmp_14 * m22 +
-      tmp_17 * m32 +
-      tmp_13 * m12 -
-      (tmp_16 * m32 + tmp_12 * m12 + tmp_15 * m22));
-  dst[13] =
-    d *
-    (tmp_20 * m32 +
-      tmp_12 * m02 +
-      tmp_19 * m22 -
-      (tmp_18 * m22 + tmp_21 * m32 + tmp_13 * m02));
-  dst[14] =
-    d *
-    (tmp_18 * m12 +
-      tmp_23 * m32 +
-      tmp_15 * m02 -
-      (tmp_22 * m32 + tmp_14 * m02 + tmp_19 * m12));
-  dst[15] =
-    d *
-    (tmp_22 * m22 +
-      tmp_16 * m02 +
-      tmp_21 * m12 -
-      (tmp_20 * m12 + tmp_23 * m22 + tmp_17 * m02));
-
-  return dst;
+  m[12] = d * (tmp_14 * m22 + tmp_17 * m32 + tmp_13 * m12 - (tmp_16 * m32 + tmp_12 * m12 + tmp_15 * m22));
+  m[13] = d * (tmp_20 * m32 + tmp_12 * m02 + tmp_19 * m22 - (tmp_18 * m22 + tmp_21 * m32 + tmp_13 * m02));
+  m[14] = d * (tmp_18 * m12 + tmp_23 * m32 + tmp_15 * m02 - (tmp_22 * m32 + tmp_14 * m02 + tmp_19 * m12));
+  m[15] = d * (tmp_22 * m22 + tmp_16 * m02 + tmp_21 * m12 - (tmp_20 * m12 + tmp_23 * m22 + tmp_17 * m02));
 }
 
 /**
  * Multiplies two 4-by-4 matrices with a on the left and b on the right
- * @param {Mat4} a The matrix on the left.
- * @param {Mat4} b The matrix on the right.
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The matrix product of a and b.
- * @memberOf m4
+ * @param a __mut__ The matrix on the left.
+ * @param b The matrix on the right.
  */
-export function multiply(a: Mat4, b: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
+export function multiply(a: Mat4, b: Mat4) {
   const a00 = a[0];
   const a01 = a[1];
   const a02 = a[2];
@@ -436,134 +333,85 @@ export function multiply(a: Mat4, b: Mat4, dst: Mat4 = new MatType(16)): Mat4 {
   const b32 = b[12 + 2];
   const b33 = b[12 + 3];
 
-  dst[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
-  dst[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
-  dst[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
-  dst[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
+  a[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
+  a[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
+  a[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
+  a[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
 
-  dst[4] = a00 * b10 + a10 * b11 + a20 * b12 + a30 * b13;
-  dst[5] = a01 * b10 + a11 * b11 + a21 * b12 + a31 * b13;
-  dst[6] = a02 * b10 + a12 * b11 + a22 * b12 + a32 * b13;
-  dst[7] = a03 * b10 + a13 * b11 + a23 * b12 + a33 * b13;
+  a[4] = a00 * b10 + a10 * b11 + a20 * b12 + a30 * b13;
+  a[5] = a01 * b10 + a11 * b11 + a21 * b12 + a31 * b13;
+  a[6] = a02 * b10 + a12 * b11 + a22 * b12 + a32 * b13;
+  a[7] = a03 * b10 + a13 * b11 + a23 * b12 + a33 * b13;
 
-  dst[8] = a00 * b20 + a10 * b21 + a20 * b22 + a30 * b23;
-  dst[9] = a01 * b20 + a11 * b21 + a21 * b22 + a31 * b23;
-  dst[10] = a02 * b20 + a12 * b21 + a22 * b22 + a32 * b23;
-  dst[11] = a03 * b20 + a13 * b21 + a23 * b22 + a33 * b23;
+  a[8] = a00 * b20 + a10 * b21 + a20 * b22 + a30 * b23;
+  a[9] = a01 * b20 + a11 * b21 + a21 * b22 + a31 * b23;
+  a[10] = a02 * b20 + a12 * b21 + a22 * b22 + a32 * b23;
+  a[11] = a03 * b20 + a13 * b21 + a23 * b22 + a33 * b23;
 
-  dst[12] = a00 * b30 + a10 * b31 + a20 * b32 + a30 * b33;
-  dst[13] = a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33;
-  dst[14] = a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33;
-  dst[15] = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
-
-  return dst;
+  a[12] = a00 * b30 + a10 * b31 + a20 * b32 + a30 * b33;
+  a[13] = a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33;
+  a[14] = a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33;
+  a[15] = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
 }
 
-export function multiplyArray(arr: Mat4[], dst: Mat4 = new MatType(16)): Mat4 {
-  let input = identity();
+export function multiplyArray(m: Mat4, arr: Mat4[]) {
   for (let i = 0; i < arr.length; i++) {
-    input = multiply(input, arr[i], dst);
+    multiply(m, arr[i]);
   }
-
-  return dst;
 }
 
 /**
  * Sets the translation component of a 4-by-4 matrix to the given
  * vector.
- * @param {Mat4} a The matrix.
- * @param {v3.Vec3} v The vector.
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The matrix with translation set.
- * @memberOf m4
+ * @param a __mut__ The matrix.
+ * @param v The vector.
  */
-export function setTranslation(
-  a: Mat4,
-  v: v3.Vec3,
-  dst: Mat4 = identity()
-): Mat4 {
-  if (a !== dst) {
-    dst[0] = a[0];
-    dst[1] = a[1];
-    dst[2] = a[2];
-    dst[3] = a[3];
-
-    dst[4] = a[4];
-    dst[5] = a[5];
-    dst[6] = a[6];
-    dst[7] = a[7];
-
-    dst[8] = a[8];
-    dst[9] = a[9];
-    dst[10] = a[10];
-    dst[11] = a[11];
-  }
-
-  dst[12] = v[0];
-  dst[13] = v[1];
-  dst[14] = v[2];
-  dst[15] = 1;
-  return dst;
+export function setTranslation(m: Mat4, v: v3.Vec3) {
+  m[12] = v[0];
+  m[13] = v[1];
+  m[14] = v[2];
+  m[15] = 1;
 }
 
 /**
  * Returns the translation component of a 4-by-4 matrix as a vector with 3
  * entries.
- * @param {Mat4} m The matrix.
- * @param {v3.Vec3} [dst] vector to hold result. If not passed a new one is created.
- * @return {v3.Vec3} The translation component of m.
+ * @param v __mut__ vector to hold result. If not passed a new one is created.
+ * @param m The matrix.
  */
-export function getTranslation(m: Mat4, dst: v3.Vec3 = v3.create()): v3.Vec3 {
-  dst[0] = m[12];
-  dst[1] = m[13];
-  dst[2] = m[14];
-
-  return dst;
+export function getTranslation(v: v3.Vec3, m: Mat4) {
+  v[0] = m[12];
+  v[1] = m[13];
+  v[2] = m[14];
 }
 
 /**
  * Returns an axis of a 4x4 matrix as a vector with 3 entries
- * @param {Mat4} m The matrix.
- * @param {number} axis The axis 0 = x, 1 = y, 2 = z;
- * @return {v3.Vec3} [dst] vector.
- * @return {v3.Vec3} The axis component of m.
- * @memberOf m4
+ * @param m The matrix.
+ * @param axis The axis 0 = x, 1 = y, 2 = z;
+ * @return The axis component of m.
  */
-export function getAxis(
-  m: Mat4,
-  axis: number,
-  dst: v3.Vec3 = v3.create()
-): v3.Vec3 {
+export function getAxis(m: Mat4, axis: number): v3.Vec3 {
+  const v = v3.create();
+
   const off = axis * 4;
-  dst[0] = m[off + 0];
-  dst[1] = m[off + 1];
-  dst[2] = m[off + 2];
-  return dst;
+  v[0] = m[off + 0];
+  v[1] = m[off + 1];
+  v[2] = m[off + 2];
+  return v;
 }
 
 /**
  * Sets an axis of a 4x4 matrix as a vector with 3 entries
- * @param {Mat4} m The matrix.
- * @param {v3.Vec3} v the axis vector
- * @param {number} axis The axis  0 = x, 1 = y, 2 = z;
- * @param {Mat4} [dst] The matrix to set. If not passed a new one is created.
- * @return {Mat4} The matrix with axis set.
- * @memberOf m4
+ * @param m __mut__ The matrix with axis to set.
+ * @param v the axis vector
+ * @param axis The axis  0 = x, 1 = y, 2 = z;
  */
-export function setAxis(
-  a: Mat4,
-  v: v3.Vec3,
-  axis: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  if (dst !== a) {
-    dst = copy(a, dst);
-  }
+export function setAxis(m: Mat4, v: v3.Vec3, axis: number) {
   const off = axis * 4;
-  dst[off + 0] = v[0];
-  dst[off + 1] = v[1];
-  dst[off + 2] = v[2];
-  return dst;
+  m[off + 0] = v[0];
+  m[off + 1] = v[1];
+  m[off + 2] = v[2];
 }
 
 /**
@@ -577,58 +425,48 @@ export function setAxis(
  * z-axis.  The matrix generated sends the viewing frustum to the unit box.
  * We assume a unit box extending from -1 to 1 in the x and y dimensions and
  * from 0 to 1 in the z dimension.
- * @param {number} fieldOfViewYInRadians The camera angle from top to bottom (in radians).
- * @param {number} aspect The aspect ratio width / height.
- * @param {number} zNear The depth (negative z coordinate)
+ * @param m __mut__ matrix to hold result. If not passed a new one is created.
+ * @param fieldOfViewYInRadians The camera angle from top to bottom (in radians).
+ * @param aspect The aspect ratio width / height.
+ * @param zNear The depth (negative z coordinate)
  *     of the near clipping plane.
- * @param {number} zFar The depth (negative z coordinate)
+ * @param zFar The depth (negative z coordinate)
  *     of the far clipping plane.
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The perspective matrix.
- * @memberOf m4
  */
-export function perspective(
-  fieldOfViewYInRadians: number,
-  aspect: number,
-  zNear: number,
-  zFar: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
+export function perspective(m: Mat4, fieldOfViewYInRadians: number, aspect: number, zNear: number, zFar: number) {
   const f = Math.tan(Math.PI * 0.5 - 0.5 * fieldOfViewYInRadians);
   const rangeInv = 1.0 / (zNear - zFar);
 
-  dst[0] = f / aspect;
-  dst[1] = 0;
-  dst[2] = 0;
-  dst[3] = 0;
+  m[0] = f / aspect;
+  m[1] = 0;
+  m[2] = 0;
+  m[3] = 0;
 
-  dst[4] = 0;
-  dst[5] = f;
-  dst[6] = 0;
-  dst[7] = 0;
+  m[4] = 0;
+  m[5] = f;
+  m[6] = 0;
+  m[7] = 0;
 
-  dst[8] = 0;
-  dst[9] = 0;
-  dst[10] = (zNear + zFar) * rangeInv;
-  dst[11] = -1;
+  m[8] = 0;
+  m[9] = 0;
+  m[10] = (zNear + zFar) * rangeInv;
+  m[11] = -1;
 
-  dst[12] = 0;
-  dst[13] = 0;
-  dst[14] = zNear * zFar * rangeInv * 2;
-  dst[15] = 0;
-
-  return dst;
+  m[12] = 0;
+  m[13] = 0;
+  m[14] = zNear * zFar * rangeInv * 2;
+  m[15] = 0;
 }
 
 export function makePerspective(
+  m: Mat4,
   left: number,
   right: number,
   bottom: number,
   top: number,
   near: number,
-  far: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
+  far: number
+) {
   const x = (2 * near) / (right - left);
   const y = (2 * near) / (top - bottom);
 
@@ -637,72 +475,58 @@ export function makePerspective(
   const c = -(far + near) / (far - near);
   const d = (-2 * far * near) / (far - near);
 
-  dst[0] = x;
-  dst[4] = 0;
-  dst[8] = a;
-  dst[12] = 0;
-  dst[1] = 0;
-  dst[5] = y;
-  dst[9] = b;
-  dst[13] = 0;
-  dst[2] = 0;
-  dst[6] = 0;
-  dst[10] = c;
-  dst[14] = d;
-  dst[3] = 0;
-  dst[7] = 0;
-  dst[11] = -1;
-  dst[15] = 0;
-
-  return dst;
+  m[0] = x;
+  m[4] = 0;
+  m[8] = a;
+  m[12] = 0;
+  m[1] = 0;
+  m[5] = y;
+  m[9] = b;
+  m[13] = 0;
+  m[2] = 0;
+  m[6] = 0;
+  m[10] = c;
+  m[14] = d;
+  m[3] = 0;
+  m[7] = 0;
+  m[11] = -1;
+  m[15] = 0;
 }
 
 /**
  * Computes a 4-by-4 orthogonal transformation matrix given the left, right,
  * bottom, and top dimensions of the near clipping plane as well as the
  * near and far clipping plane distances.
- * @param {number} left Left side of the near clipping plane viewport.
- * @param {number} right Right side of the near clipping plane viewport.
- * @param {number} bottom Bottom of the near clipping plane viewport.
- * @param {number} top Top of the near clipping plane viewport.
- * @param {number} near The depth (negative z coordinate)
+ * @param m __mut__ The perspective matrix.
+ * @param left Left side of the near clipping plane viewport.
+ * @param right Right side of the near clipping plane viewport.
+ * @param bottom Bottom of the near clipping plane viewport.
+ * @param top Top of the near clipping plane viewport.
+ * @param near The depth (negative z coordinate)
  *     of the near clipping plane.
- * @param {number} far The depth (negative z coordinate)
+ * @param far The depth (negative z coordinate)
  *     of the far clipping plane.
- * @param {Mat4} [dst] Output matrix. If not passed a new one is created.
- * @return {Mat4} The perspective matrix.
- * @memberOf m4
  */
-export function ortho(
-  left: number,
-  right: number,
-  bottom: number,
-  top: number,
-  near: number,
-  far: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  dst[0] = 2 / (right - left);
-  dst[1] = 0;
-  dst[2] = 0;
-  dst[3] = 0;
+export function ortho(m: Mat4, left: number, right: number, bottom: number, top: number, near: number, far: number) {
+  m[0] = 2 / (right - left);
+  m[1] = 0;
+  m[2] = 0;
+  m[3] = 0;
 
-  dst[4] = 0;
-  dst[5] = 2 / (top - bottom);
-  dst[6] = 0;
-  dst[7] = 0;
+  m[4] = 0;
+  m[5] = 2 / (top - bottom);
+  m[6] = 0;
+  m[7] = 0;
 
-  dst[8] = 0;
-  dst[9] = 0;
-  dst[10] = 2 / (near - far);
-  dst[11] = 0;
+  m[8] = 0;
+  m[9] = 0;
+  m[10] = 2 / (near - far);
+  m[11] = 0;
 
-  dst[12] = (right + left) / (left - right);
-  dst[13] = (top + bottom) / (bottom - top);
-  dst[14] = (far + near) / (near - far);
-  dst[15] = 1;
-
-  return dst;
+  m[12] = (right + left) / (left - right);
+  m[13] = (top + bottom) / (bottom - top);
+  m[14] = (far + near) / (near - far);
+  m[15] = 1;
 }
 
 /**
@@ -714,52 +538,40 @@ export function ortho(
  * matrix generated sends the viewing frustum to the unit box. We assume a unit
  * box extending from -1 to 1 in the x and y dimensions and from 0 to 1 in the z
  * dimension.
- * @param {number} left The x coordinate of the left plane of the box.
- * @param {number} right The x coordinate of the right plane of the box.
- * @param {number} bottom The y coordinate of the bottom plane of the box.
- * @param {number} top The y coordinate of the right plane of the box.
- * @param {number} near The negative z coordinate of the near plane of the box.
- * @param {number} far The negative z coordinate of the far plane of the box.
- * @param {Mat4} [dst] Output matrix. If not passed a new one is created.
- * @return {Mat4} The perspective projection matrix.
- * @memberOf m4
+ * @param m __mut__ The perspective projection matrix
+ * @param left The x coordinate of the left plane of the box.
+ * @param right The x coordinate of the right plane of the box.
+ * @param bottom The y coordinate of the bottom plane of the box.
+ * @param top The y coordinate of the right plane of the box.
+ * @param near The negative z coordinate of the near plane of the box.
+ * @param far The negative z coordinate of the far plane of the box.
  */
-export function frustum(
-  left: number,
-  right: number,
-  bottom: number,
-  top: number,
-  near: number,
-  far: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
+export function frustum(m: Mat4, left: number, right: number, bottom: number, top: number, near: number, far: number) {
   const dx = right - left;
   const dy = top - bottom;
   const dz = near - far;
 
-  dst[0] = (2 * near) / dx;
-  dst[1] = 0;
-  dst[2] = 0;
-  dst[3] = 0;
-  dst[4] = 0;
-  dst[5] = (2 * near) / dy;
-  dst[6] = 0;
-  dst[7] = 0;
-  dst[8] = (left + right) / dx;
-  dst[9] = (top + bottom) / dy;
-  dst[10] = far / dz;
-  dst[11] = -1;
-  dst[12] = 0;
-  dst[13] = 0;
-  dst[14] = (near * far) / dz;
-  dst[15] = 0;
-
-  return dst;
+  m[0] = (2 * near) / dx;
+  m[1] = 0;
+  m[2] = 0;
+  m[3] = 0;
+  m[4] = 0;
+  m[5] = (2 * near) / dy;
+  m[6] = 0;
+  m[7] = 0;
+  m[8] = (left + right) / dx;
+  m[9] = (top + bottom) / dy;
+  m[10] = far / dz;
+  m[11] = -1;
+  m[12] = 0;
+  m[13] = 0;
+  m[14] = (near * far) / dz;
+  m[15] = 0;
 }
 
-let xAxis: v3.Vec3;
-let yAxis: v3.Vec3;
-let zAxis: v3.Vec3;
+let xAxis: v3.Vec3 = v3.create();
+let yAxis: v3.Vec3 = v3.create();
+let zAxis: v3.Vec3 = v3.create();
 
 /**
  * Computes a 4-by-4 look-at transformation.
@@ -768,89 +580,50 @@ let zAxis: v3.Vec3;
  * a view matrix (a matrix which moves things in front of the camera)
  * take the inverse of this.
  *
- * @param {v3.Vec3} eye The position of the eye.
- * @param {v3.Vec3} target The position meant to be viewed.
- * @param {v3.Vec3} up A vector pointing up.
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The look-at matrix.
- * @memberOf m4
+ * @param m __mut__ matrix to hold result. The look-at matrix.
+ * @param eye The position of the eye.
+ * @param target The position meant to be viewed.
+ * @param up A vector pointing up.
  */
-export function lookAt(
-  eye: v3.Vec3,
-  target: v3.Vec3,
-  up: v3.Vec3,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  xAxis = xAxis || v3.create();
-  yAxis = yAxis || v3.create();
-  zAxis = zAxis || v3.create();
+export function lookAt(m: Mat4, eye: v3.Vec3, target: v3.Vec3, up: v3.Vec3) {
+  v3.copy(zAxis, eye);
+  v3.subtract(zAxis, target);
+  v3.normalize(zAxis);
 
-  v3.normalize(v3.subtract(eye, target, zAxis), zAxis);
-  v3.normalize(v3.cross(up, zAxis, xAxis), xAxis);
-  v3.normalize(v3.cross(zAxis, xAxis, yAxis), yAxis);
+  v3.copy(xAxis, up);
+  v3.cross(xAxis, zAxis);
+  v3.normalize(xAxis);
 
-  dst[0] = xAxis[0];
-  dst[1] = xAxis[1];
-  dst[2] = xAxis[2];
-  dst[3] = 0;
-  dst[4] = yAxis[0];
-  dst[5] = yAxis[1];
-  dst[6] = yAxis[2];
-  dst[7] = 0;
-  dst[8] = zAxis[0];
-  dst[9] = zAxis[1];
-  dst[10] = zAxis[2];
-  dst[11] = 0;
-  dst[12] = eye[0];
-  dst[13] = eye[1];
-  dst[14] = eye[2];
-  dst[15] = 1;
+  v3.copy(yAxis, zAxis);
+  v3.cross(yAxis, xAxis);
+  v3.normalize(yAxis);
 
-  return dst;
-}
-
-/**
- * Creates a 4-by-4 matrix which translates by the given vector v.
- * @param {v3.Vec3} v The vector by
- *     which to translate.
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The translation matrix.
- * @memberOf m4
- */
-export function translation(v: v3.Vec3, dst: Mat4 = new MatType(16)): Mat4 {
-  dst[0] = 1;
-  dst[1] = 0;
-  dst[2] = 0;
-  dst[3] = 0;
-  dst[4] = 0;
-  dst[5] = 1;
-  dst[6] = 0;
-  dst[7] = 0;
-  dst[8] = 0;
-  dst[9] = 0;
-  dst[10] = 1;
-  dst[11] = 0;
-  dst[12] = v[0];
-  dst[13] = v[1];
-  dst[14] = v[2];
-  dst[15] = 1;
-  return dst;
+  m[0] = xAxis[0];
+  m[1] = xAxis[1];
+  m[2] = xAxis[2];
+  m[3] = 0;
+  m[4] = yAxis[0];
+  m[5] = yAxis[1];
+  m[6] = yAxis[2];
+  m[7] = 0;
+  m[8] = zAxis[0];
+  m[9] = zAxis[1];
+  m[10] = zAxis[2];
+  m[11] = 0;
+  m[12] = eye[0];
+  m[13] = eye[1];
+  m[14] = eye[2];
+  m[15] = 1;
 }
 
 /**
  * Translates the given 4-by-4 matrix by the given vector v.
- * @param {Mat4} m The matrix.
- * @param {v3.Vec3} v The vector by
+ *
+ * @param m __mut__ The matrix to translate.
+ * @param v The vector by
  *     which to translate.
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The translated matrix.
- * @memberOf m4
  */
-export function translate(
-  m: Mat4,
-  v: v3.Vec3,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
+export function translate(m: Mat4, v: v3.Vec3): void {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -860,101 +633,40 @@ export function translate(
   const m02 = m[2];
   const m03 = m[3];
 
-  const m10 = m[1 * 4 + 0];
-  const m11 = m[1 * 4 + 1];
-  const m12 = m[1 * 4 + 2];
-  const m13 = m[1 * 4 + 3];
+  const m10 = m[4];
+  const m11 = m[5];
+  const m12 = m[6];
+  const m13 = m[7];
 
-  const m20 = m[2 * 4 + 0];
-  const m21 = m[2 * 4 + 1];
-  const m22 = m[2 * 4 + 2];
-  const m23 = m[2 * 4 + 3];
+  const m20 = m[8];
+  const m21 = m[9];
+  const m22 = m[10];
+  const m23 = m[11];
 
-  const m30 = m[3 * 4 + 0];
-  const m31 = m[3 * 4 + 1];
-  const m32 = m[3 * 4 + 2];
-  const m33 = m[3 * 4 + 3];
+  const m30 = m[12];
+  const m31 = m[13];
+  const m32 = m[14];
+  const m33 = m[15];
 
-  if (m !== dst) {
-    dst[0] = m00;
-    dst[1] = m01;
-    dst[2] = m02;
-    dst[3] = m03;
-
-    dst[4] = m10;
-    dst[5] = m11;
-    dst[6] = m12;
-    dst[7] = m13;
-
-    dst[8] = m20;
-    dst[9] = m21;
-    dst[10] = m22;
-    dst[11] = m23;
-  }
-
-  dst[12] = m00 * v0 + m10 * v1 + m20 * v2 + m30;
-  dst[13] = m01 * v0 + m11 * v1 + m21 * v2 + m31;
-  dst[14] = m02 * v0 + m12 * v1 + m22 * v2 + m32;
-  dst[15] = m03 * v0 + m13 * v1 + m23 * v2 + m33;
-
-  return dst;
-}
-
-/**
- * Creates a 4-by-4 matrix which rotates around the x-axis by the given angle.
- * @param {number} angleInRadians The angle by which to rotate (in radians).
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The rotation matrix.
- * @memberOf m4
- */
-export function rotationX(
-  angleInRadians: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  const c = Math.cos(angleInRadians);
-  const s = Math.sin(angleInRadians);
-
-  dst[0] = 1;
-  dst[1] = 0;
-  dst[2] = 0;
-  dst[3] = 0;
-
-  dst[4] = 0;
-  dst[5] = c;
-  dst[6] = s;
-  dst[7] = 0;
-
-  dst[8] = 0;
-  dst[9] = -s;
-  dst[10] = c;
-  dst[11] = 0;
-
-  dst[12] = 0;
-  dst[13] = 0;
-  dst[14] = 0;
-  dst[15] = 1;
-
-  return dst;
+  m[12] = m00 * v0 + m10 * v1 + m20 * v2 + m30;
+  m[13] = m01 * v0 + m11 * v1 + m21 * v2 + m31;
+  m[14] = m02 * v0 + m12 * v1 + m22 * v2 + m32;
+  m[15] = m03 * v0 + m13 * v1 + m23 * v2 + m33;
 }
 
 /**
  * Rotates the given 4-by-4 matrix around the x-axis by the given
  * angle.
- * @param {Mat4} m The matrix.
- * @param {number} angleInRadians The angle by which to rotate (in radians).
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The rotated matrix.
- * @memberOf m4
+ *
+ * @param m __mut__ The matrix to rotate.
+ * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function rotateX(
-  m: Mat4,
-  angleInRadians: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
+export function rotateX(m: Mat4, angleInRadians: number) {
   const m10 = m[4];
   const m11 = m[5];
   const m12 = m[6];
   const m13 = m[7];
+
   const m20 = m[8];
   const m21 = m[9];
   const m22 = m[10];
@@ -963,267 +675,114 @@ export function rotateX(
   const c = Math.cos(angleInRadians);
   const s = Math.sin(angleInRadians);
 
-  dst[4] = c * m10 + s * m20;
-  dst[5] = c * m11 + s * m21;
-  dst[6] = c * m12 + s * m22;
-  dst[7] = c * m13 + s * m23;
-  dst[8] = c * m20 - s * m10;
-  dst[9] = c * m21 - s * m11;
-  dst[10] = c * m22 - s * m12;
-  dst[11] = c * m23 - s * m13;
+  m[4] = c * m10 + s * m20;
+  m[5] = c * m11 + s * m21;
+  m[6] = c * m12 + s * m22;
+  m[7] = c * m13 + s * m23;
 
-  if (m !== dst) {
-    dst[0] = m[0];
-    dst[1] = m[1];
-    dst[2] = m[2];
-    dst[3] = m[3];
-    dst[12] = m[12];
-    dst[13] = m[13];
-    dst[14] = m[14];
-    dst[15] = m[15];
-  }
-
-  return dst;
-}
-
-/**
- * Creates a 4-by-4 matrix which rotates around the y-axis by the given angle.
- * @param {number} angleInRadians The angle by which to rotate (in radians).
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The rotation matrix.
- * @memberOf m4
- */
-export function rotationY(
-  angleInRadians: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  const c = Math.cos(angleInRadians);
-  const s = Math.sin(angleInRadians);
-
-  dst[0] = c;
-  dst[1] = 0;
-  dst[2] = -s;
-  dst[3] = 0;
-  dst[4] = 0;
-  dst[5] = 1;
-  dst[6] = 0;
-  dst[7] = 0;
-  dst[8] = s;
-  dst[9] = 0;
-  dst[10] = c;
-  dst[11] = 0;
-  dst[12] = 0;
-  dst[13] = 0;
-  dst[14] = 0;
-  dst[15] = 1;
-
-  return dst;
+  m[8] = c * m20 - s * m10;
+  m[9] = c * m21 - s * m11;
+  m[10] = c * m22 - s * m12;
+  m[11] = c * m23 - s * m13;
 }
 
 /**
  * Rotates the given 4-by-4 matrix around the y-axis by the given
  * angle.
- * @param {Mat4} m The matrix.
- * @param {number} angleInRadians The angle by which to rotate (in radians).
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The rotated matrix.
- * @memberOf m4
+ *
+ * @param m __mut__ The matrix to rotate.
+ * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function rotateY(
-  m: Mat4,
-  angleInRadians: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  const m00 = m[0 * 4 + 0];
-  const m01 = m[0 * 4 + 1];
-  const m02 = m[0 * 4 + 2];
-  const m03 = m[0 * 4 + 3];
-  const m20 = m[2 * 4 + 0];
-  const m21 = m[2 * 4 + 1];
-  const m22 = m[2 * 4 + 2];
-  const m23 = m[2 * 4 + 3];
+export function rotateY(m: Mat4, angleInRadians: number) {
+  const m00 = m[0];
+  const m01 = m[1];
+  const m02 = m[2];
+  const m03 = m[3];
+
+  const m20 = m[8];
+  const m21 = m[9];
+  const m22 = m[10];
+  const m23 = m[11];
   const c = Math.cos(angleInRadians);
   const s = Math.sin(angleInRadians);
 
-  dst[0] = c * m00 - s * m20;
-  dst[1] = c * m01 - s * m21;
-  dst[2] = c * m02 - s * m22;
-  dst[3] = c * m03 - s * m23;
-  dst[8] = c * m20 + s * m00;
-  dst[9] = c * m21 + s * m01;
-  dst[10] = c * m22 + s * m02;
-  dst[11] = c * m23 + s * m03;
-
-  if (m !== dst) {
-    dst[4] = m[4];
-    dst[5] = m[5];
-    dst[6] = m[6];
-    dst[7] = m[7];
-    dst[12] = m[12];
-    dst[13] = m[13];
-    dst[14] = m[14];
-    dst[15] = m[15];
-  }
-
-  return dst;
-}
-
-/**
- * Creates a 4-by-4 matrix which rotates around the z-axis by the given angle.
- * @param {number} angleInRadians The angle by which to rotate (in radians).
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The rotation matrix.
- * @memberOf m4
- */
-export function rotationZ(
-  angleInRadians: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  const c = Math.cos(angleInRadians);
-  const s = Math.sin(angleInRadians);
-
-  dst[0] = c;
-  dst[1] = s;
-  dst[2] = 0;
-  dst[3] = 0;
-  dst[4] = -s;
-  dst[5] = c;
-  dst[6] = 0;
-  dst[7] = 0;
-  dst[8] = 0;
-  dst[9] = 0;
-  dst[10] = 1;
-  dst[11] = 0;
-  dst[12] = 0;
-  dst[13] = 0;
-  dst[14] = 0;
-  dst[15] = 1;
-
-  return dst;
+  m[0] = c * m00 - s * m20;
+  m[1] = c * m01 - s * m21;
+  m[2] = c * m02 - s * m22;
+  m[3] = c * m03 - s * m23;
+  m[8] = c * m20 + s * m00;
+  m[9] = c * m21 + s * m01;
+  m[10] = c * m22 + s * m02;
+  m[11] = c * m23 + s * m03;
 }
 
 /**
  * Rotates the given 4-by-4 matrix around the z-axis by the given
  * angle.
- * @param {Mat4} m The matrix.
- * @param {number} angleInRadians The angle by which to rotate (in radians).
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The rotated matrix.
- * @memberOf m4
+ *
+ * @param m __mut__ The matrix to rotate.
+ * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function rotateZ(
-  m: Mat4,
-  angleInRadians: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  const m00 = m[0 * 4 + 0];
-  const m01 = m[0 * 4 + 1];
-  const m02 = m[0 * 4 + 2];
-  const m03 = m[0 * 4 + 3];
-  const m10 = m[1 * 4 + 0];
-  const m11 = m[1 * 4 + 1];
-  const m12 = m[1 * 4 + 2];
-  const m13 = m[1 * 4 + 3];
+export function setRotateZ(m: Mat4, angleInRadians: number) {
   const c = Math.cos(angleInRadians);
   const s = Math.sin(angleInRadians);
 
-  dst[0] = c * m00 + s * m10;
-  dst[1] = c * m01 + s * m11;
-  dst[2] = c * m02 + s * m12;
-  dst[3] = c * m03 + s * m13;
-  dst[4] = c * m10 - s * m00;
-  dst[5] = c * m11 - s * m01;
-  dst[6] = c * m12 - s * m02;
-  dst[7] = c * m13 - s * m03;
-
-  if (m !== dst) {
-    dst[8] = m[8];
-    dst[9] = m[9];
-    dst[10] = m[10];
-    dst[11] = m[11];
-    dst[12] = m[12];
-    dst[13] = m[13];
-    dst[14] = m[14];
-    dst[15] = m[15];
-  }
-
-  return dst;
+  m[0] = c + s;
+  m[1] = c + s;
+  m[2] = c + s;
+  m[3] = c + s;
+  m[4] = c - s;
+  m[5] = c - s;
+  m[6] = c - s;
+  m[7] = c - s;
 }
 
 /**
- * Creates a 4-by-4 matrix which rotates around the given axis by the given
+ * Rotates the given 4-by-4 matrix around the z-axis by the given
  * angle.
- * @param {v3.Vec3} axis The axis
- *     about which to rotate.
- * @param {number} angleInRadians The angle by which to rotate (in radians).
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} A matrix which rotates angle radians
- *     around the axis.
- * @memberOf m4
+ *
+ * @param m __mut__ The matrix to rotate.
+ * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function axisRotation(
-  axis: v3.Vec3,
-  angleInRadians: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  let x = axis[0];
-  let y = axis[1];
-  let z = axis[2];
-  const n = Math.sqrt(x * x + y * y + z * z);
-  x /= n;
-  y /= n;
-  z /= n;
-  const xx = x * x;
-  const yy = y * y;
-  const zz = z * z;
+export function rotateZ(m: Mat4, angleInRadians: number) {
+  const m00 = m[0];
+  const m01 = m[1];
+  const m02 = m[2];
+  const m03 = m[3];
+
+  const m10 = m[4];
+  const m11 = m[5];
+  const m12 = m[6];
+  const m13 = m[7];
   const c = Math.cos(angleInRadians);
   const s = Math.sin(angleInRadians);
-  const oneMinusCosine = 1 - c;
 
-  dst[0] = xx + (1 - xx) * c;
-  dst[1] = x * y * oneMinusCosine + z * s;
-  dst[2] = x * z * oneMinusCosine - y * s;
-  dst[3] = 0;
-  dst[4] = x * y * oneMinusCosine - z * s;
-  dst[5] = yy + (1 - yy) * c;
-  dst[6] = y * z * oneMinusCosine + x * s;
-  dst[7] = 0;
-  dst[8] = x * z * oneMinusCosine + y * s;
-  dst[9] = y * z * oneMinusCosine - x * s;
-  dst[10] = zz + (1 - zz) * c;
-  dst[11] = 0;
-  dst[12] = 0;
-  dst[13] = 0;
-  dst[14] = 0;
-  dst[15] = 1;
-
-  return dst;
+  m[0] = c * m00 + s * m10;
+  m[1] = c * m01 + s * m11;
+  m[2] = c * m02 + s * m12;
+  m[3] = c * m03 + s * m13;
+  m[4] = c * m10 - s * m00;
+  m[5] = c * m11 - s * m01;
+  m[6] = c * m12 - s * m02;
+  m[7] = c * m13 - s * m03;
 }
 
 /**
  * Rotates the given 4-by-4 matrix around the given axis by the
  * given angle.
- * @param {Mat4} m The matrix.
- * @param {v3.Vec3} axis The axis
+ *
+ * @param m __mut__ The matrix to rotate.
+ * @param axis The axis
  *     about which to rotate.
- * @param {number} angleInRadians The angle by which to rotate (in radians).
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The rotated matrix.
- * @memberOf m4
+ * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function axisRotate(
-  m: Mat4,
-  axis: v3.Vec3,
-  angleInRadians: number,
-  dst: Mat4 = new MatType(16)
-): Mat4 {
-  let x = axis[0];
-  let y = axis[1];
-  let z = axis[2];
+export function axisRotate(m: Mat4, [x, y, z]: v3.Vec3, angleInRadians: number) {
   const n = Math.sqrt(x * x + y * y + z * z);
+
   x /= n;
   y /= n;
   z /= n;
+
   const xx = x * x;
   const yy = y * y;
   const zz = z * z;
@@ -1254,131 +813,62 @@ export function axisRotate(
   const m22 = m[10];
   const m23 = m[11];
 
-  dst[0] = r00 * m00 + r01 * m10 + r02 * m20;
-  dst[1] = r00 * m01 + r01 * m11 + r02 * m21;
-  dst[2] = r00 * m02 + r01 * m12 + r02 * m22;
-  dst[3] = r00 * m03 + r01 * m13 + r02 * m23;
-  dst[4] = r10 * m00 + r11 * m10 + r12 * m20;
-  dst[5] = r10 * m01 + r11 * m11 + r12 * m21;
-  dst[6] = r10 * m02 + r11 * m12 + r12 * m22;
-  dst[7] = r10 * m03 + r11 * m13 + r12 * m23;
-  dst[8] = r20 * m00 + r21 * m10 + r22 * m20;
-  dst[9] = r20 * m01 + r21 * m11 + r22 * m21;
-  dst[10] = r20 * m02 + r21 * m12 + r22 * m22;
-  dst[11] = r20 * m03 + r21 * m13 + r22 * m23;
-
-  if (m !== dst) {
-    dst[12] = m[12];
-    dst[13] = m[13];
-    dst[14] = m[14];
-    dst[15] = m[15];
-  }
-
-  return dst;
-}
-
-/**
- * Creates a 4-by-4 matrix which scales in each dimension by an amount given by
- * the corresponding entry in the given vector; assumes the vector has three
- * entries.
- * @param {v3.Vec3} v A vector of
- *     three entries specifying the factor by which to scale in each dimension.
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The scaling matrix.
- * @memberOf m4
- */
-export function scaling(v: v3.Vec3, dst: Mat4 = new MatType(16)): Mat4 {
-  dst[0] = v[0];
-  dst[1] = 0;
-  dst[2] = 0;
-  dst[3] = 0;
-  dst[4] = 0;
-  dst[5] = v[1];
-  dst[6] = 0;
-  dst[7] = 0;
-  dst[8] = 0;
-  dst[9] = 0;
-  dst[10] = v[2];
-  dst[11] = 0;
-  dst[12] = 0;
-  dst[13] = 0;
-  dst[14] = 0;
-  dst[15] = 1;
-
-  return dst;
+  m[0] = r00 * m00 + r01 * m10 + r02 * m20;
+  m[1] = r00 * m01 + r01 * m11 + r02 * m21;
+  m[2] = r00 * m02 + r01 * m12 + r02 * m22;
+  m[3] = r00 * m03 + r01 * m13 + r02 * m23;
+  m[4] = r10 * m00 + r11 * m10 + r12 * m20;
+  m[5] = r10 * m01 + r11 * m11 + r12 * m21;
+  m[6] = r10 * m02 + r11 * m12 + r12 * m22;
+  m[7] = r10 * m03 + r11 * m13 + r12 * m23;
+  m[8] = r20 * m00 + r21 * m10 + r22 * m20;
+  m[9] = r20 * m01 + r21 * m11 + r22 * m21;
+  m[10] = r20 * m02 + r21 * m12 + r22 * m22;
+  m[11] = r20 * m03 + r21 * m13 + r22 * m23;
 }
 
 /**
  * Scales the given 4-by-4 matrix in each dimension by an amount
  * given by the corresponding entry in the given vector; assumes the vector has
  * three entries.
- * @param {Mat4} m The matrix to be modified.
- * @param {v3.Vec3} v A vector of three entries specifying the
+ *
+ * @param m __mut__ The matrix to be scaled.
+ * @param v A vector of three entries specifying the
  *     factor by which to scale in each dimension.
- * @param {Mat4} [dst] matrix to hold result. If not passed a new one is created.
- * @return {Mat4} The scaled matrix.
- * @memberOf m4
  */
-export function scale(m: Mat4, v: v3.Vec3, dst: Mat4 = new MatType(16)): Mat4 {
-  const v0 = v[0];
-  const v1 = v[1];
-  const v2 = v[2];
-
-  dst[0] = v0 * m[0 * 4 + 0];
-  dst[1] = v0 * m[0 * 4 + 1];
-  dst[2] = v0 * m[0 * 4 + 2];
-  dst[3] = v0 * m[0 * 4 + 3];
-  dst[4] = v1 * m[1 * 4 + 0];
-  dst[5] = v1 * m[1 * 4 + 1];
-  dst[6] = v1 * m[1 * 4 + 2];
-  dst[7] = v1 * m[1 * 4 + 3];
-  dst[8] = v2 * m[2 * 4 + 0];
-  dst[9] = v2 * m[2 * 4 + 1];
-  dst[10] = v2 * m[2 * 4 + 2];
-  dst[11] = v2 * m[2 * 4 + 3];
-
-  if (m !== dst) {
-    dst[12] = m[12];
-    dst[13] = m[13];
-    dst[14] = m[14];
-    dst[15] = m[15];
-  }
-
-  return dst;
+export function scale(m: Mat4, [v0, v1, v2]: v3.Vec3) {
+  m[0] = v0 * m[0 * 4 + 0];
+  m[1] = v0 * m[0 * 4 + 1];
+  m[2] = v0 * m[0 * 4 + 2];
+  m[3] = v0 * m[0 * 4 + 3];
+  m[4] = v1 * m[1 * 4 + 0];
+  m[5] = v1 * m[1 * 4 + 1];
+  m[6] = v1 * m[1 * 4 + 2];
+  m[7] = v1 * m[1 * 4 + 3];
+  m[8] = v2 * m[2 * 4 + 0];
+  m[9] = v2 * m[2 * 4 + 1];
+  m[10] = v2 * m[2 * 4 + 2];
+  m[11] = v2 * m[2 * 4 + 3];
 }
 
 /**
  * Takes a 4-by-4 matrix and a vector with 3 entries,
  * interprets the vector as a point, transforms that point by the matrix, and
  * returns the result as a vector with 3 entries.
+ *
+ * @param v __mut__ The point to be transformed.
  * @param m The matrix.
- * @param v The point.
- * @param dst optional vec3 to store result. If not passed a new one is created.
- * @return The transformed point.
- * @memberOf m4
  */
-export function transformPoint(
-  m: Mat4,
-  v: v3.Vec3,
-  dst: v3.Vec3 = v3.create()
-): v3.Vec3 {
+export function transformPoint(v: v3.Vec3, m: Mat4) {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
-  const d =
-    v0 * m[0 * 4 + 3] + v1 * m[1 * 4 + 3] + v2 * m[2 * 4 + 3] + m[3 * 4 + 3];
 
-  dst[0] =
-    (v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0] + m[3 * 4 + 0]) /
-    d;
-  dst[1] =
-    (v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1] + m[3 * 4 + 1]) /
-    d;
-  dst[2] =
-    (v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2] + m[3 * 4 + 2]) /
-    d;
+  const d = v0 * m[0 * 4 + 3] + v1 * m[1 * 4 + 3] + v2 * m[2 * 4 + 3] + m[3 * 4 + 3];
 
-  return dst;
+  v[0] = (v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0] + m[3 * 4 + 0]) / d;
+  v[1] = (v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1] + m[3 * 4 + 1]) / d;
+  v[2] = (v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2] + m[3 * 4 + 2]) / d;
 }
 
 /**
@@ -1388,27 +878,21 @@ export function transformPoint(
  * is parallel-preserving, i.e. any combination of rotation, scaling and
  * translation, but not a perspective distortion. Returns a vector with 3
  * entries.
- * @param m The matrix.
+ *
+ * @param m __mut__ The matrix to be transformed.
  * @param v The direction.
- * @param dst optional Vec3 to store result. If not passed a new one is created.
- * @return The transformed direction.
- * @memberOf m4
  */
-export function transformDirection(
-  m: Mat4,
-  v: v3.Vec3,
-  dst: v3.Vec3 = v3.create()
-): v3.Vec3 {
+export function transformDirection(m: Mat4, v: v3.Vec3): void {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
 
-  dst[0] = v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0];
-  dst[1] = v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1];
-  dst[2] = v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2];
-
-  return dst;
+  m[0] = v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0];
+  m[1] = v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1];
+  m[2] = v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2];
 }
+
+let mi = identity();
 
 /**
  * Takes a 4-by-4 matrix m and a vector v with 3 entries, interprets the vector
@@ -1419,56 +903,49 @@ export function transformDirection(
  * matrix is parallel-preserving, i.e. any combination of rotation, scaling and
  * translation, but not a perspective distortion.  Returns a vector with 3
  * entries.
+ * @param v __mut__ The normal to be transformed.
  * @param m The matrix.
- * @param v The normal.
- * @param dst The direction. If not passed a new one is created.
- * @return The transformed normal.
- * @memberOf m4
  */
-export function transformNormal(
-  m: Mat4,
-  v: v3.Vec3,
-  dst: v3.Vec3 = v3.create()
-): v3.Vec3 {
-  const mi = inverse(m);
+export function transformNormal(v: v3.Vec3, m: Mat4) {
+  copy(mi, m);
+  inverse(mi);
+
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
 
-  dst[0] = v0 * mi[0 * 4 + 0] + v1 * mi[0 * 4 + 1] + v2 * mi[0 * 4 + 2];
-  dst[1] = v0 * mi[1 * 4 + 0] + v1 * mi[1 * 4 + 1] + v2 * mi[1 * 4 + 2];
-  dst[2] = v0 * mi[2 * 4 + 0] + v1 * mi[2 * 4 + 1] + v2 * mi[2 * 4 + 2];
-
-  return dst;
+  v[0] = v0 * mi[0 * 4 + 0] + v1 * mi[0 * 4 + 1] + v2 * mi[0 * 4 + 2];
+  v[1] = v0 * mi[1 * 4 + 0] + v1 * mi[1 * 4 + 1] + v2 * mi[1 * 4 + 2];
+  v[2] = v0 * mi[2 * 4 + 0] + v1 * mi[2 * 4 + 1] + v2 * mi[2 * 4 + 2];
 }
 
-export function transition(
-  m1: Mat4,
-  m2: Mat4,
-  value: number,
-  dst: Mat4 = new MatType(16)
-) {
+/**
+ *
+ * @param m __mut__
+ * @param a
+ * @param b
+ * @param value
+ */
+export function transition(m: Mat4, a: Mat4, b: Mat4, value: number) {
   const start = 1 - value;
   const end = value;
-  dst[0] = m1[0] * start + m2[0] * end;
-  dst[1] = m1[1] * start + m2[1] * end;
-  dst[2] = m1[2] * start + m2[2] * end;
-  dst[3] = m1[3] * start + m2[3] * end;
+  m[0] = a[0] * start + b[0] * end;
+  m[1] = a[1] * start + b[1] * end;
+  m[2] = a[2] * start + b[2] * end;
+  m[3] = a[3] * start + b[3] * end;
 
-  dst[4] = m1[4] * start + m2[4] * end;
-  dst[5] = m1[5] * start + m2[5] * end;
-  dst[6] = m1[6] * start + m2[6] * end;
-  dst[7] = m1[7] * start + m2[7] * end;
+  m[4] = a[4] * start + b[4] * end;
+  m[5] = a[5] * start + b[5] * end;
+  m[6] = a[6] * start + b[6] * end;
+  m[7] = a[7] * start + b[7] * end;
 
-  dst[8] = m1[8] * start + m2[8] * end;
-  dst[9] = m1[9] * start + m2[9] * end;
-  dst[10] = m1[10] * start + m2[10] * end;
-  dst[11] = m1[11] * start + m2[11] * end;
+  m[8] = a[8] * start + b[8] * end;
+  m[9] = a[9] * start + b[9] * end;
+  m[10] = a[10] * start + b[10] * end;
+  m[11] = a[11] * start + b[11] * end;
 
-  dst[12] = m1[12] * start + m2[12] * end;
-  dst[13] = m1[13] * start + m2[13] * end;
-  dst[14] = m1[14] * start + m2[14] * end;
-  dst[15] = m1[15] * start + m2[15] * end;
-
-  return dst;
+  m[12] = a[12] * start + b[12] * end;
+  m[13] = a[13] * start + b[13] * end;
+  m[14] = a[14] * start + b[14] * end;
+  m[15] = a[15] * start + b[15] * end;
 }

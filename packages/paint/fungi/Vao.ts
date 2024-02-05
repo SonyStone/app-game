@@ -1,5 +1,5 @@
-import { GL_BUFFER_TYPE, GL_DATA_TYPE } from "@webgl/static-variables";
-import { IBuffer } from "./Buffer";
+import { GL_BUFFER_TYPE, GL_DATA_TYPE } from '@webgl/static-variables';
+import { IBuffer } from './Buffer';
 
 /**
  * Creates Vector Array Object
@@ -12,16 +12,8 @@ import { IBuffer } from "./Buffer";
  *  2 → Vector Buffer Object
  * ```
  **/
-export function create_vao(
-  gl: Pick<
-    WebGL2RenderingContext,
-    | "createVertexArray"
-    | "bindVertexArray"
-    | "bindBuffer"
-    | "enableVertexAttribArray"
-    | "vertexAttribPointer"
-    | "vertexAttribDivisor"
-  >,
+export function createVAO(
+  gl: WebGL2RenderingContext,
   config: {
     buffer: IBuffer;
     interleaved?: {
@@ -62,14 +54,7 @@ export function create_vao(
     } else {
       for (const spec of itm.interleaved) {
         gl.enableVertexAttribArray(spec.attrib_loc);
-        gl.vertexAttribPointer(
-          spec.attrib_loc,
-          spec.size,
-          GL_DATA_TYPE.FLOAT,
-          false,
-          spec.stride_len,
-          spec.offset
-        );
+        gl.vertexAttribPointer(spec.attrib_loc, spec.size, GL_DATA_TYPE.FLOAT, false, spec.stride_len, spec.offset);
         if (itm.instanced) {
           gl.vertexAttribDivisor(spec.attrib_loc, 1);
         }
@@ -91,9 +76,7 @@ function unbind(ctx: WebGL2RenderingContext) {
   ctx.bindVertexArray(null);
 }
 
-function unbind_all(
-  ctx: Pick<WebGL2RenderingContext, "bindVertexArray" | "bindBuffer">
-) {
+function unbind_all(ctx: Pick<WebGL2RenderingContext, 'bindVertexArray' | 'bindBuffer'>) {
   // Close VAO in the proper order, VAO first then Buffers
   ctx.bindVertexArray(null);
   ctx.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, null); // Array Buffer

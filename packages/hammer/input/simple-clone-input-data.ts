@@ -1,6 +1,6 @@
-import { Vec2Tuple } from 'ogl';
+import type { Vec2Tuple } from '@packages/ogl/math/vec-2';
 import { HammerInput } from '../pointerevent';
-import { now, round } from '../utils/utils-consts';
+import { round } from '../utils/utils-consts';
 import getCenter from './get-center';
 
 export interface ClonedInputData {

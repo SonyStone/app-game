@@ -1,46 +1,33 @@
-import { GL_STATIC_VARIABLES } from "@webgl/static-variables/static-variables";
-import { Context } from "./Context";
+import { GL_STATIC_VARIABLES } from '@webgl/static-variables/static-variables';
 
 export class Texture {
-  constructor(readonly name: any, readonly id: any) {}
+  constructor(
+    readonly name: any,
+    readonly id: any
+  ) {}
 }
 
 export class TextureFactory {
   cache = new Map();
 
-  constructor(readonly gl: Context) {}
+  constructor(readonly gl: any) {}
 
   get(n: any) {
     return this.cache.get(n);
   }
 
-  new(
-    name: any,
-    img: any,
-    do_yflip = false,
-    use_mips = false,
-    wrap_mode = 0,
-    filter_mode = 0
-  ) {
+  new(name: any, img: any, do_yflip = false, use_mips = false, wrap_mode = 0, filter_mode = 0) {
     let tex = new Texture(name, this.gl.gl.createTexture());
     this.cache.set(name, tex);
     return this.update(tex, img, do_yflip, use_mips, wrap_mode, filter_mode);
   }
 
-  update(
-    tex: any,
-    img: any,
-    do_yflip = false,
-    use_mips = false,
-    wrap_mode = 0,
-    filter_mode = 0
-  ) {
+  update(tex: any, img: any, do_yflip = false, use_mips = false, wrap_mode = 0, filter_mode = 0) {
     let ctx = this.gl.gl;
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Flip the texture by the Y Position, So 0,0 is bottom left corner.
-    if (do_yflip)
-      ctx.pixelStorei(GL_STATIC_VARIABLES.UNPACK_FLIP_Y_WEBGL, true);
+    if (do_yflip) ctx.pixelStorei(GL_STATIC_VARIABLES.UNPACK_FLIP_Y_WEBGL, true);
 
     // Bind texture, then Push image to GPU.
     ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, tex.id);
@@ -67,32 +54,13 @@ export class TextureFactory {
       ); // Setup down scaling
       ctx.generateMipmap(GL_STATIC_VARIABLES.TEXTURE_2D); //Precalc different sizes of texture for better quality rendering.
     } else {
-      let filter =
-          filter_mode == 0
-            ? GL_STATIC_VARIABLES.LINEAR
-            : GL_STATIC_VARIABLES.NEAREST,
+      let filter = filter_mode == 0 ? GL_STATIC_VARIABLES.LINEAR : GL_STATIC_VARIABLES.NEAREST,
         wrap = wrap_mode == 0 ? ctx.REPEAT : GL_STATIC_VARIABLES.CLAMP_TO_EDGE;
 
-      ctx.texParameteri(
-        GL_STATIC_VARIABLES.TEXTURE_2D,
-        GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
-        filter
-      );
-      ctx.texParameteri(
-        GL_STATIC_VARIABLES.TEXTURE_2D,
-        GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
-        filter
-      );
-      ctx.texParameteri(
-        GL_STATIC_VARIABLES.TEXTURE_2D,
-        GL_STATIC_VARIABLES.TEXTURE_WRAP_S,
-        wrap
-      );
-      ctx.texParameteri(
-        GL_STATIC_VARIABLES.TEXTURE_2D,
-        GL_STATIC_VARIABLES.TEXTURE_WRAP_T,
-        wrap
-      );
+      ctx.texParameteri(GL_STATIC_VARIABLES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER, filter);
+      ctx.texParameteri(GL_STATIC_VARIABLES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER, filter);
+      ctx.texParameteri(GL_STATIC_VARIABLES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_WRAP_S, wrap);
+      ctx.texParameteri(GL_STATIC_VARIABLES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_WRAP_T, wrap);
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

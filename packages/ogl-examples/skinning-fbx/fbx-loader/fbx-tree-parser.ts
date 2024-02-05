@@ -1,6 +1,6 @@
 // Wrapping modes
 
-import { Mat4, OGLRenderingContext, Texture } from 'ogl';
+import { Mat4, OGLRenderingContext, Texture } from '@packages/ogl';
 import type * as FBX from './fbx-tree';
 
 /** With {@link RepeatWrapping} the texture will simply repeat to infinity. */
@@ -28,7 +28,7 @@ export function fbxTreeParser(fbxTree: FBX.FBXTree, gl: OGLRenderingContext) {
     connections,
     images,
     textures,
-    deformers,
+    deformers
   };
 }
 
@@ -48,7 +48,7 @@ function parseConnections(fbxTree: FBX.FBXTree) {
       if (!connectionMap.has(fromID)) {
         connectionMap.set(fromID, {
           parents: [],
-          children: [],
+          children: []
         });
       }
 
@@ -58,7 +58,7 @@ function parseConnections(fbxTree: FBX.FBXTree) {
       if (!connectionMap.has(toID)) {
         connectionMap.set(toID, {
           parents: [],
-          children: [],
+          children: []
         });
       }
 
@@ -89,11 +89,8 @@ function parseImages(fbxTree: FBX.FBXTree) {
 
       // raw image data is in videoNode.Content
       if (videoNode.Content) {
-        const arrayBufferContent =
-          videoNode.Content instanceof ArrayBuffer &&
-          videoNode.Content.byteLength > 0;
-        const base64Content =
-          typeof videoNode.Content === 'string' && videoNode.Content !== '';
+        const arrayBufferContent = videoNode.Content instanceof ArrayBuffer && videoNode.Content.byteLength > 0;
+        const base64Content = typeof videoNode.Content === 'string' && videoNode.Content !== '';
 
         if (arrayBufferContent || base64Content) {
           const image = parseImage(videoNodes[nodeID]);
@@ -154,9 +151,7 @@ function parseImage(videoNode: FBX.Video) {
       break;
 
     default:
-      console.warn(
-        'FBXLoader: Image type "' + extension + '" is not supported.'
-      );
+      console.warn('FBXLoader: Image type "' + extension + '" is not supported.');
       return;
   }
 
@@ -186,12 +181,7 @@ function parseTextures(
   if (fbxTree.Objects.Texture) {
     const textureNodes = fbxTree.Objects.Texture;
     for (const nodeID in textureNodes) {
-      const texture = parseTexture(
-        gl,
-        connections,
-        textureNodes[nodeID],
-        images
-      );
+      const texture = parseTexture(gl, connections, textureNodes[nodeID], images);
       textureMap.set(parseInt(nodeID), texture);
     }
   }
@@ -252,11 +242,7 @@ function loadTexture(
 
   const children = connections.get(textureNode.id)!.children;
 
-  if (
-    children !== undefined &&
-    children.length > 0 &&
-    images[children[0].ID] !== undefined
-  ) {
+  if (children !== undefined && children.length > 0 && images[children[0].ID] !== undefined) {
     fileName = images[children[0].ID];
 
     if (fileName.indexOf('blob:') === 0 || fileName.indexOf('data:') === 0) {
@@ -269,10 +255,7 @@ function loadTexture(
   const extension = textureNode.FileName.slice(-3).toLowerCase();
 
   if (extension === 'tga') {
-    console.warn(
-      'FBXLoader: TGA loader not found, creating placeholder texture for',
-      textureNode.RelativeFilename
-    );
+    console.warn('FBXLoader: TGA loader not found, creating placeholder texture for', textureNode.RelativeFilename);
     // const loader = this.manager.getHandler('.tga');
 
     // if (loader === null) {
@@ -296,7 +279,10 @@ function loadTexture(
   return texture;
 }
 
-export interface Relationship { ID: number; relationship?: string }
+export interface Relationship {
+  ID: number;
+  relationship?: string;
+}
 
 export interface ConnectionRelationships {
   parents: Relationship[];
@@ -309,19 +295,16 @@ export interface MorphTarget {
 }
 
 export interface Deformers {
-  skeletons: { [key: string]: Skeleton }
+  skeletons: { [key: string]: Skeleton };
   morphTargets: {
     [key: string]: MorphTarget;
-  }
+  };
 }
 
 // Parse nodes in FBXTree.Objects.Deformer
 // Deformer node can contain skinning or Vertex Cache animation data, however only skinning is supported here
 // Generates map of Skeleton-like objects for use later when generating and binding skeletons.
-function parseDeformers(
-  fbxTree: FBX.FBXTree,
-  connections: Map<number, ConnectionRelationships>
-): Deformers {
+function parseDeformers(fbxTree: FBX.FBXTree, connections: Map<number, ConnectionRelationships>): Deformers {
   const skeletons: { [key: string]: Skeleton } = {};
   const morphTargets: {
     [key: string]: {
@@ -343,26 +326,18 @@ function parseDeformers(
         skeleton.ID = nodeID;
 
         if (relationships.parents.length > 1)
-          console.warn(
-            'THREE.FBXLoader: skeleton attached to more than one geometry is not supported.'
-          );
+          console.warn('THREE.FBXLoader: skeleton attached to more than one geometry is not supported.');
         skeleton.geometryID = relationships.parents[0].ID;
 
         skeletons[nodeID] = skeleton;
       } else if (deformerNode.attrType === 'BlendShape') {
         const morphTarget = {
           id: nodeID,
-          rawTargets: parseMorphTargets(
-            connections,
-            relationships,
-            DeformerNodes
-          ),
+          rawTargets: parseMorphTargets(connections, relationships, DeformerNodes)
         };
 
         if (relationships.parents.length > 1)
-          console.warn(
-            'THREE.FBXLoader: morph target attached to more than one geometry is not supported.'
-          );
+          console.warn('THREE.FBXLoader: morph target attached to more than one geometry is not supported.');
 
         morphTargets[nodeID] = morphTarget;
       }
@@ -371,7 +346,7 @@ function parseDeformers(
 
   return {
     skeletons: skeletons,
-    morphTargets: morphTargets,
+    morphTargets: morphTargets
   };
 }
 
@@ -409,7 +384,7 @@ function parseSkeleton(
       ID: child.ID,
       indices: [],
       weights: [],
-      transformLink: new Mat4().fromArray(boneNode.TransformLink!.a),
+      transformLink: new Mat4().fromArray(boneNode.TransformLink!.a)
       // transform: new Matrix4().fromArray( boneNode.Transform.a ),
       // linkMode: boneNode.Mode,
     };
@@ -424,7 +399,7 @@ function parseSkeleton(
 
   return {
     rawBones: rawBones,
-    bones: [],
+    bones: []
   };
 }
 
@@ -458,11 +433,9 @@ function parseMorphTargets(
       initialWeight: morphTargetNode.DeformPercent ?? 0,
       id: morphTargetNode.id,
       fullWeights: morphTargetNode.FullWeights?.a ?? [],
-      geoID: connections
-        .get(parseInt(child.ID as any))!
-        .children.filter(function (child) {
-          return child.relationship === undefined;
-        })[0].ID,
+      geoID: connections.get(parseInt(child.ID as any))!.children.filter(function (child) {
+        return child.relationship === undefined;
+      })[0].ID
     };
 
     rawMorphTargets.push(rawMorphTarget);

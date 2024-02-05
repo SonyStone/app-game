@@ -1,4 +1,4 @@
-import { Color, Polyline, Renderer, Transform, Vec3 } from 'ogl';
+import { Color, Polyline, Renderer, Transform, Vec3 } from '@packages/ogl';
 import { onCleanup } from 'solid-js';
 
 interface Line {
@@ -58,9 +58,8 @@ const vertex = /* glsl */ `
 `;
 
 export default function App() {
-  const renderer = new Renderer({ dpr: 2 });
+  const renderer = new Renderer({ dpr: 2, webgl: 2 });
   const gl = renderer.gl;
-  document.body.appendChild(gl.canvas);
   gl.clearColor(0.9, 0.9, 0.9, 1);
 
   const scene = new Transform();
@@ -180,13 +179,11 @@ export default function App() {
   }
 
   onCleanup(() => {
-    document.body.removeChild(gl.canvas);
-
     window.removeEventListener('resize', resize, false);
     window.removeEventListener('touchstart', updateMouse, false);
     window.removeEventListener('touchmove', updateMouse, false);
     window.removeEventListener('mousemove', updateMouse, false);
   });
 
-  return <></>;
+  return gl.canvas;
 }

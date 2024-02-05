@@ -1,5 +1,5 @@
+import { Camera, Geometry, Mesh, Orbit, Program, Renderer, Text, Texture, Transform } from '@packages/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { Camera, Geometry, Mesh, Orbit, Program, Renderer, Text, Texture, Transform } from 'ogl';
 import { createEffect, onCleanup } from 'solid-js';
 
 import firaSansBoldData from './FiraSans-Bold.json?url';
@@ -19,7 +19,7 @@ export default function MsdfText() {
   const camera = new Camera(gl, { fov: 45 });
   camera.position.set(0, 0, 7);
 
-  const controls = new Orbit(camera);
+  const controls = new (Orbit as any)(camera);
 
   const resize = createWindowSize();
 

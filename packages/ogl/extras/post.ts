@@ -3,8 +3,8 @@ import { Program } from '../core/program';
 import { RenderTarget } from '../core/render-target';
 import { Triangle } from './triangle';
 
-import defaultFragment from './post.frag';
-import defaultVertex from './post.vert';
+import defaultFragment from './post.frag?raw';
+import defaultVertex from './post.vert?raw';
 export class Post {
   constructor(
     gl,
@@ -29,9 +29,15 @@ export class Post {
     this.uniform = { value: null };
     this.targetOnly = targetOnly;
 
-    if (dpr) this.dpr = dpr;
-    if (width) this.width = width;
-    if (height) this.height = height;
+    if (dpr) {
+      this.dpr = dpr;
+    }
+    if (width) {
+      this.width = width;
+    }
+    if (height) {
+      this.height = height;
+    }
 
     dpr = this.dpr || this.gl.renderer.dpr;
     this.resolutionWidth = Math.floor(this.width || this.gl.renderer.width * dpr);

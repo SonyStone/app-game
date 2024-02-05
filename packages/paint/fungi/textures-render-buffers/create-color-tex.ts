@@ -1,76 +1,64 @@
-import {
-  COLOR_ATTACHMENT,
-  GL_DATA_TYPE,
-  GL_STATIC_VARIABLES,
-  GL_TEXTURES,
-} from "@webgl/static-variables";
+import { COLOR_ATTACHMENT, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
 import {
   GL_PIXEL_FORMAT,
   GL_TEXTURE_MAG_FILTER,
   GL_TEXTURE_MIN_FILTER,
   GL_TEXTURE_PARAMETER_NAME,
   GL_TEXTURE_TARGET,
-  GL_TEXTURE_WRAP_MODE,
-} from "@webgl/static-variables/textures";
+  GL_TEXTURE_WRAP_MODE
+} from '@webgl/static-variables/textures';
 
-export function create_color_tex(
-  gl: Pick<
-    WebGL2RenderingContext,
-    | "createTexture"
-    | "bindTexture"
-    | "texImage2D"
-    | "texParameteri"
-    | "framebufferTexture2D"
-  >,
-  w: number,
-  h: number,
+export function createColorTex(
+  gl: WebGL2RenderingContext,
+  width: number,
+  height: number,
   attach: COLOR_ATTACHMENT,
-  pixel = "byte"
+  pixel = 'byte'
 ): WebGLTexture {
   const id = gl.createTexture()!;
 
   gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, id);
 
   switch (pixel) {
-    case "byte":
+    case 'byte':
       gl.texImage2D(
         GL_TEXTURE_TARGET.TEXTURE_2D,
         0,
         GL_PIXEL_FORMAT.RGBA,
-        w,
-        h,
+        width,
+        height,
         0,
         GL_PIXEL_FORMAT.RGBA,
         GL_DATA_TYPE.UNSIGNED_BYTE,
         null
       );
       break;
-    case "f16":
+    case 'f16':
       gl.texImage2D(
         GL_TEXTURE_TARGET.TEXTURE_2D,
         0,
         GL_STATIC_VARIABLES.RGBA16F,
-        w,
-        h,
+        width,
+        height,
         0,
         GL_PIXEL_FORMAT.RGBA,
         GL_DATA_TYPE.FLOAT,
         null
       );
       break;
-    case "f32":
+    case 'f32':
       gl.texImage2D(
         GL_TEXTURE_TARGET.TEXTURE_2D,
         0,
         GL_STATIC_VARIABLES.RGBA32F,
-        w,
-        h,
+        width,
+        height,
         0,
         GL_PIXEL_FORMAT.RGBA,
         GL_DATA_TYPE.FLOAT,
         null
       );
-      console.log("ep");
+      console.log('ep');
       break;
   }
 
@@ -119,13 +107,7 @@ export function create_color_tex(
   //ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S, ctx.CLAMP_TO_EDGE);	//Stretch image to X position
   //ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, ctx.CLAMP_TO_EDGE);	//Stretch image to Y position
 
-  gl.framebufferTexture2D(
-    GL_STATIC_VARIABLES.FRAMEBUFFER,
-    attach,
-    GL_TEXTURE_TARGET.TEXTURE_2D,
-    id,
-    0
-  );
+  gl.framebufferTexture2D(GL_STATIC_VARIABLES.FRAMEBUFFER, attach, GL_TEXTURE_TARGET.TEXTURE_2D, id, 0);
 
   return id;
 }

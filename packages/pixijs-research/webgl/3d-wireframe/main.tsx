@@ -1,5 +1,5 @@
 import { DEG_TO_RAD } from '@webgl/math/constants';
-import * as m4 from '@webgl/math/mut-m4';
+import * as m4 from '@webgl/math/m4';
 import * as v3 from '@webgl/math/mut-v3';
 import { setFromSpherical, Spherical } from '@webgl/math/spherical';
 import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@webgl/static-variables';

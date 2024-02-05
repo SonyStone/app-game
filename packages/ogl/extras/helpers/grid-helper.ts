@@ -5,8 +5,8 @@ import { Program } from '../../core/program';
 import type { OGLRenderingContext } from '../../core/renderer';
 import { Color } from '../../math/color';
 
-import fragment from './grid-helper.frag';
-import vertex from './grid-helper.vert';
+import fragment from './grid-helper.frag?raw';
+import vertex from './grid-helper.vert?raw';
 
 export interface GridHelperOptions {
   size: number;

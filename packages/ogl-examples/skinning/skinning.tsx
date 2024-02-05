@@ -1,4 +1,16 @@
-import { Animation, Camera, Geometry, Mesh, Orbit, Plane, Program, Renderer, Skin, Texture, Transform } from 'ogl';
+import {
+  Animation,
+  Camera,
+  Geometry,
+  Mesh,
+  Orbit,
+  Plane,
+  Program,
+  Renderer,
+  Skin,
+  Texture,
+  Transform
+} from '@packages/ogl';
 
 import snoutAnimSrc from './snout-anim.json?url';
 import snoutRigSrc from './snout-rig.json?url';
@@ -21,7 +33,7 @@ export default function App() {
   const camera = new Camera(gl, { fov: 35 });
   camera.position.set(6, 2, 6);
 
-  const controls = new Orbit(camera);
+  const controls = new (Orbit as any)(camera);
 
   function resize() {
     renderer.setSize(window.innerWidth, window.innerHeight);

@@ -7,8 +7,8 @@ import { Vec3 } from '../../math/vec-3';
 import { Color } from '../../math/color';
 
 import { Camera } from '../../core/camera';
-import fragment from './face-normals-helper.frag';
-import vertex from './face-normals-helper.vert';
+import fragment from './face-normals-helper.frag?raw';
+import vertex from './face-normals-helper.vert?raw';
 
 const vA = /* @__PURE__ */ new Vec3();
 const vB = /* @__PURE__ */ new Vec3();

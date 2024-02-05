@@ -1,4 +1,4 @@
-import { Vec2Tuple } from 'ogl';
+import { Vec2Tuple } from '@packages/ogl/math/vec-2';
 import { HammerInput } from '../pointerevent';
 import simpleCloneInputData, { ClonedInputData } from './simple-clone-input-data';
 

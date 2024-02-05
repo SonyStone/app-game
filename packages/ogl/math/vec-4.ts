@@ -1,7 +1,7 @@
 import type { AttributeData } from '../core/geometry';
 import * as Vec4Func from './functions/vec-4-func';
 
-export type Vec4Tuple = [x: number, y: number, z: number, w: number];
+export type Vec4Tuple = [x: number, y: number, z: number, w: number] | number[];
 
 // @ts-ignore
 export class Vec4 extends Array implements Vec4Tuple {

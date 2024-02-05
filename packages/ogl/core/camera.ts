@@ -1,5 +1,7 @@
 import { Mat4 } from '../math/mat-4';
 import { Vec3, Vec3Tuple } from '../math/vec-3';
+import { Mesh } from './mesh';
+import { OGLRenderingContext } from './renderer';
 import { Transform } from './transform';
 
 export interface CameraOptions {
@@ -129,7 +131,26 @@ export class Camera extends Transform {
 
   updateFrustum(): void {
     if (!this.frustum) {
-      this.frustum = [new Vec3(), new Vec3(), new Vec3(), new Vec3(), new Vec3(), new Vec3()];
+      this.frustum = [
+        Object.assign(new Vec3(), {
+          constant: 0
+        }),
+        Object.assign(new Vec3(), {
+          constant: 0
+        }),
+        Object.assign(new Vec3(), {
+          constant: 0
+        }),
+        Object.assign(new Vec3(), {
+          constant: 0
+        }),
+        Object.assign(new Vec3(), {
+          constant: 0
+        }),
+        Object.assign(new Vec3(), {
+          constant: 0
+        })
+      ];
     }
 
     const m = this.projectionViewMatrix;

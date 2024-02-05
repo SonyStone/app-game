@@ -1,4 +1,4 @@
-import * as m4 from '@webgl/math/mut-m4';
+import * as m4 from '@webgl/math/m4';
 import { create, setFromSpherical, setFromVec3 } from '@webgl/math/spherical';
 import { clamp } from '@webgl/math/utils/clamp';
 import * as v3 from '@webgl/math/v3';

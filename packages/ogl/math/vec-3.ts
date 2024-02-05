@@ -1,10 +1,9 @@
-import { Mat3Tuple } from 'ogl';
 import * as Vec3Func from './functions/vec-3-func';
-import { Mat3 } from './mat-3';
+import { Mat3, Mat3Tuple } from './mat-3';
 import { Mat4 } from './mat-4';
 import type { Quat, QuatTuple } from './quat';
 
-export type Vec3Tuple = [x: number, y: number, z: number];
+export type Vec3Tuple = [x: number, y: number, z: number] | number[];
 
 // @ts-ignore
 export class Vec3 extends Array<number> implements Vec3Tuple {
@@ -186,10 +185,11 @@ export class Vec3 extends Array<number> implements Vec3Tuple {
     return this;
   }
 
-  toArray(a: number[] = [], o: number = 0): number[] {
+  toArray(a: number[] | Float32Array = [], o: number = 0): number[] | Float32Array {
     a[o] = this[0];
     a[o + 1] = this[1];
     a[o + 2] = this[2];
+
     return a;
   }
 

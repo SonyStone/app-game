@@ -1,23 +1,28 @@
+import { AttributeData } from '../core/geometry';
 import * as Mat4Func from './functions/mat-4-func';
+import { QuatTuple } from './quat';
+import { Vec3Tuple } from './vec-3';
 
-export type Mat4Tuple = [
-  m00: number,
-  m01: number,
-  m02: number,
-  m03: number,
-  m10: number,
-  m11: number,
-  m12: number,
-  m13: number,
-  m20: number,
-  m21: number,
-  m22: number,
-  m23: number,
-  m30: number,
-  m31: number,
-  m32: number,
-  m33: number
-];
+export type Mat4Tuple =
+  | [
+      m00: number,
+      m01: number,
+      m02: number,
+      m03: number,
+      m10: number,
+      m11: number,
+      m12: number,
+      m13: number,
+      m20: number,
+      m21: number,
+      m22: number,
+      m23: number,
+      m30: number,
+      m31: number,
+      m32: number,
+      m33: number
+    ]
+  | number[];
 
 export class Mat4 extends Array {
   constructor(
@@ -38,7 +43,9 @@ export class Mat4 extends Array {
     m32 = 0,
     m33 = 1
   ) {
+    // @ts-ignore
     super(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33);
+
     return this;
   }
 
@@ -74,121 +81,160 @@ export class Mat4 extends Array {
     this[15] = v;
   }
 
-  set(m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33) {
-    if (m00.length) return this.copy(m00);
-    Mat4Func.set(this, m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33);
+  set(
+    m00: number | Mat4Tuple,
+    m01: number,
+    m02: number,
+    m03: number,
+    m10: number,
+    m11: number,
+    m12: number,
+    m13: number,
+    m20: number,
+    m21: number,
+    m22: number,
+    m23: number,
+    m30: number,
+    m31: number,
+    m32: number,
+    m33: number
+  ): this {
+    if ((m00 as Mat4Tuple).length) {
+      return this.copy(m00 as Mat4Tuple);
+    }
+    Mat4Func.set(this, m00 as number, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33);
     return this;
   }
 
-  translate(v, m = this) {
+  translate(v: Vec3Tuple, m: Mat4Tuple = this): this {
     Mat4Func.translate(this, m, v);
     return this;
   }
 
-  rotate(v, axis, m = this) {
+  rotate(v: number, axis: Vec3Tuple, m: Mat4Tuple = this): this {
     Mat4Func.rotate(this, m, v, axis);
     return this;
   }
 
-  scale(v, m = this) {
+  scale(v: Vec3Tuple | number, m: Mat4Tuple = this): this {
     Mat4Func.scale(this, m, typeof v === 'number' ? [v, v, v] : v);
     return this;
   }
 
-  add(ma, mb) {
-    if (mb) Mat4Func.add(this, ma, mb);
-    else Mat4Func.add(this, this, ma);
-    return this;
-  }
-
-  sub(ma, mb) {
-    if (mb) Mat4Func.subtract(this, ma, mb);
-    else Mat4Func.subtract(this, this, ma);
-    return this;
-  }
-
-  multiply(ma, mb) {
-    if (!ma.length) {
-      Mat4Func.multiplyScalar(this, this, ma);
-    } else if (mb) {
-      Mat4Func.multiply(this, ma, mb);
+  add(ma: Mat4, mb: Mat4): this {
+    if (mb) {
+      Mat4Func.add(this, ma, mb);
     } else {
-      Mat4Func.multiply(this, this, ma);
+      Mat4Func.add(this, this, ma);
     }
     return this;
   }
 
-  identity() {
+  sub(ma: Mat4, mb: Mat4): this {
+    if (mb) {
+      Mat4Func.subtract(this, ma, mb);
+    } else {
+      Mat4Func.subtract(this, this, ma);
+    }
+    return this;
+  }
+
+  multiply(ma: Mat4Tuple | number, mb?: Mat4Tuple): this {
+    if (!(ma as Mat4Tuple).length) {
+      Mat4Func.multiplyScalar(this, this, ma as number);
+    } else if (mb) {
+      Mat4Func.multiply(this, ma as Mat4Tuple, mb);
+    } else {
+      Mat4Func.multiply(this, this, ma as Mat4Tuple);
+    }
+    return this;
+  }
+
+  identity(): this {
     Mat4Func.identity(this);
     return this;
   }
 
-  copy(m) {
+  copy(m: Mat4Tuple): this {
     Mat4Func.copy(this, m);
     return this;
   }
 
-  fromPerspective({ fov, aspect, near, far } = {}) {
+  fromPerspective({ fov, aspect, near, far }: { fov: number; aspect: number; near: number; far: number }): this {
     Mat4Func.perspective(this, fov, aspect, near, far);
     return this;
   }
 
-  fromOrthogonal({ left, right, bottom, top, near, far }) {
+  fromOrthogonal({
+    left,
+    right,
+    bottom,
+    top,
+    near,
+    far
+  }: {
+    left: number;
+    right: number;
+    bottom: number;
+    top: number;
+    near: number;
+    far: number;
+  }): this {
     Mat4Func.ortho(this, left, right, bottom, top, near, far);
     return this;
   }
 
-  fromQuaternion(q) {
+  fromQuaternion(q: QuatTuple): this {
     Mat4Func.fromQuat(this, q);
     return this;
   }
 
-  setPosition(v) {
+  setPosition(v: Vec3Tuple): this {
     this.x = v[0];
     this.y = v[1];
     this.z = v[2];
     return this;
   }
 
-  inverse(m = this) {
+  inverse(m: Mat4Tuple = this): this {
     Mat4Func.invert(this, m);
     return this;
   }
 
-  compose(q, pos, scale) {
+  compose(q: QuatTuple, pos: Vec3Tuple, scale: Vec3Tuple): this {
     Mat4Func.fromRotationTranslationScale(this, q, pos, scale);
     return this;
   }
 
-  getRotation(q) {
+  getRotation(q: QuatTuple): this {
     Mat4Func.getRotation(q, this);
     return this;
   }
 
-  getTranslation(pos) {
+  getTranslation(pos: Vec3Tuple): this {
     Mat4Func.getTranslation(pos, this);
     return this;
   }
 
-  getScaling(scale) {
+  getScaling(scale: Vec3Tuple): this {
     Mat4Func.getScaling(scale, this);
     return this;
   }
 
-  getMaxScaleOnAxis() {
+  getMaxScaleOnAxis(): number {
     return Mat4Func.getMaxScaleOnAxis(this);
   }
 
-  lookAt(eye, target, up) {
+  lookAt(eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple): this {
     Mat4Func.targetTo(this, eye, target, up);
     return this;
   }
 
-  determinant() {
+  determinant(): number {
     return Mat4Func.determinant(this);
   }
 
-  fromArray(a, o = 0) {
+  fromArray(a: number[] | AttributeData, o: number = 0): this {
     this[0] = a[o];
     this[1] = a[o + 1];
     this[2] = a[o + 2];
@@ -208,7 +254,7 @@ export class Mat4 extends Array {
     return this;
   }
 
-  toArray(a = [], o = 0) {
+  toArray<T extends number[] | AttributeData>(a: T = [] as any as T, o: number = 0): T {
     a[o] = this[0];
     a[o + 1] = this[1];
     a[o + 2] = this[2];
@@ -225,6 +271,7 @@ export class Mat4 extends Array {
     a[o + 13] = this[13];
     a[o + 14] = this[14];
     a[o + 15] = this[15];
+
     return a;
   }
 }

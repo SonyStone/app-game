@@ -78,7 +78,7 @@ export interface RenderState {
   activeTextureUnit: number;
   framebuffer: WebGLFramebuffer | null;
   boundBuffer?: WebGLBuffer | null;
-  uniformLocations: Map<WebGLUniformLocation, number | number[]>;
+  uniformLocations: Map<WebGLUniformLocation, number | number[] | Float32Array>;
   currentProgram: number | null;
   [key: GLenum]: boolean;
 }
@@ -437,7 +437,7 @@ export class Renderer {
       }
 
       if (frustumCull && (node as Mesh).frustumCulled && camera) {
-        if (!camera.frustumIntersectsMesh(node)) {
+        if (!camera.frustumIntersectsMesh(node as Mesh)) {
           return;
         }
       }

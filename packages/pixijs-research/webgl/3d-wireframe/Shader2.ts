@@ -1,16 +1,5 @@
-import * as m4 from '@webgl/math/m4';
-import * as v2 from '@webgl/math/v2';
-import * as v3 from '@webgl/math/v3';
-import * as v4 from '@webgl/math/v4';
-import {
-  GL_BUFFER_TYPE,
-  GL_DATA_TYPE,
-  GL_PROGRAM_PARAMETER,
-  GL_SHADER_TYPE,
-  GL_STATIC_VARIABLES,
-  GL_TEXTURES,
-} from '@webgl/static-variables';
-import { build } from 'vite';
+import { m4, v2, v3, v4 } from '@webgl/math';
+import { GL_BUFFER_TYPE, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
 import { createProgram } from './Shader';
 
 interface Uniform {
@@ -18,10 +7,7 @@ interface Uniform {
   bind(): void;
 }
 
-export function addUniformBuilder(
-  gl: WebGL2RenderingContext,
-  program: WebGLProgram
-) {
+export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProgram) {
   return {
     [GL_DATA_TYPE.FLOAT](name: string) {
       const location = gl.getUniformLocation(program, name);
@@ -36,7 +22,7 @@ export function addUniformBuilder(
         bind() {
           gl.uniform1f(location, this.value);
           return this;
-        },
+        }
       };
     },
     [GL_DATA_TYPE.FLOAT_VEC2](name: string) {
@@ -52,7 +38,7 @@ export function addUniformBuilder(
         bind() {
           gl.uniform2fv(location, this.value);
           return this;
-        },
+        }
       };
     },
     [GL_DATA_TYPE.FLOAT_VEC3](name: string) {
@@ -68,7 +54,7 @@ export function addUniformBuilder(
         bind() {
           gl.uniform3fv(location, this.value);
           return this;
-        },
+        }
       };
     },
     [GL_DATA_TYPE.FLOAT_MAT2](name: string) {
@@ -84,7 +70,7 @@ export function addUniformBuilder(
         bind(value: v4.Vec4) {
           gl.uniformMatrix4fv(location, false, value);
           return this;
-        },
+        }
       };
     },
     [GL_DATA_TYPE.FLOAT_MAT4](name: string) {
@@ -100,24 +86,20 @@ export function addUniformBuilder(
         bind() {
           gl.uniformMatrix4fv(location, false, this.value);
           return this;
-        },
+        }
       };
-    },
+    }
   };
 }
 
 export function createShader(gl: WebGL2RenderingContext) {
   return {
     createProgram(vertexShaderSource: string, fragmentShaderSource: string) {
-      const program = createProgram(
-        gl,
-        vertexShaderSource,
-        fragmentShaderSource
-      );
+      const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);
       gl.useProgram(program);
 
       return new ShaderBuilder(gl, program);
-    },
+    }
   };
 }
 
@@ -156,11 +138,7 @@ class ShaderBuilder {
     const location = gl.getAttribLocation(program, name);
     const buffer = gl.createBuffer();
     gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, buffer);
-    gl.bufferData(
-      GL_BUFFER_TYPE.ARRAY_BUFFER,
-      value,
-      GL_STATIC_VARIABLES.STATIC_DRAW
-    );
+    gl.bufferData(GL_BUFFER_TYPE.ARRAY_BUFFER, value, GL_STATIC_VARIABLES.STATIC_DRAW);
     gl.enableVertexAttribArray(location);
     gl.vertexAttribPointer(location, itemSize, GL_DATA_TYPE.FLOAT, false, 0, 0);
 
@@ -176,20 +154,9 @@ class ShaderBuilder {
       },
       bind() {
         gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, this.buffer);
-        gl.bufferData(
-          GL_BUFFER_TYPE.ARRAY_BUFFER,
-          this.value,
-          GL_STATIC_VARIABLES.STATIC_DRAW
-        );
-        gl.vertexAttribPointer(
-          this.location,
-          this.itemSize,
-          GL_DATA_TYPE.FLOAT,
-          false,
-          0,
-          0
-        );
-      },
+        gl.bufferData(GL_BUFFER_TYPE.ARRAY_BUFFER, this.value, GL_STATIC_VARIABLES.STATIC_DRAW);
+        gl.vertexAttribPointer(this.location, this.itemSize, GL_DATA_TYPE.FLOAT, false, 0, 0);
+      }
     };
 
     this.data[name] = attribute;

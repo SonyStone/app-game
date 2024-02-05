@@ -1,3 +1,7 @@
+import { Mat3Tuple } from '../mat-3';
+import { Mat4Tuple } from '../mat-4';
+import { Vec2Tuple } from '../vec-2';
+
 const EPSILON = 0.000001;
 
 /**
@@ -7,7 +11,7 @@ const EPSILON = 0.000001;
  * @param {vec2} a the source vector
  * @returns {vec2} out
  */
-export function copy(out, a) {
+export function copy(out: Vec2Tuple, a: Vec2Tuple): Vec2Tuple {
   out[0] = a[0];
   out[1] = a[1];
   return out;
@@ -21,7 +25,7 @@ export function copy(out, a) {
  * @param {Number} y Y component
  * @returns {vec2} out
  */
-export function set(out, x, y) {
+export function set(out: Vec2Tuple, x: number, y: number): Vec2Tuple {
   out[0] = x;
   out[1] = y;
   return out;
@@ -35,7 +39,7 @@ export function set(out, x, y) {
  * @param {vec2} b the second operand
  * @returns {vec2} out
  */
-export function add(out, a, b) {
+export function add(out: Vec2Tuple, a: Vec2Tuple, b: Vec2Tuple): Vec2Tuple {
   out[0] = a[0] + b[0];
   out[1] = a[1] + b[1];
   return out;
@@ -49,7 +53,7 @@ export function add(out, a, b) {
  * @param {vec2} b the second operand
  * @returns {vec2} out
  */
-export function subtract(out, a, b) {
+export function subtract(out: Vec2Tuple, a: Vec2Tuple, b: Vec2Tuple): Vec2Tuple {
   out[0] = a[0] - b[0];
   out[1] = a[1] - b[1];
   return out;
@@ -63,7 +67,7 @@ export function subtract(out, a, b) {
  * @param {vec2} b the second operand
  * @returns {vec2} out
  */
-export function multiply(out, a, b) {
+export function multiply(out: Vec2Tuple, a: Vec2Tuple, b: Vec2Tuple): Vec2Tuple {
   out[0] = a[0] * b[0];
   out[1] = a[1] * b[1];
   return out;
@@ -77,7 +81,7 @@ export function multiply(out, a, b) {
  * @param {vec2} b the second operand
  * @returns {vec2} out
  */
-export function divide(out, a, b) {
+export function divide(out: Vec2Tuple, a: Vec2Tuple, b: Vec2Tuple): Vec2Tuple {
   out[0] = a[0] / b[0];
   out[1] = a[1] / b[1];
   return out;
@@ -91,7 +95,7 @@ export function divide(out, a, b) {
  * @param {Number} b amount to scale the vector by
  * @returns {vec2} out
  */
-export function scale(out, a, b) {
+export function scale(out: Vec2Tuple, a: Vec2Tuple, b: number): Vec2Tuple {
   out[0] = a[0] * b;
   out[1] = a[1] * b;
   return out;
@@ -104,7 +108,7 @@ export function scale(out, a, b) {
  * @param {vec2} b the second operand
  * @returns {Number} distance between a and b
  */
-export function distance(a, b) {
+export function distance(a: Vec2Tuple, b: Vec2Tuple): number {
   var x = b[0] - a[0],
     y = b[1] - a[1];
   return Math.sqrt(x * x + y * y);
@@ -117,7 +121,7 @@ export function distance(a, b) {
  * @param {vec2} b the second operand
  * @returns {Number} squared distance between a and b
  */
-export function squaredDistance(a, b) {
+export function squaredDistance(a: Vec2Tuple, b: Vec2Tuple): number {
   var x = b[0] - a[0],
     y = b[1] - a[1];
   return x * x + y * y;
@@ -129,7 +133,7 @@ export function squaredDistance(a, b) {
  * @param {vec2} a vector to calculate length of
  * @returns {Number} length of a
  */
-export function length(a) {
+export function length(a: Vec2Tuple): number {
   var x = a[0],
     y = a[1];
   return Math.sqrt(x * x + y * y);
@@ -141,7 +145,7 @@ export function length(a) {
  * @param {vec2} a vector to calculate squared length of
  * @returns {Number} squared length of a
  */
-export function squaredLength(a) {
+export function squaredLength(a: Vec2Tuple): number {
   var x = a[0],
     y = a[1];
   return x * x + y * y;
@@ -154,7 +158,7 @@ export function squaredLength(a) {
  * @param {vec2} a vector to negate
  * @returns {vec2} out
  */
-export function negate(out, a) {
+export function negate(out: Vec2Tuple, a: Vec2Tuple): Vec2Tuple {
   out[0] = -a[0];
   out[1] = -a[1];
   return out;
@@ -167,7 +171,7 @@ export function negate(out, a) {
  * @param {vec2} a vector to invert
  * @returns {vec2} out
  */
-export function inverse(out, a) {
+export function inverse(out: Vec2Tuple, a: Vec2Tuple): Vec2Tuple {
   out[0] = 1.0 / a[0];
   out[1] = 1.0 / a[1];
   return out;
@@ -180,7 +184,7 @@ export function inverse(out, a) {
  * @param {vec2} a vector to normalize
  * @returns {vec2} out
  */
-export function normalize(out, a) {
+export function normalize(out: Vec2Tuple, a: Vec2Tuple): Vec2Tuple {
   var x = a[0],
     y = a[1];
   var len = x * x + y * y;
@@ -200,7 +204,7 @@ export function normalize(out, a) {
  * @param {vec2} b the second operand
  * @returns {Number} dot product of a and b
  */
-export function dot(a, b) {
+export function dot(a: Vec2Tuple, b: Vec2Tuple): number {
   return a[0] * b[0] + a[1] * b[1];
 }
 
@@ -212,7 +216,7 @@ export function dot(a, b) {
  * @param {vec2} b the second operand
  * @returns {Number} cross product of a and b
  */
-export function cross(a, b) {
+export function cross(a: Vec2Tuple, b: Vec2Tuple): number {
   return a[0] * b[1] - a[1] * b[0];
 }
 
@@ -225,7 +229,7 @@ export function cross(a, b) {
  * @param {Number} t interpolation amount between the two inputs
  * @returns {vec2} out
  */
-export function lerp(out, a, b, t) {
+export function lerp(out: Vec2Tuple, a: Vec2Tuple, b: Vec2Tuple, t: number): Vec2Tuple {
   var ax = a[0],
     ay = a[1];
   out[0] = ax + t * (b[0] - ax);
@@ -238,10 +242,10 @@ export function lerp(out, a, b, t) {
  *
  * @param {vec2} out the receiving vector
  * @param {vec2} a the vector to transform
- * @param {mat2} m matrix to transform with
+ * @param {mat3} m matrix to transform with
  * @returns {vec2} out
  */
-export function transformMat2(out, a, m) {
+export function transformMat2(out: Vec2Tuple, a: Vec2Tuple, m: Mat3Tuple): Vec2Tuple {
   var x = a[0],
     y = a[1];
   out[0] = m[0] * x + m[2] * y;
@@ -257,7 +261,7 @@ export function transformMat2(out, a, m) {
  * @param {mat2d} m matrix to transform with
  * @returns {vec2} out
  */
-export function transformMat2d(out, a, m) {
+export function transformMat2d(out: Vec2Tuple, a: Vec2Tuple, m: number[]): Vec2Tuple {
   var x = a[0],
     y = a[1];
   out[0] = m[0] * x + m[2] * y + m[4];
@@ -274,7 +278,7 @@ export function transformMat2d(out, a, m) {
  * @param {mat3} m matrix to transform with
  * @returns {vec2} out
  */
-export function transformMat3(out, a, m) {
+export function transformMat3(out: Vec2Tuple, a: Vec2Tuple, m: Mat3Tuple) {
   var x = a[0],
     y = a[1];
   out[0] = m[0] * x + m[3] * y + m[6];
@@ -292,7 +296,7 @@ export function transformMat3(out, a, m) {
  * @param {mat4} m matrix to transform with
  * @returns {vec2} out
  */
-export function transformMat4(out, a, m) {
+export function transformMat4(out: Vec2Tuple, a: Vec2Tuple, m: Mat4Tuple) {
   let x = a[0];
   let y = a[1];
   out[0] = m[0] * x + m[4] * y + m[12];
@@ -307,6 +311,6 @@ export function transformMat4(out, a, m) {
  * @param {vec2} b The second vector.
  * @returns {Boolean} True if the vectors are equal, false otherwise.
  */
-export function exactEquals(a, b) {
+export function exactEquals(a: Vec2Tuple, b: Vec2Tuple): boolean {
   return a[0] === b[0] && a[1] === b[1];
 }

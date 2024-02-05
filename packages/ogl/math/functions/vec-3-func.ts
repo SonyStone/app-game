@@ -1,8 +1,7 @@
-import { Mat4Tuple } from 'ogl';
 import { Mat3, Mat3Tuple } from '../mat-3';
-import { Mat4 } from '../mat-4';
+import { Mat4, Mat4Tuple } from '../mat-4';
 import { Quat, QuatTuple } from '../quat';
-import type { Vec3, Vec3Tuple } from '../vec-3';
+import type { Vec3Tuple } from '../vec-3';
 
 const EPSILON = 0.000001;
 
@@ -12,7 +11,7 @@ const EPSILON = 0.000001;
  * @param {vec3} a vector to calculate length of
  * @returns {Number} length of a
  */
-export function length(a: Vec3Tuple | Vec3): number {
+export function length(a: Vec3Tuple): number {
   let x = a[0];
   let y = a[1];
   let z = a[2];
@@ -26,7 +25,7 @@ export function length(a: Vec3Tuple | Vec3): number {
  * @param {vec3} a the source vector
  * @returns {vec3} out
  */
-export function copy<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3): T {
+export function copy<T extends Vec3Tuple>(out: T, a: Vec3Tuple): T {
   out[0] = a[0];
   out[1] = a[1];
   out[2] = a[2];
@@ -42,7 +41,7 @@ export function copy<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3): T
  * @param {Number} z Z component
  * @returns {vec3} out
  */
-export function set<T extends Vec3Tuple | Vec3>(out: T, x: number, y: number, z: number): T {
+export function set<T extends Vec3Tuple>(out: T, x: number, y: number, z: number): T {
   out[0] = x;
   out[1] = y;
   out[2] = z;
@@ -57,7 +56,7 @@ export function set<T extends Vec3Tuple | Vec3>(out: T, x: number, y: number, z:
  * @param {vec3} b the second operand
  * @returns {vec3} out
  */
-export function add<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): T {
+export function add<T extends Vec3Tuple>(out: T, a: Vec3Tuple, b: Vec3Tuple): T {
   out[0] = a[0] + b[0];
   out[1] = a[1] + b[1];
   out[2] = a[2] + b[2];
@@ -72,7 +71,7 @@ export function add<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b: 
  * @param {vec3} b the second operand
  * @returns {vec3} out
  */
-export function subtract<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): T {
+export function subtract<T extends Vec3Tuple>(out: T, a: Vec3Tuple, b: Vec3Tuple): T {
   out[0] = a[0] - b[0];
   out[1] = a[1] - b[1];
   out[2] = a[2] - b[2];
@@ -87,7 +86,7 @@ export function subtract<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3
  * @param {vec3} b the second operand
  * @returns {vec3} out
  */
-export function multiply<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): T {
+export function multiply<T extends Vec3Tuple>(out: T, a: Vec3Tuple, b: Vec3Tuple): T {
   out[0] = a[0] * b[0];
   out[1] = a[1] * b[1];
   out[2] = a[2] * b[2];
@@ -102,7 +101,7 @@ export function multiply<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3
  * @param {vec3} b the second operand
  * @returns {vec3} out
  */
-export function divide<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): T {
+export function divide<T extends Vec3Tuple>(out: T, a: Vec3Tuple, b: Vec3Tuple): T {
   out[0] = a[0] / b[0];
   out[1] = a[1] / b[1];
   out[2] = a[2] / b[2];
@@ -117,7 +116,7 @@ export function divide<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, 
  * @param {Number} b amount to scale the vector by
  * @returns {vec3} out
  */
-export function scale<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b: number): T {
+export function scale<T extends Vec3Tuple>(out: T, a: Vec3Tuple, b: number): T {
   out[0] = a[0] * b;
   out[1] = a[1] * b;
   out[2] = a[2] * b;
@@ -131,7 +130,7 @@ export function scale<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b
  * @param {vec3} b the second operand
  * @returns {Number} distance between a and b
  */
-export function distance(a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): number {
+export function distance(a: Vec3Tuple, b: Vec3Tuple): number {
   let x = b[0] - a[0];
   let y = b[1] - a[1];
   let z = b[2] - a[2];
@@ -145,7 +144,7 @@ export function distance(a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): number {
  * @param {vec3} b the second operand
  * @returns {Number} squared distance between a and b
  */
-export function squaredDistance(a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): number {
+export function squaredDistance(a: Vec3Tuple, b: Vec3Tuple): number {
   let x = b[0] - a[0];
   let y = b[1] - a[1];
   let z = b[2] - a[2];
@@ -158,7 +157,7 @@ export function squaredDistance(a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): numbe
  * @param {vec3} a vector to calculate squared length of
  * @returns {Number} squared length of a
  */
-export function squaredLength(a: Vec3Tuple | Vec3): number {
+export function squaredLength(a: Vec3Tuple): number {
   let x = a[0];
   let y = a[1];
   let z = a[2];
@@ -172,7 +171,7 @@ export function squaredLength(a: Vec3Tuple | Vec3): number {
  * @param {vec3} a vector to negate
  * @returns {vec3} out
  */
-export function negate<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3): T {
+export function negate<T extends Vec3Tuple>(out: T, a: Vec3Tuple): T {
   out[0] = -a[0];
   out[1] = -a[1];
   out[2] = -a[2];
@@ -186,7 +185,7 @@ export function negate<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3):
  * @param {vec3} a vector to invert
  * @returns {vec3} out
  */
-export function inverse<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3): T {
+export function inverse<T extends Vec3Tuple>(out: T, a: Vec3Tuple): T {
   out[0] = 1.0 / a[0];
   out[1] = 1.0 / a[1];
   out[2] = 1.0 / a[2];
@@ -200,7 +199,7 @@ export function inverse<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3)
  * @param {vec3} a vector to normalize
  * @returns {vec3} out
  */
-export function normalize<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3): T {
+export function normalize<T extends Vec3Tuple>(out: T, a: Vec3Tuple): T {
   let x = a[0];
   let y = a[1];
   let z = a[2];
@@ -222,7 +221,7 @@ export function normalize<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec
  * @param {vec3} b the second operand
  * @returns {Number} dot product of a and b
  */
-export function dot(a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): number {
+export function dot(a: Vec3Tuple, b: Vec3Tuple): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
@@ -234,7 +233,7 @@ export function dot(a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): number {
  * @param {vec3} b the second operand
  * @returns {vec3} out
  */
-export function cross<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): Vec3Tuple | Vec3 {
+export function cross<T extends Vec3Tuple>(out: T, a: Vec3Tuple, b: Vec3Tuple): Vec3Tuple {
   let ax = a[0],
     ay = a[1],
     az = a[2];
@@ -257,7 +256,7 @@ export function cross<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b
  * @param {Number} t interpolation amount between the two inputs
  * @returns {vec3} out
  */
-export function lerp<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3, t: number): T {
+export function lerp<T extends Vec3Tuple>(out: T, a: Vec3Tuple, b: Vec3Tuple, t: number): T {
   let ax = a[0];
   let ay = a[1];
   let az = a[2];
@@ -277,7 +276,7 @@ export function lerp<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, b:
  * @param {mat4} m matrix to transform with
  * @returns {vec3} out
  */
-export function transformMat4<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, m: Mat4 | Mat4Tuple): T {
+export function transformMat4<T extends Vec3Tuple>(out: T, a: Vec3Tuple, m: Mat4 | Mat4Tuple): T {
   let x = a[0],
     y = a[1],
     z = a[2];
@@ -294,7 +293,7 @@ export function transformMat4<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple |
  * Same as above but doesn't apply translation.
  * Useful for rays.
  */
-export function scaleRotateMat4<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, m: Mat4 | Mat4Tuple): T {
+export function scaleRotateMat4<T extends Vec3Tuple>(out: T, a: Vec3Tuple, m: Mat4 | Mat4Tuple): T {
   let x = a[0];
   let y = a[1];
   let z = a[2];
@@ -316,7 +315,7 @@ export function scaleRotateMat4<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple
  * @param {mat3} m the 3x3 matrix to transform with
  * @returns {vec3} out
  */
-export function transformMat3<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, m: Mat3 | Mat3Tuple): T {
+export function transformMat3<T extends Vec3Tuple>(out: T, a: Vec3Tuple, m: Mat3 | Mat3Tuple): T {
   let x = a[0],
     y = a[1],
     z = a[2];
@@ -335,7 +334,7 @@ export function transformMat3<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple |
  * @param {quat} q quaternion to transform with
  * @returns {vec3} out
  */
-export function transformQuat<T extends Vec3Tuple | Vec3>(out: T, a: Vec3Tuple | Vec3, q: Quat | QuatTuple): T {
+export function transformQuat<T extends Vec3Tuple>(out: T, a: Vec3Tuple, q: Quat | QuatTuple): T {
   // benchmarks: https://jsperf.com/quaternion-transform-vec3-implementations-fixed
 
   let x = a[0],
@@ -380,7 +379,7 @@ export const angle = (function () {
   const tempA: Vec3Tuple = [0, 0, 0];
   const tempB: Vec3Tuple = [0, 0, 0];
 
-  return function (a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): number {
+  return function (a: Vec3Tuple, b: Vec3Tuple): number {
     copy(tempA, a);
     copy(tempB, b);
 
@@ -406,6 +405,6 @@ export const angle = (function () {
  * @param {vec3} b The second vector.
  * @returns {Boolean} True if the vectors are equal, false otherwise.
  */
-export function exactEquals(a: Vec3Tuple | Vec3, b: Vec3Tuple | Vec3): boolean {
+export function exactEquals(a: Vec3Tuple, b: Vec3Tuple): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }

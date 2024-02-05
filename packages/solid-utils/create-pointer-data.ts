@@ -1,7 +1,7 @@
-import * as v2 from "@webgl/math/v2";
-import { createMemo } from "solid-js";
+import { v2 } from '@webgl/math';
+import { createMemo } from 'solid-js';
 
-import { createPointerStream } from "./create-pointer-stream";
+import { createPointerStream } from './create-pointer-stream';
 
 export function createPointerData(element: HTMLElement) {
   const pointer$ = createPointerStream(element);
@@ -13,7 +13,7 @@ export function createPointerData(element: HTMLElement) {
     tilt: v2.create(),
     angle: v2.create(),
     pressure: 0,
-    distance: 0,
+    distance: 0
   };
 
   return createMemo(
@@ -30,48 +30,38 @@ export function createPointerData(element: HTMLElement) {
       const y = event.pageY - offset_y;
 
       switch (event?.type) {
-        case "pointerdown":
-          v2.set(x, y, pointerData.start);
-          v2.set(x, y, pointerData.prev);
-          v2.set(x, y, pointerData.move);
+        case 'pointerdown':
+          v2.set(pointerData.start, x, y);
+          v2.set(pointerData.prev, x, y);
+          v2.set(pointerData.move, x, y);
           pointerData.distance = 0;
           break;
-        case "pointermove":
-          v2.copy(pointerData.move, pointerData.prev);
-          v2.set(x, y, pointerData.move);
-          pointerData.distance = v2.distanceSq(
-            pointerData.move,
-            pointerData.prev
-          );
+        case 'pointermove':
+          v2.copy(pointerData.prev, pointerData.move);
+          v2.set(pointerData.move, x, y);
+          pointerData.distance = v2.distanceSquared(pointerData.move, pointerData.prev);
           break;
         default:
-          v2.set(x, y, pointerData.move);
-          v2.set(x, y, pointerData.end);
-          pointerData.distance = v2.distanceSq(
-            pointerData.move,
-            pointerData.prev
-          );
+          v2.set(pointerData.move, x, y);
+          v2.set(pointerData.end, x, y);
+          pointerData.distance = v2.distanceSquared(pointerData.move, pointerData.prev);
           break;
       }
 
-      if (event.pointerType === "pen") {
+      if (event.pointerType === 'pen') {
         pointerData.pressure = event.pressure;
-        v2.set(event.tiltX, event.tiltY, pointerData.tilt);
-        v2.set(
-          (event as any).altitudeAngle,
-          (event as any).azimuthAngle,
-          pointerData.angle
-        );
+        v2.set(pointerData.tilt, event.tiltX, event.tiltY);
+        v2.set(pointerData.angle, (event as any).altitudeAngle, (event as any).azimuthAngle);
       } else {
         pointerData.pressure = 1;
-        v2.set(0, 0, pointerData.tilt);
+        v2.set(pointerData.tilt, 0, 0);
       }
 
       return pointerData;
     },
     pointerData,
     {
-      equals: (_, next) => next.distance === 0,
+      equals: (_, next) => next.distance === 0
     }
   );
 }

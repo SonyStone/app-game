@@ -1,7 +1,23 @@
-import { Geometry } from '../core/geometry';
+import { AttributeMap, Geometry } from '../core/geometry';
+import { OGLRenderingContext } from '../core/renderer';
 
+export interface PlaneOptions {
+  width: number;
+  height: number;
+  widthSegments: number;
+  heightSegments: number;
+  attributes: AttributeMap;
+}
+
+/**
+ * A plane geometry.
+ * @see {@link https://github.com/oframe/ogl/blob/master/src/extras/Plane.js | Source}
+ */
 export class Plane extends Geometry {
-  constructor(gl, { width = 1, height = 1, widthSegments = 1, heightSegments = 1, attributes = {} } = {}) {
+  constructor(
+    gl: OGLRenderingContext,
+    { width = 1, height = 1, widthSegments = 1, heightSegments = 1, attributes = {} }: Partial<PlaneOptions> = {}
+  ) {
     const wSegs = widthSegments;
     const hSegs = heightSegments;
 
@@ -28,23 +44,23 @@ export class Plane extends Geometry {
   }
 
   static buildPlane(
-    position,
-    normal,
-    uv,
-    index,
-    width,
-    height,
-    depth,
-    wSegs,
-    hSegs,
-    u = 0,
-    v = 1,
-    w = 2,
-    uDir = 1,
-    vDir = -1,
-    i = 0,
-    ii = 0
-  ) {
+    position: Float32Array,
+    normal: Float32Array,
+    uv: Float32Array,
+    index: Uint32Array | Uint16Array,
+    width: number,
+    height: number,
+    depth: number,
+    wSegs: number,
+    hSegs: number,
+    u: number = 0,
+    v: number = 1,
+    w: number = 2,
+    uDir: number = 1,
+    vDir: number = -1,
+    i: number = 0,
+    ii: number = 0
+  ): void {
     const io = i;
     const segW = width / wSegs;
     const segH = height / hSegs;

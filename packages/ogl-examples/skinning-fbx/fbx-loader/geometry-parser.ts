@@ -1,11 +1,7 @@
-import { Euler, Mat4, Vec3, Vec3Tuple } from 'ogl';
+import { Euler, Mat4, Vec3 } from '@packages/ogl';
+import { Vec3Tuple } from '@packages/ogl/math/vec-3';
 import * as FBX from './fbx-tree';
-import {
-  ConnectionRelationships,
-  Deformers,
-  MorphTarget,
-  Skeleton,
-} from './fbx-tree-parser';
+import { ConnectionRelationships, Deformers, MorphTarget, Skeleton } from './fbx-tree-parser';
 import { clone, extractRotation, makeRotationFromEuler } from './mat4';
 import { degToRad } from './math-utils';
 
@@ -22,12 +18,7 @@ export function geometryParser(
 
     for (const nodeID in geoNodes) {
       const relationships = connections.get(parseInt(nodeID))!;
-      const geo = parseGeometry(
-        fbxTree,
-        relationships,
-        geoNodes[nodeID],
-        deformers
-      );
+      const geo = parseGeometry(fbxTree, relationships, geoNodes[nodeID], deformers);
 
       geometryMap.set(parseInt(nodeID), geo);
     }
@@ -95,16 +86,13 @@ parseMeshGeometry(
   // don't create geometry if it is not associated with any models
   if (modelNodes.length === 0) return;
 
-  const skeleton = relationships.children.reduce(
-    (skeleton: Skeleton | undefined, child) => {
-      if (skeletons[child.ID] !== undefined) {
-        skeleton = skeletons[child.ID];
-      }
+  const skeleton = relationships.children.reduce((skeleton: Skeleton | undefined, child) => {
+    if (skeletons[child.ID] !== undefined) {
+      skeleton = skeletons[child.ID];
+    }
 
-      return skeleton;
-    },
-    undefined
-  );
+    return skeleton;
+  }, undefined);
 
   relationships.children.forEach(function (child) {
     if (deformers.morphTargets[child.ID] !== undefined) {
@@ -153,14 +141,12 @@ function getEulerOrder(order: number): EulerOrder {
     'XZY', // -> YZX extrinsic
     'ZXY', // -> YXZ extrinsic
     'YXZ', // -> ZXY extrinsic
-    'XYZ', // -> ZYX extrinsic
+    'XYZ' // -> ZYX extrinsic
     //'SphericXYZ', // not possible to support
   ];
 
   if (order === 6) {
-    console.warn(
-      'THREE.FBXLoader: unsupported Euler Order: Spherical XYZ. Animations and rotations may be incorrect.'
-    );
+    console.warn('THREE.FBXLoader: unsupported Euler Order: Spherical XYZ. Animations and rotations may be incorrect.');
     return enums[0] as EulerOrder;
   }
 
@@ -192,8 +178,7 @@ function generateTransform(transformData: TransformData) {
 
   const inheritType = transformData.inheritType ? transformData.inheritType : 0;
 
-  if (transformData.translation)
-    lTranslationM.setPosition(tempVec.fromArray(transformData.translation));
+  if (transformData.translation) lTranslationM.setPosition(tempVec.fromArray(transformData.translation));
 
   if (transformData.preRotation) {
     tempEuler.fromArray(transformData.preRotation.map(degToRad));
@@ -214,8 +199,7 @@ function generateTransform(transformData: TransformData) {
     lPostRotationM.inverse();
   }
 
-  if (transformData.scale)
-    lScalingM.scale(tempVec.fromArray(transformData.scale));
+  if (transformData.scale) lScalingM.scale(tempVec.fromArray(transformData.scale));
 
   // Pivots and offsets
   if (transformData.scalingOffset) {
@@ -225,9 +209,7 @@ function generateTransform(transformData: TransformData) {
     lScalingPivotM.setPosition(tempVec.fromArray(transformData.scalingPivot));
   }
   if (transformData.rotationOffset) {
-    lRotationOffsetM.setPosition(
-      tempVec.fromArray(transformData.rotationOffset)
-    );
+    lRotationOffsetM.setPosition(tempVec.fromArray(transformData.rotationOffset));
   }
   if (transformData.rotationPivot) {
     lRotationPivotM.setPosition(tempVec.fromArray(transformData.rotationPivot));
@@ -239,9 +221,7 @@ function generateTransform(transformData: TransformData) {
     lParentGX.copy(transformData.parentMatrixWorld);
   }
 
-  const lLRM = clone(lPreRotationM)
-    .multiply(lRotationM)
-    .multiply(lPostRotationM);
+  const lLRM = clone(lPreRotationM).multiply(lRotationM).multiply(lPostRotationM);
   // Global Rotation
   const lParentGRM = new Mat4();
   extractRotation(lParentGRM, lParentGX);
@@ -257,29 +237,15 @@ function generateTransform(transformData: TransformData) {
   const lGlobalRS = new Mat4();
 
   if (inheritType === 0) {
-    lGlobalRS
-      .copy(lParentGRM)
-      .multiply(lLRM)
-      .multiply(lParentGSM)
-      .multiply(lLSM);
+    lGlobalRS.copy(lParentGRM).multiply(lLRM).multiply(lParentGSM).multiply(lLSM);
   } else if (inheritType === 1) {
-    lGlobalRS
-      .copy(lParentGRM)
-      .multiply(lParentGSM)
-      .multiply(lLRM)
-      .multiply(lLSM);
+    lGlobalRS.copy(lParentGRM).multiply(lParentGSM).multiply(lLRM).multiply(lLSM);
   } else {
-    const lParentLSM = new Mat4().scale(
-      new Vec3().setFromMatrixScale(lParentLX)
-    );
+    const lParentLSM = new Mat4().scale(new Vec3().setFromMatrixScale(lParentLX));
     const lParentLSM_inv = clone(lParentLSM).inverse();
     const lParentGSM_noLocal = clone(lParentGSM).multiply(lParentLSM_inv);
 
-    lGlobalRS
-      .copy(lParentGRM)
-      .multiply(lLRM)
-      .multiply(lParentGSM_noLocal)
-      .multiply(lLSM);
+    lGlobalRS.copy(lParentGRM).multiply(lLRM).multiply(lParentGSM_noLocal).multiply(lLSM);
   }
 
   const lRotationPivotM_inv = clone(lRotationPivotM).inverse();
@@ -299,9 +265,7 @@ function generateTransform(transformData: TransformData) {
 
   const lLocalTWithAllPivotAndOffsetInfo = new Mat4().copyPosition(lTransform);
 
-  const lGlobalTranslation = clone(lParentGX).multiply(
-    lLocalTWithAllPivotAndOffsetInfo
-  );
+  const lGlobalTranslation = clone(lParentGX).multiply(lLocalTWithAllPivotAndOffsetInfo);
   lGlobalT.copyPosition(lGlobalTranslation);
 
   lTransform = lGlobalT.clone().multiply(lGlobalRS);

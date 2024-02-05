@@ -31,8 +31,9 @@ export default function GeometricAlgebra() {
   function Line1() {
     const v_1 = v2.create(1, 0);
     const v_2 = v2.create(0, 1);
+    const v_3 = v3.create();
 
-    const l = `cross product |e1 x e2| =${v3.length(v2.cross(v_1, v_2))}`;
+    const l = `cross product |e1 x e2| =${v3.length(v2.cross(v_3, v_1, v_2))}`;
 
     return (
       <>
@@ -73,7 +74,9 @@ export default function GeometricAlgebra() {
       return v2.create(a, b);
     });
 
-    const text1 = createMemo(() => `cross product |a × b| = ${v3.length(v2.cross(v_1(), v_2())).toFixed(4)}`);
+    const text1 = createMemo(
+      () => `cross product |a × b| = ${v3.length(v2.cross(v3.create(), v_1(), v_2())).toFixed(4)}`
+    );
     const text2 = createMemo(
       () => `outer product a ∧ b = (${(v_1()[0] * v_2()[1] - v_1()[1] * v_2()[0]).toFixed(4)}) (e1 ∧ e2)`
     );

@@ -1,4 +1,4 @@
-import { Camera, Orbit, Renderer, Transform } from 'ogl';
+import { Camera, Orbit, Renderer, Transform } from '@packages/ogl';
 
 import mariaWProp from './Maria WProp J J Ong.fbx?url';
 
@@ -12,7 +12,7 @@ export default function App() {
   const camera = new Camera(gl, { fov: 35 });
   camera.position.set(6, 2, 6);
 
-  const controls = new Orbit(camera);
+  const controls = new (Orbit as any)(camera);
 
   function resize() {
     renderer.setSize(window.innerWidth, window.innerHeight);

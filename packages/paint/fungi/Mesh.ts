@@ -1,27 +1,19 @@
-import { GL_BUFFER_TYPE } from "@webgl/static-variables";
-import { IBuffer } from "./Buffer";
-import { create_vao } from "./Vao";
+import { GL_BUFFER_TYPE } from '@webgl/static-variables';
+import { IBuffer } from './Buffer';
+import { createVAO } from './vao';
 
 export interface IMesh {
   vao: WebGLVertexArrayObject;
-  element_cnt: number;
-  element_type: number;
-  instance_cnt: number;
+  elementCount: number;
+  elementType: number;
+  instanceCount: number;
   instanced: boolean;
   buffers: Map<string, IBuffer>;
   name: string;
 }
 
-export function from_buffer_config(
-  gl: Pick<
-    WebGL2RenderingContext,
-    | "createVertexArray"
-    | "bindVertexArray"
-    | "bindBuffer"
-    | "enableVertexAttribArray"
-    | "vertexAttribPointer"
-    | "vertexAttribDivisor"
-  >,
+export function fromBufferConfig(
+  gl: WebGL2RenderingContext,
   config: {
     name: string;
     buffer: IBuffer;
@@ -57,11 +49,11 @@ export function from_buffer_config(
 
   return {
     name,
-    vao: create_vao(gl, config),
-    element_cnt,
-    element_type,
-    instance_cnt,
+    vao: createVAO(gl, config),
+    elementCount: element_cnt,
+    elementType: element_type,
+    instanceCount: instance_cnt,
     instanced,
-    buffers,
+    buffers
   };
 }
