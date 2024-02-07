@@ -1,6 +1,4 @@
-import * as m4 from '@webgl/math/m4';
-import * as m3 from '@webgl/math/m3';
-import * as m2 from '@webgl/math/m2';
+import { m3, m4 } from '@webgl/math';
 import { GL_DATA_TYPE } from '@webgl/static-variables';
 
 /**
@@ -13,14 +11,7 @@ import { GL_DATA_TYPE } from '@webgl/static-variables';
 export function defaultValue(
   type: GL_DATA_TYPE,
   size: number
-):
-  | number
-  | number[]
-  | Float32Array
-  | Int32Array
-  | Uint32Array
-  | boolean
-  | boolean[] {
+): number | number[] | Float32Array | Int32Array | Uint32Array | boolean | boolean[] {
   switch (type) {
     case GL_DATA_TYPE.BOOL:
       return false;
@@ -61,8 +52,8 @@ export function defaultValue(
     case GL_DATA_TYPE.BOOL_VEC4:
       return booleanArray(4 * size);
 
-    case GL_DATA_TYPE.FLOAT_MAT2:
-      return m2.identity();
+    // case GL_DATA_TYPE.FLOAT_MAT2:
+    //   return m2.identity();
     case GL_DATA_TYPE.FLOAT_MAT3:
       return m3.identity();
     case GL_DATA_TYPE.FLOAT_MAT4:

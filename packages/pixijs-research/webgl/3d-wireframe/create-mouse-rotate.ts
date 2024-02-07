@@ -1,4 +1,4 @@
-import * as v2 from '@webgl/math/mut-v2';
+import { v2 } from '@webgl/math';
 import { createSignal, onCleanup } from 'solid-js';
 
 export function createMouseRotate(element: HTMLElement) {
