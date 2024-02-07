@@ -1,6 +1,6 @@
 import { GL_BUFFER_TYPE, GL_DRAW_ARRAYS_MODE } from '@webgl/static-variables';
 import { fromTypeArray } from './Buffer';
-import { createVAO } from './vao';
+import { createVAO } from './vao-2';
 
 function getWireframeIndex(array: Uint16Array) {
   const indices = [];

@@ -1,6 +1,6 @@
 import { GL_BUFFER_TYPE } from '@webgl/static-variables';
 import { IBuffer } from './Buffer';
-import { createVAO } from './vao';
+import { createVAO } from './vao-2';
 
 export interface IMesh {
   vao: WebGLVertexArrayObject;
