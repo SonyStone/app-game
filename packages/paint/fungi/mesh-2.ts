@@ -34,6 +34,8 @@ export function fromBufferConfig(
   let element_type = 0;
 
   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //
+  //
   // Basic Configuration
   for (const i of config) {
     buffers.set(i.name, i.buffer); // Save Buffer to Mesh

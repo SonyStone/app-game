@@ -2,7 +2,7 @@ import { createPointerData } from '@utils/create-pointer-data';
 import { m4, v2 } from '@webgl/math';
 import { GL_DRAW_ARRAYS_MODE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
 import { createEffect } from 'solid-js';
-import { IMesh } from './fungi/mesh';
+import { IMesh } from './fungi/mesh-2';
 import { postQuadNDC } from './quads-2';
 
 import drawShaderFragSrc from './draw-shader.frag?raw';

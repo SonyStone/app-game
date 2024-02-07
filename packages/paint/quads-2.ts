@@ -1,6 +1,5 @@
 import { newArray, newElement } from './fungi/Buffer';
-import type { IMesh } from './fungi/mesh';
-import { fromBufferConfig } from './fungi/mesh';
+import { fromBufferConfig, type IMesh } from './fungi/mesh-2';
 
 /**
  * Small quad for rendering brush
