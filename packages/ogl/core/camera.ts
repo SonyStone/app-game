@@ -110,7 +110,7 @@ export class Camera extends Transform {
     return this;
   }
 
-  lookAt(target: Vec3 | Vec3Tuple): this {
+  lookAt(target: Vec3Tuple): this {
     super.lookAt(target, true);
     return this;
   }

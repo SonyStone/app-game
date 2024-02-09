@@ -1,5 +1,5 @@
 import { Vec2 } from './v2';
-import { Vec3 } from './v3';
+import { Tuple } from './v3';
 
 /**
  *
@@ -52,12 +52,7 @@ export function setDefaultType(ctor: typeof VecType) {
  * @param {number} [w] Initial w value.
  * @return {Vec4} the created vector
  */
-export function create(
-  x: number = 0,
-  y: number = 0,
-  z: number = 0,
-  w: number = 0
-): Vec4 {
+export function create(x: number = 0, y: number = 0, z: number = 0, w: number = 0): Vec4 {
   const dst = new VecType(4);
 
   dst[0] = x;
@@ -77,13 +72,7 @@ export function create(
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} the created vector
  */
-export function set(
-  x: number = 0,
-  y: number = 0,
-  z: number = 0,
-  w: number = 0,
-  dst: Vec4 = new VecType(4)
-): Vec4 {
+export function set(x: number = 0, y: number = 0, z: number = 0, w: number = 0, dst: Vec4 = new VecType(4)): Vec4 {
   dst[0] = x;
   dst[1] = y;
   dst[2] = z;
@@ -92,15 +81,15 @@ export function set(
   return dst;
 }
 
-export function x(a: Vec4 | Vec3 | Vec2): number {
+export function x(a: Vec4 | Tuple | Vec2): number {
   return a[0];
 }
 
-export function y(a: Vec4 | Vec3 | Vec2): number {
+export function y(a: Vec4 | Tuple | Vec2): number {
   return a[1];
 }
 
-export function z(a: Vec4 | Vec3): number {
+export function z(a: Vec4 | Tuple): number {
   return a[2];
 }
 
@@ -150,12 +139,7 @@ export function subtract(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} The linear interpolated result.
  */
-export function lerp(
-  a: Vec4,
-  b: Vec4,
-  t: number,
-  dst: Vec4 = new VecType(4)
-): Vec4 {
+export function lerp(a: Vec4, b: Vec4, t: number, dst: Vec4 = new VecType(4)): Vec4 {
   dst[0] = a[0] + t * (b[0] - a[0]);
   dst[1] = a[1] + t * (b[1] - a[1]);
   dst[2] = a[2] + t * (b[2] - a[2]);
@@ -174,12 +158,7 @@ export function lerp(
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} the linear interpolated result.
  */
-export function lerpV(
-  a: Vec4,
-  b: Vec4,
-  t: Vec4,
-  dst: Vec4 = new VecType(4)
-): Vec4 {
+export function lerpV(a: Vec4, b: Vec4, t: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
   dst[0] = a[0] + t[0] * (b[0] - a[0]);
   dst[1] = a[1] + t[1] * (b[1] - a[1]);
   dst[2] = a[2] + t[2] * (b[2] - a[2]);
@@ -231,11 +210,7 @@ export function min(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} The scaled vector.
  */
-export function mulScalar(
-  v: Vec4,
-  k: number,
-  dst: Vec4 = new VecType(4)
-): Vec4 {
+export function mulScalar(v: Vec4, k: number, dst: Vec4 = new VecType(4)): Vec4 {
   dst[0] = v[0] * k;
   dst[1] = v[1] * k;
   dst[2] = v[2] * k;
@@ -251,11 +226,7 @@ export function mulScalar(
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} The scaled vector.
  */
-export function divScalar(
-  v: Vec4,
-  k: number,
-  dst: Vec4 = new VecType(4)
-): Vec4 {
+export function divScalar(v: Vec4, k: number, dst: Vec4 = new VecType(4)): Vec4 {
   dst[0] = v[0] / k;
   dst[1] = v[1] / k;
   dst[2] = v[2] / k;

@@ -16,8 +16,8 @@ interface Camera {
   projection: m4.Mat4;
   // transform: m4.Mat4,
   inversePosition: m4.Mat4;
-  offset: v3.Vec3;
-  target: v3.Vec3;
+  offset: v3.Tuple;
+  target: v3.Tuple;
   spherical: Spherical;
 }
 

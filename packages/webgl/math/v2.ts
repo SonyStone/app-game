@@ -108,7 +108,7 @@ export const NEG_Y: Readonly<Vec2> = create(0, -1);
 /** ↓ */
 export const DOWN: Readonly<Vec2> = NEG_Y;
 
-export const extend = (v: Readonly<Vec2>, z: number): v3.Vec3 => {
+export const extend = (v: Readonly<Vec2>, z: number): v3.Tuple => {
   return v3.create(v[0], v[1], z);
 };
 
@@ -229,7 +229,7 @@ export const divScalar = (self: Vec2, rhs: number): Vec2 => {
  * @param a Operand vector.
  * @param b Operand vector.
  */
-export const cross = (self: v3.Vec3, a: Readonly<Vec2>, b: Readonly<Vec2>): v3.Vec3 => {
+export const cross = (self: v3.Tuple, a: Readonly<Vec2>, b: Readonly<Vec2>): v3.Tuple => {
   const t2 = a[0] * b[1] - a[1] * b[0];
 
   self[0] = 0;

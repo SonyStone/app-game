@@ -9,7 +9,7 @@ import drawShaderFragSrc from './draw-shader.frag?raw';
 import drawShaderVertSrc from './draw-shader.vert?raw';
 
 import { createShaderProgram } from './fungi/create-shader-program';
-import { bindFramebuffer, createFramebufferMap, unbindFramebuffer } from './fungi/fbo-2';
+import { bindFramebuffer, createFramebufferMap, unbindFramebuffer } from './fungi/fbo';
 import {
   clearScreenBuffer,
   createWebglContext,

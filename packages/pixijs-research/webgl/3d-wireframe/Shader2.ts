@@ -47,7 +47,7 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
       return {
         name,
         value: v3.create(0, 0, 0),
-        set(value: v3.Vec3) {
+        set(value: v3.Tuple) {
           this.value = value;
           return this;
         },

@@ -19,11 +19,11 @@ export function create(radius = 0, theta = 0, phi = 0) {
   return {
     radius,
     theta,
-    phi,
+    phi
   };
 }
 
-export function setFromVec3(spherical: Spherical, [x, y, z]: v3.Vec3) {
+export function setFromVec3(spherical: Spherical, [x, y, z]: v3.Tuple) {
   const radius = Math.sqrt(x * x + y * y + z * z);
 
   spherical.radius = radius;
@@ -37,10 +37,7 @@ export function setFromVec3(spherical: Spherical, [x, y, z]: v3.Vec3) {
   }
 }
 
-export function setFromSpherical(
-  v: v3.Vec3,
-  { radius, phi, theta }: Spherical
-) {
+export function setFromSpherical(v: v3.Tuple, { radius, phi, theta }: Spherical) {
   const sinPhiRadius = Math.sin(phi) * radius;
 
   v[0] = sinPhiRadius * Math.sin(theta);
