@@ -9,14 +9,14 @@ import drawShaderFragSrc from './draw-shader.frag?raw';
 import drawShaderVertSrc from './draw-shader.vert?raw';
 
 import { createShaderProgram } from './fungi/create-shader-program';
-import { bindFramebuffer, createFramebufferMap, unbindFramebuffer } from './fungi/Fbo';
+import { bindFramebuffer, createFramebufferMap, unbindFramebuffer } from './fungi/fbo-2';
 import {
   clearScreenBuffer,
   createWebglContext,
   setCanvasSize,
   setClearColor,
-  setupSomeWebglDefaults,
-  setWebglViewport
+  setWebglViewport,
+  setupSomeWebglDefaults
 } from './fungi/old/Context';
 import postShaderFragSrc from './post-shader.frag?raw';
 import postShaderVertSrc from './post-shader.vert?raw';
