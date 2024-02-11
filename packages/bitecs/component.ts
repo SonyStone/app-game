@@ -1,13 +1,15 @@
-import { $bitflag, $size } from './World.js';
-import { $entityComponents, $entityMasks, $entitySparseSet, getGlobalSize } from './entity';
+import { $entityComponents, $entityMasks, $entitySparseSet, Entity, getGlobalSize } from './entity';
 import { $queries, queryAddEntity, queryCheckEntity, queryRemoveEntity } from './query';
 import { createStore, resetStoreFor, resizeStore } from './storage';
+import { $bitflag, $size, World } from './world';
 
 export const $componentMap = Symbol('componentMap');
 
-export const components = [];
+export type Component = any;
 
-export const resizeComponents = (size) => {
+export const components: Component[] = [];
+
+export const resizeComponents = (size: number): void => {
   components.forEach((component) => resizeStore(component, size));
 };
 
@@ -17,13 +19,15 @@ export const resizeComponents = (size) => {
  * @param {object} schema
  * @returns {object}
  */
-export const defineComponent = (schema, size) => {
+export const defineComponent = (schema: any, size?: number) => {
   const component = createStore(schema, size || getGlobalSize());
-  if (schema && Object.keys(schema).length) components.push(component);
+  if (schema && Object.keys(schema).length) {
+    components.push(component);
+  }
   return component;
 };
 
-export const incrementBitflag = (world) => {
+export const incrementBitflag = (world: World) => {
   world[$bitflag] *= 2;
   if (world[$bitflag] >= 2 ** 31) {
     world[$bitflag] = 1;
@@ -37,18 +41,20 @@ export const incrementBitflag = (world) => {
  * @param {World} world
  * @param {Component} component
  */
-export const registerComponent = (world, component) => {
-  if (!component) throw new Error(`bitECS - Cannot register null or undefined component`);
+export const registerComponent = (world: World, component: Component) => {
+  if (!component) {
+    throw new Error(`bitECS - Cannot register null or undefined component`);
+  }
 
   const queries = new Set();
   const notQueries = new Set();
   const changedQueries = new Set();
 
-  world[$queries].forEach((q) => {
+  for (const q of world[$queries]) {
     if (q.allComponents.includes(component)) {
       queries.add(q);
     }
-  });
+  }
 
   world[$componentMap].set(component, {
     generationId: world[$entityMasks].length - 1,
@@ -68,8 +74,10 @@ export const registerComponent = (world, component) => {
  * @param {World} world
  * @param {Component} components
  */
-export const registerComponents = (world, components) => {
-  components.forEach((c) => registerComponent(world, c));
+export const registerComponents = (world: World, components: Component[]) => {
+  for (const c of components) {
+    registerComponent(world, c);
+  }
 };
 
 /**
@@ -80,7 +88,7 @@ export const registerComponents = (world, components) => {
  * @param {number} eid
  * @returns {boolean}
  */
-export const hasComponent = (world, component, eid) => {
+export const hasComponent = (world: World, component: Component, eid: Entity) => {
   const registeredComponent = world[$componentMap].get(component);
   if (!registeredComponent) return false;
   const { generationId, bitflag } = registeredComponent;
@@ -96,7 +104,7 @@ export const hasComponent = (world, component, eid) => {
  * @param {number} eid
  * @param {boolean} [reset=false]
  */
-export const addComponent = (world, component, eid, reset = false) => {
+export const addComponent = (world: World, component: Component, eid: Entity, reset = false) => {
   if (eid === undefined) throw new Error('bitECS - entity is undefined.');
   if (!world[$entitySparseSet].has(eid)) throw new Error('bitECS - entity does not exist in the world.');
   if (!world[$componentMap].has(component)) registerComponent(world, component);
@@ -109,7 +117,7 @@ export const addComponent = (world, component, eid, reset = false) => {
   world[$entityMasks][generationId][eid] |= bitflag;
 
   // todo: archetype graph
-  queries.forEach((q) => {
+  for (const q of queries) {
     // remove this entity from toRemove if it exists in this query
     q.toRemove.remove(eid);
     const match = queryCheckEntity(world, q, eid);
@@ -121,9 +129,9 @@ export const addComponent = (world, component, eid, reset = false) => {
       q.entered.remove(eid);
       queryRemoveEntity(world, q, eid);
     }
-  });
+  }
 
-  world[$entityComponents].get(eid).add(component);
+  world[$entityComponents].get(eid)!.add(component);
 
   // Zero out each property value
   if (reset) resetStoreFor(component, eid);
@@ -137,10 +145,16 @@ export const addComponent = (world, component, eid, reset = false) => {
  * @param {number} eid
  * @param {boolean} [reset=true]
  */
-export const removeComponent = (world, component, eid, reset = true) => {
-  if (eid === undefined) throw new Error('bitECS - entity is undefined.');
-  if (!world[$entitySparseSet].has(eid)) throw new Error('bitECS - entity does not exist in the world.');
-  if (!hasComponent(world, component, eid)) return;
+export const removeComponent = (world: World, component: Component, eid: Entity, reset = true) => {
+  if (eid === undefined) {
+    throw new Error('bitECS - entity is undefined.');
+  }
+  if (!world[$entitySparseSet].has(eid)) {
+    throw new Error('bitECS - entity does not exist in the world.');
+  }
+  if (!hasComponent(world, component, eid)) {
+    return;
+  }
 
   const c = world[$componentMap].get(component);
   const { generationId, bitflag, queries } = c;
@@ -149,7 +163,7 @@ export const removeComponent = (world, component, eid, reset = true) => {
   world[$entityMasks][generationId][eid] &= ~bitflag;
 
   // todo: archetype graph
-  queries.forEach((q) => {
+  for (const q of queries) {
     // remove this entity from toRemove if it exists in this query
     q.toRemove.remove(eid);
     const match = queryCheckEntity(world, q, eid);
@@ -161,10 +175,12 @@ export const removeComponent = (world, component, eid, reset = true) => {
       q.entered.remove(eid);
       queryRemoveEntity(world, q, eid);
     }
-  });
+  }
 
-  world[$entityComponents].get(eid).delete(component);
+  world[$entityComponents].get(eid)!.delete(component);
 
   // Zero out each property value
-  if (reset) resetStoreFor(component, eid);
+  if (reset) {
+    resetStoreFor(component, eid);
+  }
 };

@@ -1,31 +1,32 @@
-import { $componentMap, registerComponent } from './component';
-import { $entityArray, $entityMasks, $entitySparseSet, getEntityCursor } from './entity';
+import { $componentMap, Component, registerComponent } from './component';
+import { $entityArray, $entityMasks, $entitySparseSet, Entity, getEntityCursor } from './entity';
 import { $storeFlattened, $tagStore, createShadow } from './storage';
 import { SparseSet } from './util';
+import { World } from './world';
 
 export const $modifier = Symbol('$modifier');
 
-function modifier(c, mod) {
+function modifier(c: Component, mod: 'not' | 'or' | 'changed') {
   const inner = () => [c, mod];
   inner[$modifier] = true;
   return inner;
 }
 
-export const Not = (c) => modifier(c, 'not');
-export const Or = (c) => modifier(c, 'or');
-export const Changed = (c) => modifier(c, 'changed');
+export const Not = (c: Component) => modifier(c, 'not');
+export const Or = (c: Component) => modifier(c, 'or');
+export const Changed = (c: Component) => modifier(c, 'changed');
 
-export function Any(...comps) {
+export function Any(...comps: Component[]) {
   return function QueryAny() {
     return comps;
   };
 }
-export function All(...comps) {
+export function All(...comps: Component[]) {
   return function QueryAll() {
     return comps;
   };
 }
-export function None(...comps) {
+export function None(...comps: Component[]) {
   return function QueryNone() {
     return comps;
   };
@@ -52,9 +53,13 @@ const empty = Object.freeze([]);
  * @param {function} query
  * @returns {function} enteredQuery
  */
-export const enterQuery = (query) => (world) => {
-  if (!world[$queryMap].has(query)) registerQuery(world, query);
+export const enterQuery = (query: any) => (world: World) => {
+  if (!world[$queryMap].has(query)) {
+    registerQuery(world, query);
+  }
+
   const q = world[$queryMap].get(query);
+
   if (q.entered.dense.length === 0) {
     return empty;
   } else {
@@ -70,7 +75,7 @@ export const enterQuery = (query) => (world) => {
  * @param {function} query
  * @returns {function} enteredQuery
  */
-export const exitQuery = (query) => (world) => {
+export const exitQuery = (query: any) => (world: World) => {
   if (!world[$queryMap].has(query)) registerQuery(world, query);
   const q = world[$queryMap].get(query);
   if (q.exited.dense.length === 0) {
@@ -82,12 +87,13 @@ export const exitQuery = (query) => (world) => {
   }
 };
 
-export const registerQuery = (world, query) => {
-  const components = [];
-  const notComponents = [];
-  const changedComponents = [];
+// @ts-ignore
+export const registerQuery = (world: World, query) => {
+  const components: Component[] = [];
+  const notComponents: Component[] = [];
+  const changedComponents: Component[] = [];
 
-  query[$queryComponents].forEach((c) => {
+  for (const c of query[$queryComponents]) {
     if (typeof c === 'function' && c[$modifier]) {
       const [comp, mod] = c();
       if (!world[$componentMap].has(comp)) registerComponent(world, comp);
@@ -111,18 +117,18 @@ export const registerQuery = (world, query) => {
       if (!world[$componentMap].has(c)) registerComponent(world, c);
       components.push(c);
     }
-  });
+  }
 
-  const mapComponents = (c) => world[$componentMap].get(c);
+  const mapComponents = (c: Component) => world[$componentMap].get(c);
 
   const allComponents = components.concat(notComponents).map(mapComponents);
 
   // const sparseSet = Uint32SparseSet(getGlobalSize())
   const sparseSet = SparseSet();
 
-  const archetypes = [];
+  const archetypes: any[] = [];
   // const changed = SparseSet()
-  const changed = [];
+  const changed: any[] = [];
   const toRemove = SparseSet();
   const entered = SparseSet();
   const exited = SparseSet();
@@ -135,6 +141,7 @@ export const registerQuery = (world, query) => {
       return a;
     }, []);
 
+  // @ts-ignore
   const reduceBitflags = (a, c) => {
     if (!a[c.generationId]) a[c.generationId] = 0;
     a[c.generationId] |= c.bitflag;
@@ -155,7 +162,7 @@ export const registerQuery = (world, query) => {
     .map((c) => (Object.getOwnPropertySymbols(c).includes($storeFlattened) ? c[$storeFlattened] : [c]))
     .reduce((a, v) => a.concat(v), []);
 
-  const shadows = [];
+  const shadows: any[] = [];
 
   const q = Object.assign(sparseSet, {
     archetypes,
@@ -185,13 +192,18 @@ export const registerQuery = (world, query) => {
 
   if (notComponents.length) world[$notQueries].add(q);
 
-  for (let eid = 0; eid < getEntityCursor(); eid++) {
-    if (!world[$entitySparseSet].has(eid)) continue;
+  for (let eid = 0 as Entity; eid < getEntityCursor(); eid++) {
+    if (!world[$entitySparseSet].has(eid)) {
+      continue;
+    }
     const match = queryCheckEntity(world, q, eid);
-    if (match) queryAddEntity(q, eid);
+    if (match) {
+      queryAddEntity(q, eid);
+    }
   }
 };
 
+// @ts-ignore
 const generateShadow = (q, pid) => {
   const $ = Symbol();
   const prop = q.flatProps[pid];
@@ -200,6 +212,7 @@ const generateShadow = (q, pid) => {
   return prop[$];
 };
 
+// @ts-ignore
 const diff = (q, clearDiff) => {
   if (clearDiff) q.changed = [];
   const { flatProps, shadows } = q;
@@ -242,8 +255,10 @@ const diff = (q, clearDiff) => {
 //   })
 // }
 
+// @ts-ignore
 const flatten = (a, v) => a.concat(v);
 
+// @ts-ignore
 const aggregateComponentsFor = (mod) => (x) => x.filter((f) => f.name === mod().constructor.name).reduce(flatten);
 
 const getAnyComponents = aggregateComponentsFor(Any);
@@ -257,9 +272,12 @@ const getNoneComponents = aggregateComponentsFor(None);
  * @returns {function} query
  */
 
-export const defineQuery = (...args) => {
-  let components;
-  let any, all, none;
+export const defineQuery = (...args: Component[]) => {
+  let components: any;
+  let any: any;
+  let all: any;
+  let none: any;
+
   if (Array.isArray(args[0])) {
     components = args[0];
   } else {
@@ -269,17 +287,21 @@ export const defineQuery = (...args) => {
   }
 
   if (components === undefined || components[$componentMap] !== undefined) {
-    return (world) => (world ? world[$entityArray] : components[$entityArray]);
+    return (world: World) => (world ? world[$entityArray] : components[$entityArray]);
   }
 
-  const query = function (world, clearDiff = true) {
-    if (!world[$queryMap].has(query)) registerQuery(world, query);
+  const query = function (world: World, clearDiff = true) {
+    if (!world[$queryMap].has(query)) {
+      registerQuery(world, query);
+    }
 
     const q = world[$queryMap].get(query);
 
     commitRemovals(world);
 
-    if (q.changedComponents.length) return diff(q, clearDiff);
+    if (q.changedComponents.length) {
+      return diff(q, clearDiff);
+    }
     // if (q.changedComponents.length) return q.changed.dense
 
     return q.dense;
@@ -293,7 +315,7 @@ export const defineQuery = (...args) => {
   return query;
 };
 
-const bin = (value) => {
+const bin = (value: any) => {
   if (!Number.isSafeInteger(value)) {
     throw new TypeError('value must be a safe integer');
   }
@@ -306,6 +328,7 @@ const bin = (value) => {
 };
 
 // TODO: archetype graph
+// @ts-ignore
 export const queryCheckEntity = (world, q, eid) => {
   const { masks, notMasks, generations } = q;
   let or = 0;
@@ -335,6 +358,7 @@ export const queryCheckEntity = (world, q, eid) => {
   return true;
 };
 
+// @ts-ignore
 export const queryCheckComponent = (q, c) => {
   const { generationId, bitflag } = c;
   const { hasMasks } = q;
@@ -342,6 +366,7 @@ export const queryCheckComponent = (q, c) => {
   return (mask & bitflag) === bitflag;
 };
 
+// @ts-ignore
 export const queryAddEntity = (q, eid) => {
   q.toRemove.remove(eid);
   // if (!q.has(eid))
@@ -349,6 +374,7 @@ export const queryAddEntity = (q, eid) => {
   q.add(eid);
 };
 
+// @ts-ignore
 const queryCommitRemovals = (q) => {
   for (let i = q.toRemove.dense.length - 1; i >= 0; i--) {
     const eid = q.toRemove.dense[i];
@@ -357,14 +383,18 @@ const queryCommitRemovals = (q) => {
   }
 };
 
+// @ts-ignore
 export const commitRemovals = (world) => {
   if (!world[$dirtyQueries].size) return;
   world[$dirtyQueries].forEach(queryCommitRemovals);
   world[$dirtyQueries].clear();
 };
 
-export const queryRemoveEntity = (world, q, eid) => {
-  if (!q.has(eid) || q.toRemove.has(eid)) return;
+// @ts-ignore
+export const queryRemoveEntity = (world: World, q, eid: Entity) => {
+  if (!q.has(eid) || q.toRemove.has(eid)) {
+    return;
+  }
   q.toRemove.add(eid);
   world[$dirtyQueries].add(q);
   q.exited.add(eid);
@@ -376,6 +406,7 @@ export const queryRemoveEntity = (world, q, eid) => {
  * @param {World} world
  * @param {function} query
  */
+// @ts-ignore
 export const resetChangedQuery = (world, query) => {
   const q = world[$queryMap].get(query);
   q.changed = [];
@@ -387,6 +418,7 @@ export const resetChangedQuery = (world, query) => {
  * @param {World} world
  * @param {function} query
  */
+// @ts-ignore
 export const removeQuery = (world, query) => {
   const q = world[$queryMap].get(query);
   world[$queries].delete(q);

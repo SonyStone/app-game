@@ -1,14 +1,43 @@
-export const TYPES_ENUM = {
-  i8: 'i8',
-  ui8: 'ui8',
-  ui8c: 'ui8c',
-  i16: 'i16',
-  ui16: 'ui16',
-  i32: 'i32',
-  ui32: 'ui32',
-  f32: 'f32',
-  f64: 'f64',
-  eid: 'eid'
+export type Type = 'i8' | 'ui8' | 'ui8c' | 'i16' | 'ui16' | 'i32' | 'ui32' | 'f32' | 'f64' | 'eid';
+
+export type ListType = readonly [Type, number];
+
+export type TypedArray =
+  | Uint8Array
+  | Int8Array
+  | Uint8Array
+  | Uint8ClampedArray
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array
+  | Float32Array
+  | Float64Array;
+
+export enum TYPES_ENUM {
+  i8 = 'i8',
+  ui8 = 'ui8',
+  ui8c = 'ui8c',
+  i16 = 'i16',
+  ui16 = 'ui16',
+  i32 = 'i32',
+  ui32 = 'ui32',
+  f32 = 'f32',
+  f64 = 'f64',
+  eid = 'eid'
+}
+
+export type ArrayByType = {
+  [TYPES_ENUM.i8]: Int8Array;
+  [TYPES_ENUM.ui8]: Uint8Array;
+  [TYPES_ENUM.ui8c]: Uint8ClampedArray;
+  [TYPES_ENUM.i16]: Int16Array;
+  [TYPES_ENUM.ui16]: Uint16Array;
+  [TYPES_ENUM.i32]: Int32Array;
+  [TYPES_ENUM.ui32]: Uint32Array;
+  [TYPES_ENUM.f32]: Float32Array;
+  [TYPES_ENUM.f64]: Float64Array;
+  [TYPES_ENUM.eid]: Uint32Array;
 };
 
 export const TYPES_NAMES = {
@@ -25,16 +54,16 @@ export const TYPES_NAMES = {
 };
 
 export const TYPES = {
-  i8: Int8Array,
-  ui8: Uint8Array,
-  ui8c: Uint8ClampedArray,
-  i16: Int16Array,
-  ui16: Uint16Array,
-  i32: Int32Array,
-  ui32: Uint32Array,
-  f32: Float32Array,
-  f64: Float64Array,
-  eid: Uint32Array
+  [TYPES_ENUM.i8]: Int8Array,
+  [TYPES_ENUM.ui8]: Uint8Array,
+  [TYPES_ENUM.ui8c]: Uint8ClampedArray,
+  [TYPES_ENUM.i16]: Int16Array,
+  [TYPES_ENUM.ui16]: Uint16Array,
+  [TYPES_ENUM.i32]: Int32Array,
+  [TYPES_ENUM.ui32]: Uint32Array,
+  [TYPES_ENUM.f32]: Float32Array,
+  [TYPES_ENUM.f64]: Float64Array,
+  [TYPES_ENUM.eid]: Uint32Array
 };
 
 export const UNSIGNED_MAX = {

@@ -40,8 +40,8 @@ import {
 } from './world';
 
 export const pipe =
-  (...fns) =>
-  (input) => {
+  (...fns: ((val: any) => any)[]) =>
+  (input: any) => {
     let tmp = input;
     for (let i = 0; i < fns.length; i++) {
       const fn = fns[i];

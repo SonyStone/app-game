@@ -1,6 +1,6 @@
 import { $notQueries, $queries, queryAddEntity, queryCheckEntity, queryRemoveEntity } from './query';
 import { setSerializationResized } from './serialize';
-import { $localEntities, $localEntityLookup, $manualEntityRecycling, $size, resizeWorlds } from './world';
+import { $localEntities, $localEntityLookup, $manualEntityRecycling, $size, World, resizeWorlds } from './world';
 
 export const $entityMasks = Symbol('entityMasks');
 export const $entityComponents = Symbol('entityComponents');
@@ -17,16 +17,33 @@ let globalEntityCursor = 0;
 let globalSize = defaultSize;
 let resizeThreshold = () => globalSize - globalSize / 5;
 
-export const getGlobalSize = () => globalSize;
+export const getGlobalSize = (): number => globalSize;
+
+/**
+ * An entity is an integer, technically a pointer, which components can be associated with.
+ *
+ * Entities are accessed via queries, components of whom are mutated with systems.
+ *
+ * Add entities to the world:
+ *```ts
+ * const eid = addEntity(world)
+ * const eid2 = addEntity(world)
+ * ```
+ * Remove entities from the world:
+ * ```ts
+ * removeEntity(world, eid2)
+ * ```
+ */
+export type Entity = number & { __brand: 'Entity ID' };
 
 // removed eids should also be global to prevent memory leaks
-const removed = [];
-const recycled = [];
+const removed: Entity[] = [];
+const recycled: Entity[] = [];
 
 const defaultRemovedReuseThreshold = 0.01;
 let removedReuseThreshold = defaultRemovedReuseThreshold;
 
-export const resetGlobals = () => {
+export const resetGlobals = (): void => {
   globalSize = defaultSize;
   globalEntityCursor = 0;
   removedReuseThreshold = defaultRemovedReuseThreshold;
@@ -34,14 +51,14 @@ export const resetGlobals = () => {
   recycled.length = 0;
 };
 
-export const getDefaultSize = () => defaultSize;
+export const getDefaultSize = (): number => defaultSize;
 
 /**
  * Sets the default maximum number of entities for worlds and component stores.
  *
  * @param {number} newSize
  */
-export const setDefaultSize = (newSize) => {
+export const setDefaultSize = (newSize: number) => {
   const oldSize = globalSize;
 
   defaultSize = newSize;
@@ -58,16 +75,19 @@ export const setDefaultSize = (newSize) => {
  *
  * @param {number} newThreshold
  */
-export const setRemovedRecycleThreshold = (newThreshold) => {
+export const setRemovedRecycleThreshold = (newThreshold: number) => {
   removedReuseThreshold = newThreshold;
 };
 
 export const getEntityCursor = () => globalEntityCursor;
-export const getRemovedEntities = () => [...recycled, ...removed];
+export const getRemovedEntities = () => {
+  debugger;
+  return [...recycled, ...removed];
+};
 
 export const eidToWorld = new Map();
 
-export const flushRemovedEntities = (world) => {
+export const flushRemovedEntities = (world: World) => {
   if (!world[$manualEntityRecycling]) {
     throw new Error(
       'bitECS - cannot flush removed entities, enable feature with the enableManualEntityRecycling function'
@@ -83,24 +103,28 @@ export const flushRemovedEntities = (world) => {
  * @param {World} world
  * @returns {number} eid
  */
-export const addEntity = (world) => {
+export const addEntity = (world: World) => {
   const eid = world[$manualEntityRecycling]
     ? removed.length
-      ? removed.shift()
-      : globalEntityCursor++
+      ? removed.shift()!
+      : (globalEntityCursor++ as Entity)
     : removed.length > Math.round(globalSize * removedReuseThreshold)
-    ? removed.shift()
-    : globalEntityCursor++;
+    ? removed.shift()!
+    : (globalEntityCursor++ as Entity);
 
-  if (eid > world[$size]) throw new Error('bitECS - max entities reached');
+  if (eid > world[$size]) {
+    throw new Error('bitECS - max entities reached');
+  }
 
   world[$entitySparseSet].add(eid);
   eidToWorld.set(eid, world);
 
-  world[$notQueries].forEach((q) => {
+  for (const q of world[$notQueries]) {
     const match = queryCheckEntity(world, q, eid);
-    if (match) queryAddEntity(q, eid);
-  });
+    if (match) {
+      queryAddEntity(q, eid);
+    }
+  }
 
   world[$entityComponents].set(eid, new Set());
 
@@ -111,21 +135,28 @@ export const addEntity = (world) => {
  * Removes an existing entity from the specified world.
  *
  * @param {World} world
- * @param {number} eid
+ * @param {Entity} eid
  */
-export const removeEntity = (world, eid) => {
+export const removeEntity = (world: World, eid: Entity) => {
+  debugger;
+
   // Check if entity is already removed
-  if (!world[$entitySparseSet].has(eid)) return;
+  if (!world[$entitySparseSet].has(eid)) {
+    return;
+  }
 
   // Remove entity from all queries
   // TODO: archetype graph
-  world[$queries].forEach((q) => {
+  for (const q of world[$queries]) {
     queryRemoveEntity(world, q, eid);
-  });
+  }
 
   // Free the entity
-  if (world[$manualEntityRecycling]) recycled.push(eid);
-  else removed.push(eid);
+  if (world[$manualEntityRecycling]) {
+    recycled.push(eid);
+  } else {
+    removed.push(eid);
+  }
 
   // remove all eid state from world
   world[$entitySparseSet].remove(eid);
@@ -136,7 +167,9 @@ export const removeEntity = (world, eid) => {
   world[$localEntityLookup].delete(eid);
 
   // Clear entity bitmasks
-  for (let i = 0; i < world[$entityMasks].length; i++) world[$entityMasks][i][eid] = 0;
+  for (let i = 0; i < world[$entityMasks].length; i++) {
+    world[$entityMasks][i][eid] = 0;
+  }
 };
 
 /**
@@ -145,10 +178,14 @@ export const removeEntity = (world, eid) => {
  * @param {*} world
  * @param {*} eid
  */
-export const getEntityComponents = (world, eid) => {
-  if (eid === undefined) throw new Error('bitECS - entity is undefined.');
-  if (!world[$entitySparseSet].has(eid)) throw new Error('bitECS - entity does not exist in the world.');
-  return Array.from(world[$entityComponents].get(eid));
+export const getEntityComponents = (world: World, eid: Entity) => {
+  if (eid === undefined) {
+    throw new Error('bitECS - entity is undefined.');
+  }
+  if (!world[$entitySparseSet].has(eid)) {
+    throw new Error('bitECS - entity does not exist in the world.');
+  }
+  return Array.from(world[$entityComponents].get(eid)!);
 };
 
 /**
@@ -157,4 +194,4 @@ export const getEntityComponents = (world, eid) => {
  * @param {World} world
  * @param {number} eid
  */
-export const entityExists = (world, eid) => world[$entitySparseSet].has(eid);
+export const entityExists = (world: World, eid: Entity): boolean => world[$entitySparseSet].has(eid);

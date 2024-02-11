@@ -12,26 +12,35 @@ export const DESERIALIZE_MODE = {
 
 let resized = false;
 
+// @ts-ignore
 export const setSerializationResized = (v) => {
   resized = v;
 };
 
+// @ts-ignore
 const concat = (a, v) => a.concat(v);
+// @ts-ignore
 const not = (fn) => (v) => !fn(v);
 
+// @ts-ignore
 const storeFlattened = (c) => c[$storeFlattened];
 const isFullComponent = storeFlattened;
 const isProperty = not(isFullComponent);
 
+// @ts-ignore
 const isModifier = (c) => typeof c === 'function' && c[$modifier];
 const isNotModifier = not(isModifier);
 
+// @ts-ignore
 const isChangedModifier = (c) => isModifier(c) && c()[1] === 'changed';
 
+// @ts-ignore
 const isWorld = (w) => Object.getOwnPropertySymbols(w).includes($componentMap);
 
+// @ts-ignore
 const fromModifierToComponent = (c) => c()[0];
 
+// @ts-ignore
 export const canonicalize = (target) => {
   if (isWorld(target)) return [[], new Map()];
 
@@ -74,6 +83,7 @@ export const canonicalize = (target) => {
  * @param {number} [maxBytes=20000000]
  * @returns {function} serializer
  */
+// @ts-ignore
 export const defineSerializer = (target, maxBytes = 20000000) => {
   const worldSerializer = isWorld(target);
 
@@ -86,6 +96,7 @@ export const defineSerializer = (target, maxBytes = 20000000) => {
 
   const entityComponentCache = new Map();
 
+  // @ts-ignore
   return (ents) => {
     if (resized) {
       [componentProps, changedProps] = canonicalize(target);
@@ -94,6 +105,7 @@ export const defineSerializer = (target, maxBytes = 20000000) => {
 
     if (worldSerializer) {
       componentProps = [];
+      // @ts-ignore
       target[$componentMap].forEach((c, component) => {
         if (component[$storeFlattened]) componentProps.push(...component[$storeFlattened]);
         else componentProps.push(component);
@@ -203,11 +215,13 @@ export const defineSerializer = (target, maxBytes = 20000000) => {
             }
 
             // write array index
+            // @ts-ignore
             view[`set${indexType}`](where, i);
             where += indexBytes;
 
             // write value at that index
             const value = prop[eid][i];
+            // @ts-ignore
             view[`set${type}`](where, value);
             where += prop[eid].BYTES_PER_ELEMENT;
             arrayWriteCount++;
@@ -215,6 +229,7 @@ export const defineSerializer = (target, maxBytes = 20000000) => {
 
           if (arrayWriteCount > 0) {
             // write total element count
+            // @ts-ignore
             view[`set${indexType}`](countWhere2, arrayWriteCount);
             writeCount++;
           } else {
@@ -238,6 +253,7 @@ export const defineSerializer = (target, maxBytes = 20000000) => {
 
           const type = prop.constructor.name.replace('Array', '');
           // set value next [type] bytes
+          // @ts-ignore
           view[`set${type}`](where, prop[eid]);
           where += prop.BYTES_PER_ELEMENT;
 
@@ -266,12 +282,14 @@ const newEntities = new Map();
  * @param {object|array} target
  * @returns {function} deserializer
  */
+// @ts-ignore
 export const defineDeserializer = (target) => {
   const isWorld = Object.getOwnPropertySymbols(target).includes($componentMap);
   let [componentProps] = canonicalize(target);
 
   const deserializedEntities = new Set();
 
+  // @ts-ignore
   return (world, packet, mode = 0) => {
     newEntities.clear();
 
@@ -282,6 +300,7 @@ export const defineDeserializer = (target) => {
 
     if (isWorld) {
       componentProps = [];
+      // @ts-ignore
       target[$componentMap].forEach((c, component) => {
         if (component[$storeFlattened]) componentProps.push(...component[$storeFlattened]);
         else componentProps.push(component);
@@ -348,14 +367,17 @@ export const defineDeserializer = (target) => {
 
         if (ArrayBuffer.isView(prop[eid])) {
           const array = prop[eid];
+          // @ts-ignore
           const count = view[`get${array[$indexType]}`](where);
           where += array[$indexBytes];
 
           // iterate over count
           for (let i = 0; i < count; i++) {
+            // @ts-ignore
             const index = view[`get${array[$indexType]}`](where);
             where += array[$indexBytes];
 
+            // @ts-ignore
             const value = view[`get${array.constructor.name.replace('Array', '')}`](where);
             where += array.BYTES_PER_ELEMENT;
             if (prop[$isEidType]) {
@@ -375,6 +397,7 @@ export const defineDeserializer = (target) => {
             } else prop[eid][index] = value;
           }
         } else {
+          // @ts-ignore
           const value = view[`get${prop.constructor.name.replace('Array', '')}`](where);
           where += prop.BYTES_PER_ELEMENT;
 
