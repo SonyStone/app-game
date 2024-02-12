@@ -290,6 +290,12 @@ export const routes: (RouteDefinition & {
     component: lazy(() => import('@packages/ogl-examples/flowmap/flowmap'))
   },
   {
+    path: '/piecs-performance',
+    name: 'piecs performance',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/piecs-examles/performance/performance'))
+  },
+  {
     path: '/:any',
     name: 'Empty',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
