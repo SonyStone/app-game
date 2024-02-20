@@ -1,11 +1,11 @@
 import * as m4 from '@webgl/math/m4';
 import { create, setFromSpherical, setFromVec3 } from '@webgl/math/spherical';
 import { clamp } from '@webgl/math/utils/clamp';
-import * as v3 from '@webgl/math/v3-builder';
 import { For, createEffect, createMemo, createSignal } from 'solid-js';
 
 import { round } from '@packages/gsap/core/utils';
 import { useCamera } from '@packages/three-examples/Camera.provider';
+import { FVec3 } from '@webgl/math';
 import s from './3dWireframe.module.scss';
 import { Main } from './main';
 
@@ -38,8 +38,8 @@ export default function Wireframe() {
         projection: m4.identity(),
         // transform: m4.identity(),
         inversePosition: m4.identity(),
-        target: v3.create(0, 0, 0),
-        offset: v3.create(0.6, 1.8, 2.0),
+        target: FVec3.create(0, 0, 0),
+        offset: FVec3.create(0.6, 1.8, 2.0),
         spherical: create()
       };
 
@@ -143,7 +143,7 @@ export default function Wireframe() {
               const c = camera();
               c.target[i()] = value;
               // setFromSpherical(c.offset, c.spherical);
-              v3.add(c.offset, c.target);
+              c.offset.add(c.target);
 
               setCamera(c);
             };

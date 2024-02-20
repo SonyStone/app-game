@@ -1,4 +1,4 @@
-import { m4, v3 } from '@webgl/math';
+import { FVec3, Vec3Tuple, m4 } from '@webgl/math';
 import { DEG_TO_RAD } from '@webgl/math/constants';
 import { Spherical, setFromSpherical } from '@webgl/math/spherical';
 import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@webgl/static-variables';
@@ -16,8 +16,8 @@ interface Camera {
   projection: m4.Mat4;
   // transform: m4.Mat4,
   inversePosition: m4.Mat4;
-  offset: v3.Vec3Tuple;
-  target: v3.Vec3Tuple;
+  offset: Vec3Tuple;
+  target: Vec3Tuple;
   spherical: Spherical;
 }
 
@@ -138,7 +138,7 @@ export function Main(prop: { ctx: Context }) {
     setFromSpherical(camera.offset, camera.spherical);
   });
 
-  const up = v3.create(0, 1, 0);
+  const up = FVec3.create(0, 1, 0);
 
   const stats = useStats();
 

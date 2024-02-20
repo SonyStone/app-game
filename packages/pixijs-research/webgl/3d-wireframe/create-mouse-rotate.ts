@@ -1,10 +1,10 @@
-import { v2 } from '@webgl/math';
+import { FVec2 } from '@webgl/math';
 import { createSignal, onCleanup } from 'solid-js';
 
 export function createMouseRotate(element: HTMLElement) {
-  const rotateStart = v2.create();
-  const rotateEnd = v2.create();
-  const rotateDelta = v2.create();
+  const rotateStart = FVec2.create();
+  const rotateEnd = FVec2.create();
+  const rotateDelta = FVec2.create();
   let thetaDelta = 0;
   let phiDelta = 0;
 
@@ -14,10 +14,9 @@ export function createMouseRotate(element: HTMLElement) {
   const onPointerMove = (event: PointerEvent) => {
     if (event.pointerType === 'touch') {
     } else {
-      v2.set(rotateEnd, event.clientX, event.clientY);
+      rotateEnd.set(event.clientX, event.clientY);
 
-      v2.copy(rotateDelta, rotateEnd);
-      v2.subtract(rotateDelta, rotateStart);
+      rotateDelta.copy(rotateEnd).sub(rotateStart);
 
       // rotateLeft
       {
@@ -31,7 +30,7 @@ export function createMouseRotate(element: HTMLElement) {
         phiDelta -= angle;
       }
 
-      v2.copy(rotateStart, rotateEnd);
+      rotateStart.copy(rotateEnd);
     }
 
     setTheta(theta() + thetaDelta);
@@ -52,7 +51,7 @@ export function createMouseRotate(element: HTMLElement) {
 
     if (event.pointerType === 'touch') {
     } else {
-      v2.set(rotateStart, event.clientX, event.clientY);
+      rotateStart.set(event.clientX, event.clientY);
     }
   };
 

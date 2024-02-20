@@ -1,4 +1,4 @@
-import { m3, m4 } from '@webgl/math';
+import { FMat3, m4 } from '@webgl/math';
 import { GL_DATA_TYPE } from '@webgl/static-variables';
 
 /**
@@ -55,7 +55,7 @@ export function defaultValue(
     // case GL_DATA_TYPE.FLOAT_MAT2:
     //   return m2.identity();
     case GL_DATA_TYPE.FLOAT_MAT3:
-      return m3.identity();
+      return FMat3.identity();
     case GL_DATA_TYPE.FLOAT_MAT4:
       return m4.identity();
   }

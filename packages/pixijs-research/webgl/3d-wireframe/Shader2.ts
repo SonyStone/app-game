@@ -1,4 +1,4 @@
-import { m4, v2, v3, v4 } from '@webgl/math';
+import { FVec2, FVec3, Vec2Tuple, Vec3Tuple, m4, v4 } from '@webgl/math';
 import { GL_BUFFER_TYPE, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
 import { createProgram } from './Shader';
 
@@ -30,9 +30,9 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
 
       return {
         name,
-        value: v2.create(0, 0),
-        set(value: v2.Vec2) {
-          this.value = value;
+        value: FVec2.create(0, 0),
+        set(value: Vec2Tuple) {
+          this.value.copy(value);
           return this;
         },
         bind() {
@@ -46,9 +46,9 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
 
       return {
         name,
-        value: v3.create(0, 0, 0),
-        set(value: v3.Vec3Tuple) {
-          this.value = value;
+        value: FVec3.create(0, 0, 0),
+        set(value: Vec3Tuple) {
+          this.value.copy(value);
           return this;
         },
         bind() {

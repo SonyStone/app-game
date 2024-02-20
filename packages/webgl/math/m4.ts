@@ -1,4 +1,4 @@
-import { FVec3 } from '.';
+import { FVec3 } from './v3';
 import { Vec3Tuple } from './v3-builder';
 
 /**

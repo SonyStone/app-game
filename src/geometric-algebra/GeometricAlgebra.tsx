@@ -1,8 +1,8 @@
-import * as v2 from '@webgl/math/v2-builder';
 import * as v3 from '@webgl/math/v3-builder';
 import { animationFrameScheduler, interval, map, ObservableInput, of, from as rxFrom, switchMap, tap } from 'rxjs';
 import { createMemo, createSignal, from, observable } from 'solid-js';
 
+import { Vec2, Vec3 } from '@webgl/math';
 import { ganja } from './align';
 import s from './GeometricAlgebra.module.scss';
 
@@ -29,19 +29,19 @@ export default function GeometricAlgebra() {
   v3;
 
   function Line1() {
-    const v_1 = v2.create(1, 0);
-    const v_2 = v2.create(0, 1);
-    const v_3 = v3.create();
+    const v_1 = Vec2.create(1, 0);
+    const v_2 = Vec2.create(0, 1);
+    const v_3 = Vec3.create();
 
-    const l = `cross product |e1 x e2| =${v3.len(v2.cross(v_3, v_1, v_2))}`;
+    const l = `cross product |e1 x e2| =${v_3.cross2(v_1, v_2).len()}`;
 
     return (
       <>
         <polyline points={j([p(zero), p(v_1)])} />
         <polyline points={j([p(zero), p(v_2)])} />
 
-        <polyline class={s.dot} points={j([p(v_1), p(v2.add(v_1, v_2))])} />
-        <polyline class={s.dot} points={j([p(v_2), p(v2.add(v_1, v_2))])} />
+        <polyline class={s.dot} points={j([p(v_1), p(Vec2.add(v_1, v_2))])} />
+        <polyline class={s.dot} points={j([p(v_2), p(Vec2.add(v_1, v_2))])} />
         <text x={v_1[0] + 0.025} y={v_1[1] - 0.025}>
           e1
         </text>
@@ -65,16 +65,16 @@ export default function GeometricAlgebra() {
     const v_1 = createMemo(() => {
       const a = Math.sin((value() ?? 0) / 60) / 8 + 0.5;
       const b = Math.cos((value() ?? 0) / 60) / 8 + 1.2;
-      return v2.create(a, b);
+      return Vec2.create(a, b);
     });
 
     const v_2 = createMemo(() => {
       const b = Math.sin((value() ?? 0) / 60) / 8 + 0.5;
       const a = Math.cos((value() ?? 0) / 60) / 8 + 1.2;
-      return v2.create(a, b);
+      return Vec2.create(a, b);
     });
 
-    const text1 = createMemo(() => `cross product |a × b| = ${v3.len(v2.cross(v3.create(), v_1(), v_2())).toFixed(4)}`);
+    const text1 = createMemo(() => `cross product |a × b| = ${Vec3.create().cross2(v_1(), v_2()).len().toFixed(4)}`);
     const text2 = createMemo(
       () => `outer product a ∧ b = (${(v_1()[0] * v_2()[1] - v_1()[1] * v_2()[0]).toFixed(4)}) (e1 ∧ e2)`
     );
@@ -84,8 +84,8 @@ export default function GeometricAlgebra() {
         <polyline points={j([p(zero), p(v_1())])} />
         <polyline points={j([p(zero), p(v_2())])} />
 
-        <polyline class={s.dot} points={j([p(v_1()), p(v2.add(v_1(), v_2()))])} />
-        <polyline class={s.dot} points={j([p(v_2()), p(v2.add(v_1(), v_2()))])} />
+        <polyline class={s.dot} points={j([p(v_1()), p(Vec2.add(v_1(), v_2()))])} />
+        <polyline class={s.dot} points={j([p(v_2()), p(Vec2.add(v_1(), v_2()))])} />
         <text x={v_1()[0] + 0.025} y={v_1()[1] - 0.025}>
           a
         </text>

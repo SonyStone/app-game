@@ -149,6 +149,10 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
       return this;
     }
 
+    static identity(): Mat3 {
+      return new this().identity();
+    }
+
     /**
      * Creates an n-by-n identity matrix.
      *

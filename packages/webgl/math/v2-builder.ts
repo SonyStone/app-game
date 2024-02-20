@@ -42,46 +42,46 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
     static splat = (v: number): Vec2 => Vec2.create(v, v);
 
     /** All zeroes. */
-    static ZERO = Vec2.splat(0);
+    static readonly ZERO = Vec2.splat(0);
 
     /** All ones. */
-    static ONE = Vec2.splat(1);
+    static readonly ONE = Vec2.splat(1);
 
     /** All negative ones. */
-    static NEG_ONE = Vec2.splat(-1);
+    static readonly NEG_ONE = Vec2.splat(-1);
 
     /** All `NaN`. */
-    static NAN = Vec2.splat(NaN);
+    static readonly NAN = Vec2.splat(NaN);
 
     /** All `Infinity`. */
-    static INFINITY = Vec2.splat(Infinity);
+    static readonly INFINITY = Vec2.splat(Infinity);
 
     /** All `-Infinity`. */
-    static NEG_INFINITY = Vec2.splat(-Infinity);
+    static readonly NEG_INFINITY = Vec2.splat(-Infinity);
 
     /** A unit vector pointing along the positive X axis. */
-    static X = Vec2.create(1, 0) as Readonly<Vec2>;
+    static readonly X = Vec2.create(1, 0) as Readonly<Vec2>;
 
     /** →  */
-    static RIGHT = Vec2.create(1, 0);
+    static readonly RIGHT = Vec2.create(1, 0);
 
     /** A unit vector pointing along the positive Y axis. */
-    static Y = Vec2.create(0, 1);
+    static readonly Y = Vec2.create(0, 1);
 
     /** ↑ */
-    static UP = Vec2.create(0, 1);
+    static readonly UP = Vec2.create(0, 1);
 
     /** A unit vector pointing along the negative X axis. */
-    static NEG_X = Vec2.create(-1, 0);
+    static readonly NEG_X = Vec2.create(-1, 0);
 
     /** ← */
-    static LEFT = Vec2.create(-1, 0);
+    static readonly LEFT = Vec2.create(-1, 0);
 
     /** A unit vector pointing along the negative Y axis. */
-    static NEG_Y = Vec2.create(0, -1);
+    static readonly NEG_Y = Vec2.create(0, -1);
 
     /** ↓ */
-    static DOWN = Vec2.create(0, -1);
+    static readonly DOWN = Vec2.create(0, -1);
 
     /**
      * Gets the x component of the vector.
@@ -139,6 +139,10 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
       this[0] = rhs[0];
       this[1] = rhs[1];
       return this;
+    }
+
+    static add(a: Vec2Tuple, b: Vec2Tuple): Vec2 {
+      return Vec2.create(a[0] + b[0], a[1] + b[1]);
     }
 
     /**

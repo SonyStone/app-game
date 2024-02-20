@@ -1,4 +1,5 @@
 import type { TypedArray, TypedArrayConstructor } from './utils/typed-array';
+import { Vec2Tuple } from './v2-builder';
 
 /**
  * A JavaScript array with 3 values or a Float32Array with 3 values.
@@ -44,19 +45,19 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
     static splat = (v: number): Vec3 => Vec3.create(v, v, v);
 
     /** All zeroes. */
-    static ZERO = Vec3.splat(0);
+    static readonly ZERO = Vec3.splat(0);
 
     /** All ones. */
-    static ONE = Vec3.splat(1);
+    static readonly ONE = Vec3.splat(1);
 
     /** A unit vector pointing along the positive X axis. */
-    static X = Vec3.create(1, 0, 0);
+    static readonly X = Vec3.create(1, 0, 0);
 
     /** A unit vector pointing along the positive Y axis. */
-    static Y = Vec3.create(0, 1, 0);
+    static readonly Y = Vec3.create(0, 1, 0);
 
     /** A unit vector pointing along the positive Z axis. */
-    static Z = Vec3.create(0, 0, 1);
+    static readonly Z = Vec3.create(0, 0, 1);
 
     /**
      * Gets the x component of the vector.
@@ -259,7 +260,7 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
      * @param vec The vector to calculate the cross product with.
      * @returns The modified Vec3 instance.
      */
-    cross(vec: Vec3Tuple): this {
+    cross(vec: Readonly<Vec3Tuple>): this {
       const t1 = this[2] * vec[0] - this[0] * vec[2];
       const t2 = this[0] * vec[1] - this[1] * vec[0];
       this[0] = this[1] * vec[2] - this[2] * vec[1];
@@ -269,11 +270,27 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
     }
 
     /**
+     * Computes the cross product of two vectors; assumes both vectors have
+     * three entries.
+     * The vector → The vector of a cross b.
+     * @param a Operand vector.
+     * @param b Operand vector.
+     */
+    cross2(a: Readonly<Vec2Tuple>, b: Readonly<Vec2Tuple>): this {
+      const t2 = a[0] * b[1] - a[1] * b[0];
+
+      this[0] = 0;
+      this[1] = 0;
+      this[2] = t2;
+      return this;
+    }
+
+    /**
      * Calculates the dot product of this vector and another vector.
      * @param vec The vector to calculate the dot product with.
      * @returns The dot product value.
      */
-    dot(vec: Vec3Tuple): number {
+    dot(vec: Readonly<Vec3Tuple>): number {
       return this[0] * vec[0] + this[1] * vec[1] + this[2] * vec[2];
     }
 
