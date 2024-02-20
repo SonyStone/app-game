@@ -18,7 +18,7 @@ import type { Transform } from './transform';
 const tempVec3 = /* @__PURE__ */ new Vec3();
 let ID = 1;
 
-export type OGLRenderingContext = (WebGL2RenderingContext | WebGLRenderingContext) & {
+export type OGLRenderingContext = WebGL2RenderingContext & {
   renderer: Renderer;
   canvas: HTMLCanvasElement;
 };
@@ -63,6 +63,10 @@ export interface Viewport {
   height: number | null;
 }
 
+export type TextureUnit = number & { __brand: 'TextureUnit' };
+
+export const DEFAULT_TEXTURE_UNITS = 0 as TextureUnit;
+
 export interface RenderState {
   blendFunc: BlendFunc;
   blendEquation: BlendEquation;
@@ -74,8 +78,8 @@ export interface RenderState {
   flipY: boolean;
   unpackAlignment: number;
   viewport: Viewport;
-  textureUnits: number[];
-  activeTextureUnit: number;
+  textureUnits: TextureUnit[];
+  activeTextureUnit: TextureUnit;
   framebuffer: WebGLFramebuffer | null;
   boundBuffer?: WebGLBuffer | null;
   uniformLocations: Map<WebGLUniformLocation, number | number[] | Float32Array>;
@@ -102,18 +106,12 @@ export class Renderer {
   id: number;
 
   gl!: OGLRenderingContext;
-  isWebgl2: boolean;
 
   state: RenderState;
 
-  extensions: Record<string, any>;
-  vertexAttribDivisor?: Function;
-  drawArraysInstanced?: Function;
-  drawElementsInstanced?: Function;
-  createVertexArray?: Function;
-  bindVertexArray?: Function;
-  deleteVertexArray?: Function;
-  drawBuffers: Function;
+  extensions: Record<string, any> & {
+    EXT_texture_filter_anisotropic: { MAX_TEXTURE_MAX_ANISOTROPY_EXT: number; TEXTURE_MAX_ANISOTROPY_EXT: number };
+  };
 
   parameters: DeviceParameters;
 
@@ -134,8 +132,7 @@ export class Renderer {
     premultipliedAlpha = false,
     preserveDrawingBuffer = false,
     powerPreference = 'default',
-    autoClear = true,
-    webgl = 2
+    autoClear = true
   }: Partial<RendererOptions> = {}) {
     const attributes = { alpha, depth, stencil, antialias, premultipliedAlpha, preserveDrawingBuffer, powerPreference };
     this.dpr = dpr;
@@ -147,16 +144,10 @@ export class Renderer {
     this.autoClear = autoClear;
     this.id = ID++;
 
-    // Attempt WebGL2 unless forced to 1, if not supported fallback to WebGL1
-    if (webgl === 2) {
-      this.gl = canvas.getContext('webgl2', attributes)! as any;
-    }
-    this.isWebgl2 = !!this.gl;
+    // Attempt WebGL2
+    this.gl = canvas.getContext('webgl2', attributes)! as any;
     if (!this.gl) {
-      this.gl = canvas.getContext('webgl', attributes)! as any;
-    }
-    if (!this.gl) {
-      console.error('unable to create webgl context');
+      console.error('unable to create webgl 2 context');
     }
 
     // Attach renderer to gl so that all classes have access to internal state functions
@@ -179,57 +170,24 @@ export class Renderer {
       framebuffer: null,
       viewport: { x: 0, y: 0, width: null, height: null },
       textureUnits: [],
-      activeTextureUnit: 0,
+      activeTextureUnit: DEFAULT_TEXTURE_UNITS,
       boundBuffer: null,
       uniformLocations: new Map(),
       currentProgram: null
     };
 
     // store requested extensions
-    this.extensions = {};
+    this.extensions = {} as any;
 
     // Initialise extra format types
-    if (this.isWebgl2) {
-      this.getExtension('EXT_color_buffer_float');
-      this.getExtension('OES_texture_float_linear');
-    } else {
-      this.getExtension('OES_texture_float');
-      this.getExtension('OES_texture_float_linear');
-      this.getExtension('OES_texture_half_float');
-      this.getExtension('OES_texture_half_float_linear');
-      this.getExtension('OES_element_index_uint');
-      this.getExtension('OES_standard_derivatives');
-      this.getExtension('EXT_sRGB');
-      this.getExtension('WEBGL_depth_texture');
-      this.getExtension('WEBGL_draw_buffers');
-    }
+    this.getExtension('EXT_color_buffer_float');
+    this.getExtension('OES_texture_float_linear');
     this.getExtension('WEBGL_compressed_texture_astc');
     this.getExtension('EXT_texture_compression_bptc');
     this.getExtension('WEBGL_compressed_texture_s3tc');
     this.getExtension('WEBGL_compressed_texture_etc1');
     this.getExtension('WEBGL_compressed_texture_pvrtc');
     this.getExtension('WEBKIT_WEBGL_compressed_texture_pvrtc');
-
-    // Create method aliases using extension (WebGL1) or native if available (WebGL2)
-    this.vertexAttribDivisor = this.getExtension(
-      'ANGLE_instanced_arrays',
-      'vertexAttribDivisor',
-      'vertexAttribDivisorANGLE'
-    );
-    this.drawArraysInstanced = this.getExtension(
-      'ANGLE_instanced_arrays',
-      'drawArraysInstanced',
-      'drawArraysInstancedANGLE'
-    );
-    this.drawElementsInstanced = this.getExtension(
-      'ANGLE_instanced_arrays',
-      'drawElementsInstanced',
-      'drawElementsInstancedANGLE'
-    );
-    this.createVertexArray = this.getExtension('OES_vertex_array_object', 'createVertexArray', 'createVertexArrayOES');
-    this.bindVertexArray = this.getExtension('OES_vertex_array_object', 'bindVertexArray', 'bindVertexArrayOES');
-    this.deleteVertexArray = this.getExtension('OES_vertex_array_object', 'deleteVertexArray', 'deleteVertexArrayOES');
-    this.drawBuffers = this.getExtension('WEBGL_draw_buffers', 'drawBuffers', 'drawBuffersWEBGL')!;
 
     // Store device parameters
     this.parameters = {};
@@ -264,10 +222,16 @@ export class Renderer {
     this.gl.viewport(x, y, width, height);
   }
 
+  /**
+   * [scissor](https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/scissor)
+   */
   setScissor(width: number, height: number, x: number = 0, y: number = 0): void {
     this.gl.scissor(x, y, width, height);
   }
 
+  /**
+   * [enable](https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/enable)
+   */
   enable(id: GLenum): void {
     if (this.state[id] === true) {
       return;
@@ -302,112 +266,76 @@ export class Renderer {
 
   setBlendEquation(modeRGB: GLenum, modeAlpha: GLenum): void {
     modeRGB = modeRGB || this.gl.FUNC_ADD;
-    if (this.state.blendEquation.modeRGB === modeRGB && this.state.blendEquation.modeAlpha === modeAlpha) return;
+    if (this.state.blendEquation.modeRGB === modeRGB && this.state.blendEquation.modeAlpha === modeAlpha) {
+      return;
+    }
     this.state.blendEquation.modeRGB = modeRGB;
     this.state.blendEquation.modeAlpha = modeAlpha;
-    if (modeAlpha !== undefined) this.gl.blendEquationSeparate(modeRGB, modeAlpha);
-    else this.gl.blendEquation(modeRGB);
+    if (modeAlpha !== undefined) {
+      this.gl.blendEquationSeparate(modeRGB, modeAlpha);
+    } else {
+      this.gl.blendEquation(modeRGB);
+    }
   }
 
   setCullFace(value: GLenum): void {
-    if (this.state.cullFace === value) return;
+    if (this.state.cullFace === value) {
+      return;
+    }
     this.state.cullFace = value;
     this.gl.cullFace(value);
   }
 
   setFrontFace(value: GLenum): void {
-    if (this.state.frontFace === value) return;
+    if (this.state.frontFace === value) {
+      return;
+    }
     this.state.frontFace = value;
     this.gl.frontFace(value);
   }
 
   setDepthMask(value: GLboolean): void {
-    if (this.state.depthMask === value) return;
+    if (this.state.depthMask === value) {
+      return;
+    }
     this.state.depthMask = value;
     this.gl.depthMask(value);
   }
 
   setDepthFunc(value: GLenum): void {
-    if (this.state.depthFunc === value) return;
+    if (this.state.depthFunc === value) {
+      return;
+    }
     this.state.depthFunc = value;
     this.gl.depthFunc(value);
   }
 
-  activeTexture(value: number): void {
-    if (this.state.activeTextureUnit === value) return;
-    this.state.activeTextureUnit = value;
-    this.gl.activeTexture(this.gl.TEXTURE0 + value);
+  activeTexture(textureUnit: TextureUnit): void {
+    if (this.state.activeTextureUnit === textureUnit) {
+      return;
+    }
+    this.state.activeTextureUnit = textureUnit;
+    this.gl.activeTexture(this.gl.TEXTURE0 + textureUnit);
   }
 
   bindFramebuffer({
     target = this.gl.FRAMEBUFFER,
     buffer = null
   }: { target?: GLenum; buffer?: WebGLFramebuffer | null } = {}): void {
-    if (this.state.framebuffer === buffer) return;
+    if (this.state.framebuffer === buffer) {
+      return;
+    }
     this.state.framebuffer = buffer;
     this.gl.bindFramebuffer(target, buffer);
   }
 
-  getExtension(extension: string, webgl2Func?: keyof WebGL2RenderingContext, extFunc?: string): Function | undefined {
-    // if webgl2 function supported, return func bound to gl context
-    if (webgl2Func && (this.gl as WebGL2RenderingContext)[webgl2Func]) {
-      return ((this.gl as WebGL2RenderingContext)[webgl2Func] as any).bind(this.gl);
-    }
-
+  getExtension(extension: string): Function | undefined {
     // fetch extension once only
     if (!this.extensions[extension]) {
       this.extensions[extension] = this.gl.getExtension(extension);
     }
 
-    // return extension if no function requested
-    if (!webgl2Func) {
-      return this.extensions[extension];
-    }
-
-    // Return null if extension not supported
-    if (!this.extensions[extension]) {
-      return undefined;
-    }
-
-    // return extension function, bound to extension
-    if (extFunc) {
-      return this.extensions[extension][extFunc].bind(this.extensions[extension]);
-    }
-
-    return undefined;
-  }
-
-  sortOpaque(a: RendererSortable, b: RendererSortable): number {
-    if (a.renderOrder !== b.renderOrder) {
-      return a.renderOrder - b.renderOrder;
-    } else if (a.program.id !== b.program.id) {
-      return a.program.id - b.program.id;
-    } else if (a.zDepth !== b.zDepth) {
-      return a.zDepth - b.zDepth;
-    } else {
-      return b.id - a.id;
-    }
-  }
-
-  sortTransparent(a: RendererSortable, b: RendererSortable): number {
-    if (a.renderOrder !== b.renderOrder) {
-      return a.renderOrder - b.renderOrder;
-    }
-    if (a.zDepth !== b.zDepth) {
-      return b.zDepth - a.zDepth;
-    } else {
-      return b.id - a.id;
-    }
-  }
-
-  sortUI(a: RendererSortable, b: RendererSortable): number {
-    if (a.renderOrder !== b.renderOrder) {
-      return a.renderOrder - b.renderOrder;
-    } else if (a.program.id !== b.program.id) {
-      return a.program.id - b.program.id;
-    } else {
-      return b.id - a.id;
-    }
+    return this.extensions[extension];
   }
 
   getRenderList({
@@ -450,7 +378,7 @@ export class Renderer {
       const transparent: RendererSortable[] = []; // depthTest true
       const ui: RendererSortable[] = []; // depthTest false
 
-      renderList.forEach((node) => {
+      for (const node of renderList) {
         // Split into the 3 render groups
         if (!node.program?.transparent) {
           opaque.push(node as RendererSortable);
@@ -463,17 +391,19 @@ export class Renderer {
         (node as RendererSortable).zDepth = 0;
 
         // Only calculate z-depth if renderOrder unset and depthTest is true
-        if (node.renderOrder !== 0 || !node.program.depthTest || !camera) return;
+        if (node.renderOrder !== 0 || !node.program.depthTest || !camera) {
+          continue;
+        }
 
         // update z-depth
         node.worldMatrix.getTranslation(tempVec3);
         tempVec3.applyMatrix4(camera.projectionViewMatrix);
         node.zDepth = tempVec3.z;
-      });
+      }
 
-      opaque.sort(this.sortOpaque);
-      transparent.sort(this.sortTransparent);
-      ui.sort(this.sortUI);
+      opaque.sort(sortOpaque);
+      transparent.sort(sortTransparent);
+      ui.sort(sortUI);
 
       renderList = opaque.concat(transparent, ui);
     }
@@ -534,8 +464,41 @@ export class Renderer {
     // Get render list - entails culling and sorting
     const renderList = this.getRenderList({ scene: scene!, camera, frustumCull, sort });
 
-    renderList.forEach((node) => {
+    for (const node of renderList) {
       node.draw({ camera });
-    });
+    }
   }
 }
+
+const sortUI = (a: RendererSortable, b: RendererSortable): number => {
+  if (a.renderOrder !== b.renderOrder) {
+    return a.renderOrder - b.renderOrder;
+  } else if (a.program.id !== b.program.id) {
+    return a.program.id - b.program.id;
+  } else {
+    return b.id - a.id;
+  }
+};
+
+const sortTransparent = (a: RendererSortable, b: RendererSortable): number => {
+  if (a.renderOrder !== b.renderOrder) {
+    return a.renderOrder - b.renderOrder;
+  }
+  if (a.zDepth !== b.zDepth) {
+    return b.zDepth - a.zDepth;
+  } else {
+    return b.id - a.id;
+  }
+};
+
+const sortOpaque = (a: RendererSortable, b: RendererSortable): number => {
+  if (a.renderOrder !== b.renderOrder) {
+    return a.renderOrder - b.renderOrder;
+  } else if (a.program.id !== b.program.id) {
+    return a.program.id - b.program.id;
+  } else if (a.zDepth !== b.zDepth) {
+    return a.zDepth - b.zDepth;
+  } else {
+    return b.id - a.id;
+  }
+};

@@ -13,6 +13,7 @@ import smaaThumbnail from './thumbnail/chrome_2023-11-18_16-03-08.png?url';
 import svgLoaderThumbnail from './thumbnail/chrome_2023-11-18_16-04-46.png?url';
 import skinningThumbnail from './thumbnail/chrome_2023-11-18_16-10-52.png?url';
 import multipleLayersThumbnail from './thumbnail/multiple-layers-thumbnail.png?url';
+import rpgGamesThumbnail from './thumbnail/rpg-games.png?url';
 import rpgThumbnail from './thumbnail/rpg-thumbnail.png?url';
 import spritesThumbnail from './thumbnail/sprites-thumbnail.png?url';
 import wireframeThumbnail from './thumbnail/wireframe-thumbnail.png?url';
@@ -33,10 +34,13 @@ function Thumbnail(props: { thumbnail?: string; href: string; name?: string }) {
   );
 }
 
-export const routes: (RouteDefinition & {
-  name: string | JSX.Element;
+type Routes = Pick<RouteDefinition, 'path' | 'component'> & {
+  name?: string | JSX.Element;
   Preview?: Component<{ name: string; path: string }>;
-})[] = [
+  children?: Routes[];
+};
+
+export const routes: Routes[] = [
   {
     path: '/',
     name: 'home',
@@ -188,46 +192,98 @@ export const routes: (RouteDefinition & {
     component: lazy(() => import('@packages/bevy-examples/breakout'))
   },
   {
-    path: '/ogl-examples/polylines',
-    name: 'OGL Polylines',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={polylinesThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/polylines'))
+    path: '/ogl-examples',
+    name: 'OGL Examples',
+    children: [
+      {
+        path: '/polylines',
+        name: 'OGL Polylines',
+        Preview: (props) => (
+          <Thumbnail href={'/ogl-examples' + props.path} thumbnail={polylinesThumbnail} name={props.name} />
+        ),
+        component: lazy(() => import('@packages/ogl-examples/polylines'))
+      },
+      {
+        path: '/skinning',
+        name: 'OGL skinning',
+        Preview: (props) => (
+          <Thumbnail href={'/ogl-examples' + props.path} thumbnail={skinningThumbnail} name={props.name} />
+        ),
+        component: lazy(() => import('@packages/ogl-examples/skinning/skinning'))
+      },
+      {
+        path: '/msdf-text',
+        name: 'OGL MSDF Text',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/msdf-text/msdf-text'))
+      },
+      {
+        path: '/sort-transparency',
+        name: 'OGL Sort Transparency',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/sort-transparency/sort-transparency'))
+      },
+      {
+        path: '/helpers',
+        name: 'OGL Helpers',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/helpers/helpers'))
+      },
+      {
+        path: '/draw-modes',
+        name: 'OGL Draw modes',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/draw-modes/draw-modes'))
+      },
+      {
+        path: '/load-gltf',
+        name: 'Load glTF',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/load-gltf/load-gltf'))
+      },
+      {
+        path: '/ogl-paint',
+        name: 'OGL paint',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/paint/paint'))
+      },
+      {
+        path: '/ogl-flowmap',
+        name: 'OGL Flowmap',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/flowmap/flowmap'))
+      }
+    ]
   },
   {
-    path: '/ogl-examples/skinning',
-    name: 'OGL skinning',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={skinningThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/skinning/skinning'))
-  },
-  {
-    path: '/ogl-examples/msdf-text',
-    name: 'OGL MSDF Text',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/msdf-text/msdf-text'))
-  },
-  {
-    path: '/ogl-examples/sort-transparency',
-    name: 'OGL Sort Transparency',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/sort-transparency/sort-transparency'))
-  },
-  {
-    path: '/ogl-examples/helpers',
-    name: 'OGL Helpers',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/helpers/helpers'))
-  },
-  {
-    path: '/ogl-examples/draw-modes',
-    name: 'OGL Draw modes',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/draw-modes/draw-modes'))
-  },
-  {
-    path: '/ogl-examples/load-gltf',
-    name: 'Load glTF',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/load-gltf/load-gltf'))
+    path: '/phaser-examples',
+    name: 'Phaser Examples',
+    children: [
+      {
+        path: '/tilemap/layer-with-multiple-layers',
+        name: 'Multiple Layers',
+        Preview: (props) => (
+          <Thumbnail href={'/phaser-examples' + props.path} thumbnail={multipleLayersThumbnail} name={props.name} />
+        ),
+        component: lazy(() => import('@packages/phaser-examples/tilemap/layer-with-multiple-layers'))
+      },
+      {
+        path: '/tilemap/base-tile-size',
+        name: 'Base Tile Size',
+        Preview: (props) => (
+          <Thumbnail href={'/phaser-examples' + props.path} thumbnail={baseTileSizeThumbnail} name={props.name} />
+        ),
+        component: lazy(() => import('@packages/phaser-examples/tilemap/base-tile-size'))
+      },
+      {
+        path: '/rpg-game',
+        name: 'RPG Game',
+        Preview: (props) => (
+          <Thumbnail href={'/phaser-examples' + props.path} name={props.name} thumbnail={rpgGamesThumbnail} />
+        ),
+        component: lazy(() => import('@packages/phaser-examples/rpg/rpg-game'))
+      }
+    ]
   },
   {
     path: '/ldtk-ts-exampless',
@@ -241,18 +297,7 @@ export const routes: (RouteDefinition & {
     Preview: (props) => <Thumbnail href={props.path} thumbnail={multitouchThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/hammer-examples/multitouch'))
   },
-  {
-    path: '/phaser-examples/tilemap/layer-with-multiple-layers',
-    name: 'Multiple Layers',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={multipleLayersThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/phaser-examples/tilemap/layer-with-multiple-layers'))
-  },
-  {
-    path: '/phaser-examples/tilemap/base-tile-size',
-    name: 'Base Tile Size',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={baseTileSizeThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/phaser-examples/tilemap/base-tile-size'))
-  },
+
   {
     path: '/game-shaders-for-beginners',
     name: 'Game Shaders For Beginners',
@@ -265,29 +310,12 @@ export const routes: (RouteDefinition & {
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/three-examples/webxr-vr-teleport/webxr-vr-teleport'))
   },
-  {
-    path: '/rpg-game',
-    name: 'RPG Game',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/phaser-examples/rpg/rpg-game'))
-  },
+
   {
     path: '/webgl-state-diagram',
     name: 'WebGL State Diagram',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/webgl-state-diagram/webgl-state-diagram'))
-  },
-  {
-    path: '/ogl-paint',
-    name: 'OGL paint',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/paint/paint'))
-  },
-  {
-    path: '/ogl-flowmap',
-    name: 'OGL Flowmap',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/flowmap/flowmap'))
   },
   {
     path: '/piecs-performance',

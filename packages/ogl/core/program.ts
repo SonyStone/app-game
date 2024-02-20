@@ -30,7 +30,6 @@ export interface UniformInfo extends WebGLActiveInfo {
 
 /**
  * A WebGL program.
- * @see {@link https://github.com/oframe/ogl/blob/master/src/core/Program.js | Source}
  */
 export class Program {
   gl: OGLRenderingContext;

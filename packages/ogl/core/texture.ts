@@ -3,15 +3,20 @@
 // TODO: need? encoding = linearEncoding
 // TODO: support non-compressed mipmaps uploads
 
-import { OGLRenderingContext, RenderState } from './renderer';
+import { GL_DATA_TYPE } from '@webgl/static-variables';
+import {
+  GL_INTERNAL_FORMAT,
+  GL_PIXEL_FORMAT,
+  GL_TEXTURE_MAG_FILTER,
+  GL_TEXTURE_MIN_FILTER,
+  GL_TEXTURE_TARGET,
+  GL_TEXTURE_WRAP_MODE
+} from '@webgl/static-variables/textures';
+import { DEFAULT_TEXTURE_UNITS, OGLRenderingContext, RenderState, TextureUnit } from './renderer';
 
 const emptyPixel = new Uint8Array(4);
 
-function isPowerOf2(value: number) {
-  return (value & (value - 1)) === 0;
-}
-
-let ID = 1;
+let ID = 1 as TextureUnit;
 
 export type CompressedImage = {
   data: Uint8Array;
@@ -30,15 +35,15 @@ export type ImageRepresentation =
 
 export interface TextureOptions {
   image: ImageRepresentation;
-  target: number;
-  type: number;
-  format: number;
-  internalFormat: number;
-  wrapS: number;
-  wrapT: number;
+  target: GL_TEXTURE_TARGET;
+  type: GL_DATA_TYPE;
+  format: GL_PIXEL_FORMAT;
+  internalFormat: GL_INTERNAL_FORMAT;
+  minFilter: GL_TEXTURE_MIN_FILTER;
+  magFilter: GL_TEXTURE_MAG_FILTER;
+  wrapS: GL_TEXTURE_WRAP_MODE;
+  wrapT: GL_TEXTURE_WRAP_MODE;
   generateMipmaps: boolean;
-  minFilter: number;
-  magFilter: number;
   premultiplyAlpha: boolean;
   unpackAlignment: number;
   flipY: boolean;
@@ -50,21 +55,20 @@ export interface TextureOptions {
 
 /**
  * A surface, reflection, or refraction map.
- * @see {@link https://github.com/oframe/ogl/blob/master/src/core/Texture.js | Source}
  */
 export class Texture {
   gl: OGLRenderingContext;
-  id: number;
+  id: TextureUnit;
 
   image?: ImageRepresentation;
-  target: number;
-  type: number;
+  target: GL_TEXTURE_TARGET;
+  type: GL_DATA_TYPE;
   format: number;
   internalFormat: number;
-  minFilter: number;
-  magFilter: number;
-  wrapS: number;
-  wrapT: number;
+  minFilter: GL_TEXTURE_MIN_FILTER;
+  magFilter: GL_TEXTURE_MAG_FILTER;
+  wrapS: GL_TEXTURE_WRAP_MODE;
+  wrapT: GL_TEXTURE_WRAP_MODE;
   generateMipmaps: boolean;
   premultiplyAlpha: boolean;
   unpackAlignment: number;
@@ -82,10 +86,10 @@ export class Texture {
   glState: RenderState;
 
   state: {
-    minFilter: number;
-    magFilter: number;
-    wrapS: number;
-    wrapT: number;
+    minFilter: GL_TEXTURE_MIN_FILTER;
+    magFilter: GL_TEXTURE_MAG_FILTER;
+    wrapS: GL_TEXTURE_WRAP_MODE;
+    wrapT: GL_TEXTURE_WRAP_MODE;
     anisotropy: number;
   };
 
@@ -101,18 +105,18 @@ export class Texture {
     gl: OGLRenderingContext,
     {
       image,
-      target = gl.TEXTURE_2D,
-      type = gl.UNSIGNED_BYTE,
-      format = gl.RGBA,
-      internalFormat = format,
-      wrapS = gl.CLAMP_TO_EDGE,
-      wrapT = gl.CLAMP_TO_EDGE,
+      target = GL_TEXTURE_TARGET.TEXTURE_2D,
+      type = GL_DATA_TYPE.UNSIGNED_BYTE,
+      format = GL_PIXEL_FORMAT.RGBA,
+      internalFormat = GL_INTERNAL_FORMAT.RGBA,
+      wrapS = GL_TEXTURE_WRAP_MODE.CLAMP_TO_EDGE,
+      wrapT = GL_TEXTURE_WRAP_MODE.CLAMP_TO_EDGE,
       generateMipmaps = true,
-      minFilter = generateMipmaps ? gl.NEAREST_MIPMAP_LINEAR : gl.LINEAR,
-      magFilter = gl.LINEAR,
+      minFilter = generateMipmaps ? GL_TEXTURE_MIN_FILTER.NEAREST_MIPMAP_LINEAR : GL_TEXTURE_MIN_FILTER.LINEAR,
+      magFilter = GL_TEXTURE_MAG_FILTER.LINEAR,
       premultiplyAlpha = false,
       unpackAlignment = 4,
-      flipY = target == gl.TEXTURE_2D ? true : false,
+      flipY = target == GL_TEXTURE_TARGET.TEXTURE_2D ? true : false,
       anisotropy = 0,
       level = 0,
       width, // used for RenderTargets or Data Textures
@@ -120,7 +124,8 @@ export class Texture {
     }: Partial<TextureOptions> = {}
   ) {
     this.gl = gl;
-    this.id = ID++;
+    // ? possible bug: texture overflow
+    this.id = ID++ as TextureUnit;
 
     this.image = image;
     this.target = target;
@@ -160,12 +165,14 @@ export class Texture {
 
   bind(): void {
     // Already bound to active texture unit
-    if (this.glState.textureUnits[this.glState.activeTextureUnit] === this.id) return;
+    if (this.glState.textureUnits[this.glState.activeTextureUnit] === this.id) {
+      return;
+    }
     this.gl.bindTexture(this.target, this.texture);
     this.glState.textureUnits[this.glState.activeTextureUnit] = this.id;
   }
 
-  update(textureUnit: number = 0): void {
+  update(textureUnit: TextureUnit = DEFAULT_TEXTURE_UNITS): void {
     const needsUpdate = !(this.image === this.store.image && !this.needsUpdate);
 
     // Make sure that texture is bound to its texture unit
@@ -279,17 +286,7 @@ export class Texture {
       }
 
       if (this.generateMipmaps) {
-        // For WebGL1, if not a power of 2, turn off mips, set wrapping to clamp to edge and minFilter to linear
-        if (
-          !this.gl.renderer.isWebgl2 &&
-          (!isPowerOf2((this.image as HTMLImageElement).width) || !isPowerOf2((this.image as HTMLImageElement).height))
-        ) {
-          this.generateMipmaps = false;
-          this.wrapS = this.wrapT = this.gl.CLAMP_TO_EDGE;
-          this.minFilter = this.gl.LINEAR;
-        } else {
-          this.gl.generateMipmap(this.target);
-        }
+        this.gl.generateMipmap(this.target);
       }
 
       // Callback for when data is pushed to GPU

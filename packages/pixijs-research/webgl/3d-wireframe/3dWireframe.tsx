@@ -1,7 +1,7 @@
 import * as m4 from '@webgl/math/m4';
 import { create, setFromSpherical, setFromVec3 } from '@webgl/math/spherical';
 import { clamp } from '@webgl/math/utils/clamp';
-import * as v3 from '@webgl/math/v3';
+import * as v3 from '@webgl/math/v3-builder';
 import { For, createEffect, createMemo, createSignal } from 'solid-js';
 
 import { round } from '@packages/gsap/core/utils';

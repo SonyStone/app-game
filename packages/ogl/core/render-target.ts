@@ -24,7 +24,6 @@ export interface RenderTargetOptions {
 
 /**
  * A render target.
- * @see {@link https://github.com/oframe/ogl/blob/master/src/core/RenderTarget.js | Source}
  */
 export class RenderTarget {
   gl: OGLRenderingContext;
@@ -105,21 +104,21 @@ export class RenderTarget {
 
     // For multi-render targets shader access
     if (drawBuffers.length > 1) {
-      this.gl.renderer.drawBuffers(drawBuffers);
+      this.gl.drawBuffers(drawBuffers);
     }
 
     // alias for majority of use cases
     this.texture = this.textures[0];
 
     // note depth textures break stencil - so can't use together
-    if (depthTexture && (this.gl.renderer.isWebgl2 || this.gl.renderer.getExtension('WEBGL_depth_texture'))) {
+    if (depthTexture) {
       this.depthTexture = new Texture(gl, {
         width,
         height,
         minFilter: this.gl.NEAREST,
         magFilter: this.gl.NEAREST,
         format: this.gl.DEPTH_COMPONENT,
-        internalFormat: gl.renderer.isWebgl2 ? this.gl.DEPTH_COMPONENT16 : this.gl.DEPTH_COMPONENT,
+        internalFormat: this.gl.DEPTH_COMPONENT16,
         type: this.gl.UNSIGNED_INT
       });
       this.depthTexture.update();

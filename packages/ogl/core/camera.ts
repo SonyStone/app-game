@@ -45,6 +45,9 @@ export class Camera extends Transform {
   top!: number;
   zoom!: number;
 
+  /**
+   * An array of 6 vectors representing the camera frustum.
+   */
   frustum!: (Vec3 & {
     constant: number;
   })[];
@@ -170,11 +173,17 @@ export class Camera extends Transform {
 
   frustumIntersectsMesh(node: Mesh, worldMatrix: Mat4 = node.worldMatrix): boolean {
     // If no position attribute, treat as frustumCulled false
-    if (!node.geometry.attributes.position) return true;
+    if (!node.geometry.attributes.position) {
+      return true;
+    }
 
-    if (!node.geometry.bounds || node.geometry.bounds.radius === Infinity) node.geometry.computeBoundingSphere();
+    if (!node.geometry.bounds || node.geometry.bounds.radius === Infinity) {
+      node.geometry.computeBoundingSphere();
+    }
 
-    if (!node.geometry.bounds) return true;
+    if (!node.geometry.bounds) {
+      return true;
+    }
 
     const center = tempVec3a;
     center.copy(node.geometry.bounds.center);
@@ -191,7 +200,9 @@ export class Camera extends Transform {
     for (let i = 0; i < 6; i++) {
       const plane = this.frustum[i];
       const distance = normal.copy(plane).dot(center) + plane.constant;
-      if (distance < -radius) return false;
+      if (distance < -radius) {
+        return false;
+      }
     }
     return true;
   }

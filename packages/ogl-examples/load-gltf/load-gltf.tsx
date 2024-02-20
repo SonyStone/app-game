@@ -156,24 +156,17 @@ export default function loadGltf() {
     let vertex = shaderVertex;
     let fragment = shaderFragment;
 
-    const vertexPrefix = renderer.isWebgl2
-      ? /* glsl */ `#version 300 es
+    const vertexPrefix = /* glsl */ `#version 300 es
             #define attribute in
             #define varying out
             #define texture2D texture
-        `
-      : ``;
-
-    const fragmentPrefix = renderer.isWebgl2
-      ? /* glsl */ `#version 300 es
+        `;
+    const fragmentPrefix = /* glsl */ `#version 300 es
             precision highp float;
             #define varying in
             #define texture2D texture
             #define gl_FragColor FragColor
             out vec4 FragColor;
-        `
-      : /* glsl */ `#extension GL_OES_standard_derivatives : enable
-            precision highp float;
         `;
 
     let defines = `

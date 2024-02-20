@@ -3,7 +3,7 @@ import { Entity } from './entity';
 import { SparseSet, Uint32SparseSet } from './util';
 
 describe('util tests', () => {
-  it('shuld SparseSet work', () => {
+  it('should SparseSet work', () => {
     const set = SparseSet();
 
     expect(set).toBeDefined();
@@ -27,7 +27,7 @@ describe('util tests', () => {
     expect(set.has(eid3)).toBe(false);
   });
 
-  it('shuld Uint32SparseSet work', () => {
+  it('should Uint32SparseSet work', () => {
     const set = Uint32SparseSet(10);
 
     expect(set).toBeDefined();

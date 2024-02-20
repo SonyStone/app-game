@@ -1,5 +1,5 @@
 import { clamp } from './utils/clamp';
-import * as v3 from './v3';
+import { Vec3Tuple } from './v3-builder';
 
 /**
  * Ref: https://en.wikipedia.org/wiki/Spherical_coordinate_system
@@ -23,7 +23,7 @@ export function create(radius = 0, theta = 0, phi = 0) {
   };
 }
 
-export function setFromVec3(spherical: Spherical, [x, y, z]: v3.Tuple) {
+export function setFromVec3(spherical: Spherical, [x, y, z]: Vec3Tuple) {
   const radius = Math.sqrt(x * x + y * y + z * z);
 
   spherical.radius = radius;
@@ -37,7 +37,7 @@ export function setFromVec3(spherical: Spherical, [x, y, z]: v3.Tuple) {
   }
 }
 
-export function setFromSpherical(v: v3.Tuple, { radius, phi, theta }: Spherical) {
+export function setFromSpherical(v: Vec3Tuple, { radius, phi, theta }: Spherical) {
   const sinPhiRadius = Math.sin(phi) * radius;
 
   v[0] = sinPhiRadius * Math.sin(theta);

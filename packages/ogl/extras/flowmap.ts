@@ -133,9 +133,7 @@ function createFBOs({
   }
 
   let minFilter = (() => {
-    if (gl.renderer.isWebgl2) return gl.LINEAR;
-    if (gl.renderer.extensions[`OES_texture_${type === gl.FLOAT ? '' : 'half_'}float_linear`]) return gl.LINEAR;
-    return gl.NEAREST;
+    return gl.LINEAR;
   })();
 
   const options = {
@@ -143,11 +141,8 @@ function createFBOs({
     height: size,
     type,
     format: gl.RGBA,
-    internalFormat: gl.renderer.isWebgl2
-      ? type === gl.FLOAT
-        ? (gl as WebGL2RenderingContext).RGBA32F
-        : (gl as WebGL2RenderingContext).RGBA16F
-      : gl.RGBA,
+    internalFormat: type === gl.FLOAT ? (gl as WebGL2RenderingContext).RGBA32F : (gl as WebGL2RenderingContext).RGBA16F,
+
     minFilter,
     depth: false
   };

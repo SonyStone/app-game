@@ -1,5 +1,5 @@
-import * as v2 from '@webgl/math/v2';
-import * as v3 from '@webgl/math/v3';
+import * as v2 from '@webgl/math/v2-builder';
+import * as v3 from '@webgl/math/v3-builder';
 import { animationFrameScheduler, interval, map, ObservableInput, of, from as rxFrom, switchMap, tap } from 'rxjs';
 import { createMemo, createSignal, from, observable } from 'solid-js';
 

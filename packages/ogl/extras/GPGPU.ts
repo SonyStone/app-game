@@ -50,7 +50,7 @@ export class GPGPU {
         target: gl.TEXTURE_2D,
         type: gl.FLOAT,
         format: gl.RGBA,
-        internalFormat: gl.renderer.isWebgl2 ? gl.RGBA32F : gl.RGBA,
+        internalFormat: gl.RGBA32F,
         wrapS: gl.CLAMP_TO_EDGE,
         wrapT: gl.CLAMP_TO_EDGE,
         generateMipmaps: false,
@@ -67,7 +67,7 @@ export class GPGPU {
       height: this.size,
       type: type || gl.HALF_FLOAT || gl.renderer.extensions['OES_texture_half_float'].HALF_FLOAT_OES,
       format: gl.RGBA,
-      internalFormat: gl.renderer.isWebgl2 ? (type === gl.FLOAT ? gl.RGBA32F : gl.RGBA16F) : gl.RGBA,
+      internalFormat: type === gl.FLOAT ? gl.RGBA32F : gl.RGBA16F,
       minFilter: gl.NEAREST,
       depth: false,
       unpackAlignment: 1

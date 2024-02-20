@@ -63,7 +63,6 @@ export type GeometryRaycast = 'sphere' | 'box';
 
 /**
  * A mesh, line, or point geometry.
- * @see {@link https://github.com/oframe/ogl/blob/master/src/core/Geometry.js | Source}
  */
 export class Geometry {
   id: number = ID++;
@@ -94,7 +93,7 @@ export class Geometry {
     if (!gl.canvas) console.error('gl not passed as first argument to Geometry');
 
     // Unbind current VAO so that new buffers don't get added to active mesh
-    this.gl.renderer.bindVertexArray!(null);
+    this.gl.bindVertexArray!(null);
     this.gl.renderer.currentGeometry = null;
 
     // create the buffers
@@ -116,6 +115,7 @@ export class Geometry {
         : attr.data?.constructor === Uint16Array
         ? this.gl.UNSIGNED_SHORT
         : this.gl.UNSIGNED_INT); // Uint32Array
+
     attr.target = key === 'index' ? this.gl.ELEMENT_ARRAY_BUFFER : this.gl.ARRAY_BUFFER;
     attr.normalized = attr.normalized || false;
     attr.stride = attr.stride || 0;
@@ -176,8 +176,8 @@ export class Geometry {
   }
 
   createVAO(program: Program): void {
-    this.VAOs[program.attributeOrder] = this.gl.renderer.createVertexArray!();
-    this.gl.renderer.bindVertexArray!(this.VAOs[program.attributeOrder]);
+    this.VAOs[program.attributeOrder] = this.gl.createVertexArray()!;
+    this.gl.bindVertexArray!(this.VAOs[program.attributeOrder]);
     this.bindAttributes(program);
   }
 
@@ -218,7 +218,7 @@ export class Geometry {
 
         // For instanced attributes, divisor needs to be set.
         // For firefox, need to set back to 0 if non-instanced drawn after instanced. Else won't render
-        this.gl.renderer.vertexAttribDivisor!(location + i, attr.divisor);
+        this.gl.vertexAttribDivisor!(location + i, attr.divisor!);
       }
     });
 
@@ -229,31 +229,35 @@ export class Geometry {
   draw({ program, mode = this.gl.TRIANGLES }: { program: Program; mode?: number }): void {
     if (this.gl.renderer.currentGeometry !== `${this.id}_${program.attributeOrder}`) {
       if (!this.VAOs[program.attributeOrder]) this.createVAO(program);
-      this.gl.renderer.bindVertexArray!(this.VAOs[program.attributeOrder]);
+      this.gl.bindVertexArray!(this.VAOs[program.attributeOrder]);
       this.gl.renderer.currentGeometry = `${this.id}_${program.attributeOrder}`;
     }
 
     // Check if any attributes need updating
     program.attributeLocations.forEach((location, { name }) => {
       const attr = this.attributes[name];
-      if (attr.needsUpdate) this.updateAttribute(attr);
+      if (attr.needsUpdate) {
+        this.updateAttribute(attr);
+      }
     });
 
     // For drawElements, offset needs to be multiple of type size
     let indexBytesPerElement = 2;
-    if (this.attributes.index?.type === this.gl.UNSIGNED_INT) indexBytesPerElement = 4;
+    if (this.attributes.index?.type === this.gl.UNSIGNED_INT) {
+      indexBytesPerElement = 4;
+    }
 
     if (this.isInstanced) {
       if (this.attributes.index) {
-        this.gl.renderer.drawElementsInstanced!(
+        this.gl.drawElementsInstanced(
           mode,
           this.drawRange.count,
-          this.attributes.index.type,
+          this.attributes.index.type!,
           this.attributes.index.offset! + this.drawRange.start * indexBytesPerElement,
           this.instancedCount
         );
       } else {
-        this.gl.renderer.drawArraysInstanced!(mode, this.drawRange.start, this.drawRange.count, this.instancedCount);
+        this.gl.drawArraysInstanced!(mode, this.drawRange.start, this.drawRange.count, this.instancedCount);
       }
     } else {
       if (this.attributes.index) {
@@ -352,7 +356,7 @@ export class Geometry {
 
   remove(): void {
     for (let key in this.VAOs) {
-      this.gl.renderer.deleteVertexArray!(this.VAOs[key]);
+      this.gl.deleteVertexArray!(this.VAOs[key]);
       delete this.VAOs[key];
     }
     for (let key in this.attributes) {

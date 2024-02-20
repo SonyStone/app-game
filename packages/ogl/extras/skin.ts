@@ -6,7 +6,7 @@ import { Animation } from './animation';
 
 const tempMat4 = /* @__PURE__ */ new Mat4();
 
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_INTERNAL_FORMAT } from '@webgl/static-variables/textures';
 import type { Camera } from '../core/camera';
 import type { Geometry } from '../core/geometry';
 import type { Program } from '../core/program';
@@ -105,7 +105,7 @@ export class Skin extends Mesh {
       image: this.boneMatrices,
       generateMipmaps: false,
       type: this.gl.FLOAT,
-      internalFormat: this.gl.renderer.isWebgl2 ? GL_STATIC_VARIABLES.RGBA32F : GL_STATIC_VARIABLES.RGBA,
+      internalFormat: GL_INTERNAL_FORMAT.RGBA32F,
       minFilter: this.gl.NEAREST,
       magFilter: this.gl.NEAREST,
       flipY: false,

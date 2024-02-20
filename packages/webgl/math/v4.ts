@@ -1,5 +1,4 @@
-import { Vec2 } from './v2';
-import { Tuple } from './v3';
+import { Vec3Tuple } from './v3-builder';
 
 /**
  *
@@ -81,15 +80,15 @@ export function set(x: number = 0, y: number = 0, z: number = 0, w: number = 0, 
   return dst;
 }
 
-export function x(a: Vec4 | Tuple | Vec2): number {
+export function x(a: Vec4 | Vec3Tuple): number {
   return a[0];
 }
 
-export function y(a: Vec4 | Tuple | Vec2): number {
+export function y(a: Vec4 | Vec3Tuple): number {
   return a[1];
 }
 
-export function z(a: Vec4 | Tuple): number {
+export function z(a: Vec4 | Vec3Tuple): number {
   return a[2];
 }
 

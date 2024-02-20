@@ -41,7 +41,7 @@ export default defineConfig({
     // minify: false
   },
   test: {
-    environment: 'jsdom',
+    environment: 'happy-dom',
     transformMode: {
       web: [/\.[jt]sx?$/]
     },

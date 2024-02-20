@@ -34,7 +34,6 @@ export interface RaycastHit {
 
 /**
  * Represents a {@link https://en.wikipedia.org/wiki/Polygon_mesh | polygon mesh}.
- * @see {@link https://github.com/oframe/ogl/blob/master/src/core/Mesh.js | Source}
  */
 export class Mesh<TGeometry extends Geometry = Geometry, TProgram extends Program = Program> extends Transform {
   id: number = ID++;

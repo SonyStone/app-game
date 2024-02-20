@@ -5,11 +5,8 @@ import { createEffect, onCleanup } from 'solid-js';
 import firaSansBoldData from './FiraSans-Bold.json?url';
 import firaSansBoldImg from './FiraSans-Bold.png?url';
 
-import fragment100 from './msdf-text-100.frag?raw';
-import vertex100 from './msdf-text-100.vert?raw';
-
-import fragment300 from './msdf-text-300.frag?raw';
-import vertex300 from './msdf-text-300.vert?raw';
+import fragment from './msdf-text.frag?raw';
+import vertex from './msdf-text.vert?raw';
 
 export default function MsdfText() {
   const renderer = new Renderer({ dpr: 2 });
@@ -54,8 +51,8 @@ export default function MsdfText() {
 
   const program = new Program(gl, {
     // Get fallback shader for WebGL1 - needed for OES_standard_derivatives ext
-    vertex: renderer.isWebgl2 ? vertex300 : vertex100,
-    fragment: renderer.isWebgl2 ? fragment300 : fragment100,
+    vertex: vertex,
+    fragment: fragment,
     uniforms: {
       tMap: { value: texture }
     },

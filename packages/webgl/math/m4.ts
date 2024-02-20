@@ -1,4 +1,5 @@
-import * as v3 from './v3';
+import { FVec3 } from '.';
+import { Vec3Tuple } from './v3-builder';
 
 /**
  * 4x4 Matrix math math functions.
@@ -366,7 +367,7 @@ export function multiplyArray(m: Mat4, arr: Mat4[]) {
  * @param a __mut__ The matrix.
  * @param v The vector.
  */
-export function setTranslation(m: Mat4, v: v3.Tuple) {
+export function setTranslation(m: Mat4, v: Vec3Tuple) {
   m[12] = v[0];
   m[13] = v[1];
   m[14] = v[2];
@@ -379,7 +380,7 @@ export function setTranslation(m: Mat4, v: v3.Tuple) {
  * @param v __mut__ vector to hold result. If not passed a new one is created.
  * @param m The matrix.
  */
-export function getTranslation(v: v3.Tuple, m: Mat4) {
+export function getTranslation(v: Vec3Tuple, m: Mat4) {
   v[0] = m[12];
   v[1] = m[13];
   v[2] = m[14];
@@ -391,8 +392,8 @@ export function getTranslation(v: v3.Tuple, m: Mat4) {
  * @param axis The axis 0 = x, 1 = y, 2 = z;
  * @return The axis component of m.
  */
-export function getAxis(m: Mat4, axis: number): v3.Tuple {
-  const v = v3.create();
+export function getAxis(m: Mat4, axis: number): InstanceType<typeof FVec3> {
+  const v = FVec3.create();
 
   const off = axis * 4;
   v[0] = m[off + 0];
@@ -407,7 +408,7 @@ export function getAxis(m: Mat4, axis: number): v3.Tuple {
  * @param v the axis vector
  * @param axis The axis  0 = x, 1 = y, 2 = z;
  */
-export function setAxis(m: Mat4, v: v3.Tuple, axis: number) {
+export function setAxis(m: Mat4, v: Vec3Tuple, axis: number) {
   const off = axis * 4;
   m[off + 0] = v[0];
   m[off + 1] = v[1];
@@ -569,9 +570,9 @@ export function frustum(m: Mat4, left: number, right: number, bottom: number, to
   m[15] = 0;
 }
 
-let xAxis: v3.Tuple = v3.create();
-let yAxis: v3.Tuple = v3.create();
-let zAxis: v3.Tuple = v3.create();
+let xAxis = FVec3.create();
+let yAxis = FVec3.create();
+let zAxis = FVec3.create();
 
 /**
  * Computes a 4-by-4 look-at transformation.
@@ -585,18 +586,10 @@ let zAxis: v3.Tuple = v3.create();
  * @param target The position meant to be viewed.
  * @param up A vector pointing up.
  */
-export function lookAt(m: Mat4, eye: v3.Tuple, target: v3.Tuple, up: v3.Tuple) {
-  v3.copy(zAxis, eye);
-  v3.sub(zAxis, target);
-  v3.normalize(zAxis);
-
-  v3.copy(xAxis, up);
-  v3.cross(xAxis, zAxis);
-  v3.normalize(xAxis);
-
-  v3.copy(yAxis, zAxis);
-  v3.cross(yAxis, xAxis);
-  v3.normalize(yAxis);
+export function lookAt(m: Mat4, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple) {
+  zAxis.copy(eye).sub(target).normalize();
+  xAxis.copy(up).cross(zAxis).normalize();
+  yAxis.copy(zAxis).cross(xAxis).normalize();
 
   m[0] = xAxis[0];
   m[1] = xAxis[1];
@@ -623,7 +616,7 @@ export function lookAt(m: Mat4, eye: v3.Tuple, target: v3.Tuple, up: v3.Tuple) {
  * @param v The vector by
  *     which to translate.
  */
-export function translate(m: Mat4, v: v3.Tuple): void {
+export function translate(m: Mat4, v: Vec3Tuple): void {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -776,7 +769,7 @@ export function rotateZ(m: Mat4, angleInRadians: number) {
  *     about which to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function axisRotate(m: Mat4, [x, y, z]: v3.Tuple, angleInRadians: number) {
+export function axisRotate(m: Mat4, [x, y, z]: Vec3Tuple, angleInRadians: number) {
   const n = Math.sqrt(x * x + y * y + z * z);
 
   x /= n;
@@ -836,7 +829,7 @@ export function axisRotate(m: Mat4, [x, y, z]: v3.Tuple, angleInRadians: number)
  * @param v A vector of three entries specifying the
  *     factor by which to scale in each dimension.
  */
-export function scale(m: Mat4, [v0, v1, v2]: v3.Tuple) {
+export function scale(m: Mat4, [v0, v1, v2]: Vec3Tuple) {
   m[0] = v0 * m[0 * 4 + 0];
   m[1] = v0 * m[0 * 4 + 1];
   m[2] = v0 * m[0 * 4 + 2];
@@ -859,7 +852,7 @@ export function scale(m: Mat4, [v0, v1, v2]: v3.Tuple) {
  * @param v __mut__ The point to be transformed.
  * @param m The matrix.
  */
-export function transformPoint(v: v3.Tuple, m: Mat4) {
+export function transformPoint(v: Vec3Tuple, m: Mat4) {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -882,7 +875,7 @@ export function transformPoint(v: v3.Tuple, m: Mat4) {
  * @param m __mut__ The matrix to be transformed.
  * @param v The direction.
  */
-export function transformDirection(m: Mat4, v: v3.Tuple): void {
+export function transformDirection(m: Mat4, v: Vec3Tuple): void {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -906,7 +899,7 @@ let mi = identity();
  * @param v __mut__ The normal to be transformed.
  * @param m The matrix.
  */
-export function transformNormal(v: v3.Tuple, m: Mat4) {
+export function transformNormal(v: Vec3Tuple, m: Mat4) {
   copy(mi, m);
   inverse(mi);
 
