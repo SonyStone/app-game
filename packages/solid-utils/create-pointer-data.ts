@@ -1,17 +1,17 @@
-import { v2 } from '@webgl/math';
 import { createMemo } from 'solid-js';
 
+import { Vec2 } from '@webgl/math';
 import { createPointerStream } from './create-pointer-stream';
 
 export function createPointerData(element: HTMLElement) {
   const pointer$ = createPointerStream(element);
   const pointerData = {
-    start: v2.create(),
-    end: v2.create(),
-    move: v2.create(),
-    prev: v2.create(),
-    tilt: v2.create(),
-    angle: v2.create(),
+    start: Vec2.create(),
+    end: Vec2.create(),
+    move: Vec2.create(),
+    prev: Vec2.create(),
+    tilt: Vec2.create(),
+    angle: Vec2.create(),
     pressure: 0,
     distance: 0
   };
@@ -31,30 +31,30 @@ export function createPointerData(element: HTMLElement) {
 
       switch (event?.type) {
         case 'pointerdown':
-          v2.set(pointerData.start, x, y);
-          v2.set(pointerData.prev, x, y);
-          v2.set(pointerData.move, x, y);
+          pointerData.start.set(x, y);
+          pointerData.prev.set(x, y);
+          pointerData.move.set(x, y);
           pointerData.distance = 0;
           break;
         case 'pointermove':
-          v2.copy(pointerData.prev, pointerData.move);
-          v2.set(pointerData.move, x, y);
-          pointerData.distance = v2.distanceSquared(pointerData.move, pointerData.prev);
+          pointerData.prev.copy(pointerData.move);
+          pointerData.move.set(x, y);
+          pointerData.distance = Vec2.distanceSq(pointerData.move, pointerData.prev);
           break;
         default:
-          v2.set(pointerData.move, x, y);
-          v2.set(pointerData.end, x, y);
-          pointerData.distance = v2.distanceSquared(pointerData.move, pointerData.prev);
+          pointerData.move.set(x, y);
+          pointerData.end.set(x, y);
+          pointerData.distance = Vec2.distanceSq(pointerData.move, pointerData.prev);
           break;
       }
 
       if (event.pointerType === 'pen') {
         pointerData.pressure = event.pressure;
-        v2.set(pointerData.tilt, event.tiltX, event.tiltY);
-        v2.set(pointerData.angle, (event as any).altitudeAngle, (event as any).azimuthAngle);
+        pointerData.tilt.set(event.tiltX, event.tiltY);
+        pointerData.angle.set((event as any).altitudeAngle, (event as any).azimuthAngle);
       } else {
         pointerData.pressure = 1;
-        v2.set(pointerData.tilt, 0, 0);
+        pointerData.tilt.set(0, 0);
       }
 
       return pointerData;
