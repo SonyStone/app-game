@@ -324,6 +324,12 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/piecs-examles/performance/performance'))
   },
   {
+    path: '/ui-components-examples',
+    name: 'UI Components',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/ui-components-examples/components'))
+  },
+  {
     path: '/:any',
     name: 'Empty',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,

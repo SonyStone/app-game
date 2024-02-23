@@ -294,6 +294,12 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
       return Math.sqrt(dx * dx + dy * dy);
     }
 
+    static distanceSq(a: Vec2Tuple, b: Vec2Tuple): number {
+      const dx = a[0] - b[0];
+      const dy = a[1] - b[1];
+      return dx * dx + dy * dy;
+    }
+
     /**
      * Calculates the squared distance between this vector and another vector.
      * @param vec The vector to calculate the squared distance to.
