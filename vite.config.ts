@@ -4,10 +4,6 @@ import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 
-// node_modules\mediainfo.js\dist\MediaInfoModule.wasm
-// D:\1D\Game-Dev\app-game\node_modules\mediainfo.js\dist\MediaInfoModule.wasm
-// src D:\1D\Game-Dev\app-game\node_modules\mediainfo.js\dist\MediaInfoModule.wasm
-
 const root = resolve(__dirname, 'src');
 const packages = resolve(__dirname, 'packages');
 
@@ -19,8 +15,6 @@ export default defineConfig({
     solidPlugin(),
     solidSvg()
     // viteFBXPlugin(),
-    // vitePluginWasmPack('./wasm_game_of_life'),
-    // rust()
   ],
   server: {
     port: 3200,

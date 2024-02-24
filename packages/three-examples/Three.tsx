@@ -14,7 +14,6 @@ import {
   WebGLRenderer
 } from 'three';
 
-import { useStats } from '../../src/Stats.provider';
 import { useCamera } from './Camera.provider';
 import s from './SvgLoader.module.scss';
 
@@ -71,16 +70,13 @@ export default function Three() {
   }
 
   let id: number;
-  const stats = useStats();
   let currentCamera!: Camera;
 
   function animate() {
     id = requestAnimationFrame(animate);
-    stats.begin();
     cube.rotation.x += 0.01;
     cube.rotation.y += 0.01;
     renderer.render(scene, currentCamera);
-    stats.end();
   }
 
   createEffect(() => {
@@ -101,10 +97,7 @@ export default function Three() {
   controls.addEventListener('change', render);
 
   function render() {
-    stats.begin();
-
     renderer.render(scene, currentCamera);
-    stats.end();
   }
 
   onCleanup(() => {

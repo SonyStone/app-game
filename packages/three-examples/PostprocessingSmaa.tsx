@@ -11,7 +11,6 @@ import {
   WebGLRenderer
 } from 'three';
 
-import { useStats } from '../../src/Stats.provider';
 import brick_diffuse from './brick_diffuse.jpg';
 import { useCamera } from './Camera.provider';
 import { EffectComposer } from './postprocessing/EffectComposer';
@@ -101,12 +100,8 @@ export default function PostprocessingSmaa() {
     animate();
   });
 
-  const stats = useStats();
-
   function animate() {
     id = requestAnimationFrame(animate);
-
-    stats.begin();
 
     for (let i = 0; i < objects.children.length; i++) {
       const child = objects.children[i];
@@ -116,8 +111,6 @@ export default function PostprocessingSmaa() {
     }
 
     render();
-
-    stats.end();
   }
 
   onCleanup(() => {

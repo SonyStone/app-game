@@ -2,7 +2,6 @@ import { Application, Assets, Container, Graphics, Sprite, Texture, utils } from
 import { fromEvent } from 'rxjs';
 import { onCleanup } from 'solid-js';
 
-import { useStats } from '../../../src/Stats.provider';
 import { collisionExample } from './collisionExample';
 import { isoBasic } from './isoBasic';
 import { offseting } from './pointer';
@@ -24,17 +23,13 @@ export default function Main() {
 
   console.log(`app`, app);
 
-  const stats = useStats();
-
   window.onresize = () => {
     console.log(`W.H`, window.document.body.clientWidth, window.document.body.clientHeight);
     // app.renderer.resolution = window.devicePixelRatio || 1;
     // app.screen.height = window.document.body.clientHeight;
     // app.screen.width = window.document.body.clientWidth;
     console.log(`resolution`, app.renderer.resolution);
-    stats.begin();
     app.renderer.resize(window.document.body.clientWidth, window.document.body.clientHeight);
-    stats.end();
   };
 
   const world_container = new Container();
@@ -74,7 +69,7 @@ export default function Main() {
     world_container.addChild(map);
 
     world_container.addChild(isoBasic(app));
-    world_container.addChild(collisionExample(app, world_container, stats));
+    world_container.addChild(collisionExample(app, world_container));
 
     {
       const sprite = Sprite.from(house_1);
@@ -96,10 +91,8 @@ export default function Main() {
 
   world_container.position.copyFrom(position);
   const sub1 = offseting(window.document.body).subscribe(([x, y]) => {
-    stats.begin();
     position.set(position.x - x, position.y - y);
     world_container.position.copyFrom(position);
-    stats.end();
   });
 
   const sub2 = fromEvent<WheelEvent>(window, 'wheel').subscribe((event) => {

@@ -1,14 +1,6 @@
-import { Container, Renderer, Sprite, Texture, utils } from "pixi.js";
-import { onCleanup } from "solid-js";
-import {
-  BoxGeometry,
-  Mesh,
-  MeshBasicMaterial,
-  PerspectiveCamera,
-  Scene,
-  WebGLRenderer,
-} from "three";
-import { useStats } from "./Stats.provider";
+import { Container, Renderer, Sprite, Texture, utils } from 'pixi.js';
+import { onCleanup } from 'solid-js';
+import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 
 function createApplication() {
   // const renderer =
@@ -16,13 +8,13 @@ function createApplication() {
   const renderer = new Renderer({
     width: 640,
     height: 360,
-    backgroundAlpha: 0.5,
+    backgroundAlpha: 0.5
   });
   const stage = new Container();
 
   return {
     stage,
-    renderer,
+    renderer
   };
 }
 
@@ -30,21 +22,18 @@ export default function ThreePixi() {
   // Pixi.js
   const pixi = (function () {
     const { renderer, stage } = createApplication();
-    const texture = Texture.from("bunny.png");
+    const texture = Texture.from('bunny.png');
     const sprite = new Sprite(texture);
     stage.addChild(sprite);
 
     let elapsed = 0.0;
     let id: number;
-    const stats = useStats();
     function animate() {
       id = requestAnimationFrame(animate);
-      stats.begin();
       const delta = 1;
       elapsed += delta;
       sprite.x = 100.0 + Math.cos(elapsed / 50.0) * 100.0;
       renderer.render(stage);
-      stats.end();
     }
     animate();
 
@@ -69,7 +58,7 @@ export default function ThreePixi() {
 
     const renderer = new WebGLRenderer({
       alpha: true,
-      antialias: true,
+      antialias: true
       // ...parameters,
     });
     renderer.setSize(640, 360);

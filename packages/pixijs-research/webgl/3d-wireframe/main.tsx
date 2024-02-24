@@ -4,7 +4,6 @@ import { Spherical, setFromSpherical } from '@webgl/math/spherical';
 import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@webgl/static-variables';
 import { Accessor, Setter, createEffect, onCleanup, onMount } from 'solid-js';
 
-import { useStats } from '../../../../src/Stats.provider';
 import { createMouseRotate } from './create-mouse-rotate';
 import { createMouseWheelZoom } from './create-mouse-wheel-zoom';
 import { createImage } from './image/create-image';
@@ -140,8 +139,6 @@ export function Main(prop: { ctx: Context }) {
 
   const up = FVec3.create(0, 1, 0);
 
-  const stats = useStats();
-
   onMount(async () => {
     const shaderImage = await createImage(gl);
     // await new Promise((res) => setTimeout(() => res(0), 1000));
@@ -180,15 +177,11 @@ export function Main(prop: { ctx: Context }) {
     function handleRaf(time: number) {
       id = requestAnimationFrame(handleRaf);
 
-      stats.begin();
-
       ctx.renderTime = time;
       ctx.renderDeltaTime = (time - ctx.renderTime) * 0.001;
 
       render(ctx);
       ctx.setCamera(camera);
-
-      stats.end();
     }
 
     handleRaf(0);

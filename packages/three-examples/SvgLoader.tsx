@@ -12,7 +12,6 @@ import {
   WebGLRenderer
 } from 'three';
 
-import { useStats } from '../../src/Stats.provider';
 import { useCamera } from './Camera.provider';
 import Controls from './Controls';
 import { loadSVG } from './loadSVG';
@@ -37,8 +36,6 @@ export default function SvgLoader() {
 
   controls.init(renderer.domElement);
 
-  const stats = useStats();
-
   let currentCamera!: Camera;
   createEffect(() => {
     const { width, height } = resize();
@@ -48,9 +45,7 @@ export default function SvgLoader() {
   });
 
   function render() {
-    stats.begin();
     renderer.render(scene, currentCamera);
-    stats.end();
   }
   controls.addEventListener('change', render);
   controls.screenSpacePanning = true;

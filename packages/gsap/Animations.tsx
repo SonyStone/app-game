@@ -2,7 +2,6 @@ import { createEffect, createSignal, For, onCleanup } from 'solid-js';
 
 import PauseIcon from '@packages/film-annotation-player/icons/pause.svg';
 import PlayIcon from '@packages/film-annotation-player/icons/play.svg';
-import { useStats } from '../../src/Stats.provider';
 import s from './Animations.module.scss';
 import { Box, Slider } from './Box';
 import { back, bounce, circ, expo, linear, sine } from './core/easing-2';
@@ -27,10 +26,8 @@ export default function () {
     spd = speed();
   });
 
-  const stats = useStats();
   function tick(timestamp: number) {
     id = requestAnimationFrame(tick);
-    stats.begin();
 
     frame = round(frame + (step * spd) / 60 / 2.5);
     frame = frame < 0 ? 1 + frame : frame;
@@ -49,8 +46,6 @@ export default function () {
     frame = round(frame);
 
     setTime(frame);
-
-    stats.end();
   }
 
   createEffect(() => {

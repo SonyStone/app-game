@@ -11,7 +11,6 @@ import {
   sRGBEncoding
 } from 'three';
 
-import { useStats } from '../../src/Stats.provider';
 import { useCamera } from './Camera.provider';
 import s from './SvgLoader.module.scss';
 import { createHouse, createTiles } from './tiles';
@@ -28,8 +27,6 @@ export default function Sprites() {
   renderer.sortObjects = false;
 
   controls.init(renderer.domElement);
-
-  const stats = useStats();
 
   let currentCamera!: Camera;
 
@@ -77,10 +74,7 @@ export default function Sprites() {
   }
 
   function render() {
-    stats.begin();
-
     renderer.render(scene, currentCamera);
-    stats.end();
   }
 
   controls.addEventListener('change', render);

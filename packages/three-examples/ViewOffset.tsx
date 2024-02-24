@@ -11,7 +11,6 @@ import {
   WebGLRenderer
 } from 'three';
 
-import { useStats } from '../../src/Stats.provider';
 import { createResize } from './Camera.provider';
 import brick_diffuse from './brick_diffuse.jpg';
 import { OrbitControls } from './controls/OrbitControls';
@@ -35,7 +34,6 @@ export default function ViewOffset() {
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
 
-  const stats = useStats();
   const resize = createResize();
 
   const camera = new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
@@ -91,8 +89,6 @@ export default function ViewOffset() {
   console.log(`window.screen`, window.screen);
 
   function render() {
-    stats.begin();
-
     // TODO make dynamic windows detection
 
     const fullWidth = 1920 + 2560 + 1920;
@@ -101,7 +97,6 @@ export default function ViewOffset() {
     camera.setViewOffset(fullWidth, fullHeight, window.screenX + 1920, window.screenY, width, height);
 
     renderer.render(scene, camera);
-    stats.end();
   }
 
   sharedWorker.port.start();

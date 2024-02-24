@@ -1,6 +1,5 @@
 import { Link, RouteDefinition } from '@solidjs/router';
 import { Component, JSX, Show, lazy } from 'solid-js';
-import s from './App.module.scss';
 
 import multitouchThumbnail from '@packages/hammer-examples/thumbnail.png';
 import baseTileSizeThumbnail from './thumbnail/base-tile-size-thumbnail.png?url';
@@ -51,7 +50,7 @@ export const routes: Routes[] = [
     path: '/three-pixi',
     name: 'ThreePixi',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./ThreePixi'))
+    component: lazy(() => import('../packages/three-examples/ThreePixi'))
   },
   {
     path: '/3d-rpg',
@@ -69,13 +68,13 @@ export const routes: Routes[] = [
     path: '/tanki',
     name: 'Tanki',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./Tanki/Tanki'))
+    component: lazy(() => import('@packages/tanki/tanki'))
   },
   {
     path: '/wasm-game-of-life',
     name: 'Game Of Life',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={gameOfLifeThumbnail} name={props.name} />,
-    component: lazy(() => import('./WasmGameOfLife'))
+    component: lazy(() => import('@packages/wasm-rust-examples/wasm-game-of-life'))
   },
   {
     path: '/my-pixijs',
@@ -333,6 +332,8 @@ export const routes: Routes[] = [
     path: '/:any',
     name: 'Empty',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: () => <div class={s.nothing}>Nothing is here</div>
+    component: () => (
+      <div class="flex h-screen w-screen place-content-center place-items-center text-4xl">Nothing is here</div>
+    )
   }
 ];

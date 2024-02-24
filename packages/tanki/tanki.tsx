@@ -1,36 +1,28 @@
-import { createEventSignal } from "@solid-primitives/event-listener";
-import {
-  Application,
-  Container,
-  GraphicsGeometry,
-  Point,
-  Transform,
-  utils,
-} from "pixi.js";
-import { createEffect, createMemo, onCleanup } from "solid-js";
-import { Key } from "ts-keycode-enum";
-import { useStats } from "../Stats.provider";
-import { hasSymbol, single, withSymbol, World } from "./ecs";
-import Camera from "./elements/camera";
-import { createCircle, Ellipse } from "./elements/ellipse";
-import { createLocator } from "./elements/locator";
-import { createPull, createTank } from "./elements/tank";
-import { createRope, createTrail, Trail, updateTrail } from "./elements/trail";
-import { captureKeyboard } from "./utils/capture-keyboard";
-import { captureMouse } from "./utils/capture-mouse";
+import { createEventSignal } from '@solid-primitives/event-listener';
+import { Application, Container, GraphicsGeometry, Point, Transform, utils } from 'pixi.js';
+import { createEffect, createMemo, onCleanup } from 'solid-js';
+import { Key } from 'ts-keycode-enum';
+import { World, hasSymbol, single, withSymbol } from './ecs';
+import Camera from './elements/camera';
+import { Ellipse, createCircle } from './elements/ellipse';
+import { createLocator } from './elements/locator';
+import { createPull, createTank } from './elements/tank';
+import { Trail, createRope, createTrail, updateTrail } from './elements/trail';
+import { captureKeyboard } from './utils/capture-keyboard';
+import { captureMouse } from './utils/capture-mouse';
 
 const easing = 0.08;
 
-const CAMERA = Symbol("camera");
-const KEYBOARD = Symbol("keyboard");
-const WORLD = Symbol("world");
-const TRAIL = Symbol("trail");
+const CAMERA = Symbol('camera');
+const KEYBOARD = Symbol('keyboard');
+const WORLD = Symbol('world');
+const TRAIL = Symbol('trail');
 
 export default function Tanki() {
   const app = new Application({
     antialias: true,
     backgroundColor: 0x1099bb,
-    resizeTo: window,
+    resizeTo: window
   });
   // app.stage.addSystem(EventSystem, "events");
 
@@ -63,16 +55,14 @@ export default function Tanki() {
 
   // this.world.addChild(ellipse);
 
-  const stats = useStats();
-
   const canvasElement = app.view as HTMLCanvasElement;
   const mouse = captureMouse(canvasElement);
   const keyboard = captureKeyboard(window);
 
-  const lastEvent = createEventSignal(canvasElement, "wheel");
+  const lastEvent = createEventSignal(canvasElement, 'wheel');
 
   const deltaY = createMemo(() => lastEvent()?.deltaY ?? 0, 0, {
-    equals: false,
+    equals: false
   });
 
   createEffect(() => {
@@ -86,23 +76,14 @@ export default function Tanki() {
 
   const pull = createPull();
 
-  stage.on("click", () => {
+  stage.on('click', () => {
     rope.reset();
   });
 
   const ecs = new World()
-    .addSystem(updateCamera, [
-      single(hasSymbol(CAMERA)),
-      single(hasSymbol(KEYBOARD)),
-      single(hasSymbol(WORLD)),
-    ])
+    .addSystem(updateCamera, [single(hasSymbol(CAMERA)), single(hasSymbol(KEYBOARD)), single(hasSymbol(WORLD))])
     .addSystem(
-      (
-        items: { transform: Transform }[],
-        locator: { transform: Transform },
-        camera: Transform,
-        keyboard: Set<Key>
-      ) => {
+      (items: { transform: Transform }[], locator: { transform: Transform }, camera: Transform, keyboard: Set<Key>) => {
         pull.updatePull(locator.transform, keyboard, camera);
         for (const { transform } of items) {
           transform.position.copyFrom(locator.transform.position);
@@ -113,7 +94,7 @@ export default function Tanki() {
         (e: any) => e.tank && e.player,
         single((e: any) => e.pullLocator),
         single(hasSymbol(CAMERA)),
-        single(hasSymbol(KEYBOARD)),
+        single(hasSymbol(KEYBOARD))
       ]
     )
     .addSystem(() => {
@@ -134,7 +115,7 @@ export default function Tanki() {
         return {
           player: true,
           tank: true,
-          transform: tank.transform,
+          transform: tank.transform
         };
       })()
     )
@@ -146,7 +127,7 @@ export default function Tanki() {
 
         return {
           tank: true,
-          transform: tank.transform,
+          transform: tank.transform
         };
       })()
     )
@@ -158,7 +139,7 @@ export default function Tanki() {
 
         return {
           pullLocator,
-          transform: pullLocator.transform,
+          transform: pullLocator.transform
         };
       })()
     )
@@ -167,17 +148,14 @@ export default function Tanki() {
     .addEntity(withSymbol(KEYBOARD, keyboard))
     .addEntity(withSymbol(TRAIL, createTrail(world, cam)));
 
-  stage.on("click", () => {
+  stage.on('click', () => {
     const circle = createCircle();
     circle.zIndex = 0;
-    circle.position.set(
-      (Math.random() - 0.5) * 1000,
-      (Math.random() - 0.5) * 1000
-    );
+    circle.position.set((Math.random() - 0.5) * 1000, (Math.random() - 0.5) * 1000);
     world.addChild(circle);
     ecs.addEntity({
       cirle: circle,
-      transform: circle.transform,
+      transform: circle.transform
     });
   });
 
@@ -186,7 +164,6 @@ export default function Tanki() {
     if (skipper.skip()) {
       return;
     }
-    stats.begin();
     // tanks[0].player(keyboard, mouse, cam);
 
     // cam.focusing(app.renderer, camTarget);
@@ -201,7 +178,6 @@ export default function Tanki() {
     // }
 
     app.renderer.render(world);
-    stats.end();
   });
 
   return <>{app.view}</>;
@@ -219,7 +195,7 @@ function createSkipper(howMuchToSkip: number) {
         skip--;
         return true;
       }
-    },
+    }
   };
 }
 

@@ -1,18 +1,12 @@
 import { onCleanup } from 'solid-js';
 
-import init, {
-  Cell,
-  Universe,
-} from '../wasm_game_of_life/pkg/wasm_game_of_life';
-import { useStats } from './Stats.provider';
+import init, { Cell, Universe } from '../../wasm_game_of_life/pkg/wasm_game_of_life';
 
 export default function WasmGameOfLife() {
   // greet();
 
   const playPauseButton = (<button>▶</button>) as HTMLButtonElement;
   const canvas = (<canvas></canvas>) as HTMLCanvasElement;
-
-  const stats = useStats();
 
   let animationId: number | null = null;
 
@@ -84,12 +78,7 @@ export default function WasmGameOfLife() {
 
           ctx.fillStyle = cells[idx] === Cell.Dead ? DEAD_COLOR : ALIVE_COLOR;
 
-          ctx.fillRect(
-            col * (CELL_SIZE + 1) + 1,
-            row * (CELL_SIZE + 1) + 1,
-            CELL_SIZE,
-            CELL_SIZE
-          );
+          ctx.fillRect(col * (CELL_SIZE + 1) + 1, row * (CELL_SIZE + 1) + 1, CELL_SIZE, CELL_SIZE);
         }
       }
 
@@ -105,14 +94,11 @@ export default function WasmGameOfLife() {
       // pre.textContent = universe.render();
       // fps.render();
 
-      stats.begin();
-
       drawGrid();
       drawCells();
       // for (let i = 0; i < 90; i++) {
       universe.tick();
 
-      stats.end();
       // }
       // universe.tick();
       animationId = requestAnimationFrame(renderLoop);
