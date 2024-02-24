@@ -47,24 +47,6 @@ export const routes: Routes[] = [
     component: lazy(() => import('./home-page'))
   },
   {
-    path: '/three-pixi',
-    name: 'ThreePixi',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('../packages/three-examples/ThreePixi'))
-  },
-  {
-    path: '/3d-rpg',
-    name: '3D RPG',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={rpgThumbnail} name={props.name} />,
-    component: lazy(() => import('./3d-rpg/Main'))
-  },
-  {
-    path: '/3d-rpg-tests',
-    name: '3D RPG Tests',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./3d-rpg/load-fbx-test'))
-  },
-  {
     path: '/tanki',
     name: 'Tanki',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
@@ -88,40 +70,10 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/pixijs-research/webgl/3d-wireframe/3dWireframe'))
   },
   {
-    path: '/webgl_postprocessing_smaa',
-    name: 'SMAA',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={smaaThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/three-examples/PostprocessingSmaa'))
-  },
-  {
-    path: '/webgl_loader_svg',
-    name: 'SVG Loader',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={svgLoaderThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/three-examples/SvgLoader'))
-  },
-  {
-    path: '/sprites',
-    name: 'Sprites',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={spritesThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/three-examples/Sprites'))
-  },
-  {
     path: '/babylon',
     name: 'Babylon.js',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/babylonjs-examples/babylon-example'))
-  },
-  {
-    path: '/three',
-    name: 'Three',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/three-examples/Three'))
-  },
-  {
-    path: '/solid-three',
-    name: 'SolidThree',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/three-examples/Solid-Three'))
   },
   {
     path: '/paint',
@@ -134,12 +86,6 @@ export const routes: Routes[] = [
     name: 'twgl',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={twglThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/twgl-examples/Main'))
-  },
-  {
-    path: '/view-offset',
-    name: 'ViewOffset',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/three-examples/ViewOffset'))
   },
   {
     path: '/game-ecs',
@@ -172,12 +118,6 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/gsap/Animations'))
   },
   {
-    path: '/phaser-game',
-    name: 'Phaser',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={phaserThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/phaser-examples/phaser/Game'))
-  },
-  {
     path: '/100-world-bodies',
     name: '100 world bodies',
 
@@ -189,6 +129,116 @@ export const routes: Routes[] = [
     name: 'Breakout',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={breakoutThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/bevy-examples/breakout'))
+  },
+  {
+    path: '/ldtk-ts-exampless',
+    name: 'ldtk-ts example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/ldtk-ts-examples/example'))
+  },
+  {
+    path: '/hammer-multitouch',
+    name: 'Hammer Multitouch',
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={multitouchThumbnail} name={props.name} />,
+    component: lazy(() => import('@packages/hammer-examples/multitouch'))
+  },
+  {
+    path: '/game-shaders-for-beginners',
+    name: 'Game Shaders For Beginners',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/game-shaders-for-beginners/game-shaders-for-beginners'))
+  },
+  {
+    path: '/webxr-vr-teleport',
+    name: 'WebXR VR Teleport',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/three-examples/webxr-vr-teleport/webxr-vr-teleport'))
+  },
+  {
+    path: '/webgl-state-diagram',
+    name: 'WebGL State Diagram',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/webgl-state-diagram/webgl-state-diagram'))
+  },
+  {
+    path: '/piecs-performance',
+    name: 'piecs performance',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/piecs-examles/performance/performance'))
+  },
+  {
+    path: '/ui-components-examples',
+    name: 'UI Components',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/ui-components-examples/components'))
+  },
+  {
+    path: '/three-examples',
+    name: 'Three js Examples',
+    children: [
+      {
+        path: '/three-pixi',
+        name: 'ThreePixi',
+        Preview: (props) => <Thumbnail href={'/three-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/three-examples/ThreePixi'))
+      },
+      {
+        path: '/3d-rpg',
+        name: '3D RPG',
+        Preview: (props) => (
+          <Thumbnail href={'/three-examples' + props.path} thumbnail={rpgThumbnail} name={props.name} />
+        ),
+        component: lazy(() => import('@packages/three-examples/3d-rpg/Main'))
+      },
+      {
+        path: '/3d-rpg-tests',
+        name: '3D RPG Tests',
+        Preview: (props) => <Thumbnail href={'/three-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/three-examples/3d-rpg/load-fbx-test'))
+      },
+      {
+        path: '/webgl_postprocessing_smaa',
+        name: 'SMAA',
+        Preview: (props) => (
+          <Thumbnail href={'/three-examples' + props.path} thumbnail={smaaThumbnail} name={props.name} />
+        ),
+        component: lazy(() => import('@packages/three-examples/PostprocessingSmaa'))
+      },
+      {
+        path: '/webgl_loader_svg',
+        name: 'SVG Loader',
+        Preview: (props) => (
+          <Thumbnail href={'/three-examples' + props.path} thumbnail={svgLoaderThumbnail} name={props.name} />
+        ),
+        component: lazy(() => import('@packages/three-examples/SvgLoader'))
+      },
+      {
+        path: '/sprites',
+        name: 'Sprites',
+        Preview: (props) => (
+          <Thumbnail href={'/three-examples' + props.path} thumbnail={spritesThumbnail} name={props.name} />
+        ),
+        component: lazy(() => import('@packages/three-examples/Sprites'))
+      },
+      {
+        path: '/three',
+        name: 'Three',
+        Preview: (props) => <Thumbnail href={'/three-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/three-examples/Three'))
+      },
+      {
+        path: '/solid-three',
+        name: 'SolidThree',
+        Preview: (props) => <Thumbnail href={'/three-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/three-examples/Solid-Three'))
+      },
+      {
+        path: '/view-offset',
+        name: 'ViewOffset',
+        Preview: (props) => <Thumbnail href={'/three-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/three-examples/ViewOffset'))
+      }
+    ]
   },
   {
     path: '/ogl-examples',
@@ -281,52 +331,16 @@ export const routes: Routes[] = [
           <Thumbnail href={'/phaser-examples' + props.path} name={props.name} thumbnail={rpgGamesThumbnail} />
         ),
         component: lazy(() => import('@packages/phaser-examples/rpg/rpg-game'))
+      },
+      {
+        path: '/phaser-game',
+        name: 'Phaser',
+        Preview: (props) => (
+          <Thumbnail href={'/phaser-examples' + props.path} thumbnail={phaserThumbnail} name={props.name} />
+        ),
+        component: lazy(() => import('@packages/phaser-examples/phaser/Game'))
       }
     ]
-  },
-  {
-    path: '/ldtk-ts-exampless',
-    name: 'ldtk-ts example',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ldtk-ts-examples/example'))
-  },
-  {
-    path: '/hammer-multitouch',
-    name: 'Hammer Multitouch',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={multitouchThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/hammer-examples/multitouch'))
-  },
-
-  {
-    path: '/game-shaders-for-beginners',
-    name: 'Game Shaders For Beginners',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/game-shaders-for-beginners/game-shaders-for-beginners'))
-  },
-  {
-    path: '/webxr-vr-teleport',
-    name: 'WebXR VR Teleport',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/three-examples/webxr-vr-teleport/webxr-vr-teleport'))
-  },
-
-  {
-    path: '/webgl-state-diagram',
-    name: 'WebGL State Diagram',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/webgl-state-diagram/webgl-state-diagram'))
-  },
-  {
-    path: '/piecs-performance',
-    name: 'piecs performance',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/piecs-examles/performance/performance'))
-  },
-  {
-    path: '/ui-components-examples',
-    name: 'UI Components',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ui-components-examples/components'))
   },
   {
     path: '/:any',
