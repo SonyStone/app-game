@@ -1,0 +1,111 @@
+.main {
+  display: inline-block;
+  position: relative;
+  text-align: left;
+  font-size: inherit;
+  font-weight: 400;
+  line-height: 1.125;
+  font-family: Roboto,Helvetica Neue,sans-serif;
+  letter-spacing: normal;
+}
+
+.wrapper {
+  position: relative;
+  margin: 0.25em 0;
+  padding-bottom: 1.34375em;
+}
+
+.flex {
+  padding: 0 0.75em 0 0.75em;
+  margin-top: -0.25em;
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.outline {
+  color: #0000001f;
+  display: flex;
+  position: absolute;
+  top: 0.25em;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.outlineThick {
+  opacity: 0;
+  color: #000000de;
+}
+
+.outlineStart {
+  width: 7px;
+  border-radius: 5px 0 0 5px;
+  border: 1px solid currentColor;
+  border-right-style: none;
+  min-width: 5px;
+}
+
+.outlineGap {
+  width: 101.5px;
+  border-radius: 0.000001px;
+  border: 1px solid currentColor;
+  border-left-style: none;
+  border-right-style: none;
+}
+
+.outlineEnd {
+  border: 1px solid currentColor;
+  min-width: 5px;
+  border-radius: 0 5px 5px 0;
+  border-left-style: none;
+  flex-grow: 1;
+}
+
+
+
+.infix {
+  padding: 1em 0;
+  display: block;
+  position: relative;
+  flex: auto;
+  min-width: 0;
+  width: 180px;
+  border-top: 0.84375em solid transparent;
+}
+
+@keyframes cdk-text-field-autofill-end {/*!*/}
+
+.input {
+  caret-color: #673ab7;
+  font: inherit;
+  background: transparent;
+  color: currentColor;
+  border: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  vertical-align: bottom;
+  text-align: inherit;
+  box-sizing: content-box;
+  margin-top: -0.0625em;
+  animation: cdk-text-field-autofill-end 0s 1ms;
+}
+
+.labelWrapper {
+  position: absolute;
+  left: 0;
+  box-sizing: content-box;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+
+  top: -0.84375em;
+  padding-top: 0.84375em;
+}

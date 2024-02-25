@@ -25,7 +25,7 @@ function Thumbnail(props: { thumbnail?: string; href: string; name?: string }) {
         <img class="rounded-1 object-cover" src={props.thumbnail} />
       </Show>
       <Show when={!!props.name}>
-        <span class="absolute bottom-0 start-0 px-2 pb-2 max-w-full rounded-se-2 text-2xl leading-6 truncate bg-slate-200">
+        <span class="absolute bottom-0 start-0 px-2 pb-2 max-w-full rounded-se-2 text-2xl leading-6 bg-slate-200">
           {props.name}
         </span>
       </Show>
@@ -170,7 +170,7 @@ export const routes: Routes[] = [
     path: '/ui-components-examples',
     name: 'UI Components',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ui-components-examples/components'))
+    component: lazy(() => import('@packages/ui-components-examples/breadcrumbs/components'))
   },
   {
     path: '/three-examples',
@@ -339,6 +339,42 @@ export const routes: Routes[] = [
           <Thumbnail href={'/phaser-examples' + props.path} thumbnail={phaserThumbnail} name={props.name} />
         ),
         component: lazy(() => import('@packages/phaser-examples/phaser/Game'))
+      }
+    ]
+  },
+  {
+    path: '/ecsy-examples',
+    name: 'ECSY Examples',
+    children: [
+      {
+        path: '/circles-boxes',
+        name: 'Circles Boxes',
+        Preview: (props) => <Thumbnail href={'/ecsy-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ecsy-examples/circles-boxes/circles-boxes'))
+      },
+      {
+        path: '/circles-boxes-dom',
+        name: 'Circles Boxes DOM',
+        Preview: (props) => <Thumbnail href={'/ecsy-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ecsy-examples/circles-boxes-dom/circles-boxes-dom'))
+      },
+      {
+        path: '/circles-boxes-pixijs',
+        name: 'Circles Boxes Pixijs',
+        Preview: (props) => <Thumbnail href={'/ecsy-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ecsy-examples/circles-boxes-pixijs/circles-boxes-pixijs'))
+      },
+      {
+        path: '/canvas',
+        name: 'Canvas',
+        Preview: (props) => <Thumbnail href={'/ecsy-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ecsy-examples/canvas/intersecting-circles'))
+      },
+      {
+        path: '/dev',
+        name: 'Dev',
+        Preview: (props) => <Thumbnail href={'/ecsy-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ecsy-examples/dev/dev'))
       }
     ]
   },

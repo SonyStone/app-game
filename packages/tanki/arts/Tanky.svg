@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 19.2.1, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 400 400" style="enable-background:new 0 0 400 400;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#9C9C9C;}
+	.st1{fill:none;stroke:#2B2B2B;stroke-width:3;}
+	.st2{fill:#595959;}
+	.st3{fill:#30BF3C;stroke:#191919;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st4{fill:#BF3030;stroke:#191919;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st5{fill:none;stroke:#191919;stroke-width:11;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st6{fill:none;stroke:#3039BF;stroke-width:8;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st7{fill:none;stroke:#191919;stroke-width:6;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st8{fill:none;stroke:#3039BF;stroke-width:4;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st9{fill:#3039BF;}
+	.st10{fill:none;stroke:#191919;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+	.st11{fill:#3039BF;stroke:#191919;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:10;}
+</style>
+<symbol  id="Box" viewBox="-23.4 -23.4 46.8 46.8">
+	<g>
+		<g>
+			<rect x="-21.9" y="-21.9" class="st0" width="43.8" height="43.8"/>
+			<line class="st0" x1="-21.9" y1="21.9" x2="21.9" y2="-21.9"/>
+			<line class="st0" x1="21.9" y1="21.9" x2="-21.9" y2="-21.9"/>
+		</g>
+		<g>
+			<rect x="-21.9" y="-21.9" class="st1" width="43.8" height="43.8"/>
+			<line class="st1" x1="-21.9" y1="21.9" x2="21.9" y2="-21.9"/>
+			<line class="st1" x1="21.9" y1="21.9" x2="-21.9" y2="-21.9"/>
+		</g>
+	</g>
+</symbol>
+<g id="Background">
+	<rect class="st2" width="400" height="400"/>
+</g>
+<g id="Layer_1">
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(1 0 0 -2.7326 160.5 70.1469)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(0.7071 0.7071 0.7071 -0.7071 361.5 123.5)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(1.6804 1.6804 0.7071 -0.7071 328.4427 156.5572)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(1 0 0 -1 112.875 70.5)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(1 0 0 -1 205.75 70.5)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(0.7071 0.7071 1.7066 -1.7066 64.9133 396.5128)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(1 0 0 -1 317.1087 400)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(1 0 0 -1 45.9261 -3.5)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(1 0 0 -1.8183 0 51.3729)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(1.4438 -1.4438 -0.7071 -0.7071 302.995 -15)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(0.7071 0.7071 0.7071 -0.7071 347 5.5)" style="overflow:visible;"/>
+</g>
+<g id="Tanks">
+	<g>
+		<g id="body_4_">
+			<rect x="22.6" y="180.8" class="st3" width="30" height="40"/>
+			<polygon class="st3" points="52.6,220.8 22.6,220.8 37.6,180.8 			"/>
+		</g>
+		<g id="gun_4_">
+			
+				<rect x="33.7" y="170.8" transform="matrix(0.9999 1.038592e-002 -1.038592e-002 0.9999 1.9317 -0.3816)" class="st3" width="8" height="30"/>
+			
+				<ellipse transform="matrix(1.038592e-002 -0.9999 0.9999 1.038592e-002 -163.6223 236.2578)" class="st3" cx="37.6" cy="200.8" rx="10" ry="10"/>
+		</g>
+	</g>
+	<g>
+		<g id="body_1_">
+			
+				<rect x="232.1" y="102.9" transform="matrix(-0.9017 -0.4324 0.4324 -0.9017 416.6669 340.6362)" class="st4" width="30" height="40"/>
+			<polygon class="st4" points="242.2,98.4 269.2,111.4 238.4,141 			"/>
+		</g>
+		<g id="gun_1_">
+			
+				<rect x="230.7" y="116.4" transform="matrix(-0.5651 -0.825 0.825 -0.5651 258.8686 399.3114)" class="st4" width="8" height="30"/>
+			<ellipse transform="matrix(0.825 -0.5651 0.5651 0.825 -26.2487 161.1167)" class="st4" cx="247.1" cy="122.9" rx="10" ry="10"/>
+		</g>
+	</g>
+	<g>
+		<g id="body_2_">
+			<g>
+				
+					<rect x="312.2" y="284.1" transform="matrix(0.4132 -0.9106 0.9106 0.4132 -77.4627 478.0639)" class="st5" width="40" height="30"/>
+				
+					<rect x="312.2" y="284.1" transform="matrix(0.4132 -0.9106 0.9106 0.4132 -77.4627 478.0639)" class="st6" width="40" height="30"/>
+				
+					<rect x="312.2" y="284.1" transform="matrix(0.4132 -0.9106 0.9106 0.4132 -77.4627 478.0639)" class="st7" width="40" height="30"/>
+				
+					<rect x="312.2" y="284.1" transform="matrix(0.4132 -0.9106 0.9106 0.4132 -77.4627 478.0639)" class="st8" width="40" height="30"/>
+				
+					<rect x="312.2" y="284.1" transform="matrix(0.4132 -0.9106 0.9106 0.4132 -77.4627 478.0639)" class="st9" width="40" height="30"/>
+				
+					<rect x="312.2" y="284.1" transform="matrix(0.4132 -0.9106 0.9106 0.4132 -77.4627 478.0639)" class="st10" width="40" height="30"/>
+			</g>
+			<polygon class="st11" points="337.6,323.5 310.3,311.2 340.5,280.9 			"/>
+		</g>
+		<g id="gun_2_">
+			
+				<rect x="321.4" y="270.8" transform="matrix(0.889 -0.4579 0.4579 0.889 -94.7603 180.715)" class="st11" width="8" height="30"/>
+			
+				<ellipse transform="matrix(0.889 -0.4579 0.4579 0.889 -100.1042 185.3408)" class="st11" cx="332.2" cy="299.1" rx="10" ry="10"/>
+		</g>
+	</g>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" x="-23.4" y="-23.4" transform="matrix(1.6695 -1.6695 -0.7071 -0.7071 132.3125 254.1086)" style="overflow:visible;"/>
+	
+		<use xlink:href="#Box"  width="46.8" height="46.8" id="XMLID_1_" x="-23.4" y="-23.4" transform="matrix(1.4728 1.4728 0.7071 -0.7071 219.4266 264.5)" style="overflow:visible;"/>
+</g>
+</svg>

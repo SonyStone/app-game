@@ -1,6 +1,7 @@
 import { DEFAULT_ALTITUDE_ANGLE, HammerInput, createPointerEventsHandler } from '@packages/hammer/pointerevent';
 import { clamp, radToDeg } from '@packages/pixijs-research/math/MathUtils';
 import { createWindowSize } from '@solid-primitives/resize-observer';
+import { Title } from '@solidjs/meta';
 import { ComponentProps, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { degToRad } from 'three/src/math/MathUtils';
 
@@ -136,6 +137,7 @@ export default function Multitouch() {
 
   return (
     <>
+      <Title>Multitouch</Title>
       <div class="fixed pointer-events-none">
         <pre>{JSON.stringify(inputS(), null, 2)}</pre>
       </div>
