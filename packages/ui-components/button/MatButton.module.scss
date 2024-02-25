@@ -1,0 +1,55 @@
+.button {
+  position: relative;
+  border-radius: var(--normal-border-radius);
+  box-sizing: content-box;
+  line-height: normal;
+  padding: 0 var(--normal-padding);
+  cursor: pointer;
+  --ripple-border-radius: var(--normal-border-radius);
+
+  &.contained,
+  &.text {
+    height: calc(var(--normal-surface-height) * 0.75);
+    border: unset;
+  }
+
+  &.outlined,
+  &.text {
+    background-color: rgba(0, 0, 0, 0);
+  }
+  &.outlined {
+    height: calc(var(--normal-surface-height) * 0.75 - (var(--normal-border-width) * 2));
+  }
+
+  &.primary {
+    &.outlined,
+    &.text {
+      color: var(--primary-color);
+      --ripple-color: var(--primary-color);
+    }
+    &.contained {
+      background-color: var(--primary-color);
+      color: var(--on-primary-color);
+      --ripple-color: var(--on-primary-color);
+    }
+    &.outlined {
+      border: var(--normal-border-width) solid var(--primary-color);
+    }
+  }
+
+  &.secondary {
+    &.outlined,
+    &.text {
+      color: var(--secondary-color);
+      --ripple-color: var(--secondary-color);
+    }
+    &.contained {
+      background-color: var(--secondary-color);
+      color: var(--on-secondary-color);
+      --ripple-color: var(--on-secondary-color);
+    }
+    &.outlined {
+      border: var(--normal-border-width) solid var(--secondary-color);
+    }
+  }
+}

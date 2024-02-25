@@ -1,4 +1,7 @@
 import { BreadcrumbProps, Breadcrumbs } from '@packages/ui-components/breadcrumbs/breadcrumbs';
+import MatButton from '@packages/ui-components/button/MatButton';
+import { MatFormField } from '@packages/ui-components/form-field/MatFormField';
+import { Meta, Title } from '@solidjs/meta';
 import { createSignal } from 'solid-js';
 
 const BREADCRUMBS: BreadcrumbProps[] = [
@@ -17,27 +20,47 @@ export default () => {
   const [width, setWidth] = createSignal(100);
 
   return (
-    <div class="flex flex-col gap-4 p-2">
-      <div class="w-2/3 flex flex-col gap-4 p-2">
-        <input
-          type="range"
-          value={width()}
-          min={0}
-          max={100}
-          onInput={(e) => setWidth(parseFloat((e.target as any).value))}
-        />
-        <input
-          type="number"
-          value={width()}
-          min={0}
-          step={10}
-          max={100}
-          onInput={(e) => setWidth(parseFloat((e.target as any).value))}
-        />
-        <div class="border m-4 p-4 rounded" style={{ width: width() + `%` }}>
-          <Breadcrumbs items={BREADCRUMBS} />
+    <>
+      <Title>Components</Title>
+      <Meta name="example" content="whatever" />
+      <div class="flex flex-col gap-4 p-2">
+        <div class="w-2/3 flex flex-col gap-4 p-2">
+          <input
+            type="range"
+            value={width()}
+            min={0}
+            max={100}
+            onInput={(e) => setWidth(parseFloat((e.target as any).value))}
+          />
+          <input
+            type="number"
+            value={width()}
+            min={0}
+            step={10}
+            max={100}
+            onInput={(e) => setWidth(parseFloat((e.target as any).value))}
+          />
+          <div class="border m-4 p-4 rounded" style={{ width: width() + `%` }}>
+            <Breadcrumbs items={BREADCRUMBS} />
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <MatButton variant="outlined" color="primary">
+            click me too!
+          </MatButton>
+          <MatButton variant="outlined" color="secondary">
+            click me!
+          </MatButton>
+          <MatButton variant="contained" color="secondary">
+            click me!
+          </MatButton>
+        </div>
+
+        <div class="flex gap-2">
+          <MatFormField></MatFormField>
         </div>
       </div>
-    </div>
+    </>
   );
 };
