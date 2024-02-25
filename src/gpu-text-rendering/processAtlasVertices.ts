@@ -1,9 +1,4 @@
-import {
-  GL_BUFFER_TYPE,
-  GL_CLEAR_MASK,
-  GL_STATIC_VARIABLES,
-  GL_TEXTURES,
-} from '@webgl/static-variables';
+import { GL_BUFFER_TYPE, GL_CLEAR_MASK, GL_STATIC_VARIABLES, GL_TEXTURES } from '@packages/webgl/static-variables';
 
 import { ExtWebGLProgram } from './createProgram';
 import { ExtWebGLTexture } from './processAtlas';
@@ -24,37 +19,19 @@ export function processAtlasVertices(
   //console.log("Atlas vert buf is " + data.buf.byteLength + " bytes, this is " + data.buf.byteLength / (6 * 2 * int16PerVertex) + " glyphs");
 
   // framebuffer object
-  const fbo: WebGLFramebuffer & { width?: number; height?: number } =
-    gl.createFramebuffer()!;
+  const fbo: WebGLFramebuffer & { width?: number; height?: number } = gl.createFramebuffer()!;
   gl.bindFramebuffer(GL_STATIC_VARIABLES.FRAMEBUFFER, fbo);
   fbo.width = data.width;
   fbo.height = data.height;
 
-  const preAtlasTexture: WebGLTexture & { width?: number; height?: number } =
-    gl.createTexture()!;
+  const preAtlasTexture: WebGLTexture & { width?: number; height?: number } = gl.createTexture()!;
   preAtlasTexture.width = data.width;
   preAtlasTexture.height = data.height;
   gl.bindTexture(GL_TEXTURES.TEXTURE_2D, preAtlasTexture);
-  gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_MAG_FILTER,
-    GL_TEXTURES.LINEAR
-  );
-  gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_MIN_FILTER,
-    GL_TEXTURES.LINEAR_MIPMAP_NEAREST
-  );
-  gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_WRAP_S,
-    GL_TEXTURES.CLAMP_TO_EDGE
-  );
-  gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_WRAP_T,
-    GL_TEXTURES.CLAMP_TO_EDGE
-  );
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MAG_FILTER, GL_TEXTURES.LINEAR);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MIN_FILTER, GL_TEXTURES.LINEAR_MIPMAP_NEAREST);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_WRAP_S, GL_TEXTURES.CLAMP_TO_EDGE);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_WRAP_T, GL_TEXTURES.CLAMP_TO_EDGE);
   gl.texImage2D(
     GL_TEXTURES.TEXTURE_2D,
     0,
@@ -102,22 +79,14 @@ export function processAtlasVertices(
   gl.bindTexture(GL_TEXTURES.TEXTURE_2D, atlasTexture);
 
   gl.uniform1i(glyphProgramNoRast.uniforms!.uAtlasSampler, 0);
-  gl.uniform2f(
-    glyphProgramNoRast.uniforms!.uTexelSize,
-    1 / atlasTexture.width!,
-    1 / atlasTexture.height!
-  );
+  gl.uniform2f(glyphProgramNoRast.uniforms!.uTexelSize, 1 / atlasTexture.width!, 1 / atlasTexture.height!);
   gl.uniform1i(glyphProgramNoRast.uniforms!.uDebug, 0);
 
   // Need to map [0, 1] verts to [-1, 1] NDC, ie: aPosition * 2.0 - 1.0
   gl.uniform2f(glyphProgramNoRast.uniforms!.uPositionMul, 2, 2);
   gl.uniform2f(glyphProgramNoRast.uniforms!.uPositionAdd, -1, -1);
 
-  gl.drawArrays(
-    GL_STATIC_VARIABLES.TRIANGLES,
-    0,
-    data.buf.byteLength / (2 * int16PerVertex)
-  );
+  gl.drawArrays(GL_STATIC_VARIABLES.TRIANGLES, 0, data.buf.byteLength / (2 * int16PerVertex));
 
   disableAttributes(gl, glyphProgramNoRast);
 
@@ -147,33 +116,9 @@ function disableAttributes(gl: WebGLRenderingContext, prog: ExtWebGLProgram) {
   }
 }
 
-function doGlyphVertexAttribPointers(
-  gl: WebGLRenderingContext,
-  prog: ExtWebGLProgram
-) {
+function doGlyphVertexAttribPointers(gl: WebGLRenderingContext, prog: ExtWebGLProgram) {
   var stride = int16PerVertex * 2;
-  gl.vertexAttribPointer(
-    prog.attributes!.aPosition,
-    2,
-    GL_STATIC_VARIABLES.SHORT,
-    true,
-    stride,
-    0
-  );
-  gl.vertexAttribPointer(
-    prog.attributes!.aCurvesMin,
-    2,
-    GL_STATIC_VARIABLES.UNSIGNED_SHORT,
-    false,
-    stride,
-    2 * 2
-  );
-  gl.vertexAttribPointer(
-    prog.attributes!.aColor,
-    4,
-    GL_STATIC_VARIABLES.UNSIGNED_BYTE,
-    true,
-    stride,
-    4 * 2
-  );
+  gl.vertexAttribPointer(prog.attributes!.aPosition, 2, GL_STATIC_VARIABLES.SHORT, true, stride, 0);
+  gl.vertexAttribPointer(prog.attributes!.aCurvesMin, 2, GL_STATIC_VARIABLES.UNSIGNED_SHORT, false, stride, 2 * 2);
+  gl.vertexAttribPointer(prog.attributes!.aColor, 4, GL_STATIC_VARIABLES.UNSIGNED_BYTE, true, stride, 4 * 2);
 }

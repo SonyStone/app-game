@@ -1,6 +1,6 @@
 import { Read, System, SystemData } from '@packages/ecsy';
-import { CanvasContext, CanvasSize, MousePoint, Point } from 'examples/utils';
 
+import { CanvasContext, CanvasSize, MousePoint, Point } from '@packages/ecsy-examples/utils';
 import { Orb, P, PointData, Resize, RingsCount } from './components';
 
 @SystemData([Read(CanvasContext), Read(CanvasSize), Read(Resize)])

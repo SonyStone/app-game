@@ -1,4 +1,4 @@
-import { GL_BUFFER_TYPE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_BUFFER_TYPE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 
 import { UnpackedBMP } from './unpackBmp';
 
@@ -23,7 +23,7 @@ export function processGlyphs(gl: WebGLRenderingContext, data: UnpackedBMP) {
 
   const positions = {
     x: new Float32Array(numGlyphs),
-    y: new Float32Array(numGlyphs),
+    y: new Float32Array(numGlyphs)
   }; // for auto zoom
 
   let src = 0;
@@ -35,14 +35,8 @@ export function processGlyphs(gl: WebGLRenderingContext, data: UnpackedBMP) {
       position[src + 1] += position[src - int16PerGlyph + 1];
     }
 
-    positions.x[i] =
-      (uposition[src + 0] + 0.5 * (deltaNext[src + 0] + deltaPrev[src + 0])) /
-        32767 +
-      0.5;
-    positions.y[i] =
-      (uposition[src + 1] + 0.5 * (deltaNext[src + 1] + deltaPrev[src + 1])) /
-        32767 +
-      0.5;
+    positions.x[i] = (uposition[src + 0] + 0.5 * (deltaNext[src + 0] + deltaPrev[src + 0])) / 32767 + 0.5;
+    positions.y[i] = (uposition[src + 1] + 0.5 * (deltaNext[src + 1] + deltaPrev[src + 1])) / 32767 + 0.5;
 
     // output tri strip quad
     for (var j = 0; j < 6; j++) {
@@ -80,11 +74,7 @@ export function processGlyphs(gl: WebGLRenderingContext, data: UnpackedBMP) {
 
   const glyphBuffer = gl.createBuffer();
   gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, glyphBuffer);
-  gl.bufferData(
-    GL_BUFFER_TYPE.ARRAY_BUFFER,
-    vbuf,
-    GL_STATIC_VARIABLES.STATIC_DRAW
-  );
+  gl.bufferData(GL_BUFFER_TYPE.ARRAY_BUFFER, vbuf, GL_STATIC_VARIABLES.STATIC_DRAW);
   gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, null);
 
   return glyphBuffer;

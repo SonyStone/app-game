@@ -3,7 +3,7 @@
 // TODO: need? encoding = linearEncoding
 // TODO: support non-compressed mipmaps uploads
 
-import { GL_DATA_TYPE } from '@webgl/static-variables';
+import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
 import {
   GL_INTERNAL_FORMAT,
   GL_PIXEL_FORMAT,
@@ -11,7 +11,7 @@ import {
   GL_TEXTURE_MIN_FILTER,
   GL_TEXTURE_TARGET,
   GL_TEXTURE_WRAP_MODE
-} from '@webgl/static-variables/textures';
+} from '@packages/webgl/static-variables/textures';
 import { DEFAULT_TEXTURE_UNITS, OGLRenderingContext, RenderState, TextureUnit } from './renderer';
 
 const emptyPixel = new Uint8Array(4);

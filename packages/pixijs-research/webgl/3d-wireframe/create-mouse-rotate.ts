@@ -1,4 +1,4 @@
-import { FVec2 } from '@webgl/math';
+import { FVec2 } from '@packages/math';
 import { createSignal, onCleanup } from 'solid-js';
 
 export function createMouseRotate(element: HTMLElement) {

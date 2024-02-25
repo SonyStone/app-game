@@ -1,4 +1,4 @@
-import { GL_BUFFER_TYPE } from '@webgl/static-variables';
+import { GL_BUFFER_TYPE } from '@packages/webgl/static-variables';
 import { IBuffer } from './Buffer';
 import { createVAO } from './vao';
 

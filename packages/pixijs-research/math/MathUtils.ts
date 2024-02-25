@@ -1,4 +1,4 @@
-import { DEG_TO_RAD, RAD_TO_DEG } from '@webgl/math/constants';
+import { DEG_TO_RAD, RAD_TO_DEG } from '@packages/math/constants';
 import { Quaternion } from './Quaternion';
 
 const _lut: string[] = [];
@@ -67,13 +67,7 @@ export function euclideanModulo(n: number, m: number): number {
  * @param b1 Minimum value for range B.
  * @param b2 Maximum value for range B.
  */
-export function mapLinear(
-  x: number,
-  a1: number,
-  a2: number,
-  b1: number,
-  b2: number
-): number {
+export function mapLinear(x: number, a1: number, a2: number, b1: number, b2: number): number {
   return b1 + ((x - a1) * (b2 - b1)) / (a2 - a1);
 }
 
@@ -201,13 +195,7 @@ export function floorPowerOfTwo(value: number): number {
   return Math.pow(2, Math.floor(Math.log(value) / Math.LN2));
 }
 
-export function setQuaternionFromProperEuler(
-  q: Quaternion,
-  a: number,
-  b: number,
-  c: number,
-  order: string
-): void {
+export function setQuaternionFromProperEuler(q: Quaternion, a: number, b: number, c: number, order: string): void {
   // Intrinsic Proper Euler Angles - see https://en.wikipedia.org/wiki/Euler_angles
 
   // rotations are applied to the axes in the order specified by 'order'
@@ -255,17 +243,11 @@ export function setQuaternionFromProperEuler(
       break;
 
     default:
-      console.warn(
-        'THREE.MathUtils: .setQuaternionFromProperEuler() encountered an unknown order: ' +
-          order
-      );
+      console.warn('THREE.MathUtils: .setQuaternionFromProperEuler() encountered an unknown order: ' + order);
   }
 }
 
-export function denormalize(
-  value: number,
-  array: Float32Array | Uint16Array | Uint8Array | Int16Array | Int8Array
-) {
+export function denormalize(value: number, array: Float32Array | Uint16Array | Uint8Array | Int16Array | Int8Array) {
   switch (array.constructor) {
     case Float32Array:
       return value;
@@ -287,10 +269,7 @@ export function denormalize(
   }
 }
 
-export function normalize(
-  value: number,
-  array: Float32Array | Uint16Array | Uint8Array | Int16Array | Int8Array
-) {
+export function normalize(value: number, array: Float32Array | Uint16Array | Uint8Array | Int16Array | Int8Array) {
   switch (array.constructor) {
     case Float32Array:
       return value;

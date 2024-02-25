@@ -1,7 +1,7 @@
-import { FVec3, Vec3Tuple, m4 } from '@webgl/math';
-import { DEG_TO_RAD } from '@webgl/math/constants';
-import { Spherical, setFromSpherical } from '@webgl/math/spherical';
-import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@webgl/static-variables';
+import { FVec3, Vec3Tuple, m4 } from '@packages/math';
+import { DEG_TO_RAD } from '@packages/math/constants';
+import { Spherical, setFromSpherical } from '@packages/math/spherical';
+import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@packages/webgl/static-variables';
 import { Accessor, Setter, createEffect, onCleanup, onMount } from 'solid-js';
 
 import { createMouseRotate } from './create-mouse-rotate';

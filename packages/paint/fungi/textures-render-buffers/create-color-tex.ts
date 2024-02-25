@@ -1,4 +1,4 @@
-import { COLOR_ATTACHMENT, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { COLOR_ATTACHMENT, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 import {
   GL_PIXEL_FORMAT,
   GL_TEXTURE_MAG_FILTER,
@@ -6,7 +6,7 @@ import {
   GL_TEXTURE_PARAMETER_NAME,
   GL_TEXTURE_TARGET,
   GL_TEXTURE_WRAP_MODE
-} from '@webgl/static-variables/textures';
+} from '@packages/webgl/static-variables/textures';
 
 export function createColorTex(
   gl: WebGL2RenderingContext,

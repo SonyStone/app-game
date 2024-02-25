@@ -1,5 +1,5 @@
-import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
-import { defaultValue } from '@webgl/defaultValue';
+import { defaultValue } from '@packages/webgl/defaultValue';
+import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@packages/webgl/static-variables';
 import { GL_TO_GLSL_TYPES } from './mapType';
 import { getUniformsSetter } from './uniformsSetters';
 
@@ -9,26 +9,10 @@ export interface UniformData {
   size: number;
   isArray: boolean;
   isStruct: boolean;
-  value:
-    | number
-    | boolean
-    | number[]
-    | boolean[]
-    | Float32Array
-    | Int32Array
-    | Uint32Array;
+  value: number | boolean | number[] | boolean[] | Float32Array | Int32Array | Uint32Array;
   name: string;
   location: WebGLUniformLocation;
-  set(
-    v:
-      | number
-      | boolean
-      | number[]
-      | boolean[]
-      | Float32Array
-      | Int32Array
-      | Uint32Array
-  ): void;
+  set(v: number | boolean | number[] | boolean[] | Float32Array | Int32Array | Uint32Array): void;
 }
 
 /**
@@ -40,16 +24,10 @@ export interface UniformData {
  *
  * @returns {object} the uniform data for this program
  */
-export function getUniformData(
-  gl: WebGL2RenderingContext,
-  program: WebGLProgram
-): { [key: string]: UniformData } {
+export function getUniformData(gl: WebGL2RenderingContext, program: WebGLProgram): { [key: string]: UniformData } {
   const uniforms: { [key: string]: UniformData } = {};
 
-  const totalUniforms = gl.getProgramParameter(
-    program,
-    GL_PROGRAM_PARAMETER.ACTIVE_UNIFORMS
-  );
+  const totalUniforms = gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.ACTIVE_UNIFORMS);
 
   function getActiveUniformData(program: WebGLProgram, i: number) {
     const uniformData = gl.getActiveUniform(program, i)!;
@@ -68,7 +46,7 @@ export function getUniformData(
       isStruct,
       value: defaultValue(uniformData.type, uniformData.size),
       location,
-      set: getUniformsSetter(gl, uniformData.type as GL_DATA_TYPE, location),
+      set: getUniformsSetter(gl, uniformData.type as GL_DATA_TYPE, location)
     };
   }
 

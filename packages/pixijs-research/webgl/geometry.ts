@@ -1,8 +1,4 @@
-import {
-  GL_BUFFER_TYPE,
-  GL_BUFFER_USAGE,
-  GL_DRAW_ELEMENTS_TYPE,
-} from '@webgl/static-variables';
+import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_DRAW_ELEMENTS_TYPE } from '@packages/webgl/static-variables';
 import { TYPES } from 'pixi.js';
 
 type TypedArray =
@@ -84,7 +80,7 @@ export function getGeometry() {
         type,
         stride,
         start,
-        instance,
+        instance
       };
 
       instanced = instance;
@@ -95,20 +91,17 @@ export function getGeometry() {
       const buffer = {
         data,
         type: GL_BUFFER_TYPE.ELEMENT_ARRAY_BUFFER,
-        usage: GL_BUFFER_USAGE.STATIC_DRAW,
+        usage: GL_BUFFER_USAGE.STATIC_DRAW
       };
 
       const byteSize = data.BYTES_PER_ELEMENT;
-      const type =
-        byteSize === 2
-          ? GL_DRAW_ELEMENTS_TYPE.UNSIGNED_SHORT
-          : GL_DRAW_ELEMENTS_TYPE.UNSIGNED_INT;
+      const type = byteSize === 2 ? GL_DRAW_ELEMENTS_TYPE.UNSIGNED_SHORT : GL_DRAW_ELEMENTS_TYPE.UNSIGNED_INT;
       const length = data.length;
 
       indexBuffer = {
         type,
         length,
-        byteSize,
+        byteSize
       };
 
       getBufferIndex(buffer);
@@ -126,15 +119,13 @@ export function getGeometry() {
             const attribute = attributes[i];
             const buffer = buffers[attribute.buffer];
 
-            return (
-              buffer.data.length / (attribute.stride / 4 || attribute.size)
-            );
+            return buffer.data.length / (attribute.stride / 4 || attribute.size);
           }
 
           return 0;
-        },
+        }
       };
-    },
+    }
   };
 
   return builder;

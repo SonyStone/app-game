@@ -1,8 +1,8 @@
 import './index.scss';
 
 import { Read, System, SystemData, World } from '@packages/ecsy';
-import { Vector2 } from 'examples/utils';
 
+import { Vector2 } from '@packages/ecsy-examples/utils/vector-2';
 import { draw } from './create-circle';
 import { random } from './random';
 

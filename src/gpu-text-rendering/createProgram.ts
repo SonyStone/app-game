@@ -1,8 +1,4 @@
-import {
-  GL_PROGRAM_PARAMETER,
-  GL_SHADER_TYPE,
-  GL_STATIC_VARIABLES,
-} from '@webgl/static-variables';
+import { GL_PROGRAM_PARAMETER, GL_SHADER_TYPE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 
 export type ExtWebGLProgram = WebGLProgram & {
   attributes?: { [key: string]: number };
@@ -15,18 +11,8 @@ export function createProgram(
   fid: string,
   defines?: string
 ): ExtWebGLProgram | undefined {
-  var vshader = compileShaderFromString(
-    gl,
-    vid,
-    GL_SHADER_TYPE.VERTEX_SHADER,
-    defines
-  );
-  var fshader = compileShaderFromString(
-    gl,
-    fid,
-    GL_SHADER_TYPE.FRAGMENT_SHADER,
-    defines
-  );
+  var vshader = compileShaderFromString(gl, vid, GL_SHADER_TYPE.VERTEX_SHADER, defines);
+  var fshader = compileShaderFromString(gl, fid, GL_SHADER_TYPE.FRAGMENT_SHADER, defines);
 
   if (vshader == null || fshader == null) {
     return;
@@ -38,24 +24,14 @@ export function createProgram(
   gl.linkProgram(program);
 
   if (!gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.LINK_STATUS)) {
-    console.log(
-      'Could not link program for shaders ' +
-        vid +
-        ' and ' +
-        fid +
-        ': ' +
-        gl.getProgramInfoLog(program)
-    );
+    console.log('Could not link program for shaders ' + vid + ' and ' + fid + ': ' + gl.getProgramInfoLog(program));
     gl.deleteProgram(program);
     return;
   }
 
   //var translatedSource = gl.getExtension("WEBGL_debug_shaders").getTranslatedShaderSource(fshader);
 
-  var nattrib = gl.getProgramParameter(
-    program,
-    GL_PROGRAM_PARAMETER.ACTIVE_ATTRIBUTES
-  );
+  var nattrib = gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.ACTIVE_ATTRIBUTES);
 
   program.attributes = {};
 
@@ -64,10 +40,7 @@ export function createProgram(
     program.attributes[name] = gl.getAttribLocation(program, name);
   }
 
-  var nuniforms = gl.getProgramParameter(
-    program,
-    GL_PROGRAM_PARAMETER.ACTIVE_UNIFORMS
-  );
+  var nuniforms = gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.ACTIVE_UNIFORMS);
 
   program.uniforms = {};
   for (var i = 0; i < nuniforms; i++) {

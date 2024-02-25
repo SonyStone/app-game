@@ -1,6 +1,6 @@
 import { Read, System, SystemData } from '@packages/ecsy';
-import { CanvasContext, CanvasSize } from 'examples/utils';
 
+import { CanvasContext, CanvasSize } from '@packages/ecsy-examples/utils';
 import { Alpha, BezierCurvesConfig, Control1, Control2, End, FrameCounter, Start, WaveNoise } from './components';
 
 @SystemData(Read(WaveNoise), Read(BezierCurvesConfig))

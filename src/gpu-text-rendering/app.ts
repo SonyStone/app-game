@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 
 var canvas;
 var gl;
@@ -21,13 +21,13 @@ var mustRenderNextFrame = false;
 var transform = {
   x: 0.5,
   y: 0.5,
-  zoom: 2,
+  zoom: 2
 };
 
 var animTransform = {
   x: 0,
   y: 0,
-  zoom: 2,
+  zoom: 2
 };
 
 var lastAnimationTimestamp;
@@ -125,30 +125,9 @@ function boxesIntersect(a, b) {
 
 function doGlyphVertexAttribPointers(prog) {
   var stride = int16PerVertex * 2;
-  gl.vertexAttribPointer(
-    prog.attributes.aPosition,
-    2,
-    GL_STATIC_VARIABLES.SHORT,
-    true,
-    stride,
-    0
-  );
-  gl.vertexAttribPointer(
-    prog.attributes.aCurvesMin,
-    2,
-    GL_STATIC_VARIABLES.UNSIGNED_SHORT,
-    false,
-    stride,
-    2 * 2
-  );
-  gl.vertexAttribPointer(
-    prog.attributes.aColor,
-    4,
-    GL_STATIC_VARIABLES.UNSIGNED_BYTE,
-    true,
-    stride,
-    4 * 2
-  );
+  gl.vertexAttribPointer(prog.attributes.aPosition, 2, GL_STATIC_VARIABLES.SHORT, true, stride, 0);
+  gl.vertexAttribPointer(prog.attributes.aCurvesMin, 2, GL_STATIC_VARIABLES.UNSIGNED_SHORT, false, stride, 2 * 2);
+  gl.vertexAttribPointer(prog.attributes.aColor, 4, GL_STATIC_VARIABLES.UNSIGNED_BYTE, true, stride, 4 * 2);
 }
 
 function setCanvasSize() {
@@ -178,13 +157,13 @@ function setPageUniforms(program, page, zoomx, zoomy) {
     x0: (((0 - translateX) / zoomx) * canvas.height) / canvas.width,
     x1: (((1 - translateX) / zoomx) * canvas.height) / canvas.width,
     y0: (0 - translateY) / zoomy,
-    y1: (1 - translateY) / zoomy,
+    y1: (1 - translateY) / zoomy
   };
   var viewportNdc = {
     x0: -1,
     x1: 1,
     y0: -1,
-    y1: 1,
+    y1: 1
   };
   if (!boxesIntersect(pageNdc, viewportNdc)) {
     return false;
@@ -193,21 +172,14 @@ function setPageUniforms(program, page, zoomx, zoomy) {
   var aspect = canvas.height / canvas.width;
 
   gl.uniform2f(program.uniforms.uPositionMul, aspect / zoomx, 1 / zoomy);
-  gl.uniform2f(
-    program.uniforms.uPositionAdd,
-    (aspect * -translateX) / zoomx,
-    -translateY / zoomy
-  );
+  gl.uniform2f(program.uniforms.uPositionAdd, (aspect * -translateX) / zoomx, -translateY / zoomy);
 
   return true;
 }
 
 function computePageLocations() {
   var cols = Math.floor(
-    Math.sqrt(
-      (((pageData.length / canvas.height) * canvas.width) / pageData[0].width) *
-        pageData[0].height
-    )
+    Math.sqrt((((pageData.length / canvas.height) * canvas.width) / pageData[0].width) * pageData[0].height)
   );
 
   for (var i = 0; i < pageData.length; i++) {

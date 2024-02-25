@@ -1,9 +1,5 @@
-import * as v4 from '@webgl/math/v4';
-import {
-  GL_BUFFER_TYPE,
-  GL_BUFFER_USAGE,
-  GL_CLEAR_MASK,
-} from '@webgl/static-variables';
+import * as v4 from '@packages/math/v4';
+import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_CLEAR_MASK } from '@packages/webgl/static-variables';
 import { DRAW_MODES } from 'pixi.js';
 import { onCleanup } from 'solid-js';
 
@@ -46,7 +42,7 @@ export default function MyPixijs() {
         // ]),
         data: new Float32Array(p),
         type: GL_BUFFER_TYPE.ARRAY_BUFFER,
-        usage: GL_BUFFER_USAGE.STATIC_DRAW,
+        usage: GL_BUFFER_USAGE.STATIC_DRAW
       },
       3
     )
@@ -104,26 +100,14 @@ export default function MyPixijs() {
 
   const step = 0.1;
 
-  const left = (
-    <button onClick={() => move(step)}>→</button>
-  ) as HTMLButtonElement;
-  const right = (
-    <button onClick={() => move(-step)}>←</button>
-  ) as HTMLButtonElement;
-  const up = (
-    <button onClick={() => move(0, step)}>↑</button>
-  ) as HTMLButtonElement;
-  const bottom = (
-    <button onClick={() => move(0, -step)}>↓</button>
-  ) as HTMLButtonElement;
+  const left = (<button onClick={() => move(step)}>→</button>) as HTMLButtonElement;
+  const right = (<button onClick={() => move(-step)}>←</button>) as HTMLButtonElement;
+  const up = (<button onClick={() => move(0, step)}>↑</button>) as HTMLButtonElement;
+  const bottom = (<button onClick={() => move(0, -step)}>↓</button>) as HTMLButtonElement;
 
-  const zoom_out = (
-    <button onClick={() => move(0, 0, step)}>⇱</button>
-  ) as HTMLButtonElement;
+  const zoom_out = (<button onClick={() => move(0, 0, step)}>⇱</button>) as HTMLButtonElement;
 
-  const zoom_in = (
-    <button onClick={() => move(0, 0, -step)}>⇲</button>
-  ) as HTMLButtonElement;
+  const zoom_in = (<button onClick={() => move(0, 0, -step)}>⇲</button>) as HTMLButtonElement;
 
   return (
     <>

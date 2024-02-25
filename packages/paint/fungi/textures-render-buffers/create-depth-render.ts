@@ -1,4 +1,4 @@
-import { GL_FRAMEBUFFER_OBJECT, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_FRAMEBUFFER_OBJECT, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 
 // Create a basic render buffer
 export function createDepthRender(ctx: WebGL2RenderingContext, width: number, height: number): WebGLRenderbuffer {

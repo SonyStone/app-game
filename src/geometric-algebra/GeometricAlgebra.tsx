@@ -1,8 +1,8 @@
-import * as v3 from '@webgl/math/v3-builder';
+import * as v3 from '@packages/math/v3-builder';
 import { animationFrameScheduler, interval, map, ObservableInput, of, from as rxFrom, switchMap, tap } from 'rxjs';
 import { createMemo, createSignal, from, observable } from 'solid-js';
 
-import { Vec2, Vec3 } from '@webgl/math';
+import { Vec2, Vec3 } from '@packages/math';
 import { ganja } from './align';
 import s from './GeometricAlgebra.module.scss';
 

@@ -1,5 +1,5 @@
-import { FMat3, m4 } from '@webgl/math';
-import { GL_DATA_TYPE } from '@webgl/static-variables';
+import { FMat3, m4 } from '@packages/math';
+import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
 
 /**
  * @method defaultValue

@@ -1,8 +1,8 @@
-import { compileShader } from '@webgl/compileShader';
-import { linkProgram } from '@webgl/linkProgram';
+import { compileShader } from '@packages/webgl/compileShader';
+import { linkProgram } from '@packages/webgl/linkProgram';
 
 import { AttributeData, getAttributeData } from './getAttributeData';
-import { getUniformData, UniformData } from './getUniformData';
+import { UniformData, getUniformData } from './getUniformData';
 
 let UID = 0;
 
@@ -20,11 +20,7 @@ export interface Program {
   useProgram(): void;
 }
 
-export function getProgram(
-  gl: WebGL2RenderingContext,
-  vertexSrc: string,
-  fragmentSrc: string
-): Program {
+export function getProgram(gl: WebGL2RenderingContext, vertexSrc: string, fragmentSrc: string): Program {
   const vertShader = compileShader(gl, gl.VERTEX_SHADER, vertexSrc);
   const fragShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSrc);
 
@@ -45,7 +41,7 @@ export function getProgram(
     uniformData,
     useProgram() {
       gl.useProgram(glPprogram);
-    },
+    }
   };
 
   return program;

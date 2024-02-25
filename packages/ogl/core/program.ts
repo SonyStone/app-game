@@ -1,4 +1,4 @@
-import { GL_DATA_TYPE } from '@webgl/static-variables';
+import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
 import type { BlendEquation, BlendFunc, OGLRenderingContext } from './renderer';
 
 // TODO: upload empty texture if null ? maybe not

@@ -124,12 +124,7 @@ export const routes: Routes[] = [
     Preview: (props) => <Thumbnail href={props.path} thumbnail={worldBodiesThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/phaser-examples/physics/matterjs/100 world bodies'))
   },
-  {
-    path: 'bevy-examples/breakout',
-    name: 'Breakout',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={breakoutThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/bevy-examples/breakout'))
-  },
+
   {
     path: '/ldtk-ts-exampless',
     name: 'ldtk-ts example',
@@ -339,6 +334,14 @@ export const routes: Routes[] = [
           <Thumbnail href={'/phaser-examples' + props.path} thumbnail={phaserThumbnail} name={props.name} />
         ),
         component: lazy(() => import('@packages/phaser-examples/phaser/Game'))
+      },
+      {
+        path: '/breakout',
+        name: 'Breakout',
+        Preview: (props) => (
+          <Thumbnail href={'/phaser-examples' + props.path} thumbnail={breakoutThumbnail} name={props.name} />
+        ),
+        component: lazy(() => import('@packages/phaser-examples/breakout'))
       }
     ]
   },

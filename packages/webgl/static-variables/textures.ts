@@ -192,6 +192,7 @@ export const enum GL_TEXTURES {
   RGB8 = GL_CONST.RGB8,
   RGBA8 = GL_CONST.RGBA8,
   RGB10_A2 = GL_CONST.RGB10_A2,
+  TEXTURE_2D = GL_CONST.TEXTURE_2D,
   TEXTURE_3D = GL_CONST.TEXTURE_3D,
 
   /** Wrapping function for texture coordinate `r` */

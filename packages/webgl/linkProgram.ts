@@ -1,4 +1,4 @@
-import { GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
+import { GL_PROGRAM_PARAMETER } from '@packages/webgl/static-variables';
 
 export function linkProgram(
   gl: WebGLRenderingContextBase,
@@ -12,16 +12,11 @@ export function linkProgram(
 
   gl.linkProgram(program);
 
-  const linkStatus = gl.getProgramParameter(
-    program,
-    GL_PROGRAM_PARAMETER.LINK_STATUS
-  );
+  const linkStatus = gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.LINK_STATUS);
 
   if (linkStatus) {
     return program;
   } else {
-    throw new Error(
-      gl.getProgramInfoLog(program) || 'Unknown error creating program object'
-    );
+    throw new Error(gl.getProgramInfoLog(program) || 'Unknown error creating program object');
   }
 }

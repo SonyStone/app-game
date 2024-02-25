@@ -1,6 +1,6 @@
 import { Read, System, SystemData } from '@packages/ecsy';
-import { CanvasContext, CanvasSize, Point, Velocity } from 'examples/utils';
 
+import { CanvasContext, CanvasSize, Point, Velocity } from '@packages/ecsy-examples/utils';
 import { BackgroundColor, Life, LineProperties, ParticleProperties } from './components';
 
 @SystemData([Read(CanvasContext), Read(CanvasSize), Read(BackgroundColor)])

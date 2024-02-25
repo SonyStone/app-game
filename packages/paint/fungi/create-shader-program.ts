@@ -1,4 +1,4 @@
-import { GL_PROGRAM_PARAMETER, GL_SHADER_TYPE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_PROGRAM_PARAMETER, GL_SHADER_TYPE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 
 const DEV = import.meta.env.DEV;
 

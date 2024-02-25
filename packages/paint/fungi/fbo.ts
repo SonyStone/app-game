@@ -1,6 +1,6 @@
-import { GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 
-import { GL_TEXTURE_MAG_FILTER, GL_TEXTURE_TARGET } from '@webgl/static-variables/textures';
+import { GL_TEXTURE_MAG_FILTER, GL_TEXTURE_TARGET } from '@packages/webgl/static-variables/textures';
 import { createColorMultisample } from './textures-render-buffers/create-color-multisample';
 import { createColorTex } from './textures-render-buffers/create-color-tex';
 import { createDepthMultisample } from './textures-render-buffers/create-depth-multisample';

@@ -1,7 +1,7 @@
-import { GL_BUFFER_USAGE, GL_DRAW_ELEMENTS_TYPE } from '@webgl/static-variables';
-import { GL_BUFFER_TYPE } from '@webgl/static-variables/buffer';
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables/static-variables';
-import { TypedArray } from '@webgl/typedArray';
+import { GL_BUFFER_USAGE, GL_DRAW_ELEMENTS_TYPE } from '@packages/webgl/static-variables';
+import { GL_BUFFER_TYPE } from '@packages/webgl/static-variables/buffer';
+import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables/static-variables';
+import { TypedArray } from '@packages/webgl/typedArray';
 
 export interface IBuffer {
   /** Buffer GL ID */

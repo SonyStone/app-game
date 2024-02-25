@@ -1,7 +1,7 @@
-import { compileShader } from '@webgl/compileShader';
-import { linkProgram } from '@webgl/linkProgram';
-import { DEG_TO_RAD } from '@webgl/math/constants';
-import * as m4 from '@webgl/math/m4';
+import { DEG_TO_RAD } from '@packages/math/constants';
+import * as m4 from '@packages/math/m4';
+import { compileShader } from '@packages/webgl/compileShader';
+import { linkProgram } from '@packages/webgl/linkProgram';
 import {
   GL_BUFFER_TYPE,
   GL_CLEAR_MASK,
@@ -9,12 +9,17 @@ import {
   GL_SHADER_TYPE,
   GL_STATIC_VARIABLES,
   GL_TEXTURES
-} from '@webgl/static-variables';
+} from '@packages/webgl/static-variables';
 import { createEffect, onCleanup } from 'solid-js';
 
 import { getAttributeData } from '@packages/pixijs-research/webgl/getAttributeData';
 import { getUniformData } from '@packages/pixijs-research/webgl/getUniformData';
 import { useCamera } from '@packages/three-examples/Camera.provider';
+import {
+  GL_TEXTURE_MAG_FILTER,
+  GL_TEXTURE_MIN_FILTER,
+  GL_TEXTURE_PARAMETER_NAME
+} from '@packages/webgl/static-variables/textures';
 import fragmentSrc from './shaders/frag_shader.frag?raw';
 import vertexSrc from './shaders/vert_shader.vert?raw';
 
@@ -90,8 +95,8 @@ export default function main() {
       u_shininess: 50,
       u_specularFactor: 1,
       u_diffuse: {
-        min: GL_TEXTURES.NEAREST,
-        mag: GL_TEXTURES.NEAREST,
+        min: GL_TEXTURE_MIN_FILTER.NEAREST,
+        mag: GL_TEXTURE_MAG_FILTER.NEAREST,
         src: [255, 255, 255, 255, 192, 192, 192, 255, 192, 192, 192, 255, 255, 255, 255, 255]
       }
     }
@@ -148,8 +153,8 @@ export default function main() {
     GL_STATIC_VARIABLES.UNSIGNED_BYTE,
     new Uint8Array(scene.uniforms.u_diffuse.src)
   );
-  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MIN_FILTER, scene.uniforms.u_diffuse.min);
-  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MAG_FILTER, scene.uniforms.u_diffuse.mag);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURE_PARAMETER_NAME.TEXTURE_MIN_FILTER, scene.uniforms.u_diffuse.min);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURE_PARAMETER_NAME.TEXTURE_MAG_FILTER, scene.uniforms.u_diffuse.mag);
 
   // buffers
   // textures
@@ -166,7 +171,7 @@ export default function main() {
   const target = [0, 0, 0];
   const up = [0, 1, 0];
 
-  const camera = m4.lookAt(eye, target, up);
+  const camera = m4.lookAt(m4.identity(), eye, target, up);
   const view = m4.inverse(camera);
 
   let projection = m4.identity();

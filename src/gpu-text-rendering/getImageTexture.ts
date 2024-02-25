@@ -1,13 +1,13 @@
-import { GL_STATIC_VARIABLES, GL_TEXTURES } from "@webgl/static-variables";
+import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 import {
   GL_TEXTURE_MAG_FILTER,
   GL_TEXTURE_MIN_FILTER,
   GL_TEXTURE_PARAMETER_NAME,
   GL_TEXTURE_TARGET,
-  GL_TEXTURE_WRAP_MODE,
-} from "@webgl/static-variables/textures";
+  GL_TEXTURE_WRAP_MODE
+} from '@packages/webgl/static-variables/textures';
 
-import { forceAnimationChange } from "./renderNextFrame";
+import { forceAnimationChange } from './renderNextFrame';
 
 const imageTextures: any = {};
 
@@ -16,7 +16,7 @@ export function getImageTexture(gl: WebGLRenderingContext, filename: string) {
   if (!handle) {
     handle = gl.createTexture();
     var img = new Image();
-    img.src = "images/" + filename;
+    img.src = 'images/' + filename;
     img.onload = function () {
       imageTextureReady(gl, handle, img);
     };
@@ -31,11 +31,7 @@ export function getImageTexture(gl: WebGLRenderingContext, filename: string) {
   return handle;
 }
 
-function imageTextureReady(
-  gl: WebGLRenderingContext,
-  handle: WebGLTexture,
-  image: HTMLImageElement
-) {
+function imageTextureReady(gl: WebGLRenderingContext, handle: WebGLTexture, image: HTMLImageElement) {
   gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, handle);
   gl.pixelStorei(GL_STATIC_VARIABLES.UNPACK_FLIP_Y_WEBGL, false);
   gl.pixelStorei(GL_STATIC_VARIABLES.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); // TODO: should be true for proper mipmap
@@ -48,10 +44,7 @@ function imageTextureReady(
     GL_STATIC_VARIABLES.UNSIGNED_BYTE,
     resizeImageToPowerOfTwo(image)
   );
-  gl.hint(
-    GL_STATIC_VARIABLES.GENERATE_MIPMAP_HINT,
-    GL_STATIC_VARIABLES.FASTEST
-  );
+  gl.hint(GL_STATIC_VARIABLES.GENERATE_MIPMAP_HINT, GL_STATIC_VARIABLES.FASTEST);
   gl.generateMipmap(GL_TEXTURE_TARGET.TEXTURE_2D);
   gl.texParameteri(
     GL_TEXTURE_TARGET.TEXTURE_2D,
@@ -86,8 +79,8 @@ function resizeImageToPowerOfTwo(image: HTMLImageElement) {
     return image;
   }
 
-  var cv = document.createElement("canvas") as HTMLCanvasElement;
-  var ctx = cv.getContext("2d")!;
+  var cv = document.createElement('canvas') as HTMLCanvasElement;
+  var ctx = cv.getContext('2d')!;
   cv.width = width;
   cv.height = height;
   ctx.drawImage(image, 0, 0, width, height);

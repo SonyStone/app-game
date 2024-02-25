@@ -1,5 +1,9 @@
-import { GL_SHADER_TYPE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
-import { GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_MODE } from '@webgl/static-variables/textures';
+import { GL_SHADER_TYPE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
+import {
+  GL_TEXTURE_MAG_FILTER,
+  GL_TEXTURE_MIN_FILTER,
+  GL_TEXTURE_WRAP_MODE
+} from '@packages/webgl/static-variables/textures';
 
 /**
  * A vertex shader's sole responsibility is to set `gl_Position` to a clip space position. To create one use:

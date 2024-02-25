@@ -1,5 +1,5 @@
+import * as m3 from '@packages/math/m3';
 import '@pixi/math-extras';
-import * as m3 from '@webgl/math/m3';
 import { Container, Graphics, IPointData, Point, Transform } from 'pixi.js';
 import { Key } from 'ts-keycode-enum';
 

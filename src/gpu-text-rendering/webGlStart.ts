@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 
 import { createProgram } from './createProgram';
 import { drawScene } from './drawScene';
@@ -37,18 +37,14 @@ export async function webGlStart() {
   canvas.addEventListener('mousedown', function (e) {
     if (e.button == 2 || e.buttons == 2) {
       canvas.requestPointerLock =
-        canvas.requestPointerLock ||
-        (canvas as any).mozRequestPointerLock ||
-        (canvas as any).webkitRequestPointerLock;
+        canvas.requestPointerLock || (canvas as any).mozRequestPointerLock || (canvas as any).webkitRequestPointerLock;
 
       canvas.requestPointerLock();
     }
   });
   canvas.addEventListener('mouseup', function (e) {
     document.exitPointerLock =
-      document.exitPointerLock ||
-      (document as any).mozExitPointerLock ||
-      (document as any).webkitExitPointerLock;
+      document.exitPointerLock || (document as any).mozExitPointerLock || (document as any).webkitExitPointerLock;
     document.exitPointerLock();
   });
 
@@ -60,23 +56,13 @@ export async function webGlStart() {
   console.log('Compiling shaders...');
 
   const imageProgram = createProgram(gl, imagevs, imagefs)!;
-  const glyphProgram = createProgram(
-    gl,
-    glyphvs,
-    glyphfs,
-    '#define kUseRasteredAtlas\n'
-  )!;
+  const glyphProgram = createProgram(gl, glyphvs, glyphfs, '#define kUseRasteredAtlas\n')!;
   const glyphProgramNoRast = createProgram(gl, glyphvs, glyphfs)!;
   const pageProgram = createProgram(gl, pagevs, pagefs)!;
 
   console.log('Loading files...');
 
-  const [
-    glyphBuffer,
-    { preAtlasTexture, atlasTexture },
-    { pageData, pageBuffer },
-    imageBuffer,
-  ] = await Promise.all([
+  const [glyphBuffer, { preAtlasTexture, atlasTexture }, { pageData, pageBuffer }, imageBuffer] = await Promise.all([
     requestFile('glyphs.bmp')
       .then((response) => response.arrayBuffer())
       .then((buf) => unpackBmp(buf))
@@ -90,9 +76,7 @@ export async function webGlStart() {
         const preAtlasTexture = await requestFile('atlasverts.bmp')
           .then((response) => response.arrayBuffer())
           .then((buf) => unpackBmp(buf))
-          .then((bmp) =>
-            processAtlasVertices(gl, bmp, glyphProgramNoRast, atlasTexture)
-          );
+          .then((bmp) => processAtlasVertices(gl, bmp, glyphProgramNoRast, atlasTexture));
 
         return { preAtlasTexture, atlasTexture };
       }),
@@ -104,7 +88,7 @@ export async function webGlStart() {
     requestFile('imageverts.bmp')
       .then((response) => response.arrayBuffer())
       .then((buf) => unpackBmp(buf))
-      .then((bmp) => processImageVertices(gl, bmp)!),
+      .then((bmp) => processImageVertices(gl, bmp)!)
   ]);
 
   let waitingForTimer = false;
@@ -150,14 +134,11 @@ function initGl(canvas: HTMLCanvasElement):
     antialias: false,
     depth: false,
     stencil: false,
-    preserveDrawingBuffer: false,
+    preserveDrawingBuffer: false
   };
   let gl = canvas.getContext('webgl', flags) as WebGLRenderingContext;
   if (gl == null) {
-    gl = canvas.getContext(
-      'experimental-webgl',
-      flags
-    ) as WebGLRenderingContext;
+    gl = canvas.getContext('experimental-webgl', flags) as WebGLRenderingContext;
     if (gl == null) {
       console.log('Failed to create WebGL context');
       return;
@@ -165,9 +146,7 @@ function initGl(canvas: HTMLCanvasElement):
   }
 
   if (gl.getExtension('OES_standard_derivatives') == null) {
-    console.log(
-      'Failed to enable required WebGL extension OES_standard_derivatives'
-    );
+    console.log('Failed to enable required WebGL extension OES_standard_derivatives');
     return;
   }
 
@@ -180,10 +159,7 @@ function initGl(canvas: HTMLCanvasElement):
 
   gl.disable(GL_STATIC_VARIABLES.DEPTH_TEST);
 
-  gl.blendFunc(
-    GL_STATIC_VARIABLES.SRC_ALPHA,
-    GL_STATIC_VARIABLES.ONE_MINUS_SRC_ALPHA
-  );
+  gl.blendFunc(GL_STATIC_VARIABLES.SRC_ALPHA, GL_STATIC_VARIABLES.ONE_MINUS_SRC_ALPHA);
 
   gl.viewport(0, 0, canvas.width, canvas.height);
 

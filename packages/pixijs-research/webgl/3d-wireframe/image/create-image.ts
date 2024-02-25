@@ -1,5 +1,5 @@
-import { GL_BUFFER_USAGE, GL_TEXTURES } from '@webgl/static-variables';
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables/static-variables';
+import { GL_BUFFER_USAGE, GL_TEXTURES } from '@packages/webgl/static-variables';
+import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables/static-variables';
 
 import { createProgram } from '../Shader';
 import fragmentShader from './frag_shader.frag?raw';
@@ -29,26 +29,10 @@ export async function createImage(gl: WebGL2RenderingContext) {
 
     // Set the parameters so we don't need mips and so we're not filtering
     // and we don't repeat
-    gl.texParameteri(
-      GL_TEXTURES.TEXTURE_2D,
-      GL_TEXTURES.TEXTURE_WRAP_S,
-      GL_TEXTURES.CLAMP_TO_EDGE
-    );
-    gl.texParameteri(
-      GL_TEXTURES.TEXTURE_2D,
-      GL_TEXTURES.TEXTURE_WRAP_T,
-      GL_TEXTURES.CLAMP_TO_EDGE
-    );
-    gl.texParameteri(
-      GL_TEXTURES.TEXTURE_2D,
-      GL_TEXTURES.TEXTURE_MIN_FILTER,
-      GL_TEXTURES.NEAREST
-    );
-    gl.texParameteri(
-      GL_TEXTURES.TEXTURE_2D,
-      GL_TEXTURES.TEXTURE_MAG_FILTER,
-      GL_TEXTURES.NEAREST
-    );
+    gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_WRAP_S, GL_TEXTURES.CLAMP_TO_EDGE);
+    gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_WRAP_T, GL_TEXTURES.CLAMP_TO_EDGE);
+    gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MIN_FILTER, GL_TEXTURES.NEAREST);
+    gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MAG_FILTER, GL_TEXTURES.NEAREST);
 
     // Upload the image into the texture.
     const mipLevel = 0; // the largest mip
@@ -57,14 +41,7 @@ export async function createImage(gl: WebGL2RenderingContext) {
     const srcType = gl.UNSIGNED_BYTE; // type of data we are supplying
     const image = await loadImage(leaves);
 
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      mipLevel,
-      internalFormat,
-      srcFormat,
-      srcType,
-      image
-    );
+    gl.texImage2D(gl.TEXTURE_2D, mipLevel, internalFormat, srcFormat, srcType, image);
   }
 
   // Tell WebGL how to convert from clip space to pixels
@@ -82,10 +59,7 @@ export async function createImage(gl: WebGL2RenderingContext) {
       let positionBuffer: WebGLBuffer;
       {
         // look up where the vertex data needs to go.
-        const positionAttributeLocation = gl.getAttribLocation(
-          program,
-          'a_position'
-        );
+        const positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
         // Create a buffer
         positionBuffer = gl.createBuffer()!;
 
@@ -107,30 +81,18 @@ export async function createImage(gl: WebGL2RenderingContext) {
         const normalize = false; // don't normalize the data
         const stride = 0; // 0 = move forward size * sizeof(type) each iteration to get the next position
         const offset = 0; // start at the beginning of the buffer
-        gl.vertexAttribPointer(
-          positionAttributeLocation,
-          size,
-          type,
-          normalize,
-          stride,
-          offset
-        );
+        gl.vertexAttribPointer(positionAttributeLocation, size, type, normalize, stride, offset);
       }
 
       {
-        const texCoordAttributeLocation = gl.getAttribLocation(
-          program,
-          'a_texCoord'
-        );
+        const texCoordAttributeLocation = gl.getAttribLocation(program, 'a_texCoord');
 
         // provide texture coordinates for the rectangle.
         const texCoordBuffer = gl.createBuffer();
         gl.bindBuffer(GL_STATIC_VARIABLES.ARRAY_BUFFER, texCoordBuffer);
         gl.bufferData(
           GL_STATIC_VARIABLES.ARRAY_BUFFER,
-          new Float32Array([
-            0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0,
-          ]),
+          new Float32Array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]),
           GL_BUFFER_USAGE.STATIC_DRAW
         );
         gl.enableVertexAttribArray(texCoordAttributeLocation);
@@ -140,14 +102,7 @@ export async function createImage(gl: WebGL2RenderingContext) {
         const normalize = false; // don't normalize the data
         const stride = 0; // 0 = move forward size * sizeof(type) each iteration to get the next position
         const offset = 0; // start at the beginning of the buffer
-        gl.vertexAttribPointer(
-          texCoordAttributeLocation,
-          size,
-          type,
-          normalize,
-          stride,
-          offset
-        );
+        gl.vertexAttribPointer(texCoordAttributeLocation, size, type, normalize, stride, offset);
       }
 
       gl.useProgram(program);
@@ -170,7 +125,7 @@ export async function createImage(gl: WebGL2RenderingContext) {
       const offset = 0;
       const count = 6;
       gl.drawArrays(primitiveType, offset, count);
-    },
+    }
   };
 }
 
@@ -179,20 +134,10 @@ function randomInt(range: number) {
 }
 
 // Fill the buffer with the values that define a rectangle.
-function setRectangle(
-  gl: WebGL2RenderingContext,
-  x: number,
-  y: number,
-  width: number,
-  height: number
-) {
+function setRectangle(gl: WebGL2RenderingContext, x: number, y: number, width: number, height: number) {
   var x1 = x;
   var x2 = x + width;
   var y1 = y;
   var y2 = y + height;
-  gl.bufferData(
-    gl.ARRAY_BUFFER,
-    new Float32Array([x1, y1, x2, y1, x1, y2, x1, y2, x2, y1, x2, y2]),
-    gl.STATIC_DRAW
-  );
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([x1, y1, x2, y1, x1, y2, x1, y2, x2, y1, x2, y2]), gl.STATIC_DRAW);
 }

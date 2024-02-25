@@ -1,4 +1,4 @@
-import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@webgl/static-variables';
+import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@packages/webgl/static-variables';
 
 import { mapSize } from './mapSize';
 import { GL_TO_GLSL_TYPES } from './mapType';
@@ -19,16 +19,10 @@ export interface AttributeData {
  *
  * @returns {object} the attribute data for this program
  */
-export function getAttributeData(
-  gl: WebGL2RenderingContext,
-  program: WebGLProgram
-): { [key: string]: AttributeData } {
+export function getAttributeData(gl: WebGL2RenderingContext, program: WebGLProgram): { [key: string]: AttributeData } {
   const attributes: { [key: string]: AttributeData } = {};
 
-  const totalAttributes = gl.getProgramParameter(
-    program,
-    GL_PROGRAM_PARAMETER.ACTIVE_ATTRIBUTES
-  );
+  const totalAttributes = gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.ACTIVE_ATTRIBUTES);
 
   function getActiveAttribData(program: WebGLProgram, i: number) {
     const attribData = gl.getActiveAttrib(program, i)!;
@@ -42,7 +36,7 @@ export function getAttributeData(
       type,
       name: attribData.name,
       size: mapSize(type),
-      location: gl.getAttribLocation(program, attribData.name),
+      location: gl.getAttribLocation(program, attribData.name)
     };
   }
 

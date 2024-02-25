@@ -1,28 +1,20 @@
-import {
-  GL_BUFFER_TYPE,
-  GL_CLEAR_MASK,
-  GL_STATIC_VARIABLES,
-  GL_TEXTURES,
-} from "@webgl/static-variables";
-import {
-  GL_TEXTURE_TARGET,
-  GL_TEXTURE_UNIT,
-} from "@webgl/static-variables/textures";
+import { GL_BUFFER_TYPE, GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
+import { GL_TEXTURE_TARGET, GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
 
-import { ExtWebGLProgram } from "./createProgram";
-import { getImageTexture } from "./getImageTexture";
-import { ExtWebGLTexture } from "./processAtlas";
-import { mustRenderNextFrame } from "./renderNextFrame";
+import { ExtWebGLProgram } from './createProgram';
+import { getImageTexture } from './getImageTexture';
+import { ExtWebGLTexture } from './processAtlas';
+import { mustRenderNextFrame } from './renderNextFrame';
 
 const transform = {
   x: 0.5,
   y: 0.5,
-  zoom: 2,
+  zoom: 2
 };
 const animTransform = {
   x: 0,
   y: 0,
-  zoom: 2,
+  zoom: 2
 };
 const positions = { x: [], y: [] };
 let lastAutoChange = -1e6;
@@ -53,35 +45,25 @@ export function drawScene(
   timestamp: number,
   timerQuery?: WebGLQuery
 ) {
-  if (
-    glyphProgram == null ||
-    !glyphBuffer ||
-    !pageData ||
-    !atlasTexture ||
-    !preAtlasTexture
-  ) {
+  if (glyphProgram == null || !glyphBuffer || !pageData || !atlasTexture || !preAtlasTexture) {
     return;
   }
-  var firstFrame =
-    document.getElementById("loadinginfo")!.style.visibility != "hidden";
+  var firstFrame = document.getElementById('loadinginfo')!.style.visibility != 'hidden';
   if (firstFrame) {
-    document.getElementById("loadinginfo")!.style.visibility = "hidden";
-    canvas.style.display = "block"; // force reflow on ios
+    document.getElementById('loadinginfo')!.style.visibility = 'hidden';
+    canvas.style.display = 'block'; // force reflow on ios
   }
 
   var zoomx = animTransform.zoom;
   var zoomy = (zoomx * pageData[0].width) / pageData[0].height;
 
-  var autoPan = (document.getElementById("autopan")! as HTMLInputElement)
-    .checked;
+  var autoPan = (document.getElementById('autopan')! as HTMLInputElement).checked;
   if (autoPan) {
     var interval = 14000;
     if (timestamp - lastAutoChange > interval) {
       lastAutoChange = timestamp;
       var page = pageData[Math.floor(Math.random() * pageData.length)];
-      var glyph =
-        Math.floor(Math.random() * (page.endVertex - page.beginVertex)) +
-        page.beginVertex;
+      var glyph = Math.floor(Math.random() * (page.endVertex - page.beginVertex)) + page.beginVertex;
       glyph = Math.floor(glyph / 6);
 
       panFromX = panToX;
@@ -124,21 +106,13 @@ export function drawScene(
 
   if (timerQuery) {
     if (waitingForTimer) {
-      var available = glext.getQueryObjectEXT(
-        timerQuery,
-        glext.QUERY_RESULT_AVAILABLE_EXT
-      );
+      var available = glext.getQueryObjectEXT(timerQuery, glext.QUERY_RESULT_AVAILABLE_EXT);
       var disjoint = gl.getParameter(glext.GPU_DISJOINT_EXT);
       if (available) {
         if (lastFrametime == null || timestamp - lastFrametime > 100) {
           lastFrametime = timestamp;
-          var elapsed = glext.getQueryObjectEXT(
-            timerQuery,
-            glext.QUERY_RESULT_EXT
-          );
-          (
-            document.getElementById("frametime")! as HTMLInputElement
-          ).value = `${elapsed / 1e6}`;
+          var elapsed = glext.getQueryObjectEXT(timerQuery, glext.QUERY_RESULT_EXT);
+          (document.getElementById('frametime')! as HTMLInputElement).value = `${elapsed / 1e6}`;
         }
         waitingForTimer = false;
       }
@@ -154,21 +128,10 @@ export function drawScene(
   gl.disable(GL_STATIC_VARIABLES.BLEND);
   var aspect = canvas.height / canvas.width;
   gl.uniform2f(pageProgram.uniforms!.uPositionMul, aspect / zoomx, 1 / zoomy);
-  gl.uniform2f(
-    pageProgram.uniforms!.uPositionAdd,
-    (aspect * -animTransform.x) / zoomx,
-    -animTransform.y / zoomy
-  );
+  gl.uniform2f(pageProgram.uniforms!.uPositionAdd, (aspect * -animTransform.x) / zoomx, -animTransform.y / zoomy);
   gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, pageBuffer);
   enableAttributes(gl, pageProgram);
-  gl.vertexAttribPointer(
-    pageProgram.attributes!.aPosition,
-    2,
-    gl.FLOAT,
-    false,
-    0,
-    0
-  );
+  gl.vertexAttribPointer(pageProgram.attributes!.aPosition, 2, gl.FLOAT, false, 0, 0);
   gl.drawArrays(GL_STATIC_VARIABLES.TRIANGLE_STRIP, 0, pageData.length * 6);
   disableAttributes(gl, pageProgram);
 
@@ -195,30 +158,14 @@ export function drawScene(
       bytesPerImageVertex,
       4
     );
-    gl.vertexAttribPointer(
-      imageProgram.attributes!.aAlpha,
-      1,
-      gl.UNSIGNED_BYTE,
-      true,
-      bytesPerImageVertex,
-      8
-    );
-    gl.vertexAttribPointer(
-      imageProgram.attributes!.aInvert,
-      1,
-      gl.UNSIGNED_BYTE,
-      true,
-      bytesPerImageVertex,
-      9
-    );
+    gl.vertexAttribPointer(imageProgram.attributes!.aAlpha, 1, gl.UNSIGNED_BYTE, true, bytesPerImageVertex, 8);
+    gl.vertexAttribPointer(imageProgram.attributes!.aInvert, 1, gl.UNSIGNED_BYTE, true, bytesPerImageVertex, 9);
 
     gl.activeTexture(GL_TEXTURE_UNIT.TEXTURE0);
     gl.uniform1i(imageProgram.uniforms!.uSampler, 0);
 
     for (var i = 0; i < pageData.length; i++) {
-      if (
-        setPageUniforms(gl, canvas, imageProgram, pageData[i], zoomx, zoomy)
-      ) {
+      if (setPageUniforms(gl, canvas, imageProgram, pageData[i], zoomx, zoomy)) {
         var images = pageData[i].images;
         if (images) {
           for (var j = 0; j < images.length; j++) {
@@ -226,11 +173,7 @@ export function drawScene(
             var handle = getImageTexture(gl, img.filename);
             if (handle) {
               gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, handle);
-              gl.drawArrays(
-                GL_STATIC_VARIABLES.TRIANGLE_STRIP,
-                img.vertexOffset,
-                img.numVerts
-              );
+              gl.drawArrays(GL_STATIC_VARIABLES.TRIANGLE_STRIP, img.vertexOffset, img.numVerts);
             }
           }
         }
@@ -240,10 +183,7 @@ export function drawScene(
   }
 
   // Draw glyphs
-  const prog = (document.getElementById("vectoronly") as HTMLInputElement)
-    .checked
-    ? glyphProgramNoRast
-    : glyphProgram;
+  const prog = (document.getElementById('vectoronly') as HTMLInputElement).checked ? glyphProgramNoRast : glyphProgram;
 
   gl.useProgram(prog);
   gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, glyphBuffer);
@@ -260,29 +200,14 @@ export function drawScene(
   gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, preAtlasTexture);
   gl.uniform1i(prog.uniforms!.uRasteredAtlasSampler, 1);
 
-  gl.uniform2f(
-    prog.uniforms!.uTexelSize,
-    1 / atlasTexture.width!,
-    1 / atlasTexture.height!
-  );
-  gl.uniform2f(
-    prog.uniforms!.uRasteredTexelSize,
-    1 / preAtlasTexture.width!,
-    1 / preAtlasTexture.height!
-  );
-  gl.uniform1i(
-    prog.uniforms!.uDebug,
-    (document.getElementById("showgrids") as HTMLInputElement).checked ? 1 : 0
-  );
+  gl.uniform2f(prog.uniforms!.uTexelSize, 1 / atlasTexture.width!, 1 / atlasTexture.height!);
+  gl.uniform2f(prog.uniforms!.uRasteredTexelSize, 1 / preAtlasTexture.width!, 1 / preAtlasTexture.height!);
+  gl.uniform1i(prog.uniforms!.uDebug, (document.getElementById('showgrids') as HTMLInputElement).checked ? 1 : 0);
 
   for (var i = 0; i < pageData.length; i++) {
     var page = pageData[i];
     if (setPageUniforms(gl, canvas, prog, page, zoomx, zoomy)) {
-      gl.drawArrays(
-        GL_STATIC_VARIABLES.TRIANGLES,
-        page.beginVertex,
-        page.endVertex - page.beginVertex
-      );
+      gl.drawArrays(GL_STATIC_VARIABLES.TRIANGLES, page.beginVertex, page.endVertex - page.beginVertex);
     }
   }
   disableAttributes(gl, prog);
@@ -346,11 +271,7 @@ function updateAnimations(timestamp: number) {
       (transform as any)[key] = 0.5;
     }
 
-    var newval = getAnimatedValue(
-      (animTransform as any)[key],
-      (transform as any)[key],
-      elapsed
-    );
+    var newval = getAnimatedValue((animTransform as any)[key], (transform as any)[key], elapsed);
     if (newval != (animTransform as any)[key]) {
       changed = true;
     }
@@ -379,7 +300,7 @@ function setCanvasSize(canvas: HTMLCanvasElement) {
     devicePixelRatio *= window.innerWidth / window.outerWidth;
   }
 
-  var e = document.getElementById("canvaswrap") as HTMLDivElement;
+  var e = document.getElementById('canvaswrap') as HTMLDivElement;
   var w = Math.round(e.clientWidth * devicePixelRatio);
   var h = Math.round(e.clientHeight * devicePixelRatio);
 
@@ -407,13 +328,13 @@ function setPageUniforms(
     x0: (((0 - translateX) / zoomx) * canvas.height) / canvas.width,
     x1: (((1 - translateX) / zoomx) * canvas.height) / canvas.width,
     y0: (0 - translateY) / zoomy,
-    y1: (1 - translateY) / zoomy,
+    y1: (1 - translateY) / zoomy
   };
   var viewportNdc = {
     x0: -1,
     x1: 1,
     y0: -1,
-    y1: 1,
+    y1: 1
   };
   if (!boxesIntersect(pageNdc, viewportNdc)) {
     return false;
@@ -422,44 +343,16 @@ function setPageUniforms(
   var aspect = canvas.height / canvas.width;
 
   gl.uniform2f(program.uniforms!.uPositionMul, aspect / zoomx, 1 / zoomy);
-  gl.uniform2f(
-    program.uniforms!.uPositionAdd,
-    (aspect * -translateX) / zoomx,
-    -translateY / zoomy
-  );
+  gl.uniform2f(program.uniforms!.uPositionAdd, (aspect * -translateX) / zoomx, -translateY / zoomy);
 
   return true;
 }
 
-function doGlyphVertexAttribPointers(
-  gl: WebGLRenderingContext,
-  prog: ExtWebGLProgram
-) {
+function doGlyphVertexAttribPointers(gl: WebGLRenderingContext, prog: ExtWebGLProgram) {
   var stride = int16PerVertex * 2;
-  gl.vertexAttribPointer(
-    prog.attributes!.aPosition,
-    2,
-    GL_STATIC_VARIABLES.SHORT,
-    true,
-    stride,
-    0
-  );
-  gl.vertexAttribPointer(
-    prog.attributes!.aCurvesMin,
-    2,
-    GL_STATIC_VARIABLES.UNSIGNED_SHORT,
-    false,
-    stride,
-    2 * 2
-  );
-  gl.vertexAttribPointer(
-    prog.attributes!.aColor,
-    4,
-    GL_STATIC_VARIABLES.UNSIGNED_BYTE,
-    true,
-    stride,
-    4 * 2
-  );
+  gl.vertexAttribPointer(prog.attributes!.aPosition, 2, GL_STATIC_VARIABLES.SHORT, true, stride, 0);
+  gl.vertexAttribPointer(prog.attributes!.aCurvesMin, 2, GL_STATIC_VARIABLES.UNSIGNED_SHORT, false, stride, 2 * 2);
+  gl.vertexAttribPointer(prog.attributes!.aColor, 4, GL_STATIC_VARIABLES.UNSIGNED_BYTE, true, stride, 4 * 2);
 }
 
 function mix(b: number, a: number, t: number) {

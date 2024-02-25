@@ -1,12 +1,12 @@
-import * as m4 from '@webgl/math/m4';
+import * as m4 from '@packages/math/m4';
 import {
   GL_BUFFER_TYPE,
   GL_DATA_TYPE,
   GL_PROGRAM_PARAMETER,
   GL_SHADER_TYPE,
   GL_STATIC_VARIABLES,
-  GL_TEXTURES,
-} from '@webgl/static-variables';
+  GL_TEXTURES
+} from '@packages/webgl/static-variables';
 
 export class Shader {
   gl: WebGL2RenderingContext;
@@ -122,9 +122,7 @@ export class Shader {
         gl.activeTexture((gl as any)['TEXTURE' + uniform.textureNum]);
         break;
       default:
-        throw new Error(
-          'Unknown uniform type: ' + uniform.type + ' for uniform ' + name
-        );
+        throw new Error('Unknown uniform type: ' + uniform.type + ' for uniform ' + name);
     }
     return uniform;
   }
@@ -143,28 +141,13 @@ export class Shader {
         //attribute.buffer.itemSize = attribute.itemSize;
         //attribute.buffer.itemCount = attribute.itemCount;
         gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, attribute.buffer);
-        attribute.value =
-          attribute.value ||
-          new Array(attribute.itemSize * attribute.itemCount);
-        gl.bufferData(
-          GL_BUFFER_TYPE.ARRAY_BUFFER,
-          new Float32Array(attribute.value),
-          gl.STATIC_DRAW
-        );
+        attribute.value = attribute.value || new Array(attribute.itemSize * attribute.itemCount);
+        gl.bufferData(GL_BUFFER_TYPE.ARRAY_BUFFER, new Float32Array(attribute.value), gl.STATIC_DRAW);
         gl.enableVertexAttribArray(attribute.location);
-        gl.vertexAttribPointer(
-          attribute.location,
-          attribute.itemSize,
-          GL_DATA_TYPE.FLOAT,
-          false,
-          0,
-          0
-        );
+        gl.vertexAttribPointer(attribute.location, attribute.itemSize, GL_DATA_TYPE.FLOAT, false, 0, 0);
         break;
       default:
-        throw new Error(
-          'Unknown attribute type: ' + attribute.type + ' for attribute ' + name
-        );
+        throw new Error('Unknown attribute type: ' + attribute.type + ' for attribute ' + name);
     }
   }
 
@@ -187,25 +170,12 @@ export class Shader {
     switch (attribute.type) {
       case GL_BUFFER_TYPE.ARRAY_BUFFER:
         gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, attribute.buffer);
-        gl.bufferData(
-          GL_BUFFER_TYPE.ARRAY_BUFFER,
-          new Float32Array(attribute.value),
-          GL_STATIC_VARIABLES.STATIC_DRAW
-        );
+        gl.bufferData(GL_BUFFER_TYPE.ARRAY_BUFFER, new Float32Array(attribute.value), GL_STATIC_VARIABLES.STATIC_DRAW);
         //gl.enableVertexAttribArray(attribute.location);
-        gl.vertexAttribPointer(
-          attribute.location,
-          attribute.itemSize,
-          GL_DATA_TYPE.FLOAT,
-          false,
-          0,
-          0
-        );
+        gl.vertexAttribPointer(attribute.location, attribute.itemSize, GL_DATA_TYPE.FLOAT, false, 0, 0);
         break;
       default:
-        throw new Error(
-          'Unknown attribute type: ' + attribute.type + ' for attribute ' + name
-        );
+        throw new Error('Unknown attribute type: ' + attribute.type + ' for attribute ' + name);
     }
   }
 
@@ -220,11 +190,7 @@ export class Shader {
   }
 }
 
-export function createProgram(
-  gl: WebGL2RenderingContext,
-  vertexShaderSource: string,
-  fragmentShaderSource: string
-) {
+export function createProgram(gl: WebGL2RenderingContext, vertexShaderSource: string, fragmentShaderSource: string) {
   console.log(`createProgram`);
   const vertexShader = gl.createShader(GL_SHADER_TYPE.VERTEX_SHADER)!;
 
@@ -241,10 +207,7 @@ export function createProgram(
   gl.linkProgram(program);
 
   if (!gl.getProgramParameter(program, GL_PROGRAM_PARAMETER.LINK_STATUS)) {
-    throw (
-      'Shader.createProgram > Program link error: ' +
-      gl.getProgramInfoLog(program)
-    );
+    throw 'Shader.createProgram > Program link error: ' + gl.getProgramInfoLog(program);
   }
   return program;
 }

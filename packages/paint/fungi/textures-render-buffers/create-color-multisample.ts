@@ -1,4 +1,4 @@
-import { COLOR_ATTACHMENT, GL_FRAMEBUFFER_OBJECT, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { COLOR_ATTACHMENT, GL_FRAMEBUFFER_OBJECT, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 
 export function createColorMultisample(
   gl: WebGL2RenderingContext,

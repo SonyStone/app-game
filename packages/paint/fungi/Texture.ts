@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables/static-variables';
+import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables/static-variables';
 
 export class Texture {
   constructor(

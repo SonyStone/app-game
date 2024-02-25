@@ -1,5 +1,5 @@
-import * as m4 from '@webgl/math/m4';
-import { GL_DATA_TYPE } from '@webgl/static-variables/data-type';
+import * as m4 from '@packages/math/m4';
+import { GL_DATA_TYPE } from '@packages/webgl/static-variables/data-type';
 
 import { createShader } from '../Shader2';
 import fragmentShader from './frag_shader.frag?raw';

@@ -1,4 +1,4 @@
-import { GL_FRAMEBUFFER_OBJECT, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_FRAMEBUFFER_OBJECT, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 
 // Create a MutiSampled Render Buffer
 export function createDepthMultisample(gl: WebGL2RenderingContext, width: number, height: number): WebGLRenderbuffer {

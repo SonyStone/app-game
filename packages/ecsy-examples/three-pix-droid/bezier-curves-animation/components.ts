@@ -1,5 +1,4 @@
-import { Vector2 } from 'examples/utils';
-
+import { Vector2 } from '@packages/ecsy-examples/utils';
 
 export class BezierCurvesConfig {
   curvesNum = 40;
@@ -24,13 +23,13 @@ export class WaveNoise {
   get() {
     let blendedWave = 0;
     for (const e of this.wavesSet) {
-      blendedWave += Math.sin(e / 180 * Math.PI); // convert degree to radian and get sine
+      blendedWave += Math.sin((e / 180) * Math.PI); // convert degree to radian and get sine
     }
     return (blendedWave / this.wavesSet.length + 1) / 2;
   }
 
   reset() {
-    for(let i = 0 ; i < this.size; ++i) {
+    for (let i = 0; i < this.size; ++i) {
       const randomAngle = Math.random() * 360; // generate random degree
       this.wavesSet.push(randomAngle);
     }

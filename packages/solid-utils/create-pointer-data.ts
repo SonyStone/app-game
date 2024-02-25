@@ -1,6 +1,6 @@
 import { createMemo } from 'solid-js';
 
-import { Vec2 } from '@webgl/math';
+import { Vec2 } from '@packages/math';
 import { createPointerStream } from './create-pointer-stream';
 
 export function createPointerData(element: HTMLElement) {

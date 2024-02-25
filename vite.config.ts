@@ -24,7 +24,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@utils': resolve(packages, 'solid-utils'),
-      '@webgl': resolve(packages, 'webgl'),
       '@packages': resolve(packages),
       '@/ldtk-ts': resolve(packages, 'ldtk-ts')
     }

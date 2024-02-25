@@ -1,5 +1,5 @@
-import { FVec2, FVec3, Vec2Tuple, Vec3Tuple, m4, v4 } from '@webgl/math';
-import { GL_BUFFER_TYPE, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { FVec2, FVec3, Vec2Tuple, Vec3Tuple, m4, v4 } from '@packages/math';
+import { GL_BUFFER_TYPE, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 import { createProgram } from './Shader';
 
 interface Uniform {

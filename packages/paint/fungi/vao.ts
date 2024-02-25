@@ -1,4 +1,4 @@
-import { GL_BUFFER_TYPE, GL_DATA_TYPE } from '@webgl/static-variables';
+import { GL_BUFFER_TYPE, GL_DATA_TYPE } from '@packages/webgl/static-variables';
 import { IBuffer } from './Buffer';
 
 /**

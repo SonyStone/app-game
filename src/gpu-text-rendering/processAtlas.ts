@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES, GL_TEXTURES } from '@webgl/static-variables';
+import { GL_STATIC_VARIABLES, GL_TEXTURES } from '@packages/webgl/static-variables';
 
 import { UnpackedBMP } from './unpackBmp';
 
@@ -7,10 +7,7 @@ export type ExtWebGLTexture = WebGLTexture & {
   height?: number;
 };
 
-export function processAtlas(
-  gl: WebGLRenderingContext,
-  data: UnpackedBMP
-): ExtWebGLTexture {
+export function processAtlas(gl: WebGLRenderingContext, data: UnpackedBMP): ExtWebGLTexture {
   const arrayView = new Uint8Array(data.buf);
   const atlasTexture: ExtWebGLTexture = gl.createTexture()!;
   atlasTexture.width = data.width;
@@ -31,31 +28,13 @@ export function processAtlas(
     GL_STATIC_VARIABLES.UNSIGNED_BYTE,
     arrayView
   );
-  gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_MAG_FILTER,
-    GL_TEXTURES.NEAREST
-  );
-  gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_MIN_FILTER,
-    GL_TEXTURES.NEAREST
-  );
-  gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_WRAP_S,
-    GL_TEXTURES.CLAMP_TO_EDGE
-  );
-  gl.texParameteri(
-    GL_TEXTURES.TEXTURE_2D,
-    GL_TEXTURES.TEXTURE_WRAP_T,
-    GL_TEXTURES.CLAMP_TO_EDGE
-  );
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MAG_FILTER, GL_TEXTURES.NEAREST);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MIN_FILTER, GL_TEXTURES.NEAREST);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_WRAP_S, GL_TEXTURES.CLAMP_TO_EDGE);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_WRAP_T, GL_TEXTURES.CLAMP_TO_EDGE);
 
   gl.bindTexture(gl.TEXTURE_2D, null);
-  console.log(
-    'Loaded atlas: ' + atlasTexture.width + ' x ' + atlasTexture.height
-  );
+  console.log('Loaded atlas: ' + atlasTexture.width + ' x ' + atlasTexture.height);
 
   return atlasTexture;
 }

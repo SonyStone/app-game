@@ -6,7 +6,7 @@ import { Animation } from './animation';
 
 const tempMat4 = /* @__PURE__ */ new Mat4();
 
-import { GL_INTERNAL_FORMAT } from '@webgl/static-variables/textures';
+import { GL_INTERNAL_FORMAT } from '@packages/webgl/static-variables/textures';
 import type { Camera } from '../core/camera';
 import type { Geometry } from '../core/geometry';
 import type { Program } from '../core/program';

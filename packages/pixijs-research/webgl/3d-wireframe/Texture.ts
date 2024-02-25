@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES, GL_TEXTURES } from '@webgl/static-variables';
+import { GL_STATIC_VARIABLES, GL_TEXTURES } from '@packages/webgl/static-variables';
 
 // ! Недоделано ! Нет getTexture
 export class Texture {
@@ -21,26 +21,26 @@ export class Texture {
         type: 'i',
         target: GL_TEXTURES.TEXTURE_2D,
         name: GL_TEXTURES.TEXTURE_WRAP_S,
-        value: GL_TEXTURES.MIRRORED_REPEAT,
+        value: GL_TEXTURES.MIRRORED_REPEAT
       },
       {
         type: 'i',
         target: GL_TEXTURES.TEXTURE_2D,
         name: GL_TEXTURES.TEXTURE_WRAP_T,
-        value: GL_TEXTURES.MIRRORED_REPEAT,
+        value: GL_TEXTURES.MIRRORED_REPEAT
       },
       {
         type: 'i',
         target: GL_TEXTURES.TEXTURE_2D,
         name: GL_TEXTURES.TEXTURE_MIN_FILTER,
-        value: GL_TEXTURES.LINEAR,
+        value: GL_TEXTURES.LINEAR
       },
       {
         type: 'i',
         target: GL_TEXTURES.TEXTURE_2D,
         name: GL_TEXTURES.TEXTURE_MAG_FILTER,
-        value: GL_TEXTURES.LINEAR,
-      },
+        value: GL_TEXTURES.LINEAR
+      }
     ];
     this._glTexture = undefined;
     this.width = opts.width || 2;
@@ -138,17 +138,7 @@ export class Texture {
     var gl = this.gl;
     this.data = data || this.data;
     gl.bindTexture(GL_TEXTURES.TEXTURE_2D, this.getTexture());
-    gl.texSubImage2D(
-      GL_TEXTURES.TEXTURE_2D,
-      0,
-      0,
-      0,
-      this.width,
-      this.height,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      this.data
-    );
+    gl.texSubImage2D(GL_TEXTURES.TEXTURE_2D, 0, 0, 0, this.width, this.height, gl.RGBA, gl.UNSIGNED_BYTE, this.data);
     if (gl.FRAMEBUFFER)
       gl.framebufferTexture2D(
         GL_STATIC_VARIABLES.FRAMEBUFFER,

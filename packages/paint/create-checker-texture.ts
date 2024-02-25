@@ -1,11 +1,11 @@
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 import {
   GL_TEXTURE_MAG_FILTER,
   GL_TEXTURE_MIN_FILTER,
   GL_TEXTURE_PARAMETER_NAME,
   GL_TEXTURE_TARGET,
   GL_TEXTURE_WRAP_MODE
-} from '@webgl/static-variables/textures';
+} from '@packages/webgl/static-variables/textures';
 
 export function createCheckerTexture(gl: WebGL2RenderingContext) {
   const id = gl.createTexture();

@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 import { onCleanup } from 'solid-js';
 
 import atlas from './atlas.bmp?url';
@@ -24,9 +24,7 @@ import s from './style.module.scss';
 import { unpackBmp } from './unpackBmp';
 
 export default function GpuTextRendering() {
-  const canvas = (
-    <canvas id="beziercanvas" class={s.canvas}></canvas>
-  ) as HTMLCanvasElement;
+  const canvas = (<canvas id="beziercanvas" class={s.canvas}></canvas>) as HTMLCanvasElement;
 
   console.log(`canvas`, canvas);
 
@@ -46,18 +44,14 @@ export default function GpuTextRendering() {
   canvas.addEventListener('mousedown', function (e) {
     if (e.button == 2 || e.buttons == 2) {
       canvas.requestPointerLock =
-        canvas.requestPointerLock ||
-        (canvas as any).mozRequestPointerLock ||
-        (canvas as any).webkitRequestPointerLock;
+        canvas.requestPointerLock || (canvas as any).mozRequestPointerLock || (canvas as any).webkitRequestPointerLock;
 
       canvas.requestPointerLock();
     }
   });
   canvas.addEventListener('mouseup', function (e) {
     document.exitPointerLock =
-      document.exitPointerLock ||
-      (document as any).mozExitPointerLock ||
-      (document as any).webkitExitPointerLock;
+      document.exitPointerLock || (document as any).mozExitPointerLock || (document as any).webkitExitPointerLock;
     document.exitPointerLock();
   });
 
@@ -69,12 +63,7 @@ export default function GpuTextRendering() {
   console.log('Compiling shaders...');
 
   const imageProgram = createProgram(gl, imagevs, imagefs)!;
-  const glyphProgram = createProgram(
-    gl,
-    glyphvs,
-    glyphfs,
-    '#define kUseRasteredAtlas\n'
-  )!;
+  const glyphProgram = createProgram(gl, glyphvs, glyphfs, '#define kUseRasteredAtlas\n')!;
   const glyphProgramNoRast = createProgram(gl, glyphvs, glyphfs)!;
   const pageProgram = createProgram(gl, pagevs, pagefs)!;
 
@@ -83,12 +72,7 @@ export default function GpuTextRendering() {
   // console.log(`glyphs`, !!glyphs);
   let animationId: number;
   const start = async () => {
-    const [
-      glyphBuffer,
-      { preAtlasTexture, atlasTexture },
-      { pageData, pageBuffer },
-      imageBuffer,
-    ] = await Promise.all([
+    const [glyphBuffer, { preAtlasTexture, atlasTexture }, { pageData, pageBuffer }, imageBuffer] = await Promise.all([
       requestFile(glyphs)
         .then((response) => response.arrayBuffer())
         .then((buf) => unpackBmp(buf))
@@ -102,9 +86,7 @@ export default function GpuTextRendering() {
           const preAtlasTexture = await requestFile(atlasverts)
             .then((response) => response.arrayBuffer())
             .then((buf) => unpackBmp(buf))
-            .then((bmp) =>
-              processAtlasVertices(gl, bmp, glyphProgramNoRast, atlasTexture)
-            );
+            .then((bmp) => processAtlasVertices(gl, bmp, glyphProgramNoRast, atlasTexture));
 
           return { preAtlasTexture, atlasTexture };
         }),
@@ -116,7 +98,7 @@ export default function GpuTextRendering() {
       requestFile(imageverts)
         .then((response) => response.arrayBuffer())
         .then((buf) => unpackBmp(buf))
-        .then((bmp) => processImageVertices(gl, bmp)!),
+        .then((bmp) => processImageVertices(gl, bmp)!)
     ]);
 
     let waitingForTimer = false;
@@ -160,9 +142,7 @@ export default function GpuTextRendering() {
         {canvas}
       </div>
       <div id="toolbar" class={s.toolbar}>
-        <a href="/post/war-and-peace-and-webgl/">
-          Resolution independent GPU text rendering
-        </a>
+        <a href="/post/war-and-peace-and-webgl/">Resolution independent GPU text rendering</a>
         <br />
         Drag to pan, right mouse (or alt) drag to zoom
         <label>
@@ -199,14 +179,11 @@ function initGl(canvas: HTMLCanvasElement):
     antialias: false,
     depth: false,
     stencil: false,
-    preserveDrawingBuffer: false,
+    preserveDrawingBuffer: false
   };
   let gl = canvas.getContext('webgl', flags) as WebGLRenderingContext;
   if (gl == null) {
-    gl = canvas.getContext(
-      'experimental-webgl',
-      flags
-    ) as WebGLRenderingContext;
+    gl = canvas.getContext('experimental-webgl', flags) as WebGLRenderingContext;
     if (gl == null) {
       console.log('Failed to create WebGL context');
       return;
@@ -214,9 +191,7 @@ function initGl(canvas: HTMLCanvasElement):
   }
 
   if (gl.getExtension('OES_standard_derivatives') == null) {
-    console.log(
-      'Failed to enable required WebGL extension OES_standard_derivatives'
-    );
+    console.log('Failed to enable required WebGL extension OES_standard_derivatives');
     return;
   }
 
@@ -229,10 +204,7 @@ function initGl(canvas: HTMLCanvasElement):
 
   gl.disable(GL_STATIC_VARIABLES.DEPTH_TEST);
 
-  gl.blendFunc(
-    GL_STATIC_VARIABLES.SRC_ALPHA,
-    GL_STATIC_VARIABLES.ONE_MINUS_SRC_ALPHA
-  );
+  gl.blendFunc(GL_STATIC_VARIABLES.SRC_ALPHA, GL_STATIC_VARIABLES.ONE_MINUS_SRC_ALPHA);
 
   gl.viewport(0, 0, canvas.width, canvas.height);
 

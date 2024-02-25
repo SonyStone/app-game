@@ -1,4 +1,4 @@
-import { GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@webgl/static-variables';
+import { GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
 import { Colour } from '../Colour';
 
 /**
