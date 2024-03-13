@@ -185,7 +185,7 @@ describe('v2', () => {
     const vec1 = FVec2.create(1, 2);
     const vec2 = FVec2.create(2, 3);
 
-    const result = vec1.multiply(vec2);
+    const result = vec1.mul(vec2);
 
     expect(result).toEqual(FVec2.create(2, 6));
   });
@@ -194,7 +194,7 @@ describe('v2', () => {
     const vec1 = FVec2.create(2, 6);
     const vec2 = FVec2.create(2, 3);
 
-    const result = vec1.divide(vec2);
+    const result = vec1.div(vec2);
 
     expect(result).toEqual(FVec2.create(1, 2));
   });

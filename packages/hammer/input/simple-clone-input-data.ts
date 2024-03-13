@@ -1,4 +1,4 @@
-import type { Vec2Tuple } from '@packages/ogl/math/vec-2';
+import type { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
 import { HammerInput } from '../pointerevent';
 import { round } from '../utils/utils-consts';
 import getCenter from './get-center';

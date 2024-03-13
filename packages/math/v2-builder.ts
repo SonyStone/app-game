@@ -30,58 +30,58 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
      * @returns The new Vec3 instance.
      */
     static create(x: number = 0, y: number = 0): Vec2 {
-      const v = new Vec2();
+      const v = new this();
       v[0] = x;
       v[1] = y;
 
       return v;
     }
 
-    static angle = angle(Vec2);
-
-    static splat = (v: number): Vec2 => Vec2.create(v, v);
+    static splat(v: number): Vec2 {
+      return this.create(v, v);
+    }
 
     /** All zeroes. */
-    static readonly ZERO = Vec2.splat(0);
+    static readonly ZERO = this.splat(0);
 
     /** All ones. */
-    static readonly ONE = Vec2.splat(1);
+    static readonly ONE = this.splat(1);
 
     /** All negative ones. */
-    static readonly NEG_ONE = Vec2.splat(-1);
+    static readonly NEG_ONE = this.splat(-1);
 
     /** All `NaN`. */
-    static readonly NAN = Vec2.splat(NaN);
+    static readonly NAN = this.splat(NaN);
 
     /** All `Infinity`. */
-    static readonly INFINITY = Vec2.splat(Infinity);
+    static readonly INFINITY = this.splat(Infinity);
 
     /** All `-Infinity`. */
-    static readonly NEG_INFINITY = Vec2.splat(-Infinity);
+    static readonly NEG_INFINITY = this.splat(-Infinity);
 
     /** A unit vector pointing along the positive X axis. */
-    static readonly X = Vec2.create(1, 0) as Readonly<Vec2>;
+    static readonly X = this.create(1, 0) as Readonly<Vec2>;
 
     /** →  */
-    static readonly RIGHT = Vec2.create(1, 0);
+    static readonly RIGHT = this.create(1, 0);
 
     /** A unit vector pointing along the positive Y axis. */
-    static readonly Y = Vec2.create(0, 1);
+    static readonly Y = this.create(0, 1);
 
     /** ↑ */
-    static readonly UP = Vec2.create(0, 1);
+    static readonly UP = this.create(0, 1);
 
     /** A unit vector pointing along the negative X axis. */
-    static readonly NEG_X = Vec2.create(-1, 0);
+    static readonly NEG_X = this.create(-1, 0);
 
     /** ← */
-    static readonly LEFT = Vec2.create(-1, 0);
+    static readonly LEFT = this.create(-1, 0);
 
     /** A unit vector pointing along the negative Y axis. */
-    static readonly NEG_Y = Vec2.create(0, -1);
+    static readonly NEG_Y = this.create(0, -1);
 
     /** ↓ */
-    static readonly DOWN = Vec2.create(0, -1);
+    static readonly DOWN = this.create(0, -1);
 
     /**
      * Gets the x component of the vector.
@@ -111,29 +111,14 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
 
     /**
      * Creates a new Vec3 instance with the same values as this vector.
-     * @returns The new Vec3 instance.
      */
     clone() {
       return Vec2.create(this[0], this[1]);
     }
 
     /**
-     * Sets the values of the vector.
-     * @param x The x value to set (default: 0).
-     * @param y The y value to set (default: 0).
-     * @param z The z value to set (default: 0).
-     * @returns The modified Vec3 instance.
-     */
-    set(x: number = 0, y: number = 0): this {
-      this[0] = x;
-      this[1] = y;
-      return this;
-    }
-
-    /**
      * Copies the values from another vector to this vector.
      * @param rhs The vector to copy from.
-     * @returns The modified Vec3 instance.
      */
     copy(rhs: Vec2Tuple): this {
       this[0] = rhs[0];
@@ -141,14 +126,25 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
       return this;
     }
 
+    /**
+     * Sets the values of the vector.
+     * @param x The x value to set (default: 0).
+     * @param y The y value to set (default: 0).
+     * @param z The z value to set (default: 0).
+     */
+    set(x: number = 0, y: number = 0): this {
+      this[0] = x;
+      this[1] = y;
+      return this;
+    }
+
     static add(a: Vec2Tuple, b: Vec2Tuple): Vec2 {
-      return Vec2.create(a[0] + b[0], a[1] + b[1]);
+      return this.create(a[0] + b[0], a[1] + b[1]);
     }
 
     /**
      * Adds another vector to this vector.
      * @param vec The vector to add.
-     * @returns The modified Vec3 instance.
      */
     add(vec: Vec2Tuple): this {
       this[0] += vec[0];
@@ -157,9 +153,18 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
     }
 
     /**
+     * Adds two vectors.
+     * @param vec The vector to add.
+     */
+    addFrom(a: Vec2Tuple, b: Vec2Tuple): this {
+      this[0] = a[0] + b[0];
+      this[1] = a[1] + b[1];
+      return this;
+    }
+
+    /**
      * Subtracts another vector from this vector.
      * @param rhs The vector to subtract.
-     * @returns The modified Vec3 instance.
      */
     sub(rhs: Vec2Tuple): this {
       this[0] -= rhs[0];
@@ -168,13 +173,31 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
     }
 
     /**
+     * Subtracts of two vectors.
+     */
+    subFrom(a: Vec2Tuple, b: Vec2Tuple): this {
+      this[0] = a[0] - b[0];
+      this[1] = a[1] - b[1];
+      return this;
+    }
+
+    /**
      * Multiplies this vector component-wise with another vector.
      * @param vec The vector to multiply with.
-     * @returns The modified Vec3 instance.
      */
-    multiply(rhs: Vec2Tuple) {
+    mul(rhs: Vec2Tuple): this {
       this[0] *= rhs[0];
       this[1] *= rhs[1];
+      return this;
+    }
+
+    /**
+     * Multiplies this vector by a scalar value.
+     * @param rhs The scalar value to multiply by.
+     */
+    mulScalar(rhs: number) {
+      this[0] *= rhs;
+      this[1] *= rhs;
       return this;
     }
 
@@ -182,11 +205,20 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
      * Divides this vector component-wise by another vector.
      * @param vec The vector to divide by.
      * @param dst The destination vector to store the result (default: new VecType(3)).
-     * @returns The modified Vec3 instance.
      */
-    divide(rhs: Vec2Tuple) {
+    div(rhs: Vec2Tuple) {
       this[0] /= rhs[0];
       this[1] /= rhs[1];
+      return this;
+    }
+
+    /**
+     * Divides this vector by a scalar value.
+     * @param rhs The scalar value to divide by.
+     */
+    divScalar(rhs: number): this {
+      this[0] /= rhs;
+      this[1] /= rhs;
       return this;
     }
 
@@ -194,7 +226,6 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
      * Performs linear interpolation between this vector and another vector.
      * @param vec The vector to interpolate with.
      * @param t The interpolation coefficient.
-     * @returns The modified Vec3 instance.
      */
     lerp(rhs: Vec2Tuple, t: number): this {
       this[0] = this[0] + t * (rhs[0] - this[0]);
@@ -206,7 +237,6 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
      * Performs linear interpolation between this vector and another vector using vector coefficients.
      * @param vec The vector to interpolate with.
      * @param t The vector of interpolation coefficients.
-     * @returns The modified Vec3 instance.
      */
     lerpV(rhs: Vec2Tuple, t: Vec2Tuple): this {
       this[0] = this[0] + t[0] * (rhs[0] - this[0]);
@@ -217,7 +247,6 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
     /**
      * Returns a new vector where each component is the maximum value between the corresponding components of this vector and the given vector.
      * @param vec The vector to compare with.
-     * @returns The resulting vector.
      */
     max(rhs: Vec2Tuple): Vec2 {
       const x = Math.max(this[0], rhs[0]);
@@ -228,34 +257,11 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
     /**
      * Returns a new vector where each component is the minimum value between the corresponding components of this vector and the given vector.
      * @param vec The vector to compare with.
-     * @returns The resulting vector.
      */
     min(rhs: Vec2Tuple): Vec2 {
       const x = Math.min(this[0], rhs[0]);
       const y = Math.min(this[1], rhs[1]);
       return Vec2.create(x, y);
-    }
-
-    /**
-     * Multiplies this vector by a scalar value.
-     * @param rhs The scalar value to multiply by.
-     * @returns The modified Vec3 instance.
-     */
-    mulScalar(rhs: number) {
-      this[0] *= rhs;
-      this[1] *= rhs;
-      return this;
-    }
-
-    /**
-     * Divides this vector by a scalar value.
-     * @param rhs The scalar value to divide by.
-     * @returns The modified Vec3 instance.
-     */
-    divScalar(rhs: number): this {
-      this[0] /= rhs;
-      this[1] /= rhs;
-      return this;
     }
 
     /**
@@ -313,7 +319,6 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
 
     /**
      * Normalizes this vector (scales it to have a length of 1).
-     * @returns The modified Vec3 instance.
      */
     normalize(): this {
       const lenSq = this[0] * this[0] + this[1] * this[1];
@@ -331,7 +336,6 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
 
     /**
      * Negates this vector (flips the sign of each component).
-     * @returns The modified Vec3 instance.
      */
     negate(): this {
       this[0] = -this[0];
@@ -342,7 +346,6 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
     /**
      * Inverts this vector (1/x, 1/y, 1/z).
      * @param v The vector to invert.
-     * @returns The modified Vec3 instance.
      */
     inverse(v: Vec2Tuple = this): this {
       this[0] = 1.0 / v[0];
@@ -359,6 +362,25 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
       return this[0] === vec[0] && this[1] === vec[1];
     }
 
+    /** When values are very small, like less then 0.000001, just make it zero. */
+    nearZero(x = 1e-6, y = 1e-6) {
+      if (Math.abs(this[0]) <= x) {
+        this[0] = 0;
+      }
+      if (Math.abs(this[1]) <= y) {
+        this[1] = 0;
+      }
+      return this;
+    }
+
+    /**
+     * Get the angle between two 2D vectors
+     * @param a The first operand
+     * @param b The second operand
+     * @returns The angle in radians
+     */
+    static angle = angle(Vec2);
+
     /**
      * Returns the angle between this vector and another vector.
      * @param vec The vector to calculate the angle to.
@@ -368,23 +390,48 @@ export const Vec2Builder = (ctor: TypedArrayConstructor) =>
       return Vec2.angle(this, vec);
     }
 
-    fromAngle(angle: number): Vec2Tuple {
+    static fromAngle(angle: number): Vec2 {
       const x = Math.cos(angle);
       const y = Math.sin(angle);
+      return Vec2.create(x, y);
+    }
+
+    static fromAngleLen(ang: number, len: number): Vec2 {
+      const x = len * Math.cos(ang);
+      const y = len * Math.sin(ang);
       return Vec2.create(x, y);
     }
 
     angleTo(vec: Vec2Tuple): number {
       return Math.atan2(this[1] - vec[1], this[0] - vec[0]);
     }
+
+    static max(a: Vec2Tuple, b: Vec2Tuple): Vec2 {
+      return Vec2.create(Math.max(a[0], b[0]), Math.max(a[1], b[1]));
+    }
+
+    static min(a: Vec2Tuple, b: Vec2Tuple): Vec2 {
+      return Vec2.create(Math.min(a[0], b[0]), Math.min(a[1], b[1]));
+    }
+
+    rotate(rad: number) {
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const x = this[0];
+      const y = this[1];
+
+      this[0] = x * cos - y * sin;
+      this[1] = x * sin + y * cos;
+      return this;
+    }
+
+    fromArray(a: number[] | TypedArray, o: number = 0): this {
+      this[0] = a[o];
+      this[1] = a[o + 1];
+      return this;
+    }
   };
 
-/**
- * Get the angle between two 2D vectors
- * @param {vec3} a The first operand
- * @param {vec3} b The second operand
- * @returns {Number} The angle in radians
- */
 const angle = (ctor: ReturnType<typeof Vec2Builder>) => {
   const tempA = ctor.create();
   const tempB = ctor.create();

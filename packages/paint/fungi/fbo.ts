@@ -154,7 +154,6 @@ export const createFramebufferMap = (
     buffers: (TextureBuffer | RenderBuffer)[];
   }
 ): FramebufferMap => {
-  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   // Create Frame Buffer Object
   const framebufferId = gl.createFramebuffer()!;
   const width = config.width;
@@ -164,7 +163,6 @@ export const createFramebufferMap = (
 
   const fbo = new FramebufferMap(gl, framebufferId, width, height);
 
-  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   // Create Textures / Render Buffers
 
   // Need to get a list of Attachment Points for the Buffers in the FBO

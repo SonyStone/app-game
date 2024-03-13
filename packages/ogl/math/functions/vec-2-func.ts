@@ -1,6 +1,6 @@
 import { Mat3Tuple } from '../mat-3';
 import { Mat4Tuple } from '../mat-4';
-import { Vec2Tuple } from '../vec-2';
+import { Vec2Tuple } from '../vec-2_old';
 
 const EPSILON = 0.000001;
 

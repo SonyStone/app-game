@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES as GL_CONST } from './static-variables';
+import { GL_CONST } from './static-variables';
 
 export const enum GL_PROGRAM_PARAMETER {
   /** Returns a `GLboolean` indicating whether or not the program is flagged for deletion. */

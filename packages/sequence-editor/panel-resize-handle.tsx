@@ -1,4 +1,4 @@
-import { Vec2Tuple } from '@packages/ogl/math/vec-2';
+import { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
 import { ComponentProps, createEffect, createMemo, onMount } from 'solid-js';
 import useDrag from './use-drag';
 

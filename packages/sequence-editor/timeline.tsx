@@ -1,5 +1,6 @@
 import { createPointerEventsHandler } from '@packages/hammer/pointerevent';
-import { Animation, AnimationFrame, Vec2 } from '@packages/ogl';
+import { FVec2 } from '@packages/math';
+import { Animation, AnimationFrame } from '@packages/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { For, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -22,14 +23,14 @@ export function Timeline(props: { animation?: Animation }) {
     setFrames(props.animation?.data?.frames ?? []);
   });
 
-  const [position, setPosition] = createSignal<Vec2>(new Vec2(0, 0), { equals: (v1, v2) => !v1.equals(v2) });
+  const [position, setPosition] = createSignal<FVec2>(FVec2.create(0, 0), { equals: (v1, v2) => !v1.equals(v2) });
 
   let elementRef: HTMLElement;
 
   if (true) {
     const pointerEventsHandler = createPointerEventsHandler();
 
-    let start = new Vec2(0, 0);
+    let start = FVec2.create(0, 0);
     let dataset:
       | {
           name: 'keyframe';
@@ -48,7 +49,7 @@ export function Timeline(props: { animation?: Animation }) {
       dataset = (e.target as any).dataset as any;
 
       if (dataset?.name === 'keyframe') {
-        setFrames(dataset.item, 'position', dataset.axis, (p) => {
+        setFrames(dataset.item, 'position', dataset.axis, (p: number) => {
           posStart = p;
           return posStart + input.delta[1];
         });
@@ -56,7 +57,7 @@ export function Timeline(props: { animation?: Animation }) {
 
       if (!dataset) {
         const p = position();
-        p.set(start.add(input.delta as any as Vec2));
+        p.copy(start.add(input.delta));
         setPosition(p);
       }
       window.addEventListener('pointermove', onMove);
@@ -69,12 +70,12 @@ export function Timeline(props: { animation?: Animation }) {
       const input = pointerEventsHandler(e);
 
       if (dataset?.name === 'keyframe') {
-        setFrames(dataset.item, 'position', dataset.axis, (p) => posStart + input.delta[1]);
+        setFrames(dataset.item, 'position', dataset.axis, () => posStart + input.delta[1]);
       }
 
       if (!dataset?.name) {
         const p = position();
-        p.set([start[0] + input.delta[0], start[1] + input.delta[1]]);
+        p.set(start[0] + input.delta[0], start[1] + input.delta[1]);
         setPosition(p);
       }
     }
@@ -86,13 +87,13 @@ export function Timeline(props: { animation?: Animation }) {
 
       if (!dataset?.name) {
         const p = position();
-        p.set([start[0] + input.delta[0], start[1] + input.delta[1]]);
+        p.set(start[0] + input.delta[0], start[1] + input.delta[1]);
         start = p.clone();
         setPosition(p);
       }
 
       if (dataset?.name === 'keyframe') {
-        setFrames(dataset.item, 'position', dataset.axis, (p) => {
+        setFrames(dataset.item, 'position', dataset.axis, () => {
           return posStart + input.delta[1];
         });
         dataset = undefined;

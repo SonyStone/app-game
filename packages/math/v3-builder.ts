@@ -111,7 +111,6 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
      * @param x The x value to set (default: 0).
      * @param y The y value to set (default: 0).
      * @param z The z value to set (default: 0).
-     * @returns The modified Vec3 instance.
      */
     set(x: number = 0, y: number = 0, z: number = 0): this {
       this[0] = x;
@@ -123,7 +122,6 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
     /**
      * Copies the values from another vector to this vector.
      * @param vec The vector to copy from.
-     * @returns The modified Vec3 instance.
      */
     copy(vec: Vec3Tuple) {
       this[0] = vec[0];
@@ -135,7 +133,6 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
     /**
      * Adds another vector to this vector.
      * @param vec The vector to add.
-     * @returns The modified Vec3 instance.
      */
     add(vec: Vec3Tuple): this {
       this[0] += vec[0];
@@ -144,10 +141,13 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
       return this;
     }
 
+    static sub(a: Vec3Tuple, b: Vec3Tuple): Vec3 {
+      return this.create(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    }
+
     /**
      * Subtracts another vector from this vector.
      * @param vec The vector to subtract.
-     * @returns The modified Vec3 instance.
      */
     sub(vec: Vec3Tuple): this {
       this[0] -= vec[0];
@@ -157,9 +157,20 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
     }
 
     /**
+     * Subtracts another vector from this vector.
+     * @param vec The vector to subtract.
+     */
+    subFrom(a: Vec3Tuple, b: Vec3Tuple): this {
+      this[0] = a[0] - b[0];
+      this[1] = a[1] - b[1];
+      this[2] = a[2] - b[2];
+      return this;
+    }
+
+    /**
      * Multiplies this vector component-wise with another vector.
      * @param vec The vector to multiply with.
-     * @returns The modified Vec3 instance.
+     
      */
     multiply(vec: Vec3Tuple) {
       this[0] *= vec[0];
@@ -172,7 +183,7 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
      * Divides this vector component-wise by another vector.
      * @param vec The vector to divide by.
      * @param dst The destination vector to store the result (default: new VecType(3)).
-     * @returns The modified Vec3 instance.
+     
      */
     divide(vec: Vec3Tuple) {
       this[0] /= vec[0];
@@ -185,7 +196,6 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
      * Performs linear interpolation between this vector and another vector.
      * @param vec The vector to interpolate with.
      * @param t The interpolation coefficient.
-     * @returns The modified Vec3 instance.
      */
     lerp(vec: Vec3Tuple, t: number): this {
       this[0] = this[0] + t * (vec[0] - this[0]);
@@ -198,7 +208,6 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
      * Performs linear interpolation between this vector and another vector using vector coefficients.
      * @param vec The vector to interpolate with.
      * @param t The vector of interpolation coefficients.
-     * @returns The modified Vec3 instance.
      */
     lerpV(vec: Vec3Tuple): this {
       this[0] = this[0] + vec[0] * (vec[0] - this[0]);
@@ -234,7 +243,7 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
     /**
      * Multiplies this vector by a scalar value.
      * @param k The scalar value to multiply by.
-     * @returns The modified Vec3 instance.
+     
      */
     mulScalar(k: number) {
       this[0] = this[0] * k;
@@ -246,7 +255,6 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
     /**
      * Divides this vector by a scalar value.
      * @param k The scalar value to divide by.
-     * @returns The modified Vec3 instance.
      */
     divScalar(k: number): this {
       this[0] = this[0] / k;
@@ -255,10 +263,13 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
       return this;
     }
 
+    static cross(a: Vec3Tuple, b: Vec3Tuple): Vec3 {
+      return this.create(a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]);
+    }
+
     /**
      * Calculates the cross product of this vector and another vector.
      * @param vec The vector to calculate the cross product with.
-     * @returns The modified Vec3 instance.
      */
     cross(vec: Readonly<Vec3Tuple>): this {
       const t1 = this[2] * vec[0] - this[0] * vec[2];
@@ -266,6 +277,13 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
       this[0] = this[1] * vec[2] - this[2] * vec[1];
       this[1] = t1;
       this[2] = t2;
+      return this;
+    }
+
+    crossFrom(a: Vec3Tuple, b: Vec3Tuple): this {
+      this[0] = a[1] * b[2] - a[2] * b[1];
+      this[1] = a[2] * b[0] - a[0] * b[2];
+      this[2] = a[0] * b[1] - a[1] * b[0];
       return this;
     }
 
@@ -336,7 +354,7 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
 
     /**
      * Normalizes this vector (scales it to have a length of 1).
-     * @returns The modified Vec3 instance.
+     
      */
     normalize(): this {
       const lenSq = this[0] * this[0] + this[1] * this[1] + this[2] * this[2];
@@ -356,7 +374,7 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
 
     /**
      * Negates this vector (flips the sign of each component).
-     * @returns The modified Vec3 instance.
+     
      */
     negate(): this {
       this[0] = -this[0];
@@ -368,7 +386,7 @@ export const Vec3Builder = (ctor: TypedArrayConstructor) =>
     /**
      * Inverts this vector (1/x, 1/y, 1/z).
      * @param v The vector to invert.
-     * @returns The modified Vec3 instance.
+     
      */
     inverse(v: Vec3Tuple = this): this {
       this[0] = 1.0 / v[0];

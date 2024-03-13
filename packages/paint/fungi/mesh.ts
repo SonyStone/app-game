@@ -26,16 +26,13 @@ export function fromBufferConfig(
     instanced?: boolean;
   }[],
   name: string,
-  element_cnt = 0,
-  instance_cnt = 0
+  elementCount = 0,
+  instanceCount = 0
 ): IMesh {
   const buffers = new Map();
   let instanced = false;
-  let element_type = 0;
+  let elementType = 0;
 
-  //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  //
-  //
   // Basic Configuration
   for (const i of config) {
     buffers.set(i.name, i.buffer); // Save Buffer to Mesh
@@ -45,16 +42,16 @@ export function fromBufferConfig(
 
     if (i.buffer.type == GL_BUFFER_TYPE.ELEMENT_ARRAY_BUFFER) {
       // What Data Type is the Element Buffer
-      element_type = i.buffer.data_type;
+      elementType = i.buffer.data_type;
     }
   }
 
   return {
     name,
     vao: createVAO(gl, config),
-    elementCount: element_cnt,
-    elementType: element_type,
-    instanceCount: instance_cnt,
+    elementCount,
+    elementType,
+    instanceCount,
     instanced,
     buffers
   };

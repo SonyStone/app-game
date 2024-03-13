@@ -1,7 +1,7 @@
+import type { FVec2 } from '@packages/math';
 import { GL_DRAW_ARRAYS_MODE } from '@packages/webgl/static-variables';
 import { Mat3 } from '../math/mat-3';
 import { Mat4 } from '../math/mat-4';
-import type { Vec2 } from '../math/vec-2';
 import type { Vec3 } from '../math/vec-3.js';
 import type { Camera } from './camera';
 import type { Geometry } from './geometry';
@@ -27,7 +27,7 @@ export interface RaycastHit {
   point: Vec3;
   faceNormal: Vec3;
   localFaceNormal: Vec3;
-  uv: Vec2;
+  uv: FVec2;
   localNormal: Vec3;
   normal: Vec3;
 }
@@ -64,7 +64,9 @@ export class Mesh<TGeometry extends Geometry = Geometry, TProgram extends Progra
     }: Partial<MeshOptions> = {}
   ) {
     super();
-    if (!gl.canvas) console.error('gl not passed as first argument to Mesh');
+    if (!gl.canvas) {
+      console.error('gl not passed as first argument to Mesh');
+    }
     this.geometry = geometry as TGeometry;
     this.program = program as TProgram;
     this.mode = mode;

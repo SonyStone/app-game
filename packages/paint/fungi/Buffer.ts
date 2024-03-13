@@ -1,6 +1,6 @@
 import { GL_BUFFER_USAGE, GL_DRAW_ELEMENTS_TYPE } from '@packages/webgl/static-variables';
-import { GL_BUFFER_TYPE } from '@packages/webgl/static-variables/buffer';
-import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables/static-variables';
+import { GL_BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
+import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
 import { TypedArray } from '@packages/webgl/typedArray';
 
 export interface IBuffer {
@@ -8,7 +8,7 @@ export interface IBuffer {
   id: WebGLBuffer;
 
   /** Buffer Type */
-  type: GL_BUFFER_TYPE;
+  type: GL_BUFFER_TARGET;
 
   /**  Data Type Used */
   data_type: GL_DRAW_ELEMENTS_TYPE;
@@ -37,7 +37,7 @@ export interface IBuffer {
 
 export function fromTypeArray(
   gl: WebGL2RenderingContext,
-  buf_type: GL_BUFFER_TYPE,
+  buf_type: GL_BUFFER_TARGET,
   array?: TypedArray,
   isStatic = true,
   unbind = true
@@ -77,7 +77,7 @@ export function fromTypeArray(
 }
 
 export function newElement(gl: WebGL2RenderingContext, t_ary?: TypedArray, is_static = true, unbind = true): IBuffer {
-  return fromTypeArray(gl, GL_BUFFER_TYPE.ELEMENT_ARRAY_BUFFER, t_ary, is_static, unbind);
+  return fromTypeArray(gl, GL_BUFFER_TARGET.ELEMENT_ARRAY_BUFFER, t_ary, is_static, unbind);
 }
 
 export function newArray(
@@ -87,20 +87,20 @@ export function newArray(
   is_static = true,
   unbind = true
 ) {
-  return fromTypeArray(gl, GL_BUFFER_TYPE.ARRAY_BUFFER, t_ary, is_static, unbind);
+  return fromTypeArray(gl, GL_BUFFER_TARGET.ARRAY_BUFFER, t_ary, is_static, unbind);
 }
 
 class BufferFactory {
   constructor(readonly gl: any) {}
 
   new_uniform(t_ary?: TypedArray, is_static = true, unbind = true) {
-    return fromTypeArray(this.gl.gl, GL_BUFFER_TYPE.UNIFORM_BUFFER, t_ary, is_static, unbind);
+    return fromTypeArray(this.gl.gl, GL_BUFFER_TARGET.UNIFORM_BUFFER, t_ary, is_static, unbind);
   }
   new_element(t_ary: TypedArray, is_static = true, unbind = true) {
-    return fromTypeArray(this.gl.gl, GL_BUFFER_TYPE.ELEMENT_ARRAY_BUFFER, t_ary, is_static, unbind);
+    return fromTypeArray(this.gl.gl, GL_BUFFER_TARGET.ELEMENT_ARRAY_BUFFER, t_ary, is_static, unbind);
   }
   new_array(t_ary?: TypedArray, comp_len = 3, is_static = true, unbind = true) {
-    let buf = fromTypeArray(this.gl.gl, GL_BUFFER_TYPE.ARRAY_BUFFER, t_ary, is_static, unbind);
+    let buf = fromTypeArray(this.gl.gl, GL_BUFFER_TARGET.ARRAY_BUFFER, t_ary, is_static, unbind);
     buf.component_len = comp_len;
     return buf;
   }
@@ -111,9 +111,9 @@ class BufferFactory {
     this.gl.gl.bindBuffer(buf.type, buf.id);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    if (type_ary instanceof Float32Array) buf.data_type = GL_STATIC_VARIABLES.FLOAT;
-    else if (type_ary instanceof Uint16Array) buf.data_type = GL_STATIC_VARIABLES.UNSIGNED_SHORT;
-    else if (type_ary instanceof Uint32Array) buf.data_type = GL_STATIC_VARIABLES.UNSIGNED_INT;
+    if (type_ary instanceof Float32Array) buf.data_type = GL_CONST.FLOAT;
+    else if (type_ary instanceof Uint16Array) buf.data_type = GL_CONST.UNSIGNED_SHORT;
+    else if (type_ary instanceof Uint32Array) buf.data_type = GL_CONST.UNSIGNED_INT;
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // if the data size is of capacity on the gpu, can set it up as sub data.
@@ -140,15 +140,15 @@ class BufferFactory {
 
   // #region UNBIND
   unbind_array() {
-    this.gl.gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, null);
+    this.gl.gl.bindBuffer(GL_BUFFER_TARGET.ARRAY_BUFFER, null);
     return this;
   }
   unbind_element() {
-    this.gl.gl.bindBuffer(GL_BUFFER_TYPE.ELEMENT_ARRAY_BUFFER, null);
+    this.gl.gl.bindBuffer(GL_BUFFER_TARGET.ELEMENT_ARRAY_BUFFER, null);
     return this;
   }
   unbind_uniform() {
-    this.gl.gl.bindBuffer(GL_BUFFER_TYPE.UNIFORM_BUFFER, null);
+    this.gl.gl.bindBuffer(GL_BUFFER_TARGET.UNIFORM_BUFFER, null);
     return this;
   }
   // #endregion //////////////////////////////////////////////////////////////////////////////////////

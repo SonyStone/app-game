@@ -1,9 +1,9 @@
+import { FVec2 } from '@packages/math';
 import { AttributeMap, Geometry } from '../core/geometry';
 import { Mesh } from '../core/mesh';
 import { Program } from '../core/program';
 import { OGLRenderingContext } from '../core/renderer';
 import { Color } from '../math/color';
-import { Vec2 } from '../math/vec-2';
 import { Vec3 } from '../math/vec-3';
 
 import defaultFragment from './polyline.frag?raw';
@@ -34,7 +34,7 @@ export class Polyline {
 
   geometry: Geometry;
 
-  resolution?: { value: Vec2 };
+  resolution?: { value: FVec2 };
   dpr?: { value: number };
   thickness?: { value: number };
   color?: { value: Color };
@@ -93,7 +93,7 @@ export class Polyline {
     // Populate dynamic buffers
     this.updateGeometry();
 
-    if (!uniforms.uResolution) this.resolution = uniforms.uResolution = { value: new Vec2() };
+    if (!uniforms.uResolution) this.resolution = uniforms.uResolution = { value: new FVec2() };
     if (!uniforms.uDPR) this.dpr = uniforms.uDPR = { value: 1 };
     if (!uniforms.uThickness) this.thickness = uniforms.uThickness = { value: 1 };
     if (!uniforms.uColor) this.color = uniforms.uColor = { value: new Color('#000') };

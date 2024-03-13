@@ -48,6 +48,5 @@ export { Euler } from './math/euler';
 export { Mat3 } from './math/mat-3';
 export { Mat4 } from './math/mat-4';
 export { Quat } from './math/quat';
-export { Vec2 } from './math/vec-2';
 export { Vec3 } from './math/vec-3';
 export { Vec4 } from './math/vec-4';

@@ -1,52 +1,14 @@
+import { Mat4Builder, type Mat4Tuple } from './m4-builder';
 import { FVec3 } from './v3';
 import { Vec3Tuple } from './v3-builder';
 
-/**
- * 4x4 Matrix math math functions.
- *
- * Almost all functions take an optional `dst` argument. If it is not passed in the
- * functions will create a new matrix. In other words you can do this
- *
- *     const mat = m4.translation([1, 2, 3]);  // Creates a new translation matrix
- *
- * or
- *
- *     const mat = m4.create();
- *     m4.translation([1, 2, 3], mat);  // Puts translation matrix in mat.
- *
- * The first style is often easier but depending on where it's used it generates garbage where
- * as there is almost never allocation with the second style.
- *
- * It is always save to pass any matrix as the destination. So for example
- *
- *     const mat = m4.identity();
- *     const trans = m4.translation([1, 2, 3]);
- *     m4.multiply(mat, trans, mat);  // Multiplies mat * trans and puts result in mat.
- *
- * @module twgl/m4
- */
-let MatType = Float32Array;
+/*#__PURE__*/
+export class Mat4 extends Mat4Builder(Array) {}
 
-/**
- * A JavaScript array with 16 values or a Float32Array with 16 values.
- * When created by the library will create the default type which is `Float32Array`
- * but can be set by calling {@link setDefaultType}.
- * @typedef {(number[]|Float32Array)} Mat4
- * @memberOf m4
- */
-export type Mat4 = number[] | Float32Array;
+/*#__PURE__*/
+export class FMat4 extends Mat4Builder(Float32Array) {}
 
-/**
- * Sets the type this library creates for a Mat4
- * @param {constructor} ctor the constructor for the type. Either `Float32Array` or `Array`
- * @return {constructor} previous constructor for Mat4
- * @memberOf m4
- */
-export function setDefaultType(ctor: typeof MatType) {
-  const oldType = MatType;
-  MatType = ctor;
-  return oldType;
-}
+export type { Mat4Tuple };
 
 /**
  * Negates a matrix.
@@ -114,7 +76,7 @@ export const copy = (a: Mat4, b: Mat4): Mat4 => {
  * @return A copy of m.
  */
 export const clone = (m: Mat4): Mat4 => {
-  const dst: Mat4 = new MatType(16);
+  const dst: Mat4 = new Mat4();
 
   dst[0] = m[0];
   dst[1] = m[1];
@@ -145,7 +107,7 @@ export const clone = (m: Mat4): Mat4 => {
  * @param m __mut__ The matrix.
  * @return An n-by-n identity matrix.
  */
-export function identity(m: Mat4 = new MatType(16)): Mat4 {
+export function identity(m: Mat4 = new Mat4()): Mat4 {
   m[0] = 1;
   m[1] = 0;
   m[2] = 0;

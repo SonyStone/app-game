@@ -1,9 +1,9 @@
 import { Mesh } from '../core/mesh';
 import { Program } from '../core/program';
 import { RenderTarget } from '../core/render-target';
-import { Vec2 } from '../math/vec-2';
 import { Triangle } from './triangle';
 
+import { FVec2 } from '@packages/math';
 import { OGLRenderingContext } from '../core/renderer';
 import { Texture } from '../core/texture';
 import fragment from './flowmap.frag?raw';
@@ -30,8 +30,8 @@ export class Flowmap {
   mask: SwapMask;
 
   aspect = 1;
-  mouse = new Vec2();
-  velocity = new Vec2();
+  mouse = new FVec2();
+  velocity = new FVec2();
 
   mesh: Mesh;
 
@@ -89,8 +89,8 @@ function initProgram({
   falloff: number;
   alpha: number;
   dissipation: number;
-  mouse: Vec2;
-  velocity: Vec2;
+  mouse: FVec2;
+  velocity: FVec2;
 }) {
   return new Mesh(gl, {
     // Triangle that includes -1 to 1 range for 'position', and 0 to 1 range for 'uv'.

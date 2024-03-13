@@ -1,6 +1,6 @@
 import { GL_BUFFER_TYPE, GL_DRAW_ARRAYS_MODE } from '@packages/webgl/static-variables';
-import { fromTypeArray } from './Buffer';
-import { createVAO } from './vao';
+import { fromTypeArray } from './fungi/Buffer';
+import { createVAO } from './fungi/vao';
 
 function getWireframeIndex(array: Uint16Array) {
   const indices = [];
@@ -15,9 +15,14 @@ function getWireframeIndex(array: Uint16Array) {
   return new Uint16Array(indices);
 }
 
-export function createMesh(gl: WebGL2RenderingContext) {
+/**
+ * creates Brush buffers (indices and quad buffer) and binds them to VAO
+ * quad and us
+ * location=0 → position
+ * location=2 → uv
+ */
+export function createBrushMesh(gl: WebGL2RenderingContext) {
   const indices = new Uint16Array([0, 1, 2, 2, 3, 0]);
-  const wireframeIndices = getWireframeIndex(indices);
 
   const config = [
     {
@@ -54,13 +59,9 @@ export function createMesh(gl: WebGL2RenderingContext) {
 
   return {
     draw() {
+      gl.bindVertexArray(vao);
       gl.drawElements(GL_DRAW_ARRAYS_MODE.TRIANGLES, elementCount, elementType, 0);
       // gl.drawElements(GL_DRAW_ARRAYS_MODE.LINES, element_cnt, element_type, 0);
-    },
-    bindVertexArray() {
-      gl.bindVertexArray(vao);
-    },
-    clearVertexArray() {
       gl.bindVertexArray(null);
     }
   };

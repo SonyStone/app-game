@@ -1,6 +1,6 @@
-import { GL_STATIC_VARIABLES as GL_CONST } from './static-variables';
+import { GL_CONST } from './static-variables';
 
-export const enum GL_BUFFER_TYPE {
+export const enum GL_BUFFER_TARGET {
   /**
    * buffer type for using attribute data
    *

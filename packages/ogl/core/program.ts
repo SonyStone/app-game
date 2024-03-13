@@ -1,4 +1,4 @@
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
+import { GL_CAPABILITIES, GL_DATA_TYPE, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
 import type { BlendEquation, BlendFunc, OGLRenderingContext } from './renderer';
 
 // TODO: upload empty texture if null ? maybe not
@@ -157,7 +157,12 @@ export class Program {
     this.attributeOrder = locations.join('');
   }
 
-  setBlendFunc(src: GLenum, dst: GLenum, srcAlpha?: GLenum, dstAlpha?: GLenum): void {
+  setBlendFunc(
+    src: GL_FUNC_SEPARATE,
+    dst: GL_FUNC_SEPARATE,
+    srcAlpha?: GL_FUNC_SEPARATE,
+    dstAlpha?: GL_FUNC_SEPARATE
+  ): void {
     this.blendFunc.src = src;
     this.blendFunc.dst = dst;
     this.blendFunc.srcAlpha = srcAlpha;
@@ -174,21 +179,21 @@ export class Program {
 
   applyState(): void {
     if (this.depthTest) {
-      this.gl.renderer.enable(this.gl.DEPTH_TEST);
+      this.gl.renderer.enable(GL_CAPABILITIES.DEPTH_TEST);
     } else {
-      this.gl.renderer.disable(this.gl.DEPTH_TEST);
+      this.gl.renderer.disable(GL_CAPABILITIES.DEPTH_TEST);
     }
 
     if (this.cullFace) {
-      this.gl.renderer.enable(this.gl.CULL_FACE);
+      this.gl.renderer.enable(GL_CAPABILITIES.CULL_FACE);
     } else {
-      this.gl.renderer.disable(this.gl.CULL_FACE);
+      this.gl.renderer.disable(GL_CAPABILITIES.CULL_FACE);
     }
 
     if (this.blendFunc.src) {
-      this.gl.renderer.enable(this.gl.BLEND);
+      this.gl.renderer.enable(GL_CAPABILITIES.BLEND);
     } else {
-      this.gl.renderer.disable(this.gl.BLEND);
+      this.gl.renderer.disable(GL_CAPABILITIES.BLEND);
     }
 
     if (this.cullFace) {

@@ -1,8 +1,6 @@
-import { m4, v2 } from '@packages/math';
-import { GL_DRAW_ARRAYS_MODE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
+import { GL_CAPABILITIES, GL_DRAW_ARRAYS_MODE, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
 import { createPointerData } from '@utils/create-pointer-data';
 import { createEffect } from 'solid-js';
-import { IMesh } from './fungi/mesh';
 import { postQuadNDC } from './quads-2';
 
 import drawShaderFragSrc from './draw-shader.frag?raw';
@@ -21,8 +19,11 @@ import {
 import postShaderFragSrc from './post-shader.frag?raw';
 import postShaderVertSrc from './post-shader.vert?raw';
 
+import { Mat4 } from '@packages/math/m4';
+import { FVec2 } from '@packages/math/v2';
+import { GL_TEXTURES, GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createMesh } from './fungi/create-vao';
+import { createBrushMesh } from './create-brush-mesh';
 
 export default function Paint() {
   const canvas = (
@@ -37,6 +38,100 @@ export default function Paint() {
 
   const drawBound = createDrawBound();
 
+  const gl = createWebglContext(canvas);
+  setupSomeWebglDefaults(gl);
+  setClearColor(gl, '#270E33');
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  setCanvasSize(canvas, width, height);
+  setWebglViewport(gl, width, height);
+  clearScreenBuffer(gl);
+
+  // full screan texture
+  const screanTextureFbo = createFramebufferMap(gl, {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    buffers: [{ attach: 0, name: 'color', type: 'color', mode: 'tex', pixel: 'byte' }]
+  });
+
+  // Shader that draws a brush over a line segment
+
+  // shader to draw brush on the quad
+  const brush = {
+    program: createShaderProgram(gl, {
+      vert: drawShaderVertSrc,
+      frag: drawShaderFragSrc,
+      uniforms: (uniform) => ({
+        ortho: uniform.name('ortho').mat4,
+        brushSize: uniform.name('brush_size').float,
+        bound: uniform.name('bound').vec4,
+        segment: uniform.name('segment').vec4
+      })
+    }),
+    mesh: createBrushMesh(gl)
+  };
+
+  const orthoProj = Mat4.ortho(0, width, height, 0, -100, 100);
+
+  const screen = {
+    mesh: postQuadNDC(gl),
+    // Shader that uses a unit quad to draw a texture to screen
+    program: createShaderProgram(gl, {
+      vert: postShaderVertSrc,
+      frag: postShaderFragSrc,
+      uniforms: (uniform) => ({
+        bufColor: uniform.name('buf_color').sampler2D
+      })
+    })
+  };
+
+  const bindFboAsTexture = () => {
+    gl.activeTexture(GL_TEXTURE_UNIT.TEXTURE0); // Turn on Texture Slot
+    gl.bindTexture(GL_TEXTURES.TEXTURE_2D, screanTextureFbo.buffers.color.id); // Bind Texture
+    screen.program.bufColor(0);
+  };
+
+  // This function handles drawing the brush shader onto a custom frame buffer texture
+  function draw(pressure: number) {
+    // Setup
+
+    // Experiment with Blending Modes to get something that works well
+    gl.enable(GL_CAPABILITIES.BLEND);
+    gl.blendFunc(GL_FUNC_SEPARATE.SRC_ALPHA, GL_FUNC_SEPARATE.ONE); // BLEND_ALPHA_ADDITIVE
+
+    // Load Shader and update uniforms
+    brush.program.useProgram();
+    brush.program.ortho(orthoProj);
+    brush.program.brushSize(drawBound.brushSize * pressure);
+    brush.program.bound(drawBound.bound);
+    brush.program.segment(drawBound.segment);
+    bindFramebuffer(gl, screanTextureFbo); // Load Custom FrameBuffer
+    brush.mesh.draw();
+    brush.program.clearProgram();
+    unbindFramebuffer(gl); // Unbind any Custom Frame Buffer
+  }
+
+  // This function handles rendering the custom frame buffer texture to the screen
+  function render() {
+    clearScreenBuffer(gl); // Clear Screen Buffer
+
+    // SHADER
+    screen.program.useProgram();
+    bindFboAsTexture();
+    // Mesh
+    gl.bindVertexArray(screen.mesh.vao);
+
+    // Draw
+    gl.drawElements(GL_DRAW_ARRAYS_MODE.TRIANGLES, screen.mesh.elementCount, screen.mesh.elementType, 0);
+
+    // Cleanup
+    screen.program.clearProgram();
+
+    gl.bindVertexArray(null);
+  }
+
+  const size = createWindowSize();
+
   createEffect(() => {
     const data = pointer();
 
@@ -50,122 +145,11 @@ export default function Paint() {
     render();
   });
 
-  const gl = createWebglContext(canvas);
-  setupSomeWebglDefaults(gl);
-  setClearColor(gl, '#270E33');
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-  setCanvasSize(canvas, width, height);
-  setWebglViewport(gl, width, height);
-  clearScreenBuffer(gl);
-
-  // full screan texture
-  const mainFbo = createFramebufferMap(gl, {
-    width: window.innerWidth,
-    height: window.innerHeight,
-    buffers: [{ attach: 0, name: 'color', type: 'color', mode: 'tex', pixel: 'byte' }]
-  });
-
-  const orthoProj = m4.identity();
-  m4.ortho(orthoProj, 0, width, height, 0, -100, 100);
-
-  // { mesh, shader, material }
-  const brush = createMesh(gl);
-
-  // Shader that draws a brush over a line segment
-
-  // shader to draw brush on the quad
-  const drawShader = createShaderProgram(gl, {
-    vert: drawShaderVertSrc,
-    frag: drawShaderFragSrc,
-    uniforms: (uniform) => ({
-      ortho: uniform.name('ortho').mat4,
-      brushSize: uniform.name('brush_size').float,
-      bound: uniform.name('bound').vec4,
-      segment: uniform.name('segment').vec4
-    })
-  });
-
-  const quad: IMesh = postQuadNDC(gl);
-
-  // Shader that uses a unit quad to draw a texture to screen
-
-  const postSahder = createShaderProgram(gl, {
-    vert: postShaderVertSrc,
-    frag: postShaderFragSrc,
-    uniforms: (uniform) => ({
-      bufColor: uniform.name('buf_color').sampler2D
-    })
-  });
-
-  // This function handles drawing the brush shader onto a custom frame buffer texture
-  function draw(pressure: number) {
-    // Setup
-
-    // gl.disable(GL_STATIC_VARIABLES.DEPTH_TEST);
-
-    // Experiment with Blending Modes to get something that works well
-    gl.enable(GL_STATIC_VARIABLES.BLEND);
-    // gl.blendFunc(GL_STATIC_VARIABLES.ONE, GL_STATIC_VARIABLES.ONE); //BLEND_ADDITIVE
-    gl.blendFunc(GL_STATIC_VARIABLES.SRC_ALPHA, GL_STATIC_VARIABLES.ONE); // BLEND_ALPHA_ADDITIVE
-    // gl.blendFunc( GL_STATIC_VARIABLES.ONE, GL_STATIC_VARIABLES.ZERO ); // BLEND_OVERRIDE
-    // gl.blendFunc(
-    //   GL_STATIC_VARIABLES.SRC_ALPHA,
-    //   GL_STATIC_VARIABLES.ONE_MINUS_SRC_ALPHA
-    // ); //BLEND_ALPHA
-
-    // Load Shader and update uniforms
-    drawShader.useProgram();
-    drawShader.ortho(orthoProj);
-    drawShader.brushSize(drawBound.brushSize * pressure);
-    drawShader.bound(drawBound.bound);
-    drawShader.segment(drawBound.segment);
-
-    bindFramebuffer(gl, mainFbo); //.clear( $fbo );	// Load Custom FrameBuffer
-    brush.bindVertexArray(); // Load Quad
-
-    // Draw
-    brush.draw();
-
-    // Cleanup
-    // wireFrameSahder.clearProgram();
-    drawShader.clearProgram();
-    brush.clearVertexArray();
-  }
-
-  // This function handles rendering the custom frame buffer texture to the screen
-  function render() {
-    unbindFramebuffer(gl); // Unbind any Custom Frame Buffer
-    clearScreenBuffer(gl); // Clear Screen Buffer
-
-    // SHADER
-    postSahder.useProgram();
-    gl.activeTexture(GL_STATIC_VARIABLES.TEXTURE0); // Turn on Texture Slot
-    gl.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, mainFbo.buffers.color.id); // Bind Texture
-    postSahder.bufColor(0);
-    // Mesh
-    gl.bindVertexArray(quad.vao);
-
-    // Draw
-    gl.drawElements(GL_DRAW_ARRAYS_MODE.TRIANGLES, quad.elementCount, quad.elementType, 0);
-
-    // Cleanup
-    postSahder.clearProgram();
-
-    // wireFrameSahder.useProgram();
-    // wireFrameSahder.uniforms.ortho(ortho_proj);
-    // gl.drawArrays(GL_DRAW_ARRAYS_MODE.LINES, 0, quad.element_cnt);
-
-    gl.bindVertexArray(null);
-  }
-
-  const size = createWindowSize();
-
   createEffect(() => {
     const { width, height } = size;
     setCanvasSize(canvas, width, height);
     setWebglViewport(gl, width, height);
-    m4.ortho(orthoProj, 0, width, height, 0, -100, 100);
+    orthoProj.ortho(0, width, height, 0, -100, 100);
     render();
   });
 
@@ -184,7 +168,7 @@ function createDrawBound() {
   // to draw a line segment. So first we compute the bounding box
   // for the segment, then we enlarge it by the brush size to make
   // we have all the space we need to draw the brush along the segment
-  function computeDrawBound(prev: v2.Vec2, move: v2.Vec2) {
+  function computeDrawBound(prev: FVec2, move: FVec2) {
     let x_min: number;
     let x_max: number;
     let y_min: number;

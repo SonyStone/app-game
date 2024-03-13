@@ -90,7 +90,9 @@ export class Geometry {
     readonly gl: OGLRenderingContext,
     readonly attributes: AttributeMap = {}
   ) {
-    if (!gl.canvas) console.error('gl not passed as first argument to Geometry');
+    if (!gl.canvas) {
+      console.error('gl not passed as first argument to Geometry');
+    }
 
     // Unbind current VAO so that new buffers don't get added to active mesh
     this.gl.bindVertexArray!(null);

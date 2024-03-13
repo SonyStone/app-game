@@ -1,4 +1,4 @@
-import { Vec2Tuple } from '@packages/ogl/math/vec-2';
+import { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
 import { DIRECTION, INPUT_CANCEL, INPUT_END, INPUT_MOVE, INPUT_START } from './input-consts';
 import { createComputeDelta } from './input/compute-delta';
 import getAngle from './input/get-angle';

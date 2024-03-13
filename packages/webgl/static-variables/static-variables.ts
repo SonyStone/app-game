@@ -1,7 +1,7 @@
 /**
  * @deprecated
  */
-export const enum GL_STATIC_VARIABLES {
+export const enum GL_CONST {
   /** Returns a `GLint` indicating the number of active attribute variables to a program. */
   ACTIVE_ATTRIBUTES = 35721,
   ACTIVE_TEXTURE = 34016,

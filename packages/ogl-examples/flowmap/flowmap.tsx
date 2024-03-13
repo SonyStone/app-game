@@ -1,4 +1,5 @@
-import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle, Vec2 } from '@packages/ogl';
+import { FVec2 } from '@packages/math';
+import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@packages/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect, onCleanup } from 'solid-js';
 import fragment from './shader.frag?raw';
@@ -24,8 +25,8 @@ export default () => {
 
   // Variable inputs to control flowmap
   let aspect = 1;
-  const mouse = new Vec2(-1);
-  const velocity = Object.assign(new Vec2(), { needsUpdate: true });
+  const mouse = FVec2.splat(-1);
+  const velocity = Object.assign(new FVec2(), { needsUpdate: true });
 
   const flowmap = new Flowmap(gl);
 
@@ -59,7 +60,7 @@ export default () => {
   window.addEventListener('pointermove', updateMouse, false);
 
   let lastTime = 0;
-  const lastMouse = new Vec2();
+  const lastMouse = new FVec2();
   function updateMouse(e: PointerEvent) {
     // Get mouse value in 0 to 1 range, with y flipped
     mouse.set(e.x / gl.renderer.width, 1.0 - e.y / gl.renderer.height);

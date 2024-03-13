@@ -7,7 +7,17 @@ export class Vec3 extends Vec3Builder(Array) {}
 export class FVec3 extends Vec3Builder(Float32Array) {}
 
 /*#__PURE__*/
-export class IVec3 extends Vec3Builder(Int32Array) {}
+export class IVec3 extends Vec3Builder(Int32Array) {
+  /**
+   * All `-2147483648`.
+   **/
+  static readonly MIN = this.splat(-2147483648);
+
+  /**
+   * All `2147483647`
+   * */
+  static readonly MAX = this.splat(2147483647);
+}
 
 /*#__PURE__*/
 export class UVec3 extends Vec3Builder(Uint32Array) {}

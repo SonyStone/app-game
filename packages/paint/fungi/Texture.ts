@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables/static-variables';
+import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
 
 export class Texture {
   constructor(
@@ -10,7 +10,7 @@ export class Texture {
 export class TextureFactory {
   cache = new Map();
 
-  constructor(readonly gl: any) {}
+  constructor(readonly gl: { gl: WebGL2RenderingContext }) {}
 
   get(n: any) {
     return this.cache.get(n);
@@ -27,40 +27,27 @@ export class TextureFactory {
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // Flip the texture by the Y Position, So 0,0 is bottom left corner.
-    if (do_yflip) ctx.pixelStorei(GL_STATIC_VARIABLES.UNPACK_FLIP_Y_WEBGL, true);
+    if (do_yflip) {
+      ctx.pixelStorei(GL_CONST.UNPACK_FLIP_Y_WEBGL, true);
+    }
 
     // Bind texture, then Push image to GPU.
-    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_2D, tex.id);
-    ctx.texImage2D(
-      GL_STATIC_VARIABLES.TEXTURE_2D,
-      0,
-      GL_STATIC_VARIABLES.RGBA,
-      GL_STATIC_VARIABLES.RGBA,
-      GL_STATIC_VARIABLES.UNSIGNED_BYTE,
-      img
-    );
+    ctx.bindTexture(GL_CONST.TEXTURE_2D, tex.id);
+    ctx.texImage2D(GL_CONST.TEXTURE_2D, 0, GL_CONST.RGBA, GL_CONST.RGBA, GL_CONST.UNSIGNED_BYTE, img);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     if (use_mips) {
-      ctx.texParameteri(
-        GL_STATIC_VARIABLES.TEXTURE_2D,
-        GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
-        GL_STATIC_VARIABLES.LINEAR
-      ); // Setup up scaling
-      ctx.texParameteri(
-        GL_STATIC_VARIABLES.TEXTURE_2D,
-        GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
-        GL_STATIC_VARIABLES.LINEAR_MIPMAP_NEAREST
-      ); // Setup down scaling
-      ctx.generateMipmap(GL_STATIC_VARIABLES.TEXTURE_2D); //Precalc different sizes of texture for better quality rendering.
+      ctx.texParameteri(GL_CONST.TEXTURE_2D, GL_CONST.TEXTURE_MAG_FILTER, GL_CONST.LINEAR); // Setup up scaling
+      ctx.texParameteri(GL_CONST.TEXTURE_2D, GL_CONST.TEXTURE_MIN_FILTER, GL_CONST.LINEAR_MIPMAP_NEAREST); // Setup down scaling
+      ctx.generateMipmap(GL_CONST.TEXTURE_2D); //Precalc different sizes of texture for better quality rendering.
     } else {
-      let filter = filter_mode == 0 ? GL_STATIC_VARIABLES.LINEAR : GL_STATIC_VARIABLES.NEAREST,
-        wrap = wrap_mode == 0 ? ctx.REPEAT : GL_STATIC_VARIABLES.CLAMP_TO_EDGE;
+      let filter = filter_mode == 0 ? GL_CONST.LINEAR : GL_CONST.NEAREST,
+        wrap = wrap_mode == 0 ? ctx.REPEAT : GL_CONST.CLAMP_TO_EDGE;
 
-      ctx.texParameteri(GL_STATIC_VARIABLES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER, filter);
-      ctx.texParameteri(GL_STATIC_VARIABLES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER, filter);
-      ctx.texParameteri(GL_STATIC_VARIABLES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_WRAP_S, wrap);
-      ctx.texParameteri(GL_STATIC_VARIABLES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_WRAP_T, wrap);
+      ctx.texParameteri(GL_CONST.TEXTURE_2D, GL_CONST.TEXTURE_MAG_FILTER, filter);
+      ctx.texParameteri(GL_CONST.TEXTURE_2D, GL_CONST.TEXTURE_MIN_FILTER, filter);
+      ctx.texParameteri(GL_CONST.TEXTURE_2D, GL_CONST.TEXTURE_WRAP_S, wrap);
+      ctx.texParameteri(GL_CONST.TEXTURE_2D, GL_CONST.TEXTURE_WRAP_T, wrap);
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -87,51 +74,31 @@ export class TextureFactory {
     //	TEXTURE_CUBE_MAP_POSITIVE_Z - Back	:: TEXTURE_CUBE_MAP_NEGATIVE_Z - Front
 
     let tex = ctx.createTexture();
-    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP, tex);
+    ctx.bindTexture(GL_CONST.TEXTURE_CUBE_MAP, tex);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     // push image to specific spot in the cube map.
     for (let i = 0; i < 6; i++) {
       ctx.texImage2D(
-        GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP_POSITIVE_X + i,
+        GL_CONST.TEXTURE_CUBE_MAP_POSITIVE_X + i,
         0,
-        GL_STATIC_VARIABLES.RGBA,
-        GL_STATIC_VARIABLES.RGBA,
-        GL_STATIC_VARIABLES.UNSIGNED_BYTE,
+        GL_CONST.RGBA,
+        GL_CONST.RGBA,
+        GL_CONST.UNSIGNED_BYTE,
         img_ary[i]
       );
     }
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP,
-      GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER,
-      GL_STATIC_VARIABLES.LINEAR
-    ); // Setup up scaling
-    ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP,
-      GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
-      GL_STATIC_VARIABLES.LINEAR
-    ); // Setup down scaling
-    ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP,
-      GL_STATIC_VARIABLES.TEXTURE_WRAP_S,
-      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
-    ); // Stretch image to X position
-    ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP,
-      GL_STATIC_VARIABLES.TEXTURE_WRAP_T,
-      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
-    ); // Stretch image to Y position
-    ctx.texParameteri(
-      GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP,
-      GL_STATIC_VARIABLES.TEXTURE_WRAP_R,
-      GL_STATIC_VARIABLES.CLAMP_TO_EDGE
-    ); // Stretch image to Z position
-    if (use_mips) ctx.generateMipmap(GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP);
+    ctx.texParameteri(GL_CONST.TEXTURE_CUBE_MAP, GL_CONST.TEXTURE_MAG_FILTER, GL_CONST.LINEAR); // Setup up scaling
+    ctx.texParameteri(GL_CONST.TEXTURE_CUBE_MAP, GL_CONST.TEXTURE_MIN_FILTER, GL_CONST.LINEAR); // Setup down scaling
+    ctx.texParameteri(GL_CONST.TEXTURE_CUBE_MAP, GL_CONST.TEXTURE_WRAP_S, GL_CONST.CLAMP_TO_EDGE); // Stretch image to X position
+    ctx.texParameteri(GL_CONST.TEXTURE_CUBE_MAP, GL_CONST.TEXTURE_WRAP_T, GL_CONST.CLAMP_TO_EDGE); // Stretch image to Y position
+    ctx.texParameteri(GL_CONST.TEXTURE_CUBE_MAP, GL_CONST.TEXTURE_WRAP_R, GL_CONST.CLAMP_TO_EDGE); // Stretch image to Z position
+    if (use_mips) ctx.generateMipmap(GL_CONST.TEXTURE_CUBE_MAP);
 
     //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    ctx.bindTexture(GL_STATIC_VARIABLES.TEXTURE_CUBE_MAP, null);
+    ctx.bindTexture(GL_CONST.TEXTURE_CUBE_MAP, null);
     this.cache.set(name, tex);
 
     return tex;

@@ -2,7 +2,7 @@ import { GL_BUFFER_TYPE, GL_DATA_TYPE } from '@packages/webgl/static-variables';
 import { IBuffer } from './Buffer';
 
 /**
- * Creates Vector Array Object
+ * Creates Vertex Array Object
  * VAO is about binding data to attributes.
  *
  * ```

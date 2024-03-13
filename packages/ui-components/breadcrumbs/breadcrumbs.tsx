@@ -1,8 +1,12 @@
+import { computePosition, offset } from '@floating-ui/dom';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { toObservable } from '@utils/to-observable';
 import { toSignal } from '@utils/to-signal';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
 import { ComponentProps, For, Show, createEffect, createMemo, createSignal, mergeProps, untrack } from 'solid-js';
+import { Portal } from 'solid-js/web';
+import { Transition } from 'solid-transition-group';
+import { Ripple } from '../ripple/Ripple';
 
 declare module 'solid-js' {
   namespace JSX {
@@ -45,8 +49,6 @@ export const Breadcrumbs = (props: {
   collapseFrom?: Boundary;
 }) => {
   const merged = mergeProps({ items: [], collapseFrom: Boundary.START }, props);
-
-  createResizeObserver;
 
   const defaultChopSize = createMemo(() => halve(merged.items.length));
 
@@ -138,21 +140,91 @@ export const Breadcrumbs = (props: {
     }
   };
 
+  const [showOverflow, setShowOverflow] = createSignal(false);
+  let overflowButtonRef: HTMLButtonElement;
+
   return (
-    <ul class="flex flex-nowrap min-w-0 p-0 m-0 gap-1" ref={(element) => createResizeObserver(element, repartition)}>
+    <ul
+      class="flex flex-nowrap place-content-start min-w-0 p-0 m-0"
+      ref={(element) => {
+        createResizeObserver(element, repartition);
+        setTimeout(repartition, 0);
+      }}
+    >
       <Show when={merged.collapseFrom === Boundary.START && overflowLength() > 0}>
-        <span class="border flex-shrink-0 px-2">...{overflowLength()}</span>
+        <button
+          ref={(ref) => {
+            overflowButtonRef = ref;
+          }}
+          onClick={(e) => {
+            setShowOverflow(true);
+          }}
+          class="border flex-shrink-0 px-2 relative overflow-hidden"
+        >
+          ...
+          <Ripple />
+        </button>
+        <Portal>
+          <Show when={showOverflow()}>
+            <div onClick={(e) => setShowOverflow(false)} class="fixed start-0 end-0 top-0 bottom-0 z-1000"></div>
+          </Show>
+          <Transition
+            onEnter={(el, done) => {
+              const a = el.animate([{ opacity: 0, transform: 'translateY(-10%)' }, { opacity: 1 }], {
+                duration: 150
+              });
+              a.finished.then(done);
+            }}
+            onExit={(el, done) => {
+              const a = el.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-10%)' }], {
+                duration: 100
+              });
+              a.finished.then(done);
+            }}
+          >
+            <Show when={showOverflow()}>
+              <div
+                ref={(ref) => {
+                  computePosition(overflowButtonRef, ref, {
+                    placement: 'bottom-start',
+                    middleware: [offset()]
+                  }).then((pos) => {
+                    ref.style.left = pos.x + 'px';
+                    ref.style.top = pos.y + 'px';
+                  });
+                }}
+                class="flex flex-col absolute top-0 left-0 bg-white border z-1001 rounded shadow"
+              >
+                <For each={state().overflow}>
+                  {(item) => (
+                    <a class="truncate relative rounded px-1 hover:bg-light" href={item.href}>
+                      {item.text}
+                      <Ripple />
+                    </a>
+                  )}
+                </For>
+              </div>
+            </Show>
+          </Transition>
+        </Portal>
       </Show>
       <For each={state().visible}>
-        {(item) => (
-          <li class="truncate flex flex-shrink-0 items-center gap-2 flex-nowrap overflow-hidden">
+        {(item, index) => (
+          <li class="truncate flex flex-shrink-0 items-center flex-nowrap overflow-hidden">
+            <Show when={index() !== 0 || state().overflow.length > 0}>
+              <span class="px-1">&gt;</span>
+            </Show>
             {item.icon && <i class={`fas fa-${item.icon}`}></i>}
             {item.href ? (
-              <a class="truncate" href={item.href}>
+              <a class="truncate relative rounded px-1 hover:bg-light" href={item.href}>
                 {item.text}
+                <Ripple />
               </a>
             ) : (
-              <span>{item.text}</span>
+              <span class="truncate relative px-1 hover:bg-light">
+                {item.text}
+                <Ripple />
+              </span>
             )}
           </li>
         )}

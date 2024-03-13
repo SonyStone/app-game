@@ -1,7 +1,7 @@
 import * as Mat3Func from './functions/mat-3-func';
 import { Mat4Tuple } from './mat-4';
 import { QuatTuple } from './quat';
-import { Vec2Tuple } from './vec-2';
+import { Vec2Tuple } from './vec-2_old';
 import { Vec3Tuple } from './vec-3';
 
 export type Mat3Tuple =

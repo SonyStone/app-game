@@ -1,4 +1,4 @@
-import { Vec2Tuple } from '@packages/ogl/math/vec-2';
+import { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
 import { DIRECTION } from '../input-consts';
 import { abs } from '../utils/utils-consts';
 

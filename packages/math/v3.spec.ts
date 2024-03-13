@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { FVec3, IVec3 } from './v3';
 
+/**
+ * should have access to x, y, z
+ * should have create (create instance from x, y), splat (create from single value)
+ * should have `clone` (create new instance from other Vec2), `copy` (copy values from other Vec2)
+ * should have set
+ * should have add (+), sub (-), multiply (*), divide (/)
+ * should have mulScalar, divScalar
+ * should have max, min
+ * should have lerp, lerpV
+ * should have cross, dot
+ * should have length, lengthSq
+ * should have distance, distanceSq
+ */
+
 describe('v3', () => {
   it('should create new Vec3', () => {
     const vec = FVec3.create(1, 2, 3);

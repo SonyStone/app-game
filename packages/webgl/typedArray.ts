@@ -1,4 +1,5 @@
 export type TypedArray =
+  | Uint8Array
   | Int8Array
   | Uint8Array
   | Uint8ClampedArray
@@ -6,5 +7,5 @@ export type TypedArray =
   | Uint16Array
   | Int32Array
   | Uint32Array
-  | Float32Array;
-// | ArrayBufferView;
+  | Float32Array
+  | Float64Array;

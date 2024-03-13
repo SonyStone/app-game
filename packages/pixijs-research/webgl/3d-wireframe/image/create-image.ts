@@ -1,5 +1,5 @@
 import { GL_BUFFER_USAGE, GL_TEXTURES } from '@packages/webgl/static-variables';
-import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables/static-variables';
+import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
 
 import { createProgram } from '../Shader';
 import fragmentShader from './frag_shader.frag?raw';
@@ -89,9 +89,9 @@ export async function createImage(gl: WebGL2RenderingContext) {
 
         // provide texture coordinates for the rectangle.
         const texCoordBuffer = gl.createBuffer();
-        gl.bindBuffer(GL_STATIC_VARIABLES.ARRAY_BUFFER, texCoordBuffer);
+        gl.bindBuffer(GL_CONST.ARRAY_BUFFER, texCoordBuffer);
         gl.bufferData(
-          GL_STATIC_VARIABLES.ARRAY_BUFFER,
+          GL_CONST.ARRAY_BUFFER,
           new Float32Array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]),
           GL_BUFFER_USAGE.STATIC_DRAW
         );

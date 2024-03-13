@@ -3,15 +3,36 @@ import { Program } from '../core/program';
 import { RenderTarget } from '../core/render-target';
 import { Triangle } from './triangle';
 
+import { Camera } from '../core/camera';
+import { Geometry } from '../core/geometry';
+import { OGLRenderingContext } from '../core/renderer';
+import { Texture } from '../core/texture';
+import { Transform } from '../core/transform';
 import defaultFragment from './post.frag?raw';
 import defaultVertex from './post.vert?raw';
 export class Post {
+  gl: OGLRenderingContext;
+  geometry: Geometry;
+  width!: number;
+  height!: number;
+  dpr!: number;
+  resolutionWidth: number;
+  resolutionHeight: number;
+  fbo: {
+    read: RenderTarget;
+    write: RenderTarget;
+    swap: () => void;
+  };
+  passes: any[];
+  uniform: { value: any };
+  targetOnly: any;
+
   constructor(
-    gl,
+    gl: OGLRenderingContext,
     {
-      width,
-      height,
-      dpr,
+      width = undefined as number | undefined,
+      height = undefined as number | undefined,
+      dpr = undefined as number | undefined,
       wrapS = gl.CLAMP_TO_EDGE,
       wrapT = gl.CLAMP_TO_EDGE,
       minFilter = gl.LINEAR,
@@ -67,7 +88,9 @@ export class Post {
   addPass({
     vertex = defaultVertex,
     fragment = defaultFragment,
-    uniforms = {},
+    uniforms = {} as {
+      [key: string]: { value: any };
+    },
     textureUniform = 'tMap',
     enabled = true
   } = {}) {
@@ -88,10 +111,20 @@ export class Post {
     return pass;
   }
 
-  resize({ width, height, dpr } = {}) {
-    if (dpr) this.dpr = dpr;
-    if (width) this.width = width;
-    if (height) this.height = height;
+  resize({
+    width = undefined as number | undefined,
+    height = undefined as number | undefined,
+    dpr = undefined as number | undefined
+  } = {}) {
+    if (dpr) {
+      this.dpr = dpr;
+    }
+    if (width) {
+      this.width = width;
+    }
+    if (height) {
+      this.height = height;
+    }
 
     dpr = this.dpr || this.gl.renderer.dpr;
     this.resolutionWidth = Math.floor(this.width || this.gl.renderer.width * dpr);
@@ -106,11 +139,20 @@ export class Post {
     scene,
     camera,
     texture,
-    target = null,
+    target = undefined,
     update = true,
     sort = true,
     frustumCull = true,
     beforePostCallbacks
+  }: {
+    scene: Transform;
+    camera: Camera;
+    texture: Texture;
+    target?: RenderTarget;
+    update: boolean;
+    sort: boolean;
+    frustumCull: boolean;
+    beforePostCallbacks: (() => {})[];
   }) {
     const enabledPasses = this.passes.filter((pass) => pass.enabled);
 
@@ -126,7 +168,9 @@ export class Post {
       this.fbo.swap();
 
       // Callback after rendering scene, but before post effects
-      if (beforePostCallbacks) beforePostCallbacks.forEach((f) => f && f());
+      if (beforePostCallbacks) {
+        beforePostCallbacks.forEach((f) => f && f());
+      }
     }
 
     enabledPasses.forEach((pass, i) => {

@@ -244,46 +244,48 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
 
     /**
      * Multiplies two 3-by-3 matrices with a on the left and b on the right
-     * @param {Mat3} a The matrix on the left.
-     * @param {Mat3} b The matrix on the right.
+     * @param {Mat3} this The matrix on the left.
+     * @param {Mat3} m The matrix on the right.
      * @memberOf m3
      */
-    multiply(a: Mat3, b: Mat3): void {
-      const a00 = a[0];
-      const a01 = a[1];
-      const a02 = a[2];
+    multiply(m: Mat3): this {
+      const a00 = this[0];
+      const a01 = this[1];
+      const a02 = this[2];
 
-      const a10 = a[4 + 0];
-      const a11 = a[4 + 1];
-      const a12 = a[4 + 2];
+      const a10 = this[4 + 0];
+      const a11 = this[4 + 1];
+      const a12 = this[4 + 2];
 
-      const a20 = a[8 + 0];
-      const a21 = a[8 + 1];
-      const a22 = a[8 + 2];
+      const a20 = this[8 + 0];
+      const a21 = this[8 + 1];
+      const a22 = this[8 + 2];
 
-      const b00 = b[0];
-      const b01 = b[1];
-      const b02 = b[2];
+      const b00 = m[0];
+      const b01 = m[1];
+      const b02 = m[2];
 
-      const b10 = b[4 + 0];
-      const b11 = b[4 + 1];
-      const b12 = b[4 + 2];
+      const b10 = m[4 + 0];
+      const b11 = m[4 + 1];
+      const b12 = m[4 + 2];
 
-      const b20 = b[8 + 0];
-      const b21 = b[8 + 1];
-      const b22 = b[8 + 2];
+      const b20 = m[8 + 0];
+      const b21 = m[8 + 1];
+      const b22 = m[8 + 2];
 
-      a[0] = a00 * b00 + a10 * b01 + a20 * b02;
-      a[1] = a01 * b00 + a11 * b01 + a21 * b02;
-      a[2] = a02 * b00 + a12 * b01 + a22 * b02;
+      this[0] = a00 * b00 + a10 * b01 + a20 * b02;
+      this[1] = a01 * b00 + a11 * b01 + a21 * b02;
+      this[2] = a02 * b00 + a12 * b01 + a22 * b02;
 
-      a[3] = a00 * b10 + a10 * b11 + a20 * b12;
-      a[4] = a01 * b10 + a11 * b11 + a21 * b12;
-      a[5] = a02 * b10 + a12 * b11 + a22 * b12;
+      this[3] = a00 * b10 + a10 * b11 + a20 * b12;
+      this[4] = a01 * b10 + a11 * b11 + a21 * b12;
+      this[5] = a02 * b10 + a12 * b11 + a22 * b12;
 
-      a[6] = a00 * b20 + a10 * b21 + a20 * b22;
-      a[7] = a01 * b20 + a11 * b21 + a21 * b22;
-      a[8] = a02 * b20 + a12 * b21 + a22 * b22;
+      this[6] = a00 * b20 + a10 * b21 + a20 * b22;
+      this[7] = a01 * b20 + a11 * b21 + a21 * b22;
+      this[8] = a02 * b20 + a12 * b21 + a22 * b22;
+
+      return this;
     }
 
     /**
@@ -655,7 +657,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
       return this;
     }
 
-    static #mi = new Mat3().identity();
+    static #mi = Mat3.identity();
 
     /**
      * Takes a 3-by-3 matrix m and a vector v with 2 entries, interprets the vector

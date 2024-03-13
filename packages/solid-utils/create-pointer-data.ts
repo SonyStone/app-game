@@ -1,17 +1,17 @@
 import { createMemo } from 'solid-js';
 
-import { Vec2 } from '@packages/math';
+import { FVec2 } from '@packages/math';
 import { createPointerStream } from './create-pointer-stream';
 
 export function createPointerData(element: HTMLElement) {
   const pointer$ = createPointerStream(element);
   const pointerData = {
-    start: Vec2.create(),
-    end: Vec2.create(),
-    move: Vec2.create(),
-    prev: Vec2.create(),
-    tilt: Vec2.create(),
-    angle: Vec2.create(),
+    start: FVec2.create(),
+    end: FVec2.create(),
+    move: FVec2.create(),
+    prev: FVec2.create(),
+    tilt: FVec2.create(),
+    angle: FVec2.create(),
     pressure: 0,
     distance: 0
   };
@@ -39,12 +39,12 @@ export function createPointerData(element: HTMLElement) {
         case 'pointermove':
           pointerData.prev.copy(pointerData.move);
           pointerData.move.set(x, y);
-          pointerData.distance = Vec2.distanceSq(pointerData.move, pointerData.prev);
+          pointerData.distance = FVec2.distanceSq(pointerData.move, pointerData.prev);
           break;
         default:
           pointerData.move.set(x, y);
           pointerData.end.set(x, y);
-          pointerData.distance = Vec2.distanceSq(pointerData.move, pointerData.prev);
+          pointerData.distance = FVec2.distanceSq(pointerData.move, pointerData.prev);
           break;
       }
 

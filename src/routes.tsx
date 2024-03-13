@@ -168,6 +168,48 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/ui-components-examples/breadcrumbs/components'))
   },
   {
+    path: '/webgpu-examples',
+    name: 'WebGPU Examples',
+    children: [
+      {
+        path: '/hello-triangle',
+        name: 'Hello Triangle',
+        Preview: (props) => <Thumbnail href={'/webgpu-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/webgpu-examples/hello-triangle/hello-triangle'))
+      },
+      {
+        path: '/rotating-cube',
+        name: 'Rotating Cube',
+        Preview: (props) => <Thumbnail href={'/webgpu-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/webgpu-examples/rotating-cube/rotating-cube'))
+      }
+    ]
+  },
+  {
+    path: '/webgl-examples',
+    name: 'WebGL Examples',
+    children: [
+      {
+        path: '/simple-program',
+        name: 'Simple Program',
+        Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/webgl-examples/simple-program/simple-program'))
+      },
+      {
+        path: '/matrices-2d',
+        name: '2d matrices',
+        Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/webgl-examples/matrices-2d/matrices-2d'))
+      },
+      {
+        path: '/paint-app',
+        name: 'paint app',
+        Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/webgl-examples/paint-app/paint-app'))
+      }
+    ]
+  },
+  {
     path: '/three-examples',
     name: 'Three js Examples',
     children: [

@@ -3,6 +3,7 @@ import { resolve } from 'path';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
+import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 
 const root = resolve(__dirname, 'src');
 const packages = resolve(__dirname, 'packages');
@@ -13,7 +14,8 @@ export default defineConfig({
       // your config or in uno.config.ts
     }),
     solidPlugin(),
-    solidSvg()
+    solidSvg(),
+    vitePluginArraybuffer()
     // viteFBXPlugin(),
   ],
   server: {

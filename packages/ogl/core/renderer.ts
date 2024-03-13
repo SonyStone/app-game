@@ -1,3 +1,14 @@
+import {
+  EXTENSIONS,
+  GL_BLEND_EQUATION,
+  GL_CAPABILITIES,
+  GL_CLEAR_MASK,
+  GL_CULL_FACE,
+  GL_FRAMEBUFFER_OBJECT,
+  GL_FRONT_FACE,
+  GL_FUNC_SEPARATE,
+  GL_PARAMETER
+} from '@packages/webgl/static-variables';
 import { Vec3 } from '../math/vec-3';
 
 import type { Camera } from './camera';
@@ -45,10 +56,10 @@ export interface DeviceParameters {
 }
 
 export interface BlendFunc {
-  src: GLenum;
-  dst: GLenum;
-  srcAlpha?: GLenum;
-  dstAlpha?: GLenum;
+  src: GL_FUNC_SEPARATE;
+  dst: GL_FUNC_SEPARATE;
+  srcAlpha?: GL_FUNC_SEPARATE;
+  dstAlpha?: GL_FUNC_SEPARATE;
 }
 
 export interface BlendEquation {
@@ -159,7 +170,7 @@ export class Renderer {
     // gl state stores to avoid redundant calls on methods used internally
     this.state = {
       blendFunc: { src: this.gl.ONE, dst: this.gl.ZERO },
-      blendEquation: { modeRGB: this.gl.FUNC_ADD },
+      blendEquation: { modeRGB: GL_BLEND_EQUATION.FUNC_ADD },
       cullFace: false,
       frontFace: this.gl.CCW,
       depthMask: true,
@@ -191,7 +202,7 @@ export class Renderer {
 
     // Store device parameters
     this.parameters = {};
-    this.parameters.maxTextureUnits = this.gl.getParameter(this.gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS);
+    this.parameters.maxTextureUnits = this.gl.getParameter(GL_PARAMETER.MAX_COMBINED_TEXTURE_IMAGE_UNITS);
     this.parameters.maxAnisotropy = this.getExtension('EXT_texture_filter_anisotropic')
       ? this.gl.getParameter(
           (this.getExtension('EXT_texture_filter_anisotropic') as any).MAX_TEXTURE_MAX_ANISOTROPY_EXT
@@ -206,7 +217,9 @@ export class Renderer {
     this.gl.canvas.width = width * this.dpr;
     this.gl.canvas.height = height * this.dpr;
 
-    if (!this.gl.canvas.style) return;
+    if (!this.gl.canvas.style) {
+      return;
+    }
     Object.assign(this.gl.canvas.style, {
       width: width + 'px',
       height: height + 'px'
@@ -214,7 +227,9 @@ export class Renderer {
   }
 
   setViewport(width: number, height: number, x: number = 0, y: number = 0): void {
-    if (this.state.viewport.width === width && this.state.viewport.height === height) return;
+    if (this.state.viewport.width === width && this.state.viewport.height === height) {
+      return;
+    }
     this.state.viewport.width = width;
     this.state.viewport.height = height;
     this.state.viewport.x = x;
@@ -232,7 +247,7 @@ export class Renderer {
   /**
    * [enable](https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/enable)
    */
-  enable(id: GLenum): void {
+  enable(id: GL_CAPABILITIES): void {
     if (this.state[id] === true) {
       return;
     }
@@ -240,7 +255,7 @@ export class Renderer {
     this.state[id] = true;
   }
 
-  disable(id: GLenum): void {
+  disable(id: GL_CAPABILITIES): void {
     if (this.state[id] === false) {
       return;
     }
@@ -248,24 +263,33 @@ export class Renderer {
     this.state[id] = false;
   }
 
-  setBlendFunc(src: GLenum, dst: GLenum, srcAlpha: GLenum, dstAlpha: GLenum): void {
+  setBlendFunc(
+    src: GL_FUNC_SEPARATE,
+    dst: GL_FUNC_SEPARATE,
+    srcAlpha?: GL_FUNC_SEPARATE,
+    dstAlpha?: GL_FUNC_SEPARATE
+  ): void {
     if (
       this.state.blendFunc.src === src &&
       this.state.blendFunc.dst === dst &&
       this.state.blendFunc.srcAlpha === srcAlpha &&
       this.state.blendFunc.dstAlpha === dstAlpha
-    )
+    ) {
       return;
+    }
+
     this.state.blendFunc.src = src;
     this.state.blendFunc.dst = dst;
     this.state.blendFunc.srcAlpha = srcAlpha;
     this.state.blendFunc.dstAlpha = dstAlpha;
-    if (srcAlpha !== undefined) this.gl.blendFuncSeparate(src, dst, srcAlpha, dstAlpha);
-    else this.gl.blendFunc(src, dst);
+    if (srcAlpha !== undefined && dstAlpha !== undefined) {
+      this.gl.blendFuncSeparate(src, dst, srcAlpha, dstAlpha);
+    } else {
+      this.gl.blendFunc(src, dst);
+    }
   }
 
-  setBlendEquation(modeRGB: GLenum, modeAlpha: GLenum): void {
-    modeRGB = modeRGB || this.gl.FUNC_ADD;
+  setBlendEquation(modeRGB: GL_BLEND_EQUATION = GL_BLEND_EQUATION.FUNC_ADD, modeAlpha?: GL_BLEND_EQUATION): void {
     if (this.state.blendEquation.modeRGB === modeRGB && this.state.blendEquation.modeAlpha === modeAlpha) {
       return;
     }
@@ -278,7 +302,7 @@ export class Renderer {
     }
   }
 
-  setCullFace(value: GLenum): void {
+  setCullFace(value: GL_CULL_FACE): void {
     if (this.state.cullFace === value) {
       return;
     }
@@ -286,7 +310,7 @@ export class Renderer {
     this.gl.cullFace(value);
   }
 
-  setFrontFace(value: GLenum): void {
+  setFrontFace(value: GL_FRONT_FACE): void {
     if (this.state.frontFace === value) {
       return;
     }
@@ -319,9 +343,9 @@ export class Renderer {
   }
 
   bindFramebuffer({
-    target = this.gl.FRAMEBUFFER,
+    target = GL_FRAMEBUFFER_OBJECT.FRAMEBUFFER,
     buffer = null
-  }: { target?: GLenum; buffer?: WebGLFramebuffer | null } = {}): void {
+  }: { target?: GL_FRAMEBUFFER_OBJECT; buffer?: WebGLFramebuffer | null } = {}): void {
     if (this.state.framebuffer === buffer) {
       return;
     }
@@ -329,7 +353,7 @@ export class Renderer {
     this.gl.bindFramebuffer(target, buffer);
   }
 
-  getExtension(extension: string): Function | undefined {
+  getExtension(extension: EXTENSIONS): Function | undefined {
     // fetch extension once only
     if (!this.extensions[extension]) {
       this.extensions[extension] = this.gl.getExtension(extension);
@@ -428,14 +452,14 @@ export class Renderer {
     frustumCull: boolean;
     clear: boolean;
   }>): void {
-    if (!target) {
-      // make sure no render target bound so draws to canvas
-      this.bindFramebuffer();
-      this.setViewport(this.width * this.dpr, this.height * this.dpr);
-    } else {
+    if (target) {
       // bind supplied render target and update viewport
       this.bindFramebuffer(target);
       this.setViewport(target.width, target.height);
+    } else {
+      // make sure no render target bound so draws to canvas
+      this.bindFramebuffer();
+      this.setViewport(this.width * this.dpr, this.height * this.dpr);
     }
 
     if (clear || (this.autoClear && clear !== false)) {
@@ -444,11 +468,13 @@ export class Renderer {
         this.enable(this.gl.DEPTH_TEST);
         this.setDepthMask(true);
       }
-      this.gl.clear(
-        (this.color ? this.gl.COLOR_BUFFER_BIT : 0) |
-          (this.depth ? this.gl.DEPTH_BUFFER_BIT : 0) |
-          (this.stencil ? this.gl.STENCIL_BUFFER_BIT : 0)
-      );
+
+      const mask =
+        (this.color ? GL_CLEAR_MASK.COLOR_BUFFER_BIT : 0) |
+        (this.depth ? GL_CLEAR_MASK.DEPTH_BUFFER_BIT : 0) |
+        (this.stencil ? GL_CLEAR_MASK.STENCIL_BUFFER_BIT : 0);
+
+      this.gl.clear(mask);
     }
 
     // updates all scene graph matrices

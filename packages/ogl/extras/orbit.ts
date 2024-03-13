@@ -3,16 +3,15 @@
 // TODO: make scroll zoom more accurate than just >/< zero
 // TODO: be able to pass in new camera position
 
-import { Vec2 } from '../math/vec-2';
+import { FVec2 } from '@packages/math';
+import type { Camera } from '../core/camera';
+import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';
 
 const STATE = { NONE: -1, ROTATE: 0, DOLLY: 1, PAN: 2, DOLLY_PAN: 3 };
 const tempVec3 = /* @__PURE__ */ new Vec3();
-const tempVec2a = /* @__PURE__ */ new Vec2();
-const tempVec2b = /* @__PURE__ */ new Vec2();
-
-import type { Camera } from '../core/camera';
-import { Mat4 } from '../math/mat-4';
+const tempVec2a = /* @__PURE__ */ new FVec2();
+const tempVec2b = /* @__PURE__ */ new FVec2();
 
 export type ZoomStyle = 'dolly' | 'fov';
 
@@ -167,9 +166,9 @@ export function Orbit(
   // Everything below here just updates panDelta and sphericalDelta
   // Using those two objects' values, the orbit is calculated
 
-  const rotateStart = new Vec2();
-  const panStart = new Vec2();
-  const dollyStart = new Vec2();
+  const rotateStart = new FVec2();
+  const panStart = new FVec2();
+  const dollyStart = new FVec2();
 
   let state = STATE.NONE;
   this.mouseButtons = { ORBIT: 0, ZOOM: 1, PAN: 2 };
@@ -217,7 +216,7 @@ export function Orbit(
 
   function handleMoveRotate(x: number, y: number) {
     tempVec2a.set(x, y);
-    tempVec2b.sub(tempVec2a, rotateStart).multiply(rotateSpeed);
+    tempVec2b.subFrom(tempVec2a, rotateStart).mulScalar(rotateSpeed);
     const el = element === document ? document.body : (element as HTMLElement);
     sphericalDelta.theta -= (2 * Math.PI * tempVec2b.x) / el.clientHeight;
     sphericalDelta.phi -= (2 * Math.PI * tempVec2b.y) / el.clientHeight;
@@ -226,7 +225,7 @@ export function Orbit(
 
   function handleMouseMoveDolly(e: MouseEvent) {
     tempVec2a.set(e.clientX, e.clientY);
-    tempVec2b.sub(tempVec2a, dollyStart);
+    tempVec2b.subFrom(tempVec2a, dollyStart);
     if (tempVec2b.y > 0) {
       dolly(getZoomScale());
     } else if (tempVec2b.y < 0) {
@@ -237,7 +236,7 @@ export function Orbit(
 
   function handleMovePan(x: number, y: number) {
     tempVec2a.set(x, y);
-    tempVec2b.sub(tempVec2a, panStart).multiply(panSpeed);
+    tempVec2b.subFrom(tempVec2a, panStart).mulScalar(panSpeed);
     pan(tempVec2b.x, tempVec2b.y);
     panStart.copy(tempVec2a);
   }

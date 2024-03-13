@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES as GL_CONST } from './static-variables';
+import { GL_CONST } from './static-variables';
 
 enum SDF {
   ASDAS
