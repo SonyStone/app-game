@@ -168,6 +168,18 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/ui-components-examples/breadcrumbs/components'))
   },
   {
+    path: '/gsap-page-scroll-animation',
+    name: 'Page Scroll Animation',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/gsap-examples/page-scroll-animation/page-scroll-animation'))
+  },
+  {
+    path: '/gsap-scroll-trigger-svg-text-mask',
+    name: 'ScrollTrigger: SVG Text Mask',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/gsap-examples/scroll-trigger-svg-text-mask/scroll-trigger-svg-text-mask'))
+  },
+  {
     path: '/webgpu-examples',
     name: 'WebGPU Examples',
     children: [
