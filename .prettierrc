@@ -3,5 +3,5 @@
   "printWidth": 120,
   "trailingComma": "none",
   "arrowParens": "always",
-  "plugins": ["prettier-plugin-organize-imports", "prettier-plugin-organize-attributes"]
+  "plugins": ["prettier-plugin-organize-imports", "prettier-plugin-organize-attributes", "prettier-plugin-tailwindcss"]
 }

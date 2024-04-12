@@ -230,7 +230,9 @@ export class Geometry {
 
   draw({ program, mode = this.gl.TRIANGLES }: { program: Program; mode?: number }): void {
     if (this.gl.renderer.currentGeometry !== `${this.id}_${program.attributeOrder}`) {
-      if (!this.VAOs[program.attributeOrder]) this.createVAO(program);
+      if (!this.VAOs[program.attributeOrder]) {
+        this.createVAO(program);
+      }
       this.gl.bindVertexArray!(this.VAOs[program.attributeOrder]);
       this.gl.renderer.currentGeometry = `${this.id}_${program.attributeOrder}`;
     }

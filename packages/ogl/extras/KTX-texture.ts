@@ -17,7 +17,9 @@ export class KTXTexture extends Texture {
       magFilter
     });
 
-    if (buffer) return this.parseBuffer(buffer);
+    if (buffer) {
+      return this.parseBuffer(buffer);
+    }
   }
 
   parseBuffer(buffer) {
@@ -28,9 +30,13 @@ export class KTXTexture extends Texture {
     this.image = ktx.mipmaps;
     this.internalFormat = ktx.glInternalFormat;
     if (ktx.numberOfMipmapLevels > 1) {
-      if (this.minFilter === this.gl.LINEAR) this.minFilter = this.gl.NEAREST_MIPMAP_LINEAR;
+      if (this.minFilter === this.gl.LINEAR) {
+        this.minFilter = this.gl.NEAREST_MIPMAP_LINEAR;
+      }
     } else {
-      if (this.minFilter === this.gl.NEAREST_MIPMAP_LINEAR) this.minFilter = this.gl.LINEAR;
+      if (this.minFilter === this.gl.NEAREST_MIPMAP_LINEAR) {
+        this.minFilter = this.gl.LINEAR;
+      }
     }
 
     // TODO: support cube maps

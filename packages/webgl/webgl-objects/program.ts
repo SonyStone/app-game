@@ -151,6 +151,11 @@ type AttributesBuilder<T> = (obj: {
   };
 }) => T;
 
+// createBuffer
+// bindBuffer
+// bufferData
+// unbind bindBuffer()
+
 function createAttributes<T>(gl: WebGL2RenderingContext, program: WebGLProgram, builder?: AttributesBuilder<T>) {
   function getAttribLocation(name: string) {
     return gl.getAttribLocation(program, name);

@@ -1,14 +1,12 @@
 #version 300 es
-#define attribute in
-#define varying out
 
-attribute vec2 uv;
-attribute vec3 position;
+in vec2 uv;
+in vec3 position;
 
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
 
-varying vec2 vUv;
+out vec2 vUv;
 
 void main() {
     vUv = uv;

@@ -20,12 +20,12 @@ import worldBodiesThumbnail from './thumbnail/world-rodies-thumbnail.png?url';
 
 function Thumbnail(props: { thumbnail?: string; href: string; name?: string }) {
   return (
-    <Link class="aspect-square w-full p-2 relative bg-slate-200 rounded-2 flex" href={props.href}>
+    <Link class="rounded-2 relative flex aspect-square w-full bg-slate-200 p-2" href={props.href}>
       <Show when={!!props.thumbnail}>
         <img class="rounded-1 object-cover" src={props.thumbnail} />
       </Show>
       <Show when={!!props.name}>
-        <span class="absolute bottom-0 start-0 px-2 pb-2 max-w-full rounded-se-2 text-2xl leading-6 bg-slate-200">
+        <span class="rounded-se-2 absolute bottom-0 start-0 max-w-full bg-slate-200 px-2 pb-2 text-2xl leading-6">
           {props.name}
         </span>
       </Show>
@@ -124,7 +124,6 @@ export const routes: Routes[] = [
     Preview: (props) => <Thumbnail href={props.path} thumbnail={worldBodiesThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/phaser-examples/physics/matterjs/100 world bodies'))
   },
-
   {
     path: '/ldtk-ts-exampless',
     name: 'ldtk-ts example',
@@ -178,6 +177,24 @@ export const routes: Routes[] = [
     name: 'ScrollTrigger: SVG Text Mask',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/gsap-examples/scroll-trigger-svg-text-mask/scroll-trigger-svg-text-mask'))
+  },
+  {
+    path: '/litegraph',
+    name: '[WIP] litegraph',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/litegraph-examples/litegraph'))
+  },
+  {
+    path: '/litegraph/first-project',
+    name: 'litegraph First project',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/litegraph-examples/first-project/first-project'))
+  },
+  {
+    path: '/model-biewer',
+    name: '[WIP] Model Viewer',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/webgl-examples/model-viewer/model-viewer'))
   },
   {
     path: '/webgpu-examples',
@@ -350,6 +367,18 @@ export const routes: Routes[] = [
         name: 'OGL Flowmap',
         Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
         component: lazy(() => import('@packages/ogl-examples/flowmap/flowmap'))
+      }
+    ]
+  },
+  {
+    path: '/twgl-examples',
+    name: 'twgl Examples',
+    children: [
+      {
+        path: '/uniform-buffer-objects',
+        name: 'Uniform Buffer Objects',
+        Preview: (props) => <Thumbnail href={'/twgl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/twgl-examples/uniform-buffer-objects/uniform-buffer-objects'))
       }
     ]
   },

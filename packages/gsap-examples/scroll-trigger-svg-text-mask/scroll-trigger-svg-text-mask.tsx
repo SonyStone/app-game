@@ -1,5 +1,6 @@
 import { Meta, Title } from '@solidjs/meta';
 import gsap from 'gsap';
+import ScrollToPlugin from 'gsap/ScrollToPlugin';
 import ScrollTrigger from 'gsap/ScrollTrigger';
 import { onCleanup, onMount } from 'solid-js';
 
@@ -13,6 +14,7 @@ import mountMg from './mountMg.png?url';
 import sky from './sky.jpg?url';
 
 gsap.registerPlugin(ScrollTrigger);
+gsap.registerPlugin(ScrollToPlugin);
 
 export default function ScrollTriggerSVGTextMask() {
   let arrowBtn: SVGRectElement;
@@ -60,19 +62,19 @@ export default function ScrollTriggerSVGTextMask() {
     };
 
     const clickHandler = (e: MouseEvent) => {
-      gsap.to(window, { scrollTo: innerHeight, duration: 1.5, ease: 'power1.inOut' });
+      gsap.to(window, { scrollTo: window.innerHeight, duration: 1.5, ease: 'power1.inOut' });
     };
 
     arrowBtn.addEventListener('mouseenter', mouseenterHandler);
     arrowBtn.addEventListener('mouseleave', mouseleaveHandler);
-    arrowBtn.addEventListener('click', (e) => clickHandler);
+    arrowBtn.addEventListener('click', clickHandler);
 
     onCleanup(() => {
       tween1.revert();
       tween2.revert();
       arrowBtn.removeEventListener('mouseenter', mouseenterHandler);
       arrowBtn.removeEventListener('mouseleave', mouseleaveHandler);
-      arrowBtn.removeEventListener('click', (e) => clickHandler);
+      arrowBtn.removeEventListener('click', clickHandler);
     });
   });
 

@@ -1,9 +1,13 @@
 import GridEngine, { Direction, MoveToResult, NoPathFoundStrategy } from 'grid-engine';
 import Phaser, { Game, Scene } from 'phaser';
-import { onCleanup } from 'solid-js';
+import { onCleanup, onMount } from 'solid-js';
 
 import cloudCityMap from './cloud-city-map.json?url';
 
+import CaptureMenu from '@packages/spector/embedded-frontend-2/capture-menu';
+import { Spector } from '@packages/spector/spector';
+import { Title } from '@solidjs/meta';
+import { Portal } from 'solid-js/web';
 import cloudCityTileset from './cloud_tileset/cloud_tileset.png?url';
 import { CLOUD_CITY, CLOUD_CITY_TILED_JSON, CLOUD_CITY_TILESET_IMAGE } from './constants';
 import { createBGClouds, loadBGClouds } from './create-bg-clouds';
@@ -171,13 +175,26 @@ export default function () {
 
   const game = new Game(gameConfig);
 
+  onMount(() => {
+    const spector = new Spector();
+    spector.displayUI();
+  });
+
   onCleanup(() => {
     (game.scene.keys.Game as GameScene).destroy();
     game.destroy(true);
     document.body.style.overflow = '';
   });
 
-  return <>{canvas}</>;
+  return (
+    <>
+      <Title>Uniform Buffer Objects</Title>
+      <Portal>
+        <CaptureMenu />
+      </Portal>
+      {canvas}
+    </>
+  );
 }
 
 /**
