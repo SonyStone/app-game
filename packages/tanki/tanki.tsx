@@ -2,6 +2,7 @@ import { createEventSignal } from '@solid-primitives/event-listener';
 import { Application, Container, GraphicsGeometry, Point, Transform, utils } from 'pixi.js';
 import { createEffect, createMemo, onCleanup } from 'solid-js';
 import { Key } from 'ts-keycode-enum';
+import { createSkipper } from './create-skipper';
 import { World, hasSymbol, single, withSymbol } from './ecs';
 import Camera from './elements/camera';
 import { Ellipse, createCircle } from './elements/ellipse';
@@ -181,22 +182,6 @@ export default function Tanki() {
   });
 
   return <>{app.view}</>;
-}
-
-function createSkipper(howMuchToSkip: number) {
-  let skip = 0;
-
-  return {
-    skip(): boolean {
-      if (skip <= 0) {
-        skip = howMuchToSkip;
-        return false;
-      } else {
-        skip--;
-        return true;
-      }
-    }
-  };
 }
 
 function updateCamera(camera: Container, keyboard: Set<Key>, world: Container) {

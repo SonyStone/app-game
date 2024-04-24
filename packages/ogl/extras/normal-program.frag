@@ -1,9 +1,12 @@
+#version 300 es
 precision highp float;
 precision highp int;
 
-varying vec3 vNormal;
+in vec3 vNormal;
+
+out vec4 FragColor;
 
 void main() {
-    gl_FragColor.rgb = normalize(vNormal);
-    gl_FragColor.a = 1.0;
+    FragColor.rgb = normalize(vNormal);
+    FragColor.a = 1.0;
 }

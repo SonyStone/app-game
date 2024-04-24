@@ -13,10 +13,10 @@ export default function MsdfText() {
   const gl = renderer.gl;
   gl.clearColor(1, 1, 1, 1);
 
-  const camera = new Camera(gl, { fov: 45 });
+  const camera = new Camera({ fov: 45 });
   camera.position.set(0, 0, 7);
 
-  const controls = new (Orbit as any)(camera);
+  const controls = new Orbit(camera);
 
   const resize = createWindowSize();
 

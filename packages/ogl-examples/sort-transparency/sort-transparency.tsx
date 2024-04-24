@@ -14,11 +14,11 @@ export default function SortTransparency() {
   const gl = renderer.gl;
   gl.clearColor(1, 1, 1, 1);
 
-  const camera = new Camera(gl, { fov: 35 });
+  const camera = new Camera({ fov: 35 });
   camera.position.set(0, 0, 7);
   camera.rotation.z = -0.3;
 
-  const controls = new (Orbit as any)(camera);
+  const controls = new Orbit(camera);
 
   const resize = createWindowSize();
 

@@ -10,10 +10,10 @@ export default () => {
   const renderer = new Renderer({ dpr: 2 });
   const gl = renderer.gl;
 
-  const camera = new Camera(gl, { fov: 35 });
+  const camera = new Camera({ fov: 35 });
   camera.position.set(0, 0, 1.7);
   camera.lookAt([0, 0, 0]);
-  const controls = new (Orbit as any)(camera);
+  const controls = new Orbit(camera);
 
   const resize = createWindowSize();
 

@@ -15,10 +15,10 @@ export default function loadGltf() {
   const gl = renderer.gl;
   gl.clearColor(0.1, 0.1, 0.1, 1);
 
-  const camera = new Camera(gl, { near: 1, far: 1000 });
+  const camera = new Camera({ near: 1, far: 1000 });
   // camera.position.set(60, 25, -60);
   camera.position.set(30, 15, -30);
-  const controls = new (Orbit as any)(camera);
+  const controls = new Orbit(camera);
   // controls.target.y = 25;
 
   const resize = createWindowSize();

@@ -293,14 +293,14 @@ export function VideoApp() {
 
           <div class={s.action_start}>
             <button>
-              <SaveIcon></SaveIcon>
+              <SaveIcon />
             </button>
 
             <button>
-              <UndoIcon></UndoIcon>
+              <UndoIcon />
             </button>
             <button>
-              <RedoIcon></RedoIcon>
+              <RedoIcon />
             </button>
           </div>
         </div>

@@ -55,11 +55,11 @@ function simpleBufferView(canvas: HTMLCanvasElement) {
   const gl = renderer.gl;
   gl.clearColor(1, 1, 1, 1);
 
-  const camera = new Camera(gl, { fov: 35 });
+  const camera = new Camera({ fov: 35 });
   const MOVE_BACK = 5;
   camera.position.set([0.3 * MOVE_BACK, 1.43, 0.6 * MOVE_BACK]);
 
-  const controls = new (Orbit as any)(camera, { target: new Vec3(0, 1.43, 0) });
+  const controls = new Orbit(camera, { target: new Vec3(0, 1.43, 0) });
 
   function resize() {
     renderer.setSize(window.innerWidth, window.innerHeight);

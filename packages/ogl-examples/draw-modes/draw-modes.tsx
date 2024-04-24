@@ -11,7 +11,7 @@ export default function PaintAppOGL() {
 
   gl.clearColor(1, 1, 1, 1);
 
-  const camera = new Camera(gl, { fov: 15 });
+  const camera = new Camera({ fov: 15 });
   camera.position.z = 15;
 
   const size = createWindowSize();

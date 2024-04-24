@@ -2,6 +2,7 @@
 // TODO: SphereCast?
 
 import { FVec2 } from '@packages/math';
+import { Camera, Mesh, Plane, Sphere } from '..';
 import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';
 
@@ -24,13 +25,11 @@ const tempVec3k = /* @__PURE__ */ new Vec3();
 const tempMat4 = /* @__PURE__ */ new Mat4();
 
 export class Raycast {
-  constructor() {
-    this.origin = new Vec3();
-    this.direction = new Vec3();
-  }
+  origin = new Vec3();
+  direction = new Vec3();
 
   // Set ray from mouse unprojection
-  castMouse(camera, mouse = [0, 0]) {
+  castMouse(camera: Camera, mouse = [0, 0]) {
     if (camera.type === 'orthographic') {
       // Set origin
       // Since camera is orthographic, origin is not the camera position
@@ -56,8 +55,13 @@ export class Raycast {
     }
   }
 
-  intersectBounds(meshes, { maxDistance, output = [] } = {}) {
-    if (!Array.isArray(meshes)) meshes = [meshes];
+  intersectBounds<T extends Mesh>(
+    meshes: T | T[],
+    { maxDistance, output }: { maxDistance?: number; output: T[] } = { output: [] }
+  ) {
+    if (!Array.isArray(meshes)) {
+      meshes = [meshes];
+    }
 
     const invWorldMat4 = tempMat4;
     const origin = tempVec3a;
@@ -68,12 +72,15 @@ export class Raycast {
 
     meshes.forEach((mesh) => {
       // Create bounds
-      if (!mesh.geometry.bounds || mesh.geometry.bounds.radius === Infinity) mesh.geometry.computeBoundingSphere();
+      if (!mesh.geometry.bounds || mesh.geometry.bounds.radius === Infinity) {
+        mesh.geometry.computeBoundingSphere();
+      }
       const bounds = mesh.geometry.bounds;
       invWorldMat4.inverse(mesh.worldMatrix);
 
       // Get max distance locally
-      let localMaxDistance;
+      let localMaxDistance!: number;
+
       if (maxDistance) {
         direction.copy(this.direction).scaleRotateMatrix4(invWorldMat4);
         localMaxDistance = maxDistance * direction.len();
@@ -85,7 +92,9 @@ export class Raycast {
 
       // Break out early if bounds too far away from origin
       if (maxDistance) {
-        if (origin.distance(bounds.center) - bounds.radius > localMaxDistance) return;
+        if (origin.distance(bounds.center) - bounds.radius > localMaxDistance) {
+          return;
+        }
       }
 
       let localDistance = 0;
@@ -113,16 +122,18 @@ export class Raycast {
       if (maxDistance && localDistance > localMaxDistance) return;
 
       // Create object on mesh to avoid generating lots of objects
-      if (!mesh.hit) mesh.hit = { localPoint: new Vec3(), point: new Vec3() };
+      if (!mesh.hit) {
+        mesh.hit = { localPoint: new Vec3(), point: new Vec3() };
+      }
 
-      mesh.hit.localPoint.copy(direction).multiply(localDistance).add(origin);
-      mesh.hit.point.copy(mesh.hit.localPoint).applyMatrix4(mesh.worldMatrix);
-      mesh.hit.distance = mesh.hit.point.distance(this.origin);
+      mesh.hit.localPoint!.copy(direction).multiply(localDistance).add(origin);
+      mesh.hit.point!.copy(mesh.hit.localPoint!).applyMatrix4(mesh.worldMatrix);
+      mesh.hit.distance = mesh.hit.point!.distance(this.origin);
 
       hits.push(mesh);
     });
 
-    hits.sort((a, b) => a.hit.distance - b.hit.distance);
+    hits.sort((a, b) => a.hit!.distance! - b.hit!.distance!);
     return hits;
   }
 
@@ -187,7 +198,9 @@ export class Raycast {
         if (!distance) continue;
 
         // Too far away
-        if (maxDistance && distance > localMaxDistance) continue;
+        if (maxDistance && distance > localMaxDistance) {
+          continue;
+        }
 
         if (!localDistance || distance < localDistance) {
           localDistance = distance;
@@ -255,20 +268,25 @@ export class Raycast {
     return hits;
   }
 
-  intersectPlane(plane, origin = this.origin, direction = this.direction) {
+  intersectPlane(plane: Plane, origin = this.origin, direction = this.direction) {
     const xminp = tempVec3a;
     xminp.sub(plane.origin, origin);
 
     const a = xminp.dot(plane.normal);
     const b = direction.dot(plane.normal);
     // Assuming we don't want to count a ray parallel to the plane as intersecting
-    if (b == 0) return 0;
+    if (b == 0) {
+      return 0;
+    }
     const delta = a / b;
-    if (delta <= 0) return 0;
+    if (delta <= 0) {
+      return 0;
+    }
+
     return origin.add(direction.scale(delta));
   }
 
-  intersectSphere(sphere, origin = this.origin, direction = this.direction) {
+  intersectSphere(sphere: Sphere, origin = this.origin, direction = this.direction) {
     const ray = tempVec3c;
     ray.sub(sphere.center, origin);
     const tca = ray.dot(direction);
@@ -284,7 +302,7 @@ export class Raycast {
   }
 
   // Ray AABB - Ray Axis aligned bounding box testing
-  intersectBox(box, origin = this.origin, direction = this.direction) {
+  intersectBox(box: Box, origin = this.origin, direction = this.direction) {
     let tmin, tmax, tYmin, tYmax, tZmin, tZmax;
     const invdirx = 1 / direction.x;
     const invdiry = 1 / direction.y;
@@ -295,15 +313,29 @@ export class Raycast {
     tmax = ((invdirx >= 0 ? max.x : min.x) - origin.x) * invdirx;
     tYmin = ((invdiry >= 0 ? min.y : max.y) - origin.y) * invdiry;
     tYmax = ((invdiry >= 0 ? max.y : min.y) - origin.y) * invdiry;
-    if (tmin > tYmax || tYmin > tmax) return 0;
-    if (tYmin > tmin) tmin = tYmin;
-    if (tYmax < tmax) tmax = tYmax;
+    if (tmin > tYmax || tYmin > tmax) {
+      return 0;
+    }
+    if (tYmin > tmin) {
+      tmin = tYmin;
+    }
+    if (tYmax < tmax) {
+      tmax = tYmax;
+    }
     tZmin = ((invdirz >= 0 ? min.z : max.z) - origin.z) * invdirz;
     tZmax = ((invdirz >= 0 ? max.z : min.z) - origin.z) * invdirz;
-    if (tmin > tZmax || tZmin > tmax) return 0;
-    if (tZmin > tmin) tmin = tZmin;
-    if (tZmax < tmax) tmax = tZmax;
-    if (tmax < 0) return 0;
+    if (tmin > tZmax || tZmin > tmax) {
+      return 0;
+    }
+    if (tZmin > tmin) {
+      tmin = tZmin;
+    }
+    if (tZmax < tmax) {
+      tmax = tZmax;
+    }
+    if (tmax < 0) {
+      return 0;
+    }
     return tmin >= 0 ? tmin : tmax;
   }
 

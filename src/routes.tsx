@@ -100,10 +100,10 @@ export const routes: Routes[] = [
     component: lazy(() => import('./gpu-text-rendering/Index'))
   },
   {
-    path: '/geometric-algebra',
+    path: '/math/geometric-algebra',
     name: 'Geometric Algebra',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./geometric-algebra/GeometricAlgebra'))
+    component: lazy(() => import('@packages/math-examples/math-stuff'))
   },
   {
     path: '/player',
@@ -367,6 +367,18 @@ export const routes: Routes[] = [
         name: 'OGL Flowmap',
         Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
         component: lazy(() => import('@packages/ogl-examples/flowmap/flowmap'))
+      },
+      {
+        path: '/ogl-raycasting',
+        name: 'OGL Raycasting',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/raycasting/raycasting'))
+      },
+      {
+        path: '/ogl-frustum',
+        name: 'OGL Frustum',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/frustum/frustum'))
       }
     ]
   },

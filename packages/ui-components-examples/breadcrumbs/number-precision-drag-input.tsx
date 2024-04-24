@@ -1,16 +1,16 @@
 import { computePosition, offset, shift } from '@floating-ui/dom';
-import { onCleanup } from 'solid-js';
+import { Accessor, createEffect, createSignal, onCleanup, untrack } from 'solid-js';
 
 export function numberPrecisionDragInput(
   element: HTMLElement,
-  props: { value?: () => number; onChange?: (v: number) => void }
+  props: { value?: Accessor<number> | number; onChange?: (v: number) => void }
 ) {
   const elements = ['100', '10', '1', '.1', '.01', '.001', '.0001'].map(
     (v, i) =>
       (
         <div
           data-value={v}
-          class="border-b last:border-b-0 flex place-content-center place-items-center  h-10 border-black hover:bg-yellow"
+          class="hover:bg-yellow flex h-10 place-content-center place-items-center  border-b border-black last:border-b-0"
         >
           {v}
         </div>
@@ -18,8 +18,20 @@ export function numberPrecisionDragInput(
   );
 
   const testElement = (
-    <div class="flex flex-col border bg-white absolute top-0 left-0 border-black w-10 cursor-e-resize">{elements}</div>
+    <div class="absolute left-0 top-0 flex w-10 cursor-e-resize flex-col border border-black bg-white">{elements}</div>
   ) as HTMLElement;
+
+  const [show, setShow] = createSignal(false);
+
+  createEffect((prev) => {
+    const next = show();
+    if (next) {
+      document.body.appendChild(testElement);
+    } else if (prev === true) {
+      document.body.removeChild(testElement);
+    }
+    return next;
+  }, undefined);
 
   let prevNumber = 0;
   let prevElement: HTMLElement | undefined;
@@ -31,7 +43,7 @@ export function numberPrecisionDragInput(
     }
   ) => {
     if (e.pointerType === 'mouse' && e.button === 1) {
-      value = props.value?.() ?? 0;
+      value = props.value ? (typeof props.value === 'number' ? props.value : untrack(props.value)) : 0;
       e.preventDefault();
       e.stopPropagation();
       element.setPointerCapture(e.pointerId);
@@ -39,7 +51,7 @@ export function numberPrecisionDragInput(
       element.addEventListener('pointerup', pointerupHandler as EventListener);
       element.removeEventListener('pointerdown', pointerdownHandler as EventListener);
 
-      document.body.appendChild(testElement);
+      setShow(true);
       computePosition(element, testElement, {
         placement: 'top-end',
         middleware: [
@@ -110,17 +122,18 @@ export function numberPrecisionDragInput(
     prevElement?.classList.remove('bg-yellow');
     element.releasePointerCapture(e.pointerId);
     element.removeEventListener('pointermove', pointermoveHandler as EventListener);
-    element.removeEventListener('pointermove', pointerupHandler as EventListener);
+    element.removeEventListener('pointerup', pointerupHandler as EventListener);
     prevElement = undefined;
     value = 0;
 
-    document.body.removeChild(testElement);
+    setShow(false);
     element.addEventListener('pointerdown', pointerdownHandler as EventListener);
   };
 
   element.addEventListener('pointerdown', pointerdownHandler as EventListener);
 
   onCleanup(() => {
+    setShow(false);
     element.removeEventListener('pointerdown', pointerdownHandler as EventListener);
   });
 }

@@ -31,10 +31,7 @@ export class Shadow {
 
   castMeshes: Mesh[];
 
-  constructor(
-    gl: OGLRenderingContext,
-    { light = new Camera(gl), width = 1024, height = width }: Partial<ShadowOptions>
-  ) {
+  constructor(gl: OGLRenderingContext, { light = new Camera(), width = 1024, height = width }: Partial<ShadowOptions>) {
     this.gl = gl;
 
     this.light = light;

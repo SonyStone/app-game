@@ -2,6 +2,7 @@ import { AttributeData } from '../core/geometry';
 import * as Mat4Func from './functions/mat-4-func';
 import { QuatTuple } from './quat';
 import { Vec3Tuple } from './vec-3';
+import { Vec4Tuple } from './vec-4';
 
 export type Mat4Tuple =
   | [
@@ -30,14 +31,17 @@ export class Mat4 extends Array {
     m01 = 0,
     m02 = 0,
     m03 = 0,
+
     m10 = 0,
     m11 = 1,
     m12 = 0,
     m13 = 0,
+
     m20 = 0,
     m21 = 0,
     m22 = 1,
     m23 = 0,
+
     m30 = 0,
     m31 = 0,
     m32 = 0,
@@ -81,8 +85,9 @@ export class Mat4 extends Array {
     this[15] = v;
   }
 
+  set(m00: Mat4Tuple): this;
   set(
-    m00: number | Mat4Tuple,
+    m00: number,
     m01: number,
     m02: number,
     m03: number,
@@ -98,11 +103,29 @@ export class Mat4 extends Array {
     m31: number,
     m32: number,
     m33: number
+  ): this;
+  set(
+    m00: number | Mat4Tuple,
+    m01?: number,
+    m02?: number,
+    m03?: number,
+    m10?: number,
+    m11?: number,
+    m12?: number,
+    m13?: number,
+    m20?: number,
+    m21?: number,
+    m22?: number,
+    m23?: number,
+    m30?: number,
+    m31?: number,
+    m32?: number,
+    m33?: number
   ): this {
-    if ((m00 as Mat4Tuple).length) {
+    if (Array.isArray(m00)) {
       return this.copy(m00 as Mat4Tuple);
     }
-    Mat4Func.set(this, m00 as number, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33);
+    Mat4Func.set(this, m00, m01!, m02!, m03!, m10!, m11!, m12!, m13!, m20!, m21!, m22!, m23!, m30!, m31!, m32!, m33!);
     return this;
   }
 
@@ -150,6 +173,19 @@ export class Mat4 extends Array {
     return this;
   }
 
+  multiplyVec4<T extends Vec4Tuple>(v: Vec4Tuple, dest: T = [0, 0, 0, 0] as T): T {
+    const x = v[0];
+    const y = v[1];
+    const z = v[2];
+    const w = v[3];
+    dest[0] = this[0] * x + this[4] * y + this[8] * z + this[12] * w;
+    dest[1] = this[1] * x + this[5] * y + this[9] * z + this[13] * w;
+    dest[2] = this[2] * x + this[6] * y + this[10] * z + this[14] * w;
+    dest[3] = this[3] * x + this[7] * y + this[11] * z + this[15] * w;
+
+    return dest;
+  }
+
   identity(): this {
     Mat4Func.identity(this);
     return this;
@@ -158,6 +194,10 @@ export class Mat4 extends Array {
   copy(m: Mat4Tuple): this {
     Mat4Func.copy(this, m);
     return this;
+  }
+
+  clone(): Mat4 {
+    return new Mat4().copy(this);
   }
 
   fromPerspective({ fov, aspect, near, far }: { fov: number; aspect: number; near: number; far: number }): this {

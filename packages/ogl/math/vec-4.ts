@@ -61,6 +61,11 @@ export class Vec4 extends Array implements Vec4Tuple {
     return this;
   }
 
+  scale(): this {
+    Vec4Func.scale(this as unknown as Vec4Tuple, this as unknown as Vec4Tuple, v);
+    return this;
+  }
+
   multiply(v: number): this {
     Vec4Func.scale(this as unknown as Vec4Tuple, this as unknown as Vec4Tuple, v);
     return this;

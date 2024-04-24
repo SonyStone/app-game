@@ -430,14 +430,14 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
       const m30 = this[6]; // x
       const m31 = this[7]; // y
 
-      this[0] = cos * m10 - sin * m11; // a - b
-      this[1] = cos * m11 + sin * m10; // a + b
+      this[0] = cos * m10 - sin * m11; // a = a - b
+      this[1] = sin * m10 + cos * m11; // b = a + b
 
-      this[3] = cos * m20 - sin * m21; // c - d
-      this[4] = cos * m21 + sin * m20; // d + c
+      this[3] = cos * m20 - sin * m21; // c = c - d
+      this[4] = sin * m20 + cos * m21; // d = c + d
 
-      this[6] = cos * m30 - sin * m31; // x - y
-      this[7] = cos * m31 + sin * m30; // y + x
+      this[6] = cos * m30 - sin * m31; // x = x - y
+      this[7] = sin * m30 + cos * m31; // y = x + y
       return this;
     }
 

@@ -64,6 +64,11 @@ export const enum GL_DATA_TYPE {
   UNSIGNED_SHORT = GL_CONST.UNSIGNED_SHORT,
 
   /**
+   * @param float 16 (or 16 bit int 65535)
+   */
+  HALF_FLOAT = GL_CONST.HALF_FLOAT,
+
+  /**
    * @param float floating scalar
    */
   FLOAT = GL_CONST.FLOAT,

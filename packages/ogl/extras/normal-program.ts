@@ -9,14 +9,13 @@ import type { OGLRenderingContext } from '../core/renderer';
 /**
  * A normal program.
  */
-export function NormalProgram(
-  gl: OGLRenderingContext,
-  options?: Partial<Omit<ProgramOptions, 'vertex' | 'fragment' | 'cullFace'>>
-) {
-  return new Program(gl, {
-    ...options,
-    vertex: vertex,
-    fragment: fragment,
-    cullFace: false
-  });
+export class NormalProgram extends Program {
+  constructor(gl: OGLRenderingContext, options?: Partial<Omit<ProgramOptions, 'vertex' | 'fragment' | 'cullFace'>>) {
+    super(gl, {
+      ...options,
+      vertex: vertex,
+      fragment: fragment,
+      cullFace: false
+    });
+  }
 }

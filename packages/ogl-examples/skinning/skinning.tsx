@@ -30,10 +30,10 @@ export default function App() {
   const gl = renderer.gl;
   gl.clearColor(1, 1, 1, 1);
 
-  const camera = new Camera(gl, { fov: 35 });
+  const camera = new Camera({ fov: 35 });
   camera.position.set(6, 2, 6);
 
-  const controls = new (Orbit as any)(camera);
+  const controls = new Orbit(camera);
 
   function resize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -171,7 +171,6 @@ export default function App() {
   }
 
   onCleanup(() => {
-    document.body.removeChild(gl.canvas);
     controls.remove();
     window.removeEventListener('resize', resize, false);
   });

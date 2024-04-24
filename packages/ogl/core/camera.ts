@@ -1,7 +1,6 @@
 import { Mat4 } from '../math/mat-4';
 import { Vec3, Vec3Tuple } from '../math/vec-3';
 import { Mesh } from './mesh';
-import { OGLRenderingContext } from './renderer';
 import { Transform } from './transform';
 
 export interface CameraOptions {
@@ -52,10 +51,17 @@ export class Camera extends Transform {
     constant: number;
   })[];
 
-  constructor(
-    gl: OGLRenderingContext,
-    { near = 0.1, far = 100, fov = 45, aspect = 1, left, right, bottom, top, zoom = 1 }: Partial<CameraOptions> = {}
-  ) {
+  constructor({
+    near = 0.1,
+    far = 100,
+    fov = 45,
+    aspect = 1,
+    left,
+    right,
+    bottom,
+    top,
+    zoom = 1
+  }: Partial<CameraOptions> = {}) {
     super();
 
     Object.assign(this, { near, far, fov, aspect, left, right, bottom, top, zoom });
