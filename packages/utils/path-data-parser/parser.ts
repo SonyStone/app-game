@@ -109,8 +109,9 @@ export function parsePath(d: string): Segment[] {
   return segments;
 }
 
+const tokens: (string | number)[] = [];
 export function serialize(segments: Segment[]): string {
-  const tokens: (string | number)[] = [];
+  tokens.length = 0;
   for (const { key, data } of segments) {
     tokens.push(key);
     switch (key) {

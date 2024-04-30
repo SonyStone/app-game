@@ -75,12 +75,7 @@ export const routes: Routes[] = [
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/babylonjs-examples/babylon-example'))
   },
-  {
-    path: '/paint',
-    name: 'Paint',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/paint-page'))
-  },
+
   {
     path: '/twgl',
     name: 'twgl',
@@ -220,7 +215,7 @@ export const routes: Routes[] = [
     children: [
       {
         path: '/simple-program',
-        name: 'Simple Program',
+        name: 'Simple Program (nothing to see)',
         Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
         component: lazy(() => import('@packages/webgl-examples/simple-program/simple-program'))
       },
@@ -231,10 +226,16 @@ export const routes: Routes[] = [
         component: lazy(() => import('@packages/webgl-examples/matrices-2d/matrices-2d'))
       },
       {
-        path: '/paint-app',
-        name: 'paint app',
+        path: '/meshing',
+        name: 'Meshing [WIP]',
         Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
-        component: lazy(() => import('@packages/webgl-examples/paint-app/paint-app'))
+        component: lazy(() => import('@packages/webgl-examples/meshing/meshing'))
+      },
+      {
+        path: '/instanced-drawing',
+        name: 'Instanced Drawing',
+        Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/webgl-examples/instanced-drawing/instanced-drawing'))
       }
     ]
   },
@@ -244,7 +245,7 @@ export const routes: Routes[] = [
     children: [
       {
         path: '/three-pixi',
-        name: 'ThreePixi',
+        name: 'ThreePixi (not working)',
         Preview: (props) => <Thumbnail href={'/three-examples' + props.path} name={props.name} />,
         component: lazy(() => import('@packages/three-examples/ThreePixi'))
       },
@@ -356,12 +357,7 @@ export const routes: Routes[] = [
         Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
         component: lazy(() => import('@packages/ogl-examples/load-gltf/load-gltf'))
       },
-      {
-        path: '/ogl-paint',
-        name: 'OGL paint',
-        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/paint/paint'))
-      },
+
       {
         path: '/ogl-flowmap',
         name: 'OGL Flowmap',
@@ -391,6 +387,36 @@ export const routes: Routes[] = [
         name: 'Uniform Buffer Objects',
         Preview: (props) => <Thumbnail href={'/twgl-examples' + props.path} name={props.name} />,
         component: lazy(() => import('@packages/twgl-examples/uniform-buffer-objects/uniform-buffer-objects'))
+      }
+    ]
+  },
+  {
+    path: '/paint',
+    name: 'Paint App',
+    children: [
+      {
+        path: '/paint',
+        name: 'Paint',
+        Preview: (props) => <Thumbnail href={'/paint' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/paint-1/paint-page'))
+      },
+      {
+        path: '/ogl-paint-render-target',
+        name: 'OGL paint render target',
+        Preview: (props) => <Thumbnail href={'/paint' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/paint-ogl-1/paint-1'))
+      },
+      {
+        path: '/ogl-paint-full-screen',
+        name: 'OGL paint full screen canvas',
+        Preview: (props) => <Thumbnail href={'/paint' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/paint-ogl-1/paint-2'))
+      },
+      {
+        path: '/paint-app',
+        name: 'paint app [WIP]',
+        Preview: (props) => <Thumbnail href={'/paint' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/paint-app/paint-app'))
       }
     ]
   },

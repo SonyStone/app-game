@@ -6,8 +6,8 @@ import { postQuadNDC } from './quads-2';
 import drawShaderFragSrc from './draw-shader.frag?raw';
 import drawShaderVertSrc from './draw-shader.vert?raw';
 
-import { createShaderProgram } from './fungi/create-shader-program';
-import { bindFramebuffer, createFramebufferMap, unbindFramebuffer } from './fungi/fbo';
+import { createShaderProgram } from '../fungi/create-shader-program';
+import { bindFramebuffer, createFramebufferMap, unbindFramebuffer } from '../fungi/fbo';
 import {
   clearScreenBuffer,
   createWebglContext,
@@ -15,7 +15,7 @@ import {
   setClearColor,
   setWebglViewport,
   setupSomeWebglDefaults
-} from './fungi/old/Context';
+} from '../fungi/old/Context';
 import postShaderFragSrc from './post-shader.frag?raw';
 import postShaderVertSrc from './post-shader.vert?raw';
 

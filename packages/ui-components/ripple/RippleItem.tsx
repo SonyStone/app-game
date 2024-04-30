@@ -31,7 +31,7 @@ export function RippleItem({ event, onFadeOut }: Props) {
         top: `${offsetY - radius}px`,
         height: `${radius * 2}px`,
         width: `${radius * 2}px`,
-        'background-color': '#00ff001a',
+        'background-color': 'currentColor',
         'transition-duration': `${duration}ms`
       }}
     ></div>
@@ -53,7 +53,7 @@ export function RippleItem({ event, onFadeOut }: Props) {
 
     timeout1 = setTimeout(() => {
       onFadeOut(event);
-    }, animationConfig.exitDuration);
+    }, animationConfig.exitDuration) as any;
   };
 
   const timeout2 = setTimeout(() => {

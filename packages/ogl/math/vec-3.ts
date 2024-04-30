@@ -61,8 +61,11 @@ export class Vec3 extends Array {
   }
 
   sub(va: Vec3 | Vec3Tuple, vb?: Vec3 | Vec3Tuple): this {
-    if (vb) Vec3Func.subtract(this, va, vb);
-    else Vec3Func.subtract(this, this, va);
+    if (vb) {
+      Vec3Func.subtract(this, va, vb);
+    } else {
+      Vec3Func.subtract(this, this, va);
+    }
     return this;
   }
 

@@ -15,6 +15,7 @@ export interface ProgramOptions {
   cullFace: GLenum | false | null;
   frontFace: GLenum;
   depthTest: boolean;
+  stencilTest: boolean;
   depthWrite: boolean;
   depthFunc: GLenum;
 }

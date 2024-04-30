@@ -2,7 +2,7 @@
 // TODO: SphereCast?
 
 import { FVec2 } from '@packages/math';
-import { Camera, Mesh, Plane, Sphere } from '..';
+import { Camera, Mesh, Sphere } from '..';
 import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';
 
@@ -26,6 +26,8 @@ const tempMat4 = /* @__PURE__ */ new Mat4();
 
 export class Raycast {
   origin = new Vec3();
+
+  // mouse as direction ray from camera
   direction = new Vec3();
 
   // Set ray from mouse unprojection
@@ -268,7 +270,7 @@ export class Raycast {
     return hits;
   }
 
-  intersectPlane(plane: Plane, origin = this.origin, direction = this.direction) {
+  intersectPlane(plane: { origin: Vec3; normal: Vec3 }, origin = this.origin, direction = this.direction) {
     const xminp = tempVec3a;
     xminp.sub(plane.origin, origin);
 
@@ -276,11 +278,11 @@ export class Raycast {
     const b = direction.dot(plane.normal);
     // Assuming we don't want to count a ray parallel to the plane as intersecting
     if (b == 0) {
-      return 0;
+      return undefined;
     }
     const delta = a / b;
     if (delta <= 0) {
-      return 0;
+      return undefined;
     }
 
     return origin.add(direction.scale(delta));

@@ -1,6 +1,6 @@
 import { GL_BUFFER_TYPE } from '@packages/webgl/static-variables';
-import { fromTypeArray, newArray, newElement } from './fungi/Buffer';
-import { fromBufferConfig, type IMesh } from './fungi/mesh';
+import { fromTypeArray, newArray, newElement } from '../fungi/Buffer';
+import { fromBufferConfig, type IMesh } from '../fungi/mesh';
 
 /**
  * Small quad for rendering brush

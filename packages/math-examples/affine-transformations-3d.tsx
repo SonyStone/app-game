@@ -1,10 +1,12 @@
-import { Box, Camera, GridHelper, Mesh, NormalProgram, Orbit, Renderer, Transform, Vec3 } from '@packages/ogl';
+import { Camera, Orbit, Renderer, Transform, Vec3 } from '@packages/ogl';
 import { toRadian } from '@packages/ogl/extras/path/utils';
 import { createSkipper } from '@packages/tanki/create-skipper';
 import { numberPrecisionDragInput } from '@packages/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import { Index, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { effect } from 'solid-js/web';
+import { NormalBox } from './camera-projection-webgl2/normal-box.component';
+import { GridHelperComponent } from './grid-helper.component';
 
 export default function AffineTransformations3D() {
   const [matrix, setMatrix] = createStore([
@@ -26,41 +28,6 @@ export default function AffineTransformations3D() {
 
     const scene = new Transform();
 
-    console.log(camera);
-
-    const mesh = new Mesh(gl, { geometry: new Box(gl), program: new NormalProgram(gl) });
-    scene.addChild(mesh);
-
-    new GridHelper(gl, { size: 10, divisions: 10 }).setParent(scene);
-
-    effect(() => {
-      mesh.matrix[0] = matrix[0][0];
-      mesh.matrix[1] = matrix[0][1];
-      mesh.matrix[2] = matrix[0][2];
-      mesh.matrix[3] = matrix[0][3];
-
-      mesh.matrix[4] = matrix[1][0];
-      mesh.matrix[5] = matrix[1][1];
-      mesh.matrix[6] = matrix[1][2];
-      mesh.matrix[7] = matrix[1][3];
-
-      mesh.matrix[8] = matrix[2][0];
-      mesh.matrix[9] = matrix[2][1];
-      mesh.matrix[10] = matrix[2][2];
-      mesh.matrix[11] = matrix[2][3];
-
-      mesh.matrix[12] = matrix[3][0];
-      mesh.matrix[13] = matrix[3][1];
-      mesh.matrix[14] = matrix[3][2];
-      mesh.matrix[15] = matrix[3][3];
-
-      mesh.updateMatrix();
-    });
-
-    mesh.updateMatrix = () => {
-      mesh.worldMatrixNeedsUpdate = true;
-    };
-
     effect(() => {
       camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
     });
@@ -80,7 +47,7 @@ export default function AffineTransformations3D() {
       controls.remove();
     });
 
-    return canvas;
+    return { canvas, gl, scene };
   })();
 
   return (
@@ -160,7 +127,9 @@ export default function AffineTransformations3D() {
             </Index>
           </tbody>
         </table>
-        {canvas}
+        {canvas.canvas}
+        <GridHelperComponent gl={canvas.gl} scene={canvas.scene} />
+        <NormalBox gl={canvas.gl} scene={canvas.scene} position={[0.5, 0.5, 0.5]} matrix={matrix} />
       </div>
     </div>
   );

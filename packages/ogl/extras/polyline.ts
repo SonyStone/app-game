@@ -4,7 +4,7 @@ import { Mesh } from '../core/mesh';
 import { Program } from '../core/program';
 import { OGLRenderingContext } from '../core/renderer';
 import { Color } from '../math/color';
-import { Vec3 } from '../math/vec-3';
+import { Vec3, Vec3Tuple } from '../math/vec-3';
 
 import defaultFragment from './polyline.frag?raw';
 import defaultVertex from './polyline.vert?raw';
@@ -12,7 +12,7 @@ import defaultVertex from './polyline.vert?raw';
 const tmp = /* @__PURE__ */ new Vec3();
 
 export interface PolylineOptions {
-  points: Vec3[];
+  points: Vec3Tuple[];
   vertex?: string;
   fragment?: string;
   uniforms?: Record<string, any>;
@@ -25,7 +25,7 @@ export interface PolylineOptions {
  */
 export class Polyline {
   gl: OGLRenderingContext;
-  points: Vec3[];
+  points: Vec3Tuple[];
   count: number;
 
   position: Float32Array;
@@ -112,7 +112,9 @@ export class Polyline {
   }
 
   updateGeometry() {
-    this.points.forEach((p, i) => {
+    const tmp = new Vec3();
+    this.points.forEach((_p, i) => {
+      const p = tmp.copy(_p);
       p.toArray(this.position, i * 3 * 2);
       p.toArray(this.position, i * 3 * 2 + 3);
 
