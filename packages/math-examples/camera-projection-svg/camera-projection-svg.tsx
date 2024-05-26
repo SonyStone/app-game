@@ -2,7 +2,8 @@ import { Camera, Mat4, Orbit, Transform, Vec3, Vec4 } from '@packages/ogl';
 import { Vec4Tuple } from '@packages/ogl/math/vec-4';
 import { validate } from '@packages/utils/validate';
 import { createEmitter } from '@solid-primitives/event-bus';
-import { onCleanup, onMount } from 'solid-js';
+import createRAF from '@solid-primitives/raf';
+import { onMount } from 'solid-js';
 import { Cube } from './cube';
 import { Grid } from './grid';
 import { OnScreenCube } from './on-screen-cube';
@@ -42,10 +43,7 @@ export default function CameraProjectionSVG() {
   onMount(() => {
     const controls = new Orbit(camera, { element: svg as any as HTMLElement, target: new Vec3(1, 1, 0) });
 
-    let requestID = requestAnimationFrame(update);
     function update(t: number) {
-      requestID = requestAnimationFrame(update);
-
       controls.update();
       scene.updateMatrixWorld();
       camera.updateMatrixWorld();
@@ -59,10 +57,8 @@ export default function CameraProjectionSVG() {
       emit();
     }
 
-    onCleanup(() => {
-      cancelAnimationFrame(requestID);
-      controls.remove();
-    });
+    const [running, start, stop] = createRAF(update);
+    start();
   });
 
   return (

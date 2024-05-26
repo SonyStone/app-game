@@ -1,7 +1,8 @@
 import { Camera, Orbit, Renderer, Transform, Vec3 } from '@packages/ogl';
 import { Ripple } from '@packages/ui-components/ripple/Ripple';
 import { createEmitter } from '@solid-primitives/event-bus';
-import { onCleanup, onMount } from 'solid-js';
+import createRAF from '@solid-primitives/raf';
+import { onMount } from 'solid-js';
 import { GridHelperComponent } from '../grid-helper.component';
 import { NormalBox } from './normal-box.component';
 import { ScreenBox } from './screen-box';
@@ -21,23 +22,16 @@ export default function CameraProjectionWebGL2() {
 
   const scene = new Transform();
 
-  let requestID: number;
   function update(t: number) {
-    requestID = requestAnimationFrame(update);
-
     controls.update();
     renderer.render({ scene, camera });
   }
 
-  update(0);
+  const [running, start, stop] = createRAF(update);
+  start();
 
   onMount(() => {
     updateScreenBox.emit();
-  });
-
-  onCleanup(() => {
-    cancelAnimationFrame(requestID);
-    controls.remove();
   });
 
   return (

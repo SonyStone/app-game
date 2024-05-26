@@ -2,7 +2,8 @@ import { Camera, Orbit, Renderer, Transform, Vec3 } from '@packages/ogl';
 import { toRadian } from '@packages/ogl/extras/path/utils';
 import { createSkipper } from '@packages/tanki/create-skipper';
 import { numberPrecisionDragInput } from '@packages/ui-components-examples/breadcrumbs/number-precision-drag-input';
-import { Index, onCleanup } from 'solid-js';
+import createRAF from '@solid-primitives/raf';
+import { Index } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { effect } from 'solid-js/web';
 import { NormalBox } from './camera-projection-webgl2/normal-box.component';
@@ -32,20 +33,15 @@ export default function AffineTransformations3D() {
       camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
     });
 
-    let requestID = requestAnimationFrame(update);
     const skipper = createSkipper(100);
     function update(t: number) {
-      requestID = requestAnimationFrame(update);
-
       controls.update();
       renderer.render({ scene, camera });
       // console.log(`camera 3d`, scene, camera);
     }
 
-    onCleanup(() => {
-      cancelAnimationFrame(requestID);
-      controls.remove();
-    });
+    const [running, start, stop] = createRAF(update);
+    start();
 
     return { canvas, gl, scene };
   })();
