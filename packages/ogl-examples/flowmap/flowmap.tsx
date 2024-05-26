@@ -1,7 +1,8 @@
 import { FVec2 } from '@packages/math';
 import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@packages/ogl';
+import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect } from 'solid-js';
 import fragment from './shader.frag?raw';
 import vertex from './shader.vert?raw';
 import waterSrc from './water.jpg?url';
@@ -90,10 +91,7 @@ export default () => {
     velocity.needsUpdate = true;
   }
 
-  let requestID = requestAnimationFrame(update);
   function update(t: number) {
-    requestID = requestAnimationFrame(update);
-
     // Reset velocity when mouse not moving
     if (!velocity.needsUpdate) {
       mouse.set(-1);
@@ -115,10 +113,8 @@ export default () => {
     renderer.render({ scene: mesh, camera });
   }
 
-  onCleanup(() => {
-    controls.remove();
-    cancelAnimationFrame(requestID);
-  });
+  const [running, start, stop] = createRAF(update);
+  start();
 
   return gl.canvas;
 };

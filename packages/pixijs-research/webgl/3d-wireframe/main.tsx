@@ -2,8 +2,9 @@ import { FVec3, Vec3Tuple, m4 } from '@packages/math';
 import { DEG_TO_RAD } from '@packages/math/constants';
 import { Spherical, setFromSpherical } from '@packages/math/spherical';
 import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@packages/webgl/static-variables';
-import { Accessor, Setter, createEffect, onCleanup, onMount } from 'solid-js';
+import { Accessor, Setter, createEffect, onMount } from 'solid-js';
 
+import createRAF from '@solid-primitives/raf';
 import { createMouseRotate } from './create-mouse-rotate';
 import { createMouseWheelZoom } from './create-mouse-wheel-zoom';
 import { createImage } from './image/create-image';
@@ -175,8 +176,6 @@ export function Main(prop: { ctx: Context }) {
     }
 
     function handleRaf(time: number) {
-      id = requestAnimationFrame(handleRaf);
-
       ctx.renderTime = time;
       ctx.renderDeltaTime = (time - ctx.renderTime) * 0.001;
 
@@ -184,11 +183,8 @@ export function Main(prop: { ctx: Context }) {
       ctx.setCamera(camera);
     }
 
-    handleRaf(0);
-  });
-
-  onCleanup(() => {
-    cancelAnimationFrame(id);
+    const [running, start, stop] = createRAF(handleRaf);
+    start();
   });
 
   return <></>;

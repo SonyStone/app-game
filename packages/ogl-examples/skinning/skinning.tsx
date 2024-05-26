@@ -20,6 +20,7 @@ import snoutSrc from './snout.jpg?url';
 import meshFragment from './mesh.frag?raw';
 import meshVertex from './mesh.vert?raw';
 
+import createRAF from '@solid-primitives/raf';
 import { createSignal, onCleanup } from 'solid-js';
 import { Timeline } from '../../sequence-editor/timeline';
 import shadowFragment from './shadow.frag?raw';
@@ -149,10 +150,7 @@ export default function App() {
     mesh.setParent(scene);
   }
 
-  requestAnimationFrame(update);
   function update(t: number) {
-    requestAnimationFrame(update);
-
     // Control animation but updating the elapsed value.
     // It uses modulo to repeat the animation range,
     // so below is playing a never-ending loop.
@@ -170,8 +168,10 @@ export default function App() {
     renderer.render({ scene, camera });
   }
 
+  const [running, start, stop] = createRAF(update);
+  start();
+
   onCleanup(() => {
-    controls.remove();
     window.removeEventListener('resize', resize, false);
   });
 

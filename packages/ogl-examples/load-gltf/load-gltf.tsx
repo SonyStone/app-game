@@ -1,12 +1,14 @@
 import { Camera, GLTF, GLTFLoader, Orbit, Program, Renderer, TextureLoader, Transform, Vec3 } from '@packages/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect } from 'solid-js';
 
 import hershel from './hershel.glb?url';
 import lut from './lut.png?url';
 import sunsetDiffuse from './sunset-diffuse-RGBM.png?url';
 import sunsetSpecular from './sunset-specular-RGBM.png?url';
 
+import { makeEventListener } from '@solid-primitives/event-listener';
+import createRAF from '@solid-primitives/raf';
 import shaderFragment from './shader.frag?raw';
 import shaderVertex from './shader.vert?raw';
 
@@ -44,8 +46,8 @@ export default function loadGltf() {
 
   {
     loadInitial();
-    gl.canvas.addEventListener('dragover', over);
-    gl.canvas.addEventListener('drop', drop);
+    makeEventListener(gl.canvas, 'dragover', over);
+    makeEventListener(gl.canvas, 'drop', drop);
   }
 
   async function loadInitial() {
@@ -223,10 +225,7 @@ export default function loadGltf() {
     return program;
   }
 
-  let requestID = requestAnimationFrame(update);
   function update() {
-    requestID = requestAnimationFrame(update);
-
     // Play first animation
     if (gltf && gltf.animations && gltf.animations.length) {
       let { animation } = gltf.animations[0];
@@ -238,10 +237,8 @@ export default function loadGltf() {
     renderer.render({ scene, camera, sort: false, frustumCull: false });
   }
 
-  onCleanup(() => {
-    cancelAnimationFrame(requestID);
-    controls.remove();
-  });
+  const [running, start, stop] = createRAF(update);
+  start();
 
   return gl.canvas;
 }

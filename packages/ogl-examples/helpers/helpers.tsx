@@ -13,8 +13,9 @@ import {
   VertexNormalsHelper
 } from '@packages/ogl';
 
+import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect } from 'solid-js';
 import fragment from './helpers.frag?raw';
 import vertex from './helpers.vert?raw';
 
@@ -69,10 +70,7 @@ export default function Helpers() {
   const axes = new AxesHelper(gl, { size: 6, symmetric: true });
   axes.setParent(scene);
 
-  let requestID = requestAnimationFrame(update);
   function update(t: number) {
-    requestID = requestAnimationFrame(update);
-
     sphere.scale.y = Math.cos(t * 0.001) * 2;
     cube.rotation.y -= 0.01;
 
@@ -80,10 +78,8 @@ export default function Helpers() {
     renderer.render({ scene, camera });
   }
 
-  onCleanup(() => {
-    cancelAnimationFrame(requestID);
-    controls.remove();
-  });
+  const [running, start, stop] = createRAF(update);
+  start();
 
   return gl.canvas;
 }

@@ -11,6 +11,7 @@ import {
   WebGLRenderer
 } from 'three';
 
+import createRAF from '@solid-primitives/raf';
 import brick_diffuse from './brick_diffuse.jpg';
 import { useCamera } from './Camera.provider';
 import { EffectComposer } from './postprocessing/EffectComposer';
@@ -89,7 +90,6 @@ export default function PostprocessingSmaa() {
   controls.addEventListener('change', render);
   controls.screenSpacePanning = true;
 
-  let id: number;
   let currentCamera!: Camera;
 
   createEffect(() => {
@@ -101,8 +101,6 @@ export default function PostprocessingSmaa() {
   });
 
   function animate() {
-    id = requestAnimationFrame(animate);
-
     for (let i = 0; i < objects.children.length; i++) {
       const child = objects.children[i];
 
@@ -113,10 +111,12 @@ export default function PostprocessingSmaa() {
     render();
   }
 
+  const [running, start, stop] = createRAF(animate);
+  start();
+
   onCleanup(() => {
     scene.clear();
     renderer.dispose();
-    cancelAnimationFrame(id);
     controls.removeEventListener('change', render);
   });
 

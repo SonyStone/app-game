@@ -14,6 +14,7 @@ import {
 } from '@packages/ogl';
 
 import { Vec2 } from '@packages/math/v2';
+import createRAF from '@solid-primitives/raf';
 import { onCleanup } from 'solid-js';
 import fragment from './raycasting.frag?raw';
 import vertex from './raycasting.vert?raw';
@@ -75,13 +76,13 @@ export default function Raycasting() {
   sphere.onBeforeRender(updateHitUniform);
   cube.onBeforeRender(updateHitUniform);
 
-  requestAnimationFrame(update);
   function update() {
-    requestAnimationFrame(update);
-
     orbit.update();
     renderer.render({ scene, camera });
   }
+
+  const [running, start, stop] = createRAF(update);
+  start();
 
   const mouse = new Vec2();
 

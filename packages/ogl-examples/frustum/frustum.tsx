@@ -11,8 +11,8 @@ import {
   VertexNormalsHelper
 } from '@packages/ogl';
 import { EyeSpaceFrustum } from '@packages/ogl/extras/eye-space-frustum';
+import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { onCleanup } from 'solid-js';
 import { effect } from 'solid-js/web';
 
 export default function Frustum() {
@@ -31,7 +31,7 @@ export default function Frustum() {
 
   const frustum = (() => {
     // Add camera used for demonstrating frustum culling
-    const frustumCamera = new Camera(gl, {
+    const frustumCamera = new Camera({
       fov: 35,
       near: 1,
       far: 10
@@ -102,19 +102,14 @@ export default function Frustum() {
 
   new GridHelper(gl, { size: 10, divisions: 10 }).setParent(scene);
 
-  let requestID = requestAnimationFrame(update);
   function update(t: number) {
-    requestID = requestAnimationFrame(update);
-
     controls.update();
     renderer.render({ scene, camera });
   }
   console.log(`camera`, frustum.camera);
 
-  onCleanup(() => {
-    cancelAnimationFrame(requestID);
-    controls.remove();
-  });
+  const [running, start, stop] = createRAF(update);
+  start();
 
   return canvas;
 }

@@ -1,4 +1,5 @@
 import { Color, Polyline, Renderer, Transform, Vec3 } from '@packages/ogl';
+import createRAF from '@solid-primitives/raf';
 import { onCleanup } from 'solid-js';
 
 interface Line {
@@ -155,10 +156,7 @@ export default function App() {
 
   const tmp = new Vec3();
 
-  requestAnimationFrame(update);
   function update(t: number) {
-    requestAnimationFrame(update);
-
     lines.forEach((line) => {
       // Update polyline input points
       for (let i = line.points.length - 1; i >= 0; i--) {
@@ -177,6 +175,9 @@ export default function App() {
 
     renderer.render({ scene });
   }
+
+  const [running, start, stop] = createRAF(update);
+  start();
 
   onCleanup(() => {
     window.removeEventListener('resize', resize, false);

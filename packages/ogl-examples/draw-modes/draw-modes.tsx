@@ -1,5 +1,6 @@
 import { Camera, Geometry, Mesh, Program, Renderer, Transform } from '@packages/ogl';
 
+import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { effect } from 'solid-js/web';
 import fragment from './vertex.frag?raw';
@@ -81,13 +82,13 @@ export default function PaintAppOGL() {
   // |/ |
   // 0--3
 
-  requestAnimationFrame(update);
   function update(t: number) {
-    requestAnimationFrame(update);
-
     program.uniforms.uTime.value = t * 0.001;
     renderer.render({ scene, camera });
   }
+
+  const [running, start, stop] = createRAF(update);
+  start();
 
   return gl.canvas;
 }

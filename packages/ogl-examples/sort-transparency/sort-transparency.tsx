@@ -1,9 +1,10 @@
 import { Camera, Color, Mesh, Orbit, Plane, Program, Renderer, Texture, Transform } from '@packages/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect } from 'solid-js';
 
 import leaf from './leaf.jpg?url';
 
+import createRAF from '@solid-primitives/raf';
 import fragment from './sort-transparency.frag?raw';
 import vertex from './sort-transparency.vert?raw';
 
@@ -62,10 +63,7 @@ export default function SortTransparency() {
     meshes.push(mesh);
   }
 
-  let requestID = requestAnimationFrame(update);
   function update(t: number) {
-    requestID = requestAnimationFrame(update);
-
     // meshes.forEach((mesh) => {
     //   mesh.rotation.y += 0.05;
     //   mesh.rotation.z += 0.05;
@@ -80,10 +78,9 @@ export default function SortTransparency() {
     renderer.render({ scene, camera });
   }
 
-  onCleanup(() => {
-    cancelAnimationFrame(requestID);
-    controls.remove();
-  });
+  const [running, start, stop] = createRAF(update);
+
+  start();
 
   return <>{gl.canvas}</>;
 }

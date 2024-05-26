@@ -101,7 +101,6 @@ export default function MsdfText() {
 
   onCleanup(() => {
     cancelAnimationFrame(requestID);
-    controls.remove();
   });
 
   return <>{gl.canvas}</>;
