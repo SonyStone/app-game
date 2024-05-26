@@ -95,29 +95,118 @@ export const enum COLOR_ATTACHMENT {
   COLOR_ATTACHMENT15 = GL_CONST.COLOR_ATTACHMENT15
 }
 
-/** BlendingFactorDest */
-export const enum BLENDING_FACTOR_DEST {
+/**
+ * BlendingFactorSrc
+ * @default: ONE
+ * BlendingFactorDest
+ * @default: ZERO
+ */
+export const enum BLENDING_FACTOR {
+  /**
+   * `0,0,0,0`
+   *
+   * Multiplies all colors by 0.
+   */
   ZERO = GL_CONST.ZERO,
-  ONE = GL_CONST.ONE,
-  SRC_COLOR = GL_CONST.SRC_COLOR,
-  ONE_MINUS_SRC_COLOR = GL_CONST.ONE_MINUS_DST_COLOR,
-  SRC_ALPHA = GL_CONST.SRC_ALPHA,
-  ONE_MINUS_SRC_ALPHA = GL_CONST.ONE_MINUS_SRC_ALPHA,
-  DST_ALPHA = GL_CONST.DST_ALPHA,
-  ONE_MINUS_DST_ALPHA = GL_CONST.ONE_MINUS_DST_ALPHA
-}
 
-/** BlendingFactorSrc */
-export const enum BLENDING_FACTOR_SRC {
-  ZERO = GL_CONST.ZERO,
+  /**
+   * `1,1,1,1`
+   *
+   * Multiplies all colors by 1.
+   */
   ONE = GL_CONST.ONE,
+
+  /**
+   * `RS, GS, BS, AS`
+   *
+   * Multiplies all colors by the source colors.
+   */
+  SRC_COLOR = GL_CONST.SRC_COLOR,
+
+  /**
+   * `1-RS, 1-GS, 1-BS, 1-AS`
+   *
+   * Multiplies all colors by 1 minus each source color.
+   */
+  ONE_MINUS_SRC_COLOR = GL_CONST.ONE_MINUS_SRC_COLOR,
+
+  /**
+   * `RD, GD, BD, AD`
+   *
+   * Multiplies all colors by the destination color.
+   */
   DST_COLOR = GL_CONST.DST_COLOR,
+
+  /**
+   * 	`1-RD, 1-GD, 1-BD, 1-AD`
+   *
+   * Multiplies all colors by 1 minus each destination color.
+   */
   ONE_MINUS_DST_COLOR = GL_CONST.ONE_MINUS_DST_COLOR,
-  SRC_ALPHA_SATURATE = GL_CONST.SRC_ALPHA_SATURATE,
+
+  /**
+   * 	`AS, AS, AS, AS`
+   *
+   * Multiplies all colors by the source alpha value.
+   */
   SRC_ALPHA = GL_CONST.SRC_ALPHA,
+
+  /**
+   * `1-AS, 1-AS, 1-AS, 1-AS`
+   *
+   * Multiplies all colors by 1 minus the source alpha value.
+   */
   ONE_MINUS_SRC_ALPHA = GL_CONST.ONE_MINUS_SRC_ALPHA,
+
+  /**
+   * `AD, AD, AD, AD`
+   *
+   * Multiplies all colors by the destination alpha value.
+   */
   DST_ALPHA = GL_CONST.DST_ALPHA,
-  ONE_MINUS_DST_ALPHA = GL_CONST.ONE_MINUS_DST_ALPHA
+
+  /**
+   * `1-AD, 1-AD, 1-AD, 1-AD`
+   *
+   * Multiplies all colors by 1 minus the destination alpha value.
+   */
+  ONE_MINUS_DST_ALPHA = GL_CONST.ONE_MINUS_DST_ALPHA,
+
+  /**
+   * 	`RC, GC, BC, AC`
+   *
+   * Multiplies all colors by a constant color.
+   */
+  CONSTANT_COLOR = GL_CONST.CONSTANT_COLOR,
+
+  /**
+   * `1-RC, 1-GC, 1-BC, 1-AC`
+   *
+   * Multiplies all colors by 1 minus a constant color.
+   */
+  ONE_MINUS_CONSTANT_COLOR = GL_CONST.ONE_MINUS_CONSTANT_COLOR,
+
+  /**
+   * 	`AC, AC, AC, AC`
+   *
+   * Multiplies all colors by a constant alpha value.
+   */
+  CONSTANT_ALPHA = GL_CONST.CONSTANT_ALPHA,
+
+  /**
+   * 	`1-AC, 1-AC, 1-AC, 1-AC`
+   *
+   * Multiplies all colors by 1 minus a constant alpha value.
+   */
+  ONE_MINUS_CONSTANT_ALPHA = GL_CONST.ONE_MINUS_CONSTANT_ALPHA,
+
+  /**
+   * `min(AS, 1 - AD), min(AS, 1 - AD), min(AS, 1 - AD), 1`
+   *
+   * Multiplies the RGB colors by the smaller of either the source alpha value or the value of 1
+   * minus the destination alpha value. The alpha value is multiplied by 1.
+   */
+  SRC_ALPHA_SATURATE = GL_CONST.SRC_ALPHA_SATURATE
 }
 
 export const enum BLEND_EQUATION_SEPARATE {
@@ -130,6 +219,36 @@ export const enum BLEND_EQUATION_SEPARATE {
 /* Framebuffer Object. */
 export const enum GL_FRAMEBUFFER_OBJECT {
   FRAMEBUFFER = GL_CONST.FRAMEBUFFER,
+  RENDERBUFFER = GL_CONST.RENDERBUFFER
+}
+
+/**
+ * ```ts
+ * framebufferTexture2D() // target
+ * ```
+ */
+export const enum GL_FRAMEBUFFER_TARGET {
+  /**
+   * Collection buffer data storage of color, alpha, depth and stencil buffers used to render an image.
+   */
+  FRAMEBUFFER = GL_CONST.FRAMEBUFFER,
+  /**
+   * Used as a destination for drawing, rendering, clearing, and writing operations.
+   * @remarks WebGL2 additional constants
+   */
+  DRAW_FRAMEBUFFER = GL_CONST.DRAW_FRAMEBUFFER,
+  /**
+   * Used as a source for reading operations.
+   * @remarks WebGL2 additional constants
+   */
+  READ_FRAMEBUFFER = GL_CONST.READ_FRAMEBUFFER
+}
+
+/**
+ * bindRenderbuffer()
+ * renderbufferStorage()
+ */
+export const enum GL_RENDERBUFFER_TARGET {
   RENDERBUFFER = GL_CONST.RENDERBUFFER
 }
 

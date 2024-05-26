@@ -1,6 +1,11 @@
 import { GL_CONST } from './static-variables';
 
-/** PixelFormat */
+/**
+ * PixelFormat
+ * ```ts
+ * gl.copyTexImage2D() // internalformat
+ * ```
+ */
 export const enum GL_PIXEL_FORMAT {
   DEPTH_COMPONENT = GL_CONST.DEPTH_COMPONENT,
   ALPHA = GL_CONST.ALPHA,
@@ -13,6 +18,7 @@ export const enum GL_PIXEL_FORMAT {
 /** TextureMagFilter */
 export const enum GL_TEXTURE_MAG_FILTER {
   NEAREST = GL_CONST.NEAREST,
+  /** @default */
   LINEAR = GL_CONST.LINEAR
 }
 
@@ -22,18 +28,23 @@ export const enum GL_TEXTURE_MIN_FILTER {
   LINEAR = GL_CONST.LINEAR,
   NEAREST_MIPMAP_NEAREST = GL_CONST.NEAREST_MIPMAP_NEAREST,
   LINEAR_MIPMAP_NEAREST = GL_CONST.LINEAR_MIPMAP_NEAREST,
+  /** @default */
   NEAREST_MIPMAP_LINEAR = GL_CONST.NEAREST_MIPMAP_LINEAR,
   LINEAR_MIPMAP_LINEAR = GL_CONST.LINEAR_MIPMAP_LINEAR
 }
 
 /** TextureWrapMode */
 export const enum GL_TEXTURE_WRAP_MODE {
+  /** @default */
   REPEAT = GL_CONST.REPEAT,
   CLAMP_TO_EDGE = GL_CONST.CLAMP_TO_EDGE,
   MIRRORED_REPEAT = GL_CONST.MIRRORED_REPEAT
 }
 
 /**
+ * ```ts
+ * gl.texImage2D(.., internalformat, ..)
+ * ```
  * [internalFormat](https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/renderbufferStorage#internalformat)
  * [internalformat](https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texImage2D#internalformat)
  */
@@ -132,23 +143,112 @@ export const enum GL_TEXTURE_PARAMETER_NAME {
   TEXTURE_WRAP_T = GL_CONST.TEXTURE_WRAP_T
 }
 
-/* TextureTarget */
+/**
+ * TextureTarget
+ * ```ts
+ * gl.bindTexture(GL_TEXTURE_TARGET.TEXTURE_2D, texture);
+ * gl.generateMipmap(GL_TEXTURE_TARGET.TEXTURE_2D);
+ * ```
+ */
 export const enum GL_TEXTURE_TARGET {
+  /** A two-dimensional texture. */
   TEXTURE_2D = GL_CONST.TEXTURE_2D,
-  TEXTURE = GL_CONST.TEXTURE,
-
+  /**A cube-mapped texture */
   TEXTURE_CUBE_MAP = GL_CONST.TEXTURE_CUBE_MAP,
-  TEXTURE_BINDING_CUBE_MAP = GL_CONST.TEXTURE_BINDING_CUBE_MAP,
-  TEXTURE_CUBE_MAP_POSITIVE_X = GL_CONST.TEXTURE_CUBE_MAP_POSITIVE_X,
-  TEXTURE_CUBE_MAP_NEGATIVE_X = GL_CONST.TEXTURE_CUBE_MAP_NEGATIVE_X,
-  TEXTURE_CUBE_MAP_POSITIVE_Y = GL_CONST.TEXTURE_CUBE_MAP_POSITIVE_Y,
-  TEXTURE_CUBE_MAP_NEGATIVE_Y = GL_CONST.TEXTURE_CUBE_MAP_NEGATIVE_Y,
-  TEXTURE_CUBE_MAP_POSITIVE_Z = GL_CONST.TEXTURE_CUBE_MAP_POSITIVE_Z,
-  TEXTURE_CUBE_MAP_NEGATIVE_Z = GL_CONST.TEXTURE_CUBE_MAP_NEGATIVE_Z,
-  MAX_CUBE_MAP_TEXTURE_SIZE = GL_CONST.MAX_CUBE_MAP_TEXTURE_SIZE
+
+  /**
+   * A three-dimensional texture
+   * @remarks WebGL2 additional constants
+   */
+  TEXTURE_3D = GL_CONST.TEXTURE_3D,
+
+  /**
+   * A two-dimensional array texture
+   * @remarks WebGL2 additional constants
+   */
+  TEXTURE_2D_ARRAY = GL_CONST.TEXTURE_2D_ARRAY
 }
 
-/** TextureUnit */
+/**
+ * ```ts
+ * gl.compressedTexImage2D()
+ * gl.copyTexImage2D()
+ * gl.framebufferTexture2D(.., textarget, ..)
+ * ```
+ */
+export const enum GL_TEXTURE_2D_TARGET {
+  /** A two-dimensional texture */
+  TEXTURE_2D = GL_CONST.TEXTURE_2D,
+  /** Positive X face for a cube-mapped texture. */
+  TEXTURE_CUBE_MAP_POSITIVE_X = GL_CONST.TEXTURE_CUBE_MAP_POSITIVE_X,
+  /** Negative X face for a cube-mapped texture. */
+  TEXTURE_CUBE_MAP_NEGATIVE_X = GL_CONST.TEXTURE_CUBE_MAP_NEGATIVE_X,
+  /** Positive Y face for a cube-mapped texture. */
+  TEXTURE_CUBE_MAP_POSITIVE_Y = GL_CONST.TEXTURE_CUBE_MAP_POSITIVE_Y,
+  /** Negative Y face for a cube-mapped texture. */
+  TEXTURE_CUBE_MAP_NEGATIVE_Y = GL_CONST.TEXTURE_CUBE_MAP_NEGATIVE_Y,
+  /** Positive Z face for a cube-mapped texture. */
+  TEXTURE_CUBE_MAP_POSITIVE_Z = GL_CONST.TEXTURE_CUBE_MAP_POSITIVE_Z,
+  /** Negative Z face for a cube-mapped texture. */
+  TEXTURE_CUBE_MAP_NEGATIVE_Z = GL_CONST.TEXTURE_CUBE_MAP_NEGATIVE_Z
+}
+
+/**
+ * attachment
+ * ```ts
+ * framebufferTexture2D(.., attachment, ..)
+ * ```
+ *
+ * @remarks there is more with
+ * * `WEBGL_draw_buffers` extension
+ * * `WEBGL_depth_texture` extension
+ *
+ */
+export const enum GL_FRAMEBUFFER_ATTACHMENT {
+  /** Attaches the texture to the framebuffer's color buffer. */
+  COLOR_ATTACHMENT0 = GL_CONST.COLOR_ATTACHMENT0,
+  /** Attaches the texture to the framebuffer's depth buffer. */
+  DEPTH_ATTACHMENT = GL_CONST.DEPTH_ATTACHMENT,
+  /** Attaches the texture to the framebuffer's stencil buffer. */
+  STENCIL_ATTACHMENT = GL_CONST.STENCIL_ATTACHMENT,
+  /**
+   * depth and stencil buffer.
+   * @remarks WebGL2 additional constants
+   */
+  DEPTH_STENCIL_ATTACHMENT = GL_CONST.DEPTH_STENCIL_ATTACHMENT,
+  COLOR_ATTACHMENT1 = GL_CONST.COLOR_ATTACHMENT1,
+  COLOR_ATTACHMENT2 = GL_CONST.COLOR_ATTACHMENT2,
+  COLOR_ATTACHMENT3 = GL_CONST.COLOR_ATTACHMENT3,
+  COLOR_ATTACHMENT4 = GL_CONST.COLOR_ATTACHMENT4,
+  COLOR_ATTACHMENT5 = GL_CONST.COLOR_ATTACHMENT5,
+  COLOR_ATTACHMENT6 = GL_CONST.COLOR_ATTACHMENT6,
+  COLOR_ATTACHMENT7 = GL_CONST.COLOR_ATTACHMENT7,
+  COLOR_ATTACHMENT8 = GL_CONST.COLOR_ATTACHMENT8,
+  COLOR_ATTACHMENT9 = GL_CONST.COLOR_ATTACHMENT9,
+  COLOR_ATTACHMENT10 = GL_CONST.COLOR_ATTACHMENT10,
+  COLOR_ATTACHMENT11 = GL_CONST.COLOR_ATTACHMENT11,
+  COLOR_ATTACHMENT12 = GL_CONST.COLOR_ATTACHMENT12,
+  COLOR_ATTACHMENT13 = GL_CONST.COLOR_ATTACHMENT13,
+  COLOR_ATTACHMENT14 = GL_CONST.COLOR_ATTACHMENT14,
+  COLOR_ATTACHMENT15 = GL_CONST.COLOR_ATTACHMENT15
+}
+
+/**
+ * ```ts
+ * gl.compressedTexImage3D
+ * ```
+ */
+export const enum GL_COMPRESSED_TEXTURE_3D_TARGET {
+  TEXTURE_2D_ARRAY = GL_CONST.TEXTURE_2D_ARRAY,
+  TEXTURE_3D = GL_CONST.TEXTURE_3D
+}
+
+/**
+ * TextureUnit
+ * ```ts
+ * gl.activeTexture(gl.TEXTURE1);
+ * ```
+ */
 export const enum GL_TEXTURE_UNIT {
   TEXTURE0 = GL_CONST.TEXTURE0,
   TEXTURE1 = GL_CONST.TEXTURE1,
@@ -181,9 +281,37 @@ export const enum GL_TEXTURE_UNIT {
   TEXTURE28 = GL_CONST.TEXTURE28,
   TEXTURE29 = GL_CONST.TEXTURE29,
   TEXTURE30 = GL_CONST.TEXTURE30,
-  TEXTURE31 = GL_CONST.TEXTURE31,
+  TEXTURE31 = GL_CONST.TEXTURE31
+}
 
-  ACTIVE_TEXTURE = GL_CONST.ACTIVE_TEXTURE
+/**
+ * Comparison function
+ * ```ts
+ * getTexParameter(.., TEXTURE_COMPARE_FUNC): GL_COMPARISON_FUNCTION;
+ * ```
+ */
+export const enum GL_COMPARISON_FUNCTION {
+  /** @default */
+  LEQUAL = GL_CONST.LEQUAL,
+  GEQUAL = GL_CONST.GEQUAL,
+  LESS = GL_CONST.LESS,
+  GREATER = GL_CONST.GREATER,
+  EQUAL = GL_CONST.EQUAL,
+  NOTEQUAL = GL_CONST.NOTEQUAL,
+  ALWAYS = GL_CONST.ALWAYS,
+  NEVER = GL_CONST.NEVER
+}
+
+/**
+ * Texture comparison mode
+ * ```ts
+ * getTexParameter(.., TEXTURE_COMPARE_MODE): GL_COMPARISON_MODE;
+ * ```
+ */
+export const enum GL_COMPARISON_MODE {
+  /** @default */
+  NONE = GL_CONST.NONE,
+  COMPARE_REF_TO_TEXTURE = GL_CONST.COMPARE_REF_TO_TEXTURE
 }
 
 export const enum GL_TEXTURES {

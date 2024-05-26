@@ -1,11 +1,12 @@
-import { GL_BUFFER_USAGE } from '../static-variables';
-import { GL_BUFFER_TARGET } from '../static-variables/buffer';
+import type { WebGLRenderingContextStrict } from '../webgl-strict-types/webgl';
+import type { WebGL2RenderingContextStrict } from '../webgl-strict-types/webgl2';
+
 import { createBuffer } from './buffer';
 import { ProgramParams, createProgram } from './program';
 import { createVertexArray } from './vertex-array-object';
 
 export function createWebGL2Renderer(canvas: HTMLCanvasElement) {
-  const gl = canvas.getContext('webgl2')!;
+  const gl = canvas.getContext('webgl2')! as WebGL2RenderingContextStrict;
 
   if (!gl) {
     throw new Error('no webgl2 context');
@@ -15,7 +16,10 @@ export function createWebGL2Renderer(canvas: HTMLCanvasElement) {
     canvas: canvas,
     context: gl,
     /** WebGLBuffer */
-    createBuffer(params: { target: GL_BUFFER_TARGET; usage: GL_BUFFER_USAGE }) {
+    createBuffer(params: {
+      target: WebGLRenderingContextStrict.BufferTarget;
+      usage: WebGLRenderingContextStrict.BufferDataUsage;
+    }) {
       return createBuffer(gl, params);
     },
     /** WebGLFramebuffer */

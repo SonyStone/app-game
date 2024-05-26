@@ -1,19 +1,20 @@
-import { GL_BUFFER_USAGE } from '../static-variables';
-import { GL_BUFFER_TARGET } from '../static-variables/buffer';
+import type { WebGLRenderingContextStrict } from '../webgl-strict-types/webgl';
+import type { WebGL2RenderingContextStrict } from '../webgl-strict-types/webgl2';
 
 export function createBuffer(
-  gl: WebGL2RenderingContext,
+  gl: WebGL2RenderingContextStrict,
   {
     target,
     usage
   }: {
-    target: GL_BUFFER_TARGET;
-    usage: GL_BUFFER_USAGE;
+    target: WebGLRenderingContextStrict.BufferTarget;
+    usage: WebGLRenderingContextStrict.BufferDataUsage;
   }
 ) {
   let buffer = gl.createBuffer();
 
-  return Object.assign(buffer!, {
+  return {
+    buffer,
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/WebGLRenderingContext/bindBuffer) */
     bind() {
       if (buffer) {
@@ -63,5 +64,5 @@ export function createBuffer(
       this.unbind();
       return data;
     }
-  });
+  };
 }

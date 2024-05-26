@@ -1,8 +1,11 @@
-export function createVertexArray(gl: WebGL2RenderingContext) {
+import { WebGL2RenderingContextStrict } from '../webgl-strict-types/webgl2';
+
+export function createVertexArray(gl: WebGL2RenderingContextStrict) {
   const vao = gl.createVertexArray();
   const buffers = new Set<WebGLBuffer>();
 
-  return Object.assign(vao!, {
+  return {
+    vao,
     bind() {
       gl.bindVertexArray(vao);
       return this;
@@ -25,5 +28,5 @@ export function createVertexArray(gl: WebGL2RenderingContext) {
       buffers.add(buffer);
       return this;
     }
-  });
+  };
 }

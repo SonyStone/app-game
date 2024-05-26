@@ -1,4 +1,4 @@
-function webgl(gl: WebGL2RenderingContext) {
+function webgl(gl: WebGL2RenderingContextStrict) {
   // ! textures
   {
     gl.activeTexture;
@@ -245,7 +245,7 @@ function webgl(gl: WebGL2RenderingContext) {
     gl.isEnabled;
     gl.lineWidth; // depricated?
 
-    gl.makeXRCompatible; // VR stuff
+    // gl.makeXRCompatible; // VR stuff
 
     gl.polygonOffset;
 

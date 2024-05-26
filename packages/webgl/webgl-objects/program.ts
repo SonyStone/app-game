@@ -1,6 +1,6 @@
-import { GL_SHADER_TYPE } from '../static-variables';
+import type { WebGLRenderingContextStrict } from '../webgl-strict-types/webgl';
 
-function createShader(gl: WebGL2RenderingContext, type: GL_SHADER_TYPE, source: string) {
+function createShader(gl: WebGLRenderingContextStrict, type: WebGLRenderingContextStrict.ShaderType, source: string) {
   var shader = gl.createShader(type)!;
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
@@ -22,141 +22,198 @@ export interface ProgramParams<U, A> {
 }
 
 export function createProgram<U, A>(
-  gl: WebGL2RenderingContext,
+  gl: WebGLRenderingContextStrict,
   { vert, frag, uniforms, attributes }: ProgramParams<U, A>
 ) {
-  const vertexShader = createShader(gl, GL_SHADER_TYPE.VERTEX_SHADER, vert)!;
-  const fragmentShader = createShader(gl, GL_SHADER_TYPE.FRAGMENT_SHADER, frag)!;
+  let program: WebGLProgram | null = null;
+  const uniformData = {} as { [key: string]: any };
+  const uniformExData = [] as {
+    name: string;
+    setUniform: (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, value: any) => void;
+    location?: WebGLUniformLocation;
+  }[];
 
-  const program = gl.createProgram()!;
-  gl.attachShader(program, vertexShader);
-  gl.attachShader(program, fragmentShader);
-  gl.linkProgram(program);
+  const createProgram = () => {
+    if (program) {
+      return;
+    }
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vert)!;
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, frag)!;
 
-  const success = gl.getProgramParameter(program, gl.LINK_STATUS);
-  if (!success) {
-    console.log(gl.getProgramInfoLog(program));
-    gl.deleteProgram(program);
-  }
+    program = gl.createProgram()!;
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
 
-  return Object.assign(program, {
+    const success = gl.getProgramParameter(program, gl.LINK_STATUS);
+    if (!success) {
+      console.log(gl.getProgramInfoLog(program));
+      gl.deleteProgram(program);
+    }
+  };
+
+  let isLocations = false;
+  const setLocations = () => {
+    for (const uniform of uniformExData) {
+      uniform.location = gl.getUniformLocation(program!, uniform.name)!;
+    }
+  };
+
+  const setUniforms = () => {
+    for (const uniform of uniformExData) {
+      uniform.setUniform(gl, uniform.location!, uniformData[uniform.name]);
+    }
+  };
+
+  createProgram();
+
+  return {
     use() {
+      createProgram();
       gl.useProgram(program);
+      if (!isLocations) {
+        setLocations();
+        isLocations = true;
+      }
+      setUniforms();
     },
     unuse() {
       gl.useProgram(null);
     },
-    getAttribLocation(name: string) {
-      return gl.getAttribLocation(program, name);
-    },
-    ...createUniforms(gl, program, uniforms),
-    ...createAttributes(gl, program, attributes)
-  });
+    ...createUniforms(uniformData, uniformExData, uniforms),
+    ...createAttributes(gl, program!, attributes)
+  };
+}
+
+export interface UniformsParams {
+  name: (name: string) => {
+    location: WebGLUniformLocation;
+
+    vec2(): (vec2: Iterable<number>) => void;
+
+    uniform1f(): (value: number) => void;
+    uniform3fv(): (vec3: Iterable<number>) => void;
+    uniform4fv(): (vec4: Iterable<number>) => void;
+
+    int(): (value: number) => void;
+    ivec2(): (vec2: Iterable<number>) => void;
+    ivec3(): (vec3: Iterable<number>) => void;
+    ivec4(): (vec4: Iterable<number>) => void;
+
+    sampler2D(): (value: number) => void;
+    samplerCube(): (value: number) => void;
+
+    mat2(): (mat2: Iterable<number>) => void;
+    mat3(): (mat3: Iterable<number>) => void;
+    mat4(): (mat4: Iterable<number>) => void;
+
+    bool(): (value: boolean) => void;
+  };
 }
 
 /**
  * build uniforms quick acsess
  */
-type UniformsBuilder<T> = (obj: {
-  name: (name: string) => {
-    location: WebGLUniformLocation;
-    uniform1f(value: number): void;
-    vec2(vec2: Iterable<number>): void;
-    uniform3fv(vec3: Iterable<number>): void;
-    uniform4fv(vec4: Iterable<number>): void;
-    int(value: number): void;
-    ivec2(vec2: Iterable<number>): void;
-    ivec3(vec3: Iterable<number>): void;
-    ivec4(vec4: Iterable<number>): void;
-    sampler2D(value: number): void;
-    samplerCube(value: number): void;
+export type UniformsBuilder<T> = (obj: UniformsParams) => T;
 
-    mat2(mat2: Iterable<number>): void;
-    mat3(mat3: Iterable<number>): void;
-    mat4(mat4: Iterable<number>): void;
-
-    bool(value: boolean): void;
-  };
-}) => T;
-
-const createUniforms = <T>(gl: WebGL2RenderingContext, program: WebGLProgram, builder?: UniformsBuilder<T>) => {
-  function getUniformLocation(name: string) {
-    return gl.getUniformLocation(program, name)!;
-  }
-
+const createUniforms = <T>(
+  uniformData: { [key: string]: any },
+  uniformExData: {
+    name: string;
+    setUniform: (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, value: any) => void;
+    location?: WebGLUniformLocation;
+  }[],
+  builder?: UniformsBuilder<T>
+) => {
   if (!builder) {
     return {} as T;
   }
 
-  const uniforms = builder({
+  return builder({
     name(name: string) {
-      const location = getUniformLocation(name);
+      const setter = <T>(value: T) => {
+        uniformData[name] = value;
+      };
+
       return {
-        location,
-        uniform1f(value: number) {
-          gl.uniform1f(location, value);
+        uniform1f() {
+          uniformExData.push({ name, setUniform: uniform1f });
+          return setter<number>;
         },
-        vec2(vec2: Iterable<number>) {
-          gl.uniform2fv(location, vec2);
+        vec2() {
+          uniformExData.push({ name, setUniform: uniform2fv });
+          return setter;
         },
-        uniform3fv(vec3: Iterable<number>) {
-          gl.uniform3fv(location, vec3);
+        uniform3fv() {
+          uniformExData.push({ name, setUniform: uniform3fv });
+          return setter;
         },
-        uniform4fv(vec4: Iterable<number>) {
-          gl.uniform4fv(location, vec4);
+        uniform4fv() {
+          uniformExData.push({ name, setUniform: uniform4fv });
+          return setter;
         },
-        int(value: number) {
-          gl.uniform1i(location, value);
+        int() {
+          uniformExData.push({ name, setUniform: uniform1i });
+          return setter;
         },
-        ivec2(vec2: Iterable<number>) {
-          gl.uniform2iv(location, vec2);
+        ivec2() {
+          uniformExData.push({ name, setUniform: uniform2iv });
+          return setter;
         },
-        ivec3(vec3: Iterable<number>) {
-          gl.uniform3iv(location, vec3);
+        ivec3() {
+          uniformExData.push({ name, setUniform: uniform3iv });
+          return setter;
         },
-        ivec4(vec4: Iterable<number>) {
-          gl.uniform4iv(location, vec4);
+        ivec4() {
+          uniformExData.push({ name, setUniform: uniform4iv });
+          return setter;
         },
-        sampler2D(value: number) {
-          gl.uniform1i(location, value);
+        sampler2D() {
+          uniformExData.push({ name, setUniform: uniform1i });
+          return setter;
         },
-        samplerCube(value: number) {
-          gl.uniform1i(location, value);
+        samplerCube() {
+          uniformExData.push({ name, setUniform: uniform1i });
+          return setter;
         },
 
-        mat2(mat2: Iterable<number>) {
-          gl.uniformMatrix2fv(location, false, mat2);
+        mat2() {
+          uniformExData.push({ name, setUniform: uniformMatrix2fv });
+          return setter;
         },
-        mat3(mat3: Iterable<number>) {
-          gl.uniformMatrix3fv(location, false, mat3);
+        mat3() {
+          uniformExData.push({ name, setUniform: uniformMatrix3fv });
+          return setter;
         },
-        mat4(mat4: Iterable<number>) {
-          gl.uniformMatrix4fv(location, false, mat4);
+        mat4() {
+          uniformExData.push({ name, setUniform: uniformMatrix4fv });
+          return setter;
         },
 
-        bool(value: boolean) {
-          gl.uniform1i(location, +value);
+        bool() {
+          uniformExData.push({ name, setUniform: uniform1i });
+          return setter;
         }
       };
     }
   });
-
-  return uniforms;
 };
 
-type AttributesBuilder<T> = (obj: {
+export interface AttributesParams {
   name: (name: string) => {
     location: number;
     pointer(size: number, type: number, stride: number, offset: number): void;
   };
-}) => T;
+}
+
+type AttributesBuilder<T> = (obj: AttributesParams) => T;
 
 // createBuffer
 // bindBuffer
 // bufferData
 // unbind bindBuffer()
 
-function createAttributes<T>(gl: WebGL2RenderingContext, program: WebGLProgram, builder?: AttributesBuilder<T>) {
+function createAttributes<T>(gl: WebGLRenderingContextStrict, program: WebGLProgram, builder?: AttributesBuilder<T>) {
   function getAttribLocation(name: string) {
     return gl.getAttribLocation(program, name);
   }
@@ -170,7 +227,7 @@ function createAttributes<T>(gl: WebGL2RenderingContext, program: WebGLProgram, 
       const location = getAttribLocation(name);
       return {
         location,
-        pointer(size: number, type: number, stride: number, offset: number) {
+        pointer(size: 1 | 2 | 3 | 4, type: WebGLRenderingContextStrict.ArrayType, stride: number, offset: number) {
           gl.vertexAttribPointer(location, size, type, false, stride, offset);
           gl.enableVertexAttribArray(location);
         }
@@ -180,3 +237,26 @@ function createAttributes<T>(gl: WebGL2RenderingContext, program: WebGLProgram, 
 
   return attributes;
 }
+
+const uniform1f = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, value: number) =>
+  gl.uniform1f(location, value);
+const uniform2fv = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, vec2: Float32List) =>
+  gl.uniform2fv(location, vec2);
+const uniform3fv = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, vec3: Float32List) =>
+  gl.uniform3fv(location, vec3);
+const uniform4fv = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, vec4: Float32List) =>
+  gl.uniform4fv(location, vec4);
+const uniform1i = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, value: number) =>
+  gl.uniform1i(location, value);
+const uniform2iv = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, vec2: Int32List) =>
+  gl.uniform2iv(location, vec2);
+const uniform3iv = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, vec3: Int32List) =>
+  gl.uniform3iv(location, vec3);
+const uniform4iv = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, vec4: Int32List) =>
+  gl.uniform4iv(location, vec4);
+const uniformMatrix2fv = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, mat2: Float32List) =>
+  gl.uniformMatrix2fv(location, false, mat2);
+const uniformMatrix3fv = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, mat3: Float32List) =>
+  gl.uniformMatrix3fv(location, false, mat3);
+const uniformMatrix4fv = (gl: WebGLRenderingContextStrict, location: WebGLUniformLocation, mat4: Float32List) =>
+  gl.uniformMatrix4fv(location, false, mat4);

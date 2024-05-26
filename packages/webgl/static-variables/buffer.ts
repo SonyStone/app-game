@@ -1,7 +1,40 @@
 import { GL_CONST } from './static-variables';
 
-export const enum GL_BUFFER_TARGET {
+export const enum BUFFER_TARGET {
   /**
+   * buffer type for using attribute data
+   *
+   * Buffer containing vertex attributes, such as vertex coordinates, texture coordinate data, or vertex color data.
+   */
+  ARRAY_BUFFER = GL_CONST.ARRAY_BUFFER,
+
+  /**
+   * buffer type for using as an index buffer
+   *
+   * Buffer used for element indices.
+   */
+  ELEMENT_ARRAY_BUFFER = GL_CONST.ELEMENT_ARRAY_BUFFER
+}
+
+export const enum BUFFER_DATA_USAGE {
+  /**
+   * The data store contents will be modified once and used at most a few times.
+   */
+  STREAM_DRAW = GL_CONST.STREAM_DRAW,
+
+  /**
+   * The data store contents will be modified once and used many times.
+   */
+  STATIC_DRAW = GL_CONST.STATIC_DRAW,
+
+  /**
+   * The data store contents will be modified repeatedly and used many times.
+   */
+  DYNAMIC_DRAW = GL_CONST.DYNAMIC_DRAW
+}
+
+export const enum GL_BUFFER_TARGET {
+  /**ц
    * buffer type for using attribute data
    *
    * Buffer containing vertex attributes, such as vertex coordinates, texture coordinate data, or vertex color data.
