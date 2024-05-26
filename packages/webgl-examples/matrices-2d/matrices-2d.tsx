@@ -1,35 +1,48 @@
 import { FMat3, Vec2 } from '@packages/math';
-import { GL_BUFFER_USAGE } from '@packages/webgl/static-variables';
-import { GL_BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
+import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
+import { createBuffer } from '@packages/webgl/webgl-objects/buffer';
 import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
+import { createProgram } from '@packages/webgl/webgl-objects/program';
+import { createVertexArray } from '@packages/webgl/webgl-objects/vertex-array-object';
 import { createSignal, onMount } from 'solid-js';
 import { effect } from 'solid-js/web';
 import { vec4 } from 'wgpu-matrix';
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 
+/**
+ * 
+ * @example
+ * ```tsx
+ * <Canvas>
+ *  <WebGL2 />
+ *  <Camera2d />
+ *  <Programm />
+ * </Canvas>
+ * ```
+ */
+
 export default function Matrices2d() {
-  const canvas = (<canvas class="w-full aspect-square max-w-600px" />) as HTMLCanvasElement;
+  const canvas = (<canvas class="max-w-600px aspect-square w-full" />) as HTMLCanvasElement;
 
   const gl = createWebGL2Renderer(canvas);
 
-  const program = gl.createProgram({
+  const program = createProgram(gl.context, {
     vert: vertexShaderSource,
     frag: fragmentShaderSource,
     attributes: (attribute) => ({
-      position: attribute.name('a_position').location
+      position: attribute.name('a_position')
     }),
     uniforms: (uniform) => ({
-      color: uniform.name('u_color').uniform4fv,
-      matrix: uniform.name('u_matrix').mat3
+      color: uniform.name('u_color').uniform4fv(),
+      matrix: uniform.name('u_matrix').mat3()
     })
   });
 
-  const positionBuffer = gl
-    .createBuffer({
-      target: GL_BUFFER_TARGET.ARRAY_BUFFER,
-      usage: GL_BUFFER_USAGE.STATIC_DRAW
-    })
+  const positionBuffer = createBuffer(gl.context, {
+    target: BUFFER_TARGET.ARRAY_BUFFER,
+    usage: BUFFER_DATA_USAGE.STATIC_DRAW
+  })
     .data(
       new Float32Array([
         // left column
@@ -44,7 +57,7 @@ export default function Matrices2d() {
     )
     .bind();
 
-  const vao = gl.createVertexArray().attribPointer(program.position, 2, 0, 0);
+  const vao = createVertexArray(gl.context).attribPointer(program.position.location, 2, 0, 0);
 
   const [translation, serTranslation] = createSignal(Vec2.create(150, 100), {
     equals: (a, b) => !a.equals(b)
@@ -55,12 +68,13 @@ export default function Matrices2d() {
 
   function drawScene() {
     resizeCanvasToDisplaySize(canvas);
-    gl.clear();
-    gl.viewport();
-    program.use();
     program.color(color);
     const matrix = projection(canvas.width, canvas.height).translate(translation()).rotateY(rotation).scale(scale);
     program.matrix(matrix);
+
+    gl.clear();
+    gl.viewport();
+    program.use();
     vao.bind();
     gl.draw.triangles(18);
   }

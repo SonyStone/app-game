@@ -189,7 +189,7 @@ export const routes: Routes[] = [
     path: '/model-biewer',
     name: '[WIP] Model Viewer',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/webgl-examples/model-viewer/model-viewer'))
+    component: lazy(() => import('@packages/webgl-examples/ogl-model-viewer/model-viewer'))
   },
   {
     path: '/webgpu-examples',
@@ -229,13 +229,19 @@ export const routes: Routes[] = [
         path: '/meshing',
         name: 'Meshing [WIP]',
         Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
-        component: lazy(() => import('@packages/webgl-examples/meshing/meshing'))
+        component: lazy(() => import('@packages/webgl-examples/ogl-meshing/meshing'))
       },
       {
         path: '/instanced-drawing',
         name: 'Instanced Drawing',
         Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
         component: lazy(() => import('@packages/webgl-examples/instanced-drawing/instanced-drawing'))
+      },
+      {
+        path: '/blending-modes',
+        name: 'Blending Modes',
+        Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/webgl-examples/ogl-blending-modes/ogl-blending-modes'))
       }
     ]
   },
@@ -375,6 +381,12 @@ export const routes: Routes[] = [
         name: 'OGL Frustum',
         Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
         component: lazy(() => import('@packages/ogl-examples/frustum/frustum'))
+      },
+      {
+        path: '/ogl-mouse-flowmap',
+        name: 'OGL Mouse Flowmap',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/mouse-flowmap/mouse-flowmap'))
       }
     ]
   },
