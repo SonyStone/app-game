@@ -2,12 +2,12 @@ import { Camera, GridHelper, Orbit, Renderer, Transform, Vec3 } from '@packages/
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { Show, createEffect, createResource, createSignal } from 'solid-js';
+import { Show, createEffect, createMemo, createResource, createSignal } from 'solid-js';
 
 import { RenderTargetOptions } from '@packages/ogl/core/render-target';
 import { Vec3Tuple } from '@packages/ogl/math/vec-3';
 import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
-import { BlendModes } from './blend-modes';
+import { BlendModes, ColorBlendModes } from './blend-modes';
 import { createBlendRenderTarget } from './blend/blend-render-target';
 import { createBrushInstancingRenderTarget } from './brush-instancing/brush-instancing';
 import { createBrushRenderTarget } from './brush/brush-render-target';
@@ -16,6 +16,7 @@ import { PlaneWithTextureComponent } from './plane-with-texture.component';
 import large_red_bricks_diff_1k from './swap/large_red_bricks_diff_1k.jpg?url';
 import { createSwapRenderTarget } from './swap/swap-render-target';
 import { createColorTexture } from './utils/black-texture';
+import { hexToRgb, normalizedToRgb, rgbToHex, rgbToNormalized } from './utils/color-functions';
 import { loadTextureAsync } from './utils/load-texture';
 
 export default function OglSwapTexturesView() {
@@ -72,10 +73,44 @@ export default function OglSwapTexturesView() {
   });
   start();
 
-  const [blendMode, setBlendMode] = createSignal(BlendModes.NORMAL);
+  const [blendMode, setBlendMode] = makePersisted(createSignal(BlendModes.NORMAL), {
+    storage: sessionStorage,
+    name: 'blendMode'
+  });
+  const [colorBlendMode, setColorBlendMode] = makePersisted(createSignal(ColorBlendModes.USING_GAMMA), {
+    storage: sessionStorage,
+    name: 'colorBlendMode'
+  });
   const [transparent, setTransparent] = createSignal(false);
   const [opacity, setOpacity] = createSignal(1.0);
   const [instancedCount, setInstancedCount] = createSignal(300);
+  const [brushColor, setBrushColor] = makePersisted(
+    createSignal<[number, number, number]>(normalizedToRgb([0.27, 0.66, 0.93])),
+    {
+      storage: sessionStorage,
+      name: 'brushColor'
+    }
+  );
+  const [backgroundType, setBackgroundType] = makePersisted(createSignal<'color' | 'red-bricks'>('color'), {
+    storage: sessionStorage,
+    name: 'backgroundType'
+  });
+  const [backgroundColor, setBackgroundColor] = makePersisted(createSignal<[number, number, number]>([10, 30, 70]), {
+    storage: sessionStorage,
+    name: 'backgroundColor'
+  });
+  const colorTexture = createColorTexture(gl, backgroundColor);
+  const [redBricks] = createResource(() => loadTextureAsync(gl, large_red_bricks_diff_1k), {
+    initialValue: colorTexture()
+  });
+  const background = createMemo(() => {
+    switch (backgroundType()) {
+      case 'color':
+        return colorTexture();
+      case 'red-bricks':
+        return redBricks();
+    }
+  });
 
   const renderTargetOptions: Partial<RenderTargetOptions> = {
     width: 1024,
@@ -86,25 +121,32 @@ export default function OglSwapTexturesView() {
     depth: false
   };
 
-  const bg = createColorTexture(gl, [10, 30, 70]);
-  const [redBricks] = createResource(() => loadTextureAsync(gl, large_red_bricks_diff_1k), { initialValue: bg });
-  const brush = createBrushRenderTarget({ gl, options: renderTargetOptions });
-  const layers = createLayersRenderTarget({ gl, texture: brush.texture, options: renderTargetOptions });
+  const brush = createBrushRenderTarget({
+    gl,
+    options: renderTargetOptions,
+    color: createMemo(() => rgbToNormalized(brushColor()))
+  });
+  const layers = createLayersRenderTarget({
+    gl,
+    texture: () => brush().texture,
+    options: renderTargetOptions
+  });
   const swap = createSwapRenderTarget({ gl, options: renderTargetOptions });
   const brushInstancing = createBrushInstancingRenderTarget({
     gl,
-    texture: brush.texture,
+    texture: () => brush().texture,
     instancedCount,
+    color: createMemo(() => rgbToNormalized(brushColor())),
     options: renderTargetOptions
   });
   const layers2 = createBlendRenderTarget({
     gl,
-    texture1: redBricks,
-    texture2: brushInstancing.texture,
+    texture1: background,
+    texture2: () => brushInstancing().texture,
     blendMode,
     opacity,
-    refresh: instancedCount,
-    options: renderTargetOptions
+    options: renderTargetOptions,
+    colorBlendMode
   });
 
   return (
@@ -112,37 +154,55 @@ export default function OglSwapTexturesView() {
       {canvas}
       <PlaneWithTextureComponent gl={gl} parent={scene} position={[-1, 0.5, 0.0]} texture={swap.texture} />
       <PlaneWithTextureComponent gl={gl} parent={scene} position={[0, 0.5, 0.0]} texture={layers.texture} />
-      <PlaneWithTextureComponent gl={gl} parent={scene} position={[1, 0.5, 0.0]} texture={brush.texture} transparent />
-      <PlaneWithTextureComponent gl={gl} parent={scene} position={[1, 0.5, -0.1]} texture={bg} transparent />
+      <PlaneWithTextureComponent
+        gl={gl}
+        parent={scene}
+        position={[1, 0.5, 0.0]}
+        texture={() => brush().texture}
+        transparent
+      />
+      <PlaneWithTextureComponent gl={gl} parent={scene} position={[1, 0.5, -0.1]} texture={background} transparent />
       <PlaneWithTextureComponent
         gl={gl}
         parent={scene}
         position={[0, 1.6, 0.0]}
-        texture={brushInstancing.texture}
+        texture={() => brushInstancing().texture}
         transparent
       />
       <PlaneWithTextureComponent gl={gl} parent={scene} position={[-1, 1.6, 0.0]} texture={layers2.texture} />
       <Show when={false}>
         <></>
       </Show>
-      <div class="absolute bottom-0 start-0 flex flex-col border bg-white p-2">
-        <button onClick={() => setTransparent(!transparent())}>toggle</button>
+      <div class="absolute bottom-0 end-0 flex flex-col border bg-white p-2">
         <div>
-          <label for="blend-mode-select">Choose a BlendMode:</label>
+          <label for="blend-mode-select">Blend Mode:</label>
           <select
             id="blend-mode-select"
             onChange={(e) => {
               setBlendMode(+e.currentTarget.value as BlendModes);
             }}
           >
-            <option value={BlendModes.NORMAL}>Noraml</option>
+            <option value={BlendModes.NORMAL}>Normal</option>
             <option value={BlendModes.MULTIPLY}>Multiply</option>
             <option value={BlendModes.SCREEN}>Screen</option>
             <option value={BlendModes.OVERLAY}>Overlay</option>
           </select>
         </div>
+        <div>
+          <label for="blend-mode-select">Color Blend Mode:</label>
+          <select
+            id="blend-mode-select"
+            onChange={(e) => {
+              setColorBlendMode(+e.currentTarget.value as ColorBlendModes);
+            }}
+          >
+            <option value={ColorBlendModes.USING_GAMMA}>Using Gamma 1.0 Blending</option>
+            <option value={ColorBlendModes.DEFAULT}>Default</option>
+            <option value={ColorBlendModes.HSV}>HSV</option>
+          </select>
+        </div>
 
-        <label for="opacity-select">Opacity:</label>
+        <label for="opacity-select">Opacity: {opacity()}</label>
         <input
           id="opacity-select"
           name="opacity"
@@ -164,6 +224,36 @@ export default function OglSwapTexturesView() {
           value={instancedCount()}
           onInput={(e) => setInstancedCount(parseFloat((e.target as any).value))}
         />
+        <label for="brush-color-select">Brush Color: {instancedCount()}</label>
+        <input
+          id="brush-color-select"
+          name="brushColor"
+          type="color"
+          value={rgbToHex(brushColor())}
+          onInput={(e) => setBrushColor(hexToRgb((e.target as any).value))}
+        />
+        <div>
+          <label for="background-type-select">Background Type:</label>
+          <select
+            id="background-type-select"
+            onChange={(e) => {
+              setBackgroundType(e.currentTarget.value as 'color' | 'red-bricks');
+            }}
+          >
+            <option value={'color'}>Color</option>
+            <option value={'red-bricks'}>Ref Bricks</option>
+          </select>
+        </div>
+        <Show when={backgroundType() === 'color'}>
+          <label for="background-color-select">Background Color: {instancedCount()}</label>
+          <input
+            id="background-color-select"
+            name="backgroundColor"
+            type="color"
+            value={rgbToHex(backgroundColor())}
+            onInput={(e) => setBackgroundColor(hexToRgb((e.target as any).value))}
+          />
+        </Show>
       </div>
     </>
   );

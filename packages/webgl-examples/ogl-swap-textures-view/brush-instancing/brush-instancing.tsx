@@ -2,7 +2,7 @@ import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@pack
 import { RenderTargetOptions } from '@packages/ogl/core/render-target';
 import { Square } from '@packages/ogl/extras/square';
 import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
-import { Accessor, createEffect } from 'solid-js';
+import { Accessor, createEffect, createSignal } from 'solid-js';
 import { curve } from '../utils/curve';
 import fragment from './brush-instancing.frag?raw';
 import vertex from './brush-instancing.vert?raw';
@@ -11,6 +11,7 @@ export const createBrushInstancingRenderTarget = ({
   gl,
   texture,
   instancedCount = 300,
+  color,
   options = {
     width: 1024,
     height: 1024,
@@ -21,11 +22,13 @@ export const createBrushInstancingRenderTarget = ({
   }
 }: {
   gl: OGLRenderingContext;
-  texture?: Texture;
+  texture?: Texture | Accessor<Texture | undefined>;
+  color?: [number, number, number] | Accessor<[number, number, number] | undefined>;
   instancedCount?: number | Accessor<number | undefined>;
   options?: Partial<RenderTargetOptions>;
 }) => {
   const layer = new RenderTarget(gl, options);
+  const [layerS, setLayerS] = createSignal(layer, { equals: () => false });
 
   {
     const points = [
@@ -55,10 +58,11 @@ export const createBrushInstancingRenderTarget = ({
         }
       });
       // geometry.instancedCount = 300;
+      const tBrush = { value: typeof texture === 'function' ? texture() : texture };
       const program = new Program(gl, {
         vertex,
         fragment,
-        uniforms: { tBrush: { value: texture } },
+        uniforms: { tBrush },
         transparent: true,
         blendFunc: {
           src: gl.SRC_ALPHA,
@@ -68,14 +72,18 @@ export const createBrushInstancingRenderTarget = ({
         }
       });
       const mesh = new Mesh(gl, { geometry, program });
-      gl.clearColor(0.27, 0.66, 0.93, 0);
+      const uColor = {
+        value: (typeof color === 'function' ? color() : color) ?? ([0, 0, 0] as [number, number, number])
+      };
+      gl.clearColor(uColor.value[0], uColor.value[1], uColor.value[2], 0);
       gl.renderer.render({
         scene: mesh,
         target: layer,
         clear: true
       });
+      setLayerS(layer);
     });
   }
 
-  return layer;
+  return layerS;
 };

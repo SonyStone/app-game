@@ -4,7 +4,7 @@ import { Square } from '@packages/ogl/extras/square';
 import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
 import { Accessor } from 'solid-js';
 import { effect } from 'solid-js/web';
-import { BlendModes } from '../blend-modes';
+import { BlendModes, ColorBlendModes } from '../blend-modes';
 import fragment from './blend.frag?raw';
 import vertex from './blend.vert?raw';
 
@@ -13,8 +13,8 @@ export const createBlendRenderTarget = (props: {
   texture1?: Texture | Accessor<Texture | undefined>;
   texture2?: Texture | Accessor<Texture | undefined>;
   blendMode?: BlendModes | Accessor<BlendModes | undefined>;
+  colorBlendMode?: ColorBlendModes | Accessor<ColorBlendModes | undefined>;
   opacity?: number | Accessor<number | undefined>;
-  refresh?: any | Accessor<any | undefined>;
   options?: Partial<RenderTargetOptions>;
 }) => {
   const {
@@ -36,6 +36,11 @@ export const createBlendRenderTarget = (props: {
   const blendMode = {
     value: (typeof props.blendMode === 'function' ? props.blendMode() : props.blendMode) ?? BlendModes.NORMAL
   };
+  const colorBlendMode = {
+    value:
+      (typeof props.colorBlendMode === 'function' ? props.colorBlendMode() : props.colorBlendMode) ??
+      ColorBlendModes.DEFAULT
+  };
   const uOpacity = { value: typeof props.opacity === 'function' ? props.opacity() : props.opacity ?? 1.0 };
   const program = new Program(gl, {
     vertex,
@@ -44,6 +49,7 @@ export const createBlendRenderTarget = (props: {
       tMap1,
       tMap2,
       blendMode,
+      colorBlendMode,
       uOpacity
     }
   });
@@ -61,9 +67,10 @@ export const createBlendRenderTarget = (props: {
     if (typeof props.opacity === 'function') {
       uOpacity.value = props.opacity() ?? 1.0;
     }
-    if (typeof props.refresh === 'function') {
-      props.refresh();
+    if (typeof props.colorBlendMode === 'function') {
+      colorBlendMode.value = props.colorBlendMode() ?? ColorBlendModes.DEFAULT;
     }
+
     gl.renderer.render({
       scene: mesh,
       target: layer,

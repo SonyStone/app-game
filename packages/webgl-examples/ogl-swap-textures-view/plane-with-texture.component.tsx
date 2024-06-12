@@ -1,26 +1,33 @@
 import { Mesh, OGLRenderingContext, Plane, Texture, Transform } from '@packages/ogl';
 import { TextureProgram } from '@packages/ogl/extras/texture-program';
 import { Vec3Tuple } from '@packages/ogl/math/vec-3';
-import { onCleanup } from 'solid-js';
+import { Accessor, onCleanup } from 'solid-js';
 import { effect } from 'solid-js/web';
 
 export const PlaneWithTextureComponent = (props: {
   gl: OGLRenderingContext;
   parent: Transform;
-  texture: Texture;
+  texture: Texture | Accessor<Texture | undefined>;
   transparent?: boolean;
   position?: Vec3Tuple;
   rotation?: Vec3Tuple;
 }) => {
+  const tMap = { value: typeof props.texture === 'function' ? props.texture() : props.texture };
   const plane = new Mesh(props.gl, {
     geometry: new Plane(props.gl),
     program: new TextureProgram(props.gl, {
       uniforms: {
-        tMap: { value: props.texture }
+        tMap
       },
       depthTest: true,
       transparent: props.transparent ?? false
     })
+  });
+
+  effect(() => {
+    if (typeof props.texture === 'function') {
+      tMap.value = props.texture();
+    }
   });
 
   effect(() => {

@@ -4,6 +4,8 @@ import { RenderTargetOptions } from '@packages/ogl/core/render-target';
 import { Square } from '@packages/ogl/extras/square';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
+import { Accessor } from 'solid-js';
+import { effect } from 'solid-js/web';
 import { BlendModes } from '../blend-modes';
 import fragment from './layers-texture.frag?raw';
 import vertex from './layers-texture.vert?raw';
@@ -27,7 +29,7 @@ export const createLayersRenderTarget = ({
   }
 }: {
   gl: OGLRenderingContext;
-  texture?: Texture;
+  texture?: Texture | Accessor<Texture | undefined>;
   options?: Partial<RenderTargetOptions>;
 }) => {
   const mockTexture = createTexture4colors(gl);
@@ -35,7 +37,7 @@ export const createLayersRenderTarget = ({
   const layer1 = new RenderTarget(gl, options); // black background
 
   const textureInput = { value: layer1.texture };
-  const brushInput = { value: texture };
+  const brushInput = { value: typeof texture === 'function' ? texture() : texture };
 
   const blendMode = { value: BlendModes.NORMAL };
   const opacity = { value: 1.0 };
@@ -79,10 +81,15 @@ export const createLayersRenderTarget = ({
   opacity.value = 0.9;
   const layer2 = new RenderTarget(gl, options);
   // ! render to render target
-  gl.renderer.render({
-    scene: mesh,
-    target: layer2,
-    clear: false
+  effect(() => {
+    if (typeof texture === 'function') {
+      brushInput.value = texture();
+    }
+    gl.renderer.render({
+      scene: mesh,
+      target: layer2,
+      clear: false
+    });
   });
 
   return layer2;

@@ -18,3 +18,9 @@ export const enum BlendModes {
   // COLOR = 15,
   // LUMINOSITY = 16
 }
+
+export const enum ColorBlendModes {
+  DEFAULT = 0,
+  USING_GAMMA = 1,
+  HSV = 2
+}
