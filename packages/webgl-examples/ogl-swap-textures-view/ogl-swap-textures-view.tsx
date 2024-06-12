@@ -103,14 +103,14 @@ export default function OglSwapTexturesView() {
   const [redBricks] = createResource(() => loadTextureAsync(gl, large_red_bricks_diff_1k), {
     initialValue: colorTexture()
   });
-  const background = createMemo(() => {
+  const background = () => {
     switch (backgroundType()) {
       case 'color':
         return colorTexture();
       case 'red-bricks':
         return redBricks();
     }
-  });
+  };
 
   const renderTargetOptions: Partial<RenderTargetOptions> = {
     width: 1024,
