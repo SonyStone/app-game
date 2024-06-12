@@ -1,12 +1,13 @@
 // TODO: test stencil and depth
 import { Texture } from './texture';
 
+import { GL_FRAMEBUFFER_TARGET, GL_RENDERBUFFER_TARGET } from '@packages/webgl/static-variables';
 import type { OGLRenderingContext } from './renderer';
 
 export interface RenderTargetOptions {
   width: number;
   height: number;
-  target: GLenum;
+  target: GL_FRAMEBUFFER_TARGET;
   color: number;
   depth: boolean;
   stencil: boolean;
@@ -24,6 +25,20 @@ export interface RenderTargetOptions {
 
 /**
  * A render target.
+ *
+ * WebGL framebuffer, texture, and renderbuffer.
+ *
+ * using Framebuffer:
+ * * createFramebuffer
+ * * bindFramebuffer
+ * * framebufferTexture2D
+ * * drawBuffers
+ *
+ * using Renderbuffer:
+ * * createRenderbuffer
+ * * bindRenderbuffer
+ * * renderbufferStorage
+ * * framebufferRenderbuffer
  */
 export class RenderTarget {
   gl: OGLRenderingContext;
@@ -45,7 +60,7 @@ export class RenderTarget {
     {
       width = gl.canvas.width,
       height = gl.canvas.height,
-      target = gl.FRAMEBUFFER,
+      target = GL_FRAMEBUFFER_TARGET.FRAMEBUFFER,
       color = 1, // number of color attachments
       depth = true,
       stencil = false,
@@ -133,15 +148,15 @@ export class RenderTarget {
       // Render buffers
       if (depth && !stencil) {
         this.depthBuffer = this.gl.createRenderbuffer()!;
-        this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, this.depthBuffer);
-        this.gl.renderbufferStorage(this.gl.RENDERBUFFER, this.gl.DEPTH_COMPONENT16, width, height);
+        this.gl.bindRenderbuffer(GL_RENDERBUFFER_TARGET.RENDERBUFFER, this.depthBuffer);
+        this.gl.renderbufferStorage(GL_RENDERBUFFER_TARGET.RENDERBUFFER, this.gl.DEPTH_COMPONENT16, width, height);
         this.gl.framebufferRenderbuffer(this.target, this.gl.DEPTH_ATTACHMENT, this.gl.RENDERBUFFER, this.depthBuffer);
       }
 
       if (stencil && !depth) {
         this.stencilBuffer = this.gl.createRenderbuffer()!;
-        this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, this.stencilBuffer);
-        this.gl.renderbufferStorage(this.gl.RENDERBUFFER, this.gl.STENCIL_INDEX8, width, height);
+        this.gl.bindRenderbuffer(GL_RENDERBUFFER_TARGET.RENDERBUFFER, this.stencilBuffer);
+        this.gl.renderbufferStorage(GL_RENDERBUFFER_TARGET.RENDERBUFFER, this.gl.STENCIL_INDEX8, width, height);
         this.gl.framebufferRenderbuffer(
           this.target,
           this.gl.STENCIL_ATTACHMENT,
@@ -152,8 +167,8 @@ export class RenderTarget {
 
       if (depth && stencil) {
         this.depthStencilBuffer = this.gl.createRenderbuffer()!;
-        this.gl.bindRenderbuffer(this.gl.RENDERBUFFER, this.depthStencilBuffer);
-        this.gl.renderbufferStorage(this.gl.RENDERBUFFER, this.gl.DEPTH_STENCIL, width, height);
+        this.gl.bindRenderbuffer(GL_RENDERBUFFER_TARGET.RENDERBUFFER, this.depthStencilBuffer);
+        this.gl.renderbufferStorage(GL_RENDERBUFFER_TARGET.RENDERBUFFER, this.gl.DEPTH_STENCIL, width, height);
         this.gl.framebufferRenderbuffer(
           this.target,
           this.gl.DEPTH_STENCIL_ATTACHMENT,

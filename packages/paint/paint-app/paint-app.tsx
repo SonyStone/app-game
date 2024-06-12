@@ -1,12 +1,10 @@
 import { FMat3 } from '@packages/math';
-import { GL_BUFFER_USAGE } from '@packages/webgl/static-variables';
-import { GL_BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
 import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 
 export default function PaintApp() {
-  const canvas = (<canvas class="w-full aspect-square max-w-1024px" />) as HTMLCanvasElement;
+  const canvas = (<canvas class="max-w-1024px aspect-square w-full" />) as HTMLCanvasElement;
 
   const gl = createWebGL2Renderer(canvas);
 
@@ -26,13 +24,13 @@ export default function PaintApp() {
   // Create a buffer and put three 2d clip space points in it
   const positionBuffer = gl
     .createBuffer({
-      target: GL_BUFFER_TARGET.ARRAY_BUFFER,
-      usage: GL_BUFFER_USAGE.STATIC_DRAW
+      target: gl.context.ARRAY_BUFFER,
+      usage: gl.context.STATIC_DRAW
     })
     .data(new Float32Array([0, 0, 512, 0, 0, 512, 0, 512, 512, 0, 512, 512]))
     .bind();
 
-  const vao = gl.createVertexArray().addBuffer(positionBuffer).attribPointer(program.position, 2, 0, 0);
+  const vao = gl.createVertexArray().addBuffer(positionBuffer.buffer!).attribPointer(program.position, 2, 0, 0);
 
   canvas.width = 1024;
   canvas.height = 1024;

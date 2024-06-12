@@ -238,12 +238,12 @@ export class Geometry {
     }
 
     // Check if any attributes need updating
-    program.attributeLocations.forEach((location, { name }) => {
+    for (const [{ name }, location] of program.attributeLocations) {
       const attr = this.attributes[name];
       if (attr.needsUpdate) {
         this.updateAttribute(attr);
       }
-    });
+    }
 
     // For drawElements, offset needs to be multiple of type size
     let indexBytesPerElement = 2;

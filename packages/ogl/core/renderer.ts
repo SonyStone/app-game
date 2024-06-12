@@ -1,4 +1,5 @@
 import {
+  BLENDING_FACTOR,
   EXTENSIONS,
   GL_BLEND_EQUATION,
   GL_CAPABILITIES,
@@ -11,6 +12,7 @@ import {
 } from '@packages/webgl/static-variables';
 import { Vec3 } from '../math/vec-3';
 
+import { GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
 import type { Camera } from './camera';
 import type { Mesh } from './mesh';
 import type { RenderTarget } from './render-target';
@@ -56,8 +58,8 @@ export interface DeviceParameters {
 }
 
 export interface BlendFunc {
-  src: GL_FUNC_SEPARATE;
-  dst: GL_FUNC_SEPARATE;
+  src: BLENDING_FACTOR;
+  dst: BLENDING_FACTOR;
   srcAlpha?: GL_FUNC_SEPARATE;
   dstAlpha?: GL_FUNC_SEPARATE;
 }
@@ -74,7 +76,7 @@ export interface Viewport {
   height: number | null;
 }
 
-export type TextureUnit = number & { __brand: 'TextureUnit' };
+export type TextureUnit = (number & { __brand: 'TextureUnit' }) | GL_TEXTURE_UNIT;
 
 export const DEFAULT_TEXTURE_UNITS = 0 as TextureUnit;
 

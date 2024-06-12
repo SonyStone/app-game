@@ -1,8 +1,8 @@
 import { GridHelperComponent } from '@packages/math-examples/grid-helper.component';
 import { Camera, Orbit, Renderer, Texture, Transform, Vec3 } from '@packages/ogl';
-import { BLENDING_FACTOR, GL_CAPABILITIES } from '@packages/webgl/static-variables';
+import { BLENDING_FACTOR } from '@packages/webgl/static-variables';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { For, onCleanup } from 'solid-js';
+import { For } from 'solid-js';
 import { effect } from 'solid-js/web';
 import { PlaneComponent } from './plane.component';
 
@@ -10,6 +10,7 @@ import { TextureProgram } from './texture-program/texture-program';
 import fabric_pattern_07_col_1_1k from './textures/fabric_pattern_07_col_1_1k.png?url';
 import large_red_bricks_diff_1k from './textures/large_red_bricks_diff_1k.jpg?url';
 
+import createRAF from '@solid-primitives/raf';
 import { blendingProgram } from './blending-program/blending-program';
 
 /**
@@ -38,7 +39,7 @@ export default function OglBlendingModes() {
 
   gl.clearColor(0.9, 0.9, 0.9, 1);
 
-  renderer.enable(GL_CAPABILITIES.BLEND);
+  // renderer.enable(GL_CAPABILITIES.BLEND);
 
   const largeRedBricks = (() => {
     const texture = new Texture(gl);
@@ -69,18 +70,12 @@ export default function OglBlendingModes() {
     return program;
   })();
 
-  let requestID = requestAnimationFrame(update);
-  function update(t?: number | any) {
+  const [, start, stop] = createRAF((t: number) => {
     controls.update();
     program.uniforms.u_time.value = t * 0.001;
     renderer.render({ scene, camera });
-
-    requestID = requestAnimationFrame(update);
-  }
-
-  onCleanup(() => {
-    cancelAnimationFrame(requestID);
   });
+  start();
 
   const blendsFactorsX = [
     BLENDING_FACTOR.ZERO,

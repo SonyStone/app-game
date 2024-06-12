@@ -26,6 +26,7 @@ export function TextureRenderTargetComponent(props: {
       tMap: { value: renderTarget.texture }
     }
   });
+  targetProgram.setBlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
   const geometry = new Plane(gl, { width: 1, height: 1 });
   const mesh = new Mesh(gl, { geometry: geometry, program: targetProgram });
@@ -36,6 +37,7 @@ export function TextureRenderTargetComponent(props: {
   gl.clearColor(1, 1, 1, 1);
 
   props.render?.(() => {
+    // console.log(renderer, targetProgram, gl.isEnabled(gl.BLEND));
     // gl.enable(gl.STENCIL_TEST);
     // gl.stencilFunc(gl.ALWAYS, 1, 0xff);
     // gl.stencilOp(gl.KEEP, gl.REPLACE, gl.REPLACE);

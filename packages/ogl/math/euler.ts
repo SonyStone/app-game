@@ -5,7 +5,7 @@ import { QuatTuple } from './quat';
 
 const tmpMat4 = /* @__PURE__ */ new Mat4();
 
-export type EulerTuple = [x: number, y: number, z: number] | number[];
+export type EulerTuple = [x: number, y: number, z: number] | number[] | Float32Array;
 
 export type EulerOrder = 'XYZ' | 'XZY' | 'YXZ' | 'YZX' | 'ZXY' | 'ZYX';
 

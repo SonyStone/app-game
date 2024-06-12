@@ -1,13 +1,14 @@
 import { Mesh } from '../core/mesh';
 import { Program } from '../core/program';
-import { RenderTarget } from '../core/render-target';
 import { Triangle } from './triangle';
 
 import { FVec2 } from '@packages/math';
+import { GL_DATA_TYPE } from '@packages/webgl/static-variables/data-type';
 import { OGLRenderingContext } from '../core/renderer';
 import { Texture } from '../core/texture';
 import fragment from './flowmap.frag?raw';
 import vertex from './flowmap.vert?raw';
+import { SwapBuffering, createSwapBuffering } from './swap-buffering';
 
 export interface FlowmapOptions {
   size: number;
@@ -17,17 +18,11 @@ export interface FlowmapOptions {
   type: number;
 }
 
-interface SwapMask {
-  read: RenderTarget;
-  write: RenderTarget;
-  swap(): void;
-}
-
 export class Flowmap {
   // output uniform containing render target textures
   uniform: { value: Texture } = { value: null as any };
 
-  mask: SwapMask;
+  mask: SwapBuffering;
 
   aspect = 1;
   mouse = new FVec2();
@@ -41,7 +36,7 @@ export class Flowmap {
       size = 128, // default size of the render targets
       falloff = 0.3, // size of the stamp, percentage of the size
       alpha = 1, // opacity of the stamp
-      dissipation = 0.98, // affects the speed that the stamp fades. Closer to 1 is slower
+      dissipation = 1, // affects the speed that the stamp fades. Closer to 1 is slower
       type // Pass in gl.FLOAT to force it, defaults to gl.HALF_FLOAT
     }: Partial<FlowmapOptions> = {}
   ) {
@@ -71,11 +66,11 @@ export class Flowmap {
       target: this.mask.write,
       clear: false
     });
-    this.mask.swap();
+    this.uniform.value = this.mask.swap();
   }
 }
 
-function initProgram({
+const initProgram = ({
   gl,
   uniform,
   falloff,
@@ -91,8 +86,8 @@ function initProgram({
   dissipation: number;
   mouse: FVec2;
   velocity: FVec2;
-}) {
-  return new Mesh(gl, {
+}) =>
+  new Mesh(gl, {
     // Triangle that includes -1 to 1 range for 'position', and 0 to 1 range for 'uv'.
     geometry: new Triangle(gl),
 
@@ -114,22 +109,26 @@ function initProgram({
       depthTest: false
     })
   });
-}
 
-function createFBOs({
+/**
+ * Frame Buffer Objects (FBOs)
+ * @param param0
+ * @returns
+ */
+const createFBOs = ({
   gl,
   type,
   size,
   uniform
 }: {
   gl: OGLRenderingContext;
-  type?: number;
+  type?: GL_DATA_TYPE;
   size: number;
   uniform: { value: Texture };
-}) {
+}) => {
   // Requested type not supported, fall back to half float
   if (!type) {
-    type = (gl as WebGL2RenderingContext).HALF_FLOAT || gl.renderer.extensions['OES_texture_half_float'].HALF_FLOAT_OES;
+    type = GL_DATA_TYPE.HALF_FLOAT || gl.renderer.extensions['OES_texture_half_float'].HALF_FLOAT_OES;
   }
 
   let minFilter = (() => {
@@ -141,26 +140,19 @@ function createFBOs({
     height: size,
     type,
     format: gl.RGBA,
-    internalFormat: type === gl.FLOAT ? (gl as WebGL2RenderingContext).RGBA32F : (gl as WebGL2RenderingContext).RGBA16F,
+    internalFormat:
+      type === GL_DATA_TYPE.FLOAT ? (gl as WebGL2RenderingContext).RGBA32F : (gl as WebGL2RenderingContext).RGBA16F,
 
     minFilter,
     depth: false
   };
 
-  const mask = {
-    read: new RenderTarget(gl, options),
-    write: new RenderTarget(gl, options),
+  const mask = createSwapBuffering({
+    gl,
+    options
+  });
 
-    // Helper function to ping pong the render targets and update the uniform
-    swap: () => {
-      let temp = mask.read;
-      mask.read = mask.write;
-      mask.write = temp;
-      uniform.value = mask.read.texture;
-    }
-  };
-
-  mask.swap();
+  uniform.value = mask.swap();
 
   return mask;
-}
+};

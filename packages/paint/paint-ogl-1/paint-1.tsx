@@ -6,8 +6,9 @@ import { Camera, Orbit, RenderTarget, Renderer, Transform, Vec3 } from '@package
 import { Vec2 } from '@packages/math';
 import { SphereComponent } from '@packages/math-examples/camera-projection-webgl2/sphere.component';
 import { createRaycast } from '@packages/math-examples/raycast';
-import { GL_CAPABILITIES, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
+import { GL_CAPABILITIES } from '@packages/webgl/static-variables';
 import { createEmitter } from '@solid-primitives/event-bus';
+import createRAF from '@solid-primitives/raf';
 import { Brush1Component } from './brush-1/brush.component';
 import { Brush2Component } from './brush-2/brush-2.component';
 import { mouseNormalize } from './mouse-normalize';
@@ -19,7 +20,8 @@ export default () => {
   const gl = renderer.gl;
   gl.clearColor(0.9, 0.9, 0.9, 1);
   renderer.enable(GL_CAPABILITIES.BLEND);
-  renderer.setBlendFunc(GL_FUNC_SEPARATE.SRC_ALPHA, GL_FUNC_SEPARATE.ONE);
+  // renderer.setBlendFunc(GL_FUNC_SEPARATE.SRC_ALPHA, GL_FUNC_SEPARATE.ONE);
+  renderer.setBlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
   const sceenCamera = new Camera({ fov: 35 });
   sceenCamera.position.set(0, 0, 1.7);
@@ -74,27 +76,24 @@ export default () => {
     }
 
     update();
-    // cancelAnimationFrame(requestID);
   };
 
   document.addEventListener('pointermove', clickHandler);
   document.addEventListener('wheel', update);
 
-  let requestID = requestAnimationFrame(update);
   const renderEvent = createEmitter<void>();
   function update(t?: number | any) {
     controls.update();
 
     renderer.render({ scene: scene, camera: sceenCamera });
-
-    // requestID = requestAnimationFrame(update);
   }
 
+  const [running, start, stop] = createRAF(update);
+  start();
+
   onCleanup(() => {
-    // cancelAnimationFrame(requestID);
     document.removeEventListener('pointermove', clickHandler);
     document.removeEventListener('wheel', update);
-    controls.remove();
   });
 
   return (
@@ -113,7 +112,7 @@ export default () => {
         <Brush1Component gl={gl} brushScene={brushScene} position={brushPos()} />
       </Show>
       <Show when={true}>
-        <Brush2Component gl={gl} brushScene={brushScene} position={brushPos()} renderTarget={renderTarget} />
+        <Brush2Component gl={gl} brushScene={brushScene} position={brushPos()} />
       </Show>
       <Show when={false}>
         <SphereComponent gl={gl} scene={brushScene} position={brushPos()} radius={0.01} />

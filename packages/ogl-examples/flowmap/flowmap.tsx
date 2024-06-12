@@ -35,10 +35,13 @@ export default () => {
   const geometry = new Triangle(gl);
   // const geometry = new Plane(gl);
 
-  const texture = new Texture(gl, { wrapS: gl.REPEAT, wrapT: gl.REPEAT });
-  const img = new Image();
-  img.onload = () => (texture.image = img);
-  img.src = waterSrc;
+  const texture = (() => {
+    const texture = new Texture(gl, { wrapS: gl.REPEAT, wrapT: gl.REPEAT });
+    const img = new Image();
+    img.onload = () => (texture.image = img);
+    img.src = waterSrc;
+    return texture;
+  })();
 
   const program = new Program(gl, {
     vertex,
@@ -113,7 +116,7 @@ export default () => {
     renderer.render({ scene: mesh, camera });
   }
 
-  const [running, start, stop] = createRAF(update);
+  const [, start] = createRAF(update);
   start();
 
   return gl.canvas;

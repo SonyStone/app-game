@@ -13,7 +13,7 @@ export function blendingProgram(props: { gl: OGLRenderingContext; blendFunc?: Bl
       u_color: { value: new Vec3(1, 1, 1) }
     },
     cullFace: false,
-    depthTest: false,
+    depthTest: true,
     transparent: true,
     blendFunc
   });

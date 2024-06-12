@@ -78,7 +78,7 @@ export default function Helpers() {
     renderer.render({ scene, camera });
   }
 
-  const [running, start, stop] = createRAF(update);
+  const [, start] = createRAF(update);
   start();
 
   return gl.canvas;

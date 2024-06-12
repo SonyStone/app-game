@@ -17,9 +17,11 @@ import JingliuHeadPosition from './JingliuMod/Jingliuf0000Mod/JingliuHeadPositio
 import JingliuHeadTexcoord from './JingliuMod/Jingliuf0000Mod/JingliuHeadTexcoord.buf?Float32Array';
 import HeaderFile from './JingliuMod/Jingliuf0000Mod/backup_DISABLEDJingliu.txt?raw';
 
-import { onCleanup } from 'solid-js';
+import { createEffect } from 'solid-js';
 import { checkerTexture } from './checker-texture';
 
+import createRAF from '@solid-primitives/raf';
+import { createWindowSize } from '@solid-primitives/resize-observer';
 import { loadModel } from './create-view-model';
 import { viewTexture } from './view-texture';
 import { viewUVMap } from './view-uv-map';
@@ -61,12 +63,11 @@ function simpleBufferView(canvas: HTMLCanvasElement) {
 
   const controls = new Orbit(camera, { target: new Vec3(0, 1.43, 0) });
 
-  function resize() {
-    renderer.setSize(window.innerWidth, window.innerHeight);
+  const resize = createWindowSize();
+  createEffect(() => {
+    renderer.setSize(resize.width, resize.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
-  }
-  window.addEventListener('resize', resize, false);
-  resize();
+  });
 
   const scene = new Transform();
 
@@ -160,15 +161,9 @@ function simpleBufferView(canvas: HTMLCanvasElement) {
     }
   );
 
-  let requestID = requestAnimationFrame(update);
-  function update(t: number) {
-    requestID = requestAnimationFrame(update);
-
+  const [, start] = createRAF((t: number) => {
     controls.update();
     renderer.render({ scene, camera });
-  }
-
-  onCleanup(() => {
-    cancelAnimationFrame(requestID);
   });
+  start();
 }

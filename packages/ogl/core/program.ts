@@ -1,4 +1,4 @@
-import { GL_CAPABILITIES, GL_DATA_TYPE, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
+import { BLENDING_FACTOR, GL_CAPABILITIES, GL_DATA_TYPE, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
 import type { BlendEquation, BlendFunc, OGLRenderingContext } from './renderer';
 
 // TODO: upload empty texture if null ? maybe not
@@ -18,6 +18,7 @@ export interface ProgramOptions {
   stencilTest: boolean;
   depthWrite: boolean;
   depthFunc: GLenum;
+  blendFunc: BlendFunc;
 }
 
 export interface UniformInfo extends WebGLActiveInfo {
@@ -37,13 +38,13 @@ export class Program {
   uniforms: Record<string, any>;
   id: number;
 
-  transparent: boolean;
+  transparent = false;
   cullFace: GLenum | false | null;
   frontFace: GLenum;
   depthTest: boolean;
   depthWrite: boolean;
   depthFunc: GLenum;
-  blendFunc: BlendFunc;
+  blendFunc = {} as BlendFunc;
   blendEquation: BlendEquation;
 
   program: WebGLProgram;
@@ -63,7 +64,8 @@ export class Program {
       frontFace = gl.CCW,
       depthTest = true,
       depthWrite = true,
-      depthFunc = gl.LESS
+      depthFunc = gl.LESS,
+      blendFunc = {} as any
     }: Partial<ProgramOptions> = {}
   ) {
     if (!gl.canvas) {
@@ -81,30 +83,21 @@ export class Program {
     }
 
     // Store program state
-    this.transparent = transparent;
+    this.blendFunc = blendFunc;
+    this.setTransparent(transparent);
     this.cullFace = cullFace;
     this.frontFace = frontFace;
     this.depthTest = depthTest;
     this.depthWrite = depthWrite;
     this.depthFunc = depthFunc;
-    this.blendFunc = {} as any;
     this.blendEquation = {} as any;
-
-    // set default blendFunc if transparent flagged
-    if (this.transparent && !this.blendFunc.src) {
-      if (this.gl.renderer.premultipliedAlpha) {
-        this.setBlendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
-      } else {
-        this.setBlendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
-      }
-    }
 
     // compile vertex shader and log errors
     const vertexShader = gl.createShader(gl.VERTEX_SHADER)!;
     gl.shaderSource(vertexShader, vertex!);
     gl.compileShader(vertexShader);
     if (gl.getShaderInfoLog(vertexShader) !== '') {
-      console.warn(`${gl.getShaderInfoLog(vertexShader)}\nVertex Shader\n${addLineNumbers(vertex)}`);
+      throw new Error(`${gl.getShaderInfoLog(vertexShader)}\nVertex Shader\n${addLineNumbers(vertex)}`);
     }
 
     // compile fragment shader and log errors
@@ -112,7 +105,7 @@ export class Program {
     gl.shaderSource(fragmentShader, fragment!);
     gl.compileShader(fragmentShader);
     if (gl.getShaderInfoLog(fragmentShader) !== '') {
-      console.warn(`${gl.getShaderInfoLog(fragmentShader)}\nFragment Shader\n${addLineNumbers(fragment)}`);
+      throw new Error(`\n${gl.getShaderInfoLog(fragmentShader)}\nFragment Shader\n${addLineNumbers(fragment)}`);
     }
 
     // compile program and log errors
@@ -121,8 +114,7 @@ export class Program {
     gl.attachShader(this.program, fragmentShader);
     gl.linkProgram(this.program);
     if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
-      console.warn(gl.getProgramInfoLog(this.program));
-      return;
+      throw new Error(gl.getProgramInfoLog(this.program)!);
     }
 
     // Remove shader once linked
@@ -158,9 +150,24 @@ export class Program {
     this.attributeOrder = locations.join('');
   }
 
+  setTransparent(transparent: boolean): void {
+    this.transparent = transparent;
+
+    // set default blendFunc if transparent flagged
+    if (this.transparent && !this.blendFunc.src) {
+      if (this.gl.renderer.premultipliedAlpha) {
+        this.setBlendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
+      } else {
+        this.setBlendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
+      }
+    } else if (this.transparent === false) {
+      this.blendFunc = {} as BlendFunc;
+    }
+  }
+
   setBlendFunc(
-    src: GL_FUNC_SEPARATE,
-    dst: GL_FUNC_SEPARATE,
+    src: BLENDING_FACTOR,
+    dst: BLENDING_FACTOR,
     srcAlpha?: GL_FUNC_SEPARATE,
     dstAlpha?: GL_FUNC_SEPARATE
   ): void {
@@ -225,7 +232,7 @@ export class Program {
     }
 
     // Set only the active uniforms found in the shader
-    this.uniformLocations.forEach((location, activeUniform) => {
+    for (const [activeUniform, location] of this.uniformLocations) {
       let uniform = this.uniforms[activeUniform.uniformName];
 
       for (const component of activeUniform.nameComponents) {
@@ -255,10 +262,12 @@ export class Program {
 
       if (uniform.value.texture) {
         textureUnit = textureUnit + 1;
+        // console.log('textureUnit', textureUnit);
 
         // Check if texture needs to be updated
         uniform.value.update(textureUnit);
-        return setUniform(this.gl, activeUniform.type, location, textureUnit);
+        setUniform(this.gl, activeUniform.type, location, textureUnit);
+        continue;
       }
 
       // For texture arrays, set uniform as an array of texture units instead of just one
@@ -270,14 +279,17 @@ export class Program {
           textureUnits.push(textureUnit);
         });
 
-        return setUniform(this.gl, activeUniform.type, location, textureUnits);
+        setUniform(this.gl, activeUniform.type, location, textureUnits);
+        continue;
       }
 
       setUniform(this.gl, activeUniform.type, location, uniform.value);
-    });
+    }
 
     this.applyState();
-    if (flipFaces) this.gl.renderer.setFrontFace(this.frontFace === this.gl.CCW ? this.gl.CW : this.gl.CCW);
+    if (flipFaces) {
+      this.gl.renderer.setFrontFace(this.frontFace === this.gl.CCW ? this.gl.CW : this.gl.CCW);
+    }
   }
 
   remove(): void {

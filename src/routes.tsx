@@ -242,6 +242,12 @@ export const routes: Routes[] = [
         name: 'Blending Modes',
         Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
         component: lazy(() => import('@packages/webgl-examples/ogl-blending-modes/ogl-blending-modes'))
+      },
+      {
+        path: '/ogl-swap-textures-view',
+        name: 'OGL Swap Textures View',
+        Preview: (props) => <Thumbnail href={'/webgl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/webgl-examples/ogl-swap-textures-view/ogl-swap-textures-view'))
       }
     ]
   },
@@ -371,6 +377,12 @@ export const routes: Routes[] = [
         component: lazy(() => import('@packages/ogl-examples/flowmap/flowmap'))
       },
       {
+        path: '/ogl-mouse-flowmap',
+        name: 'OGL Mouse Flowmap',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/mouse-flowmap/mouse-flowmap'))
+      },
+      {
         path: '/ogl-raycasting',
         name: 'OGL Raycasting',
         Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
@@ -387,6 +399,12 @@ export const routes: Routes[] = [
         name: 'OGL Mouse Flowmap',
         Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
         component: lazy(() => import('@packages/ogl-examples/mouse-flowmap/mouse-flowmap'))
+      },
+      {
+        path: '/ogl-instancing',
+        name: 'OGL Instancing',
+        Preview: (props) => <Thumbnail href={'/ogl-examples' + props.path} name={props.name} />,
+        component: lazy(() => import('@packages/ogl-examples/ogl-instancing/ogl-instancing'))
       }
     ]
   },

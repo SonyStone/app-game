@@ -55,6 +55,15 @@ export interface TextureOptions {
 
 /**
  * A surface, reflection, or refraction map.
+ *
+ * uning:
+ * * createTexture
+ * * pixelStorei
+ * * texParameteri
+ * * texParameterf
+ * * texImage2D
+ * * compressedTexImage2D
+ * * generateMipmap
  */
 export class Texture {
   gl: OGLRenderingContext;

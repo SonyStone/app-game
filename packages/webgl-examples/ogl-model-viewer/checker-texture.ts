@@ -1,4 +1,5 @@
-import { Mesh, OGLRenderingContext, Plane, Program, Texture, Transform } from '@packages/ogl';
+import { Mesh, OGLRenderingContext, Plane, Program, Transform } from '@packages/ogl';
+import { createTexture4colors } from './texture-4-colors';
 import fragment from './view-texture.frag?raw';
 import vertex from './view-texture.vert?raw';
 
@@ -7,14 +8,7 @@ export function checkerTexture({ gl, scene }: { gl: OGLRenderingContext; scene: 
   plane.attributes.uv.data = new Float32Array([0, 4, 4, 4, 0, 0, 4, 0]);
   plane.attributes.uv.needsUpdate = true;
 
-  const texture4colors = new Texture(gl, {
-    image: new Uint8Array([191, 25, 54, 255, 96, 18, 54, 255, 96, 18, 54, 255, 37, 13, 53, 255]),
-    width: 2,
-    height: 2,
-    wrapS: gl.REPEAT,
-    wrapT: gl.REPEAT,
-    magFilter: gl.NEAREST
-  });
+  const texture4colors = createTexture4colors(gl);
 
   const program = new Program(gl, {
     vertex,

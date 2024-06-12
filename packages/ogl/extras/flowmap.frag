@@ -1,3 +1,4 @@
+#version 300 es
 precision highp float;
 
 uniform sampler2D tMap;
@@ -10,10 +11,12 @@ uniform float uAspect;
 uniform vec2 uMouse;
 uniform vec2 uVelocity;
 
-varying vec2 vUv;
+in vec2 vUv;
+
+out vec4 FragColor;
 
 void main() {
-    vec4 color = texture2D(tMap, vUv) * uDissipation;
+    vec4 color = texture(tMap, vUv) * uDissipation;
 
     vec2 cursor = vUv - uMouse;
     cursor.x *= uAspect;
@@ -23,5 +26,5 @@ void main() {
 
     color.rgb = mix(color.rgb, stamp, vec3(falloff));
 
-    gl_FragColor = color;
+    FragColor = color;
 }

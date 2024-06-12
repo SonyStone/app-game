@@ -4,6 +4,7 @@
 // TODO: be able to pass in new camera position
 
 import { FVec2 } from '@packages/math';
+import { makeEventListenerStack } from '@solid-primitives/event-listener';
 import type { Camera } from '../core/camera';
 import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';
@@ -274,6 +275,8 @@ export class Orbit {
       }
     }
 
+    const [listenMouse, clearMouse] = makeEventListenerStack(window, { capture: false });
+
     const onMouseDown = (e: MouseEvent) => {
       if (!this.enabled) return;
 
@@ -296,8 +299,10 @@ export class Orbit {
       }
 
       if (state !== STATE.NONE) {
-        window.addEventListener('mousemove', onMouseMove, false);
-        window.addEventListener('mouseup', onMouseUp, false);
+        listenMouse('mousemove', onMouseMove);
+        listenMouse('mouseup', onMouseUp);
+        // window.addEventListener('mousemove', onMouseMove, false);
+        // window.addEventListener('mouseup', onMouseUp, false);
       }
     };
 
@@ -321,8 +326,9 @@ export class Orbit {
     };
 
     const onMouseUp = () => {
-      window.removeEventListener('mousemove', onMouseMove, false);
-      window.removeEventListener('mouseup', onMouseUp, false);
+      clearMouse();
+      // window.removeEventListener('mousemove', onMouseMove, false);
+      // window.removeEventListener('mouseup', onMouseUp, false);
       state = STATE.NONE;
     };
 
@@ -387,24 +393,34 @@ export class Orbit {
       e.preventDefault();
     };
 
+    const [listen, clear] = makeEventListenerStack(element);
+
     function addHandlers() {
-      element.addEventListener('contextmenu', onContextMenu, false);
-      element.addEventListener('mousedown', onMouseDown as (e: Event) => void, false);
-      element.addEventListener('wheel', onMouseWheel as (e: Event) => void, { passive: false });
-      element.addEventListener('touchstart', onTouchStart as (e: Event) => void, { passive: false });
-      element.addEventListener('touchend', onTouchEnd, false);
-      element.addEventListener('touchmove', onTouchMove as (e: Event) => void, { passive: false });
+      listen('contextmenu', onContextMenu, false);
+      listen('mousedown', onMouseDown, false);
+      listen('wheel', onMouseWheel, { passive: false });
+      listen('touchstart', onTouchStart, { passive: false });
+      listen('touchend', onTouchEnd, false);
+      listen('touchmove', onTouchMove, { passive: false });
+      // element.addEventListener('contextmenu', onContextMenu, false);
+      // element.addEventListener('mousedown', onMouseDown as (e: Event) => void, false);
+      // element.addEventListener('wheel', onMouseWheel as (e: Event) => void, { passive: false });
+      // element.addEventListener('touchstart', onTouchStart as (e: Event) => void, { passive: false });
+      // element.addEventListener('touchend', onTouchEnd, false);
+      // element.addEventListener('touchmove', onTouchMove as (e: Event) => void, { passive: false });
     }
 
     this.remove = function () {
-      element.removeEventListener('contextmenu', onContextMenu);
-      element.removeEventListener('mousedown', onMouseDown as (e: Event) => void);
-      element.removeEventListener('wheel', onMouseWheel as (e: Event) => void);
-      element.removeEventListener('touchstart', onTouchStart as (e: Event) => void);
-      element.removeEventListener('touchend', onTouchEnd);
-      element.removeEventListener('touchmove', onTouchMove as (e: Event) => void);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      // element.removeEventListener('contextmenu', onContextMenu);
+      // element.removeEventListener('mousedown', onMouseDown as (e: Event) => void);
+      // element.removeEventListener('wheel', onMouseWheel as (e: Event) => void);
+      // element.removeEventListener('touchstart', onTouchStart as (e: Event) => void);
+      // element.removeEventListener('touchend', onTouchEnd);
+      // element.removeEventListener('touchmove', onTouchMove as (e: Event) => void);
+      // window.removeEventListener('mousemove', onMouseMove);
+      // window.removeEventListener('mouseup', onMouseUp);
+      clear();
+      clearMouse();
     };
 
     addHandlers();
