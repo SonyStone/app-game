@@ -11,22 +11,22 @@ export default function HomePage() {
       <Title>Home</Title>
       <header class=""></header>
 
-      <main class="p-6 mx-auto">
+      <main class="mx-auto p-6">
         <nav class="grid grid-cols-[repeat(auto-fit,_minmax(12rem,_1fr))] gap-4">
           <For each={routes}>
             {({ path, name, Preview, children }) => (
-              <Show when={!!children} fallback={<LinkPreview path={path} name={name} Preview={Preview} />}>
-                <div class="flex place-content-center place-items-center p-2 rounded-2 border-e-15 col-start-1 border-slate-200">
-                  <h2 class="text-4xl">{name}</h2>
-                </div>
-                <For each={children}>
-                  {({ path, name, Preview }) => <LinkPreview path={path} name={name} Preview={Preview} />}
-                </For>
-              </Show>
+              <>
+                <LinkPreview path={path} name={name} as={Preview} />
+                <Show when={!!children}>
+                  <For each={children}>
+                    {(child) => <LinkPreview path={path + child.path} name={child.name} as={child.Preview} />}
+                  </For>
+                </Show>
+              </>
             )}
           </For>
           <button
-            class="flex place-content-center place-items-center  p-2 bg-white border border-solid rounded"
+            class="flex place-content-center place-items-center  rounded border border-solid bg-white p-2"
             onClick={toggleCamera}
           >
             {cameraType()}
@@ -40,10 +40,10 @@ export default function HomePage() {
 const LinkPreview = (props: {
   path: string;
   name: string | JSX.Element;
-  Preview:
+  as:
     | Component<{
         name: string;
         path: string;
       }>
     | undefined;
-}) => (props.Preview ? <props.Preview path={props.path} name={props.name as string} /> : <></>);
+}) => (props.as ? <props.as path={props.path} name={props.name as string} /> : <></>);
