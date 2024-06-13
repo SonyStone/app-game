@@ -1,31 +1,32 @@
 import { OGLRenderingContext, Texture } from '@packages/ogl';
-import { Accessor, createSignal } from 'solid-js';
+import { MaybeAccessor, access } from '@solid-primitives/utils';
+import { createSignal, untrack } from 'solid-js';
 import { effect } from 'solid-js/web';
 
-export const createColorTexture = (
-  gl: OGLRenderingContext,
-  color: [number, number, number] | Accessor<[number, number, number]>
-) => {
-  const uColor = { value: typeof color === 'function' ? color() : color };
-  const texture = new Texture(gl, {
-    image: new Uint8Array([uColor.value[0], uColor.value[1], uColor.value[2], 255]),
-    width: 1,
-    height: 1,
-    wrapS: gl.REPEAT,
-    wrapT: gl.REPEAT,
-    magFilter: gl.NEAREST
-  });
-
-  const [textureS, setTextureS] = createSignal<Texture>(texture, { equals: () => false });
+export const createColorTexture = (gl: OGLRenderingContext, color: MaybeAccessor<[number, number, number]>) => {
+  let uColor = access(color);
+  const image = new Uint8Array([uColor[0], uColor[1], uColor[2], 255]);
+  const [texture, setTexture] = createSignal<Texture>(
+    new Texture(gl, {
+      image,
+      width: 1,
+      height: 1,
+      wrapS: gl.REPEAT,
+      wrapT: gl.REPEAT,
+      magFilter: gl.NEAREST
+    }),
+    { equals: () => false }
+  );
 
   effect(() => {
-    if (typeof color === 'function') {
-      uColor.value = color();
-    }
-    texture.image = new Uint8Array([uColor.value[0], uColor.value[1], uColor.value[2], 255]);
-    texture.needsUpdate = true;
-    setTextureS(texture);
+    const t = untrack(texture);
+    uColor = access(color);
+    image[0] = uColor[0];
+    image[1] = uColor[1];
+    image[2] = uColor[2];
+    t.needsUpdate = true;
+    setTexture(t);
   });
 
-  return textureS;
+  return texture;
 };

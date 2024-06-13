@@ -81,7 +81,6 @@ export default function OglSwapTexturesView() {
     storage: sessionStorage,
     name: 'colorBlendMode'
   });
-  const [transparent, setTransparent] = createSignal(false);
   const [opacity, setOpacity] = createSignal(1.0);
   const [instancedCount, setInstancedCount] = createSignal(300);
   const [brushColor, setBrushColor] = makePersisted(
@@ -137,7 +136,13 @@ export default function OglSwapTexturesView() {
     texture: () => brush().texture,
     instancedCount,
     color: createMemo(() => rgbToNormalized(brushColor())),
-    options: renderTargetOptions
+    options: renderTargetOptions,
+    points: [
+      [0.1, 0.1],
+      [0.1, 0.8],
+      [0.2, 0.9],
+      [0.9, 0.9]
+    ]
   });
   const layers2 = createBlendRenderTarget({
     gl,
@@ -153,7 +158,7 @@ export default function OglSwapTexturesView() {
     <>
       {canvas}
       <PlaneWithTextureComponent gl={gl} parent={scene} position={[-1, 0.5, 0.0]} texture={swap.texture} />
-      <PlaneWithTextureComponent gl={gl} parent={scene} position={[0, 0.5, 0.0]} texture={layers.texture} />
+      <PlaneWithTextureComponent gl={gl} parent={scene} position={[0, -0.5, 0.0]} texture={layers.texture} />
       <PlaneWithTextureComponent
         gl={gl}
         parent={scene}
@@ -165,11 +170,11 @@ export default function OglSwapTexturesView() {
       <PlaneWithTextureComponent
         gl={gl}
         parent={scene}
-        position={[0, 1.6, 0.0]}
+        position={[1, 0.5, 0.1]}
         texture={() => brushInstancing().texture}
         transparent
       />
-      <PlaneWithTextureComponent gl={gl} parent={scene} position={[-1, 1.6, 0.0]} texture={layers2.texture} />
+      <PlaneWithTextureComponent gl={gl} parent={scene} position={[0, 0.5, 0.0]} texture={layers2.texture} />
       <Show when={false}>
         <></>
       </Show>
@@ -224,7 +229,7 @@ export default function OglSwapTexturesView() {
           value={instancedCount()}
           onInput={(e) => setInstancedCount(parseFloat((e.target as any).value))}
         />
-        <label for="brush-color-select">Brush Color: {instancedCount()}</label>
+        <label for="brush-color-select">Brush Color:</label>
         <input
           id="brush-color-select"
           name="brushColor"
@@ -245,7 +250,7 @@ export default function OglSwapTexturesView() {
           </select>
         </div>
         <Show when={backgroundType() === 'color'}>
-          <label for="background-color-select">Background Color: {instancedCount()}</label>
+          <label for="background-color-select">Background Color:</label>
           <input
             id="background-color-select"
             name="backgroundColor"

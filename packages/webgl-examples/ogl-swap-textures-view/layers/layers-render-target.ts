@@ -3,10 +3,10 @@ import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@pack
 import { RenderTargetOptions } from '@packages/ogl/core/render-target';
 import { Square } from '@packages/ogl/extras/square';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
-import { Accessor } from 'solid-js';
+import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { effect } from 'solid-js/web';
 import { BlendModes } from '../blend-modes';
+import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
 import fragment from './layers-texture.frag?raw';
 import vertex from './layers-texture.vert?raw';
 
@@ -19,17 +19,10 @@ import vertex from './layers-texture.vert?raw';
 export const createLayersRenderTarget = ({
   gl,
   texture,
-  options = {
-    width: 1024,
-    height: 1024,
-    type: GL_DATA_TYPE.HALF_FLOAT,
-    format: gl.RGBA,
-    internalFormat: gl.RGBA16F,
-    depth: false
-  }
+  options = DEFAULTS_RENDER_TARGET_OPTIONS
 }: {
   gl: OGLRenderingContext;
-  texture?: Texture | Accessor<Texture | undefined>;
+  texture?: MaybeAccessor<Texture | undefined>;
   options?: Partial<RenderTargetOptions>;
 }) => {
   const mockTexture = createTexture4colors(gl);
@@ -37,11 +30,9 @@ export const createLayersRenderTarget = ({
   const layer1 = new RenderTarget(gl, options); // black background
 
   const textureInput = { value: layer1.texture };
-  const brushInput = { value: typeof texture === 'function' ? texture() : texture };
-
+  const brushInput = { value: access(texture) };
   const blendMode = { value: BlendModes.NORMAL };
   const opacity = { value: 1.0 };
-
   const lowerLeft = [-0.1, -0.1];
   const upperRight = [4, 4];
   const geometry = new Square(gl, {
@@ -82,9 +73,7 @@ export const createLayersRenderTarget = ({
   const layer2 = new RenderTarget(gl, options);
   // ! render to render target
   effect(() => {
-    if (typeof texture === 'function') {
-      brushInput.value = texture();
-    }
+    brushInput.value = access(texture);
     gl.renderer.render({
       scene: mesh,
       target: layer2,
