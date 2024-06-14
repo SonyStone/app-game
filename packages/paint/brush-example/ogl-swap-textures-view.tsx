@@ -43,7 +43,7 @@ export default function OglSwapTexturesView() {
     return camera;
   })();
   const targetVec3 = new Vec3().copy(target());
-  const controls = new Orbit(camera, { element: canvas, target: targetVec3 });
+  const controls = new Orbit(camera, { target: targetVec3 });
   const scene = new Transform();
 
   {
