@@ -20,7 +20,7 @@ import { hexToRgb, normalizedToRgb, rgbToHex, rgbToNormalized } from './utils/co
 import { loadTextureAsync } from './utils/load-texture';
 
 export default function OglSwapTexturesView() {
-  const canvas = (<canvas />) as HTMLCanvasElement;
+  const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
 
   const renderer = new Renderer({ dpr: 2, canvas });
   const gl = renderer.gl;

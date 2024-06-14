@@ -4,7 +4,7 @@ import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 
 export default function PaintApp() {
-  const canvas = (<canvas class="max-w-1024px aspect-square w-full" />) as HTMLCanvasElement;
+  const canvas = (<canvas class="max-w-1024px aspect-square w-full touch-none" />) as HTMLCanvasElement;
 
   const gl = createWebGL2Renderer(canvas);
 
