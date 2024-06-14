@@ -118,7 +118,6 @@ export default function LassoSelectExample() {
     let pointCount = 0;
 
     makeEventListener(window, 'pointerdown', (e) => {
-      console.log('pointerdown');
       if (e.button !== 0) return;
 
       isDrawing = true;
@@ -137,7 +136,6 @@ export default function LassoSelectExample() {
     });
 
     makeEventListener(window, 'pointermove', (e) => {
-      console.log('pointermove');
       if (!isDrawing) {
         return;
       }
@@ -147,7 +145,6 @@ export default function LassoSelectExample() {
     });
 
     makeEventListener(window, 'pointerup', () => {
-      console.log('pointerup');
       isDrawing = false;
       controls.enabled = true;
     });
