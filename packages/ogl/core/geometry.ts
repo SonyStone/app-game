@@ -16,6 +16,7 @@
 
 // TODO: fit in transform feedback
 
+import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
 import { Vec3 } from '../math/vec-3';
 
 import type { Program } from './program';
@@ -49,7 +50,8 @@ export interface Attribute {
   divisor: number;
   needsUpdate: boolean;
   usage: number;
-  location: number;
+
+  bufferSize: number;
 }
 
 export interface Bounds {
@@ -128,6 +130,10 @@ export class Geometry {
     attr.needsUpdate = false;
     attr.usage = attr.usage || this.gl.STATIC_DRAW;
 
+    // For check is the new buffer bigger then old one
+    // if bigger use bufferData, if not use bufferSubData
+    attr.bufferSize = attr.data?.length ?? 0;
+
     if (!attr.buffer) {
       // Push data to buffer
       this.updateAttribute(attr);
@@ -148,7 +154,7 @@ export class Geometry {
     }
   }
 
-  updateAttribute(attr: Partial<Attribute>): void {
+  private updateAttribute(attr: Partial<Attribute>): void {
     const isNewBuffer = !attr.buffer;
     if (isNewBuffer) {
       attr.buffer = this.gl.createBuffer()!;
@@ -156,26 +162,17 @@ export class Geometry {
     if (this.glState.boundBuffer !== attr.buffer) {
       this.gl.bindBuffer(attr.target!, attr.buffer!);
       this.glState.boundBuffer = attr.buffer;
-
-      // TODO
-      // ! I added it here to set new Buffer
-      // ! Without it the buffer is not set
-      {
-        this.gl.vertexAttribPointer(
-          attr.location!,
-          attr.size!,
-          attr.type!,
-          attr.normalized!,
-          attr.stride!,
-          attr.offset!
-        );
-      }
     }
     if (isNewBuffer) {
       this.gl.bufferData(attr.target!, attr.data!, attr.usage!);
     } else {
-      this.gl.bufferSubData(attr.target!, 0, attr.data!);
+      if (attr.data!.length > attr.bufferSize!) {
+        this.gl.bufferData(attr.target!, attr.data!, attr.usage!);
+      } else {
+        this.gl.bufferSubData(attr.target!, 0, attr.data!);
+      }
     }
+    attr.bufferSize = attr.data!.length;
     attr.needsUpdate = false;
   }
 
@@ -198,59 +195,76 @@ export class Geometry {
     this.bindAttributes(program);
   }
 
+  // vao should be binded before calling this
   bindAttributes(program: Program): void {
     // Link all attributes to program using gl.vertexAttribPointer
-    program.attributeLocations.forEach((location, { name, type }) => {
-      // If geometry missing a required shader attribute
-      if (!this.attributes[name]) {
-        console.warn(`active attribute ${name} not being supplied`);
-        return;
-      }
-
-      const attr = this.attributes[name];
-
-      this.gl.bindBuffer(attr.target!, attr.buffer!);
-      this.glState.boundBuffer = attr.buffer;
-
-      // For matrix attributes, buffer needs to be defined per column
-      let numLoc = 1;
-      if (type === 35674) numLoc = 2; // mat2
-      if (type === 35675) numLoc = 3; // mat3
-      if (type === 35676) numLoc = 4; // mat4
-
-      const size = attr.size! / numLoc;
-      const stride = numLoc === 1 ? 0 : numLoc * numLoc * 4;
-      const offset = numLoc === 1 ? 0 : numLoc * 4;
-
-      for (let i = 0; i < numLoc; i++) {
-        attr.location = location + i;
-        this.gl.vertexAttribPointer(
-          location + i,
-          size,
-          attr.type!,
-          attr.normalized!,
-          attr.stride! + stride,
-          attr.offset! + i * offset
-        );
-        this.gl.enableVertexAttribArray(location + i);
-
-        // For instanced attributes, divisor needs to be set.
-        // For firefox, need to set back to 0 if non-instanced drawn after instanced. Else won't render
-        this.gl.vertexAttribDivisor!(location + i, attr.divisor!);
-      }
-    });
+    for (const [{ name, type }, location] of program.attributeLocations) {
+      this.bindAttribute(location, name, type);
+    }
 
     // Bind indices if geometry indexed
-    if (this.attributes.index) this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.attributes.index.buffer!);
+    if (this.attributes.index) {
+      this.gl.bindBuffer(this.gl.ELEMENT_ARRAY_BUFFER, this.attributes.index.buffer!);
+    }
+  }
+
+  // vao should be binded before calling this
+  private bindAttribute(location: number, name: string, type: number): void {
+    // If geometry missing a required shader attribute
+    if (!this.attributes[name]) {
+      console.warn(`active attribute ${name} not being supplied`);
+      return;
+    }
+
+    const attr = this.attributes[name];
+
+    this.gl.bindBuffer(attr.target!, attr.buffer!);
+    this.glState.boundBuffer = attr.buffer;
+
+    // For matrix attributes, buffer needs to be defined per column
+    let numLoc = 1;
+    switch (type) {
+      case GL_CONST.FLOAT_MAT2:
+        numLoc = 2;
+        break;
+      case GL_CONST.FLOAT_MAT3:
+        numLoc = 3;
+        break;
+      case GL_CONST.FLOAT_MAT4:
+        numLoc = 4;
+        break;
+    }
+
+    const size = attr.size! / numLoc;
+    const stride = numLoc === 1 ? 0 : numLoc * numLoc * 4;
+    const offset = numLoc === 1 ? 0 : numLoc * 4;
+
+    for (let i = 0; i < numLoc; i++) {
+      this.gl.vertexAttribPointer(
+        location + i,
+        size,
+        attr.type!,
+        attr.normalized!,
+        attr.stride! + stride,
+        attr.offset! + i * offset
+      );
+      this.gl.enableVertexAttribArray(location + i);
+
+      // For instanced attributes, divisor needs to be set.
+      // For firefox, need to set back to 0 if non-instanced drawn after instanced. Else won't render
+      this.gl.vertexAttribDivisor!(location + i, attr.divisor!);
+    }
   }
 
   draw({ program, mode = this.gl.TRIANGLES }: { program: Program; mode?: number }): void {
-    if (this.gl.renderer.currentGeometry !== `${this.id}_${program.attributeOrder}`) {
+    const geometryId = `${this.id}_${program.attributeOrder}`;
+    // console.log('draw', geometryId);
+    if (this.gl.renderer.currentGeometry !== geometryId) {
       if (!this.VAOs[program.attributeOrder]) {
         this.createVAO(program);
       }
       this.gl.bindVertexArray!(this.VAOs[program.attributeOrder]);
-      this.gl.renderer.currentGeometry = `${this.id}_${program.attributeOrder}`;
+      this.gl.renderer.currentGeometry = geometryId;
     }
 
     // Check if any attributes need updating
@@ -258,6 +272,8 @@ export class Geometry {
       const attr = this.attributes[name];
       if (attr.needsUpdate) {
         this.updateAttribute(attr);
+        // only need for new gl buffer object
+        // this.bindAttribute(location!, name!, attr.type!);
       }
     }
 
@@ -293,6 +309,8 @@ export class Geometry {
     }
   }
 
+  // TODO: ? why is it here?
+  // TODO: move to other object?
   getPosition(): Partial<Attribute> | undefined {
     // Use position buffer, or min/max if available
     const attr = this.attributes.position;
@@ -308,6 +326,8 @@ export class Geometry {
     return;
   }
 
+  // TODO: ? why is it here?
+  // TODO: move to other object?
   computeBoundingBox(attr: Partial<Attribute>): void {
     if (!attr) {
       attr = this.getPosition()!;
@@ -354,6 +374,8 @@ export class Geometry {
     center.add(min, max).divide(2);
   }
 
+  // TODO: ? why is it here?
+  // TODO: move to other object?
   computeBoundingSphere(attr?: Partial<Attribute>): void {
     if (!attr) attr = this.getPosition();
     const array = attr!.data!;

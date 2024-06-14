@@ -81,7 +81,7 @@ export default function LassoSelectExample() {
         newPoints.set(points.data);
         points.data = newPoints;
         // set as isNewBuffer to true to force the buffer to be recreated
-        points.buffer = undefined as any;
+        // points.buffer = undefined as any;
         points.needsUpdate = true;
       }
     };
@@ -117,7 +117,7 @@ export default function LassoSelectExample() {
     let isDrawing = false;
     let pointCount = 0;
 
-    makeEventListener(canvas, 'pointerdown', (e) => {
+    makeEventListener(window, 'pointerdown', (e) => {
       if (e.button !== 0) return;
 
       isDrawing = true;
@@ -135,7 +135,7 @@ export default function LassoSelectExample() {
       addPoint(e);
     });
 
-    makeEventListener(canvas, 'pointermove', (e) => {
+    makeEventListener(window, 'pointermove', (e) => {
       if (!isDrawing) {
         return;
       }
@@ -144,11 +144,9 @@ export default function LassoSelectExample() {
       addPoint(e);
     });
 
-    makeEventListener(canvas, 'pointerup', () => {
+    makeEventListener(window, 'pointerup', () => {
       isDrawing = false;
       controls.enabled = true;
-      // stop();
-      //  performSelection();  // Implement this function to select items inside the lasso
     });
 
     return {
