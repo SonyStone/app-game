@@ -59,8 +59,8 @@ export const createBrushInstancingRenderTarget = ({
 
   const geometry = new Square(gl, {
     attributes: {
-      offset: { instanced: 1, size: 2, data: offset },
-      opacity: { instanced: 1, size: 1, data: opacity }
+      offset: { instanced: 1, size: 2, data: offset, usage: gl.DYNAMIC_DRAW },
+      opacity: { instanced: 1, size: 1, data: opacity, usage: gl.DYNAMIC_DRAW }
     }
   });
 

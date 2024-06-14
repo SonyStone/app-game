@@ -49,6 +49,7 @@ export interface Attribute {
   divisor: number;
   needsUpdate: boolean;
   usage: number;
+  location: number;
 }
 
 export interface Bounds {
@@ -155,6 +156,20 @@ export class Geometry {
     if (this.glState.boundBuffer !== attr.buffer) {
       this.gl.bindBuffer(attr.target!, attr.buffer!);
       this.glState.boundBuffer = attr.buffer;
+
+      // TODO
+      // ! I added it here to set new Buffer
+      // ! Without it the buffer is not set
+      {
+        this.gl.vertexAttribPointer(
+          attr.location!,
+          attr.size!,
+          attr.type!,
+          attr.normalized!,
+          attr.stride!,
+          attr.offset!
+        );
+      }
     }
     if (isNewBuffer) {
       this.gl.bufferData(attr.target!, attr.data!, attr.usage!);
@@ -208,6 +223,7 @@ export class Geometry {
       const offset = numLoc === 1 ? 0 : numLoc * 4;
 
       for (let i = 0; i < numLoc; i++) {
+        attr.location = location + i;
         this.gl.vertexAttribPointer(
           location + i,
           size,

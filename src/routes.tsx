@@ -135,6 +135,12 @@ export const routes: Routes[] = [
         name: 'paint app [WIP]',
         Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
         component: lazy(() => import('@packages/paint/paint-app/paint-app'))
+      },
+      {
+        path: '/lasso-select-example',
+        name: 'Lasso Select Example [WIP]',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/lasso-select-example/lasso-select-example'))
       }
     ]
   },
