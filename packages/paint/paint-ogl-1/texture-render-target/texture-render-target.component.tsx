@@ -1,57 +1,80 @@
-import { Camera, Mesh, OGLRenderingContext, Plane, Program, RenderTarget, Renderer, Transform } from '@packages/ogl';
+import { Camera, OGLRenderingContext, RenderTarget, Renderer, Transform } from '@packages/ogl';
+import { PlaneWithTextureComponent } from '@packages/paint/brush-example/plane-with-texture.component';
 import { Listen } from '@solid-primitives/event-bus';
-import { onCleanup } from 'solid-js';
-import postFrag from './post.frag?raw';
-import postVert from './post.vert?raw';
+
+export const createTextureRenderTargetComponent = (props: {
+  gl: OGLRenderingContext;
+  scene: Transform;
+  renderer: Renderer;
+  render: Listen<void>;
+}) => {
+  const { gl, renderer, scene } = props;
+
+  // Create render target framebuffer.
+  // Uses canvas size by default and doesn't automatically resize.
+  // To resize, re-create target
+  const target = new RenderTarget(gl, {
+    width: 1024,
+    height: 1024,
+    color: 1,
+    depth: false,
+    stencil: false
+  });
+
+  const camera = new Camera({ fov: 35 });
+  {
+    camera.position.set(-0.5, -0.5, 1);
+    camera.lookAt([-0.5, -0.5, 0]);
+    camera.orthographic({ left: 0, right: 1, top: 1, bottom: 0 });
+  }
+
+  gl.clearColor(0.8, 0.8, 0.8, 1);
+  renderer.render({ scene, camera: camera, target });
+
+  props.render?.(() => {
+    renderer.render({ scene, camera: camera, target, clear: false });
+  });
+
+  return target;
+};
 
 export function TextureRenderTargetComponent(props: {
   gl: OGLRenderingContext;
+  scene: Transform;
   brushScene: Transform;
   renderer: Renderer;
-  renderTarget: RenderTarget;
-  scene: Transform;
   render: Listen<void>;
 }) {
-  const { gl, scene, renderer, renderTarget } = props;
+  const { gl, scene, renderer } = props;
+
+  // Create render target framebuffer.
+  // Uses canvas size by default and doesn't automatically resize.
+  // To resize, re-create target
+  const renderTarget = new RenderTarget(gl, {
+    width: 1024,
+    height: 1024,
+    color: 1,
+    depth: false,
+    stencil: false
+  });
 
   const camera = new Camera({ fov: 35 });
-  camera.position.set(-0.5, -0.5, 1);
-  camera.lookAt([-0.5, -0.5, 0]);
-  camera.orthographic({ left: 0, right: 1, top: 1, bottom: 0 });
+  {
+    camera.position.set(-0.5, -0.5, 1);
+    camera.lookAt([-0.5, -0.5, 0]);
+    camera.orthographic({ left: 0, right: 1, top: 1, bottom: 0 });
+  }
 
-  const targetProgram = new Program(gl, {
-    vertex: postVert,
-    fragment: postFrag,
-    uniforms: {
-      tMap: { value: renderTarget.texture }
-    }
-  });
-  targetProgram.setBlendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-
-  const geometry = new Plane(gl, { width: 1, height: 1 });
-  const mesh = new Mesh(gl, { geometry: geometry, program: targetProgram });
-  scene.addChild(mesh);
-
-  const emptyScene = new Transform();
-  renderer.render({ scene: emptyScene, camera: camera, target: renderTarget });
-  gl.clearColor(1, 1, 1, 1);
+  gl.clearColor(0.8, 0.8, 0.8, 1);
+  renderer.render({ scene: props.brushScene, camera: camera, target: renderTarget });
 
   props.render?.(() => {
-    // console.log(renderer, targetProgram, gl.isEnabled(gl.BLEND));
-    // gl.enable(gl.STENCIL_TEST);
-    // gl.stencilFunc(gl.ALWAYS, 1, 0xff);
-    // gl.stencilOp(gl.KEEP, gl.REPLACE, gl.REPLACE);
-    // gl.colorMask(false, false, false, false);
     renderer.render({ scene: props.brushScene, camera: camera, target: renderTarget, clear: false });
-    // gl.stencilFunc(gl.EQUAL, 1, 1);
-    // gl.stencilOp(gl.KEEP, gl.KEEP, gl.ZERO);
-    // gl.colorMask(true, true, true, true);
-    // gl.disable(gl.STENCIL_TEST);
   });
 
-  onCleanup(() => {
-    scene.removeChild(mesh);
-  });
-
-  return <></>;
+  return (
+    <>
+      <PlaneWithTextureComponent gl={gl} parent={scene} texture={renderTarget.texture} />
+    </>
+  );
 }

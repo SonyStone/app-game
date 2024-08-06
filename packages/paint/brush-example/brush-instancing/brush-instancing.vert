@@ -10,5 +10,5 @@ out float vOpacity;
 void main() {
   vUv = uv;
   vOpacity = opacity;
-  gl_Position = vec4(((position / 10.0f) * 1.f) - 1.f + offset * 2.f, 0, 1);
+  gl_Position = vec4((position / 25.0f) + offset, 0, 1);
 }

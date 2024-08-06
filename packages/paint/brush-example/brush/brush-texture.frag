@@ -16,6 +16,5 @@ void main() {
     vec4 brushColor = vec4(uColor, 1.0f);
     vec4 brush = mix(vec4(brushColor.rgb, 0.0f), brushColor, falloff);
 
-    vec4 blendedColor = brush;
-    FragColor = blendedColor;
+    FragColor = brush;
 }

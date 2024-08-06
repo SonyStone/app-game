@@ -88,4 +88,5 @@ void main() {
     }
 
     FragColor = blendedColor;
+    // FragColor = color2Src;
 }

@@ -12,15 +12,17 @@ export const PlaneWithTextureComponent = (props: {
   position?: Vec3Tuple;
   rotation?: Vec3Tuple;
 }) => {
+  const { gl } = props;
   const tMap = { value: typeof props.texture === 'function' ? props.texture() : props.texture };
-  const plane = new Mesh(props.gl, {
-    geometry: new Plane(props.gl),
+  const plane = new Mesh(gl, {
+    geometry: new Plane(gl),
     program: new TextureProgram(props.gl, {
       uniforms: {
         tMap
       },
       depthTest: true,
-      transparent: props.transparent ?? false
+      transparent: props.transparent ?? false,
+      blendFunc: { src: gl.SRC_ALPHA, dst: gl.ONE_MINUS_SRC_ALPHA, srcAlpha: gl.ONE, dstAlpha: gl.ONE_MINUS_SRC_ALPHA }
     })
   });
 

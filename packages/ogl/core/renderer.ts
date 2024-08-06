@@ -37,7 +37,7 @@ export type OGLRenderingContext = WebGL2RenderingContext & {
 };
 
 export interface RendererOptions {
-  canvas: HTMLCanvasElement;
+  canvas: HTMLCanvasElement | OffscreenCanvas;
   width: number;
   height: number;
   dpr: number;
@@ -435,6 +435,18 @@ export class Renderer {
     }
 
     return renderList;
+  }
+
+  clearColor({
+    target = undefined,
+    color = [0, 0, 0, 0]
+  }: Partial<{
+    target: RenderTarget;
+    color: ArrayLike<number>;
+  }>): void {
+    this.bindFramebuffer(target);
+    this.gl.clearColor(color[0], color[1], color[2], color[3] ?? 0);
+    this.gl.clear(this.gl.COLOR_BUFFER_BIT);
   }
 
   render({
