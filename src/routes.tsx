@@ -89,6 +89,12 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/gsap-examples/scroll-trigger-svg-text-mask/scroll-trigger-svg-text-mask'))
   },
   {
+    path: '/web-audio',
+    name: 'Web Audio API',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/web-audio/web-audio-page'))
+  },
+  {
     path: '/paint',
     Preview: (props) => (
       <div class="rounded-2 relative col-start-1 flex flex-col place-content-center place-items-center gap-1.5 overflow-hidden p-2 px-4">
@@ -169,7 +175,6 @@ export const routes: Routes[] = [
       }
     ]
   },
-
   {
     path: '/webgl-examples',
     Preview: (props) => (
