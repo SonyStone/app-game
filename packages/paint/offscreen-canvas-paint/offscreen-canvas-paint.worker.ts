@@ -1,11 +1,12 @@
-import { OGLRenderingContext, Renderer, Transform } from '@packages/ogl';
+import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@packages/ogl';
 import createRAF from '@solid-primitives/raf';
 import { createEffect, createRoot, createSignal, untrack } from 'solid-js';
 import { ColorBlendModes } from '../brush-example/blend-modes';
 import { createBlendRenderTarget } from '../brush-example/blend/blend-render-target';
-import { createBrushInstancing } from '../brush-example/brush-instancing/brush-instancing';
+import { createBrushInstancing } from '../brush-example/brush-instancing/create-brush-instancing';
 import { createBrushRenderTarget } from '../brush-example/brush/brush-render-target';
-import { createSquareMesh } from '../brush-example/square/square.component';
+import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../brush-example/defaults';
+import { createSquareMesh } from '../brush-example/square/create-square-mesh';
 import { createColorTexture } from '../brush-example/utils/black-texture';
 
 createRoot(() => {
@@ -27,18 +28,21 @@ createRoot(() => {
     brushInstancing = createBrushInstancing({
       gl,
       texture: () => brush().texture,
-      size: () => [resize().width, resize().height],
+      // size: () => [resize().width, resize().height],
       color: [0, 0.4, 0]
     });
+
+    const blendRenderTarget = new RenderTarget(gl, { ...DEFAULTS_RENDER_TARGET_OPTIONS, id: '🖼️ blend' });
     const blendLayers = createBlendRenderTarget({
       gl,
+      target: blendRenderTarget,
       texture1: createColorTexture(gl, [255 / 2, 255 / 4, 0, 255]),
       texture2: () => brushInstancing.layer().texture,
       colorBlendMode: ColorBlendModes.USING_GAMMA
     });
     const mesh = createSquareMesh({
       gl,
-      texture: () => blendLayers.texture,
+      texture: blendRenderTarget.texture,
       transparent: true
     });
     mesh.setParent(scene);

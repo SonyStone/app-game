@@ -122,7 +122,7 @@ export default function OglSwapTexturesView() {
 
   const brush = createBrushRenderTarget({
     gl,
-    options: renderTargetOptions,
+    // options: renderTargetOptions,
     color: createMemo(() => rgbToNormalized(brushColor()))
   });
   const layers = createLayersRenderTarget({
@@ -150,7 +150,6 @@ export default function OglSwapTexturesView() {
     texture2: () => brushInstancing().texture,
     blendMode,
     opacity,
-    options: renderTargetOptions,
     colorBlendMode
   });
 

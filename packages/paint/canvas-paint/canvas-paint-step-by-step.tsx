@@ -5,7 +5,7 @@ import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect, createSignal, onMount } from 'solid-js';
 import { BlendModes, ColorBlendModes } from '../brush-example/blend-modes';
-import { BlendMesh } from '../brush-example/blend/blend-render-target';
+import { BlendMesh } from '../brush-example/blend/blend-mesh';
 import { BrushStrokeMesh } from '../brush-example/brush-instancing/create-brush-instancing';
 import { BrushMesh } from '../brush-example/brush/brush-mesh';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../brush-example/defaults';

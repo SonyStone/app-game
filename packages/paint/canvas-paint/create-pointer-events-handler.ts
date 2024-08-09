@@ -6,7 +6,7 @@ export const createPointerEventsHandler = (props: {
   brushStroke: {
     add: (point: Vec2Tuple, opacity: number) => void;
     apply: () => void;
-    render: () => void;
+    render: (force?: boolean) => void;
   };
   element: HTMLElement;
   updateOnEvent: Accessor<boolean>;
@@ -39,7 +39,7 @@ export const createPointerEventsHandler = (props: {
       brushStroke.add([x, y], e.pressure);
 
       if (untrack(updateOnEvent)) {
-        brushStroke.render();
+        brushStroke.render(true);
       }
     }
   });
@@ -47,7 +47,7 @@ export const createPointerEventsHandler = (props: {
   makeEventListener(element, 'pointerup', (e) => {
     brushStroke.apply();
     if (untrack(updateOnEvent)) {
-      brushStroke.render();
+      brushStroke.render(true);
     }
   });
 };

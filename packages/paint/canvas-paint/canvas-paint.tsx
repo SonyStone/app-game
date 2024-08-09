@@ -1,24 +1,19 @@
-import { createWindowSize } from '@solid-primitives/resize-observer';
-import { For, createEffect, createSignal, onMount, untrack } from 'solid-js';
-
-import { RenderTarget, Renderer, Transform } from '@packages/ogl';
-
 import { Vec2Tuple } from '@packages/math';
+import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@packages/ogl';
 import { SwapBuffering } from '@packages/ogl/extras/swap-buffering';
-import { createTimer } from '@packages/utils/timeout';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
-import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
+import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { Key } from 'ts-keycode-enum';
-import { BlendModes, ColorBlendModes } from '../brush-example/blend-modes';
-import { BlendMesh } from '../brush-example/blend/blend-render-target';
+import { Accessor, createEffect, createSignal, onMount, untrack } from 'solid-js';
+import { BlendMesh } from '../brush-example/blend/blend-mesh';
 import { BrushStrokeMesh } from '../brush-example/brush-instancing/create-brush-instancing';
 import { BrushMesh } from '../brush-example/brush/brush-mesh';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../brush-example/defaults';
 import { SquareComponent } from '../brush-example/square/square.component';
 import { hexToRgb, normalizedToRgb, rgbToHex, rgbToNormalized } from '../brush-example/utils/color-functions';
 import { TextureMesh } from '../brush-example/utils/texture-to-render-target/texture-mesh';
+import { createPointerEvents } from './apply-pointer-events';
 import { createPointerEventsHandler } from './create-pointer-events-handler';
 import { pointToCanvasPoint } from './utils-point-position';
 import { drawTestZigZagStrokePoints } from './zig-zag-stroke';
@@ -47,147 +42,74 @@ export default function CanvasPaint() {
     }
   );
 
-  const brushTexture = new RenderTarget(gl, { ...DEFAULTS_RENDER_TARGET_OPTIONS, id: '🖼️brush' });
-  const brushStrokeTexture = new RenderTarget(gl, { ...DEFAULTS_RENDER_TARGET_OPTIONS, id: '🖼️brush-stroke' });
   const swapBuffers = new SwapBuffering(gl, DEFAULTS_RENDER_TARGET_OPTIONS);
-  const backgroundTextTexture = createTexture4colors(
-    gl,
-    [255 * 0.1, 255 * 0.1, 255 * 0.1, 255],
-    [0, 255 * 0.4, 0, 255],
-    [255 * 0.8, 0, 0, 255],
-    [0, 0, 255 * 0.4, 255]
-  );
-
-  const background = (() => {
-    const mesh = new TextureMesh(gl, { texture: backgroundTextTexture });
-    mesh.render(swapBuffers.read);
-    const clear = () => {
-      mesh.render(swapBuffers.read);
-      mesh.render(swapBuffers.write);
-    };
-
-    return { clear };
-  })();
+  const background = createBackground({ gl, swapBuffers });
+  background.render();
 
   // creates and renderer brush texture
   // ! brush spot texture
-  {
-    const spotMesh = new BrushMesh(gl);
-    createEffect(() => {
-      spotMesh.setColor(rgbToNormalized(brushColor()));
-      spotMesh.render(brushTexture);
-      console.log('1️⃣ rendering brush texture', brushTexture.id);
-    });
-  }
+  const brushTexture = new RenderTarget(gl, { ...DEFAULTS_RENDER_TARGET_OPTIONS, id: '🖼️brush' });
+  createSpotMesh({ gl, brushTexture, brushColor });
 
   // creates swap buffer to merge brush stroke with brush strokes
+
+  const brushStrokeTexture = new RenderTarget(gl, { ...DEFAULTS_RENDER_TARGET_OPTIONS, id: '🖼️brush-stroke' });
 
   // ! creates brush stroke
   // ! mixes brush stroke with background
   const brushStroke = (() => {
-    const strokeMesh = new BrushStrokeMesh(gl);
+    const brushStrokeMesh = new BrushStrokeMesh(gl);
+    createEffect(() => {
+      brushStrokeMesh.setBrushTexture(brushTexture.texture);
+      brushStrokeMesh.setBrushColor(rgbToNormalized(brushColor()));
+    });
     const blendMesh = new BlendMesh(gl);
 
-    let needsUpdate = { value: true };
+    const [targetTexture, setTargetTexture] = createSignal(swapBuffers.write.texture, { equals: () => false });
 
-    const [layer, setLayer] = createSignal(swapBuffers.write, { equals: () => false });
-
-    const render = {
-      brushStroke() {
-        // if (!needsUpdate.value) {
-        //   return;
-        // }
-
-        strokeMesh.setBrushTexture(brushTexture.texture);
-        strokeMesh.setBrushColor(rgbToNormalized(untrack(brushColor)));
-        strokeMesh.render(brushStrokeTexture);
-        console.groupCollapsed('2️⃣ brush stroke');
-        console.log(' rendering ', brushStrokeTexture.id);
-        console.trace();
-        console.groupEnd();
-        // needsUpdate.value = false;
-      },
-      blend() {
-        // if (!needsUpdate.value) {
-        //   return;
-        // }
-
-        blendMesh.setBlendMode(BlendModes.NORMAL);
-        blendMesh.setColorBlendMode(ColorBlendModes.USING_GAMMA);
-        blendMesh.setTexture1(swapBuffers.read.texture);
-        blendMesh.setTexture2(brushStrokeTexture.texture);
-        blendMesh.render(swapBuffers.write);
-        console.groupCollapsed('3️⃣ blending');
-        console.log('🎨 rendering', blendMesh.id);
-        console.trace();
-        console.groupEnd();
-        // needsUpdate.value = false;
-      },
-      render() {
-        render.brushStroke();
-        render.blend();
+    let instance = 0;
+    let needsUpdate = false;
+    const markForUpdate = () => {
+      needsUpdate = true;
+    };
+    const render = (force?: boolean) => {
+      if (force) {
+        needsUpdate = true;
       }
+      if (!needsUpdate) {
+        return;
+      }
+      needsUpdate = false;
+      brushStrokeMesh.render(brushStrokeTexture); // render brush stroke
+      blendMesh.setTexture1(swapBuffers.read.texture);
+      blendMesh.setTexture2(brushStrokeTexture.texture);
+      blendMesh.render(swapBuffers.write); // blend swap read with brush stroke into swap write
+      swapBuffers.swap(); // swap read with write
+      instance = 0;
+      setTargetTexture(swapBuffers.read.texture); // set scene target texture to swap read
+      console.log('🖼️rendering scene target texture');
+      renderer.render({ scene }); // render scene
     };
 
     const clearBrushStroke = () => {
-      strokeMesh.clear(brushStrokeTexture);
+      brushStrokeMesh.clear(brushStrokeTexture);
     };
 
-    let index = 0;
     let prev: Vec2Tuple | undefined;
     let prevOpacity: number | undefined;
     const [instancedCount, setInstancedCount] = createSignal(0);
 
-    const jsutSwap = () => {
-      index = 0;
-      prev = undefined;
-      prevOpacity = undefined;
-      swapBuffers.swap();
-
-      // needsUpdate.value = true;
-    };
-
-    const swap = () => {
-      index = 0;
-      prev = undefined;
-      prevOpacity = undefined;
-      render.brushStroke();
-      render.blend();
-      swapBuffers.swap();
-      clearBrushStroke();
-      setLayer(swapBuffers.read);
-
-      // setLayer(swapBuffers.write);
-      // needsUpdate.value = true;
-    };
-
     const end = () => {
-      index = 0;
-      render.brushStroke();
-      render.blend();
-
+      instance = 0;
       swapBuffers.swap();
-      setLayer(swapBuffers.write);
-      needsUpdate.value = true;
-    };
-
-    const swapCheck = () => {
-      if (index > 3000) {
-        index = 0;
-        // renderBrushStroke();
-        render.blend();
-        // swapBuffers.swap();
-        setLayer(swapBuffers.write);
-        // needsUpdate.value = true;
-      }
+      needsUpdate = true;
     };
 
     const setPoint = (point: Vec2Tuple, opacity: number) => {
-      swapCheck();
-      strokeMesh.setBrushSpot(index, point, opacity);
-      strokeMesh.setInstancedCount(index + 1);
-      setInstancedCount(index + 1);
-      index++;
+      brushStrokeMesh.setBrushSpot(instance, point, opacity);
+      brushStrokeMesh.setInstancedCount(instance + 1);
+      setInstancedCount(instance + 1);
+      instance++;
     };
 
     const add = (point: Vec2Tuple, opacity: number) => {
@@ -207,29 +129,28 @@ export default function CanvasPaint() {
 
       prev = point;
       prevOpacity = opacity;
-      needsUpdate.value = true;
+      needsUpdate = true;
     };
 
     return {
       clear: clearBrushStroke,
-      render: render.render,
+      render: render,
       add: add,
-      swap: jsutSwap,
-      apply: swap,
+      apply: () => {},
       // needsUpdate,
-      layer: layer,
+      layer: targetTexture,
       end: end,
       instancedCount: instancedCount
     };
   })();
   // ! end
 
-  const timeout = createTimer();
-
   const [updateOnEvent, setUpdateOnEvent] = makePersisted(createSignal(false), {
     storage: sessionStorage,
     name: 'updateOnEvent'
   });
+
+  const pointerEvents = createPointerEvents();
 
   onMount(async () => {
     createPointerEventsHandler({
@@ -238,26 +159,20 @@ export default function CanvasPaint() {
       updateOnEvent
     });
 
-    drawTestZigZagStrokePoints(gl, brushStroke);
+    await pointerEvents.apply(canvasEl);
 
-    makeEventListener(document, 'keydown', (e) => {
-      if (e.keyCode === Key.Space) {
-        brushStroke.swap();
-      }
-    });
-
-    // applyPointerEvents(canvasEl);
+    brushStroke.render(true);
   });
 
-  const [, start] = createRAF((t?: number | any) => {
+  const [, start, stop] = createRAF((t?: number | any) => {
     if (!untrack(updateOnEvent)) {
       brushStroke.render();
     }
-    renderer.render({ scene });
+  });
+  createEffect(() => {
+    updateOnEvent() ? stop() : start();
   });
   start();
-
-  const [targetLayer, setTargetLayer] = createSignal(untrack(brushStroke.layer).texture);
 
   return (
     <>
@@ -266,40 +181,6 @@ export default function CanvasPaint() {
         <button onClick={() => setUpdateOnEvent(!untrack(updateOnEvent))}>
           update on "{updateOnEvent() ? 'event' : 'requestAnimationFrame'}"
         </button>
-        <SelectLayer
-          options={[
-            {
-              name: 'Brush Spot',
-              onSelect: () => {
-                setTargetLayer(brushTexture.texture);
-              }
-            },
-            {
-              name: 'Brush Stroke',
-              onSelect: () => {
-                setTargetLayer(brushStrokeTexture.texture);
-              }
-            },
-            {
-              name: 'Swap Buffer Write',
-              onSelect: () => {
-                setTargetLayer(swapBuffers.write.texture);
-              }
-            },
-            {
-              name: 'Swap Buffer Read',
-              onSelect: () => {
-                setTargetLayer(swapBuffers.read.texture);
-              }
-            },
-            {
-              name: 'Result',
-              onSelect: () => {
-                setTargetLayer(untrack(brushStroke.layer).texture);
-              }
-            }
-          ]}
-        />
         <label for="brush-color-select">Brush Color:</label>
         <input
           id="brush-color-select"
@@ -312,6 +193,7 @@ export default function CanvasPaint() {
           <button
             onClick={() => {
               background.clear();
+              brushStroke.render(true);
             }}
           >
             Clear
@@ -319,6 +201,7 @@ export default function CanvasPaint() {
           <button
             onClick={() => {
               brushStroke.clear();
+              brushStroke.render(true);
             }}
           >
             Clear Brush Stroke
@@ -333,7 +216,7 @@ export default function CanvasPaint() {
         </div>
       </div>
       {canvasEl}
-      <SquareComponent gl={gl} parent={scene} texture={targetLayer()} zIndex={0.9} />
+      <SquareComponent gl={gl} parent={scene} texture={brushStroke.layer()} zIndex={0.9} />
       <pre class="absolute right-0 top-0 bg-white">Brush</pre>
       <SquareComponent
         gl={gl}
@@ -376,27 +259,39 @@ export default function CanvasPaint() {
   );
 }
 
-const SelectLayer = (props: { options: { name: string; onSelect(): void }[] }) => {
-  return (
-    <fieldset>
-      <legend>Select layer:</legend>
+const createSpotMesh = ({
+  gl,
+  brushTexture,
+  brushColor
+}: {
+  gl: OGLRenderingContext;
+  brushTexture: RenderTarget;
+  brushColor: Accessor<[number, number, number]>;
+}) => {
+  const spotMesh = new BrushMesh(gl);
+  createEffect(() => {
+    spotMesh.setColor(rgbToNormalized(brushColor()));
+    spotMesh.render(brushTexture);
+    console.log('1️⃣ rendering brush texture', brushTexture.id);
+  });
+};
 
-      <For each={props.options}>
-        {({ name, onSelect }) => (
-          <div class="flex gap-1">
-            <input
-              type="radio"
-              id={name}
-              name="layer"
-              value={name}
-              onChange={(e) => {
-                onSelect();
-              }}
-            />
-            <label for={name}>{name}</label>
-          </div>
-        )}
-      </For>
-    </fieldset>
+const createBackground = ({ gl, swapBuffers }: { gl: OGLRenderingContext; swapBuffers: SwapBuffering }) => {
+  const backgroundTextTexture = createTexture4colors(
+    gl,
+    [255 * 0.1, 255 * 0.1, 255 * 0.1, 255],
+    [0, 255 * 0.4, 0, 255],
+    [255 * 0.8, 0, 0, 255],
+    [0, 0, 255 * 0.4, 255]
   );
+  const mesh = new TextureMesh(gl, { texture: backgroundTextTexture });
+  const render = () => {
+    mesh.render(swapBuffers.read);
+  };
+  const clear = () => {
+    mesh.render(swapBuffers.read);
+    mesh.render(swapBuffers.write);
+  };
+
+  return { mesh, render, clear };
 };
