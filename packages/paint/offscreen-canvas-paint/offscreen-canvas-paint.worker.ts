@@ -19,8 +19,6 @@ createRoot((dispose) => {
       renderer = new Renderer({ dpr: 1, canvas, alpha: false, premultipliedAlpha: false });
       const gl = renderer.gl;
 
-      console.clear();
-
       brushStroke = createBrushStroke({
         gl,
         brushColor: [255, 255, 255],

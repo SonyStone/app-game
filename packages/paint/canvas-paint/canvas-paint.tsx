@@ -22,8 +22,6 @@ export default function CanvasPaint() {
     renderer.setSize(resize.width, resize.height);
   });
 
-  console.clear();
-
   const [brushColor, setBrushColor] = makePersisted(
     createSignal<[number, number, number]>(normalizedToRgb([0.27, 0.66, 0.93])),
     {
