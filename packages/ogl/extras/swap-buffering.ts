@@ -2,31 +2,26 @@ import { RenderTarget, RenderTargetOptions } from '../core/render-target';
 import { OGLRenderingContext } from '../core/renderer';
 import { Texture } from '../core/texture';
 
-export interface SwapBuffering {
+/** Ping-Pong Buffering */
+export class SwapBuffering {
   read: RenderTarget;
   write: RenderTarget;
-  swap(): Texture;
+
+  constructor(
+    readonly gl: OGLRenderingContext,
+    readonly options: Partial<RenderTargetOptions>
+  ) {
+    this.read = new RenderTarget(gl, { ...this.options, id: '🖼️read' });
+    this.write = new RenderTarget(gl, { ...this.options, id: '🖼️write' });
+  }
+
+  swap(): Texture {
+    // console.groupCollapsed('⇄ swap buffers');
+    // console.trace();
+    // console.groupEnd();
+    let temp = this.read;
+    this.read = this.write;
+    this.write = temp;
+    return this.read.texture;
+  }
 }
-
-/** Ping-Pong Buffering */
-export const createSwapBuffering = ({
-  gl,
-  options
-}: {
-  gl: OGLRenderingContext;
-  options: Partial<RenderTargetOptions>;
-}): SwapBuffering => {
-  const buffers = {
-    read: new RenderTarget(gl, options),
-    write: new RenderTarget(gl, options),
-    // Helper function to ping pong the render targets and update the uniform
-    swap: (): Texture => {
-      let temp = buffers.read;
-      buffers.read = buffers.write;
-      buffers.write = temp;
-      return buffers.read.texture;
-    }
-  };
-
-  return buffers;
-};

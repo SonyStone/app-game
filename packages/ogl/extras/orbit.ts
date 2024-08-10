@@ -5,6 +5,7 @@
 
 import { FVec2 } from '@packages/math';
 import { makeEventListenerStack } from '@solid-primitives/event-listener';
+import { onMount } from 'solid-js';
 import type { Camera } from '../core/camera';
 import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';
@@ -402,27 +403,15 @@ export class Orbit {
       listen('touchstart', onTouchStart, { passive: false });
       listen('touchend', onTouchEnd, false);
       listen('touchmove', onTouchMove, { passive: false });
-      // element.addEventListener('contextmenu', onContextMenu, false);
-      // element.addEventListener('mousedown', onMouseDown as (e: Event) => void, false);
-      // element.addEventListener('wheel', onMouseWheel as (e: Event) => void, { passive: false });
-      // element.addEventListener('touchstart', onTouchStart as (e: Event) => void, { passive: false });
-      // element.addEventListener('touchend', onTouchEnd, false);
-      // element.addEventListener('touchmove', onTouchMove as (e: Event) => void, { passive: false });
     }
 
     this.remove = function () {
-      // element.removeEventListener('contextmenu', onContextMenu);
-      // element.removeEventListener('mousedown', onMouseDown as (e: Event) => void);
-      // element.removeEventListener('wheel', onMouseWheel as (e: Event) => void);
-      // element.removeEventListener('touchstart', onTouchStart as (e: Event) => void);
-      // element.removeEventListener('touchend', onTouchEnd);
-      // element.removeEventListener('touchmove', onTouchMove as (e: Event) => void);
-      // window.removeEventListener('mousemove', onMouseMove);
-      // window.removeEventListener('mouseup', onMouseUp);
       clear();
       clearMouse();
     };
 
-    addHandlers();
+    onMount(() => {
+      addHandlers();
+    });
   }
 }

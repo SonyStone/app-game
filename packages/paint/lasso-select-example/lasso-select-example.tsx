@@ -29,7 +29,7 @@ import vertex from './lasso-line.vert?raw';
 export default function LassoSelectExample() {
   const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
 
-  const renderer = new Renderer({ dpr: 2, canvas });
+  const renderer = new Renderer({ dpr: 1, canvas });
   const gl = renderer.gl;
   gl.clearColor(1, 1, 1, 1);
 

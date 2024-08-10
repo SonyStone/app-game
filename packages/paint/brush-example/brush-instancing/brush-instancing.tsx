@@ -1,12 +1,10 @@
-import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@packages/ogl';
+import { OGLRenderingContext, Texture } from '@packages/ogl';
 import { RenderTargetOptions } from '@packages/ogl/core/render-target';
-import { Square } from '@packages/ogl/extras/square';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { createEffect, createSignal, untrack } from 'solid-js';
+import { createEffect } from 'solid-js';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
 import { curve } from '../utils/curve';
-import fragment from './brush-instancing.frag?raw';
-import vertex from './brush-instancing.vert?raw';
+import { createBrushInstancing } from './create-brush-instancing';
 
 export const createBrushInstancingRenderTarget = ({
   gl,
@@ -28,12 +26,13 @@ export const createBrushInstancingRenderTarget = ({
   options?: Partial<RenderTargetOptions>;
   points?: MaybeAccessor<[number, number][] | undefined>;
 }) => {
-  const [layer, setLayer] = createSignal(new RenderTarget(gl, options), { equals: () => false });
+  const brush = createBrushInstancing({
+    gl,
+    texture,
+    color,
+    options
+  });
 
-  const MAX_COUNT = 500;
-
-  const offset = new Float32Array(MAX_COUNT * 4);
-  const opacity = new Float32Array(MAX_COUNT);
   let realInstancedCount = 0;
   const setOffset = (num: number, points: [number, number][]) => {
     let step = 1 / num;
@@ -47,8 +46,7 @@ export const createBrushInstancingRenderTarget = ({
         continue;
       }
 
-      offset.set(point, i * 2);
-      opacity.set([p], i);
+      brush.add({ point, opacity: p });
 
       prevPoint[0] = point[0];
       prevPoint[1] = point[1];
@@ -57,56 +55,14 @@ export const createBrushInstancingRenderTarget = ({
     realInstancedCount = i;
   };
 
-  const geometry = new Square(gl, {
-    attributes: {
-      offset: { instanced: 1, size: 2, data: offset, usage: gl.DYNAMIC_DRAW },
-      opacity: { instanced: 1, size: 1, data: opacity, usage: gl.DYNAMIC_DRAW }
-    }
-  });
-
-  const tBrush = { value: access(texture) };
-  const uColor = { value: access(color) ?? ([0, 0, 0] as [number, number, number]) };
-
-  const program = new Program(gl, {
-    vertex,
-    fragment,
-    uniforms: { tBrush },
-    transparent: true,
-    blendFunc: {
-      src: gl.SRC_ALPHA,
-      dst: gl.ONE_MINUS_SRC_ALPHA,
-      srcAlpha: gl.ONE,
-      dstAlpha: gl.ONE_MINUS_SRC_ALPHA
-    }
-  });
-
-  const mesh = new Mesh(gl, { geometry, program });
-
   createEffect(() => {
     const num = access(instancedCount) ?? 300;
 
     // update the instanced count and attributes
-    {
-      setOffset(num, access(points) ?? []);
-      geometry.instancedCount = realInstancedCount;
-      geometry.attributes.offset.needsUpdate = true;
-      geometry.attributes.opacity.needsUpdate = true;
-    }
-
-    // update uniforms
-    {
-      tBrush.value = access(texture);
-      uColor.value = access(color) ?? ([0, 0, 0] as [number, number, number]);
-    }
-
-    gl.clearColor(uColor.value[0], uColor.value[1], uColor.value[2], 0);
-    gl.renderer.render({
-      scene: mesh,
-      target: untrack(layer),
-      clear: true
-    });
-    setLayer(untrack(layer));
+    setOffset(num, access(points) ?? []);
+    brush.apply();
+    brush.render();
   });
 
-  return layer;
+  return brush.layer;
 };

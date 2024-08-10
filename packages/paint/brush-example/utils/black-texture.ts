@@ -3,9 +3,12 @@ import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createSignal, untrack } from 'solid-js';
 import { effect } from 'solid-js/web';
 
-export const createColorTexture = (gl: OGLRenderingContext, color: MaybeAccessor<[number, number, number]>) => {
+export const createColorTexture = (
+  gl: OGLRenderingContext,
+  color: MaybeAccessor<[number, number, number] | [number, number, number, number]>
+) => {
   let uColor = access(color);
-  const image = new Uint8Array([uColor[0], uColor[1], uColor[2], 255]);
+  const image = new Uint8Array([uColor[0], uColor[1], uColor[2], uColor[3] ?? 255]);
   const [texture, setTexture] = createSignal<Texture>(
     new Texture(gl, {
       image,

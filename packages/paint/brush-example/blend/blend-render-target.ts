@@ -1,57 +1,46 @@
-import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@packages/ogl';
-import { RenderTargetOptions } from '@packages/ogl/core/render-target';
-import { Square } from '@packages/ogl/extras/square';
+import { OGLRenderingContext, Texture } from '@packages/ogl';
+import { RenderTarget } from '@packages/ogl/core/render-target';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { effect } from 'solid-js/web';
+import { createSignal } from 'solid-js';
 import { BlendModes, ColorBlendModes } from '../blend-modes';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
-import fragment from './blend.frag?raw';
-import vertex from './blend.vert?raw';
+import { BlendMesh } from './blend-mesh';
 
+/**
+ * creates new render target (texture) - sum of blend of two textures
+ */
 export const createBlendRenderTarget = (props: {
   gl: OGLRenderingContext;
-  options?: Partial<RenderTargetOptions>;
+  target?: MaybeAccessor<RenderTarget>;
   texture1?: MaybeAccessor<Texture | undefined>;
   texture2?: MaybeAccessor<Texture | undefined>;
   blendMode?: MaybeAccessor<BlendModes | undefined>;
   colorBlendMode?: MaybeAccessor<ColorBlendModes | undefined>;
   opacity?: MaybeAccessor<number | undefined>;
 }) => {
-  const { gl, options = DEFAULTS_RENDER_TARGET_OPTIONS } = props;
+  const { gl, target = new RenderTarget(gl, DEFAULTS_RENDER_TARGET_OPTIONS) } = props;
+  const [layer, setLayer] = createSignal(access(target), { equals: () => false });
 
-  const layer = new RenderTarget(gl, options);
-  const geometry = new Square(gl);
-  const uniforms = {
-    tMap1: { value: access(props.texture1) },
-    tMap2: { value: access(props.texture2) },
-    blendMode: {
-      value: access(props.blendMode) ?? BlendModes.NORMAL
-    },
-    colorBlendMode: {
-      value: access(props.colorBlendMode) ?? ColorBlendModes.DEFAULT
-    },
-    uOpacity: { value: access(props.opacity) ?? 1.0 }
-  };
-  const program = new Program(gl, {
-    vertex,
-    fragment,
-    uniforms
-  });
-  const mesh = new Mesh(gl, { geometry, program });
+  const mesh = new BlendMesh(gl);
 
-  effect(() => {
-    uniforms.tMap1.value = access(props.texture1);
-    uniforms.tMap2.value = access(props.texture2);
-    uniforms.blendMode.value = access(props.blendMode) ?? BlendModes.NORMAL;
-    uniforms.uOpacity.value = access(props.opacity) ?? 1.0;
-    uniforms.colorBlendMode.value = access(props.colorBlendMode) ?? ColorBlendModes.DEFAULT;
+  const render = () => {
+    const texture1 = access(props.texture1);
+    const texture2 = access(props.texture2);
+    mesh.setTexture1(texture1);
+    mesh.setTexture2(texture2);
+    mesh.setBlendMode(access(props.blendMode) ?? BlendModes.NORMAL);
+    mesh.setColorBlendMode(access(props.colorBlendMode) ?? ColorBlendModes.USING_GAMMA);
+    mesh.setOpacity(access(props.opacity) ?? 1.0);
+
+    console.log(`3️⃣ rendering blend apply ${texture2?.id} to ${texture1?.id} to target: ${access(target).id}`);
 
     gl.renderer.render({
       scene: mesh,
-      target: layer,
+      target: access(target),
       clear: false
     });
-  });
+    setLayer(access(target));
+  };
 
-  return layer;
+  return { layer, render };
 };

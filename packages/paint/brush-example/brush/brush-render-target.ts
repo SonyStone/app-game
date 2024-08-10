@@ -1,44 +1,33 @@
-import { Mesh, OGLRenderingContext, Program, RenderTarget } from '@packages/ogl';
-import { RenderTargetOptions } from '@packages/ogl/core/render-target';
-import { Square } from '@packages/ogl/extras/square';
+import { OGLRenderingContext, RenderTarget } from '@packages/ogl';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createSignal } from 'solid-js';
 import { effect } from 'solid-js/web';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
-import fragment from './brush-texture.frag?raw';
-import vertex from './brush-texture.vert?raw';
+import { BrushMesh } from './brush-mesh';
 
 export const createBrushRenderTarget = ({
   gl,
-  options = DEFAULTS_RENDER_TARGET_OPTIONS,
-  color = [0.27, 0.66, 0.93]
+  target = new RenderTarget(gl, DEFAULTS_RENDER_TARGET_OPTIONS),
+  color = [0, 0, 0]
 }: {
   gl: OGLRenderingContext;
-  options?: Partial<RenderTargetOptions>;
+  target?: MaybeAccessor<RenderTarget>;
   color?: MaybeAccessor<[number, number, number] | undefined>;
 }) => {
-  const layer = new RenderTarget(gl, options);
+  const mesh = new BrushMesh(gl, access(color));
 
-  const uColor = { value: access(color) };
-
-  const geometry = new Square(gl);
-  const program = new Program(gl, {
-    vertex,
-    fragment,
-    uniforms: { uColor }
-  });
-  const mesh = new Mesh(gl, { geometry, program });
-
-  const [layerS, setLayerS] = createSignal(layer, { equals: () => false });
+  const [layerS, setLayerS] = createSignal(access(target), { equals: () => false });
 
   effect(() => {
-    uColor.value = access(color);
+    mesh.setColor(access(color));
+    // gl.clearColor(0, 0, 0, 1);
     gl.renderer.render({
       scene: mesh,
-      target: layer,
+      target: access(target),
       clear: false
     });
-    setLayerS(layer);
+    console.log('1️⃣ rendering brush texture', access(target).id);
+    setLayerS(access(target));
   });
 
   return layerS;

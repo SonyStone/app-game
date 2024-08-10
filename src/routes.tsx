@@ -116,7 +116,7 @@ export const routes: Routes[] = [
         path: '/brush-example',
         name: 'Brush Example',
         Preview: (props) => <Thumbnail href={props.path} thumbnail={texturesViewThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/paint/brush-example/ogl-swap-textures-view'))
+        component: lazy(() => import('@packages/paint/brush-example/brush-example'))
       },
       {
         path: '/paint',
@@ -124,12 +124,7 @@ export const routes: Routes[] = [
         Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
         component: lazy(() => import('@packages/paint/paint-1/paint-page'))
       },
-      {
-        path: '/ogl-paint-render-target',
-        name: 'OGL paint render target',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/paint-ogl-1/paint-1'))
-      },
+
       {
         path: '/ogl-paint-full-screen',
         name: 'OGL paint full screen canvas',
@@ -144,16 +139,57 @@ export const routes: Routes[] = [
       },
       {
         path: '/lasso-select-example',
-        name: 'Lasso Select Example [WIP]',
+        name: 'Lasso Select Example',
         Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
         component: lazy(() => import('@packages/paint/lasso-select-example/lasso-select-example'))
+      },
+      {
+        path: '/offscreen-canvas-example',
+        name: 'Offscreen Canvas Example [WIP]',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/offscreen-canvas-example/offscreen-canvas-example'))
+      },
+      {
+        path: '/can-i-use',
+        name: '"Can I Use"',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/can-i-use/can-i-use'))
+      },
+      {
+        path: '/canvas-paint',
+        name: 'Paint on WebGL Canvas',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint'))
+      },
+      {
+        path: '/canvas-paint-step-by-step',
+        name: 'Paint on WebGL Canvas Step by Step',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint-step-by-step'))
+      },
+      {
+        path: '/offscreen-canvas-paint',
+        name: 'Paint on WebGL OffscreenCanvas',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/offscreen-canvas-paint/offscreen-canvas-paint'))
       }
     ]
   },
   {
     path: '/webgl-examples',
-    name: 'WebGL Examples',
-    Preview: (props) => <SectionTitle name={props.name} />,
+    Preview: (props) => (
+      <div class="rounded-2 relative col-start-1 flex flex-col place-content-center place-items-center gap-1.5 overflow-hidden p-2 px-4">
+        <h2 class="text-4xl">
+          <a href="https://webgl2fundamentals.org/" target="_blank">
+            WebGL
+          </a>
+        </h2>
+        <span class="text-center text-sm">Examples, they may work, or may not. Who knows?</span>
+        <div class="absolute -end-2 bottom-1">
+          <span class="text-4rem leading-6">🙂</span>
+        </div>
+      </div>
+    ),
     children: [
       {
         path: '/simple-program',
@@ -189,8 +225,20 @@ export const routes: Routes[] = [
   },
   {
     path: '/ogl-examples',
-    name: 'OGL Examples',
-    Preview: (props) => <SectionTitle name={props.name} />,
+    name: ' ',
+    Preview: (props) => (
+      <div class="rounded-2 relative col-start-1 flex flex-col place-content-center place-items-center gap-1.5 overflow-hidden p-2 px-4">
+        <h2 class="text-4xl">
+          <a href="https://github.com/oframe/ogl" target="_blank">
+            OGL
+          </a>
+        </h2>
+        <span class="text-center text-sm">It's like WebGL, but it is WebGL</span>
+        <div class="absolute -end-2 bottom-1">
+          <span class="text-4rem leading-6">🚄</span>
+        </div>
+      </div>
+    ),
     children: [
       {
         path: '/polylines',

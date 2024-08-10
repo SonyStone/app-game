@@ -5,6 +5,8 @@ import { GL_FRAMEBUFFER_TARGET, GL_RENDERBUFFER_TARGET } from '@packages/webgl/s
 import type { OGLRenderingContext } from './renderer';
 
 export interface RenderTargetOptions {
+  /** id for debugging */
+  id: number | string;
   width: number;
   height: number;
   target: GL_FRAMEBUFFER_TARGET;
@@ -22,6 +24,8 @@ export interface RenderTargetOptions {
   unpackAlignment: number;
   premultiplyAlpha: boolean;
 }
+
+let _id = 0;
 
 /**
  * A render target.
@@ -41,6 +45,7 @@ export interface RenderTargetOptions {
  * * framebufferRenderbuffer
  */
 export class RenderTarget {
+  id: number | string;
   gl: OGLRenderingContext;
   width: number;
   height: number;
@@ -58,6 +63,7 @@ export class RenderTarget {
   constructor(
     gl: OGLRenderingContext,
     {
+      id = _id++,
       width = gl.canvas.width,
       height = gl.canvas.height,
       target = GL_FRAMEBUFFER_TARGET.FRAMEBUFFER,
@@ -76,6 +82,7 @@ export class RenderTarget {
       premultiplyAlpha
     }: Partial<RenderTargetOptions> = {}
   ) {
+    this.id = id;
     this.gl = gl;
     this.width = width;
     this.height = height;

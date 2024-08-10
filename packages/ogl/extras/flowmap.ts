@@ -8,7 +8,7 @@ import { OGLRenderingContext } from '../core/renderer';
 import { Texture } from '../core/texture';
 import fragment from './flowmap.frag?raw';
 import vertex from './flowmap.vert?raw';
-import { SwapBuffering, createSwapBuffering } from './swap-buffering';
+import { SwapBuffering } from './swap-buffering';
 
 export interface FlowmapOptions {
   size: number;
@@ -147,10 +147,7 @@ const createFBOs = ({
     depth: false
   };
 
-  const mask = createSwapBuffering({
-    gl,
-    options
-  });
+  const mask = new SwapBuffering(gl, options);
 
   uniform.value = mask.swap();
 

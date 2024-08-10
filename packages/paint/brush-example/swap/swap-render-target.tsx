@@ -1,5 +1,5 @@
 import { FVec2 } from '@packages/math';
-import { Mesh, OGLRenderingContext, Program, RenderTarget, Triangle, createSwapBuffering } from '@packages/ogl';
+import { Mesh, OGLRenderingContext, Program, RenderTarget, SwapBuffering, Triangle } from '@packages/ogl';
 import { RenderTargetOptions } from '@packages/ogl/core/render-target';
 import { createTimer } from '@packages/utils/timeout';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
@@ -28,10 +28,7 @@ export const createSwapRenderTarget = ({
   const timeout = createTimer();
   const outputTexture = { value: createTexture4colors(gl) };
 
-  const buffers = createSwapBuffering({
-    gl,
-    options: options
-  });
+  const swapBuffers = new SwapBuffering(gl, options);
   const layer = new RenderTarget(gl, options);
 
   (async () => {
@@ -93,7 +90,7 @@ export const createSwapRenderTarget = ({
       opacity.value = i;
       gl.renderer.render({
         scene: mesh,
-        target: buffers.write,
+        target: swapBuffers.write,
         clear: false
       });
       gl.renderer.render({
@@ -101,7 +98,7 @@ export const createSwapRenderTarget = ({
         target: layer,
         clear: false
       });
-      renderTextureUniform.value = buffers.swap();
+      renderTextureUniform.value = swapBuffers.swap();
       outputTexture.value = renderTextureUniform.value;
     }
 
@@ -113,7 +110,7 @@ export const createSwapRenderTarget = ({
       opacity.value = i;
       gl.renderer.render({
         scene: mesh,
-        target: buffers.write,
+        target: swapBuffers.write,
         clear: false
       });
       gl.renderer.render({
@@ -121,7 +118,7 @@ export const createSwapRenderTarget = ({
         target: layer,
         clear: false
       });
-      renderTextureUniform.value = buffers.swap();
+      renderTextureUniform.value = swapBuffers.swap();
       outputTexture.value = renderTextureUniform.value;
     }
 
@@ -133,7 +130,7 @@ export const createSwapRenderTarget = ({
       opacity.value = i;
       gl.renderer.render({
         scene: mesh,
-        target: buffers.write,
+        target: swapBuffers.write,
         clear: false
       });
       gl.renderer.render({
@@ -141,7 +138,7 @@ export const createSwapRenderTarget = ({
         target: layer,
         clear: false
       });
-      renderTextureUniform.value = buffers.swap();
+      renderTextureUniform.value = swapBuffers.swap();
       outputTexture.value = renderTextureUniform.value;
     }
 

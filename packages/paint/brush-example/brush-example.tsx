@@ -22,7 +22,7 @@ import { loadTextureAsync } from './utils/load-texture';
 export default function OglSwapTexturesView() {
   const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
 
-  const renderer = new Renderer({ dpr: 2, canvas });
+  const renderer = new Renderer({ dpr: 1, canvas });
   const gl = renderer.gl;
   gl.clearColor(1, 1, 1, 1);
 
@@ -43,7 +43,7 @@ export default function OglSwapTexturesView() {
     return camera;
   })();
   const targetVec3 = new Vec3().copy(target());
-  const controls = new Orbit(camera, { target: targetVec3 });
+  const controls = new Orbit(camera, { element: canvas, target: targetVec3 });
   const scene = new Transform();
 
   {
@@ -122,7 +122,7 @@ export default function OglSwapTexturesView() {
 
   const brush = createBrushRenderTarget({
     gl,
-    options: renderTargetOptions,
+    // options: renderTargetOptions,
     color: createMemo(() => rgbToNormalized(brushColor()))
   });
   const layers = createLayersRenderTarget({
@@ -150,7 +150,6 @@ export default function OglSwapTexturesView() {
     texture2: () => brushInstancing().texture,
     blendMode,
     opacity,
-    options: renderTargetOptions,
     colorBlendMode
   });
 
