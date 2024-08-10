@@ -6,7 +6,7 @@ import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect, createSignal, onMount } from 'solid-js';
 import { BlendModes, ColorBlendModes } from '../brush-example/blend-modes';
 import { BlendMesh } from '../brush-example/blend/blend-mesh';
-import { BrushStrokeMesh } from '../brush-example/brush-instancing/create-brush-instancing';
+import { BrushStrokeMesh } from '../brush-example/brush-instancing/brush-stroke-mesh';
 import { BrushMesh } from '../brush-example/brush/brush-mesh';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../brush-example/defaults';
 import { SquareComponent } from '../brush-example/square/square.component';

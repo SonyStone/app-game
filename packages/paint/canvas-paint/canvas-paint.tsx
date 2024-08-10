@@ -1,21 +1,13 @@
-import { Vec2Tuple } from '@packages/math';
-import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@packages/ogl';
-import { SwapBuffering } from '@packages/ogl/extras/swap-buffering';
-import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
+import { Renderer } from '@packages/ogl';
+import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { Accessor, createEffect, createSignal, onMount, untrack } from 'solid-js';
-import { BlendMesh } from '../brush-example/blend/blend-mesh';
-import { BrushStrokeMesh } from '../brush-example/brush-instancing/create-brush-instancing';
-import { BrushMesh } from '../brush-example/brush/brush-mesh';
-import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../brush-example/defaults';
+import { createEffect, createSignal, onMount, untrack } from 'solid-js';
 import { SquareComponent } from '../brush-example/square/square.component';
-import { hexToRgb, normalizedToRgb, rgbToHex, rgbToNormalized } from '../brush-example/utils/color-functions';
-import { TextureMesh } from '../brush-example/utils/texture-to-render-target/texture-mesh';
+import { hexToRgb, normalizedToRgb, rgbToHex } from '../brush-example/utils/color-functions';
 import { createPointerEvents } from './apply-pointer-events';
-import { createPointerEventsHandler } from './create-pointer-events-handler';
-import { pointToCanvasPoint } from './utils-point-position';
+import { createBrushStroke } from './brush-stroke';
 import { drawTestZigZagStrokePoints } from './zig-zag-stroke';
 
 export default function CanvasPaint() {
@@ -30,8 +22,6 @@ export default function CanvasPaint() {
     renderer.setSize(resize.width, resize.height);
   });
 
-  const scene = new Transform();
-
   console.clear();
 
   const [brushColor, setBrushColor] = makePersisted(
@@ -42,108 +32,12 @@ export default function CanvasPaint() {
     }
   );
 
-  const swapBuffers = new SwapBuffering(gl, DEFAULTS_RENDER_TARGET_OPTIONS);
-  const background = createBackground({ gl, swapBuffers });
-  background.render();
-
-  // creates and renderer brush texture
-  // ! brush spot texture
-  const brushTexture = new RenderTarget(gl, { ...DEFAULTS_RENDER_TARGET_OPTIONS, id: '🖼️brush' });
-  createSpotMesh({ gl, brushTexture, brushColor });
-
-  // creates swap buffer to merge brush stroke with brush strokes
-
-  const brushStrokeTexture = new RenderTarget(gl, { ...DEFAULTS_RENDER_TARGET_OPTIONS, id: '🖼️brush-stroke' });
-
-  // ! creates brush stroke
-  // ! mixes brush stroke with background
-  const brushStroke = (() => {
-    const brushStrokeMesh = new BrushStrokeMesh(gl);
-    createEffect(() => {
-      brushStrokeMesh.setBrushTexture(brushTexture.texture);
-      brushStrokeMesh.setBrushColor(rgbToNormalized(brushColor()));
-    });
-    const blendMesh = new BlendMesh(gl);
-
-    const [targetTexture, setTargetTexture] = createSignal(swapBuffers.write.texture, { equals: () => false });
-
-    let instance = 0;
-    let needsUpdate = false;
-    const markForUpdate = () => {
-      needsUpdate = true;
-    };
-    const render = (force?: boolean) => {
-      if (force) {
-        needsUpdate = true;
-      }
-      if (!needsUpdate) {
-        return;
-      }
-      needsUpdate = false;
-      brushStrokeMesh.render(brushStrokeTexture); // render brush stroke
-      blendMesh.setTexture1(swapBuffers.read.texture);
-      blendMesh.setTexture2(brushStrokeTexture.texture);
-      blendMesh.render(swapBuffers.write); // blend swap read with brush stroke into swap write
-      swapBuffers.swap(); // swap read with write
-      instance = 0;
-      setTargetTexture(swapBuffers.read.texture); // set scene target texture to swap read
-      console.log('🖼️rendering scene target texture');
-      renderer.render({ scene }); // render scene
-    };
-
-    const clearBrushStroke = () => {
-      brushStrokeMesh.clear(brushStrokeTexture);
-    };
-
-    let prev: Vec2Tuple | undefined;
-    let prevOpacity: number | undefined;
-    const [instancedCount, setInstancedCount] = createSignal(0);
-
-    const end = () => {
-      instance = 0;
-      swapBuffers.swap();
-      needsUpdate = true;
-    };
-
-    const setPoint = (point: Vec2Tuple, opacity: number) => {
-      brushStrokeMesh.setBrushSpot(instance, point, opacity);
-      brushStrokeMesh.setInstancedCount(instance + 1);
-      setInstancedCount(instance + 1);
-      instance++;
-    };
-
-    const add = (point: Vec2Tuple, opacity: number) => {
-      if (prev && prevOpacity !== undefined) {
-        const dist = Math.sqrt(Math.pow(point[0] - prev[0], 2) + Math.pow(point[1] - prev[1], 2));
-        const angle = Math.atan2(point[1] - prev[1], point[0] - prev[0]);
-
-        for (let i = 0; i < dist; i++) {
-          let point = [prev[0] + i * Math.cos(angle), prev[1] + i * Math.sin(angle)];
-          let tempOpacity = prevOpacity + (opacity - prevOpacity) * (i / dist);
-          point = pointToCanvasPoint(point, gl.canvas.clientWidth, gl.canvas.clientHeight);
-          setPoint(point, tempOpacity);
-        }
-      } else {
-        setPoint(pointToCanvasPoint(point, gl.canvas.clientWidth, gl.canvas.clientHeight), opacity);
-      }
-
-      prev = point;
-      prevOpacity = opacity;
-      needsUpdate = true;
-    };
-
-    return {
-      clear: clearBrushStroke,
-      render: render,
-      add: add,
-      apply: () => {},
-      // needsUpdate,
-      layer: targetTexture,
-      end: end,
-      instancedCount: instancedCount
-    };
-  })();
-  // ! end
+  const brushStroke = createBrushStroke({
+    gl,
+    brushColor,
+    size: () => [canvas.clientWidth, canvas.clientHeight],
+    renderer
+  });
 
   const [updateOnEvent, setUpdateOnEvent] = makePersisted(createSignal(false), {
     storage: sessionStorage,
@@ -153,15 +47,43 @@ export default function CanvasPaint() {
   const pointerEvents = createPointerEvents();
 
   onMount(async () => {
-    createPointerEventsHandler({
-      brushStroke,
-      element: canvasEl,
-      updateOnEvent
+    makeEventListener(canvasEl, 'pointerdown', (e: PointerEvent) => {
+      if (e.pressure === 0 || e.buttons !== 1) {
+        return;
+      }
+      let x = e.clientX;
+      let y = e.clientY;
+
+      brushStroke.add([x, y], e.pressure);
+    });
+    makeEventListener(canvasEl, 'pointermove', (e: PointerEvent) => {
+      const events = e.getCoalescedEvents();
+      if (events.length === 0) {
+        events.push(e);
+      }
+      for (const event of events) {
+        if (e.pressure === 0 || e.buttons !== 1) {
+          continue;
+        }
+        let x = event.clientX;
+        let y = event.clientY;
+
+        brushStroke.add([x, y], e.pressure);
+
+        if (untrack(updateOnEvent)) {
+          brushStroke.render(true);
+        }
+      }
+    });
+
+    makeEventListener(canvasEl, 'pointerup', (e) => {
+      brushStroke.end();
+      if (untrack(updateOnEvent)) {
+        brushStroke.render(false);
+      }
     });
 
     await pointerEvents.apply(canvasEl);
-
-    brushStroke.render(true);
   });
 
   const [, start, stop] = createRAF((t?: number | any) => {
@@ -176,7 +98,6 @@ export default function CanvasPaint() {
 
   return (
     <>
-      <pre class="absolute start-2 top-2 bg-white px-1">{brushStroke.instancedCount()}</pre>
       <div class="absolute bottom-2 start-2 flex flex-col bg-white px-1">
         <button onClick={() => setUpdateOnEvent(!untrack(updateOnEvent))}>
           update on "{updateOnEvent() ? 'event' : 'requestAnimationFrame'}"
@@ -192,19 +113,11 @@ export default function CanvasPaint() {
         <div class="flex flex-wrap gap-4">
           <button
             onClick={() => {
-              background.clear();
-              brushStroke.render(true);
-            }}
-          >
-            Clear
-          </button>
-          <button
-            onClick={() => {
               brushStroke.clear();
               brushStroke.render(true);
             }}
           >
-            Clear Brush Stroke
+            Clear
           </button>
           <button
             onClick={() => {
@@ -216,40 +129,40 @@ export default function CanvasPaint() {
         </div>
       </div>
       {canvasEl}
-      <SquareComponent gl={gl} parent={scene} texture={brushStroke.layer()} zIndex={0.9} />
+      <SquareComponent gl={gl} parent={brushStroke.scene} texture={brushStroke.layer()} zIndex={0.9} />
       <pre class="absolute right-0 top-0 bg-white">Brush</pre>
       <SquareComponent
         gl={gl}
-        parent={scene}
+        parent={brushStroke.scene}
         position={{ top: 0.9, bottom: 0.5, left: 0.5, right: 0.9 }}
-        texture={brushTexture.texture}
+        texture={brushStroke.brushTexture.texture}
         zIndex={0.1}
         transparent
       />
       <pre class="top-25% absolute right-0 bg-white">Brush Stroke</pre>
       <SquareComponent
         gl={gl}
-        parent={scene}
+        parent={brushStroke.scene}
         position={{ top: 0.4, bottom: 0, left: 0.5, right: 0.9 }}
-        texture={brushStrokeTexture.texture}
+        texture={brushStroke.brushStrokeTexture.texture}
         zIndex={0.2}
         transparent
       />
       <pre class="top-50% absolute right-0 bg-white">Swap Read</pre>
       <SquareComponent
         gl={gl}
-        parent={scene}
+        parent={brushStroke.scene}
         position={{ top: -0.1, bottom: -0.5, left: 0.5, right: 0.9 }}
-        texture={swapBuffers.read.texture}
+        texture={brushStroke.swapBuffers.read.texture}
         zIndex={0.3}
         transparent
       />
       <pre class="top-75% absolute right-0 bg-white">Swap Write</pre>
       <SquareComponent
         gl={gl}
-        parent={scene}
+        parent={brushStroke.scene}
         position={{ top: -0.6, bottom: -1, left: 0.5, right: 0.9 }}
-        texture={swapBuffers.write.texture}
+        texture={brushStroke.swapBuffers.write.texture}
         zIndex={0.4}
         transparent
       />
@@ -258,40 +171,3 @@ export default function CanvasPaint() {
     </>
   );
 }
-
-const createSpotMesh = ({
-  gl,
-  brushTexture,
-  brushColor
-}: {
-  gl: OGLRenderingContext;
-  brushTexture: RenderTarget;
-  brushColor: Accessor<[number, number, number]>;
-}) => {
-  const spotMesh = new BrushMesh(gl);
-  createEffect(() => {
-    spotMesh.setColor(rgbToNormalized(brushColor()));
-    spotMesh.render(brushTexture);
-    console.log('1️⃣ rendering brush texture', brushTexture.id);
-  });
-};
-
-const createBackground = ({ gl, swapBuffers }: { gl: OGLRenderingContext; swapBuffers: SwapBuffering }) => {
-  const backgroundTextTexture = createTexture4colors(
-    gl,
-    [255 * 0.1, 255 * 0.1, 255 * 0.1, 255],
-    [0, 255 * 0.4, 0, 255],
-    [255 * 0.8, 0, 0, 255],
-    [0, 0, 255 * 0.4, 255]
-  );
-  const mesh = new TextureMesh(gl, { texture: backgroundTextTexture });
-  const render = () => {
-    mesh.render(swapBuffers.read);
-  };
-  const clear = () => {
-    mesh.render(swapBuffers.read);
-    mesh.render(swapBuffers.write);
-  };
-
-  return { mesh, render, clear };
-};

@@ -2,13 +2,16 @@ import { createEffect, onMount } from 'solid-js';
 
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { createWindowSize } from '@solid-primitives/resize-observer';
+import { createPointerEvents } from '../canvas-paint/apply-pointer-events';
 import Worker from './offscreen-canvas-paint.worker?worker';
 
 export default function OffscreenCanvasPaint() {
   const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
   const worker = new Worker();
 
-  onMount(() => {
+  const pointerEvents = createPointerEvents();
+
+  onMount(async () => {
     // should be mounted before use
     const offscreenCanvas = canvas.transferControlToOffscreen();
     // takes way more time to render
@@ -16,7 +19,11 @@ export default function OffscreenCanvasPaint() {
 
     onMount(() => {
       makeEventListener(canvas, 'pointermove', (e: PointerEvent) => {
-        for (const event of e.getCoalescedEvents()) {
+        const events = e.getCoalescedEvents();
+        if (events.length === 0) {
+          events.push(e);
+        }
+        for (const event of events) {
           worker.postMessage({
             type: 'pointermove',
             event: {
@@ -41,6 +48,8 @@ export default function OffscreenCanvasPaint() {
         });
       });
     });
+
+    await pointerEvents.apply(canvas);
   });
 
   const resize = createWindowSize();

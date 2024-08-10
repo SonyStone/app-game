@@ -26,11 +26,11 @@ export const createZigZagPoints = (size: [width: number, height: number]) => {
  */
 export const drawTestZigZagStrokePoints = (
   gl: OGLRenderingContext,
-  brush: { add: (point: Vec2Tuple, opacity: number) => void; apply: () => void }
+  brush: { add: (point: Vec2Tuple, opacity: number) => void; end: () => void }
 ) => {
   const points = createZigZagPoints([gl.canvas.clientWidth, gl.canvas.clientHeight]);
   for (const [index, point] of points.entries()) {
     brush.add(point, index / points.length);
   }
-  brush.apply();
+  brush.end();
 };
