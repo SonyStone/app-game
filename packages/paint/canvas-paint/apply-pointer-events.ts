@@ -9,7 +9,7 @@ export const createPointerEvents = () => {
 
   return {
     apply: async (element: Element) => {
-      const data = (await import(pointerEventsData)).default;
+      const data = await (await fetch(pointerEventsData)).json();
       for (const dataEvent of data) {
         timeout(dataEvent.timeStamp - data[0].timeStamp).then(() => {
           // console.log(`dataEvent`, dataEvent.type, dataEvent.clientX, dataEvent.clientY);
