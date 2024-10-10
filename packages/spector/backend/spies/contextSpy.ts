@@ -222,7 +222,7 @@ export class ContextSpy {
       }
     }
 
-    debugger;
+    // debugger;
 
     for (let i = 0; i < members.length; i++) {
       const member = members[i];

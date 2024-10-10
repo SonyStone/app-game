@@ -3,7 +3,13 @@ import { Accessor, createEffect, createSignal, onCleanup, untrack } from 'solid-
 
 export function numberPrecisionDragInput(
   element: HTMLElement,
-  props: { value?: Accessor<number> | number; onChange?: (v: number) => void }
+  props: {
+    value?: Accessor<number> | number;
+    onChange?: (v: number) => void;
+    step?: '100' | '10' | '1' | '.1' | '.01' | '.001' | '.0001';
+    max?: '100' | '10' | '1' | '.1' | '.01' | '.001' | '.0001';
+    min?: '100' | '10' | '1' | '.1' | '.01' | '.001' | '.0001';
+  }
 ) {
   const elements = ['100', '10', '1', '.1', '.01', '.001', '.0001'].map(
     (v, i) =>
@@ -16,6 +22,15 @@ export function numberPrecisionDragInput(
         </div>
       ) as HTMLElement
   );
+  const elementsPos = {
+    '100': -120,
+    '10': -80,
+    '1': -40,
+    '.1': 0,
+    '.01': +40,
+    '.001': +80,
+    '.0001': +120
+  };
 
   const testElement = (
     <div class="absolute left-0 top-0 flex w-10 cursor-e-resize flex-col border border-black bg-white">{elements}</div>
@@ -56,7 +71,7 @@ export function numberPrecisionDragInput(
         placement: 'top-end',
         middleware: [
           offset(({ rects }) => ({
-            mainAxis: -rects.floating.height / 2 - rects.reference.height / 2,
+            mainAxis: -rects.floating.height / 2 - rects.reference.height / 2 + (elementsPos[props.step] ?? 0),
             alignmentAxis: rects.reference.width - e.offsetX - rects.floating.width / 2
           })),
           shift({

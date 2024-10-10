@@ -26,13 +26,7 @@ import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createBrushMesh } from './create-brush-mesh';
 
 export default function Paint() {
-  const canvas = (
-    <canvas
-      style={{
-        'touch-action': 'none'
-      }}
-    ></canvas>
-  ) as HTMLCanvasElement;
+  const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
 
   const pointer = createPointerData(canvas);
 

@@ -8,7 +8,6 @@ export const createTimer = () => {
   let rejectFn: () => void;
 
   onCleanup(() => {
-    console.log(`onCleanup`, rejectFn);
     clearTimeout(timeout);
     rejectFn?.();
   });

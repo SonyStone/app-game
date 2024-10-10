@@ -25,7 +25,7 @@ export default function GeometricAlgebra() {
 
   ganja();
 
-  v3;
+  console.log('v3', v3);
 
   function Line1() {
     const v_1 = FVec2.create(1, 0);

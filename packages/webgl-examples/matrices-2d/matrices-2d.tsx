@@ -1,4 +1,4 @@
-import { FMat3, Vec2 } from '@packages/math';
+import { m3, Vec2 } from '@packages/math';
 import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
 import { createBuffer } from '@packages/webgl/webgl-objects/buffer';
 import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
@@ -11,7 +11,7 @@ import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 
 /**
- * 
+ *
  * @example
  * ```tsx
  * <Canvas>
@@ -69,7 +69,14 @@ export default function Matrices2d() {
   function drawScene() {
     resizeCanvasToDisplaySize(canvas);
     program.color(color);
-    const matrix = projection(canvas.width, canvas.height).translate(translation()).rotateY(rotation).scale(scale);
+
+    let matrix = projection(canvas.width, canvas.height);
+    {
+      matrix = m3.translate(matrix, translation());
+      matrix = m3.rotateY(matrix, rotation);
+      matrix = m3.scale(matrix, scale);
+    }
+
     program.matrix(matrix);
 
     gl.clear();
@@ -124,7 +131,7 @@ function RangeInput(props: { value: number; onChange: (v: number) => void; name:
 
 function projection(width: number, height: number) {
   // Note: This matrix flips the Y axis so that 0 is at the top.
-  return new FMat3().set(2 / width, 0, 0, 0, -2 / height, 0, -1, 1, 1);
+  return m3.set(m3.createFMat3(), 2 / width, 0, 0, 0, -2 / height, 0, -1, 1, 1);
 }
 
 /**

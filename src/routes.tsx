@@ -96,7 +96,7 @@ export const routes: Routes[] = [
   },
   {
     path: '/paint',
-    Preview: (props) => (
+    Preview: () => (
       <div class="rounded-2 relative col-start-1 flex flex-col place-content-center place-items-center gap-1.5 overflow-hidden p-2 px-4">
         <h2 class="text-4xl">Paint App</h2>
         <span class="text-center text-sm">Stuff associated with creating a drawing application</span>
@@ -124,7 +124,6 @@ export const routes: Routes[] = [
         Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
         component: lazy(() => import('@packages/paint/paint-1/paint-page'))
       },
-
       {
         path: '/ogl-paint-full-screen',
         name: 'OGL paint full screen canvas',
@@ -162,22 +161,40 @@ export const routes: Routes[] = [
         component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint'))
       },
       {
-        path: '/canvas-paint-step-by-step',
-        name: 'Paint on WebGL Canvas Step by Step',
+        path: '/canvas-paint-step-by-step-1',
+        name: 'Paint on WebGL Canvas Step by Step #1',
         Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint-step-by-step'))
+        component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint-step-by-step-1'))
+      },
+      {
+        path: '/canvas-paint-step-by-step-2',
+        name: 'Paint on WebGL Canvas Step by Step #2',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint-step-by-step-2'))
       },
       {
         path: '/offscreen-canvas-paint',
         name: 'Paint on WebGL OffscreenCanvas',
         Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
         component: lazy(() => import('@packages/paint/offscreen-canvas-paint/offscreen-canvas-paint'))
+      },
+      {
+        path: '/ui-example',
+        name: 'Paint UI Example',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/ui-example/ui-example'))
+      },
+      {
+        path: '/trigonometry',
+        name: 'Trigonometry Example',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/paint/ui-example/trigonometry'))
       }
     ]
   },
   {
     path: '/webgl-examples',
-    Preview: (props) => (
+    Preview: () => (
       <div class="rounded-2 relative col-start-1 flex flex-col place-content-center place-items-center gap-1.5 overflow-hidden p-2 px-4">
         <h2 class="text-4xl">
           <a href="https://webgl2fundamentals.org/" target="_blank">
@@ -226,7 +243,7 @@ export const routes: Routes[] = [
   {
     path: '/ogl-examples',
     name: ' ',
-    Preview: (props) => (
+    Preview: () => (
       <div class="rounded-2 relative col-start-1 flex flex-col place-content-center place-items-center gap-1.5 overflow-hidden p-2 px-4">
         <h2 class="text-4xl">
           <a href="https://github.com/oframe/ogl" target="_blank">
@@ -429,6 +446,31 @@ export const routes: Routes[] = [
         name: 'Breakout',
         Preview: (props) => <Thumbnail href={props.path} thumbnail={breakoutThumbnail} name={props.name} />,
         component: lazy(() => import('@packages/phaser-examples/breakout'))
+      }
+    ]
+  },
+  {
+    path: '/pixijs-examples',
+    name: 'PixiJS Examples',
+    Preview: (props) => <SectionTitle name={props.name} />,
+    children: [
+      {
+        path: '/basic',
+        name: 'Basic',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/pixijs-examples/basic'))
+      },
+      {
+        path: '/blend-modes',
+        name: 'Blend Modes',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/pixijs-examples/blend-modes'))
+      },
+      {
+        path: '/mouse-trail',
+        name: 'Mouse Trail',
+        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+        component: lazy(() => import('@packages/pixijs-examples/mouse-trail'))
       }
     ]
   },

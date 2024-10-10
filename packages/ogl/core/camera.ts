@@ -74,8 +74,13 @@ export class Camera extends Transform {
     // Use orthographic if left/right set, else default to perspective camera
     this.type = left || right ? 'orthographic' : 'perspective';
 
-    if (this.type === 'orthographic') this.orthographic();
-    else this.perspective();
+    console.log('Camera', this.type);
+
+    if (this.type === 'orthographic') {
+      this.orthographic();
+    } else {
+      this.perspective();
+    }
   }
 
   perspective({

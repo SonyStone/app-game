@@ -1,4 +1,4 @@
-import * as m3 from '@packages/math/m3';
+import { m3 } from '@packages/math';
 import '@pixi/math-extras';
 import { Container, Graphics, IPointData, Point, Transform } from 'pixi.js';
 import { Key } from 'ts-keycode-enum';
@@ -94,7 +94,7 @@ export function createTank() {
   return container;
 }
 
-function setPixiMatrix(t: Transform, m2: m3.Mat3) {
+function setPixiMatrix(t: Transform, m2: m3.Mat3Tuple) {
   t.localTransform.set(m2[0], m2[1], m2[3], m2[4], m2[6], m2[7]);
   t.setFromMatrix(t.localTransform);
 }

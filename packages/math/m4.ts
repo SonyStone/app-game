@@ -107,7 +107,7 @@ export const clone = (m: Mat4): Mat4 => {
  * @param m __mut__ The matrix.
  * @return An n-by-n identity matrix.
  */
-export function identity(m: Mat4 = new Mat4()): Mat4 {
+export const identity = (m: Mat4 = new Mat4()): Mat4 => {
   m[0] = 1;
   m[1] = 0;
   m[2] = 0;
@@ -129,13 +129,13 @@ export function identity(m: Mat4 = new Mat4()): Mat4 {
   m[15] = 1;
 
   return m;
-}
+};
 
 /**
  * Make the transpose of a matrix.
  * @param m __mut__ The matrix.
  */
-export function transpose(m: Mat4) {
+export const transpose = (m: Mat4) => {
   let t;
 
   t = m[1];
@@ -161,14 +161,14 @@ export function transpose(m: Mat4) {
   t = m[11];
   m[11] = m[14];
   m[14] = t;
-}
+};
 
 /**
  * Computes the inverse of a 4-by-4 matrix.
  * @param m __mut__ The matrix.
  * @return The inverse of m.
  */
-export function inverse(m: Mat4) {
+export const inverse = (m: Mat4) => {
   const m00 = m[0];
   const m01 = m[1];
   const m02 = m[2];
@@ -248,14 +248,14 @@ export function inverse(m: Mat4) {
   m[13] = d * (tmp_20 * m32 + tmp_12 * m02 + tmp_19 * m22 - (tmp_18 * m22 + tmp_21 * m32 + tmp_13 * m02));
   m[14] = d * (tmp_18 * m12 + tmp_23 * m32 + tmp_15 * m02 - (tmp_22 * m32 + tmp_14 * m02 + tmp_19 * m12));
   m[15] = d * (tmp_22 * m22 + tmp_16 * m02 + tmp_21 * m12 - (tmp_20 * m12 + tmp_23 * m22 + tmp_17 * m02));
-}
+};
 
 /**
  * Multiplies two 4-by-4 matrices with a on the left and b on the right
  * @param a __mut__ The matrix on the left.
  * @param b The matrix on the right.
  */
-export function multiply(a: Mat4, b: Mat4) {
+export const multiply = (a: Mat4, b: Mat4) => {
   const a00 = a[0];
   const a01 = a[1];
   const a02 = a[2];
@@ -315,13 +315,13 @@ export function multiply(a: Mat4, b: Mat4) {
   a[13] = a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33;
   a[14] = a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33;
   a[15] = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
-}
+};
 
-export function multiplyArray(m: Mat4, arr: Mat4[]) {
+export const multiplyArray = (m: Mat4, arr: Mat4[]) => {
   for (let i = 0; i < arr.length; i++) {
     multiply(m, arr[i]);
   }
-}
+};
 
 /**
  * Sets the translation component of a 4-by-4 matrix to the given
@@ -329,12 +329,12 @@ export function multiplyArray(m: Mat4, arr: Mat4[]) {
  * @param a __mut__ The matrix.
  * @param v The vector.
  */
-export function setTranslation(m: Mat4, v: Vec3Tuple) {
+export const setTranslation = (m: Mat4, v: Vec3Tuple) => {
   m[12] = v[0];
   m[13] = v[1];
   m[14] = v[2];
   m[15] = 1;
-}
+};
 
 /**
  * Returns the translation component of a 4-by-4 matrix as a vector with 3
@@ -342,11 +342,11 @@ export function setTranslation(m: Mat4, v: Vec3Tuple) {
  * @param v __mut__ vector to hold result. If not passed a new one is created.
  * @param m The matrix.
  */
-export function getTranslation(v: Vec3Tuple, m: Mat4) {
+export const getTranslation = (v: Vec3Tuple, m: Mat4) => {
   v[0] = m[12];
   v[1] = m[13];
   v[2] = m[14];
-}
+};
 
 /**
  * Returns an axis of a 4x4 matrix as a vector with 3 entries
@@ -354,7 +354,7 @@ export function getTranslation(v: Vec3Tuple, m: Mat4) {
  * @param axis The axis 0 = x, 1 = y, 2 = z;
  * @return The axis component of m.
  */
-export function getAxis(m: Mat4, axis: number): InstanceType<typeof FVec3> {
+export const getAxis = (m: Mat4, axis: number): InstanceType<typeof FVec3> => {
   const v = FVec3.create();
 
   const off = axis * 4;
@@ -362,7 +362,7 @@ export function getAxis(m: Mat4, axis: number): InstanceType<typeof FVec3> {
   v[1] = m[off + 1];
   v[2] = m[off + 2];
   return v;
-}
+};
 
 /**
  * Sets an axis of a 4x4 matrix as a vector with 3 entries
@@ -370,12 +370,12 @@ export function getAxis(m: Mat4, axis: number): InstanceType<typeof FVec3> {
  * @param v the axis vector
  * @param axis The axis  0 = x, 1 = y, 2 = z;
  */
-export function setAxis(m: Mat4, v: Vec3Tuple, axis: number) {
+export const setAxis = (m: Mat4, v: Vec3Tuple, axis: number) => {
   const off = axis * 4;
   m[off + 0] = v[0];
   m[off + 1] = v[1];
   m[off + 2] = v[2];
-}
+};
 
 /**
  * Computes a 4-by-4 perspective transformation matrix given the angular height
@@ -396,7 +396,7 @@ export function setAxis(m: Mat4, v: Vec3Tuple, axis: number) {
  * @param zFar The depth (negative z coordinate)
  *     of the far clipping plane.
  */
-export function perspective(m: Mat4, fieldOfViewYInRadians: number, aspect: number, zNear: number, zFar: number) {
+export const perspective = (m: Mat4, fieldOfViewYInRadians: number, aspect: number, zNear: number, zFar: number) => {
   const f = Math.tan(Math.PI * 0.5 - 0.5 * fieldOfViewYInRadians);
   const rangeInv = 1.0 / (zNear - zFar);
 
@@ -419,9 +419,9 @@ export function perspective(m: Mat4, fieldOfViewYInRadians: number, aspect: numb
   m[13] = 0;
   m[14] = zNear * zFar * rangeInv * 2;
   m[15] = 0;
-}
+};
 
-export function makePerspective(
+export const makePerspective = (
   m: Mat4,
   left: number,
   right: number,
@@ -429,7 +429,7 @@ export function makePerspective(
   top: number,
   near: number,
   far: number
-) {
+) => {
   const x = (2 * near) / (right - left);
   const y = (2 * near) / (top - bottom);
 
@@ -454,7 +454,7 @@ export function makePerspective(
   m[7] = 0;
   m[11] = -1;
   m[15] = 0;
-}
+};
 
 /**
  * Computes a 4-by-4 orthogonal transformation matrix given the left, right,
@@ -470,7 +470,7 @@ export function makePerspective(
  * @param far The depth (negative z coordinate)
  *     of the far clipping plane.
  */
-export function ortho(m: Mat4, left: number, right: number, bottom: number, top: number, near: number, far: number) {
+export const ortho = (m: Mat4, left: number, right: number, bottom: number, top: number, near: number, far: number) => {
   m[0] = 2 / (right - left);
   m[1] = 0;
   m[2] = 0;
@@ -490,7 +490,7 @@ export function ortho(m: Mat4, left: number, right: number, bottom: number, top:
   m[13] = (top + bottom) / (bottom - top);
   m[14] = (far + near) / (near - far);
   m[15] = 1;
-}
+};
 
 /**
  * Computes a 4-by-4 perspective transformation matrix given the left, right,
@@ -509,7 +509,15 @@ export function ortho(m: Mat4, left: number, right: number, bottom: number, top:
  * @param near The negative z coordinate of the near plane of the box.
  * @param far The negative z coordinate of the far plane of the box.
  */
-export function frustum(m: Mat4, left: number, right: number, bottom: number, top: number, near: number, far: number) {
+export const frustum = (
+  m: Mat4,
+  left: number,
+  right: number,
+  bottom: number,
+  top: number,
+  near: number,
+  far: number
+) => {
   const dx = right - left;
   const dy = top - bottom;
   const dz = near - far;
@@ -530,11 +538,11 @@ export function frustum(m: Mat4, left: number, right: number, bottom: number, to
   m[13] = 0;
   m[14] = (near * far) / dz;
   m[15] = 0;
-}
+};
 
-let xAxis = FVec3.create();
-let yAxis = FVec3.create();
-let zAxis = FVec3.create();
+const xAxis = FVec3.create();
+const yAxis = FVec3.create();
+const zAxis = FVec3.create();
 
 /**
  * Computes a 4-by-4 look-at transformation.
@@ -548,7 +556,7 @@ let zAxis = FVec3.create();
  * @param target The position meant to be viewed.
  * @param up A vector pointing up.
  */
-export function lookAt(m: Mat4, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple) {
+export const lookAt = (m: Mat4, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple) => {
   zAxis.copy(eye).sub(target).normalize();
   xAxis.copy(up).cross(zAxis).normalize();
   yAxis.copy(zAxis).cross(xAxis).normalize();
@@ -569,7 +577,7 @@ export function lookAt(m: Mat4, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple
   m[13] = eye[1];
   m[14] = eye[2];
   m[15] = 1;
-}
+};
 
 /**
  * Translates the given 4-by-4 matrix by the given vector v.
@@ -578,7 +586,7 @@ export function lookAt(m: Mat4, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple
  * @param v The vector by
  *     which to translate.
  */
-export function translate(m: Mat4, v: Vec3Tuple): void {
+export const translate = (m: Mat4, v: Vec3Tuple): void => {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -607,7 +615,7 @@ export function translate(m: Mat4, v: Vec3Tuple): void {
   m[13] = m01 * v0 + m11 * v1 + m21 * v2 + m31;
   m[14] = m02 * v0 + m12 * v1 + m22 * v2 + m32;
   m[15] = m03 * v0 + m13 * v1 + m23 * v2 + m33;
-}
+};
 
 /**
  * Rotates the given 4-by-4 matrix around the x-axis by the given
@@ -616,7 +624,7 @@ export function translate(m: Mat4, v: Vec3Tuple): void {
  * @param m __mut__ The matrix to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function rotateX(m: Mat4, angleInRadians: number) {
+export const rotateX = (m: Mat4, angleInRadians: number) => {
   const m10 = m[4];
   const m11 = m[5];
   const m12 = m[6];
@@ -639,7 +647,7 @@ export function rotateX(m: Mat4, angleInRadians: number) {
   m[9] = c * m21 - s * m11;
   m[10] = c * m22 - s * m12;
   m[11] = c * m23 - s * m13;
-}
+};
 
 /**
  * Rotates the given 4-by-4 matrix around the y-axis by the given
@@ -648,7 +656,7 @@ export function rotateX(m: Mat4, angleInRadians: number) {
  * @param m __mut__ The matrix to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function rotateY(m: Mat4, angleInRadians: number) {
+export const rotateY = (m: Mat4, angleInRadians: number) => {
   const m00 = m[0];
   const m01 = m[1];
   const m02 = m[2];
@@ -669,7 +677,7 @@ export function rotateY(m: Mat4, angleInRadians: number) {
   m[9] = c * m21 + s * m01;
   m[10] = c * m22 + s * m02;
   m[11] = c * m23 + s * m03;
-}
+};
 
 /**
  * Rotates the given 4-by-4 matrix around the z-axis by the given
@@ -678,7 +686,7 @@ export function rotateY(m: Mat4, angleInRadians: number) {
  * @param m __mut__ The matrix to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function setRotateZ(m: Mat4, angleInRadians: number) {
+export const setRotateZ = (m: Mat4, angleInRadians: number) => {
   const c = Math.cos(angleInRadians);
   const s = Math.sin(angleInRadians);
 
@@ -690,7 +698,7 @@ export function setRotateZ(m: Mat4, angleInRadians: number) {
   m[5] = c - s;
   m[6] = c - s;
   m[7] = c - s;
-}
+};
 
 /**
  * Rotates the given 4-by-4 matrix around the z-axis by the given
@@ -699,7 +707,7 @@ export function setRotateZ(m: Mat4, angleInRadians: number) {
  * @param m __mut__ The matrix to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function rotateZ(m: Mat4, angleInRadians: number) {
+export const rotateZ = (m: Mat4, angleInRadians: number) => {
   const m00 = m[0];
   const m01 = m[1];
   const m02 = m[2];
@@ -720,7 +728,7 @@ export function rotateZ(m: Mat4, angleInRadians: number) {
   m[5] = c * m11 - s * m01;
   m[6] = c * m12 - s * m02;
   m[7] = c * m13 - s * m03;
-}
+};
 
 /**
  * Rotates the given 4-by-4 matrix around the given axis by the
@@ -731,7 +739,7 @@ export function rotateZ(m: Mat4, angleInRadians: number) {
  *     about which to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export function axisRotate(m: Mat4, [x, y, z]: Vec3Tuple, angleInRadians: number) {
+export const axisRotate = (m: Mat4, [x, y, z]: Vec3Tuple, angleInRadians: number) => {
   const n = Math.sqrt(x * x + y * y + z * z);
 
   x /= n;
@@ -780,7 +788,7 @@ export function axisRotate(m: Mat4, [x, y, z]: Vec3Tuple, angleInRadians: number
   m[9] = r20 * m01 + r21 * m11 + r22 * m21;
   m[10] = r20 * m02 + r21 * m12 + r22 * m22;
   m[11] = r20 * m03 + r21 * m13 + r22 * m23;
-}
+};
 
 /**
  * Scales the given 4-by-4 matrix in each dimension by an amount
@@ -791,7 +799,7 @@ export function axisRotate(m: Mat4, [x, y, z]: Vec3Tuple, angleInRadians: number
  * @param v A vector of three entries specifying the
  *     factor by which to scale in each dimension.
  */
-export function scale(m: Mat4, [v0, v1, v2]: Vec3Tuple) {
+export const scale = (m: Mat4, [v0, v1, v2]: Vec3Tuple) => {
   m[0] = v0 * m[0 * 4 + 0];
   m[1] = v0 * m[0 * 4 + 1];
   m[2] = v0 * m[0 * 4 + 2];
@@ -804,7 +812,7 @@ export function scale(m: Mat4, [v0, v1, v2]: Vec3Tuple) {
   m[9] = v2 * m[2 * 4 + 1];
   m[10] = v2 * m[2 * 4 + 2];
   m[11] = v2 * m[2 * 4 + 3];
-}
+};
 
 /**
  * Takes a 4-by-4 matrix and a vector with 3 entries,
@@ -814,7 +822,7 @@ export function scale(m: Mat4, [v0, v1, v2]: Vec3Tuple) {
  * @param v __mut__ The point to be transformed.
  * @param m The matrix.
  */
-export function transformPoint(v: Vec3Tuple, m: Mat4) {
+export const transformPoint = (v: Vec3Tuple, m: Mat4) => {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -824,7 +832,7 @@ export function transformPoint(v: Vec3Tuple, m: Mat4) {
   v[0] = (v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0] + m[3 * 4 + 0]) / d;
   v[1] = (v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1] + m[3 * 4 + 1]) / d;
   v[2] = (v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2] + m[3 * 4 + 2]) / d;
-}
+};
 
 /**
  * Takes a 4-by-4 matrix and a vector with 3 entries, interprets the vector as a
@@ -837,7 +845,7 @@ export function transformPoint(v: Vec3Tuple, m: Mat4) {
  * @param m __mut__ The matrix to be transformed.
  * @param v The direction.
  */
-export function transformDirection(m: Mat4, v: Vec3Tuple): void {
+export const transformDirection = (m: Mat4, v: Vec3Tuple) => {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -845,9 +853,9 @@ export function transformDirection(m: Mat4, v: Vec3Tuple): void {
   m[0] = v0 * m[0 * 4 + 0] + v1 * m[1 * 4 + 0] + v2 * m[2 * 4 + 0];
   m[1] = v0 * m[0 * 4 + 1] + v1 * m[1 * 4 + 1] + v2 * m[2 * 4 + 1];
   m[2] = v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2];
-}
+};
 
-let mi = identity();
+const MI = identity();
 
 /**
  * Takes a 4-by-4 matrix m and a vector v with 3 entries, interprets the vector
@@ -861,18 +869,18 @@ let mi = identity();
  * @param v __mut__ The normal to be transformed.
  * @param m The matrix.
  */
-export function transformNormal(v: Vec3Tuple, m: Mat4) {
-  copy(mi, m);
-  inverse(mi);
+export const transformNormal = (v: Vec3Tuple, m: Mat4) => {
+  copy(MI, m);
+  inverse(MI);
 
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
 
-  v[0] = v0 * mi[0 * 4 + 0] + v1 * mi[0 * 4 + 1] + v2 * mi[0 * 4 + 2];
-  v[1] = v0 * mi[1 * 4 + 0] + v1 * mi[1 * 4 + 1] + v2 * mi[1 * 4 + 2];
-  v[2] = v0 * mi[2 * 4 + 0] + v1 * mi[2 * 4 + 1] + v2 * mi[2 * 4 + 2];
-}
+  v[0] = v0 * MI[0 * 4 + 0] + v1 * MI[0 * 4 + 1] + v2 * MI[0 * 4 + 2];
+  v[1] = v0 * MI[1 * 4 + 0] + v1 * MI[1 * 4 + 1] + v2 * MI[1 * 4 + 2];
+  v[2] = v0 * MI[2 * 4 + 0] + v1 * MI[2 * 4 + 1] + v2 * MI[2 * 4 + 2];
+};
 
 /**
  *
@@ -881,7 +889,7 @@ export function transformNormal(v: Vec3Tuple, m: Mat4) {
  * @param b
  * @param value
  */
-export function transition(m: Mat4, a: Mat4, b: Mat4, value: number) {
+export const transition = (m: Mat4, a: Mat4, b: Mat4, value: number) => {
   const start = 1 - value;
   const end = value;
   m[0] = a[0] * start + b[0] * end;
@@ -903,4 +911,4 @@ export function transition(m: Mat4, a: Mat4, b: Mat4, value: number) {
   m[13] = a[13] * start + b[13] * end;
   m[14] = a[14] * start + b[14] * end;
   m[15] = a[15] * start + b[15] * end;
-}
+};

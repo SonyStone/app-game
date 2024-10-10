@@ -123,7 +123,7 @@ export class Program {
 
     // Get active uniform locations
     this.uniformLocations = new Map();
-    let numUniforms = gl.getProgramParameter(this.program, gl.ACTIVE_UNIFORMS);
+    const numUniforms = gl.getProgramParameter(this.program, gl.ACTIVE_UNIFORMS);
     for (let uIndex = 0; uIndex < numUniforms; uIndex++) {
       let uniform = gl.getActiveUniform(this.program, uIndex)! as UniformInfo;
       this.uniformLocations.set(uniform, gl.getUniformLocation(this.program, uniform.name)!);

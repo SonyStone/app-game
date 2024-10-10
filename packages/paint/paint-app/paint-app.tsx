@@ -1,10 +1,10 @@
-import { FMat3 } from '@packages/math';
+import { m3 } from '@packages/math';
 import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 
 export default function PaintApp() {
-  const canvas = (<canvas class="max-w-1024px aspect-square w-full touch-none" />) as HTMLCanvasElement;
+  const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
 
   const gl = createWebGL2Renderer(canvas);
 
@@ -17,7 +17,7 @@ export default function PaintApp() {
       position: attribute.name('a_position').location
     }),
     uniforms: (uniform) => ({
-      matrix: uniform.name('u_matrix').mat3
+      matrix: uniform.name('u_matrix').mat3()
     })
   })!;
 
@@ -44,7 +44,7 @@ export default function PaintApp() {
   // Tell it to use our program (pair of shaders)
   program.use();
 
-  const matrix = projection(canvas.width, canvas.height).translate([256, 256]);
+  const matrix = m3.translate(projection(canvas.width, canvas.height), [256, 256]);
   program.matrix(matrix);
 
   // draw
@@ -57,5 +57,5 @@ export default function PaintApp() {
 
 function projection(width: number, height: number) {
   // Note: This matrix flips the Y axis so that 0 is at the top.
-  return new FMat3().set(2 / width, 0, 0, 0, -2 / height, 0, -1, 1, 1);
+  return m3.set(m3.createFMat3(), 2 / width, 0, 0, 0, -2 / height, 0, -1, 1, 1);
 }

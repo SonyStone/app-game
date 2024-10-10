@@ -1,5 +1,5 @@
 import { DEG_TO_RAD, PI, PI_2, RAD_TO_DEG } from './constants';
-import { FMat3, Mat3, Mat3Tuple } from './m3';
+import * as m3 from './m3';
 import * as m4 from './m4';
 import * as spherical from './spherical';
 import { clamp } from './utils/clamp';
@@ -9,26 +9,24 @@ import { FVec3, IVec3, UVec3, Vec3, Vec3Tuple } from './v3';
 import * as v4 from './v4';
 
 export {
-  Mat3,
-  FMat3,
-  type Mat3Tuple,
+  clamp,
+  DEG_TO_RAD,
+  FVec2,
+  FVec3,
+  IVec2,
+  IVec3,
+  m3,
   m4,
-  v4,
-  spherical,
   PI,
   PI_2,
-  DEG_TO_RAD,
   RAD_TO_DEG,
-  clamp,
-  FVec3,
-  IVec3,
-  Vec2,
+  spherical,
   UVec2,
-  FVec2,
-  Vec3,
   UVec3,
-  IVec2,
-  type Vec3Tuple,
+  v4,
+  Vec2,
+  Vec3,
+  type TypedArrayConstructor as NumberArrayConstructor,
   type Vec2Tuple,
-  type TypedArrayConstructor as NumberArrayConstructor
+  type Vec3Tuple
 };

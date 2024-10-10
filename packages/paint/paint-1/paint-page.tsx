@@ -1,6 +1,6 @@
 import PaintApp from './paint-app';
 
-export default function () {
+export default function PaintPage() {
   return (
     <>
       <PaintApp></PaintApp>

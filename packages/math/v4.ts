@@ -37,11 +37,11 @@ export type Vec4 = number[] | Float32Array;
  * @param {constructor} ctor the constructor for the type. Either `Float32Array` or `Array`
  * @return {constructor} previous constructor for Vec4
  */
-export function setDefaultType(ctor: typeof VecType) {
+export const setDefaultType = (ctor: typeof VecType) => {
   const oldType = VecType;
   VecType = ctor;
   return oldType;
-}
+};
 
 /**
  * Creates a Vec4; may be called with x, y, z, w to set initial values.
@@ -51,7 +51,7 @@ export function setDefaultType(ctor: typeof VecType) {
  * @param {number} [w] Initial w value.
  * @return {Vec4} the created vector
  */
-export function create(x: number = 0, y: number = 0, z: number = 0, w: number = 0): Vec4 {
+export const create = (x: number = 0, y: number = 0, z: number = 0, w: number = 0): Vec4 => {
   const dst = new VecType(4);
 
   dst[0] = x;
@@ -60,7 +60,7 @@ export function create(x: number = 0, y: number = 0, z: number = 0, w: number = 
   dst[3] = w;
 
   return dst;
-}
+};
 
 /**
  * Creates a Vec2; may be called with x, y, z to set initial values.
@@ -71,30 +71,30 @@ export function create(x: number = 0, y: number = 0, z: number = 0, w: number = 
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} the created vector
  */
-export function set(x: number = 0, y: number = 0, z: number = 0, w: number = 0, dst: Vec4 = new VecType(4)): Vec4 {
+export const set = (x: number = 0, y: number = 0, z: number = 0, w: number = 0, dst: Vec4 = new VecType(4)): Vec4 => {
   dst[0] = x;
   dst[1] = y;
   dst[2] = z;
   dst[3] = w;
 
   return dst;
-}
+};
 
-export function x(a: Vec4 | Vec3Tuple): number {
+export const x = (a: Vec4 | Vec3Tuple): number => {
   return a[0];
-}
+};
 
-export function y(a: Vec4 | Vec3Tuple): number {
+export const y = (a: Vec4 | Vec3Tuple): number => {
   return a[1];
-}
+};
 
-export function z(a: Vec4 | Vec3Tuple): number {
+export const z = (a: Vec4 | Vec3Tuple): number => {
   return a[2];
-}
+};
 
-export function w(a: Vec4): number {
+export const w = (a: Vec4): number => {
   return a[3];
-}
+};
 
 /**
  * Adds two vectors; assumes a and b have the same dimension.
@@ -103,14 +103,14 @@ export function w(a: Vec4): number {
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} A vector tha tis the sum of a and b.
  */
-export function add(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
+export const add = (a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 => {
   dst[0] = a[0] + b[0];
   dst[1] = a[1] + b[1];
   dst[2] = a[2] + b[2];
   dst[3] = a[3] + b[3];
 
   return dst;
-}
+};
 
 /**
  * Subtracts two vectors.
@@ -119,14 +119,14 @@ export function add(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} A vector that is the difference of a and b.
  */
-export function subtract(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
+export const subtract = (a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 => {
   dst[0] = a[0] - b[0];
   dst[1] = a[1] - b[1];
   dst[2] = a[2] - b[2];
   dst[3] = a[3] - b[3];
 
   return dst;
-}
+};
 
 /**
  * Performs linear interpolation on two vectors.
@@ -138,14 +138,14 @@ export function subtract(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} The linear interpolated result.
  */
-export function lerp(a: Vec4, b: Vec4, t: number, dst: Vec4 = new VecType(4)): Vec4 {
+export const lerp = (a: Vec4, b: Vec4, t: number, dst: Vec4 = new VecType(4)): Vec4 => {
   dst[0] = a[0] + t * (b[0] - a[0]);
   dst[1] = a[1] + t * (b[1] - a[1]);
   dst[2] = a[2] + t * (b[2] - a[2]);
   dst[3] = a[3] + t * (b[3] - a[3]);
 
   return dst;
-}
+};
 
 /**
  * Performs linear interpolation on two vectors.
@@ -157,14 +157,14 @@ export function lerp(a: Vec4, b: Vec4, t: number, dst: Vec4 = new VecType(4)): V
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} the linear interpolated result.
  */
-export function lerpV(a: Vec4, b: Vec4, t: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
+export const lerpV = (a: Vec4, b: Vec4, t: Vec4, dst: Vec4 = new VecType(4)): Vec4 => {
   dst[0] = a[0] + t[0] * (b[0] - a[0]);
   dst[1] = a[1] + t[1] * (b[1] - a[1]);
   dst[2] = a[2] + t[2] * (b[2] - a[2]);
   dst[3] = a[3] + t[3] * (b[3] - a[3]);
 
   return dst;
-}
+};
 
 /**
  * Return max values of two vectors.
@@ -175,14 +175,14 @@ export function lerpV(a: Vec4, b: Vec4, t: Vec4, dst: Vec4 = new VecType(4)): Ve
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} The max components vector.
  */
-export function max(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
+export const max = (a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 => {
   dst[0] = Math.max(a[0], b[0]);
   dst[1] = Math.max(a[1], b[1]);
   dst[2] = Math.max(a[2], b[2]);
   dst[3] = Math.max(a[3], b[3]);
 
   return dst;
-}
+};
 
 /**
  * Return min values of two vectors.
@@ -193,14 +193,14 @@ export function max(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} The min components vector.
  */
-export function min(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
+export const min = (a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 => {
   dst[0] = Math.min(a[0], b[0]);
   dst[1] = Math.min(a[1], b[1]);
   dst[2] = Math.min(a[2], b[2]);
   dst[3] = Math.min(a[3], b[3]);
 
   return dst;
-}
+};
 
 /**
  * Multiplies a vector by a scalar.
@@ -209,14 +209,14 @@ export function min(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} The scaled vector.
  */
-export function mulScalar(v: Vec4, k: number, dst: Vec4 = new VecType(4)): Vec4 {
+export const mulScalar = (v: Vec4, k: number, dst: Vec4 = new VecType(4)): Vec4 => {
   dst[0] = v[0] * k;
   dst[1] = v[1] * k;
   dst[2] = v[2] * k;
   dst[3] = v[3] * k;
 
   return dst;
-}
+};
 
 /**
  * Divides a vector by a scalar.
@@ -225,14 +225,14 @@ export function mulScalar(v: Vec4, k: number, dst: Vec4 = new VecType(4)): Vec4 
  * @param {Vec4} [dst] vector to hold result. If not new one is created.
  * @return {Vec4} The scaled vector.
  */
-export function divScalar(v: Vec4, k: number, dst: Vec4 = new VecType(4)): Vec4 {
+export const divScalar = (v: Vec4, k: number, dst: Vec4 = new VecType(4)): Vec4 => {
   dst[0] = v[0] / k;
   dst[1] = v[1] / k;
   dst[2] = v[2] / k;
   dst[3] = v[3] / k;
 
   return dst;
-}
+};
 
 /**
  * Computes the dot product of two vectors; assumes both vectors have
@@ -241,18 +241,18 @@ export function divScalar(v: Vec4, k: number, dst: Vec4 = new VecType(4)): Vec4 
  * @param {Vec4} b Operand vector.
  * @return {number} dot product
  */
-export function dot(a: Vec4, b: Vec4): number {
+export const dot = (a: Vec4, b: Vec4): number => {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
-}
+};
 
 /**
  * Computes the length of vector
  * @param {Vec4} v vector.
  * @return {number} length of vector.
  */
-export function length(v: Vec4): number {
+export const length = (v: Vec4): number => {
   return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]);
-}
+};
 
 /**
  * Computes the square of the length of vector
@@ -260,9 +260,7 @@ export function length(v: Vec4): number {
  * @return {number} square of the length of vector.
  * @memberOf module:twgl/v4
  */
-export function lengthSq(v: Vec4): number {
-  return v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3];
-}
+export const lengthSq = (v: Vec4) => v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3];
 
 /**
  * Computes the distance between 2 points
@@ -271,13 +269,13 @@ export function lengthSq(v: Vec4): number {
  * @return {number} distance between a and b
  * @memberOf module:twgl/v4
  */
-export function distance(a: Vec4, b: Vec4): number {
+export const distance = (a: Vec4, b: Vec4) => {
   const dx = a[0] - b[0];
   const dy = a[1] - b[1];
   const dz = a[2] - b[2];
   const dw = a[3] - b[3];
   return Math.sqrt(dx * dx + dy * dy + dz * dz + dw * dw);
-}
+};
 
 /**
  * Computes the square of the distance between 2 points
@@ -286,13 +284,13 @@ export function distance(a: Vec4, b: Vec4): number {
  * @return {number} square of the distance between a and b
  * @memberOf module:twgl/v4
  */
-export function distanceSq(a: Vec4, b: Vec4): number {
+export const distanceSq = (a: Vec4, b: Vec4) => {
   const dx = a[0] - b[0];
   const dy = a[1] - b[1];
   const dz = a[2] - b[2];
   const dw = a[3] - b[3];
   return dx * dx + dy * dy + dz * dz + dw * dw;
-}
+};
 
 /**
  * Divides a vector by its Euclidean length and returns the quotient.
@@ -301,7 +299,7 @@ export function distanceSq(a: Vec4, b: Vec4): number {
  * @return {Vec4} The normalized vector.
  * @memberOf module:twgl/v4
  */
-export function normalize(a: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
+export const normalize = (a: Vec4, dst: Vec4 = new VecType(4)) => {
   const lenSq = a[0] * a[0] + a[1] * a[1] + a[2] * a[2] + a[3] * a[3];
   const len = Math.sqrt(lenSq);
   if (len > 0.00001) {
@@ -317,7 +315,7 @@ export function normalize(a: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
   }
 
   return dst;
-}
+};
 
 /**
  * Negates a vector.
@@ -326,14 +324,14 @@ export function normalize(a: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
  * @return {Vec4} -v.
  * @memberOf module:twgl/v4
  */
-export function negate(v: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
+export const negate = (v: Vec4, dst: Vec4 = new VecType(4)) => {
   dst[0] = -v[0];
   dst[1] = -v[1];
   dst[2] = -v[2];
   dst[3] = -v[3];
 
   return dst;
-}
+};
 
 /**
  * Copies a vector.
@@ -342,14 +340,14 @@ export function negate(v: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
  * @return {Vec4} A copy of v.
  * @memberOf module:twgl/v4
  */
-export function copy(v: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
+export const copy = (v: Vec4, dst: Vec4 = new VecType(4)) => {
   dst[0] = v[0];
   dst[1] = v[1];
   dst[2] = v[2];
   dst[3] = v[3];
 
   return dst;
-}
+};
 
 /**
  * Multiplies a vector by another vector (component-wise); assumes a and
@@ -361,14 +359,14 @@ export function copy(v: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
  *     b.
  * @memberOf module:twgl/v4
  */
-export function multiply(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
+export const multiply = (a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)) => {
   dst[0] = a[0] * b[0];
   dst[1] = a[1] * b[1];
   dst[2] = a[2] * b[2];
   dst[3] = a[3] * b[3];
 
   return dst;
-}
+};
 
 /**
  * Divides a vector by another vector (component-wise); assumes a and
@@ -380,11 +378,11 @@ export function multiply(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
  *     b.
  * @memberOf module:twgl/v4
  */
-export function divide(a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)): Vec4 {
+export const divide = (a: Vec4, b: Vec4, dst: Vec4 = new VecType(4)) => {
   dst[0] = a[0] / b[0];
   dst[1] = a[1] / b[1];
   dst[2] = a[2] / b[2];
   dst[3] = a[3] / b[3];
 
   return dst;
-}
+};

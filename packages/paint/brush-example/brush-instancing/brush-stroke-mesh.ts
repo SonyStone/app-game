@@ -3,6 +3,7 @@ import { Mesh, OGLRenderingContext, Program, Texture } from '@packages/ogl';
 import { Attribute } from '@packages/ogl/core/geometry';
 import { RenderTarget } from '@packages/ogl/core/render-target';
 import { Square } from '@packages/ogl/extras/square';
+import { Mat3Tuple } from '@packages/ogl/math/mat-3';
 import { Vec3Tuple } from '@packages/ogl/math/vec-3';
 import { resizeBuffer } from '../utils/resize-buffer';
 import fragment from './brush-instancing.frag?raw';
@@ -47,6 +48,8 @@ export class BrushStrokeMesh extends Mesh {
 
     const tBrush = { value: undefined };
     const uColor = { value: [0, 0, 0] as Vec3Tuple };
+    const uProjectionMatrix = { value: [1, 0, 0, 0, 1, 0, 0, 0, 1] as Mat3Tuple };
+    const uWorldTransformMatrix = { value: [1, 0, 0, 0, 1, 0, 0, 0, 1] as Mat3Tuple };
 
     super(gl, {
       geometry: new Square(gl, {
@@ -55,7 +58,7 @@ export class BrushStrokeMesh extends Mesh {
       program: new Program(gl, {
         vertex,
         fragment,
-        uniforms: { tBrush, uColor },
+        uniforms: { tBrush, uColor, uProjectionMatrix, uWorldTransformMatrix },
         transparent: true,
         blendFunc: {
           src: gl.SRC_ALPHA,
