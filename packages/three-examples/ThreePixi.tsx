@@ -1,4 +1,4 @@
-import { Application, Container, Sprite, Texture, utils } from 'pixi.js';
+import { Application, Container, Sprite, Texture } from 'pixi.js';
 import { onCleanup } from 'solid-js';
 import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 
@@ -44,7 +44,6 @@ export default function ThreePixi() {
     onCleanup(() => {
       stage.destroy();
       renderer.destroy();
-      utils.destroyTextureCache();
       cancelAnimationFrame(id);
     });
 
