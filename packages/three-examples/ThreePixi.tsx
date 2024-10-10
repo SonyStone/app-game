@@ -1,11 +1,12 @@
-import { Container, Renderer, Sprite, Texture, utils } from 'pixi.js';
+import { Application, Container, Sprite, Texture, utils } from 'pixi.js';
 import { onCleanup } from 'solid-js';
 import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 
 function createApplication() {
   // const renderer =
 
-  const renderer = new Renderer({
+  const renderer = new Application();
+  renderer.init({
     width: 640,
     height: 360,
     backgroundAlpha: 0.5
@@ -14,7 +15,7 @@ function createApplication() {
 
   return {
     stage,
-    renderer
+    renderer: renderer.renderer
   };
 }
 
