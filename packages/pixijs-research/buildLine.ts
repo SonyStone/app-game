@@ -1,12 +1,5 @@
-import { GraphicsData, GraphicsGeometry } from "./graphics.interface";
-import {
-  GRAPHICS_CURVES,
-  LINE_CAP,
-  LINE_JOIN,
-  Point,
-  Polygon,
-  SHAPES,
-} from "pixi.js";
+import { Point, Polygon } from 'pixi.js';
+import { GraphicsData, GraphicsGeometry } from './graphics.interface';
 
 /**
  * Buffers vertices to draw a square cap.
@@ -124,8 +117,7 @@ function round(
     }*/
 
   const radius = Math.sqrt(cx2p0x * cx2p0x + cy2p0y * cy2p0y);
-  const segCount =
-    (((15 * absAngleDiff * Math.sqrt(radius)) / Math.PI) >> 0) + 1;
+  const segCount = (((15 * absAngleDiff * Math.sqrt(radius)) / Math.PI) >> 0) + 1;
   const angleInc = angleDiff / segCount;
 
   startAngle += angleInc;
@@ -167,11 +159,8 @@ function round(
  * @param {PIXI.GraphicsData} graphicsData - The graphics object containing all the necessary properties
  * @param {PIXI.GraphicsGeometry} graphicsGeometry - Geometry where to append output
  */
-function buildNonNativeLine(
-  graphicsData: GraphicsData,
-  graphicsGeometry: GraphicsGeometry
-): void {
-  const shape = graphicsData.shape as Polygon;
+function buildNonNativeLine(graphicsData: GraphicsData, graphicsGeometry: GraphicsGeometry): void {
+  const shape = graphicsData.shape;
   let points = graphicsData.points || shape.points.slice();
   const eps = graphicsGeometry.closePointEps;
 
@@ -192,14 +181,9 @@ function buildNonNativeLine(
 
   // get first and last point.. figure out the middle!
   const firstPoint = new Point(points[0], points[1]);
-  const lastPoint = new Point(
-    points[points.length - 2],
-    points[points.length - 1]
-  );
+  const lastPoint = new Point(points[points.length - 2], points[points.length - 1]);
   const closedShape = shape.type !== SHAPES.POLY || shape.closeStroke;
-  const closedPath =
-    Math.abs(firstPoint.x - lastPoint.x) < eps &&
-    Math.abs(firstPoint.y - lastPoint.y) < eps;
+  const closedPath = Math.abs(firstPoint.x - lastPoint.x) < eps && Math.abs(firstPoint.y - lastPoint.y) < eps;
 
   // if the first point is the last point - gonna have issues :)
   if (closedShape) {
@@ -268,16 +252,7 @@ function buildNonNativeLine(
           true
         ) + 2;
     } else if (style.cap === LINE_CAP.SQUARE) {
-      indexCount += square(
-        x0,
-        y0,
-        perpx,
-        perpy,
-        innerWeight,
-        outerWeight,
-        true,
-        verts
-      );
+      indexCount += square(x0, y0, perpx, perpy, innerWeight, outerWeight, true, verts);
     }
   }
 
@@ -333,8 +308,7 @@ function buildNonNativeLine(
 
     /* p[x|y] is the miter point. pdist is the distance between miter point and p1. */
     const c1 = (-perpx + x0) * (-perpy + y1) - (-perpx + x1) * (-perpy + y0);
-    const c2 =
-      (-perp1x + x2) * (-perp1y + y1) - (-perp1x + x1) * (-perp1y + y2);
+    const c2 = (-perp1x + x2) * (-perp1y + y1) - (-perp1x + x1) * (-perp1y + y2);
     const px = (dx0 * c2 - dx1 * c1) / cross;
     const py = (dy1 * c1 - dy0 * c2) / cross;
     const pdist = (px - x1) * (px - x1) + (py - y1) * (py - y1);
@@ -347,20 +321,13 @@ function buildNonNativeLine(
     const omy = y1 - (py - y1) * outerWeight;
 
     /* Is the inside miter point too far away, creating a spike? */
-    const smallerInsideSegmentSq = Math.min(
-      dx0 * dx0 + dy0 * dy0,
-      dx1 * dx1 + dy1 * dy1
-    );
+    const smallerInsideSegmentSq = Math.min(dx0 * dx0 + dy0 * dy0, dx1 * dx1 + dy1 * dy1);
     const insideWeight = clockwise ? innerWeight : outerWeight;
-    const smallerInsideDiagonalSq =
-      smallerInsideSegmentSq + insideWeight * insideWeight * widthSquared;
+    const smallerInsideDiagonalSq = smallerInsideSegmentSq + insideWeight * insideWeight * widthSquared;
     const insideMiterOk = pdist <= smallerInsideDiagonalSq;
 
     if (insideMiterOk) {
-      if (
-        style.join === LINE_JOIN.BEVEL ||
-        pdist / widthSquared > miterLimitSquared
-      ) {
+      if (style.join === LINE_JOIN.BEVEL || pdist / widthSquared > miterLimitSquared) {
         if (clockwise) {
           /* rotating at inner angle */
           verts.push(imx, imy); // inner miter point
@@ -422,10 +389,7 @@ function buildNonNativeLine(
     else {
       verts.push(x1 - perpx * innerWeight, y1 - perpy * innerWeight); // first segment's inner vertex
       verts.push(x1 + perpx * outerWeight, y1 + perpy * outerWeight); // first segment's outer vertex
-      if (
-        style.join === LINE_JOIN.BEVEL ||
-        pdist / widthSquared > miterLimitSquared
-      ) {
+      if (style.join === LINE_JOIN.BEVEL || pdist / widthSquared > miterLimitSquared) {
         // Nothing needed
       } else if (style.join === LINE_JOIN.ROUND) {
         if (clockwise) {
@@ -502,16 +466,7 @@ function buildNonNativeLine(
           false
         ) + 2;
     } else if (style.cap === LINE_CAP.SQUARE) {
-      indexCount += square(
-        x1,
-        y1,
-        perpx,
-        perpy,
-        innerWeight,
-        outerWeight,
-        false,
-        verts
-      );
+      indexCount += square(x1, y1, perpx, perpy, innerWeight, outerWeight, false, verts);
     }
   }
 
@@ -548,10 +503,7 @@ function buildNonNativeLine(
  * @param {PIXI.GraphicsData} graphicsData - The graphics object containing all the necessary properties
  * @param {PIXI.GraphicsGeometry} graphicsGeometry - Geometry where to append output
  */
-function buildNativeLine(
-  graphicsData: GraphicsData,
-  graphicsGeometry: GraphicsGeometry
-): void {
+function buildNativeLine(graphicsData: GraphicsData, graphicsGeometry: GraphicsGeometry): void {
   let i = 0;
 
   const shape = graphicsData.shape as Polygon;
@@ -591,10 +543,7 @@ function buildNativeLine(
  * @param {PIXI.GraphicsData} graphicsData - The graphics object containing all the necessary properties
  * @param {PIXI.GraphicsGeometry} graphicsGeometry - Geometry where to append output
  */
-export function buildLine(
-  graphicsData: GraphicsData,
-  graphicsGeometry: GraphicsGeometry
-): void {
+export function buildLine(graphicsData: GraphicsData, graphicsGeometry: GraphicsGeometry): void {
   if (graphicsData.lineStyle.native) {
     buildNativeLine(graphicsData, graphicsGeometry);
   } else {

@@ -557,11 +557,12 @@ export const routes: Routes[] = [
     Preview: (props) => <Thumbnail href={props.path} thumbnail={wireframeThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/pixijs-research/webgl/3d-wireframe/3dWireframe'))
   },
-  {
-    path: '/my-pixijs',
-    name: 'My Pixijs',
-    component: lazy(() => import('@packages/pixijs-research/MyPixijs'))
-  },
+  // !not working
+  // {
+  //   path: '/my-pixijs',
+  //   name: 'My Pixijs',
+  //   component: lazy(() => import('@packages/pixijs-research/MyPixijs'))
+  // },
   {
     path: '/babylon',
     name: 'Babylon.js',

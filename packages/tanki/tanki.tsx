@@ -1,5 +1,5 @@
 import { createEventSignal } from '@solid-primitives/event-listener';
-import { Application, Container, GraphicsGeometry, Point, Transform, utils } from 'pixi.js';
+import { Application, Container, Point, Transform } from 'pixi.js';
 import { createEffect, createMemo, onCleanup } from 'solid-js';
 import { Key } from 'ts-keycode-enum';
 import { createSkipper } from './create-skipper';
@@ -30,7 +30,6 @@ export default function Tanki() {
   onCleanup(() => {
     app.stop();
     app.destroy();
-    utils.destroyTextureCache();
   });
 
   const cam = new Camera();
@@ -44,8 +43,6 @@ export default function Tanki() {
   stage.addChild(world);
 
   const ellipse = new Ellipse(0, 0).ctx;
-
-  GraphicsGeometry.BATCHABLE_SIZE = 1;
 
   const camTarget = new Point(app.renderer.width / 2, app.renderer.height / 2);
   cam.position.copyFrom(camTarget);
@@ -116,7 +113,7 @@ export default function Tanki() {
         return {
           player: true,
           tank: true,
-          transform: tank.transform
+          transform: tank.localTransform
         };
       })()
     )
@@ -128,7 +125,7 @@ export default function Tanki() {
 
         return {
           tank: true,
-          transform: tank.transform
+          transform: tank.localTransform
         };
       })()
     )
@@ -140,7 +137,7 @@ export default function Tanki() {
 
         return {
           pullLocator,
-          transform: pullLocator.transform
+          transform: pullLocator.localTransform
         };
       })()
     )
