@@ -1,10 +1,10 @@
-import { normalize } from '@packages/ogl/math/functions/vec-2-func';
+import { distance, normalize } from '@packages/ogl/math/functions/vec-2-func';
+import { createEventBus } from '@solid-primitives/event-bus';
 import { WindowEventListener } from '@solid-primitives/event-listener';
 import { createKeyHold } from '@solid-primitives/keyboard';
 import { ComponentProps, createEffect, createMemo, createSignal, For, mergeProps, Show, untrack } from 'solid-js';
 
 export default function PaintUIExample() {
-  const [isNavigation, setIsNavigation] = createSignal(false);
   const [isOpen, setIsOpen] = (() => {
     const [isOpen, setIsOpen] = createSignal(false);
     const pressing = createKeyHold(' ', { preventDefault: false });
@@ -35,6 +35,7 @@ export default function PaintUIExample() {
 
   const [zoom, setZoom] = createSignal(1);
   const [rotation, setRotation] = createSignal(0);
+  const [positionDelta, setPositionDelta] = createSignal({ x: 0, y: 0 });
 
   return (
     <>
@@ -63,7 +64,15 @@ export default function PaintUIExample() {
         }}
       />
       <div class="transform-origin-center transform-scale-100 flex h-full w-full touch-none place-content-center place-items-center overflow-hidden">
-        <div style={{ transform: `matrix(1, 0, 0, 1, 0, 0) scale(${(zoom(), zoom())}) rotate(${rotation()}deg)` }}>
+        <div
+          style={{
+            transform:
+              `matrix(1, 0, 0, 1, 0, 0)` +
+              `translate(${positionDelta().x}px, ${positionDelta().y}px)` +
+              `scale(${(zoom(), zoom())})` +
+              `rotate(${rotation()}deg)`
+          }}
+        >
           <pre>
             position {position2().x.toFixed(2)} {position2().y.toFixed(2)}
             {}
@@ -84,7 +93,6 @@ export default function PaintUIExample() {
             popup = ref;
           }}
           class={[
-            isNavigation() ? 'opacity-0!' : '',
             isOpen() ? 'active opacity-100' : 'opacity-0',
             'pointer-events-none fixed left-0 top-0 transition-opacity'
           ].join(' ')}
@@ -93,7 +101,7 @@ export default function PaintUIExample() {
           <NavigationPopupWithSVG
             zoomDelta={(val) => setZoom(val)}
             rotationDelta={(val) => setRotation(val)}
-            // navigationIsActive={(val) => setIsNavigation(val)}
+            positionDelta={(val) => setPositionDelta(val)}
             navigationIsActive={(val) => setIsOpen(!val)}
           />
         </div>
@@ -112,6 +120,7 @@ const NavigationPopupWithSVG = (props: {
   stroke?: boolean;
   zoomDelta?: (value: number) => void;
   rotationDelta?: (value: number) => void;
+  positionDelta?: (value: { x: number; y: number }) => void;
   navigationIsActive?: (value: boolean) => void;
 }) => {
   const merged = mergeProps(
@@ -125,10 +134,13 @@ const NavigationPopupWithSVG = (props: {
         (
         {() => {
           // zoom navigation element
-          const start = { x: 0, y: 0 };
-          let isDown = false;
-          let tempZoom = 1;
-          let zoom = 1;
+          const zoom = createZoom();
+          zoom.active.listen((value) => props.navigationIsActive?.(value));
+
+          createEffect(() => {
+            props.zoomDelta?.(zoom.zoom());
+          });
+
           return (
             <Cap
               x={merged.x}
@@ -149,40 +161,16 @@ const NavigationPopupWithSVG = (props: {
                 const element = e.target as SVGElement;
                 element.setPointerCapture(e.pointerId);
                 element.classList.add('active');
-                isDown = true;
-                props.navigationIsActive?.(true);
-                start.y = e.clientY;
-                start.x = e.clientX;
+                zoom.start({ x: e.clientX, y: e.clientY });
               }}
               onPointerUp={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.releasePointerCapture(e.pointerId);
                 element.classList.remove('active');
-                if (isDown) {
-                  props.navigationIsActive?.(false);
-                }
-                isDown = false;
-                start.y = 0;
-                start.x = 0;
-                zoom = tempZoom;
-                tempZoom = zoom;
+                zoom.end();
               }}
               onPointerMove={(e: PointerEvent) => {
-                if (isDown) {
-                  const distance = Math.sqrt((start.x - e.clientX) ** 2 + (start.y - e.clientY) ** 2);
-                  // should calculate zoom based on distance and left-right top-down direction from start
-                  const direction = normalize([0, 0], [start.x - e.clientX, start.y - e.clientY]);
-                  const angle = Math.atan2(direction[1], direction[0]);
-                  const move = distance * -(Math.cos(angle) - Math.sin(angle));
-                  tempZoom = zoom + move / 100;
-                  if (tempZoom < 0.1) {
-                    tempZoom = 0.1;
-                  }
-                  if (tempZoom > 10) {
-                    tempZoom = 10;
-                  }
-                  props.zoomDelta?.(tempZoom);
-                }
+                zoom.move({ x: e.clientX, y: e.clientY });
               }}
             />
           );
@@ -190,22 +178,12 @@ const NavigationPopupWithSVG = (props: {
         )() (
         {() => {
           // rotate navigation element
+          const rotate = createRotate();
+          rotate.active.listen((value) => props.navigationIsActive?.(value));
 
-          const start = { x: 0, y: 0 };
-          let isDown = false;
-          let tempAngle = 0;
-          let angle = 0;
-
-          const getScreenSize = () => {
-            const height = document.body.clientHeight;
-            const width = document.body.clientWidth;
-            return { height, width };
-          };
-
-          const getScreenCenter = () => {
-            const { height, width } = getScreenSize();
-            return { x: width / 2, y: height / 2 };
-          };
+          createEffect(() => {
+            props.rotationDelta?.(rotate.angle());
+          });
 
           return (
             <Cap
@@ -226,62 +204,63 @@ const NavigationPopupWithSVG = (props: {
                 const element = e.target as SVGElement;
                 element.setPointerCapture(e.pointerId);
                 element.classList.add('active');
-                isDown = true;
-                props.navigationIsActive?.(true);
-                start.y = e.clientY;
-                start.x = e.clientX;
+                rotate.start({ x: e.clientX, y: e.clientY });
               }}
               onPointerUp={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.releasePointerCapture(e.pointerId);
                 element.classList.remove('active');
-                if (isDown) {
-                  props.navigationIsActive?.(false);
-                }
-                isDown = false;
-                start.y = 0;
-                start.x = 0;
-                angle = tempAngle;
-                tempAngle = angle;
+                rotate.end();
               }}
               onPointerMove={(e: PointerEvent) => {
-                if (isDown) {
-                  const center = getScreenCenter();
-                  const angle1 = Math.atan2(start.y - center.y, start.x - center.x) * (180 / Math.PI);
-                  const angle2 = Math.atan2(e.clientY - center.y, e.clientX - center.x) * (180 / Math.PI);
-                  tempAngle = angle + angle2 - angle1;
-                  props.rotationDelta?.(tempAngle);
-                }
+                rotate.move({ x: e.clientX, y: e.clientY });
+              }}
+            />
+          );
+        }}
+        )() (
+        {() => {
+          const translate = createTranslate();
+          translate.active.listen((value) => props.navigationIsActive?.(value));
+
+          createEffect(() => {
+            props.positionDelta?.(translate.position());
+          });
+
+          return (
+            <Donut
+              x={merged.x}
+              y={merged.y}
+              inner_radius={merged.radius + merged.gap}
+              outer_radius={merged.radius + merged.thickness}
+              class="pointer-events-auto fill-red-400 transition-colors [&.active]:cursor-move [&.active]:fill-red-200 [&.hover]:fill-red-300"
+              onPointerOver={(e: PointerEvent) => {
+                const element = e.target as SVGElement;
+                element.classList.add('hover');
+              }}
+              onPointerLeave={(e: PointerEvent) => {
+                const element = e.target as SVGElement;
+                element.classList.remove('hover');
+              }}
+              onPointerDown={(e: PointerEvent) => {
+                const element = e.target as SVGElement;
+                element.setPointerCapture(e.pointerId);
+                element.classList.add('active');
+                translate.start({ x: e.clientX, y: e.clientY });
+              }}
+              onPointerUp={(e: PointerEvent) => {
+                const element = e.target as SVGElement;
+                element.releasePointerCapture(e.pointerId);
+                element.classList.remove('active');
+                translate.end();
+              }}
+              onPointerMove={(e: PointerEvent) => {
+                translate.move({ x: e.clientX, y: e.clientY });
               }}
             />
           );
         }}
         )()
-        <Donut
-          x={merged.x}
-          y={merged.y}
-          inner_radius={merged.radius + merged.gap}
-          outer_radius={merged.radius + merged.thickness}
-          class="pointer-events-auto fill-red-400 transition-colors [&.active]:cursor-move [&.active]:fill-red-200 [&.hover]:fill-red-300"
-          onPointerOver={(e: PointerEvent) => {
-            const element = e.target as SVGElement;
-            element.classList.add('hover');
-          }}
-          onPointerLeave={(e: PointerEvent) => {
-            const element = e.target as SVGElement;
-            element.classList.remove('hover');
-          }}
-          onPointerDown={(e: PointerEvent) => {
-            const element = e.target as SVGElement;
-            element.setPointerCapture(e.pointerId);
-            element.classList.add('active');
-          }}
-          onPointerUp={(e: PointerEvent) => {
-            const element = e.target as SVGElement;
-            element.releasePointerCapture(e.pointerId);
-            element.classList.remove('active');
-          }}
-        />
         <Show when={true}>
           <For
             each={[
@@ -453,3 +432,134 @@ const Cap = (
 
 /** to short svg values */
 const toFixed = (val: number) => parseFloat(val.toFixed(2));
+
+// TODO: make it a directive?
+const createRotate = () => {
+  const [angle, setAngle] = createSignal(0);
+  const active = createEventBus<boolean>();
+
+  const start = { x: 0, y: 0 };
+  let isDown = false;
+  let tempAngle = 0;
+
+  const getScreenSize = () => {
+    const height = document.body.clientHeight;
+    const width = document.body.clientWidth;
+    return { height, width };
+  };
+
+  const getScreenCenter = () => {
+    const { height, width } = getScreenSize();
+    return { x: width / 2, y: height / 2 };
+  };
+
+  return {
+    angle,
+    active,
+    move({ x = 0, y = 0 }) {
+      if (isDown) {
+        // rotate around center
+        const center = getScreenCenter();
+        const angle1 = Math.atan2(start.y - center.y, start.x - center.x) * (180 / Math.PI);
+        const angle2 = Math.atan2(y - center.y, x - center.x) * (180 / Math.PI);
+        setAngle(tempAngle + angle2 - angle1);
+
+        // rotate around start point
+        // const angle3 = Math.atan2(start.y - y, start.x - x) * (180 / Math.PI);
+        // setAngle(tempAngle + angle3);
+      }
+    },
+    start({ x = 0, y = 0 }) {
+      isDown = true;
+      active.emit(true);
+      start.y = y;
+      start.x = x;
+    },
+    end() {
+      isDown = false;
+      start.y = 0;
+      start.x = 0;
+      tempAngle = untrack(angle);
+      active.emit(false);
+    },
+    rotate: (value: number) => {
+      setAngle((prev) => prev + value);
+    }
+  };
+};
+
+const createZoom = () => {
+  const [zoom, setZoom] = createSignal(1);
+  const active = createEventBus<boolean>();
+
+  const start = { x: 0, y: 0 };
+  let isDown = false;
+  let temp = 0;
+
+  return {
+    zoom,
+    active,
+    move({ x = 0, y = 0 }) {
+      if (isDown) {
+        // should calculate zoom based on distance and left-right top-down direction from start
+        const direction = normalize([0, 0], [start.x - x, start.y - y]);
+        const angle = Math.atan2(direction[1], direction[0]);
+        const move = distance([start.x, start.y], [x, y]) * -(Math.cos(angle) - Math.sin(angle));
+        let newValue = temp + move / 100;
+        if (newValue < 0.1) {
+          newValue = 0.1;
+        }
+        if (newValue > 10) {
+          newValue = 10;
+        }
+        setZoom(newValue);
+      }
+    },
+    start({ x = 0, y = 0 }) {
+      isDown = true;
+      active.emit(true);
+      start.y = y;
+      start.x = x;
+    },
+    end() {
+      isDown = false;
+      start.y = 0;
+      start.x = 0;
+      temp = untrack(zoom);
+      active.emit(false);
+    }
+  };
+};
+
+const createTranslate = () => {
+  const [position, setPosition] = createSignal({ x: 0, y: 0 });
+  const active = createEventBus<boolean>();
+
+  const start = { x: 0, y: 0 };
+  const temp = { x: 0, y: 0 };
+  let isDown = false;
+
+  return {
+    position,
+    active,
+    move({ x = 0, y = 0 }) {
+      if (isDown) {
+        setPosition({ x: temp.x + x - start.x, y: temp.y + y - start.y });
+      }
+    },
+    start({ x = 0, y = 0 }) {
+      isDown = true;
+      active.emit(true);
+      start.y = y;
+      start.x = x;
+    },
+    end() {
+      isDown = false;
+      temp.x = untrack(position).x;
+      temp.y = untrack(position).y;
+      start.y = 0;
+      start.x = 0;
+      active.emit(false);
+    }
+  };
+};
