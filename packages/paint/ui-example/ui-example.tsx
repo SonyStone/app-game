@@ -1,3 +1,4 @@
+import { normalize } from '@packages/ogl/math/functions/vec-2-func';
 import { WindowEventListener } from '@solid-primitives/event-listener';
 import { createKeyHold } from '@solid-primitives/keyboard';
 import { ComponentProps, createEffect, createMemo, createSignal, For, mergeProps, Show, untrack } from 'solid-js';
@@ -124,7 +125,7 @@ const NavigationPopupWithSVG = (props: {
         (
         {() => {
           // zoom navigation element
-          let startY = 0;
+          const start = { x: 0, y: 0 };
           let isDown = false;
           let tempZoom = 1;
           let zoom = 1;
@@ -150,7 +151,8 @@ const NavigationPopupWithSVG = (props: {
                 element.classList.add('active');
                 isDown = true;
                 props.navigationIsActive?.(true);
-                startY = e.clientY;
+                start.y = e.clientY;
+                start.x = e.clientX;
               }}
               onPointerUp={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
@@ -160,13 +162,18 @@ const NavigationPopupWithSVG = (props: {
                   props.navigationIsActive?.(false);
                 }
                 isDown = false;
-                startY = 0;
+                start.y = 0;
+                start.x = 0;
                 zoom = tempZoom;
                 tempZoom = zoom;
               }}
               onPointerMove={(e: PointerEvent) => {
                 if (isDown) {
-                  const move = e.clientY - startY;
+                  const distance = Math.sqrt((start.x - e.clientX) ** 2 + (start.y - e.clientY) ** 2);
+                  // should calculate zoom based on distance and left-right top-down direction from start
+                  const direction = normalize([0, 0], [start.x - e.clientX, start.y - e.clientY]);
+                  const angle = Math.atan2(direction[1], direction[0]);
+                  const move = distance * -(Math.cos(angle) - Math.sin(angle));
                   tempZoom = zoom + move / 100;
                   if (tempZoom < 0.1) {
                     tempZoom = 0.1;
@@ -184,7 +191,7 @@ const NavigationPopupWithSVG = (props: {
         {() => {
           // rotate navigation element
 
-          let start = { x: 0, y: 0 };
+          const start = { x: 0, y: 0 };
           let isDown = false;
           let tempAngle = 0;
           let angle = 0;
@@ -367,8 +374,8 @@ const NavigationPopupWithSVG = (props: {
         <For each={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}>
           {(layer) => (
             <div class="flex border-t border-black text-xs last:border-b">
-              <button class="bg-amber h-8 w-8 flex-shrink-0"></button>
-              <button class="bg-blue h-8 w-8 flex-shrink-0"></button>
+              <button class="bg-blue-3 h-8 w-8 flex-shrink-0"></button>
+              <button class="bg-blue-2 h-8 w-8 flex-shrink-0"></button>
               <button class="flex w-full select-none flex-col truncate">
                 <span>Type</span>
                 <span>Layer {layer}</span>
