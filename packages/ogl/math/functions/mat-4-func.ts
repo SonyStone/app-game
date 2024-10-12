@@ -111,12 +111,12 @@ export function identity(out: Mat4Tuple): Mat4Tuple {
 export function transpose(out: Mat4Tuple, a: Mat4Tuple): Mat4Tuple {
   // If we are transposing ourselves we can skip a few steps but have to cache some values
   if (out === a) {
-    let a01 = a[1],
+    const a01 = a[1],
       a02 = a[2],
       a03 = a[3];
-    let a12 = a[6],
+    const a12 = a[6],
       a13 = a[7];
-    let a23 = a[11];
+    const a23 = a[11];
 
     out[1] = a[4];
     out[2] = a[8];
@@ -160,35 +160,35 @@ export function transpose(out: Mat4Tuple, a: Mat4Tuple): Mat4Tuple {
  * @returns {mat4} out
  */
 export function invert(out: Mat4Tuple, a: Mat4Tuple): Mat4Tuple {
-  let a00 = a[0],
+  const a00 = a[0],
     a01 = a[1],
     a02 = a[2],
     a03 = a[3];
-  let a10 = a[4],
+  const a10 = a[4],
     a11 = a[5],
     a12 = a[6],
     a13 = a[7];
-  let a20 = a[8],
+  const a20 = a[8],
     a21 = a[9],
     a22 = a[10],
     a23 = a[11];
-  let a30 = a[12],
+  const a30 = a[12],
     a31 = a[13],
     a32 = a[14],
     a33 = a[15];
 
-  let b00 = a00 * a11 - a01 * a10;
-  let b01 = a00 * a12 - a02 * a10;
-  let b02 = a00 * a13 - a03 * a10;
-  let b03 = a01 * a12 - a02 * a11;
-  let b04 = a01 * a13 - a03 * a11;
-  let b05 = a02 * a13 - a03 * a12;
-  let b06 = a20 * a31 - a21 * a30;
-  let b07 = a20 * a32 - a22 * a30;
-  let b08 = a20 * a33 - a23 * a30;
-  let b09 = a21 * a32 - a22 * a31;
-  let b10 = a21 * a33 - a23 * a31;
-  let b11 = a22 * a33 - a23 * a32;
+  const b00 = a00 * a11 - a01 * a10;
+  const b01 = a00 * a12 - a02 * a10;
+  const b02 = a00 * a13 - a03 * a10;
+  const b03 = a01 * a12 - a02 * a11;
+  const b04 = a01 * a13 - a03 * a11;
+  const b05 = a02 * a13 - a03 * a12;
+  const b06 = a20 * a31 - a21 * a30;
+  const b07 = a20 * a32 - a22 * a30;
+  const b08 = a20 * a33 - a23 * a30;
+  const b09 = a21 * a32 - a22 * a31;
+  const b10 = a21 * a33 - a23 * a31;
+  const b11 = a22 * a33 - a23 * a32;
 
   // Calculate the determinant
   let det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
@@ -225,35 +225,35 @@ export function invert(out: Mat4Tuple, a: Mat4Tuple): Mat4Tuple {
  * @returns {Number} determinant of a
  */
 export function determinant(a: Mat4Tuple): number {
-  let a00 = a[0],
+  const a00 = a[0],
     a01 = a[1],
     a02 = a[2],
     a03 = a[3];
-  let a10 = a[4],
+  const a10 = a[4],
     a11 = a[5],
     a12 = a[6],
     a13 = a[7];
-  let a20 = a[8],
+  const a20 = a[8],
     a21 = a[9],
     a22 = a[10],
     a23 = a[11];
-  let a30 = a[12],
+  const a30 = a[12],
     a31 = a[13],
     a32 = a[14],
     a33 = a[15];
 
-  let b00 = a00 * a11 - a01 * a10;
-  let b01 = a00 * a12 - a02 * a10;
-  let b02 = a00 * a13 - a03 * a10;
-  let b03 = a01 * a12 - a02 * a11;
-  let b04 = a01 * a13 - a03 * a11;
-  let b05 = a02 * a13 - a03 * a12;
-  let b06 = a20 * a31 - a21 * a30;
-  let b07 = a20 * a32 - a22 * a30;
-  let b08 = a20 * a33 - a23 * a30;
-  let b09 = a21 * a32 - a22 * a31;
-  let b10 = a21 * a33 - a23 * a31;
-  let b11 = a22 * a33 - a23 * a32;
+  const b00 = a00 * a11 - a01 * a10;
+  const b01 = a00 * a12 - a02 * a10;
+  const b02 = a00 * a13 - a03 * a10;
+  const b03 = a01 * a12 - a02 * a11;
+  const b04 = a01 * a13 - a03 * a11;
+  const b05 = a02 * a13 - a03 * a12;
+  const b06 = a20 * a31 - a21 * a30;
+  const b07 = a20 * a32 - a22 * a30;
+  const b08 = a20 * a33 - a23 * a30;
+  const b09 = a21 * a32 - a22 * a31;
+  const b10 = a21 * a33 - a23 * a31;
+  const b11 = a22 * a33 - a23 * a32;
 
   // Calculate the determinant
   return b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
@@ -337,7 +337,7 @@ export function multiply(out: Mat4Tuple, a: Mat4Tuple, b: Mat4Tuple): Mat4Tuple 
  * @returns {mat4} out
  */
 export function translate(out: Mat4Tuple, a: Mat4Tuple, v: Vec3Tuple): Mat4Tuple {
-  let x = v[0],
+  const x = v[0],
     y = v[1],
     z = v[2];
   let a00, a01, a02, a03;
@@ -394,7 +394,7 @@ export function translate(out: Mat4Tuple, a: Mat4Tuple, v: Vec3Tuple): Mat4Tuple
  * @returns {mat4} out
  **/
 export function scale(out: Mat4Tuple, a: Mat4Tuple, v: Vec3Tuple): Mat4Tuple {
-  let x = v[0],
+  const x = v[0],
     y = v[1],
     z = v[2];
 
@@ -431,13 +431,6 @@ export function rotate(out: Mat4Tuple, a: Mat4Tuple, rad: number, axis: Vec3Tupl
     y = axis[1],
     z = axis[2];
   let len = Math.hypot(x, y, z);
-  let s, c, t;
-  let a00, a01, a02, a03;
-  let a10, a11, a12, a13;
-  let a20, a21, a22, a23;
-  let b00, b01, b02;
-  let b10, b11, b12;
-  let b20, b21, b22;
 
   if (Math.abs(len) < EPSILON) {
     return out;
@@ -448,33 +441,33 @@ export function rotate(out: Mat4Tuple, a: Mat4Tuple, rad: number, axis: Vec3Tupl
   y *= len;
   z *= len;
 
-  s = Math.sin(rad);
-  c = Math.cos(rad);
-  t = 1 - c;
+  const s = Math.sin(rad);
+  const c = Math.cos(rad);
+  const t = 1 - c;
 
-  a00 = a[0];
-  a01 = a[1];
-  a02 = a[2];
-  a03 = a[3];
-  a10 = a[4];
-  a11 = a[5];
-  a12 = a[6];
-  a13 = a[7];
-  a20 = a[8];
-  a21 = a[9];
-  a22 = a[10];
-  a23 = a[11];
+  const a00 = a[0];
+  const a01 = a[1];
+  const a02 = a[2];
+  const a03 = a[3];
+  const a10 = a[4];
+  const a11 = a[5];
+  const a12 = a[6];
+  const a13 = a[7];
+  const a20 = a[8];
+  const a21 = a[9];
+  const a22 = a[10];
+  const a23 = a[11];
 
   // Construct the elements of the rotation matrix
-  b00 = x * x * t + c;
-  b01 = y * x * t + z * s;
-  b02 = z * x * t - y * s;
-  b10 = x * y * t - z * s;
-  b11 = y * y * t + c;
-  b12 = z * y * t + x * s;
-  b20 = x * z * t + y * s;
-  b21 = y * z * t - x * s;
-  b22 = z * z * t + c;
+  const b00 = x * x * t + c;
+  const b01 = y * x * t + z * s;
+  const b02 = z * x * t - y * s;
+  const b10 = x * y * t - z * s;
+  const b11 = y * y * t + c;
+  const b12 = z * y * t + x * s;
+  const b20 = x * z * t + y * s;
+  const b21 = y * z * t - x * s;
+  const b22 = z * z * t + c;
 
   // Perform rotation-specific matrix multiplication
   out[0] = a00 * b00 + a10 * b01 + a20 * b02;
@@ -528,15 +521,15 @@ export function getTranslation(out: Vec3Tuple, mat: Mat4Tuple): Vec3Tuple {
  * @return {vec3} out
  */
 export function getScaling(out: Vec3Tuple, mat: Mat4Tuple): Vec3Tuple {
-  let m11 = mat[0];
-  let m12 = mat[1];
-  let m13 = mat[2];
-  let m21 = mat[4];
-  let m22 = mat[5];
-  let m23 = mat[6];
-  let m31 = mat[8];
-  let m32 = mat[9];
-  let m33 = mat[10];
+  const m11 = mat[0];
+  const m12 = mat[1];
+  const m13 = mat[2];
+  const m21 = mat[4];
+  const m22 = mat[5];
+  const m23 = mat[6];
+  const m31 = mat[8];
+  const m32 = mat[9];
+  const m33 = mat[10];
 
   out[0] = Math.hypot(m11, m12, m13);
   out[1] = Math.hypot(m21, m22, m23);
@@ -546,15 +539,15 @@ export function getScaling(out: Vec3Tuple, mat: Mat4Tuple): Vec3Tuple {
 }
 
 export function getMaxScaleOnAxis(mat: Mat4Tuple): number {
-  let m11 = mat[0];
-  let m12 = mat[1];
-  let m13 = mat[2];
-  let m21 = mat[4];
-  let m22 = mat[5];
-  let m23 = mat[6];
-  let m31 = mat[8];
-  let m32 = mat[9];
-  let m33 = mat[10];
+  const m11 = mat[0];
+  const m12 = mat[1];
+  const m13 = mat[2];
+  const m21 = mat[4];
+  const m22 = mat[5];
+  const m23 = mat[6];
+  const m31 = mat[8];
+  const m32 = mat[9];
+  const m33 = mat[10];
 
   const x = m11 * m11 + m12 * m12 + m13 * m13;
   const y = m21 * m21 + m22 * m22 + m23 * m23;
@@ -576,24 +569,24 @@ export const getRotation = (() => {
   const temp = [1, 1, 1];
 
   return (out: QuatTuple, mat: Mat4Tuple): QuatTuple => {
-    let scaling = temp;
+    const scaling = temp;
     getScaling(scaling, mat);
 
-    let is1 = 1 / scaling[0];
-    let is2 = 1 / scaling[1];
-    let is3 = 1 / scaling[2];
+    const is1 = 1 / scaling[0];
+    const is2 = 1 / scaling[1];
+    const is3 = 1 / scaling[2];
 
-    let sm11 = mat[0] * is1;
-    let sm12 = mat[1] * is2;
-    let sm13 = mat[2] * is3;
-    let sm21 = mat[4] * is1;
-    let sm22 = mat[5] * is2;
-    let sm23 = mat[6] * is3;
-    let sm31 = mat[8] * is1;
-    let sm32 = mat[9] * is2;
-    let sm33 = mat[10] * is3;
+    const sm11 = mat[0] * is1;
+    const sm12 = mat[1] * is2;
+    const sm13 = mat[2] * is3;
+    const sm21 = mat[4] * is1;
+    const sm22 = mat[5] * is2;
+    const sm23 = mat[6] * is3;
+    const sm31 = mat[8] * is1;
+    const sm32 = mat[9] * is2;
+    const sm33 = mat[10] * is3;
 
-    let trace = sm11 + sm22 + sm33;
+    const trace = sm11 + sm22 + sm33;
     let S = 0;
 
     if (trace > 0) {
@@ -645,26 +638,26 @@ export const getRotation = (() => {
  */
 export function fromRotationTranslationScale(out: Mat4Tuple, q: QuatTuple, v: Vec3Tuple, s: Vec3Tuple) {
   // Quaternion math
-  let x = q[0],
+  const x = q[0],
     y = q[1],
     z = q[2],
     w = q[3];
-  let x2 = x + x;
-  let y2 = y + y;
-  let z2 = z + z;
+  const x2 = x + x;
+  const y2 = y + y;
+  const z2 = z + z;
 
-  let xx = x * x2;
-  let xy = x * y2;
-  let xz = x * z2;
-  let yy = y * y2;
-  let yz = y * z2;
-  let zz = z * z2;
-  let wx = w * x2;
-  let wy = w * y2;
-  let wz = w * z2;
-  let sx = s[0];
-  let sy = s[1];
-  let sz = s[2];
+  const xx = x * x2;
+  const xy = x * y2;
+  const xz = x * z2;
+  const yy = y * y2;
+  const yz = y * z2;
+  const zz = z * z2;
+  const wx = w * x2;
+  const wy = w * y2;
+  const wz = w * z2;
+  const sx = s[0];
+  const sy = s[1];
+  const sz = s[2];
 
   out[0] = (1 - (yy + zz)) * sx;
   out[1] = (xy + wz) * sx;
@@ -695,23 +688,23 @@ export function fromRotationTranslationScale(out: Mat4Tuple, q: QuatTuple, v: Ve
  * @returns {mat4} out
  */
 export function fromQuat(out: Mat4Tuple, q: QuatTuple): Mat4Tuple {
-  let x = q[0],
+  const x = q[0],
     y = q[1],
     z = q[2],
     w = q[3];
-  let x2 = x + x;
-  let y2 = y + y;
-  let z2 = z + z;
+  const x2 = x + x;
+  const y2 = y + y;
+  const z2 = z + z;
 
-  let xx = x * x2;
-  let yx = y * x2;
-  let yy = y * y2;
-  let zx = z * x2;
-  let zy = z * y2;
-  let zz = z * z2;
-  let wx = w * x2;
-  let wy = w * y2;
-  let wz = w * z2;
+  const xx = x * x2;
+  const yx = y * x2;
+  const yy = y * y2;
+  const zx = z * x2;
+  const zy = z * y2;
+  const zz = z * z2;
+  const wx = w * x2;
+  const wy = w * y2;
+  const wz = w * z2;
 
   out[0] = 1 - yy - zz;
   out[1] = yx + wz;
@@ -747,8 +740,8 @@ export function fromQuat(out: Mat4Tuple, q: QuatTuple): Mat4Tuple {
  * @returns {mat4} out
  */
 export function perspective(out: Mat4Tuple | number[], fovy: number, aspect: number, near: number, far: number) {
-  let f = 1.0 / Math.tan(fovy / 2);
-  let nf = 1 / (near - far);
+  const f = 1.0 / Math.tan(fovy / 2);
+  const nf = 1 / (near - far);
   out[0] = f / aspect;
   out[1] = 0;
   out[2] = 0;
@@ -792,9 +785,9 @@ export function ortho(
   near: number,
   far: number
 ): Mat4Tuple {
-  let lr = 1 / (left - right);
-  let bt = 1 / (bottom - top);
-  let nf = 1 / (near - far);
+  const lr = 1 / (left - right);
+  const bt = 1 / (bottom - top);
+  const nf = 1 / (near - far);
   out[0] = -2 * lr;
   out[1] = 0;
   out[2] = 0;
@@ -824,10 +817,10 @@ export function ortho(
  * @returns {mat4} out
  */
 export function targetTo(out: Mat4Tuple | number[], eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple): Mat4Tuple {
-  let eyex = eye[0],
+  const eyex = eye[0],
     eyey = eye[1],
-    eyez = eye[2],
-    upx = up[0],
+    eyez = eye[2];
+  let upx = up[0],
     upy = up[1],
     upz = up[2];
 
@@ -860,7 +853,9 @@ export function targetTo(out: Mat4Tuple | number[], eye: Vec3Tuple, target: Vec3
     } else {
       upy += 1e-6;
     }
-    (x0 = upy * z2 - upz * z1), (x1 = upz * z0 - upx * z2), (x2 = upx * z1 - upy * z0);
+    x0 = upy * z2 - upz * z1;
+    x1 = upz * z0 - upx * z2;
+    x2 = upx * z1 - upy * z0;
 
     len = x0 * x0 + x1 * x1 + x2 * x2;
   }

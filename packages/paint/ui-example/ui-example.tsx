@@ -17,7 +17,6 @@ export default function PaintUIExample() {
     });
     return [isOpen, setIsOpen];
   })();
-
   const [position, setPosition, position2] = (() => {
     const [position, setPosition] = createSignal({ x: 0, y: 0 });
 
@@ -31,7 +30,7 @@ export default function PaintUIExample() {
     return [pos, setPosition, position];
   })();
 
-  let popup: HTMLElement = null;
+  let popup: HTMLElement;
 
   const [zoom, setZoom] = createSignal(1);
   const [rotation, setRotation] = createSignal(0);
@@ -99,6 +98,7 @@ export default function PaintUIExample() {
           style={{ transform: `translate(${position().x - 60}px, ${position().y - 60}px)` }}
         >
           <NavigationPopupWithSVG
+            isActive={isOpen()}
             zoomDelta={(val) => setZoom(val)}
             rotationDelta={(val) => setRotation(val)}
             positionDelta={(val) => setPositionDelta(val)}
@@ -118,6 +118,7 @@ const NavigationPopupWithSVG = (props: {
   horizontalMove?: number;
   gap?: number;
   stroke?: boolean;
+  isActive?: boolean;
   zoomDelta?: (value: number) => void;
   rotationDelta?: (value: number) => void;
   positionDelta?: (value: { x: number; y: number }) => void;
@@ -131,14 +132,13 @@ const NavigationPopupWithSVG = (props: {
   return (
     <div class="relative flex select-none drop-shadow-lg">
       <svg class="w-30 h-30 stroke-width-1 z-1 scale-90 stroke-black transition-transform [.active_&]:scale-100">
-        (
-        {() => {
+        {(() => {
           // zoom navigation element
-          const zoom = createZoom();
-          zoom.active.listen((value) => props.navigationIsActive?.(value));
+          const nav = createZoom();
+          nav.active.listen((value) => props.navigationIsActive?.(value));
 
           createEffect(() => {
-            props.zoomDelta?.(zoom.zoom());
+            props.zoomDelta?.(nav.zoom());
           });
 
           return (
@@ -148,7 +148,8 @@ const NavigationPopupWithSVG = (props: {
               radius={merged.radius}
               horizontalMove={merged.horizontalMove}
               up={true}
-              class=" pointer-events-auto fill-blue-400 transition-colors [&.active]:cursor-zoom-in [&.active]:fill-blue-200 [&.hover]:fill-blue-300"
+              class="fill-blue-400 transition-colors [&.active]:cursor-zoom-in [&.active]:fill-blue-200 [&.hover]:fill-blue-300"
+              classList={{ 'pointer-events-auto': props.isActive, 'pointer-events-none': !props.isActive }}
               onPointerOver={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.classList.add('hover');
@@ -156,33 +157,40 @@ const NavigationPopupWithSVG = (props: {
               onPointerLeave={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.classList.remove('hover');
+                element.classList.remove('active');
+                nav.end();
               }}
               onPointerDown={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.setPointerCapture(e.pointerId);
                 element.classList.add('active');
-                zoom.start({ x: e.clientX, y: e.clientY });
+                nav.start({ x: e.clientX, y: e.clientY });
               }}
               onPointerUp={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.releasePointerCapture(e.pointerId);
                 element.classList.remove('active');
-                zoom.end();
+                nav.end();
               }}
               onPointerMove={(e: PointerEvent) => {
-                zoom.move({ x: e.clientX, y: e.clientY });
+                nav.move({ x: e.clientX, y: e.clientY });
+              }}
+              onPointerCancel={(e: PointerEvent) => {
+                const element = e.target as SVGElement;
+                element.classList.remove('hover');
+                nav.end();
               }}
             />
           );
-        }}
-        )() (
-        {() => {
+        })()}
+
+        {(() => {
           // rotate navigation element
-          const rotate = createRotate();
-          rotate.active.listen((value) => props.navigationIsActive?.(value));
+          const nav = createRotate();
+          nav.active.listen((value) => props.navigationIsActive?.(value));
 
           createEffect(() => {
-            props.rotationDelta?.(rotate.angle());
+            props.rotationDelta?.(nav.angle());
           });
 
           return (
@@ -191,7 +199,8 @@ const NavigationPopupWithSVG = (props: {
               y={merged.y}
               radius={merged.radius}
               horizontalMove={merged.horizontalMove + merged.gap}
-              class="pointer-events-auto fill-blue-400 transition-colors [&.active]:cursor-e-resize [&.active]:fill-blue-200 [&.hover]:fill-blue-300"
+              class=" fill-blue-400 transition-colors [&.active]:cursor-e-resize [&.active]:fill-blue-200 [&.hover]:fill-blue-300"
+              classList={{ 'pointer-events-auto': props.isActive, 'pointer-events-none': !props.isActive }}
               onPointerOver={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.classList.add('hover');
@@ -199,32 +208,39 @@ const NavigationPopupWithSVG = (props: {
               onPointerLeave={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.classList.remove('hover');
+                element.classList.remove('active');
+                nav.end();
               }}
               onPointerDown={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.setPointerCapture(e.pointerId);
                 element.classList.add('active');
-                rotate.start({ x: e.clientX, y: e.clientY });
+                nav.start({ x: e.clientX, y: e.clientY });
               }}
               onPointerUp={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.releasePointerCapture(e.pointerId);
                 element.classList.remove('active');
-                rotate.end();
+                nav.end();
               }}
               onPointerMove={(e: PointerEvent) => {
-                rotate.move({ x: e.clientX, y: e.clientY });
+                nav.move({ x: e.clientX, y: e.clientY });
+              }}
+              onPointerCancel={(e: PointerEvent) => {
+                const element = e.target as SVGElement;
+                element.classList.remove('hover');
+                nav.end();
               }}
             />
           );
-        }}
-        )() (
-        {() => {
-          const translate = createTranslate();
-          translate.active.listen((value) => props.navigationIsActive?.(value));
+        })()}
+
+        {(() => {
+          const nav = createTranslate();
+          nav.active.listen((value) => props.navigationIsActive?.(value));
 
           createEffect(() => {
-            props.positionDelta?.(translate.position());
+            props.positionDelta?.(nav.position());
           });
 
           return (
@@ -233,7 +249,8 @@ const NavigationPopupWithSVG = (props: {
               y={merged.y}
               inner_radius={merged.radius + merged.gap}
               outer_radius={merged.radius + merged.thickness}
-              class="pointer-events-auto fill-red-400 transition-colors [&.active]:cursor-move [&.active]:fill-red-200 [&.hover]:fill-red-300"
+              class="fill-red-400 transition-colors [&.active]:cursor-move [&.active]:fill-red-200 [&.hover]:fill-red-300"
+              classList={{ 'pointer-events-auto': props.isActive, 'pointer-events-none': !props.isActive }}
               onPointerOver={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.classList.add('hover');
@@ -241,26 +258,33 @@ const NavigationPopupWithSVG = (props: {
               onPointerLeave={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.classList.remove('hover');
+                element.classList.remove('active');
+                nav.end();
               }}
               onPointerDown={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.setPointerCapture(e.pointerId);
                 element.classList.add('active');
-                translate.start({ x: e.clientX, y: e.clientY });
+                nav.start({ x: e.clientX, y: e.clientY });
               }}
               onPointerUp={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
                 element.releasePointerCapture(e.pointerId);
                 element.classList.remove('active');
-                translate.end();
+                nav.end();
               }}
               onPointerMove={(e: PointerEvent) => {
-                translate.move({ x: e.clientX, y: e.clientY });
+                nav.move({ x: e.clientX, y: e.clientY });
+              }}
+              onPointerCancel={(e: PointerEvent) => {
+                const element = e.target as SVGElement;
+                element.classList.remove('hover');
+                nav.end();
               }}
             />
           );
-        }}
-        )()
+        })()}
+
         <Show when={true}>
           <For
             each={[
@@ -295,7 +319,10 @@ const NavigationPopupWithSVG = (props: {
         </Show>
       </svg>
 
-      <div class="pointer-events-auto absolute right-full flex w-40 translate-x-10 flex-col rounded border border-black bg-white p-1 text-xs transition-transform [.active_&]:translate-x-0">
+      <div
+        class="absolute right-full flex w-40 translate-x-10 flex-col rounded border border-black bg-white p-1 text-xs transition-transform [.active_&]:translate-x-0"
+        classList={{ 'pointer-events-auto': props.isActive, 'pointer-events-none': !props.isActive }}
+      >
         Tools
         <div class="flex flex-wrap gap-1">
           <For each={['Pen', 'Brush', 'Color picker']}>
@@ -304,7 +331,10 @@ const NavigationPopupWithSVG = (props: {
         </div>
       </div>
 
-      <div class="w-30 h-30 pointer-events-auto absolute bottom-full flex translate-y-10 flex-col gap-1 rounded border border-black bg-white p-1 text-xs transition-transform [.active_&]:translate-y-0">
+      <div
+        class="w-30 h-30 absolute bottom-full flex translate-y-10 flex-col gap-1 rounded border border-black bg-white p-1 text-xs transition-transform [.active_&]:translate-y-0"
+        classList={{ 'pointer-events-auto': props.isActive, 'pointer-events-none': !props.isActive }}
+      >
         Color wheel
         <div class="flex min-h-0 place-content-center place-items-center overflow-hidden">
           {(() => {
@@ -348,7 +378,10 @@ const NavigationPopupWithSVG = (props: {
         </div>
       </div>
 
-      <div class="pointer-events-auto absolute -top-full left-full flex w-40 -translate-x-10 flex-col rounded border  border-black bg-white p-1 text-xs transition-transform [.active_&]:translate-x-0">
+      <div
+        class="absolute -top-full left-full flex w-40 -translate-x-10 flex-col rounded border  border-black bg-white p-1 text-xs transition-transform [.active_&]:translate-x-0"
+        classList={{ 'pointer-events-auto': props.isActive, 'pointer-events-none': !props.isActive }}
+      >
         Layers
         <For each={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}>
           {(layer) => (
@@ -364,7 +397,10 @@ const NavigationPopupWithSVG = (props: {
         </For>
       </div>
 
-      <div class="w-30 pointer-events-auto absolute top-full flex -translate-y-10 flex-col rounded border  border-black bg-white p-1 text-xs transition-transform [.active_&]:translate-y-0">
+      <div
+        class="w-30 absolute top-full flex -translate-y-10 flex-col rounded border  border-black bg-white p-1 text-xs transition-transform [.active_&]:translate-y-0"
+        classList={{ 'pointer-events-auto': props.isActive, 'pointer-events-none': !props.isActive }}
+      >
         Tools settings
         <input type="range"></input>
         <input type="range"></input>
@@ -456,6 +492,12 @@ const createRotate = () => {
   return {
     angle,
     active,
+    start({ x = 0, y = 0 }) {
+      isDown = true;
+      active.emit(true);
+      start.y = y;
+      start.x = x;
+    },
     move({ x = 0, y = 0 }) {
       if (isDown) {
         // rotate around center
@@ -469,18 +511,14 @@ const createRotate = () => {
         // setAngle(tempAngle + angle3);
       }
     },
-    start({ x = 0, y = 0 }) {
-      isDown = true;
-      active.emit(true);
-      start.y = y;
-      start.x = x;
-    },
     end() {
-      isDown = false;
-      start.y = 0;
-      start.x = 0;
-      tempAngle = untrack(angle);
-      active.emit(false);
+      if (isDown) {
+        isDown = false;
+        start.y = 0;
+        start.x = 0;
+        tempAngle = untrack(angle);
+        active.emit(false);
+      }
     },
     rotate: (value: number) => {
       setAngle((prev) => prev + value);
@@ -499,6 +537,12 @@ const createZoom = () => {
   return {
     zoom,
     active,
+    start({ x = 0, y = 0 }) {
+      isDown = true;
+      active.emit(true);
+      start.y = y;
+      start.x = x;
+    },
     move({ x = 0, y = 0 }) {
       if (isDown) {
         // should calculate zoom based on distance and left-right top-down direction from start
@@ -515,18 +559,14 @@ const createZoom = () => {
         setZoom(newValue);
       }
     },
-    start({ x = 0, y = 0 }) {
-      isDown = true;
-      active.emit(true);
-      start.y = y;
-      start.x = x;
-    },
     end() {
-      isDown = false;
-      start.y = 0;
-      start.x = 0;
-      temp = untrack(zoom);
-      active.emit(false);
+      if (isDown) {
+        isDown = false;
+        start.y = 0;
+        start.x = 0;
+        temp = untrack(zoom);
+        active.emit(false);
+      }
     }
   };
 };
@@ -542,24 +582,26 @@ const createTranslate = () => {
   return {
     position,
     active,
-    move({ x = 0, y = 0 }) {
-      if (isDown) {
-        setPosition({ x: temp.x + x - start.x, y: temp.y + y - start.y });
-      }
-    },
     start({ x = 0, y = 0 }) {
       isDown = true;
       active.emit(true);
       start.y = y;
       start.x = x;
     },
+    move({ x = 0, y = 0 }) {
+      if (isDown) {
+        setPosition({ x: temp.x + x - start.x, y: temp.y + y - start.y });
+      }
+    },
     end() {
-      isDown = false;
-      temp.x = untrack(position).x;
-      temp.y = untrack(position).y;
-      start.y = 0;
-      start.x = 0;
-      active.emit(false);
+      if (isDown) {
+        isDown = false;
+        temp.x = untrack(position).x;
+        temp.y = untrack(position).y;
+        start.y = 0;
+        start.x = 0;
+        active.emit(false);
+      }
     }
   };
 };
