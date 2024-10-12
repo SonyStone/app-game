@@ -184,10 +184,21 @@ const NavigationPopupWithSVG = (props: {
         {() => {
           // rotate navigation element
 
-          let startX = 0;
+          let start = { x: 0, y: 0 };
           let isDown = false;
           let tempAngle = 0;
           let angle = 0;
+
+          const getScreenSize = () => {
+            const height = document.body.clientHeight;
+            const width = document.body.clientWidth;
+            return { height, width };
+          };
+
+          const getScreenCenter = () => {
+            const { height, width } = getScreenSize();
+            return { x: width / 2, y: height / 2 };
+          };
 
           return (
             <Cap
@@ -210,7 +221,8 @@ const NavigationPopupWithSVG = (props: {
                 element.classList.add('active');
                 isDown = true;
                 props.navigationIsActive?.(true);
-                startX = e.clientX;
+                start.y = e.clientY;
+                start.x = e.clientX;
               }}
               onPointerUp={(e: PointerEvent) => {
                 const element = e.target as SVGElement;
@@ -220,14 +232,17 @@ const NavigationPopupWithSVG = (props: {
                   props.navigationIsActive?.(false);
                 }
                 isDown = false;
-                startX = 0;
+                start.y = 0;
+                start.x = 0;
                 angle = tempAngle;
                 tempAngle = angle;
               }}
               onPointerMove={(e: PointerEvent) => {
                 if (isDown) {
-                  const move = e.clientX - startX;
-                  tempAngle = angle + move / 10;
+                  const center = getScreenCenter();
+                  const angle1 = Math.atan2(start.y - center.y, start.x - center.x) * (180 / Math.PI);
+                  const angle2 = Math.atan2(e.clientY - center.y, e.clientX - center.x) * (180 / Math.PI);
+                  tempAngle = angle + angle2 - angle1;
                   props.rotationDelta?.(tempAngle);
                 }
               }}
@@ -278,6 +293,7 @@ const NavigationPopupWithSVG = (props: {
               />
             )}
           </For>
+          <path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z" />
           <circle
             cx={merged.x}
             cy={merged.y + (merged.radius + merged.horizontalMove) / 2}
