@@ -1,5 +1,6 @@
 import UnoCSS from '@unocss/vite';
 import { resolve } from 'path';
+import solidDevtools from 'solid-devtools/vite';
 import { defineConfig } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
@@ -10,6 +11,10 @@ const packages = resolve(__dirname, 'packages');
 
 export default defineConfig({
   plugins: [
+    solidDevtools({
+      /* features options - all disabled by default */
+      autoname: true // e.g. enable autoname
+    }),
     UnoCSS({
       // your config or in uno.config.ts
     }),

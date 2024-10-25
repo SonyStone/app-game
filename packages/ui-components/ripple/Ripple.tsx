@@ -11,8 +11,10 @@ export function Ripple(props: { class?: string }) {
   return (
     <div
       class={s.ripple + ' ' + props.class}
-      onPointerDown={function (event) {
-        setList(add(event, list()));
+      onPointerDown={(event) => {
+        if (event.button === 0) {
+          setList(add(event, list()));
+        }
       }}
     >
       <For each={list()}>
@@ -22,7 +24,7 @@ export function Ripple(props: { class?: string }) {
             onFadeOut={function (event) {
               setList(remove(event, list()));
             }}
-          ></RippleItem>
+          />
         )}
       </For>
     </div>

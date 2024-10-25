@@ -64,7 +64,13 @@ export default function CameraProjectionSVG() {
   return (
     <div>
       <div>Camera Projection on SVG canvas</div>
-      <svg ref={(ref) => (svg = ref)} class="border" height={400} width={400} viewBox="0 0 2 2">
+      <svg
+        class="h-full w-full touch-none select-none border"
+        ref={(ref) => (svg = ref)}
+        height={400}
+        width={400}
+        viewBox="0 0 2 2"
+      >
         <g transform="scale(1, -1) translate(1 1)" transform-origin="center">
           <OnScreenCube
             camera={camera}

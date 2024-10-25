@@ -1,7 +1,11 @@
+import { FVec2, m3 } from '@packages/math';
+import { Mat3 } from '@packages/ogl';
 import { distance, normalize } from '@packages/ogl/math/functions/vec-2-func';
+import { rotate } from '@packages/pixijs-research/math_alt/Vector2';
 import { createEventBus } from '@solid-primitives/event-bus';
 import { WindowEventListener } from '@solid-primitives/event-listener';
 import { createKeyHold } from '@solid-primitives/keyboard';
+import { start } from 'repl';
 import { ComponentProps, createEffect, createMemo, createSignal, For, mergeProps, Show, untrack } from 'solid-js';
 
 export default function PaintUIExample() {
@@ -469,6 +473,61 @@ const Cap = (
 /** to short svg values */
 const toFixed = (val: number) => parseFloat(val.toFixed(2));
 
+const createNavigation = () => {
+  // const [matrix, setMatrix] = createSignal(m3.identity([]));
+  const transformMatrix = new Mat3();
+  const rotateStart = { x: 0, y: 0 };
+  const translateStart = new FVec2();
+
+  let isActive = false;
+
+  return {
+    translate: {
+      start(x = 0, y = 0) {
+        isActive = true;
+      },
+      move(x = 0, y = 0) {
+        if (isActive) {
+          transformMatrix.translate([translateStart.x - x, translateStart.y - y]);
+        }
+      },
+      end() {
+
+      }
+    },
+    rotate: {
+      start(x = 0, y = 0) {
+        isActive = true;
+        
+      },
+      move(x = 0, y = 0) {
+        if (isActive) {
+          
+          m3.setRotate(matrix(), 0.1);
+          // rotate around point
+        }
+      },
+      end() {
+        if (isActive) {
+          isActive = false;
+        }
+      }
+    },
+    zoom: {
+      start(x = 0, y = 0) {
+        isActive = true;
+      },
+      move(x = 0, y = 0) {
+        if (isActive) {
+          // zoom 2d camera
+
+
+        }
+      }
+    }
+  }
+}
+
 // TODO: make it a directive?
 const createRotate = () => {
   const [angle, setAngle] = createSignal(0);
@@ -572,6 +631,7 @@ const createZoom = () => {
 };
 
 const createTranslate = () => {
+  const transformMatrix = new Mat3();         
   const [position, setPosition] = createSignal({ x: 0, y: 0 });
   const active = createEventBus<boolean>();
 

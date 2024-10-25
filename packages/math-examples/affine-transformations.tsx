@@ -143,6 +143,13 @@ export default function AffineTransformations() {
             <circle class="text-red" fill="currentcolor" cx={red()[0]} cy={red()[1]} r=".8" />
             <circle class="text-blue" fill="currentcolor" cx={blue()[0]} cy={blue()[1]} r=".8" />
             <circle class="text-purple" fill="currentcolor" cx={purple()[0]} cy={purple()[1]} r=".8" />
+            <g
+              transform={`matrix(${matrix[0][0]} ${matrix[1][0]} ${matrix[0][1]} ${matrix[1][1]} ${matrix[0][2]} ${matrix[1][2]})`}
+            >
+              <text x={0} y={0} font-size="2" class="text-green">
+                asd
+              </text>
+            </g>
           </g>
         </svg>
       </div>

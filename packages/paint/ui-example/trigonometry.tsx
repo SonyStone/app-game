@@ -31,41 +31,50 @@ import { ComponentProps, createMemo, createSignal, splitProps } from 'solid-js';
 export default function TrigonometryExample() {
   const [angle, setAngle] = createSignal(30);
 
-  const [opposite, setOpposite] = createSignal(calcOpposite(angle()));
-  const [adjacent, setAdjacent] = createSignal(calcAdjacent(angle()));
+  const [opposite, setOpposite] = createSignal(toFixed(calcOpposite(angle())));
+  const [adjacent, setAdjacent] = createSignal(toFixed(calcAdjacent(angle())));
 
   return (
     <div class="flex h-full w-full place-content-center place-items-center">
       <div class="flex flex-col gap-4">
-        <Input
-          value={angle()}
-          onChange={(value) => {
-            setAngle(value);
-            setOpposite(calcOpposite(value));
-            setAdjacent(calcAdjacent(value));
-          }}
-          max={360}
-        />
-        <Input
-          value={opposite()}
-          onChange={(value) => {
-            setAngle(calcAngleFromOpposite(value));
-            setOpposite(value);
-            setAdjacent(calcAdjacentFromOpposite(value));
-          }}
-          max={1}
-          step={0.01}
-        />
-        <Input
-          value={adjacent()}
-          onChange={(value) => {
-            setAngle(calcAngleFromAdjacent(value));
-            setAdjacent(value);
-            setOpposite(calcOppositeFromAdjacent(value));
-          }}
-          max={1}
-          step={0.01}
-        />
+        <div class="flex gap-1">
+          <label>Angle</label>
+          <Input
+            value={angle()}
+            onChange={(value) => {
+              setAngle(toFixed(value));
+              setOpposite(toFixed(calcOpposite(value)));
+              setAdjacent(toFixed(calcAdjacent(value)));
+            }}
+            max={360}
+          />
+        </div>
+        <div class="flex gap-1">
+          <label>Opposite</label>
+          <Input
+            value={opposite()}
+            onChange={(value) => {
+              setAngle(toFixed(calcAngleFromOpposite(value)));
+              setOpposite(toFixed(value));
+              setAdjacent(toFixed(calcAdjacentFromOpposite(value)));
+            }}
+            max={1}
+            step={0.01}
+          />
+        </div>
+        <div class="flex gap-1">
+          <label>Adjacent</label>
+          <Input
+            value={adjacent()}
+            onChange={(value) => {
+              setAngle(toFixed(calcAngleFromAdjacent(value)));
+              setAdjacent(toFixed(value));
+              setOpposite(toFixed(calcOppositeFromAdjacent(value)));
+            }}
+            max={1}
+            step={0.01}
+          />
+        </div>
       </div>
 
       <svg class="border" class="w-100 h-100" viewBox="0 0 2 2">
@@ -223,3 +232,4 @@ const calcAngleFromAdjacent = (height: number) => {
 
 const calcOppositeFromAdjacent = (adjacent: number) => Math.sqrt(1 - adjacent * adjacent);
 const calcAdjacentFromOpposite = (opposite: number) => Math.sqrt(1 - opposite * opposite);
+const toFixed = (value: number) => +value.toFixed(2);

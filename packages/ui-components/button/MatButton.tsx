@@ -17,7 +17,7 @@ export default function MatButton({
   return (
     <button class={s.button + ' ' + s[color] + ' ' + s[variant] + ' ' + (props?.class ?? '')} type={type} {...props}>
       {children}
-      <Ripple></Ripple>
+      <Ripple />
     </button>
   );
 }

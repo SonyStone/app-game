@@ -1,12 +1,10 @@
-import { useRoutes } from '@solidjs/router';
+import { Router } from '@solidjs/router';
 import { ErrorBoundary } from 'solid-js';
 
 import Noise from './noise/Noise';
 import { routes } from './routes';
 
 export function App() {
-  const Routes = useRoutes(routes);
-
   return (
     <>
       <ErrorBoundary
@@ -15,7 +13,7 @@ export function App() {
           return <div>Error in the App</div>;
         }}
       >
-        <Routes />
+        <Router>{routes}</Router>
       </ErrorBoundary>
       <Noise />
     </>

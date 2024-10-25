@@ -1,64 +1,55 @@
-import { Link, RouteDefinition } from '@solidjs/router';
-import { Component, JSX, Show, lazy } from 'solid-js';
-
-import multitouchThumbnail from '@packages/hammer-examples/thumbnail.png';
-import baseTileSizeThumbnail from './thumbnail/base-tile-size-thumbnail.png?url';
-import breakoutThumbnail from './thumbnail/breakout-thumbnail.png?url';
+import { routes as escyRoutes } from '@packages/ecsy-examples/routes';
+import { routes as mathRoutes } from '@packages/math-examples/routes';
+import { routes as oglRoutes } from '@packages/ogl-examples/routes';
+import { routes as paintRoutes } from '@packages/paint/routes';
+import { routes as phaserRoutes } from '@packages/phaser-examples/routes';
+import { routes as pixijsRoutes } from '@packages/pixijs-examples/routes';
+import { routes as threeRoutes } from '@packages/three-examples/router';
+import { routes as twglRoutes } from '@packages/twgl-examples/routes';
+import { Ripple } from '@packages/ui-components/ripple/Ripple';
+import { Thumbnail } from '@packages/ui-components/thumbnail';
+import { routes as webglRoutes } from '@packages/webgl-examples/routes';
+import { routes as webgpuRoutes } from '@packages/webgpu-examples/routes';
+import { A } from '@solidjs/router';
+import { lazy } from 'solid-js';
+import Navigation from './navigation';
+import { Routes } from './routes.interface';
 import gameOfLifeThumbnail from './thumbnail/chrome_2023-11-18_15-20-36.png?url';
 import twglThumbnail from './thumbnail/chrome_2023-11-18_15-44-48.png?url';
-import phaserThumbnail from './thumbnail/chrome_2023-11-18_15-46-29.png?url';
-import polylinesThumbnail from './thumbnail/chrome_2023-11-18_15-48-40.png?url';
-import smaaThumbnail from './thumbnail/chrome_2023-11-18_16-03-08.png?url';
-import svgLoaderThumbnail from './thumbnail/chrome_2023-11-18_16-04-46.png?url';
-import skinningThumbnail from './thumbnail/chrome_2023-11-18_16-10-52.png?url';
-import texturesViewThumbnail from './thumbnail/chrome_2024-06-13_07-04-13.png?url';
-import multipleLayersThumbnail from './thumbnail/multiple-layers-thumbnail.png?url';
-import rpgGamesThumbnail from './thumbnail/rpg-games.png?url';
-import rpgThumbnail from './thumbnail/rpg-thumbnail.png?url';
-import spritesThumbnail from './thumbnail/sprites-thumbnail.png?url';
 import wireframeThumbnail from './thumbnail/wireframe-thumbnail.png?url';
 import worldBodiesThumbnail from './thumbnail/world-rodies-thumbnail.png?url';
 
-function Thumbnail(props: { thumbnail?: string; href: string; name?: string }) {
-  return (
-    <Link class="rounded-2 relative flex aspect-square w-full bg-slate-200 p-2" href={props.href}>
-      <Show when={!!props.thumbnail}>
-        <img class="rounded-1 object-cover" src={props.thumbnail} />
-      </Show>
-      <Show when={!!props.name}>
-        <span class="rounded-se-2 absolute bottom-0 start-0 max-w-full bg-slate-200 px-2 pb-2 text-2xl leading-6">
-          {props.name}
-        </span>
-      </Show>
-    </Link>
-  );
-}
-
 const SectionTitle = (props: { name: string }) => (
-  <div class="rounded-2 border-e-15 col-start-1 flex place-content-center place-items-center border-slate-200 p-2">
+  <div class="rounded-2 border-e-15 flex aspect-square w-full place-content-center place-items-center border-slate-200 p-2">
     <h2 class="text-4xl">{props.name}</h2>
   </div>
 );
 
-type Routes = Pick<RouteDefinition, 'path' | 'component'> & {
-  name?: string | JSX.Element;
-  Preview?: Component<{ name: string; path: string }>;
-  children?: Routes[];
-};
-
 export const routes: Routes[] = [
+  {
+    path: '/',
+    name: 'home',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./home-page'))
+  },
   {
     path: '/wasm-game-of-life',
     name: 'Game Of Life',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={gameOfLifeThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/wasm-rust-examples/wasm-game-of-life'))
   },
-
   {
-    path: '/math/geometric-algebra',
-    name: 'Geometric Algebra',
+    path: '/math',
+    name: 'Math Examples',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/math-examples/math-stuff'))
+    component: lazy(() => import('@packages/math-examples/math-examples')),
+    children: [
+      {
+        path: '/',
+        component: () => <Navigation routes={mathRoutes} parentPath="." />
+      },
+      ...mathRoutes
+    ]
   },
   {
     path: '/player',
@@ -66,22 +57,18 @@ export const routes: Routes[] = [
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/film-annotation-player/App'))
   },
-
   {
     path: '/100-world-bodies',
     name: '100 world bodies',
-
     Preview: (props) => <Thumbnail href={props.path} thumbnail={worldBodiesThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/phaser-examples/physics/matterjs/100 world bodies'))
   },
-
   {
     path: '/ui-components-examples',
     name: 'UI Components',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/ui-components-examples/breadcrumbs/components'))
   },
-
   {
     path: '/gsap-scroll-trigger-svg-text-mask',
     name: 'ScrollTrigger: SVG Text Mask',
@@ -97,453 +84,216 @@ export const routes: Routes[] = [
   {
     path: '/paint',
     Preview: () => (
-      <div class="rounded-2 relative col-start-1 flex flex-col place-content-center place-items-center gap-1.5 overflow-hidden p-2 px-4">
+      <A
+        class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 p-2 px-4"
+        href="/paint"
+      >
         <h2 class="text-4xl">Paint App</h2>
         <span class="text-center text-sm">Stuff associated with creating a drawing application</span>
         <div class="absolute -end-2 bottom-1">
           <span class="text-4rem leading-6">🎨</span>
         </div>
-      </div>
+        <Ripple class="text-slate/20" />
+      </A>
     ),
     children: [
       {
-        path: '/hammer-multitouch',
-        name: 'Hammer Multitouch',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={multitouchThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/hammer-examples/multitouch'))
+        path: '/',
+        component: () => (
+          <>
+            <div class="flex w-full place-content-center place-items-center bg-blue-100">Paint App</div>
+            <Navigation routes={paintRoutes} parentPath="." />
+          </>
+        )
       },
-      {
-        path: '/brush-example',
-        name: 'Brush Example',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={texturesViewThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/paint/brush-example/brush-example'))
-      },
-      {
-        path: '/paint',
-        name: 'Paint',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/paint-1/paint-page'))
-      },
-      {
-        path: '/ogl-paint-full-screen',
-        name: 'OGL paint full screen canvas',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/paint-ogl-1/paint-2'))
-      },
-      {
-        path: '/paint-app',
-        name: 'paint app [WIP]',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/paint-app/paint-app'))
-      },
-      {
-        path: '/lasso-select-example',
-        name: 'Lasso Select Example',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/lasso-select-example/lasso-select-example'))
-      },
-      {
-        path: '/offscreen-canvas-example',
-        name: 'Offscreen Canvas Example [WIP]',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/offscreen-canvas-example/offscreen-canvas-example'))
-      },
-      {
-        path: '/can-i-use',
-        name: '"Can I Use"',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/can-i-use/can-i-use'))
-      },
-      {
-        path: '/canvas-paint',
-        name: 'Paint on WebGL Canvas',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint'))
-      },
-      {
-        path: '/canvas-paint-step-by-step-1',
-        name: 'Paint on WebGL Canvas Step by Step #1',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint-step-by-step-1'))
-      },
-      {
-        path: '/canvas-paint-step-by-step-2',
-        name: 'Paint on WebGL Canvas Step by Step #2',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint-step-by-step-2'))
-      },
-      {
-        path: '/offscreen-canvas-paint',
-        name: 'Paint on WebGL OffscreenCanvas',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/offscreen-canvas-paint/offscreen-canvas-paint'))
-      },
-      {
-        path: '/ui-example',
-        name: 'Paint UI Example',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/ui-example/ui-example'))
-      },
-      {
-        path: '/trigonometry',
-        name: 'Trigonometry Example',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/paint/ui-example/trigonometry'))
-      }
+      ...paintRoutes
     ]
   },
   {
     path: '/webgl-examples',
     Preview: () => (
-      <div class="rounded-2 relative col-start-1 flex flex-col place-content-center place-items-center gap-1.5 overflow-hidden p-2 px-4">
+      <A
+        class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 p-2 px-4"
+        href="/webgl-examples"
+      >
         <h2 class="text-4xl">
-          <a href="https://webgl2fundamentals.org/" target="_blank">
-            WebGL
-          </a>
+          {/* <a href="https://webgl2fundamentals.org/" target="_blank">
+          </a> */}
+          WebGL
         </h2>
         <span class="text-center text-sm">Examples, they may work, or may not. Who knows?</span>
         <div class="absolute -end-2 bottom-1">
           <span class="text-4rem leading-6">🙂</span>
         </div>
-      </div>
+        <Ripple class="text-slate/20" />
+      </A>
     ),
     children: [
       {
-        path: '/simple-program',
-        name: 'Simple Program (nothing to see)',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/webgl-examples/simple-program/simple-program'))
+        path: '/',
+        component: () => (
+          <>
+            <div class="flex w-full place-content-center place-items-center bg-blue-100">WebGPU Examples</div>
+            <Navigation routes={webglRoutes} parentPath="." />
+          </>
+        )
       },
-      {
-        path: '/matrices-2d',
-        name: '2d matrices',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/webgl-examples/matrices-2d/matrices-2d'))
-      },
-      {
-        path: '/meshing',
-        name: 'Meshing [WIP]',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/webgl-examples/ogl-meshing/meshing'))
-      },
-      {
-        path: '/instanced-drawing',
-        name: 'Instanced Drawing',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/webgl-examples/instanced-drawing/instanced-drawing'))
-      },
-      {
-        path: '/blending-modes',
-        name: 'Blending Modes',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/webgl-examples/ogl-blending-modes/ogl-blending-modes'))
-      }
+      ...webglRoutes
     ]
   },
   {
     path: '/ogl-examples',
     name: ' ',
     Preview: () => (
-      <div class="rounded-2 relative col-start-1 flex flex-col place-content-center place-items-center gap-1.5 overflow-hidden p-2 px-4">
+      <A
+        class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 p-2 px-4"
+        href="/ogl-examples"
+      >
         <h2 class="text-4xl">
-          <a href="https://github.com/oframe/ogl" target="_blank">
-            OGL
-          </a>
+          {/* <a href="https://github.com/oframe/ogl" target="_blank">
+          </a> */}
+          OGL
         </h2>
         <span class="text-center text-sm">It's like WebGL, but it is WebGL</span>
         <div class="absolute -end-2 bottom-1">
           <span class="text-4rem leading-6">🚄</span>
         </div>
-      </div>
+        <Ripple class="text-slate/20" />
+      </A>
     ),
     children: [
       {
-        path: '/polylines',
-        name: 'OGL Polylines',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={polylinesThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/polylines'))
+        path: '/',
+        component: () => (
+          <>
+            <div class="flex w-full place-content-center place-items-center bg-blue-100">OGL Examples</div>
+            <Navigation routes={oglRoutes} parentPath="." />
+          </>
+        )
       },
-      {
-        path: '/skinning',
-        name: 'OGL skinning',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={skinningThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/skinning/skinning'))
-      },
-      {
-        path: '/msdf-text',
-        name: 'OGL MSDF Text',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/msdf-text/msdf-text'))
-      },
-      {
-        path: '/sort-transparency',
-        name: 'OGL Sort Transparency',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/sort-transparency/sort-transparency'))
-      },
-      {
-        path: '/helpers',
-        name: 'OGL Helpers',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/helpers/helpers'))
-      },
-      {
-        path: '/draw-modes',
-        name: 'OGL Draw modes',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/draw-modes/draw-modes'))
-      },
-      {
-        path: '/load-gltf',
-        name: 'Load glTF',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/load-gltf/load-gltf'))
-      },
-
-      {
-        path: '/ogl-flowmap',
-        name: 'OGL Flowmap',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/flowmap/flowmap'))
-      },
-      {
-        path: '/ogl-mouse-flowmap',
-        name: 'OGL Mouse Flowmap',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/mouse-flowmap/mouse-flowmap'))
-      },
-      {
-        path: '/ogl-raycasting',
-        name: 'OGL Raycasting',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/raycasting/raycasting'))
-      },
-      {
-        path: '/ogl-frustum',
-        name: 'OGL Frustum',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/frustum/frustum'))
-      },
-      {
-        path: '/ogl-mouse-flowmap',
-        name: 'OGL Mouse Flowmap',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/mouse-flowmap/mouse-flowmap'))
-      },
-      {
-        path: '/ogl-instancing',
-        name: 'OGL Instancing',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ogl-examples/ogl-instancing/ogl-instancing'))
-      }
+      ...oglRoutes
     ]
   },
   {
     path: '/three-examples',
     name: 'Three js Examples',
-    Preview: (props) => <SectionTitle name={props.name} />,
+    Preview: (props) => (
+      <A href="/three-examples" class="rounded-2 relative">
+        <SectionTitle name={props.name} />
+        <Ripple class="text-slate/20" />
+      </A>
+    ),
     children: [
       {
-        path: '/three-pixi',
-        name: 'ThreePixi (not working)',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/three-examples/ThreePixi'))
+        path: '/',
+        component: () => (
+          <>
+            <div class="flex w-full place-content-center place-items-center bg-blue-100">Three js Examples</div>
+            <Navigation routes={threeRoutes} parentPath="." />
+          </>
+        )
       },
-      {
-        path: '/3d-rpg',
-        name: '3D RPG',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={rpgThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/three-examples/3d-rpg/Main'))
-      },
-      {
-        path: '/3d-rpg-tests',
-        name: '3D RPG Tests',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/three-examples/3d-rpg/load-fbx-test'))
-      },
-      {
-        path: '/webgl_postprocessing_smaa',
-        name: 'SMAA',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={smaaThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/three-examples/PostprocessingSmaa'))
-      },
-      {
-        path: '/webgl_loader_svg',
-        name: 'SVG Loader',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={svgLoaderThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/three-examples/SvgLoader'))
-      },
-      {
-        path: '/sprites',
-        name: 'Sprites',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={spritesThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/three-examples/Sprites'))
-      },
-      {
-        path: '/three',
-        name: 'Three',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/three-examples/Three'))
-      },
-      {
-        path: '/solid-three',
-        name: 'SolidThree',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/three-examples/Solid-Three'))
-      },
-      {
-        path: '/view-offset',
-        name: 'ViewOffset',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/three-examples/ViewOffset'))
-      }
+      ...threeRoutes
     ]
   },
   {
     path: '/twgl-examples',
     name: 'twgl Examples',
-    Preview: (props) => <SectionTitle name={props.name} />,
+    Preview: (props) => (
+      <A href="/twgl-examples" class="rounded-2 relative">
+        <SectionTitle name={props.name} />
+        <Ripple class="text-slate/20" />
+      </A>
+    ),
     children: [
       {
-        path: '/uniform-buffer-objects',
-        name: 'Uniform Buffer Objects',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/twgl-examples/uniform-buffer-objects/uniform-buffer-objects'))
-      }
+        path: '/',
+        component: () => <Navigation routes={twglRoutes} parentPath="." />
+      },
+      ...twglRoutes
     ]
   },
   {
     path: '/phaser-examples',
     name: 'Phaser Examples',
-    Preview: (props) => <SectionTitle name={props.name} />,
+    Preview: (props) => (
+      <A href="/phaser-examples" class="rounded-2 relative">
+        <SectionTitle name={props.name} />
+        <Ripple class="text-slate/20" />
+      </A>
+    ),
     children: [
       {
-        path: '/tilemap/layer-with-multiple-layers',
-        name: 'Multiple Layers',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={multipleLayersThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/phaser-examples/tilemap/layer-with-multiple-layers'))
+        path: '/',
+        component: () => <Navigation routes={phaserRoutes} parentPath="." />
       },
-      {
-        path: '/tilemap/base-tile-size',
-        name: 'Base Tile Size',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={baseTileSizeThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/phaser-examples/tilemap/base-tile-size'))
-      },
-      {
-        path: '/rpg-game',
-        name: 'RPG Game',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} thumbnail={rpgGamesThumbnail} />,
-        component: lazy(() => import('@packages/phaser-examples/rpg/rpg-game'))
-      },
-      {
-        path: '/phaser-game',
-        name: 'Phaser',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={phaserThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/phaser-examples/phaser/Game'))
-      },
-      {
-        path: '/breakout',
-        name: 'Breakout',
-        Preview: (props) => <Thumbnail href={props.path} thumbnail={breakoutThumbnail} name={props.name} />,
-        component: lazy(() => import('@packages/phaser-examples/breakout'))
-      }
+      ...phaserRoutes
     ]
   },
   {
     path: '/pixijs-examples',
     name: 'PixiJS Examples',
-    Preview: (props) => <SectionTitle name={props.name} />,
+    Preview: (props) => (
+      <A href="/pixijs-examples" class="rounded-2 relative">
+        <SectionTitle name={props.name} />
+        <Ripple class="text-slate/20" />
+      </A>
+    ),
     children: [
       {
-        path: '/basic',
-        name: 'Basic',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/pixijs-examples/basic'))
+        path: '/',
+        component: () => <Navigation routes={pixijsRoutes} parentPath="." />
       },
-      {
-        path: '/blend-modes',
-        name: 'Blend Modes',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/pixijs-examples/blend-modes'))
-      },
-      {
-        path: '/mouse-trail',
-        name: 'Mouse Trail',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/pixijs-examples/mouse-trail'))
-      }
+      ...pixijsRoutes
     ]
   },
   {
     path: '/ecsy-examples',
     name: 'ECSY Examples',
-    Preview: (props) => <SectionTitle name={props.name} />,
+    Preview: (props) => (
+      <A href="/ecsy-examples" class="rounded-2 relative">
+        <SectionTitle name={props.name} />
+        <Ripple class="text-slate/20" />
+      </A>
+    ),
     children: [
       {
-        path: '/circles-boxes',
-        name: 'Circles Boxes',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ecsy-examples/circles-boxes/circles-boxes'))
+        path: '/',
+        component: () => <Navigation routes={escyRoutes} parentPath="." />
       },
-      {
-        path: '/circles-boxes-dom',
-        name: 'Circles Boxes DOM',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ecsy-examples/circles-boxes-dom/circles-boxes-dom'))
-      },
-      {
-        path: '/circles-boxes-pixijs',
-        name: 'Circles Boxes Pixijs',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ecsy-examples/circles-boxes-pixijs/circles-boxes-pixijs'))
-      },
-      {
-        path: '/canvas',
-        name: 'Canvas',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ecsy-examples/canvas/intersecting-circles'))
-      },
-      {
-        path: '/dev',
-        name: 'Dev',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/ecsy-examples/dev/dev'))
-      }
+      ...escyRoutes
     ]
   },
   {
     path: '/webgpu-examples',
     name: 'WebGPU Examples',
-    Preview: (props) => <SectionTitle name={props.name} />,
+    Preview: (props) => (
+      <A href="/webgpu-examples" class="rounded-2 relative">
+        <SectionTitle name={props.name} />
+        <Ripple class="text-slate/20" />
+      </A>
+    ),
     children: [
       {
-        path: '/hello-triangle',
-        name: 'Hello Triangle',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/webgpu-examples/hello-triangle/hello-triangle'))
+        path: '/',
+        component: () => (
+          <>
+            <div class="flex w-full place-content-center place-items-center bg-blue-100">WebGPU Examples</div>
+            <Navigation routes={webgpuRoutes} parentPath="." />
+          </>
+        )
       },
-      {
-        path: '/rotating-cube',
-        name: 'Rotating Cube',
-        Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-        component: lazy(() => import('@packages/webgpu-examples/rotating-cube/rotating-cube'))
-      }
+      ...webgpuRoutes
     ]
   },
   {
     path: '/wip',
-    Preview: (props) => (
-      <div class="rounded-2 border-e-15 col-start-1 flex flex-col place-content-center place-items-center border-slate-200 p-2">
+    Preview: () => (
+      <div class="rounded-2 border-e-15 flex flex-col place-content-center place-items-center border-slate-200 p-2">
         <h2 class="text-4xl">WIP</h2>
         <span class="text-center">And generally not interesting stuff</span>
       </div>
     )
-  },
-  {
-    path: '/',
-    name: 'home',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./home-page'))
   },
   {
     path: '/tanki',
@@ -579,13 +329,13 @@ export const routes: Routes[] = [
     path: '/game-ecs',
     name: 'Game ECS',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./game-ecs/Index'))
+    component: lazy(() => import('./game-ecs/index'))
   },
   {
     path: '/gpu-text-rendering',
     name: 'GPU Text Rendering',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./gpu-text-rendering/Index'))
+    component: lazy(() => import('./gpu-text-rendering'))
   },
   {
     path: '/animations',
