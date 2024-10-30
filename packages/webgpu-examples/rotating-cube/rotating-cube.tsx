@@ -30,7 +30,7 @@ declare enum GPUTextureUsage {
  * https://webgpu.github.io/webgpu-samples/samples/rotatingCube
  */
 export default function RotatingCube() {
-  const canvas = (<canvas class="w-full aspect-square max-w-600px" />) as HTMLCanvasElement;
+  const canvas = (<canvas class="max-w-600px aspect-square w-full" />) as HTMLCanvasElement;
 
   let requestID: number;
   async function init() {
@@ -128,7 +128,7 @@ export default function RotatingCube() {
       usage: GPUTextureUsage.RENDER_ATTACHMENT
     });
 
-    const uniformBufferSize = 4 * 16; // 4x4 matrix
+    const uniformBufferSize = 4 * 16; // 4x4 matrix = 4 bytes per float * 16 floats per mat
     const uniformBuffer = device.createBuffer({
       size: uniformBufferSize,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST

@@ -1,6 +1,6 @@
 import { onCleanup } from 'solid-js';
 
-import init, { Cell, Universe } from '../../wasm_game_of_life/pkg/wasm_game_of_life';
+import init, { Cell, Universe } from './wasm_game_of_life/pkg/wasm_game_of_life';
 
 export default function WasmGameOfLife() {
   // greet();
