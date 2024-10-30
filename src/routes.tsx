@@ -6,6 +6,7 @@ import { routes as phaserRoutes } from '@packages/phaser-examples/routes';
 import { routes as pixijsRoutes } from '@packages/pixijs-examples/routes';
 import { routes as threeRoutes } from '@packages/three-examples/router';
 import { routes as twglRoutes } from '@packages/twgl-examples/routes';
+import { routes as uiComponentsRoutes } from '@packages/ui-components-examples/routes';
 import { Ripple } from '@packages/ui-components/ripple/Ripple';
 import { Thumbnail } from '@packages/ui-components/thumbnail';
 import { routes as webglRoutes } from '@packages/webgl-examples/routes';
@@ -65,14 +66,48 @@ export const routes: Routes[] = [
   },
   {
     path: '/ui-components-examples',
-    name: 'UI Components',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ui-components-examples/breadcrumbs/components'))
+    Preview: (props) => (
+      <A
+        class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden overflow-hidden bg-slate-200 p-2 p-2 px-4"
+        href={props.path}
+      >
+        <h2 class="text-4xl">UI/UX</h2>
+        <span class="text-center text-sm">Stuff associated with creating a UI</span>
+        <div class="absolute -end-2 bottom-1">
+          <span class="text-4rem leading-6">🖼️</span>
+        </div>
+        <Ripple class="text-slate/20" />
+      </A>
+    ),
+    children: [
+      {
+        path: '/',
+        component: () => (
+          <>
+            <div class="flex w-full place-content-center place-items-center bg-blue-100">UI Components</div>
+            <Navigation routes={uiComponentsRoutes} parentPath="." />
+          </>
+        )
+      },
+      ...uiComponentsRoutes
+    ]
   },
   {
     path: '/gsap-scroll-trigger-svg-text-mask',
     name: 'ScrollTrigger: SVG Text Mask',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    Preview: (props) => (
+      <A
+        class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden overflow-hidden bg-slate-200 p-2 p-2 px-4"
+        href={props.path}
+      >
+        <h2 class="text-4xl">GSAP</h2>
+        <span class="text-center text-sm">{props.name}</span>
+        <div class="absolute -end-2 bottom-1">
+          <span class="text-4rem leading-6">💫</span>
+        </div>
+        <Ripple class="text-slate/20" />
+      </A>
+    ),
     component: lazy(() => import('@packages/gsap-examples/scroll-trigger-svg-text-mask/scroll-trigger-svg-text-mask'))
   },
   {
@@ -83,10 +118,10 @@ export const routes: Routes[] = [
   },
   {
     path: '/paint',
-    Preview: () => (
+    Preview: (props) => (
       <A
         class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 p-2 px-4"
-        href="/paint"
+        href={props.path}
       >
         <h2 class="text-4xl">Paint App</h2>
         <span class="text-center text-sm">Stuff associated with creating a drawing application</span>
@@ -111,10 +146,10 @@ export const routes: Routes[] = [
   },
   {
     path: '/webgl-examples',
-    Preview: () => (
+    Preview: (props) => (
       <A
         class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 p-2 px-4"
-        href="/webgl-examples"
+        href={props.path}
       >
         <h2 class="text-4xl">
           {/* <a href="https://webgl2fundamentals.org/" target="_blank">
@@ -142,12 +177,45 @@ export const routes: Routes[] = [
     ]
   },
   {
-    path: '/ogl-examples',
-    name: ' ',
-    Preview: () => (
+    path: '/webgpu-examples',
+    name: 'WebGPU',
+    Preview: (props) => (
       <A
         class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 p-2 px-4"
-        href="/ogl-examples"
+        href={props.path}
+      >
+        <h2 class="text-4xl">
+          {/* <a href="https://webgl2fundamentals.org/" target="_blank">
+              </a> */}
+          WebGPU
+        </h2>
+        <span class="text-center text-sm">Is it here or not?</span>
+        <div class="absolute -end-2 bottom-1">
+          <span class="text-4rem leading-6">😐</span>
+        </div>
+        <Ripple class="text-slate/20" />
+      </A>
+    ),
+    children: [
+      {
+        path: '/',
+        component: () => (
+          <>
+            <div class="flex w-full place-content-center place-items-center bg-blue-100">WebGPU Examples</div>
+            <Navigation routes={webgpuRoutes} parentPath="." />
+          </>
+        )
+      },
+      ...webgpuRoutes
+    ]
+  },
+  {
+    path: '/ogl-examples',
+    name: ' ',
+    Preview: (props) => (
+      <A
+        class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 p-2 px-4"
+        href={props.path}
       >
         <h2 class="text-4xl">
           {/* <a href="https://github.com/oframe/ogl" target="_blank">
@@ -178,7 +246,7 @@ export const routes: Routes[] = [
     path: '/three-examples',
     name: 'Three js Examples',
     Preview: (props) => (
-      <A href="/three-examples" class="rounded-2 relative">
+      <A href={props.path} class="rounded-2 relative">
         <SectionTitle name={props.name} />
         <Ripple class="text-slate/20" />
       </A>
@@ -200,7 +268,7 @@ export const routes: Routes[] = [
     path: '/twgl-examples',
     name: 'twgl Examples',
     Preview: (props) => (
-      <A href="/twgl-examples" class="rounded-2 relative">
+      <A href={props.path} class="rounded-2 relative">
         <SectionTitle name={props.name} />
         <Ripple class="text-slate/20" />
       </A>
@@ -217,7 +285,7 @@ export const routes: Routes[] = [
     path: '/phaser-examples',
     name: 'Phaser Examples',
     Preview: (props) => (
-      <A href="/phaser-examples" class="rounded-2 relative">
+      <A href={props.path} class="rounded-2 relative">
         <SectionTitle name={props.name} />
         <Ripple class="text-slate/20" />
       </A>
@@ -234,7 +302,7 @@ export const routes: Routes[] = [
     path: '/pixijs-examples',
     name: 'PixiJS Examples',
     Preview: (props) => (
-      <A href="/pixijs-examples" class="rounded-2 relative">
+      <A href={props.path} class="rounded-2 relative">
         <SectionTitle name={props.name} />
         <Ripple class="text-slate/20" />
       </A>
@@ -251,7 +319,7 @@ export const routes: Routes[] = [
     path: '/ecsy-examples',
     name: 'ECSY Examples',
     Preview: (props) => (
-      <A href="/ecsy-examples" class="rounded-2 relative">
+      <A href={props.path} class="rounded-2 relative">
         <SectionTitle name={props.name} />
         <Ripple class="text-slate/20" />
       </A>
@@ -262,28 +330,6 @@ export const routes: Routes[] = [
         component: () => <Navigation routes={escyRoutes} parentPath="." />
       },
       ...escyRoutes
-    ]
-  },
-  {
-    path: '/webgpu-examples',
-    name: 'WebGPU Examples',
-    Preview: (props) => (
-      <A href="/webgpu-examples" class="rounded-2 relative">
-        <SectionTitle name={props.name} />
-        <Ripple class="text-slate/20" />
-      </A>
-    ),
-    children: [
-      {
-        path: '/',
-        component: () => (
-          <>
-            <div class="flex w-full place-content-center place-items-center bg-blue-100">WebGPU Examples</div>
-            <Navigation routes={webgpuRoutes} parentPath="." />
-          </>
-        )
-      },
-      ...webgpuRoutes
     ]
   },
   {

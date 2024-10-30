@@ -38,5 +38,11 @@ export const routes: Routes[] = [
     name: 'Plane Eequation',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./plane-equation'))
+  },
+  {
+    path: '/buffers',
+    name: 'JavaScript Buffers',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./buffers/buffers'))
   }
 ];

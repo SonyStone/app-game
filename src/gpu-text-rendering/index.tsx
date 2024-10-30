@@ -44,14 +44,16 @@ export default function GpuTextRendering() {
   canvas.addEventListener('mousedown', function (e) {
     if (e.button == 2 || e.buttons == 2) {
       canvas.requestPointerLock =
-        canvas.requestPointerLock || (canvas as any).mozRequestPointerLock || (canvas as any).webkitRequestPointerLock;
+        canvas.requestPointerLock || canvas.mozRequestPointerLock || canvas.webkitRequestPointerLock;
 
       canvas.requestPointerLock();
     }
   });
   canvas.addEventListener('mouseup', function (e) {
     document.exitPointerLock =
-      document.exitPointerLock || (document as any).mozExitPointerLock || (document as any).webkitExitPointerLock;
+      document.exitPointerLock ||
+      (document as { mozExitPointerLock: any }).mozExitPointerLock ||
+      (document as any).webkitExitPointerLock;
     document.exitPointerLock();
   });
 
