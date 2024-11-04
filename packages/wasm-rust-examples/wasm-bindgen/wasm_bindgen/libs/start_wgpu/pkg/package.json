@@ -1,0 +1,17 @@
+{
+  "name": "start_wgpu",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "start_wgpu_bg.wasm",
+    "start_wgpu.js",
+    "start_wgpu_bg.js",
+    "start_wgpu.d.ts"
+  ],
+  "main": "start_wgpu.js",
+  "types": "start_wgpu.d.ts",
+  "sideEffects": [
+    "./start_wgpu.js",
+    "./snippets/*"
+  ]
+}
