@@ -11,7 +11,7 @@ export default function Buffers() {
   }
 
   const buffer = new ArrayBuffer(64 + 64 + 32);
-  const vertex = new VertexView(buffer);
+  const vertex = new Vertex();
   vertex.setPos(1, 2);
   vertex.setUV(0.5, 0.5);
   vertex.setColor(255, 0, 0, 255);
@@ -25,6 +25,7 @@ export default function Buffers() {
   return (
     <div>
       <h1>Buffers</h1>
+      <p>I was thinking about how to implement data structures for webgl buffers</p>
       <div class="flex flex-col">
         <span>vertex</span>
         <span class="ps-2">
@@ -98,56 +99,6 @@ class Vertex {
       g: this.view.getUint8(33 * (this.index + 1)),
       b: this.view.getUint8(34 * (this.index + 1)),
       a: this.view.getUint8(35 * (this.index + 1))
-    };
-  }
-}
-
-class VertexView {
-  index = 0;
-
-  pos = new Float32Array(this.buffer, 0, 2);
-  uv = new Float32Array(this.buffer, 16, 2);
-  color = new Uint8Array(this.buffer, 32, 4);
-
-  constructor(private buffer: ArrayBuffer) {}
-
-  setPos(x: number, y: number) {
-    this.pos[0] = x;
-    this.pos[1] = y;
-  }
-
-  getPos() {
-    return {
-      x: this.pos[0],
-      y: this.pos[1]
-    };
-  }
-
-  setUV(x: number, y: number) {
-    this.uv[0] = x;
-    this.uv[1] = y;
-  }
-
-  getUV() {
-    return {
-      x: this.uv[0],
-      y: this.uv[1]
-    };
-  }
-
-  setColor(r: number, g: number, b: number, a: number) {
-    this.color[0] = r;
-    this.color[1] = g;
-    this.color[2] = b;
-    this.color[3] = a;
-  }
-
-  getColor() {
-    return {
-      r: this.color[0],
-      g: this.color[1],
-      b: this.color[2],
-      a: this.color[3]
     };
   }
 }

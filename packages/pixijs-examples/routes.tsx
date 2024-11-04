@@ -10,6 +10,12 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/pixijs-examples/basic'))
   },
   {
+    path: '/basic-container',
+    name: 'Basic Container',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./basic-container/basic-container'))
+  },
+  {
     path: '/blend-modes',
     name: 'Blend Modes',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
