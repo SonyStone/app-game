@@ -21,5 +21,11 @@ export const routes: Routes[] = [
     name: 'WGPU Hello Triangle',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./wasm-bindgen/wgpu-hello-triangle'))
+  },
+  {
+    path: '/leptos',
+    name: 'Leptos',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./wasm-bindgen/test-leptos'))
   }
 ];

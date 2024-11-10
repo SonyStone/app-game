@@ -6,10 +6,12 @@ edition = "2021"
 
 [dependencies]
 naga = { version = "23.0.0", features = ["wgsl-in", "glsl-out"] }
-naga_oil = { version = "0.15.0" }
+naga_oil = { version = "0.16.0" }
 quote = "1.0"
 syn = { version = "2.0.87", features = ["full"] }
 itertools = "0.13.0"
+log = "0.4"
+proc-macro2 = "1.0.89"
 
 [lib]
 proc-macro = true

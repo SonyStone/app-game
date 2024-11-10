@@ -12,6 +12,8 @@ export class AppWebGL {
    * @returns {AppWebGL}
    */
   static new(canvas: HTMLCanvasElement): AppWebGL;
+  init(): void;
+  update_camera(): void;
   render(): void;
   /**
    * @param {number} width
@@ -30,29 +32,28 @@ export class AppWebGL {
    * @param {PointerEvent} event
    */
   on_pointer_down(event: PointerEvent): void;
-}
-export class PointerEvent {
-  free(): void;
   /**
-   * @param {number} x
-   * @param {number} y
-   * @returns {PointerEvent}
+   * @param {PointerEvent} event
    */
-  static new(x: number, y: number): PointerEvent;
+  on_pointer_move(event: PointerEvent): void;
   /**
-   * @returns {number}
+   * @param {PointerEvent} _event
    */
-  x(): number;
+  on_pointer_up(_event: PointerEvent): void;
   /**
-   * @returns {number}
+   * @param {PointerEvent} event
    */
-  y(): number;
+  on_pointer_enter(event: PointerEvent): void;
   /**
-   * @param {number} x
+   * @param {PointerEvent} event
    */
-  set_x(x: number): void;
+  on_pointer_leave(event: PointerEvent): void;
   /**
-   * @param {number} y
+   * @param {KeyboardEvent} event
    */
-  set_y(y: number): void;
+  on_keydown(event: KeyboardEvent): void;
+  /**
+   * @param {WheelEvent} event
+   */
+  on_wheel(event: WheelEvent): void;
 }

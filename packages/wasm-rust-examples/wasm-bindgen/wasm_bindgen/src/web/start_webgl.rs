@@ -1,91 +1,123 @@
+use lyon::tessellation::VertexBuffers;
 use wasm_bindgen::prelude::*;
 use web_sys::{console, WebGl2RenderingContext, WebGlProgram, WebGlShader};
 use wgsl_to_glsl_macro::include_wgsl_to_glsl;
 
 use crate::{
-    test_lyon::test_geometry,
-    web::event_handle::{add_event, EventListenerHandle},
+    test_lyon::{test_geometry, MyVertex},
+    web::{camera_2d::Camera2D, event_handle::JsCallback},
 };
 
+#[derive(Debug)]
+enum BindingRegister {
+    UniformBuffers,
+    StorageBuffers,
+    Textures,
+    Images,
+}
 #[wasm_bindgen]
 pub struct AppWebGL {
     canvas: web_sys::HtmlCanvasElement,
-    context: WebGl2RenderingContext,
-    on_pointer_down: EventListenerHandle<dyn FnMut(web_sys::PointerEvent)>,
-    on_pointer_enter: EventListenerHandle<dyn FnMut(web_sys::PointerEvent)>,
-    on_pointer_leave: EventListenerHandle<dyn FnMut(web_sys::PointerEvent)>,
-    on_keydown: EventListenerHandle<dyn FnMut(web_sys::KeyboardEvent)>,
+    gl: WebGl2RenderingContext,
+    camera: Camera2D,
+    is_panning: bool,
+    last_pointer_position: Option<(f32, f32)>,
+    geometry: Option<VertexBuffers<MyVertex, u16>>,
+    camera_uniform_buffer: Option<web_sys::WebGlBuffer>,
 }
 
 #[wasm_bindgen]
 impl AppWebGL {
     pub fn new(canvas: web_sys::HtmlCanvasElement) -> Result<Self, JsValue> {
-        let context = canvas
+        let gl = canvas
             .get_context("webgl2")?
             .unwrap()
             .dyn_into::<WebGl2RenderingContext>()?;
 
-        let on_pointer_down = add_event(
-            canvas.clone(),
-            "pointerdown",
-            move |event: web_sys::PointerEvent| {
-                console::log_1(&format!("Pointer down {:?}", event.type_()).into());
-            },
-        );
-
-        let on_pointer_enter = add_event(canvas.clone(), "pointerenter", {
-            let canvas = canvas.clone();
-            move |event: web_sys::PointerEvent| {
-                canvas.focus().unwrap();
-                console::log_1(&format!("Pointer over {:?}", event.type_()).into());
-            }
-        });
-
-        let on_pointer_leave = add_event(canvas.clone(), "pointerleave", {
-            let canvas = canvas.clone();
-            move |event: web_sys::PointerEvent| {
-                canvas.blur().unwrap();
-                console::log_1(&format!("Pointer out {:?}", event.type_()).into());
-            }
-        });
-
-        let on_keydown = add_event(
-            canvas.clone(),
-            "keydown",
-            move |event: web_sys::KeyboardEvent| {
-                console::log_1(&format!("Key down {:?}", event.key()).into());
-            },
-        );
-
         Ok(Self {
-            canvas,
-            context,
-            on_pointer_down,
-            on_pointer_enter,
-            on_pointer_leave,
-            on_keydown,
+            canvas: canvas.clone(),
+            gl,
+            camera: Camera2D::new(canvas.width() as f32, canvas.height() as f32),
+            is_panning: false,
+            last_pointer_position: None,
+            geometry: None,
+            camera_uniform_buffer: None,
         })
     }
 
-    pub fn render(&self) -> Result<(), JsValue> {
-        let (vert_source, frag_source) = include_wgsl_to_glsl!("src/web/start_webgl.wgsl");
+    pub fn init(&mut self) {
+        let callback = JsCallback::register(
+            &self.canvas.clone(),
+            "click",
+            false,
+            |_event: web_sys::MouseEvent| {
+                console::log_1(&"Click".into());
+            },
+        );
 
-        let vert_shader = compile_shader(
-            &self.context,
-            WebGl2RenderingContext::VERTEX_SHADER,
-            vert_source,
-        )
-        .unwrap();
+        std::mem::forget(callback);
 
-        let frag_shader = compile_shader(
-            &self.context,
-            WebGl2RenderingContext::FRAGMENT_SHADER,
-            frag_source,
-        )
-        .unwrap();
+        let (vert_shader, frag_shader, name_binding_map) =
+            include_wgsl_to_glsl!("src/web/start_webgl.wgsl");
 
-        let program = link_program(&self.context, &vert_shader, &frag_shader).unwrap();
-        self.context.use_program(Some(&program));
+        let (vert_shader, frag_shader) = compile_shader_pair(&self.gl, (vert_shader, frag_shader));
+
+        console::log_1(&format!("name_binding_map: {:?}", name_binding_map).into());
+
+        let program = link_program(&self.gl, &vert_shader, &frag_shader).unwrap();
+        self.gl.use_program(Some(&program));
+
+        {
+            // Get the number of active uniform blocks
+            let num_uniform_blocks = self
+                .gl
+                .get_program_parameter(&program, WebGl2RenderingContext::ACTIVE_UNIFORM_BLOCKS)
+                .as_f64()
+                .unwrap() as u32;
+
+            // Iterate over uniform blocks
+            for i in 0..num_uniform_blocks {
+                let name = self.gl.get_active_uniform_block_name(&program, i).unwrap();
+                console::log_1(&format!("Uniform Block {}: {}", i, name).into());
+            }
+        }
+
+        // ! Uniform Blocks for Camera2d
+        {
+            // console::log_1(&format!("Camera {:?}", self.camera).into());
+
+            const PROJECTION_MATRIX_BINDING_POINT: u32 = 0;
+
+            // 1. Connect to each uniform block
+            let uniform_block_index = self
+                .gl
+                .get_uniform_block_index(&program, name_binding_map.transforms);
+            self.gl.uniform_block_binding(
+                &program,
+                uniform_block_index,
+                PROJECTION_MATRIX_BINDING_POINT,
+            );
+
+            // 2. Connect to each buffer
+            let uniform_buffer = self.gl.create_buffer().unwrap();
+            self.gl.bind_buffer(
+                WebGl2RenderingContext::UNIFORM_BUFFER,
+                Some(&uniform_buffer),
+            );
+
+            self.gl.buffer_data_with_u8_array(
+                WebGl2RenderingContext::UNIFORM_BUFFER,
+                self.camera.get_transforms().as_bytes(),
+                WebGl2RenderingContext::DYNAMIC_DRAW,
+            );
+            self.gl.bind_buffer_base(
+                WebGl2RenderingContext::UNIFORM_BUFFER,
+                PROJECTION_MATRIX_BINDING_POINT,
+                Some(&uniform_buffer),
+            );
+
+            self.camera_uniform_buffer = Some(uniform_buffer);
+        }
 
         let geometry = test_geometry();
 
@@ -94,19 +126,18 @@ impl AppWebGL {
             .iter()
             .flat_map(|vertex| vertex.position)
             .collect::<Vec<f32>>();
-        let indexes = geometry.indices.clone();
 
         let vao = self
-            .context
+            .gl
             .create_vertex_array()
             .ok_or("Could not create vertex array object")
             .unwrap();
-        self.context.bind_vertex_array(Some(&vao));
+        self.gl.bind_vertex_array(Some(&vao));
 
         let position_attribute_location = 0;
         {
-            let buffer = self.context.create_buffer().unwrap();
-            self.context
+            let buffer = self.gl.create_buffer().unwrap();
+            self.gl
                 .bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
 
             // Note that `Float32Array::view` is somewhat dangerous (hence the
@@ -117,16 +148,21 @@ impl AppWebGL {
             //
             // As a result, after `Float32Array::view` we have to be very careful not to
             // do any memory allocations before it's dropped.
-            unsafe {
-                self.context.buffer_data_with_array_buffer_view(
-                    WebGl2RenderingContext::ARRAY_BUFFER,
-                    &js_sys::Float32Array::view(&vertices),
-                    WebGl2RenderingContext::STATIC_DRAW,
-                );
-            }
+
+            self.gl.buffer_data_with_u8_array(
+                WebGl2RenderingContext::ARRAY_BUFFER,
+                to_u8(&vertices),
+                WebGl2RenderingContext::STATIC_DRAW,
+            );
+
+            self.gl.buffer_data_with_array_buffer_view(
+                WebGl2RenderingContext::ARRAY_BUFFER,
+                unsafe { &js_sys::Float32Array::view(&vertices) },
+                WebGl2RenderingContext::STATIC_DRAW,
+            );
         }
 
-        self.context.vertex_attrib_pointer_with_i32(
+        self.gl.vertex_attrib_pointer_with_i32(
             position_attribute_location as u32,
             2,
             WebGl2RenderingContext::FLOAT,
@@ -134,50 +170,74 @@ impl AppWebGL {
             0,
             0,
         );
-        self.context
+        self.gl
             .enable_vertex_attrib_array(position_attribute_location as u32);
 
         {
             let index_buffer = self
-                .context
+                .gl
                 .create_buffer()
-                .ok_or("Failed to create buffer")?;
-            self.context.bind_buffer(
+                .ok_or("Failed to create buffer")
+                .unwrap();
+            self.gl.bind_buffer(
                 WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
                 Some(&index_buffer),
             );
-            unsafe {
-                self.context.buffer_data_with_array_buffer_view(
-                    WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
-                    &js_sys::Uint16Array::view(&indexes),
-                    WebGl2RenderingContext::STATIC_DRAW,
-                );
-            }
-        }
 
-        self.context.viewport(
+            self.gl.buffer_data_with_u8_array(
+                WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+                to_u8(&geometry.indices),
+                WebGl2RenderingContext::STATIC_DRAW,
+            );
+        };
+
+        self.geometry = Some(geometry);
+    }
+
+    pub fn update_camera(&mut self) {
+        if let Some(camera_uniform_buffer) = &self.camera_uniform_buffer {
+            self.gl.bind_buffer(
+                WebGl2RenderingContext::UNIFORM_BUFFER,
+                Some(camera_uniform_buffer),
+            );
+
+            self.gl.buffer_data_with_u8_array(
+                WebGl2RenderingContext::UNIFORM_BUFFER,
+                self.camera.get_transforms().as_bytes(),
+                WebGl2RenderingContext::DYNAMIC_DRAW,
+            );
+        }
+    }
+
+    pub fn render(&mut self) -> Result<(), JsValue> {
+        self.gl.viewport(
             0,
             0,
             self.canvas.width() as i32,
             self.canvas.height() as i32,
         );
 
-        self.context.clear_color(0.0, 0.0, 0.0, 1.0);
-        self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
+        self.gl.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
 
-        self.context.draw_elements_with_i32(
-            WebGl2RenderingContext::TRIANGLES,
-            indexes.len() as i32,
-            WebGl2RenderingContext::UNSIGNED_SHORT,
-            0,
-        );
+        self.update_camera();
+
+        if let Some(geometry) = &self.geometry {
+            self.gl.draw_elements_with_i32(
+                WebGl2RenderingContext::TRIANGLES,
+                geometry.indices.len() as i32,
+                WebGl2RenderingContext::UNSIGNED_SHORT,
+                0,
+            );
+        }
 
         Ok(())
     }
 
-    pub fn resize(&self, width: u32, height: u32) {
+    pub fn resize(&mut self, width: u32, height: u32) {
         self.canvas.set_width(width);
         self.canvas.set_height(height);
+        self.camera.resize(width as f32, height as f32);
         self.render().unwrap();
     }
 
@@ -186,12 +246,69 @@ impl AppWebGL {
     }
 
     pub fn context(&self) -> WebGl2RenderingContext {
-        self.context.clone()
+        self.gl.clone()
     }
 
-    pub fn on_pointer_down(&self, event: PointerEvent) {
-        console::log_1(&format!("Pointer down at ({}, {})", event.x(), event.y()).into());
+    pub fn on_pointer_down(&mut self, event: web_sys::PointerEvent) {
+        // console::log_1(&format!("Pointer down {:?}", event.type_()).into());
+        self.is_panning = true;
+        self.last_pointer_position = Some((event.client_x() as f32, event.client_y() as f32));
+        self.render().unwrap();
     }
+
+    pub fn on_pointer_move(&mut self, event: web_sys::PointerEvent) {
+        if self.is_panning {
+            if let Some((last_x, last_y)) = self.last_pointer_position {
+                let dx = event.client_x() as f32 - last_x;
+                let dy = event.client_y() as f32 - last_y;
+                self.camera.pan(-dx, -dy);
+                self.render().unwrap();
+                self.last_pointer_position =
+                    Some((event.client_x() as f32, event.client_y() as f32));
+            }
+        }
+    }
+
+    pub fn on_pointer_up(&mut self, _event: web_sys::PointerEvent) {
+        self.is_panning = false;
+        self.last_pointer_position = None;
+        self.render().unwrap();
+    }
+
+    pub fn on_pointer_enter(&mut self, _event: web_sys::PointerEvent) {
+        self.canvas.focus().unwrap();
+    }
+
+    pub fn on_pointer_leave(&mut self, _event: web_sys::PointerEvent) {
+        self.canvas.blur().unwrap();
+    }
+
+    pub fn on_keydown(&mut self, _event: web_sys::KeyboardEvent) {
+        console::log_1(&format!("Key down {:?}", event.key()).into());
+    }
+
+    pub fn on_wheel(&mut self, event: web_sys::WheelEvent) {
+        let delta = event.delta_y() as f32;
+        self.camera.zoom(delta);
+        self.render().unwrap();
+    }
+}
+
+pub fn compile_shader_pair(
+    context: &WebGl2RenderingContext,
+    (vert_source, frag_source): (&str, &str),
+) -> (WebGlShader, WebGlShader) {
+    let vert_shader =
+        compile_shader(context, WebGl2RenderingContext::VERTEX_SHADER, vert_source).unwrap();
+
+    let frag_shader = compile_shader(
+        context,
+        WebGl2RenderingContext::FRAGMENT_SHADER,
+        frag_source,
+    )
+    .unwrap();
+
+    (vert_shader, frag_shader)
 }
 
 pub fn compile_shader(
@@ -244,31 +361,11 @@ pub fn link_program(
     }
 }
 
-#[wasm_bindgen]
-pub struct PointerEvent {
-    x: f64,
-    y: f64,
-}
-
-#[wasm_bindgen]
-impl PointerEvent {
-    pub fn new(x: f64, y: f64) -> Self {
-        Self { x, y }
-    }
-
-    pub fn x(&self) -> f64 {
-        self.x
-    }
-
-    pub fn y(&self) -> f64 {
-        self.y
-    }
-
-    pub fn set_x(&mut self, x: f64) {
-        self.x = x;
-    }
-
-    pub fn set_y(&mut self, y: f64) {
-        self.y = y;
+fn to_u8<T>(vec: &[T]) -> &[u8] {
+    unsafe {
+        std::slice::from_raw_parts(
+            vec.as_ptr() as *const u8,
+            vec.len() * std::mem::size_of::<f32>(),
+        )
     }
 }

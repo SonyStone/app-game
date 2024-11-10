@@ -10,13 +10,22 @@ crate-type = ["cdylib"]
 target = "wasm32-unknown-unknown"
 
 [workspace]
-members = ['libs/wgsl_to_glsl_macro', 'libs/start_wgpu']
+members = ['libs/wgsl_to_glsl_macro', 'libs/start_wgpu', 'libs/webgl']
 
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+wasm-bindgen = "0.2.95"
+web-sys = "0.3.72"
+js-sys = "0.3.72"
+log = "0.4"
 
 [dependencies]
-wasm-bindgen = "0.2.95"
+wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4.45"
-web-sys = { version = "0.3.72", features = [
+web-sys = { workspace = true, features = [
     'Document',
     'Element',
     'HtmlCanvasElement',
@@ -29,9 +38,12 @@ web-sys = { version = "0.3.72", features = [
     'console',
     'PointerEvent',
     'KeyboardEvent',
+    'WheelEvent',
+    'AddEventListenerOptions',
 ] }
-js-sys = "0.3.72"
+js-sys = { workspace = true }
 wgpu = { version = "23.0.0", features = ["webgpu"] }
 lyon = { version = "1.0.1", features = ["extra"] }
 wgsl_to_glsl_macro = { path = "./libs/wgsl_to_glsl_macro" }
 glow = { version = "0.15.0" }
+bytemuck = { version = "1.19.0" }
