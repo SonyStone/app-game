@@ -7,6 +7,7 @@ pub struct Camera2D {
     transforms: Transforms,
 }
 
+/// This structure goes straight into the webgl buffer.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Transforms {

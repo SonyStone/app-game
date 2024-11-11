@@ -377,20 +377,20 @@ export class AppWebGL {
         wasm.appwebgl_on_pointer_up(this.__wbg_ptr, _event);
     }
     /**
-     * @param {PointerEvent} event
+     * @param {PointerEvent} _event
      */
-    on_pointer_enter(event) {
+    on_pointer_enter(_event) {
         if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
         _assertNum(this.__wbg_ptr);
-        wasm.appwebgl_on_pointer_enter(this.__wbg_ptr, event);
+        wasm.appwebgl_on_pointer_enter(this.__wbg_ptr, _event);
     }
     /**
-     * @param {PointerEvent} event
+     * @param {PointerEvent} _event
      */
-    on_pointer_leave(event) {
+    on_pointer_leave(_event) {
         if (this.__wbg_ptr == 0) throw new Error('Attempt to use a moved value');
         _assertNum(this.__wbg_ptr);
-        wasm.appwebgl_on_pointer_leave(this.__wbg_ptr, event);
+        wasm.appwebgl_on_pointer_leave(this.__wbg_ptr, _event);
     }
     /**
      * @param {KeyboardEvent} event
@@ -664,6 +664,14 @@ export function __wbg_getContext_bf8985355a4d22ca() { return handleError(functio
     return isLikeNone(ret) ? 0 : addToExternrefTable0(ret);
 }, arguments) };
 
+export function __wbg_key_001eb20ba3b3d2fd() { return logError(function (arg0, arg1) {
+    const ret = arg1.key;
+    const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
+    getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
+}, arguments) };
+
 export function __wbg_newnoargs_1ede4bf2ebbaaf43() { return logError(function (arg0, arg1) {
     const ret = new Function(getStringFromWasm0(arg0, arg1));
     return ret;
@@ -732,7 +740,7 @@ export function __wbindgen_memory() {
     return ret;
 };
 
-export function __wbindgen_closure_wrapper192() { return logError(function (arg0, arg1, arg2) {
+export function __wbindgen_closure_wrapper193() { return logError(function (arg0, arg1, arg2) {
     const ret = makeMutClosure(arg0, arg1, 12, __wbg_adapter_22);
     return ret;
 }, arguments) };

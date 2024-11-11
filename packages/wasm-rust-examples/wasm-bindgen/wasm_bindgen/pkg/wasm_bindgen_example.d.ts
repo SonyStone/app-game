@@ -41,13 +41,13 @@ export class AppWebGL {
    */
   on_pointer_up(_event: PointerEvent): void;
   /**
-   * @param {PointerEvent} event
+   * @param {PointerEvent} _event
    */
-  on_pointer_enter(event: PointerEvent): void;
+  on_pointer_enter(_event: PointerEvent): void;
   /**
-   * @param {PointerEvent} event
+   * @param {PointerEvent} _event
    */
-  on_pointer_leave(event: PointerEvent): void;
+  on_pointer_leave(_event: PointerEvent): void;
   /**
    * @param {KeyboardEvent} event
    */

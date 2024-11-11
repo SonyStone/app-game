@@ -283,12 +283,12 @@ impl AppWebGL {
         self.canvas.blur().unwrap();
     }
 
-    pub fn on_keydown(&mut self, _event: web_sys::KeyboardEvent) {
+    pub fn on_keydown(&mut self, event: web_sys::KeyboardEvent) {
         console::log_1(&format!("Key down {:?}", event.key()).into());
     }
 
     pub fn on_wheel(&mut self, event: web_sys::WheelEvent) {
-        let delta = event.delta_y() as f32;
+        let delta = -event.delta_y() as f32;
         self.camera.zoom(delta);
         self.render().unwrap();
     }

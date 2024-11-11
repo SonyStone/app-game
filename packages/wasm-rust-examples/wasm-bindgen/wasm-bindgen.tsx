@@ -4,7 +4,7 @@ import { createEffect, createSignal, onMount } from 'solid-js';
 import { AppWebGL, greet } from './wasm_bindgen/pkg/wasm_bindgen_example';
 
 export default function WasmBindgen() {
-  const canvas = (<canvas class="h-5xl max-w-full touch-none" tabIndex={0} />) as HTMLCanvasElement;
+  const canvas = (<canvas class="h-[80vh] max-w-full touch-none" tabIndex={0} />) as HTMLCanvasElement;
 
   const [App, setApp] = createSignal<AppWebGL | null>(null);
 

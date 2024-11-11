@@ -1,0 +1,17 @@
+{
+  "name": "test_leptos",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "test_leptos_bg.wasm",
+    "test_leptos.js",
+    "test_leptos_bg.js",
+    "test_leptos.d.ts"
+  ],
+  "main": "test_leptos.js",
+  "types": "test_leptos.d.ts",
+  "sideEffects": [
+    "./test_leptos.js",
+    "./snippets/*"
+  ]
+}
