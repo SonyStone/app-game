@@ -1,0 +1,32 @@
+[package]
+name = "custom-renderer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+web-sys = { workspace = true, features = [
+    'Document',
+    'Element',
+    'HtmlElement',
+    'HtmlCanvasElement',
+    'CssStyleDeclaration',
+    'WebGlBuffer',
+    'WebGlVertexArrayObject',
+    'WebGl2RenderingContext',
+    'WebGlProgram',
+    'WebGlShader',
+    'WebGlFramebuffer',
+    'WebGlTexture',
+    'Window',
+    'console',
+    'PointerEvent',
+    'KeyboardEvent',
+    'WheelEvent',
+    'AddEventListenerOptions',
+] }
+js-sys = { workspace = true }
+wgsl_to_glsl_macro = { path = "../wgsl_to_glsl_macro" }
+derive_into = { path = "../derive_into" }
+webgl_common = { workspace = true }

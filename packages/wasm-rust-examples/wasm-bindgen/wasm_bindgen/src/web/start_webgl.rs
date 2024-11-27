@@ -1,11 +1,14 @@
 use lyon::tessellation::VertexBuffers;
 use wasm_bindgen::prelude::*;
 use web_sys::{console, WebGl2RenderingContext, WebGlProgram, WebGlShader};
-use wgsl_to_glsl_macro::include_wgsl_to_glsl;
+use wgsl_to_glsl_macro::make_naga_module;
 
 use crate::{
     test_lyon::{test_geometry, MyVertex},
-    web::{camera_2d::Camera2D, event_handle::JsCallback},
+    web::{
+        camera_2d::{any_as_u8_slice, Camera2D},
+        event_handle::JsCallback,
+    },
 };
 
 #[derive(Debug)]
@@ -57,45 +60,25 @@ impl AppWebGL {
 
         std::mem::forget(callback);
 
-        let (vert_shader, frag_shader, name_binding_map) =
-            include_wgsl_to_glsl!("src/web/start_webgl.wgsl");
+        let data = make_naga_module!("src/web/start_webgl.wgsl");
 
-        let (vert_shader, frag_shader) = compile_shader_pair(&self.gl, (vert_shader, frag_shader));
-
-        console::log_1(&format!("name_binding_map: {:?}", name_binding_map).into());
+        let (vert_shader, frag_shader) =
+            compile_shader_pair(&self.gl, (data.vertex, data.fragment));
 
         let program = link_program(&self.gl, &vert_shader, &frag_shader).unwrap();
         self.gl.use_program(Some(&program));
 
-        {
-            // Get the number of active uniform blocks
-            let num_uniform_blocks = self
-                .gl
-                .get_program_parameter(&program, WebGl2RenderingContext::ACTIVE_UNIFORM_BLOCKS)
-                .as_f64()
-                .unwrap() as u32;
-
-            // Iterate over uniform blocks
-            for i in 0..num_uniform_blocks {
-                let name = self.gl.get_active_uniform_block_name(&program, i).unwrap();
-                console::log_1(&format!("Uniform Block {}: {}", i, name).into());
-            }
-        }
-
         // ! Uniform Blocks for Camera2d
         {
-            // console::log_1(&format!("Camera {:?}", self.camera).into());
-
-            const PROJECTION_MATRIX_BINDING_POINT: u32 = 0;
-
             // 1. Connect to each uniform block
             let uniform_block_index = self
                 .gl
-                .get_uniform_block_index(&program, name_binding_map.transforms);
+                .get_uniform_block_index(&program, data.transforms_uniform_block_name);
+
             self.gl.uniform_block_binding(
                 &program,
                 uniform_block_index,
-                PROJECTION_MATRIX_BINDING_POINT,
+                data.transforms_uniform_binding,
             );
 
             // 2. Connect to each buffer
@@ -112,11 +95,58 @@ impl AppWebGL {
             );
             self.gl.bind_buffer_base(
                 WebGl2RenderingContext::UNIFORM_BUFFER,
-                PROJECTION_MATRIX_BINDING_POINT,
+                data.transforms_uniform_binding,
                 Some(&uniform_buffer),
             );
 
             self.camera_uniform_buffer = Some(uniform_buffer);
+        }
+        {
+            let uniform_block_index = self
+                .gl
+                .get_uniform_block_index(&program, data.color_uniform_block_name);
+
+            self.gl.uniform_block_binding(
+                &program,
+                uniform_block_index,
+                data.color_uniform_binding,
+            );
+            let uniform_buffer = self.gl.create_buffer().unwrap();
+            self.gl.bind_buffer(
+                WebGl2RenderingContext::UNIFORM_BUFFER,
+                Some(&uniform_buffer),
+            );
+
+            #[repr(C)]
+            struct Color {
+                r: f32,
+                g: f32,
+                b: f32,
+                a: f32,
+            }
+
+            impl Color {
+                pub fn as_bytes(&self) -> &[u8] {
+                    unsafe { any_as_u8_slice(self) }
+                }
+            }
+
+            self.gl.buffer_data_with_u8_array(
+                WebGl2RenderingContext::UNIFORM_BUFFER,
+                Color {
+                    r: 0.7,
+                    g: 0.7,
+                    b: 1.0,
+                    a: 1.0,
+                }
+                .as_bytes(),
+                WebGl2RenderingContext::DYNAMIC_DRAW,
+            );
+            self.gl.bind_buffer_base(
+                WebGl2RenderingContext::UNIFORM_BUFFER,
+                data.color_uniform_binding,
+                Some(&uniform_buffer),
+            );
         }
 
         let geometry = test_geometry();
@@ -134,7 +164,6 @@ impl AppWebGL {
             .unwrap();
         self.gl.bind_vertex_array(Some(&vao));
 
-        let position_attribute_location = 0;
         {
             let buffer = self.gl.create_buffer().unwrap();
             self.gl
@@ -154,16 +183,10 @@ impl AppWebGL {
                 to_u8(&vertices),
                 WebGl2RenderingContext::STATIC_DRAW,
             );
-
-            self.gl.buffer_data_with_array_buffer_view(
-                WebGl2RenderingContext::ARRAY_BUFFER,
-                unsafe { &js_sys::Float32Array::view(&vertices) },
-                WebGl2RenderingContext::STATIC_DRAW,
-            );
         }
 
         self.gl.vertex_attrib_pointer_with_i32(
-            position_attribute_location as u32,
+            data.position_attribute_location,
             2,
             WebGl2RenderingContext::FLOAT,
             false,
@@ -171,7 +194,7 @@ impl AppWebGL {
             0,
         );
         self.gl
-            .enable_vertex_attrib_array(position_attribute_location as u32);
+            .enable_vertex_attrib_array(data.position_attribute_location);
 
         {
             let index_buffer = self
@@ -295,67 +318,63 @@ impl AppWebGL {
 }
 
 pub fn compile_shader_pair(
-    context: &WebGl2RenderingContext,
+    gl: &WebGl2RenderingContext,
     (vert_source, frag_source): (&str, &str),
 ) -> (WebGlShader, WebGlShader) {
     let vert_shader =
-        compile_shader(context, WebGl2RenderingContext::VERTEX_SHADER, vert_source).unwrap();
+        compile_shader(gl, WebGl2RenderingContext::VERTEX_SHADER, vert_source).unwrap();
 
-    let frag_shader = compile_shader(
-        context,
-        WebGl2RenderingContext::FRAGMENT_SHADER,
-        frag_source,
-    )
-    .unwrap();
+    let frag_shader =
+        compile_shader(gl, WebGl2RenderingContext::FRAGMENT_SHADER, frag_source).unwrap();
 
     (vert_shader, frag_shader)
 }
 
 pub fn compile_shader(
-    context: &WebGl2RenderingContext,
+    gl: &WebGl2RenderingContext,
     shader_type: u32,
     source: &str,
 ) -> Result<WebGlShader, String> {
-    let shader = context
+    let shader = gl
         .create_shader(shader_type)
         .ok_or_else(|| String::from("Unable to create shader object"))?;
-    context.shader_source(&shader, source);
-    context.compile_shader(&shader);
+    gl.shader_source(&shader, source);
+    gl.compile_shader(&shader);
 
-    if context
+    if gl
         .get_shader_parameter(&shader, WebGl2RenderingContext::COMPILE_STATUS)
         .as_bool()
         .unwrap_or(false)
     {
         Ok(shader)
     } else {
-        Err(context
+        Err(gl
             .get_shader_info_log(&shader)
             .unwrap_or_else(|| String::from("Unknown error creating shader")))
     }
 }
 
 pub fn link_program(
-    context: &WebGl2RenderingContext,
+    gl: &WebGl2RenderingContext,
     vert_shader: &WebGlShader,
     frag_shader: &WebGlShader,
 ) -> Result<WebGlProgram, String> {
-    let program = context
+    let program = gl
         .create_program()
         .ok_or_else(|| String::from("Unable to create shader object"))?;
 
-    context.attach_shader(&program, vert_shader);
-    context.attach_shader(&program, frag_shader);
-    context.link_program(&program);
+    gl.attach_shader(&program, vert_shader);
+    gl.attach_shader(&program, frag_shader);
+    gl.link_program(&program);
 
-    if context
+    if gl
         .get_program_parameter(&program, WebGl2RenderingContext::LINK_STATUS)
         .as_bool()
         .unwrap_or(false)
     {
         Ok(program)
     } else {
-        Err(context
+        Err(gl
             .get_program_info_log(&program)
             .unwrap_or_else(|| String::from("Unknown error creating program object")))
     }

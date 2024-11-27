@@ -27,5 +27,11 @@ export const routes: Routes[] = [
     name: 'Leptos',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./wasm-bindgen/test-leptos'))
+  },
+  {
+    path: '/custom-renderer',
+    name: 'Custom Renderer',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./wasm-bindgen/custom-renderer'))
   }
 ];

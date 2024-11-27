@@ -179,10 +179,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "custom-renderer"
+version = "0.1.0"
+dependencies = [
+ "derive_into",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "webgl_common",
+ "wgsl_to_glsl_macro",
+]
+
+[[package]]
+name = "custom-renderer-examples"
+version = "0.1.0"
+dependencies = [
+ "custom-renderer",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8566979429cf69b49a5c740c60791108e86440e8be149bbea4fe54d2c32d6e2"
+
+[[package]]
+name = "derive_into"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "document-features"
@@ -623,6 +657,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ogl-rs"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "webgl_common",
+ "wgsl_to_glsl_macro",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -686,9 +732,9 @@ checksum = "e8cf8e6a8aa66ce33f63993ffc4ea4271eb5b0530a9002db8455ea6050c77bfa"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.89"
+version = "1.0.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f139b0662de085916d1fb67d2b4169d1addddda1919e696f3252b740b629986e"
+checksum = "37d3544b3f2748c54e147655edb5025752e2303145b5aefb3c3ea2c78b973bb0"
 dependencies = [
  "unicode-ident",
 ]
@@ -819,9 +865,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "syn"
-version = "2.0.87"
+version = "2.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25aa4ce346d03a6dcd68dd8b4010bcb74e54e62c90c573f394c46eae99aba32d"
+checksum = "44d46482f1c1c87acd84dea20c1bf5ebff4c757009ed6bf19cfd36fb10e92c4e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1005,6 +1051,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "webgl_common"
+version = "0.1.0"
+dependencies = [
+ "derive_into",
+ "web-sys",
+]
+
+[[package]]
 name = "wgpu"
 version = "23.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1121,6 +1175,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "wgsl_to_glsl_macro_tests"
+version = "0.1.0"
+dependencies = [
+ "wgsl_to_glsl_macro",
 ]
 
 [[package]]

@@ -266,8 +266,8 @@ export class Renderer {
   }
 
   setBlendFunc(
-    src: GL_FUNC_SEPARATE,
-    dst: GL_FUNC_SEPARATE,
+    src: BLENDING_FACTOR,
+    dst: BLENDING_FACTOR,
     srcAlpha?: GL_FUNC_SEPARATE,
     dstAlpha?: GL_FUNC_SEPARATE
   ): void {

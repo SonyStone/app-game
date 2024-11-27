@@ -1,0 +1,1 @@
+If I will create another verison of webgl renderer, I will use the smae common webgl stuff

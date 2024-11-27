@@ -1,10 +1,5 @@
-use std::default;
-
 use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{
-    console, HtmlCanvasElement, WebGl2RenderingContext, WebGlProgram, WebGlShader,
-    WebglDebugRendererInfo,
-};
+use web_sys::{HtmlCanvasElement, WebGl2RenderingContext, WebglDebugRendererInfo};
 
 pub struct WebGlRenderBackend {
     gl: WebGl2RenderingContext,
