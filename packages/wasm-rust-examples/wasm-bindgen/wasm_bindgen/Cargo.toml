@@ -20,6 +20,12 @@ members = [
     'libs/custom-renderer-examples',
     'libs/derive_into',
     'libs/webgl_common',
+    'libs/from-webgl-state-diagram/draw-cubes',
+    'libs/from-webgl-state-diagram/samplers',
+    'libs/from-webgl-state-diagram/fundamentals-common',
+    'libs/glsl-parser-test',
+    'libs/macros/macros-examples',
+    'libs/macros/macros-examples-tests',
 ]
 
 [workspace.package]
@@ -32,7 +38,10 @@ wasm-bindgen-futures = "0.4.45"
 web-sys = "0.3.72"
 js-sys = "0.3.72"
 log = "0.4"
+nalgebra = "0.33.2"
+nalgebra-glm = "0.19.0"
 webgl_common = { path = "libs/webgl_common" }
+fundamentals_common = { path = "libs/from-webgl-state-diagram/fundamentals-common" }
 
 [dependencies]
 wasm-bindgen = { workspace = true }

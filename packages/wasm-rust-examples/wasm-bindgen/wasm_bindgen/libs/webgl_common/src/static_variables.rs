@@ -1,3 +1,5 @@
+use std::default;
+
 use derive_into::IntoU32;
 use web_sys::WebGl2RenderingContext;
 
@@ -8,16 +10,25 @@ pub enum WebGlVersion {
     Two,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, IntoU32)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, IntoU32, Default)]
 #[repr(u32)]
 pub enum DataType {
+    /// i8
     Byte = WebGl2RenderingContext::BYTE,
+    /// u8
     UnsignedByte = WebGl2RenderingContext::UNSIGNED_BYTE,
+    /// i16
     Short = WebGl2RenderingContext::SHORT,
+    /// u16
     UnsignedShort = WebGl2RenderingContext::UNSIGNED_SHORT,
+    /// i32
     Int = WebGl2RenderingContext::INT,
+    /// u32
     UnsignedInt = WebGl2RenderingContext::UNSIGNED_INT,
+    #[default]
+    /// f32
     Float = WebGl2RenderingContext::FLOAT,
+    /// f16
     HalfFloat = WebGl2RenderingContext::HALF_FLOAT,
 }
 

@@ -1,29 +1,23 @@
-use crate::bindable::Bindable;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
 use webgl_common::ShaderType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ShaderProgram {
-    pub program: WebGlProgram,
-}
+pub struct ShaderProgram {}
 
 impl ShaderProgram {
-    pub fn new(
-        gl: &WebGl2RenderingContext,
-        vert_src: &str,
-        frag_src: &str,
-    ) -> Result<Self, String> {
-        let vert_shader = compile_shader(gl, ShaderType::VertexShader, vert_src)?;
-        let frag_shader = compile_shader(gl, ShaderType::FragmentShader, frag_src)?;
-        let program = link_program(gl, &vert_shader, &frag_shader)?;
-        Ok(ShaderProgram { program })
+    pub fn new() -> Self {
+        ShaderProgram {}
     }
 }
 
-impl Bindable for ShaderProgram {
-    fn bind(&self, gl: &WebGl2RenderingContext) {
-        gl.use_program(Some(&self.program));
-    }
+pub(crate) fn create_shader_program(
+    gl: &WebGl2RenderingContext,
+    vert_src: &str,
+    frag_src: &str,
+) -> Result<WebGlProgram, String> {
+    let vert_shader = compile_shader(gl, ShaderType::VertexShader, vert_src)?;
+    let frag_shader = compile_shader(gl, ShaderType::FragmentShader, frag_src)?;
+    link_program(gl, &vert_shader, &frag_shader)
 }
 
 fn compile_shader(

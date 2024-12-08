@@ -1,4 +1,4 @@
-function webgl(gl: WebGL2RenderingContextStrict) {
+function webgl(gl: WebGL2RenderingContext) {
   // ! textures
   {
     gl.activeTexture;

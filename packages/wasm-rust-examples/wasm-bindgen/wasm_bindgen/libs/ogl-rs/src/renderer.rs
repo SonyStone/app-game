@@ -4,7 +4,7 @@ use wasm_bindgen::JsCast;
 
 use crate::{program::Program, BlendEquationState, BlendFuncState};
 
-use webgl_common::static_variables::{
+use webgl_common::{
     BlendEquation, BlendFactor, Capability, CullFaceMode, DepthFunction, FramebufferTarget,
     FrontFaceDirection, TextureUnit,
 };

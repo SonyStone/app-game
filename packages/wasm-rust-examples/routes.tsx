@@ -33,5 +33,11 @@ export const routes: Routes[] = [
     name: 'Custom Renderer',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./wasm-bindgen/custom-renderer'))
+  },
+  {
+    path: '/draw-cubes',
+    name: 'Draw Cubes',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./wasm-bindgen/draw-cubes'))
   }
 ];

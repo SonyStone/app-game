@@ -1,7 +1,8 @@
+mod geometry;
 mod program;
 mod renderer;
 
-use webgl_common::static_variables::{BlendEquation, BlendFactor};
+use webgl_common::{BlendEquation, BlendFactor};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BlendFuncState {

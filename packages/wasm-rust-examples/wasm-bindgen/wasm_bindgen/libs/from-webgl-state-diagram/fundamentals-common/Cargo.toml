@@ -1,5 +1,5 @@
 [package]
-name = "custom-renderer"
+name = "fundamentals_common"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,25 +9,22 @@ wasm-bindgen-futures = { workspace = true }
 web-sys = { workspace = true, features = [
     'Document',
     'Element',
-    'HtmlElement',
     'HtmlCanvasElement',
-    'CssStyleDeclaration',
     'WebGlBuffer',
     'WebGlVertexArrayObject',
     'WebGl2RenderingContext',
+    'WebGlUniformLocation',
     'WebGlProgram',
     'WebGlShader',
-    'WebGlFramebuffer',
     'WebGlTexture',
     'Window',
     'console',
     'PointerEvent',
     'KeyboardEvent',
-    'WheelEvent',
-    'AddEventListenerOptions',
+    'CanvasRenderingContext2d',
 ] }
 js-sys = { workspace = true }
-wgsl_to_glsl_macro = { path = "../wgsl_to_glsl_macro" }
-derive_into = { path = "../derive_into" }
+nalgebra = { workspace = true }
+nalgebra-glm = { workspace = true }
 webgl_common = { workspace = true }
-slotmap = "1.0.7"
+memoffset = { version = "0.9.1" }

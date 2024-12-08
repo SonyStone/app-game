@@ -1,4 +1,3 @@
-use crate::bindable::Bindable;
 use wasm_bindgen::JsValue;
 use web_sys::{WebGl2RenderingContext, WebGlFramebuffer};
 use webgl_common::FramebufferTarget;
@@ -19,10 +18,8 @@ impl Framebuffer {
     pub fn unbind(gl: &WebGl2RenderingContext, target: FramebufferTarget) {
         gl.bind_framebuffer(target.into(), None);
     }
-}
 
-impl Bindable for Framebuffer {
-    fn bind(&self, gl: &WebGl2RenderingContext) {
+    pub fn bind(&self, gl: &WebGl2RenderingContext) {
         gl.bind_framebuffer(
             FramebufferTarget::Framebuffer.into(),
             Some(&self.framebuffer),

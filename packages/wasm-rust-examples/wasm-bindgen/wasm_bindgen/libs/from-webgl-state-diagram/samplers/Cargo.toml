@@ -1,7 +1,13 @@
 [package]
-name = "custom-renderer"
+name = "samplers"
 version = "0.1.0"
 edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[build]
+target = "wasm32-unknown-unknown"
 
 [dependencies]
 wasm-bindgen = { workspace = true }
@@ -9,25 +15,23 @@ wasm-bindgen-futures = { workspace = true }
 web-sys = { workspace = true, features = [
     'Document',
     'Element',
-    'HtmlElement',
     'HtmlCanvasElement',
-    'CssStyleDeclaration',
     'WebGlBuffer',
     'WebGlVertexArrayObject',
     'WebGl2RenderingContext',
+    'WebGlUniformLocation',
     'WebGlProgram',
     'WebGlShader',
-    'WebGlFramebuffer',
     'WebGlTexture',
+    'WebGlSampler',
     'Window',
     'console',
     'PointerEvent',
     'KeyboardEvent',
-    'WheelEvent',
-    'AddEventListenerOptions',
+    'CanvasRenderingContext2d',
 ] }
 js-sys = { workspace = true }
-wgsl_to_glsl_macro = { path = "../wgsl_to_glsl_macro" }
-derive_into = { path = "../derive_into" }
+nalgebra = { workspace = true }
+nalgebra-glm = { workspace = true }
 webgl_common = { workspace = true }
-slotmap = "1.0.7"
+fundamentals_common = { workspace = true }

@@ -5,6 +5,7 @@ use crate::{
     vertex_array_object::VertexArrayObject,
 };
 
+use web_sys::WebGlProgram;
 use webgl_common::{
     BlendEquation, BlendFactor, Color, CullFaceMode, DepthFunction, FrontFaceDirection, HintMode,
     StencilOp, TextureTarget, TextureUnit, Viewport,
@@ -15,17 +16,17 @@ use webgl_common::{
 /// This struct is used to keep track of the current state of the WebGL2 renderer.
 ///
 #[derive(Debug, Clone)]
-pub struct RendererState {
+pub struct RendererState<'a> {
     // 1. Shader Program State
-    pub program: Option<ShaderProgram>,
+    pub program: Option<&'a WebGlProgram>,
 
     // 2. Buffer Bindings
-    pub array_buffer: Option<Buffer>,
-    pub element_array_buffer: Option<Buffer>,
-    pub uniform_buffers: HashMap<u32, Option<Buffer>>,
+    pub array_buffer: Option<&'a Buffer<'a>>,
+    pub element_array_buffer: Option<&'a Buffer<'a>>,
+    pub uniform_buffers: HashMap<u32, Option<&'a Buffer<'a>>>,
 
     // 3. Vertex Array Objects
-    pub vertex_array_object: Option<VertexArrayObject>,
+    pub vertex_array_object: Option<&'a VertexArrayObject<'a>>,
 
     // 4. Texture Units and Bindings
     pub active_texture_unit: TextureUnit,
@@ -71,7 +72,7 @@ pub struct RendererState {
     pub pack_alignment: i32,
 }
 
-impl Default for RendererState {
+impl<'a> Default for RendererState<'a> {
     fn default() -> Self {
         Self {
             program: None,
@@ -79,7 +80,6 @@ impl Default for RendererState {
             array_buffer: None,
             element_array_buffer: None,
             uniform_buffers: HashMap::new(),
-
             vertex_array_object: None,
 
             active_texture_unit: TextureUnit::default(),
@@ -117,7 +117,7 @@ impl Default for RendererState {
     }
 }
 
-impl RendererState {
+impl<'a> RendererState<'a> {
     pub fn new() -> Self {
         Self::default()
     }

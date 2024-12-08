@@ -149,69 +149,74 @@ impl AppWebGL {
             );
         }
 
-        let geometry = test_geometry();
+        // ! Vertex Array Object
+        let geometry = {
+            let geometry = test_geometry();
 
-        let vertices = geometry
-            .vertices
-            .iter()
-            .flat_map(|vertex| vertex.position)
-            .collect::<Vec<f32>>();
+            let vertices = geometry
+                .vertices
+                .iter()
+                .flat_map(|vertex| vertex.position)
+                .collect::<Vec<f32>>();
 
-        let vao = self
-            .gl
-            .create_vertex_array()
-            .ok_or("Could not create vertex array object")
-            .unwrap();
-        self.gl.bind_vertex_array(Some(&vao));
-
-        {
-            let buffer = self.gl.create_buffer().unwrap();
-            self.gl
-                .bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
-
-            // Note that `Float32Array::view` is somewhat dangerous (hence the
-            // `unsafe`!). This is creating a raw view into our module's
-            // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
-            // (aka do a memory allocation in Rust) it'll cause the buffer to change,
-            // causing the `Float32Array` to be invalid.
-            //
-            // As a result, after `Float32Array::view` we have to be very careful not to
-            // do any memory allocations before it's dropped.
-
-            self.gl.buffer_data_with_u8_array(
-                WebGl2RenderingContext::ARRAY_BUFFER,
-                to_u8(&vertices),
-                WebGl2RenderingContext::STATIC_DRAW,
-            );
-        }
-
-        self.gl.vertex_attrib_pointer_with_i32(
-            data.position_attribute_location,
-            2,
-            WebGl2RenderingContext::FLOAT,
-            false,
-            0,
-            0,
-        );
-        self.gl
-            .enable_vertex_attrib_array(data.position_attribute_location);
-
-        {
-            let index_buffer = self
+            let vao = self
                 .gl
-                .create_buffer()
-                .ok_or("Failed to create buffer")
+                .create_vertex_array()
+                .ok_or("Could not create vertex array object")
                 .unwrap();
-            self.gl.bind_buffer(
-                WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
-                Some(&index_buffer),
-            );
+            self.gl.bind_vertex_array(Some(&vao));
 
-            self.gl.buffer_data_with_u8_array(
-                WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
-                to_u8(&geometry.indices),
-                WebGl2RenderingContext::STATIC_DRAW,
+            {
+                let buffer = self.gl.create_buffer().unwrap();
+                self.gl
+                    .bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+
+                // Note that `Float32Array::view` is somewhat dangerous (hence the
+                // `unsafe`!). This is creating a raw view into our module's
+                // `WebAssembly.Memory` buffer, but if we allocate more pages for ourself
+                // (aka do a memory allocation in Rust) it'll cause the buffer to change,
+                // causing the `Float32Array` to be invalid.
+                //
+                // As a result, after `Float32Array::view` we have to be very careful not to
+                // do any memory allocations before it's dropped.
+
+                self.gl.buffer_data_with_u8_array(
+                    WebGl2RenderingContext::ARRAY_BUFFER,
+                    to_u8(&vertices),
+                    WebGl2RenderingContext::STATIC_DRAW,
+                );
+            }
+
+            self.gl.vertex_attrib_pointer_with_i32(
+                data.position_attribute_location,
+                2,
+                WebGl2RenderingContext::FLOAT,
+                false,
+                0,
+                0,
             );
+            self.gl
+                .enable_vertex_attrib_array(data.position_attribute_location);
+
+            {
+                let index_buffer = self
+                    .gl
+                    .create_buffer()
+                    .ok_or("Failed to create buffer")
+                    .unwrap();
+                self.gl.bind_buffer(
+                    WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+                    Some(&index_buffer),
+                );
+
+                self.gl.buffer_data_with_u8_array(
+                    WebGl2RenderingContext::ELEMENT_ARRAY_BUFFER,
+                    to_u8(&geometry.indices),
+                    WebGl2RenderingContext::STATIC_DRAW,
+                );
+            };
+
+            geometry
         };
 
         self.geometry = Some(geometry);

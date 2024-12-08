@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlUniformLocation};
-use webgl_common::static_variables::{CullFaceMode, DepthFunction, FrontFaceDirection};
+use webgl_common::{CullFaceMode, DepthFunction, FrontFaceDirection};
 
 use crate::{BlendEquationState, BlendFuncState};
 

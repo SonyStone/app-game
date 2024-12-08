@@ -1,8 +1,12 @@
+use std::{collections::HashMap, mem::swap};
+
 use crate::{
-    buffer::Buffer, renderer_state::RendererState, shader_program::ShaderProgram,
+    buffer::Buffer,
+    renderer_state::RendererState,
+    shader_program::{create_shader_program, ShaderProgram},
     vertex_array_object::VertexArrayObject,
 };
-use web_sys::{console, WebGl2RenderingContext};
+use web_sys::{console, WebGl2RenderingContext, WebGlProgram};
 use webgl_common::{
     get_error, slice_as_u8_slice, BufferTarget, BufferUsage, Color, DataType, DrawMode, ErrorType,
     Mask, Viewport,
@@ -10,49 +14,17 @@ use webgl_common::{
 
 /// The WebGL2 renderer.
 #[derive(Debug, Clone)]
-pub struct Renderer {
+pub struct Renderer<'a> {
     pub gl: web_sys::WebGl2RenderingContext,
-    pub state: RendererState,
+    pub state: RendererState<'a>,
 }
 
-impl Renderer {
+impl<'a> Renderer<'a> {
     pub fn new(gl: WebGl2RenderingContext) -> Self {
         Self {
             gl,
             state: RendererState::default(),
         }
-    }
-
-    pub fn set_state(&mut self, state: RendererState) {
-        console::log_1(&"use_program".into());
-        self.use_program(&state.program);
-
-        self.bind_buffer(BufferTarget::ArrayBuffer, &state.array_buffer);
-
-        self.bind_buffer(
-            BufferTarget::ElementArrayBuffer,
-            &state.element_array_buffer,
-        );
-
-        for (index, buffer) in state.uniform_buffers.iter() {
-            self.bind_buffer_base(BufferTarget::UniformBuffer, *index, buffer);
-        }
-
-        self.bind_vertex_array(&state.vertex_array_object);
-
-        self.gl.active_texture(state.active_texture_unit.into());
-
-        // TODO textires
-        // if self.state.texture_units != state.texture_units {
-        //     for (index, (texture, target)) in state.texture_units.iter() {
-        //         self.gl.active_texture(*index);
-        //         self.gl.bind_texture((*target).into(), (*texture).into());
-        //     }
-        // }
-
-        // TODO other states
-
-        self.state = state;
     }
 
     pub fn render(&self) {
@@ -63,15 +35,43 @@ impl Renderer {
     }
 }
 
-/// The WebGL2 bindings.
-impl Renderer {
+impl<'a> Renderer<'a> {
+    pub fn create_shader_program(
+        &self,
+        vert_src: &str,
+        frag_src: &str,
+    ) -> Result<WebGlProgram, String> {
+        create_shader_program(&self.gl, vert_src, frag_src)
+    }
+
     /// The `useProgram()` method.
     ///
     /// [MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/useProgram)
-    pub fn use_program(&self, program: &Option<ShaderProgram>) {
-        self.gl.use_program(program.as_ref().map(|v| &v.program));
+    pub fn use_program(&mut self, program: &'a WebGlProgram) {
+        self.state.program = Some(program);
+        self.gl.use_program(Some(program));
+    }
+}
+
+impl<'a> Renderer<'a> {
+    pub fn bind_array_buffer(&mut self, buffer: &'a Buffer) {
+        self.state.array_buffer = Some(buffer);
+        buffer.bind(BufferTarget::ArrayBuffer);
     }
 
+    pub fn set_array_buffer_data<T>(
+        &mut self,
+        data: &[T],
+        mut buffer: Buffer<'a>,
+        usage: BufferUsage,
+    ) -> Buffer<'a> {
+        buffer.bind(BufferTarget::ArrayBuffer);
+        buffer.set_data(BufferTarget::ArrayBuffer, data, usage);
+        buffer
+    }
+}
+
+impl<'a> Renderer<'a> {
     ///The `bindBuffer()` method.
     ///
     ///[MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/bindBuffer)
@@ -91,7 +91,7 @@ impl Renderer {
     /// The `bindVertexArray()` method.
     ///
     /// [MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/bindVertexArray)
-    pub fn bind_vertex_array(&self, vertex_array: &Option<VertexArrayObject>) {
+    pub fn bind_vertex_array(&self, vertex_array: &Option<&VertexArrayObject>) {
         self.gl
             .bind_vertex_array(vertex_array.as_ref().map(|v| &v.id));
     }
@@ -137,8 +137,12 @@ impl Renderer {
     ///
     /// [MDN Documentation](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/viewport)
     pub fn viewport(&self, viewport: &Viewport) {
-        self.gl
-            .viewport(viewport.x, viewport.y, viewport.width, viewport.height);
+        self.gl.viewport(
+            viewport.x,
+            viewport.y,
+            viewport.width as i32,
+            viewport.height as i32,
+        );
     }
 
     /// The `clearColor()` method.

@@ -1,5 +1,5 @@
-pub mod bindable;
 pub mod buffer;
+pub mod context;
 pub mod framebuffer;
 pub mod renderer;
 pub mod renderer_state;

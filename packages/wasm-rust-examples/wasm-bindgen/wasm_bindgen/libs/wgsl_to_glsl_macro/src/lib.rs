@@ -1,14 +1,10 @@
 extern crate proc_macro;
 
-use std::{
-    env,
-    sync::{LazyLock, Mutex},
-};
-
 use composer::{create_shader, Attribute, Shader, Uniform};
 use naga_oil::compose::{ComposableModuleDescriptor, Composer, NagaModuleDescriptor};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
+use std::sync::{LazyLock, Mutex};
 use syn::{parse_macro_input, LitInt, LitStr};
 
 mod composer;

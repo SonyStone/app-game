@@ -1,0 +1,9 @@
+[package]
+name = "glsl_parser_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+web-sys = { workspace = true, features = ['WebGl2RenderingContext'] }
+derive_into = { path = "../derive_into" }
+glsl = { version = "7.0.0" }
