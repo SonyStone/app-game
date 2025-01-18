@@ -577,6 +577,8 @@ export const lookAt = (m: Mat4, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple
   m[13] = eye[1];
   m[14] = eye[2];
   m[15] = 1;
+
+  return m;
 };
 
 /**
