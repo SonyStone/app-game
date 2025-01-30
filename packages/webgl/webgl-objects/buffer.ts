@@ -1,8 +1,7 @@
 import type { WebGLRenderingContextStrict } from '../webgl-strict-types/webgl';
-import type { WebGL2RenderingContextStrict } from '../webgl-strict-types/webgl2';
 
 export function createBuffer(
-  gl: WebGL2RenderingContextStrict,
+  gl: WebGL2RenderingContext,
   {
     target,
     usage

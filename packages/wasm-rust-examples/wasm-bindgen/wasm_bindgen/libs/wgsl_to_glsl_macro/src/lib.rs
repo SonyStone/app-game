@@ -56,7 +56,7 @@ pub fn wgsl_to_glsl(input: TokenStream) -> TokenStream {
     output.into()
 }
 
-/// whaiting for this featre #![feature(proc_macro_span)] will be available in stable
+/// whaiting for this featre `#![feature(proc_macro_span)]` will be available in stable
 /// https://stackoverflow.com/questions/60738538/is-there-a-way-to-get-the-file-and-the-module-path-of-where-a-procedural-macro-i
 ///
 /// For now need to use this full path

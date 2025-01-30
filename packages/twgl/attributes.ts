@@ -86,18 +86,17 @@ function setBufferFromTypedArray(
  * @param {number} [type] the GL bind type for the buffer. Default = `gl.ARRAY_BUFFER`.
  * @param {number} [drawType] the GL draw type for the buffer. Default = 'gl.STATIC_DRAW`.
  * @return {WebGLBuffer} the created WebGLBuffer
- * @memberOf module:twgl/attributes
  */
 export function createBufferFromTypedArray(
   gl: WebGL2RenderingContext,
   typedArray: ArrayBuffer | SharedArrayBuffer | ArrayBufferView | WebGLBuffer,
   type: GL_BUFFER_TYPE = ARRAY_BUFFER,
   drawType: GL_BUFFER_USAGE = STATIC_DRAW
-): WebGLBuffer | null {
+): WebGLBuffer {
   if (helper.isBuffer(gl, typedArray)) {
     return typedArray;
   }
-  const buffer = gl.createBuffer();
+  const buffer = gl.createBuffer()!;
   setBufferFromTypedArray(gl, type, buffer, typedArray, drawType);
   return buffer;
 }
@@ -118,7 +117,7 @@ function getNormalizationForTypedArrayType(typedArrayType: Int8ArrayConstructor 
   return false;
 }
 
-export function getArray(array: number[] | { data: number[] }): number[] {
+export function getArray(array: ArraySpec): number[] {
   return (array as number[]).length ? (array as number[]) : (array as { data: number[] }).data;
 }
 
@@ -144,9 +143,11 @@ function guessNumComponentsFromName(name: string, length: number): number {
   return numComponents;
 }
 
-export function getNumComponents(array, arrayName, numValues) {
+export function getNumComponents(array: ArraySpec, arrayName: string, numValues?: number) {
   return (
-    array.numComponents || array.size || guessNumComponentsFromName(arrayName, numValues || getArray(array).length)
+    (array as FullArraySpec).numComponents ||
+    (array as FullArraySpec).size ||
+    guessNumComponentsFromName(arrayName, numValues || getArray(array).length)
   );
 }
 
@@ -492,20 +493,20 @@ export function setAttribInfoBufferFromArray(
 }
 
 function getBytesPerValueForGLType(gl: WebGL2RenderingContext, type: GL_CONST): number {
-  if (type === BYTE) return 1; // eslint-disable-line
-  if (type === UNSIGNED_BYTE) return 1; // eslint-disable-line
-  if (type === SHORT) return 2; // eslint-disable-line
-  if (type === UNSIGNED_SHORT) return 2; // eslint-disable-line
-  if (type === INT) return 4; // eslint-disable-line
-  if (type === UNSIGNED_INT) return 4; // eslint-disable-line
-  if (type === FLOAT) return 4; // eslint-disable-line
+  if (type === BYTE) return 1;
+  if (type === UNSIGNED_BYTE) return 1;
+  if (type === SHORT) return 2;
+  if (type === UNSIGNED_SHORT) return 2;
+  if (type === INT) return 4;
+  if (type === UNSIGNED_INT) return 4;
+  if (type === FLOAT) return 4;
   return 0;
 }
 
 // Tries to get the number of elements from a set of arrays.
 const positionKeys = ['position', 'positions', 'a_position'];
-function getNumElementsFromNonIndexedArrays(arrays) {
-  let key;
+function getNumElementsFromNonIndexedArrays(arrays: Arrays): number {
+  let key: string;
   let ii;
   for (ii = 0; ii < positionKeys.length; ++ii) {
     key = positionKeys[ii];
@@ -516,7 +517,7 @@ function getNumElementsFromNonIndexedArrays(arrays) {
   if (ii === positionKeys.length) {
     key = Object.keys(arrays)[0];
   }
-  const array = arrays[key];
+  const array = arrays[key!];
   const length = getArray(array).length;
   if (length === undefined) {
     return 1; // There's no arrays

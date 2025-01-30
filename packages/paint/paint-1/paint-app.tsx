@@ -3,9 +3,6 @@ import { createPointerData } from '@utils/create-pointer-data';
 import { createEffect } from 'solid-js';
 import { postQuadNDC } from './quads-2';
 
-import drawShaderFragSrc from './draw-shader.frag?raw';
-import drawShaderVertSrc from './draw-shader.vert?raw';
-
 import { createShaderProgram } from '../fungi/create-shader-program';
 import { bindFramebuffer, createFramebufferMap, unbindFramebuffer } from '../fungi/fbo';
 import {
@@ -23,7 +20,7 @@ import { Mat4 } from '@packages/math/m4';
 import { FVec2 } from '@packages/math/v2';
 import { GL_TEXTURES, GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createBrushMesh } from './create-brush-mesh';
+import { BrushMesh, DrawShader } from './draw-shader';
 
 export default function Paint() {
   const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
@@ -51,19 +48,8 @@ export default function Paint() {
   // Shader that draws a brush over a line segment
 
   // shader to draw brush on the quad
-  const brush = {
-    program: createShaderProgram(gl, {
-      vert: drawShaderVertSrc,
-      frag: drawShaderFragSrc,
-      uniforms: (uniform) => ({
-        ortho: uniform.name('ortho').mat4,
-        brushSize: uniform.name('brush_size').float,
-        bound: uniform.name('bound').vec4,
-        segment: uniform.name('segment').vec4
-      })
-    }),
-    mesh: createBrushMesh(gl)
-  };
+  const brush = new DrawShader(gl);
+  const brushMesh = new BrushMesh(gl, brush.program);
 
   const orthoProj = Mat4.ortho(0, width, height, 0, -100, 100);
 
@@ -94,14 +80,15 @@ export default function Paint() {
     gl.blendFunc(GL_FUNC_SEPARATE.SRC_ALPHA, GL_FUNC_SEPARATE.ONE); // BLEND_ALPHA_ADDITIVE
 
     // Load Shader and update uniforms
-    brush.program.useProgram();
-    brush.program.ortho(orthoProj);
-    brush.program.brushSize(drawBound.brushSize * pressure);
-    brush.program.bound(drawBound.bound);
-    brush.program.segment(drawBound.segment);
+    brush.useProgram();
+    brush.ortho(orthoProj);
+    brush.brushSize(drawBound.brushSize * pressure);
+    brush.bound(drawBound.bound);
+    brush.segment(drawBound.segment);
+
     bindFramebuffer(gl, screanTextureFbo); // Load Custom FrameBuffer
-    brush.mesh.draw();
-    brush.program.clearProgram();
+    brushMesh.draw();
+    brush.clearProgram();
     unbindFramebuffer(gl); // Unbind any Custom Frame Buffer
   }
 

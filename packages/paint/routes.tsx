@@ -89,5 +89,17 @@ export const routes: Routes[] = [
     name: 'Trigonometry Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/paint/ui-example/trigonometry'))
+  },
+  {
+    path: '/tile-based-canvas',
+    name: 'Tile Based Canvas',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/paint/tile-based-canvas'))
+  },
+  {
+    path: '/webgl-whiteboard',
+    name: 'Webgl Whiteboard',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/paint/webgl-whiteboard'))
   }
 ];

@@ -85,27 +85,83 @@ export function createProgram<U, A>(
   };
 }
 
+export const createUniformsMethods = <T>(
+  gl: WebGLRenderingContextStrict | WebGL2RenderingContext,
+  program: WebGLProgram,
+  uniformsBuilder: UniformsBuilder<T>
+) => {
+  return uniformsBuilder({
+    name: (name: string) => {
+      const location = gl.getUniformLocation(program, name);
+      return {
+        vec2(vec2: Float32List) {
+          gl.uniform2fv(location, vec2);
+        },
+        uniform1f(value: number) {
+          gl.uniform1f(location, value);
+        },
+        uniform3fv(vec3: Float32List) {
+          gl.uniform3fv(location, vec3);
+        },
+        uniform4fv(vec4: Float32List) {
+          gl.uniform4fv(location, vec4);
+        },
+        int(value: number) {
+          gl.uniform1i(location, value);
+        },
+        ivec2(vec2: Int32List) {
+          gl.uniform2iv(location, vec2);
+        },
+        ivec3(vec3: Int32List) {
+          gl.uniform3iv(location, vec3);
+        },
+        ivec4(vec4: Int32List) {
+          gl.uniform4iv(location, vec4);
+        },
+        sampler2D(value: number) {
+          gl.uniform1i(location, value);
+        },
+        samplerCube(value: number) {
+          gl.uniform1i(location, value);
+        },
+        mat2(mat2: Float32List) {
+          gl.uniformMatrix2fv(location, false, mat2);
+        },
+        mat3(mat3: Float32List) {
+          gl.uniformMatrix3fv(location, false, mat3);
+        },
+        mat4(mat4: Float32List) {
+          gl.uniformMatrix4fv(location, false, mat4);
+        },
+        bool(value: boolean) {
+          gl.uniform1i(location, value ? 1 : 0);
+        }
+      };
+    }
+  });
+};
+
 export interface UniformsParams {
   name: (name: string) => {
-    location: WebGLUniformLocation;
+    location?: WebGLUniformLocation;
 
-    vec2(): (vec2: Iterable<number>) => void;
+    vec2(): (vec2: Float32List) => void;
 
     uniform1f(): (value: number) => void;
-    uniform3fv(): (vec3: Iterable<number>) => void;
-    uniform4fv(): (vec4: Iterable<number>) => void;
+    uniform3fv(): (vec3: Float32List) => void;
+    uniform4fv(): (vec4: Float32List) => void;
 
     int(): (value: number) => void;
-    ivec2(): (vec2: Iterable<number>) => void;
-    ivec3(): (vec3: Iterable<number>) => void;
-    ivec4(): (vec4: Iterable<number>) => void;
+    ivec2(): (vec2: Float32List) => void;
+    ivec3(): (vec3: Float32List) => void;
+    ivec4(): (vec4: Float32List) => void;
 
     sampler2D(): (value: number) => void;
     samplerCube(): (value: number) => void;
 
-    mat2(): (mat2: Iterable<number>) => void;
-    mat3(): (mat3: Iterable<number>) => void;
-    mat4(): (mat4: Iterable<number>) => void;
+    mat2(): (mat2: Float32List) => void;
+    mat3(): (mat3: Float32List) => void;
+    mat4(): (mat4: Float32List) => void;
 
     bool(): (value: boolean) => void;
   };

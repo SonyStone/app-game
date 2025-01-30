@@ -2,7 +2,10 @@ import { GL_BUFFER_TYPE, GL_DRAW_ARRAYS_MODE } from '@packages/webgl/static-vari
 import { fromTypeArray } from '../fungi/Buffer';
 import { createVAO } from '../fungi/vao';
 
-function getWireframeIndex(array: Uint16Array) {
+/**
+ * creates wireframe index buffer
+ */
+export function getWireframeIndex(array: Uint16Array) {
   const indices = [];
   for (let i = 0, l = array.length; i < l; i += 3) {
     const a = array[i + 0];
@@ -10,6 +13,24 @@ function getWireframeIndex(array: Uint16Array) {
     const c = array[i + 2];
 
     indices.push(a, b, b, c, c, a);
+  }
+
+  return new Uint16Array(indices);
+}
+
+/**
+ * creates quad wireframe index buffer
+ * works clockwise indices
+ */
+export function getQuadWireframeIndex(array: Uint16Array) {
+  const indices = [];
+  for (let i = 0, l = array.length; i < l; i += 6) {
+    const a = array[i + 0];
+    const b = array[i + 1];
+    const c = array[i + 2];
+    const d = array[i + 4];
+
+    indices.push(a, b, b, c, c, d, d, a);
   }
 
   return new Uint16Array(indices);

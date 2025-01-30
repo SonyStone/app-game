@@ -472,10 +472,16 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/litegraph-examples/first-project/first-project'))
   },
   {
-    path: '/model-biewer',
+    path: '/model-viewer',
     name: '[WIP] Model Viewer',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/webgl-examples/ogl-model-viewer/model-viewer'))
+  },
+  {
+    path: '/twgl-2-development',
+    name: '[WIP] TWGL 2 Development',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/twgl-2-examples/twgl-2-development'))
   },
   {
     path: '/:any',

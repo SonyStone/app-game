@@ -15,6 +15,7 @@ import { createEffect, onCleanup } from 'solid-js';
 import { getAttributeData } from '@packages/pixijs-research/webgl/getAttributeData';
 import { getUniformData } from '@packages/pixijs-research/webgl/getUniformData';
 import { useCamera } from '@packages/three-examples/Camera.provider';
+import { createProgramInfo } from '@packages/twgl/programs';
 import {
   GL_TEXTURE_MAG_FILTER,
   GL_TEXTURE_MIN_FILTER,
@@ -106,8 +107,11 @@ export default function main() {
 
   console.log(`gl`, canvas, gl);
 
+  const programInfo = createProgramInfo(gl, [scene.vertex, scene.fragment]);
+  console.log(`programInfo`, programInfo);
+
   // gl program
-  const program = createProgram(gl).shaders(scene.vertex, scene.fragment);
+  const program = createProgram(gl, scene.vertex, scene.fragment);
 
   const attributes = getAttributeData(gl, program);
   const uniforms = getUniformData(gl, program);
@@ -280,18 +284,14 @@ export default function main() {
   return canvas;
 }
 
-function createProgram(gl: WebGL2RenderingContext | WebGLRenderingContext) {
-  return {
-    shaders(vertexSrc: string, fragmentSrc: string) {
-      const vertShader = compileShader(gl, GL_SHADER_TYPE.VERTEX_SHADER, vertexSrc);
-      const fragShader = compileShader(gl, GL_SHADER_TYPE.FRAGMENT_SHADER, fragmentSrc);
+function createProgram(gl: WebGL2RenderingContext | WebGLRenderingContext, vertexSrc: string, fragmentSrc: string) {
+  const vertShader = compileShader(gl, GL_SHADER_TYPE.VERTEX_SHADER, vertexSrc);
+  const fragShader = compileShader(gl, GL_SHADER_TYPE.FRAGMENT_SHADER, fragmentSrc);
 
-      const program = linkProgram(gl, vertShader, fragShader);
+  const program = linkProgram(gl, vertShader, fragShader);
 
-      gl.deleteShader(vertShader);
-      gl.deleteShader(fragShader);
+  gl.deleteShader(vertShader);
+  gl.deleteShader(fragShader);
 
-      return program;
-    }
-  };
+  return program;
 }

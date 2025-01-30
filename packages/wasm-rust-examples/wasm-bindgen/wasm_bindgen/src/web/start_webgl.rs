@@ -322,6 +322,14 @@ impl AppWebGL {
     }
 }
 
+pub fn create_program(
+    gl: &WebGl2RenderingContext,
+    (vertex, fragment): (&str, &str),
+) -> Result<WebGlProgram, String> {
+    let (vert_shader, frag_shader) = compile_shader_pair(gl, (vertex, fragment));
+    link_program(gl, &vert_shader, &frag_shader)
+}
+
 pub fn compile_shader_pair(
     gl: &WebGl2RenderingContext,
     (vert_source, frag_source): (&str, &str),

@@ -3,7 +3,7 @@ use std::{f32::consts::PI, rc::Rc};
 
 use fundamentals_common::{
     create_checker_texture, create_decal_texture,
-    cube_data::get_vertex_data,
+    cube_data::{get_vertex_data, Attributes},
     set_element_array_buffer,
     uniform::{SetUniform, Uniform},
 };
@@ -18,8 +18,9 @@ use webgl_common::{create_shader_program, slice_as_u8_slice};
 pub struct App {
     canvas: HtmlCanvasElement,
     gl: Rc<WebGl2RenderingContext>,
-    vao: WebGlVertexArrayObject,
+    // vao: WebGlVertexArrayObject,
     uniforms: Uniforms,
+    attributes: Attributes,
     program: WebGlProgram,
     checker_texture: WebGlTexture,
     decal_texture: WebGlTexture,
@@ -47,57 +48,15 @@ impl App {
 
         let gl = Rc::new(gl);
 
-        let prg = create_shader_program(
+        let prg: WebGlProgram = create_shader_program(
             &gl,
             include_str!("shader.vert"),
             include_str!("shader.frag"),
         );
 
-        let cube_vertex_array = {
-            let cube_vertex_array = gl.create_vertex_array().unwrap();
-            gl.bind_vertex_array(Some(&cube_vertex_array));
+        let (cube_vertex, cube_vertex_indices) = get_vertex_data();
 
-            let (cube_vectex, cube_vertex_indices, cube_attributes) = get_vertex_data();
-
-            {
-                let buffer = gl.create_buffer().unwrap();
-                gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
-                gl.buffer_data_with_u8_array(
-                    WebGl2RenderingContext::ARRAY_BUFFER,
-                    slice_as_u8_slice(&cube_vectex),
-                    WebGl2RenderingContext::STATIC_DRAW,
-                );
-                cube_attributes.iter().for_each(|attr| {
-                    let i = match attr.location {
-                        Some(i) => i,
-                        None => gl.get_attrib_location(&prg, attr.name) as u32,
-                    };
-                    gl.enable_vertex_attrib_array(i);
-                    gl.vertex_attrib_pointer_with_i32(
-                        i,
-                        attr.size,
-                        attr.data_type.into(),
-                        attr.normalized,
-                        attr.stride,
-                        attr.offset,
-                    );
-                });
-            }
-
-            set_element_array_buffer(
-                &gl,
-                &cube_vertex_indices,
-                WebGl2RenderingContext::STATIC_DRAW,
-            );
-
-            // This is not really needed but if we end up binding anything
-            // to ELEMENT_ARRAY_BUFFER, say we are generating indexed geometry
-            // we'll change cubeVertexArray's ELEMENT_ARRAY_BUFFER. By binding
-            // null here that won't happen.
-            gl.bind_vertex_array(None);
-
-            cube_vertex_array
-        };
+        let attributes = Attributes::new(Rc::clone(&gl), &prg, cube_vertex, cube_vertex_indices);
 
         Self {
             uniforms: Uniforms {
@@ -129,7 +88,7 @@ impl App {
             checker_texture: create_checker_texture(&gl),
             decal_texture: create_decal_texture(&gl),
             canvas,
-            vao: cube_vertex_array,
+            attributes,
             program: prg,
             gl,
         }
@@ -158,7 +117,7 @@ impl App {
 
         {
             self.gl.use_program(Some(&self.program));
-            self.gl.bind_vertex_array(Some(&self.vao));
+            self.gl.bind_vertex_array(Some(&self.attributes.vao));
             {
                 // Picking unit 6 just to be different. The default of 0
                 // would render but would show less state changing.

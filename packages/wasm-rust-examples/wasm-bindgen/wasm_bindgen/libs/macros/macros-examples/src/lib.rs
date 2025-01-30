@@ -3,7 +3,10 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use proc_macro2::TokenTree;
 use quote::quote;
-use syn::{parse_macro_input, Attribute, ItemStruct, Lit, Meta, Path, Type, TypeArray, TypePath};
+use syn::{
+    parse_macro_input, punctuated::Punctuated, Attribute, Ident, ItemStruct, Lit, Meta, Path,
+    Token, Type, TypeArray, TypePath,
+};
 
 // #[proc_macro]
 #[proc_macro_derive(HelperAttr, attributes(location))]
@@ -59,4 +62,27 @@ pub fn verify_struct(attr: TokenStream) -> TokenStream {
     println!("❓ field_locations: {:#?}", field_locations);
 
     "".parse().unwrap()
+}
+
+#[proc_macro]
+pub fn glsl_parser(input: TokenStream) -> TokenStream {
+    println!("❓ input: \"{input}\"");
+
+    let args = parse_macro_input!(input as Args);
+
+    println!("❓ args: {:#?}", args);
+
+    "".parse().unwrap()
+}
+
+#[derive(Debug)]
+struct Args {
+    idents: Punctuated<Ident, Token![,]>,
+}
+
+impl syn::parse::Parse for Args {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let idents = Punctuated::parse_separated_nonempty(input)?;
+        Ok(Args { idents })
+    }
 }

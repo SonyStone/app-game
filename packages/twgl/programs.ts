@@ -1,4 +1,5 @@
 import { GL_SHADER_TYPE } from '@packages/webgl/static-variables';
+import { ProgramInfo } from 'twgl.js';
 import { ErrorCallback, ProgramOptions } from '.';
 import * as helper from './helper';
 import * as utils from './utils';
@@ -2058,6 +2059,29 @@ function createProgramInfoFromProgram(gl, program) {
 const notIdRE = /\s|{|}|;/;
 
 /**
+ * @typedef {Object} ProgramInfo
+ * @property {WebGLProgram} program A shader program
+ * @property {Object<string, function>} uniformSetters object of setters as returned from createUniformSetters,
+ * @property {Object<string, function>} attribSetters object of setters as returned from createAttribSetters,
+ * @property {UniformBlockSpec} [uniformBlockSpec] a uniform block spec for making UniformBlockInfos with createUniformBlockInfo etc..
+ * @property {Object<string, TransformFeedbackInfo>} [transformFeedbackInfo] info for transform feedbacks
+ * @memberOf module:twgl
+ */
+export type ProgramInfo = {
+  program: WebGLProgram;
+  uniformSetters: {
+    [key: string]: (...params: any[]) => any;
+  };
+  attribSetters: {
+    [key: string]: (...params: any[]) => any;
+  };
+  uniformBlockSpec?: UniformBlockSpec;
+  transformFeedbackInfo?: {
+    [key: string]: TransformFeedbackInfo;
+  };
+};
+
+/**
  * Creates a ProgramInfo from 2 sources.
  *
  * A ProgramInfo contains
@@ -2077,15 +2101,14 @@ const notIdRE = /\s|{|}|;/;
  *
  * @param {WebGLRenderingContext} gl The WebGLRenderingContext
  *        to use.
- * @param {string[]} shaderSources Array of sources for the
+ * @param shaderSources - Array of sources for the
  *        shaders or ids. The first is assumed to be the vertex shader,
  *        the second the fragment shader.
- * @param {module:twgl.ProgramOptions|string[]|module:twgl.ErrorCallback} [opt_attribs] Options for the program or an array of attribs names or an error callback. Locations will be assigned by index if not passed in
- * @param {number[]|module:twgl.ErrorCallback} [opt_locations] The locations for the. A parallel array to opt_attribs letting you assign locations or an error callback.
- * @param {module:twgl.ErrorCallback} [opt_errorCallback] callback for errors. By default it just prints an error to the console
+ * @param opt_attribs Options for the program or an array of attribs names or an error callback. Locations will be assigned by index if not passed in
+ * @param opt_locations The locations for the. A parallel array to opt_attribs letting you assign locations or an error callback.
+ * @param opt_errorCallback callback for errors. By default it just prints an error to the console
  *        on error. If you want something else pass an callback. It's passed an error message.
- * @return {module:twgl.ProgramInfo?} The created ProgramInfo or null if it failed to link or compile
- * @memberOf module:twgl/programs
+ * @return The created ProgramInfo or null if it failed to link or compile
  */
 function createProgramInfo(
   gl: WebGL2RenderingContext,
@@ -2093,7 +2116,7 @@ function createProgramInfo(
   opt_attribs?: ProgramOptions | string[] | ErrorCallback,
   opt_locations?: number[],
   opt_errorCallback?: ErrorCallback
-) {
+): ProgramInfo {
   const progOptions = getProgramOptions(opt_attribs, opt_locations, opt_errorCallback);
   const errors = [];
   shaderSources = shaderSources.map(function (source) {
@@ -2322,30 +2345,30 @@ const createProgramsAsync = wrapCallbackFnToAsyncFn(createPrograms);
 const createProgramInfosAsync = wrapCallbackFnToAsyncFn(createProgramInfos);
 
 export {
+  bindTransformFeedbackInfo,
+  bindUniformBlock,
   createAttributeSetters,
   createProgram,
   createProgramAsync,
-  createPrograms,
-  createProgramsAsync,
   createProgramFromScripts,
   createProgramFromSources,
   createProgramInfo,
   createProgramInfoAsync,
+  createProgramInfoFromProgram,
   createProgramInfos,
   createProgramInfosAsync,
-  createProgramInfoFromProgram,
-  createUniformSetters,
-  createUniformBlockSpecFromProgram,
-  createUniformBlockInfoFromProgram,
-  createUniformBlockInfo,
+  createPrograms,
+  createProgramsAsync,
   createTransformFeedback,
   createTransformFeedbackInfo,
-  bindTransformFeedbackInfo,
+  createUniformBlockInfo,
+  createUniformBlockInfoFromProgram,
+  createUniformBlockSpecFromProgram,
+  createUniformSetters,
   setAttributes,
-  setBuffersAndAttributes,
-  setUniforms,
-  setUniformsAndBindTextures,
-  setUniformBlock,
   setBlockUniforms,
-  bindUniformBlock
+  setBuffersAndAttributes,
+  setUniformBlock,
+  setUniforms,
+  setUniformsAndBindTextures
 };

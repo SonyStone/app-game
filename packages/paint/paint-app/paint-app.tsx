@@ -1,56 +1,59 @@
 import { m3 } from '@packages/math';
 import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
+import { onMount } from 'solid-js';
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 
 export default function PaintApp() {
   const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
 
-  const gl = createWebGL2Renderer(canvas);
+  onMount(() => {
+    const gl = createWebGL2Renderer(canvas);
 
-  // create GLSL shaders, upload the GLSL source, compile the shaders
-  // Link the two shaders into a program
-  const program = gl.createProgram({
-    vert: vertexShaderSource,
-    frag: fragmentShaderSource,
-    attributes: (attribute) => ({
-      position: attribute.name('a_position').location
-    }),
-    uniforms: (uniform) => ({
-      matrix: uniform.name('u_matrix').mat3()
-    })
-  })!;
+    // create GLSL shaders, upload the GLSL source, compile the shaders
+    // Link the two shaders into a program
+    const program = gl.createProgram({
+      vert: vertexShaderSource,
+      frag: fragmentShaderSource,
+      attributes: (attribute) => ({
+        position: attribute.name('a_position').location
+      }),
+      uniforms: (uniform) => ({
+        matrix: uniform.name('u_matrix').mat3()
+      })
+    })!;
 
-  // Create a buffer and put three 2d clip space points in it
-  const positionBuffer = gl
-    .createBuffer({
-      target: gl.context.ARRAY_BUFFER,
-      usage: gl.context.STATIC_DRAW
-    })
-    .data(new Float32Array([0, 0, 512, 0, 0, 512, 0, 512, 512, 0, 512, 512]))
-    .bind();
+    // Create a buffer and put three 2d clip space points in it
+    const positionBuffer = gl
+      .createBuffer({
+        target: gl.context.ARRAY_BUFFER,
+        usage: gl.context.STATIC_DRAW
+      })
+      .data(new Float32Array([0, 0, 512, 0, 0, 512, 0, 512, 512, 0, 512, 512]))
+      .bind();
 
-  const vao = gl.createVertexArray().addBuffer(positionBuffer.buffer!).attribPointer(program.position, 2, 0, 0);
+    const vao = gl.createVertexArray().addBuffer(positionBuffer.buffer!).attribPointer(program.position, 2, 0, 0);
 
-  canvas.width = 1024;
-  canvas.height = 1024;
+    canvas.width = 1024;
+    canvas.height = 1024;
 
-  // Tell WebGL how to convert from clip space to pixels
-  gl.viewport();
+    // Tell WebGL how to convert from clip space to pixels
+    gl.viewport();
 
-  // Clear the canvas
-  gl.clear();
+    // Clear the canvas
+    gl.clear();
 
-  // Tell it to use our program (pair of shaders)
-  program.use();
+    // Tell it to use our program (pair of shaders)
+    program.use();
 
-  const matrix = m3.translate(projection(canvas.width, canvas.height), [256, 256]);
-  program.matrix(matrix);
+    const matrix = m3.translate(projection(canvas.width, canvas.height), [256, 256]);
+    program.matrix(matrix);
 
-  // draw
-  // Bind the attribute/buffer set we want.
-  vao.bind();
-  gl.draw.triangles(6);
+    // draw
+    // Bind the attribute/buffer set we want.
+    vao.bind();
+    gl.draw.triangles(6);
+  });
 
   return canvas;
 }

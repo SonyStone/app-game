@@ -1,12 +1,21 @@
 import type { WebGLRenderingContextStrict } from '../webgl-strict-types/webgl';
-import type { WebGL2RenderingContextStrict } from '../webgl-strict-types/webgl2';
 
 import { createBuffer } from './buffer';
 import { ProgramParams, createProgram } from './program';
 import { createVertexArray } from './vertex-array-object';
 
+export function createWebGL2Context(canvas: HTMLCanvasElement): WebGL2RenderingContext {
+  const gl = canvas.getContext('webgl2')! as WebGL2RenderingContext;
+
+  if (!gl) {
+    throw new Error('no webgl2 context');
+  }
+
+  return gl;
+}
+
 export function createWebGL2Renderer(canvas: HTMLCanvasElement) {
-  const gl = canvas.getContext('webgl2')! as WebGL2RenderingContextStrict;
+  const gl = canvas.getContext('webgl2')! as WebGL2RenderingContext;
 
   if (!gl) {
     throw new Error('no webgl2 context');

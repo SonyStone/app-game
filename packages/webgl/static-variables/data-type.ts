@@ -54,6 +54,11 @@ export const enum GL_DATA_TYPE {
   INT = GL_CONST.INT,
 
   /**
+   * @param short signed short
+   */
+  SHORT = GL_CONST.SHORT,
+
+  /**
    * @param uint unsigned integer
    */
   UNSIGNED_INT = GL_CONST.UNSIGNED_INT,

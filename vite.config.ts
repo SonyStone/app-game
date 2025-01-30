@@ -2,6 +2,7 @@ import UnoCSS from '@unocss/vite';
 import { resolve } from 'path';
 import solidDevtools from 'solid-devtools/vite';
 import { defineConfig } from 'vite';
+import glsl from 'vite-plugin-glsl';
 import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import topLevelAwait from 'vite-plugin-top-level-await';
@@ -24,7 +25,8 @@ export default defineConfig({
     }),
     solidPlugin(),
     solidSvg(),
-    vitePluginArraybuffer()
+    vitePluginArraybuffer(),
+    glsl()
     // viteFBXPlugin(),
   ],
   server: {

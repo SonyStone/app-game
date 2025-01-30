@@ -5,6 +5,8 @@ import fragment from './create-view-model.frag?raw';
 import vertex from './create-view-model.vert?raw';
 import { loadDDSLevels } from './dds';
 
+const Byte = 4;
+
 export async function loadModel({
   gl,
   scene,
@@ -17,18 +19,18 @@ export async function loadModel({
   gl: OGLRenderingContext;
   scene: Transform;
   data: Float32Array;
-  uv: Float32Array;
+  uv: Float32Array | Uint16Array;
   doubleTexcoord?: boolean;
   index: Uint32Array;
   diffuse: ArrayBuffer;
 }) {
   const geometry = new Geometry(gl, {
-    position: { size: 3, data, stride: 4 * 10, offset: 0 },
-    normal: { size: 3, data, stride: 4 * 10, offset: 12 },
-    tangent: { size: 4, data, stride: 4 * 10, offset: 12 + 12 },
+    position: { size: 3, data, stride: Byte * (3 + 3 + 4), offset: Byte * 0 },
+    normal: { size: 3, data, stride: Byte * (3 + 3 + 4), offset: Byte * 3 },
+    tangent: { size: 4, data, stride: Byte * (3 + 3 + 4), offset: Byte * (3 + 3) },
     uv: doubleTexcoord
-      ? { size: 2, data: uv, stride: 4 * 2, offset: 4, type: GL_CONST.HALF_FLOAT }
-      : { size: 2, data: uv, stride: 4 * 5, offset: 4 },
+      ? { size: 2, data: uv, stride: Byte * 2, offset: Byte, type: GL_CONST.HALF_FLOAT }
+      : { size: 2, data: uv, stride: Byte * (2 + 3), offset: Byte },
     index: { data: index }
   });
 
