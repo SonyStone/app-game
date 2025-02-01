@@ -19,10 +19,11 @@ import { createProgramInfo } from '@packages/twgl/programs';
 import {
   GL_TEXTURE_MAG_FILTER,
   GL_TEXTURE_MIN_FILTER,
-  GL_TEXTURE_PARAMETER_NAME
+  GL_TEXTURE_PARAMETER_NAME,
+  GL_TEXTURE_UNIT
 } from '@packages/webgl/static-variables/textures';
-import fragmentSrc from './shaders/frag_shader.frag?raw';
-import vertexSrc from './shaders/vert_shader.vert?raw';
+import fragmentSrc from './frag_shader.frag?raw';
+import vertexSrc from './vert_shader.vert?raw';
 
 interface Attribute {
   enabled: boolean;
@@ -197,7 +198,7 @@ export default function main() {
   uniforms.u_diffuse.set(0);
   uniforms.u_viewInverse.set(camera);
 
-  gl.activeTexture(GL_TEXTURES.TEXTURE0);
+  gl.activeTexture(GL_TEXTURE_UNIT.TEXTURE0);
   gl.bindTexture(GL_TEXTURES.TEXTURE_2D, tex);
 
   gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, positionBuffer);

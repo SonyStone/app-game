@@ -1,4 +1,5 @@
 import { Mat4Builder, type Mat4Tuple } from './m4-builder';
+import { TypedArray } from './utils/typed-array';
 import { FVec3 } from './v3';
 import { Vec3Tuple } from './v3-builder';
 
@@ -17,57 +18,53 @@ export type { Mat4Tuple };
  * @return {Mat4} -m.
  * @memberOf m4
  */
-export const negate = (m: Mat4): Mat4 => {
-  m[0] = -m[0];
-  m[1] = -m[1];
-  m[2] = -m[2];
-  m[3] = -m[3];
+export const negate = <T extends TypedArray>(m: T, dst: T) => {
+  dst[0] = -m[0];
+  dst[1] = -m[1];
+  dst[2] = -m[2];
+  dst[3] = -m[3];
 
-  m[4] = -m[4];
-  m[5] = -m[5];
-  m[6] = -m[6];
-  m[7] = -m[7];
+  dst[4] = -m[4];
+  dst[5] = -m[5];
+  dst[6] = -m[6];
+  dst[7] = -m[7];
 
-  m[8] = -m[8];
-  m[9] = -m[9];
-  m[10] = -m[10];
-  m[11] = -m[11];
+  dst[8] = -m[8];
+  dst[9] = -m[9];
+  dst[10] = -m[10];
+  dst[11] = -m[11];
 
-  m[12] = -m[12];
-  m[13] = -m[13];
-  m[14] = -m[14];
-  m[15] = -m[15];
-
-  return m;
+  dst[12] = -m[12];
+  dst[13] = -m[13];
+  dst[14] = -m[14];
+  dst[15] = -m[15];
 };
 
 /**
  * Copies from `b` to `a` matrix.
  * @param a __mut__ The matrix. If not passed a new one is created.
- * @param b The matrix.
+ * @param dst The matrix.
  */
-export const copy = (a: Mat4, b: Mat4): Mat4 => {
-  a[0] = b[0];
-  a[1] = b[1];
-  a[2] = b[2];
-  a[3] = b[3];
+export const copy = <T extends TypedArray>(a: T, dst: T) => {
+  dst[0] = a[0];
+  dst[1] = a[1];
+  dst[2] = a[2];
+  dst[3] = a[3];
 
-  a[4] = b[4];
-  a[5] = b[5];
-  a[6] = b[6];
-  a[7] = b[7];
+  dst[4] = a[4];
+  dst[5] = a[5];
+  dst[6] = a[6];
+  dst[7] = a[7];
 
-  a[8] = b[8];
-  a[9] = b[9];
-  a[10] = b[10];
-  a[11] = b[11];
+  dst[8] = a[8];
+  dst[9] = a[9];
+  dst[10] = a[10];
+  dst[11] = a[11];
 
-  a[12] = b[12];
-  a[13] = b[13];
-  a[14] = b[14];
-  a[15] = b[15];
-
-  return a;
+  dst[12] = a[12];
+  dst[13] = a[13];
+  dst[14] = a[14];
+  dst[15] = a[15];
 };
 
 /**
@@ -75,9 +72,7 @@ export const copy = (a: Mat4, b: Mat4): Mat4 => {
  * @param m __mut__ The matrix.
  * @return A copy of m.
  */
-export const clone = (m: Mat4): Mat4 => {
-  const dst: Mat4 = new Mat4();
-
+export const clone = <T extends TypedArray>(m: T, dst: T): T => {
   dst[0] = m[0];
   dst[1] = m[1];
   dst[2] = m[2];
@@ -104,31 +99,29 @@ export const clone = (m: Mat4): Mat4 => {
 /**
  * Creates an n-by-n identity matrix.
  *
- * @param m __mut__ The matrix.
+ * @param dst __mut__ The matrix.
  * @return An n-by-n identity matrix.
  */
-export const identity = (m: Mat4 = new Mat4()): Mat4 => {
-  m[0] = 1;
-  m[1] = 0;
-  m[2] = 0;
-  m[3] = 0;
+export const identity = <T extends TypedArray>(dst: T, offset = 0) => {
+  dst[0 + offset] = 1;
+  dst[1 + offset] = 0;
+  dst[2 + offset] = 0;
+  dst[3 + offset] = 0;
 
-  m[4] = 0;
-  m[5] = 1;
-  m[6] = 0;
-  m[7] = 0;
+  dst[4 + offset] = 0;
+  dst[5 + offset] = 1;
+  dst[6 + offset] = 0;
+  dst[7 + offset] = 0;
 
-  m[8] = 0;
-  m[9] = 0;
-  m[10] = 1;
-  m[11] = 0;
+  dst[8 + offset] = 0;
+  dst[9 + offset] = 0;
+  dst[10 + offset] = 1;
+  dst[11 + offset] = 0;
 
-  m[12] = 0;
-  m[13] = 0;
-  m[14] = 0;
-  m[15] = 1;
-
-  return m;
+  dst[12 + offset] = 0;
+  dst[13 + offset] = 0;
+  dst[14 + offset] = 0;
+  dst[15 + offset] = 1;
 };
 
 /**
@@ -168,7 +161,7 @@ export const transpose = (m: Mat4) => {
  * @param m __mut__ The matrix.
  * @return The inverse of m.
  */
-export const inverse = (m: Mat4) => {
+export const inverse = <T extends TypedArray>(m: T, dst: T) => {
   const m00 = m[0];
   const m01 = m[1];
   const m02 = m[2];
@@ -229,25 +222,25 @@ export const inverse = (m: Mat4) => {
 
   const d = 1.0 / (m00 * t0 + m10 * t1 + m20 * t2 + m30 * t3);
 
-  m[0] = d * t0;
-  m[1] = d * t1;
-  m[2] = d * t2;
-  m[3] = d * t3;
+  dst[0] = d * t0;
+  dst[1] = d * t1;
+  dst[2] = d * t2;
+  dst[3] = d * t3;
 
-  m[4] = d * (tmp_1 * m10 + tmp_2 * m20 + tmp_5 * m30 - (tmp_0 * m10 + tmp_3 * m20 + tmp_4 * m30));
-  m[5] = d * (tmp_0 * m00 + tmp_7 * m20 + tmp_8 * m30 - (tmp_1 * m00 + tmp_6 * m20 + tmp_9 * m30));
-  m[6] = d * (tmp_3 * m00 + tmp_6 * m10 + tmp_11 * m30 - (tmp_2 * m00 + tmp_7 * m10 + tmp_10 * m30));
-  m[7] = d * (tmp_4 * m00 + tmp_9 * m10 + tmp_10 * m20 - (tmp_5 * m00 + tmp_8 * m10 + tmp_11 * m20));
+  dst[4] = d * (tmp_1 * m10 + tmp_2 * m20 + tmp_5 * m30 - (tmp_0 * m10 + tmp_3 * m20 + tmp_4 * m30));
+  dst[5] = d * (tmp_0 * m00 + tmp_7 * m20 + tmp_8 * m30 - (tmp_1 * m00 + tmp_6 * m20 + tmp_9 * m30));
+  dst[6] = d * (tmp_3 * m00 + tmp_6 * m10 + tmp_11 * m30 - (tmp_2 * m00 + tmp_7 * m10 + tmp_10 * m30));
+  dst[7] = d * (tmp_4 * m00 + tmp_9 * m10 + tmp_10 * m20 - (tmp_5 * m00 + tmp_8 * m10 + tmp_11 * m20));
 
-  m[8] = d * (tmp_12 * m13 + tmp_15 * m23 + tmp_16 * m33 - (tmp_13 * m13 + tmp_14 * m23 + tmp_17 * m33));
-  m[9] = d * (tmp_13 * m03 + tmp_18 * m23 + tmp_21 * m33 - (tmp_12 * m03 + tmp_19 * m23 + tmp_20 * m33));
-  m[10] = d * (tmp_14 * m03 + tmp_19 * m13 + tmp_22 * m33 - (tmp_15 * m03 + tmp_18 * m13 + tmp_23 * m33));
-  m[11] = d * (tmp_17 * m03 + tmp_20 * m13 + tmp_23 * m23 - (tmp_16 * m03 + tmp_21 * m13 + tmp_22 * m23));
+  dst[8] = d * (tmp_12 * m13 + tmp_15 * m23 + tmp_16 * m33 - (tmp_13 * m13 + tmp_14 * m23 + tmp_17 * m33));
+  dst[9] = d * (tmp_13 * m03 + tmp_18 * m23 + tmp_21 * m33 - (tmp_12 * m03 + tmp_19 * m23 + tmp_20 * m33));
+  dst[10] = d * (tmp_14 * m03 + tmp_19 * m13 + tmp_22 * m33 - (tmp_15 * m03 + tmp_18 * m13 + tmp_23 * m33));
+  dst[11] = d * (tmp_17 * m03 + tmp_20 * m13 + tmp_23 * m23 - (tmp_16 * m03 + tmp_21 * m13 + tmp_22 * m23));
 
-  m[12] = d * (tmp_14 * m22 + tmp_17 * m32 + tmp_13 * m12 - (tmp_16 * m32 + tmp_12 * m12 + tmp_15 * m22));
-  m[13] = d * (tmp_20 * m32 + tmp_12 * m02 + tmp_19 * m22 - (tmp_18 * m22 + tmp_21 * m32 + tmp_13 * m02));
-  m[14] = d * (tmp_18 * m12 + tmp_23 * m32 + tmp_15 * m02 - (tmp_22 * m32 + tmp_14 * m02 + tmp_19 * m12));
-  m[15] = d * (tmp_22 * m22 + tmp_16 * m02 + tmp_21 * m12 - (tmp_20 * m12 + tmp_23 * m22 + tmp_17 * m02));
+  dst[12] = d * (tmp_14 * m22 + tmp_17 * m32 + tmp_13 * m12 - (tmp_16 * m32 + tmp_12 * m12 + tmp_15 * m22));
+  dst[13] = d * (tmp_20 * m32 + tmp_12 * m02 + tmp_19 * m22 - (tmp_18 * m22 + tmp_21 * m32 + tmp_13 * m02));
+  dst[14] = d * (tmp_18 * m12 + tmp_23 * m32 + tmp_15 * m02 - (tmp_22 * m32 + tmp_14 * m02 + tmp_19 * m12));
+  dst[15] = d * (tmp_22 * m22 + tmp_16 * m02 + tmp_21 * m12 - (tmp_20 * m12 + tmp_23 * m22 + tmp_17 * m02));
 };
 
 /**
@@ -255,7 +248,7 @@ export const inverse = (m: Mat4) => {
  * @param a __mut__ The matrix on the left.
  * @param b The matrix on the right.
  */
-export const multiply = (a: Mat4, b: Mat4) => {
+export const multiply = <T extends TypedArray>(a: T, b: T, dst: T) => {
   const a00 = a[0];
   const a01 = a[1];
   const a02 = a[2];
@@ -296,30 +289,30 @@ export const multiply = (a: Mat4, b: Mat4) => {
   const b32 = b[12 + 2];
   const b33 = b[12 + 3];
 
-  a[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
-  a[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
-  a[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
-  a[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
+  dst[0] = a00 * b00 + a10 * b01 + a20 * b02 + a30 * b03;
+  dst[1] = a01 * b00 + a11 * b01 + a21 * b02 + a31 * b03;
+  dst[2] = a02 * b00 + a12 * b01 + a22 * b02 + a32 * b03;
+  dst[3] = a03 * b00 + a13 * b01 + a23 * b02 + a33 * b03;
 
-  a[4] = a00 * b10 + a10 * b11 + a20 * b12 + a30 * b13;
-  a[5] = a01 * b10 + a11 * b11 + a21 * b12 + a31 * b13;
-  a[6] = a02 * b10 + a12 * b11 + a22 * b12 + a32 * b13;
-  a[7] = a03 * b10 + a13 * b11 + a23 * b12 + a33 * b13;
+  dst[4] = a00 * b10 + a10 * b11 + a20 * b12 + a30 * b13;
+  dst[5] = a01 * b10 + a11 * b11 + a21 * b12 + a31 * b13;
+  dst[6] = a02 * b10 + a12 * b11 + a22 * b12 + a32 * b13;
+  dst[7] = a03 * b10 + a13 * b11 + a23 * b12 + a33 * b13;
 
-  a[8] = a00 * b20 + a10 * b21 + a20 * b22 + a30 * b23;
-  a[9] = a01 * b20 + a11 * b21 + a21 * b22 + a31 * b23;
-  a[10] = a02 * b20 + a12 * b21 + a22 * b22 + a32 * b23;
-  a[11] = a03 * b20 + a13 * b21 + a23 * b22 + a33 * b23;
+  dst[8] = a00 * b20 + a10 * b21 + a20 * b22 + a30 * b23;
+  dst[9] = a01 * b20 + a11 * b21 + a21 * b22 + a31 * b23;
+  dst[10] = a02 * b20 + a12 * b21 + a22 * b22 + a32 * b23;
+  dst[11] = a03 * b20 + a13 * b21 + a23 * b22 + a33 * b23;
 
-  a[12] = a00 * b30 + a10 * b31 + a20 * b32 + a30 * b33;
-  a[13] = a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33;
-  a[14] = a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33;
-  a[15] = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
+  dst[12] = a00 * b30 + a10 * b31 + a20 * b32 + a30 * b33;
+  dst[13] = a01 * b30 + a11 * b31 + a21 * b32 + a31 * b33;
+  dst[14] = a02 * b30 + a12 * b31 + a22 * b32 + a32 * b33;
+  dst[15] = a03 * b30 + a13 * b31 + a23 * b32 + a33 * b33;
 };
 
 export const multiplyArray = (m: Mat4, arr: Mat4[]) => {
   for (let i = 0; i < arr.length; i++) {
-    multiply(m, arr[i]);
+    multiply(m, arr[i], arr[i]);
   }
 };
 
@@ -329,7 +322,7 @@ export const multiplyArray = (m: Mat4, arr: Mat4[]) => {
  * @param a __mut__ The matrix.
  * @param v The vector.
  */
-export const setTranslation = (m: Mat4, v: Vec3Tuple) => {
+export const setTranslation = <T extends TypedArray>(m: T, v: Vec3Tuple) => {
   m[12] = v[0];
   m[13] = v[1];
   m[14] = v[2];
@@ -396,7 +389,13 @@ export const setAxis = (m: Mat4, v: Vec3Tuple, axis: number) => {
  * @param zFar The depth (negative z coordinate)
  *     of the far clipping plane.
  */
-export const perspective = (m: Mat4, fieldOfViewYInRadians: number, aspect: number, zNear: number, zFar: number) => {
+export const perspective = (
+  m: TypedArray,
+  fieldOfViewYInRadians: number,
+  aspect: number,
+  zNear: number,
+  zFar: number
+) => {
   const f = Math.tan(Math.PI * 0.5 - 0.5 * fieldOfViewYInRadians);
   const rangeInv = 1.0 / (zNear - zFar);
 
@@ -556,7 +555,7 @@ const zAxis = FVec3.create();
  * @param target The position meant to be viewed.
  * @param up A vector pointing up.
  */
-export const lookAt = (m: Mat4, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple) => {
+export const lookAt = <T extends TypedArray>(m: T, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple) => {
   zAxis.copy(eye).sub(target).normalize();
   xAxis.copy(up).cross(zAxis).normalize();
   yAxis.copy(zAxis).cross(xAxis).normalize();
@@ -588,35 +587,35 @@ export const lookAt = (m: Mat4, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple
  * @param v The vector by
  *     which to translate.
  */
-export const translate = (m: Mat4, v: Vec3Tuple): void => {
+export const translate = <T extends TypedArray>(m: T, v: Vec3Tuple, dst: T, offset = 0): void => {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
 
-  const m00 = m[0];
-  const m01 = m[1];
-  const m02 = m[2];
-  const m03 = m[3];
+  const m00 = m[0 + offset];
+  const m01 = m[1 + offset];
+  const m02 = m[2 + offset];
+  const m03 = m[3 + offset];
 
-  const m10 = m[4];
-  const m11 = m[5];
-  const m12 = m[6];
-  const m13 = m[7];
+  const m10 = m[4 + offset];
+  const m11 = m[5 + offset];
+  const m12 = m[6 + offset];
+  const m13 = m[7 + offset];
 
-  const m20 = m[8];
-  const m21 = m[9];
-  const m22 = m[10];
-  const m23 = m[11];
+  const m20 = m[8 + offset];
+  const m21 = m[9 + offset];
+  const m22 = m[10 + offset];
+  const m23 = m[11 + offset];
 
-  const m30 = m[12];
-  const m31 = m[13];
-  const m32 = m[14];
-  const m33 = m[15];
+  const m30 = m[12 + offset];
+  const m31 = m[13 + offset];
+  const m32 = m[14 + offset];
+  const m33 = m[15 + offset];
 
-  m[12] = m00 * v0 + m10 * v1 + m20 * v2 + m30;
-  m[13] = m01 * v0 + m11 * v1 + m21 * v2 + m31;
-  m[14] = m02 * v0 + m12 * v1 + m22 * v2 + m32;
-  m[15] = m03 * v0 + m13 * v1 + m23 * v2 + m33;
+  dst[12 + offset] = m00 * v0 + m10 * v1 + m20 * v2 + m30;
+  dst[13 + offset] = m01 * v0 + m11 * v1 + m21 * v2 + m31;
+  dst[14 + offset] = m02 * v0 + m12 * v1 + m22 * v2 + m32;
+  dst[15 + offset] = m03 * v0 + m13 * v1 + m23 * v2 + m33;
 };
 
 /**
@@ -626,7 +625,7 @@ export const translate = (m: Mat4, v: Vec3Tuple): void => {
  * @param m __mut__ The matrix to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export const rotateX = (m: Mat4, angleInRadians: number) => {
+export const rotateX = <T extends TypedArray>(m: T, angleInRadians: number) => {
   const m10 = m[4];
   const m11 = m[5];
   const m12 = m[6];
@@ -658,7 +657,7 @@ export const rotateX = (m: Mat4, angleInRadians: number) => {
  * @param m __mut__ The matrix to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export const rotateY = (m: Mat4, angleInRadians: number) => {
+export const rotateY = <T extends TypedArray>(m: T, angleInRadians: number) => {
   const m00 = m[0];
   const m01 = m[1];
   const m02 = m[2];
@@ -801,19 +800,19 @@ export const axisRotate = (m: Mat4, [x, y, z]: Vec3Tuple, angleInRadians: number
  * @param v A vector of three entries specifying the
  *     factor by which to scale in each dimension.
  */
-export const scale = (m: Mat4, [v0, v1, v2]: Vec3Tuple) => {
-  m[0] = v0 * m[0 * 4 + 0];
-  m[1] = v0 * m[0 * 4 + 1];
-  m[2] = v0 * m[0 * 4 + 2];
-  m[3] = v0 * m[0 * 4 + 3];
-  m[4] = v1 * m[1 * 4 + 0];
-  m[5] = v1 * m[1 * 4 + 1];
-  m[6] = v1 * m[1 * 4 + 2];
-  m[7] = v1 * m[1 * 4 + 3];
-  m[8] = v2 * m[2 * 4 + 0];
-  m[9] = v2 * m[2 * 4 + 1];
-  m[10] = v2 * m[2 * 4 + 2];
-  m[11] = v2 * m[2 * 4 + 3];
+export const scale = <T extends TypedArray>(m: T, [v0, v1, v2]: Vec3Tuple, dst: T, offset = 0) => {
+  dst[0 + offset] = v0 * m[0 * 4 + 0 + offset];
+  dst[1 + offset] = v0 * m[0 * 4 + 1 + offset];
+  dst[2 + offset] = v0 * m[0 * 4 + 2 + offset];
+  dst[3 + offset] = v0 * m[0 * 4 + 3 + offset];
+  dst[4 + offset] = v1 * m[1 * 4 + 0 + offset];
+  dst[5 + offset] = v1 * m[1 * 4 + 1 + offset];
+  dst[6 + offset] = v1 * m[1 * 4 + 2 + offset];
+  dst[7 + offset] = v1 * m[1 * 4 + 3 + offset];
+  dst[8 + offset] = v2 * m[2 * 4 + 0 + offset];
+  dst[9 + offset] = v2 * m[2 * 4 + 1 + offset];
+  dst[10 + offset] = v2 * m[2 * 4 + 2 + offset];
+  dst[11 + offset] = v2 * m[2 * 4 + 3 + offset];
 };
 
 /**
@@ -857,7 +856,7 @@ export const transformDirection = (m: Mat4, v: Vec3Tuple) => {
   m[2] = v0 * m[0 * 4 + 2] + v1 * m[1 * 4 + 2] + v2 * m[2 * 4 + 2];
 };
 
-const MI = identity();
+const MI = identity(new Float32Array(16));
 
 /**
  * Takes a 4-by-4 matrix m and a vector v with 3 entries, interprets the vector

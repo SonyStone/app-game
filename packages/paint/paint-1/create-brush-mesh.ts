@@ -5,7 +5,7 @@ import { createVAO } from '../fungi/vao';
 /**
  * creates wireframe index buffer
  */
-export function getWireframeIndex(array: Uint16Array) {
+export function createWireframeIndex(array: Uint16Array) {
   const indices = [];
   for (let i = 0, l = array.length; i < l; i += 3) {
     const a = array[i + 0];

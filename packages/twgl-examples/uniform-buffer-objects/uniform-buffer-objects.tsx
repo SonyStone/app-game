@@ -10,7 +10,7 @@ import fs from './shader.frag?raw';
 import vs from './shader.vert?raw';
 
 export default function UniformBufferObjects() {
-  const canvas = (<canvas class="w-full h-full" />) as HTMLCanvasElement;
+  const canvas = (<canvas class="h-full w-full" />) as HTMLCanvasElement;
 
   const m4 = twgl.m4;
   twgl.setDefaults({ attribPrefix: 'a_' });

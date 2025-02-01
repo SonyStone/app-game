@@ -7,7 +7,7 @@ import {
 } from '@packages/webgl/static-variables';
 import { GL_BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
 import { WebGL2RenderingContextStrict } from '@packages/webgl/webgl-strict-types/webgl2';
-import { getWireframeIndex } from './create-brush-mesh';
+import { createWireframeIndex } from './create-brush-mesh';
 import drawShaderFragSrc from './draw-shader.frag?raw';
 import drawShaderVertSrc from './draw-shader.vert?raw';
 
@@ -107,7 +107,7 @@ export class BrushMesh {
   private vao = this.gl.createVertexArray()!;
   private wireframeVao = this.gl.createVertexArray()!;
   private indices = new Uint16Array([0, 1, 2, 2, 3, 0]);
-  private wireframeIndices = getWireframeIndex(this.indices);
+  private wireframeIndices = createWireframeIndex(this.indices);
 
   // prettier-ignore
   private data = new Float32Array([

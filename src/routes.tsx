@@ -10,14 +10,13 @@ import { routes as uiComponentsRoutes } from '@packages/ui-components-examples/r
 import { Ripple } from '@packages/ui-components/ripple/Ripple';
 import { Thumbnail } from '@packages/ui-components/thumbnail';
 import { routes as wasmRustRoutes } from '@packages/wasm-rust-examples/routes';
-import { routes as webglRoutes } from '@packages/webgl-examples/routes';
+import { webglExamplesRoute } from '@packages/webgl-examples/routes';
 import { routes as webgpuRoutes } from '@packages/webgpu-examples/routes';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
-import Navigation from './navigation';
-import { Routes } from './routes.interface';
 
-import twglThumbnail from './thumbnail/chrome_2023-11-18_15-44-48.png?url';
+import Navigation from '@packages/utils/navigation';
+import { Routes } from '@packages/utils/routes.interface';
 import wireframeThumbnail from './thumbnail/wireframe-thumbnail.png?url';
 import worldBodiesThumbnail from './thumbnail/world-rodies-thumbnail.png?url';
 
@@ -178,38 +177,7 @@ export const routes: Routes[] = [
       ...paintRoutes
     ]
   },
-  {
-    path: '/webgl-examples',
-    Preview: (props) => (
-      <A
-        class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 p-2 px-4"
-        href={props.path}
-      >
-        <h2 class="text-4xl">
-          {/* <a href="https://webgl2fundamentals.org/" target="_blank">
-          </a> */}
-          WebGL
-        </h2>
-        <span class="text-center text-sm">Examples, they may work, or may not. Who knows?</span>
-        <div class="absolute -end-2 bottom-1">
-          <span class="text-4rem leading-6">🙂</span>
-        </div>
-        <Ripple class="text-slate/20" />
-      </A>
-    ),
-    children: [
-      {
-        path: '/',
-        component: () => (
-          <>
-            <div class="flex w-full place-content-center place-items-center bg-blue-100">WebGPU Examples</div>
-            <Navigation routes={webglRoutes} parentPath="." />
-          </>
-        )
-      },
-      ...webglRoutes
-    ]
-  },
+  webglExamplesRoute,
   {
     path: '/webgpu-examples',
     name: 'WebGPU',
@@ -400,12 +368,6 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/babylonjs-examples/babylon-example'))
   },
   {
-    path: '/twgl',
-    name: 'twgl',
-    Preview: (props) => <Thumbnail href={props.path} thumbnail={twglThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/twgl-examples/Main'))
-  },
-  {
     path: '/game-ecs',
     name: 'Game ECS',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
@@ -476,12 +438,6 @@ export const routes: Routes[] = [
     name: '[WIP] Model Viewer',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/webgl-examples/ogl-model-viewer/model-viewer'))
-  },
-  {
-    path: '/twgl-2-development',
-    name: '[WIP] TWGL 2 Development',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/twgl-2-examples/twgl-2-development'))
   },
   {
     path: '/:any',
