@@ -1,5 +1,5 @@
 import { createPointerEventsHandler } from '@packages/hammer/pointerevent';
-import { FVec2 } from '@packages/math';
+import { Vec2 } from '@packages/math';
 import { Animation, AnimationFrame } from '@packages/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { For, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
@@ -23,14 +23,14 @@ export function Timeline(props: { animation?: Animation }) {
     setFrames(props.animation?.data?.frames ?? []);
   });
 
-  const [position, setPosition] = createSignal<FVec2>(FVec2.create(0, 0), { equals: (v1, v2) => !v1.equals(v2) });
+  const [position, setPosition] = createSignal<Vec2>(new Vec2().set(0, 0), { equals: (v1, v2) => !v1.isEquals(v2) });
 
   let elementRef: HTMLElement;
 
   if (true) {
     const pointerEventsHandler = createPointerEventsHandler();
 
-    let start = FVec2.create(0, 0);
+    const start = new Vec2().set(0, 0);
     let dataset:
       | {
           name: 'keyframe';
@@ -51,7 +51,7 @@ export function Timeline(props: { animation?: Animation }) {
       if (dataset?.name === 'keyframe') {
         setFrames(dataset.item, 'position', dataset.axis, (p: number) => {
           posStart = p;
-          return posStart + input.delta[1];
+          return posStart + input.delta.y;
         });
       }
 
@@ -70,12 +70,12 @@ export function Timeline(props: { animation?: Animation }) {
       const input = pointerEventsHandler(e);
 
       if (dataset?.name === 'keyframe') {
-        setFrames(dataset.item, 'position', dataset.axis, () => posStart + input.delta[1]);
+        setFrames(dataset.item, 'position', dataset.axis, () => posStart + input.delta.y);
       }
 
       if (!dataset?.name) {
         const p = position();
-        p.set(start[0] + input.delta[0], start[1] + input.delta[1]);
+        p.addFrom(start, input.delta);
         setPosition(p);
       }
     }
@@ -87,14 +87,14 @@ export function Timeline(props: { animation?: Animation }) {
 
       if (!dataset?.name) {
         const p = position();
-        p.set(start[0] + input.delta[0], start[1] + input.delta[1]);
-        start = p.clone();
+        p.addFrom(start, input.delta);
+        start.copy(p);
         setPosition(p);
       }
 
       if (dataset?.name === 'keyframe') {
         setFrames(dataset.item, 'position', dataset.axis, () => {
-          return posStart + input.delta[1];
+          return posStart + input.delta.y;
         });
         dataset = undefined;
       }
@@ -137,12 +137,12 @@ export function Timeline(props: { animation?: Animation }) {
         top: dimensions().top + 'px',
         left: dimensions().left + 'px'
       }}
-      class=":uno: fixed h-90 overflow-hidden bg-blue"
+      class=":uno: h-90 bg-blue fixed overflow-hidden"
     >
       <PanelResizers onDimensionsChange={setDimensions} />
       <GraphEditorToggle />
       <svg xmlns="http://www.w3.org/2000/svg" height={dimensions().height} width={dimensions().width}>
-        <g transform={`translate(${position()[0]},${position()[1]})`}>
+        <g transform={`translate(${position().toString()})`}>
           <For each={frames}>
             {(frame, index) => (
               <g>

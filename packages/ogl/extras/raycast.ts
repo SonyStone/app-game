@@ -1,14 +1,14 @@
 // TODO: barycentric code shouldn't be here, but where?
 // TODO: SphereCast?
 
-import { FVec2 } from '@packages/math';
+import { Vec2 } from '@packages/math';
 import { Camera, Mesh, Sphere } from '..';
 import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';
 
-const tempVec2a = /* @__PURE__ */ new FVec2();
-const tempVec2b = /* @__PURE__ */ new FVec2();
-const tempVec2c = /* @__PURE__ */ new FVec2();
+const tempVec2a = /* @__PURE__ */ new Vec2();
+const tempVec2b = /* @__PURE__ */ new Vec2();
+const tempVec2c = /* @__PURE__ */ new Vec2();
 
 const tempVec3a = /* @__PURE__ */ new Vec3();
 const tempVec3b = /* @__PURE__ */ new Vec3();

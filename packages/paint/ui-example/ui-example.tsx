@@ -1,11 +1,9 @@
-import { FVec2, m3 } from '@packages/math';
+import { m3, Vec2 } from '@packages/math';
 import { Mat3 } from '@packages/ogl';
 import { distance, normalize } from '@packages/ogl/math/functions/vec-2-func';
-import { rotate } from '@packages/pixijs-research/math_alt/Vector2';
 import { createEventBus } from '@solid-primitives/event-bus';
 import { WindowEventListener } from '@solid-primitives/event-listener';
 import { createKeyHold } from '@solid-primitives/keyboard';
-import { start } from 'repl';
 import { ComponentProps, createEffect, createMemo, createSignal, For, mergeProps, Show, untrack } from 'solid-js';
 
 export default function PaintUIExample() {
@@ -477,7 +475,7 @@ const createNavigation = () => {
   // const [matrix, setMatrix] = createSignal(m3.identity([]));
   const transformMatrix = new Mat3();
   const rotateStart = { x: 0, y: 0 };
-  const translateStart = new FVec2();
+  const translateStart = new Vec2();
 
   let isActive = false;
 
@@ -491,18 +489,14 @@ const createNavigation = () => {
           transformMatrix.translate([translateStart.x - x, translateStart.y - y]);
         }
       },
-      end() {
-
-      }
+      end() {}
     },
     rotate: {
       start(x = 0, y = 0) {
         isActive = true;
-        
       },
       move(x = 0, y = 0) {
         if (isActive) {
-          
           m3.setRotate(matrix(), 0.1);
           // rotate around point
         }
@@ -520,13 +514,11 @@ const createNavigation = () => {
       move(x = 0, y = 0) {
         if (isActive) {
           // zoom 2d camera
-
-
         }
       }
     }
-  }
-}
+  };
+};
 
 // TODO: make it a directive?
 const createRotate = () => {
@@ -631,7 +623,7 @@ const createZoom = () => {
 };
 
 const createTranslate = () => {
-  const transformMatrix = new Mat3();         
+  const transformMatrix = new Mat3();
   const [position, setPosition] = createSignal({ x: 0, y: 0 });
   const active = createEventBus<boolean>();
 

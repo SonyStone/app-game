@@ -1,5 +1,5 @@
 export const VENDOR_PREFIXES = ['', 'webkit', 'Moz', 'MS', 'ms', 'o'];
-export const TEST_ELEMENT = document.createElement('div');
+export const TEST_ELEMENT = typeof window !== 'undefined' ? document.createElement('div') : undefined;
 
 export const TYPE_FUNCTION = 'function';
 

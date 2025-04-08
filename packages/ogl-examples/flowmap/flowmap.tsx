@@ -1,4 +1,4 @@
-import { FVec2 } from '@packages/math';
+import * as v2 from '@packages/math/v2';
 import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@packages/ogl';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
@@ -27,7 +27,7 @@ export default () => {
   // Variable inputs to control flowmap
   let aspect = 1;
   const mouse = FVec2.splat(-1);
-  const velocity = Object.assign(new FVec2(), { needsUpdate: true });
+  const velocity = Object.assign(v2.createFVec2(), { needsUpdate: true });
 
   const flowmap = new Flowmap(gl);
 
@@ -64,7 +64,7 @@ export default () => {
   window.addEventListener('pointermove', updateMouse, false);
 
   let lastTime = 0;
-  const lastMouse = new FVec2();
+  const lastMouse = v2.createFVec2();
   function updateMouse(e: PointerEvent) {
     // Get mouse value in 0 to 1 range, with y flipped
     mouse.set(e.x / gl.renderer.width, 1.0 - e.y / gl.renderer.height);
@@ -73,13 +73,13 @@ export default () => {
     if (!lastTime) {
       // First frame
       lastTime = performance.now();
-      lastMouse.set(e.x, e.y);
+      v2.set(e.x, e.y, lastMouse);
     }
 
-    const deltaX = e.x - lastMouse.x;
-    const deltaY = e.y - lastMouse.y;
+    const deltaX = e.x - lastMouse[v2.X];
+    const deltaY = e.y - lastMouse[v2.Y];
 
-    lastMouse.set(e.x, e.y);
+    v2.set(e.x, e.y, lastMouse);
 
     let time = performance.now();
 
@@ -87,8 +87,8 @@ export default () => {
     let delta = Math.max(14, time - lastTime);
     lastTime = time;
 
-    velocity.x = deltaX / delta;
-    velocity.y = deltaY / delta;
+    velocity[v2.X] = deltaX / delta;
+    velocity[v2.Y] = deltaY / delta;
 
     // Flag update to prevent hanging velocity values when not moving
     velocity.needsUpdate = true;
@@ -104,10 +104,10 @@ export default () => {
 
     // Update flowmap inputs
     flowmap.aspect = aspect;
-    flowmap.mouse.copy(mouse);
+    v2.copy(mouse, flowmap.mouse);
 
     // Ease velocity input, slower when fading out
-    flowmap.velocity.lerp(velocity, velocity.len() ? 0.5 : 0.1);
+    v2.lerp(flowmap.velocity, velocity, v2.length(velocity) ? 0.5 : 0.1, flowmap.velocity);
 
     flowmap.update();
 

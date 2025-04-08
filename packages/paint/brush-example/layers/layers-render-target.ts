@@ -1,4 +1,4 @@
-import { FVec2 } from '@packages/math';
+import { Vec2 } from '@packages/math';
 import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@packages/ogl';
 import { RenderTargetOptions } from '@packages/ogl/core/render-target';
 import { Square } from '@packages/ogl/extras/square';
@@ -52,7 +52,7 @@ export const createLayersRenderTarget = ({
       }
     }
   });
-  const mouse = FVec2.create(0.5, 0.5);
+  const mouse = new Vec2().set(0.5, 0.5);
   const program = new Program(gl, {
     vertex,
     fragment,

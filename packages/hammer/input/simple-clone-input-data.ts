@@ -1,4 +1,4 @@
-import type { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
+import { Vec2 } from '@packages/math';
 import { HammerInput } from '../pointerevent';
 import { round } from '../utils/utils-consts';
 import getCenter from './get-center';
@@ -6,9 +6,9 @@ import getCenter from './get-center';
 export interface ClonedInputData {
   eventType: HammerInput['eventType'];
   timeStamp: number;
-  pointers: Vec2Tuple[];
-  center: Vec2Tuple;
-  delta: Vec2Tuple;
+  pointers: Vec2[];
+  center: Vec2;
+  delta: Vec2;
 }
 
 /**
@@ -20,10 +20,10 @@ export interface ClonedInputData {
 export default function simpleCloneInputData(input: HammerInput | ClonedInputData): ClonedInputData {
   // make a simple copy of the pointers because we will get a reference if we don't
   // we only need clientXY for the calculations
-  let pointers: Vec2Tuple[] = [];
+  const pointers: Vec2[] = [];
   let i = 0;
   while (i < input.pointers.length) {
-    pointers[i] = [round(input.pointers[i][0]), round(input.pointers[i][1])];
+    pointers[i] = new Vec2().set(round(input.pointers[i].x), round(input.pointers[i].y));
     i++;
   }
 
@@ -32,6 +32,6 @@ export default function simpleCloneInputData(input: HammerInput | ClonedInputDat
     timeStamp: input.timeStamp,
     pointers,
     center: getCenter(pointers),
-    delta: [input.delta[0], input.delta[1]]
+    delta: new Vec2().set(input.delta.x, input.delta.y)
   };
 }

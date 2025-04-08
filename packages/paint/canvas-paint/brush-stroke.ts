@@ -1,4 +1,4 @@
-import { Vec2Tuple } from '@packages/math';
+import { Vec2 } from '@packages/math/v2';
 import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@packages/ogl';
 import { SwapBuffering } from '@packages/ogl/extras/swap-buffering';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
@@ -53,7 +53,7 @@ export const createBrushStroke = ({
   let instance = 0;
   let needsUpdate = false;
 
-  let prev: Vec2Tuple | undefined;
+  let prev: Vec2 | undefined;
   let prevOpacity: number | undefined;
 
   const end = () => {
@@ -61,7 +61,7 @@ export const createBrushStroke = ({
     prev = undefined;
   };
 
-  const setPoint = (point: Vec2Tuple, opacity: number) => {
+  const setPoint = (point: Vec2, opacity: number) => {
     brushStrokeMesh.setBrushSpot(instance, point, opacity, opacity);
     instance++;
     brushStrokeMesh.setInstancedCount(instance);
@@ -88,18 +88,18 @@ export const createBrushStroke = ({
     clear: () => {
       background.clear();
     },
-    add: (point: Vec2Tuple, opacity: number) => {
+    add: (point: Vec2, opacity: number) => {
       const [width, height] = access(size);
       if (prev && prevOpacity !== undefined) {
-        if (point[0] === prev[0] && point[1] === prev[1]) {
+        if (point.isEquals(prev)) {
           return;
         }
-        const dist = Math.sqrt(Math.pow(point[0] - prev[0], 2) + Math.pow(point[1] - prev[1], 2));
-        const angle = Math.atan2(point[1] - prev[1], point[0] - prev[0]);
+        const dist = point.distance(prev);
+        const angle = Vec2.angleTo(point, prev);
 
         for (let i = 0; i < dist; i++) {
-          let point = [prev[0] + i * Math.cos(angle), prev[1] + i * Math.sin(angle)];
-          let tempOpacity = prevOpacity + (opacity - prevOpacity) * (i / dist);
+          let point = Vec2.create(prev.x + i * Math.cos(angle), prev.y + i * Math.sin(angle));
+          const tempOpacity = prevOpacity + (opacity - prevOpacity) * (i / dist);
           point = pointToCanvasPoint(point, width, height);
           setPoint(point, tempOpacity);
         }

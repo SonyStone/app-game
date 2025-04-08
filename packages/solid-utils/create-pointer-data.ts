@@ -1,17 +1,20 @@
 import { createMemo } from 'solid-js';
 
-import { FVec2 } from '@packages/math';
+import { Vec2 } from '@packages/math';
 import { createPointerStream } from './create-pointer-stream';
 
 export function createPointerData(element: HTMLElement) {
   const pointer$ = createPointerStream(element);
+
+  const buffer = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 6);
+
   const pointerData = {
-    start: FVec2.create(),
-    end: FVec2.create(),
-    move: FVec2.create(),
-    prev: FVec2.create(),
-    tilt: FVec2.create(),
-    angle: FVec2.create(),
+    start: new Vec2(new Float32Array(buffer, 0, Vec2.ELEMENTS)),
+    end: new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS, Vec2.ELEMENTS)),
+    move: new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 2, Vec2.ELEMENTS)),
+    prev: new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 3, Vec2.ELEMENTS)),
+    tilt: new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 4, Vec2.ELEMENTS)),
+    angle: new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 5, Vec2.ELEMENTS)),
     pressure: 0,
     distance: 0
   };
@@ -39,12 +42,12 @@ export function createPointerData(element: HTMLElement) {
         case 'pointermove':
           pointerData.prev.copy(pointerData.move);
           pointerData.move.set(x, y);
-          pointerData.distance = FVec2.distanceSq(pointerData.move, pointerData.prev);
+          pointerData.distance = Vec2.distanceSq(pointerData.move, pointerData.prev);
           break;
         default:
           pointerData.move.set(x, y);
           pointerData.end.set(x, y);
-          pointerData.distance = FVec2.distanceSq(pointerData.move, pointerData.prev);
+          pointerData.distance = Vec2.distanceSq(pointerData.move, pointerData.prev);
           break;
       }
 

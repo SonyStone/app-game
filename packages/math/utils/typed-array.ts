@@ -34,3 +34,8 @@ export type TypedArray =
   | Uint16Array
   | Uint32Array
   | Uint8ClampedArray;
+
+export interface NumberArray {
+  length: number;
+  [n: number]: number;
+}

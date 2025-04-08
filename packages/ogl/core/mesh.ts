@@ -1,4 +1,4 @@
-import type { FVec2 } from '@packages/math';
+import type { Vec2 } from '@packages/math';
 import { GL_DRAW_ARRAYS_MODE } from '@packages/webgl/static-variables';
 import { Mat3 } from '../math/mat-3';
 import { Mat4 } from '../math/mat-4';
@@ -27,7 +27,7 @@ export interface RaycastHit {
   point: Vec3;
   faceNormal: Vec3;
   localFaceNormal: Vec3;
-  uv: FVec2;
+  uv: Vec2;
   localNormal: Vec3;
   normal: Vec3;
 }

@@ -1,6 +1,6 @@
 import { useCamera } from '@packages/three-examples/Camera.provider';
+import Navigation from '@packages/utils/navigation';
 import { Title } from '@solidjs/meta';
-import Navigation from './navigation';
 import { routes } from './routes';
 
 export default function HomePage() {

@@ -1,5 +1,4 @@
-import type { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
-import getDistance from './get-distance';
+import { Vec2 } from '@packages/math';
 /**
  * @private
  * calculate the scale factor between two pointersets
@@ -8,6 +7,6 @@ import getDistance from './get-distance';
  * @param {Array} end array of pointers
  * @return {Number} scale
  */
-export default function getScale(start: Vec2Tuple[], end: Vec2Tuple[]) {
-  return getDistance(end[0], end[1]) / getDistance(start[0], start[1]);
+export default function getScale(start: Vec2[], end: Vec2[]) {
+  return Vec2.distance(end[0], end[1]) / Vec2.distance(start[0], start[1]);
 }

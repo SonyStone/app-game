@@ -805,10 +805,12 @@ export const scale = <T extends TypedArray>(m: T, [v0, v1, v2]: Vec3Tuple, dst: 
   dst[1 + offset] = v0 * m[0 * 4 + 1 + offset];
   dst[2 + offset] = v0 * m[0 * 4 + 2 + offset];
   dst[3 + offset] = v0 * m[0 * 4 + 3 + offset];
+
   dst[4 + offset] = v1 * m[1 * 4 + 0 + offset];
   dst[5 + offset] = v1 * m[1 * 4 + 1 + offset];
   dst[6 + offset] = v1 * m[1 * 4 + 2 + offset];
   dst[7 + offset] = v1 * m[1 * 4 + 3 + offset];
+
   dst[8 + offset] = v2 * m[2 * 4 + 0 + offset];
   dst[9 + offset] = v2 * m[2 * 4 + 1 + offset];
   dst[10 + offset] = v2 * m[2 * 4 + 2 + offset];

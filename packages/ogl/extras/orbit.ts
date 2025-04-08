@@ -3,7 +3,7 @@
 // TODO: make scroll zoom more accurate than just >/< zero
 // TODO: be able to pass in new camera position
 
-import { FVec2 } from '@packages/math';
+import { Vec2 } from '@packages/math';
 import { makeEventListenerStack } from '@solid-primitives/event-listener';
 import { onMount } from 'solid-js';
 import type { Camera } from '../core/camera';
@@ -12,8 +12,8 @@ import { Vec3 } from '../math/vec-3';
 
 const STATE = { NONE: -1, ROTATE: 0, DOLLY: 1, PAN: 2, DOLLY_PAN: 3 };
 const tempVec3 = /* @__PURE__ */ new Vec3();
-const tempVec2a = /* @__PURE__ */ new FVec2();
-const tempVec2b = /* @__PURE__ */ new FVec2();
+const tempVec2a = /* @__PURE__ */ new Vec2();
+const tempVec2b = /* @__PURE__ */ new Vec2();
 
 export type ZoomStyle = 'dolly' | 'fov';
 
@@ -168,9 +168,9 @@ export class Orbit {
     // Everything below here just updates panDelta and sphericalDelta
     // Using those two objects' values, the orbit is calculated
 
-    const rotateStart = new FVec2();
-    const panStart = new FVec2();
-    const dollyStart = new FVec2();
+    const rotateStart = new Vec2();
+    const panStart = new Vec2();
+    const dollyStart = new Vec2();
 
     let state = STATE.NONE;
     this.mouseButtons = { ORBIT: 0, ZOOM: 1, PAN: 2 };

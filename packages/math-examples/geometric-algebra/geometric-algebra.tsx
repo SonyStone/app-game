@@ -2,11 +2,12 @@ import * as v3 from '@packages/math/v3-builder';
 import { animationFrameScheduler, interval, map, ObservableInput, of, from as rxFrom, switchMap, tap } from 'rxjs';
 import { createMemo, createSignal, from, observable } from 'solid-js';
 
-import { FVec2, Vec3 } from '@packages/math';
+import { Vec2, Vec3 } from '@packages/math';
+import { TypedArray } from '@packages/math/utils/typed-array';
 import { ganja } from './align';
 
-const p = (v: number[] | Float32Array) => v.join(',');
-const j = (v: any[]) => v.join(' ');
+const p = (v: TypedArray) => v.join(',');
+const j = (v: (number | string)[]) => v.join(' ');
 
 const frameTimer = (start: number) => interval(0, animationFrameScheduler).pipe(map((v) => start + v));
 
@@ -28,35 +29,48 @@ export default function GeometricAlgebra() {
   console.log('v3', v3);
 
   function Line1() {
-    const v_1 = FVec2.create(1, 0);
-    const v_2 = FVec2.create(0, 1);
+    // looks ugly, but one buffer for all vectors
+    const buffer = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 4);
+
+    const v_1 = new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 0)).set(1, 0);
+    const v_2 = new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 1)).set(0, 1);
     const v_3 = Vec3.create();
 
-    const l = `cross product |e1 x e2| =${v_3.cross2(v_1, v_2).len()}`;
+    const l = `cross product |e1 x e2| =${v_3.cross2(v_1.value, v_2.value).len()}`;
 
     return (
       <>
         <polyline
           class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round]"
-          points={j([p(zero), p(v_1)])}
+          points={j([p(zero), v_1.toString()])}
         />
         <polyline
           class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round]"
-          points={j([p(zero), p(v_2)])}
+          points={j([p(zero), v_2.toString()])}
         />
 
         <polyline
           class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round] [stroke-dasharray:0.1_0.05]"
-          points={j([p(v_1), p(FVec2.add(v_1, v_2))])}
+          points={j([
+            v_1.toString(),
+            new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 2))
+              .addFrom(v_1, v_2)
+              .toString()
+          ])}
         />
         <polyline
           class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round] [stroke-dasharray:0.1_0.05]"
-          points={j([p(v_2), p(FVec2.add(v_1, v_2))])}
+          points={j([
+            v_2.toString(),
+            new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 3))
+              .addFrom(v_1, v_2)
+              .toString()
+          ])}
         />
-        <text class="bg-white fill-current" x={v_1[0] + 0.025} y={v_1[1] - 0.025}>
+        <text class="bg-white fill-current" x={v_1.x + 0.025} y={v_1.y - 0.025}>
           e1
         </text>
-        <text class="bg-white fill-current" x={v_2[0] + 0.025} y={v_2[1] - 0.025}>
+        <text class="bg-white fill-current" x={v_2.x + 0.025} y={v_2.y - 0.025}>
           e2
         </text>
         <text class="bg-white fill-current" x="1.05" y="0.25">
@@ -70,49 +84,51 @@ export default function GeometricAlgebra() {
   }
 
   function Line2() {
-    const a = 0.663325;
-    const b = 1.2;
+    // const a = 0.663325;
+    // const b = 1.2;
 
     const v_1 = createMemo(() => {
       const a = Math.sin((value() ?? 0) / 60) / 8 + 0.5;
       const b = Math.cos((value() ?? 0) / 60) / 8 + 1.2;
-      return FVec2.create(a, b);
+      return new Vec2().set(a, b);
     });
 
     const v_2 = createMemo(() => {
       const b = Math.sin((value() ?? 0) / 60) / 8 + 0.5;
       const a = Math.cos((value() ?? 0) / 60) / 8 + 1.2;
-      return FVec2.create(a, b);
+      return new Vec2().set(a, b);
     });
 
-    const text1 = createMemo(() => `cross product |a × b| = ${Vec3.create().cross2(v_1(), v_2()).len().toFixed(4)}`);
+    const text1 = createMemo(
+      () => `cross product |a × b| = ${Vec3.create().cross2(v_1().value, v_2().value).len().toFixed(4)}`
+    );
     const text2 = createMemo(
-      () => `outer product a ∧ b = (${(v_1()[0] * v_2()[1] - v_1()[1] * v_2()[0]).toFixed(4)}) (e1 ∧ e2)`
+      () => `outer product a ∧ b = (${(v_1().x * v_2().y - v_1().x * v_2().y).toFixed(4)}) (e1 ∧ e2)`
     );
 
     return (
       <>
         <polyline
           class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round]"
-          points={j([p(zero), p(v_1())])}
+          points={j([p(zero), v_1().toString()])}
         />
         <polyline
           class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round]"
-          points={j([p(zero), p(v_2())])}
+          points={j([p(zero), v_2().toString()])}
         />
 
         <polyline
           class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round] [stroke-dasharray:0.1_0.05]"
-          points={j([p(v_1()), p(FVec2.add(v_1(), v_2()))])}
+          points={j([v_1().toString(), new Vec2().addFrom(v_1(), v_2()).toString()])}
         />
         <polyline
           class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round] [stroke-dasharray:0.1_0.05]"
-          points={j([p(v_2()), p(FVec2.add(v_1(), v_2()))])}
+          points={j([v_2().toString(), new Vec2().addFrom(v_1(), v_2()).toString()])}
         />
-        <text class="bg-white fill-current" x={v_1()[0] + 0.025} y={v_1()[1] - 0.025}>
+        <text class="bg-white fill-current" x={v_1().x + 0.025} y={v_1().y - 0.025}>
           a
         </text>
-        <text class="bg-white fill-current" x={v_2()[0] + 0.025} y={v_2()[1] - 0.025}>
+        <text class="bg-white fill-current" x={v_2().x + 0.025} y={v_2().y - 0.025}>
           b
         </text>
         <text class="bg-white fill-current" x="1.6" y="1">

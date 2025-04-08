@@ -1,4 +1,4 @@
-import { FVec2 } from '@packages/math';
+import { Vec2 } from '@packages/math';
 import { Mesh, OGLRenderingContext, Program, RenderTarget, SwapBuffering, Triangle } from '@packages/ogl';
 import { RenderTargetOptions } from '@packages/ogl/core/render-target';
 import { createTimer } from '@packages/utils/timeout';
@@ -41,7 +41,7 @@ export const createSwapRenderTarget = ({
     const blendMode = { value: BlendModes.NORMAL };
     const opacity = { value: 0.1 };
     const geometry = new Triangle(gl);
-    const mouse = new FVec2();
+    const mouse = new Vec2();
     const program = new Program(gl, {
       vertex,
       fragment,

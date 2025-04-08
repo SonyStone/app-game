@@ -1,6 +1,6 @@
 export const MOBILE_REGEX = /mobile|tablet|ip(ad|hone|od)|android/i;
 
-export const SUPPORT_TOUCH = 'ontouchstart' in window;
+export const SUPPORT_TOUCH = typeof window !== 'undefined' ? 'ontouchstart' in window : false;
 // export const SUPPORT_POINTER_EVENTS = prefixed(window, 'PointerEvent') !== undefined;
 export const SUPPORT_ONLY_TOUCH = SUPPORT_TOUCH && MOBILE_REGEX.test(navigator.userAgent);
 

@@ -44,5 +44,11 @@ export const routes: Routes[] = [
     name: 'JavaScript Buffers',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./buffers/buffers'))
+  },
+  {
+    path: '/m2x3',
+    name: 'Matrix 2x3 - Transform Matrix',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./m2x3'))
   }
 ];

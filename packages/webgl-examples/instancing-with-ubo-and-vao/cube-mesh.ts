@@ -2,8 +2,6 @@ import * as m4 from '@packages/math/m4';
 import { createWireframeIndex } from '@packages/paint/paint-1/create-brush-mesh';
 import { VertexAttribDivisor, VertexAttribPointer } from './vertex-attrib-pointer';
 
-export const BYTE = 4;
-
 export const CUBE = {
   geometry: {
     target: WebGL2RenderingContext.ARRAY_BUFFER,
@@ -39,9 +37,9 @@ export const CUBE = {
   ]),
   // prettier-ignore
   vertexAttribPointers: [
-    { index: 0, size: 3, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: (3 + 3 + 2) * BYTE, offset: 0 },
-    { index: 1, size: 3, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: (3 + 3 + 2) * BYTE, offset: 3 * BYTE },
-    { index: 2, size: 2, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: (3 + 3 + 2) * BYTE, offset: (3 + 3) * BYTE }
+    { index: 0, size: 3, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: (3 + 3 + 2) * Float32Array.BYTES_PER_ELEMENT, offset: 0 },
+    { index: 1, size: 3, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: (3 + 3 + 2) * Float32Array.BYTES_PER_ELEMENT, offset: 3 * Float32Array.BYTES_PER_ELEMENT },
+    { index: 2, size: 2, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: (3 + 3 + 2) * Float32Array.BYTES_PER_ELEMENT, offset: (3 + 3) * Float32Array.BYTES_PER_ELEMENT }
   ] as VertexAttribPointer[],
   element: {
     target: WebGL2RenderingContext.ELEMENT_ARRAY_BUFFER,
@@ -90,11 +88,11 @@ export const INSTANCES = {
 
   // prettier-ignore
   instanceAttribPointers: [
-    { index: 4 + 0, size: 4, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: INSTANCES_STRIDE * BYTE, offset: 0 * 4 * BYTE, divisor: 1 },
-    { index: 4 + 1, size: 4, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: INSTANCES_STRIDE * BYTE, offset: 1 * 4 * BYTE, divisor: 1 },
-    { index: 4 + 2, size: 4, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: INSTANCES_STRIDE * BYTE, offset: 2 * 4 * BYTE, divisor: 1 },
-    { index: 4 + 3, size: 4, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: INSTANCES_STRIDE * BYTE, offset: 3 * 4 * BYTE, divisor: 1 },
-    { index: 8, size: 3, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: INSTANCES_STRIDE * BYTE, offset: 4 * 4 * BYTE, divisor: 1 },
+    { index: 4 + 0, size: 4, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: INSTANCES_STRIDE * Float32Array.BYTES_PER_ELEMENT, offset: 0 * 4 * Float32Array.BYTES_PER_ELEMENT, divisor: 1 },
+    { index: 4 + 1, size: 4, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: INSTANCES_STRIDE * Float32Array.BYTES_PER_ELEMENT, offset: 1 * 4 * Float32Array.BYTES_PER_ELEMENT, divisor: 1 },
+    { index: 4 + 2, size: 4, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: INSTANCES_STRIDE * Float32Array.BYTES_PER_ELEMENT, offset: 2 * 4 * Float32Array.BYTES_PER_ELEMENT, divisor: 1 },
+    { index: 4 + 3, size: 4, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: INSTANCES_STRIDE * Float32Array.BYTES_PER_ELEMENT, offset: 3 * 4 * Float32Array.BYTES_PER_ELEMENT, divisor: 1 },
+    { index: 8, size: 3, type: WebGL2RenderingContext.FLOAT, normalize: false, stride: INSTANCES_STRIDE * Float32Array.BYTES_PER_ELEMENT, offset: 4 * 4 * Float32Array.BYTES_PER_ELEMENT, divisor: 1 },
   ] as (VertexAttribPointer & VertexAttribDivisor)[]
 };
 

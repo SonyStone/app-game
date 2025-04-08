@@ -1,11 +1,11 @@
-import { FVec2 } from '@packages/math';
+import { Vec2 } from '@packages/math';
 import { Geometry } from '../core/geometry';
 import { Vec3 } from '../math/vec-3';
 
 // helper variables
 const vertex = /* @__PURE__ */ new Vec3();
 const normal = /* @__PURE__ */ new Vec3();
-const uv = /* @__PURE__ */ new FVec2();
+const uv = /* @__PURE__ */ new Vec2();
 const point = /* @__PURE__ */ new Vec3();
 
 export class Tube extends Geometry {

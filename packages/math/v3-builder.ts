@@ -428,7 +428,7 @@ const angle = (ctor: ReturnType<typeof Vec3Builder>) => {
     tempA.copy(a).normalize();
     tempB.copy(b).normalize();
 
-    let cosine = tempA.dot(tempB);
+    const cosine = tempA.dot(tempB);
 
     if (cosine > 1.0) {
       return 0;

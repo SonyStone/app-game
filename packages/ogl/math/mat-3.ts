@@ -1,3 +1,4 @@
+import { TypedArray } from '@packages/math/utils/typed-array';
 import * as Mat3Func from './functions/mat-3-func';
 import { Mat4Tuple } from './mat-4';
 import { QuatTuple } from './quat';
@@ -5,18 +6,22 @@ import { Vec2Tuple } from './vec-2_old';
 import { Vec3Tuple } from './vec-3';
 
 export type Mat3Tuple =
+  // prettier-ignore
   | [
-      m00: number,
-      m01: number,
-      m02: number,
-      m10: number,
-      m11: number,
-      m12: number,
-      m20: number,
-      m21: number,
-      m22: number
+      m00: number, m01: number, m02: number,
+      m10: number, m11: number, m12: number,
+      m20: number, m21: number, m22: number
     ]
-  | number[];
+  | TypedArray;
+
+export type Mat3Std140Tuple =
+  // prettier-ignore
+  | [
+      m00: number, m01: number, m02: number, _pad0: number,
+      m10: number, m11: number, m12: number, _pad1: number,
+      m20: number, m21: number, m22: number, _pad2: number
+    ]
+  | TypedArray;
 
 export class Mat3 extends Array {
   constructor(m00 = 1, m01 = 0, m02 = 0, m10 = 0, m11 = 1, m12 = 0, m20 = 0, m21 = 0, m22 = 1) {

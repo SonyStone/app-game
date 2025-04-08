@@ -1,9 +1,8 @@
-import { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
+import { Vec2 } from '@packages/math';
 import { DIRECTION, INPUT_CANCEL, INPUT_END, INPUT_MOVE, INPUT_START } from './input-consts';
 import { createComputeDelta } from './input/compute-delta';
 import getAngle from './input/get-angle';
 import getDirection from './input/get-direction';
-import getDistance from './input/get-distance';
 import getRotation from './input/get-rotation';
 import getScale from './input/get-scale';
 import getVelocity from './input/get-velocity';
@@ -32,17 +31,17 @@ export interface HammerInput {
   deltaTime?: number;
 
   /** start center */
-  start: Vec2Tuple;
+  start: Vec2;
 
-  center: Vec2Tuple;
-  pointers: Vec2Tuple[];
+  center: Vec2;
+  pointers: Vec2[];
   changedPointers: MinimumInputEvent[];
   pointerType: MinimumInputEvent['pointerType'];
   angle?: number;
   distance?: number;
 
   /** Movement of the X and Y axises. */
-  delta: Vec2Tuple;
+  delta: Vec2;
 
   /** Scaling that has been done when multi-touch. 1 on a single touch. */
   scale?: number;
@@ -54,7 +53,7 @@ export interface HammerInput {
   pressure?: number;
 
   /** tilt that has been done with stylus. [0, 0] with a mouse */
-  tilt: Vec2Tuple;
+  tilt: Vec2;
 
   altitudeAngle: number;
 
@@ -65,7 +64,7 @@ export interface HammerInput {
 
   /**  */
   offsetDirection?: DIRECTION;
-  overallVelocity: Vec2Tuple;
+  overallVelocity: Vec2;
 }
 
 interface EventsHandlerOptions {
@@ -83,7 +82,7 @@ export function createPointerEventsHandler(
     now: Date.now
   }
 ) {
-  let pointersMap = new Map<number, MinimumInputEvent>();
+  const pointersMap = new Map<number, MinimumInputEvent>();
   let firstInput: ClonedInputData | undefined = undefined;
   let firstMultiple: ClonedInputData | undefined = undefined;
   const computeDelta = createComputeDelta();
@@ -91,6 +90,7 @@ export function createPointerEventsHandler(
   function pointerEventInputHandler(event: MinimumInputEvent) {
     const eventType = getEventType(event);
     const removePointer = getRemovePointer(pointersMap, event, eventType);
+
     const changedPointers = [event];
     const changedPointersLen = changedPointers.length;
     const pointersLen = pointersMap.size;
@@ -106,7 +106,7 @@ export function createPointerEventsHandler(
       firstMultiple = undefined;
     }
 
-    const pointers = [...pointersMap.values()].map((event) => [event.clientX, event.clientY] as Vec2Tuple);
+    const pointers = [...pointersMap.values()].map((event) => new Vec2().set(event.clientX, event.clientY));
     const center = getCenter(pointers);
     const timeStamp = options.now();
     const delta = computeDelta.computeDelta(center, eventType);
@@ -141,13 +141,13 @@ export function createPointerEventsHandler(
 
     const start = firstInput.center;
     const angle = getAngle(offsetCenter, center);
-    const distance = getDistance(offsetCenter, center);
+    const distance = Vec2.distance(offsetCenter, center);
 
     const offsetDirection = getDirection(delta);
     const overallVelocity = getVelocity(deltaTime, delta);
 
     const pressure = event.pressure;
-    const tilt = [event.tiltX, event.tiltY] as Vec2Tuple;
+    const tilt = new Vec2().set(event.tiltX, event.tiltY);
 
     const altitudeAngle = event.altitudeAngle ?? DEFAULT_ALTITUDE_ANGLE;
     const azimuthAngle = event.azimuthAngle ?? 0;
@@ -301,26 +301,24 @@ function getIsFirstFinal(eventType: HammerInput['eventType'], changedPointersLen
   };
 }
 
-function getCenter(pointers: Vec2Tuple[]): Vec2Tuple {
+function getCenter(pointers: Vec2[]): Vec2 {
   const pointers_length = pointers.length;
 
   if (pointers_length === 0) {
-    return [0, 0] as Vec2Tuple;
+    return new Vec2().set(0, 0);
   }
 
   if (pointers_length === 1) {
-    return [pointers[0][0], pointers[0][1]];
+    return new Vec2().set(pointers[0].x, pointers[0].y);
   }
 
-  const center = [0, 0];
+  const center = new Vec2().set(0, 0);
 
   for (const pointer of pointers) {
-    center[0] += pointer[0];
-    center[1] += pointer[1];
+    center.add(pointer);
   }
 
-  center[0] /= pointers_length;
-  center[1] /= pointers_length;
+  center.divScalar(pointers_length);
 
-  return center as Vec2Tuple;
+  return center;
 }

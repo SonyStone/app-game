@@ -4,6 +4,7 @@ import { Routes } from '@packages/utils/routes.interface';
 import { A } from '@solidjs/router';
 import { For, lazy } from 'solid-js';
 import instancingWithUBOandVAOThumbnail from './instancing-with-ubo-and-vao/image.png?url';
+import tiledMaphumbnail from './tiled-map/image.png?url';
 
 export const routes = [
   (() => {
@@ -64,6 +65,16 @@ export const routes = [
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} thumbnail={instancingWithUBOandVAOThumbnail} />,
       component: lazy(() => import('@packages/webgl-examples/instancing-with-ubo-and-vao/instancing-with-ubo-and-vao'))
+    };
+  })(),
+  (() => {
+    const path = '/tiled-map';
+    const name = 'Tiled Map or Chunk-Based Rendering';
+    return {
+      path,
+      name,
+      Preview: () => <Thumbnail href={'.' + path} name={name} thumbnail={tiledMaphumbnail} />,
+      component: lazy(() => import('@packages/webgl-examples/tiled-map/tiled-map'))
     };
   })()
 ] as const;

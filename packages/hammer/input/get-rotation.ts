@@ -1,4 +1,4 @@
-import type { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
+import { Vec2 } from '@packages/math';
 import getAngle from './get-angle';
 
 /**
@@ -8,6 +8,6 @@ import getAngle from './get-angle';
  * @param {Vec2Tuple[]} end array of pointers
  * @return {Number} rotation
  */
-export default function getRotation(start: Vec2Tuple[], end: Vec2Tuple[]) {
+export default function getRotation(start: Vec2[], end: Vec2[]) {
   return getAngle(end[1], end[0]) + getAngle(start[1], start[0]);
 }
