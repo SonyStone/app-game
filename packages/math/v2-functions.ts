@@ -286,7 +286,7 @@ export function random(out: NumberArray, scale: number = 1): void {
  * @param b The second vector.
  * @returns True if the vectors are equal, false otherwise.
  */
-export function isEquals(a: Readonly<NumberArray>, b: Readonly<NumberArray>): boolean {
+export function isEqual(a: Readonly<NumberArray>, b: Readonly<NumberArray>): boolean {
   return a[X] === b[X] && a[Y] === b[Y];
 }
 
@@ -297,7 +297,7 @@ export function isEquals(a: Readonly<NumberArray>, b: Readonly<NumberArray>): bo
  * @param b The second vector.
  * @returns True if the vectors are equal, false otherwise.
  */
-export function isEqualApprox(a: Readonly<NumberArray>, b: Readonly<NumberArray>, epsilon = 0.00001): boolean {
+export function isEqualApprox(a: Readonly<NumberArray>, b: Readonly<NumberArray>, epsilon = 1e-5): boolean {
   return Math.abs(a[X] - b[X]) < epsilon && Math.abs(a[Y] - b[Y]) < epsilon;
 }
 
@@ -308,8 +308,8 @@ export const isZero = (v: Readonly<NumberArray>): boolean => {
   return v[X] === 0 && v[Y] === 0;
 };
 
-/** When values are very small, like less then 0.000001, just make it zero. */
-export function zeroApprox(out: NumberArray, epsilon = 1e-6): void {
+/** When values are very small, like less then 0.00001, just make it zero. */
+export function zeroApprox(out: NumberArray, epsilon = 1e-5): void {
   if (Math.abs(out[X]) <= epsilon) {
     out[X] = 0;
   }

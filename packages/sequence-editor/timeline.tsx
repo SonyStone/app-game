@@ -23,7 +23,7 @@ export function Timeline(props: { animation?: Animation }) {
     setFrames(props.animation?.data?.frames ?? []);
   });
 
-  const [position, setPosition] = createSignal<Vec2>(new Vec2().set(0, 0), { equals: (v1, v2) => !v1.isEquals(v2) });
+  const [position, setPosition] = createSignal<Vec2>(new Vec2().set(0, 0), { equals: (v1, v2) => !v1.isEqual(v2) });
 
   let elementRef: HTMLElement;
 

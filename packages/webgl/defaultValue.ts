@@ -1,4 +1,3 @@
-import { m3, m4 } from '@packages/math';
 import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
 
 /**
@@ -55,9 +54,9 @@ export function defaultValue(
     // case GL_DATA_TYPE.FLOAT_MAT2:
     //   return m2.identity();
     case GL_DATA_TYPE.FLOAT_MAT3:
-      return m3.createFMat3();
+      return new Float32Array(9);
     case GL_DATA_TYPE.FLOAT_MAT4:
-      return m4.identity();
+      return new Float32Array(16);
   }
 
   throw new Error(`Wrong type "${type}"`);

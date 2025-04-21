@@ -1,5 +1,5 @@
 import { Mat3 } from '@packages/ogl';
-import { TypedArray, TypedArrayConstructor } from './utils/typed-array';
+import { NumberArray, TypedArrayConstructor } from './utils/typed-array';
 import { type Vec2Tuple } from './v2';
 import { Vec3, Vec3Tuple } from './v3';
 
@@ -30,8 +30,7 @@ export type Mat4Tuple =
       m32: number,
       m33: number
     ]
-  | number[]
-  | TypedArray;
+  | NumberArray;
 
 /**
  * 4x4 Matrix math math functions.

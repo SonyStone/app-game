@@ -1,6 +1,5 @@
 import { Mat3Builder, Mat3Tuple } from './m3-builder';
-import { TypedArray } from './utils/typed-array';
-import { Vec2Tuple } from './v2-builder';
+import { NumberArray } from './utils/typed-array';
 
 /*#__PURE__*/
 export class FMat3 extends Mat3Builder(Float32Array) {}
@@ -68,7 +67,7 @@ function identity(out: Mat3Tuple): void {
 }
 
 // prettier-ignore
-function translate(out: Mat3Tuple, a: Mat3Tuple, v: Vec2Tuple): Mat3Tuple {
+function translate(out: Mat3Tuple, a: Mat3Tuple, v: NumberArray): Mat3Tuple {
   const a00 = a[M00]; const a01 = a[M01]; const a02 = a[M02];
   const a10 = a[M10]; const a11 = a[M11]; const a12 = a[M12];
   const a20 = a[M20]; const a21 = a[M21]; const a22 = a[M22];
@@ -90,8 +89,14 @@ function translate(out: Mat3Tuple, a: Mat3Tuple, v: Vec2Tuple): Mat3Tuple {
   return out;
 }
 
-export class Mat3 {
-  constructor(public value: TypedArray = new Float32Array(6)) {}
+export class Mat3<T extends NumberArray = NumberArray> {
+  static ELEMENTS = 9;
+
+  constructor(public value: T = new Float32Array(9) as unknown as T) {}
+
+  static create(): Mat3<Float32Array> {
+    return new Mat3().identity() as Mat3<Float32Array>;
+  }
 
   /**
    * Set the components of a mat3 to the given values
@@ -128,7 +133,7 @@ export class Mat3 {
    * @param v vector to translate by
    * @param m the matrix to translate
    */
-  translate(v: Vec2Tuple, m: Mat3 = this): this {
+  translate(v: NumberArray, m: Mat3 = this): this {
     translate(this.value, m.value, v);
     return this;
   }

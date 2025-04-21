@@ -1,4 +1,4 @@
-import { m3, Vec2 } from '@packages/math';
+import { Vec2 } from '@packages/math';
 import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
 import { createBuffer } from '@packages/webgl/webgl-objects/buffer';
 import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
@@ -71,11 +71,12 @@ export default function Matrices2d() {
     program.color(color);
 
     let matrix = projection(canvas.width, canvas.height);
-    {
-      matrix = m3.translate(matrix, translation());
-      matrix = m3.rotateY(matrix, rotation);
-      matrix = m3.scale(matrix, scale);
-    }
+    // TODO: use m3
+    // {
+    //   matrix = m3.translate(matrix, translation());
+    //   matrix = m3.rotateY(matrix, rotation);
+    //   matrix = m3.scale(matrix, scale);
+    // }
 
     program.matrix(matrix);
 

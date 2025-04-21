@@ -1,34 +1,8 @@
-import { Vec2Tuple } from '@packages/math-2/v2';
-import { getRandomValueFromList } from '@packages/utils/get-random-from-list';
+import { NumberArray } from '@packages/math/utils/typed-array';
+import { getRandomFromList } from '@packages/utils/get-random-from-list';
 import { createRoot } from 'solid-js';
+import { colors } from './colors';
 import type { DebugElement } from './use-debug-layer';
-
-const colors = {
-  light: [
-    '#264653', // Dark Cyan
-    '#2A9D8F', // Teal
-    '#E76F51', // Red-Orange
-    '#D62828', // Red
-    '#457B9D', // Steel Blue
-    '#1D3557', // Prussian Blue
-    '#000000', // Black
-    '#222222', // Very dark gray
-    '#333333', // Dark gray
-    '#444444' // Medium-dark gray
-  ],
-  dark: [
-    '#F1FAEE', // Beige
-    '#A8DADC', // Light Blue
-    '#FFFFFF', // White
-    '#EEEEEE', // Very light gray
-    '#DDDDDD', // Light gray
-    '#CED4DA', // Silver
-    '#ADB5BD', // Light Gray
-    '#6C757D', // Gray
-    '#007BFF', // Blue
-    '#E9C46A' // Yellow
-  ]
-};
 
 export function useDebugCircules({
   activeElements,
@@ -40,7 +14,7 @@ export function useDebugCircules({
   addElement: (id: string, element: SVGElement) => void;
 }) {
   // Update or create a tracked debug point with specific ID
-  const updateCircule = (id: string, point: Vec2Tuple, color = getRandomValueFromList(colors[theme]), size = 20) => {
+  const updateCircule = (id: string, point: NumberArray, color = getRandomFromList(colors[theme]), size = 20) => {
     const data = activeElements.get(id);
 
     if (!data) {

@@ -1,5 +1,4 @@
-import { TypedArray, TypedArrayConstructor } from './utils/typed-array';
-import { type Vec2Tuple } from './v2';
+import { NumberArray, TypedArrayConstructor } from './utils/typed-array';
 
 /**
  * Here is a representation of it:
@@ -27,7 +26,7 @@ export type Mat3Tuple =
       m10: number, m11: number, m12: number,
       m20: number, m21: number, m22: number
     ]
-  | TypedArray;
+  | NumberArray;
 
 /**
  * 3x3 Matrix math math functions.
@@ -288,7 +287,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      * @param a _mut_ The matrix.
      * @param v The vector.
      */
-    setTranslation(v: Vec2Tuple) {
+    setTranslation(v: Readonly<NumberArray>) {
       this[6] = v[0];
       this[7] = v[1];
       this[8] = 1;
@@ -301,7 +300,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      * entries.
      * @param {Mat3} m The matrix.
      */
-    getTranslation<T extends Vec2Tuple>(v: T): T {
+    getTranslation(v: NumberArray): NumberArray {
       v[0] = this[6];
       v[1] = this[7];
       return v;
@@ -330,7 +329,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      * @param {Mat3} m The matrix.
      * @param {number} axis The axis 0 = x, 1 = y;
      */
-    getAxis<T extends Vec2Tuple>(axis: number, v: T): T {
+    getAxis(axis: number, v: NumberArray): NumberArray {
       const off = axis * 3;
       v[0] = this[off + 0];
       v[1] = this[off + 1];
@@ -344,7 +343,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      * @param {Vec2Tuple} v the axis vector
      * @param {number} axis The axis  0 = x, 1 = y;
      */
-    setAxis(v: Vec2Tuple, axis: number = 0): this {
+    setAxis(v: NumberArray, axis: number = 0): this {
       const off = axis * 3;
       this[off + 0] = v[0];
       this[off + 1] = v[1];
@@ -359,7 +358,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      * @return {Mat3} The translation matrix.
      * @memberOf m3
      */
-    translation(v: Vec2Tuple): this {
+    translation(v: NumberArray): this {
       this[0] = 1;
       this[1] = 0;
       this[2] = 0;
@@ -382,7 +381,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      *     which to translate.
      * @memberOf m3
      */
-    translate(v: Vec2Tuple): this {
+    translate(v: NumberArray): this {
       const v0 = v[0];
       const v1 = v[1];
 
@@ -569,7 +568,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      *     three entries specifying the factor by which to scale in each dimension.
      * @memberOf m3
      */
-    scaling(v: Vec2Tuple): this {
+    scaling(v: NumberArray): this {
       this[0] = v[0];
       this[1] = 0;
       this[2] = 0;
@@ -598,7 +597,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      *     factor by which to scale in each dimension.
      * @memberOf m3
      */
-    scale(v: Vec2Tuple): this {
+    scale(v: NumberArray): this {
       const v0 = v[0];
       const v1 = v[1];
 
@@ -620,7 +619,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      * @param v __mut__ The point.
      * @param m The matrix.
      */
-    transformPoint(v: Vec2Tuple): this {
+    transformPoint(v: NumberArray): this {
       const v0 = v[0];
       const v1 = v[1];
       const d = v0 * this[0 * 4 + 3] + v1 * this[1 * 4 + 3] + this[3 * 4 + 3];
@@ -640,7 +639,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      * @param m __mut__ The matrix.
      * @param v The direction.
      */
-    transformDirection(v: Vec2Tuple): this {
+    transformDirection(v: NumberArray): this {
       const v0 = v[0];
       const v1 = v[1];
       const v2 = v[2];
@@ -665,7 +664,7 @@ export const Mat3Builder = (ctor: TypedArrayConstructor) =>
      * @param v __mut__ The normal.
      * @param m The matrix.
      */
-    transformNormal<T extends Vec2Tuple>(v: T): T {
+    transformNormal<T extends NumberArray>(v: T): T {
       const mi = Mat3.#mi.copy(this).invert();
 
       const v0 = v[0];

@@ -1,40 +1,45 @@
+import { createStruct } from '@packages/math/utils/create-struct';
+import { NumberArray } from '@packages/math/utils/typed-array';
 import { Vec2 } from '@packages/math/v2';
 import { access, MaybeAccessor, noop } from '@solid-primitives/utils';
 import { usePointerDownHandler } from './use-pointer-down-handler';
+
+const [{ screenPointStart, screenPointMove, relativeChange, startPostition }] = createStruct({
+  screenPointStart: [Vec2, Float32Array],
+  screenPointMove: [Vec2, Float32Array],
+  startPostition: [Vec2, Float32Array],
+  relativeChange: [Vec2, Float32Array]
+});
 
 export function usePanHandler({
   translation = Vec2.create(),
   setTranslation = noop
 }: {
-  translation?: MaybeAccessor<Vec2>;
-  setTranslation?: (value: Vec2) => void;
+  translation?: MaybeAccessor<Vec2<NumberArray>>;
+  setTranslation?: (value: Vec2<NumberArray>) => void;
   setTransform?: (value: string) => void;
 } = {}) {
-  let startPointer: Vec2 | null = null;
-  let startTranslation: Vec2 = Vec2.create();
-
   return {
     handlePointerDown: usePointerDownHandler({
       // on pointer down on the button, add listeners to track pointer movement
       onPointerDown: (e: PointerEvent) => {
         window.getSelection()?.removeAllRanges();
-        startPointer = Vec2.create(e.clientX, e.clientY);
-        startTranslation = access(translation);
+        screenPointStart.set(e.clientX, e.clientY);
+        startPostition.copy(access(translation));
       },
       // update the matrix on pointer move with current pointer coordinates
       onPointerMove: (e: PointerEvent) => {
-        if (!startPointer) return;
-        const client = Vec2.create(e.clientX, e.clientY);
+        screenPointMove.set(e.clientX, e.clientY);
 
         // calculate the relative change
-        const d = new Vec2().subFrom(client, startPointer);
-        const newTranslation: Vec2 = new Vec2().addFrom(startTranslation, d);
+        relativeChange.subFrom(screenPointMove, screenPointStart);
+
+        const newTranslation = access(translation).addFrom(startPostition, relativeChange);
         setTranslation(newTranslation);
       },
       // when pointer is released, disable tracking
       onPointerUp: () => {
-        if (!startPointer) return;
-        startPointer = null;
+        screenPointStart.set(0, 0);
       }
     })
   };

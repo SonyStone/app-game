@@ -1,5 +1,5 @@
 import { Mat4Builder, type Mat4Tuple } from './m4-builder';
-import { TypedArray } from './utils/typed-array';
+import { NumberArray } from './utils/typed-array';
 import { FVec3 } from './v3';
 import { Vec3Tuple } from './v3-builder';
 
@@ -18,7 +18,7 @@ export type { Mat4Tuple };
  * @return {Mat4} -m.
  * @memberOf m4
  */
-export const negate = <T extends TypedArray>(m: T, dst: T) => {
+export const negate = <T extends NumberArray>(m: T, dst: T) => {
   dst[0] = -m[0];
   dst[1] = -m[1];
   dst[2] = -m[2];
@@ -45,7 +45,7 @@ export const negate = <T extends TypedArray>(m: T, dst: T) => {
  * @param a __mut__ The matrix. If not passed a new one is created.
  * @param dst The matrix.
  */
-export const copy = <T extends TypedArray>(a: T, dst: T) => {
+export const copy = <T extends NumberArray>(a: T, dst: T) => {
   dst[0] = a[0];
   dst[1] = a[1];
   dst[2] = a[2];
@@ -72,7 +72,7 @@ export const copy = <T extends TypedArray>(a: T, dst: T) => {
  * @param m __mut__ The matrix.
  * @return A copy of m.
  */
-export const clone = <T extends TypedArray>(m: T, dst: T): T => {
+export const clone = <T extends NumberArray>(m: T, dst: T): T => {
   dst[0] = m[0];
   dst[1] = m[1];
   dst[2] = m[2];
@@ -102,7 +102,7 @@ export const clone = <T extends TypedArray>(m: T, dst: T): T => {
  * @param dst __mut__ The matrix.
  * @return An n-by-n identity matrix.
  */
-export const identity = <T extends TypedArray>(dst: T, offset = 0) => {
+export const identity = <T extends NumberArray>(dst: T, offset = 0) => {
   dst[0 + offset] = 1;
   dst[1 + offset] = 0;
   dst[2 + offset] = 0;
@@ -161,7 +161,7 @@ export const transpose = (m: Mat4) => {
  * @param m __mut__ The matrix.
  * @return The inverse of m.
  */
-export const inverse = <T extends TypedArray>(m: T, dst: T) => {
+export const inverse = <T extends NumberArray>(m: T, dst: T) => {
   const m00 = m[0];
   const m01 = m[1];
   const m02 = m[2];
@@ -248,7 +248,7 @@ export const inverse = <T extends TypedArray>(m: T, dst: T) => {
  * @param a __mut__ The matrix on the left.
  * @param b The matrix on the right.
  */
-export const multiply = <T extends TypedArray>(a: T, b: T, dst: T) => {
+export const multiply = <T extends NumberArray>(a: T, b: T, dst: T) => {
   const a00 = a[0];
   const a01 = a[1];
   const a02 = a[2];
@@ -322,7 +322,7 @@ export const multiplyArray = (m: Mat4, arr: Mat4[]) => {
  * @param a __mut__ The matrix.
  * @param v The vector.
  */
-export const setTranslation = <T extends TypedArray>(m: T, v: Vec3Tuple) => {
+export const setTranslation = <T extends NumberArray>(m: T, v: Vec3Tuple) => {
   m[12] = v[0];
   m[13] = v[1];
   m[14] = v[2];
@@ -390,7 +390,7 @@ export const setAxis = (m: Mat4, v: Vec3Tuple, axis: number) => {
  *     of the far clipping plane.
  */
 export const perspective = (
-  m: TypedArray,
+  m: NumberArray,
   fieldOfViewYInRadians: number,
   aspect: number,
   zNear: number,
@@ -555,7 +555,7 @@ const zAxis = FVec3.create();
  * @param target The position meant to be viewed.
  * @param up A vector pointing up.
  */
-export const lookAt = <T extends TypedArray>(m: T, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple) => {
+export const lookAt = <T extends NumberArray>(m: T, eye: Vec3Tuple, target: Vec3Tuple, up: Vec3Tuple) => {
   zAxis.copy(eye).sub(target).normalize();
   xAxis.copy(up).cross(zAxis).normalize();
   yAxis.copy(zAxis).cross(xAxis).normalize();
@@ -587,7 +587,7 @@ export const lookAt = <T extends TypedArray>(m: T, eye: Vec3Tuple, target: Vec3T
  * @param v The vector by
  *     which to translate.
  */
-export const translate = <T extends TypedArray>(m: T, v: Vec3Tuple, dst: T, offset = 0): void => {
+export const translate = <T extends NumberArray>(m: T, v: Vec3Tuple, dst: T, offset = 0): void => {
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -625,7 +625,7 @@ export const translate = <T extends TypedArray>(m: T, v: Vec3Tuple, dst: T, offs
  * @param m __mut__ The matrix to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export const rotateX = <T extends TypedArray>(m: T, angleInRadians: number) => {
+export const rotateX = <T extends NumberArray>(m: T, angleInRadians: number) => {
   const m10 = m[4];
   const m11 = m[5];
   const m12 = m[6];
@@ -657,7 +657,7 @@ export const rotateX = <T extends TypedArray>(m: T, angleInRadians: number) => {
  * @param m __mut__ The matrix to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export const rotateY = <T extends TypedArray>(m: T, angleInRadians: number) => {
+export const rotateY = <T extends NumberArray>(m: T, angleInRadians: number) => {
   const m00 = m[0];
   const m01 = m[1];
   const m02 = m[2];
@@ -800,7 +800,7 @@ export const axisRotate = (m: Mat4, [x, y, z]: Vec3Tuple, angleInRadians: number
  * @param v A vector of three entries specifying the
  *     factor by which to scale in each dimension.
  */
-export const scale = <T extends TypedArray>(m: T, [v0, v1, v2]: Vec3Tuple, dst: T, offset = 0) => {
+export const scale = <T extends NumberArray>(m: T, [v0, v1, v2]: Vec3Tuple, dst: T, offset = 0) => {
   dst[0 + offset] = v0 * m[0 * 4 + 0 + offset];
   dst[1 + offset] = v0 * m[0 * 4 + 1 + offset];
   dst[2 + offset] = v0 * m[0 * 4 + 2 + offset];

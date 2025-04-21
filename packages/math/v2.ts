@@ -6,7 +6,7 @@ import * as v2 from './v2-functions';
  * First of all, this class is intended as a wrapper for working with
  * `ArrayBuffers`, `TypedArrays` and `WebGL`, `WebGPU`
  */
-export class Vec2<T extends NumberArray = Float32Array> {
+export class Vec2<T extends NumberArray = NumberArray> {
   static ELEMENTS = 2;
 
   constructor(public value: T = new Float32Array(2) as unknown as T) {}
@@ -19,8 +19,20 @@ export class Vec2<T extends NumberArray = Float32Array> {
     return v2.getY(this.value);
   }
 
-  static create(x: number = 0, y: number = 0): Vec2 {
-    return new Vec2().set(x, y);
+  static create(x: number = 0, y: number = x): Vec2<Float32Array> {
+    return new Vec2().set(x, y) as Vec2<Float32Array>;
+  }
+
+  static crossProduct(a: Readonly<Vec2>, b: Readonly<Vec2>): number {
+    return a.value[0] * b.value[1] - a.value[1] * b.value[0];
+  }
+
+  static dotProduct(a: Readonly<Vec2>, b: Readonly<Vec2>): number {
+    return a.value[0] * b.value[0] + a.value[1] * b.value[1];
+  }
+
+  static angle(a: Readonly<Vec2>, b: Readonly<Vec2>): Radians {
+    return Math.atan2(Vec2.crossProduct(a, b), Vec2.dotProduct(a, b)) as Radians;
   }
 
   /**
@@ -38,7 +50,7 @@ export class Vec2<T extends NumberArray = Float32Array> {
    * @param y The y value to set (default: 0).
    * @param z The z value to set (default: 0).
    */
-  set(x: number = 0, y: number = 0): this {
+  set(x: number = 0, y: number = x): this {
     v2.set(this.value, x, y);
     return this;
   }
@@ -243,8 +255,12 @@ export class Vec2<T extends NumberArray = Float32Array> {
    * @param vec The vector to compare with.
    * @returns True if the vectors are equal, false otherwise.
    */
-  isEquals(vec: Readonly<Vec2>): boolean {
-    return v2.isEquals(this.value, vec.value);
+  isEqual(vec: Readonly<Vec2>): boolean {
+    return v2.isEqual(this.value, vec.value);
+  }
+
+  isEqualApprox(vec: Readonly<Vec2>, epsilon: number = 1e-5): boolean {
+    return v2.isEqualApprox(this.value, vec.value, epsilon);
   }
 
   /** When values are very small, like less then 0.000001, just make it zero. */
@@ -287,6 +303,11 @@ export class Vec2<T extends NumberArray = Float32Array> {
     return v2.angleTo(a.value, b.value);
   }
 
+  perpendicular(): this {
+    v2.perpendicular(this.value, this.value);
+    return this;
+  }
+
   rotate(rad: Radians) {
     v2.rotate(this.value, this.value, this.value, rad);
     return this;
@@ -301,4 +322,21 @@ export class Vec2<T extends NumberArray = Float32Array> {
   toString(): string {
     return `${this.value[0]}, ${this.value[1]}`;
   }
+
+  toPath(): string {
+    return `${this.value[0]} ${this.value[1]}`;
+  }
 }
+
+export const VEC2_FLOAT32_BYTES = Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS;
+export const VEC2_FLOAT64_BYTES = Float64Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS;
+
+export const VEC2_INT8_BYTES = Int8Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS;
+export const VEC2_INT16_BYTES = Int16Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS;
+export const VEC2_INT32_BYTES = Int32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS;
+export const VEC2_BIG_INT64_BYTES = BigInt64Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS;
+
+export const VEC2_UINT8_BYTES = Uint8Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS;
+export const VEC2_UINT16_BYTES = Uint16Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS;
+export const VEC2_UINT32_BYTES = Uint32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS;
+export const VEC2_BIG_UINT64_BYTES = BigUint64Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS;

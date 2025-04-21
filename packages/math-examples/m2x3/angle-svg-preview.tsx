@@ -2,7 +2,7 @@ import { Radians } from '@packages/math/types';
 import { radToDeg } from '@packages/math/utils/trigonometry';
 import { createMemo, mergeProps } from 'solid-js';
 
-export function AngleSVGPreview(props: { angle: Radians; class?: string; radius?: number }) {
+export function SVGAnglePreview(props: { angle: Radians; class?: string; radius?: number }) {
   const merged = mergeProps({ angle: 0, radius: 100, class: '' }, props);
   const anglePoints = createMemo(() => {
     return {

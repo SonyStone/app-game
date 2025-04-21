@@ -50,5 +50,11 @@ export const routes: Routes[] = [
     name: 'Matrix 2x3 - Transform Matrix',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./m2x3'))
+  },
+  {
+    path: '/learn-solidjs-utils',
+    name: 'Learn Solidjs Utils',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./learn-solidjs-utils'))
   }
 ];

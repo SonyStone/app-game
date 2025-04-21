@@ -1,4 +1,4 @@
-import { NumberArray, TypedArray } from '@packages/math/utils/typed-array';
+import { NumberArray } from '@packages/math/utils/typed-array';
 
 /**
  * 3x3 Matrix math math functions.
@@ -55,8 +55,7 @@ type Mat3Tuple =
       m21: number,
       m22: number
     ]
-  | number[]
-  | Float32Array;
+  | NumberArray;
 
 export const createFMat3 = () => identity(new Float32Array(9) as Mat3Tuple);
 
@@ -64,7 +63,7 @@ export const createMat3 = () => identity(new Array(9) as Mat3Tuple);
 
 // Set the provided matrix values.
 // prettier-ignore
-export const set = <T extends TypedArray>(
+export const set = <T extends NumberArray>(
   dst: T,
   m00: number, m01: number, m02: number,
   m10: number, m11: number, m12: number,
@@ -83,7 +82,7 @@ export const set = <T extends TypedArray>(
  * @return {Mat3} -m.
  * @memberOf m3
  */
-export const negate = <T extends TypedArray>(m: Readonly<T>, dst: T) => {
+export const negate = <T extends NumberArray>(m: Readonly<T>, dst: T) => {
   for (let i = 0; i < m.length; i++) {
     dst[i] = -m[i];
   }
@@ -95,7 +94,7 @@ export const negate = <T extends TypedArray>(m: Readonly<T>, dst: T) => {
  * @param {Mat3} m The matrix to.
  * @memberOf m3
  */
-export const copy = <T extends TypedArray>(m: Readonly<T>, dst: T) => {
+export const copy = <T extends NumberArray>(m: Readonly<T>, dst: T) => {
   for (let i = 0; i < m.length; i++) {
     dst[i] = m[i];
   }
@@ -111,7 +110,7 @@ export const copy = <T extends TypedArray>(m: Readonly<T>, dst: T) => {
  * @memberOf m3
  */
 // prettier-ignore
-export const identity = <T extends TypedArray>(dst: T, offset = 0) => {
+export const identity = <T extends NumberArray>(dst: T, offset = 0) => {
   dst[0 + offset] = 1; dst[1 + offset] = 0; dst[2 + offset] = 0;
   dst[3 + offset] = 0; dst[4 + offset] = 1; dst[5 + offset] = 0;
   dst[6 + offset] = 0; dst[7 + offset] = 0; dst[8 + offset] = 1;
@@ -146,7 +145,7 @@ export const transpose = (m: Mat3Tuple) => {
  * @param {Mat3} m The matrix.
  * @memberOf m3
  */
-export const invert = <T extends TypedArray>(m: Readonly<T>, dst: T) => {
+export const invert = <T extends NumberArray>(m: Readonly<T>, dst: T) => {
   const m00 = m[0 * 3 + 0];
   const m01 = m[0 * 3 + 1];
   const m02 = m[0 * 3 + 2];
@@ -191,7 +190,7 @@ export const invert = <T extends TypedArray>(m: Readonly<T>, dst: T) => {
  * @param {Mat3} mRight The matrix on the right.
  * @memberOf m3
  */
-export const multiply = <T extends TypedArray>(a: Readonly<T>, b: Readonly<T>, dst: T) => {
+export const multiply = <T extends NumberArray>(a: Readonly<T>, b: Readonly<T>, dst: T) => {
   dst[0] = a[0] * b[0] + a[1] * b[3] + a[2] * b[6];
   dst[1] = a[0] * b[1] + a[1] * b[4] + a[2] * b[7];
   dst[2] = a[0] * b[2] + a[1] * b[5] + a[2] * b[8];
@@ -208,7 +207,7 @@ export const multiply = <T extends TypedArray>(a: Readonly<T>, b: Readonly<T>, d
 // Create a 2D orthographic projection matrix as a 3x3 matrix.
 // This maps [0,width]x[0,height] to NDC [-1,1].
 // prettier-ignore
-export const ortho2D = <T extends TypedArray>(dst: T, width: number, height: number) => {
+export const ortho2D = <T extends NumberArray>(dst: T, width: number, height: number) => {
   dst[0] = 2 / width; dst[1] = 0;          dst[2] = 0;
   dst[3] = 0;         dst[4] = 2 / height; dst[5] = 0;
   dst[6] = -1;        dst[7] = -1;         dst[8] = 1;
@@ -278,7 +277,7 @@ export const setAxis = (m: Mat3Tuple, v: NumberArray, axis: number = 0) => {
  * @memberOf m3
  */
 // prettier-ignore
-export const setTranslation = <T extends TypedArray>(dst: T, v: NumberArray, offset = 0) => {
+export const setTranslation = <T extends NumberArray>(dst: T, v: NumberArray, offset = 0) => {
   dst[0 + offset] = 1;    dst[1 + offset] = 0;    dst[2 + offset] = 0;
   dst[3 + offset] = 0;    dst[4 + offset] = 1;    dst[5 + offset] = 0;
   dst[6 + offset] = v[0]; dst[7 + offset] = v[1]; dst[8 + offset] = 1;
@@ -291,7 +290,7 @@ export const setTranslation = <T extends TypedArray>(dst: T, v: NumberArray, off
  *     which to translate.
  * @memberOf m3
  */
-export const translate = <T extends TypedArray>(m: T, v: NumberArray, dst: T) => {
+export const translate = <T extends NumberArray>(m: T, v: NumberArray, dst: T) => {
   const v0 = v[0];
   const v1 = v[1];
 
@@ -312,7 +311,7 @@ export const translate = <T extends TypedArray>(m: T, v: NumberArray, dst: T) =>
   dst[8] = m02 * v0 + m12 * v1 + m22;
 };
 
-export const rotate = <T extends TypedArray>(m: T, angleInRadians: number, dst: T) => {
+export const rotate = <T extends NumberArray>(m: T, angleInRadians: number, dst: T) => {
   const cos = Math.cos(angleInRadians);
   const sin = Math.sin(angleInRadians);
 
@@ -342,7 +341,7 @@ export const rotate = <T extends TypedArray>(m: T, angleInRadians: number, dst: 
  * @param {number} angleInRadians The angle by which to rotate (in radians).
  * @memberOf m3
  */
-export const rotate2 = <T extends TypedArray>(m: T, angleInRadians: number, dst: T) => {
+export const rotate2 = <T extends NumberArray>(m: T, angleInRadians: number, dst: T) => {
   const cos = Math.cos(angleInRadians);
   const sin = Math.sin(angleInRadians);
 
@@ -366,7 +365,7 @@ export const rotate2 = <T extends TypedArray>(m: T, angleInRadians: number, dst:
 };
 
 // prettier-ignore
-export const setRotate = <T extends TypedArray>(dst: T, angleInRadians: number) => {
+export const setRotate = <T extends NumberArray>(dst: T, angleInRadians: number) => {
   const cos = Math.cos(angleInRadians);
   const sin = Math.sin(angleInRadians);
 
@@ -381,7 +380,7 @@ export const setRotate = <T extends TypedArray>(dst: T, angleInRadians: number) 
  * @param {number} angleInRadians The angle by which to rotate (in radians).
  * @memberOf m3
  */
-export const rotationY = <T extends TypedArray>(angleInRadians: number, dst: T) => {
+export const rotationY = <T extends NumberArray>(angleInRadians: number, dst: T) => {
   const c = Math.cos(angleInRadians);
   const s = Math.sin(angleInRadians);
 
@@ -410,7 +409,7 @@ export const rotationY = <T extends TypedArray>(angleInRadians: number, dst: T) 
  * @param {number} angleInRadians The angle by which to rotate (in radians).
  * @memberOf m3
  */
-export const rotateY = <T extends TypedArray>(m: T, angleInRadians: number, dst: T) => {
+export const rotateY = <T extends NumberArray>(m: T, angleInRadians: number, dst: T) => {
   const m00 = m[0 * 3 + 0];
   const m01 = m[0 * 3 + 1];
   const m02 = m[0 * 3 + 2];
@@ -465,7 +464,7 @@ export const rotationZ = (m: Mat3Tuple, angleInRadians: number) => {
  * @param {number} angleInRadians The angle by which to rotate (in radians).
  * @memberOf m3
  */
-export const rotateZ = <T extends TypedArray>(m: T, angleInRadians: number, dst: T) => {
+export const rotateZ = <T extends NumberArray>(m: T, angleInRadians: number, dst: T) => {
   const m00 = m[0 * 3 + 0];
   const m01 = m[0 * 3 + 1];
   const m02 = m[0 * 3 + 2];
@@ -495,7 +494,7 @@ export const rotateZ = <T extends TypedArray>(m: T, angleInRadians: number, dst:
  *     factor by which to scale in each dimension.
  * @memberOf m3
  */
-export const scale = <T extends TypedArray>(m: Readonly<T>, v: Readonly<NumberArray>, dst: T, offset = 0) => {
+export const scale = <T extends NumberArray>(m: Readonly<T>, v: Readonly<NumberArray>, dst: T, offset = 0) => {
   const v0 = v[0];
   const v1 = v[1];
 
@@ -514,7 +513,7 @@ export const scale = <T extends TypedArray>(m: Readonly<T>, v: Readonly<NumberAr
 };
 
 // prettier-ignore
-export const setScale = <T extends TypedArray>(dst: T, v: Readonly<NumberArray>, offset = 0) => {
+export const setScale = <T extends NumberArray>(dst: T, v: Readonly<NumberArray>, offset = 0) => {
   dst[0 + offset] = v[0]; dst[1 + offset] = 0;    dst[2 + offset] = 0;
   dst[3 + offset] = 0;    dst[4 + offset] = v[1]; dst[5 + offset] = 0;
   dst[6 + offset] = 0;    dst[7 + offset] = 0;    dst[8 + offset] = 1;

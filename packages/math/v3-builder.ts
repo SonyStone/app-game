@@ -1,4 +1,4 @@
-import type { TypedArray, TypedArrayConstructor } from './utils/typed-array';
+import type { NumberArray, TypedArrayConstructor } from './utils/typed-array';
 import { Vec2Tuple } from './v2-builder';
 
 /**
@@ -6,7 +6,7 @@ import { Vec2Tuple } from './v2-builder';
  * When created by the library will create the default type which is `Float32Array`
  * but can be set by calling {@link Vec3Builder}.
  */
-export type Vec3Tuple = [x: number, y: number, z: number] | TypedArray;
+export type Vec3Tuple = [x: number, y: number, z: number] | NumberArray;
 
 /**
  * Creates a vector builder function that generates a Vec3 class based on the provided constructor.

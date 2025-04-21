@@ -1,13 +1,15 @@
 import * as m2x3 from './m2x3-functions';
-import { Radians } from './types';
-import { NumberArray } from './utils/typed-array';
+import type { Transform } from './transform';
+import type { Radians } from './types';
+import { createStruct } from './utils/create-struct';
+import type { NumberArray } from './utils/typed-array';
 import { Vec2 } from './v2';
 
 /**
  * First of all, this class is intended as a wrapper for working with
  * `ArrayBuffers`, `TypedArrays` and `WebGL`, `WebGPU`
  */
-export class Mat2x3 {
+export class Mat2x3<T extends NumberArray = NumberArray> {
   static M00 = m2x3.M00;
   static M01 = m2x3.M01;
   /** X */
@@ -19,7 +21,11 @@ export class Mat2x3 {
 
   static ELEMENTS = 6;
 
-  constructor(public value: NumberArray = new Float32Array(6)) {}
+  constructor(public value: T = new Float32Array(6) as unknown as T) {}
+
+  static create(): Mat2x3 {
+    return new Mat2x3().identity();
+  }
 
   set(m00: number, m01: number, m02: number, m10: number, m11: number, m12: number): this {
     m2x3.set(this.value, m00, m01, m02, m10, m11, m12);
@@ -77,6 +83,16 @@ export class Mat2x3 {
     return this;
   }
 
+  scaleScalar(scale: number): this {
+    m2x3.scaleScalar(this.value, this.value, scale);
+    return this;
+  }
+
+  scaleOrigin(scale: Readonly<Vec2>, origin: Readonly<Vec2>): this {
+    scaleOrigin(this, scale, origin);
+    return this;
+  }
+
   translate(v: Readonly<Vec2>): this {
     m2x3.translate(this.value, this.value, v.value);
     return this;
@@ -87,9 +103,26 @@ export class Mat2x3 {
     return this;
   }
 
+  /**
+   * Rotates a matrix around a specific point
+   *
+   * @param angle The rotation angle in radians
+   * @param point The point to rotate around
+   */
+  rotateOrigin(angle: Radians, point: Readonly<Vec2>): this {
+    rotateOrigin(this, angle, point);
+    return this;
+  }
+
   inverse(): this {
     m2x3.inverse(this.value);
     return this;
+  }
+
+  getTranslation(dst: Vec2): Vec2 {
+    dst.value[0] = this.value[Mat2x3.M02];
+    dst.value[1] = this.value[Mat2x3.M12];
+    return dst;
   }
 
   getRotation(): Radians {
@@ -106,23 +139,22 @@ export class Mat2x3 {
     return m2x3.isEqual(this.value, m.value);
   }
 
-  /**
-   * Rotates a matrix around a specific point
-   *
-   * @param angle The rotation angle in radians
-   * @param point The point to rotate around
-   */
-  rotateAroundPoint(angle: Radians, point: Readonly<Vec2>): this {
-    rotateAroundPoint(this, angle, point);
-    return this;
-  }
-
   getTransformMatrixBetweenPointPairs(p1Start: Vec2, p2Start: Vec2, p1End: Vec2, p2End: Vec2) {
     return getTransformMatrixBetweenPointPairs(this, p1Start, p2Start, p1End, p2End);
   }
 
-  transformPoint(v: Vec2): this {
+  transformPoint(v: Vec2): Vec2 {
     m2x3.transformPoint(v.value, this.value, v.value);
+    return v;
+  }
+
+  decompose(t: Readonly<Transform>): Readonly<Transform> {
+    m2x3.decompose(this.value, t.position.value, t.rotation.value, t.scale.value);
+    return t;
+  }
+
+  compose(t: Readonly<Transform>): this {
+    m2x3.compose(this.value, t.position.value, t.rotation.value, t.scale.value);
     return this;
   }
 
@@ -145,18 +177,22 @@ export class Mat2x3 {
   }
 }
 
+export const MAT2X3_FLOAT32_BYTES = Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS;
+export const MAT2X3_FLOAT64_BYTES = Float64Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS;
+
 //
 //
 // --- EXTRA ---
 //
 //
 
-export const getAngleBetweenPointPairs = (function createAngleBetweenPointPairs() {
-  const buffer = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 2);
-  const v1Start = new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 0, Vec2.ELEMENTS));
-  const v1End = new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 1, Vec2.ELEMENTS));
+export const getAngleBetweenPointPairs = (() => {
+  const [{ v1Start, v1End }] = createStruct({
+    v1Start: [Vec2, Float32Array],
+    v1End: [Vec2, Float32Array]
+  });
 
-  return function getAngleBetweenPointPairs(p1Start: Vec2, p2Start: Vec2, p1End: Vec2, p2End: Vec2) {
+  return (p1Start: Vec2, p2Start: Vec2, p1End: Vec2, p2End: Vec2) => {
     // Calculate vectors between points
     v1Start.subFrom(p2Start, p1Start);
     v1End.subFrom(p2End, p1End);
@@ -179,16 +215,11 @@ export const getAngleBetweenPointPairs = (function createAngleBetweenPointPairs(
  * @returns A 2x3 transformation matrix
  */
 export const getRotationMatrixBetweenPointPairs = (() => {
-  const buffer = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 3);
-  const toOriginMat = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 0, Mat2x3.ELEMENTS)
-  ).identity();
-  const rotationMat = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 1, Mat2x3.ELEMENTS)
-  ).identity();
-  const fromOriginMat = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 2, Mat2x3.ELEMENTS)
-  ).identity();
+  const [{ toOriginMat, rotationMat, fromOriginMat }] = createStruct({
+    toOriginMat: [Mat2x3, Float32Array],
+    rotationMat: [Mat2x3, Float32Array],
+    fromOriginMat: [Mat2x3, Float32Array]
+  });
 
   return (point: Vec2, angleChange: Radians, dst: Mat2x3): Mat2x3 => {
     // 1. Translate to the pivot point
@@ -206,6 +237,31 @@ export const getRotationMatrixBetweenPointPairs = (() => {
   };
 })();
 
+export const getTransformMatrixBetweenPointPairs = (() => {
+  const [{ backFromOrigin, rotationMat, toOrigin, midpointStart, midpointEnd }] = createStruct({
+    toOrigin: [Mat2x3, Float32Array],
+    rotationMat: [Mat2x3, Float32Array],
+    backFromOrigin: [Mat2x3, Float32Array],
+    midpointStart: [Vec2, Float32Array],
+    midpointEnd: [Vec2, Float32Array]
+  });
+
+  return (out: Mat2x3, p1Start: Vec2, p2Start: Vec2, p1End: Vec2, p2End: Vec2): Mat2x3 => {
+    // Calculate the midpoint between the end points
+    toOrigin.createTranslation(midpointEnd.addFrom(p1End, p2End).divScalar(2));
+
+    // Calculate rotation angle
+    rotationMat.createRotation(getAngleBetweenPointPairs(p1End, p2End, p1Start, p2Start));
+
+    // Calculate the midpoint between the start points
+    backFromOrigin.createTranslation(midpointStart.addFrom(p1Start, p2Start).divScalar(2).negate());
+
+    out.identity().multiply(toOrigin).multiply(rotationMat).multiply(backFromOrigin);
+
+    return out;
+  };
+})();
+
 /**
  * Rotates a matrix around a specific point
  *
@@ -215,57 +271,19 @@ export const getRotationMatrixBetweenPointPairs = (() => {
  * @param dst The destination matrix (or a new matrix if not provided)
  * @returns The rotated matrix
  */
-export const rotateAroundPoint = (() => {
-  const buffer = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 3);
-  const toOriginMat = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 0, Mat2x3.ELEMENTS)
-  ).identity();
-  const rotationMat = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 1, Mat2x3.ELEMENTS)
-  ).identity();
-  const fromOriginMat = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 2, Mat2x3.ELEMENTS)
-  ).identity();
+export const rotateOrigin = (() => {
+  const [{ position, localOrigin, rotate, toOrigin }] = createStruct({
+    position: [Vec2, Float32Array],
+    localOrigin: [Vec2, Float32Array],
+    toOrigin: [Mat2x3, Float32Array],
+    rotate: [Mat2x3, Float32Array]
+  });
 
   return (out: Mat2x3, angle: Radians, origin: Readonly<Vec2>): Mat2x3 => {
-    fromOriginMat.createTranslation(origin);
-    rotationMat.createRotation(angle);
-    toOriginMat.copy(fromOriginMat).inverse();
-
-    out.identity().multiply(fromOriginMat).multiply(rotationMat).multiply(toOriginMat);
-
-    return out;
-  };
-})();
-
-export const getTransformMatrixBetweenPointPairs = (() => {
-  const buffer = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 3);
-  const toPivotMat = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 0, Mat2x3.ELEMENTS)
-  ).identity();
-  const rotationMat = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 1, Mat2x3.ELEMENTS)
-  ).identity();
-  const fromPivotMat = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 2, Mat2x3.ELEMENTS)
-  ).identity();
-
-  return (out: Mat2x3, p1Start: Vec2, p2Start: Vec2, p1End: Vec2, p2End: Vec2): Mat2x3 => {
-    // Calculate rotation angle
-    const angle = getAngleBetweenPointPairs(p1Start, p2Start, p1End, p2End);
-
-    // Calculate the midpoint between the start points
-    const midpointStart: Vec2 = new Vec2().addFrom(p1Start, p2Start).divScalar(2);
-
-    // Calculate the midpoint between the end points
-    const midpointEnd: Vec2 = new Vec2().addFrom(p1End, p2End).divScalar(2);
-
-    toPivotMat.createTranslation(midpointStart.negate());
-    rotationMat.createRotation(-angle as Radians);
-    fromPivotMat.createTranslation(midpointEnd);
-
-    out.identity().multiply(fromPivotMat).multiply(rotationMat).multiply(toPivotMat);
-
+    localOrigin.subFrom(origin, out.getTranslation(position));
+    toOrigin.createTranslation(localOrigin);
+    out.multiply(toOrigin);
+    // .multiply(rotate.createRotation(angle)).multiply(toOrigin.inverse());
     return out;
   };
 })();
@@ -278,31 +296,15 @@ export const getTransformMatrixBetweenPointPairs = (() => {
  * @param point The fixed point.
  * @param dst The matrix to store the result.
  */
-export const zoomToPoint = (() => {
-  const buffer = new ArrayBuffer(Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 3);
-  const translationToOrigin = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 0, Mat2x3.ELEMENTS)
-  ).identity();
-  const translationBack = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 1, Mat2x3.ELEMENTS)
-  ).identity();
-  const scaleMatrix = new Mat2x3(
-    new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Mat2x3.ELEMENTS * 2, Mat2x3.ELEMENTS)
-  ).identity();
+export const scaleOrigin = (() => {
+  const [{ toOrigin, scale }] = createStruct({
+    toOrigin: [Mat2x3, Float32Array],
+    scale: [Mat2x3, Float32Array]
+  });
 
-  return (out: Mat2x3, m: Readonly<Mat2x3>, zoom: number, point: Readonly<Vec2>): Mat2x3 => {
-    // 1. Create a scale matrix
-    scaleMatrix.createScale(Vec2.create(zoom, zoom));
-
-    // 2. Create a translation matrix to move the origin to the fixed point
-    translationToOrigin.createTranslation(point.negate());
-
-    // 3. Create a translation matrix to move the origin back to the original position
-    translationBack.createTranslation(point);
-
-    // 4. Combine the matrices in the correct order: T * S * T^-1 * M
-    out.identity().multiply(translationToOrigin).multiply(scaleMatrix).multiply(translationBack);
-
+  return (out: Mat2x3, zoom: Readonly<Vec2>, origin: Readonly<Vec2>): Mat2x3 => {
+    toOrigin.createTranslation(origin);
+    out.multiply(toOrigin).multiply(scale.createScale(zoom)).multiply(toOrigin.inverse());
     return out;
   };
 })();

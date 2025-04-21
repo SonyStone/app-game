@@ -1,4 +1,4 @@
-import { Vec2Tuple } from '@packages/math-2/v2';
+import { NumberArray } from '@packages/math/utils/typed-array';
 import type { DebugElement } from './use-debug-layer';
 
 export function useDebugPoints({
@@ -9,7 +9,7 @@ export function useDebugPoints({
   addElement: (id: string, element: SVGElement) => void;
 }) {
   // Update or create a tracked debug point with specific ID
-  const updatePoint = (id: string, point: Vec2Tuple, color = 'red', size = 2) => {
+  const updatePoint = (id: string, point: NumberArray, color = 'red', size = 2) => {
     const data = activeElements.get(id);
 
     if (!data) {

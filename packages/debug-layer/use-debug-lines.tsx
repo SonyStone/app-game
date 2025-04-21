@@ -1,22 +1,40 @@
-import { Vec2Tuple } from '@packages/math-2/v2';
+import { NumberArray } from '@packages/math/utils/typed-array';
+import { getRandomFromList } from '@packages/utils/get-random-from-list';
 import { createRoot } from 'solid-js';
+import { colors } from './colors';
 import type { DebugElement } from './use-debug-layer';
 
 export function useDebugLines({
   activeElements,
-  addElement
+  addElement,
+  theme = 'light'
 }: {
   activeElements: Map<string, DebugElement>;
   addElement: (id: string, element: SVGElement) => void;
+  theme: keyof typeof colors;
 }) {
   // Update or create a tracked debug line with specific ID
-  const updateLine = (id: string, point1: Vec2Tuple, point2: Vec2Tuple, color = 'red', size = 2) => {
+  const updateLine = (
+    id: string,
+    point1: NumberArray,
+    point2: NumberArray,
+    color = getRandomFromList(colors[theme]),
+    size = 2
+  ) => {
     const data = activeElements.get(id);
 
     if (!data) {
       createRoot((dispose) => {
         const element = (
-          <line x1={point1[0]} y1={point1[1]} x2={point2[0]} y2={point2[1]} stroke={color} stroke-width={size} />
+          <line
+            class="pointer-events-none"
+            x1={point1[0]}
+            y1={point1[1]}
+            x2={point2[0]}
+            y2={point2[1]}
+            stroke={color}
+            stroke-width={size}
+          />
         ) as SVGElement;
 
         addElement(id, element);

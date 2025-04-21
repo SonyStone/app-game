@@ -91,7 +91,7 @@ export const createBrushStroke = ({
     add: (point: Vec2, opacity: number) => {
       const [width, height] = access(size);
       if (prev && prevOpacity !== undefined) {
-        if (point.isEquals(prev)) {
+        if (point.isEqual(prev)) {
           return;
         }
         const dist = point.distance(prev);

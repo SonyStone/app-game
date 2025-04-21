@@ -204,7 +204,7 @@ describe('v2', () => {
     const vec1 = new Vec2().set(1, 2);
     const vec2 = new Vec2().set(1, 2);
 
-    const result = vec1.isEquals(vec2);
+    const result = vec1.isEqual(vec2);
 
     expect(result).toBe(true);
   });

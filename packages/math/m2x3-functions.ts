@@ -87,6 +87,12 @@ export function translate(out: NumberArray, a: Readonly<NumberArray>, v: Readonl
   out[M12] = a12 + x * a10 + y * a11;
 }
 
+///
+///
+/// Rotate
+///
+///
+
 let lastAngle = NaN;
 let lastCos = 0;
 let lastSin = 0;
@@ -107,10 +113,16 @@ export function setRotation(out: NumberArray, angle: Radians): void {
   out[M10] = -s;  out[M11] = c;  out[M12] = 0;
 }
 
+/**
+ * - Pre-multiplies by the rotation matrix: R * a
+ * - Rotates around the global coordinate system origin
+ * - The object's position affects its trajectory during rotation
+ * - Useful when you want to rotate an object around the world origin
+ */
 // prettier-ignore
 export function rotate(out: NumberArray, a: Readonly<NumberArray>, angle: Radians): void {
-  const a00 = a[M00], a01 = a[M01], a02 = a[M02];
-  const a10 = a[M10], a11 = a[M11], a12 = a[M12];
+  const a00 = a[M00]; const a01 = a[M01]; const a02 = a[M02];
+  const a10 = a[M10]; const a11 = a[M11]; const a12 = a[M12];
 
   if (angle !== lastAngle) {
     lastAngle = angle;
@@ -126,6 +138,84 @@ export function rotate(out: NumberArray, a: Readonly<NumberArray>, angle: Radian
   out[M10] = -s * a00 + c * a10;
   out[M11] = -s * a01 + c * a11;
   out[M12] = -s * a02 + c * a12;
+}
+
+/**
+ * - Post-multiplies by the rotation matrix: a * R
+ * - Rotates around the object's current position
+ * - Preserves the object's translation during rotation
+ * - Useful when you want to rotate an object around its own axes
+ */
+// prettier-ignore
+export function rotateLocal(out: NumberArray, a: Readonly<NumberArray>, angle: Radians): void {
+  const a00 = a[M00]; const a01 = a[M01]; const a02 = a[M02];
+  const a10 = a[M10]; const a11 = a[M11]; const a12 = a[M12];
+
+  // Check if we've already calculated the sin and cos for this angle
+  if (angle !== lastAngle) {
+    lastAngle = angle;
+    lastCos = Math.cos(angle);
+    lastSin = Math.sin(angle);
+  }
+  const c = lastCos;
+  const s = lastSin;
+
+  // Post-multiply by the rotation matrix
+  out[M00] = a00 * c - a01 * s;
+  out[M01] = a00 * s + a01 * c;
+  out[M02] = a02;
+  out[M10] = a10 * c - a11 * s;
+  out[M11] = a10 * s + a11 * c;
+  out[M12] = a12;
+}
+
+/**
+ * - Rotates a matrix around a specific point.
+ * - T(px,py) * R(angle) * T(-px,-py) * A
+ *
+ * 1. Translate to Origin: Move the pivot point to the origin
+ * 2. Rotate: Apply the rotation around the origin
+ * 3. Translate Back: Move the pivot point back to its original position
+ * @param out The output matrix
+ * @param a The input matrix
+ * @param angle The angle of rotation in radians
+ * @param px The x-coordinate of the pivot point
+ * @param py The y-coordinate of the pivot point
+ */
+// prettier-ignore
+export function rotateAroundPoint(
+  out: NumberArray,
+  a: Readonly<NumberArray>,
+  angle: Radians,
+  point: Readonly<NumberArray>
+): void {
+  const a00 = a[M00]; const a01 = a[M01]; const a02 = a[M02];
+  const a10 = a[M10]; const a11 = a[M11]; const a12 = a[M12];
+
+  const px = point[0];
+  const py = point[1];
+
+  // Optimize by caching the trig functions if angle hasn't changed
+  if (angle !== lastAngle) {
+    lastAngle = angle;
+    lastCos = Math.cos(angle);
+    lastSin = Math.sin(angle);
+  }
+  const c = lastCos;
+  const s = lastSin;
+
+  // Calculate translation offsets to maintain the pivot point
+  const tx = px * (1 - c) + py * s;
+  const ty = py * (1 - c) - px * s;
+
+  // Apply rotation and translation in the correct order
+  out[M00] = c * a00 - s * a10;
+  out[M01] = c * a01 - s * a11;
+  out[M02] = c * a02 - s * a12 + tx;
+
+  out[M10] = s * a00 + c * a10;
+  out[M11] = s * a01 + c * a11;
+  out[M12] = s * a02 + c * a12 + ty;
 }
 
 // prettier-ignore
@@ -152,6 +242,12 @@ export function rotateFast(out: NumberArray, a: Readonly<NumberArray>, angle: Ra
   out[M12] = -s * a02 + c * a12;
 }
 
+///
+///
+/// Scale
+///
+///
+
 // prettier-ignore
 export function setScale(out: NumberArray, scale: Readonly<NumberArray>): void {
   out[M00] = scale[0]; out[M01] = 0;        out[M02] = 0;
@@ -159,12 +255,12 @@ export function setScale(out: NumberArray, scale: Readonly<NumberArray>): void {
 }
 
 export function scale(out: NumberArray, a: Readonly<NumberArray>, scale: Readonly<NumberArray>): void {
-  const a00 = a[M00],
-    a01 = a[M01],
-    a02 = a[M02];
-  const a10 = a[M10],
-    a11 = a[M11],
-    a12 = a[M12];
+  const a00 = a[M00];
+  const a01 = a[M01];
+  const a02 = a[M02];
+  const a10 = a[M10];
+  const a11 = a[M11];
+  const a12 = a[M12];
 
   out[M00] = scale[0] * a00;
   out[M01] = scale[0] * a01;
@@ -173,6 +269,93 @@ export function scale(out: NumberArray, a: Readonly<NumberArray>, scale: Readonl
   out[M11] = scale[1] * a11;
   out[M12] = scale[1] * a12;
 }
+
+export function scaleScalar(out: NumberArray, a: Readonly<NumberArray>, scale: number): void {
+  const a00 = a[M00];
+  const a01 = a[M01];
+  const a02 = a[M02];
+  const a10 = a[M10];
+  const a11 = a[M11];
+  const a12 = a[M12];
+
+  out[M00] = scale * a00;
+  out[M01] = scale * a01;
+  out[M02] = scale * a02;
+  out[M10] = scale * a10;
+  out[M11] = scale * a11;
+  out[M12] = scale * a12;
+}
+
+/**
+ * - Post-multiplies by the scaling matrix: a * S
+ * - Scales within the object's local coordinate system
+ * - Preserves the object's translation
+ * - Useful when you want to scale an object without affecting its position
+ */
+// prettier-ignore
+export function scaleLocal(out: NumberArray, a: Readonly<NumberArray>, scale: Readonly<NumberArray>): void {
+  const a00 = a[M00]; const a01 = a[M01]; const a02 = a[M02];
+  const a10 = a[M10]; const a11 = a[M11]; const a12 = a[M12];
+
+  const sx = scale[0];
+  const sy = scale[1];
+
+  // Post-multiply by the scaling matrix
+  out[M00] = a00 * sx;
+  out[M01] = a01 * sy;
+  out[M02] = a02;
+  out[M10] = a10 * sx;
+  out[M11] = a11 * sy;
+  out[M12] = a12;
+}
+
+/**
+ * - Scales a matrix around a specific point.
+ * - T(px,py) * S(scale) * T(-px,-py) * A
+ *
+ * 1. Translate to Origin: Move the pivot point to the origin
+ * 2. Scale: Apply the scaling around the origin
+ * 3. Translate Back: Move the pivot point back to its original position
+ *
+ * @param out The output matrix
+ * @param a The input matrix
+ * @param scale The scale vector [sx, sy]
+ * @param px The x-coordinate of the pivot point
+ * @param py The y-coordinate of the pivot point
+ */
+// prettier-ignore
+export function scaleAroundPoint(
+  out: NumberArray,
+  a: Readonly<NumberArray>,
+  scale: Readonly<NumberArray>,
+  point: Readonly<NumberArray>,
+
+): void {
+  const a00 = a[M00]; const a01 = a[M01]; const a02 = a[M02];
+  const a10 = a[M10]; const a11 = a[M11]; const a12 = a[M12];
+  
+  const px = point[0];
+  const py = point[1];
+
+  const sx = scale[0];
+  const sy = scale[1];
+  
+  // Calculate translation offsets to maintain the pivot point
+  const tx = px * (1 - sx);
+  const ty = py * (1 - sy);
+  
+  // Apply scaling and translation in the correct order
+  out[M00] = sx * a00;
+  out[M01] = sx * a01;
+  out[M02] = sx * a02 + tx;
+  
+  out[M10] = sy * a10;
+  out[M11] = sy * a11;
+  out[M12] = sy * a12 + ty;
+}
+
+///
+///
 
 /**
  * Transforms a point by a matrix.
@@ -324,26 +507,26 @@ export const applyShear = (out: NumberArray, m: Readonly<NumberArray>, shear: Re
 /**
  * Composes individual transformations (translation, rotation, and scale) into a single 2x3 matrix.
  *
+ * @param out The matrix to store the result.
  * @param translation The translation vector.
  * @param rotation The rotation angle in radians.
  * @param scale The scale vector.
- * @param dst The matrix to store the result.
  */
 export const compose = (
   out: NumberArray,
   translation: Readonly<NumberArray>,
-  rotation: Radians,
+  rotation: Readonly<NumberArray>,
   scale: Readonly<NumberArray>
 ): void => {
-  if (rotation !== lastAngle) {
-    lastAngle = rotation;
-    lastCos = Math.cos(rotation);
-    lastSin = Math.sin(rotation);
+  if (rotation[0] !== lastAngle) {
+    lastAngle = rotation[0];
+    lastCos = Math.cos(rotation[0]);
+    lastSin = Math.sin(rotation[0]);
   }
   const c = lastCos;
   const s = lastSin;
-  const sx = scale[v2.X];
-  const sy = scale[v2.Y];
+  const sx = scale[0];
+  const sy = scale[0];
 
   out[M00] = c * sx;
   out[M01] = s * sx;
@@ -352,6 +535,18 @@ export const compose = (
   out[M11] = c * sy;
   out[M12] = translation[v2.Y];
 };
+
+export function decompose(
+  m: Readonly<NumberArray>,
+  translation: NumberArray,
+  rotation: NumberArray,
+  scale: NumberArray
+): void {
+  translation[v2.X] = m[M02];
+  translation[v2.Y] = m[M12];
+  scale[0] = Math.max(Math.hypot(m[M00], m[M10]), Math.hypot(m[M01], m[M11]));
+  rotation[0] = Math.atan2(m[M01], m[M00]) as Radians;
+}
 
 /**
  * Linearly interpolates between two 2x3 matrices.

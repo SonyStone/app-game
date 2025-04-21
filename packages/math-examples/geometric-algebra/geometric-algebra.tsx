@@ -6,7 +6,7 @@ import { Vec2, Vec3 } from '@packages/math';
 import { TypedArray } from '@packages/math/utils/typed-array';
 import { ganja } from './align';
 
-const p = (v: TypedArray) => v.join(',');
+const p = (v: TypedArray | number[]) => v.join(',');
 const j = (v: (number | string)[]) => v.join(' ');
 
 const frameTimer = (start: number) => interval(0, animationFrameScheduler).pipe(map((v) => start + v));

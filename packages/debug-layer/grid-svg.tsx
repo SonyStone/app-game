@@ -11,13 +11,13 @@ export function GridSVG(props: { color?: string; size?: number } = {}) {
 
   return (
     <>
-      <path d={path()} stroke={merged.color} stroke-width={0.1} fill="none" />
-      <line x1={0} y1={0} x2={100} y2={0} stroke-width={0.4} stroke="red"></line>
-      <text class="select-none" x={92} y={0} dy={-4} font-size="12" fill="red">
+      <path class="pointer-events-none" d={path()} stroke={merged.color} stroke-width={0.1} fill="none" />
+      <line class="pointer-events-none" x1={0} y1={0} x2={100} y2={0} stroke-width={0.4} stroke="red"></line>
+      <text class="pointer-events-none select-none" x={92} y={0} dy={-4} font-size="12" fill="red">
         x
       </text>
-      <line x1={0} y1={0} x2={0} y2={100} stroke-width={0.4} stroke="green"></line>
-      <text class="select-none" x={0} y={100} dx={-8} font-size="12" fill="green">
+      <line class="pointer-events-none" x1={0} y1={0} x2={0} y2={100} stroke-width={0.4} stroke="green"></line>
+      <text class="pointer-events-none select-none" x={0} y={100} dx={-8} font-size="12" fill="green">
         y
       </text>
     </>
