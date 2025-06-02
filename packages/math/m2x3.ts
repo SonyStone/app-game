@@ -164,6 +164,10 @@ export class Mat2x3<T extends NumberArray = NumberArray> {
    * [ a c tx
    *   b d ty ]
    * ```
+   * @example
+   * ```
+   * `matrix(1, 0, 0, 1, 0, 0)`
+   * ```
    */
   toCssMatrix(): string {
     return m2x3.toCssMatrix(this.value);

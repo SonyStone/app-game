@@ -2,7 +2,7 @@ import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
 import { createSignal } from 'solid-js';
 import { DemoAngleVisualization } from './demo-angle-visualization';
 import { TestMatrixWithTransform } from './demo-matrix-with-transform';
-import { TestRotationMatrixAroundPoint } from './demo-rotation-matrix-around-point';
+import { DemoRotationMatrixAroundPoint } from './demo-rotation-matrix-around-point';
 import { TestRotationMatrixBetweenPointPairs } from './demo-rotation-matrix-between-point-pairs';
 import { TestTransformMatrix } from './demo-transform-matrix';
 
@@ -20,7 +20,7 @@ export default function () {
       <svg ref={setRef} class="fixed right-0 top-0 z-10 h-screen w-screen touch-none">
         <TestMatrixWithTransform debugLayer={debugLayer} />
         <TestRotationMatrixBetweenPointPairs root={ref()} debugLayer={debugLayer} />
-        <TestRotationMatrixAroundPoint />
+        <DemoRotationMatrixAroundPoint />
         <TestTransformMatrix debugLayer={debugLayer} />
         <DemoAngleVisualization debugLayer={debugLayer} />
 

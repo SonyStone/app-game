@@ -8,7 +8,7 @@ import { animationFrames, map, merge, of, Subject, switchScan } from 'rxjs';
 import { Accessor, createMemo, createSignal, from } from 'solid-js';
 import { usePointMove } from './use-point-move';
 
-export function TestRotationMatrixAroundPoint() {
+export function DemoRotationMatrixAroundPoint() {
   const origin = usePointMove(Vec2.create(50, 50));
 
   const mat = new Mat2x3(new Float32Array(6)).identity();
