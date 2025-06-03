@@ -440,6 +440,12 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/webgl-examples/ogl-model-viewer/model-viewer'))
   },
   {
+    path: '/svg-editor',
+    name: '[WIP] SVG Editor',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/svg-editor/svg-editor'))
+  },
+  {
     path: '/:any',
     name: 'Empty',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
