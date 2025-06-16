@@ -13,12 +13,16 @@ import {
   MenubarTrigger
 } from '@packages/components/ui/menubar';
 import { Resizable, ResizableHandle, ResizablePanel } from '@packages/components/ui/resizable';
-import { captureStoreUpdates, trackStore } from '@solid-primitives/deep';
+import { trackStore } from '@solid-primitives/deep';
 import { createUndoHistory } from '@solid-primitives/history';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { toObservable } from '@utils/to-observable';
+import { toSignal } from '@utils/to-signal';
+import { debounceTime } from 'rxjs';
 import { batch, createEffect, createMemo, createSignal, For, JSXElement, Match, Show, Switch } from 'solid-js';
 import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { PathInput } from './path-input';
 import { SVGNode } from './svg-node';
 import { DataWrapper, OutlinePreview, useSvgSelect } from './use-svg-select';
 import { useVirtualTree } from './use-virtual-tree';
@@ -88,39 +92,38 @@ function Display() {
     ]
   });
 
-  const delta = createMemo(captureStoreUpdates(state));
-  createEffect(() => {
-    console.log(delta());
-  });
-
   const map = useVirtualTree({ state, setState });
   const select = useSvgSelect<SVGNode>();
 
-  const history = createUndoHistory(() => {
-    trackStore(state);
-    const copy = structuredClone(unwrap(state));
-    return () => setState(reconcile(copy));
-  });
+  const debounceState = toSignal(
+    toObservable(
+      createMemo(
+        () => {
+          trackStore(state);
+          return state;
+        },
+        state,
+        { equals: false }
+      )
+    ).pipe(debounceTime(500)),
+    state
+  );
 
-  function PathInput(props: { value: string; onChange: (value: string) => void }) {
-    return (
-      <input
-        type="text"
-        class="w-full rounded border px-2 py-1 text-sm"
-        value={props.value ?? ''}
-        onInput={(e) => {
-          props.onChange?.(e.target.value);
-        }}
-      />
-    );
-  }
+  const history = createUndoHistory(
+    () => {
+      debounceState();
+      const copy = structuredClone(unwrap(state));
+      return () => setState(reconcile(copy));
+    },
+    { limit: 100 }
+  );
 
   function ListItem(props: { child: SVGNode; children?: JSXElement }) {
     return (
       <li
         class={[
-          'border-1.5 flex flex-shrink-0 flex-col overflow-hidden rounded bg-white  [&.selected]:border-blue-400 [&:not(:has(.group-child:hover))]:hover:bg-blue-50',
-          select.selectedElementsIdsMap.has(props.child) ? 'selected' : ''
+          select.selectedElementsIdsMap.has(props.child) ? 'selected' : '',
+          'border-1.5 [&.selected]:(border-blue-400 bg-blue-50) flex flex-shrink-0 flex-col overflow-hidden  rounded bg-white [&:not(:has(.group-child:hover))]:hover:bg-blue-50'
         ].join(' ')}
         onClick={(e) => {
           e.stopPropagation();
@@ -167,7 +170,7 @@ function Display() {
           </svg>
 
           {/* TODO color picker??? */}
-          <div class="flex min-w-0 flex-wrap">
+          <div class="flex w-full min-w-0 flex-wrap">
             <div class="flex flex-1 place-items-baseline gap-1 font-mono text-xs">
               <span>stroke</span>
               <select
@@ -226,7 +229,7 @@ function Display() {
         <DropdownMenu placement="bottom">
           <DropdownMenuTrigger>Add element</DropdownMenuTrigger>
           <DropdownMenuContent>
-            <For each={['svg', 'path', 'circle', 'ellipse', 'rect', 'line', 'polygon', 'polyline', 'g']}>
+            <For each={['path', 'circle', 'ellipse', 'rect', 'line', 'polygon', 'polyline', 'g']}>
               {(child) => (
                 <DropdownMenuItem
                   onClick={() => {
@@ -256,7 +259,7 @@ function Display() {
 
   function Toolbar() {
     return (
-      <Menubar>
+      <Menubar class="border-0 shadow-none">
         <MenubarMenu>
           <MenubarTrigger>Edit</MenubarTrigger>
           <MenubarContent>
@@ -330,13 +333,13 @@ function Display() {
   return (
     <div id="Display" class="flex h-screen w-full w-screen flex-col overflow-hidden">
       <Toolbar />
-      <Resizable class="flex-1 overflow-hidden rounded-lg border">
-        <ResizablePanel class="flex w-0 flex-grow flex-col overflow-hidden" initialSize={0.3} minSize={0.1}>
+      <Resizable class="flex-1 overflow-hidden border-0">
+        <ResizablePanel class="flex w-0 flex-grow flex-col overflow-hidden border-0" initialSize={0.5} minSize={0.1}>
           <span class="font-mono">Layers</span>
           <LayersView />
         </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel class="w-0 flex-grow overflow-hidden" initialSize={0.7} minSize={0.1}>
+        <ResizableHandle withHandle class="border-0 bg-inherit hover:bg-blue-400" />
+        <ResizablePanel class="w-0 flex-grow overflow-hidden border-0" initialSize={0.5} minSize={0.1}>
           <div id="Edit View" class="h-full w-full" ref={setTarget}>
             <svg
               class="bg-gray-500"
