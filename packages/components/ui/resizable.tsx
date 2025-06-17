@@ -20,6 +20,7 @@ type resizableHandleProps<T extends ValidComponent = 'button'> = VoidProps<
   HandleProps<T> & {
     class?: string;
     withHandle?: boolean;
+    orientation?: 'horizontal' | 'vertical';
   }
 >;
 
@@ -31,13 +32,18 @@ export const ResizableHandle = <T extends ValidComponent = 'button'>(
   return (
     <ResizablePrimitive.Handle
       class={cn(
-        'bg-border focus-visible:(outline-none ring-1.5 ring-ring ring-offset-1) data-[orientation=vertical]:(h-px w-full) flex w-px items-center justify-center transition-shadow',
+        'bg-border focus-visible:(outline-none ring-1.5 ring-ring ring-offset-1) data-[orientation=vertical]:(h-px w-full) flex w-px select-none items-center justify-center transition-shadow',
         local.class
       )}
       {...rest}
     >
       <Show when={local.withHandle}>
-        <div class="bg-border z-10 flex h-4 w-3 items-center justify-center rounded-sm border">
+        <div
+          class={[
+            'bg-border z-10 flex h-4 w-3 items-center justify-center rounded-sm border',
+            props.orientation === 'vertical' ? 'rotate-90' : ''
+          ].join(' ')}
+        >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 15 15">
             <path
               fill="currentColor"

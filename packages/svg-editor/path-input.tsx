@@ -35,7 +35,7 @@ export function PathInput(props: { value: string; onChange: (value: string) => v
           type="text"
           class="w-full min-w-24 rounded border px-1.5 py-0.5"
           value={props.value ?? ''}
-          onInput={(e) => {
+          onChange={(e) => {
             props.onChange?.(e.target.value);
           }}
         />

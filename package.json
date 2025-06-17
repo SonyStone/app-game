@@ -74,6 +74,7 @@
     "@solid-primitives/event-listener": "^2.3.3",
     "@solid-primitives/history": "^0.2.1",
     "@solid-primitives/keyboard": "^1.2.8",
+    "@solid-primitives/keyed": "^1.5.1",
     "@solid-primitives/map": "^0.6.0",
     "@solid-primitives/mutation-observer": "^1.2.1",
     "@solid-primitives/pointer": "^0.2.19",

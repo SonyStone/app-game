@@ -19,10 +19,11 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { toObservable } from '@utils/to-observable';
 import { toSignal } from '@utils/to-signal';
 import { debounceTime } from 'rxjs';
-import { batch, createEffect, createMemo, createSignal, For, JSXElement, Match, Show, Switch } from 'solid-js';
+import { batch, createMemo, createSignal, For, JSXElement, Match, Show, Switch } from 'solid-js';
 import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { PathInput } from './path-input';
+import { SVGCodePreview } from './svg-code-preview';
 import { SVGNode } from './svg-node';
 import { DataWrapper, OutlinePreview, useSvgSelect } from './use-svg-select';
 import { useVirtualTree } from './use-virtual-tree';
@@ -259,7 +260,7 @@ function Display() {
 
   function Toolbar() {
     return (
-      <Menubar class="border-0 shadow-none">
+      <Menubar class="select-none border-0 shadow-none">
         <MenubarMenu>
           <MenubarTrigger>Edit</MenubarTrigger>
           <MenubarContent>
@@ -310,23 +311,42 @@ function Display() {
     );
   }
 
-  const [target, setTarget] = createSignal<HTMLElement>();
-  const size = createElementSize(target);
-
-  function SVGRender(props: SVGNode) {
-    const [target, setTarget] = createSignal<DataWrapper<HTMLElement, SVGNode>>();
-
-    createEffect(() => {
-      const element = target();
-      if (element) {
-        element._inner_id = props;
-      }
-    });
+  function EditView() {
+    const [target, setTarget] = createSignal<HTMLElement>();
+    const size = createElementSize(target);
 
     return (
-      <Dynamic {...props} ref={setTarget}>
-        <For each={props.children}>{(child) => SVGRender(child)}</For>
-      </Dynamic>
+      <div id="Edit View" class="h-full w-full select-none" ref={setTarget}>
+        <svg
+          class="bg-gray-500"
+          ref={select.setSvgRef}
+          width={size.width ?? 400}
+          height={size.height ?? 400}
+          viewBox={`0 0 ${size.width} ${size.height}`}
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          {/* <rect
+          class="pointer-events-none"
+          fill="#ffffff"
+          x={state.viewBox.split(' ')[0]}
+          y={state.viewBox.split(' ')[1]}
+          width={state.viewBox.split(' ')[2]}
+          height={state.viewBox.split(' ')[3]}
+          data-ignore-selection={true}
+        /> */}
+          <g {...state}>
+            <For each={state.children}>{(child) => SVGRender(child)}</For>
+          </g>
+
+          <g id="huds">
+            <g></g>
+            <OutlinePreview selectedElements={Array.from(select.selectedElementsIdsMap.values())} />
+            {/* <BoxesPreview selectedElements={select.selectedElements()} /> */}
+            <select.LassoSelectionPreview />
+            <select.RectangleSelectionPreview />
+          </g>
+        </svg>
+      </div>
     );
   }
 
@@ -335,56 +355,86 @@ function Display() {
       <Toolbar />
       <Resizable class="flex-1 overflow-hidden border-0">
         <ResizablePanel class="flex w-0 flex-grow flex-col overflow-hidden border-0" initialSize={0.5} minSize={0.1}>
-          <span class="font-mono">Layers</span>
-          <LayersView />
+          <Resizable orientation="vertical">
+            <ResizablePanel
+              class="flex h-0 flex-grow flex-col overflow-hidden border-0"
+              initialSize={0.3}
+              minSize={0.1}
+            >
+              <button
+                class="select-none self-end rounded bg-blue-500 px-2 py-1 text-white hover:bg-blue-600"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(svgToString(state));
+                    console.log('Text copied to clipboard successfully!');
+                  } catch (err) {
+                    console.error('Failed to copy text: ', err);
+                  }
+                }}
+              >
+                Copy
+              </button>
+              <SVGCodePreview node={state} />
+            </ResizablePanel>
+            <ResizableHandle withHandle orientation="vertical" class="border-0 bg-inherit hover:bg-blue-400" />
+            <ResizablePanel
+              class="flex h-0 flex-grow select-none flex-col overflow-hidden border-0"
+              initialSize={0.7}
+              minSize={0.1}
+            >
+              <LayersView />
+            </ResizablePanel>
+          </Resizable>
         </ResizablePanel>
         <ResizableHandle withHandle class="border-0 bg-inherit hover:bg-blue-400" />
         <ResizablePanel class="w-0 flex-grow overflow-hidden border-0" initialSize={0.5} minSize={0.1}>
-          <div id="Edit View" class="h-full w-full" ref={setTarget}>
-            <svg
-              class="bg-gray-500"
-              ref={select.setSvgRef}
-              width={size.width ?? 400}
-              height={size.height ?? 400}
-              viewBox={`0 0 ${size.width} ${size.height}`}
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {/* <rect
-                class="pointer-events-none"
-                fill="#ffffff"
-                x={state.viewBox.split(' ')[0]}
-                y={state.viewBox.split(' ')[1]}
-                width={state.viewBox.split(' ')[2]}
-                height={state.viewBox.split(' ')[3]}
-                data-ignore-selection={true}
-              /> */}
-              <g {...state}>
-                <For each={state.children}>{(child) => SVGRender(child)}</For>
-              </g>
-
-              <g id="huds">
-                <g></g>
-                <OutlinePreview selectedElements={Array.from(select.selectedElementsIdsMap.values())} />
-                {/* <BoxesPreview selectedElements={select.selectedElements()} /> */}
-                <select.LassoSelectionPreview />
-                <select.RectangleSelectionPreview />
-              </g>
-            </svg>
-          </div>
+          <EditView />
         </ResizablePanel>
       </Resizable>
     </div>
   );
 }
 
-function Grip(props: { pos: [number, number] }) {
+function SVGRender(props: SVGNode) {
   return (
-    <circle
-      id={getGripId()}
-      class="fill-white stroke-black stroke-1 [vector-effect:non-scaling-stroke]"
-      cx={props.pos[0]}
-      cy={props.pos[1]}
-      r={10}
-    />
+    <Dynamic
+      {...props}
+      ref={(ref: DataWrapper<Element, SVGNode>) => {
+        ref._inner_id = props;
+      }}
+    >
+      <For each={props.children}>{(child) => SVGRender(child)}</For>
+    </Dynamic>
+  );
+}
+
+function svgToString(
+  node: SVGNode,
+  { indent = true, indentSize = 2, depth = 0 }: { indent?: boolean; indentSize?: number; depth?: number } = {}
+): string {
+  const indentStr = indent ? ' '.repeat(depth * indentSize) : '';
+  const newline = indent ? '\n' : '';
+
+  // Extract attributes excluding component, children, and id
+  const attributes = Object.entries(node)
+    .filter(([key]) => key !== 'component' && key !== 'children' && key !== 'id')
+    .map(([key, value]) => `${key}="${value}"`)
+    .join(' ');
+
+  const attributesStr = attributes ? ` ${attributes}` : '';
+  const hasChildren = node.children && node.children.length > 0;
+
+  if (!hasChildren) {
+    // Self-closing tag
+    return `${indentStr}<${node.component}${attributesStr} />`;
+  }
+
+  // Container with children
+  const childrenStr = node.children
+    ?.map((child) => svgToString(child, { indent, indentSize, depth: depth + 1 }))
+    .join(newline);
+
+  return [`${indentStr}<${node.component}${attributesStr}>`, childrenStr, `${indentStr}</${node.component}>`].join(
+    newline
   );
 }
