@@ -23,75 +23,17 @@ import { batch, createMemo, createSignal, For, JSXElement, Match, Show, Switch }
 import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { PathInput } from './path-input';
-import { SVGCodePreview } from './svg-code-preview';
 import { SVGNode } from './svg-node';
+import { svgParser } from './svg-parser';
 import { DataWrapper, OutlinePreview, useSvgSelect } from './use-svg-select';
 import { useVirtualTree } from './use-virtual-tree';
 
-export default function SVGEditorApp() {
-  return <Display />;
-}
+// import ghostscriptTigerSvg from './ghostscript-tiger.svg?raw';
+import exampleSvg from './example.svg?raw';
+import { SVGCodePreview } from './svg-code-preview';
 
-/**
- *
- * @returns
- */
-function Display() {
-  const [state, setState] = createStore<SVGNode>({
-    id: 'svg-root',
-    component: 'svg',
-    width: '400',
-    height: '400',
-    viewBox: '0 0 400 400',
-    xmlns: 'http://www.w3.org/2000/svg',
-    children: [
-      {
-        component: 'line',
-        x1: '0',
-        y1: '80',
-        x2: '100',
-        y2: '20',
-        stroke: 'black'
-      },
-      {
-        component: 'line',
-        x1: '0',
-        y1: '180',
-        x2: '100',
-        y2: '120',
-        stroke: 'black'
-      },
-      {
-        component: 'g',
-        transform: 'rotate(0)',
-        children: [
-          {
-            component: 'path',
-            stroke: 'red',
-            d: 'M10 10 h 100 v 10 z'
-          },
-          {
-            component: 'path',
-            d: 'M 10 10 h 90 v 90 h -90 z'
-          },
-          {
-            component: 'path',
-            d: 'M 110 140 h 90 v 90 h -90 z',
-            fill: 'yellow'
-          },
-          {
-            component: 'path',
-            d: 'M 10 10 h 90 v 90 h -90 z'
-          },
-          {
-            component: 'path',
-            d: 'M 110 140 h 90 v 90 h -90 z',
-            fill: 'yellow'
-          }
-        ]
-      }
-    ]
-  });
+export default function SVGEditorApp() {
+  const [state, setState] = createStore<SVGNode>(svgParser(exampleSvg));
 
   const map = useVirtualTree({ state, setState });
   const select = useSvgSelect<SVGNode>();

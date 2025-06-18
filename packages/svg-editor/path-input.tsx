@@ -137,11 +137,11 @@ function Button(props: { uppercase: boolean; children?: JSXElement; onClick?: ()
 function convertPathCommand(commands: PathCommand[], index: number, newType: string): PathCommand[] {
   const newCommands = [...commands];
   const command = commands[index];
-  
+
   // Calculate current position up to this command
   let currentX = 0;
   let currentY = 0;
-  
+
   for (let i = 0; i < index; i++) {
     const cmd = commands[i];
     switch (cmd.type.toUpperCase()) {
@@ -161,10 +161,10 @@ function convertPathCommand(commands: PathCommand[], index: number, newType: str
         break;
     }
   }
-  
+
   // Convert the command
   const newCommand = { ...command, type: newType };
-  
+
   if (command.type.toUpperCase() === 'M') {
     if (newType === 'm' && command.type === 'M') {
       // Absolute to relative
@@ -192,7 +192,7 @@ function convertPathCommand(commands: PathCommand[], index: number, newType: str
       newCommand.y = currentY + command.y;
     }
   }
-  
+
   newCommands[index] = newCommand;
   return newCommands;
 }

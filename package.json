@@ -84,6 +84,7 @@
     "@solid-primitives/set": "^0.4.2",
     "@solid-primitives/storage": "^3.5.0",
     "@solid-primitives/utils": "^6.2.3",
+    "@solid-primitives/virtual": "^0.2.1",
     "@solidjs/meta": "^0.28.7",
     "@solidjs/router": "^0.14.10",
     "@thisbeyond/solid-dnd": "^0.7.5",
