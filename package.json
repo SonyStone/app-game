@@ -109,6 +109,8 @@
     "stats.js": "^0.17.0",
     "tailwind-merge": "^3.3.0",
     "three": "0.146",
+    "tm": "^0.0.1",
+    "tm-textarea": "^0.1.1",
     "ts-keycode-enum": "^1.0.6",
     "twgl.js": "^5.5.4",
     "unocss-preset-animations": "^1.2.1",

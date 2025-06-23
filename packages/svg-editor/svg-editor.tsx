@@ -22,6 +22,7 @@ import { debounceTime } from 'rxjs';
 import { batch, createMemo, createSignal, For, JSXElement, Match, Show, Switch } from 'solid-js';
 import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { TmTextarea } from 'tm-textarea/solid';
 import { PathInput } from './path-input';
 import { SVGNode } from './svg-node';
 import { svgParser } from './svg-parser';
@@ -30,7 +31,6 @@ import { useVirtualTree } from './use-virtual-tree';
 
 // import ghostscriptTigerSvg from './ghostscript-tiger.svg?raw';
 import exampleSvg from './example.svg?raw';
-import { SVGCodePreview } from './svg-code-preview';
 
 export default function SVGEditorApp() {
   const [state, setState] = createStore<SVGNode>(svgParser(exampleSvg));
@@ -230,13 +230,6 @@ export default function SVGEditorApp() {
             </MenubarItem>
             <MenubarItem
               onClick={() => {
-                setState('children', 2, 'attributes', 'd', 'M 20 20 h 90 v 90 h -90 z');
-              }}
-            >
-              Draw
-            </MenubarItem>
-            <MenubarItem
-              onClick={() => {
                 setState(
                   'children',
                   produce((children) => {
@@ -316,7 +309,18 @@ export default function SVGEditorApp() {
               >
                 Copy
               </button>
-              <SVGCodePreview node={state} />
+              {/* <SVGCodePreview node={state} /> */}
+              <TmTextarea
+                grammar="tsx"
+                theme="min-light"
+                value={svgToString(state, { indent: true, indentSize: 2 })}
+                editable={true}
+                style={{
+                  padding: '10px',
+                  'font-size': '12pt'
+                }}
+                onInput={(e) => setState(svgParser(e.currentTarget.value))}
+              />
             </ResizablePanel>
             <ResizableHandle withHandle orientation="vertical" class="border-0 bg-inherit hover:bg-blue-400" />
             <ResizablePanel
