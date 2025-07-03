@@ -5,7 +5,7 @@ import { SVGNode } from './svg-node';
 
 const CHILDREN_KEY = 'children';
 
-type Wrapped<T extends { [CHILDREN_KEY]?: T[] }> = {
+export type Wrapped<T extends { [CHILDREN_KEY]?: T[] }> = {
   path: () => (string | number)[];
   remove: () => void;
   update: SetStoreFunction<SVGNode>;

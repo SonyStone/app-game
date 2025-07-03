@@ -1,35 +1,22 @@
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@packages/components/ui/dropdown-menu';
-import {
-  Menubar,
-  MenubarContent,
-  MenubarItem,
-  MenubarMenu,
-  MenubarShortcut,
-  MenubarTrigger
-} from '@packages/components/ui/menubar';
 import { Resizable, ResizableHandle, ResizablePanel } from '@packages/components/ui/resizable';
 import { trackStore } from '@solid-primitives/deep';
 import { createUndoHistory } from '@solid-primitives/history';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { toObservable } from '@utils/to-observable';
 import { toSignal } from '@utils/to-signal';
 import { debounceTime } from 'rxjs';
-import { batch, createMemo, createSignal, For, JSXElement, Match, Show, Switch } from 'solid-js';
-import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
-import { Dynamic } from 'solid-js/web';
+import { createMemo } from 'solid-js';
+import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { TmTextarea } from 'tm-textarea/solid';
-import { PathInput } from './path-input';
+import { EditView } from './components/editor-view';
+import { LayersView } from './components/layers-view';
+import { Toolbar } from './components/toolbar';
+import { SVGCodePreview } from './svg-code-preview';
 import { SVGNode } from './svg-node';
 import { svgParser } from './svg-parser';
-import { DataWrapper, OutlinePreview, useSvgSelect } from './use-svg-select';
+import { useSvgSelect } from './use-svg-select';
 import { useVirtualTree } from './use-virtual-tree';
 
-// import ghostscriptTigerSvg from './ghostscript-tiger.svg?raw';
+// import exampleSvg from './ghostscript-tiger.svg?raw';
 import exampleSvg from './example.svg?raw';
 
 export default function SVGEditorApp() {
@@ -61,233 +48,9 @@ export default function SVGEditorApp() {
     { limit: 100 }
   );
 
-  function ListItem(props: { child: SVGNode; children?: JSXElement }) {
-    return (
-      <li
-        class={[
-          select.selectedElementsIdsMap.has(props.child) ? 'selected' : '',
-          'border-1.5 [&.selected]:(border-blue-400 bg-blue-50) flex flex-shrink-0 flex-col overflow-hidden  rounded bg-white [&:not(:has(.group-child:hover))]:hover:bg-blue-50'
-        ].join(' ')}
-        onClick={(e) => {
-          e.stopPropagation();
-          batch(() => {
-            if (!e.shiftKey) {
-              select.selectedElementsIdsMap.clear();
-            }
-            select.selectedElementsIdsMap.add(props.child);
-          });
-        }}
-      >
-        <div class="border-b-1.5 flex w-full flex-grow place-items-center hover:bg-blue-200 [.selected>&]:border-blue-400">
-          <DropdownMenu placement="bottom">
-            <DropdownMenuTrigger class="px-1 py-0.5 text-xs hover:bg-blue-300">
-              {select.selectedElementsIdsMap.has(props.child) ? '▣' : '▢'}
-              {''}
-              {props.child.component}
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem
-                onClick={() => {
-                  map.get(props.child)?.updateParent(
-                    produce((children: SVGNode[]) => {
-                      children.push(structuredClone(unwrap(props.child)));
-                    })
-                  );
-                }}
-              >
-                Duplicate
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  map.get(props.child)?.remove();
-                }}
-              >
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <div class="flex overflow-hidden">
-          <svg width={40} height={40} viewBox="0 0 400 400" class="flex-shrink-0 border-e bg-white">
-            <SVGRender {...props.child} />
-          </svg>
-
-          {/* TODO color picker??? */}
-          <div class="flex w-full min-w-0 flex-wrap">
-            <div class="flex flex-1 place-items-baseline gap-1 font-mono text-xs">
-              <span>stroke</span>
-              <select
-                value={props.child.stroke || 'black'}
-                onChange={(e) => {
-                  map.get(props.child)?.update('stroke', e.target.value);
-                }}
-              >
-                <option value="black">Black</option>
-                <option value="red">Red</option>
-                <option value="blue">Blue</option>
-              </select>
-            </div>
-            <div class="flex flex-1 place-items-baseline gap-1 font-mono text-xs">
-              <span>fill</span>
-              <select
-                value={props.child?.fill || 'black'}
-                onChange={(e) => {
-                  map.get(props.child)?.update('fill', e.target.value);
-                }}
-              >
-                <option value="black">Black</option>
-                <option value="red">Red</option>
-                <option value="blue">Blue</option>
-              </select>
-            </div>
-
-            <Switch>
-              <Match when={props.child.component === 'path'}>
-                <div class="flex flex-1 place-items-baseline gap-1 font-mono text-xs">
-                  <span>d</span>
-                  <PathInput
-                    value={props.child?.d || ''}
-                    onChange={(e) => {
-                      map.get(props.child)?.update('d', e);
-                    }}
-                  />
-                </div>
-              </Match>
-            </Switch>
-          </div>
-        </div>
-
-        <Show when={props.child.children}>
-          <ul class="group-child flex w-full list-none flex-col gap-1 p-1">
-            <For each={props.child.children}>{(subChild) => <ListItem child={subChild} />}</For>
-          </ul>
-        </Show>
-      </li>
-    );
-  }
-
-  function LayersView() {
-    return (
-      <>
-        <DropdownMenu placement="bottom">
-          <DropdownMenuTrigger>Add element</DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <For each={['path', 'circle', 'ellipse', 'rect', 'line', 'polygon', 'polyline', 'g']}>
-              {(child) => (
-                <DropdownMenuItem
-                  onClick={() => {
-                    setState(
-                      'children',
-                      produce((children) => {
-                        children?.push({
-                          component: child as SVGNode['component'],
-                          children: []
-                        });
-                      })
-                    );
-                  }}
-                >
-                  {child}
-                </DropdownMenuItem>
-              )}
-            </For>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <ul id="Layers View" class="flex h-full list-none flex-col gap-2 overflow-y-auto p-2">
-          <For each={state.children}>{(child) => <ListItem child={child}></ListItem>}</For>
-        </ul>
-      </>
-    );
-  }
-
-  function Toolbar() {
-    return (
-      <Menubar class="select-none border-0 shadow-none">
-        <MenubarMenu>
-          <MenubarTrigger>Edit</MenubarTrigger>
-          <MenubarContent>
-            <MenubarItem
-              disabled={!history.canUndo()}
-              onClick={() => {
-                history.undo();
-              }}
-            >
-              Undo <MenubarShortcut>⌘Z</MenubarShortcut>
-            </MenubarItem>
-            <MenubarItem
-              onClick={() => {
-                batch(() => {
-                  for (const item of Array.from(select.selectedElementsIdsMap.keys())) {
-                    const node = map.get(item);
-                    if (node) {
-                      node.update('fill', 'red');
-                    }
-                  }
-                });
-              }}
-            >
-              Select
-            </MenubarItem>
-            <MenubarItem
-              onClick={() => {
-                setState(
-                  'children',
-                  produce((children) => {
-                    children?.pop();
-                  })
-                );
-              }}
-            >
-              Erase
-            </MenubarItem>
-          </MenubarContent>
-        </MenubarMenu>
-      </Menubar>
-    );
-  }
-
-  function EditView() {
-    const [target, setTarget] = createSignal<HTMLElement>();
-    const size = createElementSize(target);
-
-    return (
-      <div id="Edit View" class="h-full w-full select-none" ref={setTarget}>
-        <svg
-          class="bg-gray-500"
-          ref={select.setSvgRef}
-          width={size.width ?? 400}
-          height={size.height ?? 400}
-          viewBox={`0 0 ${size.width} ${size.height}`}
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {/* <rect
-          class="pointer-events-none"
-          fill="#ffffff"
-          x={state.viewBox.split(' ')[0]}
-          y={state.viewBox.split(' ')[1]}
-          width={state.viewBox.split(' ')[2]}
-          height={state.viewBox.split(' ')[3]}
-          data-ignore-selection={true}
-        /> */}
-          <g {...state}>
-            <For each={state.children}>{(child) => SVGRender(child)}</For>
-          </g>
-
-          <g id="huds">
-            <g></g>
-            <OutlinePreview selectedElements={Array.from(select.selectedElementsIdsMap.values())} />
-            {/* <BoxesPreview selectedElements={select.selectedElements()} /> */}
-            <select.LassoSelectionPreview />
-            <select.RectangleSelectionPreview />
-          </g>
-        </svg>
-      </div>
-    );
-  }
-
   return (
     <div id="Display" class="flex h-screen w-full w-screen flex-col overflow-hidden">
-      <Toolbar />
+      <Toolbar history={history} map={map} select={select} setState={setState} state={state} />
       <Resizable class="flex-1 overflow-hidden border-0">
         <ResizablePanel class="flex w-0 flex-grow flex-col overflow-hidden border-0" initialSize={0.5} minSize={0.1}>
           <Resizable orientation="vertical">
@@ -309,7 +72,14 @@ export default function SVGEditorApp() {
               >
                 Copy
               </button>
-              {/* <SVGCodePreview node={state} /> */}
+              <SVGCodePreview node={state} />
+            </ResizablePanel>
+            <ResizableHandle withHandle orientation="vertical" class="border-0 bg-inherit hover:bg-blue-400" />
+            <ResizablePanel
+              class="flex h-0 flex-grow flex-col overflow-hidden border-0"
+              initialSize={0.3}
+              minSize={0.1}
+            >
               <TmTextarea
                 grammar="tsx"
                 theme="min-light"
@@ -325,32 +95,19 @@ export default function SVGEditorApp() {
             <ResizableHandle withHandle orientation="vertical" class="border-0 bg-inherit hover:bg-blue-400" />
             <ResizablePanel
               class="flex h-0 flex-grow select-none flex-col overflow-hidden border-0"
-              initialSize={0.7}
+              initialSize={0.4}
               minSize={0.1}
             >
-              <LayersView />
+              <LayersView select={select} map={map} setState={setState} state={state} />
             </ResizablePanel>
           </Resizable>
         </ResizablePanel>
         <ResizableHandle withHandle class="border-0 bg-inherit hover:bg-blue-400" />
         <ResizablePanel class="w-0 flex-grow overflow-hidden border-0" initialSize={0.5} minSize={0.1}>
-          <EditView />
+          <EditView select={select} state={state} />
         </ResizablePanel>
       </Resizable>
     </div>
-  );
-}
-
-function SVGRender(props: SVGNode) {
-  return (
-    <Dynamic
-      {...props}
-      ref={(ref: DataWrapper<Element, SVGNode>) => {
-        ref._inner_id = props;
-      }}
-    >
-      <For each={props.children}>{(child) => SVGRender(child)}</For>
-    </Dynamic>
   );
 }
 
