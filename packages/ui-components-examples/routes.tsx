@@ -26,5 +26,11 @@ export const routes: Routes[] = [
     name: 'CSS Gradient Border Glowing Animation Hover Effect',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./css-gradient-border-glowing-animation-hover-effect'))
+  },
+  {
+    path: '/virtual-scroll',
+    name: 'Virtual Scroll Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./virtual-scroll/virtual-scroll'))
   }
 ];
