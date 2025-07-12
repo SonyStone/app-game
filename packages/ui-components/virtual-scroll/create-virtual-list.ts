@@ -1,9 +1,24 @@
-// Virtualizing
-
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createScrollPosition } from '@solid-primitives/scroll';
 import { access, MaybeAccessor } from '@solid-primitives/utils';
 import { createMemo } from 'solid-js';
+
+/**
+ * To make VirtualList list work, we need
+ * - viewport size
+ * - scroll position
+ * - row height
+ *
+ * on scroll we need to calculate which items are visible
+ * - start index
+ * - end index
+ * and how much padding we need to add to the top and bottom of the list
+ * - paddingTop
+ * - paddingBottom
+ *
+ * then we can slice the items array to get visible items
+ * - visibleItems
+ */
 
 export function createVirtualList<T extends readonly unknown[]>(props: {
   /** Define the properties you need for your virtual list */

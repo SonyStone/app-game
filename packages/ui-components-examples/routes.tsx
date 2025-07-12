@@ -32,5 +32,11 @@ export const routes: Routes[] = [
     name: 'Virtual Scroll Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./virtual-scroll/virtual-scroll'))
+  },
+  {
+    path: '/virtual-scroll-nested',
+    name: '[WIP] Virtual Scroll Nested Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./virtual-scroll-nested/virtual-scroll-nested'))
   }
 ];
