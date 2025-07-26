@@ -443,7 +443,7 @@ export const routes: Routes[] = [
     path: '/svg-editor',
     name: '[WIP] SVG Editor',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/svg-editor/svg-editor'))
+    component: lazy(() => import('@packages/svg-editor'))
   },
   {
     path: '/:any',

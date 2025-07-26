@@ -1,6 +1,6 @@
 import { Thumbnail } from '@packages/ui-components/thumbnail';
+import { Routes } from '@packages/utils/routes.interface';
 import { lazy } from 'solid-js';
-import { Routes } from 'src/routes.interface';
 
 export const routes: Routes[] = [
   {
@@ -38,5 +38,11 @@ export const routes: Routes[] = [
     name: '[WIP] Virtual Scroll Nested Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./virtual-scroll-nested/virtual-scroll-nested'))
+  },
+  {
+    path: '/docking',
+    name: '[WIP] Docking Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./docking'))
   }
 ];

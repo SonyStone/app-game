@@ -9,6 +9,7 @@ target/
 *.exrc
 website/public
 
+.DS_store
 
 # Added by cargo
 
