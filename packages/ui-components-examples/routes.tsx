@@ -44,5 +44,17 @@ export const routes: Routes[] = [
     name: '[WIP] Docking Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./docking'))
+  },
+  {
+    path: '/solid-dockview',
+    name: 'Solid Dockview',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./solid-dockview'))
+  },
+  {
+    path: '/timeline',
+    name: '[WIP] Timeline Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./timeline'))
   }
 ];

@@ -2,13 +2,14 @@
 
 import { cn } from '@packages/utils/cn';
 import { createEventListener } from '@solid-primitives/event-listener';
-import { ComponentProps, createMemo, createSignal, Show, splitProps, type JSX } from 'solid-js';
+import { ComponentProps, createMemo, createSignal, For, Show, splitProps, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 
 declare module 'solid-js' {
   namespace JSX {
     interface IntrinsicElements {
+      'dockview-demo': ComponentProps<'div'>;
       sash: ComponentProps<'div'>;
       'sash-container': ComponentProps<'div'>;
       'panel-container': ComponentProps<'div'>;
@@ -48,22 +49,125 @@ declare module 'solid-js' {
  * ```
  */
 
+type SplitView = {
+  direction?: 'row' | 'column';
+  children?: PanelViewState[];
+};
+
+type View = {
+  title?: string;
+  size?: number;
+  minSize?: number;
+  maxSize?: number;
+};
+
+type PanelViewState = SplitView | View | View[];
+
+/**
+ * 1
+ *
+ * column[1,2]
+ *
+ *
+ * column[1, row[2, 3]]
+ *
+ * column[1, row[2, column[3,5], 4]]
+ *
+ * column[1, row[2, column[3, row[5, 6]], 4]]
+ */
+
+// direction: 'column',
+// children: [
+//   {
+//     direction: 'row',
+//     children: [
+//       {},
+//       {
+//         direction: 'column',
+//         children: [
+//           {},
+//           {
+//             direction: 'row',
+//             children: [{}, {}]
+//           }
+//         ]
+//       },
+//       {}
+//     ]
+//   },
+//   {}
+// ]
+
+const isSplitView = (data: PanelViewState): data is SplitView => {
+  return typeof data === 'object' && data !== null && !Array.isArray(data) && 'direction' in data;
+};
+
+const isView = (data: PanelViewState): data is View => {
+  return typeof data === 'object' && data !== null && !Array.isArray(data) && !('direction' in data);
+};
+
+const isViewArray = (data: PanelViewState): data is View[] => {
+  return Array.isArray(data) && data.every(isView);
+};
+
+function PanelView(props: View) {
+  return (
+    <div
+      class="border"
+      style={{
+        'flex-basis': props.size ? `${props.size}px` : 'auto',
+        'min-width': props.minSize ? `${props.minSize}px` : '100px',
+        'max-width': props.maxSize ? `${props.maxSize}px` : 'none'
+      }}
+    >
+      <h2 class="panel-title">{props.title}</h2>
+      {/* Add content here */}
+    </div>
+  );
+}
+
+function Unwrap(props: { data: PanelViewState }) {
+  return (
+    <>
+      <Show when={isSplitView(props.data) && props.data}>
+        {(d) => (
+          <div style={{ display: 'flex', 'flex-direction': d().direction || 'column', gap: '4px' }}>
+            <For each={d().children}>{(item) => <Unwrap data={item} />}</For>
+          </div>
+        )}
+      </Show>
+      <Show when={isView(props.data) && props.data}>{(d) => <PanelView {...d()} />}</Show>
+      <Show when={isViewArray(props.data) && props.data}>
+        {(d) => (
+          <div class="panel-view-array">
+            <For each={d()}>{(item) => <PanelView {...item} />}</For>
+          </div>
+        )}
+      </Show>
+    </>
+  );
+}
+
 export default function DockingExample() {
-  const [state, setState] = createStore<any>({
-    panels: [
+  const [state, setState] = createStore<PanelViewState>({
+    direction: 'column',
+    children: [
       {
-        id: 'panel1',
-        size: 300,
-        minSize: 100,
-        maxSize: 600,
-        position: 'left'
+        title: 'Panel 2',
+        children: {
+          title: 'Panel 2.1'
+        }
       },
       {
-        id: 'panel2',
-        size: 400,
-        minSize: 200,
-        maxSize: 800,
-        position: 'right'
+        direction: 'row',
+        children: [
+          {
+            title: 'Panel 1.1'
+          },
+          {
+            title: 'Panel 1.2'
+          }
+        ]
       }
     ]
   });
@@ -75,7 +179,7 @@ export default function DockingExample() {
   const P = Portals({ children: video });
 
   return (
-    <div dockview-demo class="flex h-full w-full flex-1 flex-col rounded-lg p-2">
+    <dockview-demo class="flex h-full w-full flex-1 flex-col rounded-lg p-2">
       <div class="flex flex-col overflow-hidden">
         <h1 class="text-2xl font-bold">Docking Example</h1>
         <p class="text-sm text-gray-600">This is a placeholder for the docking example.</p>
@@ -83,6 +187,8 @@ export default function DockingExample() {
       </div>
 
       <GlobalCursorStyle />
+
+      <Unwrap data={state} />
 
       {/* Panels */}
       <div class="flex h-0 flex-1 flex-col overflow-hidden">
@@ -123,7 +229,7 @@ export default function DockingExample() {
           </div>
         </div>
       </div>
-    </div>
+    </dockview-demo>
   );
 }
 

@@ -1,11 +1,11 @@
-import presetWind from '@unocss/preset-wind';
+import presetWind4 from '@unocss/preset-wind4';
 import transformerCompileClass from '@unocss/transformer-compile-class';
 import transformerVariantGroup from '@unocss/transformer-variant-group';
 import { defineConfig } from '@unocss/vite';
 import { presetAnimations } from 'unocss-preset-animations';
 
 export default defineConfig({
-  presets: [presetWind(), presetAnimations()],
+  presets: [presetWind4(), presetAnimations()],
   rules: [],
   transformers: [transformerCompileClass(), transformerVariantGroup()],
   theme: {
