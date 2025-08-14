@@ -1,10 +1,7 @@
-import { createEffect, createSignal, onCleanup } from 'solid-js';
 import createContextProvider from '@utils/createContextProvider';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 
-export type ResizeHandler = (
-  size: { width: number; height: number },
-  ref: Element
-) => void;
+export type ResizeHandler = (size: { width: number; height: number }, ref: Element) => void;
 
 type ObservedSize = {
   width: number | undefined;
@@ -38,11 +35,7 @@ export function createResizeObserver<T extends Element>(props: {
       const newHeight = entry.contentRect.height;
       const previous = previousMap.get(entry.target);
 
-      if (
-        !previous ||
-        previous.width !== newWidth ||
-        previous.height !== newHeight
-      ) {
+      if (!previous || previous.width !== newWidth || previous.height !== newHeight) {
         const newSize = { width: newWidth, height: newHeight };
         props.onResize(newSize, entry.target);
         previousMap.set(entry.target, { width: newWidth, height: newHeight });
@@ -53,8 +46,7 @@ export function createResizeObserver<T extends Element>(props: {
   createEffect((oldRefs?: T[]) => {
     let refs: T[] = [];
     if (props.refs) {
-      const optsRefs =
-        typeof props.refs === 'function' ? props.refs() : props.refs;
+      const optsRefs = typeof props.refs === 'function' ? props.refs() : props.refs;
       if (Array.isArray(optsRefs)) refs = refs.concat(optsRefs);
       else refs.push(optsRefs);
     }
@@ -79,5 +71,4 @@ export function createResizeObserver<T extends Element>(props: {
   return refCallback;
 }
 
-export const [ResizeObserverProvider, useResizeObserverContext] =
-  createContextProvider(createResizeObserver);
+export const [ResizeObserverProvider, useResizeObserverContext] = createContextProvider(createResizeObserver<Element>);

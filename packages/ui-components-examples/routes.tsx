@@ -56,5 +56,11 @@ export const routes: Routes[] = [
     name: '[WIP] Timeline Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./timeline'))
+  },
+  {
+    path: '/solid-motionone',
+    name: '[WIP] Solid Motion One Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./solid-motionone'))
   }
 ];

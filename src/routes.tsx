@@ -309,13 +309,8 @@ export const routes: Routes[] = [
         <Ripple class="text-slate/20" />
       </A>
     ),
-    children: [
-      {
-        path: '/',
-        component: () => <Navigation routes={pixijsRoutes} parentPath="." />
-      },
-      ...pixijsRoutes
-    ]
+    component: lazy(() => import('@packages/pixijs-examples')),
+    children: pixijsRoutes
   },
   {
     path: '/ecsy-examples',

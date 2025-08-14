@@ -1,44 +1,65 @@
-import { Application, Assets, Sprite } from 'pixi.js';
-import { onCleanup, onMount } from 'solid-js';
+import { HTMLText, Sprite, useApplication, useAsset } from '@packages/solid-pixi';
+import { Ticker } from 'pixi.js';
+import { Suspense } from 'solid-js';
+import ParticleContainerExample from './ParticleContainerExample';
+import { useTick } from './useTick';
 
-export default function PixijsExamlesBasic() {
-  const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
+export default function BasicExample() {
+  const app = useApplication();
+  const [texture] = useAsset('https://pixijs.com/assets/bunny.png');
 
-  // Create a new application
-  const app = new Application();
+  return (
+    <Suspense>
+      <ParticleContainerExample />
+      <HTMLTextExample />
+      <Sprite
+        ref={(bunny) => {
+          useTick((delta: Ticker) => {
+            // Just for fun, let's rotate mr rabbit a little.
+            // * Delta is 1 if running at 100% performance *
+            // * Creates frame-independent transformation *
+            bunny.rotation += 0.1 * delta.deltaTime;
+          });
+        }}
+        texture={texture()}
+        anchor={0.5}
+        x={app.screen.width / 2}
+        y={app.screen.height / 2}
+      />
+    </Suspense>
+  );
+}
 
-  onMount(async () => {
-    // Initialize the application
-    await app.init({ background: '#1099bb', resizeTo: window, canvas: canvas });
+function HTMLTextExample() {
+  const app = useApplication();
+  const html = (
+    <div>
+      <div class="title">Welcome</div>
+      <div class="content">
+        This text supports:
+        <ul>
+          <li>✨ Emojis</li>
+          <li>🎨 Custom CSS</li>
+          <li>📏 Auto-sizing</li>
+        </ul>
+      </div>
+    </div>
+  ) as HTMLDivElement;
 
-    // Create a bunny Sprite
-    const bunny = new Sprite();
-    // Load the bunny texture
-    Assets.load('https://pixijs.com/assets/bunny.png').then((texture) => {
-      bunny.texture = texture;
-    });
-
-    // Center the sprite's anchor point
-    bunny.anchor.set(0.5);
-
-    // Move the sprite to the center of the screen
-    bunny.x = app.screen.width / 2;
-    bunny.y = app.screen.height / 2;
-
-    app.stage.addChild(bunny);
-
-    // Listen for animate update
-    app.ticker.add((time) => {
-      // Just for fun, let's rotate mr rabbit a little.
-      // * Delta is 1 if running at 100% performance *
-      // * Creates frame-independent transformation *
-      bunny.rotation += 0.1 * time.deltaTime;
-    });
-  });
-
-  onCleanup(() => {
-    app.destroy();
-  });
-
-  return <>{canvas}</>;
+  return (
+    <HTMLText
+      text={html.innerHTML}
+      style={{
+        fontSize: 24,
+        fill: '#334455',
+        cssOverrides: ['.title { font-size: 32px; color: red; }', '.content { line-height: 1.5; }'],
+        wordWrap: true,
+        wordWrapWidth: 300,
+        align: 'center'
+      }}
+      anchor={{ x: 0.5, y: 0 }}
+      x={app.screen.width / 2}
+      y={app.screen.height / 2}
+    />
+  );
 }

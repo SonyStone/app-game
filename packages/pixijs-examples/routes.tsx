@@ -4,7 +4,7 @@ import { Routes } from 'src/routes.interface';
 
 export const routes: Routes[] = [
   {
-    path: '/basic',
+    path: '/',
     name: 'Basic',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/pixijs-examples/basic'))
@@ -26,5 +26,41 @@ export const routes: Routes[] = [
     name: 'Mouse Trail',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/pixijs-examples/mouse-trail'))
+  },
+  {
+    path: '/render-layers',
+    name: 'Render Layers',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/pixijs-examples/RenderLayers/index'))
+  },
+  {
+    path: '/advanced-scratch-card',
+    name: 'Advanced Scratch Card',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/pixijs-examples/AdvancedScratchCard'))
+  },
+  {
+    path: '/shader-toy-mesh',
+    name: 'Shader Toy Mesh',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/pixijs-examples/MeshAndShaders/ShaderToyMesh'))
+  },
+  {
+    path: '/graphics-simple',
+    name: 'Graphics Simple',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/pixijs-examples/GraphicsSimple'))
+  },
+  {
+    path: '/graphics-advanced',
+    name: 'Graphics Advanced',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/pixijs-examples/GraphicsAdvanced'))
+  },
+  {
+    path: '/graphics-svg',
+    name: 'Graphics Svg',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/pixijs-examples/GraphicsSvg'))
   }
 ];
