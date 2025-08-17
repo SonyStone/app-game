@@ -1,4 +1,4 @@
-import { Mesh, useApplication } from '@packages/solid-pixi';
+import { Container, Mesh, useApplication } from '@packages/solid-pixi';
 import { Geometry, MeshGeometry, Shader, TextureShader } from 'pixi.js';
 import fragment from './shaderToy.frag';
 import vertex from './shaderToy.vert';
@@ -37,22 +37,24 @@ export default function ShaderToyMesh() {
   const app = useApplication();
 
   return (
-    <Mesh
-      geometry={quadGeometry}
-      shader={shader}
-      ref={() => {
-        const handler = () => {
-          shader.resources.shaderToyUniforms.uniforms.iTime += app.ticker.elapsedMS / 1000;
-        };
-        app.ticker.add(handler);
-        return () => {
-          app.ticker.remove(handler);
-        };
-      }}
-      x={app.screen.width / 2}
-      y={app.screen.height / 2}
-      width={app.screen.width}
-      height={app.screen.height}
-    />
+    <Container>
+      <Mesh
+        geometry={quadGeometry}
+        shader={shader}
+        ref={() => {
+          const handler = () => {
+            shader.resources.shaderToyUniforms.uniforms.iTime += app.ticker.elapsedMS / 1000;
+          };
+          app.ticker.add(handler);
+          return () => {
+            app.ticker.remove(handler);
+          };
+        }}
+        x={app.screen.width / 2}
+        y={app.screen.height / 2}
+        width={app.screen.width}
+        height={app.screen.height}
+      />
+    </Container>
   );
 }

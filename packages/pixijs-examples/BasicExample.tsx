@@ -1,4 +1,4 @@
-import { HTMLText, Sprite, useApplication, useAsset } from '@packages/solid-pixi';
+import { Container, HTMLText, Sprite, useApplication, useAsset } from '@packages/solid-pixi';
 import { Ticker } from 'pixi.js';
 import { Suspense } from 'solid-js';
 import ParticleContainerExample from './ParticleContainerExample';
@@ -9,24 +9,26 @@ export default function BasicExample() {
   const [texture] = useAsset('https://pixijs.com/assets/bunny.png');
 
   return (
-    <Suspense>
-      <ParticleContainerExample />
-      <HTMLTextExample />
-      <Sprite
-        ref={(bunny) => {
-          useTick((delta: Ticker) => {
-            // Just for fun, let's rotate mr rabbit a little.
-            // * Delta is 1 if running at 100% performance *
-            // * Creates frame-independent transformation *
-            bunny.rotation += 0.1 * delta.deltaTime;
-          });
-        }}
-        texture={texture()}
-        anchor={0.5}
-        x={app.screen.width / 2}
-        y={app.screen.height / 2}
-      />
-    </Suspense>
+    <Container>
+      <Suspense>
+        <ParticleContainerExample />
+        <HTMLTextExample />
+        <Sprite
+          ref={(bunny) => {
+            useTick((delta: Ticker) => {
+              // Just for fun, let's rotate mr rabbit a little.
+              // * Delta is 1 if running at 100% performance *
+              // * Creates frame-independent transformation *
+              bunny.rotation += 0.1 * delta.deltaTime;
+            });
+          }}
+          texture={texture()}
+          anchor={0.5}
+          x={app.screen.width / 2}
+          y={app.screen.height / 2}
+        />
+      </Suspense>
+    </Container>
   );
 }
 

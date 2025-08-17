@@ -61,7 +61,7 @@ export default function RenderLayers() {
   const uiLayer = (<RenderLayer />) as ReturnType<typeof RenderLayer>;
 
   return (
-    <>
+    <Container>
       <Container filters={displacementFilter}>
         {/* background */}
         <Sprite texture={assets()?.['https://pixijs.com/assets/pond/displacement_BG.jpg']} />
@@ -79,6 +79,6 @@ export default function RenderLayers() {
         </For>
       </Container>
       {uiLayer}
-    </>
+    </Container>
   );
 }

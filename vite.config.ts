@@ -24,6 +24,9 @@ export default defineConfig({
       // your config or in uno.config.ts
     }),
     solidPlugin(),
+    // ? check other plugins for solid-js
+    // https://github.com/thednp/vite-solid-svg
+    // https://github.com/jfgodoy/vite-plugin-solid-svg
     solidSvg(),
     vitePluginArraybuffer(),
     glsl()

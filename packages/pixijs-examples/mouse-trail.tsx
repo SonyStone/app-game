@@ -56,22 +56,24 @@ export default function PixijsExamlesMouseTrail() {
   });
 
   return (
-    <Show when={trailTexture()}>
-      <Container
-        width={app.screen.width}
-        height={app.screen.height}
-        eventMode="static"
-        interactive
-        hitArea={app.screen}
-        onmousemove={(event) => {
-          mouseposition = mouseposition || { x: 0, y: 0 };
-          mouseposition.x = event.global.x;
-          mouseposition.y = event.global.y;
-        }}
-      >
-        <MeshRope texture={trailTexture()} blendMode="add" points={points} />
-      </Container>
-    </Show>
+    <Container>
+      <Show when={trailTexture()}>
+        <Container
+          width={app.screen.width}
+          height={app.screen.height}
+          eventMode="static"
+          interactive
+          hitArea={app.screen}
+          onmousemove={(event) => {
+            mouseposition = mouseposition || { x: 0, y: 0 };
+            mouseposition.x = event.global.x;
+            mouseposition.y = event.global.y;
+          }}
+        >
+          <MeshRope texture={trailTexture()} blendMode="add" points={points} />
+        </Container>
+      </Show>
+    </Container>
   );
 }
 

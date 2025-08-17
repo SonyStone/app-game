@@ -7,19 +7,25 @@ export const routes: Routes[] = [
     path: '/',
     name: 'Basic',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/basic'))
+    component: lazy(() => import('@packages/pixijs-examples/BasicExample'))
   },
   {
     path: '/basic-container',
     name: 'Basic Container',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./basic-container/basic-container'))
+    component: lazy(() => import('./BasicContainer'))
+  },
+  {
+    path: '/animations',
+    name: 'Animations',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./AnimationsExample'))
   },
   {
     path: '/blend-modes',
     name: 'Blend Modes',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/blend-modes'))
+    component: lazy(() => import('@packages/pixijs-examples/BlendModesExamles'))
   },
   {
     path: '/mouse-trail',

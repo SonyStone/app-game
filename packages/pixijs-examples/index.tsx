@@ -1,11 +1,21 @@
 import { Application, Stage } from '@packages/solid-pixi';
 import { A } from '@solidjs/router';
+import { gsap } from 'gsap';
+import { PixiPlugin } from 'gsap/PixiPlugin';
+import { Graphics, VERSION } from 'pixi.js';
 import { For } from 'solid-js';
 import { JSX } from 'solid-js/jsx-runtime';
+import { Transition } from './Transition';
 import { routes } from './routes';
 
 export default function App(props: { children?: JSX.Element }) {
   const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
+
+  gsap.registerPlugin(PixiPlugin);
+  PixiPlugin.registerPIXI({
+    VERSION: VERSION,
+    Graphics: Graphics
+  });
 
   return (
     <>
@@ -19,7 +29,54 @@ export default function App(props: { children?: JSX.Element }) {
         </For>
       </div>
       <Application resizeTo={window} canvas={canvas} background={'#1099bb'} useBackBuffer={true} antialias={true}>
-        <Stage>{props.children}</Stage>
+        <Stage>
+          <Transition
+            onEnter={(el, done) => {
+              gsap
+                .fromTo(
+                  el,
+                  {
+                    pixi: {
+                      x: el.width / 2,
+                      y: el.height / 2,
+                      rotation: 360,
+                      pivotX: el.width / 2,
+                      pivotY: el.height / 2,
+                      scaleX: 0,
+                      scaleY: 0
+                    }
+                  },
+                  {
+                    pixi: {
+                      x: el.width / 2,
+                      y: el.height / 2,
+                      scaleX: 1,
+                      scaleY: 1,
+                      pivotX: el.width / 2,
+                      pivotY: el.height / 2,
+                      rotation: 0
+                    },
+                    duration: 0.3
+                  }
+                )
+                .eventCallback('onComplete', () => {
+                  done();
+                });
+            }}
+            onExit={(el, done) => {
+              gsap
+                .to(el, {
+                  pixi: { y: -window.innerHeight },
+                  duration: 0.5
+                })
+                .eventCallback('onComplete', () => {
+                  done();
+                });
+            }}
+          >
+            {props.children}
+          </Transition>
+        </Stage>
       </Application>
     </>
   );

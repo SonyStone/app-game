@@ -24,6 +24,10 @@ export const { effect, memo, createComponent, createTextNode, insertNode, insert
     },
     insertNode(parent, node, anchor) {
       if (!parent) return;
+      if (node instanceof Element) {
+        console.warn(`Inserting an ${node.constructor.name} node directly is not supported in Pixi`);
+        return;
+      }
 
       // ? Is there any other way to check if the parent is a Container or a ParticleContainer?
       // Handles ParticleContainer
