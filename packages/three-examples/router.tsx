@@ -8,6 +8,12 @@ import spritesThumbnail from './sprites-thumbnail.png?url';
 
 export const routes: Routes[] = [
   {
+    path: '/solid-three',
+    name: 'Solid Three',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/three-examples/SolidThreeExample'))
+  },
+  {
     path: '/three-pixi',
     name: 'ThreePixi (not working)',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,

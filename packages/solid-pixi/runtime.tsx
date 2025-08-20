@@ -4,7 +4,7 @@ import { createRenderer } from 'solid-js/universal';
 
 export const { effect, memo, createComponent, createTextNode, insertNode, insert, setProp, mergeProps, use, ...other } =
   createRenderer<Container>({
-    createElement(string) {
+    createElement() {
       return new Container({});
     },
     createTextNode(value) {
@@ -71,7 +71,7 @@ export const { effect, memo, createComponent, createTextNode, insertNode, insert
     }
   });
 
-function spreadExpression(node: any, props: any = {}, prevProps: any = {}) {
+function spreadExpression(node: unknown, props: any = {}, prevProps: any = {}) {
   let renderable = props?.renderable ?? true;
   createRenderEffect(() => props.ref?.(node));
   createRenderEffect(() => {
@@ -90,7 +90,7 @@ function spreadExpression(node: any, props: any = {}, prevProps: any = {}) {
   });
   return prevProps;
 }
-export function _spread<T>(node: any, accessor: T | (() => T)) {
+export function _spread<T>(node: unknown, accessor: T | (() => T)) {
   if (typeof accessor === 'function') {
     createRenderEffect((current) =>
       // @ts-expect-error // This expression is not callable.
@@ -129,4 +129,4 @@ export const spread = _spread;
  * @param code - A function that returns a JSX element to render
  * @returns A dispose function that cleans up the rendered element
  */
-export const render = other.render as (application: () => JSX.Element) => () => void;
+export const render = other.render as unknown as (application: () => JSX.Element) => () => void;

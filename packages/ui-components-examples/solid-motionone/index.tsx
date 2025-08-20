@@ -28,6 +28,14 @@ export default function App() {
       <Motion.button onClick={() => setBg('blue')} animate={{ backgroundColor: bg() }} transition={{ duration: 3 }}>
         Click Me
       </Motion.button>
+      <Motion.div
+        class="w-100px h-100px bg-#9911ff rounded-10px flex items-center justify-center"
+        animate={{ scale: 1.2 }}
+        transition={{ duration: 0.3 }}
+        hover={{ scale: 1.5 }}
+        // whileHover={{ scale: 1.2 }}
+        // whileTap={{ scale: 0.8 }}
+      />
       <Example2 />
       <ExampleOfLayoutAnimation />
     </div>
