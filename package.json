@@ -99,6 +99,7 @@
     "clsx": "^2.1.1",
     "dat.gui": "^0.7.9",
     "dockview-core": "4.6.2",
+    "excalibur": "0.30.3",
     "grid-engine": "^2.44.0",
     "gsap": "^3.13.0",
     "hammerjs": "^2.0.8",

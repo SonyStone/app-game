@@ -357,6 +357,12 @@ export const routes: Routes[] = [
   //   component: lazy(() => import('@packages/pixijs-research/MyPixijs'))
   // },
   {
+    path: '/excalibur-examples',
+    name: 'Excalibur.js Examples',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@packages/excalibur-examples'))
+  },
+  {
     path: '/babylon',
     name: 'Babylon.js',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
