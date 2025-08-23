@@ -45,23 +45,23 @@ export default function App(props: { children?: JSX.Element }) {
                     el,
                     {
                       pixi: {
-                        x: el.width / 2,
-                        y: el.height / 2,
+                        x: size.width / 2,
+                        y: size.height / 2,
                         rotation: 360,
-                        pivotX: el.width / 2,
-                        pivotY: el.height / 2,
+                        pivotX: size.width / 2,
+                        pivotY: size.height / 2,
                         scaleX: 0,
                         scaleY: 0
                       }
                     },
                     {
                       pixi: {
-                        x: el.width / 2,
-                        y: el.height / 2,
+                        x: size.width / 2,
+                        y: size.height / 2,
                         scaleX: 1,
                         scaleY: 1,
-                        pivotX: el.width / 2,
-                        pivotY: el.height / 2,
+                        pivotX: size.width / 2,
+                        pivotY: size.height / 2,
                         rotation: 0
                       },
                       duration: 0.3
@@ -74,7 +74,7 @@ export default function App(props: { children?: JSX.Element }) {
               onExit={(el, done) => {
                 gsap
                   .to(el, {
-                    pixi: { y: -window.innerHeight },
+                    pixi: { y: -size.height },
                     duration: 0.5
                   })
                   .eventCallback('onComplete', () => {

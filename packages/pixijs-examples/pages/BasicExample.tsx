@@ -1,12 +1,13 @@
-import { Container, HTMLText, Sprite, useApplication, useAsset } from '@packages/solid-pixi';
+import { Container, HTMLText, Sprite, useAsset } from '@packages/solid-pixi';
+import { createWindowSize } from '@solid-primitives/resize-observer';
 import { Ticker } from 'pixi.js';
 import { Suspense } from 'solid-js';
 import { useTick } from '../useTick';
 import ParticleContainerExample from './ParticleContainerExample';
 
 export default function BasicExample() {
-  const app = useApplication();
   const [texture] = useAsset('https://pixijs.com/assets/bunny.png');
+  const size = createWindowSize();
 
   return (
     <Container>
@@ -24,8 +25,8 @@ export default function BasicExample() {
           }}
           texture={texture()}
           anchor={0.5}
-          x={app.screen.width / 2}
-          y={app.screen.height / 2}
+          x={size.width / 2}
+          y={size.height / 2}
         />
       </Suspense>
     </Container>
@@ -33,7 +34,7 @@ export default function BasicExample() {
 }
 
 function HTMLTextExample() {
-  const app = useApplication();
+  const size = createWindowSize();
   const html = (
     <div>
       <div class="title">Welcome</div>
@@ -60,8 +61,8 @@ function HTMLTextExample() {
         align: 'center'
       }}
       anchor={{ x: 0.5, y: 0 }}
-      x={app.screen.width / 2}
-      y={app.screen.height / 2}
+      x={size.width / 2}
+      y={size.height / 2}
     />
   );
 }

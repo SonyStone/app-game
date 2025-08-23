@@ -1,4 +1,5 @@
 import { Container, RenderLayer, Sprite, TilingSprite, useAssets } from '@packages/solid-pixi';
+import { createWindowSize } from '@solid-primitives/resize-observer';
 import { DisplacementFilter, Texture } from 'pixi.js';
 import { createMemo, For } from 'solid-js';
 import { useTick as useTicker } from '../../useTick';
@@ -22,6 +23,7 @@ export default function RenderLayers() {
   ]);
 
   // displacementMap.source.wrapMode = 'repeat';
+  const size = createWindowSize();
 
   const displacementSpriteTexture = createMemo(() => {
     const texture = assets()?.['https://pixijs.com/assets/pond/displacement_map.png'];
@@ -62,7 +64,7 @@ export default function RenderLayers() {
 
   return (
     <Container>
-      <Container filters={displacementFilter}>
+      <Container pivot={{ x: 100 * 3, y: 100 * 3 }} x={size.width / 2} y={size.height / 2} filters={displacementFilter}>
         {/* background */}
         <Sprite texture={assets()?.['https://pixijs.com/assets/pond/displacement_BG.jpg']} />
         {displacementSprite}

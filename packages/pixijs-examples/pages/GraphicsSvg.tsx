@@ -1,9 +1,11 @@
-import { Graphics } from '@packages/solid-pixi';
+import { Container, Graphics } from '@packages/solid-pixi';
+import { createWindowSize } from '@solid-primitives/resize-observer';
 import { GraphicsOptions } from 'pixi.js';
 import { createEffect, createSignal, Show } from 'solid-js';
 
 export default function GraphicsSvg(props: Omit<GraphicsOptions, 'children'>) {
   const [toggle, setToggle] = createSignal(false);
+  const size = createWindowSize();
 
   const svg = (
     <svg height="400" width="450" xmlns="http://www.w3.org/2000/svg">
@@ -25,22 +27,27 @@ export default function GraphicsSvg(props: Omit<GraphicsOptions, 'children'>) {
   ) as SVGAElement;
 
   return (
-    <Graphics
-      ref={(graphics) => {
-        createEffect(() => {
-          toggle();
-          graphics.clear();
-          graphics.svg(svg as unknown as string);
-        });
-      }}
-      interactive
-      onmouseleave={() => {
-        setToggle(false);
-      }}
-      onmouseenter={() => {
-        setToggle(true);
-      }}
-      {...props}
-    />
+    <Container>
+      <Graphics
+        pivot={{ x: 225, y: 200 }}
+        x={size.width / 2}
+        y={size.height / 2}
+        ref={(graphics) => {
+          createEffect(() => {
+            toggle();
+            graphics.clear();
+            graphics.svg(svg as unknown as string);
+          });
+        }}
+        interactive
+        onmouseleave={() => {
+          setToggle(false);
+        }}
+        onmouseenter={() => {
+          setToggle(true);
+        }}
+        {...props}
+      />
+    </Container>
   );
 }

@@ -1,4 +1,5 @@
-import { Container, Sprite, useApplication, useAsset } from '@packages/solid-pixi';
+import { Container, Sprite, useAsset } from '@packages/solid-pixi';
+import { createWindowSize } from '@solid-primitives/resize-observer';
 import { gsap } from 'gsap';
 import { Ticker } from 'pixi.js';
 import { createSignal, For, onMount, Suspense } from 'solid-js';
@@ -7,15 +8,14 @@ import { Transition } from '../Transition';
 import { useTick } from '../useTick';
 
 export default function BasicContainer() {
-  const app = useApplication();
   const [texture] = useAsset('https://pixijs.com/assets/bunny.png');
+  const [show, setShow] = createSignal(true);
+  const size = createWindowSize();
 
   const store = Array.from({ length: 50 }, () => ({ x: 0, y: 0 })).map((_, i) => ({
     x: (i % 5) * 40,
     y: Math.floor(i / 5) * 40
   }));
-
-  const [show, setShow] = createSignal(true);
 
   // Portal return text element as an anchor, so we cannot use it inside Solid-Pixi components directly.
   <Portal mount={document.body}>
@@ -77,8 +77,8 @@ export default function BasicContainer() {
                   container.rotation -= 0.01 * delta.deltaTime;
                 });
               }}
-              x={app.screen.width / 2}
-              y={app.screen.height / 2}
+              x={size.width / 2}
+              y={size.height / 2}
             >
               <For each={store}>{(item) => <Sprite texture={texture()} x={item.x} y={item.y} />}</For>
             </Container>
