@@ -1,9 +1,11 @@
 import { Container, Mesh, useApplication } from '@packages/solid-pixi';
+import { createWindowSize } from '@solid-primitives/resize-observer';
 import { Geometry, MeshGeometry, Shader, TextureShader } from 'pixi.js';
 import fragment from './shaderToy.frag';
 import vertex from './shaderToy.vert';
 
 export default function ShaderToyMesh() {
+  const size = createWindowSize();
   const quadGeometry = new Geometry({
     attributes: {
       aPosition: [
@@ -50,10 +52,10 @@ export default function ShaderToyMesh() {
             app.ticker.remove(handler);
           };
         }}
-        x={app.screen.width / 2}
-        y={app.screen.height / 2}
-        width={app.screen.width}
-        height={app.screen.height}
+        x={size.width / 2}
+        y={size.height / 2}
+        width={size.width}
+        height={size.height}
       />
     </Container>
   );

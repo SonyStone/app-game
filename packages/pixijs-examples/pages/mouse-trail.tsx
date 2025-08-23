@@ -1,10 +1,12 @@
 import { Container, MeshRope, useApplication, useAsset } from '@packages/solid-pixi';
+import { createWindowSize } from '@solid-primitives/resize-observer';
 import { Point } from 'pixi.js';
 import 'pixi.js/advanced-blend-modes';
 import { onCleanup, Show } from 'solid-js';
 
 export default function PixijsExamlesMouseTrail() {
   const app = useApplication();
+  const size = createWindowSize();
   const [trailTexture] = useAsset('https://pixijs.com/assets/trail.png');
 
   const historyX: number[] = [];
@@ -59,8 +61,8 @@ export default function PixijsExamlesMouseTrail() {
     <Container>
       <Show when={trailTexture()}>
         <Container
-          width={app.screen.width}
-          height={app.screen.height}
+          width={size.width}
+          height={size.height}
           eventMode="static"
           interactive
           hitArea={app.screen}

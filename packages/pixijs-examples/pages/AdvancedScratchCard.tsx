@@ -1,8 +1,11 @@
 import { Container, Sprite, useApplication, useAssets } from '@packages/solid-pixi';
+import { createWindowSize } from '@solid-primitives/resize-observer';
 import { FederatedPointerEvent, Graphics, Point, RenderTexture, Texture } from 'pixi.js';
+import { createEffect } from 'solid-js';
 
 export default function AdvancedScratchCard() {
   const app = useApplication();
+  const size = createWindowSize();
   const [assets] = useAssets<Record<string, Texture>>([
     'https://pixijs.com/assets/bg_grass.jpg',
     'https://pixijs.com/assets/bg_rotate.jpg'
@@ -12,6 +15,9 @@ export default function AdvancedScratchCard() {
   const stageSize = { width, height };
 
   const renderTexture = RenderTexture.create(stageSize);
+  createEffect(() => {
+    renderTexture.resize(size.width, size.height);
+  });
 
   const brush = new Graphics().circle(0, 0, 50).fill({ color: 0xffffff });
   const line = new Graphics();
@@ -58,10 +64,10 @@ export default function AdvancedScratchCard() {
     <Sprite
       texture={renderTexture}
       anchor={0.5}
-      x={stageSize.width / 2}
-      y={stageSize.height / 2}
-      width={stageSize.width}
-      height={stageSize.height}
+      x={size.width / 2}
+      y={size.height / 2}
+      width={size.width}
+      height={size.height}
     />
   ) as ReturnType<typeof Sprite>;
 
@@ -79,20 +85,20 @@ export default function AdvancedScratchCard() {
       <Sprite
         texture={assets()?.['https://pixijs.com/assets/bg_grass.jpg']}
         anchor={0.5}
-        width={stageSize.width}
-        height={stageSize.height}
-        x={stageSize.width / 2}
-        y={stageSize.height / 2}
+        width={size.width}
+        height={size.height}
+        x={size.width / 2}
+        y={size.height / 2}
       />
       {/* imageToReveal */}
       <Sprite
         texture={assets()?.['https://pixijs.com/assets/bg_rotate.jpg']}
         anchor={0.5}
         mask={renderTextureSprite}
-        width={stageSize.width}
-        height={stageSize.height}
-        x={stageSize.width / 2}
-        y={stageSize.height / 2}
+        width={size.width}
+        height={size.height}
+        x={size.width / 2}
+        y={size.height / 2}
       />
       {/* renderTextureSprite */}
       {renderTextureSprite}
