@@ -7,66 +7,66 @@ export const routes: Routes[] = [
     path: '/',
     name: 'Basic',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/BasicExample'))
+    component: lazy(() => import('./pages/BasicExample'))
   },
   {
     path: '/basic-container',
     name: 'Basic Container',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./BasicContainer'))
+    component: lazy(() => import('./pages/BasicContainer'))
   },
   {
     path: '/animations',
     name: 'Animations',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./AnimationsExample'))
+    component: lazy(() => import('./pages/AnimationsExample'))
   },
   {
     path: '/blend-modes',
     name: 'Blend Modes',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/BlendModesExamles'))
+    component: lazy(() => import('./pages/BlendModesExamles'))
   },
   {
     path: '/mouse-trail',
     name: 'Mouse Trail',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/mouse-trail'))
+    component: lazy(() => import('./pages/mouse-trail'))
   },
   {
     path: '/render-layers',
     name: 'Render Layers',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/RenderLayers/index'))
+    component: lazy(() => import('./pages/RenderLayers/index'))
   },
   {
     path: '/advanced-scratch-card',
     name: 'Advanced Scratch Card',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/AdvancedScratchCard'))
+    component: lazy(() => import('./pages/AdvancedScratchCard'))
   },
   {
     path: '/shader-toy-mesh',
     name: 'Shader Toy Mesh',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/MeshAndShaders/ShaderToyMesh'))
+    component: lazy(() => import('./pages/MeshAndShaders/ShaderToyMesh'))
   },
   {
     path: '/graphics-simple',
     name: 'Graphics Simple',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/GraphicsSimple'))
+    component: lazy(() => import('./pages/GraphicsSimple'))
   },
   {
     path: '/graphics-advanced',
     name: 'Graphics Advanced',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/GraphicsAdvanced'))
+    component: lazy(() => import('./pages/GraphicsAdvanced'))
   },
   {
     path: '/graphics-svg',
     name: 'Graphics Svg',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-examples/GraphicsSvg'))
+    component: lazy(() => import('./pages/GraphicsSvg'))
   }
 ];

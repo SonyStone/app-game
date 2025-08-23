@@ -34,7 +34,7 @@ export default function PixijsBlendModesExamles() {
     'negation'
   ];
 
-  const size = 800 / 5;
+  const size = 800 / 6;
   const app = useApplication();
   const [pandaTexture] = useAsset(pandaUrl);
   const [rainbowGradient] = useAsset(rainbowGradientUrl);

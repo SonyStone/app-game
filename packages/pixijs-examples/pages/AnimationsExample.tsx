@@ -30,8 +30,7 @@ import {
 } from '@packages/penner-easing-equations';
 import { Container, Graphics, Sprite, Text, useApplication, useAsset } from '@packages/solid-pixi';
 import { createMemo, For, onMount, Suspense } from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { createElapsedMS } from './useTick';
+import { createElapsedMS } from '../useTick';
 
 const ANIMATION_EASING_FUNCTIONS = [
   linear,
@@ -86,13 +85,13 @@ export default function AnimationsExample() {
   });
 
   // Portal return text element as an anchor, so we cannot use it inside Solid-Pixi components directly.
-  <Portal mount={document.body}>
-    <div class="pointer-events-none absolute inset-x-0 top-0 z-50 flex place-content-center place-items-center p-4">
-      <div class="pointer-events-auto">
-        <pre>{pingPongTime().toFixed(0)}ms</pre>
-      </div>
-    </div>
-  </Portal>;
+  // <Portal mount={document.body}>
+  //   <div class="pointer-events-none absolute inset-x-0 top-0 z-50 flex place-content-center place-items-center p-4">
+  //     <div class="pointer-events-auto">
+  //       <pre>{pingPongTime().toFixed(0)}ms</pre>
+  //     </div>
+  //   </div>
+  // </Portal>;
 
   return (
     <Container>

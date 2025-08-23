@@ -1,7 +1,7 @@
 import { Container, RenderLayer, Sprite, TilingSprite, useAssets } from '@packages/solid-pixi';
 import { DisplacementFilter, Texture } from 'pixi.js';
 import { createMemo, For } from 'solid-js';
-import { useTick as useTicker } from '../useTick';
+import { useTick as useTicker } from '../../useTick';
 import { Fish } from './Fish';
 
 const NAMES = ['Alice', 'Bob', 'Caroline', 'David', 'Ellie', 'Frank', 'Gloria', 'Henry', 'Isabel', 'Jack'] as const;

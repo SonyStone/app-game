@@ -1,8 +1,8 @@
 import { Container, HTMLText, Sprite, useApplication, useAsset } from '@packages/solid-pixi';
 import { Ticker } from 'pixi.js';
 import { Suspense } from 'solid-js';
+import { useTick } from '../useTick';
 import ParticleContainerExample from './ParticleContainerExample';
-import { useTick } from './useTick';
 
 export default function BasicExample() {
   const app = useApplication();

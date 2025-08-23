@@ -3,8 +3,8 @@ import { gsap } from 'gsap';
 import { Ticker } from 'pixi.js';
 import { createSignal, For, onMount, Suspense } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { Transition } from './Transition';
-import { useTick } from './useTick';
+import { Transition } from '../Transition';
+import { useTick } from '../useTick';
 
 export default function BasicContainer() {
   const app = useApplication();

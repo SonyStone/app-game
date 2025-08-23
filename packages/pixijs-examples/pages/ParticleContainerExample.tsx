@@ -1,6 +1,6 @@
 import { Particle, ParticleContainer, useApplication, useAsset } from '@packages/solid-pixi';
 import { ParticleContainerOptions } from 'pixi.js';
-import { useTick } from './useTick';
+import { useTick } from '../useTick';
 
 export default function ParticleContainerExample(props: ParticleContainerOptions) {
   const [texture] = useAsset('https://pixijs.com/assets/bunny.png');

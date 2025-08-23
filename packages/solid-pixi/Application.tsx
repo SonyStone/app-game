@@ -1,5 +1,5 @@
 import createContextProvider from '@utils/createContextProvider';
-import { type ApplicationOptions, Application as PixiApplication } from 'pixi.js';
+import { type ApplicationOptions, DOMAdapter, Application as PixiApplication, WebWorkerAdapter } from 'pixi.js';
 import { type JSXElement, Show, createResource, onCleanup, splitProps } from 'solid-js';
 import { CommonPropKeys, type CommonProps } from './interfaces';
 import { effect } from './runtime';
@@ -22,8 +22,12 @@ const ApplicationPropKeys = [...CommonPropKeys, 'fallback'] as const;
  * @param props.children - Child components that will have access to the PIXI.Application context
  * @param props.ApplicationOptions - PIXI.Application options to initialize with
  */
-export const Application = (props: ApplicationProps) => {
+export const Application = (props: ApplicationProps & { offscreen?: boolean }) => {
   const [common, pixis] = splitProps(props, ApplicationPropKeys);
+
+  if (props.offscreen) {
+    DOMAdapter.set(WebWorkerAdapter);
+  }
 
   const [app] = createResource(
     () => (common.as || new PixiApplication()) as PixiApplication,

@@ -67,33 +67,32 @@ type TransitionProps = TransitionEvents<_Container> & {
 };
 
 export const Transition: FlowComponent<TransitionProps> = (props) => {
-  return createSwitchTransition(
-    resolveFirst(
-      () => props.children,
-      (item): item is _Container & JSXElement => item instanceof _Container
-    ),
-    {
-      mode: TRANSITION_MODE_MAP[props.mode!],
-      appear: props.appear,
-      onEnter(el, done) {
-        props.onBeforeEnter?.(el);
-        queueMicrotask(() => {
-          if (!el.parent) return done();
-          props.onEnter?.(el, () => {
-            done();
-            props.onAfterEnter?.(el);
-          });
+  const first = resolveFirst(
+    () => props.children,
+    (item): item is _Container & JSXElement => item instanceof _Container
+  );
+
+  return createSwitchTransition(first, {
+    mode: TRANSITION_MODE_MAP[props.mode!],
+    appear: props.appear,
+    onEnter(el, done) {
+      props.onBeforeEnter?.(el);
+      queueMicrotask(() => {
+        if (!el.parent) return done();
+        props.onEnter?.(el, () => {
+          done();
+          props.onAfterEnter?.(el);
         });
-      },
-      onExit(el, done) {
-        props.onBeforeExit?.(el);
-        queueMicrotask(() => {
-          props.onExit?.(el, () => {
-            done();
-            props.onAfterExit?.(el);
-          });
+      });
+    },
+    onExit(el, done) {
+      props.onBeforeExit?.(el);
+      queueMicrotask(() => {
+        props.onExit?.(el, () => {
+          done();
+          props.onAfterExit?.(el);
         });
-      }
+      });
     }
-  ) as unknown as JSX.Element;
+  }) as unknown as JSX.Element;
 };

@@ -4,7 +4,7 @@ import { For, onCleanup, onMount } from 'solid-js';
 import { createSquareMesh } from '../brush-example/square/create-square-mesh';
 import OffscreenCanvasWorker from './offscreen-canvas.worker?worker';
 
-export default function OffscreenCanvasExample() {
+export default function OffscreenCanvasSupportCheck() {
   const canvases = [
     {
       description: 'webgl2',

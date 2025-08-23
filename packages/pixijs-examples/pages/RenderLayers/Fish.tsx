@@ -1,7 +1,7 @@
 import { Container, RenderLayer, Sprite } from '@packages/solid-pixi';
 import { ContainerOptions, Texture } from 'pixi.js';
 import { splitProps } from 'solid-js';
-import { useTick } from '../useTick';
+import { useTick } from '../../useTick';
 import { CharacterUI } from './CharacterUI';
 
 export function Fish(

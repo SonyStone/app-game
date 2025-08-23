@@ -43,10 +43,10 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/paint/lasso-select-example/lasso-select-example'))
   },
   {
-    path: '/offscreen-canvas-example',
-    name: 'Offscreen Canvas Example [WIP]',
+    path: '/offscreen-canvas-support-check',
+    name: 'Offscreen Canvas Support Check',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/offscreen-canvas-example/offscreen-canvas-example'))
+    component: lazy(() => import('@packages/paint/offscreen-canvas-support-check'))
   },
   {
     path: '/can-i-use',
