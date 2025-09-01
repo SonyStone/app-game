@@ -1,4 +1,4 @@
-import { toObservable } from '@utils/to-observable';
+import { toObservable } from '@utils/toObservable';
 import { delay, filter, tap } from 'rxjs';
 import { createMemo, createSignal, Show, untrack } from 'solid-js';
 import { Motion, Presence } from 'solid-motionone';

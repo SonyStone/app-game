@@ -1,5 +1,5 @@
 import { Thumbnail } from '@packages/ui-components/thumbnail';
-import { Routes } from '@packages/utils/routes.interface';
+import { Routes } from '@utils/routes.interface';
 import { lazy } from 'solid-js';
 import twglThumbnail from './thumbnail/chrome_2023-11-18_15-44-48.png?url';
 

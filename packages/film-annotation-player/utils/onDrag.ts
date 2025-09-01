@@ -1,4 +1,4 @@
-import { createSubscription } from '@utils/create-subscription';
+import { createSubscription } from '@utils/createSubscription';
 
 import { pointerdrag } from '../events/pointer';
 
@@ -10,10 +10,7 @@ declare module 'solid-js' {
   }
 }
 
-export function onDrag(
-  element: HTMLElement,
-  accessor: () => (event: PointerEvent) => void
-) {
+export function onDrag(element: HTMLElement, accessor: () => (event: PointerEvent) => void) {
   const setDrag = accessor();
   createSubscription(pointerdrag(element).subscribe(setDrag));
 }

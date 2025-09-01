@@ -1,8 +1,8 @@
 import { Resizable, ResizableHandle, ResizablePanel } from '@packages/components/ui/resizable';
 import { trackStore } from '@solid-primitives/deep';
 import { createUndoHistory } from '@solid-primitives/history';
-import { toObservable } from '@utils/to-observable';
-import { toSignal } from '@utils/to-signal';
+import { toObservable } from '@utils/toObservable';
+import { toSignal } from '@utils/toSignal';
 import { debounceTime } from 'rxjs';
 import { createMemo } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';

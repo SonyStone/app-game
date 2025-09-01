@@ -1,6 +1,6 @@
-import { Branded } from '@packages/utils/branded.type';
+import { Brand } from '@packages/utils/Brand.type';
 
 let id = 0;
 export const getId = () => id++ as Id;
 
-export type Id = Branded<number, 'Id'>;
+export type Id = Brand<number, 'Id'>;

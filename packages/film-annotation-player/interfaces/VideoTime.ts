@@ -1,4 +1,4 @@
-import { Brand } from './Brand.type';
+import { Brand } from '@packages/utils/Brand.type';
 import { Frame } from './Frame';
 
 /**

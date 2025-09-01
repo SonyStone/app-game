@@ -3,7 +3,7 @@ import { createStruct } from '@packages/math/utils/create-struct';
 import { Vec2 } from '@packages/math/v2';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { access } from '@solid-primitives/utils';
-import { createManagedRoot } from '@utils/create-managed-root';
+import { createManagedRoot } from '@utils/createManagedRoot';
 import { Accessor, children, createEffect, createMemo, createSignal, getOwner, JSX, onCleanup, Owner } from 'solid-js';
 import { SVGAngleVisualization } from '../m2x3/svg-angle-visualization';
 

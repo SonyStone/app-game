@@ -1,8 +1,8 @@
 import { Vec2 } from '@packages/math';
 import { Mat3 } from '@packages/ogl';
 import { distance, normalize } from '@packages/ogl/math/functions/vec-2-func';
-import { takeUntilCleanup } from '@packages/utils/take-until-cleanup';
 import { createEventBus } from '@solid-primitives/event-bus';
+import { takeUntilCleanup } from '@utils/takeUntilCleanup';
 import { concat, fromEvent, merge, of, ReplaySubject, switchMap, take, takeUntil, tap } from 'rxjs';
 import { createEffect, createSignal, For, mergeProps, onCleanup, Show, untrack } from 'solid-js';
 import { Cap } from './cap';
@@ -40,7 +40,6 @@ const createPointerEvent = (element: Element) => {
     takeUntilCleanup()
   );
 };
-
 
 /**
  * ```

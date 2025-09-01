@@ -1,4 +1,4 @@
-import { Branded } from '@packages/utils/branded.type';
+import { Brand } from '@packages/utils/Brand.type';
 import { access, MaybeAccessor } from '@solid-primitives/utils';
 import {
   type AssetInitOptions,
@@ -47,7 +47,7 @@ export function useAssetInit(
 type SpriteSheetConstruction<T extends SpritesheetData> = [Texture, T];
 
 /** Number between 0.0 and 1.0 representing the progress of an asset loading operation */
-export type Progress = Branded<number, 'Progress'>;
+export type Progress = Brand<number, 'Progress'>;
 
 export function useSpritesheet<T extends SpritesheetData>(
   source: MaybeAccessor<string> | MaybeAccessor<SpriteSheetConstruction<T>>,

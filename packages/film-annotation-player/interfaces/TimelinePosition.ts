@@ -1,4 +1,4 @@
-import { Brand } from "./Brand.type";
+import { Brand } from '@packages/utils/Brand.type';
 
 /**
  * Позиция ползунка на объекте таймлайна в `px`

@@ -4,7 +4,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@packages/components/ui/dropdown-menu';
-import { batch, For, JSXElement, Match, Show, Switch } from 'solid-js';
+import { batch, ComponentProps, For, JSXElement, Match, Show, Switch } from 'solid-js';
 import { produce, unwrap } from 'solid-js/store';
 import { PathInput } from '../path-input';
 import { SVGNode } from '../svg-node';
@@ -14,6 +14,15 @@ import { SVGRender } from './editor-view';
 
 // TODO: Change onClicks to command pattern
 
+declare module 'solid-js' {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace JSX {
+    interface IntrinsicElements {
+      'layers-view': ComponentProps<'div'>;
+    }
+  }
+}
+
 export function LayersView(props: {
   select: ReturnType<typeof useSvgSelect<SVGNode>>;
   map: Map<SVGNode, Wrapped<SVGNode>>;
@@ -21,7 +30,7 @@ export function LayersView(props: {
   state: SVGNode;
 }) {
   return (
-    <>
+    <layers-view class="contents">
       <DropdownMenu placement="bottom">
         <DropdownMenuTrigger>Add element</DropdownMenuTrigger>
         <DropdownMenuContent>
@@ -51,7 +60,7 @@ export function LayersView(props: {
           {(child) => <ListItem child={child} select={props.select} map={props.map} />}
         </For>
       </ul>
-    </>
+    </layers-view>
   );
 }
 

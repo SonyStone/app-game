@@ -4,6 +4,7 @@ import { canvasList } from '../patch-canvas-element';
 import { LogLevel } from '../shared/utils/logger';
 
 declare module 'solid-js' {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
       'spector-capture-menu': ComponentProps<'div'>;

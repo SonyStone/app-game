@@ -141,7 +141,3 @@ export const SparseSet = (): SparseSet => {
     reset
   };
 };
-
-export interface BrandType<T extends string> {
-  readonly __opaqueType: T;
-}

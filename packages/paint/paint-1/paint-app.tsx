@@ -1,5 +1,5 @@
 import { GL_CAPABILITIES, GL_DRAW_ARRAYS_MODE, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
-import { createPointerData } from '@utils/create-pointer-data';
+import { createPointerData } from '@utils/createPointerData';
 import { createEffect } from 'solid-js';
 import { postQuadNDC } from './quads-2';
 

@@ -3,7 +3,7 @@ import { Mat2x3 } from '@packages/math/m2x3';
 import { Degrees } from '@packages/math/types';
 import { degToRad } from '@packages/math/utils/trigonometry';
 import { Vec2 } from '@packages/math/v2';
-import { toObservable } from '@utils/to-observable';
+import { toObservable } from '@utils/toObservable';
 import { animationFrames, map, merge, of, Subject, switchScan } from 'rxjs';
 import { Accessor, createMemo, createSignal, from } from 'solid-js';
 import { usePointMove } from './use-point-move';

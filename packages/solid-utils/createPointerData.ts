@@ -1,7 +1,7 @@
 import { createMemo } from 'solid-js';
 
 import { Vec2 } from '@packages/math';
-import { createPointerStream } from './create-pointer-stream';
+import { createPointerStream } from './createPointerStream';
 
 export function createPointerData(element: HTMLElement) {
   const pointer$ = createPointerStream(element);

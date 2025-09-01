@@ -16,7 +16,7 @@ import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 
 import Navigation from '@packages/utils/navigation';
-import { Routes } from '@packages/utils/routes.interface';
+import { Routes } from '@utils/routes.interface';
 import wireframeThumbnail from './thumbnail/wireframe-thumbnail.png?url';
 import worldBodiesThumbnail from './thumbnail/world-rodies-thumbnail.png?url';
 
