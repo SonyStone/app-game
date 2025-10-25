@@ -42,9 +42,7 @@ export const Application = (props: ApplicationProps & { offscreen?: boolean }) =
   });
 
   onCleanup(() => {
-    if (app()) {
-      app()!.destroy(true, { children: true });
-    }
+    app()?.destroy(true, { children: true });
   });
 
   <Show when={app()} fallback={common.fallback}>

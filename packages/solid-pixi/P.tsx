@@ -51,7 +51,7 @@ import { CommonPropKeys } from './interfaces';
 import { insert, spread } from './runtime';
 
 function createPixiComponent<T, O>(PixiComponent: new (options: O) => T) {
-  return function (props: Omit<Partial<O>, 'children'> & { children?: JSX.Element; as?: T; ref?: Ref<T> }) {
+  return function (props: Omit<Partial<O>, 'children'> & Partial<{ children: JSX.Element; as: T; ref: Ref<T> }>) {
     const [common, pixis] = splitProps(props, CommonPropKeys);
 
     const as = common.as || new PixiComponent(pixis as O);
