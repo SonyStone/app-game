@@ -1,6 +1,7 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createScrollPosition } from '@solid-primitives/scroll';
 import { access, MaybeAccessor } from '@solid-primitives/utils';
+import { createGetterObject } from '@utils/createGetterObject';
 import { createMemo } from 'solid-js';
 
 /**
@@ -31,6 +32,7 @@ export function createVirtualList<T extends readonly unknown[]>(props: {
   elementRef: MaybeAccessor<Element | undefined>;
 }) {
   const size = createElementSize(() => access(props.elementRef));
+  const viewportHeight = createMemo(() => size.height ?? 0);
   const scrollPosition = (() => {
     const scrollPosition = createScrollPosition(props.elementRef);
     return createMemo(() => scrollPosition.y);
@@ -40,7 +42,6 @@ export function createVirtualList<T extends readonly unknown[]>(props: {
   const items = createMemo(() => access(props.items));
   const totalHeight = createMemo(() => items().length * rowHeight());
 
-  const viewportHeight = createMemo(() => size.height ?? 0);
   const visibleCount = createMemo(() => Math.ceil(viewportHeight() / rowHeight()));
 
   const startIndex = createMemo(() => Math.max(0, Math.floor(scrollPosition() / rowHeight()) - buffer()));
@@ -51,17 +52,31 @@ export function createVirtualList<T extends readonly unknown[]>(props: {
 
   const visibleItems = createMemo(() => items().slice(startIndex(), endIndex()) as unknown as T);
 
-  return {
-    visibleItems,
-    paddingTop,
-    paddingBottom,
-    totalHeight,
-    startIndex,
-    endIndex,
-    visibleCount,
-    viewportHeight,
-    buffer,
-    scrollPosition,
-    rowHeight
+  const visibleHeight = createMemo(() => visibleItems().length * rowHeight());
+
+  const scrollTo = (position: number) => {
+    const el = access(props.elementRef) as HTMLElement | undefined;
+    if (!el) return;
+    el.scrollTo({ top: position, behavior: 'smooth' });
   };
+
+  return Object.assign(
+    createGetterObject({
+      visibleItems,
+      paddingTop,
+      paddingBottom,
+      totalHeight,
+      startIndex,
+      endIndex,
+      visibleCount,
+      viewportHeight,
+      buffer,
+      scrollPosition,
+      rowHeight,
+      visibleHeight
+    }),
+    {
+      scrollTo
+    }
+  );
 }
