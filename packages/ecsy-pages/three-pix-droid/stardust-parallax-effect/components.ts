@@ -1,4 +1,4 @@
-import { Vector2 } from '@packages/ecsy-examples/utils';
+import { Vector2 } from '../../utils';
 
 export class Resize extends Vector2 {}
 

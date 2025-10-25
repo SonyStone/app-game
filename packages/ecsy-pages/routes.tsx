@@ -11,31 +11,31 @@ const escyRoutes: Routes[] = [
     path: '/circles-boxes',
     name: 'Circles Boxes',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ecsy-examples/circles-boxes/circles-boxes'))
+    component: lazy(() => import('./circles-boxes/circles-boxes'))
   },
   {
     path: '/circles-boxes-dom',
     name: 'Circles Boxes DOM',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ecsy-examples/circles-boxes-dom/circles-boxes-dom'))
+    component: lazy(() => import('./circles-boxes-dom/circles-boxes-dom'))
   },
   {
     path: '/circles-boxes-pixijs',
     name: 'Circles Boxes Pixijs',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ecsy-examples/circles-boxes-pixijs/circles-boxes-pixijs'))
+    component: lazy(() => import('./circles-boxes-pixijs/circles-boxes-pixijs'))
   },
   {
     path: '/canvas',
     name: 'Canvas',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ecsy-examples/canvas/intersecting-circles'))
+    component: lazy(() => import('./canvas/intersecting-circles'))
   },
   {
     path: '/dev',
     name: 'Dev',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ecsy-examples/dev/dev'))
+    component: lazy(() => import('./dev/dev'))
   }
 ];
 

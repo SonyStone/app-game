@@ -2,7 +2,7 @@ import './index.scss';
 
 import { World } from '@packages/ecsy';
 
-import { CanvasContext, CanvasData, CanvasSize, Point, Velocity } from '@packages/ecsy-examples/utils';
+import { CanvasContext, CanvasData, CanvasSize, Point, Velocity } from '../../utils';
 import { BackgroundColor, Life, LineProperties, ParticleProperties } from './components';
 import {
   CalculateLifeSystem,
