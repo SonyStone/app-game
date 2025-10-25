@@ -1,7 +1,7 @@
 import { Navigation } from '@packages/app-router/components/navigation';
 import { Thumbnail } from '@packages/app-router/components/thumbnail';
 import { Routes } from '@packages/app-router/routes.interface';
-import { routes as escyRoutes } from '@packages/ecsy-examples/routes';
+import { routes as escyRoutes } from '@packages/ecsy-pages/routes';
 import { routes as mathRoutes } from '@packages/math-examples/routes';
 import { routes as oglRoutes } from '@packages/ogl-examples/routes';
 import { routes as paintRoutes } from '@packages/paint/routes';
