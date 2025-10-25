@@ -56,5 +56,23 @@ export const routes: Routes[] = [
     name: 'Learn Solidjs Utils',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./learn-solidjs-utils'))
+  },
+  {
+    path: '/rapier-2d-physics-engine',
+    name: 'Rapier 2D Physics Engine',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./rapier-2d-physics-engine'))
+  },
+  {
+    path: '/bitecs-ecs-example',
+    name: 'Bitecs ECS Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./bitecs-ecs'))
+  },
+  {
+    path: '/sensor-access-demo',
+    name: 'Sensor Access Demo',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./sensor-access-demo'))
   }
 ];
