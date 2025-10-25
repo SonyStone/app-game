@@ -56,7 +56,7 @@ export function LayersView(props: {
         </DropdownMenuContent>
       </DropdownMenu>
       <ul id="Layers View" class="flex h-full list-none flex-col gap-2 overflow-y-auto p-2">
-        <For each={props.state.children}>
+        <For each={props.state.children?.slice(0, 2)}>
           {(child) => <ListItem child={child} select={props.select} map={props.map} />}
         </For>
       </ul>
@@ -165,9 +165,9 @@ function ListItem(props: {
         </div>
       </div>
 
-      <Show when={props.child.children}>
+      <Show when={props.child.children?.length}>
         <ul class="group-child flex w-full list-none flex-col gap-1 p-1">
-          <For each={props.child.children}>
+          <For each={props.child.children?.slice(0, 10)}>
             {(subChild) => <ListItem child={subChild} select={props.select} map={props.map} />}
           </For>
         </ul>

@@ -4,7 +4,7 @@ import { createUndoHistory } from '@solid-primitives/history';
 import { toObservable } from '@utils/toObservable';
 import { toSignal } from '@utils/toSignal';
 import { debounceTime } from 'rxjs';
-import { createMemo } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { TmTextarea } from 'tm-textarea/solid';
 import { EditView } from './components/editor-view';
@@ -16,8 +16,8 @@ import { svgParser } from './svg-parser';
 import { useSvgSelect } from './use-svg-select';
 import { useVirtualTree } from './use-virtual-tree';
 
-// import exampleSvg from './ghostscript-tiger.svg?raw';
-import exampleSvg from './example.svg?raw';
+import exampleSvg from './ghostscript-tiger.svg?raw';
+// import exampleSvg from './example.svg?raw';
 
 export default function SVGEditorApp() {
   const [state, setState] = createStore<SVGNode>(svgParser(exampleSvg));
@@ -54,45 +54,49 @@ export default function SVGEditorApp() {
       <Resizable class="flex-1 overflow-hidden border-0">
         <ResizablePanel class="flex w-0 flex-grow flex-col overflow-hidden border-0" initialSize={0.5} minSize={0.1}>
           <Resizable orientation="vertical">
-            <ResizablePanel
-              class="flex h-0 flex-grow flex-col overflow-hidden border-0"
-              initialSize={0.3}
-              minSize={0.1}
-            >
-              <button
-                class="select-none self-end rounded bg-blue-500 px-2 py-1 text-white hover:bg-blue-600"
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(svgToString(state));
-                    console.log('Text copied to clipboard successfully!');
-                  } catch (err) {
-                    console.error('Failed to copy text: ', err);
-                  }
-                }}
+            <Show when={false}>
+              <ResizablePanel
+                class="flex h-0 flex-grow flex-col overflow-hidden border-0"
+                initialSize={0.3}
+                minSize={0.1}
               >
-                Copy
-              </button>
-              <SVGCodePreview node={state} />
-            </ResizablePanel>
-            <ResizableHandle withHandle orientation="vertical" class="border-0 bg-inherit hover:bg-blue-400" />
-            <ResizablePanel
-              class="flex h-0 flex-grow flex-col overflow-hidden border-0"
-              initialSize={0.3}
-              minSize={0.1}
-            >
-              <TmTextarea
-                grammar="tsx"
-                theme="min-light"
-                value={svgToString(state, { indent: true, indentSize: 2 })}
-                editable={true}
-                style={{
-                  padding: '10px',
-                  'font-size': '12pt'
-                }}
-                onInput={(e) => setState(svgParser(e.currentTarget.value))}
-              />
-            </ResizablePanel>
-            <ResizableHandle withHandle orientation="vertical" class="border-0 bg-inherit hover:bg-blue-400" />
+                <button
+                  class="select-none self-end rounded bg-blue-500 px-2 py-1 text-white hover:bg-blue-600"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(svgToString(state));
+                      console.log('Text copied to clipboard successfully!');
+                    } catch (err) {
+                      console.error('Failed to copy text: ', err);
+                    }
+                  }}
+                >
+                  Copy
+                </button>
+                <SVGCodePreview node={state} />
+              </ResizablePanel>
+              <ResizableHandle withHandle orientation="vertical" class="border-0 bg-inherit hover:bg-blue-400" />
+            </Show>
+            <Show when={false}>
+              <ResizablePanel
+                class="flex h-0 flex-grow flex-col overflow-hidden border-0"
+                initialSize={0.3}
+                minSize={0.1}
+              >
+                <TmTextarea
+                  grammar="tsx"
+                  theme="min-light"
+                  value={svgToString(state, { indent: true, indentSize: 2 })}
+                  editable={true}
+                  style={{
+                    padding: '10px',
+                    'font-size': '12pt'
+                  }}
+                  onInput={(e) => setState(svgParser(e.currentTarget.value))}
+                />
+              </ResizablePanel>
+              <ResizableHandle withHandle orientation="vertical" class="border-0 bg-inherit hover:bg-blue-400" />
+            </Show>
             <ResizablePanel
               class="flex h-0 flex-grow select-none flex-col overflow-hidden border-0"
               initialSize={0.4}
