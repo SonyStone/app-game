@@ -11,7 +11,7 @@ import { routes as threeRoutes } from '@packages/three-examples/router';
 import { routes as twglRoutes } from '@packages/twgl-examples/routes';
 import { routes as uiComponentsRoutes } from '@packages/ui-components-examples/routes';
 import { Ripple } from '@packages/ui-components/ripple/Ripple';
-import { routes as wasmRustRoutes } from '@packages/wasm-rust-examples/routes';
+import { routes as wasmRustRoutes } from '@packages/wasm-rust-pages/routes';
 import { webglExamplesRoute } from '@packages/webgl-examples/routes';
 import { routes as webgpuRoutes } from '@packages/webgpu-examples/routes';
 import { A } from '@solidjs/router';
