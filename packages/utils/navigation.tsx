@@ -1,12 +1,14 @@
 import { LinkPreview } from '@packages/ui-components/link-preview';
-import { For, mergeProps } from 'solid-js';
+import { ComponentProps, For, mergeProps, splitProps } from 'solid-js';
 import { Routes } from '../solid-utils/routes.interface';
+import { cn } from './cn';
 
-export default function Navigation(props: { routes: Routes[]; parentPath?: string }) {
-  const merged = mergeProps({ parentPath: '' }, props);
+export default function Navigation(props: { routes: Routes[]; parentPath?: string } & ComponentProps<'div'>) {
+  const [local, others] = splitProps(props, ['routes', 'parentPath', 'class']);
+  const merged = mergeProps({ parentPath: '' }, local);
 
   return (
-    <div class="grid grid-cols-[repeat(auto-fill,_minmax(12rem,_1fr))] gap-4 p-4">
+    <div class={cn('grid grid-cols-[repeat(auto-fill,_minmax(12rem,_1fr))] gap-4 p-4', local.class)} {...others}>
       <For each={merged.routes}>
         {({ path, name, Preview, children }) => (
           <>

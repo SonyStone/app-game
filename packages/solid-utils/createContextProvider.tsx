@@ -46,7 +46,7 @@ export default function createContextProvider<T, P>(
     // I don't like to throw new Error, but I don't know how to make it better.
     // Errors don't have a type, maybe I should just return `new Error`?
     // And I don't want to return `undefined` here either.
-    if (!app) throw new Error('useProvider must be used within an Provider');
+    if (!app) throw new Error('useProvider must be used within a Provider');
     return app;
   }
 

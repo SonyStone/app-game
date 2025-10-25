@@ -167,12 +167,7 @@ export const routes: Routes[] = [
     children: [
       {
         path: '/',
-        component: () => (
-          <>
-            <div class="flex w-full place-content-center place-items-center bg-blue-100">Paint App</div>
-            <Navigation routes={paintRoutes} parentPath="." />
-          </>
-        )
+        component: lazy(() => import('@packages/paint'))
       },
       ...paintRoutes
     ]
@@ -342,7 +337,7 @@ export const routes: Routes[] = [
     path: '/tanki',
     name: 'Tanki',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/tanki/tanki'))
+    component: lazy(() => import('@packages/tanki'))
   },
   {
     path: '/3d-wireframe',

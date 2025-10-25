@@ -5,13 +5,18 @@ import multitouchThumbnail from '@packages/hammer-examples/thumbnail.png';
 import { lazy } from 'solid-js';
 import texturesViewThumbnail from './thumbnail/chrome_2024-06-13_07-04-13.png?url';
 
-export const routes: Routes[] = [
+export const rendererRoutes: Routes[] = [];
+
+export const pointerEventsRoutes: Routes[] = [
   {
     path: '/hammer-multitouch',
     name: 'Hammer Multitouch',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={multitouchThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/hammer-examples/multitouch'))
-  },
+  }
+];
+
+export const brushEngineRoutes: Routes[] = [
   {
     path: '/brush-example',
     name: 'Brush Example',
@@ -23,7 +28,10 @@ export const routes: Routes[] = [
     name: 'Paint',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/paint/paint-1/paint-page'))
-  },
+  }
+];
+
+export const restRoutes: Routes[] = [
   {
     path: '/ogl-paint-full-screen',
     name: 'OGL paint full screen canvas',
@@ -103,3 +111,5 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/paint/webgl-whiteboard'))
   }
 ];
+
+export const routes: Routes[] = [...brushEngineRoutes, ...restRoutes, ...pointerEventsRoutes];
