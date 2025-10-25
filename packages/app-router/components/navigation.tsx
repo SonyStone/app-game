@@ -1,9 +1,9 @@
-import { LinkPreview } from '@packages/ui-components/link-preview';
+import { cn } from '@packages/utils/cn';
 import { ComponentProps, For, mergeProps, splitProps } from 'solid-js';
-import { Routes } from '../solid-utils/routes.interface';
-import { cn } from './cn';
+import { Routes } from '../routes.interface';
+import { LinkPreview } from './link-preview';
 
-export default function Navigation(props: { routes: Routes[]; parentPath?: string } & ComponentProps<'div'>) {
+export function Navigation(props: { routes: Routes[]; parentPath?: string } & ComponentProps<'div'>) {
   const [local, others] = splitProps(props, ['routes', 'parentPath', 'class']);
   const merged = mergeProps({ parentPath: '' }, local);
 

@@ -1,5 +1,5 @@
-import { Thumbnail } from '@packages/ui-components/thumbnail';
-import { Routes } from '@utils/routes.interface';
+import { Thumbnail } from '@packages/app-router/components/thumbnail';
+import { Routes } from '@packages/app-router/routes.interface';
 import { lazy } from 'solid-js';
 
 export const routes: Routes[] = [

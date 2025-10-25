@@ -1,4 +1,4 @@
-import Navigation from '@packages/utils/navigation';
+import { Navigation } from '@packages/app-router/components/navigation';
 import { A } from '@solidjs/router';
 import { JSX } from 'solid-js';
 import { brushEngineRoutes, pointerEventsRoutes, rendererRoutes, restRoutes } from './routes';

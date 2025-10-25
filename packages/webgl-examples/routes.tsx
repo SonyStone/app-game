@@ -1,7 +1,7 @@
+import { Thumbnail } from '@packages/app-router/components/thumbnail';
+import { Routes } from '@packages/app-router/routes.interface';
 import { Ripple } from '@packages/ui-components/ripple/Ripple';
-import { Thumbnail } from '@packages/ui-components/thumbnail';
 import { A } from '@solidjs/router';
-import { Routes } from '@utils/routes.interface';
 import { For, lazy } from 'solid-js';
 import instancingWithUBOandVAOThumbnail from './instancing-with-ubo-and-vao/image.png?url';
 import tiledMaphumbnail from './tiled-map/image.png?url';

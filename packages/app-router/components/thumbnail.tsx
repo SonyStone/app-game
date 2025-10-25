@@ -1,6 +1,6 @@
+import { Ripple } from '@packages/ui-components/ripple/Ripple';
 import { A } from '@solidjs/router';
 import { Show } from 'solid-js';
-import { Ripple } from './ripple/Ripple';
 
 export function Thumbnail(props: { thumbnail?: string; href: string; name?: string }) {
   return (

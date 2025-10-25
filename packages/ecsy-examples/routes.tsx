@@ -1,8 +1,12 @@
-import { Thumbnail } from '@packages/ui-components/thumbnail';
+import { Navigation } from '@packages/app-router/components/navigation';
+import { SectionTitle } from '@packages/app-router/components/section-title';
+import { Thumbnail } from '@packages/app-router/components/thumbnail';
+import { Routes } from '@packages/app-router/routes.interface';
+import { Ripple } from '@packages/ui-components/ripple/Ripple';
+import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
-import { Routes } from 'src/routes.interface';
 
-export const routes: Routes[] = [
+const escyRoutes: Routes[] = [
   {
     path: '/circles-boxes',
     name: 'Circles Boxes',
@@ -34,3 +38,21 @@ export const routes: Routes[] = [
     component: lazy(() => import('@packages/ecsy-examples/dev/dev'))
   }
 ];
+
+export const routes: Routes = {
+  path: '/ecsy-examples',
+  name: 'ECSY Examples',
+  Preview: (props) => (
+    <A href={props.path} class="rounded-2 relative">
+      <SectionTitle name={props.name} />
+      <Ripple class="text-slate/20" />
+    </A>
+  ),
+  children: [
+    {
+      path: '/',
+      component: () => <Navigation routes={escyRoutes} parentPath="." />
+    },
+    ...escyRoutes
+  ]
+};
