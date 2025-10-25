@@ -5,7 +5,7 @@ import { Ripple } from '@packages/ui-components/ripple/Ripple';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 
-export const routes: Routes = {
+export const pixijsRoutes: Routes = {
   path: '/pixijs-examples',
   name: 'PixiJS Examples',
   Preview: (props) => (

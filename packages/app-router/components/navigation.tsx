@@ -3,7 +3,7 @@ import { ComponentProps, For, mergeProps, splitProps } from 'solid-js';
 import { Routes } from '../routes.interface';
 import { LinkPreview } from './link-preview';
 
-export function Navigation(props: { routes: Routes[]; parentPath?: string } & ComponentProps<'div'>) {
+export function Navigation(props: Partial<{ routes: Routes[]; parentPath: string }> & ComponentProps<'div'>) {
   const [local, others] = splitProps(props, ['routes', 'parentPath', 'class']);
   const merged = mergeProps({ parentPath: '' }, local);
 

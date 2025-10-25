@@ -10,7 +10,7 @@ import svgLoaderThumbnail from './chrome_2023-11-18_16-04-46.png?url';
 import rpgThumbnail from './rpg-thumbnail.png?url';
 import spritesThumbnail from './sprites-thumbnail.png?url';
 
-const threeRoutes: Routes[] = [
+const routes: Routes[] = [
   {
     path: '/solid-three',
     name: 'Solid Three',
@@ -73,7 +73,7 @@ const threeRoutes: Routes[] = [
   }
 ];
 
-export const routes: Routes = {
+export const threeRoutes: Routes = {
   path: '/three-examples',
   name: 'Three js Examples',
   Preview: (props) => (
@@ -88,10 +88,10 @@ export const routes: Routes = {
       component: () => (
         <>
           <div class="flex w-full place-content-center place-items-center bg-blue-100">Three js Examples</div>
-          <Navigation routes={threeRoutes} parentPath="." />
+          <Navigation routes={routes} parentPath="." />
         </>
       )
     },
-    ...threeRoutes
+    ...routes
   ]
 };

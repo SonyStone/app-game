@@ -10,8 +10,9 @@ import breakoutThumbnail from './breakout-thumbnail.png?url';
 import phaserThumbnail from './chrome_2023-11-18_15-46-29.png?url';
 import multipleLayersThumbnail from './multiple-layers-thumbnail.png?url';
 import rpgGamesThumbnail from './rpg-games.png?url';
+import worldBodiesThumbnail from './world-rodies-thumbnail.png?url';
 
-const phaserRoutes: Routes[] = [
+const routes: Routes[] = [
   {
     path: '/tilemap/layer-with-multiple-layers',
     name: 'Multiple Layers',
@@ -41,10 +42,16 @@ const phaserRoutes: Routes[] = [
     name: 'Breakout',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={breakoutThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/phaser-examples/breakout'))
+  },
+  {
+    path: '/100-world-bodies',
+    name: '100 world bodies',
+    Preview: (props) => <Thumbnail href={props.path} thumbnail={worldBodiesThumbnail} name={props.name} />,
+    component: lazy(() => import('@packages/phaser-examples/physics/matterjs/100 world bodies'))
   }
 ];
 
-export const routes: Routes = {
+export const phaserRoutes: Routes = {
   path: '/phaser-examples',
   name: 'Phaser Examples',
   Preview: (props) => (
@@ -56,8 +63,8 @@ export const routes: Routes = {
   children: [
     {
       path: '/',
-      component: () => <Navigation routes={phaserRoutes} parentPath="." />
+      component: () => <Navigation routes={routes} parentPath="." />
     },
-    ...phaserRoutes
+    ...routes
   ]
 };

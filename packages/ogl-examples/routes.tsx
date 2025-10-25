@@ -7,7 +7,7 @@ import { lazy } from 'solid-js';
 import polylinesThumbnail from './chrome_2023-11-18_15-48-40.png?url';
 import skinningThumbnail from './chrome_2023-11-18_16-10-52.png?url';
 
-const oglRoutes: Routes[] = [
+const routes: Routes[] = [
   {
     path: '/polylines',
     name: 'OGL Polylines',
@@ -89,7 +89,7 @@ const oglRoutes: Routes[] = [
   }
 ];
 
-export const routes: Routes = {
+export const oglRoutes: Routes = {
   path: '/ogl-examples',
   name: ' ',
   Preview: (props) => (
@@ -115,10 +115,10 @@ export const routes: Routes = {
       component: () => (
         <>
           <div class="flex w-full place-content-center place-items-center bg-blue-100">OGL Examples</div>
-          <Navigation routes={oglRoutes} parentPath="." />
+          <Navigation routes={routes} parentPath="." />
         </>
       )
     },
-    ...oglRoutes
+    ...routes
   ]
 };

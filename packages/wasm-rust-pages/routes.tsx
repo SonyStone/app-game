@@ -6,7 +6,7 @@ import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 import gameOfLifeThumbnail from './chrome_2023-11-18_15-20-36.png?url';
 
-const wasmRustRoutes: Routes[] = [
+const routes: Routes[] = [
   {
     path: '/wasm-game-of-life',
     name: 'Game Of Life',
@@ -45,7 +45,7 @@ const wasmRustRoutes: Routes[] = [
   }
 ];
 
-export const routes: Routes = {
+export const wasmRustRoutes: Routes = {
   path: '/wasm',
   Preview: (props) => (
     <A
@@ -66,10 +66,10 @@ export const routes: Routes = {
       component: () => (
         <>
           <div class="flex w-full place-content-center place-items-center bg-blue-100">WASM</div>
-          <Navigation routes={wasmRustRoutes} parentPath="." />
+          <Navigation routes={routes} parentPath="." />
         </>
       )
     },
-    ...wasmRustRoutes
+    ...routes
   ]
 };

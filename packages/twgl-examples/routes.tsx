@@ -7,7 +7,7 @@ import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 import twglThumbnail from './thumbnail/chrome_2023-11-18_15-44-48.png?url';
 
-const twglRoutes: Routes[] = [
+const routes: Routes[] = [
   {
     path: '/uniform-buffer-objects',
     name: 'Uniform Buffer Objects',
@@ -28,7 +28,7 @@ const twglRoutes: Routes[] = [
   }
 ];
 
-export const routes: Routes = {
+export const twglRoutes: Routes = {
   path: '/twgl-examples',
   name: 'twgl Examples',
   Preview: (props) => (
@@ -40,8 +40,8 @@ export const routes: Routes = {
   children: [
     {
       path: '/',
-      component: () => <Navigation routes={twglRoutes} parentPath="." />
+      component: () => <Navigation routes={routes} parentPath="." />
     },
-    ...twglRoutes
+    ...routes
   ]
 };

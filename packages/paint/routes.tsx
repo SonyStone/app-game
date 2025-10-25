@@ -113,9 +113,7 @@ export const restRoutes: Routes[] = [
   }
 ];
 
-const paintRoutes: Routes[] = [...brushEngineRoutes, ...restRoutes, ...pointerEventsRoutes];
-
-export const routes: Routes = {
+export const paintRoutes: Routes = {
   path: '/paint',
   Preview: (props) => (
     <A
@@ -133,8 +131,10 @@ export const routes: Routes = {
   children: [
     {
       path: '/',
-      component: lazy(() => import('@packages/paint'))
+      component: lazy(() => import('./index'))
     },
-    ...paintRoutes
+    ...brushEngineRoutes,
+    ...restRoutes,
+    ...pointerEventsRoutes
   ]
 };

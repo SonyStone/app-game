@@ -6,7 +6,7 @@ import { Ripple } from '@packages/ui-components/ripple/Ripple';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 
-const escyRoutes: Routes[] = [
+const routes: Routes[] = [
   {
     path: '/circles-boxes',
     name: 'Circles Boxes',
@@ -39,7 +39,7 @@ const escyRoutes: Routes[] = [
   }
 ];
 
-export const routes: Routes = {
+export const escyRoutes: Routes = {
   path: '/ecsy-examples',
   name: 'ECSY Examples',
   Preview: (props) => (
@@ -51,8 +51,8 @@ export const routes: Routes = {
   children: [
     {
       path: '/',
-      component: () => <Navigation routes={escyRoutes} parentPath="." />
+      component: () => <Navigation routes={routes} parentPath="." />
     },
-    ...escyRoutes
+    ...routes
   ]
 };

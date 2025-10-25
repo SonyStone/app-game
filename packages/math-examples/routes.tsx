@@ -5,7 +5,7 @@ import { Ripple } from '@packages/ui-components/ripple/Ripple';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 
-const mathRoutes: Routes[] = [
+const routes: Routes[] = [
   {
     path: '/geometric-algebra',
     name: 'Geometric Algebra',
@@ -80,7 +80,7 @@ const mathRoutes: Routes[] = [
   }
 ];
 
-export const routes: Routes = {
+export const mathRoutes: Routes = {
   path: '/math',
   name: 'Math Examples',
   Preview: (props) => (
@@ -99,8 +99,8 @@ export const routes: Routes = {
   children: [
     {
       path: '/',
-      component: () => <Navigation routes={mathRoutes} parentPath="." />
+      component: () => <Navigation routes={routes} parentPath="." />
     },
-    ...mathRoutes
+    ...routes
   ]
 };

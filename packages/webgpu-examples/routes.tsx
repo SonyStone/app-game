@@ -5,7 +5,7 @@ import { Ripple } from '@packages/ui-components/ripple/Ripple';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 
-const webgpuRoutes: Routes[] = [
+const routes: Routes[] = [
   {
     path: '/hello-triangle',
     name: 'Hello Triangle',
@@ -32,7 +32,7 @@ const webgpuRoutes: Routes[] = [
   }
 ];
 
-export const routes: Routes = {
+export const webgpuRoutes: Routes = {
   path: '/webgpu-examples',
   name: 'WebGPU',
   Preview: (props) => (
@@ -58,10 +58,10 @@ export const routes: Routes = {
       component: () => (
         <>
           <div class="flex w-full place-content-center place-items-center bg-blue-100">WebGPU Examples</div>
-          <Navigation routes={webgpuRoutes} parentPath="." />
+          <Navigation routes={routes} parentPath="." />
         </>
       )
     },
-    ...webgpuRoutes
+    ...routes
   ]
 };
