@@ -12,80 +12,80 @@ const routes: Routes[] = [
     path: '/polylines',
     name: 'OGL Polylines',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={polylinesThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/polylines'))
+    component: lazy(() => import('./polylines'))
   },
   {
     path: '/skinning',
     name: 'OGL skinning',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={skinningThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/skinning/skinning'))
+    component: lazy(() => import('./skinning/skinning'))
   },
   {
     path: '/msdf-text',
     name: 'OGL MSDF Text',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/msdf-text/msdf-text'))
+    component: lazy(() => import('./msdf-text/msdf-text'))
   },
   {
     path: '/sort-transparency',
     name: 'OGL Sort Transparency',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/sort-transparency/sort-transparency'))
+    component: lazy(() => import('./sort-transparency/sort-transparency'))
   },
   {
     path: '/helpers',
     name: 'OGL Helpers',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/helpers/helpers'))
+    component: lazy(() => import('./helpers/helpers'))
   },
   {
     path: '/draw-modes',
     name: 'OGL Draw modes',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/draw-modes/draw-modes'))
+    component: lazy(() => import('./draw-modes/draw-modes'))
   },
   {
     path: '/load-gltf',
     name: 'Load glTF',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/load-gltf/load-gltf'))
+    component: lazy(() => import('./load-gltf/load-gltf'))
   },
 
   {
     path: '/ogl-flowmap',
     name: 'OGL Flowmap',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/flowmap/flowmap'))
+    component: lazy(() => import('./flowmap/flowmap'))
   },
   {
     path: '/ogl-mouse-flowmap',
     name: 'OGL Mouse Flowmap',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/mouse-flowmap/mouse-flowmap'))
+    component: lazy(() => import('./mouse-flowmap/mouse-flowmap'))
   },
   {
     path: '/ogl-raycasting',
     name: 'OGL Raycasting',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/raycasting/raycasting'))
+    component: lazy(() => import('./raycasting/raycasting'))
   },
   {
     path: '/ogl-frustum',
     name: 'OGL Frustum',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/frustum/frustum'))
+    component: lazy(() => import('./frustum/frustum'))
   },
   {
     path: '/ogl-mouse-flowmap',
     name: 'OGL Mouse Flowmap',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/mouse-flowmap/mouse-flowmap'))
+    component: lazy(() => import('./mouse-flowmap/mouse-flowmap'))
   },
   {
     path: '/ogl-instancing',
     name: 'OGL Instancing',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ogl-examples/ogl-instancing/ogl-instancing'))
+    component: lazy(() => import('./ogl-instancing/ogl-instancing'))
   }
 ];
 

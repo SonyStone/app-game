@@ -22,13 +22,13 @@ export const brushEngineRoutes: Routes[] = [
     path: '/brush-example',
     name: 'Brush Example',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={texturesViewThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/paint/brush-example/brush-example'))
+    component: lazy(() => import('./brush-example/brush-example'))
   },
   {
     path: '/paint',
     name: 'Paint',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/paint-1/paint-page'))
+    component: lazy(() => import('./paint-1/paint-page'))
   }
 ];
 
@@ -37,79 +37,79 @@ export const restRoutes: Routes[] = [
     path: '/ogl-paint-full-screen',
     name: 'OGL paint full screen canvas',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/paint-ogl-1/paint-2'))
+    component: lazy(() => import('./paint-ogl-1/paint-2'))
   },
   {
     path: '/paint-app',
     name: 'paint app [WIP]',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/paint-app/paint-app'))
+    component: lazy(() => import('./paint-app/paint-app'))
   },
   {
     path: '/lasso-select-example',
     name: 'Lasso Select Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/lasso-select-example/lasso-select-example'))
+    component: lazy(() => import('./lasso-select-example/lasso-select-example'))
   },
   {
     path: '/offscreen-canvas-support-check',
     name: 'Offscreen Canvas Support Check',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/offscreen-canvas-support-check'))
+    component: lazy(() => import('./offscreen-canvas-support-check'))
   },
   {
     path: '/can-i-use',
     name: '"Can I Use"',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/can-i-use/can-i-use'))
+    component: lazy(() => import('./can-i-use/can-i-use'))
   },
   {
     path: '/canvas-paint',
     name: 'Paint on WebGL Canvas',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint'))
+    component: lazy(() => import('./canvas-paint/canvas-paint'))
   },
   {
     path: '/canvas-paint-step-by-step-1',
     name: 'Paint on WebGL Canvas Step by Step #1',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint-step-by-step-1'))
+    component: lazy(() => import('./canvas-paint/canvas-paint-step-by-step-1'))
   },
   {
     path: '/canvas-paint-step-by-step-2',
     name: 'Paint on WebGL Canvas Step by Step #2',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/canvas-paint/canvas-paint-step-by-step-2'))
+    component: lazy(() => import('./canvas-paint/canvas-paint-step-by-step-2'))
   },
   {
     path: '/offscreen-canvas-paint',
     name: 'Paint on WebGL OffscreenCanvas',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/offscreen-canvas-paint/offscreen-canvas-paint'))
+    component: lazy(() => import('./offscreen-canvas-paint/offscreen-canvas-paint'))
   },
   {
     path: '/ui-example',
     name: 'Paint UI Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/ui-example/ui-example'))
+    component: lazy(() => import('./ui-example/ui-example'))
   },
   {
     path: '/trigonometry',
     name: 'Trigonometry Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/ui-example/trigonometry'))
+    component: lazy(() => import('./ui-example/trigonometry'))
   },
   {
     path: '/tile-based-canvas',
     name: 'Tile Based Canvas',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/tile-based-canvas'))
+    component: lazy(() => import('./tile-based-canvas'))
   },
   {
     path: '/webgl-whiteboard',
     name: 'Webgl Whiteboard',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/paint/webgl-whiteboard'))
+    component: lazy(() => import('./webgl-whiteboard'))
   }
 ];
 

@@ -1,4 +1,5 @@
-import { Component, createContext, JSXElement, useContext } from 'solid-js';
+import { access, MaybeAccessor } from '@solid-primitives/utils';
+import { Component, createComponent, createContext, JSX, JSXElement, useContext } from 'solid-js';
 
 /**
  * Create the context provider component & useContext function with types
@@ -23,22 +24,26 @@ import { Component, createContext, JSXElement, useContext } from 'solid-js';
  * ctx?.count() // => 1
  * ```
  */
-export default function createContextProvider<T, P>(
-  factoryFn: (props: P) => T
-): readonly [provider: Component<P & { children?: JSXElement }>, useContext: () => T];
+export function createContextProvider<T, TProps>(
+  factoryFn: (props: TProps) => T,
+  defaults?: MaybeAccessor<T>
+): ContextProvider<T, TProps>;
 
-export default function createContextProvider<T>(): readonly [
-  provider: Component<{ children?: JSXElement; value: T }>,
-  useContext: () => T
-];
+export function createContextProvider<T>(): ContextProvider<T, { value: T }>;
 
-export default function createContextProvider<T, P>(
-  factoryFn?: (props: P) => T
-): readonly [provider: Component<P & { children?: JSXElement; value?: T }>, useContext: () => T] {
-  const ctx = createContext<T>();
+export function createContextProvider<T, TProps>(
+  factoryFn?: (props: TProps) => T,
+  defaults?: MaybeAccessor<T>
+): ContextProvider<T, TProps & { value?: T }> {
+  const ctx = createContext(access(defaults));
 
-  function Provider(props: P & { children?: JSXElement; value?: T }) {
-    return <ctx.Provider value={factoryFn ? factoryFn(props) : props.value}>{props.children}</ctx.Provider>;
+  function Provider(props: TProps & { children?: JSXElement; value?: T }) {
+    return createComponent(ctx.Provider, {
+      value: factoryFn ? factoryFn(props) : props.value,
+      get children() {
+        return props.children;
+      }
+    });
   }
 
   function useProvider() {
@@ -46,9 +51,31 @@ export default function createContextProvider<T, P>(
     // I don't like to throw new Error, but I don't know how to make it better.
     // Errors don't have a type, maybe I should just return `new Error`?
     // And I don't want to return `undefined` here either.
-    if (!app) throw new Error('useProvider must be used within a Provider');
+    if (!app) {
+      if (defaults) {
+        return access(defaults);
+      }
+      throw new Error('useProvider must be used within a Provider');
+    }
+
     return app;
   }
 
-  return [Provider, useProvider] as const;
+  function ContextConsumer(props: { children: RequiredParameter<(item: T) => JSX.Element> }): JSX.Element {
+    const app = useProvider();
+    return props.children(app);
+  }
+
+  return [Provider, useProvider, ContextConsumer] as const;
 }
+
+/** @deprecated default export is deprecated */
+export default createContextProvider;
+
+type RequiredParameter<T> = T extends () => unknown ? never : T;
+
+type ContextProvider<T, TProps = object> = readonly [
+  Provider: Component<TProps & { children?: JSXElement }>,
+  useContext: () => T,
+  ContextConsumer: Component<{ children: RequiredParameter<(item: T) => JSX.Element> }>
+];

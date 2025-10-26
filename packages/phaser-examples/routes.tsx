@@ -17,37 +17,37 @@ const routes: Routes[] = [
     path: '/tilemap/layer-with-multiple-layers',
     name: 'Multiple Layers',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={multipleLayersThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/phaser-examples/tilemap/layer-with-multiple-layers'))
+    component: lazy(() => import('./tilemap/layer-with-multiple-layers'))
   },
   {
     path: '/tilemap/base-tile-size',
     name: 'Base Tile Size',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={baseTileSizeThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/phaser-examples/tilemap/base-tile-size'))
+    component: lazy(() => import('./tilemap/base-tile-size'))
   },
   {
     path: '/rpg-game',
     name: 'RPG Game',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} thumbnail={rpgGamesThumbnail} />,
-    component: lazy(() => import('@packages/phaser-examples/rpg/rpg-game'))
+    component: lazy(() => import('./rpg/rpg-game'))
   },
   {
     path: '/phaser-game',
     name: 'Phaser',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={phaserThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/phaser-examples/phaser/Game'))
+    component: lazy(() => import('./phaser/Game'))
   },
   {
     path: '/breakout',
     name: 'Breakout',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={breakoutThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/phaser-examples/breakout'))
+    component: lazy(() => import('./breakout'))
   },
   {
     path: '/100-world-bodies',
     name: '100 world bodies',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={worldBodiesThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/phaser-examples/physics/matterjs/100 world bodies'))
+    component: lazy(() => import('./physics/matterjs/100 world bodies'))
   }
 ];
 

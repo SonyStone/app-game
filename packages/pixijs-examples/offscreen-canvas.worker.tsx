@@ -8,47 +8,47 @@ import { Transition } from './Transition';
 export const routes = [
   {
     path: '/',
-    component: lazy(() => import('@packages/pixijs-examples/examples/BasicExample'))
+    component: lazy(() => import('./pages/BasicExample'))
   },
   {
     path: '/basic-container',
-    component: lazy(() => import('./examples/BasicContainer'))
+    component: lazy(() => import('./pages/BasicContainer'))
   },
   {
     path: '/animations',
-    component: lazy(() => import('./examples/AnimationsExample'))
+    component: lazy(() => import('./pages/AnimationsExample'))
   },
   {
     path: '/blend-modes',
-    component: lazy(() => import('@packages/pixijs-examples/examples/BlendModesExamles'))
+    component: lazy(() => import('./pages/BlendModesExample'))
   },
   {
     path: '/mouse-trail',
-    component: lazy(() => import('@packages/pixijs-examples/examples/mouse-trail'))
+    component: lazy(() => import('./pages/MouseTrail'))
   },
   {
     path: '/render-layers',
-    component: lazy(() => import('@packages/pixijs-examples/examples/RenderLayers/index'))
+    component: lazy(() => import('./pages/RenderLayers'))
   },
   {
     path: '/advanced-scratch-card',
-    component: lazy(() => import('@packages/pixijs-examples/examples/AdvancedScratchCard'))
+    component: lazy(() => import('./pages/AdvancedScratchCard'))
   },
   {
     path: '/shader-toy-mesh',
-    component: lazy(() => import('@packages/pixijs-examples/examples/MeshAndShaders/ShaderToyMesh'))
+    component: lazy(() => import('./pages/MeshAndShaders/ShaderToyMesh'))
   },
   {
     path: '/graphics-simple',
-    component: lazy(() => import('@packages/pixijs-examples/examples/GraphicsSimple'))
+    component: lazy(() => import('./pages/GraphicsSimple'))
   },
   {
     path: '/graphics-advanced',
-    component: lazy(() => import('@packages/pixijs-examples/examples/GraphicsAdvanced'))
+    component: lazy(() => import('./pages/GraphicsAdvanced'))
   },
   {
     path: '/graphics-svg',
-    component: lazy(() => import('@packages/pixijs-examples/examples/GraphicsSvg'))
+    component: lazy(() => import('./pages/GraphicsSvg'))
   }
 ] as const;
 

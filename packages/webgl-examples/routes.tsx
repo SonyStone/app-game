@@ -14,7 +14,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} />,
-      component: lazy(() => import('@packages/webgl-examples/simple-program/simple-program'))
+      component: lazy(() => import('./simple-program/simple-program'))
     };
   })(),
   (() => {
@@ -24,7 +24,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} />,
-      component: lazy(() => import('@packages/webgl-examples/matrices-2d/matrices-2d'))
+      component: lazy(() => import('./matrices-2d/matrices-2d'))
     };
   })(),
   (() => {
@@ -34,7 +34,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} />,
-      component: lazy(() => import('@packages/webgl-examples/ogl-meshing/meshing'))
+      component: lazy(() => import('./ogl-meshing/meshing'))
     };
   })(),
   (() => {
@@ -44,7 +44,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} />,
-      component: lazy(() => import('@packages/webgl-examples/instanced-drawing/instanced-drawing'))
+      component: lazy(() => import('./instanced-drawing/instanced-drawing'))
     };
   })(),
   (() => {
@@ -54,7 +54,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} />,
-      component: lazy(() => import('@packages/webgl-examples/ogl-blending-modes/ogl-blending-modes'))
+      component: lazy(() => import('./ogl-blending-modes/ogl-blending-modes'))
     };
   })(),
   (() => {
@@ -64,7 +64,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} thumbnail={instancingWithUBOandVAOThumbnail} />,
-      component: lazy(() => import('@packages/webgl-examples/instancing-with-ubo-and-vao/instancing-with-ubo-and-vao'))
+      component: lazy(() => import('./instancing-with-ubo-and-vao/instancing-with-ubo-and-vao'))
     };
   })(),
   (() => {
@@ -74,7 +74,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} thumbnail={tiledMaphumbnail} />,
-      component: lazy(() => import('@packages/webgl-examples/tiled-map/tiled-map'))
+      component: lazy(() => import('./tiled-map/tiled-map'))
     };
   })()
 ] as const;

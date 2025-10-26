@@ -12,19 +12,19 @@ const routes: Routes[] = [
     path: '/uniform-buffer-objects',
     name: 'Uniform Buffer Objects',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/twgl-examples/uniform-buffer-objects/uniform-buffer-objects'))
+    component: lazy(() => import('./uniform-buffer-objects/uniform-buffer-objects'))
   },
   {
     path: '/twgl-2-development',
     name: '[WIP] TWGL 2 Development',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/twgl-examples/twgl-2-development/twgl-2-development'))
+    component: lazy(() => import('./twgl-2-development/twgl-2-development'))
   },
   {
     path: '/twgl',
     name: '[Not working] twgl',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={twglThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/twgl-examples/twgl/main'))
+    component: lazy(() => import('./twgl/main'))
   }
 ];
 
