@@ -15,6 +15,7 @@ import { BookmarksTreeView } from './BookmarksTreeView.type';
 import { useDragAndDropContext } from './createDragHandler';
 import type { AnyTreeView } from './insertChildrenAtPath';
 import type { DefaultNode, SavedwinNode } from './tree-schema';
+import { childPath, Path, siblingPath } from './TreeViewUtils';
 
 const expandedsubnodes = {
   background: `url(${nodeAnchorExpandedUrl}) 0px -1px no-repeat`
@@ -36,6 +37,7 @@ export function NodeItem(
   props: Partial<{
     node: BookmarksTreeView;
     isLast: boolean;
+    path: Path;
   }>
 ) {
   const allDescendantsCount = createLazyMemo(() => countAllDescendants(props.node));
@@ -52,7 +54,13 @@ export function NodeItem(
     <Show when={hasSubnodes()}>
       <ul>
         <For each={props.node?.children}>
-          {(child, i) => <NodeItem node={child} isLast={i() === (props.node?.children?.length ?? 1) - 1} />}
+          {(child, i) => (
+            <NodeItem
+              node={child}
+              path={[...(props.path ?? []), i()]}
+              isLast={i() === (props.node?.children?.length ?? 1) - 1}
+            />
+          )}
         </For>
       </ul>
     </Show>
@@ -64,15 +72,24 @@ export function NodeItem(
     <li
       style={props.isLast ? nodeTitleAndSubnodesContainerLast : nodeTitleAndSubnodesContainer}
       {...droppable()}
+      data-path-to={siblingPath(props.path, +1)}
       class="py-0.25 flex flex-col ps-4"
     >
-      <div class="flex" {...droppable({ hasSubnodes: true })} {...dragHandlers({ data: props.node })}>
+      <div
+        class="flex"
+        data-path-to={childPath(props.path, 0)}
+        data-path-from={props.path}
+        {...droppable({ hasSubnodes: true })}
+        {...dragHandlers({ data: props.node })}
+      >
         <button
           style={hasSubnodes() ? expandedsubnodes : nosubnodes}
-          class="h-4 w-4"
+          class="h-4 w-4 flex-shrink-0"
           disabled={!hasSubnodes()}
           onClick={() => setIsCollapsed(!isCollapsed())}
         ></button>
+
+        <pre class="text-muted-foreground text-xs">[{props.path?.join(',')}]</pre>
 
         <Show when={isCollapsed()}>
           <span class="text-muted-foreground text-xs">[{allDescendantsCount()}]</span>
@@ -183,6 +200,7 @@ function BookmarksLinkNode(props: Partial<{ node: DefaultNode }>) {
         draggable="false"
         alt="favicon"
         onError={(e) => {
+          e.preventDefault();
           (e.target as HTMLImageElement).src = noFaviconUrl;
         }}
       />
