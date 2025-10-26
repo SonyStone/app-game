@@ -79,6 +79,7 @@
     "@solid-primitives/keyboard": "^1.2.8",
     "@solid-primitives/keyed": "^1.5.1",
     "@solid-primitives/map": "^0.6.0",
+    "@solid-primitives/memo": "^1.4.3",
     "@solid-primitives/mutation-observer": "^1.2.1",
     "@solid-primitives/pointer": "^0.2.19",
     "@solid-primitives/raf": "^2.1.16",
@@ -125,6 +126,7 @@
     "twgl.js": "^5.5.4",
     "unocss-preset-animations": "^1.2.1",
     "vite-plugin-glsl": "1.5.1",
-    "wgpu-matrix": "^2.5.1"
+    "wgpu-matrix": "^2.5.1",
+    "zod": "^4.1.12"
   }
 }
