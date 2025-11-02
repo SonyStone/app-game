@@ -6,9 +6,10 @@ import type { BookmarksTreeView } from './BookmarksTreeView.type';
 import { DragAndDropConsumer, DragAndDropProvider } from './createDragHandler';
 import { DragFeedback } from './DragFeedback';
 import { insertChildrenAtPath } from './insertChildrenAtPath';
-import { NodeItem } from './NodeItem';
+import { NodeItem, NodeItem2 } from './NodeItem';
 import treeUrl from './tree-exported-4.json?url';
 import { bookmarksTreeSchema, type DefaultNode, isNodeInsert, isNodeNewRoot } from './tree-schema';
+import { Tree } from './tree-view/Tree';
 import { moveNode } from './TreeViewUtils';
 
 export default function BookmarksExplorer() {
@@ -99,6 +100,25 @@ export default function BookmarksExplorer() {
             <>
               <ul {...dropHandlers}>
                 <NodeItem node={state} path={[]} />
+              </ul>
+              <Show when={dragging()}>
+                <DragFeedback rect={rect()} hasSubnodes={hasSubnodes()} />
+              </Show>
+            </>
+          )}
+        </DragAndDropConsumer>
+        <br />
+        <DragAndDropConsumer>
+          {({ dropHandlers, rect, hasSubnodes, dragging }) => (
+            <>
+              <ul {...dropHandlers}>
+                <Tree each={state.children} by={(node) => node.id} getChildren={(node) => node.children}>
+                  {({ item, renderChildren, path }) => (
+                    <NodeItem2 node={item()} path={path()}>
+                      {renderChildren()}
+                    </NodeItem2>
+                  )}
+                </Tree>
               </ul>
               <Show when={dragging()}>
                 <DragFeedback rect={rect()} hasSubnodes={hasSubnodes()} />

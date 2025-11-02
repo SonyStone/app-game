@@ -77,6 +77,12 @@ const routes: Routes[] = [
     name: 'Sensor Access Demo',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./sensor-access-demo'))
+  },
+  {
+    path: '/tree-struct',
+    name: 'Tree Struct Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./tree-struct'))
   }
 ];
 

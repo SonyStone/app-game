@@ -1,5 +1,5 @@
 import { createLazyMemo } from '@solid-primitives/memo';
-import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, For, JSX, Match, Show, Switch } from 'solid-js';
 import {
   chromeWindowIconGoldUrl,
   chromeWindowIconGrayUrl,
@@ -15,7 +15,7 @@ import { BookmarksTreeView } from './BookmarksTreeView.type';
 import { useDragAndDropContext } from './createDragHandler';
 import type { AnyTreeView } from './insertChildrenAtPath';
 import type { DefaultNode, SavedwinNode } from './tree-schema';
-import { childPath, Path, siblingPath } from './TreeViewUtils';
+import { childPath, type Path, siblingPath } from './TreeViewUtils';
 
 const expandedsubnodes = {
   background: `url(${nodeAnchorExpandedUrl}) 0px -1px no-repeat`
@@ -33,24 +33,12 @@ const nosubnodes = {
   background: `url(${nodeAnchorNoSubnodesUrl}) 0px -1px no-repeat`
 };
 
-export function NodeItem(
-  props: Partial<{
-    node: BookmarksTreeView;
-    isLast: boolean;
-    path: Path;
-  }>
-) {
-  const allDescendantsCount = createLazyMemo(() => countAllDescendants(props.node));
-
+export function NodeItemChildren(props: Partial<{ node: BookmarksTreeView; path: Path }>) {
   const hasSubnodes = createLazyMemo(() => {
     return props.node?.children && props.node.children.length > 0;
   });
 
-  const [isCollapsed, setIsCollapsed] = createSignal(props.node?.colapsed ?? false);
-
-  // Render children nodes in memory
-  // This avoids re-creating the children nodes on each collapse/expand action
-  const children = (
+  return (
     <Show when={hasSubnodes()}>
       <ul>
         <For each={props.node?.children}>
@@ -65,6 +53,22 @@ export function NodeItem(
       </ul>
     </Show>
   );
+}
+
+export function NodeItem(
+  props: Partial<{
+    node: BookmarksTreeView;
+    isLast: boolean;
+    path: Path;
+  }>
+) {
+  const allDescendantsCount = createLazyMemo(() => countAllDescendants(props.node));
+
+  const hasSubnodes = createLazyMemo(() => {
+    return props.node?.children && props.node.children.length > 0;
+  });
+
+  const [isCollapsed, setIsCollapsed] = createSignal(props.node?.colapsed ?? false);
 
   const { dragHandlers, droppable } = useDragAndDropContext();
 
@@ -89,7 +93,65 @@ export function NodeItem(
           onClick={() => setIsCollapsed(!isCollapsed())}
         ></button>
 
-        <pre class="text-muted-foreground text-xs">[{props.path?.join(',')}]</pre>
+        <Show when={isCollapsed()}>
+          <span class="text-muted-foreground text-xs">[{allDescendantsCount()}]</span>
+        </Show>
+
+        <Switch fallback={<UnknownNode />}>
+          <Match when={props.node?.type === 'default'}>
+            <BookmarksLinkNode node={props.node as DefaultNode} />
+          </Match>
+          <Match when={props.node?.type === 'session'}>
+            <SessionNode />
+          </Match>
+          <Match when={props.node?.type === 'savedwin'}>
+            <SavedWinNode node={props.node as SavedwinNode} />
+          </Match>
+        </Switch>
+      </div>
+      {!isCollapsed() && <NodeItemChildren node={props.node} path={props.path} />}
+    </li>
+  );
+}
+
+export function NodeItem2(
+  props: Partial<{
+    node: BookmarksTreeView;
+    isLast: boolean;
+    path: Path;
+    children: JSX.Element;
+  }>
+) {
+  const allDescendantsCount = createLazyMemo(() => countAllDescendants(props.node));
+
+  const hasSubnodes = createLazyMemo(() => {
+    return props.node?.children && props.node.children.length > 0;
+  });
+
+  const [isCollapsed, setIsCollapsed] = createSignal(props.node?.colapsed ?? false);
+
+  const { dragHandlers, droppable } = useDragAndDropContext();
+
+  return (
+    <li
+      style={props.isLast ? nodeTitleAndSubnodesContainerLast : nodeTitleAndSubnodesContainer}
+      {...droppable()}
+      data-path-to={siblingPath(props.path, +1)}
+      class="py-0.25 flex flex-col ps-4"
+    >
+      <div
+        class="flex"
+        data-path-to={childPath(props.path, 0)}
+        data-path-from={props.path}
+        {...droppable({ hasSubnodes: true })}
+        {...dragHandlers({ data: props.node })}
+      >
+        <button
+          style={hasSubnodes() ? expandedsubnodes : nosubnodes}
+          class="h-4 w-4 flex-shrink-0"
+          disabled={!hasSubnodes()}
+          onClick={() => setIsCollapsed(!isCollapsed())}
+        ></button>
 
         <Show when={isCollapsed()}>
           <span class="text-muted-foreground text-xs">[{allDescendantsCount()}]</span>
@@ -107,7 +169,11 @@ export function NodeItem(
           </Match>
         </Switch>
       </div>
-      {!isCollapsed() && children}
+      {!isCollapsed() && (
+        <Show when={hasSubnodes()}>
+          <ul>{props.children}</ul>
+        </Show>
+      )}
     </li>
   );
 }

@@ -104,6 +104,12 @@ export function siblingPath(path: Path = [], offset: number): Path {
   return p;
 }
 
+/**
+ * Get the child path for a given parent path and child index.
+ * @param path The parent path.
+ * @param childIndex The index of the child.
+ * @returns The child path.
+ */
 export function childPath(path: Path = [], childIndex: number): Path {
   return [...path, childIndex];
 }

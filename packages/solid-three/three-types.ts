@@ -248,7 +248,6 @@ export type FogExp2Props = Node<THREE.FogExp2, typeof THREE.FogExp2>;
 export type ShapeProps = Node<THREE.Shape, typeof THREE.Shape>;
 
 declare module 'solid-js' {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
       // `audio` works but conflicts with @types/react. Try using Audio from react-three-fiber/components instead

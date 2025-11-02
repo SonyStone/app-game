@@ -71,8 +71,8 @@ export const [DragAndDropProvider, useDragAndDropContext, DragAndDropConsumer] =
           paths.pathFrom = pathFrom;
 
           // e.dataTransfer.dropEffect = 'none';
-          // e.dataTransfer.setData('application/json', JSON.stringify(props.data));
-          // e.dataTransfer.setData('text/plain', JSON.stringify(props.data));
+          e.dataTransfer.setData('application/json', JSON.stringify(props.data));
+          e.dataTransfer.setData('text/plain', JSON.stringify(props.data, null, 2));
           // console.log('Drag Start:', e.dataTransfer);
         },
         onDragEnd: (e: DragEvent) => {

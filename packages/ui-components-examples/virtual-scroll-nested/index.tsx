@@ -4,7 +4,6 @@ import { VirtualScrollNestedList } from './VirtualScrollNestedList';
 import { getRandomObject } from './getRandomObject';
 
 declare module 'solid-js' {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
       'test-item': ComponentProps<'div'>;

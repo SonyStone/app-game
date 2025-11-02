@@ -1,6 +1,18 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createStore } from 'solid-js/store';
 
+/**
+ * https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent
+ * https://developer.mozilla.org/en-US/docs/Web/API/Device_orientation_events
+ * https://developer.mozilla.org/en-US/docs/Web/API/DeviceMotionEvent/rotationRate
+ * https://developer.mozilla.org/en-US/docs/Web/API/Window/deviceorientation_event
+ * https://developer.mozilla.org/en-US/docs/Web/API/Device_orientation_events/Orientation_and_motion_data_explained
+ *
+ * Example is working only on secure contexts (HTTPS) and on mobile devices.
+ *
+ * https://sensor-js.xyz/demo.html
+ * @returns
+ */
 export default function SensorAccessDemo() {
   const [state, setState] = createStore({
     orientation: { alpha: 0, beta: 0, gamma: 0 },
