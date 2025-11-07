@@ -83,6 +83,12 @@ const routes: Routes[] = [
     name: 'Tree Struct Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./tree-struct'))
+  },
+  {
+    path: '/solid-rootless-test',
+    name: 'Solid Rootless Test',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./solid-rootless-test'))
   }
 ];
 

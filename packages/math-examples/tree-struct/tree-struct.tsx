@@ -1,8 +1,9 @@
-import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { ImageCache, ImageCacheProvider, ImageStore } from './ImageCache';
 import { IDs } from './list-of-ids';
 import { Tree } from './tree';
 
-const exampleTrees = [
+export const exampleTrees = [
   {
     id: IDs[0],
     children: [
@@ -37,6 +38,7 @@ const exampleTrees = [
 export function TreeStruct() {
   const [currentIndex, setCurrentIndex] = createSignal(0);
   const root = createMemo(() => exampleTrees[currentIndex()]);
+  const [toggle, setToggle] = createSignal(true);
 
   return (
     <div class="flex flex-col">
@@ -52,41 +54,58 @@ export function TreeStruct() {
       >
         Next Example index {currentIndex()}
       </button>
-      <ul>
-        <Tree root={root()}>
-          {(props) => {
-            const [toggle, setToggle] = createSignal(true);
+      <button class="rounded border px-1" onClick={() => setToggle(!toggle())}>
+        {toggle() ? `Hide ` : `Show`}
+      </button>
+      <ImageCacheProvider>
+        <ImageStore />
+        <ul>
+          <Show when={toggle()}>
+            <Tree root={root()}>
+              {(props) => {
+                const [toggle, setToggle] = createSignal(true);
 
-            createEffect(() => {
-              console.log('❓ Toggle', toggle());
-            });
-
-            return (
-              <li data-node-id={props.node.id}>
-                <div class="flex items-center gap-2">
-                  <span>
-                    {props.node.id}{' '}
-                    {props.node.children?.length ? `(children: ${props.node.children.length})` : '(no children)'}
-                  </span>
-                  <button
-                    class="rounded border px-1"
-                    onClick={() => {
-                      console.log('❓ setToggle', !toggle());
-                      setToggle(!toggle());
-                    }}
-                  >
-                    {toggle() ? 'Hide' : 'Show'}
-                  </button>
-                  <img height={30} width={30} src={`https://api.dicebear.com/6.x/thumbs/svg?seed=${props.node.id}`} />
-                </div>
-                <Show when={toggle()}>
-                  <ul class="ps-8">{props.children}</ul>
-                </Show>
-              </li>
-            );
-          }}
-        </Tree>
-      </ul>
+                return (
+                  <li data-node-id={props.node.id}>
+                    <TestCleanup resources={props.node.id} />
+                    <div class="flex items-center gap-2">
+                      <span>
+                        {props.node.id}{' '}
+                        <span class="text-gray-500">
+                          [path: {props.path.length > 0 ? props.path.join(',') : 'root'}]
+                        </span>{' '}
+                        {props.childCount > 0 ? `(${props.childCount} descendants)` : '(leaf node)'}
+                      </span>
+                      {props.childCount > 0 && (
+                        <button class="rounded border px-1" onClick={() => setToggle(!toggle())}>
+                          {toggle() ? `Hide ${props.childCount}` : `Show ${props.childCount}`}
+                        </button>
+                      )}
+                      <ImageCache
+                        height={30}
+                        width={30}
+                        src={`https://api.dicebear.com/6.x/thumbs/svg?seed=${props.node.id}`}
+                      />
+                    </div>
+                    <Show when={toggle()}>
+                      <TestCleanup resources={props.children} />
+                      <ul class="ps-8">{props.children}</ul>
+                    </Show>
+                  </li>
+                );
+              }}
+            </Tree>
+          </Show>
+        </ul>
+      </ImageCacheProvider>
     </div>
   );
+}
+
+function TestCleanup(props: { resources?: unknown }) {
+  onCleanup(() => {
+    console.log('Cleaning up resources...', props.resources);
+  });
+
+  return null;
 }

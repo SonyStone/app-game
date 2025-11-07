@@ -1,3 +1,5 @@
+import { ImageCache, ImageCacheProvider } from '@packages/math-examples/tree-struct/ImageCache';
+import { Tree } from '@packages/math-examples/tree-struct/tree';
 import { trackStore } from '@solid-primitives/deep';
 import { createUndoHistory } from '@solid-primitives/history';
 import { createEffect, createMemo, createResource, Show } from 'solid-js';
@@ -6,10 +8,9 @@ import type { BookmarksTreeView } from './BookmarksTreeView.type';
 import { DragAndDropConsumer, DragAndDropProvider } from './createDragHandler';
 import { DragFeedback } from './DragFeedback';
 import { insertChildrenAtPath } from './insertChildrenAtPath';
-import { NodeItem, NodeItem2 } from './NodeItem';
+import { NodeItem2 } from './NodeItem';
 import treeUrl from './tree-exported-4.json?url';
 import { bookmarksTreeSchema, type DefaultNode, isNodeInsert, isNodeNewRoot } from './tree-schema';
-import { Tree } from './tree-view/Tree';
 import { moveNode } from './TreeViewUtils';
 
 export default function BookmarksExplorer() {
@@ -41,11 +42,13 @@ export default function BookmarksExplorer() {
         tree.type = element.node.type;
         tree.data = element.node.data;
         tree.children = [];
+        tree.id = index;
       } else if (isNodeInsert(element)) {
         const [, nodeData, path] = element;
         if (!(nodeData as DefaultNode & { type: 'default' }).type) {
           (nodeData as DefaultNode & { type: 'default' }).type = 'default';
         }
+        nodeData.id = index;
         insertChildrenAtPath(tree, path, nodeData);
       }
     }
@@ -85,48 +88,46 @@ export default function BookmarksExplorer() {
       <button class="rounded-2xl border px-2" onClick={history.redo}>
         Redo
       </button>
-      <DragAndDropProvider
-        onMoveNode={(from, to) => {
-          console.log('Move node from', from, 'to', to);
-          setState(
-            produce((tree) => {
-              moveNode(tree, from, to);
-            })
-          );
-        }}
-      >
-        <DragAndDropConsumer>
-          {({ dropHandlers, rect, hasSubnodes, dragging }) => (
-            <>
-              <ul {...dropHandlers}>
-                <NodeItem node={state} path={[]} />
-              </ul>
-              <Show when={dragging()}>
-                <DragFeedback rect={rect()} hasSubnodes={hasSubnodes()} />
-              </Show>
-            </>
-          )}
-        </DragAndDropConsumer>
-        <br />
-        <DragAndDropConsumer>
-          {({ dropHandlers, rect, hasSubnodes, dragging }) => (
-            <>
-              <ul {...dropHandlers}>
-                <Tree each={state.children} by={(node) => node.id} getChildren={(node) => node.children}>
-                  {({ item, renderChildren, path }) => (
-                    <NodeItem2 node={item()} path={path()}>
-                      {renderChildren()}
-                    </NodeItem2>
-                  )}
-                </Tree>
-              </ul>
-              <Show when={dragging()}>
-                <DragFeedback rect={rect()} hasSubnodes={hasSubnodes()} />
-              </Show>
-            </>
-          )}
-        </DragAndDropConsumer>
-      </DragAndDropProvider>
+      <ImageCacheProvider>
+        <DragAndDropProvider
+          onMoveNode={(from, to) => {
+            console.log('Move node from', from, 'to', to);
+            setState(
+              produce((tree) => {
+                moveNode(tree, from, to);
+              })
+            );
+          }}
+        >
+          <DragAndDropConsumer>
+            {({ dropHandlers, rect, hasSubnodes, dragging }) => (
+              <>
+                <ul {...dropHandlers}>
+                  <Tree root={state}>
+                    {(props) => {
+                      return (
+                        <div class="contents">
+                          <NodeItem2 node={props.node} path={props.path}>
+                            {props.children}
+                          </NodeItem2>
+                          <ImageCache
+                            height={20}
+                            width={20}
+                            src={`https://api.dicebear.com/6.x/thumbs/svg?seed=${props.node.id}`}
+                          />
+                        </div>
+                      );
+                    }}
+                  </Tree>
+                </ul>
+                <Show when={dragging()}>
+                  <DragFeedback rect={rect()} hasSubnodes={hasSubnodes()} />
+                </Show>
+              </>
+            )}
+          </DragAndDropConsumer>
+        </DragAndDropProvider>
+      </ImageCacheProvider>
     </div>
   );
 }

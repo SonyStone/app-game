@@ -1,4 +1,4 @@
-export type AnyTreeView<Key extends string, T = object> = { [K in Key]?: AnyTreeView<Key, T>[] } & T;
+import { AnyTreeView } from './AnyTreeView';
 
 /**
  * Inserts children at the specified path in the tree.

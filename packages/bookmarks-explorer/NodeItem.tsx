@@ -1,5 +1,6 @@
 import { createLazyMemo } from '@solid-primitives/memo';
 import { createMemo, createSignal, For, JSX, Match, Show, Switch } from 'solid-js';
+import type { AnyTreeView } from './AnyTreeView';
 import {
   chromeWindowIconGoldUrl,
   chromeWindowIconGrayUrl,
@@ -13,7 +14,6 @@ import {
 } from './assets';
 import { BookmarksTreeView } from './BookmarksTreeView.type';
 import { useDragAndDropContext } from './createDragHandler';
-import type { AnyTreeView } from './insertChildrenAtPath';
 import type { DefaultNode, SavedwinNode } from './tree-schema';
 import { childPath, type Path, siblingPath } from './TreeViewUtils';
 
