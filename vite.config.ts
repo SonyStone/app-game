@@ -1,6 +1,7 @@
 import UnoCSS from '@unocss/vite';
 import { resolve } from 'path';
 // import solidDevtools from 'solid-devtools/vite';
+import typegpuPlugin from 'unplugin-typegpu/vite';
 import { defineConfig } from 'vite';
 import glsl from 'vite-plugin-glsl';
 import solidPlugin from 'vite-plugin-solid';
@@ -29,8 +30,9 @@ export default defineConfig({
     // https://github.com/jfgodoy/vite-plugin-solid-svg
     solidSvg(),
     vitePluginArraybuffer(),
-    glsl()
+    glsl(),
     // viteFBXPlugin(),
+    typegpuPlugin({})
   ],
   server: {
     port: 3200,

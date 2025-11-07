@@ -29,6 +29,12 @@ const routes: Routes[] = [
     name: 'Lesson 1: Fundamentals',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./lesson-1-fundamentals/lesson-1-fundamentals'))
+  },
+  {
+    path: '/typegpu-example',
+    name: 'TypeGPU Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./typegpu-example'))
   }
 ];
 
