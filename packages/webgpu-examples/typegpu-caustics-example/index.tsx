@@ -4,7 +4,7 @@ import { onMount } from 'solid-js';
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 import * as std from 'typegpu/std';
-import { TGPURootProvider, useTGPURoot } from './TGPURootProvider';
+import { TGPURootProvider, useTGPURoot } from '../utils/TGPURootProvider';
 
 export default function TypeGPUExample() {
   return (
@@ -14,55 +14,55 @@ export default function TypeGPUExample() {
   );
 }
 
+/**
+ * Given a coordinate, it returns a grayscale floor tile pattern at that
+ * location.
+ */
+const tilePattern = (uv: d.v2f): number => {
+  'use gpu';
+  const tiledUv = std.fract(uv);
+  const proximity = std.abs(std.sub(std.mul(tiledUv, 2), 1));
+  const maxProximity = std.max(proximity.x, proximity.y);
+  return std.saturate(std.pow(1 - maxProximity, 0.6) * 5);
+};
+
+const mainVertex = tgpu['~unstable'].vertexFn({
+  in: { vertexIndex: d.builtin.vertexIndex },
+  out: { pos: d.builtin.position, uv: d.vec2f }
+})(({ vertexIndex }) => {
+  'use gpu';
+  const pos = [d.vec2f(0, 0.8), d.vec2f(-0.8, -0.8), d.vec2f(0.8, -0.8)];
+  const uv = [d.vec2f(0.5, 1), d.vec2f(0, 0), d.vec2f(1, 0)];
+
+  return {
+    pos: d.vec4f(pos[vertexIndex], 0, 1),
+    uv: uv[vertexIndex]
+  };
+});
+
+const caustics = (uv: d.v2f, time: number, profile: d.v3f): d.v3f => {
+  'use gpu';
+  const distortion = perlin3d.sample(d.vec3f(std.mul(uv, 0.5), time * 0.2));
+  // Distorting UV coordinates
+  const uv2 = std.add(uv, distortion);
+  const noise = std.abs(perlin3d.sample(d.vec3f(std.mul(uv2, 5), time)));
+  return std.pow(d.vec3f(1 - noise), profile);
+};
+
+/**
+ * Returns a transformation matrix that represents an `angle` rotation
+ * in the XY plane (around the imaginary Z axis)
+ */
+const rotateXY = (angle: number): d.m2x2f => {
+  'use gpu';
+  return d.mat2x2f(
+    /* right */ d.vec2f(std.cos(angle), std.sin(angle)),
+    /* up    */ d.vec2f(-std.sin(angle), std.cos(angle))
+  );
+};
+
 function TypeGPUApp() {
   const root = useTGPURoot();
-
-  const mainVertex = tgpu['~unstable'].vertexFn({
-    in: { vertexIndex: d.builtin.vertexIndex },
-    out: { pos: d.builtin.position, uv: d.vec2f }
-  })(({ vertexIndex }) => {
-    'use gpu';
-    const pos = [d.vec2f(0, 0.8), d.vec2f(-0.8, -0.8), d.vec2f(0.8, -0.8)];
-    const uv = [d.vec2f(0.5, 1), d.vec2f(0, 0), d.vec2f(1, 0)];
-
-    return {
-      pos: d.vec4f(pos[vertexIndex], 0, 1),
-      uv: uv[vertexIndex]
-    };
-  });
-
-  /**
-   * Given a coordinate, it returns a grayscale floor tile pattern at that
-   * location.
-   */
-  const tilePattern = (uv: d.v2f): number => {
-    'use gpu';
-    const tiledUv = std.fract(uv);
-    const proximity = std.abs(std.sub(std.mul(tiledUv, 2), 1));
-    const maxProximity = std.max(proximity.x, proximity.y);
-    return std.saturate(std.pow(1 - maxProximity, 0.6) * 5);
-  };
-
-  const caustics = (uv: d.v2f, time: number, profile: d.v3f): d.v3f => {
-    'use gpu';
-    const distortion = perlin3d.sample(d.vec3f(std.mul(uv, 0.5), time * 0.2));
-    // Distorting UV coordinates
-    const uv2 = std.add(uv, distortion);
-    const noise = std.abs(perlin3d.sample(d.vec3f(std.mul(uv2, 5), time)));
-    return std.pow(d.vec3f(1 - noise), profile);
-  };
-
-  /**
-   * Returns a transformation matrix that represents an `angle` rotation
-   * in the XY plane (around the imaginary Z axis)
-   */
-  const rotateXY = (angle: number): d.m2x2f => {
-    'use gpu';
-    return d.mat2x2f(
-      /* right */ d.vec2f(std.cos(angle), std.sin(angle)),
-      /* up    */ d.vec2f(-std.sin(angle), std.cos(angle))
-    );
-  };
 
   /** Seconds passed since the start of the example, wrapped to the range [0, 1000) */
   const time = root.createUniform(d.f32);
@@ -137,12 +137,10 @@ function TypeGPUApp() {
     return d.vec4f(std.add(std.mix(noFogColor, fogColor, fog), godRays), 1);
   });
 
-  const presentationFormat = navigator.gpu?.getPreferredCanvasFormat() ?? 'bgra8unorm';
-
   const canvas = (<canvas width="800" height="600"></canvas>) as HTMLCanvasElement;
-
   const context = canvas.getContext('webgpu') as GPUCanvasContext;
 
+  const presentationFormat = navigator.gpu?.getPreferredCanvasFormat() ?? 'bgra8unorm';
   context.configure({
     device: root.device,
     format: presentationFormat,
