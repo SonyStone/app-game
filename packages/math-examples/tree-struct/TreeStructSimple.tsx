@@ -1,14 +1,22 @@
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { ComponentProps, createMemo, createSignal, For, Show } from 'solid-js';
 import { ImageCache, ImageCacheProvider, ImageStore } from './ImageCache';
 import { TreeNode } from './tree';
 import { exampleTrees } from './tree-struct';
+
+declare module 'solid-js' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'app-tree-struct-simple': ComponentProps<'div'>;
+    }
+  }
+}
 
 export function TreeStructSimple() {
   const [currentIndex, setCurrentIndex] = createSignal(0);
   const root = createMemo(() => exampleTrees[currentIndex()]);
 
   return (
-    <div class="flex flex-col">
+    <app-tree-struct-simple class="flex flex-col">
       <div>Tree Struct Simple Example</div>
       <button
         class="my-2 w-32 rounded-2xl border px-2"
@@ -27,7 +35,7 @@ export function TreeStructSimple() {
           <Item node={root()} />
         </ImageCacheProvider>
       </ul>
-    </div>
+    </app-tree-struct-simple>
   );
 }
 

@@ -89,6 +89,12 @@ const routes: Routes[] = [
     name: 'Solid Rootless Test',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./solid-rootless-test'))
+  },
+  {
+    path: '/img-onload-test',
+    name: '<img/> OnLoad Test',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./img-onload-test'))
   }
 ];
 

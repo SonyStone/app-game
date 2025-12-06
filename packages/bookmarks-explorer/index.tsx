@@ -1,20 +1,20 @@
-import { ImageCache, ImageCacheProvider } from '@packages/math-examples/tree-struct/ImageCache';
 import { Tree } from '@packages/math-examples/tree-struct/tree';
 import { trackStore } from '@solid-primitives/deep';
 import { createUndoHistory } from '@solid-primitives/history';
 import { createEffect, createMemo, createResource, Show } from 'solid-js';
-import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
+import { createStore, produce, reconcile, SetStoreFunction, unwrap } from 'solid-js/store';
 import type { BookmarksTreeView } from './BookmarksTreeView.type';
-import { DragAndDropConsumer, DragAndDropProvider } from './createDragHandler';
+import { createDragAndDrop } from './createDragHandler';
 import { DragFeedback } from './DragFeedback';
 import { insertChildrenAtPath } from './insertChildrenAtPath';
 import { NodeItem2 } from './NodeItem';
-import treeUrl from './tree-exported-4.json?url';
+import treeExported2Url from './tree-exported-2.json?url';
+import treeExported4Url from './tree-exported-4.json?url';
 import { bookmarksTreeSchema, type DefaultNode, isNodeInsert, isNodeNewRoot } from './tree-schema';
 import { moveNode } from './TreeViewUtils';
 
-export default function BookmarksExplorer() {
-  const [data] = createResource(() => fetch(treeUrl).then((res) => res.json()));
+function createTreeView(props: { treeUrl: string }) {
+  const [data] = createResource(props.treeUrl, (treeUrl) => fetch(treeUrl).then((res) => res.json()));
 
   const flatTree = createMemo(() => {
     if (data()) {
@@ -79,55 +79,65 @@ export default function BookmarksExplorer() {
     }
   );
 
+  return { state, setState, history };
+}
+
+export default function BookmarksExplorer() {
+  const tree1 = createTreeView({ treeUrl: treeExported2Url });
+  const tree2 = createTreeView({ treeUrl: treeExported4Url });
+
   return (
     <div>
       <h1>Bookmarks Explorer</h1>
-      <button class="rounded-2xl border px-2" onClick={history.undo}>
+      <button class="rounded-2xl border px-2" onClick={tree1.history.undo}>
         Undo
       </button>
-      <button class="rounded-2xl border px-2" onClick={history.redo}>
+      <button class="rounded-2xl border px-2" onClick={tree1.history.redo}>
         Redo
       </button>
-      <ImageCacheProvider>
-        <DragAndDropProvider
-          onMoveNode={(from, to) => {
-            console.log('Move node from', from, 'to', to);
-            setState(
-              produce((tree) => {
-                moveNode(tree, from, to);
-              })
+      <div class="flex">
+        <TreeView state={tree1.state} setState={tree1.setState} />
+        <TreeView state={tree2.state} setState={tree2.setState} />
+      </div>
+    </div>
+  );
+}
+
+function TreeView(
+  props: Partial<{
+    state: BookmarksTreeView;
+    setState: SetStoreFunction<BookmarksTreeView>;
+  }>
+) {
+  const { dropHandlers, rect, hasSubnodes, dragging, dragHandlers, droppable } = createDragAndDrop({
+    onMoveNode: (from, to) => {
+      console.log('Move node from', from, 'to', to);
+      props.setState?.(
+        produce((tree) => {
+          moveNode(tree, from, to);
+        })
+      );
+    }
+  });
+
+  return (
+    <div class="h-80vh relative flex-1 overflow-auto border">
+      <ul {...dropHandlers}>
+        <Tree root={props.state}>
+          {(props) => {
+            return (
+              <div class="contents">
+                <NodeItem2 node={props.node} path={props.path} dragHandlers={dragHandlers} droppable={droppable}>
+                  {props.children}
+                </NodeItem2>
+              </div>
             );
           }}
-        >
-          <DragAndDropConsumer>
-            {({ dropHandlers, rect, hasSubnodes, dragging }) => (
-              <>
-                <ul {...dropHandlers}>
-                  <Tree root={state}>
-                    {(props) => {
-                      return (
-                        <div class="contents">
-                          <NodeItem2 node={props.node} path={props.path}>
-                            {props.children}
-                          </NodeItem2>
-                          <ImageCache
-                            height={20}
-                            width={20}
-                            src={`https://api.dicebear.com/6.x/thumbs/svg?seed=${props.node.id}`}
-                          />
-                        </div>
-                      );
-                    }}
-                  </Tree>
-                </ul>
-                <Show when={dragging()}>
-                  <DragFeedback rect={rect()} hasSubnodes={hasSubnodes()} />
-                </Show>
-              </>
-            )}
-          </DragAndDropConsumer>
-        </DragAndDropProvider>
-      </ImageCacheProvider>
+        </Tree>
+      </ul>
+      <Show when={dragging()}>
+        <DragFeedback rect={rect()} hasSubnodes={hasSubnodes()} />
+      </Show>
     </div>
   );
 }

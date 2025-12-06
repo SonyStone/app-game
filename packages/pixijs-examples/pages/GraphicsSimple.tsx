@@ -1,8 +1,7 @@
 import { Container, Graphics } from '@packages/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { GraphicsOptions } from 'pixi.js';
 
-export default function GraphicsSimple(props: Omit<GraphicsOptions, 'children'>) {
+export default function GraphicsSimple() {
   const size = createWindowSize();
   return (
     <Container>
@@ -106,7 +105,6 @@ export default function GraphicsSimple(props: Omit<GraphicsOptions, 'children'>)
           graphics.poly(path);
           graphics.fill({ color: 0x3500fa });
         }}
-        {...props}
       />
     </Container>
   );

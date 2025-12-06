@@ -1,9 +1,8 @@
 import { Container, Graphics, useAsset } from '@packages/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { ContainerOptions } from 'pixi.js';
-import { Show } from 'solid-js';
+import { JSX, Show } from 'solid-js';
 
-export default function GraphicsAdvanced(props: Omit<ContainerOptions, 'children'>) {
+export default function GraphicsAdvanced(): JSX.Element {
   const [texture] = useAsset('https://pixijs.com/assets/bg_rotate.jpg');
   const size = createWindowSize();
 
@@ -105,5 +104,5 @@ export default function GraphicsAdvanced(props: Omit<ContainerOptions, 'children
         </Show>
       </Container>
     </Container>
-  );
+  ) as JSX.Element;
 }

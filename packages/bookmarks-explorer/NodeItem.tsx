@@ -120,6 +120,8 @@ export function NodeItem2(
     isLast: boolean;
     path: Path;
     children: JSX.Element;
+    dragHandlers: ReturnType<typeof useDragAndDropContext>['dragHandlers'];
+    droppable: ReturnType<typeof useDragAndDropContext>['droppable'];
   }>
 ) {
   const allDescendantsCount = createLazyMemo(() => countAllDescendants(props.node));
@@ -130,12 +132,10 @@ export function NodeItem2(
 
   const [isCollapsed, setIsCollapsed] = createSignal(props.node?.colapsed ?? false);
 
-  const { dragHandlers, droppable } = useDragAndDropContext();
-
   return (
     <li
       style={props.isLast ? nodeTitleAndSubnodesContainerLast : nodeTitleAndSubnodesContainer}
-      {...droppable()}
+      {...props.droppable?.()}
       data-path-to={siblingPath(props.path, +1)}
       class="py-0.25 flex flex-col ps-4"
     >
@@ -143,8 +143,8 @@ export function NodeItem2(
         class="flex"
         data-path-to={childPath(props.path, 0)}
         data-path-from={props.path}
-        {...droppable({ hasSubnodes: true })}
-        {...dragHandlers({ data: props.node })}
+        {...props.droppable?.({ hasSubnodes: true })}
+        {...props.dragHandlers?.({ data: props.node })}
       >
         <button
           style={hasSubnodes() ? expandedsubnodes : nosubnodes}
@@ -215,6 +215,7 @@ function SessionNode() {
         src={faviconUrl}
         alt="favicon"
         draggable="false"
+        loading="lazy"
       />
       <span class="truncate text-xs">Current Session</span>
     </div>
@@ -265,6 +266,7 @@ function BookmarksLinkNode(props: Partial<{ node: DefaultNode }>) {
         src={props.node?.data?.favIconUrl ?? noFaviconUrl}
         draggable="false"
         alt="favicon"
+        loading="lazy"
         onError={(e) => {
           e.preventDefault();
           (e.target as HTMLImageElement).src = noFaviconUrl;

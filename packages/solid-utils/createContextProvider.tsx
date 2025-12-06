@@ -1,5 +1,7 @@
 import { access, MaybeAccessor } from '@solid-primitives/utils';
-import { Component, createComponent, createContext, JSX, JSXElement, useContext } from 'solid-js';
+import { createComponent, createContext, DEV, JSX, JSXElement, useContext } from 'solid-js';
+
+type Consumer<T> = (props: { children: (value: T) => JSX.Element | void }) => JSX.Element;
 
 /**
  * Create the context provider component & useContext function with types
@@ -24,58 +26,83 @@ import { Component, createComponent, createContext, JSX, JSXElement, useContext 
  * ctx?.count() // => 1
  * ```
  */
-export function createContextProvider<T, TProps>(
-  factoryFn: (props: TProps) => T,
-  defaults?: MaybeAccessor<T>
-): ContextProvider<T, TProps>;
 
-export function createContextProvider<T>(): ContextProvider<T, { value: T }>;
+export function createContextProvider<TContext>(): readonly [
+  provider: (props: { children?: JSXElement; value: TContext }) => JSX.Element,
+  use: () => TContext,
+  consumer: Consumer<TContext>
+];
 
-export function createContextProvider<T, TProps>(
-  factoryFn?: (props: TProps) => T,
-  defaults?: MaybeAccessor<T>
-): ContextProvider<T, TProps & { value?: T }> {
-  const ctx = createContext(access(defaults));
+export function createContextProvider<TContext>(
+  factoryFn: () => TContext,
+  defaultValue?: MaybeAccessor<TContext>
+): readonly [
+  provider: (props: { children?: JSXElement }) => JSX.Element,
+  use: () => TContext,
+  consumer: Consumer<TContext>
+];
 
-  function Provider(props: TProps & { children?: JSXElement; value?: T }) {
+export function createContextProvider<TContext>(
+  factoryFn: (props: { value: TContext }) => TContext,
+  defaultValue?: MaybeAccessor<TContext>
+): readonly [
+  provider: (props: { children?: JSXElement; value: TContext }) => JSX.Element,
+  use: () => TContext,
+  consumer: Consumer<TContext>
+];
+
+export function createContextProvider<TContext, TProps>(
+  factoryFn: (props: TProps) => TContext,
+  defaultValue?: MaybeAccessor<TContext>
+): readonly [
+  provider: (props: TProps & { children?: JSXElement }) => JSX.Element,
+  use: () => TContext,
+  consumer: Consumer<TContext>
+];
+
+export function createContextProvider<TContext, TProps>(
+  factoryFn?: (props?: TProps) => TContext,
+  defaultValue?: MaybeAccessor<TContext>
+) {
+  const ctx = createContext(access(defaultValue));
+
+  const useProvider = () => {
+    const app = useContext(ctx);
+    // I don't like to throw new Error, but I don't know how to make it better.
+    // Errors don't have a type, maybe I should just return `new Error`?
+    // And I don't want to return `undefined` here either.
+    if (!app) {
+      if (defaultValue) {
+        return access(defaultValue);
+      }
+      if (DEV) {
+        // Most of the time, missing provider is a hot reload
+        // and @refresh reload is not working
+        // ! But with wrong implementation it can cause infinite reload loop
+        // location.reload();
+      }
+      throw new Error('useProvider must be used within a Provider');
+    }
+
+    return app;
+  };
+
+  const Provider = (props: TProps & { value: TContext } & { children?: JSXElement }): JSX.Element => {
     return createComponent(ctx.Provider, {
       value: factoryFn ? factoryFn(props) : props.value,
       get children() {
         return props.children;
       }
     });
-  }
+  };
 
-  function useProvider() {
-    const app = useContext(ctx);
-    // I don't like to throw new Error, but I don't know how to make it better.
-    // Errors don't have a type, maybe I should just return `new Error`?
-    // And I don't want to return `undefined` here either.
-    if (!app) {
-      if (defaults) {
-        return access(defaults);
-      }
-      throw new Error('useProvider must be used within a Provider');
-    }
-
-    return app;
-  }
-
-  function ContextConsumer(props: { children: RequiredParameter<(item: T) => JSX.Element> }): JSX.Element {
+  const ContextConsumer = (props: { children: (item: TContext) => JSX.Element | void }): JSX.Element => {
     const app = useProvider();
-    return props.children(app);
-  }
+    return props.children(app) ?? null;
+  };
 
   return [Provider, useProvider, ContextConsumer] as const;
 }
 
 /** @deprecated default export is deprecated */
 export default createContextProvider;
-
-type RequiredParameter<T> = T extends () => unknown ? never : T;
-
-type ContextProvider<T, TProps = object> = readonly [
-  Provider: Component<TProps & { children?: JSXElement }>,
-  useContext: () => T,
-  ContextConsumer: Component<{ children: RequiredParameter<(item: T) => JSX.Element> }>
-];

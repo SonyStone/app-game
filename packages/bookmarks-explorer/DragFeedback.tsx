@@ -1,6 +1,16 @@
 import { dragFeedbackAsFirstChildUrl, dragFeedbackAsSiblingUrl } from './assets';
 
-export function DragFeedback(props: Partial<{ rect: DOMRect; hasSubnodes: boolean }>) {
+export function DragFeedback(
+  props: Partial<{
+    rect: {
+      top: number;
+      left: number;
+      width: number;
+      height: number;
+    };
+    hasSubnodes: boolean;
+  }>
+) {
   const dragFeedbackAsFirstChild = (
     <img
       src={dragFeedbackAsFirstChildUrl}

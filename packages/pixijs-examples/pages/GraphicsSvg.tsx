@@ -1,9 +1,8 @@
 import { Container, Graphics } from '@packages/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { GraphicsOptions } from 'pixi.js';
 import { createEffect, createSignal, Show } from 'solid-js';
 
-export default function GraphicsSvg(props: Omit<GraphicsOptions, 'children'>) {
+export default function GraphicsSvg() {
   const [toggle, setToggle] = createSignal(false);
   const size = createWindowSize();
 
@@ -46,7 +45,6 @@ export default function GraphicsSvg(props: Omit<GraphicsOptions, 'children'>) {
         onmouseenter={() => {
           setToggle(true);
         }}
-        {...props}
       />
     </Container>
   );

@@ -1,7 +1,15 @@
-import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { ComponentProps, createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { ImageCache, ImageCacheProvider, ImageStore } from './ImageCache';
 import { IDs } from './list-of-ids';
 import { Tree } from './tree';
+
+declare module 'solid-js' {
+  namespace JSX {
+    interface IntrinsicElements {
+      'app-tree-struct': ComponentProps<'div'>;
+    }
+  }
+}
 
 export const exampleTrees = [
   {
@@ -41,7 +49,7 @@ export function TreeStruct() {
   const [toggle, setToggle] = createSignal(true);
 
   return (
-    <div class="flex flex-col">
+    <app-tree-struct class="flex flex-col">
       <div>Tree Struct Example</div>
       <button
         class="my-2 w-32 rounded-2xl border px-2"
@@ -98,7 +106,7 @@ export function TreeStruct() {
           </Show>
         </ul>
       </ImageCacheProvider>
-    </div>
+    </app-tree-struct>
   );
 }
 

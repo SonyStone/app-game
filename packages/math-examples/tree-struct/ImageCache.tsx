@@ -1,17 +1,17 @@
 import { createContextProvider } from '@utils/createContextProvider';
-import { createEffect, JSX, onCleanup } from 'solid-js';
+import { createMemo, JSX } from 'solid-js';
 
 const [ImageCacheProvider, useImageCache] = createContextProvider(() => {
   // Cache to store actual DOM img elements
   const imageElementCache = new Map<string, HTMLImageElement>();
-  const imageElementStore = (<div style={{ display: 'none' }}></div>) as HTMLDivElement;
+  const imageElementStore = new DocumentFragment();
 
   const getOrCreateImage = (src: string, props: JSX.ImgHTMLAttributes<HTMLImageElement>): HTMLImageElement => {
     let img = imageElementCache.get(src);
     if (!img) {
       console.log('Creating NEW DOM element and loading:', src);
       img = (
-        <img height={props.height} width={props.width} src={src} onLoad={() => console.log('Image loaded:', src)} />
+        <img height={props.height} width={props.width} src={src} onLoad={() => console.log('🥲 Image loaded:', src)} />
       ) as HTMLImageElement;
       imageElementCache.set(src, img);
       imageElementStore.appendChild(img);
@@ -38,29 +38,28 @@ export function ImageStore() {
 
 export function ImageCache(props: JSX.ImgHTMLAttributes<HTMLImageElement>) {
   const { getOrCreateImage, storeBack } = useImageCache();
-  const containerRef = (<span style={{ display: 'contents' }} />) as HTMLSpanElement;
-  let imgElement: HTMLImageElement | null = null;
+  const containerRef = document.createTextNode('');
 
-  createEffect(() => {
+  const memoizedImage = createMemo(() => {
     const src = props.src || '';
 
     if (containerRef && src) {
       // Get or create the cached image element
-      imgElement = getOrCreateImage(src, props);
+      const imgElement = getOrCreateImage(src, props);
 
-      // Move/append the cached img element into our container
-      containerRef.appendChild(imgElement);
+      console.log('✅ Using cached image element for:', props.src, imgElement);
+
+      // onCleanup(() => {
+      //   console.log('❓ Storing back image element to cache:', props.src, imgElement);
+      //   if (imgElement) {
+      //     storeBack(imgElement);
+      //   }
+      // });
+      return imgElement;
     }
+
+    return null;
   });
 
-  onCleanup(() => {
-    console.log('❓ Storing back image element to cache:', props.src);
-    if (imgElement) {
-      containerRef.removeChild(imgElement);
-      storeBack(imgElement);
-    }
-  });
-
-  // Return a container span that will hold the cached img element
-  return containerRef;
+  return <>{memoizedImage()}</>;
 }
