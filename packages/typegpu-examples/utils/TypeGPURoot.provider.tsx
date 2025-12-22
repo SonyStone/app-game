@@ -1,28 +1,36 @@
 import { createContextProvider } from '@utils/createContextProvider';
 import { createResource, JSX, Match, mergeProps, onCleanup, Switch } from 'solid-js';
 import tgpu, { TgpuRoot } from 'typegpu';
-import { useWebGPU } from './WebGPUProvider';
+import { useGPU } from './GPU.provider';
 
-const [Provider, useTGPURoot] = createContextProvider<TgpuRoot>();
-export { useTGPURoot };
+const [Provider, useTypeGPURoot] = createContextProvider<TgpuRoot, { value: TgpuRoot }>(
+  (props) => {
+    const root = props.value;
+
+    onCleanup(() => {
+      root.destroy();
+    });
+
+    return root;
+  },
+  {
+    errorMessage: 'TGPURootProvider is missing'
+  }
+);
+export { useTypeGPURoot };
 
 const defaultProps = {
   loading: <div>Loading TypeGPU...</div>,
   error: <div>Error initializing TypeGPU</div>
 };
 
-export function TGPURootProvider(
+export function TypeGPURootProvider(
   props: Partial<{ children: JSX.Element; loading?: JSX.Element; error?: JSX.Element }>
 ) {
   props = mergeProps(defaultProps, props);
 
-  // Just to make sure WebGPU is available at this point
-  const gpu = useWebGPU();
+  const gpu = useGPU();
   const [root] = createResource(gpu, () => tgpu.init());
-
-  onCleanup(() => {
-    root()?.destroy();
-  });
 
   return (
     <Switch>

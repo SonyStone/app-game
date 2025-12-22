@@ -1,4 +1,4 @@
-import createContextProvider from '@utils/createContextProvider';
+import { createContextProvider } from '@utils/createContextProvider';
 import { JSX, onCleanup } from 'solid-js';
 import { Rapier, useRapier2D } from './Rapier2D';
 

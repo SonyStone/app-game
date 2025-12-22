@@ -1,4 +1,4 @@
-import createContextProvider from '@utils/createContextProvider';
+import { createContextProvider } from '@utils/createContextProvider';
 import { createResource, JSX, Show } from 'solid-js';
 
 export type Rapier = typeof import('@dimforge/rapier2d-simd');

@@ -11,6 +11,7 @@ import { phaserRoutes } from '@packages/phaser-examples/routes';
 import { pixijsRoutes } from '@packages/pixijs-examples/routes';
 import { threeRoutes } from '@packages/three-examples/router';
 import { twglRoutes } from '@packages/twgl-examples/routes';
+import { typegpuRoutes } from '@packages/typegpu-examples/routes';
 import { uiComponentsRoutes } from '@packages/ui-components-examples/routes';
 import { wasmRustRoutes } from '@packages/wasm-rust-pages/routes';
 import { webglExamplesRoute } from '@packages/webgl-examples/routes';
@@ -39,6 +40,7 @@ export const routes: Routes[] = [
   paintRoutes,
   webglExamplesRoute,
   webgpuRoutes,
+  typegpuRoutes,
   oglRoutes,
   threeRoutes,
   twglRoutes,
@@ -150,12 +152,6 @@ export const routes: Routes[] = [
     name: 'litegraph First project',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@packages/litegraph-examples/first-project/first-project'))
-  },
-  {
-    path: '/model-viewer',
-    name: '[WIP] Model Viewer',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/webgl-examples/ogl-model-viewer/model-viewer'))
   },
   {
     path: '/svg-editor',

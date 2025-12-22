@@ -5,14 +5,17 @@ import { JSX, mergeProps, Show } from 'solid-js';
  * Check if the browser supports WebGPU
  * And provide the GPU non null object.
  */
-const [Provider, useWebGPU] = createContextProvider<GPU>();
-export { useWebGPU };
+const [Provider, useGPU] = createContextProvider<GPU, { value: GPU }>((props) => props.value, {
+  errorMessage: 'GPUProvider is missing',
+  defaultValue: navigator.gpu
+});
+export { useGPU };
 
 const defaultProps = {
   fallback: <div>Your browser does not support WebGPU.</div>
 };
 
-export function WebGPUProvider(props: Partial<{ children: JSX.Element; noGPU?: JSX.Element }>) {
+export function GPUProvider(props: Partial<{ children: JSX.Element; noGPU?: JSX.Element }>) {
   props = mergeProps(defaultProps, props);
 
   return (

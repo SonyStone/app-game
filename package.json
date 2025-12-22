@@ -35,7 +35,7 @@
     "@unocss/transformer-variant-group": "66.4.2",
     "@unocss/vite": "66.4.2",
     "@vitest/ui": "3.2.4",
-    "@webgpu/types": "^0.1.66",
+    "@webgpu/types": "^0.1.67",
     "degit": "^2.8.4",
     "eslint": "^9.9.0",
     "fflate": "^0.7.4",

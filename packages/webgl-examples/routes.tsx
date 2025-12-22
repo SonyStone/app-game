@@ -76,6 +76,16 @@ export const routes = [
       Preview: () => <Thumbnail href={'.' + path} name={name} thumbnail={tiledMaphumbnail} />,
       component: lazy(() => import('./tiled-map/tiled-map'))
     };
+  })(),
+  (() => {
+    const path = '/model-viewer';
+    const name = '[WIP] Model Viewer';
+    return {
+      path,
+      name,
+      Preview: () => <Thumbnail href={'.' + path} name={name} />,
+      component: lazy(() => import('./ogl-model-viewer/model-viewer'))
+    };
   })()
 ] as const;
 

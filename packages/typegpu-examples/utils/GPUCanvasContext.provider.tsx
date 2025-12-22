@@ -1,17 +1,12 @@
 // @refresh reload
 
 import { createContextProvider } from '@utils/createContextProvider';
-import { JSX, mergeProps, onCleanup, Show } from 'solid-js';
+import { JSX, mergeProps, Show } from 'solid-js';
 
-const [Provider, useGPUCanvasContext] = createContextProvider<GPUCanvasContext>(
-  (props: { value: GPUCanvasContext }) => {
-    const canvasContext = props.value;
-
-    onCleanup(() => {
-      canvasContext.unconfigure();
-    });
-
-    return canvasContext;
+const [Provider, useGPUCanvasContext] = createContextProvider<GPUCanvasContext, { value: GPUCanvasContext }>(
+  (props) => props.value,
+  {
+    errorMessage: 'GPUCanvasContextProvider is missing'
   }
 );
 
@@ -24,7 +19,7 @@ const defaultProps = {
 
 export function GPUCanvasContextProvider(
   props: Partial<{
-    canvas: HTMLCanvasElement;
+    canvas?: HTMLCanvasElement;
     children?: JSX.Element;
     noCanvas?: JSX.Element;
     noWebGPUContext?: JSX.Element;

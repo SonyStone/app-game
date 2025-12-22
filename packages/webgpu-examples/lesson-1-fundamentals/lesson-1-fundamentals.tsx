@@ -17,7 +17,7 @@ export default function Lesson1Fundamentals() {
   onMount(async () => {
     // 1. start off by requesting an adapter, and then requesting a device from the adapter.
     const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
-    const info = await adapter?.requestAdapterInfo();
+    const info = adapter?.info; // new API to get adapter info
     addLog(
       <span>
         WebGPU adapter vendor: <span class="text-blue-700">{info?.vendor}</span>, architecture:{' '}
@@ -46,7 +46,7 @@ export default function Lesson1Fundamentals() {
     context.configure({
       device,
       format: presentationFormat
-    })
+    });
     // 3. Next, we create a shader module
     const module = device.createShaderModule({
       label: 'our hardcoded red triangle shaders',

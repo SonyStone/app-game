@@ -4,8 +4,6 @@ import { Routes } from '@packages/app-router/routes.interface';
 import { Ripple } from '@packages/ui-components/ripple/Ripple';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
-import typegpuCausticsExampleThumbnail from './typegpu-caustics-example/thumbnail.png?url';
-import typegpuHelloTriangleThumbnail from './typegpu-hello-triangle/thumbnail.png?url';
 
 const routes: Routes[] = [
   {
@@ -31,18 +29,6 @@ const routes: Routes[] = [
     name: 'Lesson 1: Fundamentals',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./lesson-1-fundamentals/lesson-1-fundamentals'))
-  },
-  {
-    path: '/typegpu-caustics-example',
-    name: 'TypeGPU Caustics Example',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} thumbnail={typegpuCausticsExampleThumbnail} />,
-    component: lazy(() => import('./typegpu-caustics-example'))
-  },
-  {
-    path: '/typegpu-hello-triangle',
-    name: 'TypeGPU Hello Triangle',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} thumbnail={typegpuHelloTriangleThumbnail} />,
-    component: lazy(() => import('./typegpu-hello-triangle'))
   }
 ];
 
