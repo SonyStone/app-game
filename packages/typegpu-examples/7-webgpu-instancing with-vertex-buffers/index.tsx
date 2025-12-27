@@ -8,6 +8,7 @@ import * as std from 'typegpu/std';
 import { ResizeContainer } from '../ui/ResizeContainer';
 import { TypeGPUProvider, useTypeGPU } from '../utils/TypeGPU';
 import { rand } from '../utils/rand';
+import { createCircleVertices } from './createCircleVertices';
 
 type HexColor = `#${string}`;
 

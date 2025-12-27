@@ -1,4 +1,5 @@
 import { Vec2 } from '@packages/math/v2';
+import { angleTo, distance, isEqual } from '@packages/math/v2-functions';
 import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@packages/ogl';
 import { SwapBuffering } from '@packages/ogl/extras/swap-buffering';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
@@ -91,14 +92,14 @@ export const createBrushStroke = ({
     add: (point: Vec2, opacity: number) => {
       const [width, height] = access(size);
       if (prev && prevOpacity !== undefined) {
-        if (point.isEqual(prev)) {
+        if (isEqual(point, prev)) {
           return;
         }
-        const dist = point.distance(prev);
-        const angle = Vec2.angleTo(point, prev);
+        const dist = distance(point, prev);
+        const angle = angleTo(point, prev);
 
         for (let i = 0; i < dist; i++) {
-          let point = Vec2.create(prev.x + i * Math.cos(angle), prev.y + i * Math.sin(angle));
+          let point = Vec2.create(prev[0] + i * Math.cos(angle), prev[1] + i * Math.sin(angle));
           const tempOpacity = prevOpacity + (opacity - prevOpacity) * (i / dist);
           point = pointToCanvasPoint(point, width, height);
           setPoint(point, tempOpacity);
