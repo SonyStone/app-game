@@ -9,64 +9,70 @@ import typegpuHelloTriangleThumbnail from './typegpu-hello-triangle/thumbnail.pn
 
 const routes: Routes[] = [
   {
-    path: '/1-webgpu-fundamentals',
-    name: '1. WebGPU Fundamentals',
+    path: '/1.1-webgpu-fundamentals',
+    name: '[1.1] WebGPU Fundamentals',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./1-webgpu-fundamentals'))
+    component: lazy(() => import('./1.1-webgpu-fundamentals'))
   },
   {
-    path: '/2-run-computations-on-the-gpu',
-    name: '2. Run computations on the GPU',
+    path: '/1.2-run-computations-on-the-gpu',
+    name: '[1.2] Run computations on the GPU',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./2-run-computations-on-the-gpu'))
+    component: lazy(() => import('./1.2-run-computations-on-the-gpu'))
   },
   {
-    path: '/3-webgpu-inter-stage-variables',
-    name: '3. WebGPU Inter-stage Variables',
+    path: '/2-webgpu-inter-stage-variables',
+    name: '[2] WebGPU Inter-stage Variables',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./3-webgpu-inter-stage-variables'))
+    component: lazy(() => import('./2-webgpu-inter-stage-variables'))
   },
   {
-    path: '/4-webgpu-uniforms',
-    name: '4. WebGPU Uniforms',
+    path: '/3-webgpu-uniforms',
+    name: '[3] WebGPU Uniforms',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./4-webgpu-uniforms'))
+    component: lazy(() => import('./3-webgpu-uniforms'))
   },
   {
-    path: '/5-webgpu-storage-buffers',
-    name: '5. WebGPU Storage Buffers',
+    path: '/4-webgpu-storage-buffers',
+    name: '[4] WebGPU Storage Buffers',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./5-webgpu-storage-buffers'))
+    component: lazy(() => import('./4-webgpu-storage-buffers'))
   },
   {
-    path: '/6-webgpu-vertex-buffers',
-    name: '6. WebGPU Vertex Buffers',
+    path: '/5.1-webgpu-vertex-buffers',
+    name: '[5.1] WebGPU Vertex Buffers',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./6-webgpu-vertex-buffers'))
+    component: lazy(() => import('./5.1-webgpu-vertex-buffers'))
   },
   {
-    path: '/7-webgpu-instancing-with-vertex-buffers',
-    name: '7. WebGPU Instancing with Vertex Buffers',
+    path: '/5.2-webgpu-instancing-with-vertex-buffers',
+    name: '[5.2] WebGPU Instancing with Vertex Buffers',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./7-webgpu-instancing with-vertex-buffers'))
+    component: lazy(() => import('./5.2-webgpu-instancing-with-vertex-buffers'))
   },
   {
-    path: '/8-webgpu-index-buffers',
-    name: '8. WebGPU Index Buffers',
+    path: '/5.3-webgpu-index-buffers',
+    name: '[5.3] WebGPU Index Buffers',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./8-index-buffers'))
+    component: lazy(() => import('./5.3-index-buffers'))
   },
   {
-    path: '/9-webgpu-textures',
-    name: '9. WebGPU Textures',
+    path: '/6.1-webgpu-textures',
+    name: '[6.1] WebGPU Textures',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./9-webgpu-textures'))
+    component: lazy(() => import('./6.1-webgpu-textures'))
   },
   {
-    path: '/10-webgpu-loading-images-into-textures',
-    name: '10. WebGPU Loading Images into Textures',
+    path: '/6.2-webgpu-loading-images-into-textures',
+    name: '[6.2] WebGPU Loading Images into Textures',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./10-webgpu-loading-images-into-textures'))
+    component: lazy(() => import('./6.2-webgpu-loading-images-into-textures'))
+  },
+  {
+    path: '/6.5-webgpu-multisampling',
+    name: '[6.5] WebGPU Multisampling',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./6.5-webgpu-multisampling'))
   },
   {
     path: '/draw-on-canvas',

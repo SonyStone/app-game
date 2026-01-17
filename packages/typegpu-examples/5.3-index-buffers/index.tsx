@@ -5,7 +5,7 @@ import { createEffect, createSignal } from 'solid-js';
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 import * as std from 'typegpu/std';
-import { createCircleVertices } from '../7-webgpu-instancing with-vertex-buffers/createCircleVertices';
+import { createCircleVertices } from '../5.2-webgpu-instancing-with-vertex-buffers/createCircleVertices';
 import { ResizeContainer } from '../ui/ResizeContainer';
 import { TypeGPUProvider, useTypeGPU } from '../utils/TypeGPU';
 import { rand } from '../utils/rand';

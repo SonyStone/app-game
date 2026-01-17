@@ -2,7 +2,7 @@ import { Range2D } from '@packages/components/ui/range-2d';
 import { Meta, Title } from '@solidjs/meta';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import * as d from 'typegpu/data';
-import { shaders } from '../9-webgpu-textures/shaders';
+import { shaders } from '../6.1-webgpu-textures/shaders';
 import { ResizeContainer } from '../ui/ResizeContainer';
 import { TypeGPUProvider, useTypeGPU } from '../utils/TypeGPU';
 import img from './f-texture.png?url';

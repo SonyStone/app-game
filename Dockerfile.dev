@@ -1,0 +1,17 @@
+FROM node:22
+
+WORKDIR /app
+
+# Enable corepack for better package manager support
+RUN corepack enable
+
+# Copy package files first (for better caching)
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+
+EXPOSE 3200
+
+CMD ["npm", "run", "dev"]
