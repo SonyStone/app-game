@@ -49,8 +49,8 @@ export default function CanvasPaint() {
       if (e.pressure === 0 || e.buttons !== 1) {
         return;
       }
-      let x = e.clientX;
-      let y = e.clientY;
+      const x = e.clientX;
+      const y = e.clientY;
 
       brushStroke.add([x, y], e.pressure);
     });

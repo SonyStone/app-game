@@ -97,6 +97,18 @@ const routes: Routes[] = [
     name: 'Rotating Cube 2',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./rotating-cube-2/rotating-cube-2'))
+  },
+  {
+    path: '/typegpu-rotating-cube-example',
+    name: 'TypeGPU Rotating Cube Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./typegpu-rotating-cube-example'))
+  },
+  {
+    path: '/typegpu-draw-app-example',
+    name: 'TypeGPU Draw App',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./typegpu-draw-app-example'))
   }
 ];
 
