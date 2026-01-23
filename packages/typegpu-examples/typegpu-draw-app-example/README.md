@@ -1,6 +1,6 @@
-# TypeGPU Draw App Example
+# TypeGPU Drawing Framework
 
-A GPU-accelerated drawing application built with **TypeGPU** and **SolidJS**, demonstrating advanced WebGPU rendering techniques for real-time brush strokes with blend modes and canvas transformations.
+A modular, GPU-accelerated drawing framework built with **TypeGPU** and **SolidJS**, demonstrating advanced WebGPU rendering techniques for real-time brush strokes with blend modes, layers, and canvas transformations.
 
 ![WebGPU Drawing App](https://img.shields.io/badge/WebGPU-Enabled-blue)
 ![TypeGPU](https://img.shields.io/badge/TypeGPU-Type--Safe_GPU-green)
@@ -9,69 +9,272 @@ A GPU-accelerated drawing application built with **TypeGPU** and **SolidJS**, de
 ## 📋 Table of Contents
 
 - [Overview](#overview)
-- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Framework Architecture](#framework-architecture)
 - [Features](#features)
+- [Using Presets](#using-presets)
+- [Building Custom Apps](#building-custom-apps)
+- [API Reference](#api-reference)
 - [Rendering Pipeline](#rendering-pipeline)
 - [Key Components](#key-components)
-- [Hybrid TypeGPU + Raw WGSL Approach](#hybrid-typegpu--raw-wgsl-approach)
-- [Things to Pay Attention To](#things-to-pay-attention-to)
 - [Performance Considerations](#performance-considerations)
 
 ---
 
 ## Overview
 
-This example demonstrates a full-featured drawing application that leverages WebGPU for:
+This framework provides a complete solution for building GPU-accelerated drawing applications:
 
+- **Modular architecture** - Use presets for quick setup or build custom apps from components
 - **GPU-accelerated brush rendering** with instanced drawing
 - **Procedural brush texture generation** via compute shaders
 - **Multiple blend modes** (Normal, Multiply, Screen, Overlay)
 - **Color space transformations** (Gamma, Linear, HSV)
+- **Layer support** with opacity, visibility, and blend modes
 - **Canvas transformations** (Pan, Zoom, Rotate)
-- **Ping-pong buffer accumulation** for stroke compositing
+- **Extensible brush system** with custom brush registration
 - **Fixed-size drawing canvas** (4000×4000 pixels by default) with dynamic display scaling
-
-The app showcases **full TypeGPU integration**: TypeGPU for data types, buffers, textures, AND shaders using the TypeScript function syntax with `'use gpu'`.
 
 ---
 
-## Architecture
+## Quick Start
+
+### Using a Preset (Recommended)
+
+```tsx
+// Use the full-featured drawing app
+import { FullDrawApp } from './framework';
+
+export default function App() {
+  return <FullDrawApp />;
+}
+```
+
+### Custom Configuration
+
+```tsx
+import { createFullDrawApp } from './framework';
+
+const MyDrawApp = createFullDrawApp({
+  canvasWidth: 2000,
+  canvasHeight: 2000,
+  initialColor: '#3366ff',
+  initialSize: 20,
+  showLayerPanel: true
+});
+
+export default MyDrawApp;
+```
+
+### Building from Components
+
+```tsx
+import { CanvasView, Toolbar, LayerPanel, BrushSettings } from './framework';
+
+// Build your own custom drawing app using individual components
+```
+
+---
+
+## Framework Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                          index.tsx                               │
-│                    (SolidJS Application)                         │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
-│  │ UI Controls │  │ Pointer     │  │ Canvas Transform        │  │
-│  │ (Brush,     │  │ Input       │  │ (Pan/Zoom/Rotate)       │  │
-│  │ Blend Mode) │  │ Handling    │  │                         │  │
-│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      Rendering Pipeline                          │
-│                  (All TypeGPU with 'use gpu')                    │
+│                      framework/index.ts                          │
+│                    (Main Entry Point)                            │
+├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│  ┌──────────────┐    ┌─────────────┐    ┌──────────────────┐   │
-│  │ BrushStroke  │───▶│  BlendPass  │───▶│   DisplayPass    │   │
-│  │  (TypeGPU)   │    │  (TypeGPU)  │    │    (TypeGPU)     │   │
-│  └──────────────┘    └─────────────┘    └──────────────────┘   │
-│         │                   │                                   │
-│         ▼                   ▼                                   │
-│  ┌──────────────┐    ┌─────────────┐                           │
-│  │ BrushTexture │    │ SwapBuffer  │                           │
-│  │  (TypeGPU)   │    │ (Ping-Pong) │                           │
-│  └──────────────┘    └─────────────┘                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │   Presets   │  │     UI      │  │        Core             │  │
+│  │             │  │ Components  │  │                         │  │
+│  │ SimpleApp   │  │ CanvasView  │  │ DrawingEngine           │  │
+│  │ FullApp     │  │ Toolbar     │  │ GPUContext              │  │
+│  │             │  │ LayerPanel  │  │ RenderLoop              │  │
+│  │             │  │ BrushSettings│ │                         │  │
+│  │             │  │ ColorPicker │  │                         │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│                                                                  │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐  │
+│  │   Brushes   │  │   Blend     │  │       Layers            │  │
+│  │             │  │             │  │                         │  │
+│  │ BrushRegistry│ │ BlendRegistry│ │ LayerManager            │  │
+│  │ SoftRound   │  │ Normal      │  │ Layer types             │  │
+│  │ HardRound   │  │ Multiply    │  │                         │  │
+│  │ Airbrush    │  │ Screen      │  │                         │  │
+│  │             │  │ Overlay     │  │                         │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘  │
+│                                                                  │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │               Render Components (Low-level)                  ││
+│  │  BrushStroke │ BrushTexture │ BlendPass │ SwapBuffer │ Display││
+│  └─────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Data Flow
+### Module Organization
 
-1. **Pointer Input** → Generates `StrokePoint[]` from mouse/touch events
-2. **BrushStroke** → Renders stroke points as instanced quads to a texture
-3. **BlendPass** → Composites brush texture onto accumulated canvas (SwapBuffer)
-4. **DisplayPass** → Renders final canvas to screen with transformations
+| Module       | Purpose                                 |
+| ------------ | --------------------------------------- |
+| `framework/` | Main exports and SolidJS hooks          |
+| `core/`      | Engine, GPU context, render loop, types |
+| `state/`     | SolidJS state management                |
+| `brushes/`   | Brush registry and built-in brushes     |
+| `blend/`     | Blend mode registry and implementations |
+| `layers/`    | Layer management                        |
+| `ui/`        | Reusable UI components                  |
+| `presets/`   | Pre-configured drawing apps             |
+
+---
+
+## Using Presets
+
+The framework provides two ready-to-use presets:
+
+### SimpleDrawApp
+
+A minimal drawing app with essential controls only:
+
+```tsx
+import { SimpleDrawApp } from './framework';
+
+// Use default configuration
+export default SimpleDrawApp;
+
+// Or customize
+import { createSimpleDrawApp } from './framework';
+
+const MyApp = createSimpleDrawApp({
+  canvasWidth: 2000,
+  canvasHeight: 2000,
+  initialColor: '#ff0000',
+  initialSize: 30,
+  showHardness: true,
+  showSpacing: false,
+  backgroundColor: '#222222'
+});
+```
+
+### FullDrawApp
+
+A complete drawing app with layers, blend modes, and all controls:
+
+```tsx
+import { FullDrawApp } from './framework';
+
+// Use default configuration
+export default FullDrawApp;
+
+// Or customize
+import { createFullDrawApp } from './framework';
+
+const MyApp = createFullDrawApp({
+  canvasWidth: 4000,
+  canvasHeight: 4000,
+  initialColor: '#000000',
+  initialSize: 15,
+  initialLayerCount: 3,
+  showLayerPanel: true,
+  backgroundColor: '#1a1a1a'
+});
+```
+
+---
+
+## Building Custom Apps
+
+Use individual framework components to build your own drawing app:
+
+### Available Components
+
+```tsx
+import {
+  // UI Components
+  CanvasView, // WebGPU canvas with pointer/transform handling
+  Toolbar, // Complete toolbar with all controls
+  BrushSettings, // Brush parameter sliders
+  ColorPicker, // Color input
+  LayerPanel, // Layer management UI
+
+  // Registries
+  BrushRegistry, // Register custom brushes
+  BlendRegistry, // Register custom blend modes
+
+  // State
+  createDrawingState, // Create SolidJS reactive state
+
+  // Constants
+  DEFAULT_CANVAS_WIDTH,
+  DEFAULT_CANVAS_HEIGHT,
+  BLEND_MODE_LABELS,
+
+  // Types
+  type StrokePoint,
+  type CanvasTransform,
+  type BrushDefinition
+} from './framework';
+```
+
+### Custom Brush Example
+
+```tsx
+import { BrushRegistry, type BrushDefinition } from './framework';
+
+const myCustomBrush: BrushDefinition = {
+  id: 'my-custom-brush',
+  name: 'My Custom Brush',
+  description: 'A custom brush with special behavior',
+  settings: {
+    size: { min: 1, max: 200, default: 50 },
+    opacity: { min: 0, max: 1, default: 0.8 },
+    hardness: { min: 0, max: 1, default: 0.5 }
+  },
+  processPoints: (points, settings) => {
+    // Custom point processing logic
+    return points.map((p) => ({
+      ...p,
+      size: settings.size * p.pressure
+    }));
+  }
+};
+
+const registry = new BrushRegistry();
+registry.register(myCustomBrush);
+```
+
+---
+
+## API Reference
+
+### UI Components
+
+| Component       | Props                                                                                                                 | Description                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `CanvasView`    | `ref`, `transform`, `onStroke`, `onStrokeEnd`, `brushSize`, `brushSpacing`, `canvasWidth`, `canvasHeight`, `onResize` | WebGPU canvas with input handling |
+| `Toolbar`       | Brush settings, blend modes, actions                                                                                  | Complete toolbar                  |
+| `BrushSettings` | `size`, `opacity`, `hardness`, `spacing` + setters                                                                    | Brush parameter controls          |
+| `ColorPicker`   | `color`, `setColor`                                                                                                   | Color input                       |
+| `LayerPanel`    | `layers`, `activeLayerId`, layer handlers                                                                             | Layer management                  |
+
+### Core Classes
+
+| Class           | Methods                                                                              | Description            |
+| --------------- | ------------------------------------------------------------------------------------ | ---------------------- |
+| `DrawingEngine` | `init()`, `destroy()`, `handleStrokeStart/Points/End()`, `clearCanvas()`, `render()` | Main orchestrator      |
+| `BrushRegistry` | `register()`, `get()`, `getAll()`                                                    | Brush management       |
+| `BlendRegistry` | `register()`, `get()`, `getAll()`                                                    | Blend mode management  |
+| `LayerManager`  | `createLayer()`, `removeLayer()`, `moveLayer()`, `getVisibleLayers()`                | Layer stack management |
+
+### State Creators
+
+```tsx
+import {
+  createDrawingState, // Complete state
+  createToolState, // Brush settings
+  createCanvasState, // Transform state
+  createLayerState, // Layer state
+  createStrokeState // Stroke tracking
+} from './framework';
+```
 
 ---
 
@@ -85,6 +288,7 @@ The app showcases **full TypeGPU integration**: TypeGPU for data types, buffers,
 - **Spacing control** (1-100% of brush size)
 - **Pressure sensitivity** support (from pointer events)
 - **GPU-generated brush textures** via compute shaders
+- **Extensible brush registry** for custom brushes
 
 ### 🎨 Blend Modes
 
@@ -103,7 +307,17 @@ The app showcases **full TypeGPU integration**: TypeGPU for data types, buffers,
 | **Linear**       | Convert to linear, blend, convert back |
 | **HSV**          | Convert to HSV, blend, convert back    |
 
-### 🔄 Canvas Transformations
+### � Layer System
+
+- **Multiple layers** with independent textures
+- **Layer visibility** toggle
+- **Layer opacity** (0-100%)
+- **Layer locking** to prevent edits
+- **Layer reordering** (move up/down)
+- **Layer renaming** (double-click)
+- **Add/delete layers** dynamically
+
+### �🔄 Canvas Transformations
 
 - **Pan** (drag with middle mouse or two-finger gesture)
 - **Zoom** (scroll wheel or pinch gesture)

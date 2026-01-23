@@ -1,13 +1,9 @@
-import { createEffect, createSignal, on, onCleanup, onMount, untrack, type JSX } from 'solid-js';
+import { createSignal, onCleanup, onMount, untrack, type JSX } from 'solid-js';
 import tgpu, { type TgpuRoot } from 'typegpu';
 import { BlendPass } from './blend/BlendPass';
 import { SwapBuffer } from './blend/SwapBuffer';
 import { BrushStroke } from './brush/BrushStroke';
-import { useCanvasTransform } from './canvas/useCanvasTransform';
-import { usePointerInput } from './canvas/usePointerInput';
 import {
-  BLEND_MODE_LABELS,
-  COLOR_BLEND_MODE_LABELS,
   DEFAULT_BRUSH_HARDNESS,
   DEFAULT_BRUSH_OPACITY,
   DEFAULT_BRUSH_SIZE,
@@ -16,10 +12,20 @@ import {
   DEFAULT_CANVAS_WIDTH
 } from './constants';
 import { DisplayPass } from './display/DisplayPass';
+import { FullDrawApp } from './presets';
 import { BlendMode, ColorBlendMode, type CanvasTransform, type StrokePoint } from './types';
+import { CanvasView } from './ui/CanvasView';
+import { Toolbar } from './ui/Toolbar';
 
-export default function TypeGPUDrawApp(): JSX.Element {
+export default FullDrawApp;
+
+export function TypeGPUDrawApp(): JSX.Element {
   let canvasRef!: HTMLCanvasElement;
+
+  // Canvas ref setter for CanvasView component
+  const setCanvasRef = (el: HTMLCanvasElement) => {
+    canvasRef = el;
+  };
 
   // UI State
   const [brushColor, setBrushColor] = createSignal('#000000');
@@ -261,50 +267,16 @@ export default function TypeGPUDrawApp(): JSX.Element {
   onMount(async () => {
     await initWebGPU();
     start();
-
-    window.addEventListener('resize', handleResize);
   });
 
   onCleanup(() => {
     stop();
-    window.removeEventListener('resize', handleResize);
 
     brushStroke?.destroy();
     swapBuffer?.destroy();
     displayPass?.destroy();
     root?.destroy();
   });
-
-  // Setup pointer input
-  createEffect(
-    on([() => canvasRef], () => {
-      if (!canvasRef) return;
-
-      usePointerInput({
-        canvas: () => canvasRef,
-        transform,
-        onStroke: handleStroke,
-        onStrokeEnd: handleStrokeEnd,
-        brushSize,
-        brushSpacing,
-        canvasWidth: DEFAULT_CANVAS_WIDTH,
-        canvasHeight: DEFAULT_CANVAS_HEIGHT
-      });
-    })
-  );
-
-  // Setup canvas transform
-  createEffect(
-    on([() => canvasRef], () => {
-      if (!canvasRef) return;
-
-      useCanvasTransform({
-        canvas: () => canvasRef,
-        transform,
-        onTransformChange: handleTransformChange
-      });
-    })
-  );
 
   return (
     <div
@@ -316,179 +288,38 @@ export default function TypeGPUDrawApp(): JSX.Element {
         background: '#1a1a1a'
       }}
     >
-      {/* Toolbar */}
-      <div
-        style={{
-          display: 'flex',
-          'align-items': 'center',
-          gap: '16px',
-          padding: '8px 16px',
-          background: '#2a2a2a',
-          'border-bottom': '1px solid #444',
-          'flex-wrap': 'wrap'
-        }}
-      >
-        {/* Color Picker */}
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-          <label style={{ color: '#ccc', 'font-size': '12px' }}>Color:</label>
-          <input
-            type="color"
-            value={brushColor()}
-            onInput={(e) => setBrushColor(e.currentTarget.value)}
-            style={{ width: '32px', height: '32px', border: 'none', cursor: 'pointer' }}
-          />
-        </div>
-
-        {/* Brush Size */}
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-          <label style={{ color: '#ccc', 'font-size': '12px' }}>Size:</label>
-          <input
-            type="range"
-            min="1"
-            max="100"
-            value={brushSize()}
-            onInput={(e) => setBrushSize(parseInt(e.currentTarget.value))}
-            style={{ width: '80px' }}
-          />
-          <span style={{ color: '#999', 'font-size': '12px', width: '30px' }}>{brushSize()}</span>
-        </div>
-
-        {/* Brush Opacity */}
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-          <label style={{ color: '#ccc', 'font-size': '12px' }}>Opacity:</label>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={brushOpacity() * 100}
-            onInput={(e) => setBrushOpacity(parseInt(e.currentTarget.value) / 100)}
-            style={{ width: '80px' }}
-          />
-          <span style={{ color: '#999', 'font-size': '12px', width: '30px' }}>{Math.round(brushOpacity() * 100)}%</span>
-        </div>
-
-        {/* Brush Hardness */}
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-          <label style={{ color: '#ccc', 'font-size': '12px' }}>Hardness:</label>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={brushHardness() * 100}
-            onInput={(e) => setBrushHardness(parseInt(e.currentTarget.value) / 100)}
-            style={{ width: '80px' }}
-          />
-          <span style={{ color: '#999', 'font-size': '12px', width: '30px' }}>
-            {Math.round(brushHardness() * 100)}%
-          </span>
-        </div>
-
-        {/* Brush Spacing */}
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-          <label style={{ color: '#ccc', 'font-size': '12px' }}>Spacing:</label>
-          <input
-            type="range"
-            min="1"
-            max="100"
-            value={brushSpacing()}
-            onInput={(e) => setBrushSpacing(parseInt(e.currentTarget.value))}
-            style={{ width: '80px' }}
-          />
-          <span style={{ color: '#999', 'font-size': '12px', width: '30px' }}>{brushSpacing()}%</span>
-        </div>
-
-        {/* Blend Mode */}
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-          <label style={{ color: '#ccc', 'font-size': '12px' }}>Blend:</label>
-          <select
-            value={blendMode()}
-            onChange={(e) => setBlendMode(parseInt(e.currentTarget.value) as BlendMode)}
-            style={{
-              background: '#333',
-              color: '#ccc',
-              border: '1px solid #555',
-              padding: '4px 8px',
-              'border-radius': '4px'
-            }}
-          >
-            {Object.entries(BLEND_MODE_LABELS).map(([value, label]) => (
-              <option value={value}>{label}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Color Blend Mode */}
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-          <label style={{ color: '#ccc', 'font-size': '12px' }}>Color Space:</label>
-          <select
-            value={colorBlendMode()}
-            onChange={(e) => setColorBlendMode(parseInt(e.currentTarget.value) as ColorBlendMode)}
-            style={{
-              background: '#333',
-              color: '#ccc',
-              border: '1px solid #555',
-              padding: '4px 8px',
-              'border-radius': '4px'
-            }}
-          >
-            {Object.entries(COLOR_BLEND_MODE_LABELS).map(([value, label]) => (
-              <option value={value}>{label}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Clear Button */}
-        <button
-          onClick={clearCanvas}
-          style={{
-            background: '#444',
-            color: '#ccc',
-            border: '1px solid #555',
-            padding: '6px 12px',
-            'border-radius': '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Clear
-        </button>
-
-        {/* Reset Transform */}
-        <button
-          onClick={resetTransform}
-          style={{
-            background: '#444',
-            color: '#ccc',
-            border: '1px solid #555',
-            padding: '6px 12px',
-            'border-radius': '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Reset View
-        </button>
-      </div>
-
-      {/* Help text */}
-      <div
-        style={{
-          padding: '4px 16px',
-          background: '#222',
-          'font-size': '11px',
-          color: '#888'
-        }}
-      >
-        Draw with left mouse • Middle mouse to pan • Scroll to zoom • Alt+drag to rotate
-      </div>
+      {/* Toolbar with all controls */}
+      <Toolbar
+        brushColor={brushColor}
+        setBrushColor={setBrushColor}
+        brushSize={brushSize}
+        setBrushSize={setBrushSize}
+        brushOpacity={brushOpacity}
+        setBrushOpacity={setBrushOpacity}
+        brushHardness={brushHardness}
+        setBrushHardness={setBrushHardness}
+        brushSpacing={brushSpacing}
+        setBrushSpacing={setBrushSpacing}
+        blendMode={blendMode}
+        setBlendMode={setBlendMode}
+        colorBlendMode={colorBlendMode}
+        setColorBlendMode={setColorBlendMode}
+        onClear={clearCanvas}
+        onResetView={resetTransform}
+      />
 
       {/* Canvas */}
-      <canvas
-        ref={canvasRef}
-        style={{
-          flex: 1,
-          width: '100%',
-          cursor: 'crosshair',
-          'touch-action': 'none'
-        }}
+      <CanvasView
+        ref={setCanvasRef}
+        transform={transform}
+        onTransformChange={handleTransformChange}
+        onStroke={handleStroke}
+        onStrokeEnd={handleStrokeEnd}
+        brushSize={brushSize}
+        brushSpacing={brushSpacing}
+        canvasWidth={DEFAULT_CANVAS_WIDTH}
+        canvasHeight={DEFAULT_CANVAS_HEIGHT}
+        onResize={handleResize}
       />
     </div>
   );
