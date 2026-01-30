@@ -224,7 +224,7 @@ export class Raycast {
       if (!mesh.hit.faceNormal) {
         mesh.hit.localFaceNormal = new Vec3();
         mesh.hit.faceNormal = new Vec3();
-        mesh.hit.uv = new FVec2();
+        mesh.hit.uv = new Vec2();
         mesh.hit.localNormal = new Vec3();
         mesh.hit.normal = new Vec3();
       }

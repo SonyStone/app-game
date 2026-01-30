@@ -8,7 +8,7 @@ import {
   MeshPhongMaterial,
   PointLight,
   Scene,
-  sRGBEncoding,
+  SRGBColorSpace,
   WebGLRenderer
 } from 'three';
 
@@ -32,7 +32,7 @@ export default function SvgLoader() {
   const renderer = new WebGLRenderer({ antialias: true, canvas });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.outputEncoding = sRGBEncoding;
+  renderer.outputColorSpace = SRGBColorSpace;
 
   controls.init(renderer.domElement);
 

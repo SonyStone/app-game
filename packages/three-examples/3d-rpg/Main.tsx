@@ -14,7 +14,7 @@ import {
   MeshPhongMaterial,
   Object3D,
   PerspectiveCamera,
-  PlaneBufferGeometry,
+  PlaneGeometry,
   Scene,
   Vector3,
   WebGLRenderer,
@@ -81,7 +81,7 @@ export default function Main() {
   // ground
   {
     var mesh = new Mesh(
-      new PlaneBufferGeometry(2000, 2000),
+      new PlaneGeometry(2000, 2000),
       new MeshPhongMaterial({ color: 0x999999, depthWrite: false })
     );
     mesh.rotation.x = -Math.PI / 2;

@@ -320,7 +320,7 @@ export function applyProp(
     // Auto-convert sRGB textures, for now ...
     // https://github.com/pmndrs/react-three-fiber/issues/344
     if (!rootState.linear && currentInstance[key] instanceof THREE.Texture) {
-      currentInstance[key].encoding = THREE.sRGBEncoding;
+      currentInstance[key].colorSpace = THREE.SRGBColorSpace;
     }
   }
 

@@ -8,7 +8,7 @@ import {
   MeshBasicMaterial,
   Scene,
   WebGLRenderer,
-  sRGBEncoding
+  SRGBColorSpace
 } from 'three';
 
 import { useCamera } from './Camera.provider';
@@ -23,7 +23,7 @@ export default function Sprites() {
   const renderer = new WebGLRenderer({ antialias: true, canvas });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.outputEncoding = sRGBEncoding;
+  renderer.outputColorSpace = SRGBColorSpace;
   renderer.sortObjects = false;
 
   controls.init(renderer.domElement);

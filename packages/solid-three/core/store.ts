@@ -160,7 +160,7 @@ const createThreeStore = (
   }
 
   // Set color preferences
-  if (linear) gl.outputEncoding = THREE.LinearEncoding;
+  if (linear) gl.outputColorSpace = THREE.LinearSRGBColorSpace;
   if (flat) gl.toneMapping = THREE.NoToneMapping;
 
   // clock.elapsedTime is updated using advance(timestamp)

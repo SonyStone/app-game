@@ -51,6 +51,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 5000
     // minify: false
   },
+  worker: {
+    format: 'es'
+  },
   test: {
     environment: 'happy-dom',
     transformMode: {
