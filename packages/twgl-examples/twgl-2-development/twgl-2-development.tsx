@@ -2,8 +2,8 @@ import { createBufferInfoFromArrays } from '@packages/twgl-2/attributes';
 import { createProgramInfo } from '@packages/twgl-2/programs/programs';
 import { createWebGL2Context } from '@packages/webgl/webgl-objects/context';
 import { onMount } from 'solid-js';
-import fragmentShaderSource from './shaders/shader.frag?raw';
-import vertexShaderSource from './shaders/shader.vert?raw';
+import fragmentShaderSource from './shader.frag?raw';
+import vertexShaderSource from './shader.vert?raw';
 
 export default function Twgl2Development() {
   const canvas = (

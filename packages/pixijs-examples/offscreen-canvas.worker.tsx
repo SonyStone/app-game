@@ -20,7 +20,7 @@ export const routes = [
   },
   {
     path: '/blend-modes',
-    component: lazy(() => import('./pages/BlendModesExample'))
+    component: lazy(() => import('./pages/BlendModesExamples'))
   },
   {
     path: '/mouse-trail',
@@ -56,7 +56,7 @@ createRoot(() => {
   const [offscreenCanvas, setOffscreenCanvas] = createSignal<OffscreenCanvas | undefined>(undefined);
   const [size, setSize] = createSignal<{ width: number; height: number }>({ width: 800, height: 600 });
   const [currentRoute, setCurrentRoute] = createSignal<string>('/');
-  const component = createMemo(() => {
+  const component = createMemo<JSX.Element | null>(() => {
     const route = routes.find((r) => r.path === currentRoute()) ?? routes[0];
 
     return (route ? route.component : null) as JSX.Element;
@@ -147,7 +147,7 @@ createRoot(() => {
               });
           }}
         >
-          {component()()}
+          {(component?.() as unknown as () => JSX.Element)()}
         </Transition>
       </Stage>
     </Application>

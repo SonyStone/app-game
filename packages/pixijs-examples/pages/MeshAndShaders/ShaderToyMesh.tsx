@@ -1,8 +1,8 @@
 import { Container, Mesh, useApplication } from '@packages/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { Geometry, MeshGeometry, Shader, TextureShader } from 'pixi.js';
-import fragment from './shaderToy.frag';
-import vertex from './shaderToy.vert';
+import fragment from './shaderToy.frag?raw';
+import vertex from './shaderToy.vert?raw';
 
 export default function ShaderToyMesh() {
   const size = createWindowSize();

@@ -28,13 +28,13 @@ export const routes = [
     path: '/blend-modes',
     name: 'Blend Modes',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./pages/BlendModesExamles'))
+    component: lazy(() => import('./pages/BlendModesExamples'))
   },
   {
     path: '/mouse-trail',
     name: 'Mouse Trail',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./pages/mouse-trail'))
+    component: lazy(() => import('./pages/MouseTrail'))
   },
   {
     path: '/render-layers',
