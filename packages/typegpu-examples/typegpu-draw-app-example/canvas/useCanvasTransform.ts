@@ -34,7 +34,7 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   let lastY = 0;
 
   // Touch state (using pointer events for touch-only gestures)
-  let activePointers: Map<number, TouchPoint> = new Map();
+  const activePointers: Map<number, TouchPoint> = new Map();
   let lastTouchCenter: { x: number; y: number } | null = null;
   let lastTouchDistance: number | null = null;
   let lastTouchAngle: number | null = null;
@@ -207,7 +207,7 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   };
 
   // ============================================================================
-  // MARK: Touch Gesture Handlers
+  // MARK: Touch Gesture Handlers (using Pointer Events)
   // ============================================================================
 
   /**
@@ -235,30 +235,44 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   };
 
   /**
-   * Convert Touch to TouchPoint
+   * Get active touch pointers as array (excludes pen/mouse)
    */
-  const touchToPoint = (touch: Touch): TouchPoint => ({
-    id: touch.identifier,
-    x: touch.clientX,
-    y: touch.clientY
-  });
+  const getTouchPointers = (): TouchPoint[] => {
+    return Array.from(activePointers.values()).filter((p) => p.pointerType === 'touch');
+  };
 
   /**
-   * Handle touch start - begin gesture tracking
+   * Handle pointer down for touch gestures
    */
-  const handleTouchStart = (e: TouchEvent) => {
+  const handleTouchPointerDown = (e: PointerEvent) => {
+    // Only handle touch input (not pen or mouse)
+    if (e.pointerType !== 'touch') return;
+
     // Prevent default to avoid scrolling/zooming the page
     e.preventDefault();
 
-    // Update active touches
-    activeTouches = Array.from(e.touches).map(touchToPoint);
+    const canvasEl = canvas();
+    if (canvasEl) {
+      // Capture this pointer for reliable tracking
+      canvasEl.setPointerCapture(e.pointerId);
+    }
 
-    if (activeTouches.length === 1) {
+    // Add to active pointers
+    activePointers.set(e.pointerId, {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      pointerType: e.pointerType
+    });
+
+    const touches = getTouchPointers();
+
+    if (touches.length === 1) {
       // One finger - prepare for pan
-      lastTouchCenter = { x: activeTouches[0].x, y: activeTouches[0].y };
-    } else if (activeTouches.length === 2) {
+      lastTouchCenter = { x: touches[0].x, y: touches[0].y };
+    } else if (touches.length === 2) {
       // Two fingers - prepare for pinch zoom + rotate
-      const [t1, t2] = activeTouches;
+      const [t1, t2] = touches;
       lastTouchCenter = getTouchCenter(t1, t2);
       lastTouchDistance = getTouchDistance(t1, t2);
       lastTouchAngle = getTouchAngle(t1, t2);
@@ -266,26 +280,37 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   };
 
   /**
-   * Handle touch move - process gestures
+   * Handle pointer move for touch gestures
    */
-  const handleTouchMove = (e: TouchEvent) => {
+  const handleTouchPointerMove = (e: PointerEvent) => {
+    // Only handle touch input
+    if (e.pointerType !== 'touch') return;
+    if (!activePointers.has(e.pointerId)) return;
+
     e.preventDefault();
 
-    // Update active touches
-    activeTouches = Array.from(e.touches).map(touchToPoint);
+    // Update this pointer's position
+    activePointers.set(e.pointerId, {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      pointerType: e.pointerType
+    });
 
-    if (activeTouches.length === 1 && lastTouchCenter) {
+    const touches = getTouchPointers();
+
+    if (touches.length === 1 && lastTouchCenter) {
       // One finger - pan
-      const touch = activeTouches[0];
+      const touch = touches[0];
       const dx = touch.x - lastTouchCenter.x;
       const dy = touch.y - lastTouchCenter.y;
 
       pan(dx, dy);
 
       lastTouchCenter = { x: touch.x, y: touch.y };
-    } else if (activeTouches.length === 2 && lastTouchCenter && lastTouchDistance !== null && lastTouchAngle !== null) {
+    } else if (touches.length === 2 && lastTouchCenter && lastTouchDistance !== null && lastTouchAngle !== null) {
       // Two fingers - pinch zoom + rotate
-      const [t1, t2] = activeTouches;
+      const [t1, t2] = touches;
       const currentCenter = getTouchCenter(t1, t2);
       const currentDistance = getTouchDistance(t1, t2);
       const currentAngle = getTouchAngle(t1, t2);
@@ -327,27 +352,35 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   };
 
   /**
-   * Handle touch end - reset gesture state when all fingers lifted
+   * Handle pointer up/cancel for touch gestures
    */
-  const handleTouchEnd = (e: TouchEvent) => {
-    e.preventDefault();
+  const handleTouchPointerUp = (e: PointerEvent) => {
+    // Only handle touch input
+    if (e.pointerType !== 'touch') return;
 
-    // Update active touches
-    activeTouches = Array.from(e.touches).map(touchToPoint);
+    const canvasEl = canvas();
+    if (canvasEl && canvasEl.hasPointerCapture(e.pointerId)) {
+      canvasEl.releasePointerCapture(e.pointerId);
+    }
 
-    if (activeTouches.length === 0) {
+    // Remove from active pointers
+    activePointers.delete(e.pointerId);
+
+    const touches = getTouchPointers();
+
+    if (touches.length === 0) {
       // All fingers lifted - reset state
       lastTouchCenter = null;
       lastTouchDistance = null;
       lastTouchAngle = null;
-    } else if (activeTouches.length === 1) {
+    } else if (touches.length === 1) {
       // Went from 2 fingers to 1 - reset to single finger pan mode
-      lastTouchCenter = { x: activeTouches[0].x, y: activeTouches[0].y };
+      lastTouchCenter = { x: touches[0].x, y: touches[0].y };
       lastTouchDistance = null;
       lastTouchAngle = null;
-    } else if (activeTouches.length === 2) {
+    } else if (touches.length === 2) {
       // Still 2 fingers (maybe one lifted and another touched) - recalculate
-      const [t1, t2] = activeTouches;
+      const [t1, t2] = touches;
       lastTouchCenter = getTouchCenter(t1, t2);
       lastTouchDistance = getTouchDistance(t1, t2);
       lastTouchAngle = getTouchAngle(t1, t2);
@@ -366,11 +399,14 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
       canvasEl.addEventListener('wheel', handleWheel, { passive: false });
       canvasEl.addEventListener('contextmenu', handleContextMenu);
 
-      // Touch events
-      canvasEl.addEventListener('touchstart', handleTouchStart, { passive: false });
-      canvasEl.addEventListener('touchmove', handleTouchMove, { passive: false });
-      canvasEl.addEventListener('touchend', handleTouchEnd, { passive: false });
-      canvasEl.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+      // Touch gestures via pointer events (allows distinguishing touch from pen)
+      canvasEl.addEventListener('pointerdown', handleTouchPointerDown);
+      canvasEl.addEventListener('pointermove', handleTouchPointerMove);
+      canvasEl.addEventListener('pointerup', handleTouchPointerUp);
+      canvasEl.addEventListener('pointercancel', handleTouchPointerUp);
+
+      // Prevent default touch actions to avoid browser gestures interfering
+      canvasEl.style.touchAction = 'none';
 
       onCleanup(() => {
         // Mouse events
@@ -380,11 +416,11 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
         canvasEl.removeEventListener('wheel', handleWheel);
         canvasEl.removeEventListener('contextmenu', handleContextMenu);
 
-        // Touch events
-        canvasEl.removeEventListener('touchstart', handleTouchStart);
-        canvasEl.removeEventListener('touchmove', handleTouchMove);
-        canvasEl.removeEventListener('touchend', handleTouchEnd);
-        canvasEl.removeEventListener('touchcancel', handleTouchEnd);
+        // Touch gestures via pointer events
+        canvasEl.removeEventListener('pointerdown', handleTouchPointerDown);
+        canvasEl.removeEventListener('pointermove', handleTouchPointerMove);
+        canvasEl.removeEventListener('pointerup', handleTouchPointerUp);
+        canvasEl.removeEventListener('pointercancel', handleTouchPointerUp);
       });
     })
   );
