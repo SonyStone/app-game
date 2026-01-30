@@ -15,13 +15,14 @@ interface TouchPoint {
   id: number;
   x: number;
   y: number;
+  pointerType: string;
 }
 
 /**
  * Hook to handle canvas transform (pan/zoom/rotate).
  * Handles:
  * - Middle mouse pan, scroll zoom, and alt+drag rotation (mouse)
- * - One finger pan, two finger pinch zoom + rotate (touch)
+ * - One finger pan, two finger pinch zoom + rotate (touch only, not pen/stylus)
  */
 export function useCanvasTransform(options: CanvasTransformOptions) {
   const { canvas, transform, onTransformChange } = options;
@@ -32,8 +33,8 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   let lastX = 0;
   let lastY = 0;
 
-  // Touch state
-  let activeTouches: TouchPoint[] = [];
+  // Touch state (using pointer events for touch-only gestures)
+  let activePointers: Map<number, TouchPoint> = new Map();
   let lastTouchCenter: { x: number; y: number } | null = null;
   let lastTouchDistance: number | null = null;
   let lastTouchAngle: number | null = null;
