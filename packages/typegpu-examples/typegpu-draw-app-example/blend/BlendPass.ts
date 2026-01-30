@@ -162,7 +162,7 @@ function createFragmentShader(blendMode: BlendMode, colorBlendMode: ColorBlendMo
       const dstColor = std.textureSample(blendBindGroupLayout.$.canvasTexture, blendBindGroupLayout.$.texSampler, uv);
 
       // Unpremultiply the source color (brush texture uses premultiplied alpha)
-      let srcColor = srcColorPremul;
+      let srcColor = d.vec4f(srcColorPremul);
       if (srcColorPremul.w > 0.001) {
         srcColor = d.vec4f(
           srcColorPremul.x / srcColorPremul.w,
@@ -200,7 +200,7 @@ function createFragmentShader(blendMode: BlendMode, colorBlendMode: ColorBlendMo
       const dstColor = std.textureSample(blendBindGroupLayout.$.canvasTexture, blendBindGroupLayout.$.texSampler, uv);
 
       // Unpremultiply the source color (brush texture uses premultiplied alpha)
-      let srcColor = srcColorPremul;
+      let srcColor = d.vec4f(srcColorPremul);
       if (srcColorPremul.w > 0.001) {
         srcColor = d.vec4f(
           srcColorPremul.x / srcColorPremul.w,
@@ -241,7 +241,7 @@ function createFragmentShader(blendMode: BlendMode, colorBlendMode: ColorBlendMo
       const dstColor = std.textureSample(blendBindGroupLayout.$.canvasTexture, blendBindGroupLayout.$.texSampler, uv);
 
       // Unpremultiply the source color (brush texture uses premultiplied alpha)
-      let srcColor = srcColorPremul;
+      let srcColor = d.vec4f(srcColorPremul);
       if (srcColorPremul.w > 0.001) {
         srcColor = d.vec4f(
           srcColorPremul.x / srcColorPremul.w,
