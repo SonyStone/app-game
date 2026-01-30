@@ -1,0 +1,17 @@
+{
+  "name": "samplers",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "samplers_bg.wasm",
+    "samplers.js",
+    "samplers_bg.js",
+    "samplers.d.ts"
+  ],
+  "main": "samplers.js",
+  "types": "samplers.d.ts",
+  "sideEffects": [
+    "./samplers.js",
+    "./snippets/*"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "draw-cubes",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "draw_cubes_bg.wasm",
+    "draw_cubes.js",
+    "draw_cubes_bg.js",
+    "draw_cubes.d.ts"
+  ],
+  "main": "draw_cubes.js",
+  "types": "draw_cubes.d.ts",
+  "sideEffects": [
+    "./draw_cubes.js",
+    "./snippets/*"
+  ]
+}

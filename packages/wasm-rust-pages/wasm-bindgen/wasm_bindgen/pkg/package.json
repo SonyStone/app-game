@@ -1,0 +1,17 @@
+{
+  "name": "wasm_bindgen_example",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "wasm_bindgen_example_bg.wasm",
+    "wasm_bindgen_example.js",
+    "wasm_bindgen_example_bg.js",
+    "wasm_bindgen_example.d.ts"
+  ],
+  "main": "wasm_bindgen_example.js",
+  "types": "wasm_bindgen_example.d.ts",
+  "sideEffects": [
+    "./wasm_bindgen_example.js",
+    "./snippets/*"
+  ]
+}
