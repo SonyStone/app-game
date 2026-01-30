@@ -236,6 +236,10 @@ export function usePointerInput(options: PointerInputOptions) {
     if (e.button !== 0) return; // Only left mouse button
     if (e.altKey) return; // Alt+drag is for rotation, don't draw
 
+    // Skip touch input - touch gestures are handled by useCanvasTransform
+    // (one finger = pan, two fingers = zoom/rotate)
+    if (e.pointerType === 'touch') return;
+
     // Capture pointer for smooth tracking
     canvasEl.setPointerCapture(e.pointerId);
 
