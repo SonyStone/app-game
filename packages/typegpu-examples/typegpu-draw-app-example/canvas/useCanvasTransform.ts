@@ -1,5 +1,7 @@
 import { Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { CanvasTransform } from '../types';
+import { updateCanvasTransformDebug, updatePointerDebug, updateTwoFingerDebug } from '../ui/PointerDebugOverlay';
+import { calculateTwoFingerTransform, getMidpoint } from './twoFingerTransform';
 
 export interface CanvasTransformOptions {
   /** Canvas element to attach events to */
@@ -8,6 +10,12 @@ export interface CanvasTransformOptions {
   transform: Accessor<CanvasTransform>;
   /** Callback when transform changes */
   onTransformChange: (transform: CanvasTransform) => void;
+  /** Whether debug mode is enabled */
+  debug?: Accessor<boolean>;
+  /** Virtual canvas width (for debug visualization) */
+  canvasWidth?: number;
+  /** Virtual canvas height (for debug visualization) */
+  canvasHeight?: number;
 }
 
 /** Track active touch points */
@@ -18,6 +26,17 @@ interface TouchPoint {
   pointerType: string;
 }
 
+/** Track gesture start state for two-finger gestures */
+interface TwoFingerGestureStart {
+  finger1Id: number;
+  finger2Id: number;
+  // Original positions at gesture start
+  finger1Start: { x: number; y: number };
+  finger2Start: { x: number; y: number };
+  // Starting transform values to calculate complete transform from
+  startTransform: { panX: number; panY: number; zoom: number; rotation: number };
+}
+
 /**
  * Hook to handle canvas transform (pan/zoom/rotate).
  * Handles:
@@ -25,7 +44,7 @@ interface TouchPoint {
  * - One finger pan, two finger pinch zoom + rotate (touch only, not pen/stylus)
  */
 export function useCanvasTransform(options: CanvasTransformOptions) {
-  const { canvas, transform, onTransformChange } = options;
+  const { canvas, transform, onTransformChange, debug, canvasWidth = 4000, canvasHeight = 4000 } = options;
 
   // Mouse state
   let isPanning = false;
@@ -36,8 +55,7 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   // Touch state (using pointer events for touch-only gestures)
   const activePointers: Map<number, TouchPoint> = new Map();
   let lastTouchCenter: { x: number; y: number } | null = null;
-  let lastTouchDistance: number | null = null;
-  let lastTouchAngle: number | null = null;
+  let twoFingerGestureStart: TwoFingerGestureStart | null = null;
 
   /**
    * Update pan offset
@@ -153,24 +171,61 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
     }
   };
 
+  // Current rotation pivot point (for debug visualization)
+  let currentRotationPivot: { x: number; y: number } | null = null;
+
+  /**
+   * Update debug canvas transform display
+   */
+  const updateDebugTransform = () => {
+    if (!debug?.()) return;
+    const canvasEl = canvas();
+    if (!canvasEl) return;
+    const rect = canvasEl.getBoundingClientRect();
+    const t = transform();
+    updateCanvasTransformDebug({
+      panX: t.panX,
+      panY: t.panY,
+      zoom: t.zoom,
+      rotation: t.rotation,
+      canvasRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+      canvasSize: { width: canvasWidth, height: canvasHeight },
+      rotationPivot: currentRotationPivot ?? undefined
+    });
+  };
+
   /**
    * Handle mouse move for pan/rotate
    */
   const handleMouseMove = (e: MouseEvent) => {
     if (!isPanning && !isRotating) return;
 
+    const canvasEl = canvas();
+    const rect = canvasEl?.getBoundingClientRect();
+
     const dx = e.clientX - lastX;
     const dy = e.clientY - lastY;
 
     if (isPanning) {
       pan(dx, dy);
+      currentRotationPivot = null;
     } else if (isRotating) {
       // Rotate based on horizontal movement
       rotate(dx * 0.01);
+      // Mouse rotation is around screen center
+      if (rect) {
+        currentRotationPivot = {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2
+        };
+      }
     }
 
     lastX = e.clientX;
     lastY = e.clientY;
+
+    // Update debug
+    updateDebugTransform();
   };
 
   /**
@@ -179,6 +234,8 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   const handleMouseUp = () => {
     isPanning = false;
     isRotating = false;
+    currentRotationPivot = null;
+    updateDebugTransform();
   };
 
   /**
@@ -195,6 +252,9 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
 
     const delta = -e.deltaY * 0.001;
     zoomToPoint(delta, mouseX, mouseY);
+
+    // Update debug
+    updateDebugTransform();
   };
 
   /**
@@ -213,32 +273,29 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   /**
    * Get center point between two touch points
    */
-  const getTouchCenter = (t1: TouchPoint, t2: TouchPoint): { x: number; y: number } => ({
-    x: (t1.x + t2.x) / 2,
-    y: (t1.y + t2.y) / 2
-  });
-
-  /**
-   * Get distance between two touch points
-   */
-  const getTouchDistance = (t1: TouchPoint, t2: TouchPoint): number => {
-    const dx = t2.x - t1.x;
-    const dy = t2.y - t1.y;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
-  /**
-   * Get angle between two touch points (in radians)
-   */
-  const getTouchAngle = (t1: TouchPoint, t2: TouchPoint): number => {
-    return Math.atan2(t2.y - t1.y, t2.x - t1.x);
-  };
+  const getTouchCenter = (t1: TouchPoint, t2: TouchPoint) => getMidpoint(t1, t2);
 
   /**
    * Get active touch pointers as array (excludes pen/mouse)
    */
   const getTouchPointers = (): TouchPoint[] => {
     return Array.from(activePointers.values()).filter((p) => p.pointerType === 'touch');
+  };
+
+  /**
+   * Initialize two-finger gesture tracking
+   */
+  const initTwoFingerGesture = (t1: TouchPoint, t2: TouchPoint): void => {
+    const t = transform();
+    twoFingerGestureStart = {
+      finger1Id: t1.id,
+      finger2Id: t2.id,
+      // Store original positions for rotation/scale calculation
+      finger1Start: { x: t1.x, y: t1.y },
+      finger2Start: { x: t2.x, y: t2.y },
+      // Store starting transform to calculate complete transform from
+      startTransform: { panX: t.panX, panY: t.panY, zoom: t.zoom, rotation: t.rotation }
+    };
   };
 
   /**
@@ -265,17 +322,28 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
       pointerType: e.pointerType
     });
 
+    // Debug: report pointer
+    if (debug?.()) {
+      updatePointerDebug(e.pointerId, {
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        pointerType: 'touch',
+        pressure: e.pressure
+      });
+    }
+
     const touches = getTouchPointers();
 
     if (touches.length === 1) {
       // One finger - prepare for pan
       lastTouchCenter = { x: touches[0].x, y: touches[0].y };
+      twoFingerGestureStart = null;
     } else if (touches.length === 2) {
       // Two fingers - prepare for pinch zoom + rotate
       const [t1, t2] = touches;
+      initTwoFingerGesture(t1, t2);
       lastTouchCenter = getTouchCenter(t1, t2);
-      lastTouchDistance = getTouchDistance(t1, t2);
-      lastTouchAngle = getTouchAngle(t1, t2);
     }
   };
 
@@ -297,6 +365,19 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
       pointerType: e.pointerType
     });
 
+    // Debug: report pointer and canvas transform
+    if (debug?.()) {
+      updatePointerDebug(e.pointerId, {
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        pointerType: 'touch',
+        pressure: e.pressure
+      });
+
+      updateDebugTransform();
+    }
+
     const touches = getTouchPointers();
 
     if (touches.length === 1 && lastTouchCenter) {
@@ -308,46 +389,66 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
       pan(dx, dy);
 
       lastTouchCenter = { x: touch.x, y: touch.y };
-    } else if (touches.length === 2 && lastTouchCenter && lastTouchDistance !== null && lastTouchAngle !== null) {
-      // Two fingers - pinch zoom + rotate
-      const [t1, t2] = touches;
-      const currentCenter = getTouchCenter(t1, t2);
-      const currentDistance = getTouchDistance(t1, t2);
-      const currentAngle = getTouchAngle(t1, t2);
+
+      // Debug: clear two-finger debug
+      if (debug?.()) {
+        updateTwoFingerDebug(null);
+      }
+    } else if (touches.length === 2 && twoFingerGestureStart && lastTouchCenter) {
+      // Two fingers - pinch zoom + rotate + pan
+      // Uses calculateTwoFingerTransform to compute complete transform
+
+      // IMPORTANT: Look up fingers by their IDs to ensure consistent tracking
+      const finger1 = activePointers.get(twoFingerGestureStart.finger1Id);
+      const finger2 = activePointers.get(twoFingerGestureStart.finger2Id);
+
+      if (!finger1 || !finger2) {
+        // One of the tracked fingers was lost, reinitialize
+        const [t1, t2] = touches;
+        initTwoFingerGesture(t1, t2);
+        lastTouchCenter = getTouchCenter(t1, t2);
+        return;
+      }
 
       const canvasEl = canvas();
       if (!canvasEl) return;
 
       const rect = canvasEl.getBoundingClientRect();
 
-      // Calculate pan from center movement
-      const dx = currentCenter.x - lastTouchCenter.x;
-      const dy = currentCenter.y - lastTouchCenter.y;
+      // Calculate the new transform using the reusable function
+      const result = calculateTwoFingerTransform({
+        finger1Start: twoFingerGestureStart.finger1Start,
+        finger2Start: twoFingerGestureStart.finger2Start,
+        finger1Current: { x: finger1.x, y: finger1.y },
+        finger2Current: { x: finger2.x, y: finger2.y },
+        startTransform: twoFingerGestureStart.startTransform,
+        screenCenter: {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2
+        }
+      });
 
-      // Calculate zoom from distance change
-      const zoomDelta = (currentDistance - lastTouchDistance) / lastTouchDistance;
+      // Set rotation pivot to current midpoint (for debug visualization)
+      currentRotationPivot = result.midpoint;
 
-      // Calculate rotation from angle change
-      let angleDelta = currentAngle - lastTouchAngle;
-      // Normalize angle delta to avoid jumps when crossing ±π
-      if (angleDelta > Math.PI) angleDelta -= 2 * Math.PI;
-      if (angleDelta < -Math.PI) angleDelta += 2 * Math.PI;
+      // Debug: report two-finger gesture
+      if (debug?.()) {
+        updateTwoFingerDebug({
+          finger1Start: twoFingerGestureStart.finger1Start,
+          finger2Start: twoFingerGestureStart.finger2Start,
+          finger1Current: { x: finger1.x, y: finger1.y },
+          finger2Current: { x: finger2.x, y: finger2.y },
+          center: result.midpoint,
+          angleDelta: result.rotationDelta
+        });
 
-      // Apply pan
-      pan(dx, dy);
+        updateDebugTransform();
+      }
 
-      // Apply zoom toward the pinch center
-      const centerX = currentCenter.x - rect.left;
-      const centerY = currentCenter.y - rect.top;
-      zoomToPoint(zoomDelta, centerX, centerY);
+      // Apply the complete transform
+      onTransformChange(result.transform);
 
-      // Apply rotation
-      rotate(angleDelta);
-
-      // Update last values
-      lastTouchCenter = currentCenter;
-      lastTouchDistance = currentDistance;
-      lastTouchAngle = currentAngle;
+      lastTouchCenter = result.midpoint;
     }
   };
 
@@ -366,24 +467,40 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
     // Remove from active pointers
     activePointers.delete(e.pointerId);
 
+    // Debug: remove pointer
+    if (debug?.()) {
+      updatePointerDebug(e.pointerId, null);
+    }
+
     const touches = getTouchPointers();
 
     if (touches.length === 0) {
       // All fingers lifted - reset state
       lastTouchCenter = null;
-      lastTouchDistance = null;
-      lastTouchAngle = null;
+      twoFingerGestureStart = null;
+      currentRotationPivot = null;
+
+      // Debug: clear two-finger debug
+      if (debug?.()) {
+        updateTwoFingerDebug(null);
+        updateDebugTransform();
+      }
     } else if (touches.length === 1) {
       // Went from 2 fingers to 1 - reset to single finger pan mode
       lastTouchCenter = { x: touches[0].x, y: touches[0].y };
-      lastTouchDistance = null;
-      lastTouchAngle = null;
+      twoFingerGestureStart = null;
+      currentRotationPivot = null;
+
+      // Debug: clear two-finger debug
+      if (debug?.()) {
+        updateTwoFingerDebug(null);
+        updateDebugTransform();
+      }
     } else if (touches.length === 2) {
       // Still 2 fingers (maybe one lifted and another touched) - recalculate
       const [t1, t2] = touches;
+      initTwoFingerGesture(t1, t2);
       lastTouchCenter = getTouchCenter(t1, t2);
-      lastTouchDistance = getTouchDistance(t1, t2);
-      lastTouchAngle = getTouchAngle(t1, t2);
     }
   };
 

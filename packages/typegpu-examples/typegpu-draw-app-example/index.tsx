@@ -12,20 +12,14 @@ import {
   DEFAULT_CANVAS_WIDTH
 } from './constants';
 import { DisplayPass } from './display/DisplayPass';
-import { FullDrawApp } from './presets';
 import { BlendMode, ColorBlendMode, type CanvasTransform, type StrokePoint } from './types';
 import { CanvasView } from './ui/CanvasView';
+import { PointerDebugOverlay } from './ui/PointerDebugOverlay';
 import { Toolbar } from './ui/Toolbar';
 
-export default FullDrawApp;
-
-export function TypeGPUDrawApp(): JSX.Element {
-  let canvasRef!: HTMLCanvasElement;
-
-  // Canvas ref setter for CanvasView component
-  const setCanvasRef = (el: HTMLCanvasElement) => {
-    canvasRef = el;
-  };
+export default function TypeGPUDrawApp(): JSX.Element {
+  const [canvasRef, setCanvasRef] = createSignal<HTMLCanvasElement | undefined>(undefined);
+  const [containerRef, setContainerRef] = createSignal<HTMLDivElement | undefined>(undefined);
 
   // UI State
   const [brushColor, setBrushColor] = createSignal('#000000');
@@ -35,6 +29,9 @@ export function TypeGPUDrawApp(): JSX.Element {
   const [brushSpacing, setBrushSpacing] = createSignal(DEFAULT_BRUSH_SPACING);
   const [blendMode, setBlendMode] = createSignal<BlendMode>(BlendMode.NORMAL);
   const [colorBlendMode, setColorBlendMode] = createSignal<ColorBlendMode>(ColorBlendMode.GAMMA);
+
+  // Debug state
+  const [debugEnabled, setDebugEnabled] = createSignal(false);
 
   // GPU State
   let root: TgpuRoot | null = null;
@@ -78,13 +75,14 @@ export function TypeGPUDrawApp(): JSX.Element {
 
   // Initialize WebGPU
   async function initWebGPU() {
-    if (!canvasRef) return;
+    const canvas = canvasRef();
+    if (!canvas) return;
 
     try {
       root = await tgpu.init();
 
       // Configure canvas
-      context = canvasRef.getContext('webgpu');
+      context = canvas.getContext('webgpu');
       if (!context) {
         throw new Error('Failed to get WebGPU context');
       }
@@ -100,10 +98,10 @@ export function TypeGPUDrawApp(): JSX.Element {
         alphaMode: 'premultiplied'
       });
 
-      const width = canvasRef.clientWidth;
-      const height = canvasRef.clientHeight;
-      canvasRef.width = width;
-      canvasRef.height = height;
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      canvas.width = width;
+      canvas.height = height;
 
       // Create render components with fixed canvas size
       // The drawing canvas is separate from the display size
@@ -187,8 +185,8 @@ export function TypeGPUDrawApp(): JSX.Element {
     const currentTransform = untrack(transform);
     displayPass.updateTransform(
       currentTransform,
-      canvasRef.width,
-      canvasRef.height,
+      canvasRef()?.width || DEFAULT_CANVAS_WIDTH,
+      canvasRef()?.height || DEFAULT_CANVAS_HEIGHT,
       DEFAULT_CANVAS_WIDTH,
       DEFAULT_CANVAS_HEIGHT
     );
@@ -220,24 +218,6 @@ export function TypeGPUDrawApp(): JSX.Element {
       rotation: 0
     });
     needsRender = true;
-  };
-
-  // Handle resize - only resizes display, not the drawing canvas
-  const handleResize = () => {
-    if (!canvasRef) return;
-
-    const width = canvasRef.clientWidth;
-    const height = canvasRef.clientHeight;
-
-    if (width !== canvasRef.width || height !== canvasRef.height) {
-      canvasRef.width = width;
-      canvasRef.height = height;
-
-      // Drawing canvas stays the same size (DEFAULT_CANVAS_WIDTH x DEFAULT_CANVAS_HEIGHT)
-      // Only the display adapts to window size
-
-      needsRender = true;
-    }
   };
 
   // Animation frame using requestAnimationFrame
@@ -280,6 +260,7 @@ export function TypeGPUDrawApp(): JSX.Element {
 
   return (
     <div
+      ref={setContainerRef}
       style={{
         display: 'flex',
         'flex-direction': 'column',
@@ -306,6 +287,8 @@ export function TypeGPUDrawApp(): JSX.Element {
         setColorBlendMode={setColorBlendMode}
         onClear={clearCanvas}
         onResetView={resetTransform}
+        debugEnabled={debugEnabled}
+        setDebugEnabled={setDebugEnabled}
       />
 
       {/* Canvas */}
@@ -319,8 +302,28 @@ export function TypeGPUDrawApp(): JSX.Element {
         brushSpacing={brushSpacing}
         canvasWidth={DEFAULT_CANVAS_WIDTH}
         canvasHeight={DEFAULT_CANVAS_HEIGHT}
-        onResize={handleResize}
+        debug={debugEnabled}
+        onResize={() => {
+          const canvas = canvasRef();
+          if (!canvas) return;
+
+          const width = canvas.clientWidth;
+          const height = canvas.clientHeight;
+
+          if (width !== canvas.width || height !== canvas.height) {
+            canvas.width = width;
+            canvas.height = height;
+
+            // Drawing canvas stays the same size (DEFAULT_CANVAS_WIDTH x DEFAULT_CANVAS_HEIGHT)
+            // Only the display adapts to window size
+
+            needsRender = true;
+          }
+        }}
       />
+
+      {/* Debug overlay */}
+      <PointerDebugOverlay enabled={debugEnabled} container={containerRef} />
     </div>
   );
 }

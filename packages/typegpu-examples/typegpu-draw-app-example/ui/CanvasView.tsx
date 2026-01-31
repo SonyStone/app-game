@@ -8,7 +8,8 @@
  * - Resize handling
  */
 
-import { createEffect, on, onCleanup, onMount, type Accessor, type JSX } from 'solid-js';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { createEffect, createSignal, on, type Accessor, type JSX } from 'solid-js';
 import { useCanvasTransform } from '../canvas/useCanvasTransform';
 import { usePointerInput } from '../canvas/usePointerInput';
 import type { CanvasTransform, StrokePoint } from '../types';
@@ -49,31 +50,44 @@ export interface CanvasViewProps {
 
   /** Additional styles */
   style?: JSX.CSSProperties;
+
+  /** Enable debug overlay for pointer events */
+  debug?: Accessor<boolean>;
 }
 
 export function CanvasView(props: CanvasViewProps): JSX.Element {
-  let canvasRef!: HTMLCanvasElement;
-
-  // Forward the ref to parent
-  const setRef = (el: HTMLCanvasElement) => {
-    canvasRef = el;
-    props.ref(el);
-  };
+  const [canvasRef, setCanvasRef] = createSignal<HTMLCanvasElement | undefined>(undefined);
 
   // Setup pointer input for drawing
   createEffect(
-    on(
-      () => canvasRef,
-      () => {
-        if (!canvasRef) return;
+    on(canvasRef, () => {
+      if (!canvasRef()) return;
 
-        usePointerInput({
-          canvas: () => canvasRef,
+      usePointerInput({
+        canvas: canvasRef,
+        transform: props.transform,
+        onStroke: props.onStroke,
+        onStrokeEnd: props.onStrokeEnd,
+        brushSize: props.brushSize,
+        brushSpacing: props.brushSpacing,
+        canvasWidth: props.canvasWidth,
+        canvasHeight: props.canvasHeight
+      });
+    })
+  );
+
+  // Setup canvas transform (pan, zoom, rotate)
+  createEffect(
+    on(
+      () => canvasRef(),
+      () => {
+        if (!canvasRef()) return;
+
+        useCanvasTransform({
+          canvas: canvasRef,
           transform: props.transform,
-          onStroke: props.onStroke,
-          onStrokeEnd: props.onStrokeEnd,
-          brushSize: props.brushSize,
-          brushSpacing: props.brushSpacing,
+          onTransformChange: props.onTransformChange,
+          debug: props.debug,
           canvasWidth: props.canvasWidth,
           canvasHeight: props.canvasHeight
         });
@@ -81,41 +95,21 @@ export function CanvasView(props: CanvasViewProps): JSX.Element {
     )
   );
 
-  // Setup canvas transform (pan, zoom, rotate)
-  createEffect(
-    on(
-      () => canvasRef,
-      () => {
-        if (!canvasRef) return;
-
-        useCanvasTransform({
-          canvas: () => canvasRef,
-          transform: props.transform,
-          onTransformChange: props.onTransformChange
-        });
-      }
-    )
-  );
-
-  // Setup resize listener
-  onMount(() => {
-    if (props.onResize) {
-      window.addEventListener('resize', props.onResize);
-    }
-  });
-
-  onCleanup(() => {
-    if (props.onResize) {
-      window.removeEventListener('resize', props.onResize);
-    }
+  // @ts-expect-error HTMLCanvasElement is an Element
+  createResizeObserver(canvasRef, () => {
+    props.onResize?.();
   });
 
   return (
     <canvas
-      ref={setRef}
+      ref={(el) => {
+        props.ref(el);
+        setCanvasRef(el);
+      }}
       style={{
         flex: 1,
         width: '100%',
+        height: '0',
         cursor: props.cursor ?? 'crosshair',
         'touch-action': 'none',
         ...props.style
@@ -123,5 +117,3 @@ export function CanvasView(props: CanvasViewProps): JSX.Element {
     />
   );
 }
-
-export default CanvasView;
