@@ -9,7 +9,9 @@
  */
 
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { createSignal, For, onCleanup, onMount, type Accessor, type JSX } from 'solid-js';
+import { ReactiveMap } from '@solid-primitives/map';
+import { createSignal, For, onMount, type Accessor, type JSX } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 
 // ============================================================================
 // Types
@@ -21,6 +23,15 @@ export type PointerDebugInfo = {
   y: number;
   pointerType: 'touch' | 'pen' | 'mouse';
   pressure?: number;
+  /** Coalesced events for pen - intermediate points between frames */
+  coalescedPoints?: Array<{ x: number; y: number; pressure: number }>;
+};
+
+export type StrokeDebugInfo = {
+  id: number;
+  pointerType: 'touch' | 'pen' | 'mouse';
+  /** All points accumulated during the stroke */
+  points: Array<{ x: number; y: number; pressure: number; isCoalesced: boolean }>;
 };
 
 export type TwoFingerDebugInfo = {
@@ -53,33 +64,44 @@ export type PointerDebugOverlayProps = {
 };
 
 // ============================================================================
-// Global Debug State
+// Global Debug State (Reactive)
 // ============================================================================
 
+type PointerDebugState = {
+  twoFingerGesture: TwoFingerDebugInfo | null;
+  canvasTransform: CanvasTransformDebugInfo | null;
+};
+
+const pointerDebugPointers = new ReactiveMap<number, PointerDebugInfo>();
+const [pointerDebugStore, setPointerDebugStore] = createStore<PointerDebugState>({
+  twoFingerGesture: null,
+  canvasTransform: null
+});
+
 export const pointerDebugState = {
-  pointers: new Map<number, PointerDebugInfo>(),
-  twoFingerGesture: null as TwoFingerDebugInfo | null,
-  canvasTransform: null as CanvasTransformDebugInfo | null,
-  listeners: new Set<() => void>()
+  pointers: pointerDebugPointers,
+  get twoFingerGesture() {
+    return pointerDebugStore.twoFingerGesture;
+  },
+  get canvasTransform() {
+    return pointerDebugStore.canvasTransform;
+  }
 };
 
 export function updatePointerDebug(id: number, info: PointerDebugInfo | null) {
   if (info === null) {
-    pointerDebugState.pointers.delete(id);
+    pointerDebugPointers.delete(id);
   } else {
-    pointerDebugState.pointers.set(id, info);
+    pointerDebugPointers.set(id, info);
   }
-  pointerDebugState.listeners.forEach((l) => l());
 }
 
 export function updateTwoFingerDebug(info: TwoFingerDebugInfo | null) {
-  pointerDebugState.twoFingerGesture = info;
-  pointerDebugState.listeners.forEach((l) => l());
+  setPointerDebugStore('twoFingerGesture', reconcile(info));
 }
 
 export function updateCanvasTransformDebug(info: CanvasTransformDebugInfo | null) {
-  pointerDebugState.canvasTransform = info;
-  pointerDebugState.listeners.forEach((l) => l());
+  setPointerDebugStore('canvasTransform', reconcile(info));
 }
 
 // ============================================================================
@@ -87,81 +109,144 @@ export function updateCanvasTransformDebug(info: CanvasTransformDebugInfo | null
 // ============================================================================
 
 export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Element {
-  const [pointers, setPointers] = createSignal<PointerDebugInfo[]>([]);
-  const [twoFingerGesture, setTwoFingerGesture] = createSignal<TwoFingerDebugInfo | null>(null);
-  const [canvasTransform, setCanvasTransform] = createSignal<CanvasTransformDebugInfo | null>(null);
-  const [localPointers, setLocalPointers] = createSignal<Map<number, PointerDebugInfo>>(new Map());
+  // Local state for pointer events tracked directly by this component
+  const localPointers = new ReactiveMap<number, PointerDebugInfo>();
+  const activeStrokes = new ReactiveMap<number, StrokeDebugInfo>();
+  const [lastStroke, setLastStroke] = createSignal<StrokeDebugInfo | null>(null);
 
-  // Subscribe to global debug state updates
-  onMount(() => {
-    const update = () => {
-      setPointers(Array.from(pointerDebugState.pointers.values()));
-      setTwoFingerGesture(pointerDebugState.twoFingerGesture);
-      setCanvasTransform(pointerDebugState.canvasTransform);
-    };
-    pointerDebugState.listeners.add(update);
-    onCleanup(() => {
-      pointerDebugState.listeners.delete(update);
-    });
-  });
+  // Access global reactive state directly (no need for manual subscription)
+  const canvasTransform = () => pointerDebugStore.canvasTransform;
+  const twoFingerGesture = () => pointerDebugStore.twoFingerGesture;
 
   // Also track pointer events directly for immediate feedback
   onMount(() => {
-    const container = props.container();
-    if (!container) return;
-
     const handlePointerDown = (e: PointerEvent) => {
       if (!props.enabled()) return;
-      setLocalPointers((prev) => {
-        const next = new Map(prev);
-        next.set(e.pointerId, {
+
+      // Only track strokes for primary button (left click / pen tip / single touch)
+      // Don't track for multi-touch gestures (panning/rotating)
+      const isPrimaryButton = e.button === 0 && e.isPrimary;
+
+      if (isPrimaryButton && e.pointerType !== 'touch') {
+        // Clear previous stroke when starting a new one (only for pen/mouse)
+        setLastStroke(null);
+
+        // Convert screen coords to canvas NDC for storage
+        const transform = canvasTransform();
+        const canvasPoint = transform ? screenToCanvasNDC(e.clientX, e.clientY, transform) : null;
+
+        // Start a new stroke (store in canvas NDC space)
+        activeStrokes.set(e.pointerId, {
           id: e.pointerId,
-          x: e.clientX,
-          y: e.clientY,
           pointerType: e.pointerType as 'touch' | 'pen' | 'mouse',
-          pressure: e.pressure
+          points: canvasPoint
+            ? [{ x: canvasPoint.x, y: canvasPoint.y, pressure: e.pressure, isCoalesced: false }]
+            : [{ x: e.clientX, y: e.clientY, pressure: e.pressure, isCoalesced: false }]
         });
-        return next;
+      }
+
+      localPointers.set(e.pointerId, {
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        pointerType: e.pointerType as 'touch' | 'pen' | 'mouse',
+        pressure: e.pressure
       });
     };
 
     const handlePointerMove = (e: PointerEvent) => {
       if (!props.enabled()) return;
-      setLocalPointers((prev) => {
-        if (!prev.has(e.pointerId)) return prev;
-        const next = new Map(prev);
-        next.set(e.pointerId, {
-          id: e.pointerId,
-          x: e.clientX,
-          y: e.clientY,
-          pointerType: e.pointerType as 'touch' | 'pen' | 'mouse',
-          pressure: e.pressure
-        });
-        return next;
+
+      // Get coalesced events for pen and mouse input (intermediate points)
+      let coalescedPoints: Array<{ x: number; y: number; pressure: number }> | undefined;
+      if ((e.pointerType === 'pen' || e.pointerType === 'mouse') && e.getCoalescedEvents) {
+        const coalesced = e.getCoalescedEvents();
+        if (coalesced.length > 0) {
+          coalescedPoints = coalesced.map((ce) => ({
+            x: ce.clientX,
+            y: ce.clientY,
+            pressure: ce.pressure
+          }));
+        }
+      }
+
+      // Add points to active stroke (only if there's an active stroke for this pointer)
+      const stroke = activeStrokes.get(e.pointerId);
+      if (stroke && (e.buttons & 1) !== 0) {
+        const transform = canvasTransform();
+        const newPoints = [...stroke.points];
+
+        // Add coalesced points (intermediate) - convert to canvas NDC
+        if (coalescedPoints) {
+          for (const cp of coalescedPoints) {
+            const canvasPoint = transform ? screenToCanvasNDC(cp.x, cp.y, transform) : null;
+            if (canvasPoint) {
+              newPoints.push({ x: canvasPoint.x, y: canvasPoint.y, pressure: cp.pressure, isCoalesced: true });
+            } else {
+              newPoints.push({ x: cp.x, y: cp.y, pressure: cp.pressure, isCoalesced: true });
+            }
+          }
+        }
+
+        // Add main event point - convert to canvas NDC
+        const mainCanvasPoint = transform ? screenToCanvasNDC(e.clientX, e.clientY, transform) : null;
+        if (mainCanvasPoint) {
+          newPoints.push({ x: mainCanvasPoint.x, y: mainCanvasPoint.y, pressure: e.pressure, isCoalesced: false });
+        } else {
+          newPoints.push({ x: e.clientX, y: e.clientY, pressure: e.pressure, isCoalesced: false });
+        }
+
+        activeStrokes.set(e.pointerId, { ...stroke, points: newPoints });
+      }
+
+      // Always track pointer position (not just when pressed)
+      localPointers.set(e.pointerId, {
+        id: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        pointerType: e.pointerType as 'touch' | 'pen' | 'mouse',
+        pressure: e.pressure,
+        coalescedPoints
       });
     };
 
     const handlePointerUp = (e: PointerEvent) => {
-      setLocalPointers((prev) => {
-        const next = new Map(prev);
-        next.delete(e.pointerId);
-        return next;
-      });
+      // Save the completed stroke as lastStroke for visualization
+      const stroke = activeStrokes.get(e.pointerId);
+      if (stroke) {
+        setLastStroke(stroke);
+      }
+      activeStrokes.delete(e.pointerId);
+
+      // Only remove touch pointers on up, keep mouse/pen visible
+      if (e.pointerType === 'touch') {
+        localPointers.delete(e.pointerId);
+      }
+    };
+
+    const handlePointerLeave = (e: PointerEvent) => {
+      // Remove pointer when it leaves the window
+      localPointers.delete(e.pointerId);
     };
 
     makeEventListener(window, 'pointerdown', handlePointerDown);
     makeEventListener(window, 'pointermove', handlePointerMove);
     makeEventListener(window, 'pointerup', handlePointerUp);
     makeEventListener(window, 'pointercancel', handlePointerUp);
+    makeEventListener(document, 'pointerleave', handlePointerLeave);
   });
 
   // Merge global and local pointers
   const allPointers = () => {
-    const global = pointers();
-    const local = Array.from(localPointers().values());
     const merged = new Map<number, PointerDebugInfo>();
-    global.forEach((p) => merged.set(p.id, p));
-    local.forEach((p) => merged.set(p.id, p));
+    // Global pointers from ReactiveMap
+    for (const [id, p] of pointerDebugPointers) {
+      merged.set(id, p);
+    }
+    // Local pointers override global
+    for (const [id, p] of localPointers) {
+      merged.set(id, p);
+    }
     return Array.from(merged.values());
   };
 
@@ -185,6 +270,23 @@ export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Elemen
 
         {/* Pointer circles */}
         <For each={allPointers()}>{(pointer) => <PointerCircle pointer={pointer} />}</For>
+
+        {/* Coalesced points for pen and mouse (shown as trail) */}
+        <For
+          each={allPointers().filter(
+            (p) => (p.pointerType === 'pen' || p.pointerType === 'mouse') && p.coalescedPoints
+          )}
+        >
+          {(pointer) => <CoalescedPointsTrail points={pointer.coalescedPoints!} pointerType={pointer.pointerType} />}
+        </For>
+
+        {/* Active strokes - show all accumulated points */}
+        <For each={[...activeStrokes.values()]}>
+          {(stroke) => <StrokeVisualization stroke={stroke} transform={canvasTransform()} />}
+        </For>
+
+        {/* Last completed stroke */}
+        {lastStroke() && <StrokeVisualization stroke={lastStroke()!} transform={canvasTransform()} isLast />}
       </svg>
 
       {/* Text labels for pointers */}
@@ -206,79 +308,84 @@ export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Elemen
 // Sub-Components
 // ============================================================================
 
-function CanvasRectVisualization(props: { transform: CanvasTransformDebugInfo }): JSX.Element | null {
-  const t = props.transform;
-  if (!t.canvasRect || !t.canvasSize) return null;
+function CanvasRectVisualization(props: { transform: CanvasTransformDebugInfo }): JSX.Element {
+  const pathD = () => {
+    const t = props.transform;
+    if (!t.canvasRect || !t.canvasSize) return null;
 
-  const rect = t.canvasRect;
-  const size = t.canvasSize;
+    const rect = t.canvasRect;
+    const size = t.canvasSize;
 
-  // Match DisplayPass transform calculation exactly
-  const displayWidth = rect.width;
-  const displayHeight = rect.height;
-  const cw = size.width;
-  const ch = size.height;
+    const displayWidth = rect.width;
+    const displayHeight = rect.height;
+    const cw = size.width;
+    const ch = size.height;
 
-  // Calculate aspect ratios (same as DisplayPass)
-  const displayAspect = displayWidth / displayHeight;
-  const canvasAspect = cw / ch;
+    const displayAspect = displayWidth / displayHeight;
+    const canvasAspect = cw / ch;
 
-  // Base scale to fit canvas in display (same logic as DisplayPass)
-  let baseScale: number;
-  if (displayAspect > canvasAspect) {
-    baseScale = 1.0;
-  } else {
-    baseScale = displayAspect / canvasAspect;
-  }
+    let baseScale: number;
+    if (displayAspect > canvasAspect) {
+      baseScale = 1.0;
+    } else {
+      baseScale = displayAspect / canvasAspect;
+    }
 
-  const scale = baseScale * t.zoom;
+    const scale = baseScale * t.zoom;
 
-  // Aspect ratio correction (same as DisplayPass)
-  const aspectX = displayAspect > canvasAspect ? canvasAspect / displayAspect : 1.0;
-  const aspectY = displayAspect > canvasAspect ? 1.0 : displayAspect / canvasAspect;
+    const aspectX = displayAspect > canvasAspect ? canvasAspect / displayAspect : 1.0;
+    const aspectY = displayAspect > canvasAspect ? 1.0 : displayAspect / canvasAspect;
 
-  // Normalized pan (same as DisplayPass)
-  const px = (t.panX / displayWidth) * 2;
-  const py = -(t.panY / displayHeight) * 2;
+    const px = (t.panX / displayWidth) * 2;
+    const py = -(t.panY / displayHeight) * 2;
 
-  // Canvas corners in NDC space (canvas is -1 to 1 in its own space)
-  const corners = [
-    { x: -1, y: 1 },
-    { x: 1, y: 1 },
-    { x: 1, y: -1 },
-    { x: -1, y: -1 }
-  ];
+    const corners = [
+      { x: -1, y: 1 },
+      { x: 1, y: 1 },
+      { x: 1, y: -1 },
+      { x: -1, y: -1 }
+    ];
 
-  const cos_r = Math.cos(t.rotation);
-  const sin_r = Math.sin(t.rotation);
+    const cos_r = Math.cos(t.rotation);
+    const sin_r = Math.sin(t.rotation);
 
-  // Transform corners using same matrix as DisplayPass
-  const screenCorners = corners.map((c) => {
-    const rx = scale * (c.x * cos_r - c.y * sin_r);
-    const ry = scale * (c.x * sin_r + c.y * cos_r);
-    const ax = aspectX * rx;
-    const ay = aspectY * ry;
-    const ndcX = ax + px;
-    const ndcY = ay + py;
+    const screenCorners = corners.map((c) => {
+      const rx = scale * (c.x * cos_r - c.y * sin_r);
+      const ry = scale * (c.x * sin_r + c.y * cos_r);
+      const ax = aspectX * rx;
+      const ay = aspectY * ry;
+      const ndcX = ax + px;
+      const ndcY = ay + py;
+      return {
+        x: rect.left + (ndcX + 1) * 0.5 * displayWidth,
+        y: rect.top + (1 - ndcY) * 0.5 * displayHeight
+      };
+    });
+
+    return (
+      `M ${screenCorners[0].x} ${screenCorners[0].y} ` +
+      `L ${screenCorners[1].x} ${screenCorners[1].y} ` +
+      `L ${screenCorners[2].x} ${screenCorners[2].y} ` +
+      `L ${screenCorners[3].x} ${screenCorners[3].y} Z`
+    );
+  };
+
+  const centerScreen = () => {
+    const t = props.transform;
+    if (!t.canvasRect) return null;
+    const rect = t.canvasRect;
+    const px = (t.panX / rect.width) * 2;
+    const py = -(t.panY / rect.height) * 2;
     return {
-      x: rect.left + (ndcX + 1) * 0.5 * displayWidth,
-      y: rect.top + (1 - ndcY) * 0.5 * displayHeight
+      x: rect.left + (px + 1) * 0.5 * rect.width,
+      y: rect.top + (1 - py) * 0.5 * rect.height
     };
-  });
-
-  const pathD =
-    `M ${screenCorners[0].x} ${screenCorners[0].y} ` +
-    `L ${screenCorners[1].x} ${screenCorners[1].y} ` +
-    `L ${screenCorners[2].x} ${screenCorners[2].y} ` +
-    `L ${screenCorners[3].x} ${screenCorners[3].y} Z`;
-
-  const centerScreenX = rect.left + (px + 1) * 0.5 * displayWidth;
-  const centerScreenY = rect.top + (1 - py) * 0.5 * displayHeight;
+  };
 
   return (
     <>
-      <path d={pathD} fill="none" stroke="#ff8800" stroke-width="3" stroke-dasharray="10,5" />
-      <circle cx={centerScreenX} cy={centerScreenY} r="6" fill="#ff8800" />
+      {pathD() && <path d={pathD()!} fill="none" stroke="#ff8800" stroke-width="3" stroke-dasharray="10,5" />}
+      {centerScreen() && <circle cx={centerScreen()!.x} cy={centerScreen()!.y} r="6" fill="#ff8800" />}
     </>
   );
 }
@@ -370,6 +477,115 @@ function PointerCircle(props: { pointer: PointerDebugInfo }): JSX.Element {
   );
 }
 
+function CoalescedPointsTrail(props: {
+  points: Array<{ x: number; y: number; pressure: number }>;
+  pointerType: 'touch' | 'pen' | 'mouse';
+}): JSX.Element {
+  const points = props.points;
+  if (points.length === 0) return <></>;
+
+  const color = getPointerColor(props.pointerType);
+
+  // Create path from coalesced points
+  const pathD =
+    points.length > 1
+      ? `M ${points[0].x} ${points[0].y} ` +
+        points
+          .slice(1)
+          .map((p) => `L ${p.x} ${p.y}`)
+          .join(' ')
+      : '';
+
+  return (
+    <g>
+      {/* Trail line connecting coalesced points */}
+      {pathD && <path d={pathD} fill="none" stroke={color} stroke-width="2" stroke-opacity="0.5" />}
+
+      {/* Individual coalesced points */}
+      <For each={points}>
+        {(point, index) => (
+          <g>
+            {/* Small circle for each coalesced point */}
+            <circle
+              cx={point.x}
+              cy={point.y}
+              r={3 + point.pressure * 3}
+              fill={color}
+              fill-opacity={0.3 + point.pressure * 0.4}
+              stroke={color}
+              stroke-width="1"
+            />
+            {/* Index label */}
+            <text x={point.x + 6} y={point.y - 6} fill={color} font-size="8" font-family="monospace">
+              {index()}
+            </text>
+          </g>
+        )}
+      </For>
+    </g>
+  );
+}
+
+function StrokeVisualization(props: {
+  stroke: StrokeDebugInfo;
+  transform: CanvasTransformDebugInfo | null;
+  isLast?: boolean;
+}): JSX.Element {
+  const points = props.stroke.points;
+  if (points.length === 0) return <></>;
+  const color = getPointerColor(props.stroke.pointerType);
+  const opacity = props.isLast ? 0.5 : 1.0;
+
+  // Get SVG transform to convert canvas NDC to screen coordinates
+  const svgTransform = () => (props.transform ? getCanvasToScreenTransform(props.transform) : null);
+
+  // Create path from stroke points (in canvas NDC coordinates)
+  const pathD = () =>
+    points.length > 1
+      ? `M ${points[0].x} ${points[0].y} ` +
+        points
+          .slice(1)
+          .map((p) => `L ${p.x} ${p.y}`)
+          .join(' ')
+      : '';
+
+  // Scale factor for stroke width and circle radius (to compensate for transform scale)
+  const strokeScale = () => {
+    if (!props.transform?.canvasRect) return 1;
+    const rect = props.transform.canvasRect;
+    const displayAspect = rect.width / rect.height;
+    const canvasAspect = props.transform.canvasSize
+      ? props.transform.canvasSize.width / props.transform.canvasSize.height
+      : 1;
+    const baseScale = displayAspect > canvasAspect ? 1.0 : displayAspect / canvasAspect;
+    const scale = baseScale * props.transform.zoom;
+    const pixelScale = (rect.width / 2) * scale;
+    return 1 / pixelScale;
+  };
+
+  return (
+    <g opacity={opacity} transform={svgTransform() ?? undefined}>
+      {/* Trail line connecting all stroke points */}
+      {pathD() && <path d={pathD()} fill="none" stroke={color} stroke-width={2 * strokeScale()} stroke-opacity="0.7" />}
+
+      {/* Individual stroke points */}
+      <For each={points}>
+        {(point) => (
+          <circle
+            cx={point.x}
+            cy={point.y}
+            r={(point.isCoalesced ? 2 + point.pressure * 2 : 3 + point.pressure * 2) * strokeScale()}
+            fill={point.isCoalesced ? 'cyan' : color}
+            fill-opacity={point.isCoalesced ? 0.8 : 0.9}
+            stroke={point.isCoalesced ? '#006666' : 'black'}
+            stroke-width={(point.isCoalesced ? 1 : 1.5) * strokeScale()}
+          />
+        )}
+      </For>
+    </g>
+  );
+}
+
 function PointerLabel(props: { pointer: PointerDebugInfo }): JSX.Element {
   const color = getPointerColor(props.pointer.pointerType);
 
@@ -411,6 +627,7 @@ function DebugLegend(): JSX.Element {
       <div class="text-green-500">● Touch</div>
       <div class="text-fuchsia-500">● Pen/Stylus</div>
       <div class="text-yellow-400">● Mouse</div>
+      <div class="mt-1 text-cyan-400">● Coalesced Points</div>
       <div class="mt-1 text-red-500">● Gesture Center</div>
       <div class="text-neutral-500">--- Start Vector</div>
       <div class="text-green-500">— Current Vector</div>
@@ -420,36 +637,143 @@ function DebugLegend(): JSX.Element {
 }
 
 function CanvasTransformInfo(props: { transform: CanvasTransformDebugInfo }): JSX.Element {
-  const t = props.transform;
-
   return (
     <div class="min-w-50 absolute right-2.5 top-2.5 rounded bg-black/85 p-2.5 font-mono text-xs text-white">
       <div class="mb-1.5 font-bold text-cyan-400">Canvas Transform</div>
       <div>
-        <span class="text-neutral-500">panX:</span> <span class="text-yellow-400">{t.panX.toFixed(1)}</span>
+        <span class="text-neutral-500">panX:</span>{' '}
+        <span class="text-yellow-400">{props.transform.panX.toFixed(1)}</span>
       </div>
       <div>
-        <span class="text-neutral-500">panY:</span> <span class="text-yellow-400">{t.panY.toFixed(1)}</span>
+        <span class="text-neutral-500">panY:</span>{' '}
+        <span class="text-yellow-400">{props.transform.panY.toFixed(1)}</span>
       </div>
       <div>
-        <span class="text-neutral-500">zoom:</span> <span class="text-green-500">{t.zoom.toFixed(3)}</span>
+        <span class="text-neutral-500">zoom:</span>{' '}
+        <span class="text-green-500">{props.transform.zoom.toFixed(3)}</span>
       </div>
       <div>
         <span class="text-neutral-500">rotation:</span>{' '}
-        <span class="text-fuchsia-500">{((t.rotation * 180) / Math.PI).toFixed(1)}°</span>
+        <span class="text-fuchsia-500">{((props.transform.rotation * 180) / Math.PI).toFixed(1)}°</span>
       </div>
-      {t.canvasRect && (
+      {props.transform.canvasRect && (
         <>
           <div class="mt-1.5 text-[10px] text-neutral-500">
-            Canvas: {Math.round(t.canvasRect.width)}x{Math.round(t.canvasRect.height)}
+            Canvas: {Math.round(props.transform.canvasRect.width)}x{Math.round(props.transform.canvasRect.height)}
           </div>
           <div class="text-[10px] text-neutral-500">
-            @ ({Math.round(t.canvasRect.left)}, {Math.round(t.canvasRect.top)})
+            @ ({Math.round(props.transform.canvasRect.left)}, {Math.round(props.transform.canvasRect.top)})
           </div>
         </>
       )}
     </div>
   );
+}
+
+// ============================================================================
+// Coordinate Conversion Helpers
+// ============================================================================
+
+/** Convert screen coordinates to canvas NDC space (-1 to 1) */
+function screenToCanvasNDC(
+  screenX: number,
+  screenY: number,
+  t: CanvasTransformDebugInfo
+): { x: number; y: number } | null {
+  if (!t.canvasRect || !t.canvasSize) return null;
+
+  const rect = t.canvasRect;
+  const displayWidth = rect.width;
+  const displayHeight = rect.height;
+  const displayAspect = displayWidth / displayHeight;
+  const canvasAspect = t.canvasSize.width / t.canvasSize.height;
+
+  // Base scale
+  const baseScale = displayAspect > canvasAspect ? 1.0 : displayAspect / canvasAspect;
+  const scale = baseScale * t.zoom;
+
+  // Aspect correction
+  const aspectX = displayAspect > canvasAspect ? canvasAspect / displayAspect : 1.0;
+  const aspectY = displayAspect > canvasAspect ? 1.0 : displayAspect / canvasAspect;
+
+  // Normalized pan
+  const px = (t.panX / displayWidth) * 2;
+  const py = -(t.panY / displayHeight) * 2;
+
+  // Convert screen to NDC
+  const ndcX = ((screenX - rect.left) / displayWidth) * 2 - 1;
+  const ndcY = 1 - ((screenY - rect.top) / displayHeight) * 2;
+
+  // Remove pan
+  const unpannedX = ndcX - px;
+  const unpannedY = ndcY - py;
+
+  // Remove aspect correction
+  const unaspectX = unpannedX / aspectX;
+  const unaspectY = unpannedY / aspectY;
+
+  // Remove scale and rotation (inverse rotation)
+  const cos_r = Math.cos(-t.rotation);
+  const sin_r = Math.sin(-t.rotation);
+  const unscaledX = unaspectX / scale;
+  const unscaledY = unaspectY / scale;
+  const canvasX = unscaledX * cos_r - unscaledY * sin_r;
+  const canvasY = unscaledX * sin_r + unscaledY * cos_r;
+
+  return { x: canvasX, y: canvasY };
+}
+
+/** Get SVG transform string to convert canvas NDC (-1 to 1) to screen coordinates */
+function getCanvasToScreenTransform(t: CanvasTransformDebugInfo): string | null {
+  if (!t.canvasRect || !t.canvasSize) return null;
+
+  const rect = t.canvasRect;
+  const displayWidth = rect.width;
+  const displayHeight = rect.height;
+  const displayAspect = displayWidth / displayHeight;
+  const canvasAspect = t.canvasSize.width / t.canvasSize.height;
+
+  // Base scale
+  const baseScale = displayAspect > canvasAspect ? 1.0 : displayAspect / canvasAspect;
+  const scale = baseScale * t.zoom;
+
+  // Aspect correction
+  const aspectX = displayAspect > canvasAspect ? canvasAspect / displayAspect : 1.0;
+  const aspectY = displayAspect > canvasAspect ? 1.0 : displayAspect / canvasAspect;
+
+  // Pan in NDC
+  const px = (t.panX / displayWidth) * 2;
+  const py = -(t.panY / displayHeight) * 2;
+
+  // Center of screen in pixels
+  const centerX = rect.left + displayWidth / 2;
+  const centerY = rect.top + displayHeight / 2;
+
+  // Scale from NDC to screen pixels
+  const scaleToScreenX = displayWidth / 2;
+  const scaleToScreenY = -displayHeight / 2; // Flip Y axis
+
+  // Build transform: translate to center, apply pan, scale, aspect, rotation, then NDC scale
+  // SVG transforms are applied right-to-left, so we build the string in reverse order
+  const cos_r = Math.cos(t.rotation);
+  const sin_r = Math.sin(t.rotation);
+
+  // Combined transform matrix:
+  // 1. Scale canvas NDC by (scale)
+  // 2. Rotate by rotation
+  // 3. Apply aspect correction
+  // 4. Add pan (in NDC)
+  // 5. Convert from NDC to screen pixels
+
+  // Final matrix coefficients (combining all transforms)
+  const a = scaleToScreenX * aspectX * scale * cos_r;
+  const b = scaleToScreenY * aspectY * scale * sin_r;
+  const c = scaleToScreenX * aspectX * scale * -sin_r;
+  const d = scaleToScreenY * aspectY * scale * cos_r;
+  const e = centerX + scaleToScreenX * px;
+  const f = centerY + scaleToScreenY * py;
+
+  return `matrix(${a}, ${b}, ${c}, ${d}, ${e}, ${f})`;
 }
 
 // ============================================================================
