@@ -10,7 +10,7 @@
 
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { ReactiveMap } from '@solid-primitives/map';
-import { createSignal, For, onMount, type Accessor, type JSX } from 'solid-js';
+import { createMemo, createSignal, For, Show, type Accessor, type JSX } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 
 // ============================================================================
@@ -59,8 +59,6 @@ export type CanvasTransformDebugInfo = {
 export type PointerDebugOverlayProps = {
   /** Whether debug overlay is enabled */
   enabled: Accessor<boolean>;
-  /** Container element to attach events to */
-  container: Accessor<HTMLElement | undefined>;
 };
 
 // ============================================================================
@@ -118,126 +116,8 @@ export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Elemen
   const canvasTransform = () => pointerDebugStore.canvasTransform;
   const twoFingerGesture = () => pointerDebugStore.twoFingerGesture;
 
-  // Also track pointer events directly for immediate feedback
-  onMount(() => {
-    const handlePointerDown = (e: PointerEvent) => {
-      if (!props.enabled()) return;
-
-      // Only track strokes for primary button (left click / pen tip / single touch)
-      // Don't track for multi-touch gestures (panning/rotating)
-      const isPrimaryButton = e.button === 0 && e.isPrimary;
-
-      if (isPrimaryButton && e.pointerType !== 'touch') {
-        // Clear previous stroke when starting a new one (only for pen/mouse)
-        setLastStroke(null);
-
-        // Convert screen coords to canvas NDC for storage
-        const transform = canvasTransform();
-        const canvasPoint = transform ? screenToCanvasNDC(e.clientX, e.clientY, transform) : null;
-
-        // Start a new stroke (store in canvas NDC space)
-        activeStrokes.set(e.pointerId, {
-          id: e.pointerId,
-          pointerType: e.pointerType as 'touch' | 'pen' | 'mouse',
-          points: canvasPoint
-            ? [{ x: canvasPoint.x, y: canvasPoint.y, pressure: e.pressure, isCoalesced: false }]
-            : [{ x: e.clientX, y: e.clientY, pressure: e.pressure, isCoalesced: false }]
-        });
-      }
-
-      localPointers.set(e.pointerId, {
-        id: e.pointerId,
-        x: e.clientX,
-        y: e.clientY,
-        pointerType: e.pointerType as 'touch' | 'pen' | 'mouse',
-        pressure: e.pressure
-      });
-    };
-
-    const handlePointerMove = (e: PointerEvent) => {
-      if (!props.enabled()) return;
-
-      // Get coalesced events for pen and mouse input (intermediate points)
-      let coalescedPoints: Array<{ x: number; y: number; pressure: number }> | undefined;
-      if ((e.pointerType === 'pen' || e.pointerType === 'mouse') && e.getCoalescedEvents) {
-        const coalesced = e.getCoalescedEvents();
-        if (coalesced.length > 0) {
-          coalescedPoints = coalesced.map((ce) => ({
-            x: ce.clientX,
-            y: ce.clientY,
-            pressure: ce.pressure
-          }));
-        }
-      }
-
-      // Add points to active stroke (only if there's an active stroke for this pointer)
-      const stroke = activeStrokes.get(e.pointerId);
-      if (stroke && (e.buttons & 1) !== 0) {
-        const transform = canvasTransform();
-        const newPoints = [...stroke.points];
-
-        // Add coalesced points (intermediate) - convert to canvas NDC
-        if (coalescedPoints) {
-          for (const cp of coalescedPoints) {
-            const canvasPoint = transform ? screenToCanvasNDC(cp.x, cp.y, transform) : null;
-            if (canvasPoint) {
-              newPoints.push({ x: canvasPoint.x, y: canvasPoint.y, pressure: cp.pressure, isCoalesced: true });
-            } else {
-              newPoints.push({ x: cp.x, y: cp.y, pressure: cp.pressure, isCoalesced: true });
-            }
-          }
-        }
-
-        // Add main event point - convert to canvas NDC
-        const mainCanvasPoint = transform ? screenToCanvasNDC(e.clientX, e.clientY, transform) : null;
-        if (mainCanvasPoint) {
-          newPoints.push({ x: mainCanvasPoint.x, y: mainCanvasPoint.y, pressure: e.pressure, isCoalesced: false });
-        } else {
-          newPoints.push({ x: e.clientX, y: e.clientY, pressure: e.pressure, isCoalesced: false });
-        }
-
-        activeStrokes.set(e.pointerId, { ...stroke, points: newPoints });
-      }
-
-      // Always track pointer position (not just when pressed)
-      localPointers.set(e.pointerId, {
-        id: e.pointerId,
-        x: e.clientX,
-        y: e.clientY,
-        pointerType: e.pointerType as 'touch' | 'pen' | 'mouse',
-        pressure: e.pressure,
-        coalescedPoints
-      });
-    };
-
-    const handlePointerUp = (e: PointerEvent) => {
-      // Save the completed stroke as lastStroke for visualization
-      const stroke = activeStrokes.get(e.pointerId);
-      if (stroke) {
-        setLastStroke(stroke);
-      }
-      activeStrokes.delete(e.pointerId);
-
-      // Only remove touch pointers on up, keep mouse/pen visible
-      if (e.pointerType === 'touch') {
-        localPointers.delete(e.pointerId);
-      }
-    };
-
-    const handlePointerLeave = (e: PointerEvent) => {
-      // Remove pointer when it leaves the window
-      localPointers.delete(e.pointerId);
-    };
-
-    makeEventListener(window, 'pointerdown', handlePointerDown);
-    makeEventListener(window, 'pointermove', handlePointerMove);
-    makeEventListener(window, 'pointerup', handlePointerUp);
-    makeEventListener(window, 'pointercancel', handlePointerUp);
-    makeEventListener(document, 'pointerleave', handlePointerLeave);
-  });
-
   // Merge global and local pointers
-  const allPointers = () => {
+  const allPointers = createMemo(() => {
     const merged = new Map<number, PointerDebugInfo>();
     // Global pointers from ReactiveMap
     for (const [id, p] of pointerDebugPointers) {
@@ -248,65 +128,192 @@ export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Elemen
       merged.set(id, p);
     }
     return Array.from(merged.values());
-  };
+  });
 
   return (
-    <div
-      class="pointer-events-none fixed left-0 top-0 z-[10000] h-full w-full"
-      style={{ display: props.enabled() ? 'block' : 'none' }}
-    >
-      {/* SVG overlay for drawing debug graphics */}
-      <svg class="absolute left-0 top-0 h-full w-full">
-        {/* Transformed canvas rectangle visualization */}
-        {canvasTransform()?.canvasRect && canvasTransform()?.canvasSize && (
-          <CanvasRectVisualization transform={canvasTransform()!} />
-        )}
+    <Show when={props.enabled()}>
+      {/* Event listeners - auto cleanup when Show unmounts */}
+      <WindowEvents
+        onPointerDown={(e) => {
+          // Only track strokes for primary button (left click / pen tip / single touch)
+          // Don't track for multi-touch gestures (panning/rotating)
+          const isPrimaryButton = e.button === 0 && e.isPrimary;
 
-        {/* Rotation pivot point visualization */}
-        {canvasTransform()?.rotationPivot && <RotationPivotVisualization pivot={canvasTransform()!.rotationPivot!} />}
+          if (isPrimaryButton && e.pointerType !== 'touch') {
+            // Clear previous stroke when starting a new one (only for pen/mouse)
+            setLastStroke(null);
 
-        {/* Two-finger gesture visualization */}
-        {twoFingerGesture() && <TwoFingerGestureVisualization gesture={twoFingerGesture()!} />}
+            // Convert screen coords to canvas NDC for storage
+            const transform = canvasTransform();
+            const canvasPoint = transform ? screenToCanvasNDC(e.clientX, e.clientY, transform) : null;
 
-        {/* Pointer circles */}
-        <For each={allPointers()}>{(pointer) => <PointerCircle pointer={pointer} />}</For>
+            // Start a new stroke (store in canvas NDC space)
+            activeStrokes.set(e.pointerId, {
+              id: e.pointerId,
+              pointerType: e.pointerType as 'touch' | 'pen' | 'mouse',
+              points: canvasPoint
+                ? [{ x: canvasPoint.x, y: canvasPoint.y, pressure: e.pressure, isCoalesced: false }]
+                : [{ x: e.clientX, y: e.clientY, pressure: e.pressure, isCoalesced: false }]
+            });
+          }
 
-        {/* Coalesced points for pen and mouse (shown as trail) */}
-        <For
-          each={allPointers().filter(
-            (p) => (p.pointerType === 'pen' || p.pointerType === 'mouse') && p.coalescedPoints
+          localPointers.set(e.pointerId, {
+            id: e.pointerId,
+            x: e.clientX,
+            y: e.clientY,
+            pointerType: e.pointerType as 'touch' | 'pen' | 'mouse',
+            pressure: e.pressure
+          });
+        }}
+        onPointerMove={(e) => {
+          // Get coalesced events for pen and mouse input (intermediate points)
+          let coalescedPoints: Array<{ x: number; y: number; pressure: number }> | undefined;
+          if ((e.pointerType === 'pen' || e.pointerType === 'mouse') && e.getCoalescedEvents) {
+            const coalesced = e.getCoalescedEvents();
+            if (coalesced.length > 0) {
+              coalescedPoints = coalesced.map((ce) => ({
+                x: ce.clientX,
+                y: ce.clientY,
+                pressure: ce.pressure
+              }));
+            }
+          }
+
+          // Add points to active stroke (only if there's an active stroke for this pointer)
+          const stroke = activeStrokes.get(e.pointerId);
+          if (stroke && (e.buttons & 1) !== 0) {
+            const transform = canvasTransform();
+            const newPoints = [...stroke.points];
+
+            // Add coalesced points (intermediate) - convert to canvas NDC
+            if (coalescedPoints) {
+              for (const cp of coalescedPoints) {
+                const canvasPoint = transform ? screenToCanvasNDC(cp.x, cp.y, transform) : null;
+                if (canvasPoint) {
+                  newPoints.push({ x: canvasPoint.x, y: canvasPoint.y, pressure: cp.pressure, isCoalesced: true });
+                } else {
+                  newPoints.push({ x: cp.x, y: cp.y, pressure: cp.pressure, isCoalesced: true });
+                }
+              }
+            }
+
+            // Add main event point - convert to canvas NDC
+            const mainCanvasPoint = transform ? screenToCanvasNDC(e.clientX, e.clientY, transform) : null;
+            if (mainCanvasPoint) {
+              newPoints.push({ x: mainCanvasPoint.x, y: mainCanvasPoint.y, pressure: e.pressure, isCoalesced: false });
+            } else {
+              newPoints.push({ x: e.clientX, y: e.clientY, pressure: e.pressure, isCoalesced: false });
+            }
+
+            activeStrokes.set(e.pointerId, { ...stroke, points: newPoints });
+          }
+
+          // Always track pointer position (not just when pressed)
+          localPointers.set(e.pointerId, {
+            id: e.pointerId,
+            x: e.clientX,
+            y: e.clientY,
+            pointerType: e.pointerType as 'touch' | 'pen' | 'mouse',
+            pressure: e.pressure,
+            coalescedPoints
+          });
+        }}
+        onPointerUp={(e) => {
+          // Save the completed stroke as lastStroke for visualization
+          const stroke = activeStrokes.get(e.pointerId);
+          if (stroke) {
+            setLastStroke(stroke);
+          }
+          activeStrokes.delete(e.pointerId);
+
+          // Only remove touch pointers on up, keep mouse/pen visible
+          if (e.pointerType === 'touch') {
+            localPointers.delete(e.pointerId);
+          }
+        }}
+      />
+      <DocumentEvents
+        onPointerLeave={(e) => {
+          // Remove pointer when it leaves the window
+          localPointers.delete(e.pointerId);
+        }}
+      />
+
+      <div class="pointer-events-none fixed left-0 top-0 z-[10000] h-full w-full">
+        {/* SVG overlay for drawing debug graphics */}
+        <svg class="absolute left-0 top-0 h-full w-full">
+          {/* Transformed canvas rectangle visualization */}
+          {canvasTransform()?.canvasRect && canvasTransform()?.canvasSize && (
+            <CanvasRectVisualization transform={canvasTransform()!} />
           )}
-        >
-          {(pointer) => <CoalescedPointsTrail points={pointer.coalescedPoints!} pointerType={pointer.pointerType} />}
-        </For>
 
-        {/* Active strokes - show all accumulated points */}
-        <For each={[...activeStrokes.values()]}>
-          {(stroke) => <StrokeVisualization stroke={stroke} transform={canvasTransform()} />}
-        </For>
+          {/* Rotation pivot point visualization */}
+          {canvasTransform()?.rotationPivot && <RotationPivotVisualization pivot={canvasTransform()!.rotationPivot!} />}
 
-        {/* Last completed stroke */}
-        {lastStroke() && <StrokeVisualization stroke={lastStroke()!} transform={canvasTransform()} isLast />}
-      </svg>
+          {/* Two-finger gesture visualization */}
+          {twoFingerGesture() && <TwoFingerGestureVisualization gesture={twoFingerGesture()!} />}
 
-      {/* Text labels for pointers */}
-      <For each={allPointers()}>{(pointer) => <PointerLabel pointer={pointer} />}</For>
+          {/* Pointer circles */}
+          <For each={allPointers()}>{(pointer) => <PointerCircle pointer={pointer} />}</For>
 
-      {/* Two-finger gesture info */}
-      {twoFingerGesture() && <TwoFingerGestureInfo gesture={twoFingerGesture()!} />}
+          {/* Coalesced points for pen and mouse (shown as trail) */}
+          <For
+            each={allPointers().filter(
+              (p) => (p.pointerType === 'pen' || p.pointerType === 'mouse') && p.coalescedPoints
+            )}
+          >
+            {(pointer) => <CoalescedPointsTrail points={pointer.coalescedPoints!} pointerType={pointer.pointerType} />}
+          </For>
 
-      {/* Legend */}
-      <DebugLegend />
+          {/* Active strokes - show all accumulated points */}
+          <For each={[...activeStrokes.values()]}>
+            {(stroke) => <StrokeVisualization stroke={stroke} transform={canvasTransform()} />}
+          </For>
 
-      {/* Canvas Transform Info */}
-      {canvasTransform() && <CanvasTransformInfo transform={canvasTransform()!} />}
-    </div>
+          {/* Last completed stroke */}
+          {lastStroke() && <StrokeVisualization stroke={lastStroke()!} transform={canvasTransform()} isLast />}
+        </svg>
+
+        {/* Text labels for pointers */}
+        <For each={allPointers()}>{(pointer) => <PointerLabel pointer={pointer} />}</For>
+
+        {/* Two-finger gesture info */}
+        {twoFingerGesture() && <TwoFingerGestureInfo gesture={twoFingerGesture()!} />}
+
+        {/* Legend */}
+        <DebugLegend />
+
+        {/* Canvas Transform Info */}
+        {canvasTransform() && <CanvasTransformInfo transform={canvasTransform()!} />}
+      </div>
+    </Show>
   );
 }
 
 // ============================================================================
 // Sub-Components
 // ============================================================================
+
+/** Attaches pointer event listeners to window - auto-cleanup on unmount */
+function WindowEvents(props: {
+  onPointerDown?: (e: PointerEvent) => void;
+  onPointerMove?: (e: PointerEvent) => void;
+  onPointerUp?: (e: PointerEvent) => void;
+}): JSX.Element {
+  if (props.onPointerDown) makeEventListener(window, 'pointerdown', props.onPointerDown);
+  if (props.onPointerMove) makeEventListener(window, 'pointermove', props.onPointerMove);
+  if (props.onPointerUp) {
+    makeEventListener(window, 'pointerup', props.onPointerUp);
+    makeEventListener(window, 'pointercancel', props.onPointerUp);
+  }
+  return <></>;
+}
+
+/** Attaches pointer event listeners to document - auto-cleanup on unmount */
+function DocumentEvents(props: { onPointerLeave?: (e: PointerEvent) => void }): JSX.Element {
+  if (props.onPointerLeave) makeEventListener(document, 'pointerleave', props.onPointerLeave);
+  return <></>;
+}
 
 function CanvasRectVisualization(props: { transform: CanvasTransformDebugInfo }): JSX.Element {
   const pathD = () => {
