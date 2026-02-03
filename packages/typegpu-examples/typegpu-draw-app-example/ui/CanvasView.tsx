@@ -53,6 +53,9 @@ export interface CanvasViewProps {
 
   /** Enable debug overlay for pointer events */
   debug?: Accessor<boolean>;
+
+  /** Force pan mode - mouse input pans instead of drawing */
+  forcePanMode?: Accessor<boolean>;
 }
 
 export function CanvasView(props: CanvasViewProps): JSX.Element {
@@ -71,7 +74,8 @@ export function CanvasView(props: CanvasViewProps): JSX.Element {
         brushSize: props.brushSize,
         brushSpacing: props.brushSpacing,
         canvasWidth: props.canvasWidth,
-        canvasHeight: props.canvasHeight
+        canvasHeight: props.canvasHeight,
+        forcePanMode: props.forcePanMode
       });
     })
   );
@@ -89,7 +93,8 @@ export function CanvasView(props: CanvasViewProps): JSX.Element {
           onTransformChange: props.onTransformChange,
           debug: props.debug,
           canvasWidth: props.canvasWidth,
-          canvasHeight: props.canvasHeight
+          canvasHeight: props.canvasHeight,
+          forcePanMode: props.forcePanMode
         });
       }
     )
