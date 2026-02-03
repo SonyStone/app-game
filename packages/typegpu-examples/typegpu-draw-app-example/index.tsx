@@ -19,7 +19,6 @@ import { Toolbar } from './ui/Toolbar';
 
 export default function TypeGPUDrawApp(): JSX.Element {
   const [canvasRef, setCanvasRef] = createSignal<HTMLCanvasElement | undefined>(undefined);
-  const [containerRef, setContainerRef] = createSignal<HTMLDivElement | undefined>(undefined);
 
   // UI State
   const [brushColor, setBrushColor] = createSignal('#000000');
@@ -263,7 +262,6 @@ export default function TypeGPUDrawApp(): JSX.Element {
 
   return (
     <div
-      ref={setContainerRef}
       style={{
         display: 'flex',
         'flex-direction': 'column',
@@ -329,7 +327,7 @@ export default function TypeGPUDrawApp(): JSX.Element {
       />
 
       {/* Debug overlay */}
-      <PointerDebugOverlay enabled={debugEnabled} container={containerRef} />
+      <PointerDebugOverlay enabled={debugEnabled} />
     </div>
   );
 }

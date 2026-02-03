@@ -8,7 +8,7 @@ import {
   brushBindGroupLayout,
   brushFragmentShader,
   brushVertexShader
-} from './brush-shaders';
+} from './BrushShaders';
 import { BrushTexture } from './BrushTexture';
 
 interface BrushSettings {
