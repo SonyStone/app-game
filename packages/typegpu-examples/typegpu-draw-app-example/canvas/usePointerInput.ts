@@ -385,9 +385,7 @@ export function usePointerInput(options: PointerInputOptions) {
       // Add point to buffer for smoothing
       pointBuffer.push({ x: point.x, y: point.y, pressure });
 
-      logDebug(
-        `  event[${i}] point=(${point.x.toFixed(1)},${point.y.toFixed(1)}) buffer size=${pointBuffer.length}`
-      );
+      logDebug(`  event[${i}] point=(${point.x.toFixed(1)},${point.y.toFixed(1)}) buffer size=${pointBuffer.length}`);
     }
 
     // We need at least 4 points for Catmull-Rom interpolation
