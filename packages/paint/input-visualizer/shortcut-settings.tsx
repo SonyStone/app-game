@@ -1,5 +1,6 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { createSignal, For, onMount, Show, type Accessor, type JSX, type Setter } from 'solid-js';
+import { createMemo, createSignal, For, onMount, Show, type Accessor, type JSX, type Setter } from 'solid-js';
+import { formatShortcut, KeyboardDisplay, LayoutToggle, type KeyboardLayout } from './keyboard-display';
 
 // ============================================================================
 // MARK: Types
@@ -91,6 +92,40 @@ export default function ShortcutSettings(): JSX.Element {
   const [expandedCategories, setExpandedCategories] = createSignal<Set<string>>(
     new Set(['Edit', 'View', 'Transform', 'Tools', 'Layers', 'File'])
   );
+  const [pressedKeys, setPressedKeys] = createSignal<Set<string>>(new Set());
+
+  // Compute current shortcut from pressed keys
+  const currentShortcut = createMemo(() => {
+    const keys = pressedKeys();
+    if (keys.size === 0) return '';
+    return formatShortcut(keys);
+  });
+
+  // Track keyboard input when not editing
+  onMount(() => {
+    makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
+      // Don't track if we're editing a shortcut
+      if (editingActionId()) return;
+
+      e.preventDefault();
+      setPressedKeys((prev) => new Set([...prev, e.code]));
+    });
+
+    makeEventListener(window, 'keyup', (e: KeyboardEvent) => {
+      if (editingActionId()) return;
+
+      setPressedKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(e.code);
+        return next;
+      });
+    });
+
+    // Clear keys when window loses focus
+    makeEventListener(window, 'blur', () => {
+      setPressedKeys(new Set<string>());
+    });
+  });
 
   // Group actions by category
   const categorizedActions = (): ActionCategory[] => {
@@ -159,6 +194,14 @@ export default function ShortcutSettings(): JSX.Element {
         />
       </div>
 
+      {/* Current pressed shortcut indicator */}
+      <Show when={currentShortcut()}>
+        <div class="border-b border-neutral-700 bg-neutral-800/50 px-4 py-2 text-center">
+          <span class="text-sm text-neutral-400">Pressed: </span>
+          <span class="font-mono text-sm text-green-400">{currentShortcut()}</span>
+        </div>
+      </Show>
+
       {/* Actions List */}
       <div class="flex-1 overflow-y-auto p-4">
         <For each={categorizedActions()}>
@@ -171,6 +214,7 @@ export default function ShortcutSettings(): JSX.Element {
               setEditingActionId={setEditingActionId}
               updateShortcut={updateShortcut}
               clearShortcut={clearShortcut}
+              currentShortcut={currentShortcut()}
             />
           )}
         </For>
@@ -201,6 +245,7 @@ function CategorySection(props: {
   setEditingActionId: Setter<string | null>;
   updateShortcut: (actionId: string, shortcut: string | null) => void;
   clearShortcut: (actionId: string) => void;
+  currentShortcut: string;
 }): JSX.Element {
   return (
     <div class="mb-2">
@@ -224,6 +269,7 @@ function CategorySection(props: {
               <ActionRow
                 action={action}
                 isEditing={props.editingActionId() === action.id}
+                isHighlighted={!!(props.currentShortcut && action.shortcut === props.currentShortcut)}
                 onEdit={() => props.setEditingActionId(action.id)}
                 onClear={() => props.clearShortcut(action.id)}
               />
@@ -238,20 +284,29 @@ function CategorySection(props: {
 function ActionRow(props: {
   action: Action;
   isEditing: boolean;
+  isHighlighted: boolean;
   onEdit: () => void;
   onClear: () => void;
 }): JSX.Element {
   return (
-    <div class="flex items-center justify-between rounded px-3 py-2 transition-colors hover:bg-neutral-800/50">
-      <span class="text-sm text-neutral-300">{props.action.name}</span>
+    <div
+      class={`flex items-center justify-between rounded px-3 py-2 transition-colors ${
+        props.isHighlighted ? 'bg-green-500/20 ring-1 ring-green-500/50' : 'hover:bg-neutral-800/50'
+      }`}
+    >
+      <span class={`text-sm ${props.isHighlighted ? 'font-medium text-green-300' : 'text-neutral-300'}`}>
+        {props.action.name}
+      </span>
       <div class="flex items-center gap-2">
         <button
           class={`min-w-32 rounded border px-3 py-1.5 text-center font-mono text-xs transition-all ${
-            props.isEditing
-              ? 'border-blue-500 bg-blue-500/20 text-blue-300'
-              : props.action.shortcut
-                ? 'border-neutral-600 bg-neutral-700 text-neutral-300 hover:border-neutral-500'
-                : 'border-dashed border-neutral-600 text-neutral-500 hover:border-neutral-500 hover:text-neutral-400'
+            props.isHighlighted
+              ? 'border-green-500 bg-green-500/30 text-green-300'
+              : props.isEditing
+                ? 'border-blue-500 bg-blue-500/20 text-blue-300'
+                : props.action.shortcut
+                  ? 'border-neutral-600 bg-neutral-700 text-neutral-300 hover:border-neutral-500'
+                  : 'border-dashed border-neutral-600 text-neutral-500 hover:border-neutral-500 hover:text-neutral-400'
           }`}
           onClick={props.onEdit}
         >
@@ -280,9 +335,17 @@ function ShortcutCaptureOverlay(props: {
   onCapture: (shortcut: string) => void;
   onCancel: () => void;
 }): JSX.Element {
-  const [pressedKeys, setPressedKeys] = createSignal<Set<string>>(new Set());
-  const [capturedShortcut, setCapturedShortcut] = createSignal<string>('');
+  const [selectedKeys, setSelectedKeys] = createSignal<Set<string>>(new Set());
+  const [layout, setLayout] = createSignal<KeyboardLayout>('ANSI');
 
+  // Compute formatted shortcut from selected keys
+  const currentShortcut = () => {
+    const keys = selectedKeys();
+    if (keys.size === 0) return '';
+    return formatShortcut(keys);
+  };
+
+  // Handle keyboard input (physical keyboard)
   onMount(() => {
     makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
       e.preventDefault();
@@ -293,45 +356,44 @@ function ShortcutCaptureOverlay(props: {
         return;
       }
 
-      const key = e.code;
-      setPressedKeys((prev) => {
-        const next = new Set([...prev, key]);
-        const shortcut = formatShortcut(next);
-        setCapturedShortcut(shortcut);
-        return next;
-      });
-    });
-
-    makeEventListener(window, 'keyup', (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      // When keys are released, save the captured shortcut
-      const currentShortcut = capturedShortcut();
-      if (currentShortcut && pressedKeys().size > 0) {
-        // Small delay to ensure we capture the full combo
-        setTimeout(() => {
-          if (capturedShortcut()) {
-            props.onCapture(capturedShortcut());
-          }
-        }, 100);
-      }
-
-      const key = e.code;
-      setPressedKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
+      // Add the key to selected keys
+      setSelectedKeys((prev) => new Set([...prev, e.code]));
     });
   });
 
+  // Handle clicking on the visual keyboard
+  const handleKeyClick = (code: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) {
+        // Toggle off if already selected
+        next.delete(code);
+      } else {
+        // Add the key
+        next.add(code);
+      }
+      return next;
+    });
+  };
+
+  const handleClear = () => {
+    setSelectedKeys(new Set<string>());
+  };
+
+  const handleSave = () => {
+    const shortcut = currentShortcut();
+    if (shortcut) {
+      props.onCapture(shortcut);
+    }
+  };
+
   return (
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={props.onCancel}>
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={props.onCancel}>
       <div
-        class="flex flex-col items-center gap-6 rounded-xl bg-neutral-800 p-8 shadow-2xl"
+        class="flex max-h-[90vh] max-w-[95vw] flex-col items-center gap-4 overflow-auto rounded-xl bg-neutral-800 p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div class="text-center">
           <h2 class="text-lg font-semibold text-white">Set Shortcut</h2>
           <p class="mt-1 text-sm text-neutral-400">
@@ -339,12 +401,46 @@ function ShortcutCaptureOverlay(props: {
           </p>
         </div>
 
-        <div class="flex min-h-16 min-w-64 items-center justify-center rounded-lg border-2 border-dashed border-neutral-600 bg-neutral-900 px-6 py-4">
-          <span class={`font-mono text-xl ${capturedShortcut() ? 'text-green-400' : 'text-neutral-500'}`}>
-            {capturedShortcut() || 'Press keys...'}
-          </span>
+        {/* Current shortcut display */}
+        <div class="flex items-center gap-4">
+          <div class="flex min-h-12 min-w-48 items-center justify-center rounded-lg border-2 border-dashed border-neutral-600 bg-neutral-900 px-6 py-3">
+            <span class={`font-mono text-lg ${currentShortcut() ? 'text-green-400' : 'text-neutral-500'}`}>
+              {currentShortcut() || 'Click keys or press on keyboard'}
+            </span>
+          </div>
+          <Show when={selectedKeys().size > 0}>
+            <button
+              class="rounded-lg bg-neutral-700 px-4 py-2 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-600"
+              onClick={handleClear}
+            >
+              Clear
+            </button>
+          </Show>
         </div>
 
+        {/* Layout toggle */}
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-neutral-400">Layout:</span>
+          <LayoutToggle layout={layout()} setLayout={setLayout} />
+        </div>
+
+        {/* Interactive keyboard */}
+        <div class="rounded-lg bg-neutral-900 p-2">
+          <KeyboardDisplay
+            pressedKeys={selectedKeys()}
+            layout={layout()}
+            interactive={true}
+            onKeyClick={handleKeyClick}
+          />
+        </div>
+
+        {/* Hint */}
+        <p class="text-xs text-neutral-500">
+          Click keys on the keyboard above or press keys on your physical keyboard. Click a selected key again to remove
+          it.
+        </p>
+
+        {/* Action buttons */}
         <div class="flex gap-3">
           <button
             class="rounded-lg bg-neutral-700 px-6 py-2 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-600"
@@ -352,139 +448,16 @@ function ShortcutCaptureOverlay(props: {
           >
             Cancel (Esc)
           </button>
-          <Show when={capturedShortcut()}>
+          <Show when={currentShortcut()}>
             <button
               class="rounded-lg bg-blue-600 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
-              onClick={() => props.onCapture(capturedShortcut())}
+              onClick={handleSave}
             >
-              Save
+              Save Shortcut
             </button>
           </Show>
         </div>
       </div>
     </div>
   );
-}
-
-// ============================================================================
-// MARK: Helper Functions
-// ============================================================================
-
-function formatShortcut(keys: Set<string>): string {
-  const keyArray = Array.from(keys);
-
-  // Define modifier priority order
-  const modifierOrder = [
-    'ControlLeft',
-    'ControlRight',
-    'AltLeft',
-    'AltRight',
-    'ShiftLeft',
-    'ShiftRight',
-    'MetaLeft',
-    'MetaRight'
-  ];
-
-  // Separate modifiers and regular keys
-  const modifiers: string[] = [];
-  const regularKeys: string[] = [];
-
-  for (const key of keyArray) {
-    if (modifierOrder.includes(key)) {
-      modifiers.push(key);
-    } else {
-      regularKeys.push(key);
-    }
-  }
-
-  // Sort modifiers by priority
-  modifiers.sort((a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b));
-
-  // Convert to display names
-  const displayParts = [...modifiers.map(getKeyDisplayName), ...regularKeys.map(getKeyDisplayName)];
-
-  // Remove duplicate modifier names
-  const uniqueParts: string[] = [];
-  for (const part of displayParts) {
-    if (!uniqueParts.includes(part)) {
-      uniqueParts.push(part);
-    }
-  }
-
-  return uniqueParts.join(' + ');
-}
-
-function getKeyDisplayName(code: string): string {
-  const displayNames: Record<string, string> = {
-    ControlLeft: 'Ctrl',
-    ControlRight: 'Ctrl',
-    AltLeft: 'Alt',
-    AltRight: 'Alt',
-    ShiftLeft: 'Shift',
-    ShiftRight: 'Shift',
-    MetaLeft: 'Win',
-    MetaRight: 'Win',
-    Space: 'Space',
-    Enter: 'Enter',
-    Backspace: 'Backspace',
-    Tab: 'Tab',
-    Escape: 'Esc',
-    CapsLock: 'CapsLock',
-    ArrowUp: '↑',
-    ArrowDown: '↓',
-    ArrowLeft: '←',
-    ArrowRight: '→',
-    Insert: 'Insert',
-    Delete: 'Delete',
-    Home: 'Home',
-    End: 'End',
-    PageUp: 'PageUp',
-    PageDown: 'PageDown',
-    NumLock: 'NumLock',
-    NumpadEnter: 'NumEnter',
-    NumpadAdd: 'Num+',
-    NumpadSubtract: 'Num-',
-    NumpadMultiply: 'Num*',
-    NumpadDivide: 'Num/',
-    NumpadDecimal: 'Num.',
-    Backquote: '`',
-    Minus: '-',
-    Equal: '=',
-    BracketLeft: '[',
-    BracketRight: ']',
-    Backslash: '\\',
-    IntlBackslash: '\\',
-    Semicolon: ';',
-    Quote: "'",
-    Comma: ',',
-    Period: '.',
-    Slash: '/',
-    ContextMenu: 'Menu'
-  };
-
-  if (displayNames[code]) {
-    return displayNames[code];
-  }
-
-  // Handle letter keys (KeyA -> A)
-  if (code.startsWith('Key')) {
-    return code.slice(3);
-  }
-
-  // Handle digit keys (Digit1 -> 1)
-  if (code.startsWith('Digit')) {
-    return code.slice(5);
-  }
-
-  // Handle function keys (F1 -> F1)
-  if (code.startsWith('F') && /^F\d+$/.test(code)) {
-    return code;
-  }
-
-  // Handle numpad keys (Numpad1 -> Num1)
-  if (code.startsWith('Numpad')) {
-    return 'Num' + code.slice(6);
-  }
-
-  return code;
 }
