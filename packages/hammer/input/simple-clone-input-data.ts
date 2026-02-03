@@ -1,7 +1,6 @@
 import { Vec2 } from '@packages/math';
 import { HammerInput } from '../pointerevent';
 import { round } from '../utils/utils-consts';
-import getCenter from './get-center';
 
 export interface ClonedInputData {
   eventType: HammerInput['eventType'];
@@ -9,6 +8,27 @@ export interface ClonedInputData {
   pointers: Vec2[];
   center: Vec2;
   delta: Vec2;
+}
+
+function getCenter(pointers: Vec2[]): Vec2 {
+  const pointersLength = pointers.length;
+
+  if (pointersLength === 0) {
+    return new Vec2().set(0, 0);
+  }
+
+  if (pointersLength === 1) {
+    return new Vec2().set(round(pointers[0].x), round(pointers[0].y));
+  }
+
+  let x = 0;
+  let y = 0;
+  for (const pointer of pointers) {
+    x += pointer.x;
+    y += pointer.y;
+  }
+
+  return new Vec2().set(round(x / pointersLength), round(y / pointersLength));
 }
 
 /**

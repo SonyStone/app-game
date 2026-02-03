@@ -135,11 +135,11 @@ export function createPointerEventsHandler(
       firstMultiple = undefined;
     }
 
-    const offsetCenter = firstMultiple ? firstMultiple.center : firstInput?.center;
+    const offsetCenter = firstMultiple ? firstMultiple.center : (firstInput?.center ?? center);
 
-    const deltaTime = timeStamp - firstInput.timeStamp;
+    const deltaTime = timeStamp - (firstInput?.timeStamp ?? timeStamp);
 
-    const start = firstInput.center;
+    const start = firstInput?.center ?? center;
     const angle = getAngle(offsetCenter, center);
     const distance = Vec2.distance(offsetCenter, center);
 
