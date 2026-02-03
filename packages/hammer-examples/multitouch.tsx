@@ -80,13 +80,13 @@ export default function Multitouch() {
   return (
     <>
       <Title>Multitouch</Title>
-      <div class="pointer-events-none fixed">
+      <div class="pointer-events-none fixed text-[8px] md:text-base">
         <pre>{JSON.stringify(inputS(), null, 2)}</pre>
       </div>
       <svg
         viewBox="0 0 100 100"
         xmlns="http://www.w3.org/2000/svg"
-        class="h-120 w-120 pointer-events-none absolute end-2 top-2"
+        class="md:h-120 md:w-120 pointer-events-none absolute end-2 top-2 h-60 w-60"
       >
         <g transform="scale(0.9)" transform-origin="50 50">
           <line x1="0" y1="100" x2="100" y2="100" stroke="black" stroke-width="1" />
