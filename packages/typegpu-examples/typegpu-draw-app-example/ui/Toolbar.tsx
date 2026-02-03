@@ -46,6 +46,10 @@ export interface ToolbarProps {
   debugEnabled?: Accessor<boolean>;
   setDebugEnabled?: Setter<boolean>;
 
+  // Force pan mode (for macOS with stylus + touch)
+  forcePanMode?: Accessor<boolean>;
+  setForcePanMode?: Setter<boolean>;
+
   /** Additional toolbar content (children) */
   children?: JSX.Element;
 }
@@ -144,6 +148,17 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
                 class={`cursor-pointer rounded border border-neutral-600 px-3 py-1.5 font-mono text-[11px] ${props.debugEnabled() ? 'bg-red-600 text-white' : 'bg-neutral-700 text-neutral-400'}`}
               >
                 {props.debugEnabled() ? '🔴 Debug' : '⚪ Debug'}
+              </button>
+            )}
+
+            {/* Force Pan Mode Toggle */}
+            {props.forcePanMode && props.setForcePanMode && (
+              <button
+                onClick={() => props.setForcePanMode!(!props.forcePanMode!())}
+                class={`cursor-pointer rounded border border-neutral-600 px-3 py-1.5 text-xs ${props.forcePanMode() ? 'bg-blue-600 text-white' : 'bg-neutral-700 text-neutral-400'}`}
+                title="Force Pan Mode: When enabled, mouse clicks pan instead of draw (useful for macOS with stylus + trackpad)"
+              >
+                {props.forcePanMode() ? '🖐️ Pan Mode' : '✏️ Draw Mode'}
               </button>
             )}
 

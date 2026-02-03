@@ -33,6 +33,9 @@ export default function TypeGPUDrawApp(): JSX.Element {
   // Debug state
   const [debugEnabled, setDebugEnabled] = createSignal(false);
 
+  // Force pan mode state (for macOS with stylus + trackpad)
+  const [forcePanMode, setForcePanMode] = createSignal(false);
+
   // GPU State
   let root: TgpuRoot | null = null;
   let context: GPUCanvasContext | null = null;
@@ -289,6 +292,8 @@ export default function TypeGPUDrawApp(): JSX.Element {
         onResetView={resetTransform}
         debugEnabled={debugEnabled}
         setDebugEnabled={setDebugEnabled}
+        forcePanMode={forcePanMode}
+        setForcePanMode={setForcePanMode}
       />
 
       {/* Canvas */}
@@ -303,6 +308,7 @@ export default function TypeGPUDrawApp(): JSX.Element {
         canvasWidth={DEFAULT_CANVAS_WIDTH}
         canvasHeight={DEFAULT_CANVAS_HEIGHT}
         debug={debugEnabled}
+        forcePanMode={forcePanMode}
         onResize={() => {
           const canvas = canvasRef();
           if (!canvas) return;

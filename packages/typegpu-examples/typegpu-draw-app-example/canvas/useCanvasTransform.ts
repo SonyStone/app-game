@@ -16,6 +16,8 @@ export interface CanvasTransformOptions {
   canvasWidth?: number;
   /** Virtual canvas height (for debug visualization) */
   canvasHeight?: number;
+  /** Force pan mode - when enabled, left mouse click triggers pan instead of drawing */
+  forcePanMode?: Accessor<boolean>;
 }
 
 /** Track active touch points */
@@ -44,13 +46,24 @@ interface TwoFingerGestureStart {
  * - One finger pan, two finger pinch zoom + rotate (touch only, not pen/stylus)
  */
 export function useCanvasTransform(options: CanvasTransformOptions) {
-  const { canvas, transform, onTransformChange, debug, canvasWidth = 4000, canvasHeight = 4000 } = options;
+  const {
+    canvas,
+    transform,
+    onTransformChange,
+    debug,
+    canvasWidth = 4000,
+    canvasHeight = 4000,
+    forcePanMode
+  } = options;
 
   // Mouse state
   let isPanning = false;
   let isRotating = false;
   let lastX = 0;
   let lastY = 0;
+
+  // Force pan mode state (tracks the pointer id for mouse-based panning)
+  let forcePanPointerId: number | null = null;
 
   // Touch state (using pointer events for touch-only gestures)
   const activePointers: Map<number, TouchPoint> = new Map();
@@ -152,7 +165,8 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   };
 
   /**
-   * Handle mouse down for pan/rotate
+   * Handle mouse down for pan/rotate (middle click and alt+click only)
+   * Force pan mode uses pointer events to distinguish mouse from pen
    */
   const handleMouseDown = (e: MouseEvent) => {
     // Middle mouse button for pan
@@ -258,11 +272,12 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   };
 
   /**
-   * Prevent context menu on middle click
+   * Prevent context menu in force pan mode
    */
   const handleContextMenu = (e: MouseEvent) => {
-    if (e.button === 1) {
+    if (forcePanMode?.()) {
       e.preventDefault();
+      e.stopPropagation();
     }
   };
 
@@ -504,6 +519,70 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
     }
   };
 
+  // ============================================================================
+  // MARK: Force Pan Mode Handlers (using Pointer Events for mouse-only)
+  // ============================================================================
+
+  /**
+   * Handle pointer down for force pan mode
+   * Only handles mouse pointers (not pen/stylus) to avoid interfering with drawing
+   */
+  const handleForcePanPointerDown = (e: PointerEvent) => {
+    // Only handle in force pan mode
+    if (!forcePanMode?.()) return;
+
+    // Only handle mouse input (not pen or touch)
+    // This ensures stylus drawing is not affected
+    if (e.pointerType !== 'mouse') return;
+
+    // Only left click without alt (alt is for rotation)
+    if (e.button !== 0 || e.altKey) return;
+
+    e.preventDefault();
+
+    const canvasEl = canvas();
+    if (canvasEl) {
+      canvasEl.setPointerCapture(e.pointerId);
+    }
+
+    forcePanPointerId = e.pointerId;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  };
+
+  /**
+   * Handle pointer move for force pan mode
+   */
+  const handleForcePanPointerMove = (e: PointerEvent) => {
+    // Only handle if we're tracking this pointer for force pan
+    if (forcePanPointerId !== e.pointerId) return;
+
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+
+    pan(dx, dy);
+
+    lastX = e.clientX;
+    lastY = e.clientY;
+
+    updateDebugTransform();
+  };
+
+  /**
+   * Handle pointer up for force pan mode
+   */
+  const handleForcePanPointerUp = (e: PointerEvent) => {
+    if (forcePanPointerId !== e.pointerId) return;
+
+    const canvasEl = canvas();
+    if (canvasEl && canvasEl.hasPointerCapture(e.pointerId)) {
+      canvasEl.releasePointerCapture(e.pointerId);
+    }
+
+    forcePanPointerId = null;
+    updateDebugTransform();
+  };
+
   // Attach event listeners reactively when canvas becomes available
   createEffect(
     on(canvas, (canvasEl) => {
@@ -522,6 +601,12 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
       canvasEl.addEventListener('pointerup', handleTouchPointerUp);
       canvasEl.addEventListener('pointercancel', handleTouchPointerUp);
 
+      // Force pan mode via pointer events (allows distinguishing mouse from pen)
+      canvasEl.addEventListener('pointerdown', handleForcePanPointerDown);
+      canvasEl.addEventListener('pointermove', handleForcePanPointerMove);
+      canvasEl.addEventListener('pointerup', handleForcePanPointerUp);
+      canvasEl.addEventListener('pointercancel', handleForcePanPointerUp);
+
       // Prevent default touch actions to avoid browser gestures interfering
       canvasEl.style.touchAction = 'none';
 
@@ -538,6 +623,12 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
         canvasEl.removeEventListener('pointermove', handleTouchPointerMove);
         canvasEl.removeEventListener('pointerup', handleTouchPointerUp);
         canvasEl.removeEventListener('pointercancel', handleTouchPointerUp);
+
+        // Force pan mode via pointer events
+        canvasEl.removeEventListener('pointerdown', handleForcePanPointerDown);
+        canvasEl.removeEventListener('pointermove', handleForcePanPointerMove);
+        canvasEl.removeEventListener('pointerup', handleForcePanPointerUp);
+        canvasEl.removeEventListener('pointercancel', handleForcePanPointerUp);
       });
     })
   );

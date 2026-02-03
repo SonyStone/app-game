@@ -18,6 +18,8 @@ export interface PointerInputOptions {
   canvasWidth?: number;
   /** Drawing canvas height (default: display height) */
   canvasHeight?: number;
+  /** Force pan mode - when enabled, mouse input is treated as pan (useful on macOS with stylus + touch) */
+  forcePanMode?: Accessor<boolean>;
 }
 
 /**
@@ -25,7 +27,8 @@ export interface PointerInputOptions {
  * Handles pointer events and converts them to canvas coordinates.
  */
 export function usePointerInput(options: PointerInputOptions) {
-  const { canvas, transform, onStroke, onStrokeEnd, brushSize, brushSpacing, canvasWidth, canvasHeight } = options;
+  const { canvas, transform, onStroke, onStrokeEnd, brushSize, brushSpacing, canvasWidth, canvasHeight, forcePanMode } =
+    options;
 
   const [isDrawing, setIsDrawing] = createSignal(false);
   let lastPoint: Point2D | null = null;
@@ -291,12 +294,18 @@ export function usePointerInput(options: PointerInputOptions) {
   const handlePointerDown = (e: PointerEvent) => {
     const canvasEl = canvas();
     if (!canvasEl) return;
-    if (e.button !== 0) return; // Only left mouse button
     if (e.altKey) return; // Alt+drag is for rotation, don't draw
 
     // Skip touch input - touch gestures are handled by useCanvasTransform
     // (one finger = pan, two fingers = zoom/rotate)
     if (e.pointerType === 'touch') return;
+
+    // In force pan mode, ignore all mouse buttons (left, right, middle)
+    // This is useful on macOS where touch input is interpreted as mouse
+    if (forcePanMode?.() && e.pointerType === 'mouse') return;
+
+    // Only left mouse button for drawing (after force pan mode check)
+    if (e.button !== 0) return;
 
     // Capture pointer for smooth tracking
     canvasEl.setPointerCapture(e.pointerId);
@@ -478,6 +487,15 @@ export function usePointerInput(options: PointerInputOptions) {
     }
   };
 
+  /**
+   * Prevent context menu in force pan mode
+   */
+  const handleContextMenu = (e: MouseEvent) => {
+    if (forcePanMode?.()) {
+      e.preventDefault();
+    }
+  };
+
   // Attach event listeners reactively when canvas becomes available
   createEffect(
     on(canvas, (canvasEl) => {
@@ -488,6 +506,7 @@ export function usePointerInput(options: PointerInputOptions) {
       canvasEl.addEventListener('pointerup', handlePointerUp);
       canvasEl.addEventListener('pointerleave', handlePointerLeave);
       canvasEl.addEventListener('pointercancel', handlePointerUp);
+      canvasEl.addEventListener('contextmenu', handleContextMenu);
 
       onCleanup(() => {
         canvasEl.removeEventListener('pointerdown', handlePointerDown);
@@ -495,6 +514,7 @@ export function usePointerInput(options: PointerInputOptions) {
         canvasEl.removeEventListener('pointerup', handlePointerUp);
         canvasEl.removeEventListener('pointerleave', handlePointerLeave);
         canvasEl.removeEventListener('pointercancel', handlePointerUp);
+        canvasEl.removeEventListener('contextmenu', handleContextMenu);
       });
     })
   );
