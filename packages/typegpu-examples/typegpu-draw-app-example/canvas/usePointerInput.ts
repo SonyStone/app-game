@@ -33,6 +33,10 @@ export function usePointerInput(options: PointerInputOptions) {
   // Track distance traveled since last stamp
   let distanceAccumulator = 0;
 
+  // Point buffer for Catmull-Rom smoothing (need 4 points for spline)
+  type BufferedPoint = { x: number; y: number; pressure: number };
+  let pointBuffer: BufferedPoint[] = [];
+
   // Debug logging - set to true to enable
   const DEBUG_INTERPOLATION = true;
   let strokeId = 0;
@@ -154,6 +158,60 @@ export function usePointerInput(options: PointerInputOptions) {
   };
 
   /**
+   * Catmull-Rom spline interpolation
+   * Returns a point on the spline at parameter t (0-1) between p1 and p2
+   * p0 and p3 are control points that influence the curve shape
+   */
+  const catmullRom = (
+    p0: BufferedPoint,
+    p1: BufferedPoint,
+    p2: BufferedPoint,
+    p3: BufferedPoint,
+    t: number
+  ): BufferedPoint => {
+    const t2 = t * t;
+    const t3 = t2 * t;
+
+    // Catmull-Rom basis functions
+    const b0 = -0.5 * t3 + t2 - 0.5 * t;
+    const b1 = 1.5 * t3 - 2.5 * t2 + 1.0;
+    const b2 = -1.5 * t3 + 2.0 * t2 + 0.5 * t;
+    const b3 = 0.5 * t3 - 0.5 * t2;
+
+    return {
+      x: b0 * p0.x + b1 * p1.x + b2 * p2.x + b3 * p3.x,
+      y: b0 * p0.y + b1 * p1.y + b2 * p2.y + b3 * p3.y,
+      pressure: b0 * p0.pressure + b1 * p1.pressure + b2 * p2.pressure + b3 * p3.pressure
+    };
+  };
+
+  /**
+   * Generate smoothed points between p1 and p2 using Catmull-Rom spline
+   * Uses p0 as previous control and p3 as next control
+   */
+  const generateSmoothedPoints = (
+    p0: BufferedPoint,
+    p1: BufferedPoint,
+    p2: BufferedPoint,
+    p3: BufferedPoint,
+    segmentLength: number
+  ): BufferedPoint[] => {
+    const points: BufferedPoint[] = [];
+
+    // Estimate the curve length to determine number of samples
+    const chordLength = distance(p1, p2);
+    // More samples for longer segments, minimum 2 for short ones
+    const numSamples = Math.max(2, Math.ceil(chordLength / segmentLength));
+
+    for (let i = 0; i <= numSamples; i++) {
+      const t = i / numSamples;
+      points.push(catmullRom(p0, p1, p2, p3, t));
+    }
+
+    return points;
+  };
+
+  /**
    * Interpolate between two points and return stroke points
    * Uses distance accumulator to ensure consistent spacing
    */
@@ -268,8 +326,9 @@ export function usePointerInput(options: PointerInputOptions) {
     lastPoint = point;
     lastPressure = pressure;
 
-    // Reset distance accumulator
+    // Reset distance accumulator and point buffer
     distanceAccumulator = 0;
+    pointBuffer = [{ x: point.x, y: point.y, pressure }];
     logDebug(`Reset distanceAccumulator to 0, creating initial stamp`);
 
     onStroke([
@@ -284,6 +343,7 @@ export function usePointerInput(options: PointerInputOptions) {
 
   /**
    * Handle pointer move - add points to stroke
+   * Uses Catmull-Rom spline smoothing for smoother curves
    */
   const handlePointerMove = (e: PointerEvent) => {
     if (!isDrawing()) return;
@@ -303,6 +363,7 @@ export function usePointerInput(options: PointerInputOptions) {
     const allPoints: StrokePoint[] = [];
     const size = brushSize?.() ?? 20;
 
+    // Collect all new points from events
     for (let i = 0; i < eventsToProcess.length; i++) {
       const event = eventsToProcess[i];
       // Skip if no button pressed
@@ -321,18 +382,41 @@ export function usePointerInput(options: PointerInputOptions) {
         pressure = Math.min(Math.max(rawPressure, 0.01), 1);
       }
 
-      logDebug(
-        `  event[${i}] point=(${point.x.toFixed(1)},${point.y.toFixed(1)}) lastPoint=${lastPoint ? `(${lastPoint.x.toFixed(1)},${lastPoint.y.toFixed(1)})` : 'null'}`
-      );
+      // Add point to buffer for smoothing
+      pointBuffer.push({ x: point.x, y: point.y, pressure });
 
-      if (lastPoint) {
-        const interpolated = interpolateStroke(lastPoint, point, lastPressure, pressure, size);
-        allPoints.push(...interpolated);
+      logDebug(
+        `  event[${i}] point=(${point.x.toFixed(1)},${point.y.toFixed(1)}) buffer size=${pointBuffer.length}`
+      );
+    }
+
+    // We need at least 4 points for Catmull-Rom interpolation
+    // Process smoothed segments when we have enough points
+    while (pointBuffer.length >= 4) {
+      const p0 = pointBuffer[0];
+      const p1 = pointBuffer[1];
+      const p2 = pointBuffer[2];
+      const p3 = pointBuffer[3];
+
+      // Generate smoothed points between p1 and p2
+      // Use a segment length that's proportional to brush size for good detail
+      const segmentLength = Math.max(2, size * 0.1);
+      const smoothedPoints = generateSmoothedPoints(p0, p1, p2, p3, segmentLength);
+
+      logDebug(`  Smoothing: ${smoothedPoints.length} points between buffer[1] and buffer[2]`);
+
+      // Interpolate stroke through smoothed points
+      for (const smoothedPoint of smoothedPoints) {
+        if (lastPoint) {
+          const interpolated = interpolateStroke(lastPoint, smoothedPoint, lastPressure, smoothedPoint.pressure, size);
+          allPoints.push(...interpolated);
+        }
+        lastPoint = { x: smoothedPoint.x, y: smoothedPoint.y };
+        lastPressure = smoothedPoint.pressure;
       }
 
-      // Always update lastPoint to track position for next segment
-      lastPoint = point;
-      lastPressure = pressure;
+      // Remove the processed point (keep overlap for next segment)
+      pointBuffer.shift();
     }
 
     logDebug(`  => Total stamps this move: ${allPoints.length}`);
@@ -344,6 +428,7 @@ export function usePointerInput(options: PointerInputOptions) {
 
   /**
    * Handle pointer up - end the stroke
+   * Flushes remaining points in the smoothing buffer
    */
   const handlePointerUp = (e: PointerEvent) => {
     const canvasEl = canvas();
@@ -352,8 +437,33 @@ export function usePointerInput(options: PointerInputOptions) {
     }
 
     if (isDrawing()) {
+      // Flush remaining points in buffer (less than 4 points)
+      // For the tail, we use linear interpolation since we can't do full Catmull-Rom
+      if (pointBuffer.length >= 2) {
+        const size = brushSize?.() ?? 20;
+        const allPoints: StrokePoint[] = [];
+
+        logDebug(`  Flushing ${pointBuffer.length} remaining buffer points`);
+
+        for (let i = 1; i < pointBuffer.length; i++) {
+          const to = pointBuffer[i];
+
+          if (lastPoint) {
+            const interpolated = interpolateStroke(lastPoint, to, lastPressure, to.pressure, size);
+            allPoints.push(...interpolated);
+          }
+          lastPoint = { x: to.x, y: to.y };
+          lastPressure = to.pressure;
+        }
+
+        if (allPoints.length > 0) {
+          onStroke(allPoints);
+        }
+      }
+
       setIsDrawing(false);
       lastPoint = null;
+      pointBuffer = [];
       onStrokeEnd();
     }
   };
@@ -365,6 +475,7 @@ export function usePointerInput(options: PointerInputOptions) {
     if (isDrawing()) {
       setIsDrawing(false);
       lastPoint = null;
+      pointBuffer = [];
       onStrokeEnd();
     }
   };
