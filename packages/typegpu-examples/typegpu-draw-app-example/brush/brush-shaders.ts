@@ -119,9 +119,3 @@ export const brushFragmentShader = tgpu['~unstable'].fragmentFn({
   // This allows overlapping stamps within a batch to merge without darkening
   return d.vec4f(color.x * finalAlpha, color.y * finalAlpha, color.z * finalAlpha, finalAlpha);
 });
-
-// ============================================================================
-// MARK: Legacy exports (removed - now using TypeGPU shaders above)
-// ============================================================================
-
-export const brushShaderWGSL = null;

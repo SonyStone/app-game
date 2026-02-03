@@ -175,27 +175,11 @@ export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Elemen
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        'pointer-events': 'none',
-        'z-index': 10000,
-        display: props.enabled() ? 'block' : 'none'
-      }}
+      class="pointer-events-none fixed left-0 top-0 z-[10000] h-full w-full"
+      style={{ display: props.enabled() ? 'block' : 'none' }}
     >
       {/* SVG overlay for drawing debug graphics */}
-      <svg
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%'
-        }}
-      >
+      <svg class="absolute left-0 top-0 h-full w-full">
         {/* Transformed canvas rectangle visualization */}
         {canvasTransform()?.canvasRect &&
           canvasTransform()?.canvasSize &&
@@ -406,15 +390,12 @@ export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Elemen
       <For each={allPointers()}>
         {(pointer) => (
           <div
+            class="absolute whitespace-nowrap font-mono text-xs"
             style={{
-              position: 'absolute',
               left: `${pointer.x + 25}px`,
               top: `${pointer.y - 10}px`,
               color: getPointerColor(pointer.pointerType),
-              'font-family': 'monospace',
-              'font-size': '12px',
-              'text-shadow': '1px 1px 2px black',
-              'white-space': 'nowrap'
+              'text-shadow': '1px 1px 2px black'
             }}
           >
             {pointer.pointerType}[{pointer.id}]{pointer.pressure !== undefined && ` p=${pointer.pressure.toFixed(2)}`}
@@ -426,19 +407,11 @@ export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Elemen
       {/* Two-finger gesture info */}
       {twoFingerGesture() && (
         <div
+          class="absolute whitespace-nowrap rounded bg-black/70 px-2 py-1 font-mono text-sm font-bold text-red-500"
           style={{
-            position: 'absolute',
             left: `${twoFingerGesture()!.center.x + 15}px`,
             top: `${twoFingerGesture()!.center.y + 15}px`,
-            color: '#ff0000',
-            'font-family': 'monospace',
-            'font-size': '14px',
-            'font-weight': 'bold',
-            'text-shadow': '1px 1px 2px black',
-            'white-space': 'nowrap',
-            background: 'rgba(0,0,0,0.7)',
-            padding: '4px 8px',
-            'border-radius': '4px'
+            'text-shadow': '1px 1px 2px black'
           }}
         >
           Angle: {((twoFingerGesture()!.angleDelta * 180) / Math.PI).toFixed(1)}°
@@ -446,68 +419,43 @@ export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Elemen
       )}
 
       {/* Legend */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '10px',
-          left: '10px',
-          color: '#ffffff',
-          'font-family': 'monospace',
-          'font-size': '12px',
-          background: 'rgba(0,0,0,0.7)',
-          padding: '8px',
-          'border-radius': '4px'
-        }}
-      >
-        <div style={{ color: '#00ff00' }}>● Touch</div>
-        <div style={{ color: '#ff00ff' }}>● Pen/Stylus</div>
-        <div style={{ color: '#ffff00' }}>● Mouse</div>
-        <div style={{ color: '#ff0000', 'margin-top': '4px' }}>● Gesture Center</div>
-        <div style={{ color: '#888888' }}>--- Start Vector</div>
-        <div style={{ color: '#00ff00' }}>— Current Vector</div>
-        <div style={{ color: '#ff8800', 'margin-top': '4px' }}>□ Canvas Rect</div>
+      <div class="absolute bottom-2.5 left-2.5 rounded bg-black/70 p-2 font-mono text-xs text-white">
+        <div class="text-green-500">● Touch</div>
+        <div class="text-fuchsia-500">● Pen/Stylus</div>
+        <div class="text-yellow-400">● Mouse</div>
+        <div class="mt-1 text-red-500">● Gesture Center</div>
+        <div class="text-neutral-500">--- Start Vector</div>
+        <div class="text-green-500">— Current Vector</div>
+        <div class="mt-1 text-orange-500">□ Canvas Rect</div>
       </div>
 
       {/* Canvas Transform Info */}
       {canvasTransform() && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '10px',
-            right: '10px',
-            color: '#ffffff',
-            'font-family': 'monospace',
-            'font-size': '12px',
-            background: 'rgba(0,0,0,0.85)',
-            padding: '10px',
-            'border-radius': '4px',
-            'min-width': '200px'
-          }}
-        >
-          <div style={{ color: '#00ffff', 'font-weight': 'bold', 'margin-bottom': '6px' }}>Canvas Transform</div>
+        <div class="min-w-50 absolute right-2.5 top-2.5 rounded bg-black/85 p-2.5 font-mono text-xs text-white">
+          <div class="mb-1.5 font-bold text-cyan-400">Canvas Transform</div>
           <div>
-            <span style={{ color: '#888' }}>panX:</span>{' '}
-            <span style={{ color: '#ffff00' }}>{canvasTransform()!.panX.toFixed(1)}</span>
+            <span class="text-neutral-500">panX:</span>{' '}
+            <span class="text-yellow-400">{canvasTransform()!.panX.toFixed(1)}</span>
           </div>
           <div>
-            <span style={{ color: '#888' }}>panY:</span>{' '}
-            <span style={{ color: '#ffff00' }}>{canvasTransform()!.panY.toFixed(1)}</span>
+            <span class="text-neutral-500">panY:</span>{' '}
+            <span class="text-yellow-400">{canvasTransform()!.panY.toFixed(1)}</span>
           </div>
           <div>
-            <span style={{ color: '#888' }}>zoom:</span>{' '}
-            <span style={{ color: '#00ff00' }}>{canvasTransform()!.zoom.toFixed(3)}</span>
+            <span class="text-neutral-500">zoom:</span>{' '}
+            <span class="text-green-500">{canvasTransform()!.zoom.toFixed(3)}</span>
           </div>
           <div>
-            <span style={{ color: '#888' }}>rotation:</span>{' '}
-            <span style={{ color: '#ff00ff' }}>{((canvasTransform()!.rotation * 180) / Math.PI).toFixed(1)}°</span>
+            <span class="text-neutral-500">rotation:</span>{' '}
+            <span class="text-fuchsia-500">{((canvasTransform()!.rotation * 180) / Math.PI).toFixed(1)}°</span>
           </div>
           {canvasTransform()!.canvasRect && (
             <>
-              <div style={{ 'margin-top': '6px', color: '#888', 'font-size': '10px' }}>
+              <div class="mt-1.5 text-[10px] text-neutral-500">
                 Canvas: {Math.round(canvasTransform()!.canvasRect!.width)}x
                 {Math.round(canvasTransform()!.canvasRect!.height)}
               </div>
-              <div style={{ color: '#888', 'font-size': '10px' }}>
+              <div class="text-[10px] text-neutral-500">
                 @ ({Math.round(canvasTransform()!.canvasRect!.left)}, {Math.round(canvasTransform()!.canvasRect!.top)})
               </div>
             </>

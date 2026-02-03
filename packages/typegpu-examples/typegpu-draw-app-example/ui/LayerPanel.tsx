@@ -65,101 +65,9 @@ export interface LayerPanelProps {
   /** Show blend mode */
   showBlendMode?: boolean;
 
-  /** Custom styles */
-  style?: JSX.CSSProperties;
+  /** Custom class name */
+  class?: string;
 }
-
-// Styles
-const panelStyle: JSX.CSSProperties = {
-  display: 'flex',
-  'flex-direction': 'column',
-  background: '#2a2a2a',
-  border: '1px solid #444',
-  'border-radius': '4px',
-  'min-width': '200px',
-  'max-height': '400px',
-  overflow: 'hidden'
-};
-
-const headerStyle: JSX.CSSProperties = {
-  display: 'flex',
-  'justify-content': 'space-between',
-  'align-items': 'center',
-  padding: '8px 12px',
-  background: '#333',
-  'border-bottom': '1px solid #444'
-};
-
-const titleStyle: JSX.CSSProperties = {
-  color: '#ccc',
-  'font-size': '12px',
-  'font-weight': 'bold'
-};
-
-const layerListStyle: JSX.CSSProperties = {
-  flex: 1,
-  'overflow-y': 'auto',
-  padding: '4px'
-};
-
-const layerItemStyle = (isActive: boolean): JSX.CSSProperties => ({
-  display: 'flex',
-  'align-items': 'center',
-  gap: '8px',
-  padding: '6px 8px',
-  background: isActive ? '#3a5a8a' : 'transparent',
-  'border-radius': '4px',
-  cursor: 'pointer',
-  'margin-bottom': '2px'
-});
-
-const iconButtonStyle: JSX.CSSProperties = {
-  background: 'transparent',
-  border: 'none',
-  color: '#888',
-  cursor: 'pointer',
-  padding: '4px',
-  'font-size': '14px',
-  'line-height': 1,
-  'border-radius': '2px'
-};
-
-const addButtonStyle: JSX.CSSProperties = {
-  background: '#444',
-  border: 'none',
-  color: '#ccc',
-  cursor: 'pointer',
-  padding: '4px 8px',
-  'font-size': '12px',
-  'border-radius': '4px'
-};
-
-const layerNameStyle: JSX.CSSProperties = {
-  flex: 1,
-  color: '#ccc',
-  'font-size': '12px',
-  overflow: 'hidden',
-  'text-overflow': 'ellipsis',
-  'white-space': 'nowrap'
-};
-
-const opacityInputStyle: JSX.CSSProperties = {
-  width: '50px',
-  background: '#333',
-  border: '1px solid #555',
-  color: '#ccc',
-  'font-size': '11px',
-  padding: '2px 4px',
-  'border-radius': '2px'
-};
-
-const footerStyle: JSX.CSSProperties = {
-  display: 'flex',
-  gap: '4px',
-  padding: '8px',
-  'border-top': '1px solid #444',
-  background: '#333'
-};
 
 export function LayerPanel(props: LayerPanelProps): JSX.Element {
   const title = () => props.title ?? 'Layers';
@@ -196,30 +104,36 @@ export function LayerPanel(props: LayerPanelProps): JSX.Element {
   const displayLayers = () => [...props.layers()].reverse();
 
   return (
-    <div style={{ ...panelStyle, ...props.style }}>
+    <div
+      class={`min-w-50 max-h-100 flex flex-col overflow-hidden rounded border border-neutral-700 bg-neutral-800 ${props.class ?? ''}`}
+    >
       {/* Header */}
-      <div style={headerStyle}>
-        <span style={titleStyle}>{title()}</span>
-        <button style={addButtonStyle} onClick={props.onAddLayer} title="Add Layer">
+      <div class="flex items-center justify-between border-b border-neutral-600 bg-neutral-700 px-3 py-2">
+        <span class="text-xs font-bold text-neutral-400">{title()}</span>
+        <button
+          class="cursor-pointer rounded border-none bg-neutral-600 px-2 py-1 text-xs text-neutral-400"
+          onClick={props.onAddLayer}
+          title="Add Layer"
+        >
           + Add
         </button>
       </div>
 
       {/* Layer List */}
-      <div style={layerListStyle}>
+      <div class="flex-1 overflow-y-auto p-1">
         <For each={displayLayers()}>
           {(layer) => {
             const isActive = () => props.activeLayerId() === layer.id;
             const isEditing = () => editingId() === layer.id;
 
             return (
-              <div style={layerItemStyle(isActive())} onClick={() => props.onSelectLayer(layer.id)}>
+              <div
+                class={`mb-0.5 flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 ${isActive() ? 'bg-blue-800/60' : 'bg-transparent hover:bg-neutral-700/50'}`}
+                onClick={() => props.onSelectLayer(layer.id)}
+              >
                 {/* Visibility Toggle */}
                 <button
-                  style={{
-                    ...iconButtonStyle,
-                    color: layer.visible ? '#8cf' : '#555'
-                  }}
+                  class={`cursor-pointer rounded border-none bg-transparent p-1 text-sm leading-none ${layer.visible ? 'text-sky-300' : 'text-neutral-600'}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     props.onToggleVisibility(layer.id);
@@ -232,10 +146,7 @@ export function LayerPanel(props: LayerPanelProps): JSX.Element {
                 {/* Lock Toggle */}
                 <Show when={props.onToggleLock}>
                   <button
-                    style={{
-                      ...iconButtonStyle,
-                      color: layer.locked ? '#fa5' : '#555'
-                    }}
+                    class={`cursor-pointer rounded border-none bg-transparent p-1 text-sm leading-none ${layer.locked ? 'text-amber-400' : 'text-neutral-600'}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       props.onToggleLock?.(layer.id);
@@ -256,18 +167,16 @@ export function LayerPanel(props: LayerPanelProps): JSX.Element {
                       onInput={(e) => setEditingName(e.currentTarget.value)}
                       onBlur={finishEditing}
                       onKeyDown={handleKeyDown}
-                      style={{
-                        ...layerNameStyle,
-                        background: '#333',
-                        border: '1px solid #555',
-                        padding: '2px 4px',
-                        'border-radius': '2px'
-                      }}
+                      class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded border border-neutral-600 bg-neutral-700 px-1 py-0.5 text-xs text-neutral-400"
                       autofocus
                     />
                   }
                 >
-                  <span style={layerNameStyle} onDblClick={() => startEditing(layer)} title="Double-click to rename">
+                  <span
+                    class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-neutral-400"
+                    onDblClick={() => startEditing(layer)}
+                    title="Double-click to rename"
+                  >
                     {layer.name}
                   </span>
                 </Show>
@@ -285,14 +194,14 @@ export function LayerPanel(props: LayerPanelProps): JSX.Element {
                       props.onChangeOpacity(layer.id, Math.max(0, Math.min(1, val)));
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    style={opacityInputStyle}
+                    class="w-12.5 rounded border border-neutral-600 bg-neutral-700 px-1 py-0.5 text-right text-[11px] text-neutral-400"
                     title="Opacity %"
                   />
                 </Show>
 
                 {/* Delete Button */}
                 <button
-                  style={{ ...iconButtonStyle, color: '#f55' }}
+                  class="cursor-pointer rounded border-none bg-transparent p-1 text-sm leading-none text-red-400"
                   onClick={(e) => {
                     e.stopPropagation();
                     props.onDeleteLayer(layer.id);
@@ -308,25 +217,16 @@ export function LayerPanel(props: LayerPanelProps): JSX.Element {
 
         {/* Empty state */}
         <Show when={props.layers().length === 0}>
-          <div
-            style={{
-              color: '#666',
-              'font-size': '12px',
-              'text-align': 'center',
-              padding: '20px'
-            }}
-          >
-            No layers. Click "Add" to create one.
-          </div>
+          <div class="p-5 text-center text-xs text-neutral-500">No layers. Click "Add" to create one.</div>
         </Show>
       </div>
 
       {/* Footer with move buttons */}
       <Show when={props.onMoveLayerUp || props.onMoveLayerDown}>
-        <div style={footerStyle}>
+        <div class="flex gap-1 border-t border-neutral-700 bg-neutral-700 p-2">
           <Show when={props.onMoveLayerUp}>
             <button
-              style={addButtonStyle}
+              class="cursor-pointer rounded border-none bg-neutral-600 px-2 py-1 text-xs text-neutral-400 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => {
                 const id = props.activeLayerId();
                 if (id) props.onMoveLayerUp?.(id);
@@ -339,7 +239,7 @@ export function LayerPanel(props: LayerPanelProps): JSX.Element {
           </Show>
           <Show when={props.onMoveLayerDown}>
             <button
-              style={addButtonStyle}
+              class="cursor-pointer rounded border-none bg-neutral-600 px-2 py-1 text-xs text-neutral-400 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => {
                 const id = props.activeLayerId();
                 if (id) props.onMoveLayerDown?.(id);

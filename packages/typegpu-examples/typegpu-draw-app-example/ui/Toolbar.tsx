@@ -46,95 +46,35 @@ export interface ToolbarProps {
   debugEnabled?: Accessor<boolean>;
   setDebugEnabled?: Setter<boolean>;
 
-  /** Show help text */
-  showHelp?: boolean;
-
-  /** Custom help text */
-  helpText?: string;
-
   /** Additional toolbar content (children) */
   children?: JSX.Element;
 }
 
-const toolbarStyle: JSX.CSSProperties = {
-  display: 'flex',
-  'align-items': 'center',
-  gap: '16px',
-  padding: '8px 16px',
-  background: '#2a2a2a',
-  'border-bottom': '1px solid #444',
-  'flex-wrap': 'wrap'
-};
-
-const selectStyle: JSX.CSSProperties = {
-  background: '#333',
-  color: '#ccc',
-  border: '1px solid #555',
-  padding: '4px 8px',
-  'border-radius': '4px'
-};
-
-const buttonStyle: JSX.CSSProperties = {
-  background: '#444',
-  color: '#ccc',
-  border: '1px solid #555',
-  padding: '6px 12px',
-  'border-radius': '4px',
-  cursor: 'pointer'
-};
-
-const toggleButtonStyle: JSX.CSSProperties = {
-  ...buttonStyle,
-  'min-width': '32px',
-  'font-size': '14px'
-};
-
-const debugButtonStyle = (active: boolean): JSX.CSSProperties => ({
-  ...buttonStyle,
-  background: active ? '#ff4444' : '#444',
-  'font-family': 'monospace',
-  'font-size': '11px'
-});
-
-const helpStyle: JSX.CSSProperties = {
-  padding: '4px 16px',
-  background: '#222',
-  'font-size': '11px',
-  color: '#888'
-};
-
-const labelStyle: JSX.CSSProperties = {
-  color: '#ccc',
-  'font-size': '12px'
-};
-
 export function Toolbar(props: ToolbarProps): JSX.Element {
   const [collapsed, setCollapsed] = createSignal(false);
-  const showHelp = () => props.showHelp ?? true;
-  const helpText = () =>
-    props.helpText ?? 'Draw with left mouse • Middle mouse to pan • Scroll to zoom • Alt+drag to rotate';
 
   return (
     <>
       {/* Collapsed state - just show toggle button */}
       {collapsed() ? (
-        <div
-          style={{
-            position: 'absolute',
-            top: '8px',
-            left: '8px',
-            'z-index': 1000
-          }}
-        >
-          <button onClick={() => setCollapsed(false)} style={toggleButtonStyle} title="Expand toolbar">
+        <div class="z-1000 absolute left-2 top-2">
+          <button
+            onClick={() => setCollapsed(false)}
+            class="min-w-8 cursor-pointer rounded border border-neutral-600 bg-neutral-700 px-1.5 py-1 text-sm text-neutral-400"
+            title="Expand toolbar"
+          >
             ☰
           </button>
         </div>
       ) : (
         <>
-          <div style={toolbarStyle}>
+          <div class="flex flex-wrap items-center gap-4 border-b border-neutral-700 bg-neutral-800 px-4 py-2">
             {/* Collapse button */}
-            <button onClick={() => setCollapsed(true)} style={toggleButtonStyle} title="Collapse toolbar">
+            <button
+              onClick={() => setCollapsed(true)}
+              class="min-w-8 cursor-pointer rounded border border-neutral-600 bg-neutral-700 px-1.5 py-1 text-sm text-neutral-400"
+              title="Collapse toolbar"
+            >
               ✕
             </button>
 
@@ -154,12 +94,12 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
             />
 
             {/* Blend Mode */}
-            <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-              <label style={labelStyle}>Blend:</label>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-neutral-400">Blend:</label>
               <select
                 value={props.blendMode()}
                 onChange={(e) => props.setBlendMode(parseInt(e.currentTarget.value) as BlendMode)}
-                style={selectStyle}
+                class="rounded border border-neutral-600 bg-neutral-700 px-2 py-1 text-neutral-400"
               >
                 {Object.entries(BLEND_MODE_LABELS).map(([value, label]) => (
                   <option value={value}>{label}</option>
@@ -168,12 +108,12 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
             </div>
 
             {/* Color Blend Mode */}
-            <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-              <label style={labelStyle}>Color Space:</label>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-neutral-400">Color Space:</label>
               <select
                 value={props.colorBlendMode()}
                 onChange={(e) => props.setColorBlendMode(parseInt(e.currentTarget.value) as ColorBlendMode)}
-                style={selectStyle}
+                class="rounded border border-neutral-600 bg-neutral-700 px-2 py-1 text-neutral-400"
               >
                 {Object.entries(COLOR_BLEND_MODE_LABELS).map(([value, label]) => (
                   <option value={value}>{label}</option>
@@ -182,12 +122,18 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
             </div>
 
             {/* Clear Button */}
-            <button onClick={props.onClear} style={buttonStyle}>
+            <button
+              onClick={props.onClear}
+              class="cursor-pointer rounded border border-neutral-600 bg-neutral-700 px-3 py-1.5 text-neutral-400"
+            >
               Clear
             </button>
 
             {/* Reset Transform */}
-            <button onClick={props.onResetView} style={buttonStyle}>
+            <button
+              onClick={props.onResetView}
+              class="cursor-pointer rounded border border-neutral-600 bg-neutral-700 px-3 py-1.5 text-neutral-400"
+            >
               Reset View
             </button>
 
@@ -195,7 +141,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
             {props.debugEnabled && props.setDebugEnabled && (
               <button
                 onClick={() => props.setDebugEnabled!(!props.debugEnabled!())}
-                style={debugButtonStyle(props.debugEnabled())}
+                class={`cursor-pointer rounded border border-neutral-600 px-3 py-1.5 font-mono text-[11px] ${props.debugEnabled() ? 'bg-red-600 text-white' : 'bg-neutral-700 text-neutral-400'}`}
               >
                 {props.debugEnabled() ? '🔴 Debug' : '⚪ Debug'}
               </button>
@@ -204,9 +150,6 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
             {/* Additional content */}
             {props.children}
           </div>
-
-          {/* Help text */}
-          {showHelp() && <div style={helpStyle}>{helpText()}</div>}
         </>
       )}
     </>

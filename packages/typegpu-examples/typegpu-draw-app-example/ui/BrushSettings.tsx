@@ -34,31 +34,7 @@ export interface BrushSettingsProps {
   /** Spacing range */
   spacingMin?: number;
   spacingMax?: number;
-
-  /** Custom label style */
-  labelStyle?: JSX.CSSProperties;
-
-  /** Custom value style */
-  valueStyle?: JSX.CSSProperties;
-
-  /** Custom slider style */
-  sliderStyle?: JSX.CSSProperties;
 }
-
-const defaultLabelStyle: JSX.CSSProperties = {
-  color: '#ccc',
-  'font-size': '12px'
-};
-
-const defaultValueStyle: JSX.CSSProperties = {
-  color: '#999',
-  'font-size': '12px',
-  width: '30px'
-};
-
-const defaultSliderStyle: JSX.CSSProperties = {
-  width: '80px'
-};
 
 export function BrushSettings(props: BrushSettingsProps): JSX.Element {
   const sizeMin = () => props.sizeMin ?? 1;
@@ -66,66 +42,62 @@ export function BrushSettings(props: BrushSettingsProps): JSX.Element {
   const spacingMin = () => props.spacingMin ?? 1;
   const spacingMax = () => props.spacingMax ?? 100;
 
-  const labelStyle = () => ({ ...defaultLabelStyle, ...props.labelStyle });
-  const valueStyle = () => ({ ...defaultValueStyle, ...props.valueStyle });
-  const sliderStyle = () => ({ ...defaultSliderStyle, ...props.sliderStyle });
-
   return (
     <>
       {/* Brush Size */}
-      <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-        <label style={labelStyle()}>Size:</label>
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-neutral-400">Size:</label>
         <input
           type="range"
           min={sizeMin()}
           max={sizeMax()}
           value={props.size()}
           onInput={(e) => props.setSize(parseInt(e.currentTarget.value))}
-          style={sliderStyle()}
+          class="w-20"
         />
-        <span style={valueStyle()}>{props.size()}</span>
+        <span class="w-7.5 text-xs text-neutral-500">{props.size()}</span>
       </div>
 
       {/* Brush Opacity */}
-      <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-        <label style={labelStyle()}>Opacity:</label>
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-neutral-400">Opacity:</label>
         <input
           type="range"
           min="0"
           max="100"
           value={props.opacity() * 100}
           onInput={(e) => props.setOpacity(parseInt(e.currentTarget.value) / 100)}
-          style={sliderStyle()}
+          class="w-20"
         />
-        <span style={valueStyle()}>{Math.round(props.opacity() * 100)}%</span>
+        <span class="w-7.5 text-xs text-neutral-500">{Math.round(props.opacity() * 100)}%</span>
       </div>
 
       {/* Brush Hardness */}
-      <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-        <label style={labelStyle()}>Hardness:</label>
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-neutral-400">Hardness:</label>
         <input
           type="range"
           min="0"
           max="100"
           value={props.hardness() * 100}
           onInput={(e) => props.setHardness(parseInt(e.currentTarget.value) / 100)}
-          style={sliderStyle()}
+          class="w-20"
         />
-        <span style={valueStyle()}>{Math.round(props.hardness() * 100)}%</span>
+        <span class="w-7.5 text-xs text-neutral-500">{Math.round(props.hardness() * 100)}%</span>
       </div>
 
       {/* Brush Spacing */}
-      <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
-        <label style={labelStyle()}>Spacing:</label>
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-neutral-400">Spacing:</label>
         <input
           type="range"
           min={spacingMin()}
           max={spacingMax()}
           value={props.spacing()}
           onInput={(e) => props.setSpacing(parseInt(e.currentTarget.value))}
-          style={sliderStyle()}
+          class="w-20"
         />
-        <span style={valueStyle()}>{props.spacing()}%</span>
+        <span class="w-7.5 text-xs text-neutral-500">{props.spacing()}%</span>
       </div>
     </>
   );

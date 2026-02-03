@@ -48,8 +48,8 @@ export interface CanvasViewProps {
   /** Custom cursor style */
   cursor?: string;
 
-  /** Additional styles */
-  style?: JSX.CSSProperties;
+  /** Additional class name */
+  class?: string;
 
   /** Enable debug overlay for pointer events */
   debug?: Accessor<boolean>;
@@ -106,14 +106,8 @@ export function CanvasView(props: CanvasViewProps): JSX.Element {
         props.ref(el);
         setCanvasRef(el);
       }}
-      style={{
-        flex: 1,
-        width: '100%',
-        height: '0',
-        cursor: props.cursor ?? 'crosshair',
-        'touch-action': 'none',
-        ...props.style
-      }}
+      class={`h-0 w-full flex-1 touch-none ${props.class ?? ''}`}
+      style={{ cursor: props.cursor ?? 'crosshair' }}
     />
   );
 }
