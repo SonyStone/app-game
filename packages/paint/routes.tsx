@@ -14,6 +14,18 @@ export const pointerEventsRoutes: Routes[] = [
     name: 'Hammer Multitouch',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={multitouchThumbnail} name={props.name} />,
     component: lazy(() => import('@packages/hammer-examples/multitouch'))
+  },
+  {
+    path: '/input-visualizer',
+    name: 'Input Visualizer (Keyboard & Mouse)',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./input-visualizer/input-visualizer'))
+  },
+  {
+    path: '/shortcut-settings',
+    name: 'Shortcut Settings',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./input-visualizer/shortcut-settings'))
   }
 ];
 

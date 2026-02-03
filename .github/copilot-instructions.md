@@ -162,13 +162,13 @@ The most important content (main exports) should be at the top, with supporting 
 
 ```tsx
 // ============================================================================
-// Types (exported types first)
+// MARK: Types (exported types first)
 // ============================================================================
 
 export type MyComponentProps = { ... };
 
 // ============================================================================
-// Main Component (the primary export)
+// MARK: Main Component (the primary export)
 // ============================================================================
 
 export function MyComponent(props: MyComponentProps): JSX.Element {
@@ -183,7 +183,7 @@ export function MyComponent(props: MyComponentProps): JSX.Element {
 }
 
 // ============================================================================
-// Sub-Components (internal, used by main component)
+// MARK: Sub-Components (internal, used by main component)
 // ============================================================================
 
 function Header(): JSX.Element { ... }
@@ -191,7 +191,7 @@ function Content(): JSX.Element { ... }
 function Footer(): JSX.Element { ... }
 
 // ============================================================================
-// Helper Functions (utilities at the bottom)
+// MARK: Helper Functions (utilities at the bottom)
 // ============================================================================
 
 function formatDate(date: Date): string { ... }
