@@ -65,6 +65,12 @@ const routes: Routes[] = [
     name: '[WIP] Solid Motion One Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./solid-motionone'))
+  },
+  {
+    path: '/cloud-storage-tree',
+    name: 'Cloud Storage Tree',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./cloud-storage-tree'))
   }
 ];
 

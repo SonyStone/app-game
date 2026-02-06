@@ -87,7 +87,7 @@ export function Item(
           </Show>
         </div>
         <textarea
-          rows={Object.values(local.data as unknown as unknown[]).length + 3}
+          rows={Object.values(local.data ?? {}).length + 3}
           class={[
             'm-2 h-auto resize-none border-0 bg-transparent p-2 text-sm outline-none',
             error() ? 'ring-1 ring-red-500' : ''

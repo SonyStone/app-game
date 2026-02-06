@@ -5,13 +5,33 @@ import { For, Show, type JSX } from 'solid-js';
 // ============================================================================
 
 export type KeyboardLayout = 'ANSI' | 'ISO';
+export type OperatingSystem = 'mac' | 'windows' | 'linux';
 
 export type KeyboardDisplayProps = {
   pressedKeys: Set<string>;
   layout: KeyboardLayout;
   onKeyClick?: (code: string) => void;
   interactive?: boolean;
+  os?: OperatingSystem;
 };
+
+// ============================================================================
+// OS Detection
+// ============================================================================
+
+export function detectOS(): OperatingSystem {
+  if (typeof navigator === 'undefined') return 'windows';
+  const platform = navigator.platform?.toLowerCase() ?? '';
+  const userAgent = navigator.userAgent?.toLowerCase() ?? '';
+
+  if (platform.includes('mac') || userAgent.includes('mac')) {
+    return 'mac';
+  }
+  if (platform.includes('linux') || userAgent.includes('linux')) {
+    return 'linux';
+  }
+  return 'windows';
+}
 
 // ============================================================================
 // Main Component
@@ -19,6 +39,13 @@ export type KeyboardDisplayProps = {
 
 export function KeyboardDisplay(props: KeyboardDisplayProps): JSX.Element {
   const isISO = () => props.layout === 'ISO';
+  const os = () => props.os ?? detectOS();
+  const isMac = () => os() === 'mac';
+
+  // OS-specific labels
+  const ctrlLabel = () => (isMac() ? '⌃' : 'Ctrl');
+  const altLabel = () => (isMac() ? '⌥' : 'Alt');
+  const metaLabel = () => (isMac() ? '⌘' : 'Win');
 
   return (
     <div class="flex flex-col items-center gap-1 overflow-x-auto p-4">
@@ -286,7 +313,7 @@ export function KeyboardDisplay(props: KeyboardDisplayProps): JSX.Element {
       <div class="flex gap-1">
         <Key
           code="ControlLeft"
-          label="Ctrl"
+          label={ctrlLabel()}
           pressed={props.pressedKeys}
           width="w-14"
           onKeyClick={props.onKeyClick}
@@ -294,7 +321,7 @@ export function KeyboardDisplay(props: KeyboardDisplayProps): JSX.Element {
         />
         <Key
           code="MetaLeft"
-          label="Win"
+          label={metaLabel()}
           pressed={props.pressedKeys}
           width="w-12"
           onKeyClick={props.onKeyClick}
@@ -302,7 +329,7 @@ export function KeyboardDisplay(props: KeyboardDisplayProps): JSX.Element {
         />
         <Key
           code="AltLeft"
-          label="Alt"
+          label={altLabel()}
           pressed={props.pressedKeys}
           width="w-12"
           onKeyClick={props.onKeyClick}
@@ -318,7 +345,7 @@ export function KeyboardDisplay(props: KeyboardDisplayProps): JSX.Element {
         />
         <Key
           code="AltRight"
-          label="Alt"
+          label={altLabel()}
           pressed={props.pressedKeys}
           width="w-12"
           onKeyClick={props.onKeyClick}
@@ -326,7 +353,7 @@ export function KeyboardDisplay(props: KeyboardDisplayProps): JSX.Element {
         />
         <Key
           code="MetaRight"
-          label="Win"
+          label={metaLabel()}
           pressed={props.pressedKeys}
           width="w-12"
           onKeyClick={props.onKeyClick}
@@ -342,7 +369,7 @@ export function KeyboardDisplay(props: KeyboardDisplayProps): JSX.Element {
         />
         <Key
           code="ControlRight"
-          label="Ctrl"
+          label={ctrlLabel()}
           pressed={props.pressedKeys}
           width="w-14"
           onKeyClick={props.onKeyClick}
@@ -650,8 +677,9 @@ function Key(props: {
 // Helper Functions
 // ============================================================================
 
-export function formatShortcut(keys: Set<string>): string {
+export function formatShortcut(keys: Set<string>, os?: OperatingSystem): string {
   const keyArray = Array.from(keys);
+  const currentOS = os ?? detectOS();
 
   // Define modifier priority order
   const modifierOrder = [
@@ -681,7 +709,10 @@ export function formatShortcut(keys: Set<string>): string {
   modifiers.sort((a, b) => modifierOrder.indexOf(a) - modifierOrder.indexOf(b));
 
   // Convert to display names
-  const displayParts = [...modifiers.map(getKeyDisplayName), ...regularKeys.map(getKeyDisplayName)];
+  const displayParts = [
+    ...modifiers.map((k) => getKeyDisplayName(k, currentOS)),
+    ...regularKeys.map((k) => getKeyDisplayName(k, currentOS))
+  ];
 
   // Remove duplicate modifier names (e.g., ControlLeft and ControlRight both become "Ctrl")
   const uniqueParts: string[] = [];
@@ -694,21 +725,24 @@ export function formatShortcut(keys: Set<string>): string {
   return uniqueParts.join(' + ');
 }
 
-export function getKeyDisplayName(code: string): string {
+export function getKeyDisplayName(code: string, os?: OperatingSystem): string {
+  const currentOS = os ?? detectOS();
+  const isMac = currentOS === 'mac';
+
   const displayNames: Record<string, string> = {
-    ControlLeft: 'Ctrl',
-    ControlRight: 'Ctrl',
-    AltLeft: 'Alt',
-    AltRight: 'Alt',
-    ShiftLeft: 'Shift',
-    ShiftRight: 'Shift',
-    MetaLeft: 'Win',
-    MetaRight: 'Win',
+    ControlLeft: isMac ? '⌃' : 'Ctrl',
+    ControlRight: isMac ? '⌃' : 'Ctrl',
+    AltLeft: isMac ? '⌥' : 'Alt',
+    AltRight: isMac ? '⌥' : 'Alt',
+    ShiftLeft: isMac ? '⇧' : 'Shift',
+    ShiftRight: isMac ? '⇧' : 'Shift',
+    MetaLeft: isMac ? '⌘' : 'Win',
+    MetaRight: isMac ? '⌘' : 'Win',
     Space: 'Space',
-    Enter: 'Enter',
-    Backspace: 'Backspace',
-    Tab: 'Tab',
-    Escape: 'Esc',
+    Enter: isMac ? '↵' : 'Enter',
+    Backspace: isMac ? '⌫' : 'Backspace',
+    Tab: isMac ? '⇥' : 'Tab',
+    Escape: isMac ? '⎋' : 'Esc',
     CapsLock: 'CapsLock',
     ArrowUp: '↑',
     ArrowDown: '↓',

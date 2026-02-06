@@ -6,6 +6,7 @@ import { createGetterObject } from '@utils/createGetterObject';
 import { Accessor, createEffect, createMemo, createSignal, For, onCleanup, onMount, ParentProps } from 'solid-js';
 import { NestedItem } from '.';
 import { getColorByIndex } from '../virtual-scroll/get-bg-color';
+import { Item } from './Item';
 import { useVirtualMap } from './useVirtualMap';
 import { VirtualScrollPreview } from './VirtualPreview';
 
