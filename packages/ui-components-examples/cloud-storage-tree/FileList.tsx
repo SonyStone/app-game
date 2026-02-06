@@ -3,6 +3,7 @@ import { For, JSX, Show } from 'solid-js';
 import { useCloudStorage } from './CloudStorageContext';
 import { getFileIcon } from './TreeView';
 import type { FileSystemNode } from './types';
+import { createLongPressHandlers, isTouchDevice } from './useLongPress';
 
 // ============================================================================
 // MARK: Main Component
@@ -78,12 +79,24 @@ function FileListItem(props: { item: FileSystemNode }): JSX.Element {
 
   const isSelected = () => state.selection.selectedIds.has(props.item.id);
 
+  // Detect touch device for different interaction modes
+  const isTouch = isTouchDevice();
+
   const handleClick = (e: MouseEvent) => {
     e.stopPropagation();
+
+    // On touch devices, single tap on folder navigates into it
+    if (isTouch && props.item.type === 'folder') {
+      actions.navigateToFolder(props.item.id);
+      return;
+    }
+
+    // On desktop, click selects
     actions.selectItem(props.item.id, e.ctrlKey || e.metaKey, e.shiftKey);
   };
 
   const handleDoubleClick = () => {
+    // Double-click to open folder (desktop only, touch uses single tap)
     if (props.item.type === 'folder') {
       actions.navigateToFolder(props.item.id);
     }
@@ -106,6 +119,16 @@ function FileListItem(props: { item: FileSystemNode }): JSX.Element {
     actions.openContextMenu(e.clientX, e.clientY, targetIds);
   };
 
+  // Long press handlers for mobile context menu
+  const longPressHandlers = createLongPressHandlers({
+    onLongPress: (e) => {
+      // Select the item first
+      actions.selectItem(props.item.id, false, false);
+      // Open context menu at touch position
+      actions.openContextMenu(e.clientX, e.clientY, [props.item.id]);
+    }
+  });
+
   const icon = () => {
     if (props.item.type === 'folder') {
       return '📁';
@@ -121,6 +144,10 @@ function FileListItem(props: { item: FileSystemNode }): JSX.Element {
       onClick={handleClick}
       onDblClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
+      onPointerDown={longPressHandlers.onPointerDown}
+      onPointerUp={longPressHandlers.onPointerUp}
+      onPointerLeave={longPressHandlers.onPointerLeave}
+      onPointerCancel={longPressHandlers.onPointerCancel}
     >
       <div class="flex min-w-0 items-center gap-2">
         <span class="shrink-0 text-base">{icon()}</span>

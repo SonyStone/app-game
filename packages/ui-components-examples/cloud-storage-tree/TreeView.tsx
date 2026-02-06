@@ -1,4 +1,4 @@
-import { For, JSX, Show } from 'solid-js';
+import { createContext, For, JSX, Show, useContext } from 'solid-js';
 
 import { useCloudStorage } from './CloudStorageContext';
 
@@ -8,7 +8,11 @@ import { useCloudStorage } from './CloudStorageContext';
 
 export type TreeViewProps = {
   class?: string;
+  onNavigate?: () => void;
 };
+
+// Context for passing onNavigate to nested TreeNodes
+const TreeViewContext = createContext<{ onNavigate?: () => void }>({});
 
 // ============================================================================
 // MARK: Main Component
@@ -21,9 +25,11 @@ export function TreeView(props: TreeViewProps): JSX.Element {
   const rootChildCount = () => treeData().get('root')?.length ?? 0;
 
   return (
-    <div class={`flex flex-col overflow-auto bg-neutral-900 ${props.class ?? ''}`}>
-      <TreeNode nodeId="root" name="storage:" type="folder" level={0} childCount={rootChildCount()} />
-    </div>
+    <TreeViewContext.Provider value={{ onNavigate: props.onNavigate }}>
+      <div class={`flex flex-col overflow-auto bg-neutral-900 ${props.class ?? ''}`}>
+        <TreeNode nodeId="root" name="storage:" type="folder" level={0} childCount={rootChildCount()} />
+      </div>
+    </TreeViewContext.Provider>
   );
 }
 
@@ -39,6 +45,7 @@ function TreeNode(props: {
   childCount?: number;
 }): JSX.Element {
   const { state, actions, treeData } = useCloudStorage();
+  const treeViewContext = useContext(TreeViewContext);
 
   const isExpanded = () => state.expandedFolders.has(props.nodeId);
   const isCurrentFolder = () => state.currentFolderId === props.nodeId;
@@ -57,6 +64,8 @@ function TreeNode(props: {
   const handleNodeClick = () => {
     if (props.type === 'folder') {
       actions.navigateToFolder(props.nodeId);
+      // Call onNavigate callback (used to close mobile sidebar)
+      treeViewContext.onNavigate?.();
     }
   };
 

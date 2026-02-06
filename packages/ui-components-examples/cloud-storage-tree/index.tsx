@@ -1,5 +1,5 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { JSX, onMount } from 'solid-js';
+import { createSignal, JSX, onMount, Show } from 'solid-js';
 
 import { Breadcrumbs } from './Breadcrumbs';
 import { CloudStorageProvider, useCloudStorage } from './CloudStorageContext';
@@ -27,6 +27,7 @@ export default function CloudStorageTreePage(): JSX.Element {
 
 function CloudStorageApp(): JSX.Element {
   const { state, actions } = useCloudStorage();
+  const [isSidebarOpen, setSidebarOpen] = createSignal(false);
 
   // Global keyboard shortcuts
   onMount(() => {
@@ -87,7 +88,17 @@ function CloudStorageApp(): JSX.Element {
     <div class="flex h-screen flex-col bg-neutral-900 text-neutral-100">
       {/* Header */}
       <header class="flex items-center justify-between border-b border-neutral-700 bg-neutral-800 px-4 py-3">
-        <h1 class="text-lg font-medium">Cloud Storage</h1>
+        <div class="flex items-center gap-2">
+          {/* Mobile sidebar toggle */}
+          <button
+            class="rounded p-1.5 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200 md:hidden"
+            onClick={() => setSidebarOpen(true)}
+            title="Open folders"
+          >
+            <span class="text-lg">☰</span>
+          </button>
+          <h1 class="text-lg font-medium">Cloud Storage</h1>
+        </div>
         <button
           class="rounded px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300"
           onClick={() => actions.closeContextMenu()}
@@ -99,13 +110,35 @@ function CloudStorageApp(): JSX.Element {
 
       {/* Main Content */}
       <div class="flex min-h-0 flex-1">
-        {/* Sidebar - Tree View (hidden on mobile) */}
+        {/* Sidebar - Tree View (desktop: always visible, mobile: slide-over) */}
         <aside class="hidden w-60 shrink-0 flex-col border-r border-neutral-700 md:flex">
           <div class="border-b border-neutral-700 bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-400">
             Folders
           </div>
           <TreeView class="flex-1" />
         </aside>
+
+        {/* Mobile Sidebar Overlay */}
+        <Show when={isSidebarOpen()}>
+          <div class="z-100 fixed inset-0 flex md:hidden">
+            {/* Backdrop */}
+            <div class="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+
+            {/* Sidebar Panel */}
+            <aside class="relative flex w-72 max-w-[80vw] flex-col bg-neutral-900 shadow-xl">
+              <div class="flex items-center justify-between border-b border-neutral-700 bg-neutral-800 px-3 py-2">
+                <span class="text-sm font-medium text-neutral-400">Folders</span>
+                <button
+                  class="rounded p-1 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200"
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  ✕
+                </button>
+              </div>
+              <TreeView class="flex-1" onNavigate={() => setSidebarOpen(false)} />
+            </aside>
+          </div>
+        </Show>
 
         {/* Main Area */}
         <main class="flex min-w-0 flex-1 flex-col">
