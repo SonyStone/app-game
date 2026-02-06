@@ -16,12 +16,41 @@ export type ToolbarProps = {
 
 export function Toolbar(props: ToolbarProps): JSX.Element {
   const { state, actions } = useCloudStorage();
+  let fileInputRef: HTMLInputElement | undefined;
 
   const hasSelection = () => state.selection.selectedIds.size > 0;
   const selectionCount = () => state.selection.selectedIds.size;
 
+  const handleUploadClick = () => {
+    fileInputRef?.click();
+  };
+
+  const handleFileSelect = (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      actions.uploadFiles(input.files);
+      input.value = ''; // Reset for next upload
+    }
+  };
+
   return (
     <div class={`flex items-center gap-1 border-b border-neutral-700 bg-neutral-800 p-2 ${props.class ?? ''}`}>
+      {/* Hidden file input for upload */}
+      <input ref={fileInputRef} type="file" multiple class="hidden" onChange={handleFileSelect} />
+
+      {/* Upload/Download Actions */}
+      <ToolbarButton icon="📤" label="Upload" onClick={handleUploadClick} title="Upload files" />
+
+      <ToolbarButton
+        icon="📥"
+        label="Download"
+        onClick={() => actions.downloadSelected()}
+        disabled={!hasSelection()}
+        title="Download selected items"
+      />
+
+      <div class="mx-1 h-6 w-px bg-neutral-700" />
+
       {/* Create Actions */}
       <ToolbarButton
         icon="📁"
@@ -30,17 +59,17 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
         title="Create new folder"
       />
 
-      <ToolbarButton
+      {/* <ToolbarButton
         icon="📄"
         label="New File"
         onClick={() => actions.openDialog('create-file')}
         title="Create new file"
-      />
+      /> */}
 
       <div class="mx-1 h-6 w-px bg-neutral-700" />
 
       {/* Selection Actions */}
-      <ToolbarButton
+      {/* <ToolbarButton
         icon="✏️"
         label="Rename"
         onClick={() => {
@@ -52,7 +81,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
         }}
         disabled={selectionCount() !== 1}
         title="Rename selected item"
-      />
+      /> */}
 
       <ToolbarButton
         icon="🗑️"

@@ -84,7 +84,7 @@ function TreeNode(props: {
   return (
     <div class="select-none">
       <div
-        class={`flex cursor-pointer items-center gap-1 px-2 py-1 hover:bg-neutral-700 ${
+        class={`flex cursor-pointer items-center gap-1 px-2 py-1 py-2.5 hover:bg-neutral-700 sm:py-1 ${
           isCurrentFolder() ? 'bg-neutral-700/80 text-blue-400' : 'text-neutral-200'
         }`}
         style={{ 'padding-left': `${props.level * 16 + 8}px` }}
@@ -92,13 +92,13 @@ function TreeNode(props: {
         onContextMenu={handleContextMenu}
       >
         {/* Expand/Collapse Arrow - only show for non-empty folders */}
-        <Show when={hasExpandableChildren()} fallback={<span class="w-4" />}>
+        <Show when={hasExpandableChildren()} fallback={<span class="w-4 w-6 sm:w-4" />}>
           <button
-            class="flex h-4 w-4 items-center justify-center rounded text-neutral-400 hover:bg-neutral-600 hover:text-neutral-200"
+            class="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-neutral-600 hover:text-neutral-200 sm:h-4 sm:w-4"
             onClick={handleArrowClick}
           >
             <span
-              class="text-xs transition-transform duration-150"
+              class="text-sm transition-transform duration-150 sm:text-xs"
               style={{ transform: isExpanded() ? 'rotate(90deg)' : 'rotate(0deg)' }}
             >
               ▶
@@ -107,10 +107,10 @@ function TreeNode(props: {
         </Show>
 
         {/* Icon */}
-        <span class="text-sm">{icon()}</span>
+        <span class="text-base sm:text-sm">{icon()}</span>
 
         {/* Name */}
-        <span class="truncate text-sm">{props.name}</span>
+        <span class="truncate text-base sm:text-sm">{props.name}</span>
 
         {/* Item count or Empty indicator for folders */}
         <Show when={isFolder()}>

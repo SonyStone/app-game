@@ -95,6 +95,57 @@ createEventListener(
 );
 ```
 
+## Pointer Events
+
+**Use `PointerEvent` instead of `MouseEvent` or `TouchEvent`.**
+
+Pointer Events provide a unified API for mouse, touch, and pen input. Use `pointerType` to differentiate input types when needed.
+
+```tsx
+// ❌ Don't - separate mouse and touch handling
+const isTouch = 'ontouchstart' in window;
+const handleClick = (e: MouseEvent) => {
+  if (isTouch) { /* touch behavior */ }
+  else { /* mouse behavior */ }
+};
+
+// ❌ Don't - use MouseEvent or TouchEvent
+const handleMouseDown = (e: MouseEvent) => { ... };
+const handleTouchStart = (e: TouchEvent) => { ... };
+
+// ✅ Do - use PointerEvent with pointerType
+let lastPointerType: string = 'mouse';
+
+const handlePointerDown = (e: PointerEvent) => {
+  lastPointerType = e.pointerType; // 'mouse' | 'touch' | 'pen'
+};
+
+const handleClick = (e: PointerEvent) => {
+  if (lastPointerType === 'touch') {
+    // Touch-specific behavior (e.g., single tap to navigate)
+  } else {
+    // Mouse/pen behavior (e.g., click to select)
+  }
+};
+```
+
+### PointerEvent Types
+
+- `e.pointerType === 'mouse'` - Mouse input
+- `e.pointerType === 'touch'` - Touch input (finger)
+- `e.pointerType === 'pen'` - Stylus/pen input
+
+### Common Pointer Event Handlers
+
+```tsx
+onPointerDown = { handlePointerDown };
+onPointerUp = { handlePointerUp };
+onPointerMove = { handlePointerMove };
+onPointerEnter = { handlePointerEnter };
+onPointerLeave = { handlePointerLeave };
+onPointerCancel = { handlePointerCancel };
+```
+
 ## TypeScript Conventions
 
 **Use `type` instead of `interface` for type definitions.**

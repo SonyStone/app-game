@@ -108,7 +108,82 @@ let mockNodes = initializeMockData();
 // Simulate network delay
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Helper to get full path of a node
+const getNodePath = (nodeId: string): string => {
+  const parts: string[] = [];
+  let currentId: string | null = nodeId;
+
+  while (currentId) {
+    const node = mockNodes.get(currentId);
+    if (node) {
+      parts.unshift(node.name);
+      currentId = node.parentId;
+    } else {
+      break;
+    }
+  }
+
+  return '/' + parts.join('/');
+};
+
+// Helper to find node by path
+const findNodeByPath = (path: string): FileSystemNode | null => {
+  // Normalize path
+  const normalizedPath = path.startsWith('/') ? path : '/' + path;
+
+  // Handle root
+  if (normalizedPath === '/' || normalizedPath === '/storage:') {
+    return mockNodes.get('root') ?? null;
+  }
+
+  // Split path and traverse
+  const parts = normalizedPath.split('/').filter(Boolean);
+  let currentNode: FileSystemNode | null = null;
+
+  // Start from root
+  for (const part of parts) {
+    if (!currentNode) {
+      // Looking for root level match
+      if (part === 'storage:') {
+        currentNode = mockNodes.get('root') ?? null;
+      } else {
+        return null;
+      }
+    } else {
+      // Looking for child with matching name
+      let found = false;
+      mockNodes.forEach((node) => {
+        if (node.parentId === currentNode!.id && node.name === part) {
+          currentNode = node;
+          found = true;
+        }
+      });
+      if (!found) {
+        return null;
+      }
+    }
+  }
+
+  return currentNode;
+};
+
 export const mockJrpcService = {
+  /**
+   * Get full path of a node
+   */
+  getPath(nodeId: string): string {
+    return getNodePath(nodeId);
+  },
+
+  /**
+   * Resolve a path to a node ID
+   */
+  async resolvePath(path: string): Promise<string | null> {
+    await delay(50);
+    const node = findNodeByPath(path);
+    return node?.id ?? null;
+  },
+
   /**
    * List contents of a folder
    */
@@ -322,6 +397,59 @@ export const mockJrpcService = {
     }
 
     return { movedIds };
+  },
+
+  /**
+   * Download a file (simulated)
+   */
+  async downloadFile(nodeId: string, fileName: string): Promise<void> {
+    await delay(100 + Math.random() * 200);
+
+    const node = mockNodes.get(nodeId);
+    if (!node) {
+      throw new Error('File not found');
+    }
+
+    // Create mock file content
+    const content =
+      node.type === 'folder'
+        ? `This is a simulated download of folder: ${fileName}`
+        : `This is simulated content for file: ${fileName}\n\nFile size: ${node.size ?? 0} bytes\nCreated: ${new Date(node.createdAt).toISOString()}`;
+
+    // Create and trigger download
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = node.type === 'folder' ? `${fileName}.txt` : fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  /**
+   * Upload a file (simulated)
+   */
+  async uploadFile(request: { parentPath: string; name: string; size: number }): Promise<FileSystemNode> {
+    await delay(200 + Math.random() * 300);
+
+    // Check for duplicate name
+    let hasDuplicate = false;
+    mockNodes.forEach((node) => {
+      if (node.parentId === request.parentPath && node.name === request.name) {
+        hasDuplicate = true;
+      }
+    });
+
+    if (hasDuplicate) {
+      throw new Error(`A file named "${request.name}" already exists`);
+    }
+
+    const newFile = createNode(request.name, 'file', request.parentPath, request.size);
+    mockNodes.set(newFile.id, newFile);
+
+    return { ...newFile };
   },
 
   /**

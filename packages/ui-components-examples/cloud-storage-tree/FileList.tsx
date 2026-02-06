@@ -1,9 +1,9 @@
-import { For, JSX, Show } from 'solid-js';
+import { createSignal, For, JSX, Show } from 'solid-js';
 
 import { useCloudStorage } from './CloudStorageContext';
 import { getFileIcon } from './TreeView';
 import type { FileSystemNode } from './types';
-import { createLongPressHandlers, isTouchDevice } from './useLongPress';
+import { createLongPressHandlers } from './useLongPress';
 
 // ============================================================================
 // MARK: Main Component
@@ -11,6 +11,7 @@ import { createLongPressHandlers, isTouchDevice } from './useLongPress';
 
 export function FileList(): JSX.Element {
   const { state, actions } = useCloudStorage();
+  const [isDragOver, setIsDragOver] = createSignal(false);
 
   const handleContainerClick = (e: MouseEvent) => {
     // Click on empty space clears selection
@@ -28,12 +29,57 @@ export function FileList(): JSX.Element {
     }
   };
 
+  // Drag and drop handlers
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer?.types.includes('Files')) {
+      e.dataTransfer.dropEffect = 'copy';
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only reset if leaving the container (not entering a child)
+    const relatedTarget = e.relatedTarget as Node | null;
+    if (!e.currentTarget || !(e.currentTarget as Node).contains(relatedTarget)) {
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      actions.uploadFiles(e.dataTransfer.files);
+    }
+  };
+
   return (
     <div
-      class="flex-1 overflow-auto bg-neutral-900 p-2"
+      class={`relative flex-1 overflow-auto bg-neutral-900 p-2 transition-colors ${
+        isDragOver() ? 'bg-blue-900/20' : ''
+      }`}
       onClick={handleContainerClick}
       onContextMenu={handleContainerContextMenu}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
+      {/* Drag overlay */}
+      <Show when={isDragOver()}>
+        <div class="pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-blue-500 bg-blue-900/30">
+          <div class="flex flex-col items-center gap-2 text-blue-400">
+            <span class="text-4xl">📤</span>
+            <span class="text-lg font-medium">Drop files here to upload</span>
+          </div>
+        </div>
+      </Show>
+
       <Show
         when={!state.isLoading}
         fallback={
@@ -48,6 +94,7 @@ export function FileList(): JSX.Element {
             <div class="flex h-full flex-col items-center justify-center gap-2 text-neutral-500">
               <span class="text-4xl">📂</span>
               <span>This folder is empty</span>
+              <span class="text-xs">Drag files here to upload</span>
             </div>
           }
         >
@@ -79,19 +126,24 @@ function FileListItem(props: { item: FileSystemNode }): JSX.Element {
 
   const isSelected = () => state.selection.selectedIds.has(props.item.id);
 
-  // Detect touch device for different interaction modes
-  const isTouch = isTouchDevice();
+  // Track the pointer type from pointerdown to use in click handler
+  let lastPointerType: string = 'mouse';
 
-  const handleClick = (e: MouseEvent) => {
+  const handlePointerDown = (e: PointerEvent) => {
+    lastPointerType = e.pointerType;
+    longPressHandlers.onPointerDown(e);
+  };
+
+  const handleClick = (e: PointerEvent | MouseEvent) => {
     e.stopPropagation();
 
     // On touch devices, single tap on folder navigates into it
-    if (isTouch && props.item.type === 'folder') {
+    if (lastPointerType === 'touch' && props.item.type === 'folder') {
       actions.navigateToFolder(props.item.id);
       return;
     }
 
-    // On desktop, click selects
+    // On desktop (mouse/pen), click selects
     actions.selectItem(props.item.id, e.ctrlKey || e.metaKey, e.shiftKey);
   };
 
@@ -102,7 +154,7 @@ function FileListItem(props: { item: FileSystemNode }): JSX.Element {
     }
   };
 
-  const handleContextMenu = (e: MouseEvent) => {
+  const handleContextMenu = (e: PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -144,7 +196,7 @@ function FileListItem(props: { item: FileSystemNode }): JSX.Element {
       onClick={handleClick}
       onDblClick={handleDoubleClick}
       onContextMenu={handleContextMenu}
-      onPointerDown={longPressHandlers.onPointerDown}
+      onPointerDown={handlePointerDown}
       onPointerUp={longPressHandlers.onPointerUp}
       onPointerLeave={longPressHandlers.onPointerLeave}
       onPointerCancel={longPressHandlers.onPointerCancel}

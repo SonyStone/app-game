@@ -1,4 +1,4 @@
-import { Accessor, createContext, createSignal, JSX, Setter, useContext } from 'solid-js';
+import { Accessor, createContext, createSignal, JSX, onCleanup, onMount, Setter, useContext } from 'solid-js';
 import { createStore, SetStoreFunction } from 'solid-js/store';
 
 import { mockJrpcService } from './mock-jrpc.service';
@@ -21,7 +21,7 @@ export type CloudStorageState = {
 };
 
 export type CloudStorageActions = {
-  navigateToFolder: (folderId: string) => Promise<void>;
+  navigateToFolder: (folderId: string, pushHistory?: boolean) => Promise<void>;
   toggleExpand: (folderId: string) => void;
   selectItem: (id: string, isCtrlKey: boolean, isShiftKey: boolean) => void;
   clearSelection: () => void;
@@ -35,6 +35,8 @@ export type CloudStorageActions = {
   rename: (newName: string) => Promise<void>;
   deleteSelected: () => Promise<void>;
   refresh: () => Promise<void>;
+  downloadSelected: () => Promise<void>;
+  uploadFiles: (files: FileList) => Promise<void>;
 };
 
 type CloudStorageContextValue = {
@@ -94,8 +96,45 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
     return response.items;
   };
 
+  // Helper to get folder path from URL hash
+  const getFolderPathFromHash = (): string => {
+    const hash = window.location.hash;
+    if (hash.startsWith('#')) {
+      // Remove the # and decode
+      const path = decodeURIComponent(hash.slice(1));
+      return path.startsWith('/') ? path : '/' + path;
+    }
+    return '/';
+  };
+
+  // Helper to update URL hash with folder path
+  const updateUrlHash = (folderId: string, pushState: boolean) => {
+    const path = mockJrpcService.getPath(folderId);
+    // Use path directly in hash (no encoding needed for most chars in hash)
+    const newHash = path === '/storage:' ? '' : `#${path}`;
+    const newUrl = window.location.pathname + window.location.search + newHash;
+
+    if (pushState) {
+      window.history.pushState({ path }, '', newUrl);
+    } else {
+      window.history.replaceState({ path }, '', newUrl);
+    }
+  };
+
+  // Helper to navigate by path (resolves to ID first)
+  const navigateByPath = async (path: string, pushHistory: boolean) => {
+    const folderId = await mockJrpcService.resolvePath(path);
+    if (folderId) {
+      await actions.navigateToFolder(folderId, pushHistory);
+    } else {
+      // Path not found, go to root
+      setState('error', `Folder not found: ${path}`);
+      await actions.navigateToFolder('root', pushHistory);
+    }
+  };
+
   const actions: CloudStorageActions = {
-    async navigateToFolder(folderId: string) {
+    async navigateToFolder(folderId: string, pushHistory = true) {
       setState('isLoading', true);
       setState('error', null);
 
@@ -110,10 +149,13 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
         setState('breadcrumbs', breadcrumbs);
         setState('selection', { selectedIds: new Set(), lastSelectedId: null });
 
-        // Auto-expand the current folder in tree view
+        // Update browser history
+        updateUrlHash(folderId, pushHistory);
+
+        // Auto-expand all folders in the breadcrumb path
         setState('expandedFolders', (prev) => {
           const next = new Set(prev);
-          next.add(folderId);
+          breadcrumbs.forEach((crumb) => next.add(crumb.id));
           return next;
         });
 
@@ -123,6 +165,23 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
           next.set(folderId, response.items);
           return next;
         });
+
+        // Also load tree data for all parent folders in breadcrumbs (for sidebar)
+        const parentFoldersToLoad = breadcrumbs.filter((crumb) => crumb.type === 'folder' && !treeData().has(crumb.id));
+
+        if (parentFoldersToLoad.length > 0) {
+          const parentContents = await Promise.all(
+            parentFoldersToLoad.map((crumb) => mockJrpcService.listFolder(crumb.id))
+          );
+
+          setTreeData((prev) => {
+            const next = new Map(prev);
+            parentFoldersToLoad.forEach((crumb, index) => {
+              next.set(crumb.id, parentContents[index].items);
+            });
+            return next;
+          });
+        }
       } catch (err) {
         setState('error', err instanceof Error ? err.message : 'Failed to load folder');
       } finally {
@@ -297,11 +356,67 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
         next.set(state.currentFolderId, response.items);
         return next;
       });
+    },
+
+    async downloadSelected() {
+      const selectedIds = Array.from(state.selection.selectedIds);
+      if (selectedIds.length === 0) return;
+
+      setState('isLoading', true);
+      try {
+        for (const id of selectedIds) {
+          const item = state.items.find((i) => i.id === id);
+          if (item) {
+            await mockJrpcService.downloadFile(id, item.name);
+          }
+        }
+      } catch (err) {
+        setState('error', err instanceof Error ? err.message : 'Failed to download');
+      } finally {
+        setState('isLoading', false);
+      }
+    },
+
+    async uploadFiles(files: FileList) {
+      if (files.length === 0) return;
+
+      setState('isLoading', true);
+      try {
+        for (const file of Array.from(files)) {
+          await mockJrpcService.uploadFile({
+            parentPath: state.currentFolderId,
+            name: file.name,
+            size: file.size
+          });
+        }
+        await actions.refresh();
+      } catch (err) {
+        setState('error', err instanceof Error ? err.message : 'Failed to upload');
+      } finally {
+        setState('isLoading', false);
+      }
     }
   };
 
-  // Initial load
-  actions.navigateToFolder('root');
+  // Handle browser back/forward navigation and initial load
+  onMount(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const path = e.state?.path ?? getFolderPathFromHash();
+      // Navigate by path without pushing to history
+      navigateByPath(path, false);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    onCleanup(() => window.removeEventListener('popstate', handlePopState));
+
+    // Initial load - use folder path from URL hash if present
+    const initialPath = getFolderPathFromHash();
+    if (initialPath === '/') {
+      actions.navigateToFolder('root', false);
+    } else {
+      navigateByPath(initialPath, false);
+    }
+  });
 
   return (
     <CloudStorageContext.Provider value={{ state, setState, actions, treeData, setTreeData }}>

@@ -73,6 +73,27 @@ export function ContextMenu(): JSX.Element {
       }
     }
 
+    // Download (when items are selected)
+    if (hasSelection) {
+      items.push({
+        label: `Download${targetIds.length > 1 ? ` (${targetIds.length})` : ''}`,
+        icon: '📥',
+        action: () => {
+          // Select the target items if not already selected
+          targetIds.forEach((id) => {
+            state.selection.selectedIds.add(id);
+          });
+          actions.downloadSelected();
+          actions.closeContextMenu();
+        }
+      });
+    }
+
+    // Divider before create actions
+    if (hasSelection) {
+      items.push({ label: '', icon: '', action: () => {}, divider: true });
+    }
+
     // Create actions
     items.push({
       label: 'New Folder',
