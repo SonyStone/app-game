@@ -30,6 +30,7 @@ packages/wasm-rust-pages/wasm-game-of-life
 # Logs
 *.log
 npm-debug.log*
+pnpm-debug.log*
 
 # OS files
 .DS_Store

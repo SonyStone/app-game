@@ -6,12 +6,12 @@ WORKDIR /app
 RUN corepack enable
 
 # Copy package files first (for better caching)
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml ./
 
-RUN npm install
+RUN pnpm install --frozen-lockfile
 
 COPY . .
 
 EXPOSE 3200
 
-CMD ["npm", "run", "dev"]
+CMD ["pnpm", "run", "dev"]

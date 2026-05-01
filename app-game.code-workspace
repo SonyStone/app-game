@@ -20,7 +20,7 @@
     // }
   ],
   "settings": {
-    "vitest.commandLine": "npx vitest",
+    "vitest.commandLine": "pnpm exec vitest",
     "testing.automaticallyOpenPeekView": "never",
     "github.copilot.chat.codeGeneration.instructions": [{ "file": ".github/copilot-instructions.md" }],
     "workbench.colorCustomizations": {

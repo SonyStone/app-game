@@ -9,8 +9,9 @@ interval = 50
 #! yarn link @see https://classic.yarnpkg.com/en/docs/cli/link
 #! pnpm link @see https://pnpm.io/cli/link
 #! The link command will only be executed if `[[crates]] link = true`
-#! cli: `npm` | `yarn` | `pnpm`, default is `npm`
-cli = "npm"
+#! cli: `npm` | `yarn` | `pnpm`
+#! this repo is configured to use `pnpm`
+cli = "pnpm"
 
 #! ---------------------------
 
@@ -27,21 +28,21 @@ using = "wasm-pack"
 #! copy all files in this directory
 dir = "my-template"
 
-#! ################# NPM Package #################
+#! ################# Package #################
 
 #! When there is only `name`, other fields will use the default configuration
 #! -------- package: rsw-hello --------
 [[crates]]
-#! npm package name
+#! published package name
 name = "rsw-hello"
-#! run `npm link`: `true` | `false`, default is `false`
+#! run the selected package manager's `link` command: `true` | `false`, default is `false`
 link = true
 
 #! =======================================================
 
 #! -------- package: @rsw/hello --------
 # [[crates]]
-# #! npm package name
+# #! published package name
 # name = "@rsw/hello"
 # #! default is `.`
 # root = "."
@@ -49,7 +50,7 @@ link = true
 # out-dir = "pkg"
 # #! target: bundler | nodejs | web | no-modules, default is `web`
 # target = "web"
-#! run `npm link`: `true` | `false`, default is `false`
+#! run the selected package manager's `link` command: `true` | `false`, default is `false`
 # link = false
 # #! rsw watch
 # [crates.watch]
