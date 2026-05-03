@@ -1,4 +1,4 @@
-import { GL_INTERNAL_FORMAT } from '@packages/webgl/static-variables/textures';
+import { GL_INTERNAL_FORMAT } from '@app-game/webgl/static-variables/textures';
 
 // Getted from three.js DDSLoader
 // https://github.com/mrdoob/three.js/blob/master/examples/jsm/loaders/DDSLoader.js

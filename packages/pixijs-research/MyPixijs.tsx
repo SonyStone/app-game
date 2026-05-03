@@ -1,5 +1,5 @@
 import * as v4 from '@app-game/math/v4';
-import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_CLEAR_MASK } from '@packages/webgl/static-variables';
+import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_CLEAR_MASK } from '@app-game/webgl/static-variables';
 import { DRAW_MODES } from 'pixi.js';
 import { onCleanup } from 'solid-js';
 

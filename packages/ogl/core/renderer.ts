@@ -9,10 +9,10 @@ import {
   GL_FRONT_FACE,
   GL_FUNC_SEPARATE,
   GL_PARAMETER
-} from '@packages/webgl/static-variables';
+} from '@app-game/webgl/static-variables';
 import { Vec3 } from '../math/vec-3';
 
-import { GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
+import { GL_TEXTURE_UNIT } from '@app-game/webgl/static-variables/textures';
 import type { Camera } from './camera';
 import type { Mesh } from './mesh';
 import type { RenderTarget } from './render-target';

@@ -1,5 +1,5 @@
-import { compileShader } from '@packages/webgl/compileShader';
-import { linkProgram } from '@packages/webgl/linkProgram';
+import { compileShader } from '@app-game/webgl/compileShader';
+import { linkProgram } from '@app-game/webgl/linkProgram';
 
 import { AttributeData, getAttributeData } from './getAttributeData';
 import { UniformData, getUniformData } from './getUniformData';

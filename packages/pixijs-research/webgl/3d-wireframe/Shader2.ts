@@ -1,6 +1,6 @@
 import { FVec3, Vec2, Vec3Tuple, m4, v4 } from '@app-game/math';
 import { Mat4 } from '@app-game/math/m4';
-import { GL_BUFFER_TYPE, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
+import { GL_BUFFER_TYPE, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@app-game/webgl/static-variables';
 import { createProgram } from './Shader';
 
 interface Uniform {

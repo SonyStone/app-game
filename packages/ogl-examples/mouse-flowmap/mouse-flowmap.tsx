@@ -6,7 +6,7 @@ import { Vec2 } from '@packages/ogl/math/vec-2_old';
 import fragment from './mouse-flowmap.frag?raw';
 import vertex from './mouse-flowmap.vert?raw';
 
-import { GL_TEXTURE_WRAP_MODE } from '@packages/webgl/static-variables/textures';
+import { GL_TEXTURE_WRAP_MODE } from '@app-game/webgl/static-variables/textures';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF, { targetFPS } from '@solid-primitives/raf';
 import waterUrl from './water.jpg?url';

@@ -1,5 +1,5 @@
-import { GL_BUFFER_USAGE, GL_TEXTURES } from '@packages/webgl/static-variables';
-import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
+import { GL_BUFFER_USAGE, GL_TEXTURES } from '@app-game/webgl/static-variables';
+import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
 
 import { createProgram } from '../Shader';
 import fragmentShader from './frag_shader.frag?raw';

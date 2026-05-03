@@ -3,7 +3,7 @@ import { Program } from '../core/program';
 import { Triangle } from './triangle';
 
 import { Vec2 } from '@app-game/math';
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables/data-type';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables/data-type';
 import { OGLRenderingContext } from '../core/renderer';
 import { Texture } from '../core/texture';
 import fragment from './flowmap.frag?raw';

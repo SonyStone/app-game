@@ -1,4 +1,4 @@
-import { GL_BUFFER_TYPE, GL_CLEAR_MASK, GL_STATIC_VARIABLES, GL_TEXTURES } from '@packages/webgl/static-variables';
+import { GL_BUFFER_TYPE, GL_CLEAR_MASK, GL_STATIC_VARIABLES, GL_TEXTURES } from '@app-game/webgl/static-variables';
 
 import { ExtWebGLProgram } from './createProgram';
 import { ExtWebGLTexture } from './processAtlas';

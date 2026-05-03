@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
+import { GL_STATIC_VARIABLES } from '@app-game/webgl/static-variables';
 
 import { createProgram } from './createProgram';
 import { drawScene } from './drawScene';

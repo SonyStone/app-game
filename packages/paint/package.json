@@ -6,7 +6,8 @@
     "@app-game/app-router": "workspace:*",
     "@app-game/math": "workspace:*",
     "@app-game/ui-components": "workspace:*",
-    "@app-game/utils": "workspace:*"
+    "@app-game/utils": "workspace:*",
+    "@app-game/webgl": "workspace:*"
   },
   "exports": {
     "./routes": "./routes.tsx"

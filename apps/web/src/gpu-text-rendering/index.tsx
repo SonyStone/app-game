@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
+import { GL_STATIC_VARIABLES } from '@app-game/webgl/static-variables';
 import { onCleanup } from 'solid-js';
 
 import atlas from './atlas.bmp?url';

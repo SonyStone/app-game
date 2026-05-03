@@ -2,5 +2,17 @@
   "name": "@app-game/webgl",
   "version": "0.0.0",
   "private": true,
+  "exports": {
+    "./compileShader": "./compileShader.ts",
+    "./createProgram": "./createProgram.ts",
+    "./defaultValue": "./defaultValue.ts",
+    "./linkProgram": "./linkProgram.ts",
+    "./static-variables": "./static-variables/index.ts",
+    "./static-variables/buffer": "./static-variables/buffer.ts",
+    "./static-variables/data-type": "./static-variables/data-type.ts",
+    "./static-variables/static-variables": "./static-variables/static-variables.ts",
+    "./static-variables/textures": "./static-variables/textures.ts",
+    "./typedArray": "./typedArray.ts"
+  },
   "type": "module"
 }

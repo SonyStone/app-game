@@ -1,4 +1,4 @@
-import { createProgram } from '@packages/webgl/createProgram';
+import { createProgram } from '@app-game/webgl/createProgram';
 import { createAttributeSetters } from './createAttributeSetters';
 import { createUniformBlockSetters } from './createUniformBlockSetters';
 import { createUniformSetters } from './createUniformSetters';

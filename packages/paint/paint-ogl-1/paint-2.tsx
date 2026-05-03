@@ -5,7 +5,7 @@ import { Camera, Renderer, Transform, Vec3 } from '@packages/ogl';
 
 import { SphereComponent } from '@packages/math-examples/camera-projection-webgl2/sphere.component';
 import { createRaycast } from '@packages/math-examples/raycast';
-import { GL_CAPABILITIES, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
+import { GL_CAPABILITIES, GL_FUNC_SEPARATE } from '@app-game/webgl/static-variables';
 import { createEmitter } from '@solid-primitives/event-bus';
 import { Brush1Component } from './brush-1/brush.component';
 import { mouseNormalize } from './mouse-normalize';

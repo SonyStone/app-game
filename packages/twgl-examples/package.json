@@ -9,7 +9,8 @@
     "@app-game/twgl": "workspace:*",
     "@app-game/twgl-2": "workspace:*",
     "@app-game/three-examples": "workspace:*",
-    "@app-game/ui-components": "workspace:*"
+    "@app-game/ui-components": "workspace:*",
+    "@app-game/webgl": "workspace:*"
   },
   "exports": {
     "./routes": "./routes.tsx"

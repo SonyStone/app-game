@@ -1,4 +1,4 @@
-import { BLENDING_FACTOR, GL_CAPABILITIES, GL_DATA_TYPE, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
+import { BLENDING_FACTOR, GL_CAPABILITIES, GL_DATA_TYPE, GL_FUNC_SEPARATE } from '@app-game/webgl/static-variables';
 import type { BlendEquation, BlendFunc, OGLRenderingContext } from './renderer';
 
 // TODO: upload empty texture if null ? maybe not

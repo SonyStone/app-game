@@ -6,7 +6,7 @@ import {
   GL_SHADER_TYPE,
   GL_STATIC_VARIABLES,
   GL_TEXTURES
-} from '@packages/webgl/static-variables';
+} from '@app-game/webgl/static-variables';
 
 export class Shader {
   gl: WebGL2RenderingContext;

@@ -1,9 +1,9 @@
 import { FMat4 } from '@app-game/math/m4';
 import { resizeCanvasToDisplaySize } from '@app-game/twgl';
 import { identity, ortho, rotateZ, rotationZ, setTranslation } from '@app-game/twgl/m4';
-import { compileShader } from '@packages/webgl/compileShader';
-import { linkProgram } from '@packages/webgl/linkProgram';
-import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_SHADER_TYPE } from '@packages/webgl/static-variables';
+import { compileShader } from '@app-game/webgl/compileShader';
+import { linkProgram } from '@app-game/webgl/linkProgram';
+import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_SHADER_TYPE } from '@app-game/webgl/static-variables';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect, onCleanup } from 'solid-js';
 import fragmentSrc from './instanced-drawing.frag?raw';

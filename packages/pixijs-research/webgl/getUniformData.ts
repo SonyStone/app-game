@@ -1,5 +1,5 @@
-import { defaultValue } from '@packages/webgl/defaultValue';
-import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@packages/webgl/static-variables';
+import { defaultValue } from '@app-game/webgl/defaultValue';
+import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@app-game/webgl/static-variables';
 import { GL_TO_GLSL_TYPES } from './mapType';
 import { getUniformsSetter } from './uniformsSetters';
 

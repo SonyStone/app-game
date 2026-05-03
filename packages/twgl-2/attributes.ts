@@ -1,6 +1,6 @@
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
-import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
-import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
+import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
+import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
 import {
   getGLTypeForTypedArray,
   getGLTypeForTypedArrayType,

@@ -1,4 +1,4 @@
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
 
 export const GL_TO_GLSL_TYPES: { [key: string]: string } = {
   [GL_DATA_TYPE.FLOAT]: 'float',

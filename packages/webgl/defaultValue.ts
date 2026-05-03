@@ -1,4 +1,4 @@
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
+import { GL_DATA_TYPE } from './static-variables';
 
 /**
  * @method defaultValue

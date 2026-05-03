@@ -1,4 +1,4 @@
-import { GL_CAPABILITIES, GL_DRAW_ARRAYS_MODE, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
+import { GL_CAPABILITIES, GL_DRAW_ARRAYS_MODE, GL_FUNC_SEPARATE } from '@app-game/webgl/static-variables';
 import { createPointerData } from '@utils/createPointerData';
 import { createEffect } from 'solid-js';
 import { postQuadNDC } from './quads-2';
@@ -18,7 +18,7 @@ import postShaderVertSrc from './post-shader.vert?raw';
 
 import { Mat4 } from '@app-game/math/m4';
 import { Vec2 } from '@app-game/math/v2';
-import { GL_TEXTURES, GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
+import { GL_TEXTURES, GL_TEXTURE_UNIT } from '@app-game/webgl/static-variables/textures';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { BrushMesh, DrawShader } from './draw-shader';
 

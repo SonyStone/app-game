@@ -1,5 +1,5 @@
-import { GL_BUFFER_TYPE, GL_BUFFER_USAGE } from '@packages/webgl/static-variables';
-import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
+import { GL_BUFFER_TYPE, GL_BUFFER_USAGE } from '@app-game/webgl/static-variables';
+import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
 import { ArraySpec, Arrays, AttribInfo, BufferInfo, FullArraySpec } from '.';
 import * as helper from './helper';
 import * as typedArrays from './typedarrays';

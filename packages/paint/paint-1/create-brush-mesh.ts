@@ -1,4 +1,4 @@
-import { GL_BUFFER_TYPE, GL_DRAW_ARRAYS_MODE } from '@packages/webgl/static-variables';
+import { GL_BUFFER_TYPE, GL_DRAW_ARRAYS_MODE } from '@app-game/webgl/static-variables';
 import { fromTypeArray } from '../fungi/Buffer';
 import { createVAO } from '../fungi/vao';
 

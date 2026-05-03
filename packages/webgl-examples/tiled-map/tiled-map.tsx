@@ -1,6 +1,6 @@
 import * as m3 from '@app-game/math/m3';
 import { toRadian } from '@packages/ogl/extras/path/utils';
-import { createProgram } from '@packages/webgl/createProgram';
+import { createProgram } from '@app-game/webgl/createProgram';
 import { createWebGL2Context } from '@packages/webgl/webgl-objects/context';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createWindowSize } from '@solid-primitives/resize-observer';

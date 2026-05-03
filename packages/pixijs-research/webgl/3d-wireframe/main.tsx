@@ -1,7 +1,7 @@
 import { FVec3, Vec3Tuple, m4 } from '@app-game/math';
 import { DEG_TO_RAD } from '@app-game/math/constants';
 import { Spherical, setFromSpherical } from '@app-game/math/spherical';
-import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@packages/webgl/static-variables';
+import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@app-game/webgl/static-variables';
 import { Accessor, Setter, createEffect, onMount } from 'solid-js';
 
 import createRAF from '@solid-primitives/raf';

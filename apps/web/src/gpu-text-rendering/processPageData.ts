@@ -1,4 +1,4 @@
-import { GL_BUFFER_TYPE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
+import { GL_BUFFER_TYPE, GL_STATIC_VARIABLES } from '@app-game/webgl/static-variables';
 
 export function processPageData(gl: WebGLRenderingContext, canvas: HTMLCanvasElement, pageData: any) {
   console.log('Loaded ' + pageData.length + ' page(s)');

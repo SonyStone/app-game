@@ -1,4 +1,4 @@
-import { GL_SHADER_TYPE } from '@packages/webgl/static-variables';
+import { GL_SHADER_TYPE } from '@app-game/webgl/static-variables';
 import { ProgramInfo } from 'twgl.js';
 import { ErrorCallback, ProgramOptions } from '.';
 import * as helper from './helper';

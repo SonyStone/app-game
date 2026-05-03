@@ -6,7 +6,7 @@ import { Show, createEffect, createMemo, createResource, createSignal } from 'so
 
 import { RenderTargetOptions } from '@packages/ogl/core/render-target';
 import { Vec3Tuple } from '@packages/ogl/math/vec-3';
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
 import { BlendModes, ColorBlendModes } from './blend-modes';
 import { createBlendRenderTarget } from './blend/blend-render-target';
 import { createBrushInstancingRenderTarget } from './brush-instancing/brush-instancing';

@@ -22,6 +22,7 @@
     ,"@app-game/typegpu-examples": "workspace:*"
     ,"@app-game/ui-components-examples": "workspace:*"
     ,"@app-game/wasm-rust-pages": "workspace:*"
+    ,"@app-game/webgl": "workspace:*"
     ,"@app-game/webgl-examples": "workspace:*"
     ,"@app-game/webgpu-examples": "workspace:*"
   },

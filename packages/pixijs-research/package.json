@@ -4,7 +4,8 @@
   "private": true,
   "dependencies": {
     "@app-game/math": "workspace:*",
-    "@app-game/three-examples": "workspace:*"
+    "@app-game/three-examples": "workspace:*",
+    "@app-game/webgl": "workspace:*"
   },
   "exports": {
     "./MyPixijs": "./MyPixijs.tsx",

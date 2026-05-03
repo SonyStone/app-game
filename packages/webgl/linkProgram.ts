@@ -1,4 +1,4 @@
-import { GL_PROGRAM_PARAMETER } from '@packages/webgl/static-variables';
+import { GL_PROGRAM_PARAMETER } from './static-variables';
 
 export function linkProgram(
   gl: WebGLRenderingContextBase,

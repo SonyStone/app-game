@@ -1,4 +1,4 @@
-import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@packages/webgl/static-variables';
+import { GL_DATA_TYPE, GL_PROGRAM_PARAMETER } from '@app-game/webgl/static-variables';
 
 import { mapSize } from './mapSize';
 import { GL_TO_GLSL_TYPES } from './mapType';

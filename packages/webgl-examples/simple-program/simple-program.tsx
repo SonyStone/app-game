@@ -1,4 +1,4 @@
-import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
+import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
 import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
 import { AttributesParams, createProgram } from '@packages/webgl/webgl-objects/program';
 import fragmentShaderSource from './fragment-shader.frag?raw';

@@ -1,5 +1,5 @@
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
-import { GL_TEXTURE_TARGET, GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
+import { GL_TEXTURE_TARGET, GL_TEXTURE_UNIT } from '@app-game/webgl/static-variables/textures';
 
 // prettier-ignore
 export const typeMap = {

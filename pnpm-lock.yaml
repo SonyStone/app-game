@@ -423,6 +423,9 @@ importers:
       '@app-game/wasm-rust-pages':
         specifier: workspace:*
         version: link:../../packages/wasm-rust-pages
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../../packages/webgl
       '@app-game/webgl-examples':
         specifier: workspace:*
         version: link:../../packages/webgl-examples
@@ -574,6 +577,9 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../webgl
 
   packages/ogl-examples:
     dependencies:
@@ -586,6 +592,9 @@ importers:
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../webgl
 
   packages/paint:
     dependencies:
@@ -601,6 +610,9 @@ importers:
       '@app-game/utils':
         specifier: workspace:*
         version: link:../utils
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../webgl
 
   packages/penner-easing-equations: {}
 
@@ -640,6 +652,9 @@ importers:
       '@app-game/three-examples':
         specifier: workspace:*
         version: link:../three-examples
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../webgl
 
   packages/rollup-plugin-svg-font: {}
 
@@ -702,8 +717,15 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../webgl
 
-  packages/twgl-2: {}
+  packages/twgl-2:
+    dependencies:
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../webgl
 
   packages/twgl-examples:
     dependencies:
@@ -728,6 +750,9 @@ importers:
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../webgl
 
   packages/typegpu-examples:
     dependencies:
@@ -792,8 +817,15 @@ importers:
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../webgl
 
-  packages/webgl-state-diagram: {}
+  packages/webgl-state-diagram:
+    dependencies:
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../webgl
 
   packages/webgpu-examples:
     dependencies:
@@ -803,6 +835,9 @@ importers:
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
+      '@app-game/webgl':
+        specifier: workspace:*
+        version: link:../webgl
 
 packages:
 

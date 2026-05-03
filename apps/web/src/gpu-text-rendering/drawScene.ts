@@ -1,5 +1,5 @@
-import { GL_BUFFER_TYPE, GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
-import { GL_TEXTURE_TARGET, GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
+import { GL_BUFFER_TYPE, GL_CLEAR_MASK, GL_STATIC_VARIABLES } from '@app-game/webgl/static-variables';
+import { GL_TEXTURE_TARGET, GL_TEXTURE_UNIT } from '@app-game/webgl/static-variables/textures';
 
 import { ExtWebGLProgram } from './createProgram';
 import { getImageTexture } from './getImageTexture';

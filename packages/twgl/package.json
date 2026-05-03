@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
-    "@app-game/math": "workspace:*"
+    "@app-game/math": "workspace:*",
+    "@app-game/webgl": "workspace:*"
   },
   "exports": {
     ".": "./index.ts",

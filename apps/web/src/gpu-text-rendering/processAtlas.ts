@@ -1,4 +1,4 @@
-import { GL_STATIC_VARIABLES, GL_TEXTURES } from '@packages/webgl/static-variables';
+import { GL_STATIC_VARIABLES, GL_TEXTURES } from '@app-game/webgl/static-variables';
 
 import { UnpackedBMP } from './unpackBmp';
 

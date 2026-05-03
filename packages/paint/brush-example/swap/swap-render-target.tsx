@@ -3,7 +3,7 @@ import { Mesh, OGLRenderingContext, Program, RenderTarget, SwapBuffering, Triang
 import { RenderTargetOptions } from '@packages/ogl/core/render-target';
 import { createTimer } from '@app-game/utils/timeout';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
 import { BlendModes } from '../blend-modes';
 import { curve } from '../utils/curve';
 import { loadTextureAsync } from '../utils/load-texture';

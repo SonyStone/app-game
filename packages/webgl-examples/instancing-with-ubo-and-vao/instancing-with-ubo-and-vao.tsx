@@ -1,5 +1,5 @@
 import * as m4 from '@app-game/math/m4';
-import { createProgram } from '@packages/webgl/createProgram';
+import { createProgram } from '@app-game/webgl/createProgram';
 import { createWebGL2Context } from '@packages/webgl/webgl-objects/context';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';

@@ -1,7 +1,7 @@
 import { DEG_TO_RAD } from '@app-game/math/constants';
 import * as m4 from '@app-game/math/m4';
-import { compileShader } from '@packages/webgl/compileShader';
-import { linkProgram } from '@packages/webgl/linkProgram';
+import { compileShader } from '@app-game/webgl/compileShader';
+import { linkProgram } from '@app-game/webgl/linkProgram';
 import {
   GL_BUFFER_TYPE,
   GL_CLEAR_MASK,
@@ -9,7 +9,7 @@ import {
   GL_SHADER_TYPE,
   GL_STATIC_VARIABLES,
   GL_TEXTURES
-} from '@packages/webgl/static-variables';
+} from '@app-game/webgl/static-variables';
 import { createEffect, onCleanup } from 'solid-js';
 
 import { getAttributeData } from '@app-game/pixijs-research/webgl/getAttributeData';
@@ -21,7 +21,7 @@ import {
   GL_TEXTURE_MIN_FILTER,
   GL_TEXTURE_PARAMETER_NAME,
   GL_TEXTURE_UNIT
-} from '@packages/webgl/static-variables/textures';
+} from '@app-game/webgl/static-variables/textures';
 import fragmentSrc from './frag_shader.frag?raw';
 import vertexSrc from './vert_shader.vert?raw';
 
