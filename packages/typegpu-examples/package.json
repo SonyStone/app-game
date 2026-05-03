@@ -8,5 +8,8 @@
     "@app-game/solid-utils": "workspace:*",
     "@app-game/ui-components": "workspace:*"
   },
+  "exports": {
+    "./routes": "./routes.tsx"
+  },
   "type": "module"
 }

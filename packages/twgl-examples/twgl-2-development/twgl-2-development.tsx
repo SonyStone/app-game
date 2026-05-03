@@ -1,5 +1,5 @@
-import { createBufferInfoFromArrays } from '@packages/twgl-2/attributes';
-import { createProgramInfo } from '@packages/twgl-2/programs/programs';
+import { createBufferInfoFromArrays } from '@app-game/twgl-2/attributes';
+import { createProgramInfo } from '@app-game/twgl-2/programs/programs';
 import { createWebGL2Context } from '@packages/webgl/webgl-objects/context';
 import { onMount } from 'solid-js';
 import fragmentShaderSource from './shader.frag?raw';

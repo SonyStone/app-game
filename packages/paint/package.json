@@ -8,5 +8,8 @@
     "@app-game/ui-components": "workspace:*",
     "@app-game/utils": "workspace:*"
   },
+  "exports": {
+    "./routes": "./routes.tsx"
+  },
   "type": "module"
 }

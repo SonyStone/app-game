@@ -12,10 +12,10 @@ import {
 } from '@packages/webgl/static-variables';
 import { createEffect, onCleanup } from 'solid-js';
 
-import { getAttributeData } from '@packages/pixijs-research/webgl/getAttributeData';
-import { getUniformData } from '@packages/pixijs-research/webgl/getUniformData';
+import { getAttributeData } from '@app-game/pixijs-research/webgl/getAttributeData';
+import { getUniformData } from '@app-game/pixijs-research/webgl/getUniformData';
 import { useCamera } from '@app-game/three-examples';
-import { createProgramInfo } from '@packages/twgl/programs';
+import { createProgramInfo } from '@app-game/twgl/programs';
 import {
   GL_TEXTURE_MAG_FILTER,
   GL_TEXTURE_MIN_FILTER,

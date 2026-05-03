@@ -372,12 +372,36 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../../packages/app-router
+      '@app-game/bookmarks-explorer':
+        specifier: workspace:*
+        version: link:../../packages/bookmarks-explorer
+      '@app-game/ecsy-pages':
+        specifier: workspace:*
+        version: link:../../packages/ecsy-pages
+      '@app-game/film-annotation-player':
+        specifier: workspace:*
+        version: link:../../packages/film-annotation-player
       '@app-game/gsap-examples':
         specifier: workspace:*
         version: link:../../packages/gsap-examples
       '@app-game/litegraph-examples':
         specifier: workspace:*
         version: link:../../packages/litegraph-examples
+      '@app-game/math-examples':
+        specifier: workspace:*
+        version: link:../../packages/math-examples
+      '@app-game/ogl-examples':
+        specifier: workspace:*
+        version: link:../../packages/ogl-examples
+      '@app-game/paint':
+        specifier: workspace:*
+        version: link:../../packages/paint
+      '@app-game/phaser-examples':
+        specifier: workspace:*
+        version: link:../../packages/phaser-examples
+      '@app-game/pixijs-examples':
+        specifier: workspace:*
+        version: link:../../packages/pixijs-examples
       '@app-game/pixijs-research':
         specifier: workspace:*
         version: link:../../packages/pixijs-research
@@ -387,6 +411,24 @@ importers:
       '@app-game/three-examples':
         specifier: workspace:*
         version: link:../../packages/three-examples
+      '@app-game/twgl-examples':
+        specifier: workspace:*
+        version: link:../../packages/twgl-examples
+      '@app-game/typegpu-examples':
+        specifier: workspace:*
+        version: link:../../packages/typegpu-examples
+      '@app-game/ui-components-examples':
+        specifier: workspace:*
+        version: link:../../packages/ui-components-examples
+      '@app-game/wasm-rust-pages':
+        specifier: workspace:*
+        version: link:../../packages/wasm-rust-pages
+      '@app-game/webgl-examples':
+        specifier: workspace:*
+        version: link:../../packages/webgl-examples
+      '@app-game/webgpu-examples':
+        specifier: workspace:*
+        version: link:../../packages/webgpu-examples
 
   packages/app-router:
     dependencies:
@@ -478,7 +520,11 @@ importers:
         specifier: workspace:*
         version: link:../math
 
-  packages/hammer-examples: {}
+  packages/hammer-examples:
+    dependencies:
+      '@app-game/pixijs-research':
+        specifier: workspace:*
+        version: link:../pixijs-research
 
   packages/ldtk-ts: {}
 
@@ -507,6 +553,9 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../app-router
+      '@app-game/debug-layer':
+        specifier: workspace:*
+        version: link:../debug-layer
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
@@ -664,9 +713,18 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/pixijs-research':
+        specifier: workspace:*
+        version: link:../pixijs-research
       '@app-game/three-examples':
         specifier: workspace:*
         version: link:../three-examples
+      '@app-game/twgl':
+        specifier: workspace:*
+        version: link:../twgl
+      '@app-game/twgl-2':
+        specifier: workspace:*
+        version: link:../twgl-2
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
@@ -728,6 +786,9 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/twgl':
+        specifier: workspace:*
+        version: link:../twgl
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components

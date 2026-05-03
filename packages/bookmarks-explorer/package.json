@@ -6,5 +6,8 @@
     "@app-game/app-router": "workspace:*",
     "@app-game/solid-utils": "workspace:*"
   },
+  "exports": {
+    "./routes": "./routes.tsx"
+  },
   "type": "module"
 }

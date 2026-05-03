@@ -1,4 +1,4 @@
-import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
+import { useDebugLayer } from '@app-game/debug-layer/use-debug-layer';
 import { Mat2x3 } from '@app-game/math/m2x3';
 import { createStruct } from '@app-game/math/utils/create-struct';
 import { Vec2 } from '@app-game/math/v2';

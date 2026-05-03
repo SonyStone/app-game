@@ -7,7 +7,11 @@
     "@app-game/three-examples": "workspace:*"
   },
   "exports": {
+    "./MyPixijs": "./MyPixijs.tsx",
+    "./math/MathUtils": "./math/MathUtils.ts",
     "./webgl/3d-wireframe/3dWireframe": "./webgl/3d-wireframe/3dWireframe.tsx"
+    ,"./webgl/getAttributeData": "./webgl/getAttributeData.ts"
+    ,"./webgl/getUniformData": "./webgl/getUniformData.ts"
   },
   "type": "module"
 }

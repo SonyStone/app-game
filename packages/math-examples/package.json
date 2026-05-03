@@ -4,10 +4,14 @@
   "private": true,
   "dependencies": {
     "@app-game/app-router": "workspace:*",
+    "@app-game/debug-layer": "workspace:*",
     "@app-game/math": "workspace:*",
     "@app-game/solid-utils": "workspace:*",
     "@app-game/ui-components": "workspace:*",
     "@app-game/utils": "workspace:*"
+  },
+  "exports": {
+    "./routes": "./routes.tsx"
   },
   "type": "module"
 }

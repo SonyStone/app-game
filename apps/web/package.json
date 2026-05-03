@@ -5,11 +5,25 @@
   "type": "module",
   "dependencies": {
     "@app-game/app-router": "workspace:*",
+    "@app-game/bookmarks-explorer": "workspace:*",
+    "@app-game/ecsy-pages": "workspace:*",
+    "@app-game/film-annotation-player": "workspace:*",
     "@app-game/gsap-examples": "workspace:*",
     "@app-game/litegraph-examples": "workspace:*",
+    "@app-game/math-examples": "workspace:*",
+    "@app-game/ogl-examples": "workspace:*",
+    "@app-game/paint": "workspace:*",
+    "@app-game/phaser-examples": "workspace:*",
     "@app-game/pixijs-research": "workspace:*",
+    "@app-game/pixijs-examples": "workspace:*",
     "@app-game/solid-utils": "workspace:*",
+    "@app-game/twgl-examples": "workspace:*",
     "@app-game/three-examples": "workspace:*"
+    ,"@app-game/typegpu-examples": "workspace:*"
+    ,"@app-game/ui-components-examples": "workspace:*"
+    ,"@app-game/wasm-rust-pages": "workspace:*"
+    ,"@app-game/webgl-examples": "workspace:*"
+    ,"@app-game/webgpu-examples": "workspace:*"
   },
   "scripts": {
     "dev": "pnpm --dir ../.. exec vite --config vite.config.ts",

@@ -1,4 +1,4 @@
-import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
+import { useDebugLayer } from '@app-game/debug-layer/use-debug-layer';
 import { getAngleBetweenPointPairs, Mat2x3 } from '@app-game/math/m2x3';
 import { rotateAroundPoint, scaleAroundPoint } from '@app-game/math/m2x3-functions';
 import { Radians } from '@app-game/math/types';

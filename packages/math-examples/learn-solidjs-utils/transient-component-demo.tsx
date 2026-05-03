@@ -1,4 +1,4 @@
-import { fadeOut } from '@packages/debug-layer/fade-out';
+import { fadeOut } from '@app-game/debug-layer/fade-out';
 import { createStruct } from '@app-game/math/utils/create-struct';
 import { Vec2 } from '@app-game/math/v2';
 import { createEventListener } from '@solid-primitives/event-listener';

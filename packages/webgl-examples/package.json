@@ -5,7 +5,11 @@
   "dependencies": {
     "@app-game/app-router": "workspace:*",
     "@app-game/math": "workspace:*",
+    "@app-game/twgl": "workspace:*",
     "@app-game/ui-components": "workspace:*"
+  },
+  "exports": {
+    "./routes": "./routes.tsx"
   },
   "type": "module"
 }

@@ -1,5 +1,5 @@
-import { GridSVG } from '@packages/debug-layer/grid-svg';
-import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
+import { GridSVG } from '@app-game/debug-layer/grid-svg';
+import { useDebugLayer } from '@app-game/debug-layer/use-debug-layer';
 import { Mat2x3 } from '@app-game/math/m2x3';
 import { rotateAroundPoint, scaleAroundPoint } from '@app-game/math/m2x3-functions';
 import { Transform } from '@app-game/math/transform';

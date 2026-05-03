@@ -1,5 +1,5 @@
-import { GridSVG } from '@packages/debug-layer/grid-svg';
-import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
+import { GridSVG } from '@app-game/debug-layer/grid-svg';
+import { useDebugLayer } from '@app-game/debug-layer/use-debug-layer';
 import { createStruct } from '@app-game/math/utils/create-struct';
 import { Vec2 } from '@app-game/math/v2';
 import { createMemo, createSignal, For } from 'solid-js';

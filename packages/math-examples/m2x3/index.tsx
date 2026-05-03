@@ -1,4 +1,4 @@
-import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
+import { useDebugLayer } from '@app-game/debug-layer/use-debug-layer';
 import { createSignal } from 'solid-js';
 import { DemoAngleVisualization } from './demo-angle-visualization';
 import { TestMatrixWithTransform } from './demo-matrix-with-transform';

@@ -1,6 +1,6 @@
 import { FMat4 } from '@app-game/math/m4';
-import { resizeCanvasToDisplaySize } from '@packages/twgl';
-import { identity, ortho, rotateZ, rotationZ, setTranslation } from '@packages/twgl/m4';
+import { resizeCanvasToDisplaySize } from '@app-game/twgl';
+import { identity, ortho, rotateZ, rotationZ, setTranslation } from '@app-game/twgl/m4';
 import { compileShader } from '@packages/webgl/compileShader';
 import { linkProgram } from '@packages/webgl/linkProgram';
 import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_SHADER_TYPE } from '@packages/webgl/static-variables';

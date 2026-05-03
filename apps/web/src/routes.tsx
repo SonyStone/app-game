@@ -1,20 +1,20 @@
 import { Thumbnail, type Routes } from '@app-game/app-router';
 import { threeRoutes } from '@app-game/three-examples';
-import { bookmarksExplorerRoutes } from '@packages/bookmarks-explorer/routes';
-import { escyRoutes } from '@packages/ecsy-pages/routes';
-import { filmAnnotationPlayerRoutes } from '@packages/film-annotation-player/routes';
+import { bookmarksExplorerRoutes } from '@app-game/bookmarks-explorer/routes';
+import { escyRoutes } from '@app-game/ecsy-pages/routes';
+import { filmAnnotationPlayerRoutes } from '@app-game/film-annotation-player/routes';
 import { gsapExamplesRoutes } from '@app-game/gsap-examples/routes';
-import { mathRoutes } from '@packages/math-examples/routes';
-import { oglRoutes } from '@packages/ogl-examples/routes';
-import { paintRoutes } from '@packages/paint/routes';
-import { phaserRoutes } from '@packages/phaser-examples/routes';
-import { pixijsRoutes } from '@packages/pixijs-examples/routes';
-import { twglRoutes } from '@packages/twgl-examples/routes';
-import { typegpuRoutes } from '@packages/typegpu-examples/routes';
-import { uiComponentsRoutes } from '@packages/ui-components-examples/routes';
-import { wasmRustRoutes } from '@packages/wasm-rust-pages/routes';
-import { webglExamplesRoute } from '@packages/webgl-examples/routes';
-import { webgpuRoutes } from '@packages/webgpu-examples/routes';
+import { mathRoutes } from '@app-game/math-examples/routes';
+import { oglRoutes } from '@app-game/ogl-examples/routes';
+import { paintRoutes } from '@app-game/paint/routes';
+import { phaserRoutes } from '@app-game/phaser-examples/routes';
+import { pixijsRoutes } from '@app-game/pixijs-examples/routes';
+import { twglRoutes } from '@app-game/twgl-examples/routes';
+import { typegpuRoutes } from '@app-game/typegpu-examples/routes';
+import { uiComponentsRoutes } from '@app-game/ui-components-examples/routes';
+import { wasmRustRoutes } from '@app-game/wasm-rust-pages/routes';
+import { webglExamplesRoute } from '@app-game/webgl-examples/routes';
+import { webgpuRoutes } from '@app-game/webgpu-examples/routes';
 import { lazy } from 'solid-js';
 import wireframeThumbnail from './thumbnail/wireframe-thumbnail.png?url';
 
@@ -72,7 +72,7 @@ export const routes: Routes[] = [
   // {
   //   path: '/my-pixijs',
   //   name: 'My Pixijs',
-  //   component: lazy(() => import('@packages/pixijs-research/MyPixijs'))
+  //   component: lazy(() => import('@app-game/pixijs-research/MyPixijs'))
   // },
   {
     path: '/excalibur-examples',
