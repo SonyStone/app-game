@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { OrthographicCamera, PerspectiveCamera } from 'three';
 
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { OrbitControls } from './controls/OrbitControls';
 import { copy } from './utils/object3d';
 

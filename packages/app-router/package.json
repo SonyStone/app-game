@@ -2,5 +2,12 @@
   "name": "@app-game/app-router",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/ui-components": "workspace:*",
+    "@app-game/utils": "workspace:*"
+  },
+  "exports": {
+    ".": "./index.ts"
+  },
   "type": "module"
 }

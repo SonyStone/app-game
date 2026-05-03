@@ -3,7 +3,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger
-} from '@packages/components/ui/dropdown-menu';
+} from '@app-game/components/ui/dropdown-menu';
 import { batch, ComponentProps, For, JSXElement, Match, Show, Switch } from 'solid-js';
 import { produce, unwrap } from 'solid-js/store';
 import { PathInput } from '../path-input';

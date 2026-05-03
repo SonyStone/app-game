@@ -1,4 +1,4 @@
-import { System } from '@packages/ecsy';
+import { System } from '@app-game/ecsy';
 
 import {
   Collidable,

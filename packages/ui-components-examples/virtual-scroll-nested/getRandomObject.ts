@@ -1,4 +1,4 @@
-import { randomIntInRange } from '@packages/utils/randomIntInrange';
+import { randomIntInRange } from '@app-game/utils/randomIntInrange';
 
 export function getRandomObject() {
   const obj: Record<string, string> = {};

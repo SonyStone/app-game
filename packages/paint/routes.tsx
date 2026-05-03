@@ -1,7 +1,6 @@
-import { Thumbnail } from '@packages/app-router/components/thumbnail';
-import { Routes } from '@packages/app-router/routes.interface';
+import { Thumbnail, type Routes } from '@app-game/app-router';
 import multitouchThumbnail from '@packages/hammer-examples/thumbnail.png';
-import { Ripple } from '@packages/ui-components/ripple/Ripple';
+import { Ripple } from '@app-game/ui-components/ripple';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 import texturesViewThumbnail from './thumbnail/chrome_2024-06-13_07-04-13.png?url';

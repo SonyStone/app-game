@@ -2,5 +2,11 @@
   "name": "@app-game/ui-components-examples",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/solid-utils": "workspace:*",
+    "@app-game/ui-components": "workspace:*",
+    "@app-game/utils": "workspace:*"
+  },
   "type": "module"
 }

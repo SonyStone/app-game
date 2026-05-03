@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { DIRECTION, INPUT_CANCEL, INPUT_END, INPUT_MOVE, INPUT_START } from './input-consts';
 import { createComputeDelta } from './input/compute-delta';
 import getAngle from './input/get-angle';

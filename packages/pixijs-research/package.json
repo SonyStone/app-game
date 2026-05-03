@@ -2,5 +2,12 @@
   "name": "@app-game/pixijs-research",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/math": "workspace:*",
+    "@app-game/three-examples": "workspace:*"
+  },
+  "exports": {
+    "./webgl/3d-wireframe/3dWireframe": "./webgl/3d-wireframe/3dWireframe.tsx"
+  },
   "type": "module"
 }

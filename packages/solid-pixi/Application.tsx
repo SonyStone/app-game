@@ -1,4 +1,4 @@
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { type ApplicationOptions, DOMAdapter, Application as PixiApplication, WebWorkerAdapter } from 'pixi.js';
 import { type JSXElement, Show, createResource, onCleanup, splitProps } from 'solid-js';
 import { CommonPropKeys, type CommonProps } from './interfaces';

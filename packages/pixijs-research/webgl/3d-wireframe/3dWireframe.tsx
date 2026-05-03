@@ -1,11 +1,11 @@
-import * as m4 from '@packages/math/m4';
-import { create, setFromSpherical, setFromVec3 } from '@packages/math/spherical';
-import { clamp } from '@packages/math/utils/clamp';
+import * as m4 from '@app-game/math/m4';
+import { create, setFromSpherical, setFromVec3 } from '@app-game/math/spherical';
+import { clamp } from '@app-game/math/utils/clamp';
 import { For, createEffect, createMemo, createSignal } from 'solid-js';
 
 import { round } from '@packages/gsap/core/utils';
-import { FVec3 } from '@packages/math';
-import { useCamera } from '@packages/three-examples/Camera.provider';
+import { FVec3 } from '@app-game/math';
+import { useCamera } from '@app-game/three-examples';
 import s from './3dWireframe.module.scss';
 import { Main } from './main';
 

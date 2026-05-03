@@ -1,4 +1,4 @@
-import { Brand } from '@packages/utils/Brand.type';
+import { Brand } from '@app-game/utils/Brand.type';
 import { access, MaybeAccessor } from '@solid-primitives/utils';
 import {
   type AssetInitOptions,

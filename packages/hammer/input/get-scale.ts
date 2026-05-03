@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 /**
  * @private
  * calculate the scale factor between two pointersets

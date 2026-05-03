@@ -2,5 +2,11 @@
   "name": "@app-game/paint",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/math": "workspace:*",
+    "@app-game/ui-components": "workspace:*",
+    "@app-game/utils": "workspace:*"
+  },
   "type": "module"
 }

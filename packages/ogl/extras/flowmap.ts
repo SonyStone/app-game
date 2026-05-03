@@ -2,7 +2,7 @@ import { Mesh } from '../core/mesh';
 import { Program } from '../core/program';
 import { Triangle } from './triangle';
 
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { GL_DATA_TYPE } from '@packages/webgl/static-variables/data-type';
 import { OGLRenderingContext } from '../core/renderer';
 import { Texture } from '../core/texture';

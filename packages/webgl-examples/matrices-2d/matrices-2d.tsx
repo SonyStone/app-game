@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
 import { createBuffer } from '@packages/webgl/webgl-objects/buffer';
 import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';

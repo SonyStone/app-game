@@ -1,4 +1,4 @@
-import { Ripple } from '@packages/ui-components/ripple/Ripple';
+import { Ripple } from '@app-game/ui-components/ripple';
 import { A } from '@solidjs/router';
 import { Show } from 'solid-js';
 

@@ -1,4 +1,4 @@
-import { Entity, Not, Read, System, SystemData } from '@packages/ecsy';
+import { Entity, Not, Read, System, SystemData } from '@app-game/ecsy';
 
 import {
   Collider,

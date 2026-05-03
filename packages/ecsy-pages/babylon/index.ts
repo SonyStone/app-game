@@ -1,6 +1,6 @@
 import './index.scss';
 
-import { World } from '@packages/ecsy';
+import { World } from '@app-game/ecsy';
 
 import {
   Collider,

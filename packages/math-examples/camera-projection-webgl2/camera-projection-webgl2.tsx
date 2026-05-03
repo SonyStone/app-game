@@ -1,5 +1,5 @@
 import { Camera, Orbit, Renderer, Transform, Vec3 } from '@packages/ogl';
-import { Ripple } from '@packages/ui-components/ripple/Ripple';
+import { Ripple } from '@app-game/ui-components/ripple';
 import { createEmitter } from '@solid-primitives/event-bus';
 import createRAF from '@solid-primitives/raf';
 import { onMount } from 'solid-js';

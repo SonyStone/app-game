@@ -2,5 +2,13 @@
   "name": "@app-game/three-examples",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/solid-utils": "workspace:*"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./webxr-vr-teleport/webxr-vr-teleport": "./webxr-vr-teleport/webxr-vr-teleport.tsx"
+  },
   "type": "module"
 }

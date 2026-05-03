@@ -1,5 +1,5 @@
-import { Navigation } from '@packages/app-router/components/navigation';
-import { useCamera } from '@packages/three-examples/Camera.provider';
+import { Navigation } from '@app-game/app-router';
+import { useCamera } from '@app-game/three-examples';
 import { Title } from '@solidjs/meta';
 import { routes } from './routes';
 

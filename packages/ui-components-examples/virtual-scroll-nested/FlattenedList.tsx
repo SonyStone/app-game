@@ -1,4 +1,4 @@
-import { createVirtualList } from '@packages/ui-components/virtual-scroll/create-virtual-list';
+import { createVirtualList } from '@app-game/ui-components/virtual-scroll/create-virtual-list';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { NestedItem } from '.';
 import { getColorByIndex } from '../virtual-scroll/get-bg-color';

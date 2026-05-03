@@ -2,5 +2,30 @@
   "name": "@app-game/math",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/utils": "workspace:*"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./constants": "./constants.ts",
+    "./line": "./line.ts",
+    "./m3": "./m3.ts",
+    "./m4": "./m4.ts",
+    "./m4-builder": "./m4-builder.ts",
+    "./m2x3": "./m2x3.ts",
+    "./m2x3-functions": "./m2x3-functions.ts",
+    "./spherical": "./spherical.ts",
+    "./transform": "./transform.ts",
+    "./types": "./types.ts",
+    "./utils/create-struct": "./utils/create-struct.ts",
+    "./utils/typed-array": "./utils/typed-array.ts",
+    "./utils/trigonometry": "./utils/trigonometry.ts",
+    "./utils/clamp": "./utils/clamp.ts"
+    ,"./v1": "./v1.ts"
+    ,"./v3-builder": "./v3-builder.ts"
+    ,"./v2": "./v2.ts"
+    ,"./v2-functions": "./v2-functions.ts"
+    ,"./v4": "./v4.ts"
+  },
   "type": "module"
 }

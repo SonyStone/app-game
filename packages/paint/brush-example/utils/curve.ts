@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 
 export const curve2ControlPoints = (t: number, p1: number, p2: number): number => p1 * (1 - t) + p2 * t;
 

@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math/v2';
+import { Vec2 } from '@app-game/math/v2';
 import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@packages/ogl';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';

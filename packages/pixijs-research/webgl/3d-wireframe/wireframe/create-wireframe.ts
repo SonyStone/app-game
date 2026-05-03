@@ -1,4 +1,4 @@
-import * as m4 from '@packages/math/m4';
+import * as m4 from '@app-game/math/m4';
 import { GL_DATA_TYPE } from '@packages/webgl/static-variables/data-type';
 
 import { createShader } from '../Shader2';

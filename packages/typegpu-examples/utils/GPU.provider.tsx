@@ -1,4 +1,4 @@
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { JSX, mergeProps, Show } from 'solid-js';
 
 /**

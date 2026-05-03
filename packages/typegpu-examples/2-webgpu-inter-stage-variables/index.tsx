@@ -1,4 +1,4 @@
-import { Resizable, ResizableHandle, ResizablePanel } from '@packages/components/ui/resizable';
+import { Resizable, ResizableHandle, ResizablePanel } from '@app-game/components/ui/resizable';
 import { Meta, Title } from '@solidjs/meta';
 import { createEffect, createSignal, JSX } from 'solid-js';
 import tgpu from 'typegpu';

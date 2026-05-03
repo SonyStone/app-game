@@ -1,5 +1,5 @@
-import { DEG_TO_RAD } from '@packages/math/constants';
-import * as m4 from '@packages/math/m4';
+import { DEG_TO_RAD } from '@app-game/math/constants';
+import * as m4 from '@app-game/math/m4';
 import { compileShader } from '@packages/webgl/compileShader';
 import { linkProgram } from '@packages/webgl/linkProgram';
 import {
@@ -14,7 +14,7 @@ import { createEffect, onCleanup } from 'solid-js';
 
 import { getAttributeData } from '@packages/pixijs-research/webgl/getAttributeData';
 import { getUniformData } from '@packages/pixijs-research/webgl/getUniformData';
-import { useCamera } from '@packages/three-examples/Camera.provider';
+import { useCamera } from '@app-game/three-examples';
 import { createProgramInfo } from '@packages/twgl/programs';
 import {
   GL_TEXTURE_MAG_FILTER,

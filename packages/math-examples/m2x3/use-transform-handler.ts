@@ -1,10 +1,10 @@
 import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
-import { getAngleBetweenPointPairs, Mat2x3 } from '@packages/math/m2x3';
-import { rotateAroundPoint, scaleAroundPoint } from '@packages/math/m2x3-functions';
-import { Radians } from '@packages/math/types';
-import { createStruct } from '@packages/math/utils/create-struct';
-import { Vec1 } from '@packages/math/v1';
-import { Vec2 } from '@packages/math/v2';
+import { getAngleBetweenPointPairs, Mat2x3 } from '@app-game/math/m2x3';
+import { rotateAroundPoint, scaleAroundPoint } from '@app-game/math/m2x3-functions';
+import { Radians } from '@app-game/math/types';
+import { createStruct } from '@app-game/math/utils/create-struct';
+import { Vec1 } from '@app-game/math/v1';
+import { Vec2 } from '@app-game/math/v2';
 import { access, MaybeAccessor, noop } from '@solid-primitives/utils';
 import { usePointerDownHandler } from './use-pointer-down-handler';
 

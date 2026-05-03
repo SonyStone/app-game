@@ -2,5 +2,8 @@
   "name": "@app-game/piecs",
   "version": "0.0.0",
   "private": true,
+  "exports": {
+    ".": "./index.ts"
+  },
   "type": "module"
 }

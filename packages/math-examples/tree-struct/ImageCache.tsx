@@ -1,4 +1,4 @@
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { createMemo, JSX } from 'solid-js';
 
 const [ImageCacheProvider, useImageCache] = createContextProvider(() => {

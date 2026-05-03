@@ -1,4 +1,4 @@
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { JSX, onCleanup, splitProps } from 'solid-js';
 import { useGPU } from './GPU.provider';
 import { useGPUCanvasContext } from './GPUCanvasContext.provider';

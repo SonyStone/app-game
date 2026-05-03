@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { createSignal, onCleanup } from 'solid-js';
 
 export function createMouseRotate(element: HTMLElement) {

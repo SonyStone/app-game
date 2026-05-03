@@ -14,7 +14,7 @@ import {
   Vec3
 } from '@packages/ogl';
 import { TextureProgram } from '@packages/ogl/extras/texture-program';
-import { createTimer } from '@packages/utils/timeout';
+import { createTimer } from '@app-game/utils/timeout';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';

@@ -1,6 +1,6 @@
-import { Not, Read, System, SystemData, World } from '@packages/ecsy';
-import { components } from '@packages/ecsy/entity/entity';
-import { archetypes } from '@packages/ecsy/utils/query-key';
+import { Not, Read, System, SystemData, World } from '@app-game/ecsy';
+import { components } from '@app-game/ecsy/entity';
+import { archetypes } from '@app-game/ecsy/utils';
 
 // ----------------------
 // Components

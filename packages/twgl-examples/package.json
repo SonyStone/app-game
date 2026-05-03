@@ -2,5 +2,11 @@
   "name": "@app-game/twgl-examples",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/math": "workspace:*",
+    "@app-game/three-examples": "workspace:*",
+    "@app-game/ui-components": "workspace:*"
+  },
   "type": "module"
 }

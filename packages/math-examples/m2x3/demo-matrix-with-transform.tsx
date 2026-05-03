@@ -1,10 +1,10 @@
 import { GridSVG } from '@packages/debug-layer/grid-svg';
 import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
-import { Mat2x3 } from '@packages/math/m2x3';
-import { rotateAroundPoint, scaleAroundPoint } from '@packages/math/m2x3-functions';
-import { Transform } from '@packages/math/transform';
-import { Degrees } from '@packages/math/types';
-import { degToRad } from '@packages/math/utils/trigonometry';
+import { Mat2x3 } from '@app-game/math/m2x3';
+import { rotateAroundPoint, scaleAroundPoint } from '@app-game/math/m2x3-functions';
+import { Transform } from '@app-game/math/transform';
+import { Degrees } from '@app-game/math/types';
+import { degToRad } from '@app-game/math/utils/trigonometry';
 import { createSignal } from 'solid-js';
 
 export function TestMatrixWithTransform(props: { debugLayer?: ReturnType<typeof useDebugLayer> }) {

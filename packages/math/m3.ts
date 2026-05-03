@@ -54,17 +54,18 @@ function copy(out: Mat3Tuple, m: Readonly<Mat3Tuple>): void {
   out[M22] = m[M22];
 }
 
-function identity(out: Mat3Tuple): void {
-  out[M00] = 1;
-  out[M01] = 0;
-  out[M02] = 0;
-  out[M10] = 0;
-  out[M11] = 1;
-  out[M12] = 0;
-  out[M20] = 0;
-  out[M21] = 0;
-  out[M22] = 1;
-}
+export const identity = <T extends NumberArray>(out: T, offset = 0): T => {
+  out[M00 + offset] = 1;
+  out[M01 + offset] = 0;
+  out[M02 + offset] = 0;
+  out[M10 + offset] = 0;
+  out[M11 + offset] = 1;
+  out[M12 + offset] = 0;
+  out[M20 + offset] = 0;
+  out[M21 + offset] = 0;
+  out[M22 + offset] = 1;
+  return out;
+};
 
 // prettier-ignore
 function translate(out: Mat3Tuple, a: Mat3Tuple, v: NumberArray): Mat3Tuple {
@@ -88,6 +89,73 @@ function translate(out: Mat3Tuple, a: Mat3Tuple, v: NumberArray): Mat3Tuple {
   out[M22] = x * a02 + y * a12 + a22;
   return out;
 }
+
+export const setTranslation = <T extends NumberArray>(out: T, v: NumberArray, offset = 0): T => {
+  identity(out, offset);
+  out[M20 + offset] = v[0];
+  out[M21 + offset] = v[1];
+  return out;
+};
+
+export const scale = <T extends NumberArray>(m: Readonly<T>, v: Readonly<NumberArray>, out: T, offset = 0): T => {
+  const x = v[0];
+  const y = v[1];
+
+  out[M00 + offset] = x * m[M00 + offset];
+  out[M01 + offset] = x * m[M01 + offset];
+  out[M02 + offset] = x * m[M02 + offset];
+
+  out[M10 + offset] = y * m[M10 + offset];
+  out[M11 + offset] = y * m[M11 + offset];
+  out[M12 + offset] = y * m[M12 + offset];
+
+  out[M20 + offset] = m[M20 + offset];
+  out[M21 + offset] = m[M21 + offset];
+  out[M22 + offset] = m[M22 + offset];
+  return out;
+};
+
+export const camera2D = (
+  zoom: number,
+  rotation: number,
+  translationVec: NumberArray,
+  width: number,
+  height: number,
+  out: NumberArray
+): NumberArray => {
+  const transX = translationVec[0];
+  const transY = translationVec[1];
+
+  const a = 2 / width;
+  const b = 2 / height;
+  const tx = -1;
+  const ty = -1;
+
+  const invScale = 1 / zoom;
+  const cosR = Math.cos(rotation);
+  const sinR = Math.sin(rotation);
+
+  const m00 = a * cosR * invScale;
+  const m10 = b * -sinR * invScale;
+  const m01 = a * sinR * invScale;
+  const m11 = b * cosR * invScale;
+  const m02 = a * -transX + tx;
+  const m12 = b * -transY + ty;
+
+  out[0] = m00;
+  out[1] = m10;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = m01;
+  out[5] = m11;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = m02;
+  out[9] = m12;
+  out[10] = 1;
+  out[11] = 0;
+  return out;
+};
 
 export class Mat3<T extends NumberArray = NumberArray> {
   static ELEMENTS = 9;

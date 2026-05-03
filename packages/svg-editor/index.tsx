@@ -1,4 +1,4 @@
-import { Resizable, ResizableHandle, ResizablePanel } from '@packages/components/ui/resizable';
+import { Resizable, ResizableHandle, ResizablePanel } from '@app-game/components/ui/resizable';
 import { trackStore } from '@solid-primitives/deep';
 import { createUndoHistory } from '@solid-primitives/history';
 import { toObservable } from '@utils/toObservable';

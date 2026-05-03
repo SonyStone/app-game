@@ -680,6 +680,30 @@ export const rotateY = <T extends NumberArray>(m: T, angleInRadians: number) => 
   m[11] = c * m23 + s * m03;
 };
 
+export const rotationY = <T extends NumberArray>(angleInRadians: number, dst?: T): T => {
+  const out = dst ?? (new Float32Array(16) as T);
+  const c = Math.cos(angleInRadians);
+  const s = Math.sin(angleInRadians);
+
+  out[0] = c;
+  out[1] = 0;
+  out[2] = -s;
+  out[3] = 0;
+  out[4] = 0;
+  out[5] = 1;
+  out[6] = 0;
+  out[7] = 0;
+  out[8] = s;
+  out[9] = 0;
+  out[10] = c;
+  out[11] = 0;
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
+  return out;
+};
+
 /**
  * Rotates the given 4-by-4 matrix around the z-axis by the given
  * angle.

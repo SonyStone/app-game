@@ -1,8 +1,8 @@
 import { GridSVG } from '@packages/debug-layer/grid-svg';
-import { Mat2x3 } from '@packages/math/m2x3';
-import { Degrees } from '@packages/math/types';
-import { degToRad } from '@packages/math/utils/trigonometry';
-import { Vec2 } from '@packages/math/v2';
+import { Mat2x3 } from '@app-game/math/m2x3';
+import { Degrees } from '@app-game/math/types';
+import { degToRad } from '@app-game/math/utils/trigonometry';
+import { Vec2 } from '@app-game/math/v2';
 import { toObservable } from '@utils/toObservable';
 import { animationFrames, map, merge, of, Subject, switchScan } from 'rxjs';
 import { Accessor, createMemo, createSignal, from } from 'solid-js';

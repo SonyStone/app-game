@@ -1,7 +1,7 @@
 import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
-import { Mat2x3 } from '@packages/math/m2x3';
-import { createStruct } from '@packages/math/utils/create-struct';
-import { Vec2 } from '@packages/math/v2';
+import { Mat2x3 } from '@app-game/math/m2x3';
+import { createStruct } from '@app-game/math/utils/create-struct';
+import { Vec2 } from '@app-game/math/v2';
 import { access, MaybeAccessor, noop } from '@solid-primitives/utils';
 import { usePointerDownHandler } from './use-pointer-down-handler';
 

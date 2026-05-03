@@ -1,4 +1,4 @@
-import * as m4 from '@packages/math/m4';
+import * as m4 from '@app-game/math/m4';
 import { createWireframeIndex } from '@packages/paint/paint-1/create-brush-mesh';
 import { VertexAttribDivisor, VertexAttribPointer } from './vertex-attrib-pointer';
 

@@ -1,7 +1,7 @@
 import { GridSVG } from '@packages/debug-layer/grid-svg';
 import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
-import { createStruct } from '@packages/math/utils/create-struct';
-import { Vec2 } from '@packages/math/v2';
+import { createStruct } from '@app-game/math/utils/create-struct';
+import { Vec2 } from '@app-game/math/v2';
 import { createMemo, createSignal, For } from 'solid-js';
 import { SVGAngleVisualization } from './svg-angle-visualization';
 import { SVGEditPoint } from './svg-edit-point';

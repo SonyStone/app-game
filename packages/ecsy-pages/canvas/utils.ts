@@ -1,4 +1,4 @@
-import { Resettable } from '@packages/ecsy/resettable.interface';
+import { Resettable } from '@app-game/ecsy/resettable.interface';
 import { Circle, Position } from './components';
 
 export function random(a: number, b: number) {

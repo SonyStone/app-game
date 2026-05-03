@@ -2,5 +2,9 @@
   "name": "@app-game/svg-editor",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/components": "workspace:*",
+    "@app-game/utils": "workspace:*"
+  },
   "type": "module"
 }

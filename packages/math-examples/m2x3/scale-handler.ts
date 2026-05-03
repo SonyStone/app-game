@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math/v2';
+import { Vec2 } from '@app-game/math/v2';
 import { access, MaybeAccessor, noop } from '@solid-primitives/utils';
 import { usePointerDownHandler } from './use-pointer-down-handler';
 

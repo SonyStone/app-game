@@ -367,9 +367,35 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2
 
-  apps/web: {}
+  apps/web:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../../packages/app-router
+      '@app-game/gsap-examples':
+        specifier: workspace:*
+        version: link:../../packages/gsap-examples
+      '@app-game/litegraph-examples':
+        specifier: workspace:*
+        version: link:../../packages/litegraph-examples
+      '@app-game/pixijs-research':
+        specifier: workspace:*
+        version: link:../../packages/pixijs-research
+      '@app-game/solid-utils':
+        specifier: workspace:*
+        version: link:../../packages/solid-utils
+      '@app-game/three-examples':
+        specifier: workspace:*
+        version: link:../../packages/three-examples
 
-  packages/app-router: {}
+  packages/app-router:
+    dependencies:
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../utils
 
   packages/babylonjs-examples: {}
 
@@ -379,29 +405,78 @@ importers:
 
   packages/bitecs: {}
 
-  packages/bookmarks-explorer: {}
+  packages/bookmarks-explorer:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/solid-utils':
+        specifier: workspace:*
+        version: link:../solid-utils
 
   packages/chroma: {}
 
-  packages/components: {}
+  packages/components:
+    dependencies:
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../utils
 
-  packages/debug-layer: {}
+  packages/debug-layer:
+    dependencies:
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../utils
 
   packages/ecsy: {}
 
-  packages/ecsy-pages: {}
+  packages/ecsy-pages:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/ecsy':
+        specifier: workspace:*
+        version: link:../ecsy
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
   packages/excalibur-examples: {}
 
-  packages/film-annotation-player: {}
+  packages/film-annotation-player:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/solid-utils':
+        specifier: workspace:*
+        version: link:../solid-utils
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../utils
 
   packages/game-shaders-for-beginners: {}
 
   packages/gsap: {}
 
-  packages/gsap-examples: {}
+  packages/gsap-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
-  packages/hammer: {}
+  packages/hammer:
+    dependencies:
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
 
   packages/hammer-examples: {}
 
@@ -415,79 +490,258 @@ importers:
 
   packages/litegraph-examples: {}
 
-  packages/math: {}
+  packages/math:
+    dependencies:
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../utils
 
-  packages/math-2: {}
+  packages/math-2:
+    dependencies:
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
 
-  packages/math-examples: {}
+  packages/math-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
+      '@app-game/solid-utils':
+        specifier: workspace:*
+        version: link:../solid-utils
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../utils
 
-  packages/ogl: {}
+  packages/ogl:
+    dependencies:
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
 
-  packages/ogl-examples: {}
+  packages/ogl-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
-  packages/paint: {}
+  packages/paint:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../utils
 
   packages/penner-easing-equations: {}
 
   packages/phaser: {}
 
-  packages/phaser-examples: {}
+  packages/phaser-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
   packages/piecs: {}
 
-  packages/piecs-examles: {}
+  packages/piecs-examles:
+    dependencies:
+      '@app-game/piecs':
+        specifier: workspace:*
+        version: link:../piecs
 
-  packages/pixijs-examples: {}
+  packages/pixijs-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
-  packages/pixijs-research: {}
+  packages/pixijs-research:
+    dependencies:
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
+      '@app-game/three-examples':
+        specifier: workspace:*
+        version: link:../three-examples
 
   packages/rollup-plugin-svg-font: {}
 
-  packages/sequence-editor: {}
+  packages/sequence-editor:
+    dependencies:
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
 
-  packages/solid-pixi: {}
+  packages/solid-pixi:
+    dependencies:
+      '@app-game/solid-utils':
+        specifier: workspace:*
+        version: link:../solid-utils
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../utils
 
   packages/solid-three: {}
 
-  packages/solid-utils: {}
+  packages/solid-utils:
+    dependencies:
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
 
   packages/spector: {}
 
-  packages/svg-editor: {}
+  packages/svg-editor:
+    dependencies:
+      '@app-game/components':
+        specifier: workspace:*
+        version: link:../components
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../utils
 
-  packages/tanki: {}
+  packages/tanki:
+    dependencies:
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
+      '@app-game/solid-utils':
+        specifier: workspace:*
+        version: link:../solid-utils
 
   packages/three: {}
 
-  packages/three-examples: {}
+  packages/three-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/solid-utils':
+        specifier: workspace:*
+        version: link:../solid-utils
 
-  packages/twgl: {}
+  packages/twgl:
+    dependencies:
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
 
   packages/twgl-2: {}
 
-  packages/twgl-examples: {}
+  packages/twgl-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
+      '@app-game/three-examples':
+        specifier: workspace:*
+        version: link:../three-examples
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
-  packages/typegpu-examples: {}
+  packages/typegpu-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/components':
+        specifier: workspace:*
+        version: link:../components
+      '@app-game/solid-utils':
+        specifier: workspace:*
+        version: link:../solid-utils
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
   packages/ui-components: {}
 
-  packages/ui-components-examples: {}
+  packages/ui-components-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/solid-utils':
+        specifier: workspace:*
+        version: link:../solid-utils
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../utils
 
   packages/utils: {}
 
   packages/vite-plugin-arraybuffer: {}
 
-  packages/wasm-rust-pages: {}
+  packages/wasm-rust-pages:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
   packages/web-audio: {}
 
   packages/webgl: {}
 
-  packages/webgl-examples: {}
+  packages/webgl-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/math':
+        specifier: workspace:*
+        version: link:../math
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
   packages/webgl-state-diagram: {}
 
-  packages/webgpu-examples: {}
+  packages/webgpu-examples:
+    dependencies:
+      '@app-game/app-router':
+        specifier: workspace:*
+        version: link:../app-router
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
 packages:
 

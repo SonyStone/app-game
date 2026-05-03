@@ -1,5 +1,5 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { createContextProvider2 } from '@utils/createContextProvider';
+import { createContextProvider2 } from '@app-game/solid-utils';
 import { ComponentProps, createEffect, createSignal, JSX, splitProps } from 'solid-js';
 import { GPUProvider, useGPU } from './GPU.provider';
 import { GPUCanvasContextProvider } from './GPUCanvasContext.provider';

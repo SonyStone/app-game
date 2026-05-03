@@ -12,7 +12,7 @@ import {
   MenubarSubContent,
   MenubarSubTrigger,
   MenubarTrigger
-} from '@packages/components/ui/menubar';
+} from '@app-game/components/ui/menubar';
 
 export const MenubarDemo = () => {
   return (

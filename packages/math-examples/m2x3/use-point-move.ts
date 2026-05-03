@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math/v2';
+import { Vec2 } from '@app-game/math/v2';
 import { createSignal } from 'solid-js';
 import { usePanHandler } from './use-pan-handler';
 

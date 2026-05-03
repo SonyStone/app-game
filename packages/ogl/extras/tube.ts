@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { Geometry } from '../core/geometry';
 import { Vec3 } from '../math/vec-3';
 

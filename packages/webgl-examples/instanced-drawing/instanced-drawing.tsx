@@ -1,4 +1,4 @@
-import { FMat4 } from '@packages/math/m4';
+import { FMat4 } from '@app-game/math/m4';
 import { resizeCanvasToDisplaySize } from '@packages/twgl';
 import { identity, ortho, rotateZ, rotationZ, setTranslation } from '@packages/twgl/m4';
 import { compileShader } from '@packages/webgl/compileShader';

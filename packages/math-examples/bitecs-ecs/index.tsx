@@ -1,6 +1,6 @@
 import createRAF from '@solid-primitives/raf';
 import { createStaticStore } from '@solid-primitives/static-store';
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import {
   addComponent,
   addEntity,

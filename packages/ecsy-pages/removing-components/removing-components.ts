@@ -1,4 +1,4 @@
-import { System, World } from '@packages/ecsy';
+import { System, World } from '@app-game/ecsy';
 
 class Box {}
 

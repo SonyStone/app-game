@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { AttributeMap, Geometry } from '../core/geometry';
 import { Mesh } from '../core/mesh';
 import { Program } from '../core/program';

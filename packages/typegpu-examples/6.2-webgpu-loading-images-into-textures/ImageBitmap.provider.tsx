@@ -1,4 +1,4 @@
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { loadImageBitmap } from 'pixi.js';
 import { createResource, JSX, Show } from 'solid-js';
 

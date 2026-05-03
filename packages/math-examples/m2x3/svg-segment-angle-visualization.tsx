@@ -1,7 +1,7 @@
-import { Radians } from '@packages/math/types';
-import { createStruct } from '@packages/math/utils/create-struct';
-import { radToDeg } from '@packages/math/utils/trigonometry';
-import { Vec2 } from '@packages/math/v2';
+import { Radians } from '@app-game/math/types';
+import { createStruct } from '@app-game/math/utils/create-struct';
+import { radToDeg } from '@app-game/math/utils/trigonometry';
+import { Vec2 } from '@app-game/math/v2';
 import { createMemo, mergeProps, Show } from 'solid-js';
 import { JSX } from 'solid-js/jsx-runtime';
 

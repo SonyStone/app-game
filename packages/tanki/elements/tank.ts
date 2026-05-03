@@ -1,4 +1,4 @@
-import { m3 } from '@packages/math';
+import { m3 } from '@app-game/math';
 import '@pixi/math-extras';
 import { Container, Graphics, IPointData, Point, Transform } from 'pixi.js';
 import { Key } from 'ts-keycode-enum';

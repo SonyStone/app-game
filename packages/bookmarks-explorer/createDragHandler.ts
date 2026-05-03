@@ -1,5 +1,5 @@
 import { createLazyMemo } from '@solid-primitives/memo';
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { batch, createSignal } from 'solid-js';
 import { Path } from './TreeViewUtils';
 

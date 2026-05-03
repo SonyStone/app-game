@@ -1,4 +1,4 @@
-import { DockPanel, DockView, openPanel } from '@packages/ui-components/solid-dockview';
+import { DockPanel, DockView, openPanel } from '@app-game/ui-components/solid-dockview';
 import 'dockview-core/dist/styles/dockview.css';
 import { For, createEffect, createSignal } from 'solid-js';
 

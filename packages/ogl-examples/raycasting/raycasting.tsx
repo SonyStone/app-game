@@ -13,7 +13,7 @@ import {
   Transform
 } from '@packages/ogl';
 
-import { Vec2 } from '@packages/math/v2';
+import { Vec2 } from '@app-game/math/v2';
 import createRAF from '@solid-primitives/raf';
 import { onCleanup } from 'solid-js';
 import fragment from './raycasting.frag?raw';

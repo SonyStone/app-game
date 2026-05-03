@@ -1,4 +1,4 @@
-import { Read, System, SystemData } from '@packages/ecsy';
+import { Read, System, SystemData } from '@app-game/ecsy';
 
 import {
   Acceleration,

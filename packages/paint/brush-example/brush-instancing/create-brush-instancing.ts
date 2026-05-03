@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { OGLRenderingContext, Texture } from '@packages/ogl';
 import { RenderTarget, RenderTargetOptions } from '@packages/ogl/core/render-target';
 import { MaybeAccessor, access } from '@solid-primitives/utils';

@@ -1,4 +1,4 @@
-import { components } from '@packages/ecsy/entity/entity';
+import { components } from '@app-game/ecsy/entity';
 import { Component, Constructor } from '../component.interface';
 import { OperatorComponent, Operators } from '../data';
 

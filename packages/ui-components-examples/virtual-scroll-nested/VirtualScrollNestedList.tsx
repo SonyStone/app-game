@@ -1,7 +1,7 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createScrollPosition } from '@solid-primitives/scroll';
 import { access } from '@solid-primitives/utils';
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { createGetterObject } from '@utils/createGetterObject';
 import { Accessor, createEffect, createMemo, createSignal, For, onCleanup, onMount, ParentProps } from 'solid-js';
 import { NestedItem } from '.';

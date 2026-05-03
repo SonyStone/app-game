@@ -3,7 +3,7 @@
 // TODO: make scroll zoom more accurate than just >/< zero
 // TODO: be able to pass in new camera position
 
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { makeEventListenerStack } from '@solid-primitives/event-listener';
 import { onMount } from 'solid-js';
 import type { Camera } from '../core/camera';

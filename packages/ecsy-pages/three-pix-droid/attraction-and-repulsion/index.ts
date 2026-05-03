@@ -1,6 +1,6 @@
 import './index.scss';
 
-import { Read, System, SystemData, World } from '@packages/ecsy';
+import { Read, System, SystemData, World } from '@app-game/ecsy';
 
 import { Vector2 } from '../../utils/vector-2';
 import { draw } from './create-circle';

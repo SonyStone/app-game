@@ -1,4 +1,4 @@
-import { Entity, Not, Read, System, SystemData, TagComponent, World } from '@packages/ecsy';
+import { Entity, Not, Read, System, SystemData, TagComponent, World } from '@app-game/ecsy';
 
 const textarea = document.querySelector('textarea');
 function log(msg) {

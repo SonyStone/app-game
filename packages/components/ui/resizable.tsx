@@ -1,6 +1,6 @@
 import type { DynamicProps, HandleProps, RootProps } from '@corvu/resizable';
 import ResizablePrimitive from '@corvu/resizable';
-import { cn } from '@packages/utils/cn';
+import { cn } from '@app-game/utils/cn';
 import type { ValidComponent, VoidProps } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 

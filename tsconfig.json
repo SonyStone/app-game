@@ -26,6 +26,21 @@
     "moduleResolution": "node", /* Specify how TypeScript looks up a file from a given module specifier. */
     "baseUrl": "./",                                  /* Specify the base directory to resolve non-relative module names. */
     "paths": {
+      "@app-game/app-router": ["./packages/app-router/index.ts"],
+      "@app-game/app-router/*": ["./packages/app-router/*"],
+      "@app-game/ecsy": ["./packages/ecsy/index.ts"],
+      "@app-game/ecsy/*": ["./packages/ecsy/*"],
+      "@app-game/math": ["./packages/math/index.ts"],
+      "@app-game/piecs": ["./packages/piecs/index.ts"],
+      "@app-game/piecs/*": ["./packages/piecs/*"],
+      "@app-game/solid-utils": ["./packages/solid-utils/index.ts"],
+      "@app-game/solid-utils/*": ["./packages/solid-utils/*"],
+      "@app-game/ui-components": ["./packages/ui-components/index.ts"],
+      "@app-game/ui-components/*": ["./packages/ui-components/*"],
+      "@app-game/three-examples": ["./packages/three-examples/index.ts"],
+      "@app-game/three-examples/*": ["./packages/three-examples/*"],
+      "@app-game/utils": ["./packages/utils/index.ts"],
+      "@app-game/utils/*": ["./packages/utils/*"],
       "@utils/*": ["./packages/solid-utils/*"],
       "@packages/*": ["./packages/*"],
       "@/ldtk-ts/*": ["./packages/ldtk-ts/*"]

@@ -44,6 +44,14 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@app-game/app-router': resolve(packages, 'app-router'),
+      '@app-game/ecsy': resolve(packages, 'ecsy'),
+      '@app-game/math': resolve(packages, 'math'),
+      '@app-game/piecs': resolve(packages, 'piecs'),
+      '@app-game/solid-utils': resolve(packages, 'solid-utils'),
+      '@app-game/three-examples': resolve(packages, 'three-examples'),
+      '@app-game/ui-components': resolve(packages, 'ui-components'),
+      '@app-game/utils': resolve(packages, 'utils'),
       '@utils': resolve(packages, 'solid-utils'),
       '@packages': resolve(packages),
       '@/ldtk-ts': resolve(packages, 'ldtk-ts')

@@ -1,7 +1,5 @@
-import { SectionTitle } from '@packages/app-router/components/section-title';
-import { Thumbnail } from '@packages/app-router/components/thumbnail';
-import type { Routes } from '@packages/app-router/routes.interface';
-import { Ripple } from '@packages/ui-components/ripple/Ripple';
+import { SectionTitle, Thumbnail, type Routes } from '@app-game/app-router';
+import { Ripple } from '@app-game/ui-components/ripple';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 

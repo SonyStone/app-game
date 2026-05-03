@@ -1,6 +1,6 @@
 import { createMemo } from 'solid-js';
 
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { createPointerStream } from './createPointerStream';
 
 export function createPointerData(element: HTMLElement) {

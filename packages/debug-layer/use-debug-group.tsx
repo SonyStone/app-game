@@ -1,4 +1,4 @@
-import { Mat2x3 } from '@packages/math/m2x3';
+import { Mat2x3 } from '@app-game/math/m2x3';
 import { access, MaybeAccessor } from '@solid-primitives/utils';
 import { createRoot, JSX } from 'solid-js';
 import { GridSVG } from './grid-svg';

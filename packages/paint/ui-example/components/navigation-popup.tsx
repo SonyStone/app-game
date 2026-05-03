@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { Mat3 } from '@packages/ogl';
 import { distance, normalize } from '@packages/ogl/math/functions/vec-2-func';
 import { createEventBus } from '@solid-primitives/event-bus';

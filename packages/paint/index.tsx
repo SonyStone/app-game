@@ -1,4 +1,4 @@
-import { Navigation } from '@packages/app-router/components/navigation';
+import { Navigation } from '@app-game/app-router';
 import { A } from '@solidjs/router';
 import { createResource, JSX, Suspense } from 'solid-js';
 

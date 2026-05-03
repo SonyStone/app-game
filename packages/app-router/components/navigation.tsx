@@ -1,4 +1,4 @@
-import { cn } from '@packages/utils/cn';
+import { cn } from '@app-game/utils';
 import { ComponentProps, For, mergeProps, splitProps } from 'solid-js';
 import { Routes } from '../routes.interface';
 import { LinkPreview } from './link-preview';

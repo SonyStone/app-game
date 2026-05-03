@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 
 export const createInterpoletePoints = () => {
   let prev: Vec2 | undefined;

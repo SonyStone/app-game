@@ -1,9 +1,9 @@
 import { GridSVG } from '@packages/debug-layer/grid-svg';
 import { useDebugLayer } from '@packages/debug-layer/use-debug-layer';
-import { Line } from '@packages/math/line';
-import { Mat2x3 } from '@packages/math/m2x3';
-import { createStruct } from '@packages/math/utils/create-struct';
-import { Vec2 } from '@packages/math/v2';
+import { Line } from '@app-game/math/line';
+import { Mat2x3 } from '@app-game/math/m2x3';
+import { createStruct } from '@app-game/math/utils/create-struct';
+import { Vec2 } from '@app-game/math/v2';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import { SVGEditPoint } from './svg-edit-point';

@@ -2,5 +2,9 @@
   "name": "@app-game/debug-layer",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/math": "workspace:*",
+    "@app-game/utils": "workspace:*"
+  },
   "type": "module"
 }

@@ -1,6 +1,6 @@
 import './index.scss';
 
-import { World } from '@packages/ecsy';
+import { World } from '@app-game/ecsy';
 
 import { CanvasContext, CanvasData, CanvasSize, Point, Velocity } from '../../utils';
 import { BackgroundColor, Life, LineProperties, ParticleProperties } from './components';

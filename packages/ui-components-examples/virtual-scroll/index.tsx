@@ -1,5 +1,5 @@
-import { createVirtualList } from '@packages/ui-components/virtual-scroll/create-virtual-list';
-import { Brand } from '@packages/utils/Brand.type';
+import { createVirtualList } from '@app-game/ui-components/virtual-scroll/create-virtual-list';
+import { Brand } from '@app-game/utils/Brand.type';
 import { createSignal, For } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Item } from '../virtual-scroll-nested/Item';

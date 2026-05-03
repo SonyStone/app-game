@@ -1,5 +1,5 @@
-import { Routes } from '@packages/app-router/routes.interface';
-import { Ripple } from '@packages/ui-components/ripple/Ripple';
+import { type Routes } from '@app-game/app-router';
+import { Ripple } from '@app-game/ui-components/ripple';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 

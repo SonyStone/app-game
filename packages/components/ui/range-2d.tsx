@@ -1,4 +1,4 @@
-import { cn } from '@packages/utils/cn';
+import { cn } from '@app-game/utils/cn';
 import { createElementClientRect } from '@utils/createElementClientRect';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
 

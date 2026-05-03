@@ -1,4 +1,4 @@
-import type { Vec2 } from '@packages/math';
+import type { Vec2 } from '@app-game/math';
 import { GL_DRAW_ARRAYS_MODE } from '@packages/webgl/static-variables';
 import { Mat3 } from '../math/mat-3';
 import { Mat4 } from '../math/mat-4';

@@ -1,4 +1,4 @@
-import * as m4 from '@packages/math/m4';
+import * as m4 from '@app-game/math/m4';
 import {
   GL_BUFFER_TYPE,
   GL_DATA_TYPE,

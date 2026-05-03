@@ -1,5 +1,5 @@
-import { Mat2x3 } from '@packages/math/m2x3';
-import { createStruct } from '@packages/math/utils/create-struct';
+import { Mat2x3 } from '@app-game/math/m2x3';
+import { createStruct } from '@app-game/math/utils/create-struct';
 import { WindowEventListener } from '@solid-primitives/event-listener';
 import { createKeyHold } from '@solid-primitives/keyboard';
 import { createEffect, createMemo, createSignal, onMount, untrack } from 'solid-js';

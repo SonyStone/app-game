@@ -1,4 +1,4 @@
-import { NumberArray } from '@packages/math/utils/typed-array';
+import { NumberArray } from '@app-game/math/utils/typed-array';
 import * as Mat3Func from './functions/mat-3-func';
 import { Mat4Tuple } from './mat-4';
 import { QuatTuple } from './quat';

@@ -1,7 +1,7 @@
 // TODO: barycentric code shouldn't be here, but where?
 // TODO: SphereCast?
 
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { Camera, Mesh, Sphere } from '..';
 import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';

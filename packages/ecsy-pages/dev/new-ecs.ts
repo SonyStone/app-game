@@ -1,4 +1,4 @@
-import { Query } from '@packages/ecsy/query';
+import { Query } from '@app-game/ecsy/query';
 
 const VELOCITY = {
   factory() {

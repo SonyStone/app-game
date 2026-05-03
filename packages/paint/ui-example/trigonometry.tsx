@@ -1,4 +1,4 @@
-import { DEG_TO_RAD } from '@packages/math';
+import { DEG_TO_RAD } from '@app-game/math';
 import { distance } from '@packages/ogl/math/functions/vec-2-func';
 import { numberPrecisionDragInput } from '@packages/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import { RAD_TO_DEG } from 'pixi.js';

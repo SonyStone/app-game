@@ -1,6 +1,5 @@
-import { Thumbnail } from '@packages/app-router/components/thumbnail';
-import { Routes } from '@packages/app-router/routes.interface';
-import { Ripple } from '@packages/ui-components/ripple/Ripple';
+import { Thumbnail, type Routes } from '@app-game/app-router';
+import { Ripple } from '@app-game/ui-components/ripple';
 import { A } from '@solidjs/router';
 import { For, lazy } from 'solid-js';
 import instancingWithUBOandVAOThumbnail from './instancing-with-ubo-and-vao/image.png?url';

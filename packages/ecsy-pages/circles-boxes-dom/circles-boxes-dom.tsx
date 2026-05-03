@@ -1,4 +1,4 @@
-import { Read, System, SystemData, World } from '@packages/ecsy';
+import { Read, System, SystemData, World } from '@app-game/ecsy';
 import { onCleanup, onMount } from 'solid-js';
 import { Vector2 } from '../utils';
 

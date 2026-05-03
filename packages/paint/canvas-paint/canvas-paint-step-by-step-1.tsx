@@ -1,5 +1,5 @@
 import { RenderTarget, Renderer, SwapBuffering, Transform } from '@packages/ogl';
-import { createTimer } from '@packages/utils/timeout';
+import { createTimer } from '@app-game/utils/timeout';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';

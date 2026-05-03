@@ -2,5 +2,11 @@
   "name": "@app-game/solid-utils",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/math": "workspace:*"
+  },
+  "exports": {
+    ".": "./index.ts"
+  },
   "type": "module"
 }

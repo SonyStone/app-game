@@ -1,4 +1,4 @@
-import { TagComponent } from '@packages/ecsy';
+import { TagComponent } from '@app-game/ecsy';
 
 export class Collidable extends TagComponent {}
 export class Collider extends TagComponent {}

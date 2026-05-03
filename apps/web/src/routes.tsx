@@ -1,15 +1,14 @@
-import { Thumbnail } from '@packages/app-router/components/thumbnail';
-import { Routes } from '@packages/app-router/routes.interface';
+import { Thumbnail, type Routes } from '@app-game/app-router';
+import { threeRoutes } from '@app-game/three-examples';
 import { bookmarksExplorerRoutes } from '@packages/bookmarks-explorer/routes';
 import { escyRoutes } from '@packages/ecsy-pages/routes';
 import { filmAnnotationPlayerRoutes } from '@packages/film-annotation-player/routes';
-import { gsapExamplesRoutes } from '@packages/gsap-examples/routes';
+import { gsapExamplesRoutes } from '@app-game/gsap-examples/routes';
 import { mathRoutes } from '@packages/math-examples/routes';
 import { oglRoutes } from '@packages/ogl-examples/routes';
 import { paintRoutes } from '@packages/paint/routes';
 import { phaserRoutes } from '@packages/phaser-examples/routes';
 import { pixijsRoutes } from '@packages/pixijs-examples/routes';
-import { threeRoutes } from '@packages/three-examples/router';
 import { twglRoutes } from '@packages/twgl-examples/routes';
 import { typegpuRoutes } from '@packages/typegpu-examples/routes';
 import { uiComponentsRoutes } from '@packages/ui-components-examples/routes';
@@ -67,7 +66,7 @@ export const routes: Routes[] = [
     path: '/3d-wireframe',
     name: '3d Wireframe',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={wireframeThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/pixijs-research/webgl/3d-wireframe/3dWireframe'))
+    component: lazy(() => import('@app-game/pixijs-research/webgl/3d-wireframe/3dWireframe'))
   },
   // !not working
   // {
@@ -121,7 +120,7 @@ export const routes: Routes[] = [
     path: '/webxr-vr-teleport',
     name: 'WebXR VR Teleport',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/three-examples/webxr-vr-teleport/webxr-vr-teleport'))
+    component: lazy(() => import('@app-game/three-examples/webxr-vr-teleport/webxr-vr-teleport'))
   },
   {
     path: '/webgl-state-diagram',
@@ -133,7 +132,7 @@ export const routes: Routes[] = [
     path: '/gsap-page-scroll-animation',
     name: 'Page Scroll Animation',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/gsap-examples/page-scroll-animation/page-scroll-animation'))
+    component: lazy(() => import('@app-game/gsap-examples/page-scroll-animation/page-scroll-animation'))
   },
   {
     path: '/piecs-performance',
@@ -145,13 +144,13 @@ export const routes: Routes[] = [
     path: '/litegraph',
     name: '[WIP] litegraph',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/litegraph-examples/litegraph'))
+    component: lazy(() => import('@app-game/litegraph-examples/litegraph'))
   },
   {
     path: '/litegraph/first-project',
     name: 'litegraph First project',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/litegraph-examples/first-project/first-project'))
+    component: lazy(() => import('@app-game/litegraph-examples/first-project/first-project'))
   },
   {
     path: '/svg-editor',

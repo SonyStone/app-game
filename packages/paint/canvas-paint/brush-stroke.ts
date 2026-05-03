@@ -1,5 +1,5 @@
-import { Vec2 } from '@packages/math/v2';
-import { angleTo, distance, isEqual } from '@packages/math/v2-functions';
+import { Vec2 } from '@app-game/math/v2';
+import { angleTo, distance, isEqual } from '@app-game/math/v2-functions';
 import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@packages/ogl';
 import { SwapBuffering } from '@packages/ogl/extras/swap-buffering';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';

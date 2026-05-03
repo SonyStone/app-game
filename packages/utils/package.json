@@ -2,5 +2,16 @@
   "name": "@app-game/utils",
   "version": "0.0.0",
   "private": true,
+  "exports": {
+    ".": "./index.ts",
+    "./Brand.type": "./Brand.type.ts",
+    "./cn": "./cn.ts",
+    "./get-random-from-list": "./get-random-from-list.ts",
+    "./path-data-parser/normalize": "./path-data-parser/normalize.ts",
+    "./path-data-parser/parser": "./path-data-parser/parser.ts",
+    "./randomIntInrange": "./randomIntInrange.ts",
+    "./timeout": "./timeout.ts",
+    "./validate": "./validate.ts"
+  },
   "type": "module"
 }

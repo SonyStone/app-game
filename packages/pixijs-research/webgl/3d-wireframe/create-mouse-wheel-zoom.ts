@@ -1,4 +1,4 @@
-import { clamp } from '@packages/math/utils/clamp';
+import { clamp } from '@app-game/math/utils/clamp';
 import { createSignal, onCleanup } from 'solid-js';
 
 export function createMouseWheelZoom(element: HTMLElement) {

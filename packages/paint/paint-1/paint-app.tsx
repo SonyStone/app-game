@@ -16,8 +16,8 @@ import {
 import postShaderFragSrc from './post-shader.frag?raw';
 import postShaderVertSrc from './post-shader.vert?raw';
 
-import { Mat4 } from '@packages/math/m4';
-import { Vec2 } from '@packages/math/v2';
+import { Mat4 } from '@app-game/math/m4';
+import { Vec2 } from '@app-game/math/v2';
 import { GL_TEXTURES, GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { BrushMesh, DrawShader } from './draw-shader';

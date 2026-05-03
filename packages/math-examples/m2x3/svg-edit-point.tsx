@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math/v2';
+import { Vec2 } from '@app-game/math/v2';
 import { createEffect } from 'solid-js';
 import { usePointMove } from './use-point-move';
 

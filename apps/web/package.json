@@ -2,5 +2,20 @@
   "name": "@app-game/web",
   "version": "0.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/gsap-examples": "workspace:*",
+    "@app-game/litegraph-examples": "workspace:*",
+    "@app-game/pixijs-research": "workspace:*",
+    "@app-game/solid-utils": "workspace:*",
+    "@app-game/three-examples": "workspace:*"
+  },
+  "scripts": {
+    "dev": "pnpm --dir ../.. exec vite --config vite.config.ts",
+    "build": "pnpm --dir ../.. exec vite build --config vite.config.ts",
+    "preview": "pnpm --dir ../.. exec vite preview --config vite.config.ts",
+    "test": "pnpm --dir ../.. exec vitest --config vite.config.ts run",
+    "typecheck": "pnpm --dir ../.. exec tsc --project apps/web/tsconfig.json --noEmit"
+  }
 }

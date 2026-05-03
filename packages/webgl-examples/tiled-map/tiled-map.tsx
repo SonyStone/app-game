@@ -1,4 +1,4 @@
-import * as m3 from '@packages/math/m3';
+import * as m3 from '@app-game/math/m3';
 import { toRadian } from '@packages/ogl/extras/path/utils';
 import { createProgram } from '@packages/webgl/createProgram';
 import { createWebGL2Context } from '@packages/webgl/webgl-objects/context';

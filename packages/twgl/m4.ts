@@ -1,4 +1,4 @@
-import { Mat4Tuple } from '@packages/math/m4-builder';
+import { Mat4Tuple } from '@app-game/math/m4-builder';
 import { Mat4, Vec3 } from '.';
 import * as v3 from './v3';
 

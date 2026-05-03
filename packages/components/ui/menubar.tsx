@@ -13,7 +13,7 @@ import type {
 } from '@kobalte/core/menubar';
 import { Menubar as MenubarPrimitive } from '@kobalte/core/menubar';
 import type { PolymorphicProps } from '@kobalte/core/polymorphic';
-import { cn } from '@packages/utils/cn';
+import { cn } from '@app-game/utils/cn';
 import type { ComponentProps, ParentProps, ValidComponent } from 'solid-js';
 import { mergeProps, splitProps } from 'solid-js';
 

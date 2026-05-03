@@ -1,4 +1,4 @@
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 
 export type ResizeHandler = (size: { width: number; height: number }, ref: Element) => void;

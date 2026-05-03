@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 
 export const pointToCanvasPoint = (point: Vec2, width: number, height: number) => {
   let x = point.x;

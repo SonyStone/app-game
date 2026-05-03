@@ -1,6 +1,6 @@
 import { fadeOut } from '@packages/debug-layer/fade-out';
-import { createStruct } from '@packages/math/utils/create-struct';
-import { Vec2 } from '@packages/math/v2';
+import { createStruct } from '@app-game/math/utils/create-struct';
+import { Vec2 } from '@app-game/math/v2';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { access } from '@solid-primitives/utils';
 import { createManagedRoot } from '@utils/createManagedRoot';

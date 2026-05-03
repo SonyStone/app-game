@@ -2,5 +2,14 @@
   "name": "@app-game/components",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/utils": "workspace:*"
+  },
+  "exports": {
+    "./ui/dropdown-menu": "./ui/dropdown-menu.tsx",
+    "./ui/menubar": "./ui/menubar.tsx",
+    "./ui/range-2d": "./ui/range-2d.tsx",
+    "./ui/resizable": "./ui/resizable.tsx"
+  },
   "type": "module"
 }

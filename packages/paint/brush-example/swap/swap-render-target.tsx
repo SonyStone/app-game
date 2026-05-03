@@ -1,7 +1,7 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { Mesh, OGLRenderingContext, Program, RenderTarget, SwapBuffering, Triangle } from '@packages/ogl';
 import { RenderTargetOptions } from '@packages/ogl/core/render-target';
-import { createTimer } from '@packages/utils/timeout';
+import { createTimer } from '@app-game/utils/timeout';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
 import { BlendModes } from '../blend-modes';

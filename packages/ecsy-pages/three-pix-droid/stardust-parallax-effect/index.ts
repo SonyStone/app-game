@@ -1,6 +1,6 @@
 import './index.scss';
 
-import { World } from '@packages/ecsy';
+import { World } from '@app-game/ecsy';
 
 import { CanvasContext, CanvasData, CanvasSize } from '../../utils/canvas-data';
 import { MouseData, MousePoint } from '../../utils/mouse-data';

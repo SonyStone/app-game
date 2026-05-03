@@ -1,8 +1,8 @@
-import { Navigation } from '@packages/app-router/components/navigation';
-import { SectionTitle } from '@packages/app-router/components/section-title';
-import { Thumbnail } from '@packages/app-router/components/thumbnail';
-import { Routes } from '@packages/app-router/routes.interface';
-import { Ripple } from '@packages/ui-components/ripple/Ripple';
+import { Navigation } from '@app-game/app-router/components/navigation';
+import { SectionTitle } from '@app-game/app-router/components/section-title';
+import { Thumbnail } from '@app-game/app-router/components/thumbnail';
+import { Routes } from '@app-game/app-router/routes.interface';
+import { Ripple } from '@app-game/ui-components/ripple/Ripple';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
 import twglThumbnail from './thumbnail/chrome_2023-11-18_15-44-48.png?url';

@@ -1,5 +1,5 @@
-import { NumberArray } from '@packages/math/utils/typed-array';
-import { getRandomFromList } from '@packages/utils/get-random-from-list';
+import { NumberArray } from '@app-game/math/utils/typed-array';
+import { getRandomFromList } from '@app-game/utils/get-random-from-list';
 import { createRoot } from 'solid-js';
 import { colors } from './colors';
 import type { DebugElement } from './use-debug-layer';

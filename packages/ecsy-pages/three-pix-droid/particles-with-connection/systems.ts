@@ -1,4 +1,4 @@
-import { Read, System, SystemData } from '@packages/ecsy';
+import { Read, System, SystemData } from '@app-game/ecsy';
 
 import { CanvasContext, CanvasSize, Point, Velocity } from '../../utils';
 import { BackgroundColor, Life, LineProperties, ParticleProperties } from './components';

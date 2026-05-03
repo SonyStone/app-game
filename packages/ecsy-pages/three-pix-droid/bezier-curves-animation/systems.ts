@@ -1,4 +1,4 @@
-import { Read, System, SystemData } from '@packages/ecsy';
+import { Read, System, SystemData } from '@app-game/ecsy';
 
 import { CanvasContext, CanvasSize } from '../../utils';
 import { Alpha, BezierCurvesConfig, Control1, Control2, End, FrameCounter, Start, WaveNoise } from './components';

@@ -2,5 +2,9 @@
   "name": "@app-game/solid-pixi",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/solid-utils": "workspace:*",
+    "@app-game/utils": "workspace:*"
+  },
   "type": "module"
 }

@@ -1,4 +1,4 @@
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { createResource, JSX, Match, mergeProps, onCleanup, Switch } from 'solid-js';
 import tgpu, { TgpuRoot } from 'typegpu';
 import { useGPU } from './GPU.provider';

@@ -4,7 +4,7 @@ import './index.scss';
 
 import { createApp } from 'solid-utils';
 
-import { CameraProvider } from '@packages/three-examples/Camera.provider';
+import { CameraProvider } from '@app-game/three-examples';
 import { MetaProvider } from '@solidjs/meta';
 import { App } from './App';
 import { StatsProvider } from './Stats.provider';

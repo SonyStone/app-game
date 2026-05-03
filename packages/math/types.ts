@@ -1,4 +1,4 @@
-import { Brand } from '@packages/utils/Brand.type';
+import { Brand } from '@app-game/utils/Brand.type';
 
 /**
  * A type representing a value in radians.

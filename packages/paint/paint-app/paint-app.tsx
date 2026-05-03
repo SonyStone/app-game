@@ -1,4 +1,4 @@
-import { Mat3 } from '@packages/math';
+import { Mat3 } from '@app-game/math';
 import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
 import { onMount } from 'solid-js';
 import fragmentShaderSource from './fragment-shader.frag?raw';

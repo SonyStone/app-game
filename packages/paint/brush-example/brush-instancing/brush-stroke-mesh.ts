@@ -1,4 +1,4 @@
-import { Vec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { Mesh, OGLRenderingContext, Program, Texture } from '@packages/ogl';
 import { Attribute } from '@packages/ogl/core/geometry';
 import { RenderTarget } from '@packages/ogl/core/render-target';

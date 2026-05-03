@@ -1,4 +1,4 @@
-import { NumberArray } from '@packages/math/utils/typed-array';
+import { NumberArray } from '@app-game/math/utils/typed-array';
 
 /**
  * 3x3 Matrix math math functions.

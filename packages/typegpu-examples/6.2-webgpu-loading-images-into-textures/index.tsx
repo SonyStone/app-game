@@ -1,4 +1,4 @@
-import { Range2D } from '@packages/components/ui/range-2d';
+import { Range2D } from '@app-game/components/ui/range-2d';
 import { Meta, Title } from '@solidjs/meta';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import * as d from 'typegpu/data';

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-namespace */
 
-import { cn } from '@packages/utils/cn';
+import { cn } from '@app-game/utils/cn';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { ComponentProps, createMemo, createSignal, For, Show, splitProps, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';

@@ -5,7 +5,7 @@ import {
   MenubarMenu,
   MenubarShortcut,
   MenubarTrigger
-} from '@packages/components/ui/menubar';
+} from '@app-game/components/ui/menubar';
 import { batch } from 'solid-js';
 import { produce, SetStoreFunction } from 'solid-js/store';
 import { SVGNode } from '../svg-node';

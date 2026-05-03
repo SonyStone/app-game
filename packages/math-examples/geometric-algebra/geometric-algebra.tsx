@@ -1,9 +1,9 @@
-import * as v3 from '@packages/math/v3-builder';
+import * as v3 from '@app-game/math/v3-builder';
 import { animationFrameScheduler, interval, map, ObservableInput, of, from as rxFrom, switchMap, tap } from 'rxjs';
 import { createMemo, createSignal, from, observable } from 'solid-js';
 
-import { Vec2, Vec3 } from '@packages/math';
-import { TypedArray } from '@packages/math/utils/typed-array';
+import { Vec2, Vec3 } from '@app-game/math';
+import { TypedArray } from '@app-game/math/utils/typed-array';
 import { ganja } from './align';
 
 const p = (v: TypedArray | number[]) => v.join(',');

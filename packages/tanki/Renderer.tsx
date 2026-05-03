@@ -1,4 +1,4 @@
-import { createContextProvider } from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { AutoDetectOptions, autoDetectRenderer, Renderer as PixiRenderer } from 'pixi.js';
 import { createResource, JSX, onCleanup, Show, splitProps } from 'solid-js';
 

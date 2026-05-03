@@ -1,4 +1,4 @@
-import { Resizable, ResizableHandle, ResizablePanel } from '@packages/components/ui/resizable';
+import { Resizable, ResizableHandle, ResizablePanel } from '@app-game/components/ui/resizable';
 import { JSX } from 'solid-js';
 
 export function ResizeContainer(props: { children: JSX.Element }) {

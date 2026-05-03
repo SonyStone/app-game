@@ -1,6 +1,6 @@
 import { Camera, Mat4, Orbit, Transform, Vec3, Vec4 } from '@packages/ogl';
 import { Vec4Tuple } from '@packages/ogl/math/vec-4';
-import { validate } from '@packages/utils/validate';
+import { validate } from '@app-game/utils/validate';
 import { createEmitter } from '@solid-primitives/event-bus';
 import createRAF from '@solid-primitives/raf';
 import { onMount } from 'solid-js';
