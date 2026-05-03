@@ -367,6 +367,128 @@ importers:
         specifier: ^2.0.2
         version: 2.0.2
 
+  apps/web: {}
+
+  packages/app-router: {}
+
+  packages/babylonjs-examples: {}
+
+  packages/bevy: {}
+
+  packages/bevy-examples: {}
+
+  packages/bitecs: {}
+
+  packages/bookmarks-explorer: {}
+
+  packages/chroma: {}
+
+  packages/components: {}
+
+  packages/debug-layer: {}
+
+  packages/ecsy: {}
+
+  packages/ecsy-pages: {}
+
+  packages/excalibur-examples: {}
+
+  packages/film-annotation-player: {}
+
+  packages/game-shaders-for-beginners: {}
+
+  packages/gsap: {}
+
+  packages/gsap-examples: {}
+
+  packages/hammer: {}
+
+  packages/hammer-examples: {}
+
+  packages/ldtk-ts: {}
+
+  packages/ldtk-ts-examples: {}
+
+  packages/lil-gui: {}
+
+  packages/litegraph: {}
+
+  packages/litegraph-examples: {}
+
+  packages/math: {}
+
+  packages/math-2: {}
+
+  packages/math-examples: {}
+
+  packages/ogl: {}
+
+  packages/ogl-examples: {}
+
+  packages/paint: {}
+
+  packages/penner-easing-equations: {}
+
+  packages/phaser: {}
+
+  packages/phaser-examples: {}
+
+  packages/piecs: {}
+
+  packages/piecs-examles: {}
+
+  packages/pixijs-examples: {}
+
+  packages/pixijs-research: {}
+
+  packages/rollup-plugin-svg-font: {}
+
+  packages/sequence-editor: {}
+
+  packages/solid-pixi: {}
+
+  packages/solid-three: {}
+
+  packages/solid-utils: {}
+
+  packages/spector: {}
+
+  packages/svg-editor: {}
+
+  packages/tanki: {}
+
+  packages/three: {}
+
+  packages/three-examples: {}
+
+  packages/twgl: {}
+
+  packages/twgl-2: {}
+
+  packages/twgl-examples: {}
+
+  packages/typegpu-examples: {}
+
+  packages/ui-components: {}
+
+  packages/ui-components-examples: {}
+
+  packages/utils: {}
+
+  packages/vite-plugin-arraybuffer: {}
+
+  packages/wasm-rust-pages: {}
+
+  packages/web-audio: {}
+
+  packages/webgl: {}
+
+  packages/webgl-examples: {}
+
+  packages/webgl-state-diagram: {}
+
+  packages/webgpu-examples: {}
+
 packages:
 
   '@ampproject/remapping@2.3.0':

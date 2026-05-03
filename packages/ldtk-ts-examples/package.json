@@ -1,0 +1,6 @@
+{
+  "name": "@app-game/ldtk-ts-examples",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module"
+}

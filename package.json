@@ -2,6 +2,7 @@
   "name": "app-game",
   "version": "0.0.1",
   "description": "app-game",
+  "private": true,
   "main": "index.ts",
   "type": "module",
   "packageManager": "pnpm@10.32.1",

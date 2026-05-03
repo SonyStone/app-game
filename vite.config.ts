@@ -10,10 +10,11 @@ import topLevelAwait from 'vite-plugin-top-level-await';
 import wasm from 'vite-plugin-wasm';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 
-const root = resolve(__dirname, 'src');
+const webAppRoot = resolve(__dirname, 'apps/web');
 const packages = resolve(__dirname, 'packages');
 
 export default defineConfig({
+  root: webAppRoot,
   plugins: [
     wasm(),
     topLevelAwait(),
@@ -36,9 +37,11 @@ export default defineConfig({
   ],
   server: {
     port: 3200,
-    host: '0.0.0.0'
+    host: '0.0.0.0',
+    fs: {
+      allow: [resolve(__dirname)]
+    }
   },
-  publicDir: './public',
   resolve: {
     alias: {
       '@utils': resolve(packages, 'solid-utils'),
@@ -48,7 +51,9 @@ export default defineConfig({
   },
   build: {
     assetsInlineLimit: 0,
-    chunkSizeWarningLimit: 5000
+    chunkSizeWarningLimit: 5000,
+    outDir: resolve(__dirname, 'dist'),
+    emptyOutDir: true
     // minify: false
   },
   worker: {
