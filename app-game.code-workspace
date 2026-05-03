@@ -2,9 +2,12 @@
   "folders": [
     {
       "path": "."
-    }
+    },
     // {
     //     "path": "/workspaces/repos",
+    // },
+    // {
+    //     "path": "/workspaces/projects",
     // },
     // {
     //     "path": "/workspaces/repos/react-bits",
