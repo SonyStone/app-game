@@ -1,4 +1,4 @@
-import { OGLRenderingContext, Texture, Transform } from '@packages/ogl';
+import { OGLRenderingContext, Texture, Transform } from '@app-game/ogl';
 import { MaybeAccessor } from '@solid-primitives/utils';
 import { onCleanup } from 'solid-js';
 import { createSquareMesh } from './create-square-mesh';

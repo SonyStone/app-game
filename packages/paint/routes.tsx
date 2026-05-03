@@ -1,5 +1,5 @@
 import { Thumbnail, type Routes } from '@app-game/app-router';
-import multitouchThumbnail from '@packages/hammer-examples/thumbnail.png';
+import multitouchThumbnail from '@app-game/hammer-examples/thumbnail.png';
 import { Ripple } from '@app-game/ui-components/ripple';
 import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
@@ -12,7 +12,7 @@ export const pointerEventsRoutes: Routes[] = [
     path: '/hammer-multitouch',
     name: 'Hammer Multitouch',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={multitouchThumbnail} name={props.name} />,
-    component: lazy(() => import('@packages/hammer-examples/multitouch'))
+    component: lazy(() => import('@app-game/hammer-examples/multitouch'))
   },
   {
     path: '/input-visualizer',

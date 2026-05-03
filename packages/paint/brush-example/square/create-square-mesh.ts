@@ -1,5 +1,5 @@
-import { Mesh, OGLRenderingContext, Program, Texture } from '@packages/ogl';
-import { Square } from '@packages/ogl/extras/square';
+import { Mesh, OGLRenderingContext, Program, Texture } from '@app-game/ogl';
+import { Square } from '@app-game/ogl/extras/square';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { effect } from 'solid-js/web';
 import fragment from './square.frag?raw';

@@ -2,5 +2,12 @@
   "name": "@app-game/gsap",
   "version": "0.0.0",
   "private": true,
+  "exports": {
+    "./Animations": "./Animations.tsx",
+    "./core/utils": "./core/utils.ts"
+  },
+  "dependencies": {
+    "@app-game/film-annotation-player": "workspace:*"
+  },
   "type": "module"
 }

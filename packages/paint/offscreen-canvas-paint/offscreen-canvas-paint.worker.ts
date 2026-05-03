@@ -1,4 +1,4 @@
-import { Renderer } from '@packages/ogl';
+import { Renderer } from '@app-game/ogl';
 import createRAF from '@solid-primitives/raf';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 import { createSquareMesh } from '../brush-example/square/create-square-mesh';

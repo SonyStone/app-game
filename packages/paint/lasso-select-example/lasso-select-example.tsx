@@ -9,15 +9,15 @@ import {
   Renderer,
   Transform,
   Vec3
-} from '@packages/ogl';
+} from '@app-game/ogl';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
 import { createEffect, createSignal } from 'solid-js';
 
-import { Attribute } from '@packages/ogl/core/geometry';
-import { Square } from '@packages/ogl/extras/square';
-import { Vec3Tuple } from '@packages/ogl/math/vec-3';
+import { Attribute } from '@app-game/ogl/core/geometry';
+import { Square } from '@app-game/ogl/extras/square';
+import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
 import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
 import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
 import { makeEventListener } from '@solid-primitives/event-listener';

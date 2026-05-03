@@ -11,7 +11,7 @@ import {
   Renderer,
   Sphere,
   Transform
-} from '@packages/ogl';
+} from '@app-game/ogl';
 
 import { Vec2 } from '@app-game/math/v2';
 import createRAF from '@solid-primitives/raf';

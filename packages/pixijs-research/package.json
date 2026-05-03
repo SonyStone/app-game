@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
+    "@app-game/gsap": "workspace:*",
     "@app-game/math": "workspace:*",
     "@app-game/three-examples": "workspace:*",
     "@app-game/webgl": "workspace:*"

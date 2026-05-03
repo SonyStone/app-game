@@ -1,7 +1,7 @@
 import { Vec2 } from '@app-game/math/v2';
 import { angleTo, distance, isEqual } from '@app-game/math/v2-functions';
-import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@packages/ogl';
-import { SwapBuffering } from '@packages/ogl/extras/swap-buffering';
+import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@app-game/ogl';
+import { SwapBuffering } from '@app-game/ogl/extras/swap-buffering';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createEffect, createSignal } from 'solid-js';

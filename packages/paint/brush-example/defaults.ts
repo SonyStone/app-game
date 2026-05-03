@@ -1,4 +1,4 @@
-import type { RenderTargetOptions } from '@packages/ogl/core/render-target';
+import type { RenderTargetOptions } from '@app-game/ogl/core/render-target';
 import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
 import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
 

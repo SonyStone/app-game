@@ -1,5 +1,5 @@
-import { OGLRenderingContext, Texture } from '@packages/ogl';
-import { RenderTargetOptions } from '@packages/ogl/core/render-target';
+import { OGLRenderingContext, Texture } from '@app-game/ogl';
+import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createEffect } from 'solid-js';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';

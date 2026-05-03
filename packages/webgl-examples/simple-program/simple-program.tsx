@@ -1,6 +1,6 @@
 import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
-import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
-import { AttributesParams, createProgram } from '@packages/webgl/webgl-objects/program';
+import { createWebGL2Renderer } from '@app-game/webgl/webgl-objects/context';
+import { AttributesParams, createProgram } from '@app-game/webgl/webgl-objects/program';
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 

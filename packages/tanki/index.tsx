@@ -1,4 +1,4 @@
-import { toRadian } from '@packages/ogl/extras/path/utils';
+import { toRadian } from '@app-game/ogl/extras/path/utils';
 import { Container, Graphics, Sprite, useAsset } from '@packages/solid-pixi';
 import { createEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';

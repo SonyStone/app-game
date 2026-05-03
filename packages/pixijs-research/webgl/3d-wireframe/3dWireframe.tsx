@@ -3,7 +3,7 @@ import { create, setFromSpherical, setFromVec3 } from '@app-game/math/spherical'
 import { clamp } from '@app-game/math/utils/clamp';
 import { For, createEffect, createMemo, createSignal } from 'solid-js';
 
-import { round } from '@packages/gsap/core/utils';
+import { round } from '@app-game/gsap/core/utils';
 import { FVec3 } from '@app-game/math';
 import { useCamera } from '@app-game/three-examples';
 import s from './3dWireframe.module.scss';

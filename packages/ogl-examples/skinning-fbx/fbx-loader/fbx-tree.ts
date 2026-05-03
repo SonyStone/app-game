@@ -1,5 +1,5 @@
-import { Mat4Tuple } from '@packages/ogl/math/mat-4';
-import { Vec3Tuple } from '@packages/ogl/math/vec-3';
+import { Mat4Tuple } from '@app-game/ogl/math/mat-4';
+import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
 
 export interface FBXTree {
   Connections: {

@@ -10,7 +10,7 @@ import {
   Skin,
   Texture,
   Transform
-} from '@packages/ogl';
+} from '@app-game/ogl';
 
 import snoutAnimSrc from './snout-anim.json?url';
 import snoutRigSrc from './snout-rig.json?url';

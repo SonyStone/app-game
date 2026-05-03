@@ -1,6 +1,6 @@
-import { createPointerEventsHandler } from '@packages/hammer/pointerevent';
+import { createPointerEventsHandler } from '@app-game/hammer/pointerevent';
 import { Vec2 } from '@app-game/math';
-import { Animation, AnimationFrame } from '@packages/ogl';
+import { Animation, AnimationFrame } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { For, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';

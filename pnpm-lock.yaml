@@ -372,18 +372,33 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../../packages/app-router
+      '@app-game/babylonjs-examples':
+        specifier: workspace:*
+        version: link:../../packages/babylonjs-examples
       '@app-game/bookmarks-explorer':
         specifier: workspace:*
         version: link:../../packages/bookmarks-explorer
       '@app-game/ecsy-pages':
         specifier: workspace:*
         version: link:../../packages/ecsy-pages
+      '@app-game/excalibur-examples':
+        specifier: workspace:*
+        version: link:../../packages/excalibur-examples
       '@app-game/film-annotation-player':
         specifier: workspace:*
         version: link:../../packages/film-annotation-player
+      '@app-game/game-shaders-for-beginners':
+        specifier: workspace:*
+        version: link:../../packages/game-shaders-for-beginners
+      '@app-game/gsap':
+        specifier: workspace:*
+        version: link:../../packages/gsap
       '@app-game/gsap-examples':
         specifier: workspace:*
         version: link:../../packages/gsap-examples
+      '@app-game/ldtk-ts-examples':
+        specifier: workspace:*
+        version: link:../../packages/ldtk-ts-examples
       '@app-game/litegraph-examples':
         specifier: workspace:*
         version: link:../../packages/litegraph-examples
@@ -399,6 +414,9 @@ importers:
       '@app-game/phaser-examples':
         specifier: workspace:*
         version: link:../../packages/phaser-examples
+      '@app-game/piecs-examles':
+        specifier: workspace:*
+        version: link:../../packages/piecs-examles
       '@app-game/pixijs-examples':
         specifier: workspace:*
         version: link:../../packages/pixijs-examples
@@ -408,6 +426,12 @@ importers:
       '@app-game/solid-utils':
         specifier: workspace:*
         version: link:../../packages/solid-utils
+      '@app-game/svg-editor':
+        specifier: workspace:*
+        version: link:../../packages/svg-editor
+      '@app-game/tanki':
+        specifier: workspace:*
+        version: link:../../packages/tanki
       '@app-game/three-examples':
         specifier: workspace:*
         version: link:../../packages/three-examples
@@ -423,12 +447,18 @@ importers:
       '@app-game/wasm-rust-pages':
         specifier: workspace:*
         version: link:../../packages/wasm-rust-pages
+      '@app-game/web-audio':
+        specifier: workspace:*
+        version: link:../../packages/web-audio
       '@app-game/webgl':
         specifier: workspace:*
         version: link:../../packages/webgl
       '@app-game/webgl-examples':
         specifier: workspace:*
         version: link:../../packages/webgl-examples
+      '@app-game/webgl-state-diagram':
+        specifier: workspace:*
+        version: link:../../packages/webgl-state-diagram
       '@app-game/webgpu-examples':
         specifier: workspace:*
         version: link:../../packages/webgpu-examples
@@ -506,7 +536,11 @@ importers:
 
   packages/game-shaders-for-beginners: {}
 
-  packages/gsap: {}
+  packages/gsap:
+    dependencies:
+      '@app-game/film-annotation-player':
+        specifier: workspace:*
+        version: link:../film-annotation-player
 
   packages/gsap-examples:
     dependencies:
@@ -522,9 +556,18 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/ogl':
+        specifier: workspace:*
+        version: link:../ogl
 
   packages/hammer-examples:
     dependencies:
+      '@app-game/hammer':
+        specifier: workspace:*
+        version: link:../hammer
+      '@app-game/ogl':
+        specifier: workspace:*
+        version: link:../ogl
       '@app-game/pixijs-research':
         specifier: workspace:*
         version: link:../pixijs-research
@@ -541,6 +584,9 @@ importers:
 
   packages/math:
     dependencies:
+      '@app-game/ogl':
+        specifier: workspace:*
+        version: link:../ogl
       '@app-game/utils':
         specifier: workspace:*
         version: link:../utils
@@ -562,9 +608,15 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/ogl':
+        specifier: workspace:*
+        version: link:../ogl
       '@app-game/solid-utils':
         specifier: workspace:*
         version: link:../solid-utils
+      '@app-game/tanki':
+        specifier: workspace:*
+        version: link:../tanki
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
@@ -589,6 +641,9 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/ogl':
+        specifier: workspace:*
+        version: link:../ogl
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
@@ -601,9 +656,15 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../app-router
+      '@app-game/hammer-examples':
+        specifier: workspace:*
+        version: link:../hammer-examples
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/ogl':
+        specifier: workspace:*
+        version: link:../ogl
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
@@ -646,6 +707,9 @@ importers:
 
   packages/pixijs-research:
     dependencies:
+      '@app-game/gsap':
+        specifier: workspace:*
+        version: link:../gsap
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
@@ -660,9 +724,15 @@ importers:
 
   packages/sequence-editor:
     dependencies:
+      '@app-game/hammer':
+        specifier: workspace:*
+        version: link:../hammer
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/ogl':
+        specifier: workspace:*
+        version: link:../ogl
 
   packages/solid-pixi:
     dependencies:
@@ -697,6 +767,9 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/ogl':
+        specifier: workspace:*
+        version: link:../ogl
       '@app-game/solid-utils':
         specifier: workspace:*
         version: link:../solid-utils
@@ -811,6 +884,9 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/ogl':
+        specifier: workspace:*
+        version: link:../ogl
       '@app-game/twgl':
         specifier: workspace:*
         version: link:../twgl

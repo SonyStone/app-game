@@ -1,4 +1,4 @@
-import { Camera, Color, Mesh, Orbit, Plane, Program, Renderer, Texture, Transform } from '@packages/ogl';
+import { Camera, Color, Mesh, Orbit, Plane, Program, Renderer, Texture, Transform } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect } from 'solid-js';
 

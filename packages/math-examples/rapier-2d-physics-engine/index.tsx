@@ -1,4 +1,4 @@
-import { toRadian } from '@packages/ogl/extras/path/utils';
+import { toRadian } from '@app-game/ogl/extras/path/utils';
 import createRAF from '@solid-primitives/raf';
 import { lazy, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';

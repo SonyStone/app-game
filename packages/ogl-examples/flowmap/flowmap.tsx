@@ -1,5 +1,5 @@
 import { Vec2 } from '@app-game/math/v2';
-import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@packages/ogl';
+import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@app-game/ogl';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect } from 'solid-js';

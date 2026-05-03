@@ -1,4 +1,4 @@
-import { toRadian } from '@packages/ogl/extras/path/utils';
+import { toRadian } from '@app-game/ogl/extras/path/utils';
 import { numberPrecisionDragInput } from '@packages/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import { Index, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';

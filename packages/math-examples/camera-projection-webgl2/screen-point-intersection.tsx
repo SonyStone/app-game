@@ -1,5 +1,5 @@
-import { Camera, OGLRenderingContext, Transform } from '@packages/ogl';
-import { Vec3 } from '@packages/ogl/math/vec-3';
+import { Camera, OGLRenderingContext, Transform } from '@app-game/ogl';
+import { Vec3 } from '@app-game/ogl/math/vec-3';
 import { Listen } from '@solid-primitives/event-bus';
 import { createSignal } from 'solid-js';
 import { createRaycast } from '../raycast';

@@ -1,5 +1,5 @@
 import { GridHelperComponent } from '@packages/math-examples/grid-helper.component';
-import { Camera, Orbit, Renderer, Texture, Transform, Vec3 } from '@packages/ogl';
+import { Camera, Orbit, Renderer, Texture, Transform, Vec3 } from '@app-game/ogl';
 import { BLENDING_FACTOR } from '@app-game/webgl/static-variables';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { For } from 'solid-js';

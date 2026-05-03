@@ -1,4 +1,4 @@
-import { Camera, Geometry, Mesh, Program, Renderer, Texture, Transform } from '@packages/ogl';
+import { Camera, Geometry, Mesh, Program, Renderer, Texture, Transform } from '@app-game/ogl';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect } from 'solid-js';

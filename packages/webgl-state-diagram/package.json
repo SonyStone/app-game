@@ -5,5 +5,8 @@
   "dependencies": {
     "@app-game/webgl": "workspace:*"
   },
+  "exports": {
+    "./webgl-state-diagram": "./webgl-state-diagram.tsx"
+  },
   "type": "module"
 }

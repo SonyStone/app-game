@@ -1,5 +1,5 @@
-import { Camera, Vec3 } from '@packages/ogl';
-import { Vec4Tuple } from '@packages/ogl/math/vec-4';
+import { Camera, Vec3 } from '@app-game/ogl';
+import { Vec4Tuple } from '@app-game/ogl/math/vec-4';
 import { Listen } from '@solid-primitives/event-bus';
 import { Show, createSignal } from 'solid-js';
 

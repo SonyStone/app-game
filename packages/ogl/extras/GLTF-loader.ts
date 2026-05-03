@@ -944,3 +944,5 @@ export class GLTFLoader {
     return lights;
   }
 }
+
+export type GLTF = Awaited<ReturnType<typeof GLTFLoader.load>>;

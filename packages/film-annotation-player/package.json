@@ -8,6 +8,8 @@
     "@app-game/utils": "workspace:*"
   },
   "exports": {
+    "./icons/pause.svg": "./icons/pause.svg",
+    "./icons/play.svg": "./icons/play.svg",
     "./routes": "./routes.tsx"
   },
   "type": "module"

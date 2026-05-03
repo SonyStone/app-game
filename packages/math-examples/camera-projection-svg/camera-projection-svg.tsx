@@ -1,5 +1,5 @@
-import { Camera, Mat4, Orbit, Transform, Vec3, Vec4 } from '@packages/ogl';
-import { Vec4Tuple } from '@packages/ogl/math/vec-4';
+import { Camera, Mat4, Orbit, Transform, Vec3, Vec4 } from '@app-game/ogl';
+import { Vec4Tuple } from '@app-game/ogl/math/vec-4';
 import { validate } from '@app-game/utils/validate';
 import { createEmitter } from '@solid-primitives/event-bus';
 import createRAF from '@solid-primitives/raf';

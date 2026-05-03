@@ -1,4 +1,4 @@
-import { Camera, Orbit, Renderer, Transform, Vec3 } from '@packages/ogl';
+import { Camera, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import JingliuBodyA from './JingliuMod/Jingliuf0000Mod/JingliuBodyA.ib?Uint32Array';
 import JingliuBodyADiffuse from './JingliuMod/Jingliuf0000Mod/JingliuBodyADiffuse.dds?ArrayBuffer';
 import JingliuBodyALightMap from './JingliuMod/Jingliuf0000Mod/JingliuBodyALightMap.dds?ArrayBuffer';

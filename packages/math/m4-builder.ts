@@ -1,4 +1,4 @@
-import { Mat3 } from '@packages/ogl';
+import { Mat3 } from '@app-game/ogl';
 import { NumberArray, TypedArrayConstructor } from './utils/typed-array';
 import { type Vec2Tuple } from './v2';
 import { Vec3, Vec3Tuple } from './v3';

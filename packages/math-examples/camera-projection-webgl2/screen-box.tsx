@@ -1,4 +1,4 @@
-import { Camera, Color, Mesh, OGLRenderingContext, Polyline, Transform, Vec3 } from '@packages/ogl';
+import { Camera, Color, Mesh, OGLRenderingContext, Polyline, Transform, Vec3 } from '@app-game/ogl';
 import { Listen } from '@solid-primitives/event-bus';
 import { onCleanup } from 'solid-js';
 import { createRaycast } from '../raycast';

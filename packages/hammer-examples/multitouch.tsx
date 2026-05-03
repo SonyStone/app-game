@@ -1,4 +1,4 @@
-import { DEFAULT_ALTITUDE_ANGLE, HammerInput, createPointerEventsHandler } from '@packages/hammer/pointerevent';
+import { DEFAULT_ALTITUDE_ANGLE, HammerInput, createPointerEventsHandler } from '@app-game/hammer/pointerevent';
 import { clamp, radToDeg } from '@app-game/pixijs-research/math/MathUtils';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { Title } from '@solidjs/meta';

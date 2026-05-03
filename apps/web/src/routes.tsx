@@ -34,7 +34,7 @@ export const routes: Routes[] = [
     path: '/web-audio',
     name: 'Web Audio API',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/web-audio/web-audio-page'))
+    component: lazy(() => import('@app-game/web-audio/web-audio-page'))
   },
   paintRoutes,
   webglExamplesRoute,
@@ -60,7 +60,7 @@ export const routes: Routes[] = [
     path: '/tanki',
     name: 'Tanki',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/tanki'))
+    component: lazy(() => import('@app-game/tanki'))
   },
   {
     path: '/3d-wireframe',
@@ -78,13 +78,13 @@ export const routes: Routes[] = [
     path: '/excalibur-examples',
     name: 'Excalibur.js Examples',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/excalibur-examples'))
+    component: lazy(() => import('@app-game/excalibur-examples'))
   },
   {
     path: '/babylon',
     name: 'Babylon.js',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/babylonjs-examples/babylon-example'))
+    component: lazy(() => import('@app-game/babylonjs-examples/babylon-example'))
   },
   {
     path: '/game-ecs',
@@ -102,19 +102,19 @@ export const routes: Routes[] = [
     path: '/animations',
     name: 'Animations',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/gsap/Animations'))
+    component: lazy(() => import('@app-game/gsap/Animations'))
   },
   {
     path: '/ldtk-ts-exampless',
     name: 'ldtk-ts example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/ldtk-ts-examples/example'))
+    component: lazy(() => import('@app-game/ldtk-ts-examples/example'))
   },
   {
     path: '/game-shaders-for-beginners',
     name: '[WIP] Game Shaders For Beginners',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/game-shaders-for-beginners/game-shaders-for-beginners'))
+    component: lazy(() => import('@app-game/game-shaders-for-beginners/game-shaders-for-beginners'))
   },
   {
     path: '/webxr-vr-teleport',
@@ -126,7 +126,7 @@ export const routes: Routes[] = [
     path: '/webgl-state-diagram',
     name: '[WIP] WebGL State Diagram',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/webgl-state-diagram/webgl-state-diagram'))
+    component: lazy(() => import('@app-game/webgl-state-diagram/webgl-state-diagram'))
   },
   {
     path: '/gsap-page-scroll-animation',
@@ -138,7 +138,7 @@ export const routes: Routes[] = [
     path: '/piecs-performance',
     name: 'piecs performance',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/piecs-examles/performance/performance'))
+    component: lazy(() => import('@app-game/piecs-examles/performance/performance'))
   },
   {
     path: '/litegraph',
@@ -156,7 +156,7 @@ export const routes: Routes[] = [
     path: '/svg-editor',
     name: '[WIP] SVG Editor',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/svg-editor'))
+    component: lazy(() => import('@app-game/svg-editor'))
   },
   {
     path: '/:any',

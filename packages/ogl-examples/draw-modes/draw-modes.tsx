@@ -1,4 +1,4 @@
-import { Camera, Geometry, Mesh, Program, Renderer, Transform } from '@packages/ogl';
+import { Camera, Geometry, Mesh, Program, Renderer, Transform } from '@app-game/ogl';
 
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';

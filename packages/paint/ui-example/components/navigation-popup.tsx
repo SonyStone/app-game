@@ -1,6 +1,6 @@
 import { Vec2 } from '@app-game/math';
-import { Mat3 } from '@packages/ogl';
-import { distance, normalize } from '@packages/ogl/math/functions/vec-2-func';
+import { Mat3 } from '@app-game/ogl';
+import { distance, normalize } from '@app-game/ogl/math/functions/vec-2-func';
 import { createEventBus } from '@solid-primitives/event-bus';
 import { takeUntilCleanup } from '@utils/takeUntilCleanup';
 import { concat, fromEvent, merge, of, ReplaySubject, switchMap, take, takeUntil, tap } from 'rxjs';

@@ -1,4 +1,4 @@
-import { OGLRenderingContext } from '@packages/ogl';
+import { OGLRenderingContext } from '@app-game/ogl';
 import { fbxTextParser } from './fbx-text-parser';
 import { fbxTreeParser } from './fbx-tree-parser';
 import * as Utils from './utils';

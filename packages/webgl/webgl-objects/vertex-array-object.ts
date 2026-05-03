@@ -1,4 +1,4 @@
-import { WebGL2RenderingContextStrict } from '../webgl-strict-types/webgl2';
+import type { WebGL2RenderingContextStrict } from '../webgl-strict-types/webgl2';
 
 export function createVertexArray(gl: WebGL2RenderingContextStrict) {
   const vao = gl.createVertexArray();

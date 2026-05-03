@@ -6,5 +6,8 @@
     "@app-game/components": "workspace:*",
     "@app-game/utils": "workspace:*"
   },
+  "exports": {
+    ".": "./index.tsx"
+  },
   "type": "module"
 }

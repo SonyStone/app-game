@@ -1,7 +1,7 @@
 import * as m3 from '@app-game/math/m3';
-import { toRadian } from '@packages/ogl/extras/path/utils';
+import { toRadian } from '@app-game/ogl/extras/path/utils';
 import { createProgram } from '@app-game/webgl/createProgram';
-import { createWebGL2Context } from '@packages/webgl/webgl-objects/context';
+import { createWebGL2Context } from '@app-game/webgl/webgl-objects/context';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect, createSignal, onMount } from 'solid-js';

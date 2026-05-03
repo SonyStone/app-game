@@ -1,8 +1,8 @@
-import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@packages/ogl';
+import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect } from 'solid-js';
 
-import { Vec2 } from '@packages/ogl/math/vec-2_old';
+import { Vec2 } from '@app-game/ogl/math/vec-2_old';
 import fragment from './mouse-flowmap.frag?raw';
 import vertex from './mouse-flowmap.vert?raw';
 

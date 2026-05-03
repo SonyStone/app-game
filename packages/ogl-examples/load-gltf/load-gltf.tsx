@@ -1,4 +1,4 @@
-import { Camera, GLTF, GLTFLoader, Orbit, Program, Renderer, TextureLoader, Transform, Vec3 } from '@packages/ogl';
+import { Camera, GLTF, GLTFLoader, Orbit, Program, Renderer, TextureLoader, Transform, Vec3 } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect } from 'solid-js';
 

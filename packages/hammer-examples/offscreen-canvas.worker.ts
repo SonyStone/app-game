@@ -1,4 +1,4 @@
-import { createPointerEventsHandler, HammerInput, MinimumInputEvent } from '@packages/hammer/pointerevent';
+import { createPointerEventsHandler, HammerInput, MinimumInputEvent } from '@app-game/hammer/pointerevent';
 import createRAF from '@solid-primitives/raf';
 import { createEffect, createRoot, createSignal } from 'solid-js';
 

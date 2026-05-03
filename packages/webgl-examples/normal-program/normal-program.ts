@@ -1,5 +1,5 @@
-import { AttributesParams, UniformsParams, createProgram } from '@packages/webgl/webgl-objects/program';
-import type { WebGLRenderingContextStrict } from '@packages/webgl/webgl-strict-types/webgl';
+import { AttributesParams, UniformsParams, createProgram } from '@app-game/webgl/webgl-objects/program';
+import type { WebGLRenderingContextStrict } from '@app-game/webgl/webgl-strict-types/webgl';
 import fragment from './normal-program.frag?raw';
 import vertex from './normal-program.vert?raw';
 

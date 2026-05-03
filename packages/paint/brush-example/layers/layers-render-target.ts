@@ -1,7 +1,7 @@
 import { Vec2 } from '@app-game/math';
-import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@packages/ogl';
-import { RenderTargetOptions } from '@packages/ogl/core/render-target';
-import { Square } from '@packages/ogl/extras/square';
+import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@app-game/ogl';
+import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
+import { Square } from '@app-game/ogl/extras/square';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { effect } from 'solid-js/web';

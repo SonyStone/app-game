@@ -1,5 +1,5 @@
-import { Vec3 } from '@packages/ogl';
-import { Vec4Tuple } from '@packages/ogl/math/vec-4';
+import { Vec3 } from '@app-game/ogl';
+import { Vec4Tuple } from '@app-game/ogl/math/vec-4';
 import { Listen } from '@solid-primitives/event-bus';
 import { Index, Show, createSignal } from 'solid-js';
 import { Polygon } from './polygon';

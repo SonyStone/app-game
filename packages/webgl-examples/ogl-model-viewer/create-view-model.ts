@@ -1,5 +1,5 @@
-import { Geometry, Mesh, OGLRenderingContext, Program, Texture, Transform } from '@packages/ogl';
-import { CompressedImage } from '@packages/ogl/core/texture';
+import { Geometry, Mesh, OGLRenderingContext, Program, Texture, Transform } from '@app-game/ogl';
+import { CompressedImage } from '@app-game/ogl/core/texture';
 import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
 import fragment from './create-view-model.frag?raw';
 import vertex from './create-view-model.vert?raw';

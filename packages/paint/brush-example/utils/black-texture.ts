@@ -1,4 +1,4 @@
-import { OGLRenderingContext, Texture } from '@packages/ogl';
+import { OGLRenderingContext, Texture } from '@app-game/ogl';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createSignal, untrack } from 'solid-js';
 import { effect } from 'solid-js/web';

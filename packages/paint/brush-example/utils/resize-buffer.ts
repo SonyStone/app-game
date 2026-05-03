@@ -1,4 +1,4 @@
-import { Attribute } from '@packages/ogl/core/geometry';
+import { Attribute } from '@app-game/ogl/core/geometry';
 
 export const resizeBuffer = (attribute: Pick<Attribute, 'data' | 'needsUpdate'>, offset: number) => {
   let bufferSize = attribute.data.length;

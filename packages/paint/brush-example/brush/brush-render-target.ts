@@ -1,4 +1,4 @@
-import { OGLRenderingContext, RenderTarget } from '@packages/ogl';
+import { OGLRenderingContext, RenderTarget } from '@app-game/ogl';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createSignal } from 'solid-js';
 import { effect } from 'solid-js/web';

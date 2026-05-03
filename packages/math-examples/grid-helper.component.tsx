@@ -1,4 +1,4 @@
-import { GridHelper, OGLRenderingContext, Transform } from '@packages/ogl';
+import { GridHelper, OGLRenderingContext, Transform } from '@app-game/ogl';
 import { onCleanup } from 'solid-js';
 
 export function GridHelperComponent({

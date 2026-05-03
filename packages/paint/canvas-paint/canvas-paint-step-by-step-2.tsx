@@ -12,8 +12,8 @@ import {
   Texture,
   Transform,
   Vec3
-} from '@packages/ogl';
-import { TextureProgram } from '@packages/ogl/extras/texture-program';
+} from '@app-game/ogl';
+import { TextureProgram } from '@app-game/ogl/extras/texture-program';
 import { createTimer } from '@app-game/utils/timeout';
 import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { makeEventListener } from '@solid-primitives/event-listener';

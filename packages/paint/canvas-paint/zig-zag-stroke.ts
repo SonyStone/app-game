@@ -1,5 +1,5 @@
 import { Vec2 } from '@app-game/math';
-import { OGLRenderingContext } from '@packages/ogl';
+import { OGLRenderingContext } from '@app-game/ogl';
 import { curve } from '../brush-example/utils/curve';
 import { cavasPointToPoint } from './utils-point-position';
 

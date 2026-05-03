@@ -1,7 +1,7 @@
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { Show, createEffect, createSignal, onCleanup } from 'solid-js';
 
-import { Camera, Renderer, Transform, Vec3 } from '@packages/ogl';
+import { Camera, Renderer, Transform, Vec3 } from '@app-game/ogl';
 
 import { SphereComponent } from '@packages/math-examples/camera-projection-webgl2/sphere.component';
 import { createRaycast } from '@packages/math-examples/raycast';

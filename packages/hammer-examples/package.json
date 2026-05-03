@@ -3,7 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
+    "@app-game/hammer": "workspace:*",
+    "@app-game/ogl": "workspace:*",
     "@app-game/pixijs-research": "workspace:*"
+  },
+  "exports": {
+    "./multitouch": "./multitouch.tsx",
+    "./thumbnail.png": "./thumbnail.png"
   },
   "type": "module"
 }

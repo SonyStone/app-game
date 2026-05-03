@@ -1,5 +1,5 @@
-import { Mesh, NormalProgram, OGLRenderingContext, Sphere, Transform } from '@packages/ogl';
-import { Vec3Tuple } from '@packages/ogl/math/vec-3';
+import { Mesh, NormalProgram, OGLRenderingContext, Sphere, Transform } from '@app-game/ogl';
+import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
 import { onCleanup } from 'solid-js';
 import { effect } from 'solid-js/web';
 

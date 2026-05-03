@@ -1,4 +1,4 @@
-import { Camera, OGLRenderingContext, RenderTarget, Renderer, Transform } from '@packages/ogl';
+import { Camera, OGLRenderingContext, RenderTarget, Renderer, Transform } from '@app-game/ogl';
 import { PlaneWithTextureComponent } from '@packages/paint/brush-example/plane-with-texture.component';
 import { Listen } from '@solid-primitives/event-bus';
 

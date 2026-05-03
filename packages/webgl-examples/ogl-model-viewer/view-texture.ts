@@ -1,6 +1,6 @@
-import { Mesh, OGLRenderingContext, Plane, Program, Texture, Transform } from '@packages/ogl';
-import { CompressedImage } from '@packages/ogl/core/texture';
-import { Vec3Tuple } from '@packages/ogl/math/vec-3';
+import { Mesh, OGLRenderingContext, Plane, Program, Texture, Transform } from '@app-game/ogl';
+import { CompressedImage } from '@app-game/ogl/core/texture';
+import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
 import { loadDDSLevels } from './dds';
 import fragment from './view-texture.frag?raw';
 import vertex from './view-texture.vert?raw';

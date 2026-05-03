@@ -1,9 +1,9 @@
 import { Vec2 } from '@app-game/math';
 import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
-import { createBuffer } from '@packages/webgl/webgl-objects/buffer';
-import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
-import { createProgram } from '@packages/webgl/webgl-objects/program';
-import { createVertexArray } from '@packages/webgl/webgl-objects/vertex-array-object';
+import { createBuffer } from '@app-game/webgl/webgl-objects/buffer';
+import { createWebGL2Renderer } from '@app-game/webgl/webgl-objects/context';
+import { createProgram } from '@app-game/webgl/webgl-objects/program';
+import { createVertexArray } from '@app-game/webgl/webgl-objects/vertex-array-object';
 import { createSignal, onMount } from 'solid-js';
 import { effect } from 'solid-js/web';
 import { vec4 } from 'wgpu-matrix';

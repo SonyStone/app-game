@@ -1,4 +1,4 @@
-import { Mesh, OGLRenderingContext, Plane, Program, Transform } from '@packages/ogl';
+import { Mesh, OGLRenderingContext, Plane, Program, Transform } from '@app-game/ogl';
 import { createTexture4colors } from './texture-4-colors';
 import fragment from './view-texture.frag?raw';
 import vertex from './view-texture.vert?raw';

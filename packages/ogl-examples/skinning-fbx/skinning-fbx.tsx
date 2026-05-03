@@ -1,4 +1,4 @@
-import { Camera, Orbit, Renderer, Transform } from '@packages/ogl';
+import { Camera, Orbit, Renderer, Transform } from '@app-game/ogl';
 
 import mariaWProp from './Maria WProp J J Ong.fbx?url';
 

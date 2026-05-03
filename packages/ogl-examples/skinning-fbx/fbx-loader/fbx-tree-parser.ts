@@ -1,6 +1,6 @@
 // Wrapping modes
 
-import { Mat4, OGLRenderingContext, Texture } from '@packages/ogl';
+import { Mat4, OGLRenderingContext, Texture } from '@app-game/ogl';
 import type * as FBX from './fbx-tree';
 
 /** With {@link RepeatWrapping} the texture will simply repeat to infinity. */

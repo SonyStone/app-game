@@ -8,13 +8,13 @@ const routes: Routes[] = [
     path: '/hello-triangle',
     name: 'Hello Triangle',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/webgpu-examples/hello-triangle/hello-triangle'))
+    component: lazy(() => import('./hello-triangle/hello-triangle'))
   },
   {
     path: '/rotating-cube',
     name: 'Rotating Cube',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('@packages/webgpu-examples/rotating-cube/rotating-cube'))
+    component: lazy(() => import('./rotating-cube/rotating-cube'))
   },
   {
     path: '/rotating-cube-2',

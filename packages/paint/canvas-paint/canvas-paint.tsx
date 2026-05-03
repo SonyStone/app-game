@@ -1,4 +1,4 @@
-import { Renderer } from '@packages/ogl';
+import { Renderer } from '@app-game/ogl';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';

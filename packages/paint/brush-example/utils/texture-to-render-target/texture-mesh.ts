@@ -1,5 +1,5 @@
-import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@packages/ogl';
-import { Square } from '@packages/ogl/extras/square';
+import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@app-game/ogl';
+import { Square } from '@app-game/ogl/extras/square';
 
 import fragment from './texture-mesh.frag?raw';
 import vertex from './texture-mesh.vert?raw';

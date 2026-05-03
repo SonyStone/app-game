@@ -1,11 +1,11 @@
-import { Camera, GridHelper, Orbit, Renderer, Transform, Vec3 } from '@packages/ogl';
+import { Camera, GridHelper, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
 import { Show, createEffect, createMemo, createResource, createSignal } from 'solid-js';
 
-import { RenderTargetOptions } from '@packages/ogl/core/render-target';
-import { Vec3Tuple } from '@packages/ogl/math/vec-3';
+import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
+import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
 import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
 import { BlendModes, ColorBlendModes } from './blend-modes';
 import { createBlendRenderTarget } from './blend/blend-render-target';

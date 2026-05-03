@@ -1,6 +1,6 @@
 import { createRaycast } from '@packages/math-examples/raycast';
-import { Camera, OGLRenderingContext } from '@packages/ogl';
-import { Vec2 } from '@packages/ogl/math/vec-2_old';
+import { Camera, OGLRenderingContext } from '@app-game/ogl';
+import { Vec2 } from '@app-game/ogl/math/vec-2_old';
 import { mouseNormalize } from './mouse-normalize';
 
 export const createPointer = (props: { gl: OGLRenderingContext; camera: Camera }) => {

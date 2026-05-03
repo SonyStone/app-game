@@ -11,6 +11,7 @@ export { Transform } from './core/transform';
 // Extras
 export { GLTFAnimation } from './extras/GLTF-animation';
 export { GLTFLoader } from './extras/GLTF-loader';
+export type { GLTF } from './extras/GLTF-loader';
 export { GLTFSkin } from './extras/GLTF-skin';
 export { GPGPU } from './extras/GPGPU';
 export { KTXTexture } from './extras/KTX-texture';

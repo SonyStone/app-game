@@ -6,7 +6,7 @@ import {
   GL_DRAW_ELEMENTS_TYPE
 } from '@app-game/webgl/static-variables';
 import { GL_BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
-import { WebGL2RenderingContextStrict } from '@packages/webgl/webgl-strict-types/webgl2';
+import type { WebGL2RenderingContextStrict } from '@app-game/webgl/webgl-strict-types/webgl2';
 import { createWireframeIndex } from './create-brush-mesh';
 import drawShaderFragSrc from './draw-shader.frag?raw';
 import drawShaderVertSrc from './draw-shader.vert?raw';
