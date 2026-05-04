@@ -1,4 +1,4 @@
-import { Container, HTMLText, Sprite, useAsset } from '@packages/solid-pixi';
+import { Container, HTMLText, Sprite, useAsset } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { Ticker } from 'pixi.js';
 import { Suspense } from 'solid-js';

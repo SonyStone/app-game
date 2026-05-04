@@ -1,4 +1,4 @@
-import { Particle, ParticleContainer, useApplication, useAsset } from '@packages/solid-pixi';
+import { Particle, ParticleContainer, useApplication, useAsset } from '@app-game/solid-pixi';
 import { ParticleContainerOptions } from 'pixi.js';
 import { useTick } from '../useTick';
 

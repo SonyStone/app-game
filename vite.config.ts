@@ -12,6 +12,7 @@ import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 
 const webAppRoot = resolve(__dirname, 'apps/web');
 const packages = resolve(__dirname, 'packages');
+const devServerPort = Number(process.env.APP_PORT ?? process.env.PORT ?? '3200');
 
 export default defineConfig({
   root: webAppRoot,
@@ -36,7 +37,7 @@ export default defineConfig({
     typegpuPlugin({})
   ],
   server: {
-    port: 3200,
+    port: devServerPort,
     host: '0.0.0.0',
     fs: {
       allow: [resolve(__dirname)]
@@ -45,15 +46,26 @@ export default defineConfig({
   resolve: {
     alias: {
       '@app-game/app-router': resolve(packages, 'app-router'),
+      '@app-game/chroma': resolve(packages, 'chroma'),
       '@app-game/ecsy': resolve(packages, 'ecsy'),
+      '@app-game/litegraph': resolve(packages, 'litegraph'),
       '@app-game/math': resolve(packages, 'math'),
+      '@app-game/math-examples': resolve(packages, 'math-examples'),
+      '@app-game/ogl-examples': resolve(packages, 'ogl-examples'),
+      '@app-game/paint': resolve(packages, 'paint'),
+      '@app-game/penner-easing-equations': resolve(packages, 'penner-easing-equations'),
       '@app-game/piecs': resolve(packages, 'piecs'),
+      '@app-game/spector': resolve(packages, 'spector'),
+      '@app-game/solid-pixi': resolve(packages, 'solid-pixi'),
+      '@app-game/solid-three': resolve(packages, 'solid-three'),
       '@app-game/solid-utils': resolve(packages, 'solid-utils'),
+      '@app-game/three': resolve(packages, 'three'),
       '@app-game/three-examples': resolve(packages, 'three-examples'),
       '@app-game/ui-components': resolve(packages, 'ui-components'),
+      '@app-game/ui-components-examples': resolve(packages, 'ui-components-examples'),
       '@app-game/utils': resolve(packages, 'utils'),
+      '@app-game/webgl-examples': resolve(packages, 'webgl-examples'),
       '@utils': resolve(packages, 'solid-utils'),
-      '@packages': resolve(packages),
       '@/ldtk-ts': resolve(packages, 'ldtk-ts')
     }
   },

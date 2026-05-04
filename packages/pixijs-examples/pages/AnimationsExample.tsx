@@ -27,8 +27,8 @@ import {
   easeOutQuint,
   easeOutSine,
   linear
-} from '@packages/penner-easing-equations';
-import { Container, Graphics, Sprite, Text, useApplication, useAsset } from '@packages/solid-pixi';
+} from '@app-game/penner-easing-equations';
+import { Container, Graphics, Sprite, Text, useApplication, useAsset } from '@app-game/solid-pixi';
 import { createMemo, For, onMount, Suspense } from 'solid-js';
 import { createElapsedMS } from '../useTick';
 

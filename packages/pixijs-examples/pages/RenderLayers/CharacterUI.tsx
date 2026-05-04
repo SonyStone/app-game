@@ -1,4 +1,4 @@
-import { Container, Graphics, RenderLayer, Text } from '@packages/solid-pixi';
+import { Container, Graphics, RenderLayer, Text } from '@app-game/solid-pixi';
 import { ContainerOptions, Container as _Container } from 'pixi.js';
 import { createEffect, onCleanup } from 'solid-js';
 

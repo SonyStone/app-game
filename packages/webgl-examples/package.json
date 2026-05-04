@@ -5,6 +5,7 @@
   "dependencies": {
     "@app-game/app-router": "workspace:*",
     "@app-game/math": "workspace:*",
+    "@app-game/math-examples": "workspace:*",
     "@app-game/ogl": "workspace:*",
     "@app-game/twgl": "workspace:*",
     "@app-game/webgl": "workspace:*",

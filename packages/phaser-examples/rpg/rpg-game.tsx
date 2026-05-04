@@ -4,8 +4,8 @@ import { onCleanup, onMount } from 'solid-js';
 
 import cloudCityMap from './cloud-city-map.json?url';
 
-import CaptureMenu from '@packages/spector/embedded-frontend-2/capture-menu';
-import { Spector } from '@packages/spector/spector';
+import CaptureMenu from '@app-game/spector/embedded-frontend-2/capture-menu';
+import { Spector } from '@app-game/spector/spector';
 import { Title } from '@solidjs/meta';
 import { Portal } from 'solid-js/web';
 import cloudCityTileset from './cloud_tileset/cloud_tileset.png?url';

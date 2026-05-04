@@ -1,6 +1,6 @@
-import { BoxLineGeometry } from '@packages/three/addons/geometries/box-line-geometry';
-import { VRButton } from '@packages/three/addons/webxr/vr-button';
-import { XRControllerModelFactory } from '@packages/three/addons/webxr/xr-controller-model-factory';
+import { BoxLineGeometry } from '@app-game/three/addons/geometries/box-line-geometry';
+import { VRButton } from '@app-game/three/addons/webxr/vr-button';
+import { XRControllerModelFactory } from '@app-game/three/addons/webxr/xr-controller-model-factory';
 import { onCleanup } from 'solid-js';
 import {
   AdditiveBlending,

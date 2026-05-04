@@ -1,4 +1,4 @@
-import { Container, Mesh, useApplication } from '@packages/solid-pixi';
+import { Container, Mesh, useApplication } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { Geometry, MeshGeometry, Shader, TextureShader } from 'pixi.js';
 import fragment from './shaderToy.frag?raw';

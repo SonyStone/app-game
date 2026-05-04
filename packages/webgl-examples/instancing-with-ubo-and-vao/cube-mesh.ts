@@ -1,6 +1,6 @@
 import * as m4 from '@app-game/math/m4';
-import { createWireframeIndex } from '@packages/paint/paint-1/create-brush-mesh';
 import { VertexAttribDivisor, VertexAttribPointer } from './vertex-attrib-pointer';
+import { createWireframeIndex } from '../wireframe-index';
 
 export const CUBE = {
   geometry: {

@@ -1,4 +1,4 @@
-import { Container, Sprite, useAsset } from '@packages/solid-pixi';
+import { Container, Sprite, useAsset } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { gsap } from 'gsap';
 import { Ticker } from 'pixi.js';

@@ -1,4 +1,4 @@
-import { Container, Graphics } from '@packages/solid-pixi';
+import { Container, Graphics } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 
 export default function GraphicsSimple() {

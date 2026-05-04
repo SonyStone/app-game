@@ -1,4 +1,4 @@
-import { Container, Sprite, useApplication, useAsset } from '@packages/solid-pixi';
+import { Container, Sprite, useApplication, useAsset } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { BLEND_MODES, Ticker } from 'pixi.js';
 import 'pixi.js/advanced-blend-modes';

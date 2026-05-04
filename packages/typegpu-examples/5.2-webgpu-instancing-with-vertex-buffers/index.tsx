@@ -1,4 +1,4 @@
-import { hex2rgb } from '@packages/chroma/io/hex/hex2rgb';
+import { hex2rgb } from '@app-game/chroma/io/hex/hex2rgb';
 import { Range2D } from '@app-game/components/ui/range-2d';
 import { Meta, Title } from '@solidjs/meta';
 import { createEffect, createSignal } from 'solid-js';

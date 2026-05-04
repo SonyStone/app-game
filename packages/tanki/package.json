@@ -5,6 +5,7 @@
   "dependencies": {
     "@app-game/math": "workspace:*",
     "@app-game/ogl": "workspace:*",
+    "@app-game/solid-pixi": "workspace:*",
     "@app-game/solid-utils": "workspace:*"
   },
   "exports": {

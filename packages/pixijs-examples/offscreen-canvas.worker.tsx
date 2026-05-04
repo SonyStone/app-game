@@ -1,4 +1,4 @@
-import { Application, Stage } from '@packages/solid-pixi';
+import { Application, Stage } from '@app-game/solid-pixi';
 import { gsap } from 'gsap';
 import { PixiPlugin } from 'gsap/PixiPlugin';
 import { Graphics, VERSION } from 'pixi.js';

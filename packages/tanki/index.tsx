@@ -1,5 +1,5 @@
 import { toRadian } from '@app-game/ogl/extras/path/utils';
-import { Container, Graphics, Sprite, useAsset } from '@packages/solid-pixi';
+import { Container, Graphics, Sprite, useAsset } from '@app-game/solid-pixi';
 import { createEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';

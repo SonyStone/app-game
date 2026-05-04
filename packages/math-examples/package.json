@@ -10,6 +10,7 @@
     "@app-game/solid-utils": "workspace:*",
     "@app-game/tanki": "workspace:*",
     "@app-game/ui-components": "workspace:*",
+    "@app-game/ui-components-examples": "workspace:*",
     "@app-game/utils": "workspace:*"
   },
   "exports": {

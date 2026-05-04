@@ -4,8 +4,10 @@
   "private": true,
   "dependencies": {
     "@app-game/app-router": "workspace:*",
+    "@app-game/chroma": "workspace:*",
     "@app-game/math": "workspace:*",
     "@app-game/pixijs-research": "workspace:*",
+    "@app-game/spector": "workspace:*",
     "@app-game/twgl": "workspace:*",
     "@app-game/twgl-2": "workspace:*",
     "@app-game/three-examples": "workspace:*",

@@ -1,4 +1,4 @@
-import { Container, RenderLayer, Sprite, TilingSprite, useAssets } from '@packages/solid-pixi';
+import { Container, RenderLayer, Sprite, TilingSprite, useAssets } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { DisplacementFilter, Texture } from 'pixi.js';
 import { createMemo, For } from 'solid-js';

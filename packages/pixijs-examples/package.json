@@ -4,6 +4,8 @@
   "private": true,
   "dependencies": {
     "@app-game/app-router": "workspace:*",
+    "@app-game/penner-easing-equations": "workspace:*",
+    "@app-game/solid-pixi": "workspace:*",
     "@app-game/ui-components": "workspace:*"
   },
   "exports": {

@@ -1,4 +1,4 @@
-import { Container, RenderLayer, Sprite } from '@packages/solid-pixi';
+import { Container, RenderLayer, Sprite } from '@app-game/solid-pixi';
 import { ContainerOptions, Texture } from 'pixi.js';
 import { splitProps } from 'solid-js';
 import { useTick } from '../../useTick';

@@ -1,5 +1,5 @@
 import { Renderer } from '@app-game/ogl';
-import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
+import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { For, onCleanup, onMount } from 'solid-js';
 import { createSquareMesh } from '../brush-example/square/create-square-mesh';
 import OffscreenCanvasWorker from './offscreen-canvas.worker?worker';

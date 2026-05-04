@@ -1,4 +1,4 @@
-import { Tree } from '@packages/math-examples/tree-struct/tree';
+import { Tree } from '@app-game/math-examples/tree-struct/tree';
 import { trackStore } from '@solid-primitives/deep';
 import { createUndoHistory } from '@solid-primitives/history';
 import { createEffect, createMemo, createResource, Show } from 'solid-js';

@@ -3,8 +3,8 @@ import { Show, createEffect, createSignal, onCleanup } from 'solid-js';
 
 import { Camera, Renderer, Transform, Vec3 } from '@app-game/ogl';
 
-import { SphereComponent } from '@packages/math-examples/camera-projection-webgl2/sphere.component';
-import { createRaycast } from '@packages/math-examples/raycast';
+import { SphereComponent } from '@app-game/math-examples/camera-projection-webgl2/sphere.component';
+import { createRaycast } from '@app-game/math-examples/raycast';
 import { GL_CAPABILITIES, GL_FUNC_SEPARATE } from '@app-game/webgl/static-variables';
 import { createEmitter } from '@solid-primitives/event-bus';
 import { Brush1Component } from './brush-1/brush.component';

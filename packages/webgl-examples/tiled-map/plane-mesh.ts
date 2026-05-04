@@ -1,6 +1,6 @@
 import * as m3 from '@app-game/math/m3';
-import { createWireframeIndex } from '@packages/paint/paint-1/create-brush-mesh';
 import { VertexAttribDivisor, VertexAttribPointer } from '../instancing-with-ubo-and-vao/vertex-attrib-pointer';
+import { createWireframeIndex } from '../wireframe-index';
 
 export const PLANE = {
   target: WebGL2RenderingContext.ARRAY_BUFFER,

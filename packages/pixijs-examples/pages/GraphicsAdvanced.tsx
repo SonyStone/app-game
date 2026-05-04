@@ -1,4 +1,4 @@
-import { Container, Graphics, useAsset } from '@packages/solid-pixi';
+import { Container, Graphics, useAsset } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { JSX, Show } from 'solid-js';
 

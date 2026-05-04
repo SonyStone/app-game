@@ -1,4 +1,4 @@
-import { unpack } from '@packages/chroma/utils/unpack';
+import { unpack } from '@app-game/chroma/utils/unpack';
 
 export const formatGl = (...args: number[] | [{ r: number; g: number; b: number; a: number }]) => {
   const rgb = unpack(args, 'rgba');

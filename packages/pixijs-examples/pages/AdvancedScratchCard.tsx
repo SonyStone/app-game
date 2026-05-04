@@ -1,4 +1,4 @@
-import { Container, Sprite, useApplication, useAssets } from '@packages/solid-pixi';
+import { Container, Sprite, useApplication, useAssets } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { FederatedPointerEvent, Graphics, Point, RenderTexture, Texture } from 'pixi.js';
 import { createEffect } from 'solid-js';

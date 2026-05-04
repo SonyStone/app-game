@@ -1,5 +1,5 @@
-import { SphereComponent } from '@packages/math-examples/camera-projection-webgl2/sphere.component';
-import { createRaycast } from '@packages/math-examples/raycast';
+import { SphereComponent } from '@app-game/math-examples/camera-projection-webgl2/sphere.component';
+import { createRaycast } from '@app-game/math-examples/raycast';
 import {
   Camera,
   GridHelper,
@@ -15,7 +15,7 @@ import {
 } from '@app-game/ogl';
 import { TextureProgram } from '@app-game/ogl/extras/texture-program';
 import { createTimer } from '@app-game/utils/timeout';
-import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
+import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';

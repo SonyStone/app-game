@@ -1,4 +1,4 @@
-import { Application, Stage } from '@packages/solid-pixi';
+import { Application, Stage } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { A } from '@solidjs/router';
 import { gsap } from 'gsap';

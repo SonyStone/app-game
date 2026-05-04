@@ -1,7 +1,7 @@
-import { rgbToGL } from '@packages/chroma/io/gl';
-import { hsv2rgb } from '@packages/chroma/io/hsv/hsv2rgb';
-import CaptureMenu from '@packages/spector/embedded-frontend-2/capture-menu';
-import { Spector } from '@packages/spector/spector';
+import { rgbToGL } from '@app-game/chroma/io/gl';
+import { hsv2rgb } from '@app-game/chroma/io/hsv/hsv2rgb';
+import CaptureMenu from '@app-game/spector/embedded-frontend-2/capture-menu';
+import { Spector } from '@app-game/spector/spector';
 import * as twgl from '@app-game/twgl';
 import { Title } from '@solidjs/meta';
 import { onCleanup, onMount } from 'solid-js';

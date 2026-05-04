@@ -2,6 +2,9 @@
   "name": "@app-game/litegraph-examples",
   "version": "0.0.0",
   "private": true,
+  "dependencies": {
+    "@app-game/litegraph": "workspace:*"
+  },
   "exports": {
     "./first-project/first-project": "./first-project/first-project.tsx",
     "./litegraph": "./litegraph.tsx"

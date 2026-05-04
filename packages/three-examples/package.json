@@ -4,7 +4,10 @@
   "private": true,
   "dependencies": {
     "@app-game/app-router": "workspace:*",
-    "@app-game/solid-utils": "workspace:*"
+    "@app-game/solid-three": "workspace:*",
+    "@app-game/solid-utils": "workspace:*",
+    "@app-game/three": "workspace:*",
+    "@app-game/ui-components": "workspace:*"
   },
   "exports": {
     ".": "./index.ts",

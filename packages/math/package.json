@@ -3,7 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
-    "@app-game/ogl": "workspace:*",
     "@app-game/utils": "workspace:*"
   },
   "exports": {

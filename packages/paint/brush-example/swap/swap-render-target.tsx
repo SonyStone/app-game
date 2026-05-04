@@ -2,7 +2,7 @@ import { Vec2 } from '@app-game/math';
 import { Mesh, OGLRenderingContext, Program, RenderTarget, SwapBuffering, Triangle } from '@app-game/ogl';
 import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
 import { createTimer } from '@app-game/utils/timeout';
-import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
+import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
 import { BlendModes } from '../blend-modes';
 import { curve } from '../utils/curve';

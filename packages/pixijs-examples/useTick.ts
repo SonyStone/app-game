@@ -1,4 +1,4 @@
-import { useApplication } from '@packages/solid-pixi';
+import { useApplication } from '@app-game/solid-pixi';
 import { Ticker, TickerCallback } from 'pixi.js';
 import { createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 

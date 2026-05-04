@@ -1,7 +1,7 @@
 import { Camera, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import { toRadian } from '@app-game/ogl/extras/path/utils';
 import { createSkipper } from '@app-game/tanki/create-skipper';
-import { numberPrecisionDragInput } from '@packages/ui-components-examples/breadcrumbs/number-precision-drag-input';
+import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import createRAF from '@solid-primitives/raf';
 import { Index } from 'solid-js';
 import { createStore } from 'solid-js/store';

@@ -1,4 +1,4 @@
-import { createRaycast } from '@packages/math-examples/raycast';
+import { createRaycast } from '@app-game/math-examples/raycast';
 import { Camera, OGLRenderingContext } from '@app-game/ogl';
 import { Vec2 } from '@app-game/ogl/math/vec-2_old';
 import { mouseNormalize } from './mouse-normalize';

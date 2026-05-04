@@ -1,6 +1,6 @@
 import { RenderTarget, Renderer, SwapBuffering, Transform } from '@app-game/ogl';
 import { createTimer } from '@app-game/utils/timeout';
-import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
+import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect, createSignal, onMount } from 'solid-js';

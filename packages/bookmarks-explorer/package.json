@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@app-game/app-router": "workspace:*",
+    "@app-game/math-examples": "workspace:*",
     "@app-game/solid-utils": "workspace:*"
   },
   "exports": {

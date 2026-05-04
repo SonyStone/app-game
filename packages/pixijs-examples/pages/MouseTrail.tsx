@@ -1,4 +1,4 @@
-import { Container, MeshRope, useApplication, useAsset } from '@packages/solid-pixi';
+import { Container, MeshRope, useApplication, useAsset } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { Point } from 'pixi.js';
 import 'pixi.js/advanced-blend-modes';

@@ -1,5 +1,5 @@
 import { toRadian } from '@app-game/ogl/extras/path/utils';
-import { insert, spread } from '@packages/solid-pixi';
+import { insert, spread } from '@app-game/solid-pixi';
 import { createEffect, JSX, onCleanup } from 'solid-js';
 import { Collider as _Collider, RigidBody, useRapier2D } from './Rapier2D';
 import { useWorld } from './World';

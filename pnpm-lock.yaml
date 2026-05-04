@@ -485,6 +485,9 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../app-router
+      '@app-game/math-examples':
+        specifier: workspace:*
+        version: link:../math-examples
       '@app-game/solid-utils':
         specifier: workspace:*
         version: link:../solid-utils
@@ -580,13 +583,14 @@ importers:
 
   packages/litegraph: {}
 
-  packages/litegraph-examples: {}
+  packages/litegraph-examples:
+    dependencies:
+      '@app-game/litegraph':
+        specifier: workspace:*
+        version: link:../litegraph
 
   packages/math:
     dependencies:
-      '@app-game/ogl':
-        specifier: workspace:*
-        version: link:../ogl
       '@app-game/utils':
         specifier: workspace:*
         version: link:../utils
@@ -620,6 +624,9 @@ importers:
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
+      '@app-game/ui-components-examples':
+        specifier: workspace:*
+        version: link:../ui-components-examples
       '@app-game/utils':
         specifier: workspace:*
         version: link:../utils
@@ -662,18 +669,27 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/math-examples':
+        specifier: workspace:*
+        version: link:../math-examples
       '@app-game/ogl':
         specifier: workspace:*
         version: link:../ogl
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
+      '@app-game/ui-components-examples':
+        specifier: workspace:*
+        version: link:../ui-components-examples
       '@app-game/utils':
         specifier: workspace:*
         version: link:../utils
       '@app-game/webgl':
         specifier: workspace:*
         version: link:../webgl
+      '@app-game/webgl-examples':
+        specifier: workspace:*
+        version: link:../webgl-examples
 
   packages/penner-easing-equations: {}
 
@@ -684,6 +700,9 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../app-router
+      '@app-game/spector':
+        specifier: workspace:*
+        version: link:../spector
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
@@ -701,6 +720,12 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../app-router
+      '@app-game/penner-easing-equations':
+        specifier: workspace:*
+        version: link:../penner-easing-equations
+      '@app-game/solid-pixi':
+        specifier: workspace:*
+        version: link:../solid-pixi
       '@app-game/ui-components':
         specifier: workspace:*
         version: link:../ui-components
@@ -770,6 +795,9 @@ importers:
       '@app-game/ogl':
         specifier: workspace:*
         version: link:../ogl
+      '@app-game/solid-pixi':
+        specifier: workspace:*
+        version: link:../solid-pixi
       '@app-game/solid-utils':
         specifier: workspace:*
         version: link:../solid-utils
@@ -781,9 +809,18 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../app-router
+      '@app-game/solid-three':
+        specifier: workspace:*
+        version: link:../solid-three
       '@app-game/solid-utils':
         specifier: workspace:*
         version: link:../solid-utils
+      '@app-game/three':
+        specifier: workspace:*
+        version: link:../three
+      '@app-game/ui-components':
+        specifier: workspace:*
+        version: link:../ui-components
 
   packages/twgl:
     dependencies:
@@ -805,12 +842,18 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../app-router
+      '@app-game/chroma':
+        specifier: workspace:*
+        version: link:../chroma
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
       '@app-game/pixijs-research':
         specifier: workspace:*
         version: link:../pixijs-research
+      '@app-game/spector':
+        specifier: workspace:*
+        version: link:../spector
       '@app-game/three-examples':
         specifier: workspace:*
         version: link:../three-examples
@@ -832,6 +875,9 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../app-router
+      '@app-game/chroma':
+        specifier: workspace:*
+        version: link:../chroma
       '@app-game/components':
         specifier: workspace:*
         version: link:../components
@@ -884,6 +930,9 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+      '@app-game/math-examples':
+        specifier: workspace:*
+        version: link:../math-examples
       '@app-game/ogl':
         specifier: workspace:*
         version: link:../ogl
