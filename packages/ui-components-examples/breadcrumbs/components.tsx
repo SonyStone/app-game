@@ -1,8 +1,8 @@
-import { BreadcrumbProps, Breadcrumbs } from '@packages/ui-components/breadcrumbs/breadcrumbs';
-import MatButton from '@packages/ui-components/button/MatButton';
-import { MatFormField } from '@packages/ui-components/form-field/MatFormField';
-import { Menu } from '@packages/ui-components/menu/menu';
-import { Ripple } from '@packages/ui-components/ripple/Ripple';
+import { BreadcrumbProps, Breadcrumbs } from '@app-game/ui-components/breadcrumbs/breadcrumbs';
+import MatButton from '@app-game/ui-components/button/MatButton';
+import { MatFormField } from '@app-game/ui-components/form-field/MatFormField';
+import { Menu } from '@app-game/ui-components/menu/menu';
+import { Ripple } from '@app-game/ui-components/ripple';
 import { Meta, Title } from '@solidjs/meta';
 import { For, Show, createSignal } from 'solid-js';
 import { numberPrecisionDragInput } from './number-precision-drag-input';

@@ -1,20 +1,14 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { OrthographicCamera, PerspectiveCamera } from 'three';
 
-import createContextProvider from '@utils/createContextProvider';
+import { createContextProvider } from '@app-game/solid-utils';
 import { OrbitControls } from './controls/OrbitControls';
 import { copy } from './utils/object3d';
 
 export function createResize() {
   const [resize, setResize] = createSignal<{ width: number; height: number }>({
     width: window.innerWidth,
-    height: window.innerHeight,
+    height: window.innerHeight
   });
 
   function onWindowResize() {
@@ -31,17 +25,10 @@ export function createResize() {
 }
 
 export const [CameraProvider, useCamera] = createContextProvider(() => {
-  const [cameraType, setCameraType] = createSignal<
-    'perspective' | 'orthographic'
-  >('perspective');
+  const [cameraType, setCameraType] = createSignal<'perspective' | 'orthographic'>('perspective');
 
   const cameras = {
-    perspective: new PerspectiveCamera(
-      50,
-      window.innerWidth / window.innerHeight,
-      1,
-      10000
-    ),
+    perspective: new PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000),
     orthographic: new OrthographicCamera(
       -window.innerWidth / 2,
       window.innerWidth / 2,
@@ -49,7 +36,7 @@ export const [CameraProvider, useCamera] = createContextProvider(() => {
       -window.innerHeight / 2,
       -10000,
       10000
-    ),
+    )
   };
 
   const controls = new OrbitControls();
@@ -95,9 +82,7 @@ export const [CameraProvider, useCamera] = createContextProvider(() => {
 
   function toggleCamera() {
     const type = cameraType();
-    type === 'perspective'
-      ? setCameraType('orthographic')
-      : setCameraType('perspective');
+    type === 'perspective' ? setCameraType('orthographic') : setCameraType('perspective');
   }
 
   return { camera, controls, resize, cameraType, toggleCamera };

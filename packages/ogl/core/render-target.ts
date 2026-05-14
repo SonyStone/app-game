@@ -1,7 +1,7 @@
 // TODO: test stencil and depth
 import { Texture } from './texture';
 
-import { GL_FRAMEBUFFER_TARGET, GL_RENDERBUFFER_TARGET } from '@packages/webgl/static-variables';
+import { GL_FRAMEBUFFER_TARGET, GL_RENDERBUFFER_TARGET } from '@app-game/webgl/static-variables';
 import type { OGLRenderingContext } from './renderer';
 
 export interface RenderTargetOptions {

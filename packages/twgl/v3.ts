@@ -22,7 +22,10 @@
  * @module twgl/v3
  */
 
-let VecType = Float32Array;
+type Vec3Value = number[] | Float32Array;
+type VecConstructor = Float32ArrayConstructor | ArrayConstructor;
+
+let VecType: VecConstructor = Float32Array;
 
 /**
  * A JavaScript array with 3 values or a Float32Array with 3 values.
@@ -38,7 +41,7 @@ let VecType = Float32Array;
  * @return {constructor} previous constructor for Vec3
  * @memberOf module:twgl/v3
  */
-function setDefaultType(ctor) {
+function setDefaultType(ctor: VecConstructor): VecConstructor {
   const oldType = VecType;
   VecType = ctor;
   return oldType;
@@ -52,7 +55,7 @@ function setDefaultType(ctor) {
  * @return {module:twgl/v3.Vec3} the created vector
  * @memberOf module:twgl/v3
  */
-function create(x, y, z) {
+function create(x?: number, y?: number, z?: number): Vec3Value {
   const dst = new VecType(3);
   if (x) {
     dst[0] = x;
@@ -74,7 +77,7 @@ function create(x, y, z) {
  * @return {module:twgl/v3.Vec3} A vector tha tis the sum of a and b.
  * @memberOf module:twgl/v3
  */
-function add(a, b, dst) {
+function add(a: Vec3Value, b: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = a[0] + b[0];
@@ -92,7 +95,7 @@ function add(a, b, dst) {
  * @return {module:twgl/v3.Vec3} A vector that is the difference of a and b.
  * @memberOf module:twgl/v3
  */
-function subtract(a, b, dst) {
+function subtract(a: Vec3Value, b: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = a[0] - b[0];
@@ -113,7 +116,7 @@ function subtract(a, b, dst) {
  * @return {module:twgl/v3.Vec3} The linear interpolated result.
  * @memberOf module:twgl/v3
  */
-function lerp(a, b, t, dst) {
+function lerp(a: Vec3Value, b: Vec3Value, t: number, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = a[0] + t * (b[0] - a[0]);
@@ -134,7 +137,7 @@ function lerp(a, b, t, dst) {
  * @return {module:twgl/v3.Vec3} the linear interpolated result.
  * @memberOf module:twgl/v3
  */
-function lerpV(a, b, t, dst) {
+function lerpV(a: Vec3Value, b: Vec3Value, t: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = a[0] + t[0] * (b[0] - a[0]);
@@ -154,7 +157,7 @@ function lerpV(a, b, t, dst) {
  * @return {module:twgl/v3.Vec3} The max components vector.
  * @memberOf module:twgl/v3
  */
-function max(a, b, dst) {
+function max(a: Vec3Value, b: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = Math.max(a[0], b[0]);
@@ -174,7 +177,7 @@ function max(a, b, dst) {
  * @return {module:twgl/v3.Vec3} The min components vector.
  * @memberOf module:twgl/v3
  */
-function min(a, b, dst) {
+function min(a: Vec3Value, b: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = Math.min(a[0], b[0]);
@@ -192,7 +195,7 @@ function min(a, b, dst) {
  * @return {module:twgl/v3.Vec3} The scaled vector.
  * @memberOf module:twgl/v3
  */
-function mulScalar(v, k, dst) {
+function mulScalar(v: Vec3Value, k: number, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = v[0] * k;
@@ -210,7 +213,7 @@ function mulScalar(v, k, dst) {
  * @return {module:twgl/v3.Vec3} The scaled vector.
  * @memberOf module:twgl/v3
  */
-function divScalar(v, k, dst) {
+function divScalar(v: Vec3Value, k: number, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = v[0] / k;
@@ -229,7 +232,7 @@ function divScalar(v, k, dst) {
  * @return {module:twgl/v3.Vec3} The vector of a cross b.
  * @memberOf module:twgl/v3
  */
-function cross(a, b, dst) {
+function cross(a: Vec3Value, b: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   const t1 = a[2] * b[0] - a[0] * b[2];
@@ -249,7 +252,7 @@ function cross(a, b, dst) {
  * @return {number} dot product
  * @memberOf module:twgl/v3
  */
-function dot(a, b) {
+function dot(a: Vec3Value, b: Vec3Value): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
@@ -259,7 +262,7 @@ function dot(a, b) {
  * @return {number} length of vector.
  * @memberOf module:twgl/v3
  */
-function length(v) {
+function length(v: Vec3Value): number {
   return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
@@ -269,7 +272,7 @@ function length(v) {
  * @return {number} square of the length of vector.
  * @memberOf module:twgl/v3
  */
-function lengthSq(v) {
+function lengthSq(v: Vec3Value): number {
   return v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
 }
 
@@ -280,7 +283,7 @@ function lengthSq(v) {
  * @return {number} distance between a and b
  * @memberOf module:twgl/v3
  */
-function distance(a, b) {
+function distance(a: Vec3Value, b: Vec3Value): number {
   const dx = a[0] - b[0];
   const dy = a[1] - b[1];
   const dz = a[2] - b[2];
@@ -294,7 +297,7 @@ function distance(a, b) {
  * @return {number} square of the distance between a and b
  * @memberOf module:twgl/v3
  */
-function distanceSq(a, b) {
+function distanceSq(a: Vec3Value, b: Vec3Value): number {
   const dx = a[0] - b[0];
   const dy = a[1] - b[1];
   const dz = a[2] - b[2];
@@ -308,7 +311,7 @@ function distanceSq(a, b) {
  * @return {module:twgl/v3.Vec3} The normalized vector.
  * @memberOf module:twgl/v3
  */
-function normalize(a, dst) {
+function normalize(a: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   const lenSq = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
@@ -333,7 +336,7 @@ function normalize(a, dst) {
  * @return {module:twgl/v3.Vec3} -v.
  * @memberOf module:twgl/v3
  */
-function negate(v, dst) {
+function negate(v: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = -v[0];
@@ -350,7 +353,7 @@ function negate(v, dst) {
  * @return {module:twgl/v3.Vec3} A copy of v.
  * @memberOf module:twgl/v3
  */
-function copy(v, dst) {
+function copy(v: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = v[0];
@@ -370,7 +373,7 @@ function copy(v, dst) {
  *     b.
  * @memberOf module:twgl/v3
  */
-function multiply(a, b, dst) {
+function multiply(a: Vec3Value, b: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = a[0] * b[0];
@@ -390,7 +393,7 @@ function multiply(a, b, dst) {
  *     b.
  * @memberOf module:twgl/v3
  */
-function divide(a, b, dst) {
+function divide(a: Vec3Value, b: Vec3Value, dst?: Vec3Value): Vec3Value {
   dst = dst || new VecType(3);
 
   dst[0] = a[0] / b[0];

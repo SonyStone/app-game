@@ -1,4 +1,4 @@
-import { DEG_TO_RAD, RAD_TO_DEG } from '@packages/math/constants';
+import { DEG_TO_RAD, RAD_TO_DEG } from '@app-game/math/constants';
 import { Quaternion } from './Quaternion';
 
 const _lut: string[] = [];

@@ -1,0 +1,6 @@
+{
+  "name": "@app-game/bevy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module"
+}

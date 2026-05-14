@@ -1,5 +1,5 @@
-import { OGLRenderingContext, Texture } from '@packages/ogl';
-import { RenderTargetOptions } from '@packages/ogl/core/render-target';
+import { OGLRenderingContext, Texture } from '@app-game/ogl';
+import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createEffect } from 'solid-js';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
@@ -42,14 +42,14 @@ export const createBrushInstancingRenderTarget = ({
     for (let p = 0; p <= 1; p = p + step) {
       const point = curve(p, points[0] ?? 0, points[1] ?? 0, points[2] ?? 0, points[3] ?? 0);
 
-      if (Math.abs(prevPoint[0] - point[0]) < SPACING && Math.abs(prevPoint[1] - point[1]) < SPACING) {
+      if (Math.abs(prevPoint[0] - point.x) < SPACING && Math.abs(prevPoint[1] - point.y) < SPACING) {
         continue;
       }
 
       brush.add({ point, opacity: p });
 
-      prevPoint[0] = point[0];
-      prevPoint[1] = point[1];
+      prevPoint[0] = point.x;
+      prevPoint[1] = point.y;
       i++;
     }
     realInstancedCount = i;

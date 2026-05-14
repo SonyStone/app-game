@@ -1,0 +1,16 @@
+{
+  "name": "@app-game/tanki",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/math": "workspace:*",
+    "@app-game/ogl": "workspace:*",
+    "@app-game/solid-pixi": "workspace:*",
+    "@app-game/solid-utils": "workspace:*"
+  },
+  "exports": {
+    ".": "./index.tsx",
+    "./create-skipper": "./create-skipper.ts"
+  },
+  "type": "module"
+}

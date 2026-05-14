@@ -54,7 +54,7 @@ export default function RotatingCube() {
       alphaMode: 'premultiplied'
     });
 
-    const cubeVertexArray = await getCubeVertexArray();
+    const cubeVertexArray = getCubeVertexArray;
 
     // Create a vertex buffer from the cube data.
     const verticesBuffer = device.createBuffer({
@@ -189,7 +189,8 @@ export default function RotatingCube() {
         transformationMatrix.byteOffset,
         transformationMatrix.byteLength
       );
-      renderPassDescriptor.colorAttachments[0]!.view = context.getCurrentTexture().createView();
+      const colorAttachments = renderPassDescriptor.colorAttachments as Array<GPURenderPassColorAttachment | null | undefined>;
+      colorAttachments[0]!.view = context.getCurrentTexture().createView();
 
       const commandEncoder = device.createCommandEncoder();
       const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);

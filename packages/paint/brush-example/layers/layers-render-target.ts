@@ -1,8 +1,8 @@
-import { FVec2 } from '@packages/math';
-import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@packages/ogl';
-import { RenderTargetOptions } from '@packages/ogl/core/render-target';
-import { Square } from '@packages/ogl/extras/square';
-import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
+import { Vec2 } from '@app-game/math';
+import { Mesh, OGLRenderingContext, Program, RenderTarget, Texture } from '@app-game/ogl';
+import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
+import { Square } from '@app-game/ogl/extras/square';
+import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { effect } from 'solid-js/web';
 import { BlendModes } from '../blend-modes';
@@ -52,7 +52,7 @@ export const createLayersRenderTarget = ({
       }
     }
   });
-  const mouse = FVec2.create(0.5, 0.5);
+  const mouse = new Vec2().set(0.5, 0.5);
   const program = new Program(gl, {
     vertex,
     fragment,

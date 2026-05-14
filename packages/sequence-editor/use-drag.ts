@@ -1,5 +1,6 @@
-import { Vec2Tuple } from "ogl";
 import { createSignal, onCleanup, untrack } from "solid-js"
+
+type Vec2Tuple = [number, number];
 
 export default function useDrag(
   target: HTMLElement | SVGElement,

@@ -1,7 +1,7 @@
-import { DEG_TO_RAD } from '@packages/math/constants';
-import * as m4 from '@packages/math/m4';
-import { compileShader } from '@packages/webgl/compileShader';
-import { linkProgram } from '@packages/webgl/linkProgram';
+import { DEG_TO_RAD } from '@app-game/math/constants';
+import * as m4 from '@app-game/math/m4';
+import { compileShader } from '@app-game/webgl/compileShader';
+import { linkProgram } from '@app-game/webgl/linkProgram';
 import {
   GL_BUFFER_TYPE,
   GL_CLEAR_MASK,
@@ -9,19 +9,19 @@ import {
   GL_SHADER_TYPE,
   GL_STATIC_VARIABLES,
   GL_TEXTURES
-} from '@packages/webgl/static-variables';
+} from '@app-game/webgl/static-variables';
 import { createEffect, onCleanup } from 'solid-js';
 
-import { getAttributeData } from '@packages/pixijs-research/webgl/getAttributeData';
-import { getUniformData } from '@packages/pixijs-research/webgl/getUniformData';
-import { useCamera } from '@packages/three-examples/Camera.provider';
-import { createProgramInfo } from '@packages/twgl/programs';
+import { getAttributeData } from '@app-game/pixijs-research/webgl/getAttributeData';
+import { getUniformData } from '@app-game/pixijs-research/webgl/getUniformData';
+import { useCamera } from '@app-game/three-examples';
+import { createProgramInfo } from '@app-game/twgl/programs';
 import {
   GL_TEXTURE_MAG_FILTER,
   GL_TEXTURE_MIN_FILTER,
   GL_TEXTURE_PARAMETER_NAME,
   GL_TEXTURE_UNIT
-} from '@packages/webgl/static-variables/textures';
+} from '@app-game/webgl/static-variables/textures';
 import fragmentSrc from './frag_shader.frag?raw';
 import vertexSrc from './vert_shader.vert?raw';
 
@@ -176,13 +176,17 @@ export default function main() {
   const target = [0, 0, 0];
   const up = [0, 1, 0];
 
-  const camera = m4.lookAt(m4.identity(), eye, target, up);
-  const view = m4.inverse(camera);
+  const camera = m4.lookAt(new m4.FMat4(), eye, target, up);
+  const view = new m4.FMat4();
+  m4.inverse(camera, view);
 
-  let projection = m4.identity();
-  let projectionInverse = m4.inverse(projection);
-  let viewProjection = m4.identity();
-  let world = m4.identity();
+  let projection = m4.identity(new m4.FMat4());
+  let projectionInverse = new m4.FMat4();
+  m4.inverse(projection, projectionInverse);
+  let viewProjection = m4.identity(new m4.FMat4());
+  let world = m4.identity(new m4.FMat4());
+  const worldInverseTranspose = m4.identity(new m4.FMat4());
+  const worldViewProjection = m4.identity(new m4.FMat4());
 
   console.log(`program`, program);
 
@@ -238,19 +242,19 @@ export default function main() {
       let width = aspect * height;
       let left = -0.5 * width;
 
-      projection = m4.makePerspective(left, left + width, top - height, top, near, far, projection);
-      projectionInverse = m4.inverse(projection, projectionInverse);
+      m4.makePerspective(projection, left, left + width, top - height, top, near, far);
+      m4.inverse(projection, projectionInverse);
     } else {
       let zoom = 200;
       let left = -resize.width / (2 * zoom);
       let right = resize.width / (2 * zoom);
       let top = resize.height / (2 * zoom);
       let bottom = -resize.height / (2 * zoom);
-      projection = m4.ortho(left, right, bottom, top, 0.5, 10, projection);
-      projectionInverse = m4.inverse(projection, projectionInverse);
+      m4.ortho(projection, left, right, bottom, top, 0.5, 10);
+      m4.inverse(projection, projectionInverse);
     }
 
-    viewProjection = m4.multiply(projection, view, viewProjection);
+    m4.multiply(projection, view, viewProjection);
   });
 
   // * render
@@ -265,11 +269,15 @@ export default function main() {
     gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT | GL_CLEAR_MASK.DEPTH_BUFFER_BIT);
 
     world = m4.rotationY(time, world);
+    m4.copy(world, worldInverseTranspose);
+    m4.inverse(worldInverseTranspose, worldInverseTranspose);
+    m4.transpose(worldInverseTranspose);
+    m4.multiply(viewProjection, world, worldViewProjection);
 
     gl.useProgram(program);
     uniforms.u_world.set(world);
-    uniforms.u_worldInverseTranspose.set(m4.transpose(m4.inverse(world)));
-    uniforms.u_worldViewProjection.set(m4.multiply(viewProjection, world));
+    uniforms.u_worldInverseTranspose.set(worldInverseTranspose);
+    uniforms.u_worldViewProjection.set(worldViewProjection);
 
     gl.drawElements(GL_STATIC_VARIABLES.TRIANGLES, 6 * 6, GL_STATIC_VARIABLES.UNSIGNED_SHORT, 0);
 

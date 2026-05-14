@@ -1,0 +1,17 @@
+{
+  "name": "custom-renderer-examples",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "custom_renderer_examples_bg.wasm",
+    "custom_renderer_examples.js",
+    "custom_renderer_examples_bg.js",
+    "custom_renderer_examples.d.ts"
+  ],
+  "main": "custom_renderer_examples.js",
+  "types": "custom_renderer_examples.d.ts",
+  "sideEffects": [
+    "./custom_renderer_examples.js",
+    "./snippets/*"
+  ]
+}

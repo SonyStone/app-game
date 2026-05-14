@@ -1,6 +1,6 @@
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
 
-const setters = {
+const setters: Record<number, (gl: WebGL2RenderingContext, location: WebGLUniformLocation) => (v: any) => void> = {
   // * float
   [GL_DATA_TYPE.FLOAT]: (gl: WebGL2RenderingContext, location: WebGLUniformLocation) => (v: number) =>
     gl.uniform1f(location, v),

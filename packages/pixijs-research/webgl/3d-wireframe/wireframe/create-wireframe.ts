@@ -1,5 +1,5 @@
-import * as m4 from '@packages/math/m4';
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables/data-type';
+import * as m4 from '@app-game/math/m4';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables/data-type';
 
 import { createShader } from '../Shader2';
 import fragmentShader from './frag_shader.frag?raw';
@@ -9,7 +9,7 @@ export function createWireframe(gl: WebGL2RenderingContext, vertices: any[], col
   return createShader(gl)
     .createProgram(vertexShader, fragmentShader)
     .addAttribute('aPosition', 3, vertices.length / 3, new Float32Array(vertices.slice(0)))
-    .addUniform('camera', GL_DATA_TYPE.FLOAT_MAT4, m4.identity())
+    .addUniform('camera', GL_DATA_TYPE.FLOAT_MAT4, m4.identity(new m4.FMat4()))
     .addUniform('uColor', GL_DATA_TYPE.FLOAT_VEC3, color)
     .build();
 }

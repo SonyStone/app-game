@@ -1,8 +1,9 @@
-import { Thumbnail } from '@packages/ui-components/thumbnail';
+import { Navigation, Thumbnail, type Routes } from '@app-game/app-router';
+import { Ripple } from '@app-game/ui-components/ripple';
+import { A } from '@solidjs/router';
 import { lazy } from 'solid-js';
-import { Routes } from 'src/routes.interface';
 
-export const routes: Routes[] = [
+const routes: Routes[] = [
   {
     path: '/geometric-algebra',
     name: 'Geometric Algebra',
@@ -44,5 +45,78 @@ export const routes: Routes[] = [
     name: 'JavaScript Buffers',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./buffers/buffers'))
+  },
+  {
+    path: '/m2x3',
+    name: 'Matrix 2x3 - Transform Matrix',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./m2x3'))
+  },
+  {
+    path: '/learn-solidjs-utils',
+    name: 'Learn Solidjs Utils',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./learn-solidjs-utils'))
+  },
+  {
+    path: '/rapier-2d-physics-engine',
+    name: 'Rapier 2D Physics Engine',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./rapier-2d-physics-engine'))
+  },
+  {
+    path: '/bitecs-ecs-example',
+    name: 'Bitecs ECS Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./bitecs-ecs'))
+  },
+  {
+    path: '/sensor-access-demo',
+    name: 'Sensor Access Demo',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./sensor-access-demo'))
+  },
+  {
+    path: '/tree-struct',
+    name: 'Tree Struct Example',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./tree-struct'))
+  },
+  {
+    path: '/solid-rootless-test',
+    name: 'Solid Rootless Test',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./solid-rootless-test'))
+  },
+  {
+    path: '/img-onload-test',
+    name: '<img/> OnLoad Test',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./img-onload-test'))
   }
 ];
+
+export const mathRoutes: Routes = {
+  path: '/math',
+  name: 'Math Examples',
+  Preview: (props) => (
+    <A
+      class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden overflow-hidden bg-slate-200 p-2 p-2 px-4"
+      href={props.path}
+    >
+      <h2 class="text-4xl">Math</h2>
+      <span class="text-center text-sm">{props.name}</span>
+      <div class="absolute -end-2 bottom-1">
+        <span class="text-4rem leading-6">👨‍🔬</span>
+      </div>
+      <Ripple class="text-slate/20" />
+    </A>
+  ),
+  children: [
+    {
+      path: '/',
+      component: () => <Navigation routes={routes} parentPath="." />
+    },
+    ...routes
+  ]
+};

@@ -1,6 +1,6 @@
-import { DEG_TO_RAD } from '@packages/math';
-import { distance } from '@packages/ogl/math/functions/vec-2-func';
-import { numberPrecisionDragInput } from '@packages/ui-components-examples/breadcrumbs/number-precision-drag-input';
+import { DEG_TO_RAD } from '@app-game/math';
+import { distance } from '@app-game/ogl/math/functions/vec-2-func';
+import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import { RAD_TO_DEG } from 'pixi.js';
 import { ComponentProps, createMemo, createSignal, splitProps } from 'solid-js';
 
@@ -77,7 +77,7 @@ export default function TrigonometryExample() {
         </div>
       </div>
 
-      <svg class="border" class="w-100 h-100" viewBox="0 0 2 2">
+      <svg class="h-100 w-100 border" viewBox="0 0 2 2">
         <g transform="scale(1, -1) scale(0.9, 0.9) translate(1 1) " transform-origin="center">
           <circle
             cx="0"

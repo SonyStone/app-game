@@ -1,5 +1,5 @@
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
-import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
+import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
 import type { FullArraySpec, TypedArray, TypedArrayConstructor } from './attributes';
 
 export const isArrayBuffer =

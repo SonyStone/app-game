@@ -1,12 +1,12 @@
-import { createProgram } from '@packages/webgl/createProgram';
+import { createProgram } from '@app-game/webgl/createProgram';
 import {
   GL_BUFFER_USAGE,
   GL_DATA_TYPE,
   GL_DRAW_ARRAYS_MODE,
   GL_DRAW_ELEMENTS_TYPE
-} from '@packages/webgl/static-variables';
-import { GL_BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
-import { WebGL2RenderingContextStrict } from '@packages/webgl/webgl-strict-types/webgl2';
+} from '@app-game/webgl/static-variables';
+import { GL_BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
+import type { WebGL2RenderingContextStrict } from '@app-game/webgl/webgl-strict-types/webgl2';
 import { createWireframeIndex } from './create-brush-mesh';
 import drawShaderFragSrc from './draw-shader.frag?raw';
 import drawShaderVertSrc from './draw-shader.vert?raw';

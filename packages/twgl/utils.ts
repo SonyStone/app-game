@@ -8,13 +8,21 @@
 //  return parseFloat(gl.getParameter(gl.VERSION).substr(6));
 //}
 
+type EnumSource = {
+  constructor: { name: string };
+} & Record<string, unknown>;
+
+type WebGLContextLike = {
+  texStorage2D?: unknown;
+};
+
 /**
  * Check if context is WebGL 2.0
  * @param {WebGLRenderingContext} gl A WebGLRenderingContext
  * @return {bool} true if it's WebGL 2.0
  * @memberOf module:twgl
  */
-function isWebGL2(gl) {
+function isWebGL2(gl: WebGLContextLike): boolean {
   // This is the correct check but it's slow
   //  return gl.getParameter(gl.VERSION).indexOf("WebGL 2.0") === 0;
   // This might also be the correct check but I'm assuming it's slow-ish
@@ -28,7 +36,7 @@ function isWebGL2(gl) {
  * @return {bool} true if it's WebGL 1.0
  * @memberOf module:twgl
  */
-function isWebGL1(gl) {
+function isWebGL1(gl: WebGLContextLike): boolean {
   // This is the correct check but it's slow
   // const version = getVersionAsNumber(gl);
   // return version <= 1.0 && version > 0.0;  // because as of 2016/5 Edge returns 0.96
@@ -86,25 +94,29 @@ function isWebGL1(gl) {
  * @function glEnumToString
  */
 const glEnumToString = (function () {
-  const haveEnumsForType = {};
-  const enums = {};
+  const haveEnumsForType: Record<string, boolean> = {};
+  const enums: Record<number, string> = {};
 
-  function addEnums(gl) {
+  function addEnums(gl: EnumSource): void {
     const type = gl.constructor.name;
     if (!haveEnumsForType[type]) {
       for (const key in gl) {
-        if (typeof gl[key] === 'number') {
-          const existing = enums[gl[key]];
-          enums[gl[key]] = existing ? `${existing} | ${key}` : key;
+        const enumValue = gl[key];
+        if (typeof enumValue === 'number') {
+          const existing = enums[enumValue];
+          enums[enumValue] = existing ? `${existing} | ${key}` : key;
         }
       }
       haveEnumsForType[type] = true;
     }
   }
 
-  return function glEnumToString(gl, value) {
+  return function glEnumToString(gl: EnumSource, value: number | string): string {
     addEnums(gl);
-    return enums[value] || (typeof value === 'number' ? `0x${value.toString(16)}` : value);
+    if (typeof value === 'number') {
+      return enums[value] || `0x${value.toString(16)}`;
+    }
+    return value;
   };
 })();
 

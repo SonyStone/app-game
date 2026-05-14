@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "vite/client",
+      "vite-plugin-glsl/ext",
+      "@webgpu/types",
+      "node"
+    ]
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/gpu-text-rendering/app.ts",
+    "src/gpu-text-rendering/canvas.ts",
+    "src/gpu-text-rendering/webGlStart.ts"
+  ]
+}

@@ -1,4 +1,5 @@
 import { createEffect, onCleanup } from 'solid-js';
+import * as THREE from 'three';
 import {
   BoxGeometry,
   Camera,
@@ -8,7 +9,6 @@ import {
   MeshBasicMaterial,
   Scene,
   WebGLRenderer,
-  sRGBEncoding
 } from 'three';
 
 import { useCamera } from './Camera.provider';
@@ -23,10 +23,12 @@ export default function Sprites() {
   const renderer = new WebGLRenderer({ antialias: true, canvas });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.outputEncoding = sRGBEncoding;
+  (renderer as WebGLRenderer & { outputColorSpace: unknown }).outputColorSpace = (THREE as unknown as {
+    SRGBColorSpace: unknown;
+  }).SRGBColorSpace;
   renderer.sortObjects = false;
 
-  controls.init(renderer.domElement);
+  controls.init(renderer.domElement as unknown as HTMLElement);
 
   let currentCamera!: Camera;
 

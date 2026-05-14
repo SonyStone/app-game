@@ -1,12 +1,12 @@
-import { Camera, GridHelper, Orbit, Renderer, Transform, Vec3 } from '@packages/ogl';
+import { Camera, GridHelper, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
 import { Show, createEffect, createMemo, createResource, createSignal } from 'solid-js';
 
-import { RenderTargetOptions } from '@packages/ogl/core/render-target';
-import { Vec3Tuple } from '@packages/ogl/math/vec-3';
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
+import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
+import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
 import { BlendModes, ColorBlendModes } from './blend-modes';
 import { createBlendRenderTarget } from './blend/blend-render-target';
 import { createBrushInstancingRenderTarget } from './brush-instancing/brush-instancing';
@@ -43,7 +43,7 @@ export default function OglSwapTexturesView() {
     return camera;
   })();
   const targetVec3 = new Vec3().copy(target());
-  const controls = new Orbit(camera, { element: canvas, target: targetVec3 });
+  const controls = new Orbit(camera, { element: canvas as unknown as HTMLElement, target: targetVec3 });
   const scene = new Transform();
 
   {
@@ -173,7 +173,7 @@ export default function OglSwapTexturesView() {
         texture={() => brushInstancing().texture}
         transparent
       />
-      <PlaneWithTextureComponent gl={gl} parent={scene} position={[0, 0.5, 0.0]} texture={layers2.texture} />
+      <PlaneWithTextureComponent gl={gl} parent={scene} position={[0, 0.5, 0.0]} texture={() => layers2.layer().texture} />
       <Show when={false}>
         <></>
       </Show>

@@ -1,7 +1,7 @@
-import { Camera, Mat4, Orbit, Transform, Vec3, Vec4 } from '@packages/ogl';
-import { Vec4Tuple } from '@packages/ogl/math/vec-4';
-import { validate } from '@packages/utils/validate';
-import { createEmitter } from '@solid-primitives/event-bus';
+import { Camera, Mat4, Orbit, Transform, Vec3, Vec4 } from '@app-game/ogl';
+import { Vec4Tuple } from '@app-game/ogl/math/vec-4';
+import { validate } from '@app-game/utils/validate';
+import { createEventBus } from '@solid-primitives/event-bus';
 import createRAF from '@solid-primitives/raf';
 import { onMount } from 'solid-js';
 import { Cube } from './cube';
@@ -38,7 +38,7 @@ export default function CameraProjectionSVG() {
     return validate(worldSpaceVertex);
   };
 
-  const { listen, emit } = createEmitter();
+  const { listen, emit } = createEventBus<void>();
 
   onMount(() => {
     const controls = new Orbit(camera, { element: svg as any as HTMLElement, target: new Vec3(1, 1, 0) });

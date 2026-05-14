@@ -17,7 +17,7 @@ export interface AttachmentOptions extends TextureOptions {
   type?: number;
   target?: number;
   level?: number;
-  attachment?: WebGLObject;
+  attachment?: object;
 }
 
 export interface AttribInfo {
@@ -71,7 +71,7 @@ export type ErrorCallback = (msg: string, lineOffset?: number) => void;
 
 export interface FramebufferInfo {
   framebuffer: WebGLFramebuffer;
-  attachments: WebGLObject[];
+  attachments: object[];
 }
 
 export interface FullArraySpec {
@@ -184,7 +184,7 @@ export interface UniformData {
 export interface VertexArrayInfo {
   numElements: number;
   elementType: number;
-  vertexArrayObject?: WebGLObject;
+  vertexArrayObject?: object;
 }
 
 // export function createBufferFromTypedArray(

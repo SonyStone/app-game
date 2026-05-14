@@ -1,7 +1,7 @@
-import { Vec3Tuple } from '@packages/math/v3-builder';
-import { Vec4Tuple } from '@packages/ogl/math/vec-4';
-import { normalize } from '@packages/utils/path-data-parser/normalize';
-import { parsePath, serialize } from '@packages/utils/path-data-parser/parser';
+import { Vec3Tuple } from '@app-game/math/v3-builder';
+import { Vec4Tuple } from '@app-game/ogl/math/vec-4';
+import { normalize } from '@app-game/utils/path-data-parser/normalize';
+import { parsePath, serialize } from '@app-game/utils/path-data-parser/parser';
 import { Listen } from '@solid-primitives/event-bus';
 import { createSignal } from 'solid-js';
 

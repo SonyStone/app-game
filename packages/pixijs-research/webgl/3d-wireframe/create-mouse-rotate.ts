@@ -1,10 +1,10 @@
-import { FVec2 } from '@packages/math';
+import { Vec2 } from '@app-game/math';
 import { createSignal, onCleanup } from 'solid-js';
 
 export function createMouseRotate(element: HTMLElement) {
-  const rotateStart = FVec2.create();
-  const rotateEnd = FVec2.create();
-  const rotateDelta = FVec2.create();
+  const rotateStart = new Vec2();
+  const rotateEnd = new Vec2();
+  const rotateDelta = new Vec2();
   let thetaDelta = 0;
   let phiDelta = 0;
 
@@ -20,13 +20,13 @@ export function createMouseRotate(element: HTMLElement) {
 
       // rotateLeft
       {
-        const angle = (Math.PI * rotateDelta[0]) / element.clientHeight;
+        const angle = (Math.PI * rotateDelta.x) / element.clientHeight;
         thetaDelta -= angle;
       }
 
       // rotateUp
       {
-        const angle = (Math.PI * rotateDelta[1]) / element.clientHeight;
+        const angle = (Math.PI * rotateDelta.y) / element.clientHeight;
         phiDelta -= angle;
       }
 

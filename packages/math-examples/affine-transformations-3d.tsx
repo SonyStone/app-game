@@ -1,7 +1,7 @@
-import { Camera, Orbit, Renderer, Transform, Vec3 } from '@packages/ogl';
-import { toRadian } from '@packages/ogl/extras/path/utils';
-import { createSkipper } from '@packages/tanki/create-skipper';
-import { numberPrecisionDragInput } from '@packages/ui-components-examples/breadcrumbs/number-precision-drag-input';
+import { Camera, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
+import { toRadian } from '@app-game/ogl/extras/path/utils';
+import { createSkipper } from '@app-game/tanki/create-skipper';
+import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import createRAF from '@solid-primitives/raf';
 import { Index } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -25,7 +25,7 @@ export default function AffineTransformations3D() {
 
     const camera = new Camera({ fov: 35 });
     camera.position.set(2, 4, 4);
-    const controls = new Orbit(camera, { element: canvas, target: new Vec3(1, 1, 0) });
+    const controls = new Orbit(camera, { element: canvas as unknown as HTMLElement, target: new Vec3(1, 1, 0) });
 
     const scene = new Transform();
 

@@ -1,4 +1,4 @@
-import { Vec4Tuple } from '@packages/ogl/math/vec-4';
+import { Vec4Tuple } from '@app-game/ogl/math/vec-4';
 import { Listen } from '@solid-primitives/event-bus';
 import { Index, createSignal } from 'solid-js';
 

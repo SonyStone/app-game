@@ -1,0 +1,12 @@
+{
+  "name": "@app-game/webgl-state-diagram",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/webgl": "workspace:*"
+  },
+  "exports": {
+    "./webgl-state-diagram": "./webgl-state-diagram.tsx"
+  },
+  "type": "module"
+}

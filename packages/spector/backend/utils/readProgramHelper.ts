@@ -9,7 +9,7 @@ export class ReadProgramHelper {
             VALIDATE_STATUS: context.getProgramParameter(program, WebGlConstants.VALIDATE_STATUS.value),
         };
 
-        const webGLshaders = context.getAttachedShaders(program);
+        const webGLshaders = context.getAttachedShaders(program) ?? [];
         const shaders = new Array(2);
 
         let length = 0;
@@ -33,9 +33,9 @@ export class ReadProgramHelper {
     }
 
     private static readShaderFromContext(context: WebGLRenderingContexts, shader: WebGLShader): IShaderCapture {
-        const source = context.getShaderSource(shader);
+        const source = context.getShaderSource(shader) ?? "";
         const ext = context.getExtension("WEBGL_debug_shaders");
-        const translatedSource = ext ? ext.getTranslatedShaderSource(shader) : null;
+        const translatedSource = ext?.getTranslatedShaderSource(shader) ?? "";
 
         const shaderTypeValue = context.getShaderParameter(shader, WebGlConstants.SHADER_TYPE.value);
         const isFragment = shaderTypeValue === WebGlConstants.FRAGMENT_SHADER.value;
@@ -95,7 +95,7 @@ export class ReadProgramHelper {
             return name;
         }
         catch (e) {
-            return null;
+            return "";
         }
     }
 }

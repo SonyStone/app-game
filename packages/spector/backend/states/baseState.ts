@@ -17,23 +17,23 @@ export abstract class BaseState {
   protected readonly extensions: ExtensionList;
   protected readonly toggleCapture: (capture: boolean) => void;
 
-  protected previousState: State;
-  protected currentState: State;
-  protected quickCapture: boolean;
-  protected fullCapture: boolean;
-  protected lastCommandName: string;
+  protected previousState: State = {};
+  protected currentState: State = {};
+  protected quickCapture = false;
+  protected fullCapture = false;
+  protected lastCommandName = '';
 
   private readonly changeCommandsByState: { [key: string]: string[] };
   private readonly consumeCommands: string[];
   private readonly commandNameToStates: { [commandName: string]: string[] };
 
-  private capturedCommandsByState: { [key: string]: ICommandCapture[] };
+  private capturedCommandsByState: { [key: string]: ICommandCapture[] } = {};
 
   constructor(protected readonly options: IContextInformation) {
     this.context = options.context;
     this.contextVersion = options.contextVersion;
-    this.extensions = options.extensions;
-    this.toggleCapture = options.toggleCapture;
+    this.extensions = options.extensions ?? {};
+    this.toggleCapture = options.toggleCapture ?? (() => undefined);
 
     this.consumeCommands = this.getConsumeCommands();
     this.changeCommandsByState = this.getChangeCommandsByState();
@@ -139,7 +139,7 @@ export abstract class BaseState {
     return true;
   }
 
-  protected analyse(consumeCommand: ICommandCapture): void {
+  protected analyse(consumeCommand?: ICommandCapture): void {
     for (const stateName in this.capturedCommandsByState) {
       if (this.capturedCommandsByState.hasOwnProperty(stateName)) {
         const commands = this.capturedCommandsByState[stateName];
@@ -264,7 +264,7 @@ export abstract class BaseState {
     }
 
     return {
-      __SPECTOR_Object_TAG: WebGlObjects.getWebGlObjectTag(object) || this.options.tagWebGlObject(object),
+      __SPECTOR_Object_TAG: WebGlObjects.getWebGlObjectTag(object) || this.options.tagWebGlObject?.(object),
       __SPECTOR_Object_CustomData: object.__SPECTOR_Object_CustomData,
       __SPECTOR_Metadata: object.__SPECTOR_Metadata
     };

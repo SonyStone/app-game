@@ -1,4 +1,5 @@
 import { Setter } from 'solid-js';
+import type { Dimensions } from './dimensions.interface';
 import PanelResizeHandle from './panel-resize-handle';
 
 export default function PanelResizers(props: { onDimensionsChange: Setter<Dimensions> }) {

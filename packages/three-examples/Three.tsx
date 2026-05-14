@@ -31,7 +31,7 @@ export default function Three() {
   });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  controls.init(canvas);
+  controls.init(canvas as unknown as HTMLElement);
 
   const object3d = new Object3D();
   object3d.rotateY(30);

@@ -21,8 +21,8 @@ export class ProgramRecorder extends BaseRecorder<WebGLProgram> {
     return ['deleteProgram'];
   }
 
-  protected getBoundInstance(target: WebGLProgram): WebGLProgram {
-    return target;
+  protected getBoundInstance(target: number): WebGLProgram | undefined {
+    return target as unknown as WebGLProgram | undefined;
   }
 
   protected delete(instance: WebGLProgram): number {
@@ -34,7 +34,7 @@ export class ProgramRecorder extends BaseRecorder<WebGLProgram> {
     return customData.length;
   }
 
-  protected update(functionInformation: IFunctionInformation, target: WebGLProgram, instance: WebGLProgram): number {
+  protected update(functionInformation: IFunctionInformation, target: string, instance: WebGLProgram): number {
     if (functionInformation.arguments.length >= 1 && !functionInformation.arguments[0]) {
       return 0;
     }

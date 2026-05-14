@@ -23,7 +23,11 @@ export function create(radius = 0, theta = 0, phi = 0) {
   };
 }
 
-export function setFromVec3(spherical: Spherical, [x, y, z]: Vec3Tuple) {
+export function setFromVec3(spherical: Spherical, v: Vec3Tuple) {
+  const x = v[0];
+  const y = v[1];
+  const z = v[2];
+
   const radius = Math.sqrt(x * x + y * y + z * z);
 
   spherical.radius = radius;

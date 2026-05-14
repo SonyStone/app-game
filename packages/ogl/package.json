@@ -1,0 +1,29 @@
+{
+  "name": "@app-game/ogl",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/math": "workspace:*",
+    "@app-game/webgl": "workspace:*"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./core/geometry": "./core/geometry.ts",
+    "./core/program": "./core/program.ts",
+    "./core/render-target": "./core/render-target.ts",
+    "./core/renderer": "./core/renderer.ts",
+    "./core/texture": "./core/texture.ts",
+    "./extras/eye-space-frustum": "./extras/eye-space-frustum.ts",
+    "./extras/path/utils": "./extras/path/utils.ts",
+    "./extras/square": "./extras/square.ts",
+    "./extras/swap-buffering": "./extras/swap-buffering.ts",
+    "./extras/texture-program": "./extras/texture-program.ts",
+    "./math/functions/vec-2-func": "./math/functions/vec-2-func.ts",
+    "./math/mat-3": "./math/mat-3.ts",
+    "./math/mat-4": "./math/mat-4.ts",
+    "./math/vec-2_old": "./math/vec-2_old.ts",
+    "./math/vec-3": "./math/vec-3.ts",
+    "./math/vec-4": "./math/vec-4.ts"
+  },
+  "type": "module"
+}

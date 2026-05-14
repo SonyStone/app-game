@@ -16,7 +16,7 @@
 
 // TODO: fit in transform feedback
 
-import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
+import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
 import { Vec3 } from '../math/vec-3';
 
 import type { Program } from './program';

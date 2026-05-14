@@ -1,9 +1,9 @@
-import { GL_SHADER_TYPE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
+import { GL_SHADER_TYPE, GL_STATIC_VARIABLES } from '@app-game/webgl/static-variables';
 import {
   GL_TEXTURE_MAG_FILTER,
   GL_TEXTURE_MIN_FILTER,
   GL_TEXTURE_WRAP_MODE
-} from '@packages/webgl/static-variables/textures';
+} from '@app-game/webgl/static-variables/textures';
 
 /**
  * A vertex shader's sole responsibility is to set `gl_Position` to a clip space position. To create one use:
@@ -277,7 +277,7 @@ interface WebGLState {
   textures: Map<WebGLTexture, WebGLTextureState>;
 }
 
-export class WebGL2DebugWrapper implements WebGL2RenderingContext {
+export class WebGL2DebugWrapper {
   private defaultVertexArrayObject: WebGLVertexArrayObjectState = {
     attributes: [],
     state: {
@@ -462,13 +462,13 @@ export class WebGL2DebugWrapper implements WebGL2RenderingContext {
   ): void {
     throw new Error('Method not implemented.');
   }
-  createQuery(): WebGLQuery | null {
+  createQuery(): WebGLQuery {
     throw new Error('Method not implemented.');
   }
-  createSampler(): WebGLSampler | null {
+  createSampler(): WebGLSampler {
     throw new Error('Method not implemented.');
   }
-  createTransformFeedback(): WebGLTransformFeedback | null {
+  createTransformFeedback(): WebGLTransformFeedback {
     throw new Error('Method not implemented.');
   }
   deleteQuery(query: WebGLQuery | null): void {
@@ -2078,12 +2078,10 @@ export class WebGL2DebugWrapper implements WebGL2RenderingContext {
     return this.gl.getShaderParameter;
   }
 
-  createProgram(): WebGLProgram | null {
-    const program = this.gl.createProgram();
+  createProgram(): WebGLProgram {
+    const program = this.gl.createProgram()!;
 
-    if (program) {
-      this.state.programs.set(program, new WebGLProgramState());
-    }
+    this.state.programs.set(program, new WebGLProgramState());
 
     return program;
   }
@@ -2307,15 +2305,13 @@ export class WebGL2DebugWrapper implements WebGL2RenderingContext {
     return this.gl.useProgram(program);
   }
 
-  createVertexArray(): WebGLVertexArrayObject | null {
-    const vertexArrayObject = this.gl.createVertexArray();
+  createVertexArray(): WebGLVertexArrayObject {
+    const vertexArrayObject = this.gl.createVertexArray()!;
 
-    if (vertexArrayObject) {
-      this.state.vertexArrayObjects.set(vertexArrayObject, {
-        attributes: [],
-        state: { ELEMENT_ARRAY_BUFFER_BINDING: null }
-      });
-    }
+    this.state.vertexArrayObjects.set(vertexArrayObject, {
+      attributes: [],
+      state: { ELEMENT_ARRAY_BUFFER_BINDING: null }
+    });
 
     return vertexArrayObject;
   }
@@ -2387,14 +2383,12 @@ export class WebGL2DebugWrapper implements WebGL2RenderingContext {
     return this.gl.vertexAttribDivisor(index, divisor);
   }
 
-  createBuffer(): WebGLBuffer | null {
-    const buffer = this.gl.createBuffer();
+  createBuffer(): WebGLBuffer {
+    const buffer = this.gl.createBuffer()!;
 
-    if (buffer) {
-      this.state.buffers.set(buffer, {
-        data: []
-      });
-    }
+    this.state.buffers.set(buffer, {
+      data: []
+    });
 
     return buffer;
   }
@@ -2453,12 +2447,10 @@ export class WebGL2DebugWrapper implements WebGL2RenderingContext {
     return this.gl.getExtension(name);
   }
 
-  createFramebuffer(): WebGLFramebuffer | null {
-    const framebuffer = this.gl.createFramebuffer();
+  createFramebuffer(): WebGLFramebuffer {
+    const framebuffer = this.gl.createFramebuffer()!;
 
-    if (framebuffer) {
-      this.state.framebuffer.set(framebuffer, {});
-    }
+    this.state.framebuffer.set(framebuffer, {});
 
     return framebuffer;
   }
@@ -2480,12 +2472,10 @@ export class WebGL2DebugWrapper implements WebGL2RenderingContext {
     return this.gl.bindFramebuffer(target, framebuffer);
   }
 
-  createRenderbuffer(): WebGLRenderbuffer | null {
-    const renderbuffer = this.gl.createRenderbuffer();
+  createRenderbuffer(): WebGLRenderbuffer {
+    const renderbuffer = this.gl.createRenderbuffer()!;
 
-    if (renderbuffer) {
-      this.state.renderBuffers.set(renderbuffer, {});
-    }
+    this.state.renderBuffers.set(renderbuffer, {});
 
     return renderbuffer;
   }
@@ -2530,20 +2520,18 @@ export class WebGL2DebugWrapper implements WebGL2RenderingContext {
     return this.gl.renderbufferStorage(target, internalformat, width, height);
   }
 
-  createTexture(): WebGLTexture | null {
-    const texture = this.gl.createTexture();
+  createTexture(): WebGLTexture {
+    const texture = this.gl.createTexture()!;
 
-    if (texture) {
-      this.state.textures.set(texture, {
-        mips: {},
-        texturestate: {
-          TEXTURE_MIN_FILTER: GL_TEXTURE_MIN_FILTER.NEAREST_MIPMAP_LINEAR,
+    this.state.textures.set(texture, {
+      mips: {},
+      texturestate: {
+        TEXTURE_MIN_FILTER: GL_TEXTURE_MIN_FILTER.NEAREST_MIPMAP_LINEAR,
           TEXTURE_MAG_FILTER: GL_TEXTURE_MAG_FILTER.LINEAR,
           TEXTURE_WRAP_S: GL_TEXTURE_WRAP_MODE.REPEAT,
           TEXTURE_WRAP_T: GL_TEXTURE_WRAP_MODE.REPEAT
-        }
-      });
-    }
+      }
+    });
 
     return texture;
   }

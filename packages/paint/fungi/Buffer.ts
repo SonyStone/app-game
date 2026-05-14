@@ -1,7 +1,7 @@
-import { GL_BUFFER_USAGE, GL_DRAW_ELEMENTS_TYPE } from '@packages/webgl/static-variables';
-import { GL_BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
-import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
-import { TypedArray } from '@packages/webgl/typedArray';
+import { GL_BUFFER_USAGE, GL_DRAW_ELEMENTS_TYPE } from '@app-game/webgl/static-variables';
+import { GL_BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
+import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
+import type { TypedArray } from '@app-game/webgl/typedArray';
 
 export interface IBuffer {
   /** Buffer GL ID */

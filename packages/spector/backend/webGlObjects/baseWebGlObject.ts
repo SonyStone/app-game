@@ -5,12 +5,14 @@ export type WebGlObjectTag = {
   customData?: any;
 };
 
+type WebGLObjectLike = object;
+
 export class WebGlObjects {
-  static getWebGlObjectTag(object: WebGLObject): WebGlObjectTag {
+  static getWebGlObjectTag(object: WebGLObjectLike): WebGlObjectTag {
     return (object as any)[WebGlObjects.SPECTOROBJECTTAGKEY];
   }
 
-  static attachWebGlObjectTag(object: WebGLObject, tag: WebGlObjectTag): void {
+  static attachWebGlObjectTag(object: WebGLObjectLike, tag: WebGlObjectTag): void {
     tag.displayText = WebGlObjects.stringifyWebGlObjectTag(tag);
     (object as any)[WebGlObjects.SPECTOROBJECTTAGKEY] = tag;
   }

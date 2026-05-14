@@ -5,7 +5,10 @@ import BaseSegment from './base-segment';
 const tempVec3 = /* @__PURE__ */ new Vec3();
 
 export default class LineSegment extends BaseSegment {
-  constructor(p0, p1, tiltStart = 0, tiltEnd = 0) {
+  p0: Vec3;
+  p1: Vec3;
+
+  constructor(p0: Vec3, p1: Vec3, tiltStart = 0, tiltEnd = 0) {
     super();
     this.p0 = p0;
     this.p1 = p1;
@@ -19,7 +22,7 @@ export default class LineSegment extends BaseSegment {
   /**
    * Updates the segment length. You must call this method every time you change the curve's control points.
    */
-  updateLength() {
+  updateLength(): void {
     this._len = tempVec3.sub(this.p1, this.p0).len();
   }
 
@@ -29,7 +32,7 @@ export default class LineSegment extends BaseSegment {
    * @param {Vec3} out Optional Vec3 to output
    * @returns {Vec3} Point at relative position
    */
-  getPointAt(t, out = new Vec3()) {
+  getPointAt(t: number, out = new Vec3()): Vec3 {
     lerp3(out, this.p0, this.p1, t);
     return out;
   }
@@ -40,11 +43,11 @@ export default class LineSegment extends BaseSegment {
    * @param {Vec3} out Optional Vec3 to output
    * @returns {Vec3} A unit vector
    */
-  getTangentAt(t, out = new Vec3()) {
+  getTangentAt(t: number, out = new Vec3()): Vec3 {
     return out.sub(this.p1, this.p0).normalize();
   }
 
-  lastPoint() {
+  lastPoint(): Vec3 {
     return this.p1;
   }
 }

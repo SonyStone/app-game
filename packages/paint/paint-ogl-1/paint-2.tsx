@@ -1,12 +1,12 @@
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { Show, createEffect, createSignal, onCleanup } from 'solid-js';
+import { makeEventListener } from '@solid-primitives/event-listener';
+import { Show, createEffect, createSignal } from 'solid-js';
 
-import { Camera, Renderer, Transform, Vec3 } from '@packages/ogl';
+import { Camera, Renderer, Transform, Vec3 } from '@app-game/ogl';
 
-import { SphereComponent } from '@packages/math-examples/camera-projection-webgl2/sphere.component';
-import { createRaycast } from '@packages/math-examples/raycast';
-import { GL_CAPABILITIES, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
-import { createEmitter } from '@solid-primitives/event-bus';
+import { SphereComponent } from '@app-game/math-examples/camera-projection-webgl2/sphere.component';
+import { createRaycast } from '@app-game/math-examples/raycast';
+import { GL_CAPABILITIES } from '@app-game/webgl/static-variables';
 import { Brush1Component } from './brush-1/brush.component';
 import { mouseNormalize } from './mouse-normalize';
 
@@ -16,7 +16,7 @@ export default () => {
   const gl = renderer.gl;
   gl.clearColor(0.9, 0.9, 0.9, 1);
   renderer.enable(GL_CAPABILITIES.BLEND);
-  renderer.setBlendFunc(GL_FUNC_SEPARATE.SRC_ALPHA, GL_FUNC_SEPARATE.ONE);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
 
   const camera = new Camera({ fov: 35 });
   camera.position.set(0, 0, 1.7);
@@ -29,7 +29,7 @@ export default () => {
     update();
   });
 
-  const [brushPos, setBrushPos] = createSignal<Vec3>(new Vec3(), { equals: false });
+  const [brushPos, setBrushPos] = createSignal<Vec3>(new Vec3(0, 0, 0), { equals: false });
 
   const raycast = createRaycast({ camera: camera, plane: [0, 0, 1] });
 
@@ -39,26 +39,20 @@ export default () => {
         continue;
       }
 
-      const intersectPoint = raycast.cast(mouseNormalize(event, gl.canvas));
+      const intersectPoint = raycast.cast(mouseNormalize(event, canvas as unknown as HTMLElement));
       if (intersectPoint) {
         setBrushPos(intersectPoint);
       }
-      renderEvent.emit();
     }
 
     update();
   };
 
-  document.addEventListener('pointermove', clickHandler);
+  makeEventListener(document, 'pointermove', clickHandler);
 
-  const renderEvent = createEmitter<void>();
   function update() {
     renderer.render({ scene: scene, camera: camera, clear: false });
   }
-
-  onCleanup(() => {
-    document.removeEventListener('pointermove', clickHandler);
-  });
 
   return (
     <>

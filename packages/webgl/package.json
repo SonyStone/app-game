@@ -1,0 +1,24 @@
+{
+  "name": "@app-game/webgl",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./compileShader": "./compileShader.ts",
+    "./createProgram": "./createProgram.ts",
+    "./defaultValue": "./defaultValue.ts",
+    "./linkProgram": "./linkProgram.ts",
+    "./static-variables": "./static-variables/index.ts",
+    "./static-variables/buffer": "./static-variables/buffer.ts",
+    "./static-variables/data-type": "./static-variables/data-type.ts",
+    "./static-variables/static-variables": "./static-variables/static-variables.ts",
+    "./static-variables/textures": "./static-variables/textures.ts",
+    "./typedArray": "./typedArray.ts",
+    "./webgl-objects/buffer": "./webgl-objects/buffer.ts",
+    "./webgl-objects/context": "./webgl-objects/context.ts",
+    "./webgl-objects/program": "./webgl-objects/program.ts",
+    "./webgl-objects/vertex-array-object": "./webgl-objects/vertex-array-object.ts",
+    "./webgl-strict-types/webgl": "./webgl-strict-types/webgl.d.ts",
+    "./webgl-strict-types/webgl2": "./webgl-strict-types/webgl2.d.ts"
+  },
+  "type": "module"
+}

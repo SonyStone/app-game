@@ -20,7 +20,7 @@ export class Texture3DRecorder extends BaseRecorder<WebGLTexture> {
     return ['deleteTexture'];
   }
 
-  protected getBoundInstance(target: number): WebGLTexture {
+  protected getBoundInstance(target: number): WebGLTexture | undefined {
     const gl = this.options.context;
     if (target === WebGlConstants.TEXTURE_2D_ARRAY.value) {
       return gl.getParameter(WebGlConstants.TEXTURE_BINDING_2D_ARRAY.value);
@@ -68,7 +68,7 @@ export class Texture3DRecorder extends BaseRecorder<WebGLTexture> {
       customData.length =
         customData.width *
         customData.height *
-        customData.depth *
+        (customData.depth ?? 1) *
         this.getByteSizeForInternalFormat(customData.internalFormat);
     }
 
@@ -81,7 +81,7 @@ export class Texture3DRecorder extends BaseRecorder<WebGLTexture> {
     functionInformation: IFunctionInformation,
     target: string,
     instance: WebGLTexture
-  ): ITextureRecorderData {
+  ): ITextureRecorderData | undefined {
     if (functionInformation.name === 'texImage3D') {
       return this.getTexImage3DCustomData(functionInformation, target, instance);
     } else if (functionInformation.name === 'compressedTexImage3D') {
@@ -96,8 +96,8 @@ export class Texture3DRecorder extends BaseRecorder<WebGLTexture> {
     functionInformation: IFunctionInformation,
     target: string,
     instance: WebGLTexture
-  ): ITextureRecorderData {
-    let customData: ITextureRecorderData;
+  ): ITextureRecorderData | undefined {
+    let customData: ITextureRecorderData | undefined;
     if (functionInformation.arguments.length === 6) {
       // Custom data required to display the texture.
       customData = {
@@ -120,13 +120,13 @@ export class Texture3DRecorder extends BaseRecorder<WebGLTexture> {
     functionInformation: IFunctionInformation,
     target: string,
     instance: WebGLTexture
-  ): ITextureRecorderData {
+  ): ITextureRecorderData | undefined {
     if (functionInformation.arguments[1] !== 0) {
       // Only manage main lod... so far.
       return undefined;
     }
 
-    let customData: ITextureRecorderData;
+    let customData: ITextureRecorderData | undefined;
     if (functionInformation.arguments.length >= 8) {
       // Custom data required to display the texture.
       customData = {
@@ -149,13 +149,13 @@ export class Texture3DRecorder extends BaseRecorder<WebGLTexture> {
     functionInformation: IFunctionInformation,
     target: string,
     instance: WebGLTexture
-  ): ITextureRecorderData {
+  ): ITextureRecorderData | undefined {
     if (functionInformation.arguments[1] !== 0) {
       // Only manage main lod... so far.
       return undefined;
     }
 
-    let customData: ITextureRecorderData;
+    let customData: ITextureRecorderData | undefined;
     if (functionInformation.arguments.length >= 9) {
       // Custom data required to display the texture.
       customData = {

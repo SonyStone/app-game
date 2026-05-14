@@ -1,0 +1,15 @@
+{
+  "name": "@app-game/debug-layer",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/math": "workspace:*",
+    "@app-game/utils": "workspace:*"
+  },
+  "exports": {
+    "./fade-out": "./fade-out.ts",
+    "./grid-svg": "./grid-svg.tsx",
+    "./use-debug-layer": "./use-debug-layer.tsx"
+  },
+  "type": "module"
+}

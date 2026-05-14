@@ -17,7 +17,7 @@ export default function Lesson1Fundamentals() {
   onMount(async () => {
     // 1. start off by requesting an adapter, and then requesting a device from the adapter.
     const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
-    const info = await adapter?.requestAdapterInfo();
+    const info = adapter?.info; // new API to get adapter info
     addLog(
       <span>
         WebGPU adapter vendor: <span class="text-blue-700">{info?.vendor}</span>, architecture:{' '}
@@ -46,7 +46,7 @@ export default function Lesson1Fundamentals() {
     context.configure({
       device,
       format: presentationFormat
-    })
+    });
     // 3. Next, we create a shader module
     const module = device.createShaderModule({
       label: 'our hardcoded red triangle shaders',
@@ -83,9 +83,11 @@ export default function Lesson1Fundamentals() {
 
     // 6. Now it’s time to render.
     render = () => {
+      const colorAttachments = renderPassDescriptor.colorAttachments as Array<GPURenderPassColorAttachment | null | undefined>;
+
       // Get the current texture from the canvas context and
       // set it as the texture to render to.
-      renderPassDescriptor.colorAttachments[0]!.view = context.getCurrentTexture().createView();
+      colorAttachments[0]!.view = context.getCurrentTexture().createView();
 
       // make a command encoder to start encoding commands
       const encoder = device!.createCommandEncoder({ label: 'our encoder' });
@@ -103,7 +105,7 @@ export default function Lesson1Fundamentals() {
     render();
   });
 
-  createResizeObserver(canvas, ({ width, height }) => {
+  createResizeObserver(canvas as unknown as Element, ({ width, height }) => {
     if (!device || !render) {
       return;
     }

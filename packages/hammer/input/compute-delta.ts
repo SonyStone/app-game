@@ -1,30 +1,30 @@
-import { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
+import { Vec2 } from '@app-game/math';
 import { HammerInput } from '../pointerevent';
 import simpleCloneInputData, { ClonedInputData } from './simple-clone-input-data';
 
 export function createComputeDelta() {
   const session: {
-    offsetDelta: Vec2Tuple;
-    prevDelta: Vec2Tuple;
+    offsetDelta: Vec2;
+    prevDelta: Vec2;
     prevInput?: ClonedInputData;
   } = {
-    offsetDelta: [0, 0],
-    prevDelta: [0, 0],
+    offsetDelta: new Vec2(),
+    prevDelta: new Vec2(),
     prevInput: undefined
   };
 
-  function computeDelta(center: Vec2Tuple, eventType: HammerInput['eventType']) {
+  function computeDelta(center: Vec2, eventType: HammerInput['eventType']) {
     let offset = session.offsetDelta;
     let prevDelta = session.prevDelta;
-    let prevInput = session.prevInput;
+    const prevInput = session.prevInput;
 
     if (eventType === 'start' || prevInput?.eventType === 'end') {
-      prevDelta = session.prevDelta = [prevInput?.delta?.[0] || 0, prevInput?.delta?.[1] || 0];
+      prevDelta = session.prevDelta = new Vec2().set(prevInput?.delta?.x || 0, prevInput?.delta?.y || 0);
 
-      offset = session.offsetDelta = [center[0], center[1]];
+      offset = session.offsetDelta = new Vec2().set(center.x, center.y);
     }
 
-    const delta = [prevDelta[0] + (center[0] - offset[0]), prevDelta[1] + (center[1] - offset[1])] as Vec2Tuple;
+    const delta = new Vec2().set(prevDelta.x + (center.x - offset.x), prevDelta.y + (center.y - offset.y));
 
     return delta;
   }
@@ -35,8 +35,8 @@ export function createComputeDelta() {
       session.prevInput = simpleCloneInputData(input);
     },
     clear() {
-      session.offsetDelta = [0, 0];
-      session.prevDelta = [0, 0];
+      session.offsetDelta = new Vec2();
+      session.prevDelta = new Vec2();
       session.prevInput = undefined;
     }
   };

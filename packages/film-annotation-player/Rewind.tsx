@@ -1,17 +1,8 @@
-import { asObservable } from '@utils/as-observable';
-import { createSubscription } from '@utils/create-subscription';
-import {
-  animationFrameScheduler,
-  distinctUntilChanged,
-  EMPTY,
-  filter,
-  map,
-  switchMap,
-  tap,
-  timer,
-} from 'rxjs';
+import { createSubscription } from '@utils/createSubscription';
+import { animationFrameScheduler, distinctUntilChanged, EMPTY, filter, map, switchMap, tap, timer } from 'rxjs';
 import { untrack } from 'solid-js';
 
+import { toObservable } from '@utils/toObservable';
 import { Frame } from './interfaces/Frame';
 
 interface Props {
@@ -21,7 +12,7 @@ interface Props {
 }
 
 export default function Rewind(props: Props) {
-  const rewind$ = asObservable(() => props.rewind);
+  const rewind$ = toObservable(() => props.rewind);
 
   let intervalDuration = 0;
   let direction = 1;

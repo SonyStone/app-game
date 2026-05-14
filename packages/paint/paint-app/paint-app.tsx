@@ -1,5 +1,5 @@
-import { m3 } from '@packages/math';
-import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
+import { Mat3 } from '@app-game/math';
+import { createWebGL2Renderer } from '@app-game/webgl/webgl-objects/context';
 import { onMount } from 'solid-js';
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
@@ -46,8 +46,8 @@ export default function PaintApp() {
     // Tell it to use our program (pair of shaders)
     program.use();
 
-    const matrix = m3.translate(projection(canvas.width, canvas.height), [256, 256]);
-    program.matrix(matrix);
+    const matrix = projection(canvas.width, canvas.height).translate([256, 256]);
+    program.matrix(matrix.value);
 
     // draw
     // Bind the attribute/buffer set we want.
@@ -60,5 +60,5 @@ export default function PaintApp() {
 
 function projection(width: number, height: number) {
   // Note: This matrix flips the Y axis so that 0 is at the top.
-  return m3.set(m3.createFMat3(), 2 / width, 0, 0, 0, -2 / height, 0, -1, 1, 1);
+  return new Mat3(new Float32Array(9)).set(2 / width, 0, 0, 0, -2 / height, 0, -1, 1, 1);
 }

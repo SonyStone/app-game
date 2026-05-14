@@ -1,5 +1,5 @@
-import { FVec2 } from '@packages/math';
-import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@packages/ogl';
+import { Vec2 } from '@app-game/math/v2';
+import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@app-game/ogl';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect } from 'solid-js';
@@ -26,8 +26,8 @@ export default () => {
 
   // Variable inputs to control flowmap
   let aspect = 1;
-  const mouse = FVec2.splat(-1);
-  const velocity = Object.assign(new FVec2(), { needsUpdate: true });
+  const mouse = Vec2.create(-1, -1);
+  const velocity = Object.assign(Vec2.create(), { needsUpdate: true });
 
   const flowmap = new Flowmap(gl);
 
@@ -64,7 +64,7 @@ export default () => {
   window.addEventListener('pointermove', updateMouse, false);
 
   let lastTime = 0;
-  const lastMouse = new FVec2();
+  const lastMouse = Vec2.create();
   function updateMouse(e: PointerEvent) {
     // Get mouse value in 0 to 1 range, with y flipped
     mouse.set(e.x / gl.renderer.width, 1.0 - e.y / gl.renderer.height);
@@ -87,8 +87,8 @@ export default () => {
     let delta = Math.max(14, time - lastTime);
     lastTime = time;
 
-    velocity.x = deltaX / delta;
-    velocity.y = deltaY / delta;
+    velocity.value[0] = deltaX / delta;
+    velocity.value[1] = deltaY / delta;
 
     // Flag update to prevent hanging velocity values when not moving
     velocity.needsUpdate = true;

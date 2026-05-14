@@ -1,5 +1,7 @@
 import * as programs from './programs';
 
+import type { AttribInfo, BufferInfo, ProgramInfo, VertexArrayInfo } from './index';
+
 /**
  * vertex array object related functions
  *
@@ -61,19 +63,23 @@ const ELEMENT_ARRAY_BUFFER = 0x8893;
  *
  * @memberOf module:twgl/vertexArrays
  */
-function createVertexArrayInfo(gl, programInfos, bufferInfo) {
+function createVertexArrayInfo(
+  gl: WebGL2RenderingContext,
+  programInfos: ProgramInfo | ProgramInfo[],
+  bufferInfo: BufferInfo
+): VertexArrayInfo {
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
-  if (!programInfos.length) {
+  if (!Array.isArray(programInfos)) {
     programInfos = [programInfos];
   }
-  programInfos.forEach(function (programInfo) {
+  programInfos.forEach(function (programInfo: ProgramInfo) {
     programs.setBuffersAndAttributes(gl, programInfo, bufferInfo);
   });
   gl.bindVertexArray(null);
   return {
     numElements: bufferInfo.numElements,
-    elementType: bufferInfo.elementType,
+    elementType: bufferInfo.elementType ?? 0,
     vertexArrayObject: vao
   };
 }
@@ -90,7 +96,12 @@ function createVertexArrayInfo(gl, programInfos, bufferInfo) {
  *
  * @memberOf module:twgl/vertexArrays
  */
-function createVAOAndSetAttributes(gl, setters, attribs, indices) {
+function createVAOAndSetAttributes(
+  gl: WebGL2RenderingContext,
+  setters: Record<string, (...args: any[]) => void>,
+  attribs: Record<string, AttribInfo>,
+  indices?: WebGLBuffer
+): WebGLVertexArrayObject | null {
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
   programs.setAttributes(setters, attribs);
@@ -117,10 +128,19 @@ function createVAOAndSetAttributes(gl, setters, attribs, indices) {
  *
  * @memberOf module:twgl/vertexArrays
  */
-function createVAOFromBufferInfo(gl, programInfo, bufferInfo) {
+function createVAOFromBufferInfo(
+  gl: WebGL2RenderingContext,
+  programInfo: ProgramInfo | Record<string, (...args: any[]) => void>,
+  bufferInfo: BufferInfo
+): WebGLVertexArrayObject | null {
+  const setters = ('attribSetters' in programInfo ? programInfo.attribSetters : programInfo) as Record<
+    string,
+    (...args: any[]) => void
+  >;
+
   return createVAOAndSetAttributes(
     gl,
-    programInfo.attribSetters || programInfo,
+    setters,
     bufferInfo.attribs,
     bufferInfo.indices
   );

@@ -1,7 +1,7 @@
 import { ObservableInput, distinctUntilChanged, of, switchMap } from 'rxjs';
 import { Accessor } from 'solid-js';
-import { toObservable } from './to-observable';
-import { toSignal } from './to-signal';
+import { toObservable } from './toObservable';
+import { toSignal } from './toSignal';
 
 export function wrapSignal<R, T>(
   signal: Accessor<T>,

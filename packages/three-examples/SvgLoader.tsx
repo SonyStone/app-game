@@ -1,4 +1,5 @@
 import { createEffect, onCleanup } from 'solid-js';
+import * as THREE from 'three';
 import {
   Camera,
   Color,
@@ -8,7 +9,6 @@ import {
   MeshPhongMaterial,
   PointLight,
   Scene,
-  sRGBEncoding,
   WebGLRenderer
 } from 'three';
 
@@ -32,9 +32,11 @@ export default function SvgLoader() {
   const renderer = new WebGLRenderer({ antialias: true, canvas });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.outputEncoding = sRGBEncoding;
+  (renderer as WebGLRenderer & { outputColorSpace: unknown }).outputColorSpace = (THREE as unknown as {
+    SRGBColorSpace: unknown;
+  }).SRGBColorSpace;
 
-  controls.init(renderer.domElement);
+  controls.init(renderer.domElement as unknown as HTMLElement);
 
   let currentCamera!: Camera;
   createEffect(() => {

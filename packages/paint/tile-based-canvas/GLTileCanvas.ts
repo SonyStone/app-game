@@ -1,4 +1,4 @@
-import { Tile } from './tile';
+import { Tile } from './Tile';
 
 export class GLTileCanvas {
   private gl: WebGL2RenderingContext;

@@ -25,4 +25,4 @@ export const COMPOSITE_OPERATIONS = [
   // 'saturation',
   // 'color',
   // 'luminosity',
-];
+] as const;

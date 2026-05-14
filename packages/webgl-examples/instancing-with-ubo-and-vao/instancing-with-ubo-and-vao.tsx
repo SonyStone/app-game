@@ -1,11 +1,11 @@
-import * as m4 from '@packages/math/m4';
-import { createProgram } from '@packages/webgl/createProgram';
-import { createWebGL2Context } from '@packages/webgl/webgl-objects/context';
+import * as m4 from '@app-game/math/m4';
+import { createProgram } from '@app-game/webgl/createProgram';
+import { createWebGL2Context } from '@app-game/webgl/webgl-objects/context';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect, createSignal, untrack } from 'solid-js';
 import { effect } from 'solid-js/web';
-import { BYTE, CUBE, CUBE_WIREFRAME_INDICES, INSTANCES } from './cube-mesh';
+import { CUBE, CUBE_WIREFRAME_INDICES, INSTANCES } from './cube-mesh';
 import fragmentShaderSource from './shader.frag?raw';
 import vertexShaderSource from './shader.vert?raw';
 import wireframeFragmentShaderSource from './wireframe.frag?raw';
@@ -20,8 +20,6 @@ export default function InstancingWithUBOandVAO() {
     <canvas id="canvas" class="z-2 pointer-events-none relative h-full w-full touch-none border border-black" />
   ) as HTMLCanvasElement;
 
-  const resize = createWindowSize();
-
   const [numInstances, setNumInstances] = createSignal(INSTANCES.instances.numInstances / 4);
   const [depthTest, setDepthTest] = createSignal(true);
   const [wireframe, setWireframe] = createSignal(false);
@@ -32,6 +30,7 @@ export default function InstancingWithUBOandVAO() {
 
   const gl = createWebGL2Context(canvas);
 
+  const resize = createWindowSize();
   createEffect(() => {
     gl.canvas.width = resize.width;
     gl.canvas.height = resize.height;
@@ -126,7 +125,7 @@ export default function InstancingWithUBOandVAO() {
 
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.UNIFORM_BUFFER, buffer);
-    gl.bufferData(gl.UNIFORM_BUFFER, 4 * 4 * BYTE, gl.DYNAMIC_DRAW);
+    gl.bufferData(gl.UNIFORM_BUFFER, 4 * 4 * Float32Array.BYTES_PER_ELEMENT, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.UNIFORM_BUFFER, null);
 
     gl.bindBufferBase(gl.UNIFORM_BUFFER, bindingPoint, buffer);

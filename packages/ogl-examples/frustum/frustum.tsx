@@ -9,8 +9,8 @@ import {
   Transform,
   Vec3,
   VertexNormalsHelper
-} from '@packages/ogl';
-import { EyeSpaceFrustum } from '@packages/ogl/extras/eye-space-frustum';
+} from '@app-game/ogl';
+import { EyeSpaceFrustum } from '@app-game/ogl/extras/eye-space-frustum';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { effect } from 'solid-js/web';

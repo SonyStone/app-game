@@ -1,0 +1,266 @@
+[
+  {
+    "type": 2000,
+    "node": { "type": "session", "data": { "treeId": "1724204105858.4043", "nextDId": 1, "nonDumpedDId": 1 } }
+  },
+  [
+    2001,
+    {
+      "type": "savedwin",
+      "marks": { "relicons": [] },
+      "data": { "focused": true, "type": "normal", "rect": "0_-7_1934_2119", "crashDetectedDate": 1726218306726 }
+    },
+    [0]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "active": true,
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.google.com/favicon.ico",
+        "groupId": -1,
+        "highlighted": true,
+        "lastAccessed": 1724210187126.165,
+        "mutedInfo": { "muted": false },
+        "title": "Google",
+        "url": "https://www.google.com/"
+      }
+    },
+    [0, 0]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "active": true,
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.google.com/favicon.ico",
+        "groupId": -1,
+        "highlighted": true,
+        "lastAccessed": 1724205605312.698,
+        "mutedInfo": { "muted": false },
+        "openerTabId": 409820798,
+        "title": "asd - Google Search",
+        "url": "https://www.google.com/search?q=asd&oq=asd&gs_lcrp=EgZjaHJvbWUyBggAEEUYOdIBBzU2N2owajGoAgCwAgA&sourceid=chrome&ie=UTF-8"
+      }
+    },
+    [0, 0, 0]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.google.com/favicon.ico",
+        "groupId": -1,
+        "mutedInfo": { "muted": false },
+        "title": "chrome pack extension folder - Google Search",
+        "url": "https://www.google.com/search?q=chrome+pack+extension+folder&newwindow=1&sca_esv=54d98b2102a48c5e&sca_upv=1&sxsrf=ADLYWIKJZtiOsL-jl43KW3ul42ES5ATpDg%3A1724206772578&ei=tE7FZr_8IrLq7_UP7ODX0Qs&ved=0ahUKEwi_psvhgoWIAxUy9bsIHWzwNboQ4dUDCA8&uact=5&oq=chrome+pack+extension+folder&gs_lp=Egxnd3Mtd2l6LXNlcnAiHGNocm9tZSBwYWNrIGV4dGVuc2lvbiBmb2xkZXIyBRAhGKABMgUQIRigATIFECEYoAEyBRAhGKABSJ8OUABYzQxwAHgBkAEAmAGzAaABzAaqAQM1LjO4AQPIAQD4AQGYAgigAu0GwgIFEAAYgATCAgsQABiABBiRAhiKBcICBhAAGBYYHsICChAAGBYYChgeGA_CAgsQABiABBiGAxiKBcICCBAAGIAEGKIEwgIIEAAYCBgNGB7CAgcQIRigARgKmAMA4gMFEgExIECSBwM1LjOgB88q&sclient=gws-wiz-serp"
+      }
+    },
+    [0, 0, 1]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://cdn.sstatic.net/Sites/stackoverflow/Img/favicon.ico?v=ec617d715196",
+        "groupId": -1,
+        "mutedInfo": { "muted": false },
+        "title": "👋 How to package Chrome extension (generate .CRX file) in the command line - Stack Overflow",
+        "url": "https://stackoverflow.com/questions/77517406/how-to-package-chrome-extension-generate-crx-file-in-the-command-line"
+      }
+    },
+    [0, 0, 1, 0]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://cdn.sstatic.net/Sites/stackoverflow/Img/favicon.ico?v=ec617d715196",
+        "groupId": -1,
+        "mutedInfo": { "muted": false },
+        "title": "😄 Where does Chrome store extensions? - Stack Overflow",
+        "url": "https://stackoverflow.com/questions/14543896/where-does-chrome-store-extensions"
+      }
+    },
+    [0, 0, 1, 1]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "active": true,
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.gstatic.com/devrel-devsite/prod/ve6d23e3d09b80ebb8aa912b18630ed278e1629b97aee6522ea53593a0024d951/chrome/images/favicon.png",
+        "groupId": -1,
+        "lastAccessed": 1724210891987.101,
+        "mutedInfo": { "muted": false },
+        "title": "❓❓❓ Chrome Extensions  |  ChromeDriver  |  Chrome for Developers",
+        "url": "https://developer.chrome.com/docs/chromedriver/extensions"
+      }
+    },
+    [0, 0, 1, 2]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.google.com/favicon.ico",
+        "groupId": -1,
+        "highlighted": true,
+        "lastAccessed": 1724206976558.605,
+        "mutedInfo": { "muted": false },
+        "openerTabId": 409820798,
+        "title": "❗ Google",
+        "url": "https://www.google.com/"
+      }
+    },
+    [0, 1]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.google.com/favicon.ico",
+        "groupId": -1,
+        "highlighted": true,
+        "lastAccessed": 1724210190204.458,
+        "mutedInfo": { "muted": false },
+        "title": "🥲 Google",
+        "url": "https://www.google.com/"
+      }
+    },
+    [0, 2]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.google.com/favicon.ico",
+        "groupId": -1,
+        "highlighted": true,
+        "lastAccessed": 1724210286752.843,
+        "mutedInfo": { "muted": false },
+        "openerTabId": 409820798,
+        "title": "👌 Google",
+        "url": "https://www.google.com/"
+      }
+    },
+    [0, 3]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.google.com/favicon.ico",
+        "groupId": -1,
+        "highlighted": true,
+        "lastAccessed": 1724210802723.098,
+        "mutedInfo": { "muted": false },
+        "title": "🔴 Google",
+        "url": "https://www.google.com/"
+      }
+    },
+    [0, 4]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "active": true,
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.google.com/favicon.ico",
+        "groupId": -1,
+        "highlighted": true,
+        "lastAccessed": 1724212270122.338,
+        "mutedInfo": { "muted": false },
+        "title": "✅ Google",
+        "url": "https://www.google.com/"
+      }
+    },
+    [0, 5]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.google.com/favicon.ico",
+        "groupId": -1,
+        "highlighted": true,
+        "lastAccessed": 1724210838182.255,
+        "mutedInfo": { "muted": false },
+        "openerTabId": 409820798,
+        "title": "👨‍🔬 Google",
+        "url": "https://www.google.com/"
+      }
+    },
+    [0, 5, 0]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "audible": false,
+        "autoDiscardable": true,
+        "discarded": false,
+        "favIconUrl": "https://www.google.com/favicon.ico",
+        "groupId": -1,
+        "highlighted": true,
+        "lastAccessed": 1724210880457.356,
+        "mutedInfo": { "muted": false },
+        "openerTabId": 409820798,
+        "title": "❓ Google",
+        "url": "https://www.google.com/"
+      }
+    },
+    [0, 5, 1]
+  ],
+
+  { "type": 11111, "time": 1761384436128 }
+]

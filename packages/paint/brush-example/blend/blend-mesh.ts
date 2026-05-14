@@ -1,6 +1,6 @@
-import { Mesh, OGLRenderingContext, Program, Texture } from '@packages/ogl';
-import { RenderTarget } from '@packages/ogl/core/render-target';
-import { Square } from '@packages/ogl/extras/square';
+import { Mesh, OGLRenderingContext, Program, Texture } from '@app-game/ogl';
+import { RenderTarget } from '@app-game/ogl/core/render-target';
+import { Square } from '@app-game/ogl/extras/square';
 import { BlendModes, ColorBlendModes } from '../blend-modes';
 import fragment from './blend.frag?raw';
 import vertex from './blend.vert?raw';

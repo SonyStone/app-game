@@ -1,5 +1,5 @@
-import { Euler, Mat4, Vec3 } from '@packages/ogl';
-import { Vec3Tuple } from '@packages/ogl/math/vec-3';
+import { Euler, Mat4, Vec3 } from '@app-game/ogl';
+import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
 import * as FBX from './fbx-tree';
 import { ConnectionRelationships, Deformers, MorphTarget, Skeleton } from './fbx-tree-parser';
 import { clone, extractRotation, makeRotationFromEuler } from './mat4';

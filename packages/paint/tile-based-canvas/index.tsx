@@ -1,5 +1,5 @@
-import { createProgram } from '@packages/webgl/createProgram';
-import { createWebGL2Context } from '@packages/webgl/webgl-objects/context';
+import { createProgram } from '@app-game/webgl/createProgram';
+import { createWebGL2Context } from '@app-game/webgl/webgl-objects/context';
 import { onMount } from 'solid-js';
 import { GLTileCanvas } from './GLTileCanvas';
 import fragmentShaderSource from './tiles.frag?raw';

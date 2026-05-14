@@ -1,5 +1,4 @@
-import { Mat3 } from '@packages/ogl';
-import { TypedArray, TypedArrayConstructor } from './utils/typed-array';
+import { NumberArray, TypedArrayConstructor } from './utils/typed-array';
 import { type Vec2Tuple } from './v2';
 import { Vec3, Vec3Tuple } from './v3';
 
@@ -30,8 +29,7 @@ export type Mat4Tuple =
       m32: number,
       m33: number
     ]
-  | number[]
-  | TypedArray;
+  | NumberArray;
 
 /**
  * 4x4 Matrix math math functions.
@@ -55,8 +53,8 @@ export type Mat4Tuple =
  *     const trans = m4.translation([1, 2, 3]);
  *     m4.multiply(mat, trans, mat);  // Multiplies mat * trans and puts result in mat.
  */
-export const Mat4Builder = (ctor: TypedArrayConstructor) =>
-  class Mat4 extends (ctor as ArrayConstructor) {
+export const Mat4Builder = (ctor: TypedArrayConstructor | ArrayConstructor) =>
+  class Mat4 extends (ctor as unknown as ArrayConstructor) {
     /**
      * A JavaScript array with 16 values or a Float32Array with 16 values.
      * When created by the library will create the default type which is `Float32Array`
@@ -565,7 +563,11 @@ export const Mat4Builder = (ctor: TypedArrayConstructor) =>
      * @param v A vector of three entries specifying the
      *     factor by which to scale in each dimension.
      */
-    scale([v0, v1, v2]: Vec3Tuple): this {
+    scale(v: Vec3Tuple): this {
+      const v0 = v[0];
+      const v1 = v[1];
+      const v2 = v[2];
+
       this[0] = v0 * this[0 * 4 + 0];
       this[1] = v0 * this[0 * 4 + 1];
       this[2] = v0 * this[0 * 4 + 2];

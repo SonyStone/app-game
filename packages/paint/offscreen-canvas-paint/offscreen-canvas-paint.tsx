@@ -10,6 +10,7 @@ export default function OffscreenCanvasPaint() {
   const worker = new Worker();
 
   const pointerEvents = createPointerEvents();
+  const pointerTarget = canvas as unknown as HTMLElement;
 
   onMount(async () => {
     // should be mounted before use
@@ -18,7 +19,7 @@ export default function OffscreenCanvasPaint() {
     worker.postMessage({ canvas: offscreenCanvas, type: 'canvas' }, [offscreenCanvas]);
 
     onMount(() => {
-      makeEventListener(canvas, 'pointermove', (e: PointerEvent) => {
+      makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
         const events = e.getCoalescedEvents();
         if (events.length === 0) {
           events.push(e);
@@ -36,7 +37,7 @@ export default function OffscreenCanvasPaint() {
         }
       });
 
-      makeEventListener(canvas, 'pointerup', (event: PointerEvent) => {
+      makeEventListener(pointerTarget, 'pointerup', (event: PointerEvent) => {
         worker.postMessage({
           type: 'pointerup',
           event: {
@@ -49,7 +50,7 @@ export default function OffscreenCanvasPaint() {
       });
     });
 
-    await pointerEvents.apply(canvas);
+    await pointerEvents.apply(canvas as unknown as Element);
   });
 
   const resize = createWindowSize();

@@ -1,19 +1,27 @@
-import { DEFAULT_ALTITUDE_ANGLE, HammerInput, createPointerEventsHandler } from '@packages/hammer/pointerevent';
-import { clamp, radToDeg } from '@packages/pixijs-research/math/MathUtils';
-import { createWindowSize } from '@solid-primitives/resize-observer';
+import { DEFAULT_ALTITUDE_ANGLE, HammerInput, createPointerEventsHandler } from '@app-game/hammer/pointerevent';
+import { clamp, radToDeg } from '@app-game/pixijs-research/math/MathUtils';
+import { createEventListener } from '@solid-primitives/event-listener';
 import { Title } from '@solidjs/meta';
-import { ComponentProps, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
+import { ComponentProps, Show, createMemo, createSignal } from 'solid-js';
 import { degToRad } from 'three/src/math/MathUtils';
+import { useOffscreenCanvas } from './offscreen-canvas';
+import type { WorkerMessage } from './offscreen-canvas.worker';
+
+const toPlainPointerEvent = (event: PointerEvent): WorkerMessage => ({
+  type: event.type as 'pointerdown' | 'pointermove' | 'pointerup',
+  clientX: event.clientX,
+  clientY: event.clientY,
+  pointerId: event.pointerId,
+  pointerType: event.pointerType,
+  pressure: event.pressure,
+  tiltX: event.tiltX,
+  tiltY: event.tiltY,
+  twist: event.twist,
+  timeStamp: event.timeStamp
+});
 
 export default function Multitouch() {
-  const canvas = (<canvas class="touch-none"></canvas>) as HTMLCanvasElement;
-
-  canvas.style.width = '100%';
-  canvas.style.height = '100%';
-
-  const ctx = canvas.getContext('2d')!;
-
-  const resize = createWindowSize();
+  const { canvas, worker } = useOffscreenCanvas();
 
   const [inputS, setInputS] = createSignal<HammerInput | undefined>(undefined);
   const altitudeAngle = createMemo(() => radToDeg(inputS()?.altitudeAngle ?? DEFAULT_ALTITUDE_ANGLE));
@@ -33,104 +41,38 @@ export default function Multitouch() {
     return pressure;
   });
 
-  createEffect(() => {
-    canvas.width = resize.width;
-    canvas.height = resize.height;
-  });
-
-  const [events, setEvents] = createSignal<PointerEvent[]>([]);
-  const [predictedEvents, setPredictedEvents] = createSignal<PointerEvent[]>([]);
-  const [coalescedEvents, setCoalescedEvents] = createSignal<PointerEvent[]>([]);
-
   const pointerEventsHandler = createPointerEventsHandler();
 
-  function pointerdownHandler(event: PointerEvent) {
+  createEventListener(window, 'pointerdown', (event: PointerEvent) => {
     event.preventDefault();
-    setEvents(() => [event]);
-    setPredictedEvents(() => [...event.getPredictedEvents()]);
-    setCoalescedEvents(() => [...event.getCoalescedEvents()]);
+    worker.postMessage(toPlainPointerEvent(event));
     setInputS(pointerEventsHandler(event));
-  }
-  function pointermoveHandler(event: PointerEvent) {
-    event.preventDefault();
-    setEvents((events) => {
-      events.push(event);
-      return events;
-    });
-    setPredictedEvents((events) => {
-      events.push(...event.getPredictedEvents());
-      return events;
-    });
-    setCoalescedEvents((events) => {
-      events.push(...event.getCoalescedEvents());
-      return events;
-    });
-    // console.log(event.getPredictedEvents());
-    const input = pointerEventsHandler(event);
-    setInputS(input);
-
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.strokeStyle = 'black';
-    for (const point of input.pointers) {
-      ctx.beginPath();
-      ctx.ellipse(point[0], point[1], 30, 30, 0, 0, Math.PI * 2, false);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(point[0], point[1]);
-      ctx.lineTo(input.center[0], input.center[1]);
-      ctx.stroke();
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(input.start[0], input.start[1]);
-    ctx.lineTo(input.center[0], input.center[1]);
-    ctx.stroke();
-
-    ctx.strokeStyle = 'blue';
-    for (event of untrack(events)) {
-      ctx.beginPath();
-      ctx.ellipse(event.clientX, event.clientY, 3, 3, 0, 0, Math.PI * 2, false);
-      ctx.stroke();
-    }
-
-    ctx.strokeStyle = 'red';
-    for (event of untrack(coalescedEvents)) {
-      ctx.beginPath();
-      ctx.ellipse(event.clientX, event.clientY, 2, 2, 0, 0, Math.PI * 2, false);
-      ctx.stroke();
-    }
-
-    // ctx.strokeStyle = 'green';
-    // for (event of untrack(predictedEvents)) {
-    //   ctx.beginPath();
-    //   ctx.ellipse(event.clientX, event.clientY, 1, 1, 0, 0, Math.PI * 2, false);
-    //   ctx.stroke();
-    // }
-  }
-  function pointerupHandler(event: PointerEvent) {
-    event.preventDefault();
-    setInputS(pointerEventsHandler(event));
-    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-  }
-
-  window.addEventListener('pointerdown', pointerdownHandler);
-  window.addEventListener('pointermove', pointermoveHandler);
-  window.addEventListener('pointerup', pointerupHandler);
-  window.addEventListener('pointerleave', pointerupHandler);
-  window.addEventListener('pointercancel', pointerupHandler);
-
-  onCleanup(() => {
-    window.removeEventListener('pointerdown', pointerdownHandler);
-    window.removeEventListener('pointermove', pointermoveHandler);
-    window.removeEventListener('pointerup', pointerupHandler);
-    window.removeEventListener('pointerleave', pointerupHandler);
-    window.removeEventListener('pointercancel', pointerupHandler);
   });
 
+  createEventListener(window, 'pointermove', (event: PointerEvent) => {
+    // ! Very important to use event.getCoalescedEvents() to get all the events between the frames
+    event.preventDefault();
+    if (event.getCoalescedEvents) {
+      for (const e of event.getCoalescedEvents()) {
+        worker.postMessage(toPlainPointerEvent(e));
+      }
+    } else {
+      worker.postMessage(toPlainPointerEvent(event));
+    }
+    setInputS(pointerEventsHandler(event));
+  });
+
+  createEventListener(window, ['pointerup', 'pointerleave', 'pointercancel'], (event: PointerEvent) => {
+    event.preventDefault();
+    worker.postMessage(toPlainPointerEvent(event));
+    setInputS(pointerEventsHandler(event));
+  });
+
+  createEventListener(window, 'contextmenu', (event) => event.preventDefault());
+
   const stroke = createMemo(() => {
-    const y = inputS()?.delta[0] ?? 0;
-    const x = inputS()?.delta[1] ?? 0;
+    const y = inputS()?.delta.x ?? 0;
+    const x = inputS()?.delta.y ?? 0;
 
     return clamp((y + x) / 2, -30, 30);
   });
@@ -138,13 +80,13 @@ export default function Multitouch() {
   return (
     <>
       <Title>Multitouch</Title>
-      <div class="fixed pointer-events-none">
+      <div class="pointer-events-none fixed text-[8px] md:text-base">
         <pre>{JSON.stringify(inputS(), null, 2)}</pre>
       </div>
       <svg
         viewBox="0 0 100 100"
         xmlns="http://www.w3.org/2000/svg"
-        class="absolute top-2 end-2 h-120  w-120 pointer-events-none"
+        class="md:h-120 md:w-120 pointer-events-none absolute end-2 top-2 h-60 w-60"
       >
         <g transform="scale(0.9)" transform-origin="50 50">
           <line x1="0" y1="100" x2="100" y2="100" stroke="black" stroke-width="1" />
@@ -158,8 +100,8 @@ export default function Multitouch() {
               stroke-linecap="round"
               x1="0"
               y1="0"
-              x2={(inputS()?.tilt[0] ?? 0) / 9}
-              y2={(inputS()?.tilt[1] ?? 0) / 9}
+              x2={(inputS()?.tilt.x ?? 0) / 9}
+              y2={(inputS()?.tilt.y ?? 0) / 9}
               stroke="black"
               stroke-width="1"
             />

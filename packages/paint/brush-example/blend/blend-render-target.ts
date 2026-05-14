@@ -1,5 +1,5 @@
-import { OGLRenderingContext, Texture } from '@packages/ogl';
-import { RenderTarget } from '@packages/ogl/core/render-target';
+import { OGLRenderingContext, Texture } from '@app-game/ogl';
+import { RenderTarget } from '@app-game/ogl/core/render-target';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createSignal } from 'solid-js';
 import { BlendModes, ColorBlendModes } from '../blend-modes';

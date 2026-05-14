@@ -1,12 +1,12 @@
-import type { TypedArray, TypedArrayConstructor } from './utils/typed-array';
-import { Vec2Tuple } from './v2-builder';
+import type { NumberArray, TypedArrayConstructor } from './utils/typed-array';
+import { Vec2Tuple } from './v2';
 
 /**
  * A JavaScript array with 3 values or a Float32Array with 3 values.
  * When created by the library will create the default type which is `Float32Array`
  * but can be set by calling {@link Vec3Builder}.
  */
-export type Vec3Tuple = [x: number, y: number, z: number] | TypedArray;
+export type Vec3Tuple = [x: number, y: number, z: number] | NumberArray;
 
 /**
  * Creates a vector builder function that generates a Vec3 class based on the provided constructor.
@@ -19,7 +19,7 @@ export type Vec3Tuple = [x: number, y: number, z: number] | TypedArray;
  * ```
  */
 export const Vec3Builder = (ctor: TypedArrayConstructor) =>
-  class Vec3 extends (ctor as ArrayConstructor) {
+  class Vec3 extends (ctor as unknown as ArrayConstructor) {
     constructor() {
       super(3);
     }
@@ -428,7 +428,7 @@ const angle = (ctor: ReturnType<typeof Vec3Builder>) => {
     tempA.copy(a).normalize();
     tempB.copy(b).normalize();
 
-    let cosine = tempA.dot(tempB);
+    const cosine = tempA.dot(tempB);
 
     if (cosine > 1.0) {
       return 0;

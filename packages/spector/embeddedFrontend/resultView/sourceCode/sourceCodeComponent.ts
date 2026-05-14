@@ -125,7 +125,7 @@ export class SourceCodeComponent extends BaseComponent<ISourceCodeState> {
 
     const element = this.renderElementFromTemplate(htmlString.replace(/<br>/g, '\n'), state, stateId);
 
-    this.editor = edit(element.querySelector('.sourceCodeComponent')!);
+    this.editor = edit(element.querySelector('.sourceCodeComponent') as HTMLElement);
     this.editor.setTheme('ace/theme/monokai');
     this.editor.getSession().setMode('ace/mode/glsl');
     this.editor.setShowPrintMargin(false);

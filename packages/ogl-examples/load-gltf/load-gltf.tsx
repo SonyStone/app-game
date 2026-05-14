@@ -1,4 +1,4 @@
-import { Camera, GLTF, GLTFLoader, Orbit, Program, Renderer, TextureLoader, Transform, Vec3 } from '@packages/ogl';
+import { Camera, GLTF, GLTFLoader, Orbit, Program, Renderer, TextureLoader, Transform, Vec3 } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect } from 'solid-js';
 
@@ -33,16 +33,12 @@ export default function loadGltf() {
 
   let gltf: GLTF;
 
+  const loadTexture = (src: string) => TextureLoader.load(gl, { src } as any);
+
   // Common textures for uber shader
-  const lutTexture = TextureLoader.load(gl, {
-    src: lut
-  });
-  const envDiffuseTexture = TextureLoader.load(gl, {
-    src: sunsetDiffuse
-  });
-  const envSpecularTexture = TextureLoader.load(gl, {
-    src: sunsetSpecular
-  });
+  const lutTexture = loadTexture(lut);
+  const envDiffuseTexture = loadTexture(sunsetDiffuse);
+  const envSpecularTexture = loadTexture(sunsetSpecular);
 
   {
     loadInitial();
@@ -89,9 +85,9 @@ export default function loadGltf() {
     console.log(gltf);
 
     const s = gltf.scene || gltf.scenes[0];
-    s.forEach((root) => {
+    s.forEach((root: any) => {
       root.setParent(scene);
-      root.traverse((node) => {
+      root.traverse((node: any) => {
         if ((node as any).program) {
           (node as any).program = createProgram(node);
         }
@@ -112,8 +108,8 @@ export default function loadGltf() {
     const boundsCenter = new Vec3();
     const boundsScale = new Vec3();
 
-    gltf.meshes.forEach((group) => {
-      group.primitives.forEach((mesh) => {
+    gltf.meshes.forEach((group: any) => {
+      group.primitives.forEach((mesh: any) => {
         if (!mesh.parent) return; // Skip unattached
 
         // TODO: for skins, go over joints, not mesh

@@ -7,7 +7,7 @@ export class GetTransformFeedbackVarying extends BaseCommand {
     return GetTransformFeedbackVarying.commandName;
   }
 
-  protected stringifyResult(result: any): string {
+  protected stringifyResult(result: any): string | undefined {
     if (!result) {
       return undefined;
     }

@@ -1,4 +1,4 @@
-import { TypedArray } from '@packages/webgl/typedArray';
+import type { TypedArray } from '@app-game/webgl/typedArray';
 
 export function download(data: TypedArray, filename: string) {
   const blob = new Blob([data]);

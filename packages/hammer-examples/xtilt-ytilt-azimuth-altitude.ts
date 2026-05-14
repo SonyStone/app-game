@@ -1,4 +1,4 @@
-import type { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
+import type { Vec2Tuple } from '@app-game/ogl/math/vec-2_old';
 import { degToRad } from 'three/src/math/MathUtils';
 
 // [tiltXrad, tiltYrad] => [azimuthRad, altitudeRad]

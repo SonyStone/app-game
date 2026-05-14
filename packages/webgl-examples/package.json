@@ -1,0 +1,18 @@
+{
+  "name": "@app-game/webgl-examples",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/math": "workspace:*",
+    "@app-game/math-examples": "workspace:*",
+    "@app-game/ogl": "workspace:*",
+    "@app-game/twgl": "workspace:*",
+    "@app-game/webgl": "workspace:*",
+    "@app-game/ui-components": "workspace:*"
+  },
+  "exports": {
+    "./routes": "./routes.tsx"
+  },
+  "type": "module"
+}

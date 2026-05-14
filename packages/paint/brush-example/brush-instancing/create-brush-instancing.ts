@@ -1,6 +1,6 @@
-import { Vec2Tuple } from '@packages/math';
-import { OGLRenderingContext, Texture } from '@packages/ogl';
-import { RenderTarget, RenderTargetOptions } from '@packages/ogl/core/render-target';
+import { Vec2 } from '@app-game/math';
+import { OGLRenderingContext, Texture } from '@app-game/ogl';
+import { RenderTarget, RenderTargetOptions } from '@app-game/ogl/core/render-target';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createSignal } from 'solid-js';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
@@ -45,7 +45,7 @@ export const createBrushInstancing = ({
   const mesh = new BrushStrokeMesh(gl);
 
   let i = 0;
-  const add = (options: { point: Vec2Tuple; opacity: number }) => {
+  const add = (options: { point: Vec2; opacity: number }) => {
     // console.log(`add`, i);
     if (i > 1000) {
       i = 0;

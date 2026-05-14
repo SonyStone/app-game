@@ -1,4 +1,4 @@
-import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_DRAW_ELEMENTS_TYPE } from '@packages/webgl/static-variables';
+import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_DRAW_ELEMENTS_TYPE } from '@app-game/webgl/static-variables';
 import { TYPES } from 'pixi.js';
 
 type TypedArray =

@@ -1,0 +1,46 @@
+{
+  "name": "@app-game/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/bookmarks-explorer": "workspace:*",
+    "@app-game/babylonjs-examples": "workspace:*",
+    "@app-game/ecsy-pages": "workspace:*",
+    "@app-game/excalibur-examples": "workspace:*",
+    "@app-game/film-annotation-player": "workspace:*",
+    "@app-game/game-shaders-for-beginners": "workspace:*",
+    "@app-game/gsap": "workspace:*",
+    "@app-game/gsap-examples": "workspace:*",
+    "@app-game/ldtk-ts-examples": "workspace:*",
+    "@app-game/litegraph-examples": "workspace:*",
+    "@app-game/math-examples": "workspace:*",
+    "@app-game/ogl-examples": "workspace:*",
+    "@app-game/paint": "workspace:*",
+    "@app-game/piecs-examles": "workspace:*",
+    "@app-game/phaser-examples": "workspace:*",
+    "@app-game/pixijs-research": "workspace:*",
+    "@app-game/pixijs-examples": "workspace:*",
+    "@app-game/solid-utils": "workspace:*",
+    "@app-game/svg-editor": "workspace:*",
+    "@app-game/tanki": "workspace:*",
+    "@app-game/twgl-examples": "workspace:*",
+    "@app-game/three-examples": "workspace:*"
+    ,"@app-game/typegpu-examples": "workspace:*"
+    ,"@app-game/ui-components-examples": "workspace:*"
+    ,"@app-game/wasm-rust-pages": "workspace:*"
+    ,"@app-game/web-audio": "workspace:*"
+    ,"@app-game/webgl": "workspace:*"
+    ,"@app-game/webgl-examples": "workspace:*"
+    ,"@app-game/webgl-state-diagram": "workspace:*"
+    ,"@app-game/webgpu-examples": "workspace:*"
+  },
+  "scripts": {
+    "dev": "pnpm --dir ../.. exec vite --config vite.config.ts",
+    "build": "pnpm --dir ../.. exec vite build --config vite.config.ts",
+    "preview": "pnpm --dir ../.. exec vite preview --config vite.config.ts",
+    "test": "pnpm --dir ../.. exec vitest --config vite.config.ts run",
+    "typecheck": "pnpm --dir ../.. exec tsc --project apps/web/tsconfig.json --noEmit"
+  }
+}

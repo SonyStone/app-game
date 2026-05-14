@@ -5,4 +5,4 @@ export interface Component extends Resettable {
   copy?(src: Component): void;
 }
 
-export type Constructor<T> = new (_) => T;
+export type Constructor<T> = new (...args: any[]) => T;

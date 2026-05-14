@@ -1,7 +1,7 @@
 import { computePosition, offset } from '@floating-ui/dom';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { toObservable } from '@utils/to-observable';
-import { toSignal } from '@utils/to-signal';
+import { toObservable } from '@utils/toObservable';
+import { toSignal } from '@utils/toSignal';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
 import { ComponentProps, For, Show, createEffect, createMemo, createSignal, mergeProps, untrack } from 'solid-js';
 import { Portal } from 'solid-js/web';
@@ -145,7 +145,7 @@ export const Breadcrumbs = (props: {
 
   return (
     <ul
-      class="flex flex-nowrap place-content-start min-w-0 p-0 m-0"
+      class="m-0 flex min-w-0 flex-nowrap place-content-start p-0"
       ref={(element) => {
         createResizeObserver(element, repartition);
         setTimeout(repartition, 0);
@@ -159,14 +159,14 @@ export const Breadcrumbs = (props: {
           onClick={(e) => {
             setShowOverflow(true);
           }}
-          class="border flex-shrink-0 px-2 relative overflow-hidden"
+          class="relative flex-shrink-0 overflow-hidden border px-2"
         >
           ...
           <Ripple />
         </button>
         <Portal>
           <Show when={showOverflow()}>
-            <div onClick={(e) => setShowOverflow(false)} class="fixed start-0 end-0 top-0 bottom-0 z-1000"></div>
+            <div onClick={(e) => setShowOverflow(false)} class="z-1000 fixed bottom-0 end-0 start-0 top-0"></div>
           </Show>
           <Transition
             onEnter={(el, done) => {
@@ -193,11 +193,11 @@ export const Breadcrumbs = (props: {
                     ref.style.top = pos.y + 'px';
                   });
                 }}
-                class="flex flex-col absolute top-0 left-0 bg-white border z-1001 rounded shadow"
+                class="z-1001 absolute left-0 top-0 flex flex-col rounded border bg-white shadow"
               >
                 <For each={state().overflow}>
                   {(item) => (
-                    <a class="truncate relative rounded px-1 hover:bg-light" href={item.href}>
+                    <a class="hover:bg-light relative truncate rounded px-1" href={item.href}>
                       {item.text}
                       <Ripple />
                     </a>
@@ -210,18 +210,18 @@ export const Breadcrumbs = (props: {
       </Show>
       <For each={state().visible}>
         {(item, index) => (
-          <li class="truncate flex flex-shrink-0 items-center flex-nowrap overflow-hidden">
+          <li class="flex flex-shrink-0 flex-nowrap items-center overflow-hidden truncate">
             <Show when={index() !== 0 || state().overflow.length > 0}>
               <span class="px-1">&gt;</span>
             </Show>
             {item.icon && <i class={`fas fa-${item.icon}`}></i>}
             {item.href ? (
-              <a class="truncate relative rounded px-1 hover:bg-light" href={item.href}>
+              <a class="hover:bg-light relative truncate rounded px-1" href={item.href}>
                 {item.text}
                 <Ripple />
               </a>
             ) : (
-              <span class="truncate relative px-1 hover:bg-light">
+              <span class="hover:bg-light relative truncate px-1">
                 {item.text}
                 <Ripple />
               </span>
@@ -230,9 +230,9 @@ export const Breadcrumbs = (props: {
         )}
       </For>
       <Show when={merged.collapseFrom === Boundary.END && overflowLength() > 0}>
-        <span class="border flex-shrink-0 px-2">...{overflowLength()}</span>
+        <span class="flex-shrink-0 border px-2">...{overflowLength()}</span>
       </Show>
-      <overflow-list-spacer class="flex-shrink w-1px" ref={(ref) => (spacer = ref)} />
+      <overflow-list-spacer class="w-1px flex-shrink" ref={(ref) => (spacer = ref)} />
     </ul>
   );
 };

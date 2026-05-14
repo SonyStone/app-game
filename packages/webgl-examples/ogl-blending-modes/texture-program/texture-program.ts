@@ -1,5 +1,5 @@
-import { OGLRenderingContext, Program } from '@packages/ogl';
-import { ProgramOptions } from '@packages/ogl/core/program';
+import { OGLRenderingContext, Program } from '@app-game/ogl';
+import { ProgramOptions } from '@app-game/ogl/core/program';
 import fragment from './texture-program.frag?raw';
 import vertex from './texture-program.vert?raw';
 

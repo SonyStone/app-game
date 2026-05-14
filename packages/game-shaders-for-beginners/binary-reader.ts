@@ -166,7 +166,7 @@ export class BinaryReader {
     return a;
   }
 
-  getArrayBuffer(size: number): ArrayBuffer {
+  getArrayBuffer(size: number): ArrayBufferLike {
     const value = this.dv.buffer.slice(this.offset, this.offset + size);
     this.skip(size);
     return value;

@@ -1,4 +1,4 @@
-import { Color, Polyline, Renderer, Transform, Vec3 } from '@packages/ogl';
+import { Color, Polyline, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import createRAF from '@solid-primitives/raf';
 import { onCleanup } from 'solid-js';
 

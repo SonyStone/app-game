@@ -1,0 +1,21 @@
+{
+  "name": "@app-game/paint",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/hammer-examples": "workspace:*",
+    "@app-game/math": "workspace:*",
+    "@app-game/math-examples": "workspace:*",
+    "@app-game/ogl": "workspace:*",
+    "@app-game/ui-components": "workspace:*",
+    "@app-game/ui-components-examples": "workspace:*",
+    "@app-game/utils": "workspace:*",
+    "@app-game/webgl": "workspace:*",
+    "@app-game/webgl-examples": "workspace:*"
+  },
+  "exports": {
+    "./routes": "./routes.tsx"
+  },
+  "type": "module"
+}

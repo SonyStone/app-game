@@ -1,4 +1,4 @@
-import { LGraph, LGraphCanvas } from '@packages/litegraph/litegraph';
+import { LGraph, LGraphCanvas } from '@app-game/litegraph/litegraph';
 import { onMount } from 'solid-js';
 
 export default function litegraph() {

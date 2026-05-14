@@ -1,5 +1,5 @@
-import { OGLRenderingContext, Program, Vec3 } from '@packages/ogl';
-import { BlendFunc } from '@packages/ogl/core/renderer';
+import { OGLRenderingContext, Program, Vec3 } from '@app-game/ogl';
+import { BlendFunc } from '@app-game/ogl/core/renderer';
 import fragment from './blending-program.frag?raw';
 import vertex from './blending-program.vert?raw';
 

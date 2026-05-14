@@ -1,4 +1,4 @@
-import * as m4 from '@packages/math/m4';
+import * as m4 from '@app-game/math/m4';
 import {
   GL_BUFFER_TYPE,
   GL_DATA_TYPE,
@@ -6,7 +6,7 @@ import {
   GL_SHADER_TYPE,
   GL_STATIC_VARIABLES,
   GL_TEXTURES
-} from '@packages/webgl/static-variables';
+} from '@app-game/webgl/static-variables';
 
 export class Shader {
   gl: WebGL2RenderingContext;
@@ -108,7 +108,7 @@ export class Shader {
         gl.uniformMatrix2fv(uniform.location, false, uniform.value);
         break;
       case GL_DATA_TYPE.FLOAT_MAT4:
-        uniform.value = uniform.value || m4.identity();
+        uniform.value = uniform.value || m4.identity(new Float32Array(16));
         gl.uniformMatrix4fv(uniform.location, false, uniform.value);
         break;
 

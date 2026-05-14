@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    image: app-game-dev:latest
+    container_name: app-game-dev-container
+    volumes:
+      - ..:/workspaces/app-game
+      - ${HOST_PROJECTS:-/home/driver/projects}:/workspaces/projects:ro
+      - ${HOST_REPOS:-/home/driver/repos}:/workspaces/repos:ro
+      - ${HOST_PNPM_STORE:-/home/driver/.cache/pnpm-store}:/pnpm/store
+    command: sleep infinity
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3120

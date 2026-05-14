@@ -1,4 +1,4 @@
-import { Mesh, OGLRenderingContext, Plane, Program, Transform, Vec3 } from '@packages/ogl';
+import { Mesh, OGLRenderingContext, Plane, Program, Transform, Vec3 } from '@app-game/ogl';
 import { onCleanup } from 'solid-js';
 import { effect } from 'solid-js/web';
 import brushFragment from './brush-shader.frag?raw';

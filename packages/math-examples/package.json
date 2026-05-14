@@ -1,0 +1,20 @@
+{
+  "name": "@app-game/math-examples",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/debug-layer": "workspace:*",
+    "@app-game/math": "workspace:*",
+    "@app-game/ogl": "workspace:*",
+    "@app-game/solid-utils": "workspace:*",
+    "@app-game/tanki": "workspace:*",
+    "@app-game/ui-components": "workspace:*",
+    "@app-game/ui-components-examples": "workspace:*",
+    "@app-game/utils": "workspace:*"
+  },
+  "exports": {
+    "./routes": "./routes.tsx"
+  },
+  "type": "module"
+}

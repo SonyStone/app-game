@@ -1,7 +1,9 @@
-import { Vec2Tuple } from '@packages/math';
-import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@packages/ogl';
-import { SwapBuffering } from '@packages/ogl/extras/swap-buffering';
-import { createTexture4colors } from '@packages/webgl-examples/ogl-model-viewer/texture-4-colors';
+import { Vec2 } from '@app-game/math/v2';
+import { angleTo, distance, isEqual } from '@app-game/math/v2-functions';
+import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@app-game/ogl';
+import { SwapBuffering } from '@app-game/ogl/extras/swap-buffering';
+import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
+import type { NumberArray } from '@app-game/math/utils/typed-array';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createEffect, createSignal } from 'solid-js';
 import { BlendMesh } from '../brush-example/blend/blend-mesh';
@@ -53,7 +55,7 @@ export const createBrushStroke = ({
   let instance = 0;
   let needsUpdate = false;
 
-  let prev: Vec2Tuple | undefined;
+  let prev: Vec2 | undefined;
   let prevOpacity: number | undefined;
 
   const end = () => {
@@ -61,7 +63,7 @@ export const createBrushStroke = ({
     prev = undefined;
   };
 
-  const setPoint = (point: Vec2Tuple, opacity: number) => {
+  const setPoint = (point: Vec2, opacity: number) => {
     brushStrokeMesh.setBrushSpot(instance, point, opacity, opacity);
     instance++;
     brushStrokeMesh.setInstancedCount(instance);
@@ -88,18 +90,19 @@ export const createBrushStroke = ({
     clear: () => {
       background.clear();
     },
-    add: (point: Vec2Tuple, opacity: number) => {
+    add: (point: Vec2 | NumberArray, opacity: number) => {
       const [width, height] = access(size);
+      const pointValue = point instanceof Vec2 ? point.value : point;
       if (prev && prevOpacity !== undefined) {
-        if (point[0] === prev[0] && point[1] === prev[1]) {
+        if (isEqual(pointValue, prev.value)) {
           return;
         }
-        const dist = Math.sqrt(Math.pow(point[0] - prev[0], 2) + Math.pow(point[1] - prev[1], 2));
-        const angle = Math.atan2(point[1] - prev[1], point[0] - prev[0]);
+        const dist = distance(pointValue, prev.value);
+        const angle = angleTo(pointValue, prev.value);
 
         for (let i = 0; i < dist; i++) {
-          let point = [prev[0] + i * Math.cos(angle), prev[1] + i * Math.sin(angle)];
-          let tempOpacity = prevOpacity + (opacity - prevOpacity) * (i / dist);
+          let point = Vec2.create(prev.x + i * Math.cos(angle), prev.y + i * Math.sin(angle));
+          const tempOpacity = prevOpacity + (opacity - prevOpacity) * (i / dist);
           point = pointToCanvasPoint(point, width, height);
           setPoint(point, tempOpacity);
         }
@@ -107,7 +110,7 @@ export const createBrushStroke = ({
         setPoint(pointToCanvasPoint(point, width, height), opacity);
       }
 
-      prev = point;
+      prev = point instanceof Vec2 ? point : Vec2.create(point[0], point[1]);
       prevOpacity = opacity;
       needsUpdate = true;
     },

@@ -1,18 +1,60 @@
+import type { AttributeMap } from '../core/geometry';
 import { Mesh } from '../core/mesh';
 import { Program } from '../core/program';
 import { RenderTarget } from '../core/render-target';
 import { Texture } from '../core/texture';
+import type { OGLRenderingContext } from '../core/renderer';
+import type { Geometry } from '../core/geometry';
 import { Triangle } from './triangle';
 
+type TextureUniform = {
+  value: Texture;
+};
+
+type GPGPUPass = {
+  mesh: Mesh;
+  program: Program;
+  uniforms: Record<string, any>;
+  enabled: boolean;
+  textureUniform: string;
+};
+
+type GPGPUOptions = {
+  data?: Float32Array;
+  geometry?: Geometry;
+  type?: GLenum;
+};
+
+type GPGPUPassOptions = {
+  vertex?: string;
+  fragment?: string;
+  uniforms?: Record<string, any>;
+  textureUniform?: string;
+  enabled?: boolean;
+};
+
 export class GPGPU {
+  gl: OGLRenderingContext;
+  passes: GPGPUPass[];
+  geometry: Geometry;
+  dataLength: number;
+  size: number;
+  coords: Float32Array;
+  uniform: TextureUniform;
+  fbo: {
+    read: RenderTarget;
+    write: RenderTarget;
+    swap: () => void;
+  };
+
   constructor(
-    gl,
+    gl: OGLRenderingContext,
     {
       // Always pass in array of vec4s (RGBA values within texture)
       data = new Float32Array(16),
       geometry = new Triangle(gl),
       type // Pass in gl.FLOAT to force it, defaults to gl.HALF_FLOAT
-    }
+    }: GPGPUOptions = {}
   ) {
     this.gl = gl;
     const initialData = data;
@@ -91,7 +133,7 @@ export class GPGPU {
     uniforms = {},
     textureUniform = 'tMap',
     enabled = true
-  } = {}) {
+  }: GPGPUPassOptions = {}): GPGPUPass {
     uniforms[textureUniform] = this.uniform;
     const program = new Program(this.gl, { vertex, fragment, uniforms });
     const mesh = new Mesh(this.gl, { geometry: this.geometry, program });
@@ -108,10 +150,10 @@ export class GPGPU {
     return pass;
   }
 
-  render() {
+  render(): void {
     const enabledPasses = this.passes.filter((pass) => pass.enabled);
 
-    enabledPasses.forEach((pass, i) => {
+    enabledPasses.forEach((pass: GPGPUPass, i: number) => {
       this.gl.renderer.render({
         scene: pass.mesh,
         target: this.fbo.write,

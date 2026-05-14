@@ -128,16 +128,16 @@ export class TimeSpy {
             ? () => {
                 owner[functionName](callback);
               }
-            : null
+            : undefined
         );
       }
 
-      const result = OriginFunctionHelper.executeOriginFunction(owner, functionName, args);
+      const result = OriginFunctionHelper.executeOriginFunction(owner, functionName, args as unknown as IArguments);
       return result;
     };
   }
 
-  private getCallback(self: TimeSpy, callback: any, skippedCalback: () => void = null): Function {
+  private getCallback(self: TimeSpy, callback: any, skippedCalback?: () => void): Function {
     return function () {
       const now = Time.now;
 
@@ -147,7 +147,7 @@ export class TimeSpy {
         try {
           callback.apply(self.spiedWindow, arguments);
         } catch (e) {
-          self.onError.trigger(e);
+          self.onError.trigger(String(e));
         }
         self.lastSixtyFramesCurrentIndex = (self.lastSixtyFramesCurrentIndex + 1) % TimeSpy.fpsWindowSize;
         self.lastSixtyFramesDuration[self.lastSixtyFramesCurrentIndex] = now - self.lastSixtyFramesPreviousStart;

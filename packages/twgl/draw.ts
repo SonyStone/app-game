@@ -1,7 +1,17 @@
 import * as programs from './programs';
 
+import type { BufferInfo, DrawObject, ProgramInfo, VertexArrayInfo } from './index';
+
 const TRIANGLES = 0x0004;
 const UNSIGNED_SHORT = 0x1403;
+
+type BufferBindingInfo = (BufferInfo | VertexArrayInfo) & {
+  vertexArrayObject?: object | null;
+};
+
+type InstancedDrawObject = DrawObject & {
+  instanceCount?: number;
+};
 
 /**
  * Drawing related functions
@@ -39,21 +49,16 @@ export function drawBufferInfo(
   instanceCount?: number
 ) {
   type = type === undefined ? TRIANGLES : type;
-  const indices = bufferInfo.indices;
+  const indices = 'indices' in bufferInfo ? bufferInfo.indices : undefined;
   const elementType = bufferInfo.elementType;
+  const drawElementType = elementType === undefined ? UNSIGNED_SHORT : elementType;
   const numElements = count === undefined ? bufferInfo.numElements : count;
   offset = offset === undefined ? 0 : offset;
   if (elementType || indices) {
     if (instanceCount !== undefined) {
-      gl.drawElementsInstanced(
-        type,
-        numElements,
-        elementType === undefined ? UNSIGNED_SHORT : bufferInfo.elementType,
-        offset,
-        instanceCount
-      );
+      gl.drawElementsInstanced(type, numElements, drawElementType, offset, instanceCount);
     } else {
-      gl.drawElements(type, numElements, elementType === undefined ? UNSIGNED_SHORT : bufferInfo.elementType, offset);
+      gl.drawElements(type, numElements, drawElementType, offset);
     }
   } else {
     if (instanceCount !== undefined) {
@@ -106,17 +111,18 @@ export function drawBufferInfo(
  * @param {DrawObject[]} objectsToDraw an array of objects to draw.
  * @memberOf module:twgl/draw
  */
-export function drawObjectList(gl, objectsToDraw) {
-  let lastUsedProgramInfo = null;
-  let lastUsedBufferInfo = null;
+export function drawObjectList(gl: WebGL2RenderingContext, objectsToDraw: InstancedDrawObject[]) {
+  let lastUsedProgramInfo: ProgramInfo | null = null;
+  let lastUsedBufferInfo: BufferBindingInfo | null = null;
 
-  objectsToDraw.forEach(function (object) {
+  objectsToDraw.forEach(function (object: InstancedDrawObject) {
     if (object.active === false) {
       return;
     }
 
     const programInfo = object.programInfo;
-    const bufferInfo = object.vertexArrayInfo || object.bufferInfo;
+    const bufferInfo = (object.vertexArrayInfo || object.bufferInfo) as BufferBindingInfo | undefined;
+    if (!bufferInfo) return;
     let bindBuffers = false;
     const type = object.type === undefined ? TRIANGLES : object.type;
 
@@ -147,7 +153,7 @@ export function drawObjectList(gl, objectsToDraw) {
     drawBufferInfo(gl, bufferInfo, type, object.count, object.offset, object.instanceCount);
   });
 
-  if (lastUsedBufferInfo && lastUsedBufferInfo.vertexArrayObject) {
+  if (lastUsedBufferInfo && (lastUsedBufferInfo as BufferBindingInfo).vertexArrayObject) {
     gl.bindVertexArray(null);
   }
 }

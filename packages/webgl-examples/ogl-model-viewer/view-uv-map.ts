@@ -1,6 +1,6 @@
-import { Geometry, Mesh, OGLRenderingContext, Program, Transform } from '@packages/ogl';
-import { Vec3Tuple } from '@packages/ogl/math/vec-3';
-import { GL_DATA_TYPE, GL_DRAW_ARRAYS_MODE } from '@packages/webgl/static-variables';
+import { Geometry, Mesh, OGLRenderingContext, Program, Transform } from '@app-game/ogl';
+import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
+import { GL_DATA_TYPE, GL_DRAW_ARRAYS_MODE } from '@app-game/webgl/static-variables';
 import { toFloat32Array } from './to-float-32-array';
 import fragment from './view-uv-map.frag?raw';
 import vertex from './view-uv-map.vert?raw';

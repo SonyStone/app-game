@@ -22,10 +22,12 @@ export class CaptureListComponent extends BaseComponent<boolean> {
 
         const element = this.renderElementFromTemplate(htmlString, state, stateId);
 
-        const openCaptureFileElement = element.querySelector(".openCaptureFile");
-        openCaptureFileElement.addEventListener("dragenter", (e: DragEvent) => { this.drag(e); return false; }, false);
-        openCaptureFileElement.addEventListener("dragover", (e: DragEvent) => { this.drag(e); return false; }, false);
-        openCaptureFileElement.addEventListener("drop", (e: DragEvent) => { this.drop(e); }, false);
+        const openCaptureFileElement = element.querySelector(".openCaptureFile") as HTMLDivElement | null;
+        if (openCaptureFileElement) {
+            openCaptureFileElement.addEventListener("dragenter", (e: DragEvent) => { this.drag(e); return false; }, false);
+            openCaptureFileElement.addEventListener("dragover", (e: DragEvent) => { this.drag(e); return false; }, false);
+            openCaptureFileElement.addEventListener("drop", (e: DragEvent) => { this.drop(e); }, false);
+        }
 
         return element;
     }

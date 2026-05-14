@@ -9,7 +9,7 @@ export class GetActiveAttrib extends BaseCommand {
 
   protected stringifyResult(result: any): string {
     if (!result) {
-      return undefined;
+      return '';
     }
 
     return `name: ${result.name}, size: ${result.size}, type: ${result.type}`;

@@ -18,7 +18,7 @@ export function Renderer(props: { children?: any; class?: string }) {
 
   const scene = new Scene();
   const { camera, controls, resize } = useCamera();
-  controls.init(canvas);
+  controls.init(canvas as unknown as HTMLElement);
 
   console.log(`Renderer created!`);
 

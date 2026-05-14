@@ -1,0 +1,42 @@
+# Dependencies (will be installed fresh in container)
+node_modules
+
+# Build outputs
+dist
+html
+*.tsbuildinfo
+
+# Rust/WASM build artifacts (these are HUGE - 7GB+)
+target
+**/target
+rsw-hello/target
+pkg
+**/pkg
+packages/wasm-rust-pages/wasm-bindgen
+packages/wasm-rust-pages/wasm-game-of-life
+**/wasm-bindgen
+**/wasm-game-of-life
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (don't need to copy themselves)
+Dockerfile*
+docker-compose*.yml
+.dockerignore

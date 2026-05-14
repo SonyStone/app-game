@@ -1,0 +1,9 @@
+{
+  "name": "@app-game/solid-three",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./index.tsx"
+  },
+  "type": "module"
+}

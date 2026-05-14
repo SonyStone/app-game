@@ -1,4 +1,4 @@
-import { OGLRenderingContext, RenderTarget } from '@packages/ogl';
+import { OGLRenderingContext, RenderTarget } from '@app-game/ogl';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createSignal } from 'solid-js';
 import { effect } from 'solid-js/web';
@@ -14,9 +14,9 @@ export const createBrushRenderTarget = ({
   target?: MaybeAccessor<RenderTarget>;
   color?: MaybeAccessor<[number, number, number] | undefined>;
 }) => {
-  const mesh = new BrushMesh(gl, access(color));
+  const mesh = new BrushMesh(gl);
 
-  const [layerS, setLayerS] = createSignal(access(target), { equals: () => false });
+  const [layerS, setLayerS] = createSignal(access(target));
 
   effect(() => {
     mesh.setColor(access(color));

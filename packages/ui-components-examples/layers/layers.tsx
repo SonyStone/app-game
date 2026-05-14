@@ -36,14 +36,16 @@ export default function Layers() {
 
 const Sortable = (props: any) => {
   const sortable = createSortable(props.item);
-  const [state] = useDragDropContext();
+  const context = useDragDropContext();
+  const state = context?.[0];
   return (
     <div
+      // @ts-expect-error solid-dnd provides the sortable directive at runtime.
       use:sortable
       class="h-28px flex cursor-pointer border border-solid border-[#252525] text-white"
       classList={{
         'opacity-25': sortable.isActiveDraggable,
-        'transition-transform': !!state.active.draggable
+        'transition-transform': !!state?.active.draggable
       }}
     >
       <div class="w-1.7em filter-invert-78 h-full bg-center bg-no-repeat [background-image:var(--icon-folder)] [background-size:15px]"></div>

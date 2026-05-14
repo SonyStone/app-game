@@ -1,0 +1,24 @@
+[package]
+name = "app_render_webgl"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+web-sys = { workspace = true, features = [
+    "HtmlCanvasElement",
+    "OesVertexArrayObject",
+    "WebGl2RenderingContext",
+    "WebGlBuffer",
+    "WebglDebugRendererInfo",
+    "WebGlFramebuffer",
+    "WebGlProgram",
+    "WebGlRenderbuffer",
+    "WebGlRenderingContext",
+    "WebGlShader",
+    "WebGlTexture",
+    "WebGlUniformLocation",
+    "WebGlVertexArrayObject",
+] }
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+log = { workspace = true }

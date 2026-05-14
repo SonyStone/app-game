@@ -1,10 +1,10 @@
-import { Vec2Tuple } from '@packages/math';
-import { Mesh, OGLRenderingContext, Program, Texture } from '@packages/ogl';
-import { Attribute } from '@packages/ogl/core/geometry';
-import { RenderTarget } from '@packages/ogl/core/render-target';
-import { Square } from '@packages/ogl/extras/square';
-import { Mat3Tuple } from '@packages/ogl/math/mat-3';
-import { Vec3Tuple } from '@packages/ogl/math/vec-3';
+import { Vec2 } from '@app-game/math';
+import { Mesh, OGLRenderingContext, Program, Texture } from '@app-game/ogl';
+import { Attribute } from '@app-game/ogl/core/geometry';
+import { RenderTarget } from '@app-game/ogl/core/render-target';
+import { Square } from '@app-game/ogl/extras/square';
+import { Mat3Tuple } from '@app-game/ogl/math/mat-3';
+import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
 import { resizeBuffer } from '../utils/resize-buffer';
 import fragment from './brush-instancing.frag?raw';
 import vertex from './brush-instancing.vert?raw';
@@ -90,10 +90,10 @@ export class BrushStrokeMesh extends Mesh {
     this.geometry.instancedCount = value;
   }
 
-  setBrushSpot(index: number = 0, point: Vec2Tuple, opacity: number = 1, size: number = 1) {
+  setBrushSpot(index: number = 0, point: Vec2, opacity: number = 1, size: number = 1) {
     const pointOffset = index * BrushStrokeMesh.POINT_BUFFER_OFFSET;
     resizeBuffer(this.attributes.offset, pointOffset);
-    this.attributes.offset.data.set(point, pointOffset);
+    this.attributes.offset.data.set(point.value, pointOffset);
     this.attributes.offset.needsUpdate = true;
 
     resizeBuffer(this.attributes.opacity, index);

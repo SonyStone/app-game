@@ -1,9 +1,9 @@
-import { FMat4 } from '@packages/math/m4';
-import { resizeCanvasToDisplaySize } from '@packages/twgl';
-import { identity, ortho, rotateZ, rotationZ, setTranslation } from '@packages/twgl/m4';
-import { compileShader } from '@packages/webgl/compileShader';
-import { linkProgram } from '@packages/webgl/linkProgram';
-import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_SHADER_TYPE } from '@packages/webgl/static-variables';
+import { FMat4 } from '@app-game/math/m4';
+import { resizeCanvasToDisplaySize } from '@app-game/twgl';
+import { identity, ortho, rotateZ, rotationZ, setTranslation } from '@app-game/twgl/m4';
+import { compileShader } from '@app-game/webgl/compileShader';
+import { linkProgram } from '@app-game/webgl/linkProgram';
+import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_SHADER_TYPE } from '@app-game/webgl/static-variables';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect, onCleanup } from 'solid-js';
 import fragmentSrc from './instanced-drawing.frag?raw';
@@ -137,8 +137,9 @@ export default function InstancedDrawing() {
     // set the view and projection matrices since
     // they are shared by all instances
     const aspect = canvas.clientWidth / canvas.clientHeight;
+    const viewMatrix = rotationZ(time * 0.1, new Float32Array(16)) as Float32Array;
     gl.uniformMatrix4fv(projectionLoc, false, ortho(-aspect, aspect, -1, 1, -1, 1, new FMat4()));
-    gl.uniformMatrix4fv(viewLoc, false, rotationZ(time * 0.1, new FMat4()));
+    gl.uniformMatrix4fv(viewLoc!, false, viewMatrix);
 
     // setup all attributes
     gl.bindVertexArray(vao);

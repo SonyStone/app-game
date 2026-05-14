@@ -1,6 +1,6 @@
-import { createSubscription } from '@utils/create-subscription';
+import { createSubscription } from '@utils/createSubscription';
 import { resizeObservable } from '@utils/resize-observable';
-import { toObservable } from '@utils/to-observable';
+import { toObservable } from '@utils/toObservable';
 import { wrapSignal } from '@utils/wrap-signal';
 import {
   animationFrameScheduler,

@@ -42,7 +42,7 @@ export default function ViewOffset() {
   const controls = new OrbitControls();
   controls.screenSpacePanning = true;
   controls.setCamera(camera);
-  controls.init(renderer.domElement);
+  controls.init(renderer.domElement as unknown as HTMLElement);
 
   camera.lookAt(controls.target.x, controls.target.y, controls.target.z);
 

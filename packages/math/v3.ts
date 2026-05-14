@@ -1,7 +1,8 @@
+import type { TypedArrayConstructor } from './utils/typed-array';
 import { Vec3Builder, type Vec3Tuple } from './v3-builder';
 
 /*#__PURE__*/
-export class Vec3 extends Vec3Builder(Array) {}
+export class Vec3 extends Vec3Builder(Array as unknown as TypedArrayConstructor) {}
 
 /*#__PURE__*/
 export class FVec3 extends Vec3Builder(Float32Array) {}

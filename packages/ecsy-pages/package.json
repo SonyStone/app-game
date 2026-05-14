@@ -1,0 +1,14 @@
+{
+  "name": "@app-game/ecsy-pages",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/ecsy": "workspace:*",
+    "@app-game/ui-components": "workspace:*"
+  },
+  "exports": {
+    "./routes": "./routes.tsx"
+  },
+  "type": "module"
+}

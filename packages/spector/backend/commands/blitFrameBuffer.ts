@@ -11,11 +11,11 @@ export class BlitFrameBuffer extends BaseCommand {
   protected stringifyArgs(args: IArguments): string[] {
     const stringified = [];
     const readFrameBuffer = this.options.context.getParameter(WebGlConstants.READ_FRAMEBUFFER_BINDING.value);
-    const readFrameBufferTag = this.options.tagWebGlObject(readFrameBuffer);
+    const readFrameBufferTag = this.options.tagWebGlObject?.(readFrameBuffer);
     stringified.push('READ FROM: ' + this.stringifyValue(readFrameBufferTag));
 
     const drawFrameBuffer = this.options.context.getParameter(WebGlConstants.DRAW_FRAMEBUFFER_BINDING.value);
-    const drawFrameBufferTag = this.options.tagWebGlObject(drawFrameBuffer);
+    const drawFrameBufferTag = this.options.tagWebGlObject?.(drawFrameBuffer);
     stringified.push('WRITE TO: ' + this.stringifyValue(drawFrameBufferTag));
 
     for (let i = 0; i < 8; i++) {

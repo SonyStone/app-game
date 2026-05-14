@@ -34,7 +34,27 @@ const UNSIGNED_INT_5_9_9_9_REV = 0x8c3e;
 const FLOAT_32_UNSIGNED_INT_24_8_REV = 0x8dad;
 const UNSIGNED_INT_24_8 = 0x84fa;
 
-const glTypeToTypedArray = {};
+type TypedArrayConstructor =
+  | Int8ArrayConstructor
+  | Uint8ArrayConstructor
+  | Uint8ClampedArrayConstructor
+  | Int16ArrayConstructor
+  | Uint16ArrayConstructor
+  | Int32ArrayConstructor
+  | Uint32ArrayConstructor
+  | Float32ArrayConstructor;
+
+type TypedArrayInstance =
+  | Int8Array
+  | Uint8Array
+  | Uint8ClampedArray
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array
+  | Float32Array;
+
+const glTypeToTypedArray: Record<number, TypedArrayConstructor> = {};
 {
   const tt = glTypeToTypedArray;
   tt[BYTE] = Int8Array;
@@ -62,7 +82,7 @@ const glTypeToTypedArray = {};
  *   be returned. Pass in a `Uint32Array` and `gl.UNSIGNED_INT` will be returned
  * @memberOf module:twgl/typedArray
  */
-function getGLTypeForTypedArray(typedArray) {
+function getGLTypeForTypedArray(typedArray: TypedArrayInstance): number {
   if (typedArray instanceof Int8Array) {
     return BYTE;
   } // eslint-disable-line
@@ -97,7 +117,7 @@ function getGLTypeForTypedArray(typedArray) {
  *   be returned. Pass in `Uint32Array` and `gl.UNSIGNED_INT` will be returned
  * @memberOf module:twgl/typedArray
  */
-function getGLTypeForTypedArrayType(typedArrayType) {
+function getGLTypeForTypedArrayType(typedArrayType: TypedArrayConstructor): number {
   if (typedArrayType === Int8Array) {
     return BYTE;
   } // eslint-disable-line
@@ -131,7 +151,7 @@ function getGLTypeForTypedArrayType(typedArrayType) {
  * @return {function} the constructor for a the corresponding typed array. (eg. `Uint32Array`).
  * @memberOf module:twgl/typedArray
  */
-function getTypedArrayTypeForGLType(type) {
+function getTypedArrayTypeForGLType(type: number): TypedArrayConstructor {
   const CTOR = glTypeToTypedArray[type];
   if (!CTOR) {
     throw new Error('unknown gl type');
@@ -141,11 +161,13 @@ function getTypedArrayTypeForGLType(type) {
 
 const isArrayBuffer =
   typeof SharedArrayBuffer !== 'undefined'
-    ? function isArrayBufferOrSharedArrayBuffer(a) {
-        return a && a.buffer && (a.buffer instanceof ArrayBuffer || a.buffer instanceof SharedArrayBuffer);
+    ? function isArrayBufferOrSharedArrayBuffer(a: unknown) {
+        const value = a as { buffer?: ArrayBuffer | SharedArrayBuffer } | null | undefined;
+        return !!value?.buffer && (value.buffer instanceof ArrayBuffer || value.buffer instanceof SharedArrayBuffer);
       }
-    : function isArrayBuffer(a) {
-        return a && a.buffer && a.buffer instanceof ArrayBuffer;
+    : function isArrayBuffer(a: unknown) {
+        const value = a as { buffer?: ArrayBuffer } | null | undefined;
+        return !!value?.buffer && value.buffer instanceof ArrayBuffer;
       };
 
 export { getGLTypeForTypedArray, getGLTypeForTypedArrayType, getTypedArrayTypeForGLType, isArrayBuffer };

@@ -1,12 +1,5 @@
-import { createSubscription } from '@utils/create-subscription';
-import {
-  animationFrameScheduler,
-  fromEvent,
-  merge,
-  switchMapTo,
-  takeUntil,
-  timer,
-} from 'rxjs';
+import { createSubscription } from '@utils/createSubscription';
+import { animationFrameScheduler, fromEvent, merge, switchMapTo, takeUntil, timer } from 'rxjs';
 
 declare module 'solid-js' {
   namespace JSX {
@@ -16,21 +9,13 @@ declare module 'solid-js' {
   }
 }
 
-export function onHold(
-  element: HTMLElement,
-  accessor: () => (event: number) => void
-) {
+export function onHold(element: HTMLElement, accessor: () => (event: number) => void) {
   const setDrag = accessor();
 
   const start$ = fromEvent(element, 'pointerdown');
-  const end$ = merge(
-    fromEvent(element, 'pointerup'),
-    fromEvent(element, 'pointerleave')
-  );
+  const end$ = merge(fromEvent(element, 'pointerup'), fromEvent(element, 'pointerleave'));
 
-  const frameByFrame = start$.pipe(
-    switchMapTo(timer(250, 50, animationFrameScheduler).pipe(takeUntil(end$)))
-  );
+  const frameByFrame = start$.pipe(switchMapTo(timer(250, 50, animationFrameScheduler).pipe(takeUntil(end$))));
 
   const subscription = createSubscription();
 

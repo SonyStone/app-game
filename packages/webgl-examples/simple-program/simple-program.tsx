@@ -1,6 +1,6 @@
-import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
-import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
-import { AttributesParams, createProgram } from '@packages/webgl/webgl-objects/program';
+import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
+import { createWebGL2Renderer } from '@app-game/webgl/webgl-objects/context';
+import { AttributesParams, createProgram } from '@app-game/webgl/webgl-objects/program';
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 
@@ -24,7 +24,11 @@ export default function SimpleProgram() {
 
   // create GLSL shaders, upload the GLSL source, compile the shaders
   // Link the two shaders into a program
-  const program = createProgram(gl.context, data);
+  const program = createProgram(gl.context as unknown as Parameters<typeof createProgram>[0], data) as ReturnType<
+    typeof createProgram
+  > & {
+    position: number;
+  };
 
   // Create a buffer and put three 2d clip space points in it
   const positionBuffer = gl.createBuffer(data).data(data.data).bind();

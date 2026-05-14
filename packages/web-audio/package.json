@@ -1,0 +1,9 @@
+{
+  "name": "@app-game/web-audio",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./web-audio-page": "./web-audio-page.tsx"
+  },
+  "type": "module"
+}

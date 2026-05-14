@@ -1,12 +1,12 @@
-import { m3, Vec2 } from '@packages/math';
-import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
-import { createBuffer } from '@packages/webgl/webgl-objects/buffer';
-import { createWebGL2Renderer } from '@packages/webgl/webgl-objects/context';
-import { createProgram } from '@packages/webgl/webgl-objects/program';
-import { createVertexArray } from '@packages/webgl/webgl-objects/vertex-array-object';
+import { Vec2 } from '@app-game/math';
+import * as m3 from '@app-game/math/m3';
+import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
+import { createBuffer } from '@app-game/webgl/webgl-objects/buffer';
+import { createWebGL2Renderer } from '@app-game/webgl/webgl-objects/context';
+import { createProgram } from '@app-game/webgl/webgl-objects/program';
+import { createVertexArray } from '@app-game/webgl/webgl-objects/vertex-array-object';
 import { createSignal, onMount } from 'solid-js';
 import { effect } from 'solid-js/web';
-import { vec4 } from 'wgpu-matrix';
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 
@@ -27,7 +27,7 @@ export default function Matrices2d() {
 
   const gl = createWebGL2Renderer(canvas);
 
-  const program = createProgram(gl.context, {
+  const program = createProgram(gl.context as unknown as Parameters<typeof createProgram>[0], {
     vert: vertexShaderSource,
     frag: fragmentShaderSource,
     attributes: (attribute) => ({
@@ -37,7 +37,11 @@ export default function Matrices2d() {
       color: uniform.name('u_color').uniform4fv(),
       matrix: uniform.name('u_matrix').mat3()
     })
-  });
+  }) as ReturnType<typeof createProgram> & {
+    position: { location: number };
+    color: (value: Float32Array | number[]) => void;
+    matrix: (value: m3.FMat3) => void;
+  };
 
   const positionBuffer = createBuffer(gl.context, {
     target: BUFFER_TARGET.ARRAY_BUFFER,
@@ -60,22 +64,23 @@ export default function Matrices2d() {
   const vao = createVertexArray(gl.context).attribPointer(program.position.location, 2, 0, 0);
 
   const [translation, serTranslation] = createSignal(Vec2.create(150, 100), {
-    equals: (a, b) => !a.equals(b)
+    equals: (a, b) => a.x === b.x && a.y === b.y
   });
   const rotation = 0;
   const scale = Vec2.create(1, 1);
-  const color = vec4.create(Math.random(), Math.random(), Math.random(), 1);
+  const color = [Math.random(), Math.random(), Math.random(), 1];
 
   function drawScene() {
     resizeCanvasToDisplaySize(canvas);
     program.color(color);
 
     let matrix = projection(canvas.width, canvas.height);
-    {
-      matrix = m3.translate(matrix, translation());
-      matrix = m3.rotateY(matrix, rotation);
-      matrix = m3.scale(matrix, scale);
-    }
+    // TODO: use m3
+    // {
+    //   matrix = m3.translate(matrix, translation());
+    //   matrix = m3.rotateY(matrix, rotation);
+    //   matrix = m3.scale(matrix, scale);
+    // }
 
     program.matrix(matrix);
 
@@ -98,20 +103,14 @@ export default function Matrices2d() {
         name="x"
         value={translation().x}
         onChange={(v) =>
-          serTranslation((vec) => {
-            vec.x = v;
-            return vec;
-          })
+          serTranslation((vec) => Vec2.create(v, vec.y))
         }
       />
       <RangeInput
         name="y"
         value={translation().y}
         onChange={(v) =>
-          serTranslation((vec) => {
-            vec.y = v;
-            return vec;
-          })
+          serTranslation((vec) => Vec2.create(vec.x, v))
         }
       />
       {canvas}
@@ -131,7 +130,7 @@ function RangeInput(props: { value: number; onChange: (v: number) => void; name:
 
 function projection(width: number, height: number) {
   // Note: This matrix flips the Y axis so that 0 is at the top.
-  return m3.set(m3.createFMat3(), 2 / width, 0, 0, 0, -2 / height, 0, -1, 1, 1);
+  return new m3.FMat3().set(2 / width, 0, 0, 0, -2 / height, 0, -1, 1, 1);
 }
 
 /**

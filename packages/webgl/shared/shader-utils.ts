@@ -4,8 +4,8 @@ import {
   GL_PROGRAM_PARAMETER,
   GL_SHADER_TYPE,
   GL_STATIC_VARIABLES
-} from '@packages/webgl/static-variables';
-import { GL_TEXTURES, GL_TEXTURE_TARGET, GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
+} from '../static-variables';
+import { GL_TEXTURES, GL_TEXTURE_TARGET, GL_TEXTURE_UNIT } from '../static-variables/textures';
 
 const typeMap = {
   [GL_DATA_TYPE.FLOAT]: {

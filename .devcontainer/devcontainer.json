@@ -1,0 +1,28 @@
+{
+  "name": "app-game",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/app-game",
+  "remoteUser": "node",
+  "containerUser": "node",
+  "updateRemoteUserUID": true,
+  "postCreateCommand": "bash /workspaces/app-game/.devcontainer/post-create.sh",
+  "forwardPorts": [3120],
+  "portsAttributes": {
+    "3120": {
+      "label": "boxing-landing dev server",
+      "protocol": "https",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "remote.autoForwardPorts": true,
+        "remote.autoForwardPortsSource": "process",
+        "remote.autoForwardPortsFallback": 0,
+        "remote.restoreForwardedPorts": true
+      }
+    }
+  }
+}

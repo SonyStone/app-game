@@ -1,4 +1,4 @@
-import { World, createEntitySystem } from '@packages/piecs';
+import { World, createEntitySystem } from '@app-game/piecs';
 
 export default function createSimpleIter(count: number) {
   const world = new World();

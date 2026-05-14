@@ -1,4 +1,4 @@
-import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
+import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
 import { isBuiltIn } from './isBuiltIn';
 
 export function createUniformBlockSetters(gl: WebGL2RenderingContext, program: WebGLProgram) {

@@ -69,9 +69,9 @@ export abstract class BaseCommand {
   protected stringifyJSON(value: any): string {
     try {
       const str = JSON.stringify(value);
-      return str;
+      return str ?? JSON.stringify(this.stringifyValue(value));
     } catch (e) {
-      return null;
+      return JSON.stringify(this.stringifyValue(value));
     }
   }
 
@@ -119,7 +119,7 @@ export abstract class BaseCommand {
     return stringified;
   }
 
-  protected stringifyResult(result: any): string {
+  protected stringifyResult(result: any): string | undefined {
     if (!result) {
       return undefined;
     }
@@ -138,7 +138,7 @@ export abstract class BaseCommand {
 
     const tag = WebGlObjects.getWebGlObjectTag(value);
     if (tag) {
-      return tag.displayText;
+      return tag.displayText ?? WebGlObjects.stringifyWebGlObjectTag(tag);
     }
 
     if (typeof value === 'number' && WebGlConstants.isWebGlConstant(value)) {
@@ -161,6 +161,6 @@ export abstract class BaseCommand {
       return '[..(' + value.length + ')..]';
     }
 
-    return value;
+    return String(value);
   }
 }

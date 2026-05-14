@@ -1,5 +1,5 @@
-import { GL_CAPABILITIES, GL_DRAW_ARRAYS_MODE, GL_FUNC_SEPARATE } from '@packages/webgl/static-variables';
-import { createPointerData } from '@utils/create-pointer-data';
+import { GL_CAPABILITIES, GL_DRAW_ARRAYS_MODE, GL_FUNC_SEPARATE } from '@app-game/webgl/static-variables';
+import { createPointerData } from '@utils/createPointerData';
 import { createEffect } from 'solid-js';
 import { postQuadNDC } from './quads-2';
 
@@ -16,16 +16,16 @@ import {
 import postShaderFragSrc from './post-shader.frag?raw';
 import postShaderVertSrc from './post-shader.vert?raw';
 
-import { Mat4 } from '@packages/math/m4';
-import { FVec2 } from '@packages/math/v2';
-import { GL_TEXTURES, GL_TEXTURE_UNIT } from '@packages/webgl/static-variables/textures';
+import { Mat4 } from '@app-game/math/m4';
+import { Vec2 } from '@app-game/math/v2';
+import { GL_TEXTURES, GL_TEXTURE_UNIT } from '@app-game/webgl/static-variables/textures';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { BrushMesh, DrawShader } from './draw-shader';
 
 export default function Paint() {
   const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
 
-  const pointer = createPointerData(canvas);
+  const pointer = createPointerData(canvas as unknown as HTMLElement);
 
   const drawBound = createDrawBound();
 
@@ -149,27 +149,27 @@ function createDrawBound() {
   // to draw a line segment. So first we compute the bounding box
   // for the segment, then we enlarge it by the brush size to make
   // we have all the space we need to draw the brush along the segment
-  function computeDrawBound(prev: FVec2, move: FVec2) {
+  function computeDrawBound(prev: Vec2, move: Vec2) {
     let x_min: number;
     let x_max: number;
     let y_min: number;
     let y_max: number;
 
     // Compute the Min and Max Bounds
-    if (prev[0] < move[0]) {
-      x_min = prev[0];
-      x_max = move[0];
+    if (prev.x < move.x) {
+      x_min = prev.x;
+      x_max = move.x;
     } else {
-      x_min = move[0];
-      x_max = prev[0];
+      x_min = move.x;
+      x_max = prev.x;
     }
 
-    if (prev[1] < move[1]) {
-      y_min = prev[1];
-      y_max = move[1];
+    if (prev.y < move.y) {
+      y_min = prev.y;
+      y_max = move.y;
     } else {
-      y_min = move[1];
-      y_max = prev[1];
+      y_min = move.y;
+      y_max = prev.y;
     }
 
     // Expand the bounding box by the size of the brush
@@ -183,10 +183,10 @@ function createDrawBound() {
     bound[2] = x_max - x_min; // Scale (W/H)
     bound[3] = y_max - y_min;
 
-    segment[0] = prev[0]; // Segment Point A
-    segment[1] = prev[1];
-    segment[2] = move[0]; // Segment Point B
-    segment[3] = move[1];
+    segment[0] = prev.x; // Segment Point A
+    segment[1] = prev.y;
+    segment[2] = move.x; // Segment Point B
+    segment[3] = move.y;
   }
 
   return {

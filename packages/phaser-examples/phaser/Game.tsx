@@ -19,7 +19,7 @@ export default function () {
     physics: {
       default: 'arcade',
       arcade: {
-        gravity: { y: 1000 },
+        gravity: { x: 0, y: 1000 },
         debug: false
       }
     },

@@ -28,7 +28,7 @@ export class RenderBufferRecorder extends BaseRecorder<WebGLRenderbuffer> {
     return ['deleteRenderbuffer'];
   }
 
-  protected getBoundInstance(target: number): WebGLTexture {
+  protected getBoundInstance(target: number): WebGLRenderbuffer | undefined {
     const gl = this.options.context;
     if (target === WebGlConstants.RENDERBUFFER.value) {
       return gl.getParameter(WebGlConstants.RENDERBUFFER_BINDING.value);

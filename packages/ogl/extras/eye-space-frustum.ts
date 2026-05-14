@@ -1,11 +1,11 @@
-import { degToRad } from '@packages/ogl-examples/skinning-fbx/fbx-loader/math-utils';
+import { degToRad } from '@app-game/math/utils/trigonometry';
 import { OGLRenderingContext } from '..';
 import { Geometry } from '../core/geometry';
 import { createBoxAttributes } from './box';
 
 export class EyeSpaceFrustum extends Geometry {
   constructor(gl: OGLRenderingContext, { near = 0.1, far = 100, fov = 45, aspect = 1 }) {
-    const tanHFov = Math.tan(degToRad(fov * 0.5));
+    const tanHFov = Math.tan(degToRad((fov * 0.5) as never));
     const nearHeight = tanHFov * near;
     const nearWidth = tanHFov * near * aspect;
     const farHeight = tanHFov * far;

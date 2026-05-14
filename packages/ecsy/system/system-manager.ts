@@ -11,7 +11,7 @@ export class SystemManager {
   // order is important
   private executeSystems: System[] = []; // Systems that have `execute` method
 
-  lastExecutedSystem = null;
+  lastExecutedSystem: System | null = null;
 
   constructor(
     private entityManager: EntityManager,
@@ -30,11 +30,9 @@ export class SystemManager {
 
     const system = new systemConstructor();
 
-    const queries = systemConstructor.queries;
+    const queries = systemConstructor.queries ?? [];
 
-    if (queries?.length !== 0) {
-      system.queries = [];
-
+    if (queries.length !== 0) {
       for (const operatorCopmonents of queries) {
         const query = this.queryManager.getQuery(
           operatorCopmonents,
@@ -54,17 +52,15 @@ export class SystemManager {
     system.order = this.systems.size;
     this.systems.set(systemConstructor, system);
 
-    if (system.run) {
-      this.executeSystems.push(system);
-    }
+    this.executeSystems.push(system);
 
     return this;
   }
 
   // ! Experement
-  addSystem(queries: QueriesConstructor, runFunction: (...args: any) => void) {
-    const newQueries = [];
-    if (queries?.length !== 0) {
+  addSystem(queries: QueriesConstructor, runFunction: (...args: unknown[]) => void) {
+    const newQueries: QueryManager['queries'] extends Map<string, infer T> ? T[] : never[] = [];
+    if (queries.length !== 0) {
       for (const operatorCopmonents of queries) {
         const query = this.queryManager.getQuery(
           operatorCopmonents,
@@ -76,12 +72,13 @@ export class SystemManager {
     }
 
     console.log(`newQueries`, newQueries);
+    runFunction(...newQueries);
 
     return this;
   }
 
   getSystem(systemConstructor: SystemConstructor<System>): System {
-    return this.systems.get(systemConstructor);
+    return this.systems.get(systemConstructor)!;
   }
 
   getSystems(): Map<SystemConstructor<System>, System> {
@@ -117,7 +114,7 @@ export class SystemManager {
 
   stop(): void {
     for (const system of this.executeSystems) {
-      system.stop();
+      system.stop?.();
       system.executeTime = 0; // ! debag performance
     }
   }
@@ -131,12 +128,12 @@ export class SystemManager {
   stats() {
     const stats = {
       numSystems: this.systems.size,
-      systems: {},
+      systems: {} as Record<string, { queries: Record<string, unknown> }>
     };
 
-    for (const system of this.systems) {
-      const systemStats = (stats.systems[system.constructor.name] = {
-        queries: {},
+    for (const [, system] of this.systems) {
+      const systemStats: { queries: Record<string, unknown> } = (stats.systems[system.constructor.name] = {
+        queries: {}
       });
 
       for (const name in (system as any).ctx) {

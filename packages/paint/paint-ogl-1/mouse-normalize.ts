@@ -1,4 +1,4 @@
-import { Vec3 } from '@packages/ogl';
+import { Vec3 } from '@app-game/ogl';
 
 /**
  * Normalize the mouse coordinates to the range [-1, 1]

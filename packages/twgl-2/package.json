@@ -1,0 +1,13 @@
+{
+  "name": "@app-game/twgl-2",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/webgl": "workspace:*"
+  },
+  "exports": {
+    "./attributes": "./attributes.ts",
+    "./programs/programs": "./programs/programs.ts"
+  },
+  "type": "module"
+}

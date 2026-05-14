@@ -1,0 +1,16 @@
+{
+  "name": "@app-game/typegpu-examples",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/chroma": "workspace:*",
+    "@app-game/components": "workspace:*",
+    "@app-game/solid-utils": "workspace:*",
+    "@app-game/ui-components": "workspace:*"
+  },
+  "exports": {
+    "./routes": "./routes.tsx"
+  },
+  "type": "module"
+}

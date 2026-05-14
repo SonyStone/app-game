@@ -3,6 +3,10 @@
  * This class contains common methods for all segments types.
  */
 export default class BaseSegment {
+    _len: number;
+    tiltStart: number;
+    tiltEnd: number;
+
     constructor() {
         this._len = -1;
         this.tiltStart = 0;
@@ -13,7 +17,7 @@ export default class BaseSegment {
      * Get segment length.
      * @returns {number} segment length
      */
-    getLength() {
+    getLength(): number {
         if (this._len < 0) {
             this.updateLength();
         }
@@ -26,7 +30,7 @@ export default class BaseSegment {
      * @param {number} t Distance at time t in range [0 .. 1]
      * @returns {number} Tilt angle at t
      */
-    getTiltAt(t) {
+    getTiltAt(t: number): number {
         return this.tiltStart * (1 - t) * this.tiltEnd * t;
     }
 
@@ -34,8 +38,8 @@ export default class BaseSegment {
      * Creates a clone of this instance
      * @returns {BaseSegment} cloned instance
      */
-    clone() {
-        return new this.constructor().copy(this);
+    clone(): BaseSegment {
+        return new (this.constructor as { new (): BaseSegment })().copy(this);
     }
 
     /**
@@ -43,10 +47,14 @@ export default class BaseSegment {
      * @param {BaseSegment} source reference object
      * @returns {BaseSegment} copy of source object
      */
-    copy(source) {
+    copy(source: BaseSegment): this {
         this._len = source._len;
         this.tiltStart = source.tiltStart;
         this.tiltEnd = source.tiltEnd;
         return this;
+    }
+
+    updateLength(): void {
+        // Implemented by subclasses.
     }
 }

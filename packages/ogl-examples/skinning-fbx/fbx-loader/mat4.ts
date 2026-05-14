@@ -1,4 +1,4 @@
-import { Euler, Mat4, Vec3 } from '@packages/ogl';
+import { Euler, Mat4, Vec3 } from '@app-game/ogl';
 
 export function makeRotationFromEuler(mat4: Mat4, euler: Euler) {
   const te = mat4;

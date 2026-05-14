@@ -38,24 +38,24 @@ export abstract class System {
   enabled? = true;
   initialized? = true;
 
-  queriesOther? = {};
+  queriesOther = {};
 
-  components?: any[];
-  queries?: Query[];
+  components: unknown[] = [];
+  queries: Query[] = [];
 
-  mandatoryQueries? = [];
+  mandatoryQueries: unknown[] = [];
 
-  priority? = 0;
-  order? = 0;
+  priority = 0;
+  order = 0;
 
-  executeTime?: number;
+  executeTime = 0;
 
   /**
    * It will get called each run by default (unless a custom scheduler is being used).
    * Usually it will be used to loop through the lists of entities from each query and
    * process the value of theirs components.
    */
-  run(...queries): void {}
+  run(...queries: any[]): void {}
 
   /**
    * This function is called when the system is registered in a world (Calling `world.registerSystem`)

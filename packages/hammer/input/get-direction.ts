@@ -1,4 +1,4 @@
-import { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
+import { Vec2 } from '@app-game/math';
 import { DIRECTION } from '../input-consts';
 import { abs } from '../utils/utils-consts';
 
@@ -9,13 +9,13 @@ import { abs } from '../utils/utils-consts';
  * @param {Number} y
  * @return {Number} direction
  */
-export default function getDirection(delta: Vec2Tuple) {
-  if (delta[0] === delta[1]) {
+export default function getDirection(delta: Vec2) {
+  if (delta.x === delta.y) {
     return DIRECTION.NONE;
   }
 
-  if (abs(delta[0]) >= abs(delta[1])) {
-    return delta[0] < 0 ? DIRECTION.LEFT : DIRECTION.RIGHT;
+  if (abs(delta.x) >= abs(delta.y)) {
+    return delta.x < 0 ? DIRECTION.LEFT : DIRECTION.RIGHT;
   }
-  return delta[1] < 0 ? DIRECTION.UP : DIRECTION.DOWN;
+  return delta.y < 0 ? DIRECTION.UP : DIRECTION.DOWN;
 }

@@ -1,6 +1,6 @@
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
-import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
-import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
+import { BUFFER_DATA_USAGE, BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
+import { GL_CONST } from '@app-game/webgl/static-variables/static-variables';
 import {
   getGLTypeForTypedArray,
   getGLTypeForTypedArrayType,
@@ -197,8 +197,8 @@ function createAttribsFromArrays(gl: WebGL2RenderingContext, arrays: Arrays): Re
         }
         const { buffer, type, numValues, arrayType } = fn(gl, array as FullArraySpec, arrayName);
         const normalized =
-          (array as FullArraySpec).normalize !== undefined
-            ? (array as FullArraySpec).normalize
+          (array as FullArraySpec).normalized !== undefined
+            ? (array as FullArraySpec).normalized
             : getNormalizationForTypedArrayType(arrayType);
         const size = getNumComponents(array as FullArraySpec, arrayName, numValues);
         attribs[name] = {

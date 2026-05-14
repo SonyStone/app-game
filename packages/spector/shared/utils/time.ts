@@ -4,7 +4,7 @@ export class Time {
   private readonly nowFunction: () => number;
 
   constructor() {
-    if (window.performance && window.performance.now) {
+    if (typeof window.performance?.now === 'function') {
       this.nowFunction = this.dateBasedPerformanceNow.bind(this);
     } else {
       const date = new Date();

@@ -1,6 +1,8 @@
 import * as helper from './helper';
 import * as textures from './textures';
 
+import type { AttachmentOptions, FramebufferInfo } from '.';
+
 /**
  * Framebuffer related functions
  *
@@ -48,6 +50,23 @@ const CLAMP_TO_EDGE = 0x812f;
 /* TextureMagFilter */
 const LINEAR = 0x2601;
 
+type FramebufferAttachmentOptions = AttachmentOptions & {
+  attachmentPoint?: number;
+  internalFormat?: number;
+  samples?: number;
+  layer?: number;
+  attachment?: WebGLRenderbuffer | WebGLTexture;
+  auto?: boolean;
+  minMag?: number;
+  wrap?: number;
+};
+
+type ManagedFramebufferInfo = FramebufferInfo & {
+  width: number;
+  height: number;
+  attachments: (WebGLRenderbuffer | WebGLTexture)[];
+};
+
 /**
  * The options for a framebuffer attachment.
  *
@@ -80,12 +99,12 @@ const LINEAR = 0x2601;
  * @mixes module:twgl.TextureOptions
  */
 
-const defaultAttachments = [
+const defaultAttachments: FramebufferAttachmentOptions[] = [
   { format: RGBA, type: UNSIGNED_BYTE, min: LINEAR, wrap: CLAMP_TO_EDGE },
   { format: DEPTH_STENCIL }
 ];
 
-const attachmentsByFormat = {};
+const attachmentsByFormat: Record<number, number> = {};
 attachmentsByFormat[DEPTH_STENCIL] = DEPTH_STENCIL_ATTACHMENT;
 attachmentsByFormat[STENCIL_INDEX] = STENCIL_ATTACHMENT;
 attachmentsByFormat[STENCIL_INDEX8] = STENCIL_ATTACHMENT;
@@ -96,11 +115,11 @@ attachmentsByFormat[DEPTH_COMPONENT32F] = DEPTH_ATTACHMENT;
 attachmentsByFormat[DEPTH24_STENCIL8] = DEPTH_STENCIL_ATTACHMENT;
 attachmentsByFormat[DEPTH32F_STENCIL8] = DEPTH_STENCIL_ATTACHMENT;
 
-function getAttachmentPointForFormat(format, internalFormat) {
-  return attachmentsByFormat[format] || attachmentsByFormat[internalFormat];
+function getAttachmentPointForFormat(format: number, internalFormat?: number): number | undefined {
+  return attachmentsByFormat[format] || (internalFormat !== undefined ? attachmentsByFormat[internalFormat] : undefined);
 }
 
-const renderbufferFormats = {};
+const renderbufferFormats: Record<number, boolean> = {};
 renderbufferFormats[RGBA4] = true;
 renderbufferFormats[RGB5_A1] = true;
 renderbufferFormats[RGB565] = true;
@@ -109,13 +128,13 @@ renderbufferFormats[DEPTH_COMPONENT16] = true;
 renderbufferFormats[STENCIL_INDEX] = true;
 renderbufferFormats[STENCIL_INDEX8] = true;
 
-function isRenderbufferFormat(format) {
+function isRenderbufferFormat(format: number): boolean {
   return renderbufferFormats[format];
 }
 
 const MAX_COLOR_ATTACHMENT_POINTS = 32; // even an 3090 only supports 8 but WebGL/OpenGL ES define constants for 32
 
-function isColorAttachmentPoint(attachmentPoint) {
+function isColorAttachmentPoint(attachmentPoint: number): boolean {
   return attachmentPoint >= COLOR_ATTACHMENT0 && attachmentPoint < COLOR_ATTACHMENT0 + MAX_COLOR_ATTACHMENT_POINTS;
 }
 
@@ -167,25 +186,30 @@ function isColorAttachmentPoint(attachmentPoint) {
  * @return {module:twgl.FramebufferInfo} the framebuffer and attachments.
  * @memberOf module:twgl/framebuffers
  */
-export function createFramebufferInfo(gl, attachments, width, height) {
+export function createFramebufferInfo(
+  gl: WebGL2RenderingContext,
+  attachments?: FramebufferAttachmentOptions[],
+  width?: number,
+  height?: number
+): ManagedFramebufferInfo {
   const target = FRAMEBUFFER;
   const fb = gl.createFramebuffer();
   gl.bindFramebuffer(target, fb);
   width = width || gl.drawingBufferWidth;
   height = height || gl.drawingBufferHeight;
   attachments = attachments || defaultAttachments;
-  const usedColorAttachmentsPoints = [];
-  const framebufferInfo = {
+  const usedColorAttachmentsPoints: number[] = [];
+  const framebufferInfo: ManagedFramebufferInfo = {
     framebuffer: fb,
     attachments: [],
     width: width,
     height: height
   };
 
-  attachments.forEach(function (attachmentOptions, i) {
+  attachments.forEach(function (attachmentOptions: FramebufferAttachmentOptions, i: number) {
     let attachment = attachmentOptions.attachment;
     const samples = attachmentOptions.samples;
-    const format = attachmentOptions.format;
+    const format = attachmentOptions.format ?? RGBA;
     let attachmentPoint =
       attachmentOptions.attachmentPoint || getAttachmentPointForFormat(format, attachmentOptions.internalFormat);
     if (!attachmentPoint) {
@@ -198,7 +222,7 @@ export function createFramebufferInfo(gl, attachments, width, height) {
       if (samples !== undefined || isRenderbufferFormat(format)) {
         attachment = gl.createRenderbuffer();
         gl.bindRenderbuffer(RENDERBUFFER, attachment);
-        if (samples > 1) {
+        if (samples && samples > 1) {
           gl.renderbufferStorageMultisample(RENDERBUFFER, samples, format, width, height);
         } else {
           gl.renderbufferStorage(RENDERBUFFER, format, width, height);
@@ -240,7 +264,7 @@ export function createFramebufferInfo(gl, attachments, width, height) {
     } else {
       throw new Error('unknown attachment type');
     }
-    framebufferInfo.attachments.push(attachment);
+    framebufferInfo.attachments.push(attachment as WebGLRenderbuffer | WebGLTexture);
   });
   if (gl.drawBuffers) {
     gl.drawBuffers(usedColorAttachmentsPoints);
@@ -291,25 +315,31 @@ export function createFramebufferInfo(gl, attachments, width, height) {
  * @param {number} [height] the height for the attachments. Default = size of drawingBuffer
  * @memberOf module:twgl/framebuffers
  */
-export function resizeFramebufferInfo(gl, framebufferInfo, attachments, width, height) {
+export function resizeFramebufferInfo(
+  gl: WebGL2RenderingContext,
+  framebufferInfo: ManagedFramebufferInfo,
+  attachments?: FramebufferAttachmentOptions[],
+  width?: number,
+  height?: number
+) {
   width = width || gl.drawingBufferWidth;
   height = height || gl.drawingBufferHeight;
   framebufferInfo.width = width;
   framebufferInfo.height = height;
   attachments = attachments || defaultAttachments;
-  attachments.forEach(function (attachmentOptions, ndx) {
+  attachments.forEach(function (attachmentOptions: FramebufferAttachmentOptions, ndx: number) {
     const attachment = framebufferInfo.attachments[ndx];
-    const format = attachmentOptions.format;
+    const format = attachmentOptions.format ?? RGBA;
     const samples = attachmentOptions.samples;
     if (samples !== undefined || helper.isRenderbuffer(gl, attachment)) {
       gl.bindRenderbuffer(RENDERBUFFER, attachment);
-      if (samples > 1) {
+      if (samples && samples > 1) {
         gl.renderbufferStorageMultisample(RENDERBUFFER, samples, format, width, height);
       } else {
         gl.renderbufferStorage(RENDERBUFFER, format, width, height);
       }
     } else if (helper.isTexture(gl, attachment)) {
-      textures.resizeTexture(gl, attachment, attachmentOptions, width, height);
+      textures.resizeTexture(gl, attachment, attachmentOptions, width, height, attachmentOptions.depth);
     } else {
       throw new Error('unknown attachment type');
     }
@@ -336,7 +366,7 @@ export function resizeFramebufferInfo(gl, framebufferInfo, attachments, width, h
  * @memberOf module:twgl/framebuffers
  */
 
-export function bindFramebufferInfo(gl, framebufferInfo, target) {
+export function bindFramebufferInfo(gl: WebGL2RenderingContext, framebufferInfo?: ManagedFramebufferInfo | null, target?: number) {
   target = target || FRAMEBUFFER;
   if (framebufferInfo) {
     gl.bindFramebuffer(target, framebufferInfo.framebuffer);

@@ -1,4 +1,4 @@
-import { createTimer } from '@packages/utils/timeout';
+import { createTimer } from '@app-game/utils/timeout';
 import pointerEventsData from './pointer-events-data.json?url';
 
 /**

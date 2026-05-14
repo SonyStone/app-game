@@ -1,12 +1,14 @@
 
+type TypeStorage = Record<string, unknown>;
+
 export interface TypeDefinition<T> {
   baseType?: T;
   isType?: boolean;
   isSimpleType?: boolean;
-  create(defaultValue): void;
-  reset(src, key, defaultValue): void;
-  clear(src, key): void;
-  copy?(src, dst, key): void;
+  create(defaultValue?: unknown): unknown;
+  reset(src: TypeStorage, key: string, defaultValue?: unknown): void;
+  clear(src: TypeStorage, key: string): void;
+  copy?(src: TypeStorage, dst: TypeStorage, key: string): void;
 }
 
 export function createType<T>(typeDefinition: TypeDefinition<T>): TypeDefinition<T> {
@@ -15,10 +17,10 @@ export function createType<T>(typeDefinition: TypeDefinition<T>): TypeDefinition
     'reset',
     'clear'
     /*"copy"*/
-  ];
+  ] as const;
 
-  const undefinedFunctions = mandatoryFunctions.filter(f => {
-    return !typeDefinition[f];
+  const undefinedFunctions = mandatoryFunctions.filter((fn) => {
+    return !typeDefinition[fn];
   });
 
   if (undefinedFunctions.length > 0) {

@@ -2,8 +2,8 @@ import { Mesh } from '../core/mesh';
 import { Program } from '../core/program';
 import { Triangle } from './triangle';
 
-import { FVec2 } from '@packages/math';
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables/data-type';
+import { Vec2 } from '@app-game/math';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables/data-type';
 import { OGLRenderingContext } from '../core/renderer';
 import { Texture } from '../core/texture';
 import fragment from './flowmap.frag?raw';
@@ -25,8 +25,8 @@ export class Flowmap {
   mask: SwapBuffering;
 
   aspect = 1;
-  mouse = new FVec2();
-  velocity = new FVec2();
+  mouse = new Vec2();
+  velocity = new Vec2();
 
   mesh: Mesh;
 
@@ -84,8 +84,8 @@ const initProgram = ({
   falloff: number;
   alpha: number;
   dissipation: number;
-  mouse: FVec2;
-  velocity: FVec2;
+  mouse: Vec2;
+  velocity: Vec2;
 }) =>
   new Mesh(gl, {
     // Triangle that includes -1 to 1 range for 'position', and 0 to 1 range for 'uv'.

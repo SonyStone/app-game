@@ -1,6 +1,6 @@
 const noop = (_?: any) => {};
 
-export const dummyCanvasContext: CanvasRenderingContext2D = {
+export const dummyCanvasContext = {
   canvas: {} as HTMLCanvasElement,
   direction: 'ltr',
   fillStyle: '#000000',
@@ -76,4 +76,4 @@ export const dummyCanvasContext: CanvasRenderingContext2D = {
   rect: noop,
   arc: noop,
   ellipse: noop,
-};
+} as unknown as CanvasRenderingContext2D;

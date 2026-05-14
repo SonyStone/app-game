@@ -185,7 +185,8 @@ export class DrawCallState extends BaseState {
       );
     }
 
-    const drawBuffersExtension = this.extensions[WebGlConstants.MAX_DRAW_BUFFERS_WEBGL.extensionName];
+    const drawBuffersExtensionName = WebGlConstants.MAX_DRAW_BUFFERS_WEBGL.extensionName;
+    const drawBuffersExtension = drawBuffersExtensionName ? this.extensions[drawBuffersExtensionName] : undefined;
     if (drawBuffersExtension) {
       frameBufferState.colorAttachments = [];
       const maxDrawBuffers = this.context.getParameter(WebGlConstants.MAX_DRAW_BUFFERS_WEBGL.value);
@@ -341,6 +342,10 @@ export class DrawCallState extends BaseState {
 
   protected readAttributeFromContext(program: WebGLProgram, activeAttributeIndex: number): {} {
     const info = this.context.getActiveAttrib(program, activeAttributeIndex);
+    if (!info) {
+      return {};
+    }
+
     const location = this.context.getAttribLocation(program, info.name);
     if (location === -1) {
       return {
@@ -370,7 +375,8 @@ export class DrawCallState extends BaseState {
       vertexAttrib: Array.prototype.slice.call(unbufferedValue)
     };
 
-    if (this.extensions[WebGlConstants.VERTEX_ATTRIB_ARRAY_DIVISOR_ANGLE.extensionName]) {
+    const divisorExtensionName = WebGlConstants.VERTEX_ATTRIB_ARRAY_DIVISOR_ANGLE.extensionName;
+    if (divisorExtensionName && this.extensions[divisorExtensionName]) {
       attributeState.divisor = this.context.getVertexAttrib(
         location,
         WebGlConstants.VERTEX_ATTRIB_ARRAY_DIVISOR_ANGLE.value
@@ -386,6 +392,10 @@ export class DrawCallState extends BaseState {
 
   protected readUniformFromContext(program: WebGLProgram, activeUniformIndex: number): {} {
     const info = this.context.getActiveUniform(program, activeUniformIndex);
+    if (!info) {
+      return {};
+    }
+
     const location = this.context.getUniformLocation(program, info.name);
     if (location) {
       if (info.size > 1 && info.name && info.name.indexOf('[0]') === info.name.length - 3) {
@@ -452,7 +462,8 @@ export class DrawCallState extends BaseState {
       wrapT: this.getWebGlConstant(this.context.getTexParameter(target.value, WebGlConstants.TEXTURE_WRAP_T.value))
     };
 
-    if (this.extensions[WebGlConstants.TEXTURE_MAX_ANISOTROPY_EXT.extensionName]) {
+    const anisotropyExtensionName = WebGlConstants.TEXTURE_MAX_ANISOTROPY_EXT.extensionName;
+    if (anisotropyExtensionName && this.extensions[anisotropyExtensionName]) {
       textureState.anisotropy = this.context.getTexParameter(
         target.value,
         WebGlConstants.TEXTURE_MAX_ANISOTROPY_EXT.value
@@ -585,6 +596,9 @@ export class DrawCallState extends BaseState {
   protected readTransformFeedbackFromContext(program: WebGLProgram, index: number): {} {
     const context2 = this.context as WebGL2RenderingContext;
     const info = context2.getTransformFeedbackVarying(program, index);
+    if (!info) {
+      return {};
+    }
 
     const boundBuffer = context2.getIndexedParameter(WebGlConstants.TRANSFORM_FEEDBACK_BUFFER_BINDING.value, index);
     const transformFeedbackState = {

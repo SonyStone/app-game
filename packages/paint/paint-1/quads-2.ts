@@ -1,4 +1,4 @@
-import { GL_BUFFER_TYPE } from '@packages/webgl/static-variables';
+import { GL_BUFFER_TYPE } from '@app-game/webgl/static-variables';
 import { fromTypeArray, newArray, newElement } from '../fungi/Buffer';
 import { fromBufferConfig, type IMesh } from '../fungi/mesh';
 

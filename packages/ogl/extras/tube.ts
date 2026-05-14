@@ -1,17 +1,44 @@
-import { FVec2 } from '@packages/math';
+import type { Attribute, AttributeMap } from '../core/geometry';
 import { Geometry } from '../core/geometry';
+import type { OGLRenderingContext } from '../core/renderer';
 import { Vec3 } from '../math/vec-3';
+import type { Path } from './path/path';
 
 // helper variables
 const vertex = /* @__PURE__ */ new Vec3();
 const normal = /* @__PURE__ */ new Vec3();
-const uv = /* @__PURE__ */ new FVec2();
+const uv: [number, number] = [0, 0];
 const point = /* @__PURE__ */ new Vec3();
 
 export class Tube extends Geometry {
+  path: Path;
+  radius: number;
+  tubularSegments: number;
+  radialSegments: number;
+  closed: boolean;
+  frenetFrames: ReturnType<Path['computeFrenetFrames']>;
+  positions: Float32Array;
+  normals: Float32Array;
+  uvs: Float32Array;
+  indices: Uint16Array | Uint32Array;
+
   constructor(
-    gl,
-    { path, radius = 1, tubularSegments = 64, radialSegments = 8, closed = false, attributes = {} } = {}
+    gl: OGLRenderingContext,
+    {
+      path,
+      radius = 1,
+      tubularSegments = 64,
+      radialSegments = 8,
+      closed = false,
+      attributes = {}
+    }: {
+      path: Path;
+      radius?: number;
+      tubularSegments?: number;
+      radialSegments?: number;
+      closed?: boolean;
+      attributes?: AttributeMap;
+    }
   ) {
     super(gl, attributes);
 
@@ -37,10 +64,10 @@ export class Tube extends Geometry {
     this.addAttribute('position', { size: 3, data: this.positions });
     this.addAttribute('normal', { size: 3, data: this.normals });
     this.addAttribute('uv', { size: 2, data: this.uvs });
-    this.setIndex({ data: this.indices });
+    this.setIndex({ data: this.indices } as Attribute);
   }
 
-  _generateAttributes() {
+  _generateAttributes(): void {
     for (let i = 0; i <= this.tubularSegments; i++) {
       let ci = i;
       if (i === this.tubularSegments) {
@@ -77,14 +104,14 @@ export class Tube extends Geometry {
         this.positions.set(vertex, idx * 3);
 
         // uv
-        uv.x = i / this.tubularSegments;
-        uv.y = j / this.radialSegments;
+        uv[0] = i / this.tubularSegments;
+        uv[1] = j / this.radialSegments;
         this.uvs.set(uv, idx * 2);
       }
     }
   }
 
-  _generateIndices() {
+  _generateIndices(): void {
     for (let j = 1; j <= this.tubularSegments; j++) {
       for (let i = 1; i <= this.radialSegments; i++) {
         const a = (this.radialSegments + 1) * (j - 1) + (i - 1);

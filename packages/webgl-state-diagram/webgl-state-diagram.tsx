@@ -96,7 +96,7 @@ export default () => {
                 {(item) => (
                   <tr>
                     <td class="border border-#ffffff80 p-1 whitespace-pre">{item[0]}</td>
-                    <td class="border border-#ffffff80 p-1 whitespace-pre">{item[1]}</td>
+                    <td class="border border-#ffffff80 p-1 whitespace-pre">{String(item[1])}</td>
                   </tr>
                 )}
               </For>

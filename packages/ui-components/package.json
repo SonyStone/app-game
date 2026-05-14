@@ -1,0 +1,16 @@
+{
+  "name": "@app-game/ui-components",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./index.ts",
+    "./breadcrumbs/breadcrumbs": "./breadcrumbs/breadcrumbs.tsx",
+    "./button/MatButton": "./button/MatButton.tsx",
+    "./form-field/MatFormField": "./form-field/MatFormField.tsx",
+    "./menu/menu": "./menu/menu.tsx",
+    "./ripple": "./ripple/index.ts"
+    ,"./solid-dockview": "./solid-dockview/index.ts"
+    ,"./virtual-scroll/create-virtual-list": "./virtual-scroll/create-virtual-list.ts"
+  },
+  "type": "module"
+}

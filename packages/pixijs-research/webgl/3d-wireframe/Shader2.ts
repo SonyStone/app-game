@@ -1,5 +1,6 @@
-import { FVec2, FVec3, Vec2Tuple, Vec3Tuple, m4, v4 } from '@packages/math';
-import { GL_BUFFER_TYPE, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@packages/webgl/static-variables';
+import { FVec3, Vec2, Vec3Tuple, m4, v4 } from '@app-game/math';
+import { Mat4 } from '@app-game/math/m4';
+import { GL_BUFFER_TYPE, GL_DATA_TYPE, GL_STATIC_VARIABLES } from '@app-game/webgl/static-variables';
 import { createProgram } from './Shader';
 
 interface Uniform {
@@ -20,7 +21,7 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
           return this;
         },
         bind() {
-          gl.uniform1f(location, this.value);
+          gl.uniform1f(location!, this.value);
           return this;
         }
       };
@@ -30,13 +31,13 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
 
       return {
         name,
-        value: FVec2.create(0, 0),
-        set(value: Vec2Tuple) {
+        value: new Vec2().set(0, 0),
+        set(value: Vec2) {
           this.value.copy(value);
           return this;
         },
         bind() {
-          gl.uniform2fv(location, this.value);
+          gl.uniform2fv(location!, this.value.value);
           return this;
         }
       };
@@ -52,7 +53,7 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
           return this;
         },
         bind() {
-          gl.uniform3fv(location, this.value);
+          gl.uniform3fv(location!, this.value);
           return this;
         }
       };
@@ -67,8 +68,8 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
           this.value = value;
           return this;
         },
-        bind(value: v4.Vec4) {
-          gl.uniformMatrix4fv(location, false, value);
+        bind() {
+          gl.uniformMatrix2fv(location!, false, this.value);
           return this;
         }
       };
@@ -78,18 +79,18 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
 
       return {
         name,
-        value: m4.identity(),
+        value: new Mat4().identity(),
         set(value: m4.Mat4) {
           this.value = value;
           return this;
         },
         bind() {
-          gl.uniformMatrix4fv(location, false, this.value);
+          gl.uniformMatrix4fv(location!, false, this.value);
           return this;
         }
       };
     }
-  };
+  } as Record<number, (name: string) => any>;
 }
 
 export function createShader(gl: WebGL2RenderingContext) {
@@ -115,8 +116,7 @@ class ShaderBuilder {
   ) {}
 
   addUniform(name: string, type: GL_DATA_TYPE, value?: any) {
-    const { gl, program, uniformBuilder } = this;
-    const location = gl.getUniformLocation(program, name);
+    const { uniformBuilder } = this;
     const uniform = uniformBuilder[type](name);
     if (value) {
       uniform.set(value);

@@ -1,6 +1,6 @@
-import { Camera, Vec3 } from '@packages/ogl';
-import { Vec2Tuple } from '@packages/ogl/math/vec-2_old';
-import { Vec3Tuple } from '@packages/ogl/math/vec-3';
+import { Camera, Vec3 } from '@app-game/ogl';
+import { Vec2Tuple } from '@app-game/ogl/math/vec-2_old';
+import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
 
 export function createRaycast({ camera, plane = [0, 1, 0] }: { camera: Camera; plane?: Vec3Tuple }) {
   const planeNormal = new Vec3().set(plane).normalize();

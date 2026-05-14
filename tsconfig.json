@@ -24,20 +24,143 @@
     "module": "ES2020", /* Specify what module code is generated. */
     // "rootDir": "./",                                  /* Specify the root folder within your source files. */
     "moduleResolution": "node", /* Specify how TypeScript looks up a file from a given module specifier. */
-    "baseUrl": "./",                                  /* Specify the base directory to resolve non-relative module names. */
+    "baseUrl": "./", /* Specify the base directory to resolve non-relative module names. */
+    "ignoreDeprecations": "5.0",
     "paths": {
-      "@utils/*": ["./packages/solid-utils/*"],
-      "@packages/*": ["./packages/*"],
-      "@/ldtk-ts/*": ["./packages/ldtk-ts/*"]
-    },                                      /* Specify a set of entries that re-map imports to additional lookup locations. */
+      "@app-game/app-router": [
+        "./packages/app-router/index.ts"
+      ],
+      "@app-game/app-router/*": [
+        "./packages/app-router/*"
+      ],
+      "@app-game/chroma": [
+        "./packages/chroma"
+      ],
+      "@app-game/chroma/*": [
+        "./packages/chroma/*"
+      ],
+      "@app-game/ecsy": [
+        "./packages/ecsy/index.ts"
+      ],
+      "@app-game/ecsy/*": [
+        "./packages/ecsy/*"
+      ],
+      "@app-game/math": [
+        "./packages/math/index.ts"
+      ],
+      "@app-game/math-examples": [
+        "./packages/math-examples"
+      ],
+      "@app-game/math-examples/*": [
+        "./packages/math-examples/*"
+      ],
+      "@app-game/litegraph": [
+        "./packages/litegraph"
+      ],
+      "@app-game/litegraph/*": [
+        "./packages/litegraph/*"
+      ],
+      "@app-game/ogl-examples": [
+        "./packages/ogl-examples"
+      ],
+      "@app-game/ogl-examples/*": [
+        "./packages/ogl-examples/*"
+      ],
+      "@app-game/paint": [
+        "./packages/paint"
+      ],
+      "@app-game/paint/*": [
+        "./packages/paint/*"
+      ],
+      "@app-game/penner-easing-equations": [
+        "./packages/penner-easing-equations"
+      ],
+      "@app-game/penner-easing-equations/*": [
+        "./packages/penner-easing-equations/*"
+      ],
+      "@app-game/piecs": [
+        "./packages/piecs/index.ts"
+      ],
+      "@app-game/piecs/*": [
+        "./packages/piecs/*"
+      ],
+      "@app-game/spector": [
+        "./packages/spector"
+      ],
+      "@app-game/spector/*": [
+        "./packages/spector/*"
+      ],
+      "@app-game/solid-pixi": [
+        "./packages/solid-pixi/index.ts"
+      ],
+      "@app-game/solid-pixi/*": [
+        "./packages/solid-pixi/*"
+      ],
+      "@app-game/solid-three": [
+        "./packages/solid-three/index.tsx"
+      ],
+      "@app-game/solid-three/*": [
+        "./packages/solid-three/*"
+      ],
+      "@app-game/three": [
+        "./packages/three"
+      ],
+      "@app-game/three/*": [
+        "./packages/three/*"
+      ],
+      "@app-game/solid-utils": [
+        "./packages/solid-utils/index.ts"
+      ],
+      "@app-game/solid-utils/*": [
+        "./packages/solid-utils/*"
+      ],
+      "@app-game/ui-components": [
+        "./packages/ui-components/index.ts"
+      ],
+      "@app-game/ui-components/*": [
+        "./packages/ui-components/*"
+      ],
+      "@app-game/three-examples": [
+        "./packages/three-examples/index.ts"
+      ],
+      "@app-game/three-examples/*": [
+        "./packages/three-examples/*"
+      ],
+      "@app-game/utils": [
+        "./packages/utils/index.ts"
+      ],
+      "@app-game/utils/*": [
+        "./packages/utils/*"
+      ],
+      "@app-game/ui-components-examples": [
+        "./packages/ui-components-examples"
+      ],
+      "@app-game/ui-components-examples/*": [
+        "./packages/ui-components-examples/*"
+      ],
+      "@app-game/webgl-examples": [
+        "./packages/webgl-examples"
+      ],
+      "@app-game/webgl-examples/*": [
+        "./packages/webgl-examples/*"
+      ],
+      "@utils/*": [
+        "./packages/solid-utils/*"
+      ],
+      "@/ldtk-ts/*": [
+        "./packages/ldtk-ts/*"
+      ]
+    }, /* Specify a set of entries that re-map imports to additional lookup locations. */
     // "rootDirs": [],                                   /* Allow multiple folders to be treated as one when resolving modules. */
     // "typeRoots": [],                                  /* Specify multiple folders that act like `./node_modules/@types`. */
     "types": [
       "vite/client",
-      "vite-plugin-glsl/ext"
+      "vite-plugin-glsl/ext",
+      "@webgpu/types",
+      "node"
     ], /* Specify type package names to be included without being referenced in a source file. */
     // "allowUmdGlobalAccess": true,                     /* Allow accessing UMD globals from modules. */
-    // "resolveJsonModule": true,                        /* Enable importing .json files */
+    "resolveJsonModule": true, /* Enable importing .json files */
     // "noResolve": true,                                /* Disallow `import`s, `require`s or `<reference>`s from expanding the number of files TypeScript should add to a project. */
     /* JavaScript Support */
     // "allowJs": true,                                  /* Allow JavaScript files to be a part of your program. Use the `checkJS` option to get errors from these files. */

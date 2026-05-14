@@ -1,0 +1,12 @@
+{
+  "name": "@app-game/piecs-examles",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@app-game/piecs": "workspace:*"
+  },
+  "exports": {
+    "./performance/performance": "./performance/performance.tsx"
+  },
+  "type": "module"
+}

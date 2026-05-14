@@ -1,6 +1,6 @@
-import { Camera, Orbit, Renderer, Transform, Vec3 } from '@packages/ogl';
-import { Ripple } from '@packages/ui-components/ripple/Ripple';
-import { createEmitter } from '@solid-primitives/event-bus';
+import { Camera, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
+import { Ripple } from '@app-game/ui-components/ripple';
+import { createEventBus } from '@solid-primitives/event-bus';
 import createRAF from '@solid-primitives/raf';
 import { onMount } from 'solid-js';
 import { GridHelperComponent } from '../grid-helper.component';
@@ -9,16 +9,16 @@ import { ScreenBox } from './screen-box';
 import { ScreenPointIntersection } from './screen-point-intersection';
 
 export default function CameraProjectionWebGL2() {
-  const click = createEmitter<MouseEvent>();
-  const updateScreenBox = createEmitter<void>();
-  const canvas = (<canvas class="w-400px h-400px border-t" onClick={click.emit} />) as HTMLCanvasElement;
+  const click = createEventBus<MouseEvent>();
+  const updateScreenBox = createEventBus<void>();
+  const canvas = (<canvas class="w-400px h-400px border-t" onClick={(event) => click.emit(event)} />) as HTMLCanvasElement;
   const renderer = new Renderer({ dpr: 2, canvas, height: 400, width: 400 });
   const gl = renderer.gl;
   gl.clearColor(1, 1, 1, 1);
 
   const camera = new Camera({ fov: 35 });
   camera.position.set(2, 4, 4);
-  const controls = new Orbit(camera, { element: canvas, target: new Vec3(1, 1, 0) });
+  const controls = new Orbit(camera, { element: canvas as unknown as HTMLElement, target: new Vec3(1, 1, 0) });
 
   const scene = new Transform();
 

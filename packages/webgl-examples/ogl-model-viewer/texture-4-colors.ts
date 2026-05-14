@@ -1,4 +1,4 @@
-import { OGLRenderingContext, Texture } from '@packages/ogl';
+import { OGLRenderingContext, Texture } from '@app-game/ogl';
 
 export const createTexture4colors = (
   gl: OGLRenderingContext,

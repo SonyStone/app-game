@@ -46,7 +46,7 @@ export class Entity implements Component {
 
   alive = false;
 
-  constructor(public entityManager: EntityManager) {}
+  constructor(public entityManager: EntityManager = undefined as unknown as EntityManager) {}
 
   // COMPONENTS
 
@@ -84,7 +84,7 @@ export class Entity implements Component {
    * Once a component is removed from an entity, it is possible to access its contents
    */
   getRemovedComponent(componentConstructor: Constructor<Component>): Component {
-    return this.componentsToRemove.get(componentConstructor.name);
+    return this.componentsToRemove.get(componentConstructor.name)!;
   }
 
   getComponents(): Map<string, Component> {
@@ -164,7 +164,7 @@ export class Entity implements Component {
   // Initialize the entity. To be used when returning an entity to the pool
   reset() {
     this.id = nextId++;
-    this.entityManager = null;
+    this.entityManager = undefined as unknown as EntityManager;
     this.componentTypes.clear();
     this.queries.clear();
     this.components.clear();

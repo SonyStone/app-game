@@ -1,5 +1,4 @@
-import { GL_BUFFER_USAGE, GL_TEXTURES } from '@packages/webgl/static-variables';
-import { GL_CONST } from '@packages/webgl/static-variables/static-variables';
+import { GL_BUFFER_USAGE } from '@app-game/webgl/static-variables';
 
 import { createProgram } from '../Shader';
 import fragmentShader from './frag_shader.frag?raw';
@@ -22,17 +21,17 @@ export async function createImage(gl: WebGL2RenderingContext) {
 
     // make unit 0 the active texture unit
     // (i.e, the unit all other texture commands will affect.)
-    gl.activeTexture(GL_TEXTURES.TEXTURE0);
+    gl.activeTexture(gl.TEXTURE0);
 
     // Bind texture to 'texture unit '0' 2D bind point
-    gl.bindTexture(GL_TEXTURES.TEXTURE_2D, texture);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
 
     // Set the parameters so we don't need mips and so we're not filtering
     // and we don't repeat
-    gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_WRAP_S, GL_TEXTURES.CLAMP_TO_EDGE);
-    gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_WRAP_T, GL_TEXTURES.CLAMP_TO_EDGE);
-    gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MIN_FILTER, GL_TEXTURES.NEAREST);
-    gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MAG_FILTER, GL_TEXTURES.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
     // Upload the image into the texture.
     const mipLevel = 0; // the largest mip
@@ -89,9 +88,9 @@ export async function createImage(gl: WebGL2RenderingContext) {
 
         // provide texture coordinates for the rectangle.
         const texCoordBuffer = gl.createBuffer();
-        gl.bindBuffer(GL_CONST.ARRAY_BUFFER, texCoordBuffer);
+        gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
         gl.bufferData(
-          GL_CONST.ARRAY_BUFFER,
+          gl.ARRAY_BUFFER,
           new Float32Array([0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0]),
           GL_BUFFER_USAGE.STATIC_DRAW
         );

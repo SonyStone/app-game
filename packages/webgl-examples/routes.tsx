@@ -1,9 +1,9 @@
-import { Ripple } from '@packages/ui-components/ripple/Ripple';
-import { Thumbnail } from '@packages/ui-components/thumbnail';
-import { Routes } from '@packages/utils/routes.interface';
+import { Thumbnail, type Routes } from '@app-game/app-router';
+import { Ripple } from '@app-game/ui-components/ripple';
 import { A } from '@solidjs/router';
 import { For, lazy } from 'solid-js';
 import instancingWithUBOandVAOThumbnail from './instancing-with-ubo-and-vao/image.png?url';
+import tiledMaphumbnail from './tiled-map/image.png?url';
 
 export const routes = [
   (() => {
@@ -13,7 +13,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} />,
-      component: lazy(() => import('@packages/webgl-examples/simple-program/simple-program'))
+      component: lazy(() => import('./simple-program/simple-program'))
     };
   })(),
   (() => {
@@ -23,7 +23,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} />,
-      component: lazy(() => import('@packages/webgl-examples/matrices-2d/matrices-2d'))
+      component: lazy(() => import('./matrices-2d/matrices-2d'))
     };
   })(),
   (() => {
@@ -33,7 +33,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} />,
-      component: lazy(() => import('@packages/webgl-examples/ogl-meshing/meshing'))
+      component: lazy(() => import('./ogl-meshing/meshing'))
     };
   })(),
   (() => {
@@ -43,7 +43,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} />,
-      component: lazy(() => import('@packages/webgl-examples/instanced-drawing/instanced-drawing'))
+      component: lazy(() => import('./instanced-drawing/instanced-drawing'))
     };
   })(),
   (() => {
@@ -53,7 +53,7 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} />,
-      component: lazy(() => import('@packages/webgl-examples/ogl-blending-modes/ogl-blending-modes'))
+      component: lazy(() => import('./ogl-blending-modes/ogl-blending-modes'))
     };
   })(),
   (() => {
@@ -63,7 +63,27 @@ export const routes = [
       path,
       name,
       Preview: () => <Thumbnail href={'.' + path} name={name} thumbnail={instancingWithUBOandVAOThumbnail} />,
-      component: lazy(() => import('@packages/webgl-examples/instancing-with-ubo-and-vao/instancing-with-ubo-and-vao'))
+      component: lazy(() => import('./instancing-with-ubo-and-vao/instancing-with-ubo-and-vao'))
+    };
+  })(),
+  (() => {
+    const path = '/tiled-map';
+    const name = 'Tiled Map or Chunk-Based Rendering';
+    return {
+      path,
+      name,
+      Preview: () => <Thumbnail href={'.' + path} name={name} thumbnail={tiledMaphumbnail} />,
+      component: lazy(() => import('./tiled-map/tiled-map'))
+    };
+  })(),
+  (() => {
+    const path = '/model-viewer';
+    const name = '[WIP] Model Viewer';
+    return {
+      path,
+      name,
+      Preview: () => <Thumbnail href={'.' + path} name={name} />,
+      component: lazy(() => import('./ogl-model-viewer/model-viewer'))
     };
   })()
 ] as const;

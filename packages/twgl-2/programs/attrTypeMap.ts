@@ -1,5 +1,5 @@
-import { GL_DATA_TYPE } from '@packages/webgl/static-variables';
-import { BUFFER_TARGET } from '@packages/webgl/static-variables/buffer';
+import { GL_DATA_TYPE } from '@app-game/webgl/static-variables';
+import { BUFFER_TARGET } from '@app-game/webgl/static-variables/buffer';
 import { typeMap, TypeMapKeys } from './typeMap';
 
 // prettier-ignore

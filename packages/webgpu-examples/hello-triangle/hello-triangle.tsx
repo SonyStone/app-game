@@ -7,7 +7,7 @@ import triangleVertWGSL from './triangle.vert.wgsl?raw';
  * https://webgpu.github.io/webgpu-samples/samples/helloTriangle
  */
 export default function HelloTriangle() {
-  const canvas = (<canvas class="w-full aspect-square max-w-600px" />) as HTMLCanvasElement;
+  const canvas = (<canvas class="max-w-600px aspect-square w-full" />) as HTMLCanvasElement;
 
   let requestID: number;
 
