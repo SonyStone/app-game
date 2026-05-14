@@ -8,6 +8,6 @@ export interface IContextInformation {
   readonly context: WebGLRenderingContexts;
   readonly contextVersion: number;
   readonly toggleCapture?: (capture: boolean) => void;
-  readonly tagWebGlObject?: (object: any) => WebGlObjectTag;
+  readonly tagWebGlObject?: (object: any) => WebGlObjectTag | undefined;
   readonly extensions?: ExtensionList;
 }

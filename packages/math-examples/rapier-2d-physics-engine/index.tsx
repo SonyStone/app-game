@@ -51,7 +51,7 @@ const TestRapier2D = lazy(async () => {
     const colliderDesc = RAPIER.ColliderDesc.cuboid(state.rigidBody.hx, state.rigidBody.hy);
     const collider = world.createCollider(colliderDesc, rigidBody);
 
-    const [running, start, stop] = createRAF(({ dt }) => {
+    const [running, start, stop] = createRAF(() => {
       // Step the physics world.
       world.step();
       setSteate('rigidBody', 'translation', rigidBody.translation());

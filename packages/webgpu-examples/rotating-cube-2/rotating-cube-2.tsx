@@ -271,12 +271,14 @@ async function main(canvas: HTMLCanvasElement) {
     device.queue.writeBuffer(vsUniformBuffer, 0, vsUniformValues);
     device.queue.writeBuffer(fsUniformBuffer, 0, fsUniformValues);
 
+    const colorAttachments = renderPassDescriptor.colorAttachments as Array<GPURenderPassColorAttachment | null | undefined>;
+
     if (canvasInfo.sampleCount === 1) {
       const colorTexture = context.getCurrentTexture();
-      renderPassDescriptor.colorAttachments[0]!.view = colorTexture.createView();
+      colorAttachments[0]!.view = colorTexture.createView();
     } else {
-      renderPassDescriptor.colorAttachments[0]!.view = canvasInfo.renderTargetView!;
-      renderPassDescriptor.colorAttachments[0]!.resolveTarget = context.getCurrentTexture().createView();
+      colorAttachments[0]!.view = canvasInfo.renderTargetView!;
+      colorAttachments[0]!.resolveTarget = context.getCurrentTexture().createView();
     }
     renderPassDescriptor.depthStencilAttachment!.view = canvasInfo.depthTextureView!;
 

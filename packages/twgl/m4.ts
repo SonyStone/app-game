@@ -1,6 +1,7 @@
-import { Mat4Tuple } from '@app-game/math/m4-builder';
 import { Mat4, Vec3 } from '.';
 import * as v3 from './v3';
+
+type MatConstructor = Float32ArrayConstructor | ArrayConstructor;
 
 /**
  * 4x4 Matrix math math functions.
@@ -26,7 +27,7 @@ import * as v3 from './v3';
  *
  * @module twgl/m4
  */
-let MatType = Float32Array;
+let MatType: MatConstructor = Float32Array;
 
 /**
  * A JavaScript array with 16 values or a Float32Array with 16 values.
@@ -42,7 +43,7 @@ let MatType = Float32Array;
  * @return {constructor} previous constructor for Mat4
  * @memberOf module:twgl/m4
  */
-export function setDefaultType(ctor) {
+export function setDefaultType(ctor: MatConstructor): MatConstructor {
   const oldType = MatType;
   MatType = ctor;
   return oldType;
@@ -55,7 +56,7 @@ export function setDefaultType(ctor) {
  * @return {module:twgl/m4.Mat4} -m.
  * @memberOf module:twgl/m4
  */
-export function negate(m, dst) {
+export function negate(m: Mat4, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   dst[0] = -m[0];
@@ -83,7 +84,7 @@ export function negate(m, dst) {
  * @return {module:twgl/m4.Mat4} A new matrix.
  * @memberOf module:twgl/m4
  */
-export function create() {
+export function create(): Mat4 {
   return new MatType(16).fill(0);
 }
 
@@ -94,7 +95,7 @@ export function create() {
  * @return {module:twgl/m4.Mat4} A copy of m.
  * @memberOf module:twgl/m4
  */
-export function copy(m, dst) {
+export function copy(m: Mat4, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   dst[0] = m[0];
@@ -154,7 +155,7 @@ export function identity(dst?: Mat4) {
  * @return {module:twgl/m4.Mat4} The transpose of m.
  * @memberOf module:twgl/m4
  */
-export function transpose(m, dst?: any) {
+export function transpose(m: Mat4, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
   if (dst === m) {
     let t;
@@ -229,7 +230,7 @@ export function transpose(m, dst?: any) {
  * @return {module:twgl/m4.Mat4} The inverse of m.
  * @memberOf module:twgl/m4
  */
-export function inverse(m, dst?: any) {
+export function inverse(m: Mat4, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const m00 = m[0 * 4 + 0];
@@ -308,7 +309,7 @@ export function inverse(m, dst?: any) {
  * @return {module:twgl/m4.Mat4} The matrix product of a and b.
  * @memberOf module:twgl/m4
  */
-export function multiply(a: Mat4Tuple, b: Mat4Tuple, dst?: Mat4Tuple): Mat4Tuple {
+export function multiply(a: Mat4, b: Mat4, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const a00 = a[0];
@@ -404,8 +405,8 @@ export function setTranslation(a: Mat4, v: Vec3, dst?: Mat4): Mat4 {
  * @return {module:twgl/v3.Vec3} The translation component of m.
  * @memberOf module:twgl/m4
  */
-export function getTranslation(m, dst) {
-  dst = dst || v3.create();
+export function getTranslation(m: Mat4, dst?: Vec3): Vec3 {
+  dst = dst || v3.create(0, 0, 0);
   dst[0] = m[12];
   dst[1] = m[13];
   dst[2] = m[14];
@@ -420,8 +421,8 @@ export function getTranslation(m, dst) {
  * @return {module:twgl/v3.Vec3} The axis component of m.
  * @memberOf module:twgl/m4
  */
-export function getAxis(m, axis, dst) {
-  dst = dst || v3.create();
+export function getAxis(m: Mat4, axis: number, dst?: Vec3): Vec3 {
+  dst = dst || v3.create(0, 0, 0);
   const off = axis * 4;
   dst[0] = m[off + 0];
   dst[1] = m[off + 1];
@@ -438,7 +439,7 @@ export function getAxis(m, axis, dst) {
  * @return {module:twgl/m4.Mat4} The matrix with axis set.
  * @memberOf module:twgl/m4
  */
-export function setAxis(a, v, axis, dst) {
+export function setAxis(a: Mat4, v: Vec3, axis: number, dst?: Mat4): Mat4 {
   if (dst !== a) {
     dst = copy(a, dst);
   }
@@ -470,7 +471,7 @@ export function setAxis(a, v, axis, dst) {
  * @return {module:twgl/m4.Mat4} The perspective matrix.
  * @memberOf module:twgl/m4
  */
-export function perspective(fieldOfViewYInRadians, aspect, zNear, zFar, dst?: any) {
+export function perspective(fieldOfViewYInRadians: number, aspect: number, zNear: number, zFar: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const f = Math.tan(Math.PI * 0.5 - 0.5 * fieldOfViewYInRadians);
@@ -515,7 +516,7 @@ export function perspective(fieldOfViewYInRadians, aspect, zNear, zFar, dst?: an
  * @return {module:twgl/m4.Mat4} The perspective matrix.
  * @memberOf module:twgl/m4
  */
-export function ortho(left, right, bottom, top, near, far, dst) {
+export function ortho(left: number, right: number, bottom: number, top: number, near: number, far: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   dst[0] = 2 / (right - left);
@@ -560,7 +561,7 @@ export function ortho(left, right, bottom, top, near, far, dst) {
  * @return {module:twgl/m4.Mat4} The perspective projection matrix.
  * @memberOf module:twgl/m4
  */
-export function frustum(left, right, bottom, top, near, far, dst) {
+export function frustum(left: number, right: number, bottom: number, top: number, near: number, far: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const dx = right - left;
@@ -587,9 +588,9 @@ export function frustum(left, right, bottom, top, near, far, dst) {
   return dst;
 }
 
-let xAxis;
-let yAxis;
-let zAxis;
+let xAxis: Vec3 | undefined;
+let yAxis: Vec3 | undefined;
+let zAxis: Vec3 | undefined;
 
 /**
  * Computes a 4-by-4 look-at transformation.
@@ -605,12 +606,12 @@ let zAxis;
  * @return {module:twgl/m4.Mat4} The look-at matrix.
  * @memberOf module:twgl/m4
  */
-export function lookAt(eye, target, up, dst) {
+export function lookAt(eye: Vec3, target: Vec3, up: Vec3, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
-  xAxis = xAxis || v3.create();
-  yAxis = yAxis || v3.create();
-  zAxis = zAxis || v3.create();
+  xAxis = xAxis || v3.create(0, 0, 0);
+  yAxis = yAxis || v3.create(0, 0, 0);
+  zAxis = zAxis || v3.create(0, 0, 0);
 
   v3.normalize(v3.subtract(eye, target, zAxis), zAxis);
   v3.normalize(v3.cross(up, zAxis, xAxis), xAxis);
@@ -644,7 +645,7 @@ export function lookAt(eye, target, up, dst) {
  * @return {module:twgl/m4.Mat4} The translation matrix.
  * @memberOf module:twgl/m4
  */
-export function translation(v, dst?: any) {
+export function translation(v: Vec3, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   dst[0] = 1;
@@ -675,7 +676,7 @@ export function translation(v, dst?: any) {
  * @return {module:twgl/m4.Mat4} The translated matrix.
  * @memberOf module:twgl/m4
  */
-export function translate(m, v, dst) {
+export function translate(m: Mat4, v: Vec3, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const v0 = v[0];
@@ -728,7 +729,7 @@ export function translate(m, v, dst) {
  * @return {module:twgl/m4.Mat4} The rotation matrix.
  * @memberOf module:twgl/m4
  */
-export function rotationX(angleInRadians, dst) {
+export function rotationX(angleInRadians: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const c = Math.cos(angleInRadians);
@@ -763,7 +764,7 @@ export function rotationX(angleInRadians, dst) {
  * @return {module:twgl/m4.Mat4} The rotated matrix.
  * @memberOf module:twgl/m4
  */
-export function rotateX(m, angleInRadians, dst?: any) {
+export function rotateX(m: Mat4, angleInRadians: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const m10 = m[4];
@@ -807,7 +808,7 @@ export function rotateX(m, angleInRadians, dst?: any) {
  * @return {module:twgl/m4.Mat4} The rotation matrix.
  * @memberOf module:twgl/m4
  */
-export function rotationY(angleInRadians, dst) {
+export function rotationY(angleInRadians: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const c = Math.cos(angleInRadians);
@@ -842,7 +843,7 @@ export function rotationY(angleInRadians, dst) {
  * @return {module:twgl/m4.Mat4} The rotated matrix.
  * @memberOf module:twgl/m4
  */
-export function rotateY(m: any, angleInRadians: number, dst?: any) {
+export function rotateY(m: Mat4, angleInRadians: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const m00 = m[0 * 4 + 0];
@@ -886,7 +887,7 @@ export function rotateY(m: any, angleInRadians: number, dst?: any) {
  * @return {module:twgl/m4.Mat4} The rotation matrix.
  * @memberOf module:twgl/m4
  */
-export function rotationZ(angleInRadians: number, dst: Mat4Tuple): Mat4Tuple {
+export function rotationZ(angleInRadians: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const c = Math.cos(angleInRadians);
@@ -921,7 +922,7 @@ export function rotationZ(angleInRadians: number, dst: Mat4Tuple): Mat4Tuple {
  * @return {module:twgl/m4.Mat4} The rotated matrix.
  * @memberOf module:twgl/m4
  */
-export function rotateZ(m: Mat4Tuple, angleInRadians: number, dst?: Mat4Tuple): Mat4Tuple {
+export function rotateZ(m: Mat4, angleInRadians: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const m00 = m[0 * 4 + 0];
@@ -969,7 +970,7 @@ export function rotateZ(m: Mat4Tuple, angleInRadians: number, dst?: Mat4Tuple): 
  *     around the axis.
  * @memberOf module:twgl/m4
  */
-export function axisRotation(axis, angleInRadians, dst) {
+export function axisRotation(axis: Vec3, angleInRadians: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   let x = axis[0];
@@ -1017,7 +1018,7 @@ export function axisRotation(axis, angleInRadians, dst) {
  * @return {module:twgl/m4.Mat4} The rotated matrix.
  * @memberOf module:twgl/m4
  */
-export function axisRotate(m, axis, angleInRadians, dst) {
+export function axisRotate(m: Mat4, axis: Vec3, angleInRadians: number, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   let x = axis[0];
@@ -1090,7 +1091,7 @@ export function axisRotate(m, axis, angleInRadians, dst) {
  * @return {module:twgl/m4.Mat4} The scaling matrix.
  * @memberOf module:twgl/m4
  */
-export function scaling(v, dst) {
+export function scaling(v: Vec3, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   dst[0] = v[0];
@@ -1124,7 +1125,7 @@ export function scaling(v, dst) {
  * @return {module:twgl/m4.Mat4} The scaled matrix.
  * @memberOf module:twgl/m4
  */
-export function scale(m, v, dst) {
+export function scale(m: Mat4, v: Vec3, dst?: Mat4): Mat4 {
   dst = dst || new MatType(16);
 
   const v0 = v[0];
@@ -1164,8 +1165,8 @@ export function scale(m, v, dst) {
  * @return {module:twgl/v3.Vec3} The transformed point.
  * @memberOf module:twgl/m4
  */
-export function transformPoint(m, v, dst) {
-  dst = dst || v3.create();
+export function transformPoint(m: Mat4, v: Vec3, dst?: Vec3): Vec3 {
+  dst = dst || v3.create(0, 0, 0);
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -1191,8 +1192,8 @@ export function transformPoint(m, v, dst) {
  * @return {module:twgl/v3.Vec3} The transformed direction.
  * @memberOf module:twgl/m4
  */
-export function transformDirection(m, v, dst) {
-  dst = dst || v3.create();
+export function transformDirection(m: Mat4, v: Vec3, dst?: Vec3): Vec3 {
+  dst = dst || v3.create(0, 0, 0);
 
   const v0 = v[0];
   const v1 = v[1];
@@ -1220,8 +1221,8 @@ export function transformDirection(m, v, dst) {
  * @return {module:twgl/v3.Vec3} The transformed normal.
  * @memberOf module:twgl/m4
  */
-export function transformNormal(m, v, dst) {
-  dst = dst || v3.create();
+export function transformNormal(m: Mat4, v: Vec3, dst?: Vec3): Vec3 {
+  dst = dst || v3.create(0, 0, 0);
   const mi = inverse(m);
   const v0 = v[0];
   const v1 = v[1];

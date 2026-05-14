@@ -1,9 +1,14 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { createMemo, createSignal, For } from 'solid-js';
+import { type Component, createMemo, createSignal, For } from 'solid-js';
 import BackwardIcon from './icons/backward.svg';
 import ForwardIcon from './icons/forward.svg';
 import PlayIcon from './icons/play.svg';
 import SearchIcon from './icons/search.svg';
+
+const BackwardIconComponent = BackwardIcon as unknown as Component<{ class?: string }>;
+const ForwardIconComponent = ForwardIcon as unknown as Component<{ class?: string }>;
+const PlayIconComponent = PlayIcon as unknown as Component<{ class?: string }>;
+const SearchIconComponent = SearchIcon as unknown as Component<{ class?: string }>;
 
 export default function TimelineExample() {
   return (
@@ -26,17 +31,17 @@ export default function TimelineExample() {
               tabindex={0}
               class="rounded-l-4px border-#3a3f41 text-#bcb7ae bg-#1b1e1f w-26px h-27px text-20px float-left flex place-content-center place-items-center border text-center outline-none"
             >
-              <BackwardIcon class="scale-y-60 h-14px" />
+              <BackwardIconComponent class="scale-y-60 h-14px" />
             </button>
             <button class="border-#3a3f41 text-#bcb7ae bg-#1b1e1f w-26px h-27px text-20px float-left flex place-content-center place-items-center border-y text-center outline-none">
-              <PlayIcon class="h-14px" />
+              <PlayIconComponent class="h-14px" />
             </button>
             <button
               type="button"
               tabindex={0}
               class="rounded-r-4px border-#3a3f41 text-#bcb7ae bg-#1b1e1f w-26px h-27px text-20px float-left flex place-content-center place-items-center border text-center outline-none"
             >
-              <ForwardIcon class="scale-y-60 h-14px" />
+              <ForwardIconComponent class="scale-y-60 h-14px" />
             </button>
           </div>
         </div>
@@ -56,7 +61,7 @@ export default function TimelineExample() {
           </div>
           {/* Timeline zoom handler */}
           <div class="border-t-#383c3f bg-#1f2123 h-15px gap-4px px-14px py-2px bottom-0 left-0 z-10 flex w-full place-items-center border-t">
-            <SearchIcon class="h-10px text-#9a9284 float-left" />
+            <SearchIconComponent class="h-10px text-#9a9284 float-left" />
 
             <div class="h-13px w-172px relative overflow-hidden">
               <div class="top-5px border-t-#494f52 absolute left-0 right-0 border-t-2"></div>
@@ -64,7 +69,7 @@ export default function TimelineExample() {
               {/* Zoom handle */}
               <div class="left-25px h-10px w-10px bg-#1c1e1f border-#474d50 absolute top-0 rounded-full border"></div>
             </div>
-            <SearchIcon class="h-12px text-#9a9284" />
+            <SearchIconComponent class="h-12px text-#9a9284" />
           </div>
         </div>
       </div>

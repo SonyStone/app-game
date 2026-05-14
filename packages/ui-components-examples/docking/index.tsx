@@ -153,10 +153,8 @@ export default function DockingExample() {
     direction: 'column',
     children: [
       {
-        title: 'Panel 2',
-        children: {
-          title: 'Panel 2.1'
-        }
+        direction: 'column',
+        children: [{ title: 'Panel 2' }, { title: 'Panel 2.1' }]
       },
       {
         direction: 'row',
@@ -311,6 +309,12 @@ function PanelContainer(props: ComponentProps<'div'>) {
 
 function Sash(props: { type?: 'horizontal' | 'vertical' }) {
   let dragStartPos: { x: number; y: number } | null = null;
+
+  const onMove = (_x: number, _y: number, _isAltPressed: boolean) => {};
+
+  const onDragEnd = () => {
+    dragStartPos = null;
+  };
 
   const handlers: {
     onBlur: JSX.EventHandler<HTMLButtonElement, FocusEvent>;

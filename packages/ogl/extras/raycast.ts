@@ -2,9 +2,13 @@
 // TODO: SphereCast?
 
 import { Vec2 } from '@app-game/math';
-import { Camera, Mesh, Sphere } from '..';
+import { Camera, Mesh } from '..';
+import type { Bounds } from '../core/geometry';
 import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';
+
+type BoundingSphere = Pick<Bounds, 'center' | 'radius'>;
+type BoundingBox = Pick<Bounds, 'min' | 'max'>;
 
 const tempVec2a = /* @__PURE__ */ new Vec2();
 const tempVec2b = /* @__PURE__ */ new Vec2();
@@ -31,7 +35,7 @@ export class Raycast {
   direction = new Vec3();
 
   // Set ray from mouse unprojection
-  castMouse(camera: Camera, mouse = [0, 0]) {
+  castMouse(camera: Camera, mouse: [number, number] = [0, 0]): void {
     if (camera.type === 'orthographic') {
       // Set origin
       // Since camera is orthographic, origin is not the camera position
@@ -60,7 +64,7 @@ export class Raycast {
   intersectBounds<T extends Mesh>(
     meshes: T | T[],
     { maxDistance, output }: { maxDistance?: number; output: T[] } = { output: [] }
-  ) {
+  ): T[] {
     if (!Array.isArray(meshes)) {
       meshes = [meshes];
     }
@@ -139,7 +143,16 @@ export class Raycast {
     return hits;
   }
 
-  intersectMeshes(meshes, { cullFace = true, maxDistance, includeUV = true, includeNormal = true, output = [] } = {}) {
+  intersectMeshes<T extends Mesh>(
+    meshes: T | T[],
+    {
+      cullFace = true,
+      maxDistance,
+      includeUV = true,
+      includeNormal = true,
+      output = []
+    }: { cullFace?: boolean; maxDistance?: number; includeUV?: boolean; includeNormal?: boolean; output?: T[] } = {}
+  ): T[] {
     // Test bounds first before testing geometry
     const hits = this.intersectBounds(meshes, { maxDistance, output });
     if (!hits.length) return hits;
@@ -162,11 +175,12 @@ export class Raycast {
       invWorldMat4.inverse(mesh.worldMatrix);
 
       // Get max distance locally
-      let localMaxDistance;
-      if (maxDistance) {
+      const localMaxDistance = maxDistance
+        ? (() => {
         direction.copy(this.direction).scaleRotateMatrix4(invWorldMat4);
-        localMaxDistance = maxDistance * direction.len();
-      }
+            return maxDistance * direction.len();
+          })()
+        : Infinity;
 
       // Take world space ray and make it object space to align with bounding box
       origin.copy(this.origin).applyMatrix4(invWorldMat4);
@@ -179,22 +193,29 @@ export class Raycast {
       const attributes = geometry.attributes;
       const index = attributes.index;
       const position = attributes.position;
+      const positionData = position?.data;
+      const indexData = index?.data;
+
+      if (!position || !positionData || !position.size) {
+        hits.splice(i, 1);
+        continue;
+      }
 
       const start = Math.max(0, geometry.drawRange.start);
-      const end = Math.min(index ? index.count : position.count, geometry.drawRange.start + geometry.drawRange.count);
+      const end = Math.min(index ? (index.count ?? 0) : (position.count ?? 0), geometry.drawRange.start + geometry.drawRange.count);
       // Data loaded shouldn't haave stride, only buffers
       // const stride = position.stride ? position.stride / position.data.BYTES_PER_ELEMENT : position.size;
       const stride = position.size;
 
       for (let j = start; j < end; j += 3) {
         // Position attribute indices for each triangle
-        const ai = index ? index.data[j] : j;
-        const bi = index ? index.data[j + 1] : j + 1;
-        const ci = index ? index.data[j + 2] : j + 2;
+        const ai = indexData ? indexData[j] : j;
+        const bi = indexData ? indexData[j + 1] : j + 1;
+        const ci = indexData ? indexData[j + 2] : j + 2;
 
-        a.fromArray(position.data, ai * stride);
-        b.fromArray(position.data, bi * stride);
-        c.fromArray(position.data, ci * stride);
+        a.fromArray(positionData, ai * stride);
+        b.fromArray(positionData, bi * stride);
+        c.fromArray(positionData, ci * stride);
 
         const distance = this.intersectTriangle(a, b, c, cullFace, origin, direction, faceNormal);
         if (!distance) continue;
@@ -213,64 +234,69 @@ export class Raycast {
         }
       }
 
-      if (!localDistance) hits.splice(i, 1);
+      if (!localDistance || closestA === undefined || closestB === undefined || closestC === undefined) {
+        hits.splice(i, 1);
+        continue;
+      }
+
+      const hit = mesh.hit ?? (mesh.hit = { localPoint: new Vec3(), point: new Vec3() });
 
       // Update hit values from bounds-test
-      mesh.hit.localPoint.copy(direction).multiply(localDistance).add(origin);
-      mesh.hit.point.copy(mesh.hit.localPoint).applyMatrix4(mesh.worldMatrix);
-      mesh.hit.distance = mesh.hit.point.distance(this.origin);
+      hit.localPoint!.copy(direction).multiply(localDistance).add(origin);
+      hit.point!.copy(hit.localPoint!).applyMatrix4(mesh.worldMatrix);
+      hit.distance = hit.point!.distance(this.origin);
 
       // Add unique hit objects on mesh to avoid generating lots of objects
-      if (!mesh.hit.faceNormal) {
-        mesh.hit.localFaceNormal = new Vec3();
-        mesh.hit.faceNormal = new Vec3();
-        mesh.hit.uv = new Vec2();
-        mesh.hit.localNormal = new Vec3();
-        mesh.hit.normal = new Vec3();
+      if (!hit.faceNormal) {
+        hit.localFaceNormal = new Vec3();
+        hit.faceNormal = new Vec3();
+        hit.uv = new Vec2();
+        hit.localNormal = new Vec3();
+        hit.normal = new Vec3();
       }
 
       // Add face normal data which is already computed
-      mesh.hit.localFaceNormal.copy(closestFaceNormal);
-      mesh.hit.faceNormal.copy(mesh.hit.localFaceNormal).transformDirection(mesh.worldMatrix);
+      hit.localFaceNormal!.copy(closestFaceNormal);
+      hit.faceNormal!.copy(hit.localFaceNormal!).transformDirection(mesh.worldMatrix);
 
       // Optional data, opt out to optimise a bit if necessary
       if (includeUV || includeNormal) {
         // Calculate barycoords to find uv values at hit point
-        a.fromArray(position.data, closestA * 3);
-        b.fromArray(position.data, closestB * 3);
-        c.fromArray(position.data, closestC * 3);
-        this.getBarycoord(mesh.hit.localPoint, a, b, c, barycoord);
+        a.fromArray(positionData, closestA * 3);
+        b.fromArray(positionData, closestB * 3);
+        c.fromArray(positionData, closestC * 3);
+        this.getBarycoord(hit.localPoint!, a, b, c, barycoord);
       }
 
-      if (includeUV && attributes.uv) {
+      if (includeUV && attributes.uv?.data) {
         uvA.fromArray(attributes.uv.data, closestA * 2);
         uvB.fromArray(attributes.uv.data, closestB * 2);
         uvC.fromArray(attributes.uv.data, closestC * 2);
-        mesh.hit.uv.set(
+        hit.uv!.set(
           uvA.x * barycoord.x + uvB.x * barycoord.y + uvC.x * barycoord.z,
           uvA.y * barycoord.x + uvB.y * barycoord.y + uvC.y * barycoord.z
         );
       }
 
-      if (includeNormal && attributes.normal) {
+      if (includeNormal && attributes.normal?.data) {
         a.fromArray(attributes.normal.data, closestA * 3);
         b.fromArray(attributes.normal.data, closestB * 3);
         c.fromArray(attributes.normal.data, closestC * 3);
-        mesh.hit.localNormal.set(
+        hit.localNormal!.set(
           a.x * barycoord.x + b.x * barycoord.y + c.x * barycoord.z,
           a.y * barycoord.x + b.y * barycoord.y + c.y * barycoord.z,
           a.z * barycoord.x + b.z * barycoord.y + c.z * barycoord.z
         );
 
-        mesh.hit.normal.copy(mesh.hit.localNormal).transformDirection(mesh.worldMatrix);
+        hit.normal!.copy(hit.localNormal!).transformDirection(mesh.worldMatrix);
       }
     }
 
-    hits.sort((a, b) => a.hit.distance - b.hit.distance);
+    hits.sort((a, b) => a.hit!.distance! - b.hit!.distance!);
     return hits;
   }
 
-  intersectPlane(plane: { origin: Vec3; normal: Vec3 }, origin = this.origin, direction = this.direction) {
+  intersectPlane(plane: { origin: Vec3; normal: Vec3 }, origin = this.origin, direction = this.direction): Vec3 | undefined {
     const xminp = tempVec3a;
     xminp.sub(plane.origin, origin);
 
@@ -288,7 +314,7 @@ export class Raycast {
     return origin.add(direction.scale(delta));
   }
 
-  intersectSphere(sphere: Sphere, origin = this.origin, direction = this.direction) {
+  intersectSphere(sphere: BoundingSphere, origin = this.origin, direction = this.direction): number {
     const ray = tempVec3c;
     ray.sub(sphere.center, origin);
     const tca = ray.dot(direction);
@@ -304,7 +330,7 @@ export class Raycast {
   }
 
   // Ray AABB - Ray Axis aligned bounding box testing
-  intersectBox(box: Box, origin = this.origin, direction = this.direction) {
+  intersectBox(box: BoundingBox, origin = this.origin, direction = this.direction): number {
     let tmin, tmax, tYmin, tYmax, tZmin, tZmax;
     const invdirx = 1 / direction.x;
     const invdiry = 1 / direction.y;
@@ -342,14 +368,14 @@ export class Raycast {
   }
 
   intersectTriangle(
-    a,
-    b,
-    c,
+    a: Vec3,
+    b: Vec3,
+    c: Vec3,
     backfaceCulling = true,
     origin = this.origin,
     direction = this.direction,
     normal = tempVec3g
-  ) {
+  ): number {
     // from https://github.com/mrdoob/three.js/blob/master/src/math/Ray.js
     // which is from http://www.geometrictools.com/GTEngine/Include/Mathematics/GteIntrRay3Triangle3.h
     const edge1 = tempVec3h;
@@ -379,7 +405,7 @@ export class Raycast {
     return QdN / DdN;
   }
 
-  getBarycoord(point, a, b, c, target = tempVec3h) {
+  getBarycoord(point: Vec3, a: Vec3, b: Vec3, c: Vec3, target = tempVec3h): Vec3 {
     // From https://github.com/mrdoob/three.js/blob/master/src/math/Triangle.js
     // static/instance method to calculate barycentric coordinates
     // based on: http://www.blackpawn.com/texts/pointinpoly/default.html

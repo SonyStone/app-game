@@ -137,8 +137,9 @@ export default function InstancedDrawing() {
     // set the view and projection matrices since
     // they are shared by all instances
     const aspect = canvas.clientWidth / canvas.clientHeight;
+    const viewMatrix = rotationZ(time * 0.1, new Float32Array(16)) as Float32Array;
     gl.uniformMatrix4fv(projectionLoc, false, ortho(-aspect, aspect, -1, 1, -1, 1, new FMat4()));
-    gl.uniformMatrix4fv(viewLoc, false, rotationZ(time * 0.1, new FMat4()));
+    gl.uniformMatrix4fv(viewLoc!, false, viewMatrix);
 
     // setup all attributes
     gl.bindVertexArray(vao);

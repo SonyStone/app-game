@@ -82,7 +82,7 @@ export const NavigationPopup = (props: {
 
         return (
           <Cap
-            ref={(element) => {
+            ref={(element: Element) => {
               createPointerEvent(element).subscribe({
                 next: (n) => {
                   console.log(`log-next`, n);

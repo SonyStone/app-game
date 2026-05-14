@@ -9,11 +9,11 @@ export class ObjectPool<T extends Resettable> implements Pool<T> {
 
   // @todo Add initial size
   constructor(
-    objectConstructor: new (...args) => T,
-    initialSize?: number,
+    objectConstructor: new (...args: any[]) => T,
+    initialSize?: number
   ) {
 
-    let extraArgs = null;
+    let extraArgs: unknown[] | null = null;
 
     if (arguments.length > 1) {
       extraArgs = Array.prototype.slice.call(arguments);
@@ -37,7 +37,7 @@ export class ObjectPool<T extends Resettable> implements Pool<T> {
 
     const item = this.freeList.pop();
 
-    return item;
+    return item!;
   }
 
   release(item: T): void {

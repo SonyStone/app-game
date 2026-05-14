@@ -1,3 +1,6 @@
+import { Mat4 } from '../../math/mat-4';
+import { Vec3 } from '../../math/vec-3';
+
 // from https://github.com/Pomax/bezierjs/blob/d19695f3cc3ce383cf38ce4643f467deca7edb92/src/utils.js#L26
 // Legendre-Gauss abscissae with n=24 (x_i values, defined at i=n as the roots of the nth order Legendre polynomial Pn(x))
 export const T_VALUES = [
@@ -36,17 +39,17 @@ export const C_VALUES = [
  * @param {number} a Angle in Degrees
  * @returns {number} a Angle in Radians
  */
-export const toRadian = (a) => (a * Math.PI) / 180;
+export const toRadian = (a: number): number => (a * Math.PI) / 180;
 
 /**
  * Convert Radian To Degree
  * @param {number} a Angle in Radians
  * @returns {number} a Angle in Radian
  */
-export const toDegrees = (a) => (180 * a) / Math.PI;
+export const toDegrees = (a: number): number => (180 * a) / Math.PI;
 
-export const clamp = (val, min, max) => Math.max(min, Math.min(val, max));
-export const lerp = (t, v0, v1) => v0 * (t - 1) + v1 * t;
+export const clamp = (val: number, min: number, max: number): number => Math.max(min, Math.min(val, max));
+export const lerp = (t: number, v0: number, v1: number): number => v0 * (t - 1) + v1 * t;
 
 /**
  * Fills a rotation matrix with the given sine and cosine of the angle around the given axis
@@ -57,7 +60,7 @@ export const lerp = (t, v0, v1) => v0 * (t - 1) + v1 * t;
  * @param {number} cos cosine of rotation angle
  * @returns {Mat4} out
  */
-export function mat4fromRotationSinCos(out, axis, sin, cos) {
+export function mat4fromRotationSinCos(out: Mat4, axis: Vec3, sin: number, cos: number): Mat4 {
   const x = axis[0];
   const y = axis[1];
   const z = axis[2];
@@ -92,7 +95,7 @@ export function mat4fromRotationSinCos(out, axis, sin, cos) {
  * @param {Vec3} outNorm optional normal output vector. If not present then normal vector changes in place
  * @param {Vec3} outBinorm optional binormal output vector. If not present then binormal vector changes in place
  */
-export function rotateNormalBinormal(angle, norm, binorm, outNorm = norm, outBinorm = binorm) {
+export function rotateNormalBinormal(angle: number, norm: Vec3, binorm: Vec3, outNorm: Vec3 = norm, outBinorm: Vec3 = binorm): void {
   const s = Math.sin(angle);
   const c = Math.cos(angle);
 

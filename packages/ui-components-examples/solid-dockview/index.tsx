@@ -56,7 +56,7 @@ export default function App() {
         onReady={({ dockview }) => {
           console.log('dockview ready', dockview);
           currentDockview = dockview;
-          window.dockview = dockview;
+          (window as Window & { dockview?: DockviewComponent }).dockview = dockview;
         }}
         singleTabMode="default"
         leftHeaderActionsComponent={(props) => (

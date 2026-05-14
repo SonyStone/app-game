@@ -25,7 +25,7 @@ import { BrushMesh, DrawShader } from './draw-shader';
 export default function Paint() {
   const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
 
-  const pointer = createPointerData(canvas);
+  const pointer = createPointerData(canvas as unknown as HTMLElement);
 
   const drawBound = createDrawBound();
 

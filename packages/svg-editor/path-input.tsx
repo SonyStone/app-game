@@ -3,6 +3,10 @@ import { createEffect, Index, JSXElement, Match, Switch, untrack } from 'solid-j
 import { createStore } from 'solid-js/store';
 import { PathCommand, SVGPathParser } from './svg-path-parser';
 
+type MoveCommand = Extract<PathCommand, { type: 'M' | 'm' }>;
+type HorizontalCommand = Extract<PathCommand, { type: 'H' | 'h' }>;
+type VerticalCommand = Extract<PathCommand, { type: 'V' | 'v' }>;
+
 export function PathInput(props: { value: string; onChange: (value: string) => void }) {
   const [state, setState] = createStore<PathCommand[]>([]);
 
@@ -44,72 +48,104 @@ export function PathInput(props: { value: string; onChange: (value: string) => v
             <Switch>
               <Match when={item().type === 'M' || item().type === 'm'}>
                 <div class="flex flex-nowrap place-items-baseline hover:bg-blue-100">
+                  {(() => {
+                    const command = item() as MoveCommand;
+
+                    return (
+                      <>
                   <Button
-                    uppercase={item().type === 'M'}
+                    uppercase={command.type === 'M'}
                     onClick={() => {
                       const newType = untrack(item).type === 'M' ? 'm' : 'M';
                       const newCommands = convertPathCommand(state, index, newType);
                       setState(newCommands);
                     }}
                   >
-                    {item().type}
+                    {command.type}
                   </Button>
                   x:{' '}
                   <NumberInput
-                    value={item().x}
+                    value={command.x}
                     onChange={(value) => {
-                      setState(index, 'x', value);
+                      setState(updateCommand(state, index, (current) =>
+                        isMoveCommand(current) ? { ...current, x: value } : current
+                      ));
                     }}
                   />
                   y:{' '}
                   <NumberInput
-                    value={item().y}
+                    value={command.y}
                     onChange={(value) => {
-                      setState(index, 'y', value);
+                      setState(updateCommand(state, index, (current) =>
+                        isMoveCommand(current) ? { ...current, y: value } : current
+                      ));
                     }}
                   />
+                      </>
+                    );
+                  })()}
                 </div>
               </Match>
               <Match when={item().type === 'H' || item().type === 'h'}>
                 <div class="flex flex-nowrap place-items-baseline hover:bg-blue-100">
+                  {(() => {
+                    const command = item() as HorizontalCommand;
+
+                    return (
+                      <>
                   <Button
-                    uppercase={item().type === 'H'}
+                    uppercase={command.type === 'H'}
                     onClick={() => {
                       const newType = untrack(item).type === 'H' ? 'h' : 'H';
                       const newCommands = convertPathCommand(state, index, newType);
                       setState(newCommands);
                     }}
                   >
-                    {item().type}
+                    {command.type}
                   </Button>
                   x:{' '}
                   <NumberInput
-                    value={item().x}
+                    value={command.x}
                     onChange={(value) => {
-                      setState(index, 'x', value);
+                      setState(updateCommand(state, index, (current) =>
+                        isHorizontalCommand(current) ? { ...current, x: value } : current
+                      ));
                     }}
                   />
+                      </>
+                    );
+                  })()}
                 </div>
               </Match>
               <Match when={item().type === 'V' || item().type === 'v'}>
                 <div class="flex flex-nowrap place-items-baseline hover:bg-blue-100">
+                  {(() => {
+                    const command = item() as VerticalCommand;
+
+                    return (
+                      <>
                   <Button
-                    uppercase={item().type === 'V'}
+                    uppercase={command.type === 'V'}
                     onClick={() => {
                       const newType = untrack(item).type === 'V' ? 'v' : 'V';
                       const newCommands = convertPathCommand(state, index, newType);
                       setState(newCommands);
                     }}
                   >
-                    {item().type}
+                    {command.type}
                   </Button>
                   y:{' '}
                   <NumberInput
-                    value={item().y}
+                    value={command.y}
                     onChange={(value) => {
-                      setState(index, 'y', value);
+                      setState(updateCommand(state, index, (current) =>
+                        isVerticalCommand(current) ? { ...current, y: value } : current
+                      ));
                     }}
                   />
+                      </>
+                    );
+                  })()}
                 </div>
               </Match>
             </Switch>
@@ -134,7 +170,29 @@ function Button(props: { uppercase: boolean; children?: JSXElement; onClick?: ()
   );
 }
 
-function convertPathCommand(commands: PathCommand[], index: number, newType: string): PathCommand[] {
+function isMoveCommand(command: PathCommand): command is MoveCommand {
+  return command.type === 'M' || command.type === 'm';
+}
+
+function isHorizontalCommand(command: PathCommand): command is HorizontalCommand {
+  return command.type === 'H' || command.type === 'h';
+}
+
+function isVerticalCommand(command: PathCommand): command is VerticalCommand {
+  return command.type === 'V' || command.type === 'v';
+}
+
+function updateCommand(
+  commands: PathCommand[],
+  index: number,
+  update: (command: PathCommand) => PathCommand
+): PathCommand[] {
+  const nextCommands = [...commands];
+  nextCommands[index] = update(commands[index]);
+  return nextCommands;
+}
+
+function convertPathCommand(commands: PathCommand[], index: number, newType: PathCommand['type']): PathCommand[] {
   const newCommands = [...commands];
   const command = commands[index];
 
@@ -146,50 +204,56 @@ function convertPathCommand(commands: PathCommand[], index: number, newType: str
     const cmd = commands[i];
     switch (cmd.type.toUpperCase()) {
       case 'M':
-        currentX = cmd.type === 'M' ? cmd.x : currentX + cmd.x;
-        currentY = cmd.type === 'M' ? cmd.y : currentY + cmd.y;
+        if (isMoveCommand(cmd)) {
+          currentX = cmd.type === 'M' ? cmd.x : currentX + cmd.x;
+          currentY = cmd.type === 'M' ? cmd.y : currentY + cmd.y;
+        }
         break;
       case 'H':
-        currentX = cmd.type === 'H' ? cmd.x : currentX + cmd.x;
+        if (isHorizontalCommand(cmd)) {
+          currentX = cmd.type === 'H' ? cmd.x : currentX + cmd.x;
+        }
         break;
       case 'V':
-        currentY = cmd.type === 'V' ? cmd.y : currentY + cmd.y;
+        if (isVerticalCommand(cmd)) {
+          currentY = cmd.type === 'V' ? cmd.y : currentY + cmd.y;
+        }
         break;
       case 'L':
-        currentX = cmd.type === 'L' ? cmd.x : currentX + cmd.x;
-        currentY = cmd.type === 'L' ? cmd.y : currentY + cmd.y;
+        if ('x' in cmd && 'y' in cmd) {
+          currentX = cmd.type === 'L' ? cmd.x : currentX + cmd.x;
+          currentY = cmd.type === 'L' ? cmd.y : currentY + cmd.y;
+        }
         break;
     }
   }
 
   // Convert the command
-  const newCommand = { ...command, type: newType };
+  let newCommand: PathCommand = command;
 
-  if (command.type.toUpperCase() === 'M') {
+  if (isMoveCommand(command) && (newType === 'M' || newType === 'm')) {
     if (newType === 'm' && command.type === 'M') {
-      // Absolute to relative
-      newCommand.x = command.x - currentX;
-      newCommand.y = command.y - currentY;
+      newCommand = { ...command, type: newType, x: command.x - currentX, y: command.y - currentY };
     } else if (newType === 'M' && command.type === 'm') {
-      // Relative to absolute
-      newCommand.x = currentX + command.x;
-      newCommand.y = currentY + command.y;
+      newCommand = { ...command, type: newType, x: currentX + command.x, y: currentY + command.y };
+    } else {
+      newCommand = { ...command, type: newType };
     }
-  } else if (command.type.toUpperCase() === 'H') {
+  } else if (isHorizontalCommand(command) && (newType === 'H' || newType === 'h')) {
     if (newType === 'h' && command.type === 'H') {
-      // Absolute to relative
-      newCommand.x = command.x - currentX;
+      newCommand = { ...command, type: newType, x: command.x - currentX };
     } else if (newType === 'H' && command.type === 'h') {
-      // Relative to absolute
-      newCommand.x = currentX + command.x;
+      newCommand = { ...command, type: newType, x: currentX + command.x };
+    } else {
+      newCommand = { ...command, type: newType };
     }
-  } else if (command.type.toUpperCase() === 'V') {
+  } else if (isVerticalCommand(command) && (newType === 'V' || newType === 'v')) {
     if (newType === 'v' && command.type === 'V') {
-      // Absolute to relative
-      newCommand.y = command.y - currentY;
+      newCommand = { ...command, type: newType, y: command.y - currentY };
     } else if (newType === 'V' && command.type === 'v') {
-      // Relative to absolute
-      newCommand.y = currentY + command.y;
+      newCommand = { ...command, type: newType, y: currentY + command.y };
+    } else {
+      newCommand = { ...command, type: newType };
     }
   }
 

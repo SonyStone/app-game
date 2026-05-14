@@ -82,7 +82,7 @@ function spreadExpression(node: unknown, props: any = {}, prevProps: any = {}) {
       if (prop === 'children' || prop === 'ref') continue;
       const value = props[prop];
       if (value === prevProps[prop]) continue;
-      setProp(node, prop, value, prevProps[prop]);
+      setProp(node as any, prop, value, prevProps[prop]);
       prevProps[prop] = value;
     }
 

@@ -197,8 +197,8 @@ function createAttribsFromArrays(gl: WebGL2RenderingContext, arrays: Arrays): Re
         }
         const { buffer, type, numValues, arrayType } = fn(gl, array as FullArraySpec, arrayName);
         const normalized =
-          (array as FullArraySpec).normalize !== undefined
-            ? (array as FullArraySpec).normalize
+          (array as FullArraySpec).normalized !== undefined
+            ? (array as FullArraySpec).normalized
             : getNormalizationForTypedArrayType(arrayType);
         const size = getNumComponents(array as FullArraySpec, arrayName, numValues);
         attribs[name] = {

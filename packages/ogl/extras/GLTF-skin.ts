@@ -1,19 +1,43 @@
 import { Mesh } from '../core/mesh';
+import type { Camera } from '../core/camera';
+import type { Geometry } from '../core/geometry';
+import type { Program } from '../core/program';
+import type { OGLRenderingContext } from '../core/renderer';
 import { Texture } from '../core/texture';
+import type { Transform } from '../core/transform';
 import { Mat4 } from '../math/mat-4';
 
 const tempMat4 = /* @__PURE__ */ new Mat4();
 const identity = /* @__PURE__ */ new Mat4();
 
+type GLTFJoint = Transform & {
+  bindInverse: Mat4;
+};
+
+type GLTFSkeleton = {
+  joints: GLTFJoint[];
+};
+
+type GLTFSkinOptions = {
+  skeleton: GLTFSkeleton;
+  geometry: Geometry;
+  program: Program;
+  mode: GLenum;
+};
+
 export class GLTFSkin extends Mesh {
-  constructor(gl, { skeleton, geometry, program, mode = gl.TRIANGLES } = {}) {
+  skeleton!: GLTFSkeleton;
+  boneMatrices!: Float32Array;
+  boneTextureSize!: number;
+  boneTexture!: Texture;
+
+  constructor(gl: OGLRenderingContext, { skeleton, geometry, program, mode = gl.TRIANGLES }: Partial<GLTFSkinOptions> = {}) {
     super(gl, { geometry, program, mode });
-    this.skeleton = skeleton;
-    this.program = program;
+    this.skeleton = skeleton!;
     this.createBoneTexture();
   }
 
-  createBoneTexture() {
+  createBoneTexture(): void {
     if (!this.skeleton.joints.length) return;
     const size = Math.max(4, Math.pow(2, Math.ceil(Math.log(Math.sqrt(this.skeleton.joints.length * 4)) / Math.LN2)));
     this.boneMatrices = new Float32Array(size * size * 4);
@@ -30,9 +54,9 @@ export class GLTFSkin extends Mesh {
     });
   }
 
-  updateUniforms() {
+  updateUniforms(): void {
     // Update bone texture
-    this.skeleton.joints.forEach((bone, i) => {
+    this.skeleton.joints.forEach((bone: GLTFJoint, i: number) => {
       // Find difference between current and bind pose
       tempMat4.multiply(bone.worldMatrix, bone.bindInverse);
       this.boneMatrices.set(tempMat4, i * 16);
@@ -43,7 +67,7 @@ export class GLTFSkin extends Mesh {
     this.program.uniforms.boneTextureSize.value = this.boneTextureSize;
   }
 
-  draw({ camera } = {}) {
+  draw({ camera }: { camera?: Camera } = {}): void {
     if (!this.program.uniforms.boneTexture) {
       Object.assign(this.program.uniforms, {
         boneTexture: { value: this.boneTexture },

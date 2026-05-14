@@ -31,7 +31,7 @@ function DrawCubes() {
     };
 
     createResizeObserver(
-      () => canvas,
+      () => canvas as unknown as Element,
       () => {
         update();
       }
@@ -76,7 +76,7 @@ function Samplers() {
     };
 
     createResizeObserver(
-      () => canvas,
+      () => canvas as unknown as Element,
       () => {
         update();
       }

@@ -76,7 +76,7 @@ export default function webxrVRTeleport() {
   const controls = new OrbitControls();
   controls.addEventListener('change', render);
   controls.screenSpacePanning = true;
-  controls.init(renderer.domElement);
+  controls.init(renderer.domElement as unknown as HTMLElement);
   controls.setCamera(camera);
 
   let baseReferenceSpace: XRReferenceSpace;

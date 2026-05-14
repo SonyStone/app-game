@@ -2,17 +2,19 @@ const RE_HEX = /^#?([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
 const RE_HEXA = /^#?([A-Fa-f0-9]{8}|[A-Fa-f0-9]{4})$/;
 
 export const hex2rgb = (hex: `#${string}`) => {
+  let normalizedHex = hex;
+
   if (hex.match(RE_HEX)) {
     // remove optional leading #
-    if (hex.length === 4 || hex.length === 7) {
-      hex = hex.substr(1);
+    if (normalizedHex.length === 4 || normalizedHex.length === 7) {
+      normalizedHex = normalizedHex.slice(1) as `#${string}`;
     }
     // expand short-notation to full six-digit
-    if (hex.length === 3) {
-      hex = hex.split('');
-      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    if (normalizedHex.length === 3) {
+      const [r, g, b] = normalizedHex.split('');
+      normalizedHex = `${r}${r}${g}${g}${b}${b}` as `#${string}`;
     }
-    const u = parseInt(hex, 16);
+    const u = parseInt(normalizedHex, 16);
     const r = u >> 16;
     const g = (u >> 8) & 0xff;
     const b = u & 0xff;
@@ -21,16 +23,16 @@ export const hex2rgb = (hex: `#${string}`) => {
 
   // match rgba hex format, eg #FF000077
   if (hex.match(RE_HEXA)) {
-    if (hex.length === 5 || hex.length === 9) {
+    if (normalizedHex.length === 5 || normalizedHex.length === 9) {
       // remove optional leading #
-      hex = hex.substr(1);
+      normalizedHex = normalizedHex.slice(1) as `#${string}`;
     }
     // expand short-notation to full eight-digit
-    if (hex.length === 4) {
-      hex = hex.split('');
-      hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+    if (normalizedHex.length === 4) {
+      const [r, g, b, a] = normalizedHex.split('');
+      normalizedHex = `${r}${r}${g}${g}${b}${b}${a}${a}` as `#${string}`;
     }
-    const u = parseInt(hex, 16);
+    const u = parseInt(normalizedHex, 16);
     const r = (u >> 24) & 0xff;
     const g = (u >> 16) & 0xff;
     const b = (u >> 8) & 0xff;

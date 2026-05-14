@@ -51,7 +51,7 @@ export class Program extends BaseWebGlObject {
     this.store[tag.id] = newProgram;
   }
 
-  private static store: { [id: number]: WebGLObject } = {};
+  private static store: { [id: number]: object } = {};
 }
 
 export class Query extends BaseWebGlObject {

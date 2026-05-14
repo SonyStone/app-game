@@ -7,7 +7,7 @@ export class GetActiveUniform extends BaseCommand {
     return GetActiveUniform.commandName;
   }
 
-  protected stringifyResult(result: any): string {
+  protected stringifyResult(result: any): string | undefined {
     if (!result) {
       return undefined;
     }

@@ -63,14 +63,14 @@ export function useSpritesheet<T extends SpritesheetData>(
   const name = () => {
     const s = access(source);
     if (typeof s === 'string') return s;
-    const t = s.at(0) as Texture;
+    const t = s[0] as Texture;
     return t.label || String(t.uid);
   };
 
   const [resource, resourceActions] = createResource<Spritesheet<T>, string | SpriteSheetConstruction<T>>(
     source,
     async (urlOrOpts) => {
-      setProgress(0);
+      setProgress(0 as Progress);
       if (typeof urlOrOpts === 'string') {
         const asset = await Assets.load<Spritesheet<T>>(urlOrOpts, (progressValue) => {
           setProgress(progressValue as Progress);

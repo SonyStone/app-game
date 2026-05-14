@@ -77,7 +77,7 @@ export default function TrigonometryExample() {
         </div>
       </div>
 
-      <svg class="border" class="w-100 h-100" viewBox="0 0 2 2">
+      <svg class="h-100 w-100 border" viewBox="0 0 2 2">
         <g transform="scale(1, -1) scale(0.9, 0.9) translate(1 1) " transform-origin="center">
           <circle
             cx="0"

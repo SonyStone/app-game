@@ -55,7 +55,7 @@ export function build(ctx: CanvasRenderingContext2D) {
   // ----------------------
 
   // MovableSystem
-  class MovableSystem implements System {
+  class MovableSystem extends System {
     // This method will get called on every frame by default
     run(entities: any[]) {
       console.log(`run MovableSystem`, performance, entities);
@@ -64,7 +64,7 @@ export function build(ctx: CanvasRenderingContext2D) {
 
   SystemData(MovableSystem, Read(Position));
 
-  class SystemTest implements System {
+  class SystemTest extends System {
     run(entities: any[]) {
       console.log(`run SystemTest`, entities);
     }
@@ -97,7 +97,7 @@ export function build(ctx: CanvasRenderingContext2D) {
   // const queries = world.systemManager.getSystems().get(SystemTest).queries;
   // console.log(`queries`, queries);
 
-  let id: number;
+  let id = 0;
   // Run!
   function run() {
     // Compute delta and elapsed time

@@ -43,9 +43,10 @@ export default function CanvasPaint() {
   });
 
   const pointerEvents = createPointerEvents();
+  const pointerTarget = canvasEl as unknown as HTMLElement;
 
   onMount(async () => {
-    makeEventListener(canvasEl, 'pointerdown', (e: PointerEvent) => {
+    makeEventListener(pointerTarget, 'pointerdown', (e: PointerEvent) => {
       if (e.pressure === 0 || e.buttons !== 1) {
         return;
       }
@@ -54,7 +55,7 @@ export default function CanvasPaint() {
 
       brushStroke.add([x, y], e.pressure);
     });
-    makeEventListener(canvasEl, 'pointermove', (e: PointerEvent) => {
+    makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
       const events = e.getCoalescedEvents();
       if (events.length === 0) {
         events.push(e);
@@ -74,14 +75,14 @@ export default function CanvasPaint() {
       }
     });
 
-    makeEventListener(canvasEl, 'pointerup', (e) => {
+    makeEventListener(pointerTarget, 'pointerup', (e) => {
       brushStroke.end();
       if (untrack(updateOnEvent)) {
         brushStroke.render(false);
       }
     });
 
-    await pointerEvents.apply(canvasEl);
+    await pointerEvents.apply(canvasEl as unknown as Element);
   });
 
   const [, start, stop] = createRAF((t?: number | any) => {

@@ -1,5 +1,5 @@
 import type { NumberArray, TypedArrayConstructor } from './utils/typed-array';
-import { Vec2Tuple } from './v2-builder';
+import { Vec2Tuple } from './v2';
 
 /**
  * A JavaScript array with 3 values or a Float32Array with 3 values.
@@ -19,7 +19,7 @@ export type Vec3Tuple = [x: number, y: number, z: number] | NumberArray;
  * ```
  */
 export const Vec3Builder = (ctor: TypedArrayConstructor) =>
-  class Vec3 extends (ctor as ArrayConstructor) {
+  class Vec3 extends (ctor as unknown as ArrayConstructor) {
     constructor() {
       super(3);
     }

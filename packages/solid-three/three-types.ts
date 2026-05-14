@@ -89,54 +89,42 @@ export type InstancedBufferGeometryProps = BufferGeometryNode<
   typeof THREE.InstancedBufferGeometry
 >;
 export type BufferGeometryProps = BufferGeometryNode<THREE.BufferGeometry, typeof THREE.BufferGeometry>;
-export type BoxBufferGeometryProps = BufferGeometryNode<THREE.BoxBufferGeometry, typeof THREE.BoxBufferGeometry>;
-export type CircleBufferGeometryProps = BufferGeometryNode<
-  THREE.CircleBufferGeometry,
-  typeof THREE.CircleBufferGeometry
->;
-export type ConeBufferGeometryProps = BufferGeometryNode<THREE.ConeBufferGeometry, typeof THREE.ConeBufferGeometry>;
-export type CylinderBufferGeometryProps = BufferGeometryNode<
-  THREE.CylinderBufferGeometry,
-  typeof THREE.CylinderBufferGeometry
->;
+export type BoxBufferGeometryProps = BufferGeometryNode<THREE.BoxGeometry, typeof THREE.BoxGeometry>;
+export type CircleBufferGeometryProps = BufferGeometryNode<THREE.CircleGeometry, typeof THREE.CircleGeometry>;
+export type ConeBufferGeometryProps = BufferGeometryNode<THREE.ConeGeometry, typeof THREE.ConeGeometry>;
+export type CylinderBufferGeometryProps = BufferGeometryNode<THREE.CylinderGeometry, typeof THREE.CylinderGeometry>;
 export type DodecahedronBufferGeometryProps = BufferGeometryNode<
-  THREE.DodecahedronBufferGeometry,
-  typeof THREE.DodecahedronBufferGeometry
+  THREE.DodecahedronGeometry,
+  typeof THREE.DodecahedronGeometry
 >;
-export type ExtrudeBufferGeometryProps = BufferGeometryNode<
-  THREE.ExtrudeBufferGeometry,
-  typeof THREE.ExtrudeBufferGeometry
->;
+export type ExtrudeBufferGeometryProps = BufferGeometryNode<THREE.ExtrudeGeometry, typeof THREE.ExtrudeGeometry>;
 export type IcosahedronBufferGeometryProps = BufferGeometryNode<
-  THREE.IcosahedronBufferGeometry,
-  typeof THREE.IcosahedronBufferGeometry
+  THREE.IcosahedronGeometry,
+  typeof THREE.IcosahedronGeometry
 >;
-export type LatheBufferGeometryProps = BufferGeometryNode<THREE.LatheBufferGeometry, typeof THREE.LatheBufferGeometry>;
+export type LatheBufferGeometryProps = BufferGeometryNode<THREE.LatheGeometry, typeof THREE.LatheGeometry>;
 export type OctahedronBufferGeometryProps = BufferGeometryNode<
-  THREE.OctahedronBufferGeometry,
-  typeof THREE.OctahedronBufferGeometry
+  THREE.OctahedronGeometry,
+  typeof THREE.OctahedronGeometry
 >;
-export type PlaneBufferGeometryProps = BufferGeometryNode<THREE.PlaneBufferGeometry, typeof THREE.PlaneBufferGeometry>;
+export type PlaneBufferGeometryProps = BufferGeometryNode<THREE.PlaneGeometry, typeof THREE.PlaneGeometry>;
 export type PolyhedronBufferGeometryProps = BufferGeometryNode<
-  THREE.PolyhedronBufferGeometry,
-  typeof THREE.PolyhedronBufferGeometry
+  THREE.PolyhedronGeometry,
+  typeof THREE.PolyhedronGeometry
 >;
-export type RingBufferGeometryProps = BufferGeometryNode<THREE.RingBufferGeometry, typeof THREE.RingBufferGeometry>;
-export type ShapeBufferGeometryProps = BufferGeometryNode<THREE.ShapeBufferGeometry, typeof THREE.ShapeBufferGeometry>;
-export type SphereBufferGeometryProps = BufferGeometryNode<
-  THREE.SphereBufferGeometry,
-  typeof THREE.SphereBufferGeometry
->;
+export type RingBufferGeometryProps = BufferGeometryNode<THREE.RingGeometry, typeof THREE.RingGeometry>;
+export type ShapeBufferGeometryProps = BufferGeometryNode<THREE.ShapeGeometry, typeof THREE.ShapeGeometry>;
+export type SphereBufferGeometryProps = BufferGeometryNode<THREE.SphereGeometry, typeof THREE.SphereGeometry>;
 export type TetrahedronBufferGeometryProps = BufferGeometryNode<
-  THREE.TetrahedronBufferGeometry,
-  typeof THREE.TetrahedronBufferGeometry
+  THREE.TetrahedronGeometry,
+  typeof THREE.TetrahedronGeometry
 >;
-export type TorusBufferGeometryProps = BufferGeometryNode<THREE.TorusBufferGeometry, typeof THREE.TorusBufferGeometry>;
+export type TorusBufferGeometryProps = BufferGeometryNode<THREE.TorusGeometry, typeof THREE.TorusGeometry>;
 export type TorusKnotBufferGeometryProps = BufferGeometryNode<
-  THREE.TorusKnotBufferGeometry,
-  typeof THREE.TorusKnotBufferGeometry
+  THREE.TorusKnotGeometry,
+  typeof THREE.TorusKnotGeometry
 >;
-export type TubeBufferGeometryProps = BufferGeometryNode<THREE.TubeBufferGeometry, typeof THREE.TubeBufferGeometry>;
+export type TubeBufferGeometryProps = BufferGeometryNode<THREE.TubeGeometry, typeof THREE.TubeGeometry>;
 export type WireframeGeometryProps = BufferGeometryNode<THREE.WireframeGeometry, typeof THREE.WireframeGeometry>;
 export type TetrahedronGeometryProps = BufferGeometryNode<THREE.TetrahedronGeometry, typeof THREE.TetrahedronGeometry>;
 export type OctahedronGeometryProps = BufferGeometryNode<THREE.OctahedronGeometry, typeof THREE.OctahedronGeometry>;

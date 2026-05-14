@@ -45,15 +45,15 @@ export class ContextSpy {
   private readonly recorderSpy: RecorderSpy;
   private readonly webGlObjectSpy: WebGlObjectSpy;
 
-  private marker: string;
+  private marker = '';
   private capturing: boolean;
   private globalCapturing: boolean;
   private commandId: number;
-  private currentCapture: ICapture;
-  private canvasCapture: ICanvasCapture;
-  private contextCapture: IContextCapture;
+  private currentCapture!: ICapture;
+  private canvasCapture!: ICanvasCapture;
+  private contextCapture!: IContextCapture;
   private analyser: CaptureAnalyser;
-  private maxCommands: number;
+  private maxCommands = 0;
 
   constructor(private readonly options: IContextSpyOptions) {
     this.commandId = 0;
@@ -170,7 +170,7 @@ export class ContextSpy {
   }
 
   clearMarker() {
-    this.marker = null;
+    this.marker = '';
   }
 
   log(value: string) {
@@ -237,7 +237,7 @@ export class ContextSpy {
         }
       } catch (e) {
         Logger.error('Cant Spy member: ' + member);
-        Logger.error(e);
+        Logger.error(String(e));
       }
     }
   }
@@ -247,7 +247,7 @@ export class ContextSpy {
     const extensions = extensionsState.getExtensions();
     for (const extensionName in extensions) {
       if (extensions.hasOwnProperty(extensionName)) {
-        this.contextInformation.extensions[extensionName] = extensions[extensionName];
+        this.contextInformation.extensions![extensionName] = extensions[extensionName];
       }
     }
 
@@ -291,7 +291,7 @@ export class ContextSpy {
     this.globalCapturing = capture;
   }
 
-  private tagWebGlObject(object: any): WebGlObjectTag {
+  private tagWebGlObject(object: any): WebGlObjectTag | undefined {
     return this.webGlObjectSpy.tagWebGlObject(object);
   }
 }

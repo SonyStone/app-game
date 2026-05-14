@@ -84,7 +84,9 @@ export function VideoApp() {
 
   const [brushSize, setBrushSize] = createSignal(20);
   const [brushColor, setBrushColor] = createSignal('#ffffff');
-  const [brushComposite, setBrushComposite] = createSignal(COMPOSITE_OPERATIONS[0]);
+  const [brushComposite, setBrushComposite] = createSignal<(typeof COMPOSITE_OPERATIONS)[number]>(
+    COMPOSITE_OPERATIONS[0]
+  );
 
   createShortcut(['Control', 'Z'], () => {
     console.log(`undo!`);

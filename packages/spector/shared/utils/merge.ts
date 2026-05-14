@@ -1,12 +1,12 @@
 export function merge<T, U>(first: T, second: U): T & U {
   const result: any = {};
   for (const id in first) {
-    if (first.hasOwnProperty(id)) {
+    if (Object.prototype.hasOwnProperty.call(first, id)) {
       result[id] = first[id];
     }
   }
   for (const id in second) {
-    if (!result.hasOwnProperty(id)) {
+    if (!Object.prototype.hasOwnProperty.call(result, id)) {
       result[id] = second[id];
     }
   }

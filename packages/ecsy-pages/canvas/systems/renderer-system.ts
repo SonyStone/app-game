@@ -3,7 +3,7 @@ import { Read, System, SystemData } from '@app-game/ecsy';
 import { CanvasContext, Circle, Intersecting, Position } from '../components';
 import { drawLine, fillCircle } from '../utils';
 
-export class RendererBackground implements System {
+export class RendererBackground extends System {
   run(canvas: CanvasContext[]) {
     const canvasComponent = canvas[0];
 
@@ -18,7 +18,7 @@ export class RendererBackground implements System {
 
 SystemData(RendererBackground, Read(CanvasContext));
 
-export class RendererCircles implements System {
+export class RendererCircles extends System {
   run(components: [Circle, Position][], canvas: CanvasContext[]) {
     const ctx = canvas[0].ctx!;
 
@@ -37,7 +37,7 @@ export class RendererCircles implements System {
 
 SystemData(RendererCircles, [Read(Circle), Read(Position)], Read(CanvasContext));
 
-export class RendererIntersecting implements System {
+export class RendererIntersecting extends System {
   run(intersects: Intersecting[], canvas: CanvasContext[]) {
     const ctx = canvas[0].ctx!;
 

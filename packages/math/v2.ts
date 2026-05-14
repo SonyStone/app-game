@@ -2,6 +2,8 @@ import { Radians } from './types';
 import { NumberArray } from './utils/typed-array';
 import * as v2 from './v2-functions';
 
+export type Vec2Tuple = [x: number, y: number] | NumberArray;
+
 /**
  * First of all, this class is intended as a wrapper for working with
  * `ArrayBuffers`, `TypedArrays` and `WebGL`, `WebGPU`

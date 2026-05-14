@@ -2,12 +2,31 @@ import { Geometry } from '../core/geometry';
 import { Mesh } from '../core/mesh';
 import { Texture } from '../core/texture';
 import { Transform } from '../core/transform';
+import type { OGLRenderingContext } from '../core/renderer';
+import type { TextureOptions } from '../core/texture';
 import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';
 import { GLTFAnimation } from './GLTF-animation';
 import { GLTFSkin } from './GLTF-skin';
 import { InstancedMesh } from './instanced-mesh';
 import { NormalProgram } from './normal-program';
+
+type BasisManager = {
+  parseTexture(data: ArrayBuffer): Promise<any>;
+};
+
+type GLTFImage = HTMLImageElement & {
+  name?: string;
+  ready: Promise<void>;
+  texture?: Texture;
+  isBasis?: boolean;
+  internalFormat?: GLenum;
+  isCompressedTexture?: boolean;
+  length?: number;
+};
+
+type GLTFTextureOptions = Partial<TextureOptions> & Record<string, any>;
+type GLTFNode = Transform & { name?: string; extras?: any; extensions?: any; animations?: number[]; skin?: any; bindInverse?: Mat4 };
 
 // Supports
 // [x] glb
@@ -67,11 +86,13 @@ const TRANSFORMS = {
 };
 
 export class GLTFLoader {
-  static setBasisManager(manager) {
+  static basisManager: BasisManager | null = null;
+
+  static setBasisManager(manager: BasisManager): void {
     this.basisManager = manager;
   }
 
-  static async load(gl, src) {
+  static async load(gl: OGLRenderingContext, src: string) {
     const dir = src.split('/').slice(0, -1).join('/') + '/';
 
     // load main description json
@@ -80,7 +101,7 @@ export class GLTFLoader {
     return this.parse(gl, desc, dir);
   }
 
-  static async parse(gl, desc, dir) {
+  static async parse(gl: OGLRenderingContext, desc: any, dir: string) {
     if (desc.asset === undefined || desc.asset.version[0] < 2)
       console.warn('Only GLTF >=2.0 supported. Attempting to parse.');
 
@@ -91,7 +112,7 @@ export class GLTFLoader {
     const buffers = await this.loadBuffers(desc, dir);
 
     // Unbind current VAO so that new buffers don't get added to active mesh
-    gl.renderer.bindVertexArray(null);
+    (gl.renderer as any).bindVertexArray?.(null);
 
     // Create gl buffers from bufferViews
     const bufferViews = this.parseBufferViews(gl, desc, buffers);
@@ -145,7 +166,7 @@ export class GLTFLoader {
     };
   }
 
-  static parseDesc(src) {
+  static parseDesc(src: string) {
     if (!src.match(/\.glb/)) {
       return fetch(src).then((res) => res.json());
     } else {
@@ -156,7 +177,7 @@ export class GLTFLoader {
   }
 
   // From https://github.com/donmccurdy/glTF-Transform/blob/e4108cc/packages/core/src/io/io.ts#L32
-  static unpackGLB(glb) {
+  static unpackGLB(glb: ArrayBuffer) {
     // Decode and verify GLB header.
     const header = new Uint32Array(glb, 0, 3);
     if (header[0] !== 0x46546c67) {
@@ -192,7 +213,7 @@ export class GLTFLoader {
   }
 
   // Threejs GLTF Loader https://github.com/mrdoob/three.js/blob/master/examples/js/loaders/GLTFLoader.js#L1085
-  static resolveURI(uri, dir) {
+  static resolveURI(uri: string, dir: string): string {
     // Invalid URI
     if (typeof uri !== 'string' || uri === '') return '';
 
@@ -214,10 +235,10 @@ export class GLTFLoader {
     return dir + uri;
   }
 
-  static loadBuffers(desc, dir) {
+  static loadBuffers(desc: any, dir: string) {
     if (!desc.buffers) return null;
     return Promise.all(
-      desc.buffers.map((buffer) => {
+      desc.buffers.map((buffer: any) => {
         // For GLB, binary buffer ready to go
         if (buffer.binary) return buffer.binary;
         const uri = this.resolveURI(buffer.uri, dir);
@@ -226,14 +247,14 @@ export class GLTFLoader {
     );
   }
 
-  static parseBufferViews(gl, desc, buffers) {
+  static parseBufferViews(gl: OGLRenderingContext, desc: any, buffers: ArrayBuffer[] | null) {
     if (!desc.bufferViews) return null;
     // Clone to leave description pure
-    const bufferViews = desc.bufferViews.map((o) => Object.assign({}, o));
+    const bufferViews = desc.bufferViews.map((o: any) => Object.assign({}, o));
 
     desc.meshes &&
-      desc.meshes.forEach(({ primitives }) => {
-        primitives.forEach(({ attributes, indices }) => {
+      desc.meshes.forEach(({ primitives }: any) => {
+        primitives.forEach(({ attributes, indices }: any) => {
           // Flag bufferView as an attribute, so it knows to create a gl buffer
           for (let attr in attributes) bufferViews[desc.accessors[attributes[attr]].bufferView].isAttribute = true;
 
@@ -246,13 +267,13 @@ export class GLTFLoader {
       });
 
     // Get componentType of each bufferView from the accessors
-    desc.accessors.forEach(({ bufferView: i, componentType }) => {
+    desc.accessors.forEach(({ bufferView: i, componentType }: any) => {
       bufferViews[i].componentType = componentType;
     });
 
     // Get mimetype of bufferView from images
     desc.images &&
-      desc.images.forEach(({ uri, bufferView: i, mimeType }) => {
+      desc.images.forEach(({ uri, bufferView: i, mimeType }: any) => {
         if (i === undefined) return;
         bufferViews[i].mimeType = mimeType;
       });
@@ -273,10 +294,10 @@ export class GLTFLoader {
           componentType, // optional, added from accessor above
           mimeType, // optional, added from images above
           isAttribute
-        },
-        i
+        }: any,
+        i: number
       ) => {
-        bufferViews[i].data = buffers[bufferIndex].slice(byteOffset, byteOffset + byteLength);
+        bufferViews[i].data = buffers![bufferIndex].slice(byteOffset, byteOffset + byteLength);
 
         if (!isAttribute) return;
         // Create gl buffers for the bufferView, pushing it to the GPU
@@ -291,27 +312,27 @@ export class GLTFLoader {
     return bufferViews;
   }
 
-  static parseImages(gl, desc, dir, bufferViews) {
+  static parseImages(gl: OGLRenderingContext, desc: any, dir: string, bufferViews: any[] | null) {
     if (!desc.images) return null;
     return Promise.all(
-      desc.images.map(async ({ uri, bufferView: bufferViewIndex, mimeType, name }) => {
+      desc.images.map(async ({ uri, bufferView: bufferViewIndex, mimeType, name }: any) => {
         if (mimeType === 'image/ktx2') {
-          const { data } = bufferViews[bufferViewIndex];
-          const image = await this.basisManager.parseTexture(data);
+          const { data } = bufferViews![bufferViewIndex];
+          const image = await this.basisManager!.parseTexture(data);
           return image;
         }
 
         // jpg / png
-        const image = new Image();
+        const image = new Image() as GLTFImage;
         image.name = name;
         if (uri) {
           image.src = this.resolveURI(uri, dir);
         } else if (bufferViewIndex !== undefined) {
-          const { data } = bufferViews[bufferViewIndex];
+          const { data } = bufferViews![bufferViewIndex];
           const blob = new Blob([data], { type: mimeType });
           image.src = URL.createObjectURL(blob);
         }
-        image.ready = new Promise((res) => {
+        image.ready = new Promise<void>((res) => {
           image.onload = () => res();
         });
         return image;
@@ -319,12 +340,17 @@ export class GLTFLoader {
     );
   }
 
-  static parseTextures(gl, desc, images) {
-    if (!desc.textures) return null;
-    return desc.textures.map((textureInfo) => this.createTexture(gl, desc, images, textureInfo));
+  static parseTextures(gl: OGLRenderingContext, desc: any, images: GLTFImage[] | null) {
+    if (!desc.textures || !images) return null;
+    return desc.textures.map((textureInfo: any) => this.createTexture(gl, desc, images, textureInfo));
   }
 
-  static createTexture(gl, desc, images, { sampler: samplerIndex, source: sourceIndex, name, extensions, extras }) {
+  static createTexture(
+    gl: OGLRenderingContext,
+    desc: any,
+    images: GLTFImage[],
+    { sampler: samplerIndex, source: sourceIndex, name, extensions, extras }: any
+  ) {
     if (sourceIndex === undefined && !!extensions) {
       // Basis extension source index
       if (extensions.KHR_texture_basisu) sourceIndex = extensions.KHR_texture_basisu.source;
@@ -333,14 +359,14 @@ export class GLTFLoader {
     const image = images[sourceIndex];
     if (image.texture) return image.texture;
 
-    const options = {
+    const options: GLTFTextureOptions = {
       flipY: false,
       wrapS: gl.REPEAT, // Repeat by default, opposed to OGL's clamp by default
       wrapT: gl.REPEAT
     };
     const sampler = samplerIndex !== undefined ? desc.samplers[samplerIndex] : null;
     if (sampler) {
-      ['magFilter', 'minFilter', 'wrapS', 'wrapT'].forEach((prop) => {
+      (['magFilter', 'minFilter', 'wrapS', 'wrapT'] as const).forEach((prop) => {
         if (sampler[prop]) options[prop] = sampler[prop];
       });
     }
@@ -351,7 +377,7 @@ export class GLTFLoader {
       options.internalFormat = image.internalFormat;
       if (image.isCompressedTexture) {
         options.generateMipmaps = false;
-        if (image.length > 1) this.minFilter = gl.NEAREST_MIPMAP_LINEAR;
+        if (image.length && image.length > 1) options.minFilter = gl.NEAREST_MIPMAP_LINEAR;
       }
       const texture = new Texture(gl, options);
       texture.name = name;
@@ -369,7 +395,7 @@ export class GLTFLoader {
     return texture;
   }
 
-  static parseMaterials(gl, desc, textures) {
+  static parseMaterials(gl: OGLRenderingContext, desc: any, textures: Texture[] | null) {
     if (!desc.materials) return null;
     return desc.materials.map(
       ({
@@ -384,7 +410,7 @@ export class GLTFLoader {
         alphaMode = 'OPAQUE',
         alphaCutoff = 0.5,
         doubleSided = false
-      }) => {
+      }: any) => {
         const {
           baseColorFactor = [1, 1, 1, 1],
           baseColorTexture,
@@ -393,28 +419,30 @@ export class GLTFLoader {
           metallicRoughnessTexture
           //   extensions,
           //   extras,
-        } = pbrMetallicRoughness;
+        } = pbrMetallicRoughness as any;
+
+        const materialTextures = textures ?? [];
 
         if (baseColorTexture) {
-          baseColorTexture.texture = textures[baseColorTexture.index];
+          baseColorTexture.texture = materialTextures[baseColorTexture.index];
           // texCoord
         }
         if (normalTexture) {
-          normalTexture.texture = textures[normalTexture.index];
+          normalTexture.texture = materialTextures[normalTexture.index];
           // scale: 1
           // texCoord
         }
         if (metallicRoughnessTexture) {
-          metallicRoughnessTexture.texture = textures[metallicRoughnessTexture.index];
+          metallicRoughnessTexture.texture = materialTextures[metallicRoughnessTexture.index];
           // texCoord
         }
         if (occlusionTexture) {
-          occlusionTexture.texture = textures[occlusionTexture.index];
+          occlusionTexture.texture = materialTextures[occlusionTexture.index];
           // strength 1
           // texCoord
         }
         if (emissiveTexture) {
-          emissiveTexture.texture = textures[emissiveTexture.index];
+          emissiveTexture.texture = materialTextures[emissiveTexture.index];
           // texCoord
         }
 
@@ -439,7 +467,7 @@ export class GLTFLoader {
     );
   }
 
-  static parseSkins(gl, desc, bufferViews) {
+  static parseSkins(gl: OGLRenderingContext, desc: any, bufferViews: any[] | null) {
     if (!desc.skins) return null;
     return desc.skins.map(
       ({
@@ -449,7 +477,7 @@ export class GLTFLoader {
         // name,
         // extensions,
         // extras,
-      }) => {
+      }: any) => {
         return {
           inverseBindMatrices: this.parseAccessor(inverseBindMatrices, desc, bufferViews),
           skeleton,
@@ -459,7 +487,7 @@ export class GLTFLoader {
     );
   }
 
-  static parseMeshes(gl, desc, bufferViews, materials, skins) {
+  static parseMeshes(gl: OGLRenderingContext, desc: any, bufferViews: any[] | null, materials: any, skins: any) {
     if (!desc.meshes) return null;
     return desc.meshes.map(
       (
@@ -469,18 +497,18 @@ export class GLTFLoader {
           name, // optional
           extensions, // optional
           extras // optional
-        },
-        meshIndex
+        }: any,
+        meshIndex: number
       ) => {
         // TODO: weights stuff ?
         // Parse through nodes to see how many instances there are
         // and if there is a skin attached
         // If multiple instances of a skin, need to create each
         let numInstances = 0;
-        let skinIndices = [];
+        let skinIndices: number[] = [];
         let isLightmap = false;
         desc.nodes &&
-          desc.nodes.forEach(({ mesh, skin, extras }) => {
+          desc.nodes.forEach(({ mesh, skin, extras }: any) => {
             if (mesh === meshIndex) {
               numInstances++;
               if (skin !== undefined) skinIndices.push(skin);
@@ -493,8 +521,11 @@ export class GLTFLoader {
         if (isSkin) {
           primitives = skinIndices.map((skinIndex) => {
             return this.parsePrimitives(gl, primitives, desc, bufferViews, materials, 1, isLightmap).map(
-              ({ geometry, program, mode }) => {
-                const mesh = new GLTFSkin(gl, { skeleton: skins[skinIndex], geometry, program, mode });
+              ({ geometry, program, mode }: any) => {
+                const mesh = new GLTFSkin(gl, { skeleton: skins[skinIndex], geometry, program, mode }) as GLTFSkin & {
+                  name?: string;
+                  frustumCulled?: boolean;
+                };
                 mesh.name = name;
                 // TODO: support skin frustum culling
                 mesh.frustumCulled = false;
@@ -507,10 +538,13 @@ export class GLTFLoader {
           primitives.numInstances = numInstances;
         } else {
           primitives = this.parsePrimitives(gl, primitives, desc, bufferViews, materials, numInstances, isLightmap).map(
-            ({ geometry, program, mode }) => {
+            ({ geometry, program, mode }: any) => {
               // InstancedMesh class has custom frustum culling for instances
               const meshConstructor = geometry.attributes.instanceMatrix ? InstancedMesh : Mesh;
-              const mesh = new meshConstructor(gl, { geometry, program, mode });
+              const mesh = new meshConstructor(gl, { geometry, program, mode }) as (Mesh | InstancedMesh) & {
+                name?: string;
+                numInstances?: number;
+              };
               mesh.name = name;
               // Tag mesh so that nodes can add their transforms to the instance attribute
               mesh.numInstances = numInstances;
@@ -528,7 +562,15 @@ export class GLTFLoader {
     );
   }
 
-  static parsePrimitives(gl, primitives, desc, bufferViews, materials, numInstances, isLightmap) {
+  static parsePrimitives(
+    gl: OGLRenderingContext,
+    primitives: any[],
+    desc: any,
+    bufferViews: any[] | null,
+    materials: any,
+    numInstances: number,
+    isLightmap: boolean
+  ) {
     return primitives.map(
       ({
         attributes, // required
@@ -538,9 +580,9 @@ export class GLTFLoader {
         targets, // optional
         extensions, // optional
         extras // optional
-      }) => {
+      }: any) => {
         // TODO: materials
-        const program = new NormalProgram(gl);
+        const program = new NormalProgram(gl) as NormalProgram & { gltfMaterial?: any };
         if (materialIndex !== undefined) {
           program.gltfMaterial = materials[materialIndex];
         }
@@ -549,7 +591,7 @@ export class GLTFLoader {
 
         // Add each attribute found in primitive
         for (let attr in attributes) {
-          geometry.addAttribute(ATTRIBUTES[attr], this.parseAccessor(attributes[attr], desc, bufferViews));
+          geometry.addAttribute((ATTRIBUTES as Record<string, string>)[attr], this.parseAccessor(attributes[attr], desc, bufferViews));
         }
 
         // Add index attribute if found
@@ -586,7 +628,7 @@ export class GLTFLoader {
     );
   }
 
-  static parseAccessor(index, desc, bufferViews) {
+  static parseAccessor(index: number, desc: any, bufferViews: any[] | null) {
     // TODO: init missing bufferView with 0s
     // TODO: support sparse
 
@@ -615,12 +657,12 @@ export class GLTFLoader {
       // name,
       // extensions,
       // extras,
-    } = bufferViews[bufferViewIndex];
+    } = bufferViews![bufferViewIndex];
 
-    const size = TYPE_SIZE[type];
+    const size = (TYPE_SIZE as Record<string, number>)[type];
 
     // Parse data from joined buffers
-    const TypeArray = TYPE_ARRAY[componentType];
+    const TypeArray = (TYPE_ARRAY as Record<string, any>)[componentType];
     const elementBytes = TypeArray.BYTES_PER_ELEMENT;
     const componentStride = byteStride / elementBytes;
     const isInterleaved = !!byteStride && componentStride !== size;
@@ -663,7 +705,7 @@ export class GLTFLoader {
     };
   }
 
-  static parseNodes(gl, desc, meshes, skins, images) {
+  static parseNodes(gl: OGLRenderingContext, desc: any, meshes: any, skins: any, images: GLTFImage[] | null) {
     if (!desc.nodes) return null;
     const nodes = desc.nodes.map(
       ({
@@ -679,15 +721,15 @@ export class GLTFLoader {
         name, // optional
         extensions, // optional
         extras // optional
-      }) => {
-        const node = new Transform();
+      }: any) => {
+        const node = new Transform() as GLTFNode;
         if (name) node.name = name;
         node.extras = extras;
         node.extensions = extensions;
 
         // Need to attach to node as may have same material but different lightmap
         if (extras && extras.lightmapTexture !== undefined) {
-          extras.lightmapTexture.texture = this.createTexture(gl, desc, images, {
+          extras.lightmapTexture.texture = this.createTexture(gl, desc, images ?? [], {
             source: extras.lightmapTexture.index
           });
         }
@@ -712,7 +754,7 @@ export class GLTFLoader {
         // add mesh if included
         if (meshIndex !== undefined) {
           if (isSkin) {
-            meshes[meshIndex].primitives[meshes[meshIndex].primitives.instanceCount].forEach((mesh) => {
+            meshes[meshIndex].primitives[meshes[meshIndex].primitives.instanceCount].forEach((mesh: any) => {
               mesh.extras = extras;
               mesh.setParent(node);
             });
@@ -723,7 +765,7 @@ export class GLTFLoader {
               delete meshes[meshIndex].primitives.instanceCount;
             }
           } else {
-            meshes[meshIndex].primitives.forEach((mesh) => {
+            meshes[meshIndex].primitives.forEach((mesh: any) => {
               mesh.extras = extras;
 
               // instanced mesh might only have 1
@@ -785,17 +827,17 @@ export class GLTFLoader {
       }
     );
 
-    desc.nodes.forEach(({ children = [] }, i) => {
+    desc.nodes.forEach(({ children = [] }: any, i: number) => {
       // Set hierarchy now all nodes created
-      children.forEach((childIndex) => {
+      children.forEach((childIndex: number) => {
         if (!nodes[childIndex]) return;
         nodes[childIndex].setParent(nodes[i]);
       });
     });
 
     // Add frustum culling for instances now that instanceMatrix attribute is populated
-    meshes.forEach(({ primitives }, i) => {
-      primitives.forEach((primitive, i) => {
+    meshes.forEach(({ primitives }: any, i: number) => {
+      primitives.forEach((primitive: any, i: number) => {
         if (primitive.isInstancedMesh) primitive.addFrustumCull();
       });
     });
@@ -803,10 +845,10 @@ export class GLTFLoader {
     return nodes;
   }
 
-  static populateSkins(skins, nodes) {
+  static populateSkins(skins: any, nodes: any) {
     if (!skins) return;
-    skins.forEach((skin) => {
-      skin.joints = skin.joints.map((i, index) => {
+    skins.forEach((skin: any) => {
+      skin.joints = skin.joints.map((i: number, index: number) => {
         const joint = nodes[i];
         joint.skin = skin;
         joint.bindInverse = new Mat4(...skin.inverseBindMatrices.data.slice(index * 16, (index + 1) * 16));
@@ -816,7 +858,7 @@ export class GLTFLoader {
     });
   }
 
-  static parseAnimations(gl, desc, nodes, bufferViews) {
+  static parseAnimations(gl: OGLRenderingContext, desc: any, nodes: any, bufferViews: any[] | null) {
     if (!desc.animations) return null;
     return desc.animations.map(
       (
@@ -826,8 +868,8 @@ export class GLTFLoader {
           name // optional
           // extensions, // optional
           // extras,  // optional
-        },
-        animationIndex
+        }: any,
+        animationIndex: number
       ) => {
         const data = channels.map(
           ({
@@ -835,7 +877,7 @@ export class GLTFLoader {
             target // required
             // extensions, // optional
             // extras, // optional
-          }) => {
+          }: any) => {
             const {
               input: inputIndex, // required
               interpolation = 'LINEAR',
@@ -852,7 +894,7 @@ export class GLTFLoader {
             } = target;
 
             const node = nodes[nodeIndex];
-            const transform = TRANSFORMS[path];
+            const transform = (TRANSFORMS as Record<string, string>)[path];
             const times = this.parseAccessor(inputIndex, desc, bufferViews).data;
             const values = this.parseAccessor(outputIndex, desc, bufferViews).data;
 
@@ -878,7 +920,7 @@ export class GLTFLoader {
     );
   }
 
-  static parseScenes(desc, nodes) {
+  static parseScenes(desc: any, nodes: any) {
     if (!desc.scenes) return null;
     return desc.scenes.map(
       ({
@@ -886,37 +928,37 @@ export class GLTFLoader {
         name, // optional
         extensions,
         extras
-      }) => {
-        const scene = nodesIndices.reduce((map, i) => {
+      }: any) => {
+        const scene = nodesIndices.reduce((map: any[], i: number) => {
           // Don't add null nodes (instanced transforms)
           if (nodes[i]) map.push(nodes[i]);
           return map;
-        }, []);
+        }, []) as any[] & { extras?: any };
         scene.extras = extras;
         return scene;
       }
     );
   }
 
-  static parseLights(gl, desc, nodes, scenes) {
-    const lights = {
+  static parseLights(gl: OGLRenderingContext, desc: any, nodes: any, scenes: any) {
+    const lights: Record<'directional' | 'point' | 'spot', any[]> = {
       directional: [],
       point: [],
       spot: []
     };
 
     // Update matrices on root nodes
-    scenes.forEach((scene) => scene.forEach((node) => node.updateMatrixWorld()));
+    scenes.forEach((scene: any) => scene.forEach((node: any) => node.updateMatrixWorld()));
 
     // uses KHR_lights_punctual extension
     const lightsDescArray = desc.extensions?.KHR_lights_punctual?.lights || [];
 
     // Need nodes for transforms
-    nodes.forEach((node) => {
+    nodes.forEach((node: any) => {
       if (!node?.extensions?.KHR_lights_punctual) return;
       const lightIndex = node.extensions.KHR_lights_punctual.light;
       const lightDesc = lightsDescArray[lightIndex];
-      const light = {
+      const light: any = {
         name: lightDesc.name || '',
         color: { value: new Vec3().set(lightDesc.color || 1) }
       };
@@ -938,7 +980,7 @@ export class GLTFLoader {
           break;
       }
 
-      lights[lightDesc.type].push(light);
+      lights[lightDesc.type as keyof typeof lights].push(light);
     });
 
     return lights;

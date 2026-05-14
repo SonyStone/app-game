@@ -81,7 +81,7 @@ export default function Raycasting() {
     renderer.render({ scene, camera });
   }
 
-  const [running, start, stop] = createRAF(update);
+  const [, start,] = createRAF(update);
   start();
 
   const mouse = new Vec2();
@@ -118,7 +118,7 @@ export default function Raycasting() {
     mouse.set(2.0 * (e.x / renderer.width) - 1.0, 2.0 * (1.0 - e.y / renderer.height) - 1.0);
 
     // Update the ray's origin and direction using the camera and mouse
-    raycast.castMouse(camera, mouse);
+     raycast.castMouse(camera, mouse as unknown as [number, number]);
 
     // Just for the feedback in this example - reset each mesh's hit to false
     meshes.forEach((mesh) => (mesh.isHit = false));

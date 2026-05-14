@@ -51,7 +51,7 @@ export class CommandSpy {
   private readonly callback: CommandSpyCallback;
   private readonly commandOptions: IContextInformation;
 
-  private command: BaseCommand;
+  private command!: BaseCommand;
   private overloadedCommand: any;
 
   constructor(options: ICommandSpyOptions) {

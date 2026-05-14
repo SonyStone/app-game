@@ -15,9 +15,9 @@ export class GetParameter extends BaseCommand {
 
     const tag = WebGlObjects.getWebGlObjectTag(result);
     if (tag) {
-      return tag.displayText;
+      return tag.displayText ?? WebGlObjects.stringifyWebGlObjectTag(tag);
     }
 
-    return result;
+    return String(result);
   }
 }

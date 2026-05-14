@@ -178,7 +178,7 @@ function ImageCreateAndDestroy() {
     get width() {
       return imageSize();
     },
-    onload: (e) => console.log('🥲 Cloned Image loaded:', e)
+    onload: (e: Event) => console.log('🥲 Cloned Image loaded:', e)
   });
 
   function addImage() {
@@ -190,7 +190,7 @@ function ImageCreateAndDestroy() {
       get width() {
         return imageSize();
       },
-      onload: (e) => console.log('🥲 Cloned Image loaded:', e)
+      onload: (e: Event) => console.log('🥲 Cloned Image loaded:', e)
     });
     holder.appendChild(newImage);
   }

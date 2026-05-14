@@ -67,7 +67,9 @@ function MenuButton(props: MenuButtonProps) {
               }}
               class="bg-white border shadow rounded-2 absolute overflow-hidden"
             >
-              <MenuPopup {...props} {...menuProps} autofocus={state.focusStrategy()} onClose={() => state.close()} />
+              <MenuPopup {...(menuProps as AriaMenuProps)} onAction={props.onAction} onClose={() => state.close()}>
+                {props.children}
+              </MenuPopup>
             </div>
           </Show>
         </Transition>

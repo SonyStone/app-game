@@ -1,7 +1,7 @@
 import type { AnyTreeView } from './AnyTreeView';
-import type { DefaultNode, NodeNewRoot, SavedwinNode } from './tree-schema';
+import type { DefaultNode, NodeNewRoot, SavedwinNode, TabNode, WinNode } from './tree-schema';
 
 export type BookmarksTreeView = AnyTreeView<
   'children',
-  (SavedwinNode | (DefaultNode & { type: 'default' }) | NodeNewRoot['node']) & { id: number }
+  (SavedwinNode | TabNode | WinNode | (DefaultNode & { type: 'default' }) | NodeNewRoot['node']) & { id: number }
 >;

@@ -7,10 +7,10 @@ import { Entity } from '../entity';
 
 export class Query {
 
-  components: Component[] | Component[][];
-  private isChanged: boolean;
+  components: Component[] | Component[][] = [];
+  private isChanged = false;
 
-  private componentConstructors: Map<Constructor<Component>, OperatorComponent>;
+  private componentConstructors = new Map<Constructor<Component>, OperatorComponent>();
 
   private entities = new Set<Entity>();
 
@@ -25,7 +25,7 @@ export class Query {
 
     // Fill the query with the existing entities
     for (const entity of entities) {
-      const isAddEntity = !some(operatorComponents)(({skipEntity}) => skipEntity(entity));
+      const isAddEntity = !some(operatorComponents)(({ skipEntity }) => skipEntity?.(entity) ?? false);
 
       if (isAddEntity) {
         this.addEntity(entity);
@@ -52,7 +52,7 @@ export class Query {
       return;
     }
 
-    const isAddEntity = !some(operatorComponent)(({skipEntity}) => skipEntity(entity));
+    const isAddEntity = !some(operatorComponent)(({ skipEntity }) => skipEntity?.(entity) ?? false);
 
     if (isAddEntity) {
       this.addEntity(entity);

@@ -83,9 +83,11 @@ export default function Lesson1Fundamentals() {
 
     // 6. Now it’s time to render.
     render = () => {
+      const colorAttachments = renderPassDescriptor.colorAttachments as Array<GPURenderPassColorAttachment | null | undefined>;
+
       // Get the current texture from the canvas context and
       // set it as the texture to render to.
-      renderPassDescriptor.colorAttachments[0]!.view = context.getCurrentTexture().createView();
+      colorAttachments[0]!.view = context.getCurrentTexture().createView();
 
       // make a command encoder to start encoding commands
       const encoder = device!.createCommandEncoder({ label: 'our encoder' });
@@ -103,7 +105,7 @@ export default function Lesson1Fundamentals() {
     render();
   });
 
-  createResizeObserver(canvas, ({ width, height }) => {
+  createResizeObserver(canvas as unknown as Element, ({ width, height }) => {
     if (!device || !render) {
       return;
     }

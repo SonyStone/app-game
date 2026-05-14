@@ -108,7 +108,7 @@ export class Shader {
         gl.uniformMatrix2fv(uniform.location, false, uniform.value);
         break;
       case GL_DATA_TYPE.FLOAT_MAT4:
-        uniform.value = uniform.value || m4.identity();
+        uniform.value = uniform.value || m4.identity(new Float32Array(16));
         gl.uniformMatrix4fv(uniform.location, false, uniform.value);
         break;
 

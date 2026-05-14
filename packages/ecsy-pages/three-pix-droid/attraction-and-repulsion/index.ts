@@ -80,7 +80,7 @@ class PerformanceCompensation {
 
 // UpdateDotsSystem
 @SystemData(Read(Dot), Read(PerformanceCompensation))
-class UpdateDotsSystem implements System {
+class UpdateDotsSystem extends System {
   // This method will get called on every frame by default
   run(dots: Dot[]) {
     // Iterate through all the entities on the query
@@ -117,7 +117,7 @@ class UpdateDotsSystem implements System {
 }
 
 @SystemData(Read(MouseClick), Read(MousePosition))
-class AddDotsSystem implements System {
+class AddDotsSystem extends System {
   run([mouseClick]: MouseClick[], [mouse]: MousePosition[]) {
     const down = mouseClick.down;
 
@@ -128,21 +128,21 @@ class AddDotsSystem implements System {
 }
 
 @SystemData(Read(MouseClick))
-class UpadateMouseClickSystem implements System {
+class UpadateMouseClickSystem extends System {
   run([mouse]: MouseClick[]) {
     mouse.down = gDown;
   }
 }
 
 @SystemData(Read(MousePosition))
-class UpadateMousePositionSystem implements System {
+class UpadateMousePositionSystem extends System {
   run([mouse]: MousePosition[]) {
     [mouse.x, mouse.y] = [gMouse.x, gMouse.y];
   }
 }
 
 @SystemData(Read(MousePosition))
-export class RendererBackground implements System {
+export class RendererBackground extends System {
   run() {
     ctx.fillStyle = 'rgb(21, 25, 46)';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
@@ -150,7 +150,7 @@ export class RendererBackground implements System {
 }
 
 @SystemData(Read(Dot), Read(MousePosition))
-class RendererDotsSystem implements System {
+class RendererDotsSystem extends System {
   createCircle = draw(ctx).createCircle;
 
   run(dots: Dot[], [mouse]: MousePosition[]) {

@@ -23,7 +23,7 @@ export const {
 
 export * from 'solid-js';
 
-type DynamicProps<T> = T & {
+type DynamicProps<T extends Record<string, any>> = T & {
   children?: any;
   component?: Component<T> | string | keyof JSX.IntrinsicElements;
 };
@@ -35,7 +35,7 @@ type DynamicProps<T> = T & {
  * ```
  * @description https://www.solidjs.com/docs/latest/api#%3Cdynamic%3E
  */
-export function Dynamic<T>(props: DynamicProps<T>): Accessor<JSX.Element> {
+export function Dynamic<T extends Record<string, any>>(props: DynamicProps<T>): Accessor<JSX.Element> {
   const [p, others] = splitProps(props, ['component']);
   return createMemo(() => {
     const component = p.component as Function | string;

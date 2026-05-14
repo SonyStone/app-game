@@ -71,8 +71,8 @@ export default function Multitouch() {
   createEventListener(window, 'contextmenu', (event) => event.preventDefault());
 
   const stroke = createMemo(() => {
-    const y = inputS()?.delta[0] ?? 0;
-    const x = inputS()?.delta[1] ?? 0;
+    const y = inputS()?.delta.x ?? 0;
+    const x = inputS()?.delta.y ?? 0;
 
     return clamp((y + x) / 2, -30, 30);
   });
@@ -100,8 +100,8 @@ export default function Multitouch() {
               stroke-linecap="round"
               x1="0"
               y1="0"
-              x2={(inputS()?.tilt[0] ?? 0) / 9}
-              y2={(inputS()?.tilt[1] ?? 0) / 9}
+              x2={(inputS()?.tilt.x ?? 0) / 9}
+              y2={(inputS()?.tilt.y ?? 0) / 9}
               stroke="black"
               stroke-width="1"
             />

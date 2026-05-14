@@ -1,4 +1,4 @@
-export const some = <T>(values: T | T[]) => (fn: (T) => boolean): boolean => {
+export const some = <T>(values: T | T[]) => (fn: (value: T) => boolean): boolean => {
   if (Array.isArray(values)) {
 
     return values.some(fn)

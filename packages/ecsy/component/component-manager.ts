@@ -36,6 +36,6 @@ export class ComponentManager {
   private getComponentsPool(componentConstructor: Constructor<Component>): Pool<Component> {
     this.registerComponent(componentConstructor);
 
-    return this.componentPool.get(componentConstructor);
+    return this.componentPool.get(componentConstructor)!;
   }
 }

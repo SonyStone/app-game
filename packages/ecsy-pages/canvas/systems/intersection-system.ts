@@ -3,7 +3,7 @@ import { Entity, ObjectPool, Read, System, SystemData } from '@app-game/ecsy';
 import { Circle, Intersecting, Position } from '../components';
 import { Intersection } from '../utils';
 
-export class IntersectionSystem implements System {
+export class IntersectionSystem extends System {
   intersectionPool = new ObjectPool<Intersection>(Intersection);
 
   run(entities: [Circle, Position, Entity, Intersecting][]) {

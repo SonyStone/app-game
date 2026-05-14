@@ -9,6 +9,10 @@ import * as programs from './programs';
 import * as typedarrays from './typedarrays';
 import * as vertexArrays from './vertex-arrays';
 
+import type { Defaults } from './index';
+
+type ExtendableContext = (WebGLRenderingContext | WebGL2RenderingContext) & Record<string, any>;
+
 /**
  * The main TWGL module.
  *
@@ -114,19 +118,19 @@ const defaults = {
  * @param {module:twgl.Defaults} newDefaults The default settings.
  * @memberOf module:twgl
  */
-function setDefaults(newDefaults) {
+function setDefaults(newDefaults: Partial<Defaults>) {
   helper.copyExistingProperties(newDefaults, defaults);
   attributes.setAttributeDefaults(newDefaults); // eslint-disable-line
   textures.setTextureDefaults_(newDefaults); // eslint-disable-line
 }
 
 const prefixRE = /^(.*?)_/;
-function addExtensionToContext(gl, extensionName) {
+function addExtensionToContext(gl: ExtendableContext, extensionName: string) {
   utils.glEnumToString(gl, 0);
   const ext = gl.getExtension(extensionName);
   if (ext) {
-    const enums = {};
-    const fnSuffix = prefixRE.exec(extensionName)[1];
+    const enums: Record<string, unknown> & { constructor?: { name: string } } = {};
+    const fnSuffix = prefixRE.exec(extensionName)?.[1] ?? '';
     const enumSuffix = '_' + fnSuffix;
     for (const key in ext) {
       const value = ext[key];
@@ -159,7 +163,7 @@ function addExtensionToContext(gl, extensionName) {
     enums.constructor = {
       name: ext.constructor.name
     };
-    utils.glEnumToString(enums, 0);
+    utils.glEnumToString(enums as any, 0);
   }
   return ext;
 }
@@ -248,7 +252,7 @@ const supportedExtensions = [
  * @param {WebGLRenderingContext} gl A WebGLRenderingContext
  * @memberOf module:twgl
  */
-function addExtensionsToContext(gl) {
+function addExtensionsToContext(gl: ExtendableContext) {
   for (let ii = 0; ii < supportedExtensions.length; ++ii) {
     addExtensionToContext(gl, supportedExtensions[ii]);
   }
@@ -262,19 +266,22 @@ function addExtensionsToContext(gl) {
  * @return {WebGLRenderingContext} The created context.
  * @private
  */
-function create3DContext(canvas: HTMLCanvasElement, opt_attribs?: WebGLContextAttributes): WebGL2RenderingContext {
+function create3DContext(
+  canvas: HTMLCanvasElement,
+  opt_attribs?: WebGLContextAttributes
+): WebGLRenderingContext | WebGL2RenderingContext | null {
   const names = ['webgl', 'experimental-webgl'];
   let context = null;
   for (let ii = 0; ii < names.length; ++ii) {
     context = canvas.getContext(names[ii], opt_attribs);
     if (context) {
       if (defaults.addExtensionsToContext) {
-        addExtensionsToContext(context);
+        addExtensionsToContext(context as ExtendableContext);
       }
       break;
     }
   }
-  return context;
+  return context as WebGLRenderingContext | WebGL2RenderingContext | null;
 }
 
 /**
@@ -291,7 +298,10 @@ function create3DContext(canvas: HTMLCanvasElement, opt_attribs?: WebGLContextAt
  * @deprecated
  * @private
  */
-function getWebGLContext(canvas: HTMLCanvasElement, opt_attribs?: WebGLContextAttributes): WebGL2RenderingContext {
+function getWebGLContext(
+  canvas: HTMLCanvasElement,
+  opt_attribs?: WebGLContextAttributes
+): WebGLRenderingContext | WebGL2RenderingContext | null {
   const gl = create3DContext(canvas, opt_attribs);
   return gl;
 }
@@ -310,19 +320,22 @@ function getWebGLContext(canvas: HTMLCanvasElement, opt_attribs?: WebGLContextAt
  *     created.
  * @return {WebGLRenderingContext} The created context.
  */
-function createContext(canvas: HTMLCanvasElement, opt_attribs?: WebGLContextAttributes): WebGL2RenderingContext {
+function createContext(
+  canvas: HTMLCanvasElement,
+  opt_attribs?: WebGLContextAttributes
+): WebGLRenderingContext | WebGL2RenderingContext | null {
   const names = ['webgl2', 'webgl', 'experimental-webgl'];
   let context = null;
   for (let ii = 0; ii < names.length; ++ii) {
     context = canvas.getContext(names[ii], opt_attribs);
     if (context) {
       if (defaults.addExtensionsToContext) {
-        addExtensionsToContext(context);
+        addExtensionsToContext(context as ExtendableContext);
       }
       break;
     }
   }
-  return context;
+  return context as WebGLRenderingContext | WebGL2RenderingContext | null;
 }
 
 /**
@@ -343,7 +356,10 @@ function createContext(canvas: HTMLCanvasElement, opt_attribs?: WebGLContextAttr
  * @return {WebGLRenderingContext} The created context.
  * @memberOf module:twgl
  */
-function getContext(canvas: HTMLCanvasElement, opt_attribs?: WebGLContextAttributes): WebGL2RenderingContext {
+function getContext(
+  canvas: HTMLCanvasElement,
+  opt_attribs?: WebGLContextAttributes
+): WebGLRenderingContext | WebGL2RenderingContext | null {
   const gl = createContext(canvas, opt_attribs);
   return gl;
 }

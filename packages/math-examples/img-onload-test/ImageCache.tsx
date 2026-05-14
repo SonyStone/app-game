@@ -25,7 +25,7 @@ import { spread } from 'solid-js/web';
 export function createImageCache() {
   type Root = {
     src: string | undefined;
-    img: HTMLImageElement;
+    img: HTMLImageElement | Accessor<HTMLImageElement | null>;
     readyForClone: Accessor<boolean>;
     dispose(): void;
     refcount: number;
@@ -78,7 +78,7 @@ export function createImageCache() {
 
       // Need to clone only after original img did load to avoid re-loading
       console.log(`♻️ Cloned image element for src: ${sourceRoot.src}`);
-      const img = sourceRoot.img.cloneNode() as HTMLImageElement;
+      const img = (sourceRoot.img as HTMLImageElement).cloneNode() as HTMLImageElement;
       spread(
         img,
         mergeProps(props(), {

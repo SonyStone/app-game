@@ -1,3 +1,4 @@
+// @ts-expect-error dat.gui does not ship types in this workspace
 import * as dat from 'dat.gui';
 import { Scene } from 'phaser';
 import { onCleanup } from 'solid-js';
@@ -109,6 +110,7 @@ const config = {
     default: 'matter',
     matter: {
       gravity: {
+        x: 0,
         y: 0
       },
       debug: true

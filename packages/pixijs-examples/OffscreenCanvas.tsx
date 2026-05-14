@@ -23,7 +23,8 @@ export function OffscreenCanvas(props: { worker: Worker } & JSX.CanvasHTMLAttrib
     });
   }
 
-  createEventListener(canvasEl, 'pointerdown', (e: PointerEvent) => {
+  createEventListener(() => canvasEl, 'pointerdown', (event) => {
+    const e = event as PointerEvent;
     local.worker.postMessage({
       type: 'pointerdown',
       pointerId: e.pointerId,

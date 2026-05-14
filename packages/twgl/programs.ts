@@ -1,5 +1,4 @@
 import { GL_SHADER_TYPE } from '@app-game/webgl/static-variables';
-import { ProgramInfo } from 'twgl.js';
 import { ErrorCallback, ProgramOptions } from '.';
 import * as helper from './helper';
 import * as utils from './utils';
@@ -21,7 +20,120 @@ import * as utils from './utils';
 
 const error = helper.error;
 const warn = helper.warn;
-function getElementById(id) {
+
+type ProgramGLContext = WebGLRenderingContext | WebGL2RenderingContext;
+type ProgramContextLike = Parameters<typeof utils.isWebGL2>[0];
+type TypedArrayConstructor = Float32ArrayConstructor | Int32ArrayConstructor | Uint32ArrayConstructor;
+type UniformSetter = ((...args: any[]) => void) & {
+  location?: WebGLUniformLocation;
+};
+type UniformValue = number | ArrayLike<number>;
+type UniformSetterMap = Record<string, UniformSetter>;
+type PublicUniformSetterMap = Record<string, (...args: any[]) => void>;
+type UniformTree = Record<string | number, any>;
+type TypeMapEntry = {
+  Type: TypedArrayConstructor | null;
+  size: number;
+  setter: (...args: any[]) => UniformSetter;
+  arraySetter?: (...args: any[]) => UniformSetter;
+  rows?: number;
+  cols?: number;
+  bindPoint?: number;
+};
+type AttribValue = Float32List | Int32List | Uint32List;
+type AttribInfoLike = {
+  value?: AttribValue;
+  buffer?: WebGLBuffer | null;
+  numComponents?: number;
+  size?: number;
+  type?: number;
+  normalize?: boolean;
+  stride?: number;
+  offset?: number;
+  divisor?: number;
+};
+type AttribSetter = ((attribInfo: AttribInfoLike) => void) & {
+  location?: number;
+};
+type AttribSetterMap = Record<string, AttribSetter>;
+type PublicAttribSetterMap = Record<string, (attribInfo: AttribInfoLike) => void>;
+type AttrTypeMapEntry = {
+  size: number;
+  setter: (...args: any[]) => AttribSetter;
+  count?: number;
+};
+type ProgramCreationOptions = {
+  errorCallback: ErrorCallback;
+  callback?: (err?: string, result?: unknown) => void;
+  errors: string[];
+  transformFeedbackVaryings?: unknown;
+  transformFeedbackMode?: number;
+  attribLocations?: Record<string, number>;
+};
+type ProgramOptionsLike = ProgramOptions & {
+  callback?: (err?: string, result?: unknown) => void;
+  attribLocations?: Record<string, number> | string[];
+  transformFeedbackVaryings?: unknown;
+  transformFeedbackMode?: number;
+  errorCallback?: ErrorCallback;
+};
+type ProgramOptionsArg = ProgramCreationOptions | ProgramOptionsLike | string[] | ErrorCallback | undefined;
+type TextureSamplerPair = {
+  texture: WebGLTexture | null;
+  sampler: WebGLSampler | null;
+};
+type TransformFeedbackInfo = {
+  index: number;
+  type: number;
+  size: number;
+};
+type TransformFeedbackInfoMap = Record<string, TransformFeedbackInfo>;
+type BufferInfoLike = {
+  attribs?: Record<string, AttribInfoLike>;
+  indices?: WebGLBuffer | null;
+  vertexArrayObject?: WebGLVertexArrayObject | null;
+};
+type BlockUniformData = {
+  name: string;
+  type: number;
+  size: number;
+  blockNdx: number;
+  offset: number;
+};
+type BlockUniformNumericKey = 'type' | 'size' | 'blockNdx' | 'offset';
+type BlockSpec = {
+  index: number;
+  usedByVertexShader: boolean | number;
+  usedByFragmentShader: boolean | number;
+  size: number;
+  uniformIndices: number[];
+  used: boolean;
+};
+type UniformBlockSpec = {
+  blockSpecs: Record<string, BlockSpec>;
+  uniformData: BlockUniformData[];
+};
+type UniformBlockInfo = {
+  name: string;
+  array: ArrayBuffer;
+  asFloat: Float32Array;
+  buffer: WebGLBuffer | null;
+  offset?: number;
+  uniforms: Record<string, ArrayBufferView>;
+  setters: Record<string, (value: UniformValue) => void>;
+};
+type ProgramInfoLike = {
+  program: WebGLProgram;
+  uniformSetters?: PublicUniformSetterMap;
+  attribSetters?: PublicAttribSetterMap;
+  uniformBlockSpec?: UniformBlockSpec;
+  transformFeedbackInfo?: TransformFeedbackInfoMap;
+};
+type ProgramSpecLike = string[] | (ProgramOptionsLike & { shaders: (string | WebGLShader)[] });
+type ProgramSpecMap = Record<string, ProgramSpecLike>;
+type SharedProgramOptions = ProgramOptionsLike | ProgramCreationOptions;
+
+function getElementById(id: string): HTMLElement | null {
   return typeof document !== 'undefined' && document.getElementById ? document.getElementById(id) : null;
 }
 
@@ -96,216 +208,230 @@ const TEXTURE_CUBE_MAP = 0x8513;
 const TEXTURE_3D = 0x806f;
 const TEXTURE_2D_ARRAY = 0x8c1a;
 
-const typeMap = {};
+const typeMap: Record<number, TypeMapEntry> = {};
 
 /**
  * Returns the corresponding bind point for a given sampler type
  * @private
  */
-function getBindPointForSamplerType(gl, type) {
-  return typeMap[type].bindPoint;
+function getBindPointForSamplerType(gl: ProgramGLContext, type: number): number {
+  const typeInfo = typeMap[type];
+  if (!typeInfo || typeInfo.bindPoint === undefined) {
+    throw new Error('unknown sampler type');
+  }
+  return typeInfo.bindPoint;
 }
 
 // This kind of sucks! If you could compose functions as in `var fn = gl[name];`
 // this code could be a lot smaller but that is sadly really slow (T_T)
 
-function floatSetter(gl, location) {
-  return function (v) {
+function floatSetter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: number) => void {
+  return function (v: number) {
     gl.uniform1f(location, v);
   };
 }
 
-function floatArraySetter(gl, location) {
-  return function (v) {
+function floatArraySetter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniform1fv(location, v);
   };
 }
 
-function floatVec2Setter(gl, location) {
-  return function (v) {
+function floatVec2Setter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniform2fv(location, v);
   };
 }
 
-function floatVec3Setter(gl, location) {
-  return function (v) {
+function floatVec3Setter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniform3fv(location, v);
   };
 }
 
-function floatVec4Setter(gl, location) {
-  return function (v) {
+function floatVec4Setter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniform4fv(location, v);
   };
 }
 
-function intSetter(gl, location) {
-  return function (v) {
+function intSetter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: number) => void {
+  return function (v: number) {
     gl.uniform1i(location, v);
   };
 }
 
-function intArraySetter(gl, location) {
-  return function (v) {
+function intArraySetter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Int32List) => void {
+  return function (v: Int32List) {
     gl.uniform1iv(location, v);
   };
 }
 
-function intVec2Setter(gl, location) {
-  return function (v) {
+function intVec2Setter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Int32List) => void {
+  return function (v: Int32List) {
     gl.uniform2iv(location, v);
   };
 }
 
-function intVec3Setter(gl, location) {
-  return function (v) {
+function intVec3Setter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Int32List) => void {
+  return function (v: Int32List) {
     gl.uniform3iv(location, v);
   };
 }
 
-function intVec4Setter(gl, location) {
-  return function (v) {
+function intVec4Setter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Int32List) => void {
+  return function (v: Int32List) {
     gl.uniform4iv(location, v);
   };
 }
 
-function uintSetter(gl, location) {
-  return function (v) {
+function uintSetter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: number) => void {
+  return function (v: number) {
     gl.uniform1ui(location, v);
   };
 }
 
-function uintArraySetter(gl, location) {
-  return function (v) {
+function uintArraySetter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: Uint32List) => void {
+  return function (v: Uint32List) {
     gl.uniform1uiv(location, v);
   };
 }
 
-function uintVec2Setter(gl, location) {
-  return function (v) {
+function uintVec2Setter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: Uint32List) => void {
+  return function (v: Uint32List) {
     gl.uniform2uiv(location, v);
   };
 }
 
-function uintVec3Setter(gl, location) {
-  return function (v) {
+function uintVec3Setter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: Uint32List) => void {
+  return function (v: Uint32List) {
     gl.uniform3uiv(location, v);
   };
 }
 
-function uintVec4Setter(gl, location) {
-  return function (v) {
+function uintVec4Setter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: Uint32List) => void {
+  return function (v: Uint32List) {
     gl.uniform4uiv(location, v);
   };
 }
 
-function floatMat2Setter(gl, location) {
-  return function (v) {
+function floatMat2Setter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniformMatrix2fv(location, false, v);
   };
 }
 
-function floatMat3Setter(gl, location) {
-  return function (v) {
+function floatMat3Setter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniformMatrix3fv(location, false, v);
   };
 }
 
-function floatMat4Setter(gl, location) {
-  return function (v) {
+function floatMat4Setter(gl: ProgramGLContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniformMatrix4fv(location, false, v);
   };
 }
 
-function floatMat23Setter(gl, location) {
-  return function (v) {
+function floatMat23Setter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniformMatrix2x3fv(location, false, v);
   };
 }
 
-function floatMat32Setter(gl, location) {
-  return function (v) {
+function floatMat32Setter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniformMatrix3x2fv(location, false, v);
   };
 }
 
-function floatMat24Setter(gl, location) {
-  return function (v) {
+function floatMat24Setter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniformMatrix2x4fv(location, false, v);
   };
 }
 
-function floatMat42Setter(gl, location) {
-  return function (v) {
+function floatMat42Setter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniformMatrix4x2fv(location, false, v);
   };
 }
 
-function floatMat34Setter(gl, location) {
-  return function (v) {
+function floatMat34Setter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniformMatrix3x4fv(location, false, v);
   };
 }
 
-function floatMat43Setter(gl, location) {
-  return function (v) {
+function floatMat43Setter(gl: WebGL2RenderingContext, location: WebGLUniformLocation): (v: Float32List) => void {
+  return function (v: Float32List) {
     gl.uniformMatrix4x3fv(location, false, v);
   };
 }
 
-function samplerSetter(gl, type, unit, location) {
+function samplerSetter(gl: ProgramGLContext, type: number, unit: number, location: WebGLUniformLocation): UniformSetter {
   const bindPoint = getBindPointForSamplerType(gl, type);
-  return utils.isWebGL2(gl)
-    ? function (textureOrPair) {
-        let texture;
-        let sampler;
-        if (!textureOrPair || helper.isTexture(gl, textureOrPair)) {
-          texture = textureOrPair;
+  return utils.isWebGL2(gl as ProgramContextLike)
+    ? function (textureOrPair: unknown) {
+        const gl2 = gl as WebGL2RenderingContext;
+        let texture: WebGLTexture | null;
+        let sampler: WebGLSampler | null;
+        if (!textureOrPair || helper.isTexture(gl2, textureOrPair)) {
+          texture = textureOrPair as WebGLTexture | null;
           sampler = null;
         } else {
-          texture = textureOrPair.texture;
-          sampler = textureOrPair.sampler;
+          const pair = textureOrPair as TextureSamplerPair;
+          texture = pair.texture;
+          sampler = pair.sampler;
         }
-        gl.uniform1i(location, unit);
-        gl.activeTexture(TEXTURE0 + unit);
-        gl.bindTexture(bindPoint, texture);
-        gl.bindSampler(unit, sampler);
+        gl2.uniform1i(location, unit);
+        gl2.activeTexture(TEXTURE0 + unit);
+        gl2.bindTexture(bindPoint, texture);
+        gl2.bindSampler(unit, sampler);
       }
-    : function (texture) {
+    : function (texture: WebGLTexture | null) {
         gl.uniform1i(location, unit);
         gl.activeTexture(TEXTURE0 + unit);
         gl.bindTexture(bindPoint, texture);
       };
 }
 
-function samplerArraySetter(gl, type, unit, location, size) {
+function samplerArraySetter(
+  gl: ProgramGLContext,
+  type: number,
+  unit: number,
+  location: WebGLUniformLocation,
+  size: number
+): UniformSetter {
   const bindPoint = getBindPointForSamplerType(gl, type);
   const units = new Int32Array(size);
   for (let ii = 0; ii < size; ++ii) {
     units[ii] = unit + ii;
   }
 
-  return utils.isWebGL2(gl)
-    ? function (textures) {
-        gl.uniform1iv(location, units);
-        textures.forEach(function (textureOrPair, index) {
-          gl.activeTexture(TEXTURE0 + units[index]);
-          let texture;
-          let sampler;
-          if (!textureOrPair || helper.isTexture(gl, textureOrPair)) {
-            texture = textureOrPair;
+  return utils.isWebGL2(gl as ProgramContextLike)
+    ? function (textures: unknown) {
+        const gl2 = gl as WebGL2RenderingContext;
+        gl2.uniform1iv(location, units);
+        (textures as Array<unknown>).forEach(function (textureOrPair: unknown, index: number) {
+          gl2.activeTexture(TEXTURE0 + units[index]);
+          let texture: WebGLTexture | null;
+          let sampler: WebGLSampler | null;
+          if (!textureOrPair || helper.isTexture(gl2, textureOrPair)) {
+            texture = textureOrPair as WebGLTexture | null;
             sampler = null;
           } else {
-            texture = textureOrPair.texture;
-            sampler = textureOrPair.sampler;
+            const pair = textureOrPair as TextureSamplerPair;
+            texture = pair.texture;
+            sampler = pair.sampler;
           }
-          gl.bindSampler(unit, sampler);
-          gl.bindTexture(bindPoint, texture);
+          gl2.bindSampler(unit, sampler);
+          gl2.bindTexture(bindPoint, texture);
         });
       }
-    : function (textures) {
+    : function (textures: unknown) {
         gl.uniform1iv(location, units);
-        textures.forEach(function (texture, index) {
+        (textures as Array<WebGLTexture | null>).forEach(function (texture: WebGLTexture | null, index: number) {
           gl.activeTexture(TEXTURE0 + units[index]);
           gl.bindTexture(bindPoint, texture);
         });
@@ -443,8 +569,8 @@ typeMap[UNSIGNED_INT_SAMPLER_2D_ARRAY] = {
   bindPoint: TEXTURE_2D_ARRAY
 };
 
-function floatAttribSetter(gl, index) {
-  return function (b) {
+function floatAttribSetter(gl: ProgramGLContext, index: number): AttribSetter {
+  return function (b: AttribInfoLike) {
     if (b.value) {
       gl.disableVertexAttribArray(index);
       switch (b.value.length) {
@@ -464,36 +590,37 @@ function floatAttribSetter(gl, index) {
           throw new Error('the length of a float constant value must be between 1 and 4!');
       }
     } else {
-      gl.bindBuffer(ARRAY_BUFFER, b.buffer);
+      gl.bindBuffer(ARRAY_BUFFER, b.buffer || null);
       gl.enableVertexAttribArray(index);
       gl.vertexAttribPointer(
         index,
-        b.numComponents || b.size,
+        b.numComponents || b.size || 0,
         b.type || FLOAT,
         b.normalize || false,
         b.stride || 0,
         b.offset || 0
       );
-      if (gl.vertexAttribDivisor) {
-        gl.vertexAttribDivisor(index, b.divisor || 0);
+      const gl2 = gl as WebGL2RenderingContext;
+      if (gl2.vertexAttribDivisor) {
+        gl2.vertexAttribDivisor(index, b.divisor || 0);
       }
     }
   };
 }
 
-function intAttribSetter(gl, index) {
-  return function (b) {
+function intAttribSetter(gl: WebGL2RenderingContext, index: number): AttribSetter {
+  return function (b: AttribInfoLike) {
     if (b.value) {
       gl.disableVertexAttribArray(index);
       if (b.value.length === 4) {
-        gl.vertexAttrib4iv(index, b.value);
+        gl.vertexAttribI4iv(index, b.value as Int32List);
       } else {
         throw new Error('The length of an integer constant value must be 4!');
       }
     } else {
-      gl.bindBuffer(ARRAY_BUFFER, b.buffer);
+      gl.bindBuffer(ARRAY_BUFFER, b.buffer || null);
       gl.enableVertexAttribArray(index);
-      gl.vertexAttribIPointer(index, b.numComponents || b.size, b.type || INT, b.stride || 0, b.offset || 0);
+      gl.vertexAttribIPointer(index, b.numComponents || b.size || 0, b.type || INT, b.stride || 0, b.offset || 0);
       if (gl.vertexAttribDivisor) {
         gl.vertexAttribDivisor(index, b.divisor || 0);
       }
@@ -501,19 +628,19 @@ function intAttribSetter(gl, index) {
   };
 }
 
-function uintAttribSetter(gl, index) {
-  return function (b) {
+function uintAttribSetter(gl: WebGL2RenderingContext, index: number): AttribSetter {
+  return function (b: AttribInfoLike) {
     if (b.value) {
       gl.disableVertexAttribArray(index);
       if (b.value.length === 4) {
-        gl.vertexAttrib4uiv(index, b.value);
+        gl.vertexAttribI4uiv(index, b.value as Uint32List);
       } else {
         throw new Error('The length of an unsigned integer constant value must be 4!');
       }
     } else {
-      gl.bindBuffer(ARRAY_BUFFER, b.buffer);
+      gl.bindBuffer(ARRAY_BUFFER, b.buffer || null);
       gl.enableVertexAttribArray(index);
-      gl.vertexAttribIPointer(index, b.numComponents || b.size, b.type || UNSIGNED_INT, b.stride || 0, b.offset || 0);
+      gl.vertexAttribIPointer(index, b.numComponents || b.size || 0, b.type || UNSIGNED_INT, b.stride || 0, b.offset || 0);
       if (gl.vertexAttribDivisor) {
         gl.vertexAttribDivisor(index, b.divisor || 0);
       }
@@ -521,17 +648,20 @@ function uintAttribSetter(gl, index) {
   };
 }
 
-function matAttribSetter(gl, index, typeInfo) {
+function matAttribSetter(gl: WebGL2RenderingContext, index: number, typeInfo: AttrTypeMapEntry): AttribSetter {
   const defaultSize = typeInfo.size;
-  const count = typeInfo.count;
+  const count = typeInfo.count || 1;
 
-  return function (b) {
-    gl.bindBuffer(ARRAY_BUFFER, b.buffer);
+  return function (b: AttribInfoLike) {
+    gl.bindBuffer(ARRAY_BUFFER, b.buffer || null);
     const numComponents = b.size || b.numComponents || defaultSize;
     const size = numComponents / count;
     const type = b.type || FLOAT;
-    const typeInfo = typeMap[type];
-    const stride = typeInfo.size * numComponents;
+    const mappedTypeInfo = typeMap[type];
+    if (!mappedTypeInfo) {
+      throw new Error('unknown attribute type');
+    }
+    const stride = mappedTypeInfo.size * numComponents;
     const normalize = b.normalize || false;
     const offset = b.offset || 0;
     const rowOffset = stride / count;
@@ -545,7 +675,7 @@ function matAttribSetter(gl, index, typeInfo) {
   };
 }
 
-const attrTypeMap = {};
+const attrTypeMap: Record<number, AttrTypeMapEntry> = {};
 attrTypeMap[FLOAT] = { size: 4, setter: floatAttribSetter };
 attrTypeMap[FLOAT_VEC2] = { size: 8, setter: floatAttribSetter };
 attrTypeMap[FLOAT_VEC3] = { size: 12, setter: floatAttribSetter };
@@ -570,21 +700,21 @@ attrTypeMap[FLOAT_MAT4] = { size: 16, setter: matAttribSetter, count: 4 };
 const gl = undefined; /* eslint-disable-line */
 
 const errorRE = /ERROR:\s*\d+:(\d+)/gi;
-function addLineNumbersWithError(src, log = '', lineOffset = 0) {
+function addLineNumbersWithError(src: string, log = '', lineOffset = 0): string {
   // Note: Error message formats are not defined by any spec so this may or may not work.
   const matches = [...log.matchAll(errorRE)];
   const lineNoToErrorMap = new Map(
     matches.map((m, ndx) => {
-      const lineNo = parseInt(m[1]);
+      const lineNo = parseInt(m[1], 10);
       const next = matches[ndx + 1];
       const end = next ? next.index : log.length;
-      const msg = log.substring(m.index, end);
+      const msg = log.substring(m.index || 0, end);
       return [lineNo - 1, msg];
     })
   );
   return src
     .split('\n')
-    .map((line, lineNo) => {
+    .map((line: string, lineNo: number) => {
       const err = lineNoToErrorMap.get(lineNo);
       return `${lineNo + 1 + lineOffset}: ${line}${err ? `\n\n^^^ ${err}` : ''}`;
     })
@@ -624,7 +754,7 @@ const spaceRE = /^[ \t]*\n/;
  * @returns {{shaderSource: string, lineOffset: number}}
  * @private
  */
-function prepShaderSource(shaderSource) {
+function prepShaderSource(shaderSource: string): { lineOffset: number; shaderSource: string } {
   let lineOffset = 0;
   if (spaceRE.test(shaderSource)) {
     lineOffset = 1;
@@ -639,11 +769,12 @@ function prepShaderSource(shaderSource) {
  * @return null
  * @private
  */
-function reportError(progOptions, msg) {
+function reportError(progOptions: ProgramCreationOptions, msg: string): null {
   progOptions.errorCallback(msg);
-  if (progOptions.callback) {
+  const callback = progOptions.callback;
+  if (callback) {
     setTimeout(() => {
-      progOptions.callback(`${msg}\n${progOptions.errors.join('\n')}`);
+      callback(`${msg}\n${progOptions.errors.join('\n')}`);
     });
   }
   return null;
@@ -658,20 +789,20 @@ function reportError(progOptions, msg) {
  * @return {string} errors or empty string
  * @private
  */
-function checkShaderStatus(gl, shaderType, shader, errFn) {
-  errFn = errFn || error;
+function checkShaderStatus(gl: ProgramGLContext, shaderType: number, shader: WebGLShader, errFn?: ErrorCallback): string {
+  const report = errFn || error;
   // Check the compile status
   const compiled = gl.getShaderParameter(shader, COMPILE_STATUS);
   if (!compiled) {
     // Something went wrong during compilation; get the error
-    const lastError = gl.getShaderInfoLog(shader);
-    const { lineOffset, shaderSource } = prepShaderSource(gl.getShaderSource(shader));
+    const lastError = gl.getShaderInfoLog(shader) || '';
+    const { lineOffset, shaderSource } = prepShaderSource(gl.getShaderSource(shader) || '');
     const error = `${addLineNumbersWithError(
       shaderSource,
       lastError,
       lineOffset
-    )}\nError compiling ${utils.glEnumToString(gl, shaderType)}: ${lastError}`;
-    errFn(error);
+    )}\nError compiling ${utils.glEnumToString(gl as unknown as Parameters<typeof utils.glEnumToString>[0], shaderType)}: ${lastError}`;
+    report(error);
     return error;
   }
   return '';
@@ -716,7 +847,11 @@ function checkShaderStatus(gl, shaderType, shader, errFn) {
  * @return {module:twgl.ProgramOptions} an instance of ProgramOptions based on the arguments passed in
  * @private
  */
-function getProgramOptions(opt_attribs, opt_locations, opt_errorCallback) {
+function getProgramOptions(
+  opt_attribs?: ProgramOptionsArg,
+  opt_locations?: number[] | ErrorCallback,
+  opt_errorCallback?: ErrorCallback
+): ProgramCreationOptions {
   let transformFeedbackVaryings;
   let transformFeedbackMode;
   let callback;
@@ -728,7 +863,7 @@ function getProgramOptions(opt_attribs, opt_locations, opt_errorCallback) {
     opt_errorCallback = opt_attribs;
     opt_attribs = undefined;
   } else if (opt_attribs && !Array.isArray(opt_attribs)) {
-    const opt = opt_attribs;
+    const opt = opt_attribs as ProgramOptionsLike;
     opt_errorCallback = opt.errorCallback;
     opt_attribs = opt.attribLocations;
     transformFeedbackVaryings = opt.transformFeedbackVaryings;
@@ -737,11 +872,11 @@ function getProgramOptions(opt_attribs, opt_locations, opt_errorCallback) {
   }
 
   const errorCallback = opt_errorCallback || error;
-  const errors = [];
-  const options = {
-    errorCallback(msg, ...args) {
+  const errors: string[] = [];
+  const options: ProgramCreationOptions = {
+    errorCallback(msg: string, ...args: unknown[]) {
       errors.push(msg);
-      errorCallback(msg, ...args);
+      errorCallback(msg, ...(args as [number?]));
     },
     transformFeedbackVaryings,
     transformFeedbackMode,
@@ -750,13 +885,13 @@ function getProgramOptions(opt_attribs, opt_locations, opt_errorCallback) {
   };
 
   {
-    let attribLocations = {};
+    let attribLocations: Record<string, number> = {};
     if (Array.isArray(opt_attribs)) {
-      opt_attribs.forEach(function (attrib, ndx) {
-        attribLocations[attrib] = opt_locations ? opt_locations[ndx] : ndx;
+      opt_attribs.forEach(function (attrib: string, ndx: number) {
+        attribLocations[attrib] = opt_locations ? (opt_locations[ndx] ?? ndx) : ndx;
       });
     } else {
-      attribLocations = opt_attribs || {};
+      attribLocations = (opt_attribs as Record<string, number>) || {};
     }
     options.attribLocations = attribLocations;
   }
@@ -766,7 +901,7 @@ function getProgramOptions(opt_attribs, opt_locations, opt_errorCallback) {
 
 const defaultShaderType = [GL_SHADER_TYPE.VERTEX_SHADER, GL_SHADER_TYPE.FRAGMENT_SHADER] as const;
 
-function getShaderTypeFromScriptType(gl, scriptType) {
+function getShaderTypeFromScriptType(gl: ProgramGLContext, scriptType: string): number | undefined {
   if (scriptType.indexOf('frag') >= 0) {
     return FRAGMENT_SHADER;
   } else if (scriptType.indexOf('vert') >= 0) {
@@ -775,8 +910,8 @@ function getShaderTypeFromScriptType(gl, scriptType) {
   return undefined;
 }
 
-function deleteProgramAndShaders(gl, program, notThese) {
-  const shaders = gl.getAttachedShaders(program);
+function deleteProgramAndShaders(gl: ProgramGLContext, program: WebGLProgram, notThese: Set<string | WebGLShader>): void {
+  const shaders = gl.getAttachedShaders(program) || [];
   for (const shader of shaders) {
     if (notThese.has(shader)) {
       gl.deleteShader(shader);
@@ -789,8 +924,8 @@ const wait = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function createProgramNoCheck(
   gl: WebGL2RenderingContext,
-  shaders: [string, string] | [WebGLShader, WebGLShader],
-  programOptions?: any
+  shaders: (string | WebGLShader)[],
+  programOptions?: ProgramOptionsArg
 ): WebGLProgram {
   const program = gl.createProgram()!;
   const { attribLocations, transformFeedbackVaryings, transformFeedbackMode } = getProgramOptions(programOptions);
@@ -811,18 +946,21 @@ function createProgramNoCheck(
     }
   }
 
-  Object.entries(attribLocations).forEach(([attrib, loc]) => gl.bindAttribLocation(program, loc, attrib));
+  for (const attrib in attribLocations) {
+    gl.bindAttribLocation(program, attribLocations[attrib]!, attrib);
+  }
 
   {
     let varyings = transformFeedbackVaryings;
     if (varyings) {
-      if (varyings.attribs) {
-        varyings = varyings.attribs;
+      const varyingInfo = varyings as { attribs?: Record<string, unknown> };
+      if (varyingInfo.attribs) {
+        varyings = varyingInfo.attribs;
       }
       if (!Array.isArray(varyings)) {
-        varyings = Object.keys(varyings);
+        varyings = Object.keys(varyings as Record<string, unknown>);
       }
-      gl.transformFeedbackVaryings(program, varyings, transformFeedbackMode || SEPARATE_ATTRIBS);
+      gl.transformFeedbackVaryings(program, varyings as string[], transformFeedbackMode || SEPARATE_ATTRIBS);
     }
   }
 
@@ -853,17 +991,17 @@ function createProgramNoCheck(
 function createProgram(
   gl: WebGL2RenderingContext,
   shaders: (string | WebGLShader)[],
-  opt_attribs?: string[],
-  opt_locations?: number[],
-  opt_errorCallback?: any
-) {
+  opt_attribs?: ProgramOptionsArg,
+  opt_locations?: number[] | ErrorCallback,
+  opt_errorCallback?: ErrorCallback
+): WebGLProgram | undefined {
   // This code is really convoluted, because it may or may not be async
   // Maybe it would be better to have a separate function
   const progOptions = getProgramOptions(opt_attribs, opt_locations, opt_errorCallback);
   const shaderSet = new Set<string | WebGLShader>(shaders);
-  const program = createProgramNoCheck(gl, shaders, progOptions);
+  const program = createProgramNoCheck(gl, shaders as [string, string] | [WebGLShader, WebGLShader], progOptions);
 
-  function hasErrors(gl, program) {
+  function hasErrors(gl: WebGL2RenderingContext, program: WebGLProgram): string | undefined {
     const errors = getProgramErrors(gl, program, progOptions.errorCallback);
     if (errors) {
       deleteProgramAndShaders(gl, program, shaderSet);
@@ -872,9 +1010,10 @@ function createProgram(
   }
 
   if (progOptions.callback) {
+    const callback = progOptions.callback;
     waitForProgramLinkCompletionAsync(gl, program).then(() => {
       const errors = hasErrors(gl, program);
-      progOptions.callback(errors, errors ? undefined : program);
+      callback(errors, errors ? undefined : program);
     });
     return undefined;
   }
@@ -887,15 +1026,21 @@ function createProgram(
  * are gl and any, followed by things that become programOptions
  * @private
  */
-function wrapCallbackFnToAsyncFn(fn) {
-  return function (gl, arg1, ...args) {
-    return new Promise((resolve, reject) => {
-      const programOptions = getProgramOptions(...args);
-      programOptions.callback = (err, program) => {
+function wrapCallbackFnToAsyncFn<Result>(
+  fn: (gl: WebGL2RenderingContext, arg1: any, ...args: any[]) => Result | undefined
+) {
+  return function (gl: WebGL2RenderingContext, arg1: any, ...args: any[]) {
+    return new Promise<Result | undefined>((resolve, reject) => {
+      const programOptions = getProgramOptions(
+        args[0] as ProgramOptionsArg,
+        args[1] as number[] | ErrorCallback | undefined,
+        args[2] as ErrorCallback | undefined
+      );
+      programOptions.callback = (err?: string, result?: unknown) => {
         if (err) {
           reject(err);
         } else {
-          resolve(program);
+          resolve(result as Result | undefined);
         }
       };
       fn(gl, arg1, programOptions);
@@ -942,9 +1087,12 @@ const createProgramAsync = wrapCallbackFnToAsyncFn(createProgram);
  */
 const createProgramInfoAsync = wrapCallbackFnToAsyncFn(createProgramInfo);
 
-async function waitForProgramLinkCompletionAsync(gl, program) {
+async function waitForProgramLinkCompletionAsync(gl: WebGL2RenderingContext, program: WebGLProgram): Promise<void> {
   const ext = gl.getExtension('KHR_parallel_shader_compile');
-  const checkFn = ext ? (gl, program) => gl.getProgramParameter(program, ext.COMPLETION_STATUS_KHR) : () => true;
+  const checkFn = ext
+    ? (currentGl: WebGL2RenderingContext, currentProgram: WebGLProgram) =>
+        currentGl.getProgramParameter(currentProgram, ext.COMPLETION_STATUS_KHR)
+    : () => true;
 
   let waitTime = 0;
   do {
@@ -953,7 +1101,10 @@ async function waitForProgramLinkCompletionAsync(gl, program) {
   } while (!checkFn(gl, program));
 }
 
-async function waitForAllProgramsLinkCompletionAsync(gl, programs) {
+async function waitForAllProgramsLinkCompletionAsync(
+  gl: WebGL2RenderingContext,
+  programs: Record<string, WebGLProgram>
+): Promise<void> {
   for (const program of Object.values(programs)) {
     await waitForProgramLinkCompletionAsync(gl, program);
   }
@@ -967,20 +1118,20 @@ async function waitForAllProgramsLinkCompletionAsync(gl, programs) {
  * @return {string?} errors if program is failed, else undefined
  * @private
  */
-function getProgramErrors(gl, program, errFn) {
-  errFn = errFn || error;
+function getProgramErrors(gl: ProgramGLContext, program: WebGLProgram, errFn?: ErrorCallback): string | undefined {
+  const report = errFn || error;
   // Check the link status
   const linked = gl.getProgramParameter(program, LINK_STATUS);
   if (!linked) {
     // something went wrong with the link
-    const lastError = gl.getProgramInfoLog(program);
-    errFn(`Error in program linking: ${lastError}`);
+    const lastError = gl.getProgramInfoLog(program) || '';
+    report(`Error in program linking: ${lastError}`);
     // print any errors from these shaders
-    const shaders = gl.getAttachedShaders(program);
+    const shaders = gl.getAttachedShaders(program) || [];
     const errors = shaders.map((shader) =>
-      checkShaderStatus(gl, gl.getShaderParameter(shader, gl.SHADER_TYPE), shader, errFn)
+      checkShaderStatus(gl, gl.getShaderParameter(shader, gl.SHADER_TYPE), shader, report)
     );
-    return `${lastError}\n${errors.filter((_) => _).join('\n')}`;
+    return `${lastError}\n${errors.filter((message) => message).join('\n')}`;
   }
   return undefined;
 }
@@ -1007,11 +1158,17 @@ function getProgramErrors(gl, program, errFn) {
  * @return {WebGLProgram?} the created program or null if error or a callback was provided.
  * @memberOf module:twgl/programs
  */
-function createProgramFromScripts(gl, shaderScriptIds, opt_attribs, opt_locations, opt_errorCallback) {
+function createProgramFromScripts(
+  gl: WebGL2RenderingContext,
+  shaderScriptIds: string[],
+  opt_attribs?: ProgramOptionsArg,
+  opt_locations?: number[] | ErrorCallback,
+  opt_errorCallback?: ErrorCallback
+): WebGLProgram | null | undefined {
   const progOptions = getProgramOptions(opt_attribs, opt_locations, opt_errorCallback);
-  const shaders = [];
+  const shaders: string[] = [];
   for (const scriptId of shaderScriptIds) {
-    const shaderScript = getElementById(scriptId);
+    const shaderScript = getElementById(scriptId) as HTMLScriptElement | null;
     if (!shaderScript) {
       return reportError(progOptions, `unknown script element: ${scriptId}`);
     }
@@ -1042,7 +1199,13 @@ function createProgramFromScripts(gl, shaderScriptIds, opt_attribs, opt_location
  * @return {WebGLProgram?} the created program or null if error or a callback was provided.
  * @memberOf module:twgl/programs
  */
-function createProgramFromSources(gl, shaderSources, opt_attribs, opt_locations, opt_errorCallback) {
+function createProgramFromSources(
+  gl: WebGL2RenderingContext,
+  shaderSources: string[],
+  opt_attribs?: ProgramOptionsArg,
+  opt_locations?: number[] | ErrorCallback,
+  opt_errorCallback?: ErrorCallback
+): WebGLProgram | undefined {
   return createProgram(gl, shaderSources, opt_attribs, opt_locations, opt_errorCallback);
 }
 
@@ -1063,15 +1226,20 @@ function createProgramFromSources(gl, shaderSources, opt_attribs, opt_locations,
  * @return {bool} true if it's reserved
  * @private
  */
-function isBuiltIn(info) {
+function isBuiltIn(info: WebGLActiveInfo): boolean {
   const name = info.name;
   return name.startsWith('gl_') || name.startsWith('webgl_');
 }
 
 const tokenRE = /(\.|\[|]|\w+)/g;
-const isDigit = (s) => s >= '0' && s <= '9';
-function addSetterToUniformTree(fullPath, setter, node, uniformSetters) {
-  const tokens = fullPath.split(tokenRE).filter((s) => s !== '');
+const isDigit = (s: string) => s >= '0' && s <= '9';
+function addSetterToUniformTree(
+  fullPath: string,
+  setter: UniformSetter,
+  node: UniformTree,
+  uniformSetters: UniformSetterMap
+): void {
+  const tokens = fullPath.split(tokenRE).filter((s: string) => s !== '');
   let tokenNdx = 0;
   let path = '';
 
@@ -1079,7 +1247,7 @@ function addSetterToUniformTree(fullPath, setter, node, uniformSetters) {
     const token = tokens[tokenNdx++]; // has to be name or number
     path += token;
     const isArrayIndex = isDigit(token[0]);
-    const accessor = isArrayIndex ? parseInt(token) : token;
+    const accessor = isArrayIndex ? parseInt(token, 10) : token;
     if (isArrayIndex) {
       path += tokens[tokenNdx++]; // skip ']'
     }
@@ -1090,14 +1258,14 @@ function addSetterToUniformTree(fullPath, setter, node, uniformSetters) {
     } else {
       const token = tokens[tokenNdx++]; // has to be . or [
       const isArray = token === '[';
-      const child = node[accessor] || (isArray ? [] : {});
+      const child = (node[accessor] as UniformTree | undefined) || (isArray ? [] : {});
       node[accessor] = child;
-      node = child;
+      node = child as UniformTree;
       uniformSetters[path] =
         uniformSetters[path] ||
-        (function (node) {
-          return function (value) {
-            setUniformTree(node, value);
+        (function (treeNode: UniformTree) {
+          return function (value: unknown) {
+            setUniformTree(treeNode, value as Record<string, unknown>);
           };
         })(child);
       path += token;
@@ -1116,7 +1284,7 @@ function addSetterToUniformTree(fullPath, setter, node, uniformSetters) {
  * @returns {Object.<string, function>} an object with a setter by name for each uniform
  * @memberOf module:twgl/programs
  */
-function createUniformSetters(gl, program) {
+function createUniformSetters(gl: ProgramGLContext, program: WebGLProgram): UniformSetterMap {
   let textureUnit = 0;
 
   /**
@@ -1126,7 +1294,11 @@ function createUniformSetters(gl, program) {
    * @param {WebGLUniformInfo} uniformInfo
    * @returns {function} the created setter.
    */
-  function createUniformSetter(program, uniformInfo, location) {
+  function createUniformSetter(
+    program: WebGLProgram,
+    uniformInfo: WebGLActiveInfo,
+    location: WebGLUniformLocation
+  ): UniformSetter {
     const isArray = uniformInfo.name.endsWith('[0]');
     const type = uniformInfo.type;
     const typeInfo = typeMap[type];
@@ -1139,7 +1311,7 @@ function createUniformSetters(gl, program) {
       const unit = textureUnit;
       textureUnit += uniformInfo.size;
       if (isArray) {
-        setter = typeInfo.arraySetter(gl, type, unit, location, uniformInfo.size);
+        setter = (typeInfo.arraySetter || typeInfo.setter)(gl, type, unit, location, uniformInfo.size);
       } else {
         setter = typeInfo.setter(gl, type, unit, location, uniformInfo.size);
       }
@@ -1154,12 +1326,15 @@ function createUniformSetters(gl, program) {
     return setter;
   }
 
-  const uniformSetters = {};
-  const uniformTree = {};
+  const uniformSetters: UniformSetterMap = {};
+  const uniformTree: UniformTree = {};
   const numUniforms = gl.getProgramParameter(program, ACTIVE_UNIFORMS);
 
   for (let ii = 0; ii < numUniforms; ++ii) {
     const uniformInfo = gl.getActiveUniform(program, ii);
+    if (!uniformInfo) {
+      continue;
+    }
     if (isBuiltIn(uniformInfo)) {
       continue;
     }
@@ -1195,11 +1370,14 @@ function createUniformSetters(gl, program) {
  * @return {Object<string, module:twgl.TransformFeedbackInfo>}
  * @memberOf module:twgl
  */
-function createTransformFeedbackInfo(gl, program) {
-  const info = {};
+function createTransformFeedbackInfo(gl: WebGL2RenderingContext, program: WebGLProgram): TransformFeedbackInfoMap {
+  const info: TransformFeedbackInfoMap = {};
   const numVaryings = gl.getProgramParameter(program, TRANSFORM_FEEDBACK_VARYINGS);
   for (let ii = 0; ii < numVaryings; ++ii) {
     const varying = gl.getTransformFeedbackVarying(program, ii);
+    if (!varying) {
+      continue;
+    }
     info[varying.name] = {
       index: ii,
       type: varying.type,
@@ -1217,21 +1395,27 @@ function createTransformFeedbackInfo(gl, program) {
  * @param {(module:twgl.BufferInfo|Object<string, module:twgl.AttribInfo>)} [bufferInfo] A BufferInfo or set of AttribInfos.
  * @memberOf module:twgl
  */
-function bindTransformFeedbackInfo(gl, transformFeedbackInfo, bufferInfo) {
-  if (transformFeedbackInfo.transformFeedbackInfo) {
-    transformFeedbackInfo = transformFeedbackInfo.transformFeedbackInfo;
+function bindTransformFeedbackInfo(
+  gl: WebGL2RenderingContext,
+  transformFeedbackInfo: ProgramInfoLike | TransformFeedbackInfoMap,
+  bufferInfo?: BufferInfoLike | Record<string, AttribInfoLike>
+): void {
+  const feedbackInfo = (transformFeedbackInfo as ProgramInfoLike).transformFeedbackInfo ||
+    (transformFeedbackInfo as TransformFeedbackInfoMap);
+  if (!bufferInfo) {
+    return;
   }
-  if (bufferInfo.attribs) {
-    bufferInfo = bufferInfo.attribs;
+  if ((bufferInfo as BufferInfoLike).attribs) {
+    bufferInfo = (bufferInfo as BufferInfoLike).attribs!;
   }
   for (const name in bufferInfo) {
-    const varying = transformFeedbackInfo[name];
+    const varying = feedbackInfo[name];
     if (varying) {
-      const buf = bufferInfo[name];
+      const buf = (bufferInfo as Record<string, AttribInfoLike>)[name];
       if (buf.offset) {
-        gl.bindBufferRange(TRANSFORM_FEEDBACK_BUFFER, varying.index, buf.buffer, buf.offset, buf.size);
+        gl.bindBufferRange(TRANSFORM_FEEDBACK_BUFFER, varying.index, buf.buffer || null, buf.offset, buf.size ?? 0);
       } else {
-        gl.bindBufferBase(TRANSFORM_FEEDBACK_BUFFER, varying.index, buf.buffer);
+        gl.bindBufferBase(TRANSFORM_FEEDBACK_BUFFER, varying.index, buf.buffer || null);
       }
     }
   }
@@ -1245,7 +1429,11 @@ function bindTransformFeedbackInfo(gl, transformFeedbackInfo, bufferInfo) {
  * @return {WebGLTransformFeedback} the created transform feedback
  * @memberOf module:twgl
  */
-function createTransformFeedback(gl, programInfo, bufferInfo) {
+function createTransformFeedback(
+  gl: WebGL2RenderingContext,
+  programInfo: ProgramInfoLike,
+  bufferInfo?: BufferInfoLike | Record<string, AttribInfoLike>
+): WebGLTransformFeedback | null {
   const tf = gl.createTransformFeedback();
   gl.bindTransformFeedback(TRANSFORM_FEEDBACK, tf);
   gl.useProgram(programInfo.program);
@@ -1299,44 +1487,51 @@ function createTransformFeedback(gl, programInfo, bufferInfo) {
  * @return {module:twgl.UniformBlockSpec} The created UniformBlockSpec
  * @memberOf module:twgl/programs
  */
-function createUniformBlockSpecFromProgram(gl, program) {
+function createUniformBlockSpecFromProgram(gl: WebGL2RenderingContext, program: WebGLProgram): UniformBlockSpec {
   const numUniforms = gl.getProgramParameter(program, ACTIVE_UNIFORMS);
-  const uniformData = [];
-  const uniformIndices = [];
+  const uniformData: BlockUniformData[] = [];
+  const uniformIndices: number[] = [];
 
   for (let ii = 0; ii < numUniforms; ++ii) {
     uniformIndices.push(ii);
-    uniformData.push({});
-    const uniformInfo = gl.getActiveUniform(program, ii);
-    uniformData[ii].name = uniformInfo.name;
+    const uniformInfo = gl.getActiveUniform(program, ii)!;
+    uniformData.push({
+      name: uniformInfo.name,
+      type: 0,
+      size: 0,
+      blockNdx: -1,
+      offset: 0
+    });
   }
 
-  [
-    ['UNIFORM_TYPE', 'type'],
-    ['UNIFORM_SIZE', 'size'], // num elements
-    ['UNIFORM_BLOCK_INDEX', 'blockNdx'],
-    ['UNIFORM_OFFSET', 'offset']
-  ].forEach(function (pair) {
-    const pname = pair[0];
-    const key = pair[1];
-    gl.getActiveUniforms(program, uniformIndices, gl[pname]).forEach(function (value, ndx) {
+  const uniformProperties: Array<[number, BlockUniformNumericKey]> = [
+    [gl.UNIFORM_TYPE, 'type'],
+    [gl.UNIFORM_SIZE, 'size'],
+    [gl.UNIFORM_BLOCK_INDEX, 'blockNdx'],
+    [gl.UNIFORM_OFFSET, 'offset']
+  ];
+  uniformProperties.forEach(function ([pname, key]) {
+    gl.getActiveUniforms(program, uniformIndices, pname).forEach(function (value: number, ndx: number) {
       uniformData[ndx][key] = value;
     });
   });
 
-  const blockSpecs = {};
+  const blockSpecs: Record<string, BlockSpec> = {};
 
   const numUniformBlocks = gl.getProgramParameter(program, ACTIVE_UNIFORM_BLOCKS);
   for (let ii = 0; ii < numUniformBlocks; ++ii) {
     const name = gl.getActiveUniformBlockName(program, ii);
+    if (!name) {
+      continue;
+    }
     const blockSpec = {
       index: gl.getUniformBlockIndex(program, name),
       usedByVertexShader: gl.getActiveUniformBlockParameter(program, ii, UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER),
       usedByFragmentShader: gl.getActiveUniformBlockParameter(program, ii, UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER),
       size: gl.getActiveUniformBlockParameter(program, ii, UNIFORM_BLOCK_DATA_SIZE),
       uniformIndices: gl.getActiveUniformBlockParameter(program, ii, UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES)
-    };
-    blockSpec.used = blockSpec.usedByVertexShader || blockSpec.usedByFragmentShader;
+    } as BlockSpec;
+    blockSpec.used = Boolean(blockSpec.usedByVertexShader || blockSpec.usedByFragmentShader);
     blockSpecs[name] = blockSpec;
   }
 
@@ -1348,29 +1543,35 @@ function createUniformBlockSpecFromProgram(gl, program) {
 
 const arraySuffixRE = /\[\d+\]\.$/; // better way to check?
 
-const pad = (v, padding) => (((v + (padding - 1)) / padding) | 0) * padding;
+const pad = (v: number, padding: number) => (((v + (padding - 1)) / padding) | 0) * padding;
 
-function createUniformBlockUniformSetter(view, isArray, rows, cols) {
+function createUniformBlockUniformSetter(
+  view: Float32Array | Int32Array | Uint32Array,
+  isArray: boolean,
+  rows?: number,
+  cols?: number
+): (value: UniformValue) => void {
   if (isArray || rows) {
-    cols = cols || 1;
+    const resolvedCols = cols || 1;
     const numElements = view.length;
     const totalRows = numElements / 4;
-    return function (value) {
+    return function (value: UniformValue) {
+      const arrayValue = value as ArrayLike<number>;
       let dst = 0;
       let src = 0;
       for (let row = 0; row < totalRows; ++row) {
-        for (let col = 0; col < cols; ++col) {
-          view[dst++] = value[src++];
+        for (let col = 0; col < resolvedCols; ++col) {
+          view[dst++] = arrayValue[src++]!;
         }
-        dst += 4 - cols;
+        dst += 4 - resolvedCols;
       }
     };
   } else {
-    return function (value) {
-      if (value.length) {
+    return function (value: UniformValue) {
+      if (typeof value !== 'number' && value.length) {
         view.set(value);
       } else {
-        view[0] = value;
+        view[0] = value as number;
       }
     };
   }
@@ -1420,7 +1621,12 @@ function createUniformBlockUniformSetter(view, isArray, rows, cols) {
  * @return {module:twgl.UniformBlockInfo} The created UniformBlockInfo
  * @memberOf module:twgl/programs
  */
-function createUniformBlockInfoFromProgram(gl, program, uniformBlockSpec, blockName) {
+function createUniformBlockInfoFromProgram(
+  gl: WebGL2RenderingContext,
+  program: WebGLProgram,
+  uniformBlockSpec: UniformBlockSpec,
+  blockName: string
+): UniformBlockInfo {
   const blockSpecs = uniformBlockSpec.blockSpecs;
   const uniformData = uniformBlockSpec.uniformData;
   const blockSpec = blockSpecs[blockName];
@@ -1428,7 +1634,11 @@ function createUniformBlockInfoFromProgram(gl, program, uniformBlockSpec, blockN
     warn('no uniform block object named:', blockName);
     return {
       name: blockName,
-      uniforms: {} as { [key: string]: any }
+      array: new ArrayBuffer(0),
+      asFloat: new Float32Array(0),
+      buffer: null,
+      uniforms: {},
+      setters: {}
     };
   }
   const array = new ArrayBuffer(blockSpec.size);
@@ -1441,10 +1651,10 @@ function createUniformBlockInfoFromProgram(gl, program, uniformBlockSpec, blockN
   if (arraySuffixRE.test(prefix)) {
     prefix = prefix.replace(arraySuffixRE, '.');
   }
-  const uniforms = {} as { [key: string]: any };
-  const setters = {};
-  const setterTree = {};
-  blockSpec.uniformIndices.forEach(function (uniformNdx) {
+  const uniforms: Record<string, ArrayBufferView> = {};
+  const setters: Record<string, (value: UniformValue) => void> = {};
+  const setterTree: UniformTree = {};
+  blockSpec.uniformIndices.forEach(function (uniformNdx: number) {
     const data = uniformData[uniformNdx];
     let name = data.name;
     if (name.startsWith(prefix)) {
@@ -1455,6 +1665,9 @@ function createUniformBlockInfoFromProgram(gl, program, uniformBlockSpec, blockN
       name = name.substr(0, name.length - 3);
     }
     const typeInfo = typeMap[data.type];
+    if (!typeInfo || !typeInfo.Type) {
+      throw new Error(`unknown block uniform type: 0x${data.type.toString(16)}`);
+    }
     const Type = typeInfo.Type;
     const byteLength = isArray ? pad(typeInfo.size, 16) * data.size : typeInfo.size * data.size;
     const uniformView = new Type(array, data.offset, byteLength / Type.BYTES_PER_ELEMENT);
@@ -1514,7 +1727,11 @@ function createUniformBlockInfoFromProgram(gl, program, uniformBlockSpec, blockN
  * @return {module:twgl.UniformBlockInfo} The created UniformBlockInfo
  * @memberOf module:twgl/programs
  */
-function createUniformBlockInfo(gl, programInfo, blockName) {
+function createUniformBlockInfo(
+  gl: WebGL2RenderingContext,
+  programInfo: ProgramInfoLike & { uniformBlockSpec: UniformBlockSpec },
+  blockName: string
+): UniformBlockInfo {
   return createUniformBlockInfoFromProgram(gl, programInfo.program, programInfo.uniformBlockSpec, blockName);
 }
 
@@ -1536,8 +1753,12 @@ function createUniformBlockInfo(gl, programInfo, blockName) {
  *     no buffer is bound.
  * @memberOf module:twgl/programs
  */
-function bindUniformBlock(gl, programInfo, uniformBlockInfo) {
-  const uniformBlockSpec = programInfo.uniformBlockSpec || programInfo;
+function bindUniformBlock(
+  gl: WebGL2RenderingContext,
+  programInfo: ProgramInfoLike | UniformBlockSpec,
+  uniformBlockInfo: UniformBlockInfo
+): boolean {
+  const uniformBlockSpec = (programInfo as ProgramInfoLike).uniformBlockSpec || (programInfo as UniformBlockSpec);
   const blockSpec = uniformBlockSpec.blockSpecs[uniformBlockInfo.name];
   if (blockSpec) {
     const bufferBindIndex = blockSpec.index;
@@ -1568,7 +1789,11 @@ function bindUniformBlock(gl, programInfo, uniformBlockInfo) {
  *     {@link module:twgl.createUniformBlockInfo}.
  * @memberOf module:twgl/programs
  */
-function setUniformBlock(gl, programInfo, uniformBlockInfo) {
+function setUniformBlock(
+  gl: WebGL2RenderingContext,
+  programInfo: ProgramInfoLike | UniformBlockSpec,
+  uniformBlockInfo: UniformBlockInfo
+): void {
   if (bindUniformBlock(gl, programInfo, uniformBlockInfo)) {
     gl.bufferData(UNIFORM_BUFFER, uniformBlockInfo.array, DYNAMIC_DRAW);
   }
@@ -1659,7 +1884,7 @@ function setUniformBlock(gl, programInfo, uniformBlockInfo) {
  *  Any name that doesn't match will be ignored
  * @memberOf module:twgl/programs
  */
-function setBlockUniforms(uniformBlockInfo, values) {
+function setBlockUniforms(uniformBlockInfo: UniformBlockInfo, values: Record<string, UniformValue>): void {
   const setters = uniformBlockInfo.setters;
   for (const name in values) {
     const setter = setters[name];
@@ -1670,13 +1895,13 @@ function setBlockUniforms(uniformBlockInfo, values) {
   }
 }
 
-function setUniformTree(tree, values) {
+function setUniformTree(tree: UniformTree, values: Record<string, unknown>): void {
   for (const name in values) {
     const prop = tree[name];
     if (typeof prop === 'function') {
-      prop(values[name]);
+      (prop as (value: unknown) => void)(values[name]);
     } else {
-      setUniformTree(tree[name], values[name]);
+      setUniformTree(tree[name] as UniformTree, values[name] as Record<string, unknown>);
     }
   }
 }
@@ -1839,9 +2064,12 @@ function setUniformTree(tree, values) {
  *
  * @memberOf module:twgl/programs
  */
-function setUniforms(setters, ...args) {
+function setUniforms(
+  setters: ProgramInfoLike | PublicUniformSetterMap,
+  ...args: Array<Record<string, unknown> | Array<Record<string, unknown>>>
+): void {
   // eslint-disable-line
-  const actualSetters = setters.uniformSetters || setters;
+  const actualSetters = (setters as ProgramInfoLike).uniformSetters || (setters as PublicUniformSetterMap);
   const numArgs = args.length;
   for (let aNdx = 0; aNdx < numArgs; ++aNdx) {
     const values = args[aNdx];
@@ -1881,12 +2109,15 @@ const setUniformsAndBindTextures = setUniforms;
  * @return {Object.<string, function>} an object with a setter for each attribute by name.
  * @memberOf module:twgl/programs
  */
-function createAttributeSetters(gl, program) {
-  const attribSetters = {};
+function createAttributeSetters(gl: ProgramGLContext, program: WebGLProgram): AttribSetterMap {
+  const attribSetters: AttribSetterMap = {};
 
   const numAttribs = gl.getProgramParameter(program, ACTIVE_ATTRIBUTES);
   for (let ii = 0; ii < numAttribs; ++ii) {
     const attribInfo = gl.getActiveAttrib(program, ii);
+    if (!attribInfo) {
+      continue;
+    }
     if (isBuiltIn(attribInfo)) {
       continue;
     }
@@ -1955,9 +2186,10 @@ function createAttributeSetters(gl, program) {
  * @deprecated use {@link module:twgl.setBuffersAndAttributes}
  * @private
  */
-function setAttributes(setters, buffers) {
+function setAttributes(setters: ProgramInfoLike | PublicAttribSetterMap, buffers: Record<string, AttribInfoLike>): void {
+  const actualSetters = (setters as ProgramInfoLike).attribSetters || (setters as PublicAttribSetterMap);
   for (const name in buffers) {
-    const setter = setters[name];
+    const setter = actualSetters[name];
     if (setter) {
       setter(buffers[name]);
     }
@@ -2001,11 +2233,17 @@ function setAttributes(setters, buffers) {
  *   or a `VertexArrayInfo` as returned from {@link module:twgl.createVertexArrayInfo}
  * @memberOf module:twgl/programs
  */
-function setBuffersAndAttributes(gl, programInfo, buffers) {
+function setBuffersAndAttributes(
+  gl: WebGL2RenderingContext,
+  programInfo: ProgramInfoLike | PublicAttribSetterMap,
+  buffers: BufferInfoLike
+): void {
   if (buffers.vertexArrayObject) {
     gl.bindVertexArray(buffers.vertexArrayObject);
   } else {
-    setAttributes(programInfo.attribSetters || programInfo, buffers.attribs);
+    if (buffers.attribs) {
+      setAttributes(((programInfo as ProgramInfoLike).attribSetters || programInfo) as PublicAttribSetterMap, buffers.attribs);
+    }
     if (buffers.indices) {
       gl.bindBuffer(ELEMENT_ARRAY_BUFFER, buffers.indices);
     }
@@ -2039,10 +2277,10 @@ function setBuffersAndAttributes(gl, programInfo, buffers) {
  * @return {module:twgl.ProgramInfo} The created ProgramInfo.
  * @memberOf module:twgl/programs
  */
-function createProgramInfoFromProgram(gl, program) {
+function createProgramInfoFromProgram(gl: WebGL2RenderingContext, program: WebGLProgram): ProgramInfo {
   const uniformSetters = createUniformSetters(gl, program);
   const attribSetters = createAttributeSetters(gl, program);
-  const programInfo = {
+  const programInfo: ProgramInfo = {
     program,
     uniformSetters,
     attribSetters
@@ -2112,17 +2350,17 @@ export type ProgramInfo = {
  */
 function createProgramInfo(
   gl: WebGL2RenderingContext,
-  shaderSources: [string, string],
-  opt_attribs?: ProgramOptions | string[] | ErrorCallback,
-  opt_locations?: number[],
+  shaderSources: string[],
+  opt_attribs?: ProgramOptionsArg,
+  opt_locations?: number[] | ErrorCallback,
   opt_errorCallback?: ErrorCallback
-): ProgramInfo {
+) : ProgramInfo | null | undefined {
   const progOptions = getProgramOptions(opt_attribs, opt_locations, opt_errorCallback);
-  const errors = [];
+  const errors: string[] = [];
   shaderSources = shaderSources.map(function (source) {
     // Lets assume if there is no \n it's an id
     if (!notIdRE.test(source)) {
-      const script = getElementById(source);
+      const script = getElementById(source) as HTMLScriptElement | null;
       if (!script) {
         const err = `no element with id: ${source}`;
         progOptions.errorCallback(err);
@@ -2141,7 +2379,7 @@ function createProgramInfo(
   const origCallback = progOptions.callback;
   if (origCallback) {
     progOptions.callback = (err, program) => {
-      origCallback(err, err ? undefined : createProgramInfoFromProgram(gl, program));
+      origCallback(err, err ? undefined : createProgramInfoFromProgram(gl, program as WebGLProgram));
     };
   }
 
@@ -2153,10 +2391,16 @@ function createProgramInfo(
   return createProgramInfoFromProgram(gl, program);
 }
 
-function checkAllPrograms(gl, programs, programSpecs, noDeleteShadersSet, programOptions) {
+function checkAllPrograms(
+  gl: WebGL2RenderingContext,
+  programs: Record<string, WebGLProgram>,
+  programSpecs: ProgramSpecMap,
+  noDeleteShadersSet: Set<string | WebGLShader>,
+  programOptions: SharedProgramOptions
+): string | undefined {
   // check errors for everything.
   for (const [name, program] of Object.entries(programs)) {
-    const options = { ...programOptions };
+    const options: SharedProgramOptions = { ...programOptions };
     const spec = programSpecs[name];
     if (!Array.isArray(spec)) {
       Object.assign(options, spec);
@@ -2165,7 +2409,7 @@ function checkAllPrograms(gl, programs, programSpecs, noDeleteShadersSet, progra
     if (errors) {
       // delete everything we created
       for (const program of Object.values(programs)) {
-        const shaders = gl.getAttachedShaders(program);
+        const shaders = gl.getAttachedShaders(program) || [];
         gl.deleteProgram(program);
         for (const shader of shaders) {
           // Don't delete it if we didn't create it.
@@ -2206,14 +2450,18 @@ function checkAllPrograms(gl, programs, programSpecs, noDeleteShadersSet, progra
  * @param {module:twgl.ProgramOptions} [programOptions] options to apply to all programs
  * @return {Object.<string, WebGLProgram>?} the created programInfos by name
  */
-function createPrograms(gl, programSpecs, programOptions = {}) {
+function createPrograms(
+  gl: WebGL2RenderingContext,
+  programSpecs: ProgramSpecMap,
+  programOptions: SharedProgramOptions = {}
+): Record<string, WebGLProgram> | undefined {
   // Remember existing shaders so that if there is an error we don't delete them
-  const noDeleteShadersSet = new Set();
+  const noDeleteShadersSet = new Set<string | WebGLShader>();
 
   // compile and link everything
   const programs = Object.fromEntries(
     Object.entries(programSpecs).map(([name, spec]) => {
-      const options = { ...programOptions };
+      const options: SharedProgramOptions = { ...programOptions };
       const shaders = Array.isArray(spec) ? spec : spec.shaders;
       if (!Array.isArray(spec)) {
         Object.assign(options, spec);
@@ -2221,12 +2469,13 @@ function createPrograms(gl, programSpecs, programOptions = {}) {
       shaders.forEach(noDeleteShadersSet.add, noDeleteShadersSet);
       return [name, createProgramNoCheck(gl, shaders, options)];
     })
-  );
+  ) as Record<string, WebGLProgram>;
 
-  if (programOptions.callback) {
+  const callback = programOptions.callback;
+  if (callback) {
     waitForAllProgramsLinkCompletionAsync(gl, programs).then(() => {
       const errors = checkAllPrograms(gl, programs, programSpecs, noDeleteShadersSet, programOptions);
-      programOptions.callback(errors, errors ? undefined : programs);
+      callback(errors, errors ? undefined : programs);
     });
     return undefined;
   }
@@ -2272,23 +2521,30 @@ function createPrograms(gl, programSpecs, programOptions = {}) {
  * @param {module:twgl.ProgramOptions} [programOptions] options to apply to all programs
  * @return {Object.<string, module:twgl.ProgramInfo>?} the created programInfos by name
  */
-function createProgramInfos(gl, programSpecs, programOptions) {
-  programOptions = getProgramOptions(programOptions);
+function createProgramInfos(
+  gl: WebGL2RenderingContext,
+  programSpecs: ProgramSpecMap,
+  programOptions?: ProgramOptionsLike
+): Record<string, ProgramInfo> | undefined {
+  const resolvedProgramOptions = getProgramOptions(programOptions);
 
-  function createProgramInfosForPrograms(gl, programs) {
+  function createProgramInfosForPrograms(
+    gl: WebGL2RenderingContext,
+    programs: Record<string, WebGLProgram>
+  ): Record<string, ProgramInfo> {
     return Object.fromEntries(
       Object.entries(programs).map(([name, program]) => [name, createProgramInfoFromProgram(gl, program)])
-    );
+    ) as Record<string, ProgramInfo>;
   }
 
-  const origCallback = programOptions.callback;
+  const origCallback = resolvedProgramOptions.callback;
   if (origCallback) {
-    programOptions.callback = (err, programs) => {
-      origCallback(err, err ? undefined : createProgramInfosForPrograms(gl, programs));
+    resolvedProgramOptions.callback = (err, programs) => {
+      origCallback(err, err ? undefined : createProgramInfosForPrograms(gl, programs as Record<string, WebGLProgram>));
     };
   }
 
-  const programs = createPrograms(gl, programSpecs, programOptions);
+  const programs = createPrograms(gl, programSpecs, resolvedProgramOptions);
   if (origCallback || !programs) {
     return undefined;
   }

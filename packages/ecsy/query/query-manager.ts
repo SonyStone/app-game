@@ -47,8 +47,8 @@ export class QueryManager {
   /**
    * Return some stats from this class
    */
-  stats(): { [key: string]: Query; } {
-    const stats = {};
+  stats(): { [key: string]: ReturnType<Query['stats']>; } {
+    const stats: { [key: string]: ReturnType<Query['stats']> } = {};
     for (const [queryName, query] of this.queries) {
 
       stats[queryName] = query.stats();

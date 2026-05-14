@@ -28,10 +28,14 @@ export function processAtlasVertices(
   preAtlasTexture.width = data.width;
   preAtlasTexture.height = data.height;
   gl.bindTexture(GL_TEXTURES.TEXTURE_2D, preAtlasTexture);
-  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MAG_FILTER, GL_TEXTURES.LINEAR);
-  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_MIN_FILTER, GL_TEXTURES.LINEAR_MIPMAP_NEAREST);
-  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_WRAP_S, GL_TEXTURES.CLAMP_TO_EDGE);
-  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_TEXTURES.TEXTURE_WRAP_T, GL_TEXTURES.CLAMP_TO_EDGE);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_MAG_FILTER, GL_STATIC_VARIABLES.LINEAR);
+  gl.texParameteri(
+    GL_TEXTURES.TEXTURE_2D,
+    GL_STATIC_VARIABLES.TEXTURE_MIN_FILTER,
+    GL_STATIC_VARIABLES.LINEAR_MIPMAP_NEAREST
+  );
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_WRAP_S, GL_STATIC_VARIABLES.CLAMP_TO_EDGE);
+  gl.texParameteri(GL_TEXTURES.TEXTURE_2D, GL_STATIC_VARIABLES.TEXTURE_WRAP_T, GL_STATIC_VARIABLES.CLAMP_TO_EDGE);
   gl.texImage2D(
     GL_TEXTURES.TEXTURE_2D,
     0,
@@ -75,7 +79,7 @@ export function processAtlasVertices(
   enableAttributes(gl, glyphProgramNoRast);
   doGlyphVertexAttribPointers(gl, glyphProgramNoRast);
 
-  gl.activeTexture(GL_TEXTURES.TEXTURE0);
+  gl.activeTexture(GL_STATIC_VARIABLES.TEXTURE0);
   gl.bindTexture(GL_TEXTURES.TEXTURE_2D, atlasTexture);
 
   gl.uniform1i(glyphProgramNoRast.uniforms!.uAtlasSampler, 0);

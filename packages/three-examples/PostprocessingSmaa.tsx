@@ -86,7 +86,7 @@ export default function PostprocessingSmaa() {
     composer.render();
   }
 
-  controls.init(renderer.domElement);
+  controls.init(renderer.domElement as unknown as HTMLElement);
   controls.addEventListener('change', render);
   controls.screenSpacePanning = true;
 
@@ -96,7 +96,6 @@ export default function PostprocessingSmaa() {
     currentCamera = camera();
     renderPass.setCamera(currentCamera);
 
-    cancelAnimationFrame(id);
     animate();
   });
 

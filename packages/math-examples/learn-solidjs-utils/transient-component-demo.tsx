@@ -8,7 +8,7 @@ import { Accessor, children, createEffect, createMemo, createSignal, getOwner, J
 import { SVGAngleVisualization } from '../m2x3/svg-angle-visualization';
 
 export function TransientComponentDemo() {
-  const owner = getOwner();
+  const owner = getOwner() ?? undefined;
 
   const contentContainer = (<div />) as HTMLElement;
 
@@ -17,13 +17,14 @@ export function TransientComponentDemo() {
   ) as SVGSVGElement;
 
   const componentFactories = {
-    contentCard: createTransientComponent((props, dispose) => {
+    contentCard: createTransientComponent<{ text: string | number; name: string }>((props, dispose) => {
       contentContainer.appendChild(
         access(
           (
             <FadeOut {...props()} onFinish={dispose}>
               <DemoContentCard
-                {...props}
+                text={props().text}
+                name={props().name}
                 onRemove={() => {
                   dispose();
                 }}
@@ -33,7 +34,7 @@ export function TransientComponentDemo() {
         )
       );
     }, owner),
-    notification: createTransientComponent((props, dispose) => {
+    notification: createTransientComponent<{ text: string | number; name: string }>((props, dispose) => {
       contentContainer.appendChild(
         access(
           (
@@ -54,7 +55,7 @@ export function TransientComponentDemo() {
         )
       );
     }, owner),
-    cursorIndicator: createTransientComponent((props, dispose) => {
+    cursorIndicator: createTransientComponent<{ x: number; y: number }>((props, dispose) => {
       svgOverlay.appendChild(
         access(
           (
@@ -175,7 +176,7 @@ export function TransientComponentDemo() {
 
 function createTransientComponent<T extends Record<string, any>>(
   create: (props: Accessor<T>, dispose: VoidFunction) => void,
-  detachedOwner?: typeof Owner
+  detachedOwner?: Owner
 ) {
   const [getProps, setProps] = createSignal<T | undefined>();
   const attach = createManagedRoot((dispose) => {
@@ -183,7 +184,7 @@ function createTransientComponent<T extends Record<string, any>>(
   }, detachedOwner);
 
   return (props: T) => {
-    setProps(props);
+    setProps(() => props);
     attach();
   };
 }

@@ -16,6 +16,7 @@ export function createWebGL2Context(canvas: HTMLCanvasElement): WebGL2RenderingC
 
 export function createWebGL2Renderer(canvas: HTMLCanvasElement) {
   const gl = canvas.getContext('webgl2')! as WebGL2RenderingContext;
+  const strictGl = gl as unknown as WebGLRenderingContextStrict;
 
   if (!gl) {
     throw new Error('no webgl2 context');
@@ -37,7 +38,7 @@ export function createWebGL2Renderer(canvas: HTMLCanvasElement) {
     },
     /** WebGLProgram  */
     createProgram<U, A>(params: ProgramParams<U, A>) {
-      return createProgram<U, A>(gl, params);
+      return createProgram<U, A>(strictGl, params);
     },
     /** WebGLRenderbuffer */
     createRenderbuffer() {

@@ -51,7 +51,7 @@ export class PerformanceCompensation {
 
 // Systems
 @SystemData([Read(Entity), Read(NPC), Not(Name)])
-class NameSystem implements System {
+class NameSystem extends System {
   run(entities: [Entity, NPC][]) {
     for (const [entity, npc] of entities) {
       const name = randomFromArray(names);
@@ -62,7 +62,7 @@ class NameSystem implements System {
 }
 
 @SystemData([Read(Entity), Read(NPC), Not(Tshirt)])
-class TshirtSystem implements System {
+class TshirtSystem extends System {
   run(entities: [Entity, NPC][]) {
     for (const [entity] of entities) {
       const size = randomFromArray(sizes);

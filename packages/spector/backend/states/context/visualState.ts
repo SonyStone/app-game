@@ -27,9 +27,9 @@ export class VisualState extends BaseState {
     super(options);
     this.captureFrameBuffer = options.context.createFramebuffer();
     this.workingCanvas = document.createElement('canvas');
-    this.workingContext2D = this.workingCanvas.getContext('2d');
+    this.workingContext2D = this.getCanvas2DContext(this.workingCanvas);
     this.captureCanvas = document.createElement('canvas');
-    this.captureContext2D = this.captureCanvas.getContext('2d');
+    this.captureContext2D = this.getCanvas2DContext(this.captureCanvas);
     this.captureContext2D.imageSmoothingEnabled = true;
     (this.captureContext2D as any).mozImageSmoothingEnabled = true;
     (this.captureContext2D as any).oImageSmoothingEnabled = true;
@@ -82,7 +82,8 @@ export class VisualState extends BaseState {
     }
 
     // Capture all the attachments.
-    const drawBuffersExtension = this.extensions[WebGlConstants.MAX_DRAW_BUFFERS_WEBGL.extensionName];
+    const drawBuffersExtensionName = WebGlConstants.MAX_DRAW_BUFFERS_WEBGL.extensionName;
+    const drawBuffersExtension = drawBuffersExtensionName ? this.extensions[drawBuffersExtensionName] : undefined;
     if (drawBuffersExtension) {
       const maxDrawBuffers = this.context.getParameter(WebGlConstants.MAX_DRAW_BUFFERS_WEBGL.value);
       for (let i = 0; i < maxDrawBuffers; i++) {
@@ -312,9 +313,15 @@ export class VisualState extends BaseState {
       const info = storage.__SPECTOR_Object_CustomData as ITextureRecorderData;
       width = info.width;
       height = info.height;
-      textureType = info.type;
+      textureType = info.type ?? componentType;
       knownAsTextureArray = info.target === WebGlConstants.TEXTURE_2D_ARRAY.name;
-      if (!ReadPixelsHelper.isSupportedCombination(info.type, info.format, info.internalFormat)) {
+      if (
+        !ReadPixelsHelper.isSupportedCombination(
+          info.type ?? componentType,
+          info.format ?? WebGlConstants.RGBA.value,
+          info.internalFormat
+        )
+      ) {
         return;
       }
     } else {
@@ -363,7 +370,7 @@ export class VisualState extends BaseState {
   ) {
     const attachmentVisualState = {
       attachmentName: name,
-      src: null as string,
+      src: null as string | null,
       textureCubeMapFace: textureCubeMapFace ? WebGlConstantsByValue[textureCubeMapFace].name : null,
       textureLayer
     };
@@ -433,5 +440,14 @@ export class VisualState extends BaseState {
 
   protected analyse(consumeCommand: ICommandCapture): void {
     // Nothing to analyse on visual state.
+  }
+
+  private getCanvas2DContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('2D canvas context is required for visual state capture');
+    }
+
+    return context;
   }
 }

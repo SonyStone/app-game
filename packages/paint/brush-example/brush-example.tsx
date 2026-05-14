@@ -43,7 +43,7 @@ export default function OglSwapTexturesView() {
     return camera;
   })();
   const targetVec3 = new Vec3().copy(target());
-  const controls = new Orbit(camera, { element: canvas, target: targetVec3 });
+  const controls = new Orbit(camera, { element: canvas as unknown as HTMLElement, target: targetVec3 });
   const scene = new Transform();
 
   {
@@ -173,7 +173,7 @@ export default function OglSwapTexturesView() {
         texture={() => brushInstancing().texture}
         transparent
       />
-      <PlaneWithTextureComponent gl={gl} parent={scene} position={[0, 0.5, 0.0]} texture={layers2.texture} />
+      <PlaneWithTextureComponent gl={gl} parent={scene} position={[0, 0.5, 0.0]} texture={() => layers2.layer().texture} />
       <Show when={false}>
         <></>
       </Show>

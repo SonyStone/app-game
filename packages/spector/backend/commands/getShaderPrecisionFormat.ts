@@ -7,7 +7,7 @@ export class GetShaderPrecisionFormat extends BaseCommand {
     return GetShaderPrecisionFormat.commandName;
   }
 
-  protected stringifyResult(result: any): string {
+  protected stringifyResult(result: any): string | undefined {
     if (!result) {
       return undefined;
     }

@@ -10,7 +10,7 @@ export function createBuffer(
     usage: WebGLRenderingContextStrict.BufferDataUsage;
   }
 ) {
-  let buffer = gl.createBuffer();
+  let buffer: WebGLBuffer | null = gl.createBuffer();
 
   return {
     buffer,

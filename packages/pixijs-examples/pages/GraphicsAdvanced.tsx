@@ -8,7 +8,7 @@ export default function GraphicsAdvanced(): JSX.Element {
 
   return (
     <Container>
-      <Container pivot={{ x: 100 * 3, y: 100 * 3 }} x={size.width / 2} y={size.height / 2} {...props}>
+      <Container pivot={{ x: 100 * 3, y: 100 * 3 }} x={size.width / 2} y={size.height / 2}>
         {/* BEZIER CURVE */}
         {/* information: https://en.wikipedia.org/wiki/Bézier_curve */}
         <Graphics

@@ -71,7 +71,9 @@ export function numberPrecisionDragInput(
         placement: 'top-end',
         middleware: [
           offset(({ rects }) => ({
-            mainAxis: -rects.floating.height / 2 - rects.reference.height / 2 + (elementsPos[props.step] ?? 0),
+            mainAxis:
+              -rects.floating.height / 2 - rects.reference.height / 2 +
+              (props.step ? elementsPos[props.step] ?? 0 : 0),
             alignmentAxis: rects.reference.width - e.offsetX - rects.floating.width / 2
           })),
           shift({

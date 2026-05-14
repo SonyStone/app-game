@@ -1,8 +1,8 @@
 import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@app-game/ogl';
+import { Vec2 } from '@app-game/math';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { createEffect } from 'solid-js';
 
-import { Vec2 } from '@app-game/ogl/math/vec-2_old';
 import fragment from './mouse-flowmap.frag?raw';
 import vertex from './mouse-flowmap.vert?raw';
 
@@ -37,7 +37,7 @@ export default function MouseFlowmap() {
   });
 
   let aspect = 1;
-  const mouse = new Vec2(-1);
+  const mouse = Vec2.create(-1);
   const velocity = new Vec2() as Vec2 & { needsUpdate?: boolean };
 
   const flowmap = new Flowmap(gl);
@@ -95,8 +95,7 @@ export default function MouseFlowmap() {
     let delta = Math.max(14, time - lastTime);
     lastTime = time;
 
-    velocity.x = deltaX / delta;
-    velocity.y = deltaY / delta;
+    velocity.set(deltaX / delta, deltaY / delta);
 
     // Flag update to prevent hanging velocity values when not moving
     velocity.needsUpdate = true;

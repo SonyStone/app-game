@@ -1,6 +1,6 @@
 import { onCleanup } from 'solid-js';
 
-import init, { Cell, Universe } from './wasm_game_of_life/pkg/wasm_game_of_life';
+import init, { Universe } from './wasm_game_of_life/pkg/wasm_game_of_life';
 
 export default function WasmGameOfLife() {
   // greet();
@@ -17,6 +17,7 @@ export default function WasmGameOfLife() {
     const GRID_COLOR = '#CCCCCC';
     const DEAD_COLOR = '#FFFFFF';
     const ALIVE_COLOR = '#000000';
+    const DEAD_CELL = 0;
 
     const universe = Universe.new();
     const width = universe.width();
@@ -76,7 +77,7 @@ export default function WasmGameOfLife() {
         for (let col = 0; col < width; col++) {
           const idx = getIndex(row, col);
 
-          ctx.fillStyle = cells[idx] === Cell.Dead ? DEAD_COLOR : ALIVE_COLOR;
+          ctx.fillStyle = cells[idx] === DEAD_CELL ? DEAD_COLOR : ALIVE_COLOR;
 
           ctx.fillRect(col * (CELL_SIZE + 1) + 1, row * (CELL_SIZE + 1) + 1, CELL_SIZE, CELL_SIZE);
         }

@@ -30,7 +30,7 @@ export function createSolidRenderer({
       if (element === 'scene') {
         return prepare<Instance>(new Scene() as unknown as Instance);
       }
-      let root = useContext(ThreeContext);
+      let root = useContext(ThreeContext)!;
       return createInstance(
         element,
         {

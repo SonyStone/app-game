@@ -25,7 +25,7 @@ export default function AffineTransformations3D() {
 
     const camera = new Camera({ fov: 35 });
     camera.position.set(2, 4, 4);
-    const controls = new Orbit(camera, { element: canvas, target: new Vec3(1, 1, 0) });
+    const controls = new Orbit(camera, { element: canvas as unknown as HTMLElement, target: new Vec3(1, 1, 0) });
 
     const scene = new Transform();
 

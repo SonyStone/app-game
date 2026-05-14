@@ -4,7 +4,7 @@ import { RenderProps } from '../core';
 
 // extend(THREE);
 
-export type Props = Omit<RenderProps<HTMLCanvasElement>, 'size' | 'events'> & {
+export type Props = Omit<RenderProps<HTMLElement>, 'size' | 'events'> & {
   // ,
   //   HTMLAttributes<HTMLDivElement>
   children: JSX.Element;

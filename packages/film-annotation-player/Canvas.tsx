@@ -5,6 +5,7 @@ import s from './Canvas.module.scss';
 import { stroke } from './croquis/brush/simple';
 import { getStylusState } from './croquis/stylus';
 import { pointerdown, pointermove, pointerup } from './events/pointer';
+import { COMPOSITE_OPERATIONS } from './interfaces/CompositeOperations';
 import { Dimensions } from './interfaces/Dimensions.interface';
 
 export default function Canvas(
@@ -13,7 +14,7 @@ export default function Canvas(
     dimentions: Dimensions;
     brushSize: number;
     brushColor: string;
-    brushComposite: string;
+    brushComposite: (typeof COMPOSITE_OPERATIONS)[number];
   } & JSX.VideoHTMLAttributes<HTMLVideoElement>
 ) {
   const canvas: HTMLCanvasElement = (<canvas class={s.canvas}></canvas>) as HTMLCanvasElement;
@@ -43,7 +44,7 @@ export default function Canvas(
     canvas.width = width;
   });
 
-  pointerdown(ctx.canvas)
+  pointerdown(ctx.canvas as unknown as HTMLElement)
     .pipe(
       exhaustMap((event) => {
         const context = stroke.down(
@@ -56,10 +57,10 @@ export default function Canvas(
           getStylusState(event)
         );
 
-        return pointermove(ctx.canvas).pipe(
+        return pointermove(ctx.canvas as unknown as HTMLElement).pipe(
           startWith(event),
           map((event) => context.move(getStylusState(event))),
-          takeUntil(pointerup(ctx.canvas).pipe(map((event) => context.up(getStylusState(event))))),
+          takeUntil(pointerup(ctx.canvas as unknown as HTMLElement).pipe(map((event) => context.up(getStylusState(event))))),
           last()
         );
       }),

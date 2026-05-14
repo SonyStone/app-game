@@ -14,9 +14,9 @@ export const createBrushRenderTarget = ({
   target?: MaybeAccessor<RenderTarget>;
   color?: MaybeAccessor<[number, number, number] | undefined>;
 }) => {
-  const mesh = new BrushMesh(gl, access(color));
+  const mesh = new BrushMesh(gl);
 
-  const [layerS, setLayerS] = createSignal(access(target), { equals: () => false });
+  const [layerS, setLayerS] = createSignal(access(target));
 
   effect(() => {
     mesh.setColor(access(color));

@@ -7,7 +7,7 @@ import { round } from '@app-game/gsap/core/utils';
 import { FVec3 } from '@app-game/math';
 import { useCamera } from '@app-game/three-examples';
 import s from './3dWireframe.module.scss';
-import { Main } from './main';
+import { Camera, Context, Main } from './main';
 
 export default function Wireframe() {
   const canvas = (<canvas class={s.canvas}></canvas>) as HTMLCanvasElement;
@@ -30,14 +30,14 @@ export default function Wireframe() {
     setTransition(cameraType() === 'perspective' ? 1 : 0);
   });
 
-  const [camera, setCamera] = createSignal(
+  const [camera, setCamera] = createSignal<Camera>(
     (() => {
       const c = {
-        orthographicProjection: m4.identity(),
-        perspectiveProjection: m4.identity(),
-        projection: m4.identity(),
+        orthographicProjection: m4.identity(new m4.FMat4()),
+        perspectiveProjection: m4.identity(new m4.FMat4()),
+        projection: m4.identity(new m4.FMat4()),
         // transform: m4.identity(),
-        inversePosition: m4.identity(),
+        inversePosition: m4.identity(new m4.FMat4()),
         target: FVec3.create(0, 0, 0),
         offset: FVec3.create(0.6, 1.8, 2.0),
         spherical: create()
@@ -51,7 +51,7 @@ export default function Wireframe() {
     { equals: false }
   );
 
-  const context = {
+  const context: Context = {
     canvas,
     gl: canvas.getContext('webgl2')!,
 

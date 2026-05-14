@@ -40,7 +40,7 @@ export class WebGlObjectSpy {
     }
   }
 
-  tagWebGlObject(object: any): WebGlObjectTag {
+  tagWebGlObject(object: any): WebGlObjectTag | undefined {
     for (const webGlObject of this.webGlObjects) {
       const tag = webGlObject.tagWebGlObject(object);
       if (tag) {

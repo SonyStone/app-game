@@ -210,7 +210,7 @@ export function applyProps(instance: Instance, data: InstanceProps | DiffSet) {
   // Filter equals, events and reserved props
   const localState = (instance?.__r3f ?? {}) as LocalState;
   const root = localState.root;
-  const rootState: RootState = root?.getState() ?? ({} as unknown as RootState);
+  const rootState: RootState = root?.[0] ?? ({} as unknown as RootState);
   const { changes } = isDiffSet(data) ? data : diffProps(instance, data);
   const prevHandlers = localState.eventCount;
 
@@ -237,7 +237,7 @@ export function applyProp(
   instance: Instance,
   [key, value, isEvent, keys]: [key: string, value: unknown, isEvent: boolean, keys: string[]],
   localState: LocalState = instance?.__r3f ?? ({} as unknown as LocalState),
-  rootState: RootState = localState.root?.getState()
+  rootState: RootState = localState.root?.[0] as RootState
 ) {
   let currentInstance = instance;
   let targetProp = currentInstance[key];
@@ -320,7 +320,9 @@ export function applyProp(
     // Auto-convert sRGB textures, for now ...
     // https://github.com/pmndrs/react-three-fiber/issues/344
     if (!rootState.linear && currentInstance[key] instanceof THREE.Texture) {
-      currentInstance[key].colorSpace = THREE.SRGBColorSpace;
+      (currentInstance[key] as THREE.Texture & { colorSpace: unknown }).colorSpace = (THREE as unknown as {
+        SRGBColorSpace: unknown;
+      }).SRGBColorSpace;
     }
   }
 
@@ -342,7 +344,7 @@ export function applyProp(
 }
 
 export function invalidateInstance(instance: Instance) {
-  const state = instance.__r3f?.root?.getState?.();
+  const state = instance.__r3f?.root?.[0];
   if (state && state.internal.frames === 0) state.invalidate();
 }
 

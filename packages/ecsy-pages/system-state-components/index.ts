@@ -49,7 +49,7 @@ export class PerformanceCompensation {
   [Read(Entity), Not(Sprite), Read(SpriteResources)],
   [Read(Entity), Read(Sprite), Read(SpriteResources)]
 )
-class MainSystem implements System {
+class MainSystem extends System {
   run(added: [Entity, Sprite][], removed: [Entity, SpriteResources], normal: [Entity, Sprite, SpriteResources]) {
     for (const [entity] of added) {
       const memPosition = Math.floor(Math.random() * 1000);

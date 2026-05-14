@@ -4,7 +4,7 @@ import { CanvasContext, CanvasSize, Point, Velocity } from '../../utils';
 import { BackgroundColor, Life, LineProperties, ParticleProperties } from './components';
 
 @SystemData([Read(CanvasContext), Read(CanvasSize), Read(BackgroundColor)])
-export class DrawBackgroundSystem implements System {
+export class DrawBackgroundSystem extends System {
   run([[{ ctx }, { width, height }, { bgColor }]]: [CanvasContext, CanvasSize, BackgroundColor][]) {
     ctx.globalCompositeOperation = `normal`;
     ctx.fillStyle = bgColor;
@@ -13,7 +13,7 @@ export class DrawBackgroundSystem implements System {
 }
 
 @SystemData([Read(Point), Read(Velocity), Read(Life)], [Read(CanvasSize), Read(ParticleProperties)])
-export class CalculateLifeSystem implements System {
+export class CalculateLifeSystem extends System {
   run(
     particles: [Point, Velocity, Life][],
     [[{ width, height }, { maxVelocity, life }]]: [CanvasSize, ParticleProperties][]
@@ -32,7 +32,7 @@ export class CalculateLifeSystem implements System {
 }
 
 @SystemData([Read(Point), Read(Velocity)], Read(CanvasSize))
-export class ParticlesPositionSystem implements System {
+export class ParticlesPositionSystem extends System {
   run(particles: [Point, Velocity][], [{ width, height }]: CanvasSize[]) {
     for (const [point, velocity] of particles) {
       velocity.x =
@@ -52,7 +52,7 @@ export class ParticlesPositionSystem implements System {
 }
 
 @SystemData(Read(Point), [Read(CanvasContext), Read(ParticleProperties)])
-export class DrawParticlesSystem implements System {
+export class DrawParticlesSystem extends System {
   run(points: Point[], [[{ ctx }, { radius, color }]]: [CanvasContext, ParticleProperties][]) {
     for (const point of points) {
       ctx.beginPath();
@@ -65,7 +65,7 @@ export class DrawParticlesSystem implements System {
 }
 
 @SystemData(Read(Point), [Read(CanvasContext), Read(LineProperties)])
-export class DrawLinesSystem implements System {
+export class DrawLinesSystem extends System {
   run(points: Point[], [[{ ctx }, { length: lineLength, color }]]: [CanvasContext, LineProperties][]) {
     for (const { x: x1, y: y1 } of points) {
       for (const { x: x2, y: y2 } of points) {

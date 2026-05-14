@@ -45,11 +45,13 @@ function createTreeView(props: { treeUrl: string }) {
         tree.id = index;
       } else if (isNodeInsert(element)) {
         const [, nodeData, path] = element;
-        if (!(nodeData as DefaultNode & { type: 'default' }).type) {
-          (nodeData as DefaultNode & { type: 'default' }).type = 'default';
-        }
-        nodeData.id = index;
-        insertChildrenAtPath(tree, path, nodeData);
+        const normalizedNode = {
+          ...nodeData,
+          type: 'type' in nodeData ? nodeData.type : 'default',
+          id: index
+        } as BookmarksTreeView;
+
+        insertChildrenAtPath(tree, path, normalizedNode);
       }
     }
 
@@ -127,7 +129,12 @@ function TreeView(
           {(props) => {
             return (
               <div class="contents">
-                <NodeItem2 node={props.node} path={props.path} dragHandlers={dragHandlers} droppable={droppable}>
+                <NodeItem2
+                  node={props.node as BookmarksTreeView}
+                  path={props.path}
+                  dragHandlers={dragHandlers}
+                  droppable={droppable}
+                >
                   {props.children}
                 </NodeItem2>
               </div>

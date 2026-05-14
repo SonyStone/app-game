@@ -8,11 +8,21 @@ import { clamp, mat4fromRotationSinCos, rotateNormalBinormal, toDegrees, toRadia
 const tempVec3 = /* @__PURE__ */ new Vec3();
 const tempMat4 = /* @__PURE__ */ new Mat4();
 
-function throwIfNullProperty(property, message) {
+type PathSegment = CubicBezierSegment | LineSegment | QuadraticBezierSegment;
+
+function throwIfNullProperty(this: Path, property: '_lastPoint', message: string): void {
   if (this[property] == null) throw new Error(message);
 }
 
 export class Path {
+  _segments: PathSegment[];
+  _lengthOffsets: number[] | null;
+  _totalLength: number;
+  _lastPoint: Vec3 | null;
+  _lastTilt: number;
+  _assertLastPoint: () => void;
+  tiltFunction: ((tilt: number, progress: number, path: Path) => number) | null;
+
   constructor() {
     this._segments = [];
     this._lengthOffsets = null;
@@ -29,34 +39,34 @@ export class Path {
     this.tiltFunction = null;
   }
 
-  moveTo(p, tilt = 0) {
+  moveTo(p: Vec3, tilt = 0): void {
     this._totalLength = -1;
     this._lastPoint = p;
     this._lastTilt = tilt;
   }
 
-  bezierCurveTo(cp1, cp2, p, tilt = 0) {
+  bezierCurveTo(cp1: Vec3, cp2: Vec3, p: Vec3, tilt = 0): this {
     this._assertLastPoint();
-    const seg = new CubicBezierSegment(this._lastPoint, cp1, cp2, p, this._lastTilt, tilt);
+    const seg = new CubicBezierSegment(this._lastPoint!, cp1, cp2, p, this._lastTilt, tilt);
     this.addSegment(seg);
     return this;
   }
 
-  quadraticCurveTo(cp, p, tilt = 0) {
+  quadraticCurveTo(cp: Vec3, p: Vec3, tilt = 0): this {
     this._assertLastPoint();
-    const seg = new QuadraticBezierSegment(this._lastPoint, cp, p, this._lastTilt, tilt);
+    const seg = new QuadraticBezierSegment(this._lastPoint!, cp, p, this._lastTilt, tilt);
     this.addSegment(seg);
     return this;
   }
 
-  lineTo(p, tilt = 0) {
+  lineTo(p: Vec3, tilt = 0): this {
     this._assertLastPoint();
-    const seg = new LineSegment(this._lastPoint, p, this._lastTilt, tilt);
+    const seg = new LineSegment(this._lastPoint!, p, this._lastTilt, tilt);
     this.addSegment(seg);
     return this;
   }
 
-  addSegment(segment) {
+  addSegment(segment: PathSegment): this {
     this._totalLength = -1;
     this._lastPoint = segment.lastPoint();
     this._lastTilt = segment.tiltEnd;
@@ -64,11 +74,11 @@ export class Path {
     return this;
   }
 
-  getSegments() {
+  getSegments(): PathSegment[] {
     return this._segments;
   }
 
-  updateLength() {
+  updateLength(): void {
     const n = this._segments.length;
     this._lengthOffsets = new Array(n);
 
@@ -81,7 +91,7 @@ export class Path {
     this._totalLength = offset;
   }
 
-  getLength() {
+  getLength(): number {
     if (this._totalLength < 0) {
       this.updateLength();
     }
@@ -94,8 +104,9 @@ export class Path {
    * @param {number} len absolute length distance
    * @returns {[number, number]} [_segment index_, _relative segment distance_]
    */
-  findSegmentIndexAtLength(len) {
+  findSegmentIndexAtLength(len: number): [number, number] {
     const totalLength = this.getLength();
+    const lengthOffsets = this._lengthOffsets ?? [];
 
     if (len <= 0) {
       return [0, 0];
@@ -106,7 +117,7 @@ export class Path {
     }
 
     let start = 0;
-    let end = this._lengthOffsets.length - 1;
+    let end = lengthOffsets.length - 1;
     let index = -1;
     let mid;
 
@@ -115,12 +126,12 @@ export class Path {
 
       if (
         mid === 0 ||
-        mid === this._lengthOffsets.length - 1 ||
-        (len >= this._lengthOffsets[mid] && len < this._lengthOffsets[mid + 1])
+        mid === lengthOffsets.length - 1 ||
+        (len >= lengthOffsets[mid] && len < lengthOffsets[mid + 1])
       ) {
         index = mid;
         break;
-      } else if (len < this._lengthOffsets[mid]) {
+      } else if (len < lengthOffsets[mid]) {
         end = mid - 1;
       } else {
         start = mid + 1;
@@ -129,37 +140,37 @@ export class Path {
 
     const seg = this._segments[index];
     const segLen = seg.getLength();
-    const t = (len - this._lengthOffsets[index]) / segLen;
+    const t = (len - lengthOffsets[index]) / segLen;
 
     return [index, t];
   }
 
-  getPointAtLength(len, out = new Vec3()) {
+  getPointAtLength(len: number, out = new Vec3()): Vec3 {
     const [i, t] = this.findSegmentIndexAtLength(len);
     return this._segments[i].getPointAt(t, out);
   }
 
-  getPointAt(t, out = new Vec3()) {
+  getPointAt(t: number, out = new Vec3()): Vec3 {
     const totalLength = this.getLength();
     return this.getPointAtLength(t * totalLength, out);
   }
 
-  getTangentAtLength(len, out = new Vec3()) {
+  getTangentAtLength(len: number, out = new Vec3()): Vec3 {
     const [i, t] = this.findSegmentIndexAtLength(len);
     return this._segments[i].getTangentAt(t, out);
   }
 
-  getTangentAt(t, out = new Vec3()) {
+  getTangentAt(t: number, out = new Vec3()): Vec3 {
     const totalLength = this.getLength();
     return this.getTangentAtLength(t * totalLength, out);
   }
 
-  getTiltAtLength(len) {
+  getTiltAtLength(len: number): number {
     const [i, t] = this.findSegmentIndexAtLength(len);
     return this._segments[i].getTiltAt(t);
   }
 
-  getTiltAt(t) {
+  getTiltAt(t: number): number {
     const totalLength = this.getLength();
     return this.getTiltAtLength(t * totalLength);
   }
@@ -169,7 +180,7 @@ export class Path {
    * @param {number} divisions number of subdivisions
    * @returns {Vec3[]} array of points
    */
-  getPoints(divisions = 64) {
+  getPoints(divisions = 64): Vec3[] {
     const points = new Array(divisions + 1);
     for (let i = 0; i <= divisions; i++) {
       points[i] = this.getPointAt(i / divisions);
@@ -183,11 +194,11 @@ export class Path {
    * @param {number} divisions number of subdivisions
    * @returns {{tangents: Vec3[], normals: Vec3[], binormals: Vec3[]}} Object with tangents, normals and binormals arrays
    */
-  computeFrenetFrames(divisions = 64, closed = false) {
+  computeFrenetFrames(divisions = 64, closed = false): { tangents: Vec3[]; normals: Vec3[]; binormals: Vec3[]; tilts: number[] } {
     const tangents = new Array(divisions + 1);
     const tilts = new Array(divisions + 1);
 
-    const tiltFunction = this.tiltFunction ?? ((a) => a);
+    const tiltFunction = this.tiltFunction ?? ((a: number) => a);
 
     // compute the tangent vectors and tilt for each segment on the curve
     const totalLength = this.getLength();

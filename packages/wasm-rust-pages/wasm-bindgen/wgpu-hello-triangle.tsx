@@ -5,7 +5,7 @@ import { HelloTriangle } from './wasm_bindgen/libs/start_wgpu/pkg/start_wgpu';
 export default function WgpuTest() {
   const canvas = (<canvas class="aspect-ratio-square max-w-full touch-none" />) as HTMLCanvasElement;
 
-  createResizeObserver(canvas, ({ width, height }) => resize?.(width, height));
+  createResizeObserver(canvas as unknown as Element, ({ width, height }) => resize?.(width, height));
 
   let resize: (width: number, height: number) => void;
 

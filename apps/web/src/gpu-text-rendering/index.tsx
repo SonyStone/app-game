@@ -50,11 +50,16 @@ export default function GpuTextRendering() {
     }
   });
   canvas.addEventListener('mouseup', function (e) {
-    document.exitPointerLock =
-      document.exitPointerLock ||
-      (document as { mozExitPointerLock: any }).mozExitPointerLock ||
-      (document as any).webkitExitPointerLock;
-    document.exitPointerLock();
+    const pointerLockDocument = document as Document & {
+      mozExitPointerLock?: () => void;
+      webkitExitPointerLock?: () => void;
+    };
+
+    pointerLockDocument.exitPointerLock =
+      pointerLockDocument.exitPointerLock ||
+      pointerLockDocument.mozExitPointerLock ||
+      pointerLockDocument.webkitExitPointerLock;
+    pointerLockDocument.exitPointerLock();
   });
 
   // window.addEventListener("resize", forceAnimationChange);

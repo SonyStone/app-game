@@ -82,7 +82,7 @@ export class Mat3 extends Array {
     return this;
   }
 
-  fromMatrix4(m: Mat3Tuple): this {
+  fromMatrix4(m: Mat4Tuple): this {
     Mat3Func.fromMat4(this, m);
     return this;
   }

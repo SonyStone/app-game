@@ -33,6 +33,10 @@ export interface ISourceCodeChangeEvent {
   programId: number;
 }
 
+type LegacyNavigator = Navigator & {
+  msSaveBlob?: (blob: Blob, defaultName?: string) => boolean;
+};
+
 export class ResultView {
   readonly onSourceCodeChanged: Observable<ISourceCodeChangeEvent>;
 
@@ -66,8 +70,8 @@ export class ResultView {
   private commandDetailStateId: number;
   private visualStateListStateId: number;
   private currentCaptureStateId: number;
-  private currentCommandStateId: number;
-  private currentVisualStateId: number;
+  private currentCommandStateId: number | null;
+  private currentVisualStateId: number | null;
   private initVisualStateId: number;
   private sourceCodeComponentStateId: number;
 
@@ -115,9 +119,9 @@ export class ResultView {
     this.sourceCodeComponent = new SourceCodeComponent();
     this.informationColumnComponent = new InformationColumnComponent();
 
-    this.rootStateId = this.mvx.addRootState(null, this.resultViewComponent);
-    this.menuStateId = this.mvx.addChildState(this.rootStateId, null, this.resultViewMenuComponent);
-    this.contentStateId = this.mvx.addChildState(this.rootStateId, null, this.resultViewContentComponent);
+    this.rootStateId = this.mvx.addRootState({}, this.resultViewComponent);
+    this.menuStateId = this.mvx.addChildState(this.rootStateId, {}, this.resultViewMenuComponent);
+    this.contentStateId = this.mvx.addChildState(this.rootStateId, {}, this.resultViewContentComponent);
     this.captureListStateId = this.mvx.addChildState(this.rootStateId, false, this.captureListComponent);
 
     this.initKeyboardEvents();
@@ -189,8 +193,9 @@ export class ResultView {
     const blob = new Blob([captureInString], { type: 'octet/stream' });
     const fileName = 'capture ' + new Date(capture.startTime).toTimeString().split(' ')[0] + '.json';
 
-    if (navigator.msSaveBlob) {
-      navigator.msSaveBlob(blob, fileName);
+    const legacyNavigator = navigator as LegacyNavigator;
+    if (legacyNavigator.msSaveBlob) {
+      legacyNavigator.msSaveBlob(blob, fileName);
     } else {
       const a = document.createElement('a');
       const url = window.URL.createObjectURL(blob);
@@ -274,6 +279,10 @@ export class ResultView {
 
   private openShader(fragment: boolean): void {
     this.mvx.removeChildrenStates(this.contentStateId);
+    if (this.currentCommandStateId === null) {
+      return;
+    }
+
     const commandState = this.mvx.getGenericState<ICommandListItemState>(this.currentCommandStateId);
     this.sourceCodeComponentStateId = this.mvx.addChildState(
       this.contentStateId,
@@ -292,11 +301,15 @@ export class ResultView {
       this.sourceCodeComponent
     );
 
-    this.commandDetailStateId = this.mvx.addChildState(this.contentStateId, null, this.commandDetailComponent);
+    this.commandDetailStateId = this.mvx.addChildState(this.contentStateId, {}, this.commandDetailComponent);
     this.displayCurrentCommandDetail(commandState);
   }
 
   private selectPreviousCommand(): void {
+    if (this.currentCommandStateId === null) {
+      return;
+    }
+
     const commandState = this.mvx.getGenericState<ICommandListItemState>(this.currentCommandStateId);
     if (commandState.previousCommandStateId < 0) {
       return;
@@ -306,6 +319,10 @@ export class ResultView {
   }
 
   private selectNextCommand(): void {
+    if (this.currentCommandStateId === null) {
+      return;
+    }
+
     const commandState = this.mvx.getGenericState<ICommandListItemState>(this.currentCommandStateId);
     if (commandState.nextCommandStateId < 0) {
       return;
@@ -315,6 +332,10 @@ export class ResultView {
   }
 
   private selectPreviousVisualState(): void {
+    if (this.currentVisualStateId === null) {
+      return;
+    }
+
     const visualState = this.mvx.getGenericState<IVisualStateItem>(this.currentVisualStateId);
     if (visualState.previousVisualStateId < 0) {
       return;
@@ -324,6 +345,10 @@ export class ResultView {
   }
 
   private selectNextVisualState(): void {
+    if (this.currentVisualStateId === null) {
+      return;
+    }
+
     const visualState = this.mvx.getGenericState<IVisualStateItem>(this.currentVisualStateId);
     if (visualState.nextVisualStateId < 0) {
       return;
@@ -401,11 +426,11 @@ export class ResultView {
     const leftId = this.mvx.addChildState(this.contentStateId, true, this.informationColumnComponent);
     const rightId = this.mvx.addChildState(this.contentStateId, false, this.informationColumnComponent);
 
-    const leftJsonContentStateId = this.mvx.addChildState(leftId, null, this.jsonContentComponent);
+    const leftJsonContentStateId = this.mvx.addChildState(leftId, {}, this.jsonContentComponent);
     this.displayJSONGroup(leftJsonContentStateId, 'Canvas', capture.canvas);
     this.displayJSONGroup(leftJsonContentStateId, 'Context', capture.context);
 
-    const rightJsonContentStateId = this.mvx.addChildState(rightId, null, this.jsonContentComponent);
+    const rightJsonContentStateId = this.mvx.addChildState(rightId, {}, this.jsonContentComponent);
     for (const analysis of capture.analyses) {
       if (analysis.analyserName === 'Primitives') {
         this.displayJSONGroup(rightJsonContentStateId, 'Vertices count', analysis);
@@ -554,14 +579,14 @@ export class ResultView {
   private displayInitState(): void {
     const capture = this.onCaptureRelatedAction(MenuStatus.InitState);
 
-    const jsonContentStateId = this.mvx.addChildState(this.contentStateId, null, this.jsonContentComponent);
+    const jsonContentStateId = this.mvx.addChildState(this.contentStateId, {}, this.jsonContentComponent);
     this.displayJSON(jsonContentStateId, capture.initState);
   }
 
   private displayEndState(): void {
     const capture = this.onCaptureRelatedAction(MenuStatus.EndState);
 
-    const jsonContentStateId = this.mvx.addChildState(this.contentStateId, null, this.jsonContentComponent);
+    const jsonContentStateId = this.mvx.addChildState(this.contentStateId, {}, this.jsonContentComponent);
     this.displayJSON(jsonContentStateId, capture.endState);
   }
 
@@ -577,14 +602,18 @@ export class ResultView {
     });
 
     this.createVisualStates(capture);
-    this.commandListStateId = this.mvx.addChildState(this.contentStateId, null, this.commandListComponent);
-    this.commandDetailStateId = this.mvx.addChildState(this.contentStateId, null, this.commandDetailComponent);
+    this.commandListStateId = this.mvx.addChildState(this.contentStateId, {}, this.commandListComponent);
+    this.commandDetailStateId = this.mvx.addChildState(this.contentStateId, {}, this.commandDetailComponent);
 
     this.createCommands(capture);
   }
 
   private displayCurrentCommand(): number {
     if (this.mvx.getGenericState<IResultViewMenuState>(this.menuStateId).status !== MenuStatus.Commands) {
+      return -1;
+    }
+
+    if (this.currentCommandStateId === null) {
       return -1;
     }
 
@@ -665,6 +694,10 @@ export class ResultView {
       return null;
     }
 
+    if (this.currentVisualStateId === null) {
+      return null;
+    }
+
     const visualState = this.mvx.getGenericState<IVisualStateItem>(this.currentVisualStateId);
     if (visualState.commandStateId === Number.MIN_VALUE) {
       this.displayInitState();
@@ -683,7 +716,7 @@ export class ResultView {
   }
 
   private createVisualStates(capture: ICapture): void {
-    this.visualStateListStateId = this.mvx.addChildState(this.contentStateId, null, this.visualStateListComponent);
+    this.visualStateListStateId = this.mvx.addChildState(this.contentStateId, {}, this.visualStateListComponent);
 
     this.mvx.removeChildrenStates(this.visualStateListStateId);
 
@@ -704,10 +737,10 @@ export class ResultView {
     let tempVisualStateId = this.initVisualStateId;
     let visualStateSet = false;
 
-    let previousCommandState: ICommandListItemState = null;
+    let previousCommandState: ICommandListItemState | null = null;
     let previousCommandStateId = -1;
 
-    let previousVisualState: IVisualStateItem = null;
+    let previousVisualState: IVisualStateItem | null = null;
     let previousVisualStateId = -1;
 
     for (let i = 0; i < capture.commands.length; i++) {
@@ -725,7 +758,7 @@ export class ResultView {
         capture: commandCapture,
         previousCommandStateId,
         nextCommandStateId: -1,
-        visualStateId: undefined as number,
+        visualStateId: -1,
         active: false
       };
 

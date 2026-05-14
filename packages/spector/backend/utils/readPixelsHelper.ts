@@ -29,7 +29,7 @@ export class ReadPixelsHelper {
         return this.isSupportedComponentType(type);
     }
 
-    public static readPixels(gl: WebGLRenderingContext, x: number, y: number, width: number, height: number, type: number): Uint8Array {
+    public static readPixels(gl: WebGLRenderingContext, x: number, y: number, width: number, height: number, type: number): Uint8Array | undefined {
         // Empty error list.
         gl.getError();
 

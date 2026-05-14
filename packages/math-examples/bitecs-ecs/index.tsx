@@ -300,10 +300,10 @@ function DrawWorld() {
         if (Array.isArray(comp)) {
           console.log(' - Component Array:', componentNames.get(comp), comp[eid]);
         } else {
-          const res = Object.entries(comp).reduce((acc, [key, value]) => {
-            acc[key] = value[eid];
-            return acc;
-          }, {});
+          const res: Record<string, unknown> = {};
+          for (const [key, value] of Object.entries(comp as Record<string, ArrayLike<unknown>>)) {
+            res[key] = value[eid];
+          }
           console.log(' - Component:', componentNames.get(comp), res);
         }
       }

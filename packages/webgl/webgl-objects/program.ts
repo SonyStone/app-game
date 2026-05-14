@@ -138,7 +138,7 @@ export const createUniformsMethods = <T>(
         }
       };
     }
-  });
+  } as any);
 };
 
 export interface UniformsParams {

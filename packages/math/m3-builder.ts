@@ -53,7 +53,7 @@ export type Mat3Tuple =
  * @module twgl/m3
  */
 export const Mat3Builder = (ctor: TypedArrayConstructor) =>
-  class Mat3 extends (ctor as ArrayConstructor) {
+  class Mat3 extends (ctor as unknown as ArrayConstructor) {
     /**
      * Here is a representation of it:
      * ```

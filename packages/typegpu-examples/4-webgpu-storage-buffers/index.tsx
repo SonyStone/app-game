@@ -135,22 +135,21 @@ function App(props: { color: HexColor; scale: [number, number]; offset: [number,
 
   // 4️⃣ Create storage buffer for one bind group
   const ourStruct = root
-    .createBuffer(
-      ourStructShema(1000),
-      Array.from({ length: 1000 }).map(() => ({
+    .createBuffer(ourStructShema(1000))
+    .$usage('storage');
+  ourStruct.write(
+    Array.from({ length: 1000 }).map(() => ({
         color: d.vec4f(rand(0, 255) / 255, rand(0, 255) / 255, rand(0, 255) / 255, 1),
         scale: d.vec2f(1, 1),
         offset: d.vec2f(rand(-1, 1), rand(-1, 1))
       }))
-    )
-    .$usage('storage');
-
+  );
   const circle = createCircleVertices2({
     radius: 0.5,
     innerRadius: 0.25
   });
 
-  const circle2 = createCircleVertices({
+  const circle2 = createCircleVertices2({
     radius: 0.5,
     innerRadius: 0.25
   });
@@ -163,23 +162,20 @@ function App(props: { color: HexColor; scale: [number, number]; offset: [number,
   {
     const circleVerticesSchema = d.arrayOf(d.vec2f);
 
-    const { vertexData, numVertices }: { vertexData: Float32Array<ArrayBuffer>; numVertices: number } =
-      createCircleVertices({
+    const { vertexData, numVertices }: { vertexData: d.v2f[]; numVertices: number } =
+      createCircleVertices2({
         radius: 0.5,
         innerRadius: 0.25
       });
 
-    const circleBuffer = root.createBuffer(circleVerticesSchema(numVertices), vertexData).$usage('storage');
+    const circleBuffer = root.createBuffer(circleVerticesSchema(numVertices)).$usage('storage');
+    circleBuffer.write(vertexData);
 
-    root.device.queue.writeBuffer(circleBuffer.buffer, 0, vertexData);
   }
 
   // 4️⃣ And create storage buffer for the circle vertices
-  const circleBuffer = root.createBuffer(circleVerticesSchema(circle.numVertices), unbufferedData).$usage('storage');
-
-  // circleBuffer.write(circle.vertexData);
-  // if cast does not work, lets use raw writeBuffer
-  root.device.queue.writeBuffer(circleBuffer.buffer, 0, circle2.vertexData);
+  const circleBuffer = root.createBuffer(circleVerticesSchema(circle.numVertices)).$usage('storage');
+  circleBuffer.write(circle2.vertexData);
 
   const bindGroup = root.createBindGroup(bindGroupLayout, {
     ourStruct: ourStruct.buffer,

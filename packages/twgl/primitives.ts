@@ -30,7 +30,7 @@
  *
  * @module twgl/primitives
  */
-import { TypedArray } from '.';
+import type { ArraySpec, Arrays, FullArraySpec, Mat4, TypedArray, Vec3 } from '.';
 import * as attributes from './attributes';
 import * as helper from './helper';
 import * as m4 from './m4';
@@ -39,6 +39,43 @@ import * as v3 from './v3';
 
 const getArray = attributes.getArray; // eslint-disable-line
 const getNumComponents = attributes.getNumComponents; // eslint-disable-line
+
+type TypedArrayConstructor =
+  | Float32ArrayConstructor
+  | Float64ArrayConstructor
+  | Uint16ArrayConstructor
+  | Uint32ArrayConstructor
+  | Uint8ArrayConstructor
+  | Int8ArrayConstructor
+  | Int16ArrayConstructor
+  | Int32ArrayConstructor;
+
+type AugmentedTypedArray = TypedArray & {
+  numComponents: number;
+  numElements: number;
+  push: (...values: Array<number | ArrayLike<number>>) => void;
+  reset: (optIndex?: number) => void;
+};
+
+type AugmentedVertices = Record<string, AugmentedTypedArray> & {
+  indices?: AugmentedTypedArray;
+  normal?: AugmentedTypedArray;
+  position: AugmentedTypedArray;
+  color?: AugmentedTypedArray;
+};
+
+type MutableNumericArray = number[] | TypedArray;
+type RandomVerticesOptions = {
+  vertsPerColor?: number;
+  rand?: (ndx: number, channel: number) => number;
+};
+
+type PrimitiveFullArraySpec = Omit<FullArraySpec, 'data'> & {
+  data: number | number[] | ArrayBuffer | TypedArray;
+};
+
+type PrimitiveArraySpec = number[] | ArrayBuffer | TypedArray | PrimitiveFullArraySpec;
+type PrimitiveArrays = Record<string, PrimitiveArraySpec>;
 
 /**
  * @typedef {(Int8Array|Uint8Array|Int16Array|Uint16Array|Int32Array|Uint32Array|Float32Array)} TypedArray
@@ -52,12 +89,12 @@ const getNumComponents = attributes.getNumComponents; // eslint-disable-line
  * @param {number} numComponents number of components.
  * @private
  */
-function augmentTypedArray(typedArray: TypedArray, numComponents: number) {
+function augmentTypedArray(typedArray: TypedArray, numComponents: number): AugmentedTypedArray {
   let cursor = 0;
-  (typedArray as any).push = function () {
-    for (let ii = 0; ii < arguments.length; ++ii) {
-      const value = arguments[ii];
-      if (value instanceof Array || typedArrays.isArrayBuffer(value)) {
+  (typedArray as AugmentedTypedArray).push = function (...values: Array<number | ArrayLike<number>>) {
+    for (let ii = 0; ii < values.length; ++ii) {
+      const value = values[ii];
+      if (typeof value !== 'number') {
         for (let jj = 0; jj < value.length; ++jj) {
           typedArray[cursor++] = value[jj];
         }
@@ -66,16 +103,16 @@ function augmentTypedArray(typedArray: TypedArray, numComponents: number) {
       }
     }
   };
-  (typedArray as any).reset = function (opt_index: number) {
+  (typedArray as AugmentedTypedArray).reset = function (opt_index?: number) {
     cursor = opt_index || 0;
   };
-  (typedArray as any).numComponents = numComponents;
+  (typedArray as AugmentedTypedArray).numComponents = numComponents;
   Object.defineProperty(typedArray, 'numElements', {
     get: function () {
-      return (this.length / this.numComponents) | 0;
+      return ((this as AugmentedTypedArray).length / (this as AugmentedTypedArray).numComponents) | 0;
     }
   });
-  return typedArray;
+  return typedArray as AugmentedTypedArray;
 }
 
 /**
@@ -103,15 +140,8 @@ function augmentTypedArray(typedArray: TypedArray, numComponents: number) {
 function createAugmentedTypedArray(
   numComponents: number,
   numElements: number,
-  Type:
-    | Float32ArrayConstructor
-    | Uint16ArrayConstructor
-    | Uint32ArrayConstructor
-    | Int8ArrayConstructor
-    | Uint8ArrayConstructor
-    | Int16ArrayConstructor
-    | Int32ArrayConstructor = Float32Array
-): ArrayBufferView {
+  Type: TypedArrayConstructor = Float32Array
+): AugmentedTypedArray {
   return augmentTypedArray(new Type(numComponents * numElements), numComponents);
 }
 
@@ -125,17 +155,25 @@ function allButIndices(name: string) {
  * @return {Object.<string, TypedArray>} The deindexed vertices
  * @memberOf module:twgl/primitives
  */
-function deindexVertices(vertices: { [key: string]: TypedArray }): { [key: string]: TypedArray } {
+function deindexVertices(vertices: AugmentedVertices): AugmentedVertices {
   const indices = vertices.indices;
-  const newVertices = {};
+  const newVertices: AugmentedVertices = {} as AugmentedVertices;
+  if (!indices) {
+    return newVertices;
+  }
+  const safeIndices = indices;
   const numElements = indices.length;
 
-  function expandToUnindexed(channel) {
+  function expandToUnindexed(channel: string): void {
     const srcBuffer = vertices[channel];
     const numComponents = srcBuffer.numComponents;
-    const dstBuffer = createAugmentedTypedArray(numComponents, numElements, srcBuffer.constructor);
+    const dstBuffer = createAugmentedTypedArray(
+      numComponents,
+      numElements,
+      srcBuffer.constructor as TypedArrayConstructor
+    );
     for (let ii = 0; ii < numElements; ++ii) {
-      const ndx = indices[ii];
+      const ndx = safeIndices[ii];
       const offset = ndx * numComponents;
       for (let jj = 0; jj < numComponents; ++jj) {
         dstBuffer.push(srcBuffer[offset + jj]);
@@ -155,12 +193,15 @@ function deindexVertices(vertices: { [key: string]: TypedArray }): { [key: strin
  * @return {Object.<string, TypedArray>} The flattened vertices (same as was passed in)
  * @memberOf module:twgl/primitives
  */
-function flattenNormals(vertices: { [key: string]: TypedArray }): { [key: string]: TypedArray } {
+function flattenNormals(vertices: AugmentedVertices): AugmentedVertices {
   if (vertices.indices) {
     throw new Error('can not flatten normals of indexed vertices. deindex them first');
   }
 
   const normals = vertices.normal;
+  if (!normals) {
+    throw new Error('can not flatten normals without normal data');
+  }
   const numNormals = normals.length;
   for (let ii = 0; ii < numNormals; ii += 9) {
     // pull out the 3 normals for this triangle
@@ -205,7 +246,7 @@ function flattenNormals(vertices: { [key: string]: TypedArray }): { [key: string
   return vertices;
 }
 
-function applyFuncToV3Array(array, matrix, fn) {
+function applyFuncToV3Array(array: MutableNumericArray, matrix: Mat4, fn: (matrix: Mat4, vector: Vec3, dst: Vec3) => Vec3) {
   const len = array.length;
   const tmp = new Float32Array(3);
   for (let ii = 0; ii < len; ii += 3) {
@@ -216,8 +257,8 @@ function applyFuncToV3Array(array, matrix, fn) {
   }
 }
 
-function transformNormal(mi, v, dst) {
-  dst = dst || v3.create();
+function transformNormal(mi: Mat4, v: Vec3, dst?: Vec3): Vec3 {
+  dst = dst || v3.create(0, 0, 0);
   const v0 = v[0];
   const v1 = v[1];
   const v2 = v[2];
@@ -236,7 +277,7 @@ function transformNormal(mi, v, dst) {
  * @return {(number[]|TypedArray)} the same array that was passed in
  * @memberOf module:twgl/primitives
  */
-function reorientDirections(array, matrix) {
+function reorientDirections(array: MutableNumericArray, matrix: Mat4) {
   applyFuncToV3Array(array, matrix, m4.transformDirection);
   return array;
 }
@@ -249,7 +290,7 @@ function reorientDirections(array, matrix) {
  * @return {(number[]|TypedArray)} the same array that was passed in
  * @memberOf module:twgl/primitives
  */
-function reorientNormals(array, matrix) {
+function reorientNormals(array: MutableNumericArray, matrix: Mat4) {
   applyFuncToV3Array(array, m4.inverse(matrix), transformNormal);
   return array;
 }
@@ -262,7 +303,7 @@ function reorientNormals(array, matrix) {
  * @return {(number[]|TypedArray)} the same array that was passed in
  * @memberOf module:twgl/primitives
  */
-function reorientPositions(array, matrix) {
+function reorientPositions(array: MutableNumericArray, matrix: Mat4) {
   applyFuncToV3Array(array, matrix, m4.transformPoint);
   return array;
 }
@@ -281,7 +322,7 @@ function reorientPositions(array, matrix) {
  * @return {Object.<string, NativeArrayOrTypedArray>} same arrays that were passed in.
  * @memberOf module:twgl/primitives
  */
-function reorientVertices(arrays, matrix) {
+function reorientVertices(arrays: Record<string, MutableNumericArray>, matrix: Mat4) {
   Object.keys(arrays).forEach(function (name) {
     const array = arrays[name];
     if (name.indexOf('pos') >= 0) {
@@ -355,10 +396,7 @@ function reorientVertices(arrays, matrix) {
  * @return {Object.<string, TypedArray>} the created XY Quad vertices
  * @memberOf module:twgl/primitives
  */
-function createXYQuadVertices(size, xOffset, yOffset) {
-  size = size || 2;
-  xOffset = xOffset || 0;
-  yOffset = yOffset || 0;
+function createXYQuadVertices(size: number = 2, xOffset: number = 0, yOffset: number = 0) {
   size *= 0.5;
   return {
     position: {
@@ -425,12 +463,13 @@ function createXYQuadVertices(size, xOffset, yOffset) {
  * @return {Object.<string, TypedArray>} The created plane vertices.
  * @memberOf module:twgl/primitives
  */
-function createPlaneVertices(width, depth, subdivisionsWidth, subdivisionsDepth, matrix) {
-  width = width || 1;
-  depth = depth || 1;
-  subdivisionsWidth = subdivisionsWidth || 1;
-  subdivisionsDepth = subdivisionsDepth || 1;
-  matrix = matrix || m4.identity();
+function createPlaneVertices(
+  width: number = 1,
+  depth: number = 1,
+  subdivisionsWidth: number = 1,
+  subdivisionsDepth: number = 1,
+  matrix: Mat4 = m4.identity()
+) {
 
   const numVertices = (subdivisionsWidth + 1) * (subdivisionsDepth + 1);
   const positions = createAugmentedTypedArray(3, numVertices);
@@ -538,22 +577,17 @@ function createPlaneVertices(width, depth, subdivisionsWidth, subdivisionsDepth,
  * @memberOf module:twgl/primitives
  */
 function createSphereVertices(
-  radius,
-  subdivisionsAxis,
-  subdivisionsHeight,
-  opt_startLatitudeInRadians,
-  opt_endLatitudeInRadians,
-  opt_startLongitudeInRadians,
-  opt_endLongitudeInRadians
+  radius: number,
+  subdivisionsAxis: number,
+  subdivisionsHeight: number,
+  opt_startLatitudeInRadians: number = 0,
+  opt_endLatitudeInRadians: number = Math.PI,
+  opt_startLongitudeInRadians: number = 0,
+  opt_endLongitudeInRadians: number = Math.PI * 2
 ) {
   if (subdivisionsAxis <= 0 || subdivisionsHeight <= 0) {
     throw new Error('subdivisionAxis and subdivisionHeight must be > 0');
   }
-
-  opt_startLatitudeInRadians = opt_startLatitudeInRadians || 0;
-  opt_endLatitudeInRadians = opt_endLatitudeInRadians || Math.PI;
-  opt_startLongitudeInRadians = opt_startLongitudeInRadians || 0;
-  opt_endLongitudeInRadians = opt_endLongitudeInRadians || Math.PI * 2;
 
   const latRange = opt_endLatitudeInRadians - opt_startLatitudeInRadians;
   const longRange = opt_endLongitudeInRadians - opt_startLongitudeInRadians;
@@ -896,9 +930,8 @@ function createTruncatedConeVertices(
  * @return {number[]} the expanded rleData
  * @private
  */
-function expandRLEData(rleData, padding) {
-  padding = padding || [];
-  const data = [];
+function expandRLEData(rleData: number[], padding: number[] = []): number[] {
+  const data: number[] = [];
   for (let ii = 0; ii < rleData.length; ii += 4) {
     const runLength = rleData[ii];
     const element = rleData.slice(ii + 1, ii + 4);
@@ -1243,20 +1276,17 @@ function create3DFVertices() {
  * @memberOf module:twgl/primitives
  */
 function createCrescentVertices(
-  verticalRadius,
-  outerRadius,
-  innerRadius,
-  thickness,
-  subdivisionsDown,
-  startOffset,
-  endOffset
+  verticalRadius: number,
+  outerRadius: number,
+  innerRadius: number,
+  thickness: number,
+  subdivisionsDown: number,
+  startOffset: number = 0,
+  endOffset: number = 1
 ) {
   if (subdivisionsDown <= 0) {
     throw new Error('subdivisionDown must be > 0');
   }
-
-  startOffset = startOffset || 0;
-  endOffset = endOffset || 1;
 
   const subdivisionsThick = 2;
 
@@ -1266,11 +1296,11 @@ function createCrescentVertices(
   const normals = createAugmentedTypedArray(3, numVertices);
   const texcoords = createAugmentedTypedArray(2, numVertices);
 
-  function lerp(a, b, s) {
+  function lerp(a: number, b: number, s: number): number {
     return a + (b - a) * s;
   }
 
-  function createArc(arcRadius, x, normalMult, normalAdd, uMult, uAdd) {
+  function createArc(arcRadius: number, x: number, normalMult: Vec3, normalAdd: Vec3, uMult: number, uAdd: number) {
     for (let z = 0; z <= subdivisionsDown; z++) {
       const uBack = x / (subdivisionsThick - 1);
       const v = z / subdivisionsDown;
@@ -1301,7 +1331,7 @@ function createCrescentVertices(
   // Do outer surface.
   const indices = createAugmentedTypedArray(3, subdivisionsDown * 2 * (2 + subdivisionsThick), Uint16Array);
 
-  function createSurface(leftArcOffset, rightArcOffset) {
+  function createSurface(leftArcOffset: number, rightArcOffset: number) {
     for (let z = 0; z < subdivisionsDown; ++z) {
       // Make triangle 1 of quad.
       indices.push(leftArcOffset + z + 0, leftArcOffset + z + 1, rightArcOffset + z + 0);
@@ -1435,7 +1465,14 @@ function createCylinderVertices(
  * @return {Object.<string, TypedArray>} The created vertices.
  * @memberOf module:twgl/primitives
  */
-function createTorusVertices(radius, thickness, radialSubdivisions, bodySubdivisions, startAngle, endAngle) {
+function createTorusVertices(
+  radius: number,
+  thickness: number,
+  radialSubdivisions: number,
+  bodySubdivisions: number,
+  startAngle: number = 0,
+  endAngle: number = Math.PI * 2
+) {
   if (radialSubdivisions < 3) {
     throw new Error('radialSubdivisions must be 3 or greater');
   }
@@ -1444,8 +1481,6 @@ function createTorusVertices(radius, thickness, radialSubdivisions, bodySubdivis
     throw new Error('verticalSubdivisions must be 3 or greater');
   }
 
-  startAngle = startAngle || 0;
-  endAngle = endAngle || Math.PI * 2;
   const range = endAngle - startAngle;
 
   const radialParts = radialSubdivisions + 1;
@@ -1586,14 +1621,16 @@ function createTorusVertices(radius, thickness, radialSubdivisions, bodySubdivis
  * @return {Object.<string, TypedArray>} The created vertices.
  * @memberOf module:twgl/primitives
  */
-function createDiscVertices(radius, divisions, stacks, innerRadius, stackPower) {
+function createDiscVertices(
+  radius: number,
+  divisions: number,
+  stacks: number = 1,
+  innerRadius: number = 0,
+  stackPower: number = 1
+) {
   if (divisions < 3) {
     throw new Error('divisions must be at least 3');
   }
-
-  stacks = stacks ? stacks : 1;
-  stackPower = stackPower ? stackPower : 1;
-  innerRadius = innerRadius ? innerRadius : 0;
 
   // Note: We don't share the center vertex because that would
   // mess up texture coordinates.
@@ -1652,7 +1689,7 @@ function createDiscVertices(radius, divisions, stacks, innerRadius, stackPower) 
  * @return {number} random value between 0 and range - 1 inclusive.
  * @private
  */
-function randInt(range) {
+function randInt(range: number): number {
   return (Math.random() * range) | 0;
 }
 
@@ -1682,13 +1719,12 @@ function randInt(range) {
  * @return {Object.<string, AugmentedTypedArray>} same vertices as passed in with `color` added.
  * @memberOf module:twgl/primitives
  */
-function makeRandomVertexColors(vertices, options) {
-  options = options || {};
+function makeRandomVertexColors(vertices: AugmentedVertices, options: RandomVerticesOptions = {}): AugmentedVertices {
   const numElements = vertices.position.numElements;
   const vColors = createAugmentedTypedArray(4, numElements, Uint8Array);
   const rand =
     options.rand ||
-    function (ndx, channel) {
+    function (ndx: number, channel: number): number {
       return channel < 3 ? randInt(256) : 255;
     };
   vertices.color = vColors;
@@ -1717,10 +1753,10 @@ function makeRandomVertexColors(vertices, options) {
  * creates a buffers for them
  * @private
  */
-function createBufferFunc(fn) {
-  return function (gl) {
+function createBufferFunc<F extends (...args: any[]) => PrimitiveArrays>(fn: F) {
+  return function (this: unknown, gl: WebGL2RenderingContext, ...args: Parameters<F>) {
     const arrays = fn.apply(this, Array.prototype.slice.call(arguments, 1));
-    return attributes.createBuffersFromArrays(gl, arrays);
+    return attributes.createBuffersFromArrays(gl, arrays as any);
   };
 }
 
@@ -1729,10 +1765,10 @@ function createBufferFunc(fn) {
  * creates a bufferInfo object for them
  * @private
  */
-function createBufferInfoFunc<F extends (...args: any[]) => any>(fn: F) {
-  return function (gl: any, ...args: Parameters<F>) {
-    const arrays = fn(args);
-    return attributes.createBufferInfoFromArrays(gl, arrays);
+function createBufferInfoFunc<F extends (...args: any[]) => PrimitiveArrays>(fn: F) {
+  return function (this: unknown, gl: WebGL2RenderingContext, ...args: Parameters<F>) {
+    const arrays = fn.apply(this, args);
+    return attributes.createBufferInfoFromArrays(gl, arrays as any);
   };
 }
 
@@ -1757,8 +1793,7 @@ const arraySpecPropertyNames = [
  * @param {number} [offset] offset to add to copied values
  * @private
  */
-function copyElements(src, dst, dstNdx, offset) {
-  offset = offset || 0;
+function copyElements(src: ArrayLike<number>, dst: MutableNumericArray, dstNdx: number, offset: number = 0) {
   const length = src.length;
   for (let ii = 0; ii < length; ++ii) {
     dst[dstNdx + ii] = src[ii] + offset;
@@ -1773,20 +1808,20 @@ function copyElements(src, dst, dstNdx, offset) {
  * @return {(number[]|ArrayBufferView|module:twgl.FullArraySpec)} array with same type as srcArray
  * @private
  */
-function createArrayOfSameType(srcArray, length) {
-  const arraySrc = getArray(srcArray);
-  const newArray = new arraySrc.constructor(length);
-  let newArraySpec = newArray;
+function createArrayOfSameType(srcArray: PrimitiveArraySpec, length: number): PrimitiveArraySpec {
+  const arraySrc = getArray(srcArray as any);
+  const newArray = new (arraySrc.constructor as TypedArrayConstructor)(length);
+  let newArraySpec: PrimitiveArraySpec = newArray;
   // If it appears to have been augmented make new one augmented
-  if (arraySrc.numComponents && arraySrc.numElements) {
-    augmentTypedArray(newArray, arraySrc.numComponents);
+  if ((arraySrc as any).numComponents && (arraySrc as any).numElements) {
+    augmentTypedArray(newArray, (arraySrc as any).numComponents);
   }
   // If it was a full spec make new one a full spec
-  if (srcArray.data) {
+  if ((srcArray as PrimitiveFullArraySpec).data) {
     newArraySpec = {
       data: newArray
     };
-    helper.copyNamedProperties(arraySpecPropertyNames, srcArray, newArraySpec);
+    helper.copyNamedProperties(arraySpecPropertyNames, srcArray as PrimitiveFullArraySpec, newArraySpec);
   }
   return newArraySpec;
 }
@@ -1816,9 +1851,9 @@ function createArrayOfSameType(srcArray, length) {
  * @return {module:twgl.Arrays} The concatenated vertices.
  * @memberOf module:twgl/primitives
  */
-function concatVertices(arrayOfArrays) {
-  const names = {};
-  let baseName;
+function concatVertices(arrayOfArrays: PrimitiveArrays[]): PrimitiveArrays {
+  const names: Record<string, number[]> = {};
+  let baseName: string | undefined;
   // get names of all arrays.
   // and numElements for each set of vertices
   for (let ii = 0; ii < arrayOfArrays.length; ++ii) {
@@ -1831,9 +1866,9 @@ function concatVertices(arrayOfArrays) {
       if (!baseName && name !== 'indices') {
         baseName = name;
       }
-      const arrayInfo = arrays[name];
-      const numComponents = getNumComponents(arrayInfo, name);
-      const array = getArray(arrayInfo);
+      const arrayInfo = arrays[name]!;
+      const numComponents = getNumComponents(arrayInfo as any, name);
+      const array = getArray(arrayInfo as any);
       const numElements = array.length / numComponents;
       names[name].push(numElements);
     });
@@ -1841,15 +1876,15 @@ function concatVertices(arrayOfArrays) {
 
   // compute length of combined array
   // and return one for reference
-  function getLengthOfCombinedArrays(name) {
+  function getLengthOfCombinedArrays(name: string): { length: number; spec: PrimitiveArraySpec | undefined } {
     let length = 0;
-    let arraySpec;
+    let arraySpec: PrimitiveArraySpec | undefined;
     for (let ii = 0; ii < arrayOfArrays.length; ++ii) {
       const arrays = arrayOfArrays[ii];
-      const arrayInfo = arrays[name];
-      const array = getArray(arrayInfo);
+      const arrayInfo = arrays[name]!;
+      const array = getArray(arrayInfo as any);
       length += array.length;
-      if (!arraySpec || arrayInfo.data) {
+      if (!arraySpec || (arrayInfo as PrimitiveFullArraySpec).data) {
         arraySpec = arrayInfo;
       }
     }
@@ -1859,13 +1894,13 @@ function concatVertices(arrayOfArrays) {
     };
   }
 
-  function copyArraysToNewArray(name, base, newArray) {
+  function copyArraysToNewArray(name: string, base: number[], newArray: MutableNumericArray) {
     let baseIndex = 0;
     let offset = 0;
     for (let ii = 0; ii < arrayOfArrays.length; ++ii) {
       const arrays = arrayOfArrays[ii];
-      const arrayInfo = arrays[name];
-      const array = getArray(arrayInfo);
+      const arrayInfo = arrays[name]!;
+      const array = getArray(arrayInfo as any);
       if (name === 'indices') {
         copyElements(array, newArray, offset, baseIndex);
         baseIndex += base[ii];
@@ -1876,13 +1911,13 @@ function concatVertices(arrayOfArrays) {
     }
   }
 
-  const base = names[baseName];
+  const base = names[baseName ?? Object.keys(names)[0]!];
 
-  const newArrays = {};
+  const newArrays: PrimitiveArrays = {};
   Object.keys(names).forEach(function (name) {
     const info = getLengthOfCombinedArrays(name);
-    const newArraySpec = createArrayOfSameType(info.spec, info.length);
-    copyArraysToNewArray(name, base, getArray(newArraySpec));
+    const newArraySpec = createArrayOfSameType(info.spec!, info.length);
+    copyArraysToNewArray(name, base, getArray(newArraySpec as any) as MutableNumericArray);
     newArrays[name] = newArraySpec;
   });
   return newArrays;
@@ -1898,13 +1933,13 @@ function concatVertices(arrayOfArrays) {
  * @return {module:twgl.Arrays} The duplicated vertices.
  * @memberOf module:twgl/primitives
  */
-function duplicateVertices(arrays) {
-  const newArrays = {};
+function duplicateVertices(arrays: PrimitiveArrays): PrimitiveArrays {
+  const newArrays: PrimitiveArrays = {};
   Object.keys(arrays).forEach(function (name) {
-    const arraySpec = arrays[name];
-    const srcArray = getArray(arraySpec);
+    const arraySpec = arrays[name]!;
+    const srcArray = getArray(arraySpec as any);
     const newArraySpec = createArrayOfSameType(arraySpec, srcArray.length);
-    copyElements(srcArray, getArray(newArraySpec), 0);
+    copyElements(srcArray, getArray(newArraySpec as any) as MutableNumericArray, 0);
     newArrays[name] = newArraySpec;
   });
   return newArrays;

@@ -50,7 +50,7 @@ export function createLoop<TCanvas>(roots: Map<TCanvas, Root>) {
     run(globalEffects, timestamp);
     // Render all roots
     roots.forEach((root) => {
-      const state = root.store.getState();
+      const state = root.store[0];
       // If the frameloop is invalidated, do not run another frame
       if (
         state.internal.active &&
@@ -73,7 +73,7 @@ export function createLoop<TCanvas>(roots: Map<TCanvas, Root>) {
   }
 
   function invalidate(state?: RootState): void {
-    if (!state) return roots.forEach((root) => invalidate(root.store.getState()));
+    if (!state) return roots.forEach((root) => invalidate(root.store[0]));
     if (state.gl.xr?.isPresenting || !state.internal.active || state.frameloop === 'never') return;
     // Increase frames, do not go higher than 60
     state.internal.frames = Math.min(60, state.internal.frames + 1);
@@ -86,7 +86,7 @@ export function createLoop<TCanvas>(roots: Map<TCanvas, Root>) {
 
   function advance(timestamp: number, runGlobalEffects: boolean = true, state?: RootState): void {
     if (runGlobalEffects) run(globalEffects, timestamp);
-    if (!state) roots.forEach((root) => render(timestamp, root.store.getState()));
+    if (!state) roots.forEach((root) => render(timestamp, root.store[0]));
     else render(timestamp, state);
     if (runGlobalEffects) run(globalAfterEffects, timestamp);
   }

@@ -18,7 +18,7 @@ const setComponentValues = (component: Component, values: { [key: string]: any }
       }
     }
   }
-}
+};
 
 /**
  * EntityManager
@@ -106,7 +106,10 @@ export class EntityManager {
       entity.componentTypesToRemove.add(componentConstructor);
 
       const componentName = getName(componentConstructor);
-      entity.componentsToRemove.set(componentName, entity.components.get(componentName));
+      const component = entity.components.get(componentName);
+      if (component) {
+        entity.componentsToRemove.set(componentName, component);
+      }
 
       entity.components.delete(componentName);
 
@@ -123,7 +126,10 @@ export class EntityManager {
     const componentEntity = entity.components.get(componentName);
     entity.components.delete(componentName);
 
-    this.componentManager.componentPool.get(componentConstructor).release(componentEntity);
+    const pool = this.componentManager.componentPool.get(componentConstructor);
+    if (pool && componentEntity) {
+      pool.release(componentEntity);
+    }
   }
 
   /**
@@ -153,11 +159,11 @@ export class EntityManager {
     this.entityRemoveAllComponents(entity, immediately);
   }
 
-  private releaseEntity(entity: Entity, index): void {
+  private releaseEntity(entity: Entity, index: number): void {
     this.entities.splice(index, 1);
 
     // Prevent any access and free
-    entity.entityManager = null;
+    entity.entityManager = undefined as unknown as EntityManager;
     this.entityPool.release(entity);
   }
 
@@ -190,7 +196,10 @@ export class EntityManager {
         const component = entity.componentsToRemove.get(componentName);
         entity.componentsToRemove.delete(componentName);
 
-        this.componentManager.componentPool.get(componentTypeToRemove).release(component);
+        const pool = this.componentManager.componentPool.get(componentTypeToRemove);
+        if (pool && component) {
+          pool.release(component);
+        }
       }
 
       entity.componentTypesToRemove.clear();
@@ -218,16 +227,18 @@ export class EntityManager {
       queries: this.queryManager.stats(),
       numComponentPool: Object.keys(this.componentManager.componentPool)
         .length,
-      componentPool: {},
+      componentPool: {} as Record<string, { used: number; size: number }>
     };
 
     for (const [cname, _] of this.componentManager.componentPool) {
 
       const pool = this.componentManager.componentPool.get(cname);
-      stats.componentPool[cname.name] = {
-        used: pool.totalUsed(),
-        size: pool.count
-      };
+      if (pool) {
+        stats.componentPool[cname.name] = {
+          used: pool.totalUsed(),
+          size: pool.count
+        };
+      }
 
     }
 

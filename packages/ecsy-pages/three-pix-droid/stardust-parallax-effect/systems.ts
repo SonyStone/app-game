@@ -4,7 +4,7 @@ import { CanvasContext, CanvasSize, MousePoint, Point } from '../../utils';
 import { Orb, P, PointData, Resize, RingsCount } from './components';
 
 @SystemData([Read(CanvasContext), Read(CanvasSize), Read(Resize)])
-export class DrawSunBackgroundSystem implements System {
+export class DrawSunBackgroundSystem extends System {
   run([[{ ctx }, { width, height }, resize]]: [CanvasContext, CanvasSize, Resize][]) {
     const bgColor = ctx.createRadialGradient(resize.x, resize.y, 0, resize.x, resize.y, resize.x);
     bgColor.addColorStop(0, `rgb(255, 255, 255)`);
@@ -22,7 +22,7 @@ export class DrawSunBackgroundSystem implements System {
 }
 
 @SystemData([Read(CanvasSize), Read(P), Read(Resize)])
-export class CenterUpdateSystem implements System {
+export class CenterUpdateSystem extends System {
   run([[canvas, place, resize]]: [CanvasSize, P, Resize][]) {
     resize.x = canvas.width * 0.5;
     resize.y = canvas.height * 0.5;
@@ -35,7 +35,7 @@ export class CenterUpdateSystem implements System {
   [Read(Orb), Read(Point), Read(PointData)],
   [Read(P), Read(MousePoint), Read(CanvasSize), Read(Resize), Read(RingsCount)]
 )
-export class OrbPointSystem implements System {
+export class OrbPointSystem extends System {
   run(
     particles: [Orb, Point, PointData][],
     [[place, mouse, canvas, resize, { ringsCount }]]: [P, MousePoint, CanvasSize, Resize, RingsCount][]
@@ -63,7 +63,7 @@ export class OrbPointSystem implements System {
 }
 
 @SystemData([Read(Orb), Read(Point), Read(PointData)], [Read(MousePoint), Read(Resize)])
-export class RefreshSystem implements System {
+export class RefreshSystem extends System {
   run(particles: [Orb, Point, PointData][], [[mouse, resize]]: [MousePoint, Resize][]) {
     for (const [orb, point, data] of particles) {
       data.distToC = Math.hypot(point.x - resize.x, point.y - resize.y);
@@ -79,7 +79,7 @@ export class RefreshSystem implements System {
 }
 
 @SystemData([Read(Orb), Read(Point), Read(PointData)], [Read(CanvasContext), Read(P)])
-export class DrawOrbsSystem implements System {
+export class DrawOrbsSystem extends System {
   run(particles: [Orb, Point, PointData][], [[{ ctx }, place]]: [CanvasContext, P][]) {
     ctx.globalCompositeOperation = `lighter`;
 

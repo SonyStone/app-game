@@ -138,8 +138,7 @@ export default function CanvasPaintStepByStep() {
 
     const points = createZigZagPoints([gl.canvas.clientWidth, gl.canvas.clientHeight])
       .map((point) => interpoletePoints(point))
-      .flat()
-      .map((point, i) => [point[0], point[1], i]);
+      .flat();
 
     console.log(`🎨 points`, points.length);
 

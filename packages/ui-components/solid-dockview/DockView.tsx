@@ -23,7 +23,6 @@ export type DockViewProps = ParentProps<
     prefixHeaderActionsComponent?: (props: DockViewGroupHeaderComponentProps) => JSX.Element;
     rightHeaderActionsComponent?: (props: DockViewGroupHeaderComponentProps) => JSX.Element;
 
-    orientation?: DockviewComponentOptions['orientation'];
     singleTabMode?: DockviewComponentOptions['singleTabMode'];
     disableFloatingGroups?: DockviewComponentOptions['disableFloatingGroups'];
     floatingGroupBounds?: DockviewComponentOptions['floatingGroupBounds'];
@@ -43,7 +42,6 @@ export const dockViewPropKeys = strictKeys<DockViewProps>()([
   'prefixHeaderActionsComponent',
   'rightHeaderActionsComponent',
 
-  'orientation',
   'singleTabMode',
   'disableFloatingGroups',
   'floatingGroupBounds'

@@ -1,11 +1,12 @@
 // https://github.com/mrdoob/three.js/blob/master/src/geometries/TorusGeometry.js
 
 import { Geometry } from '../core/geometry';
+import type { OGLRenderingContext } from '../core/renderer';
 import { Vec3 } from '../math/vec-3';
 
 export class Torus extends Geometry {
   constructor(
-    gl,
+    gl: OGLRenderingContext,
     { radius = 0.5, tube = 0.2, radialSegments = 8, tubularSegments = 6, arc = Math.PI * 2, attributes = {} } = {}
   ) {
     const num = (radialSegments + 1) * (tubularSegments + 1);

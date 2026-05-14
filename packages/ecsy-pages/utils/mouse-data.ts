@@ -1,7 +1,7 @@
 import { Vector2 } from './vector-2';
 
 export class MouseIsDown {
-  down: boolean;
+  down = false;
 }
 
 export class MousePoint extends Vector2 {}
@@ -11,12 +11,12 @@ export class MouseData {
   y = 0;
   down = false;
 
-  private mousemoveListener: (this: HTMLElement, ev: MouseEvent) => any;
-  private mousedownListener: (this: Window, ev: MouseEvent) => any
+  private mousemoveListener: (ev: MouseEvent) => void = () => {};
+  private mousedownListener: (ev: MouseEvent) => void = () => {};
 
   constructor(
     private element: HTMLElement,
-    private window: Window & typeof globalThis,
+    private window: Window & typeof globalThis
   ) {}
 
   mouseMoveUpdater(component: MousePoint): void {
@@ -29,14 +29,14 @@ export class MouseData {
   mousedownUpdater(component: MouseIsDown): void {
     this.mousedownListener = () => {
       component.down = this.down = !this.down;
-    }
+    };
     this.window.addEventListener(`mousedown`, this.mousedownListener);
-    this.window.addEventListener(`mouseup`  , this.mousedownListener);
+    this.window.addEventListener(`mouseup`, this.mousedownListener);
   }
 
   destroy(): void {
-    this.window.removeEventListener('mousemove', this.mousemoveListener);
+    this.element.removeEventListener('mousemove', this.mousemoveListener);
     this.window.removeEventListener(`mousedown`, this.mousedownListener);
-    this.window.removeEventListener(`mouseup`  , this.mousedownListener);
+    this.window.removeEventListener(`mouseup`, this.mousedownListener);
   }
 }

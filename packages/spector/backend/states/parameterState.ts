@@ -17,7 +17,7 @@ export interface IParameter {
 }
 
 export abstract class ParameterState extends BaseState {
-  protected parameters: IParameter[][];
+  protected parameters: IParameter[][] = [];
 
   protected getWebgl1Parameters(): IParameter[] {
     return [];

@@ -10,7 +10,7 @@ import {
   Velocity
 } from '../components';
 
-export class MovementSystem implements System {
+export class MovementSystem extends System {
   run(
     entities: [Circle, Velocity, Acceleration, Position][],
     performance: PerformanceCompensation[],

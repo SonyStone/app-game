@@ -21,7 +21,7 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
           return this;
         },
         bind() {
-          gl.uniform1f(location, this.value);
+          gl.uniform1f(location!, this.value);
           return this;
         }
       };
@@ -37,7 +37,7 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
           return this;
         },
         bind() {
-          gl.uniform2fv(location, this.value.value);
+          gl.uniform2fv(location!, this.value.value);
           return this;
         }
       };
@@ -53,7 +53,7 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
           return this;
         },
         bind() {
-          gl.uniform3fv(location, this.value);
+          gl.uniform3fv(location!, this.value);
           return this;
         }
       };
@@ -68,8 +68,8 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
           this.value = value;
           return this;
         },
-        bind(value: v4.Vec4) {
-          gl.uniformMatrix4fv(location, false, value);
+        bind() {
+          gl.uniformMatrix2fv(location!, false, this.value);
           return this;
         }
       };
@@ -85,12 +85,12 @@ export function addUniformBuilder(gl: WebGL2RenderingContext, program: WebGLProg
           return this;
         },
         bind() {
-          gl.uniformMatrix4fv(location, false, this.value);
+          gl.uniformMatrix4fv(location!, false, this.value);
           return this;
         }
       };
     }
-  };
+  } as Record<number, (name: string) => any>;
 }
 
 export function createShader(gl: WebGL2RenderingContext) {
@@ -116,8 +116,7 @@ class ShaderBuilder {
   ) {}
 
   addUniform(name: string, type: GL_DATA_TYPE, value?: any) {
-    const { gl, program, uniformBuilder } = this;
-    const location = gl.getUniformLocation(program, name);
+    const { uniformBuilder } = this;
     const uniform = uniformBuilder[type](name);
     if (value) {
       uniform.set(value);

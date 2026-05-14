@@ -10,7 +10,7 @@ export interface BrushConfig {
   ctx: BrushContext;
   color: string;
   size: number;
-  globalCompositeOperation: string;
+  globalCompositeOperation: GlobalCompositeOperation;
 }
 
 export const defaultBrushConfig = Object.freeze<BrushConfig>({

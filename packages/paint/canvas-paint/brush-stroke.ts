@@ -3,6 +3,7 @@ import { angleTo, distance, isEqual } from '@app-game/math/v2-functions';
 import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@app-game/ogl';
 import { SwapBuffering } from '@app-game/ogl/extras/swap-buffering';
 import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
+import type { NumberArray } from '@app-game/math/utils/typed-array';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
 import { createEffect, createSignal } from 'solid-js';
 import { BlendMesh } from '../brush-example/blend/blend-mesh';
@@ -89,17 +90,18 @@ export const createBrushStroke = ({
     clear: () => {
       background.clear();
     },
-    add: (point: Vec2, opacity: number) => {
+    add: (point: Vec2 | NumberArray, opacity: number) => {
       const [width, height] = access(size);
+      const pointValue = point instanceof Vec2 ? point.value : point;
       if (prev && prevOpacity !== undefined) {
-        if (isEqual(point, prev)) {
+        if (isEqual(pointValue, prev.value)) {
           return;
         }
-        const dist = distance(point, prev);
-        const angle = angleTo(point, prev);
+        const dist = distance(pointValue, prev.value);
+        const angle = angleTo(pointValue, prev.value);
 
         for (let i = 0; i < dist; i++) {
-          let point = Vec2.create(prev[0] + i * Math.cos(angle), prev[1] + i * Math.sin(angle));
+          let point = Vec2.create(prev.x + i * Math.cos(angle), prev.y + i * Math.sin(angle));
           const tempOpacity = prevOpacity + (opacity - prevOpacity) * (i / dist);
           point = pointToCanvasPoint(point, width, height);
           setPoint(point, tempOpacity);
@@ -108,7 +110,7 @@ export const createBrushStroke = ({
         setPoint(pointToCanvasPoint(point, width, height), opacity);
       }
 
-      prev = point;
+      prev = point instanceof Vec2 ? point : Vec2.create(point[0], point[1]);
       prevOpacity = opacity;
       needsUpdate = true;
     },

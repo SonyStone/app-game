@@ -1,19 +1,35 @@
 import { Camera, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuBodyA from './JingliuMod/Jingliuf0000Mod/JingliuBodyA.ib?Uint32Array';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuBodyADiffuse from './JingliuMod/Jingliuf0000Mod/JingliuBodyADiffuse.dds?ArrayBuffer';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuBodyALightMap from './JingliuMod/Jingliuf0000Mod/JingliuBodyALightMap.dds?ArrayBuffer';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuBodyPosition from './JingliuMod/Jingliuf0000Mod/JingliuBodyPosition.buf?Float32Array';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuBodyTexcoord from './JingliuMod/Jingliuf0000Mod/JingliuBodyTexcoord.buf?Float32Array';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHairA from './JingliuMod/Jingliuf0000Mod/JingliuHairA.ib?Uint32Array';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHairADiffuse from './JingliuMod/Jingliuf0000Mod/JingliuHairADiffuse.dds?ArrayBuffer';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHairALightMap from './JingliuMod/Jingliuf0000Mod/JingliuHairALightMap.dds?ArrayBuffer';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHairPosition from './JingliuMod/Jingliuf0000Mod/JingliuHairPosition.buf?Float32Array';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHairTexcoord from './JingliuMod/Jingliuf0000Mod/JingliuHairTexcoord.buf?Float32Array';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHeadA from './JingliuMod/Jingliuf0000Mod/JingliuHeadA.ib?Uint32Array';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHeadB from './JingliuMod/Jingliuf0000Mod/JingliuHeadB.ib?Uint32Array';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHeadBDiffuse from './JingliuMod/Jingliuf0000Mod/JingliuHeadBDiffuse.dds?ArrayBuffer';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHeadBLightMap from './JingliuMod/Jingliuf0000Mod/JingliuHeadBLightMap.dds?ArrayBuffer';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHeadPosition from './JingliuMod/Jingliuf0000Mod/JingliuHeadPosition.buf?Float32Array';
+// @ts-expect-error bundler-provided binary asset query
 import JingliuHeadTexcoord from './JingliuMod/Jingliuf0000Mod/JingliuHeadTexcoord.buf?Float32Array';
 import HeaderFile from './JingliuMod/Jingliuf0000Mod/backup_DISABLEDJingliu.txt?raw';
 

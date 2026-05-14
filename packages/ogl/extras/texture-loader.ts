@@ -1,14 +1,32 @@
 import { Texture } from '../core/texture';
+import type { OGLRenderingContext } from '../core/renderer';
 import { KTXTexture } from './KTX-texture';
 
 // For compressed textures, generate using https://github.com/TimvanScherpenzeel/texture-compressor
 
-let cache = {};
-const supportedExtensions = [];
+type TextureSource = string | Record<string, string>;
+
+type TextureLoaderOptions = {
+  src?: TextureSource;
+  wrapS?: GLenum;
+  wrapT?: GLenum;
+  anisotropy?: number;
+  format?: GLenum;
+  internalFormat?: GLenum;
+  generateMipmaps?: boolean;
+  minFilter?: GLenum;
+  magFilter?: GLenum;
+  premultiplyAlpha?: boolean;
+  unpackAlignment?: number;
+  flipY?: boolean;
+};
+
+let cache: Record<string, Texture | KTXTexture> = {};
+const supportedExtensions: string[] = [];
 
 export class TextureLoader {
   static load(
-    gl,
+    gl: OGLRenderingContext,
     {
       src, // string or object of extension:src key-values
       // {
@@ -28,31 +46,36 @@ export class TextureLoader {
       anisotropy = 0,
 
       // For regular images
-      format = gl.RGBA,
-      internalFormat = format,
-      generateMipmaps = true,
-      minFilter = generateMipmaps ? gl.NEAREST_MIPMAP_LINEAR : gl.LINEAR,
+      format,
+      internalFormat,
+      generateMipmaps,
+      minFilter,
       magFilter = gl.LINEAR,
       premultiplyAlpha = false,
       unpackAlignment = 4,
       flipY = true
-    } = {}
-  ) {
+    }: TextureLoaderOptions = {}
+  ): Texture | KTXTexture {
     const support = this.getSupportedExtensions(gl);
+    const resolvedFormat = format ?? gl.RGBA;
+    const resolvedInternalFormat = internalFormat ?? resolvedFormat;
+    const resolvedGenerateMipmaps = generateMipmaps ?? true;
+    const resolvedMinFilter = minFilter ?? (resolvedGenerateMipmaps ? gl.NEAREST_MIPMAP_LINEAR : gl.LINEAR);
     let ext = 'none';
+    let resolvedSrc = src;
 
     // If src is string, determine which format from the extension
-    if (typeof src === 'string') {
-      ext = src.split('.').pop().split('?')[0].toLowerCase();
+    if (typeof resolvedSrc === 'string') {
+      ext = resolvedSrc.split('.').pop()?.split('?')[0].toLowerCase() ?? 'none';
     }
 
     // If src is object, use supported extensions and provided list to choose best option
     // Get first supported match, so put in order of preference
-    if (typeof src === 'object') {
-      for (const prop in src) {
+    if (resolvedSrc && typeof resolvedSrc === 'object') {
+      for (const prop in resolvedSrc) {
         if (support.includes(prop.toLowerCase())) {
           ext = prop.toLowerCase();
-          src = src[prop];
+          resolvedSrc = resolvedSrc[prop];
           break;
         }
       }
@@ -60,14 +83,14 @@ export class TextureLoader {
 
     // Stringify props
     const cacheID =
-      src +
+      String(resolvedSrc ?? '') +
       wrapS +
       wrapT +
       anisotropy +
-      format +
-      internalFormat +
-      generateMipmaps +
-      minFilter +
+      resolvedFormat +
+      resolvedInternalFormat +
+      resolvedGenerateMipmaps +
+      resolvedMinFilter +
       magFilter +
       premultiplyAlpha +
       unpackAlignment +
@@ -87,14 +110,13 @@ export class TextureLoader {
       case 'astc':
         // Load compressed texture using KTX format
         texture = new KTXTexture(gl, {
-          src,
           wrapS,
           wrapT,
           anisotropy,
-          minFilter,
+          minFilter: resolvedMinFilter,
           magFilter
-        });
-        texture.loaded = this.loadKTX(src, texture);
+        } as any);
+        texture.loaded = this.loadKTX(resolvedSrc as string, texture);
         break;
       case 'webp':
       case 'jpg':
@@ -104,16 +126,16 @@ export class TextureLoader {
           wrapS,
           wrapT,
           anisotropy,
-          format,
-          internalFormat,
-          generateMipmaps,
-          minFilter,
+          format: resolvedFormat,
+          internalFormat: resolvedInternalFormat,
+          generateMipmaps: resolvedGenerateMipmaps,
+          minFilter: resolvedMinFilter,
           magFilter,
           premultiplyAlpha,
           unpackAlignment,
           flipY
         });
-        texture.loaded = this.loadImage(gl, src, texture, flipY);
+        texture.loaded = this.loadImage(gl, resolvedSrc as string, texture, flipY);
         break;
       default:
         console.warn('No supported format supplied');
@@ -125,7 +147,7 @@ export class TextureLoader {
     return texture;
   }
 
-  static getSupportedExtensions(gl) {
+  static getSupportedExtensions(gl: OGLRenderingContext): string[] {
     if (supportedExtensions.length) return supportedExtensions;
 
     const extensions = {
@@ -139,7 +161,7 @@ export class TextureLoader {
       bc7: gl.renderer.getExtension('EXT_texture_compression_bptc')
     };
 
-    for (const ext in extensions) if (extensions[ext]) supportedExtensions.push(ext);
+    for (const ext in extensions) if (extensions[ext as keyof typeof extensions]) supportedExtensions.push(ext);
 
     // Formats supported by all
     supportedExtensions.push('png', 'jpg', 'webp');
@@ -147,23 +169,26 @@ export class TextureLoader {
     return supportedExtensions;
   }
 
-  static loadKTX(src, texture) {
+  static loadKTX(src: string, texture: KTXTexture): Promise<Texture> {
     return fetch(src)
       .then((res) => res.arrayBuffer())
-      .then((buffer) => texture.parseBuffer(buffer));
+      .then((buffer) => {
+        texture.parseBuffer(buffer);
+        return texture;
+      });
   }
 
-  static loadImage(gl, src, texture, flipY) {
+  static loadImage(gl: OGLRenderingContext, src: string, texture: Texture, flipY: boolean): Promise<Texture> {
     return decodeImage(src, flipY).then((imgBmp) => {
-      texture.image = imgBmp;
+      texture.image = imgBmp as any;
 
       // For createImageBitmap, close once uploaded
       texture.onUpdate = () => {
-        if (imgBmp.close) imgBmp.close();
-        texture.onUpdate = null;
+        if ('close' in imgBmp) imgBmp.close();
+        texture.onUpdate = undefined;
       };
 
-      return imgBmp;
+      return texture;
     });
   }
 
@@ -172,12 +197,12 @@ export class TextureLoader {
   }
 }
 
-function powerOfTwo(value) {
+function powerOfTwo(value: number): boolean {
   // (width & (width - 1)) !== 0
   return Math.log2(value) % 1 === 0;
 }
 
-function decodeImage(src, flipY) {
+function decodeImage(src: string, flipY: boolean): Promise<HTMLImageElement | ImageBitmap> {
   return new Promise((resolve) => {
     if (isCreateImageBitmap()) {
       fetch(src, { mode: 'cors' })
@@ -194,7 +219,7 @@ function decodeImage(src, flipY) {
   });
 }
 
-function isCreateImageBitmap() {
+function isCreateImageBitmap(): boolean {
   const isChrome = navigator.userAgent.toLowerCase().includes('chrome');
   if (!isChrome) return false;
   try {

@@ -23,22 +23,22 @@ export class DrawCallTextureInputState {
   private readonly workingContext2D: CanvasRenderingContext2D;
   private readonly captureContext2D: CanvasRenderingContext2D;
 
-  private fullCapture: boolean;
+  private fullCapture = false;
 
   constructor(options: IContextInformation) {
     this.context = options.context;
     this.captureFrameBuffer = options.context.createFramebuffer();
     this.workingCanvas = document.createElement('canvas');
-    this.workingContext2D = this.workingCanvas.getContext('2d');
+    this.workingContext2D = this.getCanvas2DContext(this.workingCanvas);
     this.captureCanvas = document.createElement('canvas');
-    this.captureContext2D = this.captureCanvas.getContext('2d');
+    this.captureContext2D = this.getCanvas2DContext(this.captureCanvas);
     this._setSmoothing(true);
   }
 
   public appendTextureState(
     state: any,
     storage: WebGLTexture,
-    target: WebGlConstant = null,
+    target: WebGlConstant | null = null,
     fullCapture: boolean
   ): void {
     if (!storage) {
@@ -84,7 +84,13 @@ export class DrawCallTextureInputState {
       const gl = this.context;
       const visual: any = {};
 
-      if (!ReadPixelsHelper.isSupportedCombination(info.type, info.format, info.internalFormat)) {
+      if (
+        !ReadPixelsHelper.isSupportedCombination(
+          info.type ?? WebGlConstants.UNSIGNED_BYTE.value,
+          info.format ?? WebGlConstants.RGBA.value,
+          info.internalFormat
+        )
+      ) {
         return visual;
       }
 
@@ -96,6 +102,7 @@ export class DrawCallTextureInputState {
         const textureLevel = 0;
         const width = info.width;
         const height = info.height;
+        const captureType = info.type ?? WebGlConstants.UNSIGNED_BYTE.value;
 
         if (target === WebGlConstants.TEXTURE_3D && info.depth) {
           const gl2 = gl as WebGL2RenderingContext;
@@ -111,7 +118,7 @@ export class DrawCallTextureInputState {
               textureLevel,
               i
             );
-            visual['3D Layer ' + i] = this.getCapture(gl, 0, 0, width, height, info.type, pixelated);
+            visual['3D Layer ' + i] = this.getCapture(gl, 0, 0, width, height, captureType, pixelated);
           }
         } else if (target === WebGlConstants.TEXTURE_2D_ARRAY && info.depth) {
           const gl2 = gl as WebGL2RenderingContext;
@@ -127,7 +134,7 @@ export class DrawCallTextureInputState {
               textureLevel,
               i
             );
-            visual['Layer ' + i] = this.getCapture(gl, 0, 0, width, height, info.type, pixelated);
+            visual['Layer ' + i] = this.getCapture(gl, 0, 0, width, height, captureType, pixelated);
           }
         } else if (target === WebGlConstants.TEXTURE_CUBE_MAP) {
           for (const face of DrawCallTextureInputState.cubeMapFaces) {
@@ -138,7 +145,7 @@ export class DrawCallTextureInputState {
               storage,
               textureLevel
             );
-            visual[face.name] = this.getCapture(gl, 0, 0, width, height, info.type, pixelated);
+            visual[face.name] = this.getCapture(gl, 0, 0, width, height, captureType, pixelated);
           }
         } else {
           gl.framebufferTexture2D(
@@ -148,7 +155,7 @@ export class DrawCallTextureInputState {
             storage,
             textureLevel
           );
-          visual[WebGlConstants.TEXTURE_2D.name] = this.getCapture(gl, 0, 0, width, height, info.type, pixelated);
+          visual[WebGlConstants.TEXTURE_2D.name] = this.getCapture(gl, 0, 0, width, height, captureType, pixelated);
         }
       } catch (e) {
         // Something went wrong during the capture.
@@ -171,7 +178,7 @@ export class DrawCallTextureInputState {
     height: number,
     type: number,
     pixelated: boolean
-  ): string {
+  ): string | undefined {
     try {
       // Check FBO status.
       const status = this.context.checkFramebufferStatus(WebGlConstants.FRAMEBUFFER.value);
@@ -246,6 +253,15 @@ export class DrawCallTextureInputState {
   protected getWebGlConstant(value: number): string {
     const constant = WebGlConstantsByValue[value];
     return constant ? constant.name : value + '';
+  }
+
+  private getCanvas2DContext(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('2D canvas context is required for texture capture');
+    }
+
+    return context;
   }
 
   private _setSmoothing(smooth: boolean) {

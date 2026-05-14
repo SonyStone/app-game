@@ -1,4 +1,4 @@
-import type { AnyTreeView } from './insertChildrenAtPath';
+import type { AnyTreeView } from './AnyTreeView';
 
 export type Path = number[];
 
@@ -127,7 +127,7 @@ export function getNodeAtPath<T>(root: AnyTreeView<'children', T>, path: Path): 
   let cur: AnyTreeView<'children', T> | undefined = root;
   for (let i = 0; i < path.length; i++) {
     const idx = path[i];
-    const arr = cur.children;
+    const arr: AnyTreeView<'children', T>[] | undefined = cur?.children;
     if (!arr || idx < 0 || idx >= arr.length) {
       return undefined;
     }

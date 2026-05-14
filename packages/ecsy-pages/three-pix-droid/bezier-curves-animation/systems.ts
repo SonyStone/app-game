@@ -4,7 +4,7 @@ import { CanvasContext, CanvasSize } from '../../utils';
 import { Alpha, BezierCurvesConfig, Control1, Control2, End, FrameCounter, Start, WaveNoise } from './components';
 
 @SystemData(Read(WaveNoise), Read(BezierCurvesConfig))
-export class UpdateControls implements System {
+export class UpdateControls extends System {
   run(controls: WaveNoise[], [{ waveSpeed }]: BezierCurvesConfig[]) {
     for (const { wavesSet } of controls) {
       for (const [i, wave] of wavesSet.entries()) {
@@ -16,7 +16,7 @@ export class UpdateControls implements System {
 }
 
 @SystemData(Read(WaveNoise), [Read(Control1), Read(Control2), Read(Alpha)], Read(CanvasSize))
-export class UpdateCurvesSystem implements System {
+export class UpdateCurvesSystem extends System {
   run(controls: WaveNoise[], curves: [Control1, Control2, Alpha][], [size]: CanvasSize[]) {
     const control1X = controls[0].get() * size.width; // general controls x1 for all curves
     const control1Y = controls[1].get() * size.height; // general controls y1 for all curves
@@ -36,7 +36,7 @@ export class UpdateCurvesSystem implements System {
 }
 
 @SystemData([Read(Start), Read(Control1), Read(Control2), Read(End), Read(Alpha)], Read(CanvasContext))
-export class DrawCurveSystem implements System {
+export class DrawCurveSystem extends System {
   run(curves: [Start, Control1, Control2, End, Alpha][], [{ ctx }]: CanvasContext[]) {
     for (const [start, control1, control2, end, alpha] of curves) {
       ctx.strokeStyle = `rgba(255, 255, 255, ${alpha.alpha})`;

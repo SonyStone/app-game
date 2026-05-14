@@ -45,7 +45,7 @@ export const negate = <T extends NumberArray>(m: T, dst: T) => {
  * @param a __mut__ The matrix. If not passed a new one is created.
  * @param dst The matrix.
  */
-export const copy = <T extends NumberArray>(a: T, dst: T) => {
+export const copy = <TSource extends NumberArray, TDestination extends NumberArray>(a: TSource, dst: TDestination) => {
   dst[0] = a[0];
   dst[1] = a[1];
   dst[2] = a[2];
@@ -65,6 +65,8 @@ export const copy = <T extends NumberArray>(a: T, dst: T) => {
   dst[13] = a[13];
   dst[14] = a[14];
   dst[15] = a[15];
+
+  return dst;
 };
 
 /**
@@ -122,6 +124,8 @@ export const identity = <T extends NumberArray>(dst: T, offset = 0) => {
   dst[13 + offset] = 0;
   dst[14 + offset] = 0;
   dst[15 + offset] = 1;
+
+  return dst;
 };
 
 /**
@@ -681,7 +685,7 @@ export const rotateY = <T extends NumberArray>(m: T, angleInRadians: number) => 
 };
 
 export const rotationY = <T extends NumberArray>(angleInRadians: number, dst?: T): T => {
-  const out = dst ?? (new Float32Array(16) as T);
+  const out = dst ?? (new Float32Array(16) as unknown as T);
   const c = Math.cos(angleInRadians);
   const s = Math.sin(angleInRadians);
 
@@ -764,7 +768,11 @@ export const rotateZ = (m: Mat4, angleInRadians: number) => {
  *     about which to rotate.
  * @param angleInRadians The angle by which to rotate (in radians).
  */
-export const axisRotate = (m: Mat4, [x, y, z]: Vec3Tuple, angleInRadians: number) => {
+export const axisRotate = (m: Mat4, axis: Vec3Tuple, angleInRadians: number) => {
+  let x = axis[0];
+  let y = axis[1];
+  let z = axis[2];
+
   const n = Math.sqrt(x * x + y * y + z * z);
 
   x /= n;
@@ -824,7 +832,11 @@ export const axisRotate = (m: Mat4, [x, y, z]: Vec3Tuple, angleInRadians: number
  * @param v A vector of three entries specifying the
  *     factor by which to scale in each dimension.
  */
-export const scale = <T extends NumberArray>(m: T, [v0, v1, v2]: Vec3Tuple, dst: T, offset = 0) => {
+export const scale = <T extends NumberArray>(m: T, v: Vec3Tuple, dst: T, offset = 0) => {
+  const v0 = v[0];
+  const v1 = v[1];
+  const v2 = v[2];
+
   dst[0 + offset] = v0 * m[0 * 4 + 0 + offset];
   dst[1 + offset] = v0 * m[0 * 4 + 1 + offset];
   dst[2 + offset] = v0 * m[0 * 4 + 2 + offset];
@@ -897,8 +909,8 @@ const MI = identity(new Float32Array(16));
  * @param m The matrix.
  */
 export const transformNormal = (v: Vec3Tuple, m: Mat4) => {
-  copy(MI, m);
-  inverse(MI);
+  copy(m, MI);
+  inverse(MI, MI);
 
   const v0 = v[0];
   const v1 = v[1];

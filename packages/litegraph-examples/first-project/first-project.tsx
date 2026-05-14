@@ -1,4 +1,4 @@
-import { LGraph, LGraphCanvas, LiteGraph } from 'litegraph.js';
+import { LGraph, LGraphCanvas, LiteGraph, type LGraphNode } from 'litegraph.js';
 import { onMount } from 'solid-js';
 
 export default function FirstProject() {
@@ -9,7 +9,7 @@ export default function FirstProject() {
 
     // debugger;
 
-    var node_const = LiteGraph.createNode('basic/const');
+    var node_const = LiteGraph.createNode('basic/const') as LGraphNode & { setValue(value: number): void };
     node_const.pos = [200, 200];
     graph.add(node_const);
     node_const.setValue(4.5);

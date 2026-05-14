@@ -1,8 +1,16 @@
 import { Vec2 } from '@app-game/math';
+import type { NumberArray } from '@app-game/math/utils/typed-array';
 
-export const pointToCanvasPoint = (point: Vec2, width: number, height: number) => {
-  let x = point.x;
-  let y = point.y;
+const getPointCoords = (point: Vec2 | NumberArray) => {
+  if (point instanceof Vec2) {
+    return { x: point.x, y: point.y };
+  }
+
+  return { x: point[0], y: point[1] };
+};
+
+export const pointToCanvasPoint = (point: Vec2 | NumberArray, width: number, height: number) => {
+  let { x, y } = getPointCoords(point);
 
   x = (x / width) * 2 - 1;
   y = (y / height) * -2 + 1;
@@ -10,9 +18,8 @@ export const pointToCanvasPoint = (point: Vec2, width: number, height: number) =
   return Vec2.create(x, y);
 };
 
-export const cavasPointToPoint = (point: Vec2, width: number, height: number) => {
-  let x = point.x;
-  let y = point.y;
+export const cavasPointToPoint = (point: Vec2 | NumberArray, width: number, height: number) => {
+  let { x, y } = getPointCoords(point);
 
   x = ((x + 1) * width) / 2;
   y = ((y - 1) * -height) / 2;

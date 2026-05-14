@@ -29,9 +29,9 @@ export class EcsCanvas {
     nativeElement: document.body
   };
 
-  private resizeCanvas: () => void;
-  private animationFrameId: number;
-  private world: World;
+  private resizeCanvas: () => void = () => {};
+  private animationFrameId = 0;
+  private world?: World;
 
   run(canvas: HTMLCanvasElement) {
     const world = (this.world = new World());
@@ -111,7 +111,7 @@ export class EcsCanvas {
   }
 
   destroy() {
-    this.world.stop();
+    this.world?.stop();
     window.removeEventListener('resize', this.resizeCanvas);
     cancelAnimationFrame(this.animationFrameId);
   }

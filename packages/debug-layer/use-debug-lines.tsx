@@ -11,7 +11,7 @@ export function useDebugLines({
 }: {
   activeElements: Map<string, DebugElement>;
   addElement: (id: string, element: SVGElement) => void;
-  theme: keyof typeof colors;
+  theme?: keyof typeof colors;
 }) {
   // Update or create a tracked debug line with specific ID
   const updateLine = (

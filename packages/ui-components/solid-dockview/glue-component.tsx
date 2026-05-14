@@ -98,7 +98,7 @@ export function createGroupHeaderComponent(
           const jsxEl = createMemo(() => {
             const comp = props[type];
             if (typeof comp !== 'function') return null;
-            return createComponent(comp, userProps);
+            return solidCreateComponent(comp, userProps);
           });
 
           return (

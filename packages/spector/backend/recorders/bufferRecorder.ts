@@ -27,7 +27,7 @@ export class BufferRecorder extends BaseRecorder<WebGLBuffer> {
     return ['deleteBuffer'];
   }
 
-  protected getBoundInstance(target: number): WebGLTexture {
+  protected getBoundInstance(target: number): WebGLBuffer | undefined {
     const gl = this.options.context;
     if (target === WebGlConstants.ARRAY_BUFFER.value) {
       return gl.getParameter(WebGlConstants.ARRAY_BUFFER_BINDING.value);
@@ -71,7 +71,7 @@ export class BufferRecorder extends BaseRecorder<WebGLBuffer> {
     return customData.length - previousLength;
   }
 
-  protected getCustomData(target: string, functionInformation: IFunctionInformation): IBufferRecorderData {
+  protected getCustomData(target: string, functionInformation: IFunctionInformation): IBufferRecorderData | undefined {
     const length = this.getLength(functionInformation);
     if (functionInformation.arguments.length >= 4) {
       return {

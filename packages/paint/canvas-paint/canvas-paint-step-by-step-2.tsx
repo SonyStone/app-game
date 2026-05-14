@@ -149,6 +149,7 @@ export default function CanvasPaintStepByStep() {
 
   const [brushPos, setBrushPos] = createSignal<Vec3>(new Vec3(), { equals: false });
   const raycast = createRaycast({ camera: camera, plane: [0, 0, 1] });
+  const pointerTarget = canvasEl as unknown as HTMLElement;
 
   const [, start, stop] = createRAF((t?: number | any) => {
     // render();
@@ -158,19 +159,19 @@ export default function CanvasPaintStepByStep() {
   start();
 
   onMount(async () => {
-    makeEventListener(canvasEl, 'pointerdown', (e: PointerEvent) => {
+    makeEventListener(pointerTarget, 'pointerdown', (e: PointerEvent) => {
       if (e.pressure === 0 || e.buttons !== 1) {
         return;
       }
       let x = e.clientX;
       let y = e.clientY;
 
-      const intersectPoint = raycast.cast(mouseNormalize(e, gl.canvas));
+      const intersectPoint = raycast.cast(mouseNormalize(e, gl.canvas as unknown as HTMLElement));
       if (intersectPoint) {
         setBrushPos(intersectPoint);
       }
     });
-    makeEventListener(canvasEl, 'pointermove', (e: PointerEvent) => {
+    makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
       const events = e.getCoalescedEvents();
       if (events.length === 0) {
         events.push(e);
@@ -182,14 +183,14 @@ export default function CanvasPaintStepByStep() {
         let x = event.clientX;
         let y = event.clientY;
 
-        const intersectPoint = raycast.cast(mouseNormalize(event, gl.canvas));
+        const intersectPoint = raycast.cast(mouseNormalize(event, gl.canvas as unknown as HTMLElement));
         if (intersectPoint) {
           setBrushPos(intersectPoint);
         }
       }
     });
 
-    makeEventListener(canvasEl, 'pointerup', (e) => {});
+    makeEventListener(pointerTarget, 'pointerup', (e) => {});
 
     backgroundMesh.render(swapBuffers.read);
     await timeout(TIMEOUT);
@@ -222,8 +223,7 @@ export default function CanvasPaintStepByStep() {
 
     const points = createZigZagPoints([gl.canvas.clientWidth, gl.canvas.clientHeight])
       .map((point) => interpoletePoints(point))
-      .flat()
-      .map((point, i) => [point[0], point[1], i]);
+      .flat();
 
     for (let index = 0; index < points.length; index++) {
       const point = points[index];

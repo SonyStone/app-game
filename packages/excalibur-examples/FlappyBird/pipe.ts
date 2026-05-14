@@ -1,4 +1,4 @@
-import { Actor, vec, Vector } from 'excalibur';
+import { Actor, Color, vec, Vector } from 'excalibur';
 import { Config } from './config';
 import { Resources } from './resources';
 

@@ -53,13 +53,13 @@ export function createResizeObserver<T extends Element>(props: {
     refs = refs.concat(otherRefs());
     oldRefs = oldRefs || [];
     oldRefs.forEach((oldRef) => {
-      if (!(oldRef in refs)) {
+      if (!refs.includes(oldRef)) {
         resizeObserver.unobserve(oldRef);
         previousMap.delete(oldRef);
       }
     });
     refs.forEach((ref) => {
-      if (!(ref in oldRefs!)) {
+      if (!oldRefs!.includes(ref)) {
         resizeObserver.observe(ref);
       }
     });

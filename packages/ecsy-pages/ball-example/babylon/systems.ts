@@ -16,7 +16,7 @@ import {
 declare var BABYLON: any;
 
 @SystemData([Read(Rotating), Read(Object3D), Not(PulsatingColor)], Read(PerformanceCompensation))
-export class RotatingSystem implements System {
+export class RotatingSystem extends System {
   run(entities: [Rotating, Object3D][], [{ delta }]: PerformanceCompensation[]) {
     // console.log(`entities`, entities);
 
@@ -31,7 +31,7 @@ export class RotatingSystem implements System {
 const TIMER_TIME = 1;
 
 @SystemData([Read(Entity), Read(PulsatingColor), Read(Object3D)], Read(PerformanceCompensation))
-export class PulsatingColorSystem implements System {
+export class PulsatingColorSystem extends System {
   run(entities: [Entity, PulsatingColor, Object3D][], [{ time }]: PerformanceCompensation[]) {
     time *= 1000;
 
@@ -82,7 +82,7 @@ export class MovingSystem extends System {
 }
 
 @SystemData([Read(Entity), Read(Timeout)], Read(PerformanceCompensation))
-export class TimeoutSystem implements System {
+export class TimeoutSystem extends System {
   run(entities: [Entity, Timeout][], [{ delta }]: PerformanceCompensation[]) {
     for (const [entity, timeout] of entities) {
       timeout.timer -= delta;
@@ -102,7 +102,7 @@ export class TimeoutSystem implements System {
 }
 
 @SystemData([Read(Entity), Read(Object3D), Read(Collisionable)], [Read(Object3D), Read(Collider)])
-export class ColliderSystem implements System {
+export class ColliderSystem extends System {
   run(boxes: [Entity, Object3D, Collisionable][], balls: [Object3D, Collider][]) {
     for (const [{ object: ballObject }] of balls) {
       for (const [entity, { object: boxObject }] of boxes) {

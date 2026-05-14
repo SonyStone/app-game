@@ -1,4 +1,4 @@
-import { FVec3, Vec3Tuple, m4 } from '@app-game/math';
+import { FVec3, m4 } from '@app-game/math';
 import { DEG_TO_RAD } from '@app-game/math/constants';
 import { Spherical, setFromSpherical } from '@app-game/math/spherical';
 import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@app-game/webgl/static-variables';
@@ -10,14 +10,14 @@ import { createMouseWheelZoom } from './create-mouse-wheel-zoom';
 import { createImage } from './image/create-image';
 import { createWireframe } from './wireframe/create-wireframe';
 
-interface Camera {
-  orthographicProjection: m4.Mat4;
-  perspectiveProjection: m4.Mat4;
-  projection: m4.Mat4;
+export interface Camera {
+  orthographicProjection: m4.FMat4;
+  perspectiveProjection: m4.FMat4;
+  projection: m4.FMat4;
   // transform: m4.Mat4,
-  inversePosition: m4.Mat4;
-  offset: Vec3Tuple;
-  target: Vec3Tuple;
+  inversePosition: m4.FMat4;
+  offset: FVec3;
+  target: FVec3;
   spherical: Spherical;
 }
 
@@ -54,9 +54,9 @@ export function Main(prop: { ctx: Context }) {
   const shader = createWireframe(gl, box, [1, 0, 1]);
 
   function makeBox(w: number, h: number, d: number, x: number, y: number, z: number) {
-    const m = m4.identity();
-    m4.translate(m, [x, y, z]);
-    m4.scale(m, [w, h, d]);
+    const m = m4.identity(new m4.FMat4());
+    m4.translate(m, [x, y, z], m);
+    m4.scale(m, [w, h, d], m);
 
     return applyMatToPoints(m, box);
   }
@@ -100,13 +100,13 @@ export function Main(prop: { ctx: Context }) {
   shelves.push(makeBox(0.8, 0.02, 0.23, 0.21, 1.0, -0.775));
 
   // camera box
-  const camera_box = applyMatToPoints(m4.identity(), box);
-  const camera_m = m4.identity();
+  const camera_box = applyMatToPoints(m4.identity(new m4.FMat4()), box);
+  const camera_m = m4.identity(new m4.FMat4());
 
   function updateCamera(value: number) {
     // Update Camera Position
     m4.lookAt(camera.inversePosition, camera.offset, camera.target, up);
-    m4.inverse(camera.inversePosition);
+    m4.inverse(camera.inversePosition, camera.inversePosition);
 
     shader.camera.set(camera.inversePosition);
 
@@ -116,13 +116,13 @@ export function Main(prop: { ctx: Context }) {
     m4.transition(camera.projection, camera.orthographicProjection, camera.perspectiveProjection, value);
 
     m4.identity(camera_m);
-    m4.multiply(camera_m, camera.projection);
-    m4.multiply(camera_m, camera.inversePosition);
+    m4.multiply(camera_m, camera.projection, camera_m);
+    m4.multiply(camera_m, camera.inversePosition, camera_m);
 
     return camera_m;
   }
 
-  const element: HTMLElement = ctx.canvas;
+  const element = ctx.canvas as unknown as HTMLElement;
 
   const { radius, setRadius } = createMouseWheelZoom(element);
   const { theta, setTheta, phi, setPhi } = createMouseRotate(element);
@@ -199,7 +199,7 @@ function drawPoints(gl: WebGL2RenderingContext, shader: any, points: number[], c
   gl.drawArrays(GL_DRAW_ARRAYS_MODE.LINE_STRIP, 0, shader.aPosition.value.length / 3);
 }
 
-function applyMatToPoints(mat: number[] | Float32Array, points: number[], r?: number[]) {
+function applyMatToPoints(mat: m4.Mat4, points: number[], r?: number[]) {
   r = r || [];
   const v = [];
   for (let i = 0; i < points.length; i += 3) {
