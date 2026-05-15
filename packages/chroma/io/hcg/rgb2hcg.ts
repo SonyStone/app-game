@@ -1,23 +1,31 @@
-const {unpack} = require('../../utils');
+import { unpack } from '../../utils';
 
-const rgb2hcg = (...args) => {
-    const [r,g,b] = unpack(args, 'rgb');
-    const min = Math.min(r, g, b);
-    const max = Math.max(r, g, b);
-    const delta = max - min;
-    const c = delta * 100 / 255;
-    const _g = min / (255 - delta) * 100;
-    let h;
-    if (delta === 0) {
-        h = Number.NaN
+/**
+ * Converts RGB input into HCG channel values.
+ *
+ * Hue is returned in degrees. Chroma and grayness are normalized to percentage-style 0..100 values.
+ */
+export function rgb2hcg(...args: unknown[]): [number, number, number] {
+  const [r = 0, g = 0, b = 0] = unpack(args, 'rgb') as number[];
+  const min = Math.min(r, g, b);
+  const max = Math.max(r, g, b);
+  const delta = max - min;
+  const chroma = (delta * 100) / 255;
+  const grayness = (min / (255 - delta)) * 100;
+  let hue = Number.NaN;
+  if (delta !== 0) {
+    if (r === max) {
+      hue = (g - b) / delta;
+    } else if (g === max) {
+      hue = 2 + (b - r) / delta;
     } else {
-        if (r === max) h = (g - b) / delta;
-        if (g === max) h = 2+(b - r) / delta;
-        if (b === max) h = 4+(r - g) / delta;
-        h *= 60;
-        if (h < 0) h += 360
+      hue = 4 + (r - g) / delta;
     }
-    return [h, c, _g];
-}
+    hue *= 60;
+    if (hue < 0) {
+      hue += 360;
+    }
+  }
 
-module.exports = rgb2hcg;
+  return [hue, chroma, grayness];
+}

@@ -1,32 +1,31 @@
-const {unpack,TWOPI} = require('../../utils');
-const {min,sqrt,acos} = Math;
+import { TWOPI, unpack } from '../../utils';
 
-const rgb2hsi = (...args) => {
-    /*
-    borrowed from here:
-    http://hummer.stanford.edu/museinfo/doc/examples/humdrum/keyscape2/rgb2hsi.cpp
-    */
-    let [r,g,b] = unpack(args, 'rgb');
-    r /= 255;
-    g /= 255;
-    b /= 255;
-    let h;
-    const min_ = min(r,g,b);
-    const i = (r+g+b) / 3;
-    const s = i > 0 ? 1 - min_/i : 0;
-    if (s === 0) {
-        h = NaN;
-    } else {
-        h = ((r-g)+(r-b)) / 2;
-        h /= sqrt((r-g)*(r-g) + (r-b)*(g-b));
-        h = acos(h);
-        if (b > g) {
-            h = TWOPI - h;
-        }
-        h /= TWOPI;
-    }
-    return [h*360,s,i];
+const { acos, min, sqrt } = Math;
+
+/**
+ * Converts RGB input into HSI channel values.
+ *
+ * Hue is returned in degrees. Saturation and intensity are normalized to 0..1.
+ */
+export function rgb2hsi(...args: unknown[]): [number, number, number] {
+  let [r = 0, g = 0, b = 0] = unpack(args, 'rgb') as number[];
+  r /= 255;
+  g /= 255;
+  b /= 255;
+
+  const minValue = min(r, g, b);
+  const intensity = (r + g + b) / 3;
+  const saturation = intensity > 0 ? 1 - minValue / intensity : 0;
+  if (saturation === 0) {
+    return [Number.NaN, saturation, intensity];
+  }
+
+  let hue = (r - g + (r - b)) / 2;
+  hue /= sqrt((r - g) * (r - g) + (r - b) * (g - b));
+  hue = acos(hue);
+  if (b > g) {
+    hue = TWOPI - hue;
+  }
+
+  return [(hue / TWOPI) * 360, saturation, intensity];
 }
-
-module.exports = rgb2hsi;
-

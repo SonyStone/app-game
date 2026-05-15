@@ -1,16 +1,17 @@
-const {unpack} = require('../../utils');
+import { unpack } from '../../utils';
 
-const cmyk2rgb = (...args) => {
-    args = unpack(args, 'cmyk');
-    const [c,m,y,k] = args;
-    const alpha = args.length > 4 ? args[4] : 1;
-    if (k === 1) return [0,0,0,alpha];
-    return [
-        c >= 1 ? 0 : 255 * (1-c) * (1-k), // r
-        m >= 1 ? 0 : 255 * (1-m) * (1-k), // g
-        y >= 1 ? 0 : 255 * (1-y) * (1-k), // b
-        alpha
-    ];
+export function cmyk2rgb(...args: unknown[]): [number, number, number, number] {
+  const cmyk = unpack(args, 'cmyk') as number[];
+  const [c = 0, m = 0, y = 0, k = 0] = cmyk;
+  const alpha = cmyk.length > 4 ? (cmyk[4] ?? 1) : 1;
+  if (k === 1) {
+    return [0, 0, 0, alpha];
+  }
+
+  return [
+    c >= 1 ? 0 : 255 * (1 - c) * (1 - k),
+    m >= 1 ? 0 : 255 * (1 - m) * (1 - k),
+    y >= 1 ? 0 : 255 * (1 - y) * (1 - k),
+    alpha
+  ];
 }
-
-module.exports = cmyk2rgb;

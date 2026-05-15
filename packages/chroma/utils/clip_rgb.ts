@@ -1,15 +1,22 @@
-const limit = require('./limit');
+import type { ColorChannelArray } from '../types';
+import { limit } from './limit';
 
-module.exports = (rgb) => {
-    rgb._clipped = false;
-    rgb._unclipped = rgb.slice(0);
-    for (let i=0; i<=3; i++) {
-        if (i < 3) {
-            if (rgb[i] < 0 || rgb[i] > 255) rgb._clipped = true;
-            rgb[i] = limit(rgb[i], 0, 255);
-        } else if (i === 3) {
-            rgb[i] = limit(rgb[i], 0, 1);
-        }
+export function clip_rgb(rgb: ColorChannelArray): ColorChannelArray {
+  rgb._clipped = false;
+  rgb._unclipped = [...rgb];
+
+  for (let index = 0; index <= 3; index += 1) {
+    if (index < 3) {
+      const value = rgb[index] ?? 0;
+      if (value < 0 || value > 255) {
+        rgb._clipped = true;
+      }
+      rgb[index] = limit(value, 0, 255);
+      continue;
     }
-    return rgb;
-};
+
+    rgb[index] = limit(rgb[index] ?? 1, 0, 1);
+  }
+
+  return rgb;
+}

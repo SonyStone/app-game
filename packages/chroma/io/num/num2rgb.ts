@@ -1,13 +1,7 @@
-const {type} = require('../../utils');
+export function num2rgb(num: number): [number, number, number, number] {
+  if (typeof num === 'number' && num >= 0 && num <= 0xffffff) {
+    return [num >> 16, (num >> 8) & 0xff, num & 0xff, 1];
+  }
 
-const num2rgb = (num) => {
-    if (type(num) == "number" && num >= 0 && num <= 0xFFFFFF) {
-        const r = num >> 16;
-        const g = (num >> 8) & 0xFF;
-        const b = num & 0xFF;
-        return [r,g,b,1];
-    }
-    throw new Error("unknown num color: "+num);
+  throw new Error(`unknown num color: ${num}`);
 }
-
-module.exports = num2rgb;

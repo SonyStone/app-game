@@ -1,5 +1,10 @@
 const { floor } = Math;
 
+/**
+ * Converts HSV channel values into an internal RGBA tuple.
+ *
+ * Hue is expected in degrees. Saturation and value are normalized to 0..1.
+ */
 export const hsv2rgb = (h: number, s: number, v: number, a?: number) => {
   let r = 0;
   let g = 0;

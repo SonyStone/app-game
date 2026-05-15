@@ -1,42 +1,40 @@
-const {unpack} = require('../../utils');
+import { unpack } from '../../utils';
 
-/*
- * supported arguments:
- * - rgb2hsl(r,g,b)
- * - rgb2hsl(r,g,b,a)
- * - rgb2hsl([r,g,b])
- * - rgb2hsl([r,g,b,a])
- * - rgb2hsl({r,g,b,a})
+/**
+ * Converts RGB(A) input into HSL channel values.
+ *
+ * Hue is returned in degrees. Saturation and lightness are normalized to 0..1.
+ * If an alpha channel is present, it is preserved as the fourth tuple entry.
  */
-const rgb2hsl = (...args) => {
-    args = unpack(args, 'rgba');
-    let [r,g,b] = args;
+export function rgb2hsl(...args: unknown[]): number[] {
+  const rgba = unpack(args, 'rgba') as number[];
+  let [r = 0, g = 0, b = 0] = rgba;
+  r /= 255;
+  g /= 255;
+  b /= 255;
 
-    r /= 255;
-    g /= 255;
-    b /= 255;
+  const min = Math.min(r, g, b);
+  const max = Math.max(r, g, b);
+  const lightness = (max + min) / 2;
+  let saturation = 0;
+  let hue = Number.NaN;
 
-    const min = Math.min(r, g, b);
-    const max = Math.max(r, g, b);
-
-    const l = (max + min) / 2;
-    let s, h;
-
-    if (max === min){
-        s = 0;
-        h = Number.NaN;
+  if (max !== min) {
+    saturation = lightness < 0.5 ? (max - min) / (max + min) : (max - min) / (2 - max - min);
+    if (r === max) {
+      hue = (g - b) / (max - min);
+    } else if (g === max) {
+      hue = 2 + (b - r) / (max - min);
     } else {
-        s = l < 0.5 ? (max - min) / (max + min) : (max - min) / (2 - max - min);
+      hue = 4 + (r - g) / (max - min);
     }
+    hue *= 60;
+    if (hue < 0) {
+      hue += 360;
+    }
+  }
 
-    if (r == max) h = (g - b) / (max - min);
-    else if (g == max) h = 2 + (b - r) / (max - min);
-    else if (b == max) h = 4 + (r - g) / (max - min);
-
-    h *= 60;
-    if (h < 0) h += 360;
-    if (args.length>3 && args[3]!==undefined) return [h,s,l,args[3]];
-    return [h,s,l];
+  return rgba.length > 3 && rgba[3] !== undefined
+    ? [hue, saturation, lightness, rgba[3]]
+    : [hue, saturation, lightness];
 }
-
-module.exports = rgb2hsl;

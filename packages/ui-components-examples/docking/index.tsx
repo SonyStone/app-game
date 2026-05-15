@@ -2,9 +2,11 @@
 
 import { cn } from '@app-game/utils/cn';
 import { createEventListener } from '@solid-primitives/event-listener';
-import { ComponentProps, createMemo, createSignal, For, Show, splitProps, type JSX } from 'solid-js';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { ComponentProps, createMemo, createSignal, For, onMount, Show, splitProps, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
+import { SolidDockView } from '../solid-dockview';
 
 declare module 'solid-js' {
   namespace JSX {
@@ -176,58 +178,95 @@ export default function DockingExample() {
 
   const P = Portals({ children: video });
 
+  const [ref, setRef] = createSignal<HTMLDivElement | undefined>(undefined);
+  const [target, setTarget] = createSignal<{ width: string; height: string } | undefined>(undefined);
+  onMount(() => {
+    createResizeObserver(ref, (_, element) => {
+      const rect = element.getBoundingClientRect();
+      console.log('Resized', rect.width, rect.height);
+
+      setTarget({
+        width: rect.width + 'px',
+        height: rect.height + 'px',
+        top: element.offsetTop + 'px',
+        left: element.offsetLeft + 'px'
+      });
+    });
+  });
+
   return (
-    <dockview-demo class="flex h-full w-full flex-1 flex-col rounded-lg p-2">
+    <>
       <div class="flex flex-col overflow-hidden">
         <h1 class="text-2xl font-bold">Docking Example</h1>
         <p class="text-sm text-gray-600">This is a placeholder for the docking example.</p>
         {/* Add your docking example components here */}
       </div>
 
-      <GlobalCursorStyle />
+      <dockview-demo class="flex h-full w-full flex-1 flex-col rounded-lg p-2">
+        <GlobalCursorStyle />
 
-      <Unwrap data={state} />
-
-      {/* Panels */}
-      <div class="flex h-0 flex-1 flex-col overflow-hidden">
-        <div class="flex flex-shrink-0 flex-grow-0" style={{ 'flex-basis': '40px' }}>
-          <PanelContainer>
-            <span class="p-4 text-white ">Header Panel 1</span>
-          </PanelContainer>
-        </div>
-        <Sash type="horizontal" />
-        <div class="flex-grow-1 flex flex-shrink-0" style={{ 'flex-basis': '60%' }}>
-          <div class="flex-grow-1 flex flex-shrink-0" style={{ 'flex-basis': '60%' }}>
-            <PanelContainer class="bg-gray-800">
-              <Tabs />
-              <span class="p-4 text-white ">Panel 2</span>
-              <button
-                type="button"
-                onClick={() => {
-                  P.toggle();
-                }}
-              >
-                toggle
-              </button>
-              <P.Portal1 />
-            </PanelContainer>
+        <div class="relative">
+          {/* real layout */}
+          <div class="grid grid-cols-4 grid-rows-4 gap-4 text-white">
+            <div class="rounded-lg bg-pink-500 p-4">01</div>
+            <div class="rounded-lg bg-pink-500 p-4">02</div>
+            <div class="row-span-3 rounded-lg bg-pink-500 p-4">03</div>
+            <div ref={setRef} class="col-span-2 rounded-lg bg-pink-500 p-4">
+              04
+            </div>
           </div>
-          <Sash type="vertical" />
-          <div class="flex flex-shrink-0 flex-grow-0" style={{ 'flex-basis': '80px' }}>
-            <PanelContainer class="bg-gray-800">
-              <span class="p-4 text-white ">Side Panel 3</span>
-              <div class="flex flex-wrap gap-2">
-                <TestButton />
-                <TestButton />
-                <TestButton />
-                <TestButton />
-                <P.Portal2 />
-              </div>
-            </PanelContainer>
+
+          {/* connected layout */}
+          <div class={cn('absolute inset-0', SHADED_BACKGROUND)} style={target()}>
+            overlay
           </div>
         </div>
-      </div>
-    </dockview-demo>
+
+        <Unwrap data={state} />
+
+        {/* Panels */}
+        <div class="flex h-0 flex-1 flex-col overflow-hidden">
+          <div class="flex flex-shrink-0 flex-grow-0" style={{ 'flex-basis': '40px' }}>
+            <PanelContainer>
+              <span class="p-4 text-white">Header Panel 1</span>
+            </PanelContainer>
+          </div>
+          <Sash type="horizontal" />
+          <div class="flex flex-shrink-0 flex-grow-1" style={{ 'flex-basis': '60%' }}>
+            <div class="flex flex-shrink-0 flex-grow-1" style={{ 'flex-basis': '60%' }}>
+              <PanelContainer class="bg-gray-800">
+                <Tabs />
+                <span class="p-4 text-white">Panel 2</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    P.toggle();
+                  }}
+                >
+                  toggle
+                </button>
+                <P.Portal1 />
+              </PanelContainer>
+            </div>
+            <Sash type="vertical" />
+            <div class="flex flex-shrink-0 flex-grow-0" style={{ 'flex-basis': '80px' }}>
+              <PanelContainer class="bg-gray-800">
+                <span class="p-4 text-white">Side Panel 3</span>
+                <div class="flex flex-wrap gap-2">
+                  <TestButton />
+                  <TestButton />
+                  <TestButton />
+                  <TestButton />
+                  <P.Portal2 />
+                </div>
+              </PanelContainer>
+            </div>
+          </div>
+        </div>
+      </dockview-demo>
+
+      <SolidDockView />
+    </>
   );
 }
 
@@ -258,7 +297,7 @@ function Portals(props: { children: JSX.Element }) {
 
 function TestButton() {
   return (
-    <button class="group relative h-8 w-8  rounded border border-red-500 bg-red-500">
+    <button class="group relative h-8 w-8 rounded border border-red-500 bg-red-500">
       <div class="translate-x-1px -translate-y-2px -m-1px group-focus:(translate-x-0 translate-y-0) pointer-events-none absolute inset-0 rounded border border-red-500 bg-white transition-transform"></div>
     </button>
   );
@@ -274,7 +313,7 @@ function Tabs(props: Partial<{ children: JSX.Element }>) {
       <button
         ref={setRef}
         class={cn(
-          'select-none rounded-full p-2 px-3 text-sm text-white transition-colors duration-1000'
+          'rounded-full p-2 px-3 text-sm text-white transition-colors duration-1000 select-none'
           // isActive() ? 'text-[#000c18]' : 'text-white'
         )}
         onClick={(e) => setActive(e.currentTarget)}
@@ -292,7 +331,7 @@ function Tabs(props: Partial<{ children: JSX.Element }>) {
         <span class="z-1 rounded-full p-2 px-3 text-sm text-red-600">Tab 3</span>
       </div> */}
       <div
-        class="m-2px pointer-events-none absolute inset-y-0 rounded-full bg-white mix-blend-exclusion transition-transform  ease-out"
+        class="m-2px pointer-events-none absolute inset-y-0 rounded-full bg-white mix-blend-exclusion transition-transform ease-out"
         style={{ transform: `translateX(${active()?.offsetLeft}px)`, width: `${active()?.offsetWidth}px` }}
       ></div>
       <Button>Tab 1</Button>
@@ -364,11 +403,11 @@ function Sash(props: { type?: 'horizontal' | 'vertical' }) {
       aria-valuenow="0.33578"
       data-orientation={props.type === 'horizontal' ? 'horizontal' : 'vertical'}
       class={[
-        ` relative flex flex-shrink-0 touch-none select-none place-content-center place-items-center outline-0`,
-        props.type === 'horizontal' ? 'h-1px w-full  cursor-ns-resize' : 'w-1px h-full cursor-ew-resize'
+        `relative flex flex-shrink-0 touch-none place-content-center place-items-center outline-0 select-none`,
+        props.type === 'horizontal' ? 'h-1px w-full cursor-ns-resize' : 'w-1px h-full cursor-ew-resize'
       ].join(' ')}
     >
-      <div class={['absolute ', props.type === 'horizontal' ? 'inset-x-0 h-4' : 'inset-y-0 w-4'].join(' ')}></div>
+      <div class={['absolute', props.type === 'horizontal' ? 'inset-x-0 h-4' : 'inset-y-0 w-4'].join(' ')}></div>
       <ResizableHandle {...props} />
     </button>
   );
@@ -427,3 +466,6 @@ function GlobalCursorStyle(props: { globalCursorStyle?: 'horizontal' | 'vertical
     </Show>
   );
 }
+
+const SHADED_BACKGROUND =
+  'col-start-1 row-start-1 rounded-lg border bg-[image:repeating-linear-gradient(315deg,currentColor_0,currentColor_1px,transparent_0,transparent_50%)] bg-[size:8px_8px] bg-top-left text-black/10 dark:text-white/12.5';

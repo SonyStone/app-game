@@ -1,10 +1,15 @@
-// some pre-defined color scales:
-const chroma = require('../chroma');
-require('../io/hsl');
-const scale = require('../generator/scale');
+import { Color } from '../color';
+import { scale } from '../generator/scale';
 
-module.exports = {
-	cool() { return scale([chroma.hsl(180,1,.9), chroma.hsl(250,.7,.4)]) },
-	hot() { return scale(['#000','#f00','#ff0','#fff'], [0,.25,.75,1]).mode('rgb') }
-}
+/** Preset scale factories exposed as `Color.scales` and `chroma.scales`. */
+export const scales = {
+  /** A cool blue-violet ramp built from HSL endpoints. */
+  cool() {
+    return scale([new Color([180, 1, 0.9], 'hsl'), new Color([250, 0.7, 0.4], 'hsl')]);
+  },
 
+  /** A hot black-red-yellow-white ramp. */
+  hot() {
+    return scale(['#000', '#f00', '#ff0', '#fff']).mode('rgb');
+  }
+} as const;

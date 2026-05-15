@@ -1,10 +1,11 @@
-const Color = require('../Color');
+import { Color } from '../color';
+import type { ColorArguments } from '../types';
 
-module.exports = (...args) => {
-    try {
-        new Color(...args);
-        return true;
-    } catch (e) {
-        return false;
-    }
-};
+export function valid(...args: ColorArguments): boolean {
+  try {
+    new Color(...args);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -1,9 +1,12 @@
-const {unpack} = require('../../utils');
-const lch2rgb = require('./lch2rgb');
+import { unpack } from '../../utils';
+import { lch2rgb } from './lch2rgb';
 
-const hcl2rgb = (...args) => {
-    const hcl = unpack(args, 'hcl').reverse();
-    return lch2rgb(...hcl);
+/**
+ * Converts HCL input into an internal RGBA tuple.
+ *
+ * HCL is the same underlying space as LCh, but ordered as hue, chroma, then lightness.
+ */
+export function hcl2rgb(...args: unknown[]): [number, number, number, number] {
+  const hcl = [...(unpack(args, 'hcl') as number[])].reverse();
+  return lch2rgb(...hcl);
 }
-
-module.exports = hcl2rgb;

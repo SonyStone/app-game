@@ -1,18 +1,12 @@
-const {unpack, DEG2RAD} = require('../../utils');
-const {sin, cos} = Math;
+import { DEG2RAD, unpack } from '../../utils';
 
-const lch2lab = (...args) => {
-    /*
-    Convert from a qualitative parameter h and a quantitative parameter l to a 24-bit pixel.
-    These formulas were invented by David Dalrymple to obtain maximum contrast without going
-    out of gamut if the parameters are in the range 0-1.
+const { cos, sin } = Math;
 
-    A saturation multiplier was added by Gregor Aisch
-    */
-    let [l,c,h] = unpack(args, 'lch');
-    if (isNaN(h)) h = 0;
-    h = h * DEG2RAD;
-    return [l, cos(h) * c, sin(h) * c]
+export function lch2lab(...args: unknown[]): [number, number, number] {
+  let [l = 0, c = 0, h = 0] = unpack(args, 'lch') as number[];
+  if (Number.isNaN(h)) {
+    h = 0;
+  }
+  const radians = h * DEG2RAD;
+  return [l, cos(radians) * c, sin(radians) * c];
 }
-
-module.exports = lch2lab;

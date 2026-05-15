@@ -1,40 +1,40 @@
-const {unpack} = require('../../utils');
-const {round} = Math;
+import { unpack } from '../../utils';
 
-const hsl2rgb = (...args) => {
-    args = unpack(args, 'hsl');
-    const [h,s,l] = args;
-    let r,g,b;
-    if (s === 0) {
-        r = g = b = l*255;
-    } else {
-        const t3 = [0,0,0];
-        const c = [0,0,0];
-        const t2 = l < 0.5 ? l * (1+s) : l+s-l*s;
-        const t1 = 2 * l - t2;
-        const h_ = h / 360;
-        t3[0] = h_ + 1/3;
-        t3[1] = h_;
-        t3[2] = h_ - 1/3;
-        for (let i=0; i<3; i++) {
-            if (t3[i] < 0) t3[i] += 1;
-            if (t3[i] > 1) t3[i] -= 1;
-            if (6 * t3[i] < 1)
-                c[i] = t1 + (t2 - t1) * 6 * t3[i];
-            else if (2 * t3[i] < 1)
-                c[i] = t2;
-            else if (3 * t3[i] < 2)
-                c[i] = t1 + (t2 - t1) * ((2 / 3) - t3[i]) * 6;
-            else
-                c[i] = t1;
-        }
-        [r,g,b] = [round(c[0]*255),round(c[1]*255),round(c[2]*255)];
+const { round } = Math;
+
+/**
+ * Converts HSL input into an internal RGBA tuple.
+ *
+ * Hue is expected in degrees. Saturation and lightness are normalized to 0..1.
+ */
+export function hsl2rgb(...args: unknown[]): [number, number, number, number] {
+  const values = unpack(args, 'hsl') as number[];
+  const [h = 0, s = 0, l = 0] = values;
+  let r: number;
+  let g: number;
+  let b: number;
+  if (s === 0) {
+    r = l * 255;
+    g = l * 255;
+    b = l * 255;
+  } else {
+    const t3 = [0, 0, 0];
+    const channel = [0, 0, 0];
+    const t2 = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const t1 = 2 * l - t2;
+    const hue = h / 360;
+    t3[0] = hue + 1 / 3;
+    t3[1] = hue;
+    t3[2] = hue - 1 / 3;
+    for (let index = 0; index < 3; index += 1) {
+      if (t3[index] < 0) t3[index] += 1;
+      if (t3[index] > 1) t3[index] -= 1;
+      if (6 * t3[index] < 1) channel[index] = t1 + (t2 - t1) * 6 * t3[index];
+      else if (2 * t3[index] < 1) channel[index] = t2;
+      else if (3 * t3[index] < 2) channel[index] = t1 + (t2 - t1) * (2 / 3 - t3[index]) * 6;
+      else channel[index] = t1;
     }
-    if (args.length > 3) {
-        // keep alpha channel
-        return [r,g,b,args[3]];
-    }
-    return [r,g,b,1];
+    [r, g, b] = [round(channel[0] * 255), round(channel[1] * 255), round(channel[2] * 255)];
+  }
+  return [r, g, b, values.length > 3 ? (values[3] ?? 1) : 1];
 }
-
-module.exports = hsl2rgb;

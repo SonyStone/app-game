@@ -1,366 +1,403 @@
-// minimal multi-purpose interface
+import { Color } from '../color';
+import type { ColorValue, InterpolationMode } from '../types';
 
-// @requires utils color analyze
+const { pow } = Math;
 
-const chroma = require('../chroma');
-const {type} = require('../utils');
-
-const {pow} = Math;
-
-module.exports = function(colors) {
-
-    // constructor
-    let _mode = 'rgb';
-    let _nacol = chroma('#ccc');
-    let _spread = 0;
-    // const _fixed = false;
-    let _domain = [0, 1];
-    let _pos = [];
-    let _padding = [0,0];
-    let _classes = false;
-    let _colors = [];
-    let _out = false;
-    let _min = 0;
-    let _max = 1;
-    let _correctLightness = false;
-    let _colorCache = {};
-    let _useCache = true;
-    let _gamma = 1;
-
-    // private methods
-
-    const setColors = function(colors) {
-        colors = colors || ['#fff', '#000'];
-        if (colors && type(colors) === 'string' && chroma.brewer &&
-            chroma.brewer[colors.toLowerCase()]) {
-            colors = chroma.brewer[colors.toLowerCase()];
-        }
-        if (type(colors) === 'array') {
-            // handle single color
-            if (colors.length === 1) {
-                colors = [colors[0], colors[0]];
-            }
-            // make a copy of the colors
-            colors = colors.slice(0);
-            // convert to chroma classes
-            for (let c=0; c<colors.length; c++) {
-                colors[c] = chroma(colors[c]);
-            }
-            // auto-fill color position
-            _pos.length = 0;
-            for (let c=0; c<colors.length; c++) {
-                _pos.push(c/(colors.length-1));
-            }
-        }
-        resetCache();
-        return _colors = colors;
-    };
-
-    const getClass = function(value) {
-        if (_classes != null) {
-            const n = _classes.length-1;
-            let i = 0;
-            while (i < n && value >= _classes[i]) {
-                i++;
-            }
-            return i-1;
-        }
-        return 0;
-    };
-
-    let tMapLightness = t => t;
-    let tMapDomain = t => t;
-
-    // const classifyValue = function(value) {
-    //     let val = value;
-    //     if (_classes.length > 2) {
-    //         const n = _classes.length-1;
-    //         const i = getClass(value);
-    //         const minc = _classes[0] + ((_classes[1]-_classes[0]) * (0 + (_spread * 0.5)));  // center of 1st class
-    //         const maxc = _classes[n-1] + ((_classes[n]-_classes[n-1]) * (1 - (_spread * 0.5)));  // center of last class
-    //         val = _min + ((((_classes[i] + ((_classes[i+1] - _classes[i]) * 0.5)) - minc) / (maxc-minc)) * (_max - _min));
-    //     }
-    //     return val;
-    // };
-
-    const getColor = function(val, bypassMap) {
-        let col, t;
-        if (bypassMap == null) { bypassMap = false; }
-        if (isNaN(val) || (val === null)) { return _nacol; }
-        if (!bypassMap) {
-            if (_classes && (_classes.length > 2)) {
-                // find the class
-                const c = getClass(val);
-                t = c / (_classes.length-2);
-            } else if (_max !== _min) {
-                // just interpolate between min/max
-                t = (val - _min) / (_max - _min);
-            } else {
-                t = 1;
-            }
-        } else {
-            t = val;
-        }
-
-        // domain map
-        t = tMapDomain(t);
-
-        if (!bypassMap) {
-            t = tMapLightness(t);  // lightness correction
-        }
-
-        if (_gamma !== 1) { t = pow(t, _gamma); }
-
-        t = _padding[0] + (t * (1 - _padding[0] - _padding[1]));
-
-        t = Math.min(1, Math.max(0, t));
-
-        const k = Math.floor(t * 10000);
-
-        if (_useCache && _colorCache[k]) {
-            col = _colorCache[k];
-        } else {
-            if (type(_colors) === 'array') {
-                //for i in [0.._pos.length-1]
-                for (let i=0; i<_pos.length; i++) {
-                    const p = _pos[i];
-                    if (t <= p) {
-                        col = _colors[i];
-                        break;
-                    }
-                    if ((t >= p) && (i === (_pos.length-1))) {
-                        col = _colors[i];
-                        break;
-                    }
-                    if (t > p && t < _pos[i+1]) {
-                        t = (t-p)/(_pos[i+1]-p);
-                        col = chroma.interpolate(_colors[i], _colors[i+1], t, _mode);
-                        break;
-                    }
-                }
-            } else if (type(_colors) === 'function') {
-                col = _colors(t);
-            }
-            if (_useCache) { _colorCache[k] = col; }
-        }
-        return col;
-    };
-
-    var resetCache = () => _colorCache = {};
-
-    setColors(colors);
-
-    // public interface
-
-    const f = function(v) {
-        const c = chroma(getColor(v));
-        if (_out && c[_out]) { return c[_out](); } else { return c; }
-    };
-
-    f.classes = function(classes) {
-        if (classes != null) {
-            if (type(classes) === 'array') {
-                _classes = classes;
-                _domain = [classes[0], classes[classes.length-1]];
-            } else {
-                const d = chroma.analyze(_domain);
-                if (classes === 0) {
-                    _classes = [d.min, d.max];
-                } else {
-                    _classes = chroma.limits(d, 'e', classes);
-                }
-            }
-            return f;
-        }
-        return _classes;
-    };
-
-
-    f.domain = function(domain) {
-        if (!arguments.length) {
-            return _domain;
-        }
-        _min = domain[0];
-        _max = domain[domain.length-1];
-        _pos = [];
-        const k = _colors.length;
-        if ((domain.length === k) && (_min !== _max)) {
-            // update positions
-            for (let d of Array.from(domain)) {
-                _pos.push((d-_min) / (_max-_min));
-            }
-        } else {
-            for (let c=0; c<k; c++) {
-                _pos.push(c/(k-1));
-            }
-            if (domain.length > 2) {
-                // set domain map
-                const tOut = domain.map((d,i) => i/(domain.length-1));
-                const tBreaks = domain.map(d => (d - _min) / (_max - _min));
-                if (!tBreaks.every((val, i) => tOut[i] === val)) {
-                    tMapDomain = (t) => {
-                        if (t <= 0 || t >= 1) return t;
-                        let i = 0;
-                        while (t >= tBreaks[i+1]) i++;
-                        const f = (t - tBreaks[i]) / (tBreaks[i+1] - tBreaks[i]);
-                        const out = tOut[i] + f * (tOut[i+1] - tOut[i])
-                        return out;
-                    }
-                }
-
-            }
-        }
-        _domain = [_min, _max];
-        return f;
-    };
-
-    f.mode = function(_m) {
-        if (!arguments.length) {
-            return _mode;
-        }
-        _mode = _m;
-        resetCache();
-        return f;
-    };
-
-    f.range = function(colors, _pos) {
-        setColors(colors, _pos);
-        return f;
-    };
-
-    f.out = function(_o) {
-        _out = _o;
-        return f;
-    };
-
-    f.spread = function(val) {
-        if (!arguments.length) {
-            return _spread;
-        }
-        _spread = val;
-        return f;
-    };
-
-    f.correctLightness = function(v) {
-        if (v == null) { v = true; }
-        _correctLightness = v;
-        resetCache();
-        if (_correctLightness) {
-            tMapLightness = function(t) {
-                const L0 = getColor(0, true).lab()[0];
-                const L1 = getColor(1, true).lab()[0];
-                const pol = L0 > L1;
-                let L_actual = getColor(t, true).lab()[0];
-                const L_ideal = L0 + ((L1 - L0) * t);
-                let L_diff = L_actual - L_ideal;
-                let t0 = 0;
-                let t1 = 1;
-                let max_iter = 20;
-                while ((Math.abs(L_diff) > 1e-2) && (max_iter-- > 0)) {
-                    (function() {
-                        if (pol) { L_diff *= -1; }
-                        if (L_diff < 0) {
-                            t0 = t;
-                            t += (t1 - t) * 0.5;
-                        } else {
-                            t1 = t;
-                            t += (t0 - t) * 0.5;
-                        }
-                        L_actual = getColor(t, true).lab()[0];
-                        return L_diff = L_actual - L_ideal;
-                    })();
-                }
-                return t;
-            };
-        } else {
-            tMapLightness = t => t;
-        }
-        return f;
-    };
-
-    f.padding = function(p) {
-        if (p != null) {
-            if (type(p) === 'number') {
-                p = [p,p];
-            }
-            _padding = p;
-            return f;
-        } else {
-            return _padding;
-        }
-    };
-
-    f.colors = function(numColors, out) {
-        // If no arguments are given, return the original colors that were provided
-        if (arguments.length < 2) { out = 'hex'; }
-        let result = [];
-
-        if (arguments.length === 0) {
-            result = _colors.slice(0);
-
-        } else if (numColors === 1) {
-            result = [f(0.5)];
-
-        } else if (numColors > 1) {
-            const dm = _domain[0];
-            const dd = _domain[1] - dm;
-            result = __range__(0, numColors, false).map(i => f( dm + ((i/(numColors-1)) * dd) ));
-
-        } else { // returns all colors based on the defined classes
-            colors = [];
-            let samples = [];
-            if (_classes && (_classes.length > 2)) {
-                for (let i = 1, end = _classes.length, asc = 1 <= end; asc ? i < end : i > end; asc ? i++ : i--) {
-                    samples.push((_classes[i-1]+_classes[i])*0.5);
-                }
-            } else {
-                samples = _domain;
-            }
-            result = samples.map(v => f(v));
-        }
-
-        if (chroma[out]) {
-            result = result.map(c => c[out]());
-        }
-        return result;
-    };
-
-    f.cache = function(c) {
-        if (c != null) {
-            _useCache = c;
-            return f;
-        } else {
-            return _useCache;
-        }
-    };
-
-    f.gamma = function(g) {
-        if (g != null) {
-            _gamma = g;
-            return f;
-        } else {
-            return _gamma;
-        }
-    };
-
-    f.nodata = function(d) {
-        if (d != null) {
-            _nacol = chroma(d);
-            return f;
-        } else {
-            return _nacol;
-        }
-    };
-
-    return f;
+type ColorGetter = (value: number | null | undefined) => unknown;
+type LightnessReader = () => [number, number, number];
+type ColorOutputReader = () => unknown;
+type ScalePalette = Color[] | ((t: number) => Color);
+type ScaleFunction = ColorGetter & {
+  classes: (classes?: number | number[]) => number[] | false | ScaleFunction;
+  domain: (domain?: number[]) => number[] | ScaleFunction;
+  mode: (mode?: string) => string | ScaleFunction;
+  range: (colors: ScaleInput) => ScaleFunction;
+  out: (output: string | false) => ScaleFunction;
+  spread: (value?: number) => number | ScaleFunction;
+  correctLightness: (enabled?: boolean) => ScaleFunction;
+  padding: (padding?: number | number[]) => [number, number] | ScaleFunction;
+  colors: (count?: number, output?: string) => unknown[];
+  cache: (enabled?: boolean) => boolean | ScaleFunction;
+  gamma: (value?: number) => number | ScaleFunction;
+  nodata: (value?: ColorValue) => Color | ScaleFunction;
 };
+type ScaleInput = string | readonly ColorValue[] | ((t: number) => Color);
 
-function __range__(left, right, inclusive) {
-  let range = [];
-  let ascending = left < right;
-  let end = !inclusive ? right : ascending ? right + 1 : right - 1;
-  for (let i = left; ascending ? i < end : i > end; ascending ? i++ : i--) {
-    range.push(i);
+function ensureColor(value: ColorValue | Color): Color {
+  return value instanceof Color ? value : new Color(value);
+}
+
+function readLab(color: Color): [number, number, number] {
+  const lab = color.lab;
+  if (typeof lab !== 'function') {
+    throw new Error('Missing lab reader');
   }
-  return range;
+
+  return (lab as LightnessReader).call(color);
+}
+
+function callColorOutput(color: Color, output: string): unknown {
+  const reader = color[output];
+  if (typeof reader !== 'function') {
+    return color;
+  }
+
+  return (reader as ColorOutputReader).call(color);
+}
+
+function range(left: number, right: number, inclusive: boolean): number[] {
+  const values: number[] = [];
+  const ascending = left < right;
+  const end = !inclusive ? right : ascending ? right + 1 : right - 1;
+  for (let index = left; ascending ? index < end : index > end; ascending ? (index += 1) : (index -= 1)) {
+    values.push(index);
+  }
+  return values;
+}
+
+/**
+ * Creates a continuous color scale or a scale from a named ColorBrewer palette.
+ *
+ * The returned function maps numeric input values to colors and exposes helpers for interpolation mode,
+ * output formatting, class breaks, gamma correction, and more.
+ */
+export function scale(colors?: ScaleInput): ScaleFunction {
+  let mode: InterpolationMode = 'rgb';
+  let noDataColor = new Color('#ccc');
+  let spread = 0;
+  let domain = [0, 1];
+  let positions: number[] = [];
+  let padding: [number, number] = [0, 0];
+  let classes: number[] | false = false;
+  let palette: ScalePalette = [];
+  let output: string | false = false;
+  let min = 0;
+  let max = 1;
+  let correctLightness = false;
+  let colorCache: Record<number, Color> = {};
+  let useCache = true;
+  let gamma = 1;
+  let mapLightness = (t: number) => t;
+  let mapDomain = (t: number) => t;
+
+  const resetCache = () => {
+    colorCache = {};
+  };
+
+  const setColors = (nextColors?: ScaleInput): ScalePalette => {
+    if (typeof nextColors === 'function') {
+      palette = nextColors;
+      resetCache();
+      return palette;
+    }
+
+    let resolvedColors = nextColors ?? ['#fff', '#000'];
+    if (typeof resolvedColors === 'string') {
+      const brewerPalettes = Color.brewer as Record<string, readonly ColorValue[]>;
+      const brewer = brewerPalettes[resolvedColors.toLowerCase()];
+      if (brewer != null) {
+        resolvedColors = brewer;
+      }
+    }
+
+    if (!Array.isArray(resolvedColors)) {
+      palette = [];
+      resetCache();
+      return palette;
+    }
+
+    const colorList = resolvedColors.length === 1 ? [resolvedColors[0], resolvedColors[0]] : [...resolvedColors];
+    palette = colorList.map((color) => ensureColor(color));
+    positions = palette.map((_, index) => index / Math.max(palette.length - 1, 1));
+    resetCache();
+    return palette;
+  };
+
+  const getClass = (value: number): number => {
+    if (!classes || classes.length === 0) {
+      return 0;
+    }
+
+    const length = classes.length - 1;
+    let index = 0;
+    while (index < length && value >= (classes[index] ?? Number.POSITIVE_INFINITY)) {
+      index += 1;
+    }
+    return index - 1;
+  };
+
+  const getColor = (value: number | null | undefined, bypassMap = false): Color => {
+    if (value == null || Number.isNaN(value)) {
+      return noDataColor;
+    }
+
+    let t = bypassMap
+      ? value
+      : classes && classes.length > 2
+        ? getClass(value) / (classes.length - 2)
+        : max !== min
+          ? (value - min) / (max - min)
+          : 1;
+
+    t = mapDomain(t);
+    if (!bypassMap) {
+      t = mapLightness(t);
+    }
+    if (gamma !== 1) {
+      t = pow(t, gamma);
+    }
+
+    t = padding[0] + t * (1 - padding[0] - padding[1]);
+    t = Math.min(1, Math.max(0, t));
+
+    const cacheKey = Math.floor(t * 10000);
+    const cached = colorCache[cacheKey];
+    if (useCache && cached != null) {
+      return cached;
+    }
+
+    let color = noDataColor;
+    if (Array.isArray(palette)) {
+      for (let index = 0; index < positions.length; index += 1) {
+        const position = positions[index] ?? 0;
+        if (t <= position || index === positions.length - 1) {
+          color = palette[index] ?? noDataColor;
+          break;
+        }
+
+        const nextPosition = positions[index + 1];
+        if (nextPosition != null && t > position && t < nextPosition) {
+          const localT = (t - position) / (nextPosition - position);
+          color = Color.interpolate(palette[index] ?? noDataColor, palette[index + 1] ?? noDataColor, localT, mode);
+          break;
+        }
+      }
+    } else {
+      color = palette(t);
+    }
+
+    if (useCache) {
+      colorCache[cacheKey] = color;
+    }
+    return color;
+  };
+
+  setColors(colors);
+
+  const scaleFunction = ((value: number | null | undefined): unknown => {
+    const color = ensureColor(getColor(value));
+    return output ? callColorOutput(color, output) : color;
+  }) as ScaleFunction;
+
+  /** Switches the scale into discrete classes. Passing a number computes equidistant classes. */
+  scaleFunction.classes = (nextClasses?: number | number[]) => {
+    if (nextClasses == null) {
+      return classes;
+    }
+
+    if (Array.isArray(nextClasses)) {
+      classes = [...nextClasses];
+      domain = [classes[0] ?? 0, classes[classes.length - 1] ?? 1];
+      return scaleFunction;
+    }
+
+    const analyzed = Color.analyze(domain);
+    classes = nextClasses === 0 ? [analyzed.min, analyzed.max] : Color.limits(analyzed, 'e', nextClasses);
+    return scaleFunction;
+  };
+
+  /** Sets the numeric input domain for the scale. */
+  scaleFunction.domain = (nextDomain?: number[]) => {
+    if (nextDomain == null) {
+      return domain;
+    }
+
+    min = nextDomain[0] ?? 0;
+    max = nextDomain[nextDomain.length - 1] ?? min;
+    positions = [];
+    const paletteSize = Array.isArray(palette) ? palette.length : 0;
+    if (nextDomain.length === paletteSize && min !== max) {
+      positions = nextDomain.map((value) => (value - min) / (max - min));
+    } else {
+      positions = Array.from({ length: paletteSize }, (_, index) => index / Math.max(paletteSize - 1, 1));
+      if (nextDomain.length > 2) {
+        const targetOutputs = nextDomain.map((_, index) => index / (nextDomain.length - 1));
+        const targetBreaks = nextDomain.map((value) => (value - min) / (max - min));
+        if (!targetBreaks.every((value, index) => targetOutputs[index] === value)) {
+          mapDomain = (t: number) => {
+            if (t <= 0 || t >= 1) {
+              return t;
+            }
+
+            let index = 0;
+            while (t >= (targetBreaks[index + 1] ?? Number.POSITIVE_INFINITY)) {
+              index += 1;
+            }
+
+            const leftBreak = targetBreaks[index] ?? 0;
+            const rightBreak = targetBreaks[index + 1] ?? 1;
+            const fraction = (t - leftBreak) / (rightBreak - leftBreak);
+            return (
+              (targetOutputs[index] ?? 0) + fraction * ((targetOutputs[index + 1] ?? 1) - (targetOutputs[index] ?? 0))
+            );
+          };
+        }
+      }
+    }
+
+    domain = [min, max];
+    return scaleFunction;
+  };
+
+  /** Sets the interpolation mode used between colors. */
+  scaleFunction.mode = (nextMode?: string) => {
+    if (nextMode == null) {
+      return mode;
+    }
+
+    mode = nextMode as InterpolationMode;
+    resetCache();
+    return scaleFunction;
+  };
+
+  /**
+   * Replaces the scale palette.
+   *
+   * This accepts explicit colors, a named ColorBrewer palette, or a custom sampler function.
+   */
+  scaleFunction.range = (nextColors: ScaleInput) => {
+    setColors(nextColors);
+    return scaleFunction;
+  };
+
+  /** Sets the output format returned by the scale function. Pass `false` to return `Color` objects. */
+  scaleFunction.out = (nextOutput: string | false) => {
+    output = nextOutput;
+    return scaleFunction;
+  };
+
+  /**
+   * Sets or reads the internal spread value used by some downstream consumers.
+   */
+  scaleFunction.spread = (value?: number) => {
+    if (value == null) {
+      return spread;
+    }
+
+    spread = value;
+    return scaleFunction;
+  };
+
+  /** Enables lightness correction so interpolation stays more perceptually uniform. */
+  scaleFunction.correctLightness = (enabled = true) => {
+    correctLightness = enabled;
+    resetCache();
+    if (!correctLightness) {
+      mapLightness = (t) => t;
+      return scaleFunction;
+    }
+
+    mapLightness = (t) => {
+      const l0 = readLab(getColor(0, true))[0];
+      const l1 = readLab(getColor(1, true))[0];
+      const inverse = l0 > l1;
+      let actual = readLab(getColor(t, true))[0];
+      const ideal = l0 + (l1 - l0) * t;
+      let diff = actual - ideal;
+      let left = 0;
+      let right = 1;
+      let iterations = 20;
+      while (Math.abs(diff) > 1e-2 && iterations-- > 0) {
+        if (inverse) {
+          diff *= -1;
+        }
+
+        if (diff < 0) {
+          left = t;
+          t += (right - t) * 0.5;
+        } else {
+          right = t;
+          t += (left - t) * 0.5;
+        }
+
+        actual = readLab(getColor(t, true))[0];
+        diff = actual - ideal;
+      }
+
+      return t;
+    };
+
+    return scaleFunction;
+  };
+
+  /** Adds symmetric or asymmetric padding at the low and high ends of the scale. */
+  scaleFunction.padding = (nextPadding?: number | number[]) => {
+    if (nextPadding == null) {
+      return padding;
+    }
+
+    padding = typeof nextPadding === 'number' ? [nextPadding, nextPadding] : [nextPadding[0] ?? 0, nextPadding[1] ?? 0];
+    return scaleFunction;
+  };
+
+  /** Returns sampled colors from the scale. With no count, it returns the underlying palette. */
+  scaleFunction.colors = (count?: number, nextOutput = 'hex') => {
+    let result: unknown[];
+    if (count == null) {
+      result = Array.isArray(palette) ? [...palette] : [];
+    } else if (count === 1) {
+      result = [scaleFunction(0.5)];
+    } else if (count > 1) {
+      const domainMin = domain[0] ?? 0;
+      const domainDelta = (domain[1] ?? domainMin) - domainMin;
+      result = range(0, count, false).map((index) => scaleFunction(domainMin + (index / (count - 1)) * domainDelta));
+    } else {
+      const classBreaks = Array.isArray(classes) ? classes : undefined;
+      const samples =
+        classBreaks != null && classBreaks.length > 2
+          ? range(1, classBreaks.length, false).map(
+              (index) => ((classBreaks[index - 1] ?? 0) + (classBreaks[index] ?? 0)) * 0.5
+            )
+          : domain;
+      result = samples.map((value) => scaleFunction(value));
+    }
+
+    return nextOutput
+      ? result.map((value) => (value instanceof Color ? callColorOutput(value, nextOutput) : value))
+      : result;
+  };
+
+  /** Enables or disables internal caching for repeated lookups. */
+  scaleFunction.cache = (enabled?: boolean) => {
+    if (enabled == null) {
+      return useCache;
+    }
+
+    useCache = enabled;
+    return scaleFunction;
+  };
+
+  /** Sets the gamma curve used when mapping scale positions. */
+  scaleFunction.gamma = (value?: number) => {
+    if (value == null) {
+      return gamma;
+    }
+
+    gamma = value;
+    return scaleFunction;
+  };
+
+  /**
+   * Sets the fallback color returned for `null`, `undefined`, or `NaN` inputs.
+   */
+  scaleFunction.nodata = (value?: ColorValue) => {
+    if (value == null) {
+      return noDataColor;
+    }
+
+    noDataColor = ensureColor(value);
+    return scaleFunction;
+  };
+
+  return scaleFunction;
 }

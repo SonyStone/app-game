@@ -1,19 +1,24 @@
-require('../io/oklab');
+import type { Color as ColorInstance } from '../color';
+import { Color } from '../color';
 
-const Color = require('../Color');
+type OklabReader = () => [number, number, number];
 
-const oklab = (col1, col2, f) => {
-    const xyz0 = col1.oklab();
-    const xyz1 = col2.oklab();
-    return new Color(
-        xyz0[0] + f * (xyz1[0] - xyz0[0]),
-        xyz0[1] + f * (xyz1[1] - xyz0[1]),
-        xyz0[2] + f * (xyz1[2] - xyz0[2]),
-        'oklab'
-    );
-};
+function readOklab(color: ColorInstance): [number, number, number] {
+  const reader = color.oklab;
+  if (typeof reader !== 'function') {
+    throw new Error('Missing oklab reader');
+  }
 
-// register interpolator
-require('./index').oklab = oklab;
+  return (reader as OklabReader).call(color);
+}
 
-module.exports = oklab;
+export function oklab(col1: ColorInstance, col2: ColorInstance, f: number): Color {
+  const xyz0 = readOklab(col1);
+  const xyz1 = readOklab(col2);
+  return new Color(
+    xyz0[0] + f * (xyz1[0] - xyz0[0]),
+    xyz0[1] + f * (xyz1[1] - xyz0[1]),
+    xyz0[2] + f * (xyz1[2] - xyz0[2]),
+    'oklab'
+  );
+}

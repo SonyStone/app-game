@@ -13,6 +13,18 @@ type MyDocument = {
 };
 
 export default function App() {
+  return (
+    <div>
+      <h1>solid-dockview</h1>
+      <p>
+        <a href="https://github.com/lyonbot/solid-dockview">GitHub</a>
+      </p>
+      <SolidDockView />
+    </div>
+  );
+}
+
+export function SolidDockView() {
   const [inevitableOpenTimes, setInevitableOpenTimes] = createSignal(0);
   const [documents, updateDocuments] = createSignal<MyDocument[]>([]);
 
@@ -45,86 +57,80 @@ export default function App() {
   }
 
   return (
-    <div>
-      <h1>solid-dockview</h1>
-      <p>
-        <a href="https://github.com/lyonbot/solid-dockview">GitHub</a>
-      </p>
-      <DockView
-        class="dockview-theme-light"
-        style={{ height: '500px', border: '1px solid #ccc' }}
-        onReady={({ dockview }) => {
-          console.log('dockview ready', dockview);
-          currentDockview = dockview;
-          (window as Window & { dockview?: DockviewComponent }).dockview = dockview;
-        }}
-        singleTabMode="default"
-        leftHeaderActionsComponent={(props) => (
-          <MyRightHeaderActions
-            isGroupActive={props.isGroupActive}
-            onAddPanel={() => createDocumentInGroup(props.group)}
-          />
-        )}
+    <DockView
+      class="dockview-theme-light"
+      style={{ height: '500px', border: '1px solid #ccc' }}
+      onReady={({ dockview }) => {
+        console.log('dockview ready', dockview);
+        currentDockview = dockview;
+        (window as Window & { dockview?: DockviewComponent }).dockview = dockview;
+      }}
+      singleTabMode="default"
+      leftHeaderActionsComponent={(props) => (
+        <MyRightHeaderActions
+          isGroupActive={props.isGroupActive}
+          onAddPanel={() => createDocumentInGroup(props.group)}
+        />
+      )}
+    >
+      {/* simple panel */}
+      <DockPanel title="First Panel">
+        <p>hello world</p>
+      </DockPanel>
+
+      {/* panel with events */}
+      <DockPanel
+        id="inevitable"
+        title="Inevitable"
+        onClose={({ panel }) => setTimeout(() => openPanel(panel), 500)}
+        onOpen={() => setInevitableOpenTimes((c) => c + 1)}
       >
-        {/* simple panel */}
-        <DockPanel title="First Panel">
-          <p>hello world</p>
-        </DockPanel>
+        <p>You can't close this panel - it always come back</p>
+        <p>Opened: {inevitableOpenTimes()} times</p>
+      </DockPanel>
 
-        {/* panel with events */}
-        <DockPanel
-          id="inevitable"
-          title="Inevitable"
-          onClose={({ panel }) => setTimeout(() => openPanel(panel), 500)}
-          onOpen={() => setInevitableOpenTimes((c) => c + 1)}
-        >
-          <p>You can't close this panel - it always come back</p>
-          <p>Opened: {inevitableOpenTimes()} times</p>
-        </DockPanel>
+      {/* panel with custom tab */}
+      <DockPanel
+        title="Third"
+        position={{ referencePanel: 'inevitable', direction: 'right' }}
+        onCreate={({ panel }) => {
+          panel.api.setSize({ width: 300 });
+        }}
+      >
+        with a smaller default width
+      </DockPanel>
 
-        {/* panel with custom tab */}
-        <DockPanel
-          title="Third"
-          position={{ referencePanel: 'inevitable', direction: 'right' }}
-          onCreate={({ panel }) => {
-            panel.api.setSize({ width: 300 });
-          }}
-        >
-          with a smaller default width
-        </DockPanel>
+      {/* complex example. see below */}
+      <ComplexExamplePanel />
 
-        {/* complex example. see below */}
-        <ComplexExamplePanel />
+      {/* floating at create */}
+      <DockPanel title="Floating" floating={{ width: 400, height: 200, x: 300, y: 100 }}>
+        <p>Default Floating</p>
+      </DockPanel>
 
-        {/* floating at create */}
-        <DockPanel title="Floating" floating={{ width: 400, height: 200, x: 300, y: 100 }}>
-          <p>Default Floating</p>
-        </DockPanel>
-
-        {/* render documents as panels */}
-        <For each={documents()}>
-          {(document) => (
-            <DockPanel
-              id={document.id}
-              title={document.id}
-              onClose={() => {
-                // remove document
-                console.log('Removing document ', document);
-                updateDocuments((p) => p.filter((x) => x.id !== document.id));
+      {/* render documents as panels */}
+      <For each={documents()}>
+        {(document) => (
+          <DockPanel
+            id={document.id}
+            title={document.id}
+            onClose={() => {
+              // remove document
+              console.log('Removing document ', document);
+              updateDocuments((p) => p.filter((x) => x.id !== document.id));
+            }}
+          >
+            <textarea
+              class="myTextarea"
+              value={document.content}
+              onChange={(e) => {
+                document.content = e.currentTarget.value;
               }}
-            >
-              <textarea
-                class="myTextarea"
-                value={document.content}
-                onChange={(e) => {
-                  document.content = e.currentTarget.value;
-                }}
-              />
-            </DockPanel>
-          )}
-        </For>
-      </DockView>
-    </div>
+            />
+          </DockPanel>
+        )}
+      </For>
+    </DockView>
   );
 }
 

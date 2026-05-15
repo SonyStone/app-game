@@ -1,12 +1,25 @@
-const Color = require('../Color');
-require('../ops/luminance');
+import { Color } from '../color';
+import type { ColorValue } from '../types';
 
-module.exports = (a, b) => {
-    // WCAG contrast ratio
-    // see http://www.w3.org/TR/2008/REC-WCAG20-20081211/#contrast-ratiodef
-    a = new Color(a);
-    b = new Color(b);
-    const l1 = a.luminance();
-    const l2 = b.luminance();
-    return l1 > l2 ? (l1 + 0.05) / (l2 + 0.05) : (l2 + 0.05) / (l1 + 0.05);
+type LuminanceReader = () => number;
+
+function ensureColor(value: ColorValue): Color {
+  return value instanceof Color ? value : new Color(value);
+}
+
+function readLuminance(color: Color): number {
+  const luminance = color.luminance;
+  if (typeof luminance !== 'function') {
+    throw new Error('Missing luminance method');
+  }
+
+  return (luminance as LuminanceReader).call(color);
+}
+
+export function contrast(a: ColorValue, b: ColorValue): number {
+  const left = ensureColor(a);
+  const right = ensureColor(b);
+  const l1 = readLuminance(left);
+  const l2 = readLuminance(right);
+  return l1 > l2 ? (l1 + 0.05) / (l2 + 0.05) : (l2 + 0.05) / (l1 + 0.05);
 }

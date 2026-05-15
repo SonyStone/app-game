@@ -1,11 +1,12 @@
-const {unpack} = require('../../utils');
-const rgb2lab = require('../lab/rgb2lab');
-const lab2lch = require('./lab2lch');
+import { unpack } from '../../utils';
+import { rgb2lab } from '../lab/rgb2lab';
+import { lab2lch } from './lab2lch';
 
-const rgb2lch = (...args) => {
-    const [r,g,b] = unpack(args, 'rgb');
-    const [l,a,b_] = rgb2lab(r,g,b);
-    return lab2lch(l,a,b_);
+/**
+ * Converts RGB input into CIELCh coordinates.
+ */
+export function rgb2lch(...args: unknown[]): [number, number, number] {
+  const [r = 0, g = 0, b = 0] = unpack(args, 'rgb') as number[];
+  const [l, a, b_] = rgb2lab(r, g, b);
+  return lab2lch(l, a, b_);
 }
-
-module.exports = rgb2lch;

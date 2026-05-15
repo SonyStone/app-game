@@ -1,69 +1,101 @@
-//
-// interpolates between a set of colors uzing a bezier spline
-//
+import { Color } from '../color';
+import type { ColorValue } from '../types';
+import { scale } from './scale';
 
-// @requires utils lab
-const Color = require('../Color');
-require('../io/lab');
-const scale = require('./scale');
-
-// nth row of the pascal triangle
-const binom_row = function(n) {
-    let row = [1, 1];
-    for (let i = 1; i < n; i++) {
-        let newrow = [1];
-        for (let j = 1; j <= row.length; j++) {
-            newrow[j] = (row[j] || 0) + row[j - 1];
-        }
-        row = newrow;
-    }
-    return row;
-}
-
-const bezier = function(colors) {
-    let I, lab0, lab1, lab2;
-    colors = colors.map(c => new Color(c));
-    if (colors.length === 2) {
-        // linear interpolation
-        [lab0, lab1] = colors.map(c => c.lab());
-        I = function(t) {
-            const lab = ([0, 1, 2].map((i) => lab0[i] + (t * (lab1[i] - lab0[i]))));
-            return new Color(lab, 'lab');
-        };
-    } else if (colors.length === 3) {
-        // quadratic bezier interpolation
-        [lab0, lab1, lab2] = colors.map(c => c.lab());
-        I = function(t) {
-            const lab = ([0, 1, 2].map((i) => ((1-t)*(1-t) * lab0[i]) + (2 * (1-t) * t * lab1[i]) + (t * t * lab2[i])));
-            return new Color(lab, 'lab');
-        };
-    } else if (colors.length === 4) {
-        // cubic bezier interpolation
-        let lab3;
-        [lab0, lab1, lab2, lab3] = colors.map(c => c.lab());
-        I = function(t) {
-            const lab = ([0, 1, 2].map((i) => ((1-t)*(1-t)*(1-t) * lab0[i]) + (3 * (1-t) * (1-t) * t * lab1[i]) + (3 * (1-t) * t * t * lab2[i]) + (t*t*t * lab3[i])));
-            return new Color(lab, 'lab');
-        };
-    } else if (colors.length >= 5) {
-        // general case (degree n bezier)
-        let labs, row, n;
-        labs = colors.map(c => c.lab());
-        n = colors.length - 1
-        row = binom_row(n);
-        I = function (t) {
-            const u = 1 - t;
-            const lab = ([0, 1, 2].map((i) => labs.reduce((sum, el, j) => (sum + row[j] * u ** (n - j) * t ** j * el[i]), 0)))
-            return new Color(lab, 'lab');
-        };
-    } else {
-        throw new RangeError("No point in running bezier with only one color.")
-    }
-    return I;
+type LabTuple = [number, number, number];
+type LabReader = () => LabTuple;
+type BezierFunction = ((t: number) => Color) & {
+  scale: () => ReturnType<typeof scale>;
 };
 
-module.exports = (colors) => {
-    const f = bezier(colors);
-    f.scale = () => scale(f);
-    return f;
+function readLab(color: Color): LabTuple {
+  const lab = color.lab;
+  if (typeof lab !== 'function') {
+    throw new Error('Missing lab reader');
+  }
+
+  return (lab as LabReader).call(color);
+}
+
+function binomRow(n: number): number[] {
+  let row = [1, 1];
+  for (let index = 1; index < n; index += 1) {
+    const nextRow = [1];
+    for (let column = 1; column <= row.length; column += 1) {
+      nextRow[column] = (row[column] ?? 0) + (row[column - 1] ?? 0);
+    }
+    row = nextRow;
+  }
+  return row;
+}
+
+function ensureColors(colors: readonly ColorValue[]): Color[] {
+  return colors.map((color) => (color instanceof Color ? color : new Color(color)));
+}
+
+function createBezier(colors: readonly ColorValue[]): (t: number) => Color {
+  const palette = ensureColors(colors);
+  if (palette.length < 2) {
+    throw new RangeError('No point in running bezier with only one color.');
+  }
+
+  const labs = palette.map((color) => readLab(color));
+  if (labs.length === 2) {
+    const [lab0, lab1] = labs;
+    return (t: number) =>
+      new Color(
+        [0, 1, 2].map((index) => lab0[index] + t * (lab1[index] - lab0[index])),
+        'lab'
+      );
+  }
+
+  if (labs.length === 3) {
+    const [lab0, lab1, lab2] = labs;
+    return (t: number) =>
+      new Color(
+        [0, 1, 2].map((index) => (1 - t) * (1 - t) * lab0[index] + 2 * (1 - t) * t * lab1[index] + t * t * lab2[index]),
+        'lab'
+      );
+  }
+
+  if (labs.length === 4) {
+    const [lab0, lab1, lab2, lab3] = labs;
+    return (t: number) =>
+      new Color(
+        [0, 1, 2].map(
+          (index) =>
+            (1 - t) * (1 - t) * (1 - t) * lab0[index] +
+            3 * (1 - t) * (1 - t) * t * lab1[index] +
+            3 * (1 - t) * t * t * lab2[index] +
+            t * t * t * lab3[index]
+        ),
+        'lab'
+      );
+  }
+
+  const row = binomRow(labs.length - 1);
+  const degree = labs.length - 1;
+  return (t: number) => {
+    const u = 1 - t;
+    return new Color(
+      [0, 1, 2].map((index) =>
+        labs.reduce(
+          (sum, lab, labIndex) => sum + (row[labIndex] ?? 0) * u ** (degree - labIndex) * t ** labIndex * lab[index],
+          0
+        )
+      ),
+      'lab'
+    );
+  };
+}
+
+/**
+ * Returns a bezier interpolator in Lab space.
+ *
+ * The returned function accepts a value in the range 0..1. Call `.scale()` to convert it into a regular chroma scale.
+ */
+export function bezier(colors: readonly ColorValue[]): BezierFunction {
+  const interpolate = createBezier(colors) as BezierFunction;
+  interpolate.scale = () => scale(interpolate);
+  return interpolate;
 }

@@ -1,8 +1,9 @@
+import type { ChromaStatic } from './color';
 import { Color } from './color';
 
-export const chroma = (...args: any) => {
-  return new chroma.Color(...args);
-};
-
-chroma.Color = Color;
-chroma.version = '@@version';
+/**
+ * Chroma.js is a tiny library for color conversions, interpolation, and scale generation.
+ *
+ * The callable `chroma(...)` factory mirrors the public static helpers defined on `Color`.
+ */
+export const chroma: ChromaStatic = Color.createFactory('@@version');

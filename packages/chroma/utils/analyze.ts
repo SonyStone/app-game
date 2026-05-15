@@ -1,191 +1,177 @@
-const type = require('./type');
-const {log, pow, floor, abs} = Math;
+const { abs, floor, log, pow } = Math;
 
-
-const analyze = (data, key=null) => {
-    const r = {
-        min: Number.MAX_VALUE,
-        max: Number.MAX_VALUE*-1,
-        sum: 0,
-        values: [],
-        count: 0
-    };
-    if (type(data) === 'object') {
-        data = Object.values(data);
-    }
-    data.forEach(val => {
-        if (key && type(val) === 'object') val = val[key];
-        if (val !== undefined && val !== null && !isNaN(val)) {
-            r.values.push(val);
-            r.sum += val;
-            if (val < r.min) r.min = val;
-            if (val > r.max) r.max = val;
-            r.count += 1;
-        }
-    });
-
-    r.domain = [r.min, r.max];
-
-    r.limits = (mode, num) => limits(r, mode, num)
-
-    return r;
+export type Analysis = {
+  min: number;
+  max: number;
+  sum: number;
+  values: number[];
+  count: number;
+  domain: [number, number];
+  limits: (mode?: string, num?: number) => number[];
 };
 
-
-const limits = (data, mode='equal', num=7) => {
-    if (type(data) == 'array') {
-        data = analyze(data);
-    }
-    const {min,max} = data;
-    const values = data.values.sort((a,b) => a-b);
-
-    if (num === 1) { return [min,max]; }
-
-    const limits = [];
-
-    if (mode.substr(0,1) === 'c') { // continuous
-        limits.push(min);
-        limits.push(max);
-    }
-
-    if (mode.substr(0,1) === 'e') { // equal interval
-        limits.push(min);
-        for (let i=1; i<num; i++) {
-            limits.push(min+((i/num)*(max-min)));
-        }
-        limits.push(max);
-    }
-
-    else if (mode.substr(0,1) === 'l') { // log scale
-        if (min <= 0) {
-            throw new Error('Logarithmic scales are only possible for values > 0');
-        }
-        const min_log = Math.LOG10E * log(min);
-        const max_log = Math.LOG10E * log(max);
-        limits.push(min);
-        for (let i=1; i<num; i++) {
-            limits.push(pow(10, min_log + ((i/num) * (max_log - min_log))));
-        }
-        limits.push(max);
-    }
-
-    else if (mode.substr(0,1) === 'q') { // quantile scale
-        limits.push(min);
-        for (let i=1; i<num; i++) {
-            const p = ((values.length-1) * i)/num;
-            const pb = floor(p);
-            if (pb === p) {
-                limits.push(values[pb]);
-            } else { // p > pb
-                const pr = p - pb;
-                limits.push((values[pb]*(1-pr)) + (values[pb+1]*pr));
-            }
-        }
-        limits.push(max);
-
-    }
-
-    else if (mode.substr(0,1) === 'k') { // k-means clustering
-        /*
-        implementation based on
-        http://code.google.com/p/figue/source/browse/trunk/figue.js#336
-        simplified for 1-d input values
-        */
-        let cluster;
-        const n = values.length;
-        const assignments = new Array(n);
-        const clusterSizes = new Array(num);
-        let repeat = true;
-        let nb_iters = 0;
-        let centroids = null;
-
-        // get seed values
-        centroids = [];
-        centroids.push(min);
-        for (let i=1; i<num; i++) {
-            centroids.push(min + ((i/num) * (max-min)));
-        }
-        centroids.push(max);
-
-        while (repeat) {
-            // assignment step
-            for (let j=0; j<num; j++) {
-                clusterSizes[j] = 0;
-            }
-            for (let i=0; i<n; i++) {
-                const value = values[i];
-                let mindist = Number.MAX_VALUE;
-                let best;
-                for (let j=0; j<num; j++) {
-                    const dist = abs(centroids[j]-value);
-                    if (dist < mindist) {
-                        mindist = dist;
-                        best = j;
-                    }
-                    clusterSizes[best]++;
-                    assignments[i] = best;
-                }
-            }
-
-            // update centroids step
-            const newCentroids = new Array(num);
-            for (let j=0; j<num; j++) {
-                newCentroids[j] = null;
-            }
-            for (let i=0; i<n; i++) {
-                cluster = assignments[i];
-                if (newCentroids[cluster] === null) {
-                    newCentroids[cluster] = values[i];
-                } else {
-                    newCentroids[cluster] += values[i];
-                }
-            }
-            for (let j=0; j<num; j++) {
-                newCentroids[j] *= 1/clusterSizes[j];
-            }
-
-            // check convergence
-            repeat = false;
-            for (let j=0; j<num; j++) {
-                if (newCentroids[j] !== centroids[j]) {
-                    repeat = true;
-                    break;
-                }
-            }
-
-            centroids = newCentroids;
-            nb_iters++;
-
-            if (nb_iters > 200) {
-                repeat = false;
-            }
-        }
-
-        // finished k-means clustering
-        // the next part is borrowed from gabrielflor.it
-        const kClusters = {};
-        for (let j=0; j<num; j++) {
-            kClusters[j] = [];
-        }
-        for (let i=0; i<n; i++) {
-            cluster = assignments[i];
-            kClusters[cluster].push(values[i]);
-        }
-        let tmpKMeansBreaks = [];
-        for (let j=0; j<num; j++) {
-            tmpKMeansBreaks.push(kClusters[j][0]);
-            tmpKMeansBreaks.push(kClusters[j][kClusters[j].length-1]);
-        }
-        tmpKMeansBreaks = tmpKMeansBreaks.sort((a,b)=> a-b);
-        limits.push(tmpKMeansBreaks[0]);
-        for (let i=1; i < tmpKMeansBreaks.length; i+= 2) {
-            const v = tmpKMeansBreaks[i];
-            if (!isNaN(v) && (limits.indexOf(v) === -1)) {
-                limits.push(v);
-            }
-        }
-    }
-    return limits;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-module.exports = {analyze, limits};
+function toValues(data: readonly unknown[] | Record<string, unknown>): readonly unknown[] {
+  return Array.isArray(data) ? data : Object.values(data);
+}
+
+function isAnalysis(value: Analysis | readonly unknown[]): value is Analysis {
+  return !Array.isArray(value);
+}
+
+function getNumericValue(value: unknown, key: string | null): number | undefined {
+  const candidate = key != null && isRecord(value) ? value[key] : value;
+  return typeof candidate === 'number' && !Number.isNaN(candidate) ? candidate : undefined;
+}
+
+export function analyze(data: readonly unknown[] | Record<string, unknown>, key: string | null = null): Analysis {
+  const analysisBase = {
+    min: Number.MAX_VALUE,
+    max: -Number.MAX_VALUE,
+    sum: 0,
+    values: [] as number[],
+    count: 0
+  };
+
+  for (const value of toValues(data)) {
+    const numericValue = getNumericValue(value, key);
+    if (numericValue == null) {
+      continue;
+    }
+    analysisBase.values.push(numericValue);
+    analysisBase.sum += numericValue;
+    if (numericValue < analysisBase.min) analysisBase.min = numericValue;
+    if (numericValue > analysisBase.max) analysisBase.max = numericValue;
+    analysisBase.count += 1;
+  }
+
+  const analysis: Analysis = {
+    ...analysisBase,
+    domain: [analysisBase.min, analysisBase.max],
+    limits: (mode = 'equal', num = 7) => limits(analysis, mode, num)
+  };
+  return analysis;
+}
+
+export function limits(data: Analysis | readonly unknown[], mode = 'equal', num = 7): number[] {
+  const analysis = isAnalysis(data) ? data : analyze(data);
+  const min = analysis.min;
+  const max = analysis.max;
+  const values = analysis.values.slice().sort((left, right) => left - right);
+  if (num === 1) {
+    return [min, max];
+  }
+
+  const output: number[] = [];
+  if (mode.startsWith('c')) {
+    output.push(min, max);
+    return output;
+  }
+
+  if (mode.startsWith('e')) {
+    output.push(min);
+    for (let index = 1; index < num; index += 1) {
+      output.push(min + (index / num) * (max - min));
+    }
+    output.push(max);
+    return output;
+  }
+
+  if (mode.startsWith('l')) {
+    if (min <= 0) {
+      throw new Error('Logarithmic scales are only possible for values > 0');
+    }
+    const minLog = Math.LOG10E * log(min);
+    const maxLog = Math.LOG10E * log(max);
+    output.push(min);
+    for (let index = 1; index < num; index += 1) {
+      output.push(pow(10, minLog + (index / num) * (maxLog - minLog)));
+    }
+    output.push(max);
+    return output;
+  }
+
+  if (mode.startsWith('q')) {
+    output.push(min);
+    for (let index = 1; index < num; index += 1) {
+      const position = ((values.length - 1) * index) / num;
+      const base = floor(position);
+      if (base === position) {
+        output.push(values[base] ?? max);
+      } else {
+        const ratio = position - base;
+        output.push((values[base] ?? min) * (1 - ratio) + (values[base + 1] ?? max) * ratio);
+      }
+    }
+    output.push(max);
+    return output;
+  }
+
+  if (!mode.startsWith('k')) {
+    return output;
+  }
+
+  const assignments = new Array<number>(values.length).fill(0);
+  const clusterSizes = new Array<number>(num).fill(0);
+  let centroids = [min, ...Array.from({ length: num - 1 }, (_, index) => min + ((index + 1) / num) * (max - min)), max];
+  let repeat = true;
+  let iterations = 0;
+
+  while (repeat && iterations <= 200) {
+    clusterSizes.fill(0);
+    for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
+      const value = values[valueIndex] ?? min;
+      let best = 0;
+      let minDistance = Number.MAX_VALUE;
+      for (let centroidIndex = 0; centroidIndex < num; centroidIndex += 1) {
+        const distance = abs((centroids[centroidIndex] ?? min) - value);
+        if (distance < minDistance) {
+          minDistance = distance;
+          best = centroidIndex;
+        }
+      }
+      clusterSizes[best] += 1;
+      assignments[valueIndex] = best;
+    }
+
+    const newCentroids = new Array<number>(num).fill(0);
+    for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
+      const cluster = assignments[valueIndex] ?? 0;
+      newCentroids[cluster] += values[valueIndex] ?? 0;
+    }
+    for (let centroidIndex = 0; centroidIndex < num; centroidIndex += 1) {
+      if (clusterSizes[centroidIndex] > 0) {
+        newCentroids[centroidIndex] /= clusterSizes[centroidIndex];
+      } else {
+        newCentroids[centroidIndex] = centroids[centroidIndex] ?? min;
+      }
+    }
+
+    repeat = newCentroids.some((value, index) => value !== centroids[index]);
+    centroids = newCentroids;
+    iterations += 1;
+  }
+
+  const clusters = Array.from({ length: num }, () => [] as number[]);
+  for (let valueIndex = 0; valueIndex < values.length; valueIndex += 1) {
+    const cluster = assignments[valueIndex] ?? 0;
+    clusters[cluster].push(values[valueIndex] ?? 0);
+  }
+
+  const breaks = clusters
+    .flatMap((cluster) => (cluster.length > 0 ? [cluster[0] ?? min, cluster[cluster.length - 1] ?? max] : []))
+    .sort((left, right) => left - right);
+  if (breaks.length > 0) {
+    output.push(breaks[0]);
+    for (let index = 1; index < breaks.length; index += 2) {
+      const value = breaks[index] ?? max;
+      if (!Number.isNaN(value) && !output.includes(value)) {
+        output.push(value);
+      }
+    }
+  }
+  return output;
+}

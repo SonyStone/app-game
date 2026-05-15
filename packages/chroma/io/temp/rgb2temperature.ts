@@ -1,29 +1,27 @@
-/*
- * Based on implementation by Neil Bartlett
- * https://github.com/neilbartlett/color-temperature
- **/
+import { unpack } from '../../utils';
+import { temperature2rgb } from './temperature2rgb';
 
-const temperature2rgb = require('./temperature2rgb');
-const {unpack} = require('../../utils');
-const {round} = Math;
+const { round } = Math;
 
-const rgb2temperature = (...args) => {
-    const rgb = unpack(args, 'rgb');
-    const r = rgb[0], b = rgb[2];
-    let minTemp = 1000;
-    let maxTemp = 40000;
-    const eps = 0.4;
-    let temp;
-    while (maxTemp - minTemp > eps) {
-        temp = (maxTemp + minTemp) * 0.5;
-        const rgb = temperature2rgb(temp);
-        if ((rgb[2] / rgb[0]) >= (b / r)) {
-            maxTemp = temp;
-        } else {
-            minTemp = temp;
-        }
+/**
+ * Estimates the color temperature in Kelvin for a given RGB input.
+ */
+export function rgb2temperature(...args: unknown[]): number {
+  const rgb = unpack(args, 'rgb') as number[];
+  const r = rgb[0] ?? 0;
+  const b = rgb[2] ?? 0;
+  let minTemp = 1000;
+  let maxTemp = 40000;
+  const epsilon = 0.4;
+  let temperature = minTemp;
+  while (maxTemp - minTemp > epsilon) {
+    temperature = (maxTemp + minTemp) * 0.5;
+    const candidate = temperature2rgb(temperature);
+    if ((candidate[2] ?? 0) / (candidate[0] ?? 1) >= b / Math.max(r, 1e-12)) {
+      maxTemp = temperature;
+    } else {
+      minTemp = temperature;
     }
-    return round(temp);
+  }
+  return round(temperature);
 }
-
-module.exports = rgb2temperature;

@@ -1,12 +1,11 @@
 const { min, max } = Math;
 
-/*
- * supported arguments:
- * - rgb2hsv(r,g,b)
- * - rgb2hsv([r,g,b])
- * - rgb2hsv({r,g,b})
+/**
+ * Converts RGB channel values into HSV.
+ *
+ * Hue is returned in degrees. Saturation and value are normalized to 0..1.
  */
-export const rgb2hsl = (r: number, g: number, b: number) => {
+export const rgb2hsv = (r: number, g: number, b: number) => {
   const min_ = min(r, g, b);
   const max_ = max(r, g, b);
   const delta = max_ - min_;

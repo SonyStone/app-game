@@ -3,56 +3,75 @@
  * blend mode formulas taken from http://www.venture-ware.com/kevin/coding/lets-learn-math-photoshop-blend-modes/
  */
 
-require('../io/rgb');
-const chroma = require('../chroma');
+import { Color } from '../color';
+import type { ColorValue } from '../types';
 
-const blend = (bottom, top, mode) => {
-    if (!blend[mode]) {
-        throw new Error('unknown blend mode ' + mode);
-    }
-    return blend[mode](bottom, top);
+export type BlendMode = 'normal' | 'multiply' | 'darken' | 'lighten' | 'screen' | 'overlay' | 'burn' | 'dodge';
+type BlendChannel = (a: number, b: number) => number;
+type BlendArray = [number, number, number];
+type BlendOperation = (bottom: ColorValue, top: ColorValue) => Color;
+type RgbReader = () => BlendArray;
+
+function readRgb(color: Color): BlendArray {
+  const rgb = color.rgb;
+  if (typeof rgb !== 'function') {
+    throw new Error('Missing rgb reader');
+  }
+
+  return (rgb as RgbReader).call(color);
 }
 
-const blend_f = (f) =>
-    (bottom,top) => {
-        const c0 = chroma(top).rgb();
-        const c1 = chroma(bottom).rgb();
-        return chroma.rgb(f(c0, c1));
-    }
-
-const each = (f) =>
-    (c0, c1) => {
-        const out = []
-        out[0] = f(c0[0], c1[0]);
-        out[1] = f(c0[1], c1[1]);
-        out[2] = f(c0[2], c1[2]);
-        return out;
-    }
-
-const normal = (a) => a
-const multiply = (a,b) => a * b / 255
-const darken = (a,b) => a > b ? b : a
-const lighten = (a,b) => a > b ? a : b
-const screen = (a,b) => 255 * (1 - (1-a/255) * (1-b/255))
-const overlay = (a,b) => b < 128 ? 2 * a * b / 255 : 255 * (1 - 2 * (1 - a / 255 ) * ( 1 - b / 255 ))
-const burn = (a,b) => 255 * (1 - (1 - b / 255) / (a/255))
-const dodge = (a,b) => {
-    if (a === 255) return 255;
-    a = 255 * (b / 255) / (1 - a / 255);
-    return a > 255 ? 255 : a
+function ensureColor(value: ColorValue): Color {
+  return value instanceof Color ? value : new Color(value);
 }
 
-// # add = (a,b) ->
-// #     if (a + b > 255) then 255 else a + b
+const normal: BlendChannel = (a) => a;
+const multiply: BlendChannel = (a, b) => (a * b) / 255;
+const darken: BlendChannel = (a, b) => (a > b ? b : a);
+const lighten: BlendChannel = (a, b) => (a > b ? a : b);
+const screen: BlendChannel = (a, b) => 255 * (1 - (1 - a / 255) * (1 - b / 255));
+const overlay: BlendChannel = (a, b) => (b < 128 ? (2 * a * b) / 255 : 255 * (1 - 2 * (1 - a / 255) * (1 - b / 255)));
+const burn: BlendChannel = (a, b) => 255 * (1 - (1 - b / 255) / (a / 255));
+const dodge: BlendChannel = (a, b) => {
+  if (a === 255) {
+    return 255;
+  }
 
-blend.normal = blend_f(each(normal));
-blend.multiply = blend_f(each(multiply));
-blend.screen = blend_f(each(screen));
-blend.overlay = blend_f(each(overlay));
-blend.darken = blend_f(each(darken));
-blend.lighten = blend_f(each(lighten));
-blend.dodge = blend_f(each(dodge));
-blend.burn = blend_f(each(burn));
-// blend.add = blend_f(each(add));
+  const value = (255 * (b / 255)) / (1 - a / 255);
+  return value > 255 ? 255 : value;
+};
 
-module.exports = blend;
+function each(fn: BlendChannel): (c0: BlendArray, c1: BlendArray) => BlendArray {
+  return (c0, c1) => [fn(c0[0], c1[0]), fn(c0[1], c1[1]), fn(c0[2], c1[2])];
+}
+
+function blendFactory(fn: (c0: BlendArray, c1: BlendArray) => BlendArray): BlendOperation {
+  return (bottom, top) => {
+    const topRgb = readRgb(ensureColor(top));
+    const bottomRgb = readRgb(ensureColor(bottom));
+    return new Color(fn(topRgb, bottomRgb), 'rgb');
+  };
+}
+
+type BlendFunction = ((bottom: ColorValue, top: ColorValue, mode: BlendMode) => Color) &
+  Record<BlendMode, BlendOperation>;
+
+const blend = ((bottom: ColorValue, top: ColorValue, mode: BlendMode): Color => {
+  const operation = blend[mode];
+  if (operation == null) {
+    throw new Error(`unknown blend mode ${mode}`);
+  }
+
+  return operation(bottom, top);
+}) as BlendFunction;
+
+blend.normal = blendFactory(each(normal));
+blend.multiply = blendFactory(each(multiply));
+blend.screen = blendFactory(each(screen));
+blend.overlay = blendFactory(each(overlay));
+blend.darken = blendFactory(each(darken));
+blend.lighten = blendFactory(each(lighten));
+blend.dodge = blendFactory(each(dodge));
+blend.burn = blendFactory(each(burn));
+
+export { blend };

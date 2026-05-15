@@ -1,11 +1,12 @@
-const { unpack } = require('../../utils');
-const rgb2oklab = require('../oklab/rgb2oklab');
-const lab2lch = require('../lch/lab2lch');
+import { unpack } from '../../utils';
+import { lab2lch } from '../lch/lab2lch';
+import { rgb2oklab } from '../oklab/rgb2oklab';
 
-const rgb2oklch = (...args) => {
-    const [r, g, b] = unpack(args, 'rgb');
-    const [l, a, b_] = rgb2oklab(r, g, b);
-    return lab2lch(l, a, b_);
-};
-
-module.exports = rgb2oklch;
+/**
+ * Converts RGB input into Oklch coordinates.
+ */
+export function rgb2oklch(...args: unknown[]): [number, number, number] {
+  const [r = 0, g = 0, b = 0] = unpack(args, 'rgb') as number[];
+  const [l, a, b_] = rgb2oklab(r, g, b);
+  return lab2lch(l, a, b_);
+}

@@ -1,8 +1,10 @@
-const type = require('./type');
+import { type } from './type';
 
-module.exports = (args) => {
-    if (args.length < 2) return null;
-    const l = args.length-1;
-    if (type(args[l]) == 'string') return args[l].toLowerCase();
+export function last(args: readonly unknown[]): string | null {
+  if (args.length < 2) {
     return null;
-};
+  }
+
+  const value = args[args.length - 1];
+  return type(value) === 'string' ? String(value).toLowerCase() : null;
+}

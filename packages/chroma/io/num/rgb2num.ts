@@ -1,8 +1,6 @@
-const {unpack} = require('../../utils');
+import { unpack } from '../../utils';
 
-const rgb2num = (...args) => {
-    const [r,g,b] = unpack(args, 'rgb');
-    return (r << 16) + (g << 8) + b;
+export function rgb2num(...args: unknown[]): number {
+  const [r = 0, g = 0, b = 0] = unpack(args, 'rgb') as number[];
+  return (r << 16) + (g << 8) + b;
 }
-
-module.exports = rgb2num;

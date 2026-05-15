@@ -167,6 +167,8 @@ type UserData = {
 };
 ```
 
+**Don't use default exports. Always use named exports.**
+
 ## Component Patterns
 
 ### Props Types
