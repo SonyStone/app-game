@@ -72,12 +72,14 @@ export default defineConfig({
   build: {
     assetsInlineLimit: 0,
     chunkSizeWarningLimit: 5000,
+    target: 'esnext',
     outDir: resolve(__dirname, 'dist'),
     emptyOutDir: true
     // minify: false
   },
   worker: {
-    format: 'es'
+    format: 'es',
+    plugins: () => [solidPlugin()]
   },
   test: {
     environment: 'happy-dom',

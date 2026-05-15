@@ -22,10 +22,10 @@ class Example extends Scene {
     this.map = this.make.tilemap({ key: 'multiple-layers-map' });
     const tiles = this.map.addTilesetImage('kenny_platformer_64x64')!;
 
-    this.rockLayer = this.map.createLayer('Rock Layer', tiles, 0, 0)!;
-    this.waterLayer = this.map.createLayer('Water Layer', tiles, 0, 0)!;
-    this.platformLayer = this.map.createLayer('Platform Layer', tiles, 0, 0)!;
-    this.stuffLayer = this.map.createLayer('Stuff Layer', tiles, 0, 0)!;
+    this.rockLayer = this.map.createLayer('Rock Layer', tiles, 0, 0)! as Phaser.Tilemaps.TilemapLayer;
+    this.waterLayer = this.map.createLayer('Water Layer', tiles, 0, 0)! as Phaser.Tilemaps.TilemapLayer;
+    this.platformLayer = this.map.createLayer('Platform Layer', tiles, 0, 0)! as Phaser.Tilemaps.TilemapLayer;
+    this.stuffLayer = this.map.createLayer('Stuff Layer', tiles, 0, 0)! as Phaser.Tilemaps.TilemapLayer;
 
     console.log(`tiles`, tiles);
     console.log(`map`, this.map);

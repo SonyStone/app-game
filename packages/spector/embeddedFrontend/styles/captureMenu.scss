@@ -1,4 +1,4 @@
-@import './_main';
+@use './main' as *;
 
 $captureMenuComponentWidth: 400px;
 $captureMenuComponentHeight: 40px;

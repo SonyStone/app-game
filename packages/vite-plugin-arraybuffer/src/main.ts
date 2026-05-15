@@ -6,94 +6,74 @@ const uint8ArraySearchStr = '?Uint8Array';
 const uint16ArraySearchStr = '?Uint16Array';
 const uint32ArraySearchStr = '?Uint32Array';
 const int32ArraySearchStr = '?Int32Array';
+const supportedSearchStrings = [
+  arrayBufferSearchStr,
+  float32ArraySearchStr,
+  uint8ArraySearchStr,
+  uint16ArraySearchStr,
+  uint32ArraySearchStr,
+  int32ArraySearchStr
+] as const;
 
 export default function vitePluginArraybuffer(): PluginOption {
   return {
     name: 'vite-plugin-arraybuffer',
-    transform(_src, id) {
-      if (id.endsWith(arrayBufferSearchStr)) {
-        const file = id.slice(0, -arrayBufferSearchStr.length);
-        return `
-          import __arrayUrl from '${file}?url';
+    enforce: 'pre',
+    async resolveId(source, importer) {
+      const suffix = getSupportedSuffix(source);
+      if (!suffix) return null;
 
-          export default function() {
-            return fetch(__arrayUrl)
-              .then((response) => response.arrayBuffer());
-          }
-        `;
-      }
-      if (id.endsWith(float32ArraySearchStr)) {
-        const file = id.slice(0, -float32ArraySearchStr.length);
-        const code = `
-          import __arrayUrl from '${file}?url';
+      const file = source.slice(0, -suffix.length);
+      const resolved = await this.resolve(file, importer, { skipSelf: true });
 
-          export default function() {
-            return fetch(__arrayUrl)
-              .then((response) => response.arrayBuffer())
-              .then((buffer) => new Float32Array(buffer));
-          }
-        `;
+      if (!resolved) return null;
 
-        return code;
-      }
-      if (id.endsWith(uint8ArraySearchStr)) {
-        const file = id.slice(0, -uint8ArraySearchStr.length);
-        const code = `
-          import __arrayUrl from '${file}?url';
+      return `${resolved.id}${suffix}`;
+    },
+    load(id) {
+      const suffix = getSupportedSuffix(id);
+      if (!suffix) return null;
 
-          export default function() {
-            return fetch(__arrayUrl)
-              .then((response) => response.arrayBuffer())
-              .then((buffer) => new Uint8Array(buffer));
-          }
-        `;
-
-        return code;
-      }
-      if (id.endsWith(uint16ArraySearchStr)) {
-        const file = id.slice(0, -uint16ArraySearchStr.length);
-        const code = `
-          import __arrayUrl from '${file}?url';
-
-          export default function() {
-            return fetch(__arrayUrl)
-              .then((response) => response.arrayBuffer())
-              .then((buffer) => new Uint16Array(buffer));
-          }
-        `;
-
-        return code;
-      }
-      if (id.endsWith(uint32ArraySearchStr)) {
-        const file = id.slice(0, -uint32ArraySearchStr.length);
-        const code = `
-          import __arrayUrl from '${file}?url';
-
-          export default function() {
-            return fetch(__arrayUrl)
-              .then((response) => response.arrayBuffer())
-              .then((buffer) => new Uint32Array(buffer));
-          }
-        `;
-
-        return code;
-      }
-      if (id.endsWith(int32ArraySearchStr)) {
-        const file = id.slice(0, -int32ArraySearchStr.length);
-        const code = `
-          import __arrayUrl from '${file}?url';
-
-          export default function() {
-            return fetch(__arrayUrl)
-              .then((response) => response.arrayBuffer())
-              .then((buffer) => new Int32Array(buffer));
-          }
-        `;
-
-        return code;
-      }
-
-      return;
+      const file = id.slice(0, -suffix.length);
+      return createLoaderModule(file, suffix);
     }
   };
+}
+
+function getSupportedSuffix(id: string): (typeof supportedSearchStrings)[number] | undefined {
+  return supportedSearchStrings.find((suffix) => id.endsWith(suffix));
+}
+
+function createLoaderModule(file: string, suffix: (typeof supportedSearchStrings)[number]): string {
+  if (suffix === arrayBufferSearchStr) {
+    return createArrayModule(file, 'response.arrayBuffer()');
+  }
+
+  if (suffix === float32ArraySearchStr) {
+    return createArrayModule(file, 'response.arrayBuffer().then((buffer) => new Float32Array(buffer))');
+  }
+
+  if (suffix === uint8ArraySearchStr) {
+    return createArrayModule(file, 'response.arrayBuffer().then((buffer) => new Uint8Array(buffer))');
+  }
+
+  if (suffix === uint16ArraySearchStr) {
+    return createArrayModule(file, 'response.arrayBuffer().then((buffer) => new Uint16Array(buffer))');
+  }
+
+  if (suffix === uint32ArraySearchStr) {
+    return createArrayModule(file, 'response.arrayBuffer().then((buffer) => new Uint32Array(buffer))');
+  }
+
+  return createArrayModule(file, 'response.arrayBuffer().then((buffer) => new Int32Array(buffer))');
+}
+
+function createArrayModule(file: string, responseExpression: string): string {
+  return `
+    import __arrayUrl from ${JSON.stringify(`${file}?url`)};
+
+    export default function() {
+      return fetch(__arrayUrl).then((response) => ${responseExpression});
+    }
+  `;
 }

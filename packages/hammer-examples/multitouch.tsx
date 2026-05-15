@@ -3,9 +3,11 @@ import { clamp, radToDeg } from '@app-game/pixijs-research/math/MathUtils';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { Title } from '@solidjs/meta';
 import { ComponentProps, Show, createMemo, createSignal } from 'solid-js';
-import { degToRad } from 'three/src/math/MathUtils';
+import { MathUtils } from 'three';
 import { useOffscreenCanvas } from './offscreen-canvas';
 import type { WorkerMessage } from './offscreen-canvas.worker';
+
+const { degToRad } = MathUtils;
 
 const toPlainPointerEvent = (event: PointerEvent): WorkerMessage => ({
   type: event.type as 'pointerdown' | 'pointermove' | 'pointerup',

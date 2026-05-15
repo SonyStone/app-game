@@ -109,11 +109,9 @@ function create (this: Phaser.Scene) {
       setXY: { x: 12, y: 0, stepX: 70 }
     });
 
-    stars.children.iterate((child) => {
+    stars.children.forEach((child) => {
 
       (child as any).setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
-
-      return null;
     });
 
     this.physics.add.collider(stars, platforms);
@@ -148,10 +146,9 @@ function collectStar(player: any, star: any) {
   scoreText.setText('Score: ' + score);
 
   if (stars.countActive(true) === 0) {
-    stars.children.iterate((child) => {
+    stars.children.forEach((child) => {
 
       (child as any).enableBody(true, (child as any).x, 0, true, true);
-      return null;
     });
 
     var x = (player.x < 400) ? Phaser.Math.Between(400, 800) : Phaser.Math.Between(0, 400);

@@ -5,7 +5,7 @@ import { defineConfig } from '@unocss/vite';
 import { presetAnimations } from 'unocss-preset-animations';
 
 export default defineConfig({
-  presets: [presetWind4(), presetAnimations()],
+  presets: [presetWind4(), presetAnimations() as unknown as ReturnType<typeof presetWind4>],
   rules: [],
   transformers: [transformerCompileClass(), transformerVariantGroup()],
   theme: {
@@ -44,7 +44,7 @@ export default defineConfig({
         foreground: 'hsl(var(--card-foreground))'
       }
     },
-    borderRadius: {
+    radius: {
       lg: `var(--radius)`,
       md: `calc(var(--radius) - 2px)`,
       sm: 'calc(var(--radius) - 4px)'

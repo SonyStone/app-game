@@ -78,7 +78,7 @@ function MenuButton(props: MenuButtonProps) {
   );
 }
 
-function MenuPopup(props: AriaMenuProps & AriaOverlayProps) {
+function MenuPopup(props: ParentProps<AriaMenuProps & AriaOverlayProps>) {
   let ref: HTMLUListElement | undefined;
 
   // Get props for the menu element

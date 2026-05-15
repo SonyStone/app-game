@@ -19,7 +19,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from "three";
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
+import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import s from "./Main.module.scss";
 
 import { For, onCleanup } from "solid-js";
@@ -194,7 +194,7 @@ export default function Main() {
 
     Promise.all(
       anims.map((anim) =>
-        loader.loadAsync(anim).then((object) => {
+        loader.loadAsync(anim).then((object: Group) => {
           const clip = object.animations[0];
           player.animationClips[anim] = clip;
           player.animationActions[anim] = player.mixer.clipAction(
@@ -252,14 +252,14 @@ export default function Main() {
     actionToPlay.reset().fadeIn(0.5).play();
   }
 
-  loader.loadAsync(girlWalk).then((object) => {
+  loader.loadAsync(girlWalk).then((object: Group) => {
     const mixer = new AnimationMixer(object);
     player.mixer = mixer;
     player.root = mixer.getRoot() as Group;
 
     object.name = "Character";
 
-    object.traverse(function (child) {
+    object.traverse(function (child: Object3D) {
       if ((child as any).isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;

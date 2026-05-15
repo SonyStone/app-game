@@ -18,7 +18,7 @@ import { loadSVG } from './loadSVG';
 import hexagon from './svg/diogram.drawio.svg?url';
 import s from './SvgLoader.module.scss';
 
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import a from './airboat.obj?raw';
 
 const loader = new OBJLoader();
@@ -32,9 +32,7 @@ export default function SvgLoader() {
   const renderer = new WebGLRenderer({ antialias: true, canvas });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  (renderer as WebGLRenderer & { outputColorSpace: unknown }).outputColorSpace = (THREE as unknown as {
-    SRGBColorSpace: unknown;
-  }).SRGBColorSpace;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   controls.init(renderer.domElement as unknown as HTMLElement);
 

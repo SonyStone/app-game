@@ -45,9 +45,7 @@ const createRendererInstance = <TElement extends Element>(gl: GLProps, canvas: T
   });
 
   // Set color management
-  (renderer as THREE.WebGLRenderer & { outputColorSpace: unknown }).outputColorSpace = (THREE as unknown as {
-    SRGBColorSpace: unknown;
-  }).SRGBColorSpace;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
   // Set gl props

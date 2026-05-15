@@ -1,4 +1,5 @@
 import {
+  BaseEvent,
   Camera,
   EventDispatcher,
   Matrix4,
@@ -12,6 +13,12 @@ import {
   Vector3,
 } from 'three';
 
+type OrbitControlsEventMap = {
+  change: {};
+  start: {};
+  end: {};
+};
+
 // This set of controls performs orbiting, dollying (zooming), and panning.
 // Unlike TrackballControls, it maintains the "up" direction object.up (+Y by default).
 //
@@ -20,9 +27,9 @@ import {
 //    Pan - right mouse, or left mouse + ctrl/meta/shiftKey, or arrow keys / touch: two-finger move
 
 function createOrbitControls() {
-  const _changeEvent = { type: 'change' };
-  const _startEvent = { type: 'start' };
-  const _endEvent = { type: 'end' };
+  const _changeEvent: BaseEvent<'change'> = { type: 'change' };
+  const _startEvent: BaseEvent<'start'> = { type: 'start' };
+  const _endEvent: BaseEvent<'end'> = { type: 'end' };
 
   const update = function (this: OrbitControls) {
     const offset = new Vector3();
@@ -145,7 +152,7 @@ function createOrbitControls() {
     };
   };
 
-  class OrbitControls extends EventDispatcher {
+  class OrbitControls extends EventDispatcher<OrbitControlsEventMap> {
     domElement!: HTMLElement;
     camera!: PerspectiveCamera | OrthographicCamera;
 

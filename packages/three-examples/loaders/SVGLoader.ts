@@ -1,13 +1,17 @@
 import {
   Box2,
   BufferGeometry,
+  CubicBezierCurve,
   Curve,
+  EllipseCurve,
   FileLoader,
   Float32BufferAttribute,
+  LineCurve,
   Loader,
   LoadingManager,
   Matrix3,
   Path,
+  QuadraticBezierCurve,
   Shape,
   ShapePath,
   ShapeUtils,
@@ -28,9 +32,9 @@ export class SVGLoader extends Loader {
 
   load(
     url: string,
-    onLoad: (result: any) => void,
-    onProgress?: () => void,
-    onError?: (e: any) => void
+    onLoad: (result: ReturnType<SVGLoader['parse']>) => void,
+    onProgress?: (event: ProgressEvent<EventTarget>) => void,
+    onError?: (error: unknown) => void
   ) {
     const scope = this;
 
@@ -571,6 +575,8 @@ export class SVGLoader extends Loader {
 
           case 'Z':
           case 'z':
+            if (!path.currentPath) break;
+
             path.currentPath.autoClose = true;
 
             if (path.currentPath.curves.length > 0) {
@@ -707,6 +713,8 @@ export class SVGLoader extends Loader {
         ) %
         (Math.PI * 2);
 
+      if (!path.currentPath) return;
+
       path.currentPath.absellipse(
         cx,
         cy,
@@ -822,7 +830,7 @@ export class SVGLoader extends Loader {
 
       node.getAttribute('points')!.replace(regex, iterator as any);
 
-      path.currentPath.autoClose = true;
+      if (path.currentPath) path.currentPath.autoClose = true;
 
       return path;
     }
@@ -849,7 +857,7 @@ export class SVGLoader extends Loader {
 
       node.getAttribute('points')!.replace(regex, iterator as any);
 
-      path.currentPath.autoClose = false;
+      if (path.currentPath) path.currentPath.autoClose = false;
 
       return path;
     }
@@ -892,7 +900,7 @@ export class SVGLoader extends Loader {
       const path = new ShapePath();
       path.moveTo(x1, y1);
       path.lineTo(x2, y2);
-      path.currentPath.autoClose = false;
+      if (path.currentPath) path.currentPath.autoClose = false;
 
       return path;
     }
@@ -1448,19 +1456,19 @@ export class SVGLoader extends Loader {
         for (let j = 0; j < curves.length; j++) {
           const curve = curves[j];
 
-          if (curve.isLineCurve) {
+          if (curve instanceof LineCurve) {
             transfVec2(curve.v1);
             transfVec2(curve.v2);
-          } else if (curve.isCubicBezierCurve) {
+          } else if (curve instanceof CubicBezierCurve) {
             transfVec2(curve.v0);
             transfVec2(curve.v1);
             transfVec2(curve.v2);
             transfVec2(curve.v3);
-          } else if (curve.isQuadraticBezierCurve) {
+          } else if (curve instanceof QuadraticBezierCurve) {
             transfVec2(curve.v0);
             transfVec2(curve.v1);
             transfVec2(curve.v2);
-          } else if (curve.isEllipseCurve) {
+          } else if (curve instanceof EllipseCurve) {
             if (isRotated) {
               console.warn(
                 'SVGLoader: Elliptic arc or ellipse rotation or skewing is not implemented.'

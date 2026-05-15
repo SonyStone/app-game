@@ -189,8 +189,6 @@ export type DirectionalLightShadowProps = Node<THREE.DirectionalLightShadow, typ
 export type DirectionalLightProps = LightNode<THREE.DirectionalLight, typeof THREE.DirectionalLight>;
 export type AmbientLightProps = LightNode<THREE.AmbientLight, typeof THREE.AmbientLight>;
 export type LightShadowProps = Node<THREE.LightShadow, typeof THREE.LightShadow>;
-export type AmbientLightProbeProps = LightNode<THREE.AmbientLightProbe, typeof THREE.AmbientLightProbe>;
-export type HemisphereLightProbeProps = LightNode<THREE.HemisphereLightProbe, typeof THREE.HemisphereLightProbe>;
 export type LightProbeProps = LightNode<THREE.LightProbe, typeof THREE.LightProbe>;
 
 export type SpotLightHelperProps = Object3DNode<THREE.SpotLightHelper, typeof THREE.SpotLightHelper>;
@@ -213,7 +211,7 @@ export type AxesHelperProps = Object3DNode<THREE.AxesHelper, typeof THREE.AxesHe
 export type TextureProps = Node<THREE.Texture, typeof THREE.Texture>;
 export type VideoTextureProps = Node<THREE.VideoTexture, typeof THREE.VideoTexture>;
 export type DataTextureProps = Node<THREE.DataTexture, typeof THREE.DataTexture>;
-export type DataTexture3DProps = Node<THREE.DataTexture3D, typeof THREE.DataTexture3D>;
+export type DataTexture3DProps = Node<THREE.Data3DTexture, typeof THREE.Data3DTexture>;
 export type CompressedTextureProps = Node<THREE.CompressedTexture, typeof THREE.CompressedTexture>;
 export type CubeTextureProps = Node<THREE.CubeTexture, typeof THREE.CubeTexture>;
 export type CanvasTextureProps = Node<THREE.CanvasTexture, typeof THREE.CanvasTexture>;
@@ -341,8 +339,6 @@ declare module 'solid-js' {
       directionalLight: DirectionalLightProps;
       ambientLight: AmbientLightProps;
       lightShadow: LightShadowProps;
-      ambientLightProbe: AmbientLightProbeProps;
-      hemisphereLightProbe: HemisphereLightProbeProps;
       lightProbe: LightProbeProps;
 
       // helpers

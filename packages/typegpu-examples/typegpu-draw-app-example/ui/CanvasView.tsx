@@ -100,7 +100,6 @@ export function CanvasView(props: CanvasViewProps): JSX.Element {
     )
   );
 
-  // @ts-expect-error HTMLCanvasElement is an Element
   createResizeObserver(canvasRef, () => {
     props.onResize?.();
   });

@@ -23,9 +23,7 @@ export default function Sprites() {
   const renderer = new WebGLRenderer({ antialias: true, canvas });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  (renderer as WebGLRenderer & { outputColorSpace: unknown }).outputColorSpace = (THREE as unknown as {
-    SRGBColorSpace: unknown;
-  }).SRGBColorSpace;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.sortObjects = false;
 
   controls.init(renderer.domElement as unknown as HTMLElement);
