@@ -1,7 +1,9 @@
 import { colorbrewer } from './colors/colorbrewer';
-import { w3cx11 } from './colors/w3cx11';
+import type { NamedColorName } from './colors/w3cx11';
+import { w3cx11Entries } from './colors/w3cx11';
 import { average } from './generator/average';
 import { bezier } from './generator/bezier';
+import type { BlendMode } from './generator/blend';
 import { blend } from './generator/blend';
 import { cubehelix } from './generator/cubehelix';
 import { mix as mixColors } from './generator/mix';
@@ -24,38 +26,55 @@ import { rgb2oklab } from './io/oklab/rgb2oklab';
 import { rgb2oklch } from './io/oklch/rgb2oklch';
 import { rgb2temperature } from './io/temp/rgb2temperature';
 import type {
+  AlphaChannel,
+  BlendFactor,
   ColorArguments,
   ColorChannelArray,
+  ColorChannelInput,
+  ColorSpaceName,
   ColorSpaces,
+  ColorTemperatureKelvin,
   ColorValue,
+  CssColorString,
   CssMode,
-  Cubehelix,
+  FactoryColorSpaceName,
   HexMode,
+  HexString,
+  HueDegrees,
+  InputFormatName,
   InterpolationMode,
-  LimitMode,
-  Scale
+  LabAxis,
+  LabLightness,
+  LuminanceValue,
+  ModeChannel,
+  NormalizedChannel,
+  OklabLightness,
+  ParserColorArguments,
+  PercentageChannel,
+  PolarColorChroma,
+  RgbChannel,
+  RgbHexNumber,
+  Scale,
+  ScaleInput
 } from './types';
 import { clip_rgb, last } from './utils';
 import { analyze, limits } from './utils/analyze';
-import type { Analysis } from './utils/analyze';
 import { contrast } from './utils/contrast';
 import { deltaE } from './utils/delta-e';
 import { distance } from './utils/distance';
 import { scales } from './utils/scales';
 import { valid } from './utils/valid';
-import type { BlendMode } from './generator/blend';
 
-const namedColors = w3cx11 as Record<string, string>;
-type GlInput = { r: number; g: number; b: number; a?: number };
+type GlInput = { r: NormalizedChannel; g: NormalizedChannel; b: NormalizedChannel; a?: AlphaChannel };
 
 /**
  * Callable constructor surface shared by `Color` and the public `chroma(...)` factory.
  */
 export type ColorFactoryCallable = {
   (color: string | number | Color): Color;
-  (a: number, b: number, c: number, colorSpace?: keyof ColorSpaces): Color;
-  (a: number, b: number, c: number, d: number, colorSpace?: keyof ColorSpaces): Color;
-  (values: readonly number[], colorSpace?: keyof ColorSpaces): Color;
+  (a: number, b: number, c: number, colorSpace?: FactoryColorSpaceName): Color;
+  (a: number, b: number, c: number, d: number, colorSpace?: FactoryColorSpaceName): Color;
+  (values: ColorChannelInput, colorSpace?: FactoryColorSpaceName): Color;
 };
 
 /** Constructor and static helper surface exposed as `chroma.Color`. */
@@ -67,40 +86,40 @@ export type ColorConstructor = typeof Color;
 export type ChromaStatic = ColorFactoryCallable & {
   Color: ColorConstructor;
   version: string;
-  analyze: (data: readonly unknown[] | Record<string, unknown>, key?: string | null) => Analysis;
-  average: (colors: readonly ColorValue[], colorSpace?: InterpolationMode, weights?: readonly number[]) => Color;
-  bezier: (colors: string[]) => ((t: number) => Color) & { scale: () => Scale };
+  analyze: typeof analyze;
+  average: typeof average;
+  bezier: typeof bezier;
   blend: (color1: ColorValue, color2: ColorValue, blendMode: BlendMode) => Color;
   brewer: typeof colorbrewer;
-  cmyk: (c: number, m: number, y: number, k: number) => Color;
-  contrast: (color1: ColorValue, color2: ColorValue) => number;
-  css: (col: string) => Color;
-  cubehelix: () => Cubehelix;
-  deltaE: (color1: ColorValue, color2: ColorValue, L?: number, C?: number) => number;
-  distance: (color1: ColorValue, color2: ColorValue, colorSpace?: keyof ColorSpaces) => number;
+  cmyk: (c: NormalizedChannel, m: NormalizedChannel, y: NormalizedChannel, k: NormalizedChannel) => Color;
+  contrast: typeof contrast;
+  css: (col: CssColorString) => Color;
+  cubehelix: typeof cubehelix;
+  deltaE: typeof deltaE;
+  distance: typeof distance;
   gl: typeof Color.gl;
-  hcg: (h: number, c: number, g: number, alpha?: number) => Color;
-  hcl: (h: number, c: number, l: number, alpha?: number) => Color;
-  hex: (color: string) => Color;
-  hsi: (h: number, s: number, i: number, alpha?: number) => Color;
-  hsl: (h: number, s: number, l: number, alpha?: number) => Color;
-  hsv: (h: number, s: number, v: number, alpha?: number) => Color;
-  interpolate: (color1: ColorValue, color2: ColorValue, f?: number, colorSpace?: InterpolationMode) => Color;
-  kelvin: (t: number) => Color;
-  lab: (lightness: number, a: number, b: number, alpha?: number) => Color;
-  lch: (l: number, c: number, h: number, alpha?: number) => Color;
-  limits: (data: Analysis | readonly unknown[], mode?: LimitMode | 'equal', c?: number) => number[];
-  mix: (color1: ColorValue, color2: ColorValue, f?: number, colorSpace?: InterpolationMode) => Color;
-  num: (value: number) => Color;
-  oklab: (lightness: number, a: number, b: number, alpha?: number) => Color;
-  oklch: (l: number, c: number, h: number, alpha?: number) => Color;
+  hcg: (h: HueDegrees, c: PercentageChannel, g: PercentageChannel, alpha?: AlphaChannel) => Color;
+  hcl: (h: HueDegrees, c: PolarColorChroma, l: LabLightness, alpha?: AlphaChannel) => Color;
+  hex: (color: HexString) => Color;
+  hsi: (h: HueDegrees, s: NormalizedChannel, i: NormalizedChannel, alpha?: AlphaChannel) => Color;
+  hsl: (h: HueDegrees, s: NormalizedChannel, l: NormalizedChannel, alpha?: AlphaChannel) => Color;
+  hsv: (h: HueDegrees, s: NormalizedChannel, v: NormalizedChannel, alpha?: AlphaChannel) => Color;
+  interpolate: (color1: ColorValue, color2: ColorValue, f?: BlendFactor, colorSpace?: InterpolationMode) => Color;
+  kelvin: (t: ColorTemperatureKelvin) => Color;
+  lab: (lightness: LabLightness, a: LabAxis, b: LabAxis, alpha?: AlphaChannel) => Color;
+  lch: (l: LabLightness, c: PolarColorChroma, h: HueDegrees, alpha?: AlphaChannel) => Color;
+  limits: typeof limits;
+  mix: (color1: ColorValue, color2: ColorValue, f?: BlendFactor, colorSpace?: InterpolationMode) => Color;
+  num: (value: RgbHexNumber) => Color;
+  oklab: (lightness: OklabLightness, a: LabAxis, b: LabAxis, alpha?: AlphaChannel) => Color;
+  oklch: (l: OklabLightness, c: PolarColorChroma, h: HueDegrees, alpha?: AlphaChannel) => Color;
   random: () => Color;
-  rgb: (r: number, g: number, b: number, alpha?: number) => Color;
-  scale: (colors?: string | readonly ColorValue[]) => Scale;
+  rgb: (r: RgbChannel, g: RgbChannel, b: RgbChannel, alpha?: AlphaChannel) => Color;
+  scale: (colors?: ScaleInput) => Scale;
   scales: typeof scales;
-  temp: (t: number) => Color;
-  temperature: (t: number) => Color;
-  valid: (color: unknown, mode?: string) => boolean;
+  temp: (t: ColorTemperatureKelvin) => Color;
+  temperature: (t: ColorTemperatureKelvin) => Color;
+  valid: typeof valid;
 };
 
 type ColorFactory = ChromaStatic;
@@ -182,12 +201,12 @@ export class Color {
    */
   static readonly brewer = colorbrewer;
 
-  static cmyk(...values: number[]): Color {
-    return new Color(values, 'cmyk');
+  static cmyk(c: NormalizedChannel, m: NormalizedChannel, y: NormalizedChannel, k: NormalizedChannel): Color {
+    return new Color([c, m, y, k], 'cmyk');
   }
 
   /** Creates a color from a CSS-compatible string. */
-  static css(value: string): Color {
+  static css(value: CssColorString): Color {
     return new Color(value, 'css');
   }
 
@@ -209,78 +228,83 @@ export class Color {
    */
   static readonly distance = distance;
 
-  static hcg(...values: number[]): Color {
-    return new Color(values, 'hcg');
+  static hcg(h: HueDegrees, c: PercentageChannel, g: PercentageChannel, alpha?: AlphaChannel): Color {
+    return new Color(alpha == null ? [h, c, g] : [h, c, g, alpha], 'hcg');
   }
 
-  static hsi(...values: number[]): Color {
-    return new Color(values, 'hsi');
+  static hsi(h: HueDegrees, s: NormalizedChannel, i: NormalizedChannel, alpha?: AlphaChannel): Color {
+    return new Color(alpha == null ? [h, s, i] : [h, s, i, alpha], 'hsi');
   }
 
-  static hsl(...values: number[]): Color {
-    return new Color(values, 'hsl');
+  static hsl(h: HueDegrees, s: NormalizedChannel, l: NormalizedChannel, alpha?: AlphaChannel): Color {
+    return new Color(alpha == null ? [h, s, l] : [h, s, l, alpha], 'hsl');
   }
 
-  static hsv(...values: number[]): Color {
-    return new Color(values, 'hsv');
+  static hsv(h: HueDegrees, s: NormalizedChannel, v: NormalizedChannel, alpha?: AlphaChannel): Color {
+    return new Color(alpha == null ? [h, s, v] : [h, s, v, alpha], 'hsv');
   }
 
   /** Creates a color from a hexadecimal string. */
-  static hex(value: string): Color {
+  static hex(value: HexString): Color {
     return new Color(value, 'hex');
   }
 
   /** Same meaning as `lch()`, but with the components in reverse order. */
-  static hcl(...values: number[]): Color {
-    return new Color(values, 'hcl');
+  static hcl(h: HueDegrees, c: PolarColorChroma, l: LabLightness, alpha?: AlphaChannel): Color {
+    return new Color(alpha == null ? [h, c, l] : [h, c, l, alpha], 'hcl');
   }
 
-  static lab(...values: number[]): Color {
-    return new Color(values, 'lab');
+  static lab(lightness: LabLightness, a: LabAxis, b: LabAxis, alpha?: AlphaChannel): Color {
+    return new Color(alpha == null ? [lightness, a, b] : [lightness, a, b, alpha], 'lab');
   }
 
-  static lch(...values: number[]): Color {
-    return new Color(values, 'lch');
+  static lch(l: LabLightness, c: PolarColorChroma, h: HueDegrees, alpha?: AlphaChannel): Color {
+    return new Color(alpha == null ? [l, c, h] : [l, c, h, alpha], 'lch');
   }
 
   /** Creates a color from its numeric hexadecimal RGB representation. */
-  static num(value: number): Color {
+  static num(value: RgbHexNumber): Color {
     return new Color(value, 'num');
   }
 
-  static oklab(...values: number[]): Color {
-    return new Color(values, 'oklab');
+  static oklab(lightness: OklabLightness, a: LabAxis, b: LabAxis, alpha?: AlphaChannel): Color {
+    return new Color(alpha == null ? [lightness, a, b] : [lightness, a, b, alpha], 'oklab');
   }
 
-  static oklch(...values: number[]): Color {
-    return new Color(values, 'oklch');
+  static oklch(l: OklabLightness, c: PolarColorChroma, h: HueDegrees, alpha?: AlphaChannel): Color {
+    return new Color(alpha == null ? [l, c, h] : [l, c, h, alpha], 'oklch');
   }
 
-  static rgb(...values: number[]): Color {
-    return new Color(values, 'rgb');
+  static rgb(r: RgbChannel, g: RgbChannel, b: RgbChannel, alpha?: AlphaChannel): Color {
+    return new Color(alpha == null ? [r, g, b] : [r, g, b, alpha], 'rgb');
   }
 
   /** Returns a random color. */
   static readonly random = randomColor;
 
   /** Returns a color scale. Named ColorBrewer palettes are resolved automatically. */
-  static scale(colors?: string | readonly ColorValue[]): Scale {
+  static scale(colors?: ScaleInput): Scale {
     return createScale(colors);
   }
 
   static readonly scales = scales;
 
   /** Returns a color from the color temperature scale. */
-  static temp(value: number): Color {
+  static temp(value: ColorTemperatureKelvin): Color {
     return new Color(value, 'temp');
   }
 
-  static kelvin(value: number): Color {
+  static kelvin(value: ColorTemperatureKelvin): Color {
     return Color.temp(value);
   }
 
   /** Alias for `Color.mix()`. */
-  static interpolate(left: ColorValue, right: ColorValue, f = 0.5, colorSpace: InterpolationMode = 'lrgb'): Color {
+  static interpolate(
+    left: ColorValue,
+    right: ColorValue,
+    f: BlendFactor = toBlendFactor(0.5),
+    colorSpace: InterpolationMode = 'lrgb'
+  ): Color {
     return mixColors(left, right, f, colorSpace);
   }
 
@@ -295,12 +319,17 @@ export class Color {
    * @example
    * chroma.mix('red', 'blue', 0.5, 'hsl') // => #ff00ff
    */
-  static mix(left: ColorValue, right: ColorValue, f = 0.5, colorSpace: InterpolationMode = 'lrgb'): Color {
+  static mix(
+    left: ColorValue,
+    right: ColorValue,
+    f: BlendFactor = toBlendFactor(0.5),
+    colorSpace: InterpolationMode = 'lrgb'
+  ): Color {
     return mixColors(left, right, f, colorSpace);
   }
 
   /** Returns a color from the color temperature scale. */
-  static temperature(value: number): Color {
+  static temperature(value: ColorTemperatureKelvin): Color {
     return Color.temp(value);
   }
 
@@ -309,11 +338,11 @@ export class Color {
 
   /** GL is normalized RGB(A) input where color channels are in the range 0..1. */
   static gl(...args: unknown[]): Color;
-  static gl(red: number, green: number, blue: number, alpha?: number): Color;
-  static gl(values: readonly number[]): Color;
+  static gl(red: NormalizedChannel, green: NormalizedChannel, blue: NormalizedChannel, alpha?: AlphaChannel): Color;
+  static gl(values: readonly [NormalizedChannel, NormalizedChannel, NormalizedChannel] | ColorSpaces['gl']): Color;
   static gl(value: GlInput): Color;
   static gl(...args: unknown[]): Color {
-    return new Color(glToRgb(...args), 'rgb');
+    return new Color(toColorChannelInput(glToRgb(...(args as ParserColorArguments))), 'rgb');
   }
 
   constructor(...args: ColorArguments) {
@@ -322,7 +351,9 @@ export class Color {
       return firstArgument;
     }
 
-    let mode: string | undefined = last(args) ?? undefined;
+    const parserColorArgs = args as ParserColorArguments;
+
+    let mode = last<InputFormatName>(parserColorArgs) ?? undefined;
     let autodetect = false;
 
     if (mode == null) {
@@ -333,19 +364,19 @@ export class Color {
       }
 
       for (const checker of input.autodetect) {
-        mode = checker.test(...args);
+        mode = checker.test(...parserColorArgs);
         if (mode != null) {
           break;
         }
       }
     }
 
-    const parser = mode == null ? undefined : (formatParsers[mode] ?? input.format[mode]);
+    const parser = mode == null ? undefined : mode === 'named' ? input.format.named : formatParsers[mode];
     if (parser == null) {
       throw new Error(`unknown format: ${args}`);
     }
 
-    const parserArgs = autodetect ? args : args.slice(0, -1);
+    const parserArgs = (autodetect ? parserColorArgs : parserColorArgs.slice(0, -1)) as ParserColorArguments;
     this._rgb = clip_rgb(parser(...parserArgs));
     if (this._rgb.length === 3) {
       this._rgb.push(1);
@@ -385,7 +416,7 @@ export class Color {
    * @example
    * chroma('orange').cmyk()
    */
-  cmyk(): [number, number, number, number] {
+  cmyk(): ColorSpaces['cmyk'] {
     return rgb2cmyk(this._rgb);
   }
 
@@ -393,14 +424,15 @@ export class Color {
    * Returns a RGB() or HSL() string representation that can be used as a CSS color definition.
    * `mode` defaults to `rgb`.
    */
-  css(): string;
-  css(mode: CssMode): string;
-  css(mode?: CssMode): string {
+  css(): CssColorString;
+  css(mode: CssMode): CssColorString;
+  css(mode?: CssMode): CssColorString {
     return rgb2css(this._rgb, mode);
   }
 
   darken(amount = 1): Color {
-    const lab = this.lab();
+    const [lightness, a, b] = this.lab();
+    const lab: [number, number, number] = [lightness, a, b];
     lab[0] -= LAB_CONSTANTS.Kn * amount;
     return new Color(lab, 'lab').alpha(this.alpha(), true);
   }
@@ -421,8 +453,8 @@ export class Color {
    * Returns a single channel value.
    * Also see `set()`.
    */
-  get(modeChannel: string): number | number[] {
-    const [mode, channel] = modeChannel.split('.');
+  get(modeChannel: ModeChannel): number | ColorChannelInput {
+    const [mode, channel] = modeChannel.split('.') as [ColorSpaceName, string?];
     const source = this.readModeValues(mode);
     if (channel == null) {
       return source;
@@ -437,7 +469,7 @@ export class Color {
   }
 
   /** Returns hue, chroma, and grayness for the color. */
-  hcg(): [number, number, number] {
+  hcg(): ColorSpaces['hcg'] {
     return rgb2hcg(this._rgb);
   }
 
@@ -447,7 +479,7 @@ export class Color {
    * @example
    * chroma('orange').hsi() === [39.64, 1, 0.55]
    */
-  hsi(): [number, number, number] {
+  hsi(): ColorSpaces['hsi'] {
     return rgb2hsi(this._rgb);
   }
 
@@ -458,7 +490,7 @@ export class Color {
    * chroma('orange').hsl() === [38.82, 1, 0.5]
    */
   hsl(): ColorSpaces['hsl'] {
-    return rgb2hsl(this._rgb) as ColorSpaces['hsl'];
+    return toHslChannels(rgb2hsl(this._rgb));
   }
 
   /**
@@ -468,7 +500,7 @@ export class Color {
    * chroma('orange').hsv() === [38.82, 1, 1]
    */
   hsv(): ColorSpaces['hsv'] {
-    return rgb2hsv(this._rgb[0] ?? 0, this._rgb[1] ?? 0, this._rgb[2] ?? 0) as ColorSpaces['hsv'];
+    return rgb2hsv(this._rgb[0] ?? 0, this._rgb[1] ?? 0, this._rgb[2] ?? 0);
   }
 
   /**
@@ -485,7 +517,7 @@ export class Color {
    * @example
    * chroma('orange').alpha(0.5).hex('rgb') === '#ffa500'
    */
-  hex(mode?: HexMode): string {
+  hex(mode?: HexMode): HexString {
     return rgb2hex(this._rgb, mode);
   }
 
@@ -495,16 +527,16 @@ export class Color {
    * @example
    * chroma('skyblue').hcl() === [235.11, 25.94, 79.21]
    */
-  hcl(): [number, number, number] {
-    return [...rgb2lch(this._rgb)].reverse() as [number, number, number];
+  hcl(): ColorSpaces['hcl'] {
+    return toHclChannels(rgb2lch(this._rgb));
   }
 
   /** Alias for `mix()` on the instance. */
-  interpolate(color: ColorValue, f = 0.5, colorSpace: InterpolationMode = 'lrgb'): Color {
+  interpolate(color: ColorValue, f: BlendFactor = toBlendFactor(0.5), colorSpace: InterpolationMode = 'lrgb'): Color {
     return mixColors(this, color, f, colorSpace);
   }
 
-  kelvin(): number {
+  kelvin(): ColorTemperatureKelvin {
     return this.temperature();
   }
 
@@ -514,7 +546,7 @@ export class Color {
    * @example
    * chroma('orange').lab() === [74.94, 23.93, 78.95]
    */
-  lab(): [number, number, number] {
+  lab(): ColorSpaces['lab'] {
     return rgb2lab(this._rgb);
   }
 
@@ -524,7 +556,7 @@ export class Color {
    * @example
    * chroma('skyblue').lch() === [79.21, 25.94, 235.11]
    */
-  lch(): [number, number, number] {
+  lch(): ColorSpaces['lch'] {
     return rgb2lch(this._rgb);
   }
 
@@ -532,9 +564,9 @@ export class Color {
    * Relative brightness, according to the WCAG luminance definition.
    * When a value is provided, the color is interpolated with black or white until the requested luminance is found.
    */
-  luminance(): number;
-  luminance(value: number, colorSpace?: InterpolationMode): Color;
-  luminance(value?: number, colorSpace?: InterpolationMode): number | Color {
+  luminance(): LuminanceValue;
+  luminance(value: LuminanceValue, colorSpace?: InterpolationMode): Color;
+  luminance(value?: LuminanceValue, colorSpace?: InterpolationMode): LuminanceValue | Color {
     void colorSpace;
     if (typeof value === 'number') {
       if (value === 0) {
@@ -548,11 +580,8 @@ export class Color {
       const currentLuminance = this.luminance();
       let maxIterations = 20;
       const test = (low: Color, high: Color): Color => {
-        const mid = low.interpolate(high, 0.5, 'rgb');
+        const mid = low.interpolate(high, toBlendFactor(0.5), 'rgb');
         const midLuminance = mid.luminance();
-        if (typeof midLuminance !== 'number') {
-          throw new Error('Expected numeric luminance');
-        }
 
         if (Math.abs(value - midLuminance) < 1e-7 || maxIterations-- <= 0) {
           return mid;
@@ -566,20 +595,20 @@ export class Color {
       return new Color([...result.rgb(), this.alpha()], 'rgb');
     }
 
-    return rgb2luminance(this._rgb[0] ?? 0, this._rgb[1] ?? 0, this._rgb[2] ?? 0);
+    return toLuminanceValue(rgb2luminance(this._rgb[0] ?? 0, this._rgb[1] ?? 0, this._rgb[2] ?? 0));
   }
 
   /** Mixes the current color with another color using the requested interpolation mode. */
-  mix(color: ColorValue, f = 0.5, colorSpace: InterpolationMode = 'lrgb'): Color {
+  mix(color: ColorValue, f: BlendFactor = toBlendFactor(0.5), colorSpace: InterpolationMode = 'lrgb'): Color {
     return mixColors(this, color, f, colorSpace);
   }
 
   /** Returns the named color when one exists, otherwise falls back to a hexadecimal string. */
-  name(): string {
+  name(): NamedColorName | HexString {
     const hex = rgb2hex(this._rgb, 'rgb');
-    for (const key of Object.keys(namedColors)) {
-      if (namedColors[key] === hex) {
-        return key.toLowerCase();
+    for (const [name, value] of w3cx11Entries) {
+      if (value === hex) {
+        return name;
       }
     }
 
@@ -594,7 +623,7 @@ export class Color {
    * @example
    * chroma('#0000ff').num() === 255
    */
-  num(): number {
+  num(): RgbHexNumber {
     return rgb2num(this._rgb);
   }
 
@@ -604,7 +633,7 @@ export class Color {
    * @example
    * chroma('orange').oklab() === [0.7927, 0.0566, 0.1614]
    */
-  oklab(): [number, number, number] {
+  oklab(): ColorSpaces['oklab'] {
     return rgb2oklab(this._rgb);
   }
 
@@ -614,7 +643,7 @@ export class Color {
    * @example
    * chroma('skyblue').oklch() === [0.8148, 0.0819, 225.8]
    */
-  oklch(): [number, number, number] {
+  oklch(): ColorSpaces['oklch'] {
     return rgb2oklch(this._rgb);
   }
 
@@ -631,7 +660,7 @@ export class Color {
       return this;
     }
 
-    return new Color(premultiplied, 'rgb');
+    return new Color(toColorChannelInput(premultiplied), 'rgb');
   }
 
   /**
@@ -643,7 +672,7 @@ export class Color {
    */
   rgb(shouldRound = true): ColorSpaces['rgb'] {
     const values = this._rgb.slice(0, 3);
-    return (shouldRound ? values.map((value) => Math.round(value)) : values) as ColorSpaces['rgb'];
+    return toRgbChannels(shouldRound ? values.map((value) => Math.round(value)) : values);
   }
 
   /**
@@ -653,7 +682,9 @@ export class Color {
    * chroma('orange').rgba() === [255, 165, 0, 1]
    */
   rgba(shouldRound = true): ColorSpaces['rgba'] {
-    return this._rgb.slice(0, 4).map((value, index) => (index < 3 && shouldRound ? Math.round(value) : value)) as ColorSpaces['rgba'];
+    return toRgbaChannels(
+      this._rgb.slice(0, 4).map((value, index) => (index < 3 && shouldRound ? Math.round(value) : value))
+    );
   }
 
   /**
@@ -662,13 +693,19 @@ export class Color {
    * @example
    * chroma('33cc00').gl() === [0.2, 0.8, 0, 1]
    */
-  gl(): [number, number, number, number] {
-    return [(this._rgb[0] ?? 0) / 255, (this._rgb[1] ?? 0) / 255, (this._rgb[2] ?? 0) / 255, this._rgb[3] ?? 1];
+  gl(): ColorSpaces['gl'] {
+    return toGlChannels([
+      (this._rgb[0] ?? 0) / 255,
+      (this._rgb[1] ?? 0) / 255,
+      (this._rgb[2] ?? 0) / 255,
+      this._rgb[3] ?? 1
+    ]);
   }
 
   /** Changes the saturation of a color by manipulating the Lch chroma channel. */
   saturate(amount = 1): Color {
-    const lch = this.lch();
+    const [lightness, chroma, hue] = this.lch();
+    const lch: [number, number, number] = [lightness, chroma, hue];
     lch[1] += LAB_CONSTANTS.Kn * amount;
     if (lch[1] < 0) {
       lch[1] = 0;
@@ -690,14 +727,14 @@ export class Color {
    * @example
    * chroma('darkseagreen').set('lch.c', '*2')
    */
-  set(modeChannel: string, value: number | string, mutate?: false): Color;
-  set(modeChannel: string, value: number | string, mutate: true): Color;
-  set(modeChannel: string, value: number | string, mutate: boolean): Color;
-  set(modeChannel: string, value: number | string, mutate = false): Color {
-    const [mode, channel] = modeChannel.split('.');
+  set(modeChannel: ModeChannel, value: number | string, mutate?: false): Color;
+  set(modeChannel: ModeChannel, value: number | string, mutate: true): Color;
+  set(modeChannel: ModeChannel, value: number | string, mutate: boolean): Color;
+  set(modeChannel: ModeChannel, value: number | string, mutate = false): Color {
+    const [mode, channel] = modeChannel.split('.') as [ColorSpaceName, string?];
     const source = [...this.readModeValues(mode)];
     if (channel == null) {
-      return new Color(source, mode);
+      return new Color(toColorChannelInput(source), mode);
     }
 
     const index = mode.indexOf(channel) - (mode.startsWith('ok') ? 2 : 0);
@@ -706,7 +743,7 @@ export class Color {
     }
 
     source[index] = resolveChannelValue(source[index] ?? 0, value);
-    const output = new Color(source, mode);
+    const output = new Color(toColorChannelInput(source), mode);
     if (mutate) {
       this._rgb = output._rgb;
       return this;
@@ -715,14 +752,14 @@ export class Color {
     return output;
   }
 
-  temp(): number {
+  temp(): ColorTemperatureKelvin {
     return this.temperature();
   }
 
   /**
    * Estimates the temperature in Kelvin for colors from the temperature gradient.
    */
-  temperature(): number {
+  temperature(): ColorTemperatureKelvin {
     return rgb2temperature(this._rgb);
   }
 
@@ -730,14 +767,30 @@ export class Color {
     return this.hex();
   }
 
-  private readModeValues(mode: string): number[] {
+  private readModeValues(mode: ColorSpaceName): ColorChannelInput {
     const reader = this[mode];
     if (typeof reader !== 'function') {
       throw new Error(`unknown mode ${mode}`);
     }
 
-    return (reader as () => number[]).call(this);
+    return toColorChannelInput((reader as () => readonly number[]).call(this));
   }
+}
+
+function toColorChannelInput(values: readonly number[]): ColorChannelInput {
+  if (values.length === 3) {
+    return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0];
+  }
+
+  if (values.length === 4) {
+    return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 0];
+  }
+
+  if (values.length === 5) {
+    return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 0, values[4] ?? 0];
+  }
+
+  throw new Error(`Unsupported channel input length: ${values.length}`);
 }
 
 function resolveChannelValue(previousValue: number, value: number | string): number {
@@ -756,6 +809,39 @@ function resolveChannelValue(previousValue: number, value: number | string): num
     default:
       return Number(value);
   }
+}
+
+function toBlendFactor(value: number): BlendFactor {
+  return value as BlendFactor;
+}
+
+function toHclChannels(value: ColorSpaces['lch']): ColorSpaces['hcl'] {
+  const [lightness, chroma, hue] = value;
+  return [hue, chroma, lightness];
+}
+
+function toGlChannels(value: readonly number[]): ColorSpaces['gl'] {
+  const [red = 0, green = 0, blue = 0, alpha = 1] = value;
+  return [red as NormalizedChannel, green as NormalizedChannel, blue as NormalizedChannel, alpha as AlphaChannel];
+}
+
+function toHslChannels(value: ColorSpaces['hsl'] | [...ColorSpaces['hsl'], AlphaChannel]): ColorSpaces['hsl'] {
+  const [hue, saturation, lightness] = value;
+  return [hue, saturation, lightness];
+}
+
+function toRgbChannels(value: readonly number[]): ColorSpaces['rgb'] {
+  const [red = 0, green = 0, blue = 0] = value;
+  return [red as RgbChannel, green as RgbChannel, blue as RgbChannel];
+}
+
+function toRgbaChannels(value: readonly number[]): ColorSpaces['rgba'] {
+  const [red = 0, green = 0, blue = 0, alpha = 1] = value;
+  return [red as RgbChannel, green as RgbChannel, blue as RgbChannel, alpha as AlphaChannel];
+}
+
+function toLuminanceValue(value: number): LuminanceValue {
+  return value as LuminanceValue;
 }
 
 function rgb2luminance(r: number, g: number, b: number): number {

@@ -1,4 +1,4 @@
-import { unpack } from '../../utils';
+import { unpackNumberArray } from '../../utils';
 
 const { pow, sign } = Math;
 
@@ -11,7 +11,11 @@ function lrgb2rgb(c: number): number {
  * Converts Oklab coordinates into an internal RGBA tuple.
  */
 export function oklab2rgb(...args: unknown[]): [number, number, number, number] {
-  const values = unpack(args, 'lab') as number[];
+  const values = unpackNumberArray(args, 'oklab');
+  if (values == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
   const [L = 0, a = 0, b = 0] = values;
   const l = pow(L + 0.3963377774 * a + 0.2158037573 * b, 3);
   const m = pow(L - 0.1055613458 * a - 0.0638541728 * b, 3);

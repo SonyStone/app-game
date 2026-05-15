@@ -1,9 +1,11 @@
+import type { AlphaChannel, ColorSpaces, ColorTemperatureKelvin, RgbChannel } from '../../types';
+
 const { log } = Math;
 
 /**
  * Converts a color temperature in Kelvin into an approximate RGB color.
  */
-export function temperature2rgb(kelvin: number): [number, number, number, number] {
+export function temperature2rgb(kelvin: ColorTemperatureKelvin): ColorSpaces['rgba'] {
   const temp = kelvin / 100;
   let r: number;
   let g: number;
@@ -29,5 +31,13 @@ export function temperature2rgb(kelvin: number): [number, number, number, number
     g = 325.4494125711974 + 0.07943456536662342 * greenBase - 28.0852963507957 * log(greenBase);
     b = 255;
   }
-  return [r, g, b, 1];
+  return [toRgbChannel(r), toRgbChannel(g), toRgbChannel(b), toAlphaChannel(1)];
+}
+
+function toAlphaChannel(value: number): AlphaChannel {
+  return value as AlphaChannel;
+}
+
+function toRgbChannel(value: number): RgbChannel {
+  return value as RgbChannel;
 }

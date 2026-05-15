@@ -1,5 +1,5 @@
 import { Color } from '../color';
-import type { ColorValue } from '../types';
+import type { ColorChannelInput, ColorValue } from '../types';
 import { scale } from './scale';
 
 type LabTuple = [number, number, number];
@@ -43,17 +43,18 @@ function createBezier(colors: readonly ColorValue[]): (t: number) => Color {
   if (labs.length === 2) {
     const [lab0, lab1] = labs;
     return (t: number) =>
-      new Color(
-        [0, 1, 2].map((index) => lab0[index] + t * (lab1[index] - lab0[index])),
-        'lab'
-      );
+      new Color(toColorChannelInput([0, 1, 2].map((index) => lab0[index] + t * (lab1[index] - lab0[index]))), 'lab');
   }
 
   if (labs.length === 3) {
     const [lab0, lab1, lab2] = labs;
     return (t: number) =>
       new Color(
-        [0, 1, 2].map((index) => (1 - t) * (1 - t) * lab0[index] + 2 * (1 - t) * t * lab1[index] + t * t * lab2[index]),
+        toColorChannelInput(
+          [0, 1, 2].map(
+            (index) => (1 - t) * (1 - t) * lab0[index] + 2 * (1 - t) * t * lab1[index] + t * t * lab2[index]
+          )
+        ),
         'lab'
       );
   }
@@ -62,12 +63,14 @@ function createBezier(colors: readonly ColorValue[]): (t: number) => Color {
     const [lab0, lab1, lab2, lab3] = labs;
     return (t: number) =>
       new Color(
-        [0, 1, 2].map(
-          (index) =>
-            (1 - t) * (1 - t) * (1 - t) * lab0[index] +
-            3 * (1 - t) * (1 - t) * t * lab1[index] +
-            3 * (1 - t) * t * t * lab2[index] +
-            t * t * t * lab3[index]
+        toColorChannelInput(
+          [0, 1, 2].map(
+            (index) =>
+              (1 - t) * (1 - t) * (1 - t) * lab0[index] +
+              3 * (1 - t) * (1 - t) * t * lab1[index] +
+              3 * (1 - t) * t * t * lab2[index] +
+              t * t * t * lab3[index]
+          )
         ),
         'lab'
       );
@@ -78,15 +81,21 @@ function createBezier(colors: readonly ColorValue[]): (t: number) => Color {
   return (t: number) => {
     const u = 1 - t;
     return new Color(
-      [0, 1, 2].map((index) =>
-        labs.reduce(
-          (sum, lab, labIndex) => sum + (row[labIndex] ?? 0) * u ** (degree - labIndex) * t ** labIndex * lab[index],
-          0
+      toColorChannelInput(
+        [0, 1, 2].map((index) =>
+          labs.reduce(
+            (sum, lab, labIndex) => sum + (row[labIndex] ?? 0) * u ** (degree - labIndex) * t ** labIndex * lab[index],
+            0
+          )
         )
       ),
       'lab'
     );
   };
+}
+
+function toColorChannelInput(values: readonly number[]): ColorChannelInput {
+  return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0];
 }
 
 /**

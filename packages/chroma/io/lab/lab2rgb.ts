@@ -1,4 +1,4 @@
-import { unpack } from '../../utils';
+import { unpackNumberArray } from '../../utils';
 import { LAB_CONSTANTS } from './lab-constants';
 
 const { pow } = Math;
@@ -15,7 +15,11 @@ function labXyz(value: number): number {
  * Converts CIELab coordinates into an internal RGBA tuple.
  */
 export function lab2rgb(...args: unknown[]): [number, number, number, number] {
-  const lab = unpack(args, 'lab') as number[];
+  const lab = unpackNumberArray(args, 'lab');
+  if (lab == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
   const [l = 0, a = Number.NaN, b = Number.NaN] = lab;
 
   const yBase = (l + 16) / 116;

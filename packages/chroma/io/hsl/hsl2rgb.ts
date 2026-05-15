@@ -1,4 +1,4 @@
-import { unpack } from '../../utils';
+import { unpackNumberArray } from '../../utils';
 
 const { round } = Math;
 
@@ -8,7 +8,11 @@ const { round } = Math;
  * Hue is expected in degrees. Saturation and lightness are normalized to 0..1.
  */
 export function hsl2rgb(...args: unknown[]): [number, number, number, number] {
-  const values = unpack(args, 'hsl') as number[];
+  const values = unpackNumberArray(args, 'hsl');
+  if (values == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
   const [h = 0, s = 0, l = 0] = values;
   let r: number;
   let g: number;
@@ -18,8 +22,8 @@ export function hsl2rgb(...args: unknown[]): [number, number, number, number] {
     g = l * 255;
     b = l * 255;
   } else {
-    const t3 = [0, 0, 0];
-    const channel = [0, 0, 0];
+    const t3: [number, number, number] = [0, 0, 0];
+    const channel: [number, number, number] = [0, 0, 0];
     const t2 = l < 0.5 ? l * (1 + s) : l + s - l * s;
     const t1 = 2 * l - t2;
     const hue = h / 360;

@@ -1,3 +1,4 @@
+import type { ColorSpaces, CssColorString } from '../../types';
 import { hsl2rgb } from '../hsl/hsl2rgb';
 import { input } from '../input';
 
@@ -11,47 +12,47 @@ const RE_HSLA = /^hsla\(\s*(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)%\s*,\s*(-?\d+(
 
 const { round } = Math;
 
-type Css2Rgb = ((css: string) => number[] | undefined) & {
+type Css2Rgb = ((css: CssColorString) => ColorSpaces['rgba'] | undefined) & {
   test: (value: string) => boolean;
 };
 
-export const css2rgb = ((css: string) => {
-  css = css.toLowerCase().trim();
+export const css2rgb = ((css: CssColorString) => {
+  const normalizedCss = css.toLowerCase().trim();
   let m: RegExpMatchArray | null;
 
   if (input.format.named) {
     try {
-      return input.format.named(css);
+      return input.format.named(normalizedCss);
     } catch {
       // ignore named-color misses and continue with CSS parsing
     }
   }
 
   // rgb(250,20,0)
-  if ((m = css.match(RE_RGB))) {
+  if ((m = normalizedCss.match(RE_RGB))) {
     const rgb = m.slice(1, 4).map(Number);
     return [rgb[0] ?? 0, rgb[1] ?? 0, rgb[2] ?? 0, 1];
   }
 
   // rgba(250,20,0,0.4)
-  if ((m = css.match(RE_RGBA))) {
+  if ((m = normalizedCss.match(RE_RGBA))) {
     return m.slice(1, 5).map(Number);
   }
 
   // rgb(100%,0%,0%)
-  if ((m = css.match(RE_RGB_PCT))) {
+  if ((m = normalizedCss.match(RE_RGB_PCT))) {
     const rgb = m.slice(1, 4).map((value) => round(Number(value) * 2.55));
     return [rgb[0] ?? 0, rgb[1] ?? 0, rgb[2] ?? 0, 1];
   }
 
   // rgba(100%,0%,0%,0.4)
-  if ((m = css.match(RE_RGBA_PCT))) {
+  if ((m = normalizedCss.match(RE_RGBA_PCT))) {
     const rgb = m.slice(1, 5).map(Number);
     return [round((rgb[0] ?? 0) * 2.55), round((rgb[1] ?? 0) * 2.55), round((rgb[2] ?? 0) * 2.55), rgb[3] ?? 1];
   }
 
   // hsl(0,100%,50%)
-  if ((m = css.match(RE_HSL))) {
+  if ((m = normalizedCss.match(RE_HSL))) {
     const hsl = m.slice(1, 4).map(Number);
     hsl[1] = (hsl[1] ?? 0) * 0.01;
     hsl[2] = (hsl[2] ?? 0) * 0.01;
@@ -61,7 +62,7 @@ export const css2rgb = ((css: string) => {
   }
 
   // hsla(0,100%,50%,0.5)
-  if ((m = css.match(RE_HSLA))) {
+  if ((m = normalizedCss.match(RE_HSLA))) {
     const hsl = m.slice(1, 4).map(Number);
     hsl[1] = (hsl[1] ?? 0) * 0.01;
     hsl[2] = (hsl[2] ?? 0) * 0.01;

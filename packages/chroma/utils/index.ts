@@ -2,7 +2,7 @@ export { clip_rgb } from './clip_rgb';
 export { last } from './last';
 export { limit } from './limit';
 export { type } from './type';
-export { unpack } from './unpack';
+export { unpack, unpackArray, unpackNumberArray } from './unpack';
 
 export const PI = Math.PI;
 export const TWOPI = PI * 2;

@@ -1,4 +1,6 @@
-export const colorbrewer = {
+type Palette = readonly `#${string}`[];
+
+const colorbrewerBase = {
   // sequential
   OrRd: ['#fff7ec', '#fee8c8', '#fdd49e', '#fdbb84', '#fc8d59', '#ef6548', '#d7301f', '#b30000', '#7f0000'] as const,
   PuBu: ['#fff7fb', '#ece7f2', '#d0d1e6', '#a6bddb', '#74a9cf', '#3690c0', '#0570b0', '#045a8d', '#023858'] as const,
@@ -176,9 +178,20 @@ export const colorbrewer = {
   ] as const,
   Pastel2: ['#b3e2cd', '#fdcdac', '#cbd5e8', '#f4cae4', '#e6f5c9', '#fff2ae', '#f1e2cc', '#cccccc'] as const,
   Pastel1: ['#fbb4ae', '#b3cde3', '#ccebc5', '#decbe4', '#fed9a6', '#ffffcc', '#e5d8bd', '#fddaec', '#f2f2f2'] as const
+} as const satisfies Record<string, Palette>;
+
+type BrewerBase = typeof colorbrewerBase;
+type LowercaseBrewer<T extends Record<string, Palette>> = {
+  [Key in keyof T as Key extends string ? Lowercase<Key> : never]: T[Key];
 };
 
-// add lowercase aliases for case-insensitive matches
-for (const key of Object.keys(colorbrewer)) {
-  (colorbrewer as any)[key.toLowerCase()] = (colorbrewer as any)[key];
+function withLowercaseAliases<T extends Record<string, Palette>>(palettes: T): T & LowercaseBrewer<T> {
+  const lowercaseEntries = Object.entries(palettes).map(([key, value]) => [key.toLowerCase(), value] as const);
+  return Object.fromEntries([...Object.entries(palettes), ...lowercaseEntries]) as T & LowercaseBrewer<T>;
 }
+
+export const colorbrewer = withLowercaseAliases(colorbrewerBase);
+
+export type ColorBrewer = typeof colorbrewer;
+export type ColorBrewerKey = keyof BrewerBase;
+export type ColorBrewerName = keyof ColorBrewer;

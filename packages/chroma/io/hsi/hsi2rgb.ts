@@ -1,4 +1,4 @@
-import { PITHIRD, TWOPI, limit, unpack } from '../../utils';
+import { PITHIRD, TWOPI, limit, unpackNumberArray } from '../../utils';
 
 const { cos } = Math;
 
@@ -6,7 +6,11 @@ const { cos } = Math;
  * Converts HSI input into an internal RGBA tuple.
  */
 export function hsi2rgb(...args: unknown[]): [number, number, number, number] {
-  const values = unpack(args, 'hsi') as number[];
+  const values = unpackNumberArray(args, 'hsi');
+  if (values == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
   let [h = 0, s = 0, i = 0] = values;
   let r: number;
   let g: number;

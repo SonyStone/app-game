@@ -1,7 +1,11 @@
-import { unpack } from '../../utils';
+import { unpackNumberArray } from '../../utils';
 
 export function cmyk2rgb(...args: unknown[]): [number, number, number, number] {
-  const cmyk = unpack(args, 'cmyk') as number[];
+  const cmyk = unpackNumberArray(args, 'cmyk');
+  if (cmyk == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
   const [c = 0, m = 0, y = 0, k = 0] = cmyk;
   const alpha = cmyk.length > 4 ? (cmyk[4] ?? 1) : 1;
   if (k === 1) {

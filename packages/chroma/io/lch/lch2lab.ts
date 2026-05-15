@@ -1,9 +1,14 @@
-import { DEG2RAD, unpack } from '../../utils';
+import { DEG2RAD, unpackNumberArray } from '../../utils';
 
 const { cos, sin } = Math;
 
 export function lch2lab(...args: unknown[]): [number, number, number] {
-  let [l = 0, c = 0, h = 0] = unpack(args, 'lch') as number[];
+  const values = unpackNumberArray(args, 'lch');
+  if (values == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
+  let [l = 0, c = 0, h = 0] = values;
   if (Number.isNaN(h)) {
     h = 0;
   }

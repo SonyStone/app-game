@@ -18,7 +18,7 @@ export const hex2rgb = (hex: `#${string}`) => {
     const r = u >> 16;
     const g = (u >> 8) & 0xff;
     const b = u & 0xff;
-    return [r, g, b, 1];
+    return [r, g, b, 1] as [number, number, number, number];
   }
 
   // match rgba hex format, eg #FF000077
@@ -37,7 +37,7 @@ export const hex2rgb = (hex: `#${string}`) => {
     const g = (u >> 16) & 0xff;
     const b = (u >> 8) & 0xff;
     const a = Math.round(((u & 0xff) / 0xff) * 100) / 100;
-    return [r, g, b, a];
+    return [r, g, b, a] as [number, number, number, number];
   }
 
   // we used to check for css colors here

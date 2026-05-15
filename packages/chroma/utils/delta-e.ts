@@ -1,5 +1,5 @@
 import { Color } from '../color';
-import type { ColorValue } from '../types';
+import type { ColorValue, DeltaEValue } from '../types';
 
 const { PI, abs, atan2, cos, exp, max, min, pow, sin, sqrt } = Math;
 
@@ -26,7 +26,7 @@ function deg2rad(deg: number): number {
   return (2 * PI * deg) / 360;
 }
 
-export function deltaE(a: ColorValue, b: ColorValue, Kl = 1, Kc = 1, Kh = 1): number {
+export function deltaE(a: ColorValue, b: ColorValue, Kl = 1, Kc = 1, Kh = 1): DeltaEValue {
   const [L1, a1, b1] = readLab(ensureColor(a));
   const [L2, a2, b2] = readLab(ensureColor(b));
   const avgL = (L1 + L2) / 2;
@@ -67,5 +67,5 @@ export function deltaE(a: ColorValue, b: ColorValue, Kl = 1, Kc = 1, Kh = 1): nu
       pow(deltaHp / (Kh * sh), 2) +
       Rt * (deltaCp / (Kc * sc)) * (deltaHp / (Kh * sh))
   );
-  return max(0, min(100, result));
+  return max(0, min(100, result)) as DeltaEValue;
 }

@@ -1,19 +1,19 @@
 import { Color } from '../color';
-import type { ColorValue } from '../types';
+import type { ColorDistanceValue, ColorSpaceName, ColorSpaces, ColorValue } from '../types';
 
-type ChannelReader = (mode: string) => number[];
+type ChannelReader<Mode extends ColorSpaceName> = () => ColorSpaces[Mode];
 
 function ensureColor(value: ColorValue): Color {
   return value instanceof Color ? value : new Color(value);
 }
 
-function readChannels(color: Color, mode: string): number[] {
-  const get = color.get;
-  if (typeof get !== 'function') {
-    throw new Error('Missing get method');
+function readChannels<Mode extends ColorSpaceName>(color: Color, mode: Mode): ColorSpaces[Mode] {
+  const reader = color[mode];
+  if (typeof reader !== 'function') {
+    throw new Error(`Missing ${mode} reader`);
   }
 
-  const value = (get as ChannelReader).call(color, mode);
+  const value = (reader as ChannelReader<Mode>).call(color);
   if (!Array.isArray(value)) {
     throw new Error(`Mode ${mode} did not return channel data`);
   }
@@ -21,7 +21,7 @@ function readChannels(color: Color, mode: string): number[] {
   return value;
 }
 
-export function distance(a: ColorValue, b: ColorValue, mode = 'lab'): number {
+export function distance(a: ColorValue, b: ColorValue, mode: ColorSpaceName = 'lab'): ColorDistanceValue {
   const left = readChannels(ensureColor(a), mode);
   const right = readChannels(ensureColor(b), mode);
   let sumSquared = 0;
@@ -30,5 +30,5 @@ export function distance(a: ColorValue, b: ColorValue, mode = 'lab'): number {
     sumSquared += delta * delta;
   }
 
-  return Math.sqrt(sumSquared);
+  return Math.sqrt(sumSquared) as ColorDistanceValue;
 }

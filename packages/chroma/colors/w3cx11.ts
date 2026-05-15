@@ -161,3 +161,12 @@ export const w3cx11 = {
   yellow: '#ffff00',
   yellowgreen: '#9acd32'
 } as const;
+
+export type NamedColorName = keyof typeof w3cx11;
+export type NamedColorHex = (typeof w3cx11)[NamedColorName];
+
+export const w3cx11Entries = Object.entries(w3cx11) as readonly [NamedColorName, NamedColorHex][];
+
+export function isNamedColorName(value: string): value is NamedColorName {
+  return value in w3cx11;
+}

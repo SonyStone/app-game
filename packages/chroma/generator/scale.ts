@@ -1,27 +1,33 @@
 import { Color } from '../color';
-import type { ColorValue, InterpolationMode } from '../types';
+import type {
+  BlendFactor,
+  ColorOutputValue,
+  ColorValue,
+  InterpolationMode,
+  ScaleInput,
+  ScaleOutputName
+} from '../types';
 
 const { pow } = Math;
 
-type ColorGetter = (value: number | null | undefined) => unknown;
+type ColorGetter = (value: number | null | undefined) => ColorOutputValue;
 type LightnessReader = () => [number, number, number];
-type ColorOutputReader = () => unknown;
+type ColorOutputReader = () => ColorOutputValue;
 type ScalePalette = Color[] | ((t: number) => Color);
 type ScaleFunction = ColorGetter & {
   classes: (classes?: number | number[]) => number[] | false | ScaleFunction;
   domain: (domain?: number[]) => number[] | ScaleFunction;
-  mode: (mode?: string) => string | ScaleFunction;
+  mode: (mode?: InterpolationMode) => InterpolationMode | ScaleFunction;
   range: (colors: ScaleInput) => ScaleFunction;
-  out: (output: string | false) => ScaleFunction;
+  out: (output: ScaleOutputName | false) => ScaleFunction;
   spread: (value?: number) => number | ScaleFunction;
   correctLightness: (enabled?: boolean) => ScaleFunction;
   padding: (padding?: number | number[]) => [number, number] | ScaleFunction;
-  colors: (count?: number, output?: string) => unknown[];
+  colors: (count?: number, output?: ScaleOutputName) => ColorOutputValue[];
   cache: (enabled?: boolean) => boolean | ScaleFunction;
   gamma: (value?: number) => number | ScaleFunction;
   nodata: (value?: ColorValue) => Color | ScaleFunction;
 };
-type ScaleInput = string | readonly ColorValue[] | ((t: number) => Color);
 
 function ensureColor(value: ColorValue | Color): Color {
   return value instanceof Color ? value : new Color(value);
@@ -36,7 +42,7 @@ function readLab(color: Color): [number, number, number] {
   return (lab as LightnessReader).call(color);
 }
 
-function callColorOutput(color: Color, output: string): unknown {
+function callColorOutput(color: Color, output: ScaleOutputName): ColorOutputValue {
   const reader = color[output];
   if (typeof reader !== 'function') {
     return color;
@@ -70,7 +76,7 @@ export function scale(colors?: ScaleInput): ScaleFunction {
   let padding: [number, number] = [0, 0];
   let classes: number[] | false = false;
   let palette: ScalePalette = [];
-  let output: string | false = false;
+  let output: ScaleOutputName | false = false;
   let min = 0;
   let max = 1;
   let correctLightness = false;
@@ -168,7 +174,12 @@ export function scale(colors?: ScaleInput): ScaleFunction {
         const nextPosition = positions[index + 1];
         if (nextPosition != null && t > position && t < nextPosition) {
           const localT = (t - position) / (nextPosition - position);
-          color = Color.interpolate(palette[index] ?? noDataColor, palette[index + 1] ?? noDataColor, localT, mode);
+          color = Color.interpolate(
+            palette[index] ?? noDataColor,
+            palette[index + 1] ?? noDataColor,
+            toBlendFactor(localT),
+            mode
+          );
           break;
         }
       }
@@ -184,7 +195,7 @@ export function scale(colors?: ScaleInput): ScaleFunction {
 
   setColors(colors);
 
-  const scaleFunction = ((value: number | null | undefined): unknown => {
+  const scaleFunction = ((value: number | null | undefined): ColorOutputValue => {
     const color = ensureColor(getColor(value));
     return output ? callColorOutput(color, output) : color;
   }) as ScaleFunction;
@@ -250,7 +261,7 @@ export function scale(colors?: ScaleInput): ScaleFunction {
   };
 
   /** Sets the interpolation mode used between colors. */
-  scaleFunction.mode = (nextMode?: string) => {
+  scaleFunction.mode = (nextMode?: InterpolationMode) => {
     if (nextMode == null) {
       return mode;
     }
@@ -271,7 +282,7 @@ export function scale(colors?: ScaleInput): ScaleFunction {
   };
 
   /** Sets the output format returned by the scale function. Pass `false` to return `Color` objects. */
-  scaleFunction.out = (nextOutput: string | false) => {
+  scaleFunction.out = (nextOutput: ScaleOutputName | false) => {
     output = nextOutput;
     return scaleFunction;
   };
@@ -341,8 +352,8 @@ export function scale(colors?: ScaleInput): ScaleFunction {
   };
 
   /** Returns sampled colors from the scale. With no count, it returns the underlying palette. */
-  scaleFunction.colors = (count?: number, nextOutput = 'hex') => {
-    let result: unknown[];
+  scaleFunction.colors = (count?: number, nextOutput: ScaleOutputName = 'hex') => {
+    let result: ColorOutputValue[];
     if (count == null) {
       result = Array.isArray(palette) ? [...palette] : [];
     } else if (count === 1) {
@@ -400,4 +411,8 @@ export function scale(colors?: ScaleInput): ScaleFunction {
   };
 
   return scaleFunction;
+}
+
+function toBlendFactor(value: number): BlendFactor {
+  return value as BlendFactor;
 }

@@ -1,4 +1,5 @@
-import { unpack } from '../../utils';
+import type { ColorSpaces, LabAxis, LabLightness } from '../../types';
+import { unpackNumberArray } from '../../utils';
 import { LAB_CONSTANTS } from './lab-constants';
 
 const { pow } = Math;
@@ -26,9 +27,22 @@ function rgb2xyz(r: number, g: number, b: number): [number, number, number] {
 /**
  * Converts RGB input into CIELab coordinates.
  */
-export function rgb2lab(...args: unknown[]): [number, number, number] {
-  const [r = 0, g = 0, b = 0] = unpack(args, 'rgb') as number[];
+export function rgb2lab(...args: unknown[]): ColorSpaces['lab'] {
+  const values = unpackNumberArray(args, 'rgb');
+  if (values == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
+  const [r = 0, g = 0, b = 0] = values;
   const [x, y, z] = rgb2xyz(r, g, b);
   const l = 116 * y - 16;
-  return [l < 0 ? 0 : l, 500 * (x - y), 200 * (y - z)];
+  return [toLabLightness(l < 0 ? 0 : l), toLabAxis(500 * (x - y)), toLabAxis(200 * (y - z))];
+}
+
+function toLabAxis(value: number): LabAxis {
+  return value as LabAxis;
+}
+
+function toLabLightness(value: number): LabLightness {
+  return value as LabLightness;
 }

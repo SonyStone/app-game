@@ -1,4 +1,5 @@
-import { TWOPI, unpack } from '../../utils';
+import type { ColorSpaces, HueDegrees, NormalizedChannel } from '../../types';
+import { TWOPI, unpackNumberArray } from '../../utils';
 
 const { acos, min, sqrt } = Math;
 
@@ -7,8 +8,13 @@ const { acos, min, sqrt } = Math;
  *
  * Hue is returned in degrees. Saturation and intensity are normalized to 0..1.
  */
-export function rgb2hsi(...args: unknown[]): [number, number, number] {
-  let [r = 0, g = 0, b = 0] = unpack(args, 'rgb') as number[];
+export function rgb2hsi(...args: unknown[]): ColorSpaces['hsi'] {
+  const values = unpackNumberArray(args, 'rgb');
+  if (values == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
+  let [r = 0, g = 0, b = 0] = values;
   r /= 255;
   g /= 255;
   b /= 255;
@@ -17,7 +23,7 @@ export function rgb2hsi(...args: unknown[]): [number, number, number] {
   const intensity = (r + g + b) / 3;
   const saturation = intensity > 0 ? 1 - minValue / intensity : 0;
   if (saturation === 0) {
-    return [Number.NaN, saturation, intensity];
+    return [toHueDegrees(Number.NaN), toNormalizedChannel(saturation), toNormalizedChannel(intensity)];
   }
 
   let hue = (r - g + (r - b)) / 2;
@@ -27,5 +33,13 @@ export function rgb2hsi(...args: unknown[]): [number, number, number] {
     hue = TWOPI - hue;
   }
 
-  return [(hue / TWOPI) * 360, saturation, intensity];
+  return [toHueDegrees((hue / TWOPI) * 360), toNormalizedChannel(saturation), toNormalizedChannel(intensity)];
+}
+
+function toHueDegrees(value: number): HueDegrees {
+  return value as HueDegrees;
+}
+
+function toNormalizedChannel(value: number): NormalizedChannel {
+  return value as NormalizedChannel;
 }

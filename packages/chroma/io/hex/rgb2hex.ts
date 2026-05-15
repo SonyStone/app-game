@@ -1,6 +1,8 @@
-import { last, unpack } from '../../utils';
+import type { HexMode, HexString } from '../../types';
+import { last, unpackNumberArray } from '../../utils';
 
 const { round } = Math;
+type HexStringMode = HexMode | 'argb';
 
 /**
  * Formats RGB(A) channel values as a hexadecimal string.
@@ -11,9 +13,14 @@ const { round } = Math;
  * - `rgba`: emit `#rrggbbaa`
  * - `argb`: emit `#aarrggbb`
  */
-export function rgb2hex(...args: unknown[]): string {
-  let [r = 0, g = 0, b = 0, a = 1] = unpack(args, 'rgba') as number[];
-  let mode = last(args) ?? 'auto';
+export function rgb2hex(...args: unknown[]): HexString {
+  const rgba = unpackNumberArray(args, 'rgba');
+  if (rgba == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
+  let [r = 0, g = 0, b = 0, a = 1] = rgba;
+  let mode = last<HexStringMode>(args) ?? 'auto';
   if (mode === 'auto') {
     mode = a < 1 ? 'rgba' : 'rgb';
   }
@@ -23,10 +30,10 @@ export function rgb2hex(...args: unknown[]): string {
   const alpha = `0${round(a * 255).toString(16)}`.slice(-2);
   switch (mode.toLowerCase()) {
     case 'rgba':
-      return `#${rgb}${alpha}`;
+      return `#${rgb}${alpha}` as HexString;
     case 'argb':
-      return `#${alpha}${rgb}`;
+      return `#${alpha}${rgb}` as HexString;
     default:
-      return `#${rgb}`;
+      return `#${rgb}` as HexString;
   }
 }

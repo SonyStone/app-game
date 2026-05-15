@@ -1,4 +1,4 @@
-import { unpack } from '../../utils';
+import { unpackNumberArray } from '../../utils';
 
 const { floor } = Math;
 
@@ -6,7 +6,11 @@ const { floor } = Math;
  * Converts HCG input into an internal RGBA tuple.
  */
 export function hcg2rgb(...args: unknown[]): [number, number, number, number] {
-  const values = unpack(args, 'hcg') as number[];
+  const values = unpackNumberArray(args, 'hcg');
+  if (values == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
   const [, c = 0, grayness = 0] = values;
   let h = values[0] ?? 0;
   const grayscale = grayness * 255;

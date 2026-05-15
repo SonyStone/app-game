@@ -1,12 +1,18 @@
-import { unpack } from '../../utils';
+import type { ColorSpaces, HueDegrees, PercentageChannel } from '../../types';
+import { unpackNumberArray } from '../../utils';
 
 /**
  * Converts RGB input into HCG channel values.
  *
  * Hue is returned in degrees. Chroma and grayness are normalized to percentage-style 0..100 values.
  */
-export function rgb2hcg(...args: unknown[]): [number, number, number] {
-  const [r = 0, g = 0, b = 0] = unpack(args, 'rgb') as number[];
+export function rgb2hcg(...args: unknown[]): ColorSpaces['hcg'] {
+  const values = unpackNumberArray(args, 'rgb');
+  if (values == null) {
+    throw new Error(`unknown format: ${args}`);
+  }
+
+  const [r = 0, g = 0, b = 0] = values;
   const min = Math.min(r, g, b);
   const max = Math.max(r, g, b);
   const delta = max - min;
@@ -27,5 +33,13 @@ export function rgb2hcg(...args: unknown[]): [number, number, number] {
     }
   }
 
-  return [hue, chroma, grayness];
+  return [toHueDegrees(hue), toPercentageChannel(chroma), toPercentageChannel(grayness)];
+}
+
+function toHueDegrees(value: number): HueDegrees {
+  return value as HueDegrees;
+}
+
+function toPercentageChannel(value: number): PercentageChannel {
+  return value as PercentageChannel;
 }

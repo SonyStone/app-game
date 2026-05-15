@@ -1,20 +1,28 @@
 import { Color } from '../color';
-import type { ColorValue } from '../types';
+import type {
+  AlphaChannel,
+  ColorChannelInput,
+  ColorSpaces,
+  ColorValue,
+  HueDegrees,
+  InterpolationMode,
+  NormalizedWeight,
+  RadianAngle
+} from '../types';
 import { clip_rgb } from '../utils';
 
 const { PI, atan2, cos, pow, sin, sqrt } = Math;
 
-type ChannelReader = (mode: string) => number[];
-type AlphaReader = () => number;
-type AlphaWriter = (value: number, mutate?: boolean) => Color;
+type ChannelReadMode = Exclude<InterpolationMode, 'lrgb'>;
+type ChannelReader<Mode extends ChannelReadMode = ChannelReadMode> = () => ColorSpaces[Mode];
 
-function readChannels(color: Color, mode: string): number[] {
-  const get = color.get;
-  if (typeof get !== 'function') {
-    throw new Error('Missing get method');
+function readChannels(color: Color, mode: ChannelReadMode): number[] {
+  const reader = color[mode];
+  if (typeof reader !== 'function') {
+    throw new Error(`Missing ${mode} reader`);
   }
 
-  const value = (get as ChannelReader).call(color, mode);
+  const value = (reader as ChannelReader).call(color);
   if (!Array.isArray(value)) {
     throw new Error(`Mode ${mode} did not return channels`);
   }
@@ -22,22 +30,12 @@ function readChannels(color: Color, mode: string): number[] {
   return [...value];
 }
 
-function readAlpha(color: Color): number {
-  const alpha = color.alpha;
-  if (typeof alpha !== 'function') {
-    throw new Error('Missing alpha reader');
-  }
-
-  return (alpha as AlphaReader).call(color);
+function readAlpha(color: Color): AlphaChannel {
+  return toAlphaChannel(color.alpha());
 }
 
-function writeAlpha(color: Color, value: number): Color {
-  const alpha = color.alpha;
-  if (typeof alpha !== 'function') {
-    throw new Error('Missing alpha writer');
-  }
-
-  return (alpha as AlphaWriter).call(color, value, true);
+function writeAlpha(color: Color, value: AlphaChannel): Color {
+  return color.alpha(value, true);
 }
 
 function ensurePalette(colors: readonly ColorValue[]): Color[] {
@@ -63,15 +61,21 @@ function averageLrgb(colors: readonly Color[], weights: readonly number[]): Colo
     xyz[3] = 1;
   }
 
-  return new Color(clip_rgb(xyz), 'rgb');
+  return new Color(toColorChannelInput(clip_rgb(xyz)), 'rgb');
 }
 
-export function average(colors: readonly ColorValue[], mode = 'lrgb', weights?: readonly number[]): Color {
+export function average(
+  colors: readonly ColorValue[],
+  mode: InterpolationMode = 'lrgb',
+  weights?: readonly number[]
+): Color {
   const length = colors.length;
-  const normalizedWeights = weights == null ? Array.from({ length }, () => 1) : [...weights];
-  const factor = length / normalizedWeights.reduce((sum, weight) => sum + weight, 0);
+  const normalizedWeights: NormalizedWeight[] = (weights == null ? Array.from({ length }, () => 1) : [...weights]).map(
+    toNormalizedWeight
+  );
+  const factor = toNormalizedWeight(length / normalizedWeights.reduce((sum, weight) => sum + weight, 0));
   normalizedWeights.forEach((weight, index) => {
-    normalizedWeights[index] = weight * factor;
+    normalizedWeights[index] = toNormalizedWeight(weight * factor);
   });
 
   const palette = ensurePalette(colors);
@@ -85,7 +89,7 @@ export function average(colors: readonly ColorValue[], mode = 'lrgb', weights?: 
   }
 
   const xyz = readChannels(first, mode);
-  const counts = xyz.map((value) => (Number.isNaN(value) ? 0 : (normalizedWeights[0] ?? 0)));
+  const counts: number[] = xyz.map((value) => (Number.isNaN(value) ? 0 : (normalizedWeights[0] ?? 0)));
   let dx = 0;
   let dy = 0;
 
@@ -107,7 +111,7 @@ export function average(colors: readonly ColorValue[], mode = 'lrgb', weights?: 
       if (!Number.isNaN(xyz2[index] ?? Number.NaN)) {
         counts[index] = (counts[index] ?? 0) + weight;
         if (mode.charAt(index) === 'h') {
-          const angle = ((xyz2[index] ?? 0) / 180) * PI;
+          const angle = toRadianAngle(((xyz2[index] ?? 0) / 180) * PI);
           dx += cos(angle) * weight;
           dy += sin(angle) * weight;
         } else {
@@ -119,12 +123,12 @@ export function average(colors: readonly ColorValue[], mode = 'lrgb', weights?: 
 
   for (let index = 0; index < xyz.length; index += 1) {
     if (mode.charAt(index) === 'h') {
-      let angle = (atan2(dy / (counts[index] || 1), dx / (counts[index] || 1)) / PI) * 180;
+      let angle = toHueDegrees((atan2(dy / (counts[index] || 1), dx / (counts[index] || 1)) / PI) * 180);
       while (angle < 0) {
-        angle += 360;
+        angle = toHueDegrees(angle + 360);
       }
       while (angle >= 360) {
-        angle -= 360;
+        angle = toHueDegrees(angle - 360);
       }
       xyz[index] = angle;
     } else {
@@ -132,5 +136,40 @@ export function average(colors: readonly ColorValue[], mode = 'lrgb', weights?: 
     }
   }
 
-  return writeAlpha(new Color(xyz, mode), alpha / length > 0.99999 ? 1 : alpha / length);
+  return writeAlpha(
+    new Color(toColorChannelInput(xyz), mode),
+    toAlphaChannel(alpha / length > 0.99999 ? 1 : alpha / length)
+  );
+}
+
+function toAlphaChannel(value: number): AlphaChannel {
+  return value as AlphaChannel;
+}
+
+function toHueDegrees(value: number): HueDegrees {
+  return value as HueDegrees;
+}
+
+function toRadianAngle(value: number): RadianAngle {
+  return value as RadianAngle;
+}
+
+function toNormalizedWeight(value: number): NormalizedWeight {
+  return value as NormalizedWeight;
+}
+
+function toColorChannelInput(values: readonly number[]): ColorChannelInput {
+  if (values.length === 3) {
+    return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0];
+  }
+
+  if (values.length === 4) {
+    return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 0];
+  }
+
+  if (values.length === 5) {
+    return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 0, values[4] ?? 0];
+  }
+
+  throw new Error(`Unsupported channel input length: ${values.length}`);
 }

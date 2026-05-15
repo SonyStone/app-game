@@ -1,5 +1,7 @@
 const { abs, floor, log, pow } = Math;
 
+import type { AnalysisMode } from '../types';
+
 export type Analysis = {
   min: number;
   max: number;
@@ -7,14 +9,16 @@ export type Analysis = {
   values: number[];
   count: number;
   domain: [number, number];
-  limits: (mode?: string, num?: number) => number[];
+  limits: (mode?: AnalysisMode, num?: number) => number[];
 };
+
+type AnalysisSource = readonly unknown[] | Record<string, unknown>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function toValues(data: readonly unknown[] | Record<string, unknown>): readonly unknown[] {
+function toValues(data: AnalysisSource): readonly unknown[] {
   return Array.isArray(data) ? data : Object.values(data);
 }
 
@@ -27,7 +31,7 @@ function getNumericValue(value: unknown, key: string | null): number | undefined
   return typeof candidate === 'number' && !Number.isNaN(candidate) ? candidate : undefined;
 }
 
-export function analyze(data: readonly unknown[] | Record<string, unknown>, key: string | null = null): Analysis {
+function analyzeUnknown(data: AnalysisSource, key: string | null = null): Analysis {
   const analysisBase = {
     min: Number.MAX_VALUE,
     max: -Number.MAX_VALUE,
@@ -56,8 +60,23 @@ export function analyze(data: readonly unknown[] | Record<string, unknown>, key:
   return analysis;
 }
 
-export function limits(data: Analysis | readonly unknown[], mode = 'equal', num = 7): number[] {
-  const analysis = isAnalysis(data) ? data : analyze(data);
+export function analyze(data: readonly number[] | Record<string, number>): Analysis;
+export function analyze<T extends Record<string, unknown>>(
+  data: readonly T[] | Record<string, T>,
+  key: Extract<keyof T, string>
+): Analysis;
+export function analyze(data: AnalysisSource, key: string | null = null): Analysis {
+  return analyzeUnknown(data, key);
+}
+
+export function limits(data: Analysis | readonly number[], mode?: AnalysisMode, num?: number): number[];
+export function limits<T extends Record<string, unknown>>(
+  data: Analysis | readonly T[],
+  mode?: AnalysisMode,
+  num?: number
+): number[];
+export function limits(data: Analysis | readonly unknown[], mode: AnalysisMode = 'equal', num = 7): number[] {
+  const analysis = isAnalysis(data) ? data : analyzeUnknown(data);
   const min = analysis.min;
   const max = analysis.max;
   const values = analysis.values.slice().sort((left, right) => left - right);

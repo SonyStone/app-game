@@ -1,3 +1,5 @@
+import type { ColorSpaces, HueDegrees, NormalizedChannel } from '../../types';
+
 const { min, max } = Math;
 
 /**
@@ -5,7 +7,7 @@ const { min, max } = Math;
  *
  * Hue is returned in degrees. Saturation and value are normalized to 0..1.
  */
-export const rgb2hsv = (r: number, g: number, b: number) => {
+export const rgb2hsv = (r: number, g: number, b: number): ColorSpaces['hsv'] => {
   const min_ = min(r, g, b);
   const max_ = max(r, g, b);
   const delta = max_ - min_;
@@ -32,5 +34,13 @@ export const rgb2hsv = (r: number, g: number, b: number) => {
       h += 360;
     }
   }
-  return [h, s, v];
+  return [toHueDegrees(h), toNormalizedChannel(s), toNormalizedChannel(v)];
 };
+
+function toHueDegrees(value: number): HueDegrees {
+  return value as HueDegrees;
+}
+
+function toNormalizedChannel(value: number): NormalizedChannel {
+  return value as NormalizedChannel;
+}

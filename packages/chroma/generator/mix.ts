@@ -1,6 +1,6 @@
 import { Color } from '../color';
 import { interpolator } from '../interpolator';
-import type { ColorValue, Interpolator as InterpolatorFn } from '../types';
+import type { ColorValue, Interpolator as InterpolatorFn, RegisteredInterpolatorMode } from '../types';
 
 type AlphaReader = () => number;
 type AlphaWriter = (value: number) => Color;
@@ -27,15 +27,14 @@ function writeAlpha(color: Color, value: number): Color {
   return (alpha as AlphaWriter).call(color, value);
 }
 
-export function mix(col1: ColorValue, col2: ColorValue, f = 0.5, ...rest: string[]): Color {
-  const registry = interpolator as Record<string, InterpolatorFn>;
-  let mode = rest[0] ?? 'lrgb';
-  if (registry[mode] == null && rest.length === 0) {
+export function mix(col1: ColorValue, col2: ColorValue, f = 0.5, mode: RegisteredInterpolatorMode = 'lrgb'): Color {
+  const registry = interpolator as Record<RegisteredInterpolatorMode, InterpolatorFn>;
+  if (registry[mode] == null) {
     const fallbackMode = Object.keys(registry)[0];
     if (fallbackMode == null) {
       throw new Error('No interpolation modes are registered');
     }
-    mode = fallbackMode;
+    mode = fallbackMode as RegisteredInterpolatorMode;
   }
 
   const interpolate = registry[mode];

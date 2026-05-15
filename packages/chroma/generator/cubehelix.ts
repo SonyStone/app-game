@@ -1,4 +1,5 @@
 import { Color } from '../color';
+import type { ColorChannelInput } from '../types';
 import { TWOPI, clip_rgb } from '../utils';
 import { scale } from './scale';
 
@@ -41,7 +42,7 @@ export function cubehelix(
     const red = lightnessValue + amplitude * (-0.14861 * cos(angle) + 1.78277 * sin(angle));
     const green = lightnessValue + amplitude * (-0.29227 * cos(angle) - 0.90649 * sin(angle));
     const blue = lightnessValue + amplitude * (1.97294 * cos(angle));
-    return new Color(clip_rgb([red * 255, green * 255, blue * 255, 1]), 'rgb');
+    return new Color(toColorChannelInput(clip_rgb([red * 255, green * 255, blue * 255, 1])), 'rgb');
   }) as CubehelixFunction;
 
   /** Sets the starting hue for the rotation. */
@@ -104,4 +105,8 @@ export function cubehelix(
   generator.scale = () => scale(generator);
   generator.hue(hue);
   return generator;
+}
+
+function toColorChannelInput(values: readonly number[]): ColorChannelInput {
+  return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 1];
 }

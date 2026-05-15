@@ -1,18 +1,19 @@
 import { Color } from '../color';
+import type { InterpolationMode } from '../types';
 
-type InterpolatedMode = 'hsl' | 'hsv' | 'hcg' | 'hsi' | 'lch' | 'hcl' | 'oklch';
-type HueMode = 'hsl' | 'hsv' | 'hcg' | 'hsi' | 'hcl' | 'oklch';
+type InterpolatedMode = Extract<InterpolationMode, 'hsl' | 'hsv' | 'hsi' | 'hcg' | 'lch' | 'hcl' | 'oklch'>;
+type HueMode = Exclude<InterpolatedMode, 'lch'>;
 
-type ColorChannelReader = () => number[];
+type ColorChannelReader = () => [number, number, number];
 
-function readChannels(color: Color, mode: HueMode): number[] {
+function readChannels(color: Color, mode: HueMode): [number, number, number] {
   const reader = color[mode];
   if (typeof reader !== 'function') {
     throw new Error(`Missing color reader for ${mode}`);
   }
 
   const value = (reader as ColorChannelReader).call(color);
-  return Array.isArray(value) ? [...value] : [];
+  return value;
 }
 
 export function interpolateHsx(col1: Color, col2: Color, f: number, mode: InterpolatedMode): Color {
@@ -21,8 +22,8 @@ export function interpolateHsx(col1: Color, col2: Color, f: number, mode: Interp
   let xyz1 = readChannels(col2, targetMode);
 
   if (mode === 'oklch') {
-    xyz0 = xyz0.reverse();
-    xyz1 = xyz1.reverse();
+    xyz0 = [xyz0[2], xyz0[1], xyz0[0]];
+    xyz1 = [xyz1[2], xyz1[1], xyz1[0]];
   }
 
   const [hue0, sat0, lbv0] = xyz0;

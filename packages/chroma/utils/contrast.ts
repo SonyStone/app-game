@@ -1,13 +1,13 @@
 import { Color } from '../color';
-import type { ColorValue } from '../types';
+import type { ColorValue, ContrastRatio, LuminanceValue } from '../types';
 
-type LuminanceReader = () => number;
+type LuminanceReader = () => LuminanceValue;
 
 function ensureColor(value: ColorValue): Color {
   return value instanceof Color ? value : new Color(value);
 }
 
-function readLuminance(color: Color): number {
+function readLuminance(color: Color): LuminanceValue {
   const luminance = color.luminance;
   if (typeof luminance !== 'function') {
     throw new Error('Missing luminance method');
@@ -16,10 +16,10 @@ function readLuminance(color: Color): number {
   return (luminance as LuminanceReader).call(color);
 }
 
-export function contrast(a: ColorValue, b: ColorValue): number {
+export function contrast(a: ColorValue, b: ColorValue): ContrastRatio {
   const left = ensureColor(a);
   const right = ensureColor(b);
   const l1 = readLuminance(left);
   const l2 = readLuminance(right);
-  return l1 > l2 ? (l1 + 0.05) / (l2 + 0.05) : (l2 + 0.05) / (l1 + 0.05);
+  return (l1 > l2 ? (l1 + 0.05) / (l2 + 0.05) : (l2 + 0.05) / (l1 + 0.05)) as ContrastRatio;
 }
