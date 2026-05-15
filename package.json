@@ -33,6 +33,7 @@
     "@types/three": "^0.184.1",
     "@types/which": "^3.0.4",
     "@unocss/preset-mini": "66.6.8",
+    "@unocss/preset-web-fonts": "^66.6.8",
     "@unocss/preset-wind": "66.6.8",
     "@unocss/preset-wind4": "^66.6.8",
     "@unocss/reset": "66.6.8",

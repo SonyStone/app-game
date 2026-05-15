@@ -22,7 +22,6 @@ export const routes: Routes[] = [
   {
     path: '/',
     name: 'home',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./home-page'))
   },
   wasmRustRoutes,

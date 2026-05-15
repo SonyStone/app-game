@@ -25,6 +25,10 @@ import { unpackBmp } from './unpackBmp';
 
 export default function GpuTextRendering() {
   const canvas = (<canvas id="beziercanvas" class={s.canvas}></canvas>) as HTMLCanvasElement;
+  const pointerLockCanvas = canvas as HTMLCanvasElement & {
+    mozRequestPointerLock?: () => void;
+    webkitRequestPointerLock?: () => void;
+  };
 
   console.log(`canvas`, canvas);
 
@@ -43,10 +47,12 @@ export default function GpuTextRendering() {
   );
   canvas.addEventListener('mousedown', function (e) {
     if (e.button == 2 || e.buttons == 2) {
-      canvas.requestPointerLock =
-        canvas.requestPointerLock || canvas.mozRequestPointerLock || canvas.webkitRequestPointerLock;
+      const requestPointerLock =
+        pointerLockCanvas.requestPointerLock ||
+        pointerLockCanvas.mozRequestPointerLock ||
+        pointerLockCanvas.webkitRequestPointerLock;
 
-      canvas.requestPointerLock();
+      requestPointerLock?.call(pointerLockCanvas);
     }
   });
   canvas.addEventListener('mouseup', function (e) {

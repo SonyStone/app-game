@@ -1,3 +1,4 @@
+import presetWebFonts from '@unocss/preset-web-fonts';
 import presetWind4 from '@unocss/preset-wind4';
 import transformerCompileClass from '@unocss/transformer-compile-class';
 import transformerVariantGroup from '@unocss/transformer-variant-group';
@@ -5,7 +6,16 @@ import { defineConfig } from '@unocss/vite';
 import { presetAnimations } from 'unocss-preset-animations';
 
 export default defineConfig({
-  presets: [presetWind4(), presetAnimations() as unknown as ReturnType<typeof presetWind4>],
+  presets: [
+    presetWind4(),
+    presetWebFonts({
+      provider: 'google',
+      fonts: {
+        geist: ['Geist', { name: 'sans-serif', provider: 'none' }]
+      }
+    }) as unknown as ReturnType<typeof presetWind4>,
+    presetAnimations() as unknown as ReturnType<typeof presetWind4>
+  ],
   rules: [],
   transformers: [transformerCompileClass(), transformerVariantGroup()],
   theme: {

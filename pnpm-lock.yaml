@@ -264,6 +264,9 @@ importers:
       '@unocss/preset-mini':
         specifier: 66.6.8
         version: 66.6.8
+      '@unocss/preset-web-fonts':
+        specifier: ^66.6.8
+        version: 66.6.8
       '@unocss/preset-wind':
         specifier: 66.6.8
         version: 66.6.8
