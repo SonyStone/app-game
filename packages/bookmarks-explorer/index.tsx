@@ -10,7 +10,7 @@ import { insertChildrenAtPath } from './insertChildrenAtPath';
 import { NodeItem2 } from './NodeItem';
 import treeExported2Url from './tree-exported-2.json?url';
 import treeExported4Url from './tree-exported-4.json?url';
-import { bookmarksTreeSchema, type DefaultNode, isNodeInsert, isNodeNewRoot } from './tree-schema';
+import { bookmarksTreeSchema, isNodeInsert, isNodeNewRoot } from './tree-schema';
 import { moveNode } from './TreeViewUtils';
 
 function createTreeView(props: { treeUrl: string }) {
