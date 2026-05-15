@@ -1,0 +1,80 @@
+@import 'tailwindcss';
+
+/* ============================================================================
+ * Photoshop Dark Theme — CSS Custom Properties
+ * ============================================================================ */
+
+@theme {
+  /* Background shades */
+  --color-ps-bg-dark: #1e1e1e;
+  --color-ps-bg: #2b2b2b;
+  --color-ps-bg-light: #333333;
+  --color-ps-bg-lighter: #3c3c3c;
+
+  /* Text */
+  --color-ps-text: #b0b0b0;
+  --color-ps-text-bright: #e0e0e0;
+  --color-ps-text-muted: #707070;
+
+  /* Borders */
+  --color-ps-border: #3a3a3a;
+  --color-ps-border-light: #4a4a4a;
+
+  /* Accent */
+  --color-ps-accent: #2d9cdb;
+  --color-ps-accent-hover: #3daee8;
+
+  /* Status */
+  --color-ps-warning: #e8a838;
+  --color-ps-error: #e84848;
+  --color-ps-success: #38c838;
+}
+
+/* ============================================================================
+ * Global Styles
+ * ============================================================================ */
+
+body {
+  margin: 0;
+  background: var(--color-ps-bg-dark);
+  color: var(--color-ps-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-ps-bg-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ps-bg-lighter);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* ============================================================================
+ * Checkered background for brush previews
+ * ============================================================================ */
+
+.checkered-bg {
+  background-color: #1a1a1a;
+  background-image:
+    linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0px;
+}

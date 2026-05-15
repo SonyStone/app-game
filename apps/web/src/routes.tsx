@@ -1,5 +1,4 @@
 import { Thumbnail, type Routes } from '@app-game/app-router';
-import { threeRoutes } from '@app-game/three-examples';
 import { bookmarksExplorerRoutes } from '@app-game/bookmarks-explorer/routes';
 import { escyRoutes } from '@app-game/ecsy-pages/routes';
 import { filmAnnotationPlayerRoutes } from '@app-game/film-annotation-player/routes';
@@ -9,6 +8,8 @@ import { oglRoutes } from '@app-game/ogl-examples/routes';
 import { paintRoutes } from '@app-game/paint/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
 import { pixijsRoutes } from '@app-game/pixijs-examples/routes';
+import { routes as solidDndPlaygroundRoutes } from '@app-game/solid-dnd-playground/routes';
+import { threeRoutes } from '@app-game/three-examples';
 import { twglRoutes } from '@app-game/twgl-examples/routes';
 import { typegpuRoutes } from '@app-game/typegpu-examples/routes';
 import { uiComponentsRoutes } from '@app-game/ui-components-examples/routes';
@@ -23,6 +24,18 @@ export const routes: Routes[] = [
     path: '/',
     name: 'home',
     component: lazy(() => import('./home-page'))
+  },
+  {
+    path: '/solid-dnd',
+    name: 'Solid DnD Playground',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    children: [solidDndPlaygroundRoutes]
+  },
+  {
+    path: '/dnd-playground',
+    name: 'DnD Playground',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@app-game/dnd-playground/App'))
   },
   wasmRustRoutes,
   mathRoutes,
@@ -49,7 +62,7 @@ export const routes: Routes[] = [
   {
     path: '/wip',
     Preview: () => (
-      <div class="rounded-2 border-e-15 flex flex-col place-content-center place-items-center border-slate-200 p-2">
+      <div class="rounded-2 flex flex-col place-content-center place-items-center border-e-15 border-slate-200 p-2">
         <h2 class="text-4xl">WIP</h2>
         <span class="text-center">And generally not interesting stuff</span>
       </div>

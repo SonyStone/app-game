@@ -7,7 +7,7 @@
     //     "path": "/workspaces/repos",
     // },
     // {
-    //     "path": "/workspaces/projects",
+    //   "path": "/workspaces/projects",
     // },
     // {
     //     "path": "/workspaces/repos/react-bits",
@@ -18,9 +18,6 @@
     // {
     //     "path": "/workspaces/repos/corvu",
     // },
-    // {
-    //     "path": "/shared",
-    // }
   ],
   "settings": {
     "vitest.commandLine": "pnpm exec vitest",

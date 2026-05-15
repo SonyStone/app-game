@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@app-game/solid-dnd-playground": "workspace:*",
+    "@app-game/dnd-playground": "workspace:*",
     "@app-game/app-router": "workspace:*",
     "@app-game/babylonjs-examples": "workspace:*",
     "@app-game/bookmarks-explorer": "workspace:*",

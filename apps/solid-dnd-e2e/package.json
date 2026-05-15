@@ -1,0 +1,27 @@
+{
+  "name": "solid-dnd-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "fuser -k 3055/tcp 2>/dev/null; vite --port 3055",
+    "build": "vite build",
+    "preview": "vite preview --port 3055",
+    "cleanup": "fuser -k 3055/tcp 2>/dev/null; echo 'Port 3055 cleaned up'",
+    "test": "fuser -k 3055/tcp 2>/dev/null; playwright test",
+    "test:playground": "playwright test e2e/sortable-overlay-demo.spec.ts --config=playwright.playground.config.ts",
+    "test:headed": "fuser -k 3055/tcp 2>/dev/null; playwright test --headed",
+    "test:ui": "fuser -k 3055/tcp 2>/dev/null; playwright test --ui"
+  },
+  "dependencies": {
+    "solid-dnd": "workspace:*",
+    "solid-js": "^1.9.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.3.5",
+    "vite-plugin-solid": "^2.11.6",
+    "vite-tsconfig-paths": "^6.1.1"
+  }
+}

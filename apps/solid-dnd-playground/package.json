@@ -1,0 +1,26 @@
+{
+  "name": "@app-game/solid-dnd-playground",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3040",
+    "build": "vite build",
+    "preview": "vite preview",
+    "kill": "pkill -9 -f \"vite\" 2>/dev/null; sleep 1; echo \"All vite processes killed\""
+  },
+  "dependencies": {
+    "@corvu/drawer": "^0.2.4",
+    "@solid-primitives/cursor": "^0.1.2",
+    "@solid-primitives/scheduled": "^1.5.3",
+    "solid-dnd": "workspace:*"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.7.2",
+    "vite": "^6.3.5",
+    "vite-plugin-solid": "^2.11.6",
+    "vite-tsconfig-paths": "^6.1.1"
+  }
+}

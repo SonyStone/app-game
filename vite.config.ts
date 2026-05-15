@@ -11,6 +11,7 @@ import wasm from 'vite-plugin-wasm';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 
 const webAppRoot = resolve(__dirname, 'apps/web');
+const apps = resolve(__dirname, 'apps');
 const packages = resolve(__dirname, 'packages');
 const devServerPort = Number(process.env.APP_PORT ?? process.env.PORT ?? '3200');
 
@@ -45,6 +46,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@app-game/solid-dnd-playground': resolve(apps, 'solid-dnd-playground/src'),
+      '@app-game/dnd-playground': resolve(apps, 'dnd-playground/src'),
       '@app-game/app-router': resolve(packages, 'app-router'),
       '@app-game/chroma': resolve(packages, 'chroma'),
       '@app-game/ecsy': resolve(packages, 'ecsy'),
