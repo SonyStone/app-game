@@ -13,7 +13,13 @@
     //     "path": "/workspaces/repos/react-bits",
     // },
     {
-        "path": "/workspaces/repos/dockview",
+      "path": "/workspaces/repos/dockview",
+    },
+    {
+      "path": "/workspaces/repos/rc-dock",
+    },
+    {
+      "path": "/workspaces/repos/FlexLayout",
     },
     // {
     //     "path": "/workspaces/repos/solid-primitives",

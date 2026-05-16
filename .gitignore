@@ -2,7 +2,7 @@ node_modules/
 dist/
 wasm/pkg/
 rust-licenses.js
-
+.tmp/
 
 target/
 *.spv

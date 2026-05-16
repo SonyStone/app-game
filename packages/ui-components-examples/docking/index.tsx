@@ -2,12 +2,11 @@
 
 import { cn } from '@app-game/utils/cn';
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { createDragSensor } from 'solid-dnd';
-import { ComponentProps, createMemo, createSignal, For, onMount, Show, splitProps, type JSX } from 'solid-js';
+import { ComponentProps, createMemo, createSignal, For, Show, splitProps, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import { SolidDockView } from '../solid-dockview';
+import { SolidDockingExample } from './SolidDockingExample';
 
 declare module 'solid-js' {
   namespace JSX {
@@ -179,26 +178,6 @@ export default function DockingExample() {
 
   const P = Portals({ children: video });
 
-  const [ref, setRef] = createSignal<HTMLDivElement | undefined>(undefined);
-  const [target, setTarget] = createSignal<{ width: string; height: string } | undefined>(undefined);
-  onMount(() => {
-    createResizeObserver(ref, (_, element) => {
-      const rect = element.getBoundingClientRect();
-      console.log('Resized', rect.width, rect.height);
-
-      setTarget({
-        width: rect.width + 'px',
-        height: rect.height + 'px',
-        top: element.offsetTop + 'px',
-        left: element.offsetLeft + 'px'
-      });
-    });
-  });
-
-  const sensor = createDragSensor({
-    threshold: 8
-  });
-
   return (
     <>
       <div class="flex flex-col overflow-hidden">
@@ -210,35 +189,7 @@ export default function DockingExample() {
       <dockview-demo class="flex h-full w-full flex-1 flex-col rounded-lg p-2">
         <GlobalCursorStyle />
 
-        <div class="relative">
-          {/* real layout */}
-          <div class="grid grid-cols-4 grid-rows-4 gap-4 text-white">
-            <div class="rounded-lg bg-pink-500 p-4">01</div>
-            <div class="rounded-lg bg-pink-500 p-4">02</div>
-            <div class="row-span-3 rounded-lg bg-pink-500 p-4">03</div>
-            <div
-              ref={setRef}
-              class="relative col-span-2 touch-none rounded-lg bg-pink-500 p-4"
-              onPointerDown={sensor.onPointerDown}
-              style={{
-                transform: `translate(${sensor.delta()?.x ?? 0}px, ${sensor.delta()?.y ?? 0}px)`
-              }}
-            >
-              04
-            </div>
-          </div>
-
-          {/* connected layout */}
-          <div
-            class={cn('pointer-events-none absolute inset-0', SHADED_BACKGROUND)}
-            style={{
-              ...target(),
-              transform: `translate(${sensor.delta()?.x ?? 0}px, ${sensor.delta()?.y ?? 0}px)`
-            }}
-          >
-            overlay
-          </div>
-        </div>
+        <SolidDockingExample />
 
         <Unwrap data={state} />
 

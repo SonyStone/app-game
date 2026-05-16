@@ -13,7 +13,7 @@ import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 const webAppRoot = resolve(__dirname, 'apps/web');
 const apps = resolve(__dirname, 'apps');
 const packages = resolve(__dirname, 'packages');
-const devServerPort = Number(process.env.APP_PORT ?? process.env.PORT ?? '3200');
+const devServerPort = Number(process.env.APP_PORT ?? process.env.PORT ?? '3120');
 
 export default defineConfig({
   root: webAppRoot,
