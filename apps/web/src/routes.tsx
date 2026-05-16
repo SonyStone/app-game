@@ -17,13 +17,14 @@ import { wasmRustRoutes } from '@app-game/wasm-rust-pages/routes';
 import { webglExamplesRoute } from '@app-game/webgl-examples/routes';
 import { webgpuRoutes } from '@app-game/webgpu-examples/routes';
 import { lazy } from 'solid-js';
+import HomePage from './home-page';
 import wireframeThumbnail from './thumbnail/wireframe-thumbnail.png?url';
 
 export const routes: Routes[] = [
   {
     path: '/',
     name: 'home',
-    component: lazy(() => import('./home-page'))
+    component: HomePage
   },
   {
     path: '/solid-dnd',

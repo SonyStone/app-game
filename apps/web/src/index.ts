@@ -9,8 +9,10 @@ import { MetaProvider } from '@solidjs/meta';
 import { App } from './App';
 import { StatsProvider } from './Stats.provider';
 
-createApp(App)
-  .use(MetaProvider)
-  .use(StatsProvider)
-  .use(CameraProvider)
-  .mount(document.body as HTMLElement);
+const root = document.getElementById('app');
+
+if (!root) {
+  throw new Error('Root element not found');
+}
+
+createApp(App).use(MetaProvider).use(StatsProvider).use(CameraProvider).mount(root);
