@@ -1,10 +1,8 @@
-@import 'tailwindcss';
-
 /* ============================================================================
  * Photoshop Dark Theme — CSS Custom Properties
  * ============================================================================ */
 
-@theme {
+:root {
   /* Background shades */
   --color-ps-bg-dark: #1e1e1e;
   --color-ps-bg: #2b2b2b;

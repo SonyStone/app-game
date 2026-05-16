@@ -1,0 +1,539 @@
+
+> @app-game/web@0.0.0 build /workspaces/app-game/apps/web
+> pnpm --dir ../.. exec vite build --config vite.config.ts
+
+vite v8.0.13 building client environment for production...
+[2Ktransforming...[plugin rolldown:vite-resolve] Module "fs" has been externalized for browser compatibility, imported by "/workspaces/app-game/packages/ldtk-ts/util.ts". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+✓ 2839 modules transformed.
+rendering chunks...
+[lightningcss minify] Unknown at rule: @apply
+461 |  
+462 |  * {
+463 |    @apply border-border min-w-0;
+    |          ^
+464 |  }
+465 |  
+[lightningcss minify] Unknown at rule: @apply
+465 |  
+466 |  body {
+467 |    @apply bg-background text-foreground;
+    |          ^
+468 |  }._noise_1qi77_1 {
+469 |    --noise-size: 64;
+computing gzip size...
+dist/assets/imageverts-BO3qCicR.bmp                                               0.05 kB
+dist/assets/webworkerAll-DpMJ9e_x.js                                              0.07 kB
+dist/assets/init-Bk0w7xx3.js                                                      0.10 kB
+dist/assets/browserAll-Dn74wUp9.js                                                0.18 kB
+dist/assets/view-offset.worker-CIWMl1bf.js                                        0.18 kB
+dist/assets/lineto_subnode_s1-D_AEjjmn.png                                        0.19 kB
+dist/assets/line_vertical_s1-0ZOyxejs.png                                         0.19 kB
+dist/assets/favicon-CAzznYRi.png                                                  0.21 kB
+dist/assets/pipe-Bk79r-4Q.png                                                     0.21 kB
+dist/assets/ground-DfWyBh2B.png                                                   0.22 kB
+dist/assets/lineto_last_subnode_s1-Cx9TD9BI.png                                   0.25 kB
+dist/assets/node_anchor_no_subnodes_s1-CIsx_8GE.png                               0.25 kB
+dist/assets/init-D2CkmQah.js                                                      0.25 kB
+dist/assets/folder-DsOIDOl7.png                                                   0.27 kB
+dist/assets/node_anchor_expanded_s1-CYWrg185.png                                  0.28 kB
+dist/assets/hexagon-CvAcJUDu.svg                                                  0.30 kB │ gzip:     0.19 kB
+dist/assets/grid-CrqnlLl3.png                                                     0.35 kB
+dist/assets/useTick-ClZNXitI.js                                                   0.36 kB
+dist/assets/no-favicon-2-BE2nJOUP.png                                             0.38 kB
+dist/assets/star-DprScIFb.png                                                     0.44 kB
+dist/assets/bunny-BAQi687R.png                                                    0.44 kB
+dist/assets/can-i-use.worker-CMgmT4l_.js                                          0.45 kB
+dist/assets/bomb-DeqYYKCN.png                                                     0.49 kB
+dist/assets/JingliuHeadB-biGaFmq1.ib                                              0.57 kB
+dist/assets/chrome-window-icon-gold-BrFCg4iP.png                                  0.64 kB
+dist/assets/dist-CeZ4owLh.js                                                      0.87 kB
+dist/assets/bird-DwM57gkN.png                                                     0.90 kB
+dist/assets/JingliuHeadBLightMap-BzGadZSq.dds                                     1.11 kB
+dist/assets/GraphicsSvg-DK57O1Yo.js                                               1.14 kB
+dist/assets/favicon-A1UKx2bx.ico                                                  1.15 kB
+dist/assets/MouseTrail-DV22q44F.js                                                1.20 kB
+dist/assets/BlendModesExamples-CjbekeeM.js                                        1.21 kB
+dist/assets/BasicExample-BajzwJQg.js                                              1.37 kB
+dist/assets/chrome-window-icon-gray-9P2bJ-Ty.png                                  1.42 kB
+dist/assets/GraphicsSimple-C33uvGZD.js                                            1.44 kB
+dist/assets/AdvancedScratchCard-BdkMXYF2.js                                       1.45 kB
+dist/assets/BasicContainer-DymI6lm_.js                                            1.53 kB
+dist/assets/GraphicsAdvanced-Cb3qMJJm.js                                          1.54 kB
+dist/assets/bg_cloud2-D5Z0alR2.png                                                1.69 kB
+dist/assets/bg_cloud1-ec9JdpLO.png                                                1.71 kB
+dist/assets/noise-IUDBx5RT.png                                                    1.72 kB
+dist/assets/walls_1x2-7ZAt5EGk.png                                                2.48 kB
+dist/assets/drag_feedback_as_sibling-FAoyRYor.png                                 2.53 kB
+dist/assets/RenderLayers-c1LE2MW8.js                                              2.54 kB
+dist/assets/drag_feedback_as_first_child-C7z83xT7.png                             2.67 kB
+dist/index.html                                                                   3.10 kB │ gzip:     0.80 kB
+dist/assets/dude-jU-w_Alr.png                                                     3.22 kB
+dist/assets/Inca_back2_by_Kronbits-Bj5wlPD5.png                                   3.35 kB
+dist/assets/flap-BbHarq5L.wav                                                     3.66 kB
+dist/assets/AnimationsExample-Cb4PZCzW.js                                         3.67 kB
+dist/assets/sky-BC6BUNkB.jpg                                                      3.90 kB
+dist/assets/breakout-CboLGXi1.json                                                4.04 kB │ gzip:     0.61 kB
+dist/assets/sky-C3FK-69K.png                                                      4.75 kB
+dist/assets/nyancat-CALUMQ1U.ico                                                  4.94 kB
+dist/assets/Cavernas_by_Adam_Saltsman-DuoImES5.png                                7.30 kB
+dist/assets/tree-exported-4-DLZLWm_6.json                                         7.68 kB │ gzip:     1.60 kB
+dist/assets/breakout-ppFpB-Jd.png                                                 8.59 kB
+dist/assets/ShaderToyMesh-W0iHcwPt.js                                             9.16 kB
+dist/assets/acorn-n7lpC1ub.jpg                                                    9.57 kB
+dist/assets/bench-DMLlyjpr.js                                                    10.84 kB
+dist/assets/cloud1Mask-Dp1vJ-f4.jpg                                              12.10 kB
+dist/assets/f-texture-D6WUbxtf.png                                               13.57 kB
+dist/assets/skybox-BlJmw7q2.bam                                                  13.60 kB
+dist/assets/sunset-diffuse-RGBM-BYy05zSN.png                                     14.33 kB
+dist/assets/atlasverts-CTWSD6Cq.bmp                                              14.45 kB
+dist/assets/score-DrfeF4Ba.wav                                                   14.59 kB
+dist/assets/platform-Bpju0ip4.png                                                14.97 kB
+dist/assets/isometric-grass-and-water-OHQYpuzo.json                              15.11 kB │ gzip:     1.34 kB
+dist/assets/snout-shadow-Ddeq29i9.jpg                                            15.62 kB
+dist/assets/lut-DjJSlwEc.png                                                     16.62 kB
+dist/assets/JingliuHeadTexcoord-Bhv03XoM.buf                                     22.19 kB
+dist/assets/multiple-layers-D6BtXCKT.json                                        23.43 kB │ gzip:     0.78 kB
+dist/assets/Inca_front_by_Kronbits-extended-BASYXNh_.png                         23.73 kB
+dist/assets/FiraSans-Bold-Boe6_mCS.json                                          24.01 kB │ gzip:     2.78 kB
+dist/assets/water-BnWyxMFr.jpg                                                   27.30 kB
+dist/assets/offscreen-canvas.worker-CUMPFsK_.js                                  28.90 kB
+dist/assets/cloud1-C94Qt6pJ.png                                                  29.21 kB
+dist/assets/cloud2-CxzokacC.png                                                  30.11 kB
+dist/assets/acorn-BPZ9evR-.json                                                  31.26 kB │ gzip:     4.52 kB
+dist/assets/pointer-events-data-4PnhmAZr.json                                    34.51 kB │ gzip:     2.11 kB
+dist/assets/JingliuHairTexcoord-B7kIBie2.buf                                     34.81 kB
+dist/assets/cloud-city-map-AxQlHim7.json                                         34.95 kB │ gzip:     1.69 kB
+dist/assets/fail-C7tVxIop.wav                                                    36.63 kB
+dist/assets/leaves-JWqtRTPG.jpg                                                  36.90 kB
+dist/assets/leaf-DOUAjb4B.jpg                                                    39.38 kB
+dist/assets/wasm_game_of_life_bg-B5_48N20.wasm                                   39.65 kB │ gzip:    18.01 kB
+dist/assets/rainbow-gradient-DhPOHiES.png                                        40.75 kB
+dist/assets/characters-Cq8wVdxH.png                                              42.49 kB
+dist/assets/JingliuHeadA-W6wE4Up_.ib                                             44.83 kB
+dist/assets/mountBg-CcTfYtiE.png                                                 46.40 kB
+dist/assets/cloud_tileset-B_CA0SH2.png                                           55.02 kB
+dist/assets/cloud3-Bs2uxAkH.png                                                  58.26 kB
+dist/assets/snout-anim-D5IEg3ZY.json                                             58.93 kB │ gzip:    14.90 kB
+dist/assets/kenny_platformer_64x64-CjNHjbZk.png                                  60.54 kB
+dist/assets/panda-wILUnviL.png                                                   69.17 kB
+dist/assets/JingliuHairA-Dqrf_5PG.ib                                             69.70 kB
+dist/assets/mountFg-DCq63Eaw.png                                                 73.92 kB
+dist/assets/snout-BwoVvjE5.jpg                                                   79.85 kB
+dist/assets/mountMg-DLRoMaUg.png                                                 82.59 kB
+dist/assets/base-tile-size-thumbnail-BIzyz86d.png                                83.30 kB
+dist/assets/thumbnail-6SVCSVSu.png                                               84.13 kB
+dist/assets/FiraSans-Bold-BAcAfppu.png                                           87.95 kB
+dist/assets/diogram.drawio-Bl-qNQ5z.svg                                          90.03 kB │ gzip:    37.65 kB
+dist/assets/basic-level-2-CaIbmMG-.ldtk                                          93.83 kB
+dist/assets/breakout-thumbnail-Bvun5Re6.png                                      94.07 kB
+dist/assets/isometric-grass-and-water-C4GCjKvh.png                              104.82 kB
+dist/assets/JingliuHeadPosition-BFNzSHfB.buf                                    110.96 kB
+dist/assets/world-rodies-thumbnail-CT7isKuM.png                                 117.59 kB
+dist/assets/multiple-layers-thumbnail-B2WY8foq.png                              123.72 kB
+dist/assets/atlas-CQFWPzxD.bmp                                                  131.12 kB
+dist/assets/offscreen-canvas.worker-Ct6mTwuh.js                                 131.87 kB
+dist/assets/offscreen-canvas-paint.worker-xA9hxFPs.js                           146.14 kB
+dist/assets/chrome_2023-11-18_15-20-36-Cdz9ySx4.png                             154.98 kB
+dist/assets/JingliuHairPosition-Dt6TcMZQ.buf                                    174.08 kB
+dist/assets/start_wgpu_bg-BVTQY3I7.wasm                                         184.05 kB │ gzip:    70.59 kB
+dist/assets/thumbnail-DScrtwNp.png                                              187.01 kB
+dist/assets/pages-BSvBUQh1.json                                                 191.71 kB │ gzip:     9.58 kB
+dist/assets/chrome_2023-11-18_16-04-46-BoF8o5LG.png                             192.87 kB
+dist/assets/wireframe-thumbnail-OuXd46eo.png                                    236.17 kB
+dist/assets/chrome_2023-11-18_15-46-29-CeLVDBjG.png                             249.06 kB
+dist/assets/custom_renderer_examples_bg-D587uVkn.wasm                           252.33 kB │ gzip:    86.80 kB
+dist/assets/chrome_2023-11-18_15-44-48-DoyxN53s.png                             260.64 kB
+dist/assets/chrome_2023-11-18_16-10-52-BAvo_lUS.png                             273.83 kB
+dist/assets/chrome_2023-11-18_15-48-40-DvVBQXE6.png                             275.79 kB
+dist/assets/run-Ch4cCPbM.fbx                                                    277.66 kB
+dist/assets/JingliuBodyTexcoord-9b4pUJEB.buf                                    289.02 kB
+dist/assets/image-CagfxvcC.png                                                  291.54 kB
+dist/assets/JingliuBodyA-DNbGLhPd.ib                                            296.24 kB
+dist/assets/sunset-specular-RGBM-Dvb2k1LA.png                                   353.09 kB
+dist/assets/rpg-thumbnail-Bk_3xO_Z.png                                          357.58 kB
+dist/assets/thumbnail-DwYiiukf.png                                              360.47 kB
+dist/assets/rpg-games-p0FYneZx.png                                              373.02 kB
+dist/assets/samplers_bg-BsE0q8fN.wasm                                           401.31 kB │ gzip:   136.52 kB
+dist/assets/chrome_2023-11-18_16-03-08-DzGpaMr6.png                             406.21 kB
+dist/assets/draw_cubes_bg-CdnXxOm4.wasm                                         453.16 kB │ gzip:   151.57 kB
+dist/assets/tree-exported-2-ocv4hk9H.json                                       476.51 kB │ gzip:    58.93 kB
+dist/assets/push-button-CK0w3Eih.fbx                                            523.69 kB
+dist/assets/sprites-thumbnail-fX1LVef4.png                                      534.02 kB
+dist/assets/stumble-backwards-COI_RKcX.fbx                                      541.37 kB
+dist/assets/image-BMR5bx-w.png                                                  553.07 kB
+dist/assets/look-around-BY9Hviu-.fbx                                            564.01 kB
+dist/assets/JingliuBodyPosition-C0AqcDjQ.buf                                    578.04 kB
+dist/assets/large_red_bricks_diff_1k-DVkfQaxB.jpg                               616.87 kB
+dist/assets/gather-objects-diLwXkjW.fbx                                         682.86 kB
+dist/assets/wasm_bindgen_example_bg-GxIQwhA1.wasm                               710.88 kB │ gzip:   253.01 kB
+dist/assets/chrome_2024-06-13_07-04-13-BZnh1U3m.png                             767.22 kB
+dist/assets/offscreen-canvas.worker-BUD_Gg2u.js                                 839.97 kB
+dist/assets/test_leptos_bg-CoKr9CLV.wasm                                        933.84 kB │ gzip:   234.37 kB
+dist/assets/JingliuHeadBDiffuse-ChXZvn_6.dds                                  1,048.72 kB
+dist/assets/brick_diffuse-QqKc2Flg.jpg                                        1,090.64 kB
+dist/assets/rapier_wasm2d_bg-DTJZFDvE.wasm                                    1,199.11 kB │ gzip:   447.14 kB
+dist/assets/house_1-D_Ab4Sfk.png                                              1,341.57 kB
+dist/assets/hershel-DEn-QQXn.glb                                              2,703.84 kB
+dist/assets/two_left_socks-B8Ji99G1.ogg                                       4,833.15 kB
+dist/assets/snout-rig-F8NdFUso.json                                           6,428.09 kB │ gzip:   501.05 kB
+dist/assets/fabric_pattern_07_col_1_1k-dCbE99Uk.png                           6,641.85 kB
+dist/assets/JingliuHairADiffuse-BNek8OxU.dds                                  8,388.75 kB
+dist/assets/JingliuHairALightMap-CFM5rpje.dds                                 8,388.75 kB
+dist/assets/mill-scene-WFsJqFdC.bam                                           9,046.57 kB
+dist/assets/girl-walk-2k4yGPqC.fbx                                           16,650.57 kB
+dist/assets/JingliuBodyADiffuse-CV9xErGB.dds                                 16,777.36 kB
+dist/assets/JingliuBodyALightMap-DILd7Cmo.dds                                16,777.36 kB
+dist/assets/glyphs-DZAUeorw.bmp                                              53,507.43 kB
+dist/assets/SvgLoader-D8Aiy1Iz.css                                                0.03 kB │ gzip:     0.05 kB
+dist/assets/3dWireframe-DoLL6p9p.css                                              0.12 kB │ gzip:     0.12 kB
+dist/assets/babylon-example-BW3k3ShD.css                                          0.13 kB │ gzip:     0.12 kB
+dist/assets/Animations-FKn2z8Of.css                                               0.22 kB │ gzip:     0.17 kB
+dist/assets/SvgLoader-CNt9U-KF.css                                                0.23 kB │ gzip:     0.17 kB
+dist/assets/ripple-D553mxdK.css                                                   0.27 kB │ gzip:     0.20 kB
+dist/assets/Main-MGxMJM8K.css                                                     0.51 kB │ gzip:     0.29 kB
+dist/assets/gpu-text-rendering-CDgnbWRm.css                                       0.53 kB │ gzip:     0.31 kB
+dist/assets/svg-editor-CwVwxRlE.css                                               1.54 kB │ gzip:     0.57 kB
+dist/assets/css-gradient-border-glowing-animation-hover-effect-O0_edXYA.css       1.72 kB │ gzip:     0.63 kB
+dist/assets/components-B3jtQFYb.css                                               2.98 kB │ gzip:     0.92 kB
+dist/assets/App-BUm1JqEW.css                                                      3.90 kB │ gzip:     1.22 kB
+dist/assets/spector-1iqIJ4pu.css                                                 16.86 kB │ gzip:     2.74 kB
+dist/assets/solid-dockview-CqQKKTyy.css                                          93.05 kB │ gzip:     8.09 kB
+dist/assets/index-BX9-5RAO.css                                                  112.66 kB │ gzip:    17.91 kB
+dist/assets/utils-BANfp9a5.js                                                     0.03 kB │ gzip:     0.05 kB
+dist/assets/SvgLoader.module-BaXOL6rF.js                                          0.04 kB │ gzip:     0.06 kB
+dist/assets/brick_diffuse-CnbMXOjq.js                                             0.05 kB │ gzip:     0.07 kB
+dist/assets/webworkerAll-LH1mvx-G.js                                              0.06 kB │ gzip:     0.07 kB
+dist/assets/BitmapFont-ffAJXYvh.js                                                0.06 kB │ gzip:     0.07 kB
+dist/assets/WebGLRenderer-BKoRHOUw.js                                             0.07 kB │ gzip:     0.07 kB
+dist/assets/CanvasRenderer-BOuPw0r3.js                                            0.07 kB │ gzip:     0.08 kB
+dist/assets/WebGPURenderer-BrCoQN6-.js                                            0.07 kB │ gzip:     0.08 kB
+dist/assets/dateTimestampProvider-Dd49GVOr.js                                     0.08 kB │ gzip:     0.09 kB
+dist/assets/trigonometry-BAdlooUI.js                                              0.08 kB │ gzip:     0.09 kB
+dist/assets/solid-dockview-CcFuPnF7.js                                            0.09 kB │ gzip:     0.10 kB
+dist/assets/load-fbx-test-wFu59pXR.js                                             0.11 kB │ gzip:     0.12 kB
+dist/assets/toObservable-DLsMtzYV.js                                              0.11 kB │ gzip:     0.11 kB
+dist/assets/init-BlWCe-OL.js                                                      0.12 kB │ gzip:     0.12 kB
+dist/assets/createGetterObject-BWSxsju9.js                                        0.13 kB │ gzip:     0.13 kB
+dist/assets/wireframe-index-DU8A0sAu.js                                           0.14 kB │ gzip:     0.13 kB
+dist/assets/vector-2-BFV0FgmC.js                                                  0.14 kB │ gzip:     0.11 kB
+dist/assets/map-I3k69kP4.js                                                       0.16 kB │ gzip:     0.14 kB
+dist/assets/routes-DwDrieGo.js                                                    0.16 kB │ gzip:     0.13 kB
+dist/assets/timeout-rolwUG6Y.js                                                   0.16 kB │ gzip:     0.15 kB
+dist/assets/mouse-normalize-BYFM2u3m.js                                           0.17 kB │ gzip:     0.16 kB
+dist/assets/square.component-ClLiIkQY.js                                          0.19 kB │ gzip:     0.17 kB
+dist/assets/vec-2-func-C3WjrQ8P.js                                                0.19 kB │ gzip:     0.14 kB
+dist/assets/toSignal-CO0jnpL7.js                                                  0.22 kB │ gzip:     0.18 kB
+dist/assets/dist-B23Rc8lA2.js                                                     0.22 kB │ gzip:     0.18 kB
+dist/assets/grid-helper.component-CzJ4gT5_.js                                     0.23 kB │ gzip:     0.19 kB
+dist/assets/eventListenerStack-C8jde3LS.js                                        0.23 kB │ gzip:     0.18 kB
+dist/assets/args-BgjB4tEk.js                                                      0.24 kB │ gzip:     0.17 kB
+dist/assets/create-struct-DiyZy5zf.js                                             0.24 kB │ gzip:     0.18 kB
+dist/assets/distinctUntilChanged-C0EFMiz_.js                                      0.25 kB │ gzip:     0.19 kB
+dist/assets/texture-4-colors-CzfV8GiR.js                                          0.25 kB │ gzip:     0.21 kB
+dist/assets/merge-C8KivXk0.js                                                     0.26 kB │ gzip:     0.20 kB
+dist/assets/init-oNih3pfp.js                                                      0.27 kB │ gzip:     0.19 kB
+dist/assets/utils-DMjycPUb.js                                                     0.27 kB │ gzip:     0.21 kB
+dist/assets/eventBus-BQNPq8Jp.js                                                  0.27 kB │ gzip:     0.21 kB
+dist/assets/compileShader-vBpNl1an.js                                             0.28 kB │ gzip:     0.22 kB
+dist/assets/browserAll-DJiQLdfA.js                                                0.28 kB │ gzip:     0.19 kB
+dist/assets/linkProgram-4hJ19keb.js                                               0.28 kB │ gzip:     0.22 kB
+dist/assets/createManagedRoot-BLJVUhHx.js                                         0.29 kB │ gzip:     0.23 kB
+dist/assets/takeUntilCleanup-C8Ux-lfg.js                                          0.31 kB │ gzip:     0.22 kB
+dist/assets/utils-point-interpolation-nEI21aMd.js                                 0.32 kB │ gzip:     0.24 kB
+dist/assets/eventListener-BoDH4dCD.js                                             0.33 kB │ gzip:     0.23 kB
+dist/assets/getTextureBatchBindGroup-CJ8lAzGi.js                                  0.34 kB │ gzip:     0.26 kB
+dist/assets/game-ecs-DRXFXPkt.js                                                  0.36 kB │ gzip:     0.23 kB
+dist/assets/ImageSource-Dj6QxY2B.js                                               0.37 kB │ gzip:     0.26 kB
+dist/assets/dist-DA5-JRQu.js                                                      0.37 kB │ gzip:     0.25 kB
+dist/assets/square-Cnv5_Efx.js                                                    0.38 kB │ gzip:     0.26 kB
+dist/assets/take-BU_FAeeO.js                                                      0.38 kB │ gzip:     0.25 kB
+dist/assets/apply-pointer-events-BxCN07B2.js                                      0.38 kB │ gzip:     0.27 kB
+dist/assets/useTick-DU8XLKqx.js                                                   0.38 kB │ gzip:     0.24 kB
+dist/assets/createProgram-D34RACaT.js                                             0.40 kB │ gzip:     0.29 kB
+dist/assets/createCircleVertices-49zEOn5j.js                                      0.41 kB │ gzip:     0.29 kB
+dist/assets/timer-C0_x_kPK.js                                                     0.43 kB │ gzip:     0.30 kB
+dist/assets/ResizeContainer-BgmDICiv.js                                           0.44 kB │ gzip:     0.28 kB
+dist/assets/dist-BArmTeVS.js                                                      0.44 kB │ gzip:     0.32 kB
+dist/assets/switchMap-Bn95fQ9w.js                                                 0.45 kB │ gzip:     0.27 kB
+dist/assets/dist-CM2QlqAH.js                                                      0.47 kB │ gzip:     0.31 kB
+dist/assets/Transition-Cqs-00z5.js                                                0.49 kB │ gzip:     0.31 kB
+dist/assets/dist-zkqa-W5l.js                                                      0.51 kB │ gzip:     0.32 kB
+dist/assets/tap-DosorsGL.js                                                       0.52 kB │ gzip:     0.28 kB
+dist/assets/dist-wRkDhBt_.js                                                      0.57 kB │ gzip:     0.38 kB
+dist/assets/math-DZl_SR1f.js                                                      0.58 kB │ gzip:     0.36 kB
+dist/assets/animationFrameProvider-Cg2iCP41.js                                    0.59 kB │ gzip:     0.27 kB
+dist/assets/plane-equation-ncsQXXEd.js                                            0.60 kB │ gzip:     0.38 kB
+dist/assets/sphere.component-BTaTZ2Af.js                                          0.60 kB │ gzip:     0.38 kB
+dist/assets/rand-DDonvwEq.js                                                      0.61 kB │ gzip:     0.33 kB
+dist/assets/texture-program-eEP0Qx24.js                                           0.64 kB │ gzip:     0.36 kB
+dist/assets/__vite-plugin-wasm-helper-DbnjV-SI.js                                 0.69 kB │ gzip:     0.39 kB
+dist/assets/chunk-CilyBKbf.js                                                     0.69 kB │ gzip:     0.42 kB
+dist/assets/delay-DY0wN_qN.js                                                     0.72 kB │ gzip:     0.36 kB
+dist/assets/normal-box.component-BmG1uzTC.js                                      0.72 kB │ gzip:     0.37 kB
+dist/assets/CanvasPool-DF3Fr-Yd.js                                                0.75 kB │ gzip:     0.42 kB
+dist/assets/play-CNaNOakg.js                                                      0.86 kB │ gzip:     0.45 kB
+dist/assets/dist-BI7NO7EQ.js                                                      0.87 kB │ gzip:     0.51 kB
+dist/assets/dist-0fT0ZpTE.js                                                      0.87 kB │ gzip:     0.47 kB
+dist/assets/performance-rYjf5yHO.js                                               0.90 kB │ gzip:     0.53 kB
+dist/assets/mergeAll-Eu2Wozl8.js                                                  0.90 kB │ gzip:     0.48 kB
+dist/assets/home-page-BTyFLT4T.js                                                 0.91 kB │ gzip:     0.54 kB
+dist/assets/persisted-ClbHFOFO.js                                                 0.93 kB │ gzip:     0.50 kB
+dist/assets/base-tile-size-Csd-lJEb.js                                            0.97 kB │ gzip:     0.62 kB
+dist/assets/ThreePixi-yf5ClE8v.js                                                 1.00 kB │ gzip:     0.58 kB
+dist/assets/svg-animations-CcLP92Zf.js                                            1.01 kB │ gzip:     0.56 kB
+dist/assets/create-square-mesh-DUZ79Lmd.js                                        1.02 kB │ gzip:     0.56 kB
+dist/assets/offscreen-canvas-paint-ClVN8Ozh.js                                    1.05 kB │ gzip:     0.58 kB
+dist/assets/Cache-CUF2k9l1.js                                                     1.09 kB │ gzip:     0.55 kB
+dist/assets/animationFrame-C0RVoCnF.js                                            1.14 kB │ gzip:     0.57 kB
+dist/assets/GraphicsSvg-BZJFSSTu.js                                               1.18 kB │ gzip:     0.60 kB
+dist/assets/preload-helper-BFUm3KPL.js                                            1.19 kB │ gzip:     0.68 kB
+dist/assets/page-scroll-animation-1-c9gDWB.js                                     1.20 kB │ gzip:     0.60 kB
+dist/assets/dist-ZTIYLEtB.js                                                      1.20 kB │ gzip:     0.70 kB
+dist/assets/BlendModesExamples-B4YUXcbR.js                                        1.22 kB │ gzip:     0.66 kB
+dist/assets/dist-BsdQ8e7w.js                                                      1.22 kB │ gzip:     0.63 kB
+dist/assets/dist-C_4sigRO.js                                                      1.25 kB │ gzip:     0.67 kB
+dist/assets/MouseTrail-DDHx0m0i.js                                                1.27 kB │ gzip:     0.71 kB
+dist/assets/simple-program-C6klMo6N.js                                            1.30 kB │ gzip:     0.75 kB
+dist/assets/TypeGPU-XXjZjhuj.js                                                   1.34 kB │ gzip:     0.69 kB
+dist/assets/Three-FLqLo6tn.js                                                     1.37 kB │ gzip:     0.76 kB
+dist/assets/paint-app-CaoQltpP.js                                                 1.38 kB │ gzip:     0.80 kB
+dist/assets/BasicExample-XG56Eqn-.js                                              1.42 kB │ gzip:     0.78 kB
+dist/assets/zig-zag-stroke-BqrY2dgt.js                                            1.42 kB │ gzip:     0.79 kB
+dist/assets/dist-C1KEdpvb.js                                                      1.43 kB │ gzip:     0.60 kB
+dist/assets/offscreen-canvas-support-check-rw_PWhc0.js                            1.45 kB │ gzip:     0.70 kB
+dist/assets/GraphicsSimple-5b55fqEh.js                                            1.46 kB │ gzip:     0.54 kB
+dist/assets/dev-Biyb6NDh.js                                                       1.48 kB │ gzip:     0.66 kB
+dist/assets/ripple-CEugL0Sj.js                                                    1.48 kB │ gzip:     0.81 kB
+dist/assets/can-i-use-C4pEgWom.js                                                 1.54 kB │ gzip:     0.69 kB
+dist/assets/combineProps-4WC0nBtX.js                                              1.55 kB │ gzip:     0.78 kB
+dist/assets/GraphicsAdvanced-CZm6rUSW.js                                          1.56 kB │ gzip:     0.55 kB
+dist/assets/css-gradient-border-glowing-animation-hover-effect-CHfCEzot.js        1.57 kB │ gzip:     0.79 kB
+dist/assets/helpers-5CI7JfHz.js                                                   1.59 kB │ gzip:     0.80 kB
+dist/assets/AdvancedScratchCard-CmW10Oj2.js                                       1.63 kB │ gzip:     0.72 kB
+dist/assets/hello-triangle-DHt_Goli.js                                            1.64 kB │ gzip:     0.94 kB
+dist/assets/BasicContainer-1tnnDGLn.js                                            1.64 kB │ gzip:     0.87 kB
+dist/assets/solid-rootless-test-CDTRD498.js                                       1.67 kB │ gzip:     0.85 kB
+dist/assets/dist-BZ5NEh6B.js                                                      1.69 kB │ gzip:     0.83 kB
+dist/assets/draw-modes-BgLjwexa.js                                                1.69 kB │ gzip:     0.86 kB
+dist/assets/tree-CSCGxAcB.js                                                      1.75 kB │ gzip:     0.87 kB
+dist/assets/rotating-cube-2-BnTpdW07.js                                           1.76 kB │ gzip:     0.68 kB
+dist/assets/Camera.provider-BjCi2e0A.js                                           1.78 kB │ gzip:     0.85 kB
+dist/assets/svg-angle-visualization-UmyxG04X.js                                   1.81 kB │ gzip:     0.87 kB
+dist/assets/breakout-2WZa9e16.js                                                  1.82 kB │ gzip:     0.90 kB
+dist/assets/solid-utils-BQqjcD6q.js                                               1.86 kB │ gzip:     0.82 kB
+dist/assets/buffers-mhcVhRau.js                                                   1.89 kB │ gzip:     0.67 kB
+dist/assets/frustum-DZPO8OAP.js                                                   1.91 kB │ gzip:     0.96 kB
+dist/assets/TypeGPUCanvasContext.provider-D2SXNjBc.js                             1.92 kB │ gzip:     0.80 kB
+dist/assets/sort-transparency-D0HbAIBv.js                                         1.95 kB │ gzip:     1.04 kB
+dist/assets/shaders-CKHAKIiW.js                                                   2.00 kB │ gzip:     0.77 kB
+dist/assets/msdf-text-CBDHCU83.js                                                 2.00 kB │ gzip:     1.07 kB
+dist/assets/number-precision-drag-input-gMlx1Ugg.js                               2.02 kB │ gzip:     1.04 kB
+dist/assets/dist-CtZEbVRY.js                                                      2.03 kB │ gzip:     1.00 kB
+dist/assets/meshing-mAnGoWzX.js                                                   2.04 kB │ gzip:     0.96 kB
+dist/assets/StateCard-DX6SAN_v.js                                                 2.09 kB │ gzip:     1.03 kB
+dist/assets/circles-boxes-D1gJAEwi.js                                             2.09 kB │ gzip:     0.97 kB
+dist/assets/createPointerData-MMryFlPV.js                                         2.09 kB │ gzip:     0.65 kB
+dist/assets/Solid-Three-DRlTJEp0.js                                               2.14 kB │ gzip:     1.01 kB
+dist/assets/1.1-webgpu-fundamentals-DdTGfS34.js                                   2.20 kB │ gzip:     1.07 kB
+dist/assets/affine-transformations-3d-BNOjGWMK.js                                 2.21 kB │ gzip:     1.13 kB
+dist/assets/1.2-run-computations-on-the-gpu-DJd2Q_5A.js                           2.24 kB │ gzip:     1.15 kB
+dist/assets/circles-boxes-dom-BRUi2Esh.js                                         2.24 kB │ gzip:     0.99 kB
+dist/assets/mouse-flowmap--jFkxqdf.js                                             2.26 kB │ gzip:     1.24 kB
+dist/assets/ViewOffset-CRUiXcdw.js                                                2.26 kB │ gzip:     1.04 kB
+dist/assets/circles-boxes-pixijs-BR-NCCXZ.js                                      2.27 kB │ gzip:     1.06 kB
+dist/assets/flowmap-BxYcXyM0.js                                                   2.29 kB │ gzip:     1.25 kB
+dist/assets/camera-projection-webgl2-BkK42LF_.js                                  2.30 kB │ gzip:     1.20 kB
+dist/assets/size-CzCAwr20.js                                                      2.32 kB │ gzip:     1.24 kB
+dist/assets/matrices-2d-D1H_2uCS.js                                               2.34 kB │ gzip:     1.23 kB
+dist/assets/ogl-instancing-DoKRTZhK.js                                            2.39 kB │ gzip:     1.20 kB
+dist/assets/layer-with-multiple-layers-CMqASsN3.js                                2.39 kB │ gzip:     1.01 kB
+dist/assets/raycasting-Bg8xfkas.js                                                2.40 kB │ gzip:     1.14 kB
+dist/assets/Game-CMES5zdt.js                                                      2.46 kB │ gzip:     1.16 kB
+dist/assets/async-BALZU8oG.js                                                     2.48 kB │ gzip:     0.92 kB
+dist/assets/paint-2-Bx6QxUEi.js                                                   2.56 kB │ gzip:     1.36 kB
+dist/assets/RenderLayers-B8cUGFSl.js                                              2.58 kB │ gzip:     1.12 kB
+dist/assets/createDragSensor-ILkRZtL1.js                                          2.75 kB │ gzip:     1.20 kB
+dist/assets/solid-pixi-B1VNtVCG.js                                                2.79 kB │ gzip:     1.34 kB
+dist/assets/lesson-1-fundamentals-Bs21uoAQ.js                                     2.83 kB │ gzip:     1.36 kB
+dist/assets/instanced-drawing-BTIMVA43.js                                         2.83 kB │ gzip:     1.25 kB
+dist/assets/6.5-webgpu-multisampling-CMG4v0eF.js                                  2.93 kB │ gzip:     1.36 kB
+dist/assets/dist-B7TysYH8.js                                                      2.94 kB │ gzip:     1.30 kB
+dist/assets/universal-D-G-f71c.js                                                 3.04 kB │ gzip:     1.39 kB
+dist/assets/polylines-CbMyG5zo.js                                                 3.06 kB │ gzip:     1.35 kB
+dist/assets/range-2d-CV9EGeNA.js                                                  3.08 kB │ gzip:     1.45 kB
+dist/assets/Animations-Bnen2U5u.js                                                3.31 kB │ gzip:     1.51 kB
+dist/assets/game-shaders-for-beginners-BjTiAFiv.js                                3.32 kB │ gzip:     1.06 kB
+dist/assets/dist-Dezq0d7r.js                                                      3.32 kB │ gzip:     1.50 kB
+dist/assets/canvas-paint-step-by-step-1-CoYi4qM1.js                               3.40 kB │ gzip:     1.31 kB
+dist/assets/litegraph-atEC9CLK.js                                                 3.41 kB │ gzip:     1.38 kB
+dist/assets/sensor-access-demo-V2xTxp6E.js                                        3.42 kB │ gzip:     0.88 kB
+dist/assets/context-Bqz0wbrl.js                                                   3.51 kB │ gzip:     1.26 kB
+dist/assets/pointerevent-CFtNbLY7.js                                              3.52 kB │ gzip:     1.51 kB
+dist/assets/paint-xcsCzfHf.js                                                     3.52 kB │ gzip:     1.13 kB
+dist/assets/learn-solidjs-utils-sFUjOwmX.js                                       3.57 kB │ gzip:     1.47 kB
+dist/assets/typegpu-hello-triangle-CzsPllVY.js                                    3.58 kB │ gzip:     1.43 kB
+dist/assets/canvas-paint-step-by-step-2-COCxXdvL.js                               3.62 kB │ gzip:     1.57 kB
+dist/assets/input-visualizer-DMbNACpV.js                                          3.62 kB │ gzip:     1.36 kB
+dist/assets/AnimationsExample-bYIJvEAK.js                                         3.64 kB │ gzip:     1.22 kB
+dist/assets/SensorDemo-CzjgLxR2.js                                                3.70 kB │ gzip:     1.60 kB
+dist/assets/6.1-webgpu-textures-BElGZ6hC.js                                       3.87 kB │ gzip:     1.62 kB
+dist/assets/rotating-cube-CaVljIJf.js                                             4.03 kB │ gzip:     1.72 kB
+dist/assets/6.2-webgpu-loading-images-into-textures-C6kqFSuQ.js                   4.13 kB │ gzip:     1.73 kB
+dist/assets/ogl-blending-modes-Cg4NFIrm.js                                        4.14 kB │ gzip:     1.75 kB
+dist/assets/5.3-index-buffers-DkHMRYU1.js                                         4.25 kB │ gzip:     1.82 kB
+dist/assets/3-webgpu-uniforms-B4s8YKYl.js                                         4.27 kB │ gzip:     1.79 kB
+dist/assets/5.2-webgpu-instancing-with-vertex-buffers-D2ptAU3O.js                 4.28 kB │ gzip:     1.82 kB
+dist/assets/NestedDemo-BZmcEl9N.js                                                4.37 kB │ gzip:     1.96 kB
+dist/assets/tile-based-canvas-DzrvXPQS.js                                         4.37 kB │ gzip:     1.71 kB
+dist/assets/intersecting-circles-BaNCHzb7.js                                      4.39 kB │ gzip:     1.71 kB
+dist/assets/affine-transformations-cDx8xD_Q.js                                    4.45 kB │ gzip:     1.69 kB
+dist/assets/v2-xFEi6gaL.js                                                        4.48 kB │ gzip:     1.26 kB
+dist/assets/Sprites-CY7q0K8N.js                                                   4.54 kB │ gzip:     1.98 kB
+dist/assets/5.1-webgpu-vertex-buffers-3moyQTYd.js                                 4.64 kB │ gzip:     2.04 kB
+dist/assets/canvas-paint-D6P0XnC1.js                                              4.66 kB │ gzip:     2.03 kB
+dist/assets/lasso-select-example-e-i686pZ.js                                      4.68 kB │ gzip:     2.18 kB
+dist/assets/trigonometry-BLqLKpyi.js                                              4.79 kB │ gzip:     1.71 kB
+dist/assets/rapier-2d-physics-engine-DZ0ZS2MK.js                                  4.87 kB │ gzip:     1.68 kB
+dist/assets/store-C8xD_U_t.js                                                     4.93 kB │ gzip:     2.03 kB
+dist/assets/uniform-buffer-objects-DqVGuEjS.js                                    4.95 kB │ gzip:     2.16 kB
+dist/assets/wasm-game-of-life-Cfwb31zR.js                                         4.97 kB │ gzip:     2.18 kB
+dist/assets/4-webgpu-storage-buffers-CDpIhtCc.js                                  5.01 kB │ gzip:     2.12 kB
+dist/assets/virtual-scroll-nested-DUjJwfIy.js                                     5.11 kB │ gzip:     2.03 kB
+dist/assets/TreeDisplay-DldBIbou.js                                               5.17 kB │ gzip:     2.10 kB
+dist/assets/2-webgpu-inter-stage-variables-CrB01UR9.js                            5.22 kB │ gzip:     1.79 kB
+dist/assets/tree-struct-rjYUK5EC.js                                               5.25 kB │ gzip:     1.91 kB
+dist/assets/m3-BxrO7FZ3.js                                                        5.45 kB │ gzip:     1.84 kB
+dist/assets/timeline-BNWNDl6v.js                                                  5.61 kB │ gzip:     2.31 kB
+dist/assets/canvasUtils-B6GPj0Kh.js                                               5.68 kB │ gzip:     1.89 kB
+dist/assets/tiled-map-CoZWEZlV.js                                                 5.87 kB │ gzip:     1.91 kB
+dist/assets/getRandomObject-N4g3j2lZ.js                                           6.22 kB │ gzip:     2.55 kB
+dist/assets/rotating-cube-2-C_QXVzTE.js                                           6.35 kB │ gzip:     2.61 kB
+dist/assets/scroll-trigger-svg-text-mask-D0AplfDf.js                              6.39 kB │ gzip:     2.91 kB
+dist/assets/NestedOverlayDemo-UzwL9F_9.js                                         7.65 kB │ gzip:     3.07 kB
+dist/assets/draw-on-canvas-DKvTR8-i.js                                            7.70 kB │ gzip:     2.49 kB
+dist/assets/virtual-scroll-B4SeAuDT.js                                            7.90 kB │ gzip:     2.79 kB
+dist/assets/multitouch-Bw91PmDz.js                                                7.92 kB │ gzip:     2.54 kB
+dist/assets/data-Q2FXN2QL.js                                                      8.12 kB │ gzip:     3.10 kB
+dist/assets/color-functions-CEs1U19j.js                                           8.17 kB │ gzip:     2.69 kB
+dist/assets/web-audio-page-B7PQjMDB.js                                            8.40 kB │ gzip:     3.06 kB
+dist/assets/m2x3-Dtozq-00.js                                                      8.57 kB │ gzip:     2.79 kB
+dist/assets/docking-dVq-03tu.js                                                   8.58 kB │ gzip:     3.23 kB
+dist/assets/pixijs-examples-BfeMPXch.js                                           8.69 kB │ gzip:     3.77 kB
+dist/assets/instancing-with-ubo-and-vao-TLrhlGCT.js                               8.82 kB │ gzip:     2.56 kB
+dist/assets/index-BzCO0cj0.js                                                     8.92 kB │ gzip:     3.89 kB
+dist/assets/ShaderToyMesh-CvKvImiX.js                                             9.23 kB │ gzip:     3.46 kB
+dist/assets/SolidThreeExample-CLByg_j0.js                                         9.33 kB │ gzip:     3.89 kB
+dist/assets/three-examples-CUMdRBlq.js                                            9.57 kB │ gzip:     2.00 kB
+dist/assets/app-router-tvGL7B1D.js                                                9.63 kB │ gzip:     4.44 kB
+dist/assets/example-CV7Y0vKC.js                                                   9.84 kB │ gzip:     3.36 kB
+dist/assets/main-zpaK2wSk.js                                                     10.27 kB │ gzip:     3.42 kB
+dist/assets/FlipDebugOverlay-CAc_87cu.js                                         10.30 kB │ gzip:     3.51 kB
+dist/assets/webgl-whiteboard-2QL2fjN4.js                                         10.41 kB │ gzip:     3.46 kB
+dist/assets/routes-Cya6w9Pl.js                                                   10.49 kB │ gzip:     1.88 kB
+dist/assets/BufferResource-DNzmZp5B.js                                           10.56 kB │ gzip:     2.79 kB
+dist/assets/ecsy-BYaMd3Ut.js                                                     10.57 kB │ gzip:     3.13 kB
+dist/assets/camera-projection-svg-DGrSZyIM.js                                    10.67 kB │ gzip:     4.03 kB
+dist/assets/shortcut-settings-DmDv1BMi.js                                        10.85 kB │ gzip:     3.47 kB
+dist/assets/OrbitControls-BIlJ0-Ey.js                                            11.18 kB │ gzip:     3.07 kB
+dist/assets/skinning-BRy7RZlE.js                                                 11.24 kB │ gzip:     3.96 kB
+dist/assets/web-B9W6WiTW.js                                                      11.88 kB │ gzip:     4.92 kB
+dist/assets/brush-example-BAa8mQV4.js                                            12.54 kB │ gzip:     4.43 kB
+dist/assets/custom-renderer-DbYWrRW-.js                                          12.60 kB │ gzip:     3.48 kB
+dist/assets/3dWireframe-CNrIRZwf.js                                              12.62 kB │ gzip:     4.51 kB
+dist/assets/img-onload-test-osY5jO6k.js                                          13.10 kB │ gzip:     3.95 kB
+dist/assets/m4-U0VpXYvQ.js                                                       13.41 kB │ gzip:     4.90 kB
+dist/assets/load-gltf-CY3lD64f.js                                                13.72 kB │ gzip:     4.62 kB
+dist/assets/typegpu-rotating-cube-example-B8eoYmRZ.js                            14.75 kB │ gzip:     3.50 kB
+dist/assets/keyboard-display-DlpJDmWy.js                                         15.04 kB │ gzip:     2.56 kB
+dist/assets/ui-example-B-W2f6J_.js                                               15.11 kB │ gzip:     5.02 kB
+dist/assets/layers-DSfL6hPq.js                                                   15.15 kB │ gzip:     4.92 kB
+dist/assets/model-viewer-DHaN8hyJ.js                                             15.27 kB │ gzip:     4.20 kB
+dist/assets/paint-page-DYnsrjq2.js                                               15.45 kB │ gzip:     5.39 kB
+dist/assets/from-BN402N_p.js                                                     15.80 kB │ gzip:     5.13 kB
+dist/assets/solid-motionone-BPyhlH5B.js                                          15.99 kB │ gzip:     6.63 kB
+dist/assets/routes-DfmMGMqo.js                                                   15.99 kB │ gzip:     3.10 kB
+dist/assets/programs-CspvmR9b.js                                                 16.05 kB │ gzip:     5.29 kB
+dist/assets/tanki-DgBUYF_q.js                                                    16.18 kB │ gzip:     3.72 kB
+dist/assets/bitecs-ecs-BQu700pu.js                                               17.15 kB │ gzip:     6.04 kB
+dist/assets/floating-ui.dom-BxfsYRtp.js                                          17.93 kB │ gzip:     7.13 kB
+dist/assets/solid-D2BnvDy4.js                                                    18.05 kB │ gzip:     6.91 kB
+dist/assets/twgl-2-development-qT4A3EM8.js                                       18.26 kB │ gzip:     5.12 kB
+dist/assets/test-leptos-DMm2xjJm.js                                              20.54 kB │ gzip:     4.90 kB
+dist/assets/m2x3-Cs4PuJj3.js                                                     21.57 kB │ gzip:     7.08 kB
+dist/assets/wasm-bindgen-gaTTtYoU.js                                             23.18 kB │ gzip:     5.45 kB
+dist/assets/resizable-BDm2OpVF.js                                                24.53 kB │ gzip:     6.88 kB
+dist/assets/static-variables-Cfnodymz.js                                         25.23 kB │ gzip:     4.89 kB
+dist/assets/GCManagedHash-B8DtvPet.js                                            25.46 kB │ gzip:     8.72 kB
+dist/assets/App-Dvi3ug6q.js                                                      25.57 kB │ gzip:     9.19 kB
+dist/assets/App-BiaRA2bP.js                                                      25.58 kB │ gzip:     9.58 kB
+dist/assets/SortableOverlayDemo-Yy6ejQgp.js                                      26.18 kB │ gzip:     9.04 kB
+dist/assets/CanvasRenderer-D-l-Lgpm.js                                           26.51 kB │ gzip:     7.75 kB
+dist/assets/buffer-D3CeIW5U.js                                                   26.79 kB │ gzip:     6.16 kB
+dist/assets/cn-BJyqQ-nV.js                                                       27.24 kB │ gzip:     8.68 kB
+dist/assets/gpu-text-rendering-Do_kJ6Xg.js                                       27.74 kB │ gzip:     9.22 kB
+dist/assets/geometric-algebra-C0wX_-Hq.js                                        28.31 kB │ gzip:     7.75 kB
+dist/assets/cloud-storage-tree-CT6EPMST.js                                       33.17 kB │ gzip:     9.28 kB
+dist/assets/twgl-EXUDR_cT.js                                                     33.48 kB │ gzip:    10.91 kB
+dist/assets/BitmapFont-DW2BDD7b.js                                               33.55 kB │ gzip:    11.20 kB
+dist/assets/wgpu-hello-triangle-BF6RJnvz.js                                      35.12 kB │ gzip:     8.73 kB
+dist/assets/WebGPURenderer-AInrfeUR.js                                           37.81 kB │ gzip:    10.52 kB
+dist/assets/draw-cubes-CGABEMwk.js                                               37.83 kB │ gzip:     6.46 kB
+dist/assets/Filter-GwU-Ydr1.js                                                   38.76 kB │ gzip:    11.06 kB
+dist/assets/wgpu-matrix.module-CyGU3WgL.js                                       38.77 kB │ gzip:     9.61 kB
+dist/assets/FilterSystem-NKHcXb7q.js                                             39.39 kB │ gzip:    12.77 kB
+dist/assets/FederatedEventTarget-BD40xC1n.js                                     42.54 kB │ gzip:    11.07 kB
+dist/assets/ScrollTrigger-CZO5R3MM.js                                            42.73 kB │ gzip:    17.54 kB
+dist/assets/webgl-state-diagram-DNlydKoU.js                                      47.24 kB │ gzip:     8.80 kB
+dist/assets/typegpu-caustics-example-Ckll8uI0.js                                 47.45 kB │ gzip:     8.34 kB
+dist/assets/100 world bodies-CkMzbcKs.js                                         51.28 kB │ gzip:    14.62 kB
+dist/assets/RenderTargetSystem-C3I9ERjq.js                                       51.71 kB │ gzip:    14.45 kB
+dist/assets/Main-BI_gLRSw.js                                                     54.28 kB │ gzip:    18.52 kB
+dist/assets/GraphicsContext-yWiLTxY1.js                                          54.40 kB │ gzip:    17.54 kB
+dist/assets/webxr-vr-teleport-Bi5btVgo.js                                        58.91 kB │ gzip:    17.86 kB
+dist/assets/Geometry-Bl3FXB_t.js                                                 62.35 kB │ gzip:    20.47 kB
+dist/assets/typegpu-draw-app-example-BX6hPjQa.js                                 63.37 kB │ gzip:    16.91 kB
+dist/assets/WebGLRenderer-BT56K3S-.js                                            67.78 kB │ gzip:    18.48 kB
+dist/assets/PostprocessingSmaa-C0LMC1c5.js                                       68.45 kB │ gzip:    40.75 kB
+dist/assets/components-DzK1m7aR.js                                               68.47 kB │ gzip:    21.57 kB
+dist/assets/gsap-DJE0UGsV.js                                                     69.56 kB │ gzip:    27.28 kB
+dist/assets/bookmarks-explorer-DjNKeAbQ.js                                       81.54 kB │ gzip:    23.03 kB
+dist/assets/ogl-CCMHdCXK.js                                                     101.29 kB │ gzip:    30.93 kB
+dist/assets/routes-C6maYaUi.js                                                  151.19 kB │ gzip:    22.61 kB
+dist/assets/rpg-game-CkPtXIVB.js                                                216.91 kB │ gzip:    63.70 kB
+dist/assets/rapier-HgZ6T5FQ.js                                                  221.61 kB │ gzip:    31.01 kB
+dist/assets/solid-dockview-DBhjxskm.js                                          245.09 kB │ gzip:    57.22 kB
+dist/assets/svg-editor-DsgTE7cL.js                                              255.12 kB │ gzip:    76.87 kB
+dist/assets/typegpu-C8uTw3re.js                                                 287.96 kB │ gzip:    75.94 kB
+dist/assets/SvgLoader-BGNw4Eb5.js                                               339.72 kB │ gzip:    93.89 kB
+dist/assets/lib-aLYNNW8Z.js                                                     360.71 kB │ gzip:    74.50 kB
+dist/assets/excalibur-examples-DXk2mlzU.js                                      493.02 kB │ gzip:   126.04 kB
+dist/assets/first-project-23bO6i6m.js                                           498.80 kB │ gzip:   121.88 kB
+dist/assets/three.module-CmpkyT5N.js                                            596.75 kB │ gzip:   150.93 kB
+dist/assets/spector-hf5nZbKO.js                                                 691.85 kB │ gzip:   171.22 kB
+dist/assets/phaser.esm-Dz4UxIbQ.js                                            1,352.45 kB │ gzip:   351.55 kB
+dist/assets/babylon-example-CbbhnLhp.js                                       8,104.00 kB │ gzip: 1,689.89 kB
+
+[33m[EVAL] [0mUse of direct `eval` function is strongly discouraged as it poses security risks and may cause issues with minification.
+       [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m node_modules/.pnpm/litegraph.js@0.7.18/node_modules/litegraph.js/build/litegraph.js:10223:20 [38;5;246m][0m
+       [38;5;246m│[0m
+ [38;5;246m10223 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mv[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0meval[38;5;249m([0m[38;5;249mv[0m[38;5;249m)[0m[38;5;249m;[0m
+ [38;5;240m      │[0m                                      ──┬─  
+ [38;5;240m      │[0m                                        ╰─── Use of direct `eval` here.
+ [38;5;240m      │[0m 
+ [38;5;240m      │[0m [38;5;115mHelp[0m: Consider using indirect eval. For more information, check the documentation: https://rolldown.rs/guide/troubleshooting#avoiding-direct-eval
+[38;5;246m───────╯[0m
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 5000 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugins. Here is a breakdown:
+  - vite-plugin-wasm (35%)
+  - vite-plugin-arraybuffer (26%)
+  - unocss:global:build:generate (8%)
+  - solid (8%)
+  - unocss:global:build:scan (7%)
+See https://rolldown.rs/options/checks#plugintimings for more details.
+
+✓ built in 11.02s

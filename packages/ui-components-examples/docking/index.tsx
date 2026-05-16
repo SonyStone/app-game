@@ -3,6 +3,7 @@
 import { cn } from '@app-game/utils/cn';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { createDragSensor } from 'solid-dnd';
 import { ComponentProps, createMemo, createSignal, For, onMount, Show, splitProps, type JSX } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
@@ -194,6 +195,10 @@ export default function DockingExample() {
     });
   });
 
+  const sensor = createDragSensor({
+    threshold: 8
+  });
+
   return (
     <>
       <div class="flex flex-col overflow-hidden">
@@ -211,13 +216,26 @@ export default function DockingExample() {
             <div class="rounded-lg bg-pink-500 p-4">01</div>
             <div class="rounded-lg bg-pink-500 p-4">02</div>
             <div class="row-span-3 rounded-lg bg-pink-500 p-4">03</div>
-            <div ref={setRef} class="col-span-2 rounded-lg bg-pink-500 p-4">
+            <div
+              ref={setRef}
+              class="relative col-span-2 touch-none rounded-lg bg-pink-500 p-4"
+              onPointerDown={sensor.onPointerDown}
+              style={{
+                transform: `translate(${sensor.delta()?.x ?? 0}px, ${sensor.delta()?.y ?? 0}px)`
+              }}
+            >
               04
             </div>
           </div>
 
           {/* connected layout */}
-          <div class={cn('absolute inset-0', SHADED_BACKGROUND)} style={target()}>
+          <div
+            class={cn('pointer-events-none absolute inset-0', SHADED_BACKGROUND)}
+            style={{
+              ...target(),
+              transform: `translate(${sensor.delta()?.x ?? 0}px, ${sensor.delta()?.y ?? 0}px)`
+            }}
+          >
             overlay
           </div>
         </div>

@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
+    "solid-dnd": "workspace:*",
     "@app-game/app-router": "workspace:*",
     "@app-game/solid-utils": "workspace:*",
     "@app-game/ui-components": "workspace:*",

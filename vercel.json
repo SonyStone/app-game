@@ -1,3 +1,6 @@
 {
-  "routes": [{ "src": "/[^.]+", "dest": "/", "status": 200 }]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm build",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
