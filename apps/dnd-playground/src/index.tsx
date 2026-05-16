@@ -1,6 +1,6 @@
 /* @refresh reload */
-import { render } from 'solid-js/web';
 import '@unocss/reset/tailwind.css';
+import { render } from 'solid-js/web';
 import 'uno.css';
 import App from './App';
 import './styles.css';

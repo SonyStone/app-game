@@ -1,7 +1,7 @@
 /* @refresh reload */
 import { Router } from '@solidjs/router';
-import { render } from 'solid-js/web';
 import '@unocss/reset/tailwind.css';
+import { render } from 'solid-js/web';
 import 'uno.css';
 import { routes } from './routes';
 import './styles.css';
