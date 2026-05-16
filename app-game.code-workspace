@@ -21,6 +21,9 @@
     {
       "path": "/workspaces/repos/FlexLayout",
     },
+    {
+      "path": "/workspaces/repos/unocss",
+    },
     // {
     //     "path": "/workspaces/repos/solid-primitives",
     // },

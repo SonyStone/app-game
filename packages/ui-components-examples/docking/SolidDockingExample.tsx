@@ -556,56 +556,10 @@ function DockingTabsView(props: {
   );
 }
 
-function RoundOutBorders(props: { side?: 'top-right' | 'bottom-right' | 'bottom-left' | 'top-left' }) {
-  const size = 8;
-  const borderWidth = 1;
-  const backgroundColor = 'var(--out-border-bg-color, transparent)';
-  const borderColor = 'var(--out-border-color, transparent)';
-
-  const positions = {
-    'top-left': `0 ${size}px`,
-    'top-right': `${size}px ${size}px`,
-    'bottom-left': `0 0`,
-    'bottom-right': `${size}px 0`
-  };
-
-  const border = `
-    radial-gradient(${size}px at ${positions[props.side ?? 'bottom-right']},transparent calc(98% - ${borderWidth}px),${borderColor} calc(100% - ${borderWidth}px) 98%,${backgroundColor})
-  `;
-
-  const pos = {
-    'top-left': {
-      left: `-${size}px`,
-      top: `-${borderWidth}px`
-    },
-    'top-right': {
-      right: `-${size}px`,
-      top: `-${borderWidth}px`
-    },
-    'bottom-left': {
-      left: `-${size}px`,
-      bottom: `-${borderWidth}px`
-    },
-    'bottom-right': {
-      right: `-${size}px`,
-      bottom: `-${borderWidth}px`
-    }
-  };
-
-  return (
-    <div
-      class="absolute right-0 bottom-0"
-      style={{
-        ...pos[props.side ?? 'bottom-right'],
-        height: `${size}px`,
-        width: `${size}px`,
-        background: border,
-        'background-position': ` -${size}px -${size}px`,
-        'background-repeat': 'no-repeat'
-      }}
-    ></div>
-  );
-}
+const BEFORE_OUT =
+  'before:content-[""] before:out-es before:out-rounded-lg before:out-border-white before:out-bg-neutral-800';
+const AFTER_OUT =
+  'after:content-[""] after:out-ee after:out-rounded-lg after:out-border-white after:out-bg-neutral-800';
 
 function DockingTabButton(props: {
   index?: number;
@@ -662,7 +616,7 @@ function DockingTabButton(props: {
       class={cn(
         'relative flex touch-none items-center gap-2 rounded-t-lg px-3 py-1.5 text-sm transition-colors',
         props.isActive()
-          ? 'border-x border-t border-white bg-neutral-800 text-white [--out-border-bg-color:theme(colors.neutral.800)] [--out-border-color:theme(colors.white)]'
+          ? `${AFTER_OUT} ${props.index === 0 ? '' : BEFORE_OUT} border-x border-t border-white bg-neutral-800 text-white`
           : 'hover:bg-neutral-850 text-neutral-400 hover:text-neutral-200',
         props.isDragged() && 'cursor-grabbing opacity-60',
         !props.isDragged() && 'cursor-grab'
@@ -675,10 +629,6 @@ function DockingTabButton(props: {
       </Show>
 
       <div class={cn(props.isActive() ? 'absolute inset-x-0 bottom-[-1px] h-[1px] bg-neutral-800' : '')}></div>
-      <Show when={props.index !== 0}>
-        <RoundOutBorders side="bottom-left" />
-      </Show>
-      <RoundOutBorders side="bottom-right" />
     </button>
   );
 }
