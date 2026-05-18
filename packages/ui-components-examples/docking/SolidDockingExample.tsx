@@ -614,9 +614,9 @@ function DockingTabButton(props: {
       type="button"
       ref={(element) => props.setTabRef(props.panelId, element)}
       class={cn(
-        'relative flex touch-none items-center gap-2 rounded-t-lg px-3 py-1.5 text-sm transition-colors',
+        'relative flex touch-none items-center gap-2 rounded-t-lg border-x border-t border-transparent px-3 py-1.5 text-sm transition-colors',
         props.isActive()
-          ? `${AFTER_OUT} ${props.index === 0 ? '' : BEFORE_OUT} border-x border-t border-white bg-neutral-800 text-white`
+          ? `${AFTER_OUT} ${props.index === 0 ? '' : BEFORE_OUT} border-white bg-neutral-800 text-white`
           : 'hover:bg-neutral-850 text-neutral-400 hover:text-neutral-200',
         props.isDragged() && 'cursor-grabbing opacity-60',
         !props.isDragged() && 'cursor-grab'
@@ -1097,7 +1097,7 @@ const DEMO_LAYOUT = {
           type: 'tabs',
           id: 'bottom-right-group',
           activeId: 'component-4',
-          children: ['component-4', 'component-5']
+          children: ['component-4', 'component-5', 'component-3']
         }
       ]
     }

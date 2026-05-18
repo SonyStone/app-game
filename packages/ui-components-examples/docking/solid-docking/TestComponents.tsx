@@ -15,7 +15,7 @@ declare module 'solid-js' {
 
 export function Component1(): JSX.Element {
   return (
-    <test-component-1 class="grid gap-2 overflow-auto border border-green-400 p-2 text-sm text-neutral-300">
+    <test-component-1 class="grid gap-2 overflow-auto p-2 text-sm text-neutral-300">
       <div class="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">src</div>
       <div class="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">components</div>
       <div class="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">Docking.tsx</div>
@@ -41,11 +41,11 @@ export function Component2(): JSX.Element {
   );
 }
 
-export function Component3(props: { layout: DockingNode }): JSX.Element {
+export function Component3(props: Partial<{ layout: DockingNode }>): JSX.Element {
   return (
     <test-component-3 class="@container flex overflow-auto border border-red-400">
       <pre class="w-full bg-neutral-950/70 p-3 text-xs leading-tight text-neutral-300 @3xs:text-sm @3xs:leading-normal">
-        {JSON.stringify(props.layout, null, 2)}
+        {JSON.stringify(props.layout ?? { item1: 'default' }, null, 2)}
       </pre>
     </test-component-3>
   );

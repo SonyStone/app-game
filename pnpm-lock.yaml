@@ -258,6 +258,9 @@ importers:
       '@types/which':
         specifier: ^3.0.4
         version: 3.0.4
+      '@unocss/core':
+        specifier: ^66.6.8
+        version: 66.6.8
       '@unocss/preset-mini':
         specifier: 66.6.8
         version: 66.6.8

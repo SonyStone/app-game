@@ -25,7 +25,7 @@ export default defineConfig({
     //   autoname: true // e.g. enable autoname
     // }),
     UnoCSS({
-      // your config or in uno.config.ts
+      configFile: resolve(__dirname, 'uno.config.ts')
     }),
     solidPlugin(),
     // ? check other plugins for solid-js

@@ -6,7 +6,9 @@ import { ComponentProps, createMemo, createSignal, For, Show, splitProps, type J
 import { createStore } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import { SolidDockView } from '../solid-dockview';
+import { RoundOutBordersExample } from './RoundOutBordersExample';
 import { SolidDockingExample } from './SolidDockingExample';
+import { SolidTabsExample } from './SolidTabsExample';
 
 declare module 'solid-js' {
   namespace JSX {
@@ -186,8 +188,12 @@ export default function DockingExample() {
         {/* Add your docking example components here */}
       </div>
 
-      <dockview-demo class="flex h-full w-full flex-1 flex-col rounded-lg p-2">
+      <dockview-demo class="flex h-full w-full flex-1 flex-col gap-4 rounded-lg p-2">
         <GlobalCursorStyle />
+
+        <RoundOutBordersExample />
+
+        <SolidTabsExample />
 
         <SolidDockingExample />
 

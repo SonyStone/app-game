@@ -1,6 +1,8 @@
+import type { Rule } from '@unocss/core';
+import { symbols } from '@unocss/core';
+import type { Theme } from '@unocss/preset-wind4';
 import {
   colorCSSGenerator,
-  cornerMap,
   generateThemeVariable,
   h,
   hasParseableColor,
@@ -16,94 +18,141 @@ type RuleContextLike = {
 };
 
 type RuleResult = CSSObject | ReturnType<typeof colorCSSGenerator>;
+type OutwardSide = 'b' | 't' | 'l' | 'r';
 
-type OutRoundedCorner =
-  | '-top-left'
-  | '-top-right'
-  | '-bottom-left'
-  | '-bottom-right'
-  | '-start-start'
-  | '-start-end'
-  | '-end-start'
-  | '-end-end';
+const OUTWARD_ROUNDED_RADIUS_VAR = '--un-outward-rounded-radius';
+const OUTWARD_ROUNDED_RADIUS_VALUE = ` var(${OUTWARD_ROUNDED_RADIUS_VAR}, var(--radius-DEFAULT))`;
 
-type OutRoundedCornerMeta = {
-  gradientPosition: string;
-  tilePosition: string;
-  inlineEdge: string;
-  blockEdge: string;
+const OUTWARD_BORDER_WIDTH_VAR = '--un-outward-border-width';
+const OUTWARD_BORDER_WIDTH_VALUE = ` var(${OUTWARD_BORDER_WIDTH_VAR}, 0px)`;
+
+const OUTWARD_BG_COLOR_VAR = '--un-outward-bg-color';
+const OUTWARD_BG_COLOR_VALUE = `var(${OUTWARD_BG_COLOR_VAR}, transparent)`;
+
+const OUTWARD_BORDER_COLOR_VAR = '--un-outward-border-color';
+const OUTWARD_BORDER_COLOR_VALUE = `var(${OUTWARD_BORDER_COLOR_VAR}, ${OUTWARD_BG_COLOR_VALUE})`;
+const OUTWARD_NEGATIVE_BORDER_WIDTH_VALUE = `calc(${OUTWARD_BORDER_WIDTH_VALUE} * -1)`;
+
+const radius = `calc(${OUTWARD_ROUNDED_RADIUS_VALUE} + ${OUTWARD_BORDER_WIDTH_VALUE})`;
+const borderWidth = OUTWARD_BORDER_WIDTH_VALUE;
+const borderColor = OUTWARD_BORDER_COLOR_VALUE;
+const backgroundColor = OUTWARD_BG_COLOR_VALUE;
+const size = `calc(${OUTWARD_ROUNDED_RADIUS_VALUE} + ${OUTWARD_BORDER_WIDTH_VALUE})`;
+
+const defaultObject: CSSObject = {
+  position: 'absolute',
+  'pointer-events': 'none',
+  'background-position': 'right top', // Not important for now
+  'background-repeat': 'no-repeat',
+  'background-size': `${size} ${size}`,
+  width: size,
+  height: size
 };
 
-const OUT_ROUNDED_RADIUS_VAR = '--un-out-rounded-radius';
-const OUT_ROUNDED_BORDER_WIDTH_VAR = '--un-out-rounded-border-width';
-const OUT_ROUNDED_RADIUS_VALUE = `var(${OUT_ROUNDED_RADIUS_VAR}, var(--radius-DEFAULT, 8px))`;
-const OUT_ROUNDED_BORDER_WIDTH_VALUE = `var(${OUT_ROUNDED_BORDER_WIDTH_VAR}, 1px)`;
+const outwardHostBaseStyles: CSSObject = {
+  position: 'relative',
+  'background-color': OUTWARD_BG_COLOR_VALUE,
+  'border-color': OUTWARD_BORDER_COLOR_VALUE,
+  'border-width': OUTWARD_BORDER_WIDTH_VALUE
+};
 
-const outRoundedCornerMeta: Record<OutRoundedCorner, OutRoundedCornerMeta> = {
-  '-top-left': {
-    gradientPosition: `0 var(${OUT_ROUNDED_RADIUS_VAR})`,
-    tilePosition: 'left top',
-    inlineEdge: 'left',
-    blockEdge: 'top'
+const outwardHostSideStyles: Record<OutwardSide, CSSObject> = {
+  b: {
+    'margin-bottom': OUTWARD_NEGATIVE_BORDER_WIDTH_VALUE,
+    'border-top-left-radius': OUTWARD_ROUNDED_RADIUS_VALUE,
+    'border-top-right-radius': OUTWARD_ROUNDED_RADIUS_VALUE,
+    'border-bottom-color': OUTWARD_BG_COLOR_VALUE
   },
-  '-top-right': {
-    gradientPosition: `var(${OUT_ROUNDED_RADIUS_VAR}) var(${OUT_ROUNDED_RADIUS_VAR})`,
-    tilePosition: 'right top',
-    inlineEdge: 'right',
-    blockEdge: 'top'
+  t: {
+    'margin-top': OUTWARD_NEGATIVE_BORDER_WIDTH_VALUE,
+    'border-bottom-left-radius': OUTWARD_ROUNDED_RADIUS_VALUE,
+    'border-bottom-right-radius': OUTWARD_ROUNDED_RADIUS_VALUE,
+    'border-top-color': OUTWARD_BG_COLOR_VALUE
   },
-  '-bottom-left': {
-    gradientPosition: '0 0',
-    tilePosition: 'left bottom',
-    inlineEdge: 'left',
-    blockEdge: 'bottom'
+  l: {
+    'margin-left': OUTWARD_NEGATIVE_BORDER_WIDTH_VALUE,
+    'border-top-right-radius': OUTWARD_ROUNDED_RADIUS_VALUE,
+    'border-bottom-right-radius': OUTWARD_ROUNDED_RADIUS_VALUE,
+    'border-left-color': OUTWARD_BG_COLOR_VALUE
   },
-  '-bottom-right': {
-    gradientPosition: `var(${OUT_ROUNDED_RADIUS_VAR}) 0`,
-    tilePosition: 'right bottom',
-    inlineEdge: 'right',
-    blockEdge: 'bottom'
-  },
-  '-start-start': {
-    gradientPosition: `0 var(${OUT_ROUNDED_RADIUS_VAR})`,
-    tilePosition: 'left top',
-    inlineEdge: 'inset-inline-start',
-    blockEdge: 'inset-block-start'
-  },
-  '-start-end': {
-    gradientPosition: `var(${OUT_ROUNDED_RADIUS_VAR}) var(${OUT_ROUNDED_RADIUS_VAR})`,
-    tilePosition: 'right top',
-    inlineEdge: 'inset-inline-end',
-    blockEdge: 'inset-block-start'
-  },
-  '-end-start': {
-    gradientPosition: '0 0',
-    tilePosition: 'left bottom',
-    inlineEdge: 'inset-inline-start',
-    blockEdge: 'inset-block-end'
-  },
-  '-end-end': {
-    gradientPosition: `var(${OUT_ROUNDED_RADIUS_VAR}) 0`,
-    tilePosition: 'right bottom',
-    inlineEdge: 'inset-inline-end',
-    blockEdge: 'inset-block-end'
+  r: {
+    'margin-right': OUTWARD_NEGATIVE_BORDER_WIDTH_VALUE,
+    'border-top-left-radius': OUTWARD_ROUNDED_RADIUS_VALUE,
+    'border-bottom-left-radius': OUTWARD_ROUNDED_RADIUS_VALUE,
+    'border-right-color': OUTWARD_BG_COLOR_VALUE
   }
 };
 
-const outRoundedRules = [
-  [/^out()$/, handlerOutPlacement],
-  [/^out-([rltbse])$/, handlerOutPlacement],
-  [/^out-([rltb]{2})$/, handlerOutPlacement],
-  [/^out-([bise][se])$/, handlerOutPlacement],
-  [/^out-([bi][se]-[bi][se])$/, handlerOutPlacement],
+// moving clockwise from top right
+const connectedCorners = {
+  // top right corner
+  '↗': {
+    start: {
+      'inset-inline-end': `calc(${borderWidth} * -1)`,
+      'inset-block-start': `calc(${radius} * -1)`
+    },
+    // ▢◜
+    end: {
+      'inset-inline-end': `calc(${radius} * -1)`,
+      'inset-block-start': `calc(${borderWidth} * -1)`
+    }
+  },
+  // bottom right corner
+  '↘': {
+    // ▢◟
+    start: {
+      'inset-inline-end': `calc(${radius} * -1)`,
+      'inset-block-end': `calc(${borderWidth} * -1)`
+    },
+    // ▢
+    // ◝
+    end: {
+      'inset-inline-end': `calc(${borderWidth} * -1)`,
+      'inset-block-end': `calc(${radius} * -1)`
+    }
+  },
+  // bottom left corner
+  '↙': {
+    // ▢
+    // ◜
+    start: {
+      'inset-inline-start': `calc(${borderWidth} * -1)`,
+      'inset-block-end': `calc(${radius} * -1)`
+    },
+    end: {
+      'inset-inline-start': `calc(${radius} * -1)`,
+      'inset-block-end': `calc(${borderWidth} * -1)`
+    }
+  },
+  // top left corner
+  '↖': {
+    start: {
+      'inset-inline-start': `calc(${radius} * -1)`,
+      'inset-block-start': `calc(${borderWidth} * -1)`
+    },
+    end: {
+      'inset-inline-start': `calc(${borderWidth} * -1)`,
+      'inset-block-start': `calc(${radius} * -1)`
+    }
+  }
+};
 
-  [/^(?:out-rounded|out-rd)(?:-(.+))?$/, handlerOutRoundedRadius],
+const gradientPositions = {
+  '◞': `0 0`,
+  '◟': `${radius} 0`,
+  '◜': `${radius} ${radius}`,
+  '◝': `0 ${radius}`
+};
 
-  [/^(?:out-border|out-b)-(?:width|size)-(.+)$/, handlerOutRoundedBorderWidth],
-  [/^(?:out-border|out-b)-(.+)$/, handlerOutRoundedBorderColorOrWidth],
-
-  [/^out-bg-(.+)$/, handlerOutRoundedBackgroundColor]
-] satisfies Array<[RegExp, (match: string[], ctx: RuleContextLike) => RuleResult]>;
+const background = (position: '◞' | '◟' | '◜' | '◝') => ({
+  background:
+    `radial-gradient(` +
+    `${radius} at ${gradientPositions[position]}, ` +
+    `transparent calc(98% - ${borderWidth}), ` +
+    `${borderColor} calc(100% - ${borderWidth}) 98%, ` +
+    `${backgroundColor}` +
+    `)`
+});
 
 export function presetOutRounded() {
   return {
@@ -112,123 +161,161 @@ export function presetOutRounded() {
   };
 }
 
-function handlerOutPlacement([, side = '']: string[]): RuleResult {
-  const corners = resolveOutRoundedCorners(side);
-  if (!corners) {
+// Round-Out
+// outward-side-<size> // rounded size
+// outward-bg-<color>
+// outward-border-<width>
+// outward-border-<color>
+const outward = {
+  b: function* () {
+    yield {
+      ...outwardHostBaseStyles,
+      ...outwardHostSideStyles.b
+    };
+    yield {
+      [symbols.selector]: (s: string) => `${s}::before`,
+      content: ' "" ',
+      ...defaultObject,
+      ...background('◞'),
+      ...connectedCorners['↙'].end
+    };
+    yield {
+      [symbols.selector]: (s: string) => `${s}::after`,
+      content: ' "" ',
+      ...defaultObject,
+      ...background('◟'),
+      ...connectedCorners['↘'].start
+    };
+  },
+  t: function* () {
+    yield {
+      ...outwardHostBaseStyles,
+      ...outwardHostSideStyles.t
+    };
+    yield {
+      [symbols.selector]: (s: string) => `${s}::before`,
+      content: ' "" ',
+      ...defaultObject,
+      ...background('◝'),
+      ...connectedCorners['↖'].start
+    };
+    yield {
+      [symbols.selector]: (s: string) => `${s}::after`,
+      content: ' "" ',
+      ...defaultObject,
+      ...background('◜'),
+      ...connectedCorners['↗'].end
+    };
+  },
+  l: function* () {
+    yield {
+      ...outwardHostBaseStyles,
+      ...outwardHostSideStyles.l
+    };
+    yield {
+      [symbols.selector]: (s: string) => `${s}::before`,
+      content: ' "" ',
+      ...defaultObject,
+      ...background('◟'),
+      ...connectedCorners['↖'].end
+    };
+    yield {
+      [symbols.selector]: (s: string) => `${s}::after`,
+      content: ' "" ',
+      ...defaultObject,
+      ...background('◜'),
+      ...connectedCorners['↙'].start
+    };
+  },
+  r: function* () {
+    yield {
+      ...outwardHostBaseStyles,
+      ...outwardHostSideStyles.r
+    };
+    yield {
+      [symbols.selector]: (s: string) => `${s}::before`,
+      content: ' "" ',
+      ...defaultObject,
+      ...background('◞'),
+      ...connectedCorners['↗'].start
+    };
+    yield {
+      [symbols.selector]: (s: string) => `${s}::after`,
+      content: ' "" ',
+      ...defaultObject,
+      ...background('◝'),
+      ...connectedCorners['↘'].end
+    };
+  }
+} as const;
+
+const outRoundedRules: Rule<Theme>[] = [
+  [/^outward-([rltb])(?:-(.+))?$/, handlerOutwardPlacement],
+
+  [/^outward-border-(?:width|size)-(.+)$/, handlerOutwardBorderWidth],
+  [/^outward-border-(.+)$/, handlerOutwardBorderColorOrWidth],
+
+  [/^outward-bg-(.+)$/, handlerOutwardBackgroundColor]
+] satisfies Array<[RegExp, (match: string[], ctx: RuleContextLike) => RuleResult | Generator<RuleResult>]>;
+
+function* handlerOutwardPlacement(
+  [, side = '', value = 'DEFAULT']: string[],
+  { theme }: RuleContextLike
+): Generator<CSSObject> {
+  if (!isOutwardSide(side)) {
     return undefined;
   }
 
-  return getOutRoundedPlacement(corners);
-}
-
-function handlerOutRoundedRadius([, value = 'DEFAULT']: string[], { theme }: RuleContextLike): RuleResult {
-  const radius = resolveOutRoundedRadius(value, theme);
-  if (!radius) {
+  const rounded = resolveRounded(value, theme);
+  if (!rounded) {
     return undefined;
   }
 
-  return {
-    [OUT_ROUNDED_RADIUS_VAR]: radius
+  yield {
+    [OUTWARD_ROUNDED_RADIUS_VAR]: rounded
   };
+
+  yield* outward[side]();
 }
 
-function handlerOutRoundedBorderWidth([, value]: string[], { theme }: RuleContextLike): RuleResult {
+function handlerOutwardBorderWidth([, value]: string[], { theme }: RuleContextLike): RuleResult {
   const borderWidth = h.bracket.cssvar.global.px(value, theme);
   if (borderWidth == null) {
     return undefined;
   }
 
   return {
-    [OUT_ROUNDED_BORDER_WIDTH_VAR]: borderWidth
+    [OUTWARD_BORDER_WIDTH_VAR]: borderWidth
   };
 }
 
-function handlerOutRoundedBorderColorOrWidth([, value]: string[], ctx: RuleContextLike): RuleResult {
+function handlerOutwardBorderColorOrWidth([, value]: string[], ctx: RuleContextLike): RuleResult {
   if (hasParseableColor(value, ctx.theme)) {
     return colorCSSGenerator(
       parseColor(value, ctx.theme),
-      '--out-border-color',
-      'out-border',
+      OUTWARD_BORDER_COLOR_VAR,
+      'outward-border',
       ctx as Parameters<typeof colorCSSGenerator>[3]
     );
   }
 
-  return handlerOutRoundedBorderWidth(['', value], ctx);
+  return handlerOutwardBorderWidth(['', value], ctx);
 }
 
-function handlerOutRoundedBackgroundColor([, value]: string[], ctx: RuleContextLike): RuleResult {
+function handlerOutwardBackgroundColor([, value]: string[], ctx: RuleContextLike): RuleResult {
   if (!hasParseableColor(value, ctx.theme)) {
     return undefined;
   }
 
   return colorCSSGenerator(
     parseColor(value, ctx.theme),
-    '--out-border-bg-color',
-    'out-bg',
+    OUTWARD_BG_COLOR_VAR,
+    'outward-bg',
     ctx as Parameters<typeof colorCSSGenerator>[3]
   );
 }
 
-function resolveOutRoundedCorners(side: string): OutRoundedCorner[] | undefined {
-  if (side === '') {
-    return ['-bottom-right'];
-  }
-
-  const corners = cornerMap[side as keyof typeof cornerMap];
-  if (!corners) {
-    return undefined;
-  }
-
-  const supportedCorners = corners.filter(isOutRoundedCorner);
-  return supportedCorners.length > 0 ? supportedCorners : undefined;
-}
-
-function isOutRoundedCorner(value: string): value is OutRoundedCorner {
-  return value in outRoundedCornerMeta;
-}
-
-function getOutRoundedPlacement(corners: OutRoundedCorner[]): CSSObject {
-  const [firstCorner, secondCorner] = corners;
-  const firstMeta = outRoundedCornerMeta[firstCorner];
-
-  const styles: CSSObject = {
-    position: 'absolute',
-    'pointer-events': 'none',
-    background: corners.map(getOutRoundedGradient).join(', '),
-    'background-position': corners.map((corner) => outRoundedCornerMeta[corner].tilePosition).join(', '),
-    'background-repeat': 'no-repeat',
-    'background-size': corners.map(() => `${OUT_ROUNDED_RADIUS_VALUE} ${OUT_ROUNDED_RADIUS_VALUE}`).join(', ')
-  };
-
-  if (!secondCorner) {
-    styles.width = OUT_ROUNDED_RADIUS_VALUE;
-    styles.height = OUT_ROUNDED_RADIUS_VALUE;
-    styles[firstMeta.inlineEdge] = `calc(${OUT_ROUNDED_RADIUS_VALUE} * -1)`;
-    styles[firstMeta.blockEdge] = `calc(${OUT_ROUNDED_BORDER_WIDTH_VALUE} * -1)`;
-    return styles;
-  }
-
-  const secondMeta = outRoundedCornerMeta[secondCorner];
-  if (firstMeta.inlineEdge === secondMeta.inlineEdge) {
-    styles.width = OUT_ROUNDED_RADIUS_VALUE;
-    styles[firstMeta.inlineEdge] = `calc(${OUT_ROUNDED_RADIUS_VALUE} * -1)`;
-    styles[firstMeta.blockEdge] = `calc(${OUT_ROUNDED_BORDER_WIDTH_VALUE} * -1)`;
-    styles[secondMeta.blockEdge] = `calc(${OUT_ROUNDED_BORDER_WIDTH_VALUE} * -1)`;
-    return styles;
-  }
-
-  styles.height = OUT_ROUNDED_RADIUS_VALUE;
-  styles[firstMeta.blockEdge] = `calc(${OUT_ROUNDED_BORDER_WIDTH_VALUE} * -1)`;
-  styles[firstMeta.inlineEdge] = `calc(${OUT_ROUNDED_RADIUS_VALUE} * -1)`;
-  styles[secondMeta.inlineEdge] = `calc(${OUT_ROUNDED_RADIUS_VALUE} * -1)`;
-  return styles;
-}
-
-function getOutRoundedGradient(corner: OutRoundedCorner): string {
-  return `radial-gradient(${OUT_ROUNDED_RADIUS_VALUE} at ${outRoundedCornerMeta[corner].gradientPosition}, transparent calc(98% - ${OUT_ROUNDED_BORDER_WIDTH_VALUE}), var(--out-border-color, transparent) calc(100% - ${OUT_ROUNDED_BORDER_WIDTH_VALUE}) 98%, var(--out-border-bg-color, transparent))`;
-}
-
-function resolveOutRoundedRadius(value: string, theme: OutRoundedTheme): string | undefined {
+function resolveRounded(value: string, theme: OutRoundedTheme): string | undefined {
   if (value === 'DEFAULT') {
     return generateThemeVariable('radius', 'DEFAULT');
   }
@@ -248,4 +335,8 @@ function resolveOutRoundedRadius(value: string, theme: OutRoundedTheme): string 
   }
 
   return isThemeRadius ? generateThemeVariable('radius', value) : resolvedRadius;
+}
+
+function isOutwardSide(value: string): value is OutwardSide {
+  return value === 'b' || value === 't' || value === 'l' || value === 'r';
 }

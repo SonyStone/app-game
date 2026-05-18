@@ -7,6 +7,7 @@ import { presetAnimations } from 'unocss-preset-animations';
 import { presetOutRounded } from './unocss/preset-out-rounded';
 
 export default defineConfig({
+  configDeps: ['unocss/preset-out-rounded.ts'],
   presets: [
     presetWind4(),
     presetOutRounded(),
