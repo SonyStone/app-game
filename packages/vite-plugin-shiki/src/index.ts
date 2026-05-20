@@ -43,6 +43,7 @@ export function codeBlockHighlightPlugin(options: CodeBlockHighlightPluginOption
   const pluginName = options.pluginName ?? 'vite-plugin-shiki';
 
   let highlighterPromise: ReturnType<typeof createCodeHighlighter> | undefined;
+  const virtualIdsByFile = new Map<string, Set<string>>();
 
   return {
     name: pluginName,
@@ -72,7 +73,13 @@ export function codeBlockHighlightPlugin(options: CodeBlockHighlightPluginOption
         return null;
       }
 
-      const [filePath, rawQuery = ''] = id.slice(prefix.length).split('?', 2);
+      const resolvedId = id.slice(prefix.length);
+      const [filePath, rawQuery = ''] = resolvedId.split('?', 2);
+
+      trackVirtualId(virtualIdsByFile, filePath, id);
+
+      this.addWatchFile(filePath);
+
       const code = await readFile(filePath, 'utf8');
       const language = resolveLanguage(filePath, new URLSearchParams(rawQuery), defaultLanguage);
       const highlighter = await (highlighterPromise ??= createCodeHighlighter(theme, supportedLanguages));
@@ -86,6 +93,23 @@ export function codeBlockHighlightPlugin(options: CodeBlockHighlightPluginOption
         `export const language = ${JSON.stringify(language)};`,
         `export default ${JSON.stringify(highlightedHtml)};`
       ].join('\n');
+    },
+    handleHotUpdate(ctx) {
+      const virtualIds = virtualIdsByFile.get(ctx.file);
+
+      if (!virtualIds?.size) {
+        return;
+      }
+
+      const modules = [...virtualIds]
+        .map((virtualId) => ctx.server.moduleGraph.getModuleById(virtualId))
+        .filter((module) => module != null);
+
+      for (const module of modules) {
+        ctx.server.moduleGraph.invalidateModule(module);
+      }
+
+      return modules;
     }
   };
 }
@@ -182,3 +206,14 @@ function normalizeLanguage(language?: string | null): string | undefined {
 }
 
 export type ShikiQueryLanguage = DefaultLanguage;
+
+function trackVirtualId(virtualIdsByFile: Map<string, Set<string>>, filePath: string, virtualId: string): void {
+  const knownVirtualIds = virtualIdsByFile.get(filePath);
+
+  if (knownVirtualIds) {
+    knownVirtualIds.add(virtualId);
+    return;
+  }
+
+  virtualIdsByFile.set(filePath, new Set([virtualId]));
+}
