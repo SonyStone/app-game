@@ -1,7 +1,7 @@
 import { type JSX } from 'solid-js';
 import { template } from 'solid-js/web';
-import { CodeBlock } from '../components/CodeBlock';
-import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
+import { CodeBlock } from '../../components/CodeBlock';
+import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
 import example1Html, {
   code as example1Code,
   language as example1Language

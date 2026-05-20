@@ -5,19 +5,19 @@ export const routes = {
   path: '/',
   component: App,
   children: [
-    { path: ['/', '/overview'], component: lazy(() => import('./pages/OverviewPage')) },
-    { path: '/signals', component: lazy(() => import('./pages/SignalsPage')) },
-    { path: '/derived', component: lazy(() => import('./pages/DerivedPage')) },
-    { path: '/effects', component: lazy(() => import('./pages/EffectsPage')) },
-    { path: '/batching', component: lazy(() => import('./pages/BatchingPage')) },
-    { path: '/stores', component: lazy(() => import('./pages/StorePage')) },
-    { path: '/context', component: lazy(() => import('./pages/ContextPage')) },
-    { path: '/components', component: lazy(() => import('./pages/ComponentsPage')) },
-    { path: '/control-flow', component: lazy(() => import('./pages/ControlFlowPage')) },
-    { path: '/props', component: lazy(() => import('./pages/PropsPage')) },
-    { path: '/resources', component: lazy(() => import('./pages/ResourcesPage')) },
-    { path: '/suspense', component: lazy(() => import('./pages/SuspensePage')) },
-    { path: '/primitives', component: lazy(() => import('./pages/PrimitivesPage')) },
-    { path: '/directives', component: lazy(() => import('./pages/DirectivesPage')) }
+    { path: ['/', '/overview'], component: lazy(() => import('./pages/overview/OverviewPage')) },
+    { path: '/signals', component: lazy(() => import('./pages/signals/SignalsPage')) },
+    { path: '/derived', component: lazy(() => import('./pages/derived/DerivedPage')) },
+    { path: '/effects', component: lazy(() => import('./pages/effects/EffectsPage')) },
+    { path: '/batching', component: lazy(() => import('./pages/batching/BatchingPage')) },
+    { path: '/stores', component: lazy(() => import('./pages/stores/StorePage')) },
+    { path: '/context', component: lazy(() => import('./pages/context/ContextPage')) },
+    { path: '/components', component: lazy(() => import('./pages/components/ComponentsPage')) },
+    { path: '/control-flow', component: lazy(() => import('./pages/control-flow/ControlFlowPage')) },
+    { path: '/props', component: lazy(() => import('./pages/props/PropsPage')) },
+    { path: '/resources', component: lazy(() => import('./pages/resources/ResourcesPage')) },
+    { path: '/suspense', component: lazy(() => import('./pages/suspense/SuspensePage')) },
+    { path: '/primitives', component: lazy(() => import('./pages/primitives/PrimitivesPage')) },
+    { path: '/directives', component: lazy(() => import('./pages/directives/DirectivesPage')) }
   ]
 };

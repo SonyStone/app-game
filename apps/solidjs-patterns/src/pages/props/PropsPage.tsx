@@ -1,7 +1,7 @@
 import { type JSX } from 'solid-js';
 import { template } from 'solid-js/web';
-import { CodeBlock } from '../components/CodeBlock';
-import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
+import { CodeBlock } from '../../components/CodeBlock';
+import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
 import example1Html, { code as example1Code, language as example1Language } from './props-example-1.txt?shiki&lang=tsx';
 import example2Html, { code as example2Code, language as example2Language } from './props-example-2.txt?shiki&lang=tsx';
 import example3Html, { code as example3Code, language as example3Language } from './props-example-3.txt?shiki&lang=tsx';

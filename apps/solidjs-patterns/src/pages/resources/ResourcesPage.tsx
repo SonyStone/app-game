@@ -1,9 +1,9 @@
 import { createResource, createSignal, Suspense, type JSX } from 'solid-js';
 import { template } from 'solid-js/web';
-import { CodeBlock } from '../components/CodeBlock';
-import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
+import { CodeBlock } from '../../components/CodeBlock';
+import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
 import example1Html, {
   code as example1Code,
   language as example1Language

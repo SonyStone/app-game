@@ -1,10 +1,10 @@
 import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
 import { template } from 'solid-js/web';
-import { CodeBlock } from '../components/CodeBlock';
-import { PatternLayout, PatternSection } from '../components/PatternLayout';
-import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
+import { CodeBlock } from '../../components/CodeBlock';
+import { PatternLayout, PatternSection } from '../../components/PatternLayout';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
 import example1Html, {
   code as example1Code,
   language as example1Language

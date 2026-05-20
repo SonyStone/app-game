@@ -1,9 +1,9 @@
 import { createMemo, createSignal, type JSX } from 'solid-js';
 import { template } from 'solid-js/web';
-import { CodeBlock } from '../components/CodeBlock';
-import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
+import { CodeBlock } from '../../components/CodeBlock';
+import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
 import example1Html, { code as example1Code, language as example1Language } from './derived-example-1?shiki';
 import example2Html, { code as example2Code, language as example2Language } from './derived-example-2?shiki';
 import example3Html, { code as example3Code, language as example3Language } from './derived-example-3?shiki';

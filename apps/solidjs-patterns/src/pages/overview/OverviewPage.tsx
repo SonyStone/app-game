@@ -1,7 +1,7 @@
 import { A } from '@solidjs/router';
 import { For, type JSX } from 'solid-js';
-import { Badge } from '../components/ui/Badge';
-import { Card, CardDescription, CardTitle } from '../components/ui/Card';
+import { Badge } from '../../components/ui/Badge';
+import { Card, CardDescription, CardTitle } from '../../components/ui/Card';
 
 // ============================================================================
 // MARK: Overview Page
