@@ -10,6 +10,7 @@
     "strict": true,
     "noEmit": true,
     "isolatedModules": true,
+    "baseUrl": ".",
   },
   "include": [
     "src"

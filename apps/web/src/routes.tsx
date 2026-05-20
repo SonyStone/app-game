@@ -9,6 +9,7 @@ import { paintRoutes } from '@app-game/paint/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
 import { pixijsRoutes } from '@app-game/pixijs-examples/routes';
 import { routes as solidDndPlaygroundRoutes } from '@app-game/solid-dnd-playground/routes';
+import { routes as solidjsPatternsRoutes } from '@app-game/solidjs-patterns/routes';
 import { threeRoutes } from '@app-game/three-examples';
 import { twglRoutes } from '@app-game/twgl-examples/routes';
 import { typegpuRoutes } from '@app-game/typegpu-examples/routes';
@@ -31,6 +32,12 @@ export const routes: Routes[] = [
     name: 'Solid DnD Playground',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     children: [solidDndPlaygroundRoutes]
+  },
+  {
+    path: '/solidjs-patterns',
+    name: 'SolidJS Patterns',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    children: [solidjsPatternsRoutes]
   },
   {
     path: '/dnd-playground',
