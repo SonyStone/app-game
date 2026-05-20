@@ -2,13 +2,6 @@ packages:
   - apps/*
   - packages/*
 
-catalogMode: strict
-
-peerDependencyRules:
-  allowedVersions:
-    tsconfck>typescript: 6.0.3
-    grid-engine>phaser: 4.1.0
-
 catalog:
   '@corvu/drawer': ^0.2.4
   '@kobalte/core': ^0.13.11
@@ -26,6 +19,7 @@ catalog:
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   jsdom: ^29.1.1
+  shiki: ^4.1.0
   solid-js: ^1.9.12
   tailwind-merge: ^3.6.0
   typescript: ^6.0.3
@@ -33,3 +27,10 @@ catalog:
   vite-plugin-solid: 2.11.12
   vite-tsconfig-paths: ^6.1.1
   vitest: 4.1.6
+
+catalogMode: strict
+
+peerDependencyRules:
+  allowedVersions:
+    grid-engine>phaser: 4.1.0
+    tsconfck>typescript: 6.0.3

@@ -1,3 +1,4 @@
+import { codeBlockHighlightPlugin } from '@app-game/vite-plugin-shiki';
 import UnoCSS from '@unocss/vite';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
@@ -6,6 +7,7 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [
+    codeBlockHighlightPlugin(),
     tsconfigPaths({ root: '../..' }),
     solid(),
     UnoCSS({
@@ -14,10 +16,5 @@ export default defineConfig({
   ],
   server: {
     host: '0.0.0.0'
-  },
-  resolve: {
-    alias: {
-      '~': '/src'
-    }
   }
 });

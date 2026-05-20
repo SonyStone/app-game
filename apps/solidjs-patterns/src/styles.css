@@ -22,3 +22,18 @@ pre code {
   font-size: 0.8rem;
   line-height: 1.6;
 }
+
+.code-block-body .shiki {
+  margin: 0;
+  min-width: 100%;
+  background-color: transparent !important;
+  padding: 1rem;
+}
+
+.code-block-body .shiki,
+.code-block-body .shiki code,
+.code-block-body .shiki span {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}

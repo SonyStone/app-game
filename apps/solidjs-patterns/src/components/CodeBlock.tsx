@@ -1,21 +1,28 @@
-import { createSignal, type JSX } from 'solid-js';
+import { createMemo, createSignal, type JSX } from 'solid-js';
 
 // ============================================================================
 // MARK: CodeBlock
 // ============================================================================
 
 export type CodeBlockProps = {
-  code: string;
+  code?: string;
   language?: string;
+  highlightedHtml?: string;
   title?: string;
   class?: string;
+  children?: JSX.Element;
 };
 
 export function CodeBlock(props: CodeBlockProps): JSX.Element {
   const [copied, setCopied] = createSignal(false);
+  const trimmedCode = createMemo(() => props.code?.trim() ?? '');
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(props.code.trim());
+    if (!trimmedCode()) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(trimmedCode());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -34,21 +41,21 @@ export function CodeBlock(props: CodeBlockProps): JSX.Element {
         </div>
         <div class="flex items-center gap-2">
           {props.language && <span class="font-mono text-[10px] text-neutral-600 uppercase">{props.language}</span>}
-          <button
-            onClick={handleCopy}
-            class="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-neutral-500 transition-colors hover:bg-neutral-700 hover:text-neutral-300"
-            aria-label="Copy code"
-          >
-            {copied() ? <CheckIcon /> : <CopyIcon />}
-            {copied() ? 'Copied!' : 'Copy'}
-          </button>
+          {props.code && (
+            <button
+              onClick={handleCopy}
+              class="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-neutral-500 transition-colors hover:bg-neutral-700 hover:text-neutral-300"
+              aria-label="Copy code"
+            >
+              {copied() ? <CheckIcon /> : <CopyIcon />}
+              {copied() ? 'Copied!' : 'Copy'}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Code */}
-      <pre class="overflow-x-auto p-4 text-[0.8rem] leading-relaxed text-neutral-200">
-        <code>{props.code.trim()}</code>
-      </pre>
+      {props.children}
     </div>
   );
 }

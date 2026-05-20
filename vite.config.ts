@@ -1,6 +1,7 @@
 import UnoCSS from '@unocss/vite';
 import { resolve } from 'path';
 // import solidDevtools from 'solid-devtools/vite';
+import { codeBlockHighlightPlugin } from '@app-game/vite-plugin-shiki';
 import typegpuPlugin from 'unplugin-typegpu/vite';
 import { defineConfig } from 'vite';
 import glsl from 'vite-plugin-glsl';
@@ -18,6 +19,9 @@ const devServerPort = Number(process.env.APP_PORT ?? process.env.PORT ?? '3120')
 export default defineConfig({
   root: webAppRoot,
   plugins: [
+    codeBlockHighlightPlugin({
+      theme: 'dark-plus'
+    }),
     wasm(),
     topLevelAwait(),
     // solidDevtools({

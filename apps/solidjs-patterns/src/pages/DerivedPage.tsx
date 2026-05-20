@@ -1,8 +1,12 @@
 import { createMemo, createSignal, type JSX } from 'solid-js';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import example1Html, { code, language } from './example-1?shiki';
+
+console.log('example1Html', language, code);
 
 // ============================================================================
 // MARK: Derived Page
@@ -19,20 +23,9 @@ export default function DerivedPage(): JSX.Element {
         title="createMemo"
         description="Memo tracks its reactive dependencies automatically. It only re-runs when a dependency changes, and caches the result between updates."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createSignal, createMemo } from 'solid-js';
-
-const [firstName, setFirstName] = createSignal('John');
-const [lastName, setLastName] = createSignal('Doe');
-
-// Only recomputes when firstName or lastName changes
-const fullName = createMemo(() => \`\${firstName()} \${lastName()}\`);
-
-console.log(fullName()); // "John Doe"
-setFirstName('Jane');
-console.log(fullName()); // "Jane Doe" — recomputed`}
-        />
+        <CodeBlock language={language} code={code}>
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Live Demo">
