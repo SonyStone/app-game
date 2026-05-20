@@ -13,14 +13,15 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "solid-js": "^1.9.0"
+    "solid-js": "catalog:"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "^6.9.1",
-    "jsdom": "^28.1.0",
-    "vite": "^7.3.1",
-    "vite-plugin-solid": "^2.11.6",
-    "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "4.1.6"
+    "@testing-library/jest-dom": "catalog:",
+    "jsdom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vite-tsconfig-paths": "catalog:",
+    "vitest": "catalog:"
   }
 }
