@@ -1,0 +1,29 @@
+import { createContext, createSignal, useContext, type Accessor, type Setter } from 'solid-js';
+
+type CounterContextValue = {
+  count: Accessor<number>;
+  increment: () => void;
+  decrement: () => void;
+};
+
+const CounterContext = createContext<CounterContextValue>();
+
+export function CounterProvider(props: { children: JSX.Element }) {
+  const [count, setCount] = createSignal(0);
+
+  return (
+    <CounterContext.Provider value={{
+      count,
+      increment: () => setCount(c => c + 1),
+      decrement: () => setCount(c => c - 1)
+    }}>
+      {props.children}
+    </CounterContext.Provider>
+  );
+}
+
+export function useCounter(): CounterContextValue {
+  const ctx = useContext(CounterContext);
+  if (!ctx) throw new Error('useCounter must be used inside CounterProvider');
+  return ctx;
+}

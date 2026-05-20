@@ -1,0 +1,29 @@
+import { Accessor } from 'solid-js';
+
+// Must declare the type for TypeScript
+declare module 'solid-js' {
+  namespace JSX {
+    interface Directives {
+      clickOutside: () => void;
+    }
+  }
+}
+
+// Directive function
+function clickOutside(el: Element, accessor: Accessor<() => void>) {
+  const handler = (e: MouseEvent) => {
+    if (!el.contains(e.target as Node)) accessor()?.();
+  };
+  document.addEventListener('click', handler);
+  onCleanup(() => document.removeEventListener('click', handler));
+}
+
+// Usage
+function Dropdown() {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <div use:clickOutside={() => setOpen(false)}>
+      ...
+    </div>
+  );
+}

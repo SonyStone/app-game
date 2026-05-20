@@ -1,0 +1,12 @@
+import { createKeyHold, createShortcut } from '@solid-primitives/keyboard';
+
+// Detect if a key is currently held down
+const [spaceHeld] = createKeyHold('Space');
+
+// Register a keyboard shortcut
+createShortcut(['Control', 'K'], () => {
+  openCommandPalette();
+});
+
+// In JSX
+<div class={spaceHeld() ? 'zoomed' : ''}> ... </div>

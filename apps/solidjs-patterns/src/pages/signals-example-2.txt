@@ -1,0 +1,11 @@
+// Custom equality — always notify (useful for arrays/objects)
+const [items, setItems] = createSignal([], { equals: false });
+
+// Never re-run subscribers (suppress updates)
+const [data, setData] = createSignal(initialData, { equals: () => true });
+
+// Custom comparator
+const [pos, setPos] = createSignal(
+  { x: 0, y: 0 },
+  { equals: (a, b) => a.x === b.x && a.y === b.y }
+);

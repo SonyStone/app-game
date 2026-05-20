@@ -1,0 +1,16 @@
+import { makeEventListener, createEventListener } from '@solid-primitives/event-listener';
+import { onMount } from 'solid-js';
+
+// makeEventListener — in reactive scope (auto cleanup)
+onMount(() => {
+  makeEventListener(window, 'resize', (e) => {
+    console.log('resized:', window.innerWidth);
+  });
+});
+
+// createEventListener — reactive target (re-registers when target changes)
+createEventListener(
+  () => containerRef,
+  'click',
+  (e) => console.log('clicked:', e.target)
+);

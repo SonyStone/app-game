@@ -1,0 +1,14 @@
+import { Switch, Match } from 'solid-js';
+
+// Switch renders the first matching Match
+<Switch fallback={<p>Unknown status</p>}>
+  <Match when={status() === 'loading'}>
+    <Spinner />
+  </Match>
+  <Match when={status() === 'error'}>
+    <ErrorMsg message={error()} />
+  </Match>
+  <Match when={status() === 'success'}>
+    <DataView data={data()} />
+  </Match>
+</Switch>

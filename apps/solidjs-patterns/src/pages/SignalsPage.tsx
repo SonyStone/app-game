@@ -1,8 +1,25 @@
 import { createSignal, type JSX } from 'solid-js';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import example1Html, {
+  code as example1Code,
+  language as example1Language
+} from './signals-example-1.txt?shiki&lang=tsx';
+import example2Html, {
+  code as example2Code,
+  language as example2Language
+} from './signals-example-2.txt?shiki&lang=tsx';
+import example3Html, {
+  code as example3Code,
+  language as example3Language
+} from './signals-example-3.txt?shiki&lang=tsx';
+import example4Html, {
+  code as example4Code,
+  language as example4Language
+} from './signals-example-4.txt?shiki&lang=tsx';
 
 // ============================================================================
 // MARK: Signals Page
@@ -16,23 +33,12 @@ export default function SignalsPage(): JSX.Element {
       description="Signals are the fundamental reactive primitive in SolidJS. They hold a value and notify subscribers when it changes."
     >
       <PatternSection
-        title="Basic Signal"
+        title="Basic Signal 2"
         description="createSignal returns a getter and setter tuple. The getter is a function — calling it inside a reactive context subscribes to changes."
       >
-        <CodeBlock
-          language="tsx"
-          title="basic-signal.tsx"
-          code={`import { createSignal } from 'solid-js';
-
-const [count, setCount] = createSignal(0);
-
-// Read: call the getter
-console.log(count()); // 0
-
-// Write: call the setter
-setCount(1);
-setCount(prev => prev + 1); // functional update`}
-        />
+        <CodeBlock language={example1Language} code={example1Code} title="basic-signal.tsx">
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Live Demo">
@@ -43,40 +49,18 @@ setCount(prev => prev + 1); // functional update`}
         title="Equality Check"
         description="Signals skip notifications when the new value equals the old one. Customize with the equals option."
       >
-        <CodeBlock
-          language="tsx"
-          code={`// Custom equality — always notify (useful for arrays/objects)
-const [items, setItems] = createSignal([], { equals: false });
-
-// Never re-run subscribers (suppress updates)
-const [data, setData] = createSignal(initialData, { equals: () => true });
-
-// Custom comparator
-const [pos, setPos] = createSignal(
-  { x: 0, y: 0 },
-  { equals: (a, b) => a.x === b.x && a.y === b.y }
-);`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="Signals vs State"
         description="Unlike React useState, signals are not tied to components. They can live outside components and be shared freely."
       >
-        <CodeBlock
-          language="tsx"
-          code={`// Global signal — lives outside any component
-export const [theme, setTheme] = createSignal<'light' | 'dark'>('dark');
-
-// Use in any component without prop drilling
-function ThemeToggle() {
-  return (
-    <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}>
-      Current: {theme()}
-    </button>
-  );
-}`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="tip" title="Getter is a function">
@@ -89,26 +73,9 @@ function ThemeToggle() {
         title="Passing Reactivity"
         description="Pass the getter function (without calling it) to defer reading and preserve the reactive subscription at the call site."
       >
-        <CodeBlock
-          language="tsx"
-          code={`// ✅ Pass getter — child subscribes at its own level
-function Parent() {
-  const [count, setCount] = createSignal(0);
-  return <Display value={count} />;
-  //                      ^^^^^ pass getter, not count()
-}
-
-function Display(props: { value: Accessor<number> }) {
-  return <span>{props.value()}</span>;
-  //            ^^^^^^^^^^^^^ subscribe here
-}
-
-// ❌ Pass value — breaks reactivity, static snapshot
-function Parent() {
-  const [count] = createSignal(0);
-  return <Display value={count()} />; // count() is 0 forever
-}`}
-        />
+        <CodeBlock language={example4Language} code={example4Code}>
+          {template(example4Html)()}
+        </CodeBlock>
       </PatternSection>
     </PatternLayout>
   );

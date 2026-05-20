@@ -1,0 +1,14 @@
+import { createStore } from 'solid-js/store';
+
+const [state, setState] = createStore({
+  user: { name: 'Alice', age: 30 },
+  items: [{ id: 1, done: false }, { id: 2, done: true }]
+});
+
+// Read nested values (tracked reactively)
+console.log(state.user.name);   // 'Alice'
+console.log(state.items[0].done); // false
+
+// Update specific path — only that path's subscribers re-run
+setState('user', 'name', 'Bob');
+setState('items', 0, 'done', true);

@@ -1,0 +1,19 @@
+import { lazy, Suspense } from 'solid-js';
+
+// Component is loaded on first render
+const HeavyChart = lazy(() => import('./HeavyChart'));
+const DataTable = lazy(() => import('./DataTable'));
+
+function Dashboard() {
+  return (
+    <Suspense fallback={<div>Loading dashboard…</div>}>
+      <HeavyChart />
+      <DataTable />
+    </Suspense>
+  );
+}
+
+// With @solidjs/router (auto Suspense)
+const routes = [
+  { path: '/dashboard', component: lazy(() => import('./Dashboard')) }
+];

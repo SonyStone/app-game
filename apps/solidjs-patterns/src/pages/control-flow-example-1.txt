@@ -1,0 +1,16 @@
+import { Show } from 'solid-js';
+
+// Basic condition
+<Show when={isLoggedIn()}>
+  <UserPanel />
+</Show>
+
+// With fallback
+<Show when={user()} fallback={<LoginButton />}>
+  {(u) => <UserPanel name={u().name} />}
+  {/* Callback form — u() is narrowed (non-null) */}
+</Show>
+
+// ⚠ Avoid ternary for components — Show re-mounts on changes
+// Bad: {condition() ? <HeavyComponent /> : null}
+// Good: <Show when={condition()}><HeavyComponent /></Show>

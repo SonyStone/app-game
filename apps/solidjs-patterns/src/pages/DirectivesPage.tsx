@@ -1,6 +1,19 @@
 import { type JSX } from 'solid-js';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
+import example1Html, {
+  code as example1Code,
+  language as example1Language
+} from './directives-example-1.txt?shiki&lang=tsx';
+import example2Html, {
+  code as example2Code,
+  language as example2Language
+} from './directives-example-2.txt?shiki&lang=tsx';
+import example3Html, {
+  code as example3Code,
+  language as example3Language
+} from './directives-example-3.txt?shiki&lang=tsx';
 
 // ============================================================================
 // MARK: Directives Page
@@ -17,89 +30,24 @@ export default function DirectivesPage(): JSX.Element {
         title="Creating a directive"
         description="A directive is a function (el, accessor) where el is the DOM element and accessor returns the value passed to use:directiveName."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { Accessor } from 'solid-js';
-
-// Must declare the type for TypeScript
-declare module 'solid-js' {
-  namespace JSX {
-    interface Directives {
-      clickOutside: () => void;
-    }
-  }
-}
-
-// Directive function
-function clickOutside(el: Element, accessor: Accessor<() => void>) {
-  const handler = (e: MouseEvent) => {
-    if (!el.contains(e.target as Node)) accessor()?.();
-  };
-  document.addEventListener('click', handler);
-  onCleanup(() => document.removeEventListener('click', handler));
-}
-
-// Usage
-function Dropdown() {
-  const [open, setOpen] = createSignal(false);
-  return (
-    <div use:clickOutside={() => setOpen(false)}>
-      ...
-    </div>
-  );
-}`}
-        />
+        <CodeBlock language={example1Language} code={example1Code}>
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="Directives with options"
         description="Pass an options object or reactive value through the use: prop."
       >
-        <CodeBlock
-          language="tsx"
-          code={`declare module 'solid-js' {
-  namespace JSX {
-    interface Directives {
-      tooltip: { text: string; position?: 'top' | 'bottom' };
-    }
-  }
-}
-
-function tooltip(el: HTMLElement, accessor: Accessor<{ text: string; position?: string }>) {
-  createEffect(() => {
-    const opts = accessor();
-    el.title = opts.text;
-    // reactive — updates when opts changes
-  });
-}
-
-// Usage
-<button use:tooltip={{ text: 'Save document', position: 'top' }}>
-  Save
-</button>`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="autoFocus directive" description="A simple directive to focus an element on mount.">
-        <CodeBlock
-          language="tsx"
-          code={`declare module 'solid-js' {
-  namespace JSX {
-    interface Directives {
-      autoFocus: boolean;
-    }
-  }
-}
-
-function autoFocus(el: HTMLElement, accessor: Accessor<boolean>) {
-  createEffect(() => {
-    if (accessor()) el.focus();
-  });
-}
-
-// Usage
-<input use:autoFocus={true} placeholder="Auto-focused" />`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="info" title="Import directives to prevent tree-shaking">

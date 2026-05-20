@@ -1,9 +1,14 @@
 import { For, type JSX } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import example1Html, { code as example1Code, language as example1Language } from './store-example-1.txt?shiki&lang=tsx';
+import example2Html, { code as example2Code, language as example2Language } from './store-example-2.txt?shiki&lang=tsx';
+import example3Html, { code as example3Code, language as example3Language } from './store-example-3.txt?shiki&lang=tsx';
+import example4Html, { code as example4Code, language as example4Language } from './store-example-4.txt?shiki&lang=tsx';
 
 // ============================================================================
 // MARK: Store Page
@@ -20,23 +25,9 @@ export default function StorePage(): JSX.Element {
         title="createStore basics"
         description="createStore returns a reactive proxy (getter) and a setter. Nested property access is tracked."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createStore } from 'solid-js/store';
-
-const [state, setState] = createStore({
-  user: { name: 'Alice', age: 30 },
-  items: [{ id: 1, done: false }, { id: 2, done: true }]
-});
-
-// Read nested values (tracked reactively)
-console.log(state.user.name);   // 'Alice'
-console.log(state.items[0].done); // false
-
-// Update specific path — only that path's subscribers re-run
-setState('user', 'name', 'Bob');
-setState('items', 0, 'done', true);`}
-        />
+        <CodeBlock language={example1Language} code={example1Code}>
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Live Demo">
@@ -47,67 +38,27 @@ setState('items', 0, 'done', true);`}
         title="Path syntax"
         description="setState accepts a path of keys, an updater function, or a combination."
       >
-        <CodeBlock
-          language="tsx"
-          code={`const [state, setState] = createStore({ count: 0, list: ['a', 'b'] });
-
-// Direct value
-setState('count', 5);
-
-// Functional update (receives current value)
-setState('count', c => c + 1);
-
-// Deep nested path
-setState('user', 'address', 'city', 'London');
-
-// Array item by index
-setState('list', 1, 'London');
-
-// All array items matching a predicate
-setState('items', item => item.done, 'archived', true);`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="produce() — immer-style mutations"
         description="produce() allows writing imperative mutation code. It uses a draft that gets applied immutably."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createStore, produce } from 'solid-js/store';
-
-const [todos, setTodos] = createStore([
-  { id: 1, text: 'Learn SolidJS', done: false },
-  { id: 2, text: 'Build something', done: false }
-]);
-
-// Mutate multiple things at once
-setTodos(produce(draft => {
-  draft[0].done = true;
-  draft.push({ id: 3, text: 'Ship it!', done: false });
-  draft.splice(1, 1); // remove index 1
-}));`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="reconcile() — replace from external data"
         description="reconcile diffs incoming data against the existing store, updating only changed parts."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createStore, reconcile } from 'solid-js/store';
-
-const [data, setData] = createStore({ items: [] });
-
-async function refresh() {
-  const fresh = await fetchItems();
-
-  // Diff against existing — minimal updates
-  setData('items', reconcile(fresh));
-}
-// vs setData('items', fresh) — replaces everything, loses reactivity`}
-        />
+        <CodeBlock language={example4Language} code={example4Code}>
+          {template(example4Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="warning" title="Don't destructure store values">

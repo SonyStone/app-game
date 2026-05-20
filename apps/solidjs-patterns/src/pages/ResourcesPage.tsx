@@ -1,8 +1,21 @@
 import { createResource, createSignal, Suspense, type JSX } from 'solid-js';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import example1Html, {
+  code as example1Code,
+  language as example1Language
+} from './resources-example-1.txt?shiki&lang=tsx';
+import example2Html, {
+  code as example2Code,
+  language as example2Language
+} from './resources-example-2.txt?shiki&lang=tsx';
+import example3Html, {
+  code as example3Code,
+  language as example3Language
+} from './resources-example-3.txt?shiki&lang=tsx';
 
 // ============================================================================
 // MARK: Resources Page
@@ -19,51 +32,18 @@ export default function ResourcesPage(): JSX.Element {
         title="createResource basics"
         description="createResource takes an optional source signal and a fetcher function. It returns a reactive resource with loading/error states."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createResource, createSignal } from 'solid-js';
-
-// Simple fetch — runs once
-const [user] = createResource(() => fetchUser(1));
-
-// Reactive source — refetches when id() changes
-const [id, setId] = createSignal(1);
-const [user, { refetch, mutate }] = createResource(id, fetchUser);
-// fetcher signature: (id: number) => Promise<User>
-
-// Access state
-user()          // current data (undefined while loading)
-user.loading    // boolean — true while fetching
-user.error      // error if last fetch threw
-user.state      // 'unresolved' | 'pending' | 'ready' | 'refreshing' | 'errored'`}
-        />
+        <CodeBlock language={example1Language} code={example1Code}>
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="With Suspense"
         description="Wrap resource consumers in Suspense to declaratively show loading states."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createResource, Suspense } from 'solid-js';
-import { ErrorBoundary } from 'solid-js';
-
-function UserProfile(props: { id: number }) {
-  const [user] = createResource(() => props.id, fetchUser);
-  return <div>{user()?.name}</div>;
-  // No explicit loading check — Suspense handles it
-}
-
-function App() {
-  return (
-    <ErrorBoundary fallback={<p>Failed to load</p>}>
-      <Suspense fallback={<Spinner />}>
-        <UserProfile id={1} />
-      </Suspense>
-    </ErrorBoundary>
-  );
-}`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Live Demo">
@@ -74,19 +54,9 @@ function App() {
         title="refetch and mutate"
         description="refetch re-runs the fetcher. mutate lets you update the resource value optimistically without a network call."
       >
-        <CodeBlock
-          language="tsx"
-          code={`const [todos, { refetch, mutate }] = createResource(fetchTodos);
-
-// Optimistic delete
-function deleteTodo(id: number) {
-  mutate(todos => todos?.filter(t => t.id !== id));
-  apiDeleteTodo(id).catch(() => refetch()); // rollback on error
-}
-
-// Manual refresh
-<button onClick={refetch}>↺ Refresh</button>`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="tip" title="initialValue">

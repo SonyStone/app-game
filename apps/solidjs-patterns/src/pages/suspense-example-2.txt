@@ -1,0 +1,15 @@
+import { SuspenseList, Suspense } from 'solid-js';
+
+<SuspenseList revealOrder="forwards" tail="collapsed">
+  <Suspense fallback={<Skeleton />}>
+    <Header />
+  </Suspense>
+  <Suspense fallback={<Skeleton />}>
+    <Body />      {/* waits for Header, then reveals */}
+  </Suspense>
+  <Suspense fallback={<Skeleton />}>
+    <Footer />
+  </Suspense>
+</SuspenseList>
+// revealOrder: 'forwards' | 'backwards' | 'together'
+// tail: 'hidden' | 'collapsed'

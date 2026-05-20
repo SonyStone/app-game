@@ -1,6 +1,23 @@
 import { type JSX } from 'solid-js';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
+import example1Html, {
+  code as example1Code,
+  language as example1Language
+} from './primitives-example-1.txt?shiki&lang=tsx';
+import example2Html, {
+  code as example2Code,
+  language as example2Language
+} from './primitives-example-2.txt?shiki&lang=tsx';
+import example3Html, {
+  code as example3Code,
+  language as example3Language
+} from './primitives-example-3.txt?shiki&lang=tsx';
+import example4Html, {
+  code as example4Code,
+  language as example4Language
+} from './primitives-example-4.txt?shiki&lang=tsx';
 
 // ============================================================================
 // MARK: Primitives Page
@@ -17,88 +34,30 @@ export default function PrimitivesPage(): JSX.Element {
         title="Event listeners"
         description="Use makeEventListener / createEventListener instead of manual addEventListener for automatic cleanup."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { makeEventListener, createEventListener } from '@solid-primitives/event-listener';
-import { onMount } from 'solid-js';
-
-// makeEventListener — in reactive scope (auto cleanup)
-onMount(() => {
-  makeEventListener(window, 'resize', (e) => {
-    console.log('resized:', window.innerWidth);
-  });
-});
-
-// createEventListener — reactive target (re-registers when target changes)
-createEventListener(
-  () => containerRef,
-  'click',
-  (e) => console.log('clicked:', e.target)
-);`}
-        />
+        <CodeBlock language={example1Language} code={example1Code}>
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Keyboard" description="createKeyHold and createShortcut for keyboard interactions.">
-        <CodeBlock
-          language="tsx"
-          code={`import { createKeyHold, createShortcut } from '@solid-primitives/keyboard';
-
-// Detect if a key is currently held down
-const [spaceHeld] = createKeyHold('Space');
-
-// Register a keyboard shortcut
-createShortcut(['Control', 'K'], () => {
-  openCommandPalette();
-});
-
-// In JSX
-<div class={spaceHeld() ? 'zoomed' : ''}> ... </div>`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="Storage"
         description="createLocalStorage and createCookieStorage for persistent reactive state."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { makePersisted } from '@solid-primitives/storage';
-import { createSignal, createStore } from 'solid-js';
-import { createStore } from 'solid-js/store';
-
-// Persist a signal to localStorage
-const [theme, setTheme] = makePersisted(
-  createSignal<'light' | 'dark'>('dark'),
-  { name: 'theme' }
-);
-
-// Persist a store
-const [prefs, setPrefs] = makePersisted(
-  createStore({ fontSize: 14, lang: 'en' }),
-  { name: 'user-prefs' }
-);`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Bounds & resize" description="createElementBounds for reactive element dimensions.">
-        <CodeBlock
-          language="tsx"
-          code={`import { createElementBounds } from '@solid-primitives/bounds';
-
-function ResponsiveChart(): JSX.Element {
-  let el!: HTMLDivElement;
-  const bounds = createElementBounds(() => el);
-
-  return (
-    <div ref={el} class="w-full">
-      <canvas
-        width={bounds.width ?? 0}
-        height={bounds.height ?? 0}
-      />
-    </div>
-  );
-}`}
-        />
+        <CodeBlock language={example4Language} code={example4Code}>
+          {template(example4Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="tip" title="Browse all primitives">

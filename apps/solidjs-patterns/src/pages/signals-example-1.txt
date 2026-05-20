@@ -1,0 +1,10 @@
+import { createSignal } from 'solid-js';
+
+const [count, setCount] = createSignal(0);
+
+// Read: call the getter
+console.log(count()); // 0
+
+// Write: call the setter
+setCount(1);
+setCount(prev => prev + 1); // functional update

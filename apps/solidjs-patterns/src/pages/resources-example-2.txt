@@ -1,0 +1,18 @@
+import { createResource, Suspense } from 'solid-js';
+import { ErrorBoundary } from 'solid-js';
+
+function UserProfile(props: { id: number }) {
+  const [user] = createResource(() => props.id, fetchUser);
+  return <div>{user()?.name}</div>;
+  // No explicit loading check — Suspense handles it
+}
+
+function App() {
+  return (
+    <ErrorBoundary fallback={<p>Failed to load</p>}>
+      <Suspense fallback={<Spinner />}>
+        <UserProfile id={1} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}

@@ -1,0 +1,10 @@
+// ✅ Module-level signal — truly global, no provider needed
+export const [globalTheme, setGlobalTheme] = createSignal<'light' | 'dark'>('dark');
+
+// ✅ Context — scoped, supports multiple instances, testable
+export const ThemeContext = createContext<Theme>('dark');
+
+// Use context when:
+// - You want to scope state to a subtree
+// - You have multiple instances (e.g., nested providers)
+// - You want to swap implementations in tests

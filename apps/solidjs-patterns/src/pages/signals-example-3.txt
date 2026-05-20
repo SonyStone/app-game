@@ -1,0 +1,11 @@
+// Global signal — lives outside any component
+export const [theme, setTheme] = createSignal<'light' | 'dark'>('dark');
+
+// Use in any component without prop drilling
+function ThemeToggle() {
+  return (
+    <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}>
+      Current: {theme()}
+    </button>
+  );
+}

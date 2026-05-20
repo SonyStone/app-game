@@ -1,0 +1,11 @@
+import { createStore, reconcile } from 'solid-js/store';
+
+const [data, setData] = createStore({ items: [] });
+
+async function refresh() {
+  const fresh = await fetchItems();
+
+  // Diff against existing — minimal updates
+  setData('items', reconcile(fresh));
+}
+// vs setData('items', fresh) — replaces everything, loses reactivity

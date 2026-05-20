@@ -1,0 +1,15 @@
+import { createElementBounds } from '@solid-primitives/bounds';
+
+function ResponsiveChart(): JSX.Element {
+  let el!: HTMLDivElement;
+  const bounds = createElementBounds(() => el);
+
+  return (
+    <div ref={el} class="w-full">
+      <canvas
+        width={bounds.width ?? 0}
+        height={bounds.height ?? 0}
+      />
+    </div>
+  );
+}

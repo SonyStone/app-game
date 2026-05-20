@@ -1,0 +1,15 @@
+import { makePersisted } from '@solid-primitives/storage';
+import { createSignal, createStore } from 'solid-js';
+import { createStore } from 'solid-js/store';
+
+// Persist a signal to localStorage
+const [theme, setTheme] = makePersisted(
+  createSignal<'light' | 'dark'>('dark'),
+  { name: 'theme' }
+);
+
+// Persist a store
+const [prefs, setPrefs] = makePersisted(
+  createStore({ fontSize: 14, lang: 'en' }),
+  { name: 'user-prefs' }
+);

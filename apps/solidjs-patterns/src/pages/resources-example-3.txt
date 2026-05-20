@@ -1,0 +1,10 @@
+const [todos, { refetch, mutate }] = createResource(fetchTodos);
+
+// Optimistic delete
+function deleteTodo(id: number) {
+  mutate(todos => todos?.filter(t => t.id !== id));
+  apiDeleteTodo(id).catch(() => refetch()); // rollback on error
+}
+
+// Manual refresh
+<button onClick={refetch}>↺ Refresh</button>

@@ -1,6 +1,12 @@
 import { type JSX } from 'solid-js';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
+import example1Html, { code as example1Code, language as example1Language } from './components-example-1?shiki';
+import example2Html, { code as example2Code, language as example2Language } from './components-example-2?shiki';
+import example3Html, { code as example3Code, language as example3Language } from './components-example-3?shiki';
+import example4Html, { code as example4Code, language as example4Language } from './components-example-4?shiki';
+import example5Html, { code as example5Code, language as example5Language } from './components-example-5?shiki';
 
 // ============================================================================
 // MARK: Components Page
@@ -17,85 +23,27 @@ export default function ComponentsPage(): JSX.Element {
         title="Props & type definitions"
         description="Use type aliases (not interfaces). For exported components, define props type separately."
       >
-        <CodeBlock
-          language="tsx"
-          code={`// ✅ Internal component — inline props
-function Avatar(props: { name: string; size?: number }): JSX.Element {
-  return <img src={avatar(props.name)} width={props.size ?? 32} />;
-}
-
-// ✅ Exported component — separate type
-export type ButtonProps = {
-  variant?: 'primary' | 'secondary';
-  disabled?: boolean;
-  children: JSX.Element;
-  onClick?: () => void;
-};
-
-export function Button(props: ButtonProps): JSX.Element {
-  return (
-    <button disabled={props.disabled} onClick={props.onClick}>
-      {props.children}
-    </button>
-  );
-}`}
-        />
+        <CodeBlock language={example1Language} code={example1Code}>
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="splitProps"
         description="splitProps separates your component's own props from props to forward. Essential for avoiding unknown DOM attribute warnings."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { splitProps } from 'solid-js';
-
-type InputProps = JSX.InputHTMLAttributes<HTMLInputElement> & {
-  label?: string;
-};
-
-export function Input(props: InputProps): JSX.Element {
-  // Split out 'label' — forward rest to <input>
-  const [local, rest] = splitProps(props, ['label']);
-
-  return (
-    <div>
-      {local.label && <label>{local.label}</label>}
-      <input {...rest} />
-    </div>
-  );
-}`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="mergeProps — default values"
         description="mergeProps safely merges props with defaults, preserving reactivity of the original props."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { mergeProps } from 'solid-js';
-
-type CardProps = {
-  title?: string;
-  variant?: 'default' | 'outlined';
-  children: JSX.Element;
-};
-
-export function Card(props: CardProps): JSX.Element {
-  // Props with defaults — reactive to changes
-  const merged = mergeProps({ variant: 'default' as const, title: 'Card' }, props);
-
-  return (
-    <div class={merged.variant === 'outlined' ? 'border' : 'bg-neutral-800'}>
-      <h3>{merged.title}</h3>
-      {merged.children}
-    </div>
-  );
-}
-// ❌ Don't use JS destructuring defaults — breaks reactivity:
-// function Card({ title = 'Card', ...props }) { ... }`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="danger" title="Never destructure props">
@@ -109,60 +57,18 @@ export function Card(props: CardProps): JSX.Element {
         title="children helper"
         description="Use the children() helper when you need to evaluate or inspect children — it memoizes them properly."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { children, type JSX } from 'solid-js';
-
-type RowProps = { children: JSX.Element };
-
-function Row(props: RowProps): JSX.Element {
-  // Memoize children — resolves lazy children/fragments
-  const resolved = children(() => props.children);
-
-  // Can now inspect/map resolved children
-  const count = () => {
-    const c = resolved();
-    return Array.isArray(c) ? c.length : c ? 1 : 0;
-  };
-
-  return (
-    <div>
-      <span class="badge">{count()} items</span>
-      {resolved()}
-    </div>
-  );
-}`}
-        />
+        <CodeBlock language={example4Language} code={example4Code}>
+          {template(example4Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="Component as prop"
         description="Pass components as props using the Component<Props> type or JSX.Element for static content."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { type Component, type JSX } from 'solid-js';
-
-type ListProps<T> = {
-  items: T[];
-  renderItem: (item: T, index: () => number) => JSX.Element;
-  fallback?: JSX.Element;
-};
-
-function List<T>(props: ListProps<T>): JSX.Element {
-  return (
-    <For each={props.items} fallback={props.fallback ?? <p>No items</p>}>
-      {props.renderItem}
-    </For>
-  );
-}
-
-// Usage
-<List
-  items={users}
-  renderItem={(user) => <UserCard name={user.name} />}
-/>`}
-        />
+        <CodeBlock language={example5Language} code={example5Code}>
+          {template(example5Html)()}
+        </CodeBlock>
       </PatternSection>
     </PatternLayout>
   );

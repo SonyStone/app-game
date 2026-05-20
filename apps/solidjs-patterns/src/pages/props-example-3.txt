@@ -1,0 +1,15 @@
+type InputProps = JSX.InputHTMLAttributes<HTMLInputElement> & {
+  ref?: HTMLInputElement | ((el: HTMLInputElement) => void);
+};
+
+function FancyInput(props: InputProps): JSX.Element {
+  const [local, rest] = splitProps(props, []);
+  return <input {...rest} class="fancy-input" />;
+}
+
+// Usage — ref is assigned when mounted
+function Form(): JSX.Element {
+  let inputRef!: HTMLInputElement;
+  onMount(() => inputRef.focus());
+  return <FancyInput ref={inputRef} />;
+}

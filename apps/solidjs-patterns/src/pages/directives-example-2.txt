@@ -1,0 +1,20 @@
+declare module 'solid-js' {
+  namespace JSX {
+    interface Directives {
+      tooltip: { text: string; position?: 'top' | 'bottom' };
+    }
+  }
+}
+
+function tooltip(el: HTMLElement, accessor: Accessor<{ text: string; position?: string }>) {
+  createEffect(() => {
+    const opts = accessor();
+    el.title = opts.text;
+    // reactive — updates when opts changes
+  });
+}
+
+// Usage
+<button use:tooltip={{ text: 'Save document', position: 'top' }}>
+  Save
+</button>

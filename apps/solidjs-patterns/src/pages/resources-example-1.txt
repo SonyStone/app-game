@@ -1,0 +1,15 @@
+import { createResource, createSignal } from 'solid-js';
+
+// Simple fetch — runs once
+const [user] = createResource(() => fetchUser(1));
+
+// Reactive source — refetches when id() changes
+const [id, setId] = createSignal(1);
+const [user, { refetch, mutate }] = createResource(id, fetchUser);
+// fetcher signature: (id: number) => Promise<User>
+
+// Access state
+user()          // current data (undefined while loading)
+user.loading    // boolean — true while fetching
+user.error      // error if last fetch threw
+user.state      // 'unresolved' | 'pending' | 'ready' | 'refreshing' | 'errored'

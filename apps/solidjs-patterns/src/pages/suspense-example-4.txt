@@ -1,0 +1,18 @@
+import { ErrorBoundary, Suspense } from 'solid-js';
+
+function App() {
+  return (
+    <ErrorBoundary
+      fallback={(err, reset) => (
+        <div>
+          <p>Error: {err.message}</p>
+          <button onClick={reset}>Retry</button>
+        </div>
+      )}
+    >
+      <Suspense fallback={<Spinner />}>
+        <DataView />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}

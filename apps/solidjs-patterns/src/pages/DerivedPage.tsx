@@ -4,9 +4,10 @@ import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import example1Html, { code, language } from './example-1?shiki';
-
-console.log('example1Html', language, code);
+import example1Html, { code as example1Code, language as example1Language } from './derived-example-1?shiki';
+import example2Html, { code as example2Code, language as example2Language } from './derived-example-2?shiki';
+import example3Html, { code as example3Code, language as example3Language } from './derived-example-3?shiki';
+import example4Html, { code as example4Code, language as example4Language } from './derived-example-4?shiki';
 
 // ============================================================================
 // MARK: Derived Page
@@ -23,7 +24,7 @@ export default function DerivedPage(): JSX.Element {
         title="createMemo"
         description="Memo tracks its reactive dependencies automatically. It only re-runs when a dependency changes, and caches the result between updates."
       >
-        <CodeBlock language={language} code={code}>
+        <CodeBlock language={example1Language} code={example1Code}>
           {template(example1Html)()}
         </CodeBlock>
       </PatternSection>
@@ -36,23 +37,9 @@ export default function DerivedPage(): JSX.Element {
         title="Memo vs Inline Expression"
         description="Use memo when the computation is expensive or when the result is read multiple times. Inline expressions recompute on each read."
       >
-        <CodeBlock
-          language="tsx"
-          code={`const [items, setItems] = createSignal([1, 2, 3, 4, 5]);
-
-// ❌ Inline — recomputes every time the JSX reads it (may run twice)
-// Also re-runs on EVERY render, even if items didn't change
-return <div>{items().filter(x => x > 2).length} items</div>;
-
-// ✅ Memo — computed once per change, cached for multiple reads
-const bigItems = createMemo(() => items().filter(x => x > 2));
-return (
-  <div>
-    {bigItems().length} items over 2
-    {/* bigItems() can be called multiple times — same cached result */}
-  </div>
-);`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="tip" title="Memo = derived signal">
@@ -65,35 +52,18 @@ return (
         title="Chained Memos"
         description="Memos can depend on other memos, forming a reactive dependency graph."
       >
-        <CodeBlock
-          language="tsx"
-          code={`const [price, setPrice] = createSignal(100);
-const [qty, setQty] = createSignal(3);
-const [discount, setDiscount] = createSignal(0.1);
-
-const subtotal = createMemo(() => price() * qty());         // 300
-const discountAmt = createMemo(() => subtotal() * discount()); // 30
-const total = createMemo(() => subtotal() - discountAmt());    // 270
-
-// total only recomputes when price, qty, or discount changes`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="Memo with equals"
         description="Control when downstream effects are notified by providing a custom equality check."
       >
-        <CodeBlock
-          language="tsx"
-          code={`const [data, setData] = createSignal({ x: 1, y: 2, z: 3 });
-
-// Only notify when x or y change — ignore z
-const position = createMemo(
-  () => ({ x: data().x, y: data().y }),
-  undefined,
-  { equals: (a, b) => a.x === b.x && a.y === b.y }
-);`}
-        />
+        <CodeBlock language={example4Language} code={example4Code}>
+          {template(example4Html)()}
+        </CodeBlock>
       </PatternSection>
     </PatternLayout>
   );

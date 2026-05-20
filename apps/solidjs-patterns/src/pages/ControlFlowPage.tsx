@@ -1,9 +1,26 @@
 import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { PatternLayout, PatternSection } from '../components/PatternLayout';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import example1Html, {
+  code as example1Code,
+  language as example1Language
+} from './control-flow-example-1.txt?shiki&lang=tsx';
+import example2Html, {
+  code as example2Code,
+  language as example2Language
+} from './control-flow-example-2.txt?shiki&lang=tsx';
+import example3Html, {
+  code as example3Code,
+  language as example3Language
+} from './control-flow-example-3.txt?shiki&lang=tsx';
+import example4Html, {
+  code as example4Code,
+  language as example4Language
+} from './control-flow-example-4.txt?shiki&lang=tsx';
 
 // ============================================================================
 // MARK: Control Flow Page
@@ -20,91 +37,30 @@ export default function ControlFlowPage(): JSX.Element {
         title="Show"
         description="Conditionally render content. The fallback prop renders when the condition is false."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { Show } from 'solid-js';
-
-// Basic condition
-<Show when={isLoggedIn()}>
-  <UserPanel />
-</Show>
-
-// With fallback
-<Show when={user()} fallback={<LoginButton />}>
-  {(u) => <UserPanel name={u().name} />}
-  {/* Callback form — u() is narrowed (non-null) */}
-</Show>
-
-// ⚠ Avoid ternary for components — Show re-mounts on changes
-// Bad: {condition() ? <HeavyComponent /> : null}
-// Good: <Show when={condition()}><HeavyComponent /></Show>`}
-        />
+        <CodeBlock language={example1Language} code={example1Code}>
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="For vs Index"
         description="For re-creates items when the array changes (key by reference). Index is stable by position — good for static-length arrays."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { For, Index } from 'solid-js';
-
-// For — keyed by item identity (reference)
-// Good for: lists that add/remove/reorder items
-<For each={items()}>
-  {(item, index) => (
-    <li>{index() + 1}. {item.name}</li>
-    // item is the value, index is an Accessor<number>
-  )}
-</For>
-
-// Index — keyed by array position
-// Good for: fixed-length lists, primitive arrays
-<Index each={scores()}>
-  {(score, index) => (
-    // score is an Accessor (reactive), index is a number
-    <span>#{index}: {score()}</span>
-  )}
-</Index>`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Switch / Match">
-        <CodeBlock
-          language="tsx"
-          code={`import { Switch, Match } from 'solid-js';
-
-// Switch renders the first matching Match
-<Switch fallback={<p>Unknown status</p>}>
-  <Match when={status() === 'loading'}>
-    <Spinner />
-  </Match>
-  <Match when={status() === 'error'}>
-    <ErrorMsg message={error()} />
-  </Match>
-  <Match when={status() === 'success'}>
-    <DataView data={data()} />
-  </Match>
-</Switch>`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Dynamic" description="Render a component or HTML element determined at runtime.">
-        <CodeBlock
-          language="tsx"
-          code={`import { Dynamic } from 'solid-js/web';
-
-const [tag, setTag] = createSignal<'h1' | 'h2' | 'p'>('h1');
-
-// Renders different elements based on tag()
-<Dynamic component={tag()} class="heading">
-  Hello World
-</Dynamic>
-
-// Works with components too
-const widgets = { button: ButtonWidget, input: InputWidget };
-<Dynamic component={widgets[type()]} {...widgetProps} />`}
-        />
+        <CodeBlock language={example4Language} code={example4Code}>
+          {template(example4Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Live Demo: Show & Switch">

@@ -1,6 +1,10 @@
 import { type JSX } from 'solid-js';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
+import example1Html, { code as example1Code, language as example1Language } from './props-example-1.txt?shiki&lang=tsx';
+import example2Html, { code as example2Code, language as example2Language } from './props-example-2.txt?shiki&lang=tsx';
+import example3Html, { code as example3Code, language as example3Language } from './props-example-3.txt?shiki&lang=tsx';
 
 // ============================================================================
 // MARK: Props Page
@@ -17,74 +21,27 @@ export default function PropsPage(): JSX.Element {
         title="Spreading props onto native elements"
         description="Spread remaining props onto the native element. SolidJS handles the DOM attributes correctly."
       >
-        <CodeBlock
-          language="tsx"
-          code={`type InputProps = JSX.InputHTMLAttributes<HTMLInputElement> & {
-  label?: string;
-};
-
-function Input(props: InputProps): JSX.Element {
-  const [local, rest] = splitProps(props, ['label']);
-  return (
-    <div>
-      {local.label && <label>{local.label}</label>}
-      <input {...rest} />  {/* all native attrs forwarded */}
-    </div>
-  );
-}
-
-// Usage — className, onInput, etc. forwarded automatically
-<Input label="Email" type="email" placeholder="you@example.com" required />`}
-        />
+        <CodeBlock language={example1Language} code={example1Code}>
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="class prop merging"
         description="SolidJS uses class (not className). Merge with a utility for conditional classes."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { cn } from '../lib/utils'; // clsx + tailwind-merge
-import { splitProps } from 'solid-js';
-
-type CardProps = JSX.HTMLAttributes<HTMLDivElement> & { class?: string };
-
-function Card(props: CardProps): JSX.Element {
-  const [local, rest] = splitProps(props, ['class', 'children']);
-  return (
-    <div {...rest} class={cn('rounded-xl bg-neutral-900 p-4', local.class)}>
-      {local.children}
-    </div>
-  );
-}
-
-// Consumer can extend styles
-<Card class="border border-violet-500" />`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="ref forwarding"
         description="Forward refs to DOM elements using the ref prop. SolidJS refs are assigned on mount, not wrapped in a callback."
       >
-        <CodeBlock
-          language="tsx"
-          code={`type InputProps = JSX.InputHTMLAttributes<HTMLInputElement> & {
-  ref?: HTMLInputElement | ((el: HTMLInputElement) => void);
-};
-
-function FancyInput(props: InputProps): JSX.Element {
-  const [local, rest] = splitProps(props, []);
-  return <input {...rest} class="fancy-input" />;
-}
-
-// Usage — ref is assigned when mounted
-function Form(): JSX.Element {
-  let inputRef!: HTMLInputElement;
-  onMount(() => inputRef.focus());
-  return <FancyInput ref={inputRef} />;
-}`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="info" title="use:directive syntax">

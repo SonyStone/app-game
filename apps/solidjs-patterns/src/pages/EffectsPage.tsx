@@ -1,7 +1,28 @@
 import { createEffect, createSignal, type JSX } from 'solid-js';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
 import { Card } from '../components/ui/Card';
+import example1Html, {
+  code as example1Code,
+  language as example1Language
+} from './effects-example-1.txt?shiki&lang=tsx';
+import example2Html, {
+  code as example2Code,
+  language as example2Language
+} from './effects-example-2.txt?shiki&lang=tsx';
+import example3Html, {
+  code as example3Code,
+  language as example3Language
+} from './effects-example-3.txt?shiki&lang=tsx';
+import example4Html, {
+  code as example4Code,
+  language as example4Language
+} from './effects-example-4.txt?shiki&lang=tsx';
+import example5Html, {
+  code as example5Code,
+  language as example5Language
+} from './effects-example-5.txt?shiki&lang=tsx';
 
 // ============================================================================
 // MARK: Effects Page
@@ -18,65 +39,27 @@ export default function EffectsPage(): JSX.Element {
         title="createEffect"
         description="Runs immediately and re-runs whenever its reactive dependencies change. Not for producing values — use createMemo for that."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createSignal, createEffect } from 'solid-js';
-
-const [count, setCount] = createSignal(0);
-
-createEffect(() => {
-  // Runs immediately, then on every count() change
-  console.log('count changed:', count());
-  document.title = \`Count: \${count()}\`;
-});`}
-        />
+        <CodeBlock language={example1Language} code={example1Code}>
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="onCleanup"
         description="Registers a cleanup function that runs before the effect re-runs and when the owner disposes."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createEffect, onCleanup } from 'solid-js';
-
-createEffect(() => {
-  const id = setInterval(() => console.log('tick'), 1000);
-
-  // Runs before next effect execution or on dispose
-  onCleanup(() => clearInterval(id));
-});`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="onMount / onCleanup in components"
         description="onMount runs once after the component mounts. Use onCleanup for teardown."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { onMount, onCleanup } from 'solid-js';
-
-function ResizeWatcher() {
-  onMount(() => {
-    const handler = () => console.log(window.innerWidth);
-    window.addEventListener('resize', handler);
-    onCleanup(() => window.removeEventListener('resize', handler));
-  });
-  return null;
-}
-
-// ✅ Better: use @solid-primitives/event-listener
-import { makeEventListener } from '@solid-primitives/event-listener';
-
-function ResizeWatcher() {
-  onMount(() => {
-    makeEventListener(window, 'resize', () => console.log(window.innerWidth));
-    // Cleaned up automatically on unmount
-  });
-  return null;
-}`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="warning" title="Effects run after render">
@@ -88,48 +71,18 @@ function ResizeWatcher() {
         title="on() — explicit dependencies"
         description="on() lets you specify dependencies explicitly, avoiding implicit tracking. Useful for watching specific signals."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createSignal, createEffect, on } from 'solid-js';
-
-const [source, setSource] = createSignal(0);
-const [other, setOther] = createSignal('hello');
-
-// Only re-runs when source changes — other is not tracked
-createEffect(on(source, (value, prevValue) => {
-  console.log('source:', value, 'was:', prevValue);
-  // Safe to read other() here without subscribing
-  console.log('other snapshot:', other());
-}));
-
-// Defer first run (don't run on init)
-createEffect(on(source, () => {
-  console.log('source changed (not initial)');
-}, { defer: true }));`}
-        />
+        <CodeBlock language={example4Language} code={example4Code}>
+          {template(example4Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection
         title="Tracking context"
         description="Only code inside a reactive root tracks dependencies. Reading signals outside tracking context (e.g. in async callbacks) won't subscribe."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createSignal, createEffect, untrack } from 'solid-js';
-
-const [a, setA] = createSignal(1);
-const [b, setB] = createSignal(2);
-
-createEffect(() => {
-  // Tracks a — effect re-runs when a changes
-  const aVal = a();
-
-  // Does NOT track b — untrack reads without subscribing
-  const bVal = untrack(() => b());
-
-  console.log(aVal + bVal);
-});`}
-        />
+        <CodeBlock language={example5Language} code={example5Code}>
+          {template(example5Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Live Demo">

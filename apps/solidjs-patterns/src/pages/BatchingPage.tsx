@@ -1,8 +1,12 @@
 import { batch, createEffect, createSignal, type JSX } from 'solid-js';
+import { template } from 'solid-js/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../components/PatternLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import example1Html, { code as example1Code, language as example1Language } from './batching-example-1?shiki';
+import example2Html, { code as example2Code, language as example2Language } from './batching-example-2?shiki';
+import example3Html, { code as example3Code, language as example3Language } from './batching-example-3?shiki';
 
 // ============================================================================
 // MARK: Batching Page
@@ -19,25 +23,9 @@ export default function BatchingPage(): JSX.Element {
         title="batch()"
         description="Without batch, each setX() call triggers separate effect runs. batch defers notifications until the function completes."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createSignal, createEffect, batch } from 'solid-js';
-
-const [x, setX] = createSignal(0);
-const [y, setY] = createSignal(0);
-
-createEffect(() => console.log(x(), y()));
-
-// ❌ Without batch — effect runs twice
-setX(1); // effect: 1, 0
-setY(1); // effect: 1, 1
-
-// ✅ With batch — effect runs once
-batch(() => {
-  setX(2); // queued
-  setY(2); // queued
-}); // effect: 2, 2 (single run)`}
-        />
+        <CodeBlock language={example1Language} code={example1Code}>
+          {template(example1Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <PatternSection title="Live Demo: batch">
@@ -48,22 +36,9 @@ batch(() => {
         title="untrack()"
         description="Reads reactive values without subscribing. Use inside effects or memos to access data without triggering re-runs."
       >
-        <CodeBlock
-          language="tsx"
-          code={`import { createSignal, createEffect, untrack } from 'solid-js';
-
-const [trigger, setTrigger] = createSignal(0);
-const [data, setData] = createSignal('hello');
-
-// Effect only re-runs when trigger changes
-createEffect(() => {
-  trigger(); // subscribed
-
-  // Read data without subscribing — won't re-run when data changes
-  const snapshot = untrack(() => data());
-  console.log('triggered, data snapshot:', snapshot);
-});`}
-        />
+        <CodeBlock language={example2Language} code={example2Code}>
+          {template(example2Html)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="info" title="batch is automatic in event handlers">
@@ -76,21 +51,9 @@ createEffect(() => {
         title="Practical: multi-field form reset"
         description="batch is ideal for resetting multiple fields at once without intermediate effect runs."
       >
-        <CodeBlock
-          language="tsx"
-          code={`const [name, setName] = createSignal('');
-const [email, setEmail] = createSignal('');
-const [age, setAge] = createSignal(0);
-
-function resetForm() {
-  batch(() => {
-    setName('');
-    setEmail('');
-    setAge(0);
-  });
-  // Subscribers notified once, with all fields reset
-}`}
-        />
+        <CodeBlock language={example3Language} code={example3Code}>
+          {template(example3Html)()}
+        </CodeBlock>
       </PatternSection>
     </PatternLayout>
   );
