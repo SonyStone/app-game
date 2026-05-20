@@ -1,0 +1,8 @@
+export interface Owner {
+  owned: Computation<any>[] | null;
+  cleanups: (() => void)[] | null;
+  owner: Owner | null;
+  context: any | null;
+  sourceMap?: SourceMapValue[];
+  name?: string;
+}

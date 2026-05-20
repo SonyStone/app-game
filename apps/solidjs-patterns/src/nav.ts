@@ -43,7 +43,8 @@ export const navSections: NavSection[] = [
     items: [
       { label: 'Component Patterns', href: './components' },
       { label: 'Control Flow', href: './control-flow' },
-      { label: 'Props & Spreading', href: './props' }
+      { label: 'Props & Spreading', href: './props' },
+      { label: 'Pass Data', href: './pass-data' }
     ]
   },
   {
@@ -57,6 +58,7 @@ export const navSections: NavSection[] = [
     title: 'Advanced',
     items: [
       { label: 'Primitives', href: './primitives' },
+      { label: 'Owner & Computation', href: './owner-computation' },
       { label: 'Directives', href: './directives' }
     ]
   }

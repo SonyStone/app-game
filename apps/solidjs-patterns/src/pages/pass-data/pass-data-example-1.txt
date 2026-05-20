@@ -1,0 +1,14 @@
+<Hand rotate={props.subsecond} class="subsecond" length={85} width={5} />
+
+createComponent(Hand, {
+  get rotate() {
+    return props.subsecond;
+  },
+  class: "subsecond",
+  length: 85,
+  width: 5
+});
+
+function createComponent(Comp, props) {
+  return untrack(() => Comp(props || {}));
+}

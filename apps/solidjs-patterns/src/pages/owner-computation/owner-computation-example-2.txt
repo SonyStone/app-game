@@ -1,0 +1,12 @@
+export interface Computation<Init, Next extends Init = Init> extends Owner {
+  fn: EffectFunction<Init, Next>;
+  state: ComputationState;
+  tState?: ComputationState;
+  sources: SignalState<Next>[] | null;
+  sourceSlots: number[] | null;
+  value?: Init;
+  updatedAt: number | null;
+  pure: boolean;
+  user?: boolean;
+  suspense?: SuspenseContextType;
+}

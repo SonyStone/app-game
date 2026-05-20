@@ -15,9 +15,11 @@ export const routes = {
     { path: '/components', component: lazy(() => import('./pages/components/ComponentsPage')) },
     { path: '/control-flow', component: lazy(() => import('./pages/control-flow/ControlFlowPage')) },
     { path: '/props', component: lazy(() => import('./pages/props/PropsPage')) },
+    { path: '/pass-data', component: lazy(() => import('./pages/pass-data')) },
     { path: '/resources', component: lazy(() => import('./pages/resources/ResourcesPage')) },
     { path: '/suspense', component: lazy(() => import('./pages/suspense/SuspensePage')) },
     { path: '/primitives', component: lazy(() => import('./pages/primitives/PrimitivesPage')) },
+    { path: '/owner-computation', component: lazy(() => import('./pages/owner-computation/OwnerComputationPage')) },
     { path: '/directives', component: lazy(() => import('./pages/directives/DirectivesPage')) }
   ]
 };
