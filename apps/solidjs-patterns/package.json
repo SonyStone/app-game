@@ -10,19 +10,19 @@
     "kill": "pkill -9 -f \"vite\" 2>/dev/null; sleep 1; echo \"All vite processes killed\""
   },
   "dependencies": {
-    "@kobalte/core": "^0.13.11",
-    "@solidjs/router": "0.16.1",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^3.6.0"
+    "@kobalte/core": "catalog:",
+    "@solidjs/router": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "tailwind-merge": "catalog:"
   },
   "devDependencies": {
-    "@corvu/drawer": "^0.2.4",
-    "@unocss/reset": "66.6.8",
-    "@unocss/vite": "66.6.8",
-    "typescript": "^5.7.2",
-    "vite": "^6.3.5",
-    "vite-plugin-solid": "^2.11.6",
-    "vite-tsconfig-paths": "^6.1.1"
+    "@corvu/drawer": "catalog:",
+    "@unocss/reset": "catalog:",
+    "@unocss/vite": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vite-tsconfig-paths": "catalog:"
   }
 }

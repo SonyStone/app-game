@@ -15,13 +15,13 @@
   },
   "dependencies": {
     "solid-dnd": "workspace:*",
-    "solid-js": "^1.9.4"
+    "solid-js": "catalog:"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "typescript": "^5.7.2",
-    "vite": "^6.3.5",
-    "vite-plugin-solid": "^2.11.6",
-    "vite-tsconfig-paths": "^6.1.1"
+    "@playwright/test": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vite-tsconfig-paths": "catalog:"
   }
 }
