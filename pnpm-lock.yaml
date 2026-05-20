@@ -463,6 +463,46 @@ importers:
         specifier: ^6.1.1
         version: 6.1.1(typescript@5.9.3)(vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.99.0))
 
+  apps/solidjs-patterns:
+    dependencies:
+      '@kobalte/core':
+        specifier: ^0.13.11
+        version: 0.13.11(solid-js@1.9.12)
+      '@solidjs/router':
+        specifier: 0.16.1
+        version: 0.16.1(solid-js@1.9.12)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      tailwind-merge:
+        specifier: ^3.6.0
+        version: 3.6.0
+    devDependencies:
+      '@corvu/drawer':
+        specifier: ^0.2.4
+        version: 0.2.4(solid-js@1.9.12)
+      '@unocss/reset':
+        specifier: 66.6.8
+        version: 66.6.8
+      '@unocss/vite':
+        specifier: 66.6.8
+        version: 66.6.8(vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.99.0))
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vite:
+        specifier: ^6.3.5
+        version: 6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.99.0)
+      vite-plugin-solid:
+        specifier: ^2.11.6
+        version: 2.11.12(@testing-library/jest-dom@6.9.1)(solid-js@1.9.12)(vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.99.0))
+      vite-tsconfig-paths:
+        specifier: ^6.1.1
+        version: 6.1.1(typescript@5.9.3)(vite@6.4.2(@types/node@25.8.0)(jiti@2.7.0)(lightningcss@1.32.0)(sass@1.99.0))
+
   apps/web:
     dependencies:
       '@app-game/app-router':
@@ -528,6 +568,9 @@ importers:
       '@app-game/solid-utils':
         specifier: workspace:*
         version: link:../../packages/solid-utils
+      '@app-game/solidjs-patterns':
+        specifier: workspace:*
+        version: link:../solidjs-patterns
       '@app-game/svg-editor':
         specifier: workspace:*
         version: link:../../packages/svg-editor
