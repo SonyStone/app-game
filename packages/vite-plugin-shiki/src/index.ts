@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { getSingletonHighlighter } from 'shiki';
 import type { Plugin } from 'vite';
-import { CSS_VARIABLE_THEME, CSS_VARIABLE_THEME_NAME } from './css-variable-theme';
+import { createVsCodeCssVariablesTheme } from './css-variable-theme';
 
 const DEFAULT_QUERY = 'shiki';
 const DEFAULT_PREFIX = '\0shiki:';
@@ -35,7 +35,8 @@ export type CodeBlockHighlightPluginOptions = {
 };
 
 export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): Plugin {
-  const themes = options.themes ?? [CSS_VARIABLE_THEME_NAME];
+  const cssVariablesTheme = createVsCodeCssVariablesTheme();
+  const themes = options.themes ?? [];
   const queryKey = options.query ?? DEFAULT_QUERY;
   const prefix = options.prefix ?? DEFAULT_PREFIX;
   const supportedLanguages = options.supportedLanguages ?? DEFAULT_SUPPORTED_LANGUAGES;
@@ -84,9 +85,22 @@ export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): 
       const code = await readFile(filePath, 'utf8');
       const params = new URLSearchParams(rawQuery);
       const language = resolveLanguage(filePath, params, defaultLanguage);
-      const theme = params.get('theme') ?? themes[0];
-      const highlighter = await (highlighterPromise ??= createCodeHighlighter(themes, supportedLanguages));
-      const highlightedHtml = await highlightWithTheme(highlighter, code, language, theme);
+
+      const theme = params.get('theme') ?? themes[0] ?? cssVariablesTheme.name;
+
+      const highlighter = await (highlighterPromise ??= getSingletonHighlighter({
+        themes: [...themes, cssVariablesTheme.name],
+        langs: [...supportedLanguages]
+      }));
+
+      if (!highlighter.getLoadedThemes().includes(theme)) {
+        await highlighter.loadTheme(theme);
+      }
+
+      const highlightedHtml = highlighter.codeToHtml(code, {
+        lang: language,
+        theme
+      });
 
       return [
         `export const code = ${JSON.stringify(code)};`,
@@ -114,33 +128,6 @@ export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): 
       return modules;
     }
   };
-}
-
-async function createCodeHighlighter(themes: readonly string[], supportedLanguages: readonly string[]) {
-  const resolvedThemes = themes.includes(CSS_VARIABLE_THEME_NAME)
-    ? [CSS_VARIABLE_THEME, ...themes.filter((themeName) => themeName !== CSS_VARIABLE_THEME_NAME)]
-    : [...themes];
-
-  return getSingletonHighlighter({
-    themes: resolvedThemes,
-    langs: [...supportedLanguages]
-  });
-}
-
-type CodeHighlighter = Awaited<ReturnType<typeof createCodeHighlighter>>;
-
-async function highlightWithTheme(highlighter: CodeHighlighter, code: string, language: string, theme: string) {
-  const themeInput = theme as Parameters<CodeHighlighter['loadTheme']>[0];
-  const highlightedCodeOptions = {
-    lang: language,
-    theme
-  } as Parameters<CodeHighlighter['codeToHtml']>[1];
-
-  if (!highlighter.getLoadedThemes().includes(theme)) {
-    await highlighter.loadTheme(themeInput);
-  }
-
-  return highlighter.codeToHtml(code, highlightedCodeOptions);
 }
 
 function hasQuery(id: string, queryKey: string): boolean {

@@ -1,14 +1,11 @@
 import { CssVariablesThemeOptions, type ThemeRegistration } from 'shiki/core';
 
-export const CSS_VARIABLE_THEME_NAME = 'css-variables';
-export const CSS_VARIABLE_THEME = createVsCodeCssVariablesTheme();
-
 export function createVsCodeCssVariablesTheme(
-  options: CssVariablesThemeOptions = {
-    name: CSS_VARIABLE_THEME_NAME,
+  options = {
+    name: 'css-variables',
     variablePrefix: `--shiki-`
-  }
-): ThemeRegistration {
+  } as const satisfies CssVariablesThemeOptions
+): ThemeRegistration & Required<Pick<ThemeRegistration, 'name'>> {
   const variable = (name: string) => `var(${options.variablePrefix}${name})`;
 
   return {
