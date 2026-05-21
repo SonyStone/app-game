@@ -11,7 +11,7 @@ export function Sidebar(): JSX.Element {
   return (
     <>
       {/* Desktop sidebar — always visible */}
-      <aside class="hidden w-56 shrink-0 border-r border-neutral-800 bg-neutral-900/50 md:flex md:flex-col">
+      <aside class="hidden w-56 shrink-0 border-r border-stone-300 bg-stone-100/70 md:flex md:flex-col dark:border-slate-800 dark:bg-slate-900/50">
         <SidebarContent />
       </aside>
 
@@ -31,7 +31,7 @@ function SidebarContent(props: { onNavigate?: () => void }): JSX.Element {
       <For each={navSections}>
         {(section) => (
           <div class="mb-3">
-            <div class="mb-1 px-2 text-[10px] font-semibold tracking-widest text-neutral-500 uppercase">
+            <div class="mb-1 px-2 text-[10px] font-semibold tracking-widest text-stone-500 uppercase dark:text-slate-500">
               {section.title}
             </div>
             <For each={section.items}>
@@ -65,16 +65,18 @@ function NavLink(props: { href: string; label: string; badge?: string; onNavigat
       onClick={() => props.onNavigate?.()}
       class={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors ${
         isActive()
-          ? 'bg-violet-600/20 font-medium text-violet-300'
-          : 'text-neutral-400 hover:bg-white/5 hover:text-neutral-200'
+          ? 'bg-violet-100 font-medium text-violet-700 dark:bg-violet-600/20 dark:text-violet-300'
+          : 'text-stone-600 hover:bg-stone-900/5 hover:text-stone-950 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-200'
       }`}
     >
       <span
-        class={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${isActive() ? 'bg-violet-400' : 'bg-neutral-700'}`}
+        class={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${isActive() ? 'bg-violet-500 dark:bg-violet-400' : 'bg-stone-300 dark:bg-slate-700'}`}
       />
       <span class="flex-1">{props.label}</span>
       {props.badge && (
-        <span class="rounded bg-neutral-700 px-1 py-0.5 text-[9px] font-medium text-neutral-400">{props.badge}</span>
+        <span class="rounded bg-stone-200 px-1 py-0.5 text-[9px] font-medium text-stone-600 dark:bg-slate-700 dark:text-slate-400">
+          {props.badge}
+        </span>
       )}
     </A>
   );
@@ -90,7 +92,7 @@ function MobileDrawer(): JSX.Element {
   return (
     <>
       <button
-        class="fixed top-3 left-3 z-50 flex h-8 w-8 items-center justify-center rounded-md border border-neutral-700 bg-neutral-900/80 backdrop-blur-sm md:hidden"
+        class="fixed top-3 left-3 z-50 flex h-8 w-8 items-center justify-center rounded-md border border-stone-300 bg-stone-100/90 text-stone-700 backdrop-blur-sm md:hidden dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-200"
         onClick={() => setOpen(true)}
         aria-label="Open navigation"
       >
@@ -104,13 +106,13 @@ function MobileDrawer(): JSX.Element {
               class="fixed inset-0 z-100 transition-colors duration-300"
               style={{ 'background-color': `rgb(0 0 0 / ${0.6 * drawerProps.openPercentage})` }}
             />
-            <Drawer.Content class="fixed inset-y-0 left-0 z-101 flex w-60 flex-col border-r border-neutral-800 bg-neutral-950 data-transitioning:transition-transform data-transitioning:duration-300 data-transitioning:ease-[cubic-bezier(0.32,0.72,0,1)]">
-              <div class="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+            <Drawer.Content class="fixed inset-y-0 left-0 z-101 flex w-60 flex-col border-r border-stone-300 bg-stone-50 data-transitioning:transition-transform data-transitioning:duration-300 data-transitioning:ease-[cubic-bezier(0.32,0.72,0,1)] dark:border-slate-800 dark:bg-slate-950">
+              <div class="flex items-center justify-between border-b border-stone-300 px-4 py-3 dark:border-slate-800">
                 <div class="flex items-baseline gap-2">
-                  <Drawer.Label class="text-sm font-bold text-white">SolidJS</Drawer.Label>
-                  <span class="text-xs text-violet-400">Patterns</span>
+                  <Drawer.Label class="text-sm font-bold text-stone-950 dark:text-white">SolidJS</Drawer.Label>
+                  <span class="text-xs text-violet-700 dark:text-violet-400">Patterns</span>
                 </div>
-                <Drawer.Close class="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-white/10 hover:text-white">
+                <Drawer.Close class="flex h-6 w-6 items-center justify-center rounded text-stone-500 hover:bg-stone-900/10 hover:text-stone-950 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white">
                   <CloseIcon />
                 </Drawer.Close>
               </div>

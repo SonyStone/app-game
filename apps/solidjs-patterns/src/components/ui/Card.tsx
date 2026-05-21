@@ -9,7 +9,13 @@ export function Card(props: JSX.HTMLAttributes<HTMLDivElement> & { class?: strin
   const [local, rest] = splitProps(props, ['class', 'children']);
 
   return (
-    <div {...rest} class={cn('rounded-xl border border-neutral-800 bg-neutral-900 p-5', local.class)}>
+    <div
+      {...rest}
+      class={cn(
+        'rounded-xl border border-stone-300 bg-white p-5 dark:border-slate-800 dark:bg-slate-900',
+        local.class
+      )}
+    >
       {local.children}
     </div>
   );
@@ -29,7 +35,7 @@ export function CardTitle(props: JSX.HTMLAttributes<HTMLHeadingElement> & { clas
   const [local, rest] = splitProps(props, ['class', 'children']);
 
   return (
-    <h3 {...rest} class={cn('text-sm font-semibold text-neutral-100', local.class)}>
+    <h3 {...rest} class={cn('text-sm font-semibold text-stone-950 dark:text-slate-100', local.class)}>
       {local.children}
     </h3>
   );
@@ -39,7 +45,7 @@ export function CardDescription(props: JSX.HTMLAttributes<HTMLParagraphElement> 
   const [local, rest] = splitProps(props, ['class', 'children']);
 
   return (
-    <p {...rest} class={cn('text-xs text-neutral-500', local.class)}>
+    <p {...rest} class={cn('text-xs text-stone-500 dark:text-slate-500', local.class)}>
       {local.children}
     </p>
   );

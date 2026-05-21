@@ -1,11 +1,8 @@
-import '@unocss/reset/tailwind.css';
-import 'uno.css';
-import './index.scss';
-
-import { createApp } from 'solid-utils';
-
 import { CameraProvider } from '@app-game/three-examples';
 import { MetaProvider } from '@solidjs/meta';
+import '@unocss/reset/tailwind.css';
+import { createApp } from 'solid-utils';
+import 'uno.css';
 import { App } from './App';
 import { StatsProvider } from './Stats.provider';
 

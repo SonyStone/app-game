@@ -1,28 +1,15 @@
+import { A } from '@solidjs/router';
 import { type JSX } from 'solid-js';
 import { template } from 'solid-js/web';
 import { CodeBlock } from '../../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
 import { Card } from '../../components/ui/Card';
-import example1Html, {
-  code as example1Code,
-  language as example1Language
-} from './pass-data-example-1.txt?shiki&lang=tsx';
-import example2Html, {
-  code as example2Code,
-  language as example2Language
-} from './pass-data-example-2.txt?shiki&lang=tsx';
-import example3Html, {
-  code as example3Code,
-  language as example3Language
-} from './pass-data-example-3.txt?shiki&lang=tsx';
-import example4Html, {
-  code as example4Code,
-  language as example4Language
-} from './pass-data-example-4.txt?shiki&lang=tsx';
-import example5Html, {
-  code as example5Code,
-  language as example5Language
-} from './pass-data-example-5.txt?shiki&lang=tsx';
+import componentHtml, { code as componentCode, language as componentLanguage } from './component?shiki';
+import example1Html, { code as example1Code, language as example1Language } from './pass-data-example-1?shiki';
+import example2Html, { code as example2Code, language as example2Language } from './pass-data-example-2?shiki';
+import example3Html, { code as example3Code, language as example3Language } from './pass-data-example-3?shiki';
+import example4Html, { code as example4Code, language as example4Language } from './pass-data-example-4?shiki';
+import example5Html, { code as example5Code, language as example5Language } from './pass-data-example-5?shiki';
 
 // ============================================================================
 // MARK: Pass Data Page
@@ -39,7 +26,7 @@ export default function PassDataPage(): JSX.Element {
         title="Props preserve reactivity"
         description="Props can hold either plain values or getter-backed properties, so Solid can defer reads until the child actually accesses them."
       >
-        <div class="flex flex-col gap-3 text-sm leading-6 text-neutral-300">
+        <div class="text-baseleading-6 flex flex-col gap-3 dark:text-slate-300">
           <p>
             A component receives a props object through a call like <InlineCode>Comp(props)</InlineCode>. When a prop
             comes from a signal or another getter, Solid tries to keep that access lazy instead of eagerly reading it at
@@ -55,6 +42,14 @@ export default function PassDataPage(): JSX.Element {
         <CodeBlock language={example1Language} code={example1Code} title="props-lowering.tsx">
           {template(example1Html)()}
         </CodeBlock>
+        <div class="absolute rounded bg-white p-2 text-black">
+          <A href="https://github.com/solidjs/solid/blob/128225942095f51f9b49a3f8fdc1bd7e3b9ee97b/packages/solid/src/render/component.ts#L96">
+            createComponent source
+          </A>
+        </div>
+        <CodeBlock language={componentLanguage} code={componentCode} title="component.ts">
+          {template(componentHtml)()}
+        </CodeBlock>
       </PatternSection>
 
       <Callout type="tip" title="Pass a getter when the child should own the subscription">
@@ -66,7 +61,7 @@ export default function PassDataPage(): JSX.Element {
         title="Use ref as an output channel"
         description="A ref callback lets a child hand a concrete object back to its parent, usually a DOM node."
       >
-        <div class="flex flex-col gap-3 text-sm leading-6 text-neutral-300">
+        <div class="flex flex-col gap-3 text-base leading-6 dark:text-slate-300">
           <p>
             <InlineCode>props.ref</InlineCode> is just another callback prop. The child exposes a DOM element or some
             other object, and the parent decides what to do with it.
@@ -86,7 +81,7 @@ export default function PassDataPage(): JSX.Element {
         title="Build polymorphic components with as and Dynamic"
         description="A common pattern is to accept an as prop, split it out, and render the final element through Dynamic."
       >
-        <div class="flex flex-col gap-3 text-sm leading-6 text-neutral-300">
+        <div class="flex flex-col gap-3 text-base leading-6 dark:text-slate-300">
           <p>
             This lets you swap the underlying tag or component without duplicating behavior. It is the core idea behind
             polymorphic APIs such as button components that can also render as links.
@@ -113,7 +108,7 @@ export default function PassDataPage(): JSX.Element {
         title="Use context for shared subtree state"
         description="Context moves shared values through a subtree without manually threading props through every intermediate component."
       >
-        <div class="flex flex-col gap-3 text-sm leading-6 text-neutral-300">
+        <div class="text-baseleading-6 flex flex-col gap-3 dark:text-slate-300">
           <p>
             Internally, Solid stores context on owner nodes. When a provider renders, it creates a new scope, writes a
             value into that owner context, and lets descendants read it with <InlineCode>useContext</InlineCode>.
@@ -139,7 +134,7 @@ export default function PassDataPage(): JSX.Element {
         title="Resolve children explicitly when you need to inspect them"
         description="children(() => props.children) normalizes incoming JSX so you can work with the resolved result instead of an opaque prop."
       >
-        <div class="flex flex-col gap-3 text-sm leading-6 text-neutral-300">
+        <div class="text-baseleading-6 flex flex-col gap-3 dark:text-slate-300">
           <p>
             The <InlineCode>children</InlineCode> helper recursively unwraps child functions until it reaches concrete
             JSX values: DOM nodes, strings, numbers, booleans, <InlineCode>null</InlineCode>, or
@@ -155,8 +150,8 @@ export default function PassDataPage(): JSX.Element {
         </CodeBlock>
 
         <Card class="flex flex-col gap-3">
-          <h3 class="text-sm font-semibold text-neutral-100">Related primitives</h3>
-          <div class="flex flex-col gap-2 text-sm leading-6 text-neutral-300">
+          <h3 class="text-basefont-semibold text-slate-100">Related primitives</h3>
+          <div class="text-baseleading-6 flex flex-col gap-2 dark:text-slate-300">
             <p>
               <strong>solid-primitives</strong> includes <InlineCode>resolveFirst</InlineCode> and{' '}
               <InlineCode>resolveElements</InlineCode>. They are similar to <InlineCode>children</InlineCode>, but also
@@ -205,11 +200,17 @@ export default function PassDataPage(): JSX.Element {
 // ============================================================================
 
 function InlineCode(props: { children: JSX.Element }): JSX.Element {
-  return <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-neutral-200">{props.children}</code>;
+  return (
+    <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-slate-900 dark:text-slate-200">{props.children}</code>
+  );
 }
 
 function ReferenceCard(props: { children: JSX.Element }): JSX.Element {
-  return <ul class="flex flex-col gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-4">{props.children}</ul>;
+  return (
+    <ul class="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-200 p-4 dark:bg-slate-900">
+      {props.children}
+    </ul>
+  );
 }
 
 function ReferenceLink(props: { href: string; children: JSX.Element }): JSX.Element {
@@ -219,7 +220,7 @@ function ReferenceLink(props: { href: string; children: JSX.Element }): JSX.Elem
         href={props.href}
         target="_blank"
         rel="noreferrer"
-        class="text-sm text-violet-300 underline decoration-violet-800 underline-offset-4 transition-colors hover:text-violet-200"
+        class="text-basetext-violet-300 text-violet-900 underline decoration-violet-800 underline-offset-4 transition-colors hover:text-violet-200"
       >
         {props.children}
       </a>

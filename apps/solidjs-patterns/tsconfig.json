@@ -1,18 +1,3 @@
 {
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "jsx": "preserve",
-    "jsxImportSource": "solid-js",
-    "strict": true,
-    "noEmit": true,
-    "isolatedModules": true,
-    "baseUrl": ".",
-  },
-  "include": [
-    "src"
-  ]
+  "extends": "../../tsconfig.json",
 }

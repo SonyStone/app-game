@@ -11,12 +11,12 @@ export default function OverviewPage(): JSX.Element {
   return (
     <article class="flex flex-col gap-10">
       {/* Hero */}
-      <header class="border-b border-neutral-800 pb-8">
+      <header class="border-b border-stone-300 pb-8 dark:border-neutral-800">
         <div class="mb-3 flex items-center gap-2">
-          <h1 class="text-3xl font-bold text-white">SolidJS Patterns</h1>
+          <h1 class="text-3xl font-bold text-stone-950 dark:text-white">SolidJS Patterns</h1>
           <Badge variant="secondary">Research Notes</Badge>
         </div>
-        <p class="max-w-xl text-sm text-neutral-400">
+        <p class="max-w-xl text-sm text-stone-600 dark:text-neutral-400">
           A personal reference site for SolidJS patterns, primitives, and reactive concepts. Collected from
           documentation, experiments, and real-world usage.
         </p>
@@ -24,15 +24,19 @@ export default function OverviewPage(): JSX.Element {
 
       {/* Quick links grid */}
       <section>
-        <h2 class="mb-4 text-xs font-semibold tracking-widest text-neutral-500 uppercase">Topics</h2>
+        <h2 class="mb-4 text-xs font-semibold tracking-widest text-stone-500 uppercase dark:text-neutral-500">
+          Topics
+        </h2>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <For each={quickLinks}>
             {(link) => (
               <A href={link.href} class="group">
-                <Card class="transition-colors hover:border-neutral-700 hover:bg-neutral-800/50">
+                <Card class="transition-colors hover:border-stone-400 hover:bg-stone-100 dark:hover:border-neutral-700 dark:hover:bg-neutral-800/50">
                   <div class="flex items-start justify-between gap-2">
                     <div>
-                      <CardTitle class="mb-1 transition-colors group-hover:text-violet-300">{link.title}</CardTitle>
+                      <CardTitle class="mb-1 text-stone-950 transition-colors group-hover:text-violet-700 dark:text-neutral-100 dark:group-hover:text-violet-300">
+                        {link.title}
+                      </CardTitle>
                       <CardDescription>{link.description}</CardDescription>
                     </div>
                     <span class="mt-0.5 text-xl">{link.icon}</span>
@@ -51,20 +55,22 @@ export default function OverviewPage(): JSX.Element {
 
       {/* Notes section */}
       <section>
-        <h2 class="mb-3 text-xs font-semibold tracking-widest text-neutral-500 uppercase">Key Concepts</h2>
-        <div class="space-y-2 rounded-xl border border-neutral-800 bg-neutral-900/50 p-5 text-xs text-neutral-400">
+        <h2 class="mb-3 text-xs font-semibold tracking-widest text-stone-500 uppercase dark:text-neutral-500">
+          Key Concepts
+        </h2>
+        <div class="space-y-2 rounded-xl border border-stone-300 bg-stone-100/80 p-5 text-xs text-stone-600 dark:border-neutral-800 dark:bg-neutral-900/50 dark:text-neutral-400">
           <p>
-            <span class="font-semibold text-neutral-300">Fine-grained reactivity: </span>
+            <span class="font-semibold text-stone-800 dark:text-neutral-300">Fine-grained reactivity: </span>
             SolidJS tracks reactive dependencies at the signal level — components don't re-render; only the parts of the
             DOM that depend on a changed signal update.
           </p>
           <p>
-            <span class="font-semibold text-neutral-300">No virtual DOM: </span>
+            <span class="font-semibold text-stone-800 dark:text-neutral-300">No virtual DOM: </span>
             Compiled to real DOM operations. JSX runs once at creation time; reactivity is achieved through signals and
             effects, not diffing.
           </p>
           <p>
-            <span class="font-semibold text-neutral-300">Ownership & cleanup: </span>
+            <span class="font-semibold text-stone-800 dark:text-neutral-300">Ownership & cleanup: </span>
             Computations are owned by a root or component. When the owner disposes, all nested effects, memos, and
             children are cleaned up automatically.
           </p>

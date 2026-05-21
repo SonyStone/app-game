@@ -14,6 +14,33 @@ export type CodeBlockProps = {
 };
 
 export function CodeBlock(props: CodeBlockProps): JSX.Element {
+  return (
+    <div
+      class={`group relative overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 ${props.class ?? ''}`}
+    >
+      {/* Top bar */}
+      <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-2 dark:border-slate-800 dark:bg-slate-900/80">
+        <div class="flex items-center gap-2">
+          <span class="h-2.5 w-2.5 rounded-full bg-red-500/60" />
+          <span class="h-2.5 w-2.5 rounded-full bg-yellow-500/60" />
+          <span class="h-2.5 w-2.5 rounded-full bg-green-500/60" />
+          {props.title && <span class="ml-2 text-[11px] text-slate-600 dark:text-slate-400">{props.title}</span>}
+        </div>
+        <div class="flex items-center gap-2">
+          {props.language && (
+            <span class="font-mono text-[10px] text-slate-400 uppercase dark:text-slate-500">{props.language}</span>
+          )}
+          <CopyButton code={props.code} />
+        </div>
+      </div>
+
+      {/* Code */}
+      <div class="text-sm [&>*]:overflow-auto [&>*]:p-4">{props.children}</div>
+    </div>
+  );
+}
+
+function CopyButton(props: { code?: string }): JSX.Element {
   const [copied, setCopied] = createSignal(false);
   const trimmedCode = createMemo(() => props.code?.trim() ?? '');
 
@@ -28,35 +55,18 @@ export function CodeBlock(props: CodeBlockProps): JSX.Element {
   };
 
   return (
-    <div
-      class={`group relative overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950 ${props.class ?? ''}`}
-    >
-      {/* Top bar */}
-      <div class="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/50 px-4 py-2">
-        <div class="flex items-center gap-2">
-          <span class="h-2.5 w-2.5 rounded-full bg-red-500/60" />
-          <span class="h-2.5 w-2.5 rounded-full bg-yellow-500/60" />
-          <span class="h-2.5 w-2.5 rounded-full bg-green-500/60" />
-          {props.title && <span class="ml-2 text-[11px] text-neutral-500">{props.title}</span>}
-        </div>
-        <div class="flex items-center gap-2">
-          {props.language && <span class="font-mono text-[10px] text-neutral-600 uppercase">{props.language}</span>}
-          {props.code && (
-            <button
-              onClick={handleCopy}
-              class="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-neutral-500 transition-colors hover:bg-neutral-700 hover:text-neutral-300"
-              aria-label="Copy code"
-            >
-              {copied() ? <CheckIcon /> : <CopyIcon />}
-              {copied() ? 'Copied!' : 'Copy'}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Code */}
-      {props.children}
-    </div>
+    <>
+      {props.code && (
+        <button
+          onClick={handleCopy}
+          class="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+          aria-label="Copy code"
+        >
+          {copied() ? <CheckIcon /> : <CopyIcon />}
+          {copied() ? 'Copied!' : 'Copy'}
+        </button>
+      )}
+    </>
   );
 }
 

@@ -87,31 +87,31 @@ function MemoDemo(): JSX.Element {
 
   return (
     <Card class="flex flex-col gap-4">
-      <p class="text-xs text-neutral-500">Hypotenuse = √(a² + b²)</p>
+      <p class="text-xs text-slate-500">Hypotenuse = √(a² + b²)</p>
       <div class="flex flex-wrap items-center gap-4">
         <div class="flex items-center gap-2">
-          <span class="text-xs text-neutral-400">a =</span>
+          <span class="text-xs text-slate-400">a =</span>
           <Button size="sm" variant="outline" onClick={() => setA((v) => v - 1)}>
             −
           </Button>
-          <span class="w-6 text-center font-mono text-sm text-violet-300">{a()}</span>
+          <span class="w-6 text-center font-mono text-basetext-violet-300">{a()}</span>
           <Button size="sm" variant="outline" onClick={() => setA((v) => v + 1)}>
             +
           </Button>
         </div>
         <div class="flex items-center gap-2">
-          <span class="text-xs text-neutral-400">b =</span>
+          <span class="text-xs text-slate-400">b =</span>
           <Button size="sm" variant="outline" onClick={() => setB((v) => v - 1)}>
             −
           </Button>
-          <span class="w-6 text-center font-mono text-sm text-violet-300">{b()}</span>
+          <span class="w-6 text-center font-mono text-basetext-violet-300">{b()}</span>
           <Button size="sm" variant="outline" onClick={() => setB((v) => v + 1)}>
             +
           </Button>
         </div>
       </div>
-      <div class="rounded-lg bg-neutral-950 p-3 font-mono text-sm">
-        <span class="text-neutral-500">hypotenuse = </span>
+      <div class="rounded-lg bg-slate-950 p-3 font-mono text-sm">
+        <span class="text-slate-500">hypotenuse = </span>
         <span class="text-green-400">{hypotenuse().toFixed(4)}</span>
       </div>
     </Card>

@@ -1,0 +1,39 @@
+.shiki {
+  /* VS Code Light+ */
+  --shiki-color-background: #ffffff;
+  --shiki-color-text: #000000;
+  --shiki-foreground: #000000;
+  --shiki-background: #ffffff;
+  --shiki-token-comment: #008000;
+  --shiki-token-keyword: #0000ff;
+  --shiki-token-string: #a31515;
+  --shiki-token-constant: #098658;
+  --shiki-token-function: #795e26;
+  --shiki-token-type: #267f99;
+  --shiki-token-property: #001080;
+  --shiki-token-tag: #800000;
+  --shiki-token-punctuation: #000000;
+  --shiki-token-parameter: #001080;
+  --shiki-token-string-expression: #a31515;
+  --shiki-token-link: #267f99;
+}
+
+:global(.dark) .shiki {
+  /* VS Code Dark+ */
+  --shiki-color-background: #1e1e1e;
+  --shiki-color-text: #d4d4d4;
+  --shiki-foreground: #d4d4d4;
+  --shiki-background: #1e1e1e;
+  --shiki-token-comment: #6a9955;
+  --shiki-token-keyword: #569cd6;
+  --shiki-token-string: #ce9178;
+  --shiki-token-constant: #b5cea8;
+  --shiki-token-function: #dcdcaa;
+  --shiki-token-type: #4ec9b0;
+  --shiki-token-property: #9cdcfe;
+  --shiki-token-tag: #569cd6;
+  --shiki-token-punctuation: #d4d4d4;
+  --shiki-token-parameter: #9cdcfe;
+  --shiki-token-string-expression: #ce9178;
+  --shiki-token-link: #4ec9b0;
+}

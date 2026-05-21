@@ -48,7 +48,7 @@ export default function OwnerComputationPage(): JSX.Element {
         title="Owner"
         description="An owner is a scope node in Solid's ownership tree. It links parent/child scopes, cleanup callbacks, and context."
       >
-        <div class="flex flex-col gap-3 text-sm leading-6 text-neutral-300">
+        <div class="flex flex-col gap-3 text-baseleading-6 dark:text-slate-300">
           <p>
             An owner is not necessarily a computation. Think of it as the scope object that ties together lifecycle,
             context propagation, and cleanup chains. It points to its parent through <InlineCode>owner</InlineCode>, its
@@ -70,7 +70,7 @@ export default function OwnerComputationPage(): JSX.Element {
         title="Computation"
         description="A computation is an owner plus reactive execution state: a function to run, dependencies to track, and cached state to update."
       >
-        <div class="flex flex-col gap-3 text-sm leading-6 text-neutral-300">
+        <div class="flex flex-col gap-3 text-baseleading-6 dark:text-slate-300">
           <p>
             Every <InlineCode>createEffect</InlineCode>, <InlineCode>createMemo</InlineCode>, and
             <InlineCode>createComputed</InlineCode> creates its own computation node. That node stores the function,
@@ -106,7 +106,7 @@ export default function OwnerComputationPage(): JSX.Element {
         title="createSelector"
         description="createSelector is useful when many subscribers care about whether one key matches the current selection."
       >
-        <div class="flex flex-col gap-3 text-sm leading-6 text-neutral-300">
+        <div class="flex flex-col gap-3 text-baseleading-6 dark:text-slate-300">
           <p>
             Each subscriber only reacts when its key starts matching or stops matching. For large selectable lists, that
             is much cheaper than making every item recompute a generic equality check on every update.
@@ -122,7 +122,7 @@ export default function OwnerComputationPage(): JSX.Element {
         title="createRoot"
         description="createRoot creates a new owner scope without creating a computation node. It establishes ownership, not a new reactive effect."
       >
-        <div class="flex flex-col gap-3 text-sm leading-6 text-neutral-300">
+        <div class="flex flex-col gap-3 text-baseleading-6 dark:text-slate-300">
           <p>
             It helps to read the API surface this way: <InlineCode>createEffect</InlineCode> creates a computation,
             while <InlineCode>createRoot</InlineCode> creates a scope. Computations become children of their owner all
@@ -135,9 +135,9 @@ export default function OwnerComputationPage(): JSX.Element {
           </p>
         </div>
 
-        <Card class="flex flex-col gap-2 text-sm leading-6 text-neutral-300">
+        <Card class="flex flex-col gap-2 text-baseleading-6 dark:text-slate-300">
           <div>
-            <span class="font-semibold text-neutral-100">Short version:</span> computations create child owners, but not
+            <span class="font-semibold text-slate-100">Short version:</span> computations create child owners, but not
             every owner is a computation.
           </div>
         </Card>
@@ -186,21 +186,21 @@ function PrimitiveCard(props: { note: PrimitiveNote }): JSX.Element {
   return (
     <Card class="flex flex-col gap-3">
       <div class="flex items-center gap-2">
-        <h3 class="text-sm font-semibold text-neutral-100">{props.note.name}</h3>
+        <h3 class="text-basefont-semibold text-slate-100">{props.note.name}</h3>
         <Badge variant={props.note.purity === 'pure' ? 'success' : 'warning'}>{props.note.purity}</Badge>
       </div>
-      <p class="text-xs text-neutral-500">{props.note.timing}</p>
-      <p class="text-sm leading-6 text-neutral-300">{props.note.summary}</p>
+      <p class="text-xs text-slate-500">{props.note.timing}</p>
+      <p class="text-baseleading-6 dark:text-slate-300">{props.note.summary}</p>
     </Card>
   );
 }
 
 function InlineCode(props: { children: JSX.Element }): JSX.Element {
-  return <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-neutral-200">{props.children}</code>;
+  return <code class="rounded bg-white/10 px-1 py-0.5 text-[11px] text-slate-200">{props.children}</code>;
 }
 
 function ReferenceCard(props: { children: JSX.Element }): JSX.Element {
-  return <ul class="flex flex-col gap-2 rounded-xl border border-neutral-800 bg-neutral-900 p-4">{props.children}</ul>;
+  return <ul class="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900 p-4">{props.children}</ul>;
 }
 
 function ReferenceLink(props: { href: string; children: JSX.Element }): JSX.Element {
@@ -210,7 +210,7 @@ function ReferenceLink(props: { href: string; children: JSX.Element }): JSX.Elem
         href={props.href}
         target="_blank"
         rel="noreferrer"
-        class="text-sm text-violet-300 underline decoration-violet-800 underline-offset-4 transition-colors hover:text-violet-200"
+        class="text-basetext-violet-300 underline decoration-violet-800 underline-offset-4 transition-colors hover:text-violet-200"
       >
         {props.children}
       </a>
