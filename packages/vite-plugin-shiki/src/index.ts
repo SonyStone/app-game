@@ -2,8 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { getSingletonHighlighter } from 'shiki';
 import type { Plugin } from 'vite';
+import { CSS_VARIABLE_THEME, CSS_VARIABLE_THEME_NAME } from './css-variable-theme';
 
-const DEFAULT_THEME = 'nord';
 const DEFAULT_QUERY = 'shiki';
 const DEFAULT_PREFIX = '\0shiki:';
 const DEFAULT_SUPPORTED_LANGUAGES = [
@@ -26,7 +26,7 @@ const DEFAULT_SUPPORTED_LANGUAGES = [
 type DefaultLanguage = (typeof DEFAULT_SUPPORTED_LANGUAGES)[number];
 
 export type CodeBlockHighlightPluginOptions = {
-  theme?: string;
+  themes?: readonly string[];
   query?: string;
   prefix?: string;
   supportedLanguages?: readonly string[];
@@ -34,8 +34,8 @@ export type CodeBlockHighlightPluginOptions = {
   pluginName?: string;
 };
 
-export function codeBlockHighlightPlugin(options: CodeBlockHighlightPluginOptions = {}): Plugin {
-  const theme = options.theme ?? DEFAULT_THEME;
+export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): Plugin {
+  const themes = options.themes ?? [CSS_VARIABLE_THEME_NAME];
   const queryKey = options.query ?? DEFAULT_QUERY;
   const prefix = options.prefix ?? DEFAULT_PREFIX;
   const supportedLanguages = options.supportedLanguages ?? DEFAULT_SUPPORTED_LANGUAGES;
@@ -68,6 +68,7 @@ export function codeBlockHighlightPlugin(options: CodeBlockHighlightPluginOption
 
       return `${prefix}${withQuery(resolved.id, new URLSearchParams(rawQuery))}`;
     },
+
     async load(id) {
       if (!id.startsWith(prefix)) {
         return null;
@@ -81,19 +82,20 @@ export function codeBlockHighlightPlugin(options: CodeBlockHighlightPluginOption
       this.addWatchFile(filePath);
 
       const code = await readFile(filePath, 'utf8');
-      const language = resolveLanguage(filePath, new URLSearchParams(rawQuery), defaultLanguage);
-      const highlighter = await (highlighterPromise ??= createCodeHighlighter(theme, supportedLanguages));
-      const highlightedHtml = await highlighter.codeToHtml(code, {
-        lang: language,
-        theme
-      });
+      const params = new URLSearchParams(rawQuery);
+      const language = resolveLanguage(filePath, params, defaultLanguage);
+      const theme = params.get('theme') ?? themes[0];
+      const highlighter = await (highlighterPromise ??= createCodeHighlighter(themes, supportedLanguages));
+      const highlightedHtml = await highlightWithTheme(highlighter, code, language, theme);
 
       return [
         `export const code = ${JSON.stringify(code)};`,
         `export const language = ${JSON.stringify(language)};`,
+        `export const html = ${JSON.stringify(highlightedHtml)};`,
         `export default ${JSON.stringify(highlightedHtml)};`
       ].join('\n');
     },
+
     handleHotUpdate(ctx) {
       const virtualIds = virtualIdsByFile.get(ctx.file);
 
@@ -114,15 +116,31 @@ export function codeBlockHighlightPlugin(options: CodeBlockHighlightPluginOption
   };
 }
 
-export function vitePluginShiki(options?: CodeBlockHighlightPluginOptions): Plugin {
-  return codeBlockHighlightPlugin(options);
-}
+async function createCodeHighlighter(themes: readonly string[], supportedLanguages: readonly string[]) {
+  const resolvedThemes = themes.includes(CSS_VARIABLE_THEME_NAME)
+    ? [CSS_VARIABLE_THEME, ...themes.filter((themeName) => themeName !== CSS_VARIABLE_THEME_NAME)]
+    : [...themes];
 
-async function createCodeHighlighter(theme: string, supportedLanguages: readonly string[]) {
   return getSingletonHighlighter({
-    themes: [theme],
+    themes: resolvedThemes,
     langs: [...supportedLanguages]
   });
+}
+
+type CodeHighlighter = Awaited<ReturnType<typeof createCodeHighlighter>>;
+
+async function highlightWithTheme(highlighter: CodeHighlighter, code: string, language: string, theme: string) {
+  const themeInput = theme as Parameters<CodeHighlighter['loadTheme']>[0];
+  const highlightedCodeOptions = {
+    lang: language,
+    theme
+  } as Parameters<CodeHighlighter['codeToHtml']>[1];
+
+  if (!highlighter.getLoadedThemes().includes(theme)) {
+    await highlighter.loadTheme(themeInput);
+  }
+
+  return highlighter.codeToHtml(code, highlightedCodeOptions);
 }
 
 function hasQuery(id: string, queryKey: string): boolean {

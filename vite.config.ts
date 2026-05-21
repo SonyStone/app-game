@@ -19,7 +19,9 @@ const devServerPort = Number(process.env.APP_PORT ?? process.env.PORT ?? '3120')
 export default defineConfig({
   root: webAppRoot,
   plugins: [
-    vitePluginShiki(),
+    vitePluginShiki({
+      themes: ['css-variables', 'dark-plus']
+    }),
     wasm(),
     topLevelAwait(),
     // solidDevtools({

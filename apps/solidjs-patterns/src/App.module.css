@@ -1,39 +1,305 @@
 .shiki {
-  /* VS Code Light+ */
-  --shiki-color-background: #ffffff;
   --shiki-color-text: #000000;
+  --shiki-color-background: #ffffff;
   --shiki-foreground: #000000;
   --shiki-background: #ffffff;
+  /* semantic: customLiteral */
+  --shiki-semantic-customliteral: #795e26;
+  /* semantic: newOperator */
+  --shiki-semantic-newoperator: #af00db;
+  /* semantic: numberLiteral */
+  --shiki-semantic-numberliteral: #098658;
+  /* semantic: stringLiteral */
+  --shiki-semantic-stringliteral: #a31515;
+  /* scope: comment */
   --shiki-token-comment: #008000;
+  /* scope: constant.character, constant.other.option */
+  --shiki-token-constant-character-constant-other-option: #0000ff;
+  /* scope: constant.character.character-class.regexp, constant.other.character-class.set.regexp, constant.other.character-class.regexp, constant.character.set.regexp */
+  --shiki-token-constant-character-character-class-regexp-constant-other-character-class-set-reg: #811f3f;
+  /* scope: constant.character.escape */
+  --shiki-token-constant-character-escape: #ee0000;
+  /* scope: constant.language */
+  --shiki-token-constant-language: #0000ff;
+  /* scope: constant.numeric, variable.other.enummember, keyword.operator.plus.exponent, keyword.operator.minus.exponent */
+  --shiki-token-constant-numeric-variable-other-enummember-keyword-operator-plus-exponent-keywor: #098658;
+  /* scope: constant.regexp */
+  --shiki-token-constant-regexp: #811f3f;
+  /* scope: constant.sha.git-rebase */
+  --shiki-token-constant-sha-git-rebase: #098658;
+  /* scope: emphasis | fontStyle: italic */
+  --shiki-token-emphasis-italic: #000000;
+  /* scope: entity.name.function, support.function, support.constant.handlebars, source.powershell variable.other.member, entity.name.operator.custom-literal */
+  --shiki-token-entity-name-function-support-function-support-constant-handlebars-source-powersh: #795e26;
+  /* scope: entity.name.label */
+  --shiki-token-entity-name-label: #000000;
+  /* scope: entity.name.selector */
+  --shiki-token-entity-name-selector: #800000;
+  /* scope: entity.name.tag */
+  --shiki-token-entity-name-tag: #800000;
+  /* scope: entity.name.tag.css, entity.name.tag.less */
+  --shiki-token-entity-name-tag-css-entity-name-tag-less: #d7ba7d;
+  /* scope: entity.other.attribute-name */
+  --shiki-token-entity-other-attribute-name: #e50000;
+  /* scope: entity.other.attribute-name.class.css, source.css entity.other.attribute-name.class, entity.other.attribute-name.id.css, entity.other.attribute-name.parent-selector.css, entity.other.attribute-name.parent.less, source.css entity.other.attribute-name.pseudo-class, entity.other.attribute-name.pseudo-element.css, source.css.less entity.other.attribute-name.id, entity.other.attribute-name.scss */
+  --shiki-token-entity-other-attribute-name-class-css-source-css-entity-other-attribute-name-cla: #800000;
+  /* scope: header */
+  --shiki-token-header: #000080;
+  /* scope: invalid */
+  --shiki-token-invalid: #cd3131;
+  /* scope: keyword */
   --shiki-token-keyword: #0000ff;
-  --shiki-token-string: #a31515;
-  --shiki-token-constant: #098658;
-  --shiki-token-function: #795e26;
-  --shiki-token-type: #267f99;
-  --shiki-token-property: #001080;
-  --shiki-token-tag: #800000;
-  --shiki-token-punctuation: #000000;
-  --shiki-token-parameter: #001080;
-  --shiki-token-string-expression: #a31515;
-  --shiki-token-link: #267f99;
+  /* scope: keyword.control */
+  --shiki-token-keyword-control: #0000ff;
+  /* scope: keyword.control, source.cpp keyword.operator.new, keyword.operator.delete, keyword.other.using, keyword.other.directive.using, keyword.other.operator, entity.name.operator */
+  --shiki-token-keyword-control-source-cpp-keyword-operator-new-keyword-operator-delete-keyword-: #c586c0;
+  /* scope: keyword.operator */
+  --shiki-token-keyword-operator: #000000;
+  /* scope: keyword.operator.new, keyword.operator.expression, keyword.operator.cast, keyword.operator.sizeof, keyword.operator.alignof, keyword.operator.typeid, keyword.operator.alignas, keyword.operator.instanceof, keyword.operator.logical.python, keyword.operator.wordlike */
+  --shiki-token-keyword-operator-new-keyword-operator-expression-keyword-operator-cast-keyword-o: #0000ff;
+  /* scope: keyword.operator.or.regexp, keyword.control.anchor.regexp */
+  --shiki-token-keyword-operator-or-regexp-keyword-control-anchor-regexp: #ee0000;
+  /* scope: keyword.operator.quantifier.regexp */
+  --shiki-token-keyword-operator-quantifier-regexp: #000000;
+  /* scope: keyword.other.unit */
+  --shiki-token-keyword-other-unit: #098658;
+  /* scope: markup.bold */
+  --shiki-token-markup-bold-bold: #000080;
+  /* scope: markup.changed */
+  --shiki-token-markup-changed: #0451a5;
+  /* scope: markup.deleted */
+  --shiki-token-markup-deleted: #a31515;
+  /* scope: markup.heading */
+  --shiki-token-markup-heading-bold: #800000;
+  /* scope: markup.inline.raw */
+  --shiki-token-markup-inline-raw: #800000;
+  /* scope: markup.inserted */
+  --shiki-token-markup-inserted: #098658;
+  /* scope: markup.italic | fontStyle: italic */
+  --shiki-token-markup-italic-italic: #000000;
+  /* scope: markup.strikethrough | fontStyle: strikethrough */
+  --shiki-token-markup-strikethrough-strikethrough: #000000;
+  /* scope: markup.underline | fontStyle: underline */
+  --shiki-token-markup-underline-underline: #000000;
+  /* scope: meta.diff.header */
+  --shiki-token-meta-diff-header: #000080;
+  /* scope: meta.embedded, source.groovy.embedded, string meta.image.inline.markdown, variable.legacy.builtin.python */
+  --shiki-token-meta-embedded-source-groovy-embedded-string-meta-image-inline-markdown-variable-: #000000ff;
+  /* scope: meta.object-literal.key */
+  --shiki-token-meta-object-literal-key: #001080;
+  /* scope: meta.preprocessor, entity.name.function.preprocessor */
+  --shiki-token-meta-preprocessor-entity-name-function-preprocessor: #0000ff;
+  /* scope: meta.preprocessor.numeric */
+  --shiki-token-meta-preprocessor-numeric: #098658;
+  /* scope: meta.preprocessor.string */
+  --shiki-token-meta-preprocessor-string: #a31515;
+  /* scope: meta.structure.dictionary.key.python */
+  --shiki-token-meta-structure-dictionary-key-python: #0451a5;
+  /* scope: meta.template.expression */
+  --shiki-token-meta-template-expression: #000000;
+  /* scope: meta.type.cast.expr, meta.type.new.expr, support.constant.math, support.constant.dom, support.constant.json, entity.other.inherited-class, punctuation.separator.namespace.ruby */
+  --shiki-token-meta-type-cast-expr-meta-type-new-expr-support-constant-math-support-constant-do: #267f99;
+  /* scope: punctuation.definition.group.regexp, punctuation.definition.group.assertion.regexp, punctuation.definition.character-class.regexp, punctuation.character.set.begin.regexp, punctuation.character.set.end.regexp, keyword.operator.negation.regexp, support.other.parenthesis.regexp */
+  --shiki-token-punctuation-definition-group-regexp-punctuation-definition-group-assertion-regex: #d16969;
+  /* scope: punctuation.definition.list.begin.markdown */
+  --shiki-token-punctuation-definition-list-begin-markdown: #6796e6;
+  /* scope: punctuation.definition.quote.begin.markdown */
+  --shiki-token-punctuation-definition-quote-begin-markdown: #6a9955;
+  /* scope: punctuation.definition.quote.begin.markdown, punctuation.definition.list.begin.markdown */
+  --shiki-token-punctuation-definition-quote-begin-markdown-punctuation-definition-list-begin-ma: #0451a5;
+  /* scope: punctuation.definition.tag */
+  --shiki-token-punctuation-definition-tag: #800000;
+  /* scope: punctuation.definition.template-expression.begin, punctuation.definition.template-expression.end, punctuation.section.embedded */
+  --shiki-token-punctuation-definition-template-expression-begin-punctuation-definition-template: #0000ff;
+  /* scope: punctuation.section.embedded.begin.php, punctuation.section.embedded.end.php */
+  --shiki-token-punctuation-section-embedded-begin-php-punctuation-section-embedded-end-php: #800000;
+  /* scope: storage */
+  --shiki-token-storage: #0000ff;
+  /* scope: storage.modifier, keyword.operator.noexcept */
+  --shiki-token-storage-modifier-keyword-operator-noexcept: #0000ff;
+  /* scope: storage.modifier.import.java, variable.language.wildcard.java, storage.modifier.package.java */
+  --shiki-token-storage-modifier-import-java-variable-language-wildcard-java-storage-modifier-pa: #000000;
+  /* scope: storage.type */
+  --shiki-token-storage-type: #0000ff;
+  /* scope: string, meta.embedded.assembly */
+  --shiki-token-string-meta-embedded-assembly: #a31515;
+  /* scope: string.comment.buffered.block.pug, string.quoted.pug, string.interpolated.pug, string.unquoted.plain.in.yaml, string.unquoted.plain.out.yaml, string.unquoted.block.yaml, string.quoted.single.yaml, string.quoted.double.xml, string.quoted.single.xml, string.unquoted.cdata.xml, string.quoted.double.html, string.quoted.single.html, string.unquoted.html, string.quoted.single.handlebars, string.quoted.double.handlebars */
+  --shiki-token-string-comment-buffered-block-pug-string-quoted-pug-string-interpolated-pug-stri: #0000ff;
+  /* scope: string.regexp */
+  --shiki-token-string-regexp: #811f3f;
+  /* scope: string.tag */
+  --shiki-token-string-tag: #ce9178;
+  /* scope: string.value */
+  --shiki-token-string-value: #ce9178;
+  /* scope: strong | fontStyle: bold */
+  --shiki-token-strong-bold: #000000;
+  /* scope: support.class, support.type, entity.name.type, entity.name.namespace, entity.other.attribute, entity.name.scope-resolution, entity.name.class, storage.type.numeric.go, storage.type.byte.go, storage.type.boolean.go, storage.type.string.go, storage.type.uintptr.go, storage.type.error.go, storage.type.rune.go, storage.type.cs, storage.type.generic.cs, storage.type.modifier.cs, storage.type.variable.cs, storage.type.annotation.java, storage.type.generic.java, storage.type.java, storage.type.object.array.java, storage.type.primitive.array.java, storage.type.primitive.java, storage.type.token.java, storage.type.groovy, storage.type.annotation.groovy, storage.type.parameters.groovy, storage.type.generic.groovy, storage.type.object.array.groovy, storage.type.primitive.array.groovy, storage.type.primitive.groovy */
+  --shiki-token-support-class-support-type-entity-name-type-entity-name-namespace-entity-other-a: #267f99;
+  /* scope: support.constant.property-value, support.constant.font-name, support.constant.media-type, support.constant.media, constant.other.color.rgb-value, constant.other.rgb-value, support.constant.color */
+  --shiki-token-support-constant-property-value-support-constant-font-name-support-constant-medi: #0451a5;
+  /* scope: support.function.git-rebase */
+  --shiki-token-support-function-git-rebase: #0451a5;
+  /* scope: support.type.property-name.json */
+  --shiki-token-support-type-property-name-json: #0451a5;
+  /* scope: support.type.vendored.property-name, support.type.property-name, source.css variable, source.coffee.embedded */
+  --shiki-token-support-type-vendored-property-name-support-type-property-name-source-css-variab: #e50000;
+  /* scope: variable, meta.definition.variable.name, support.variable, entity.name.variable, constant.other.placeholder */
+  --shiki-token-variable-meta-definition-variable-name-support-variable-entity-name-variable-con: #001080;
+  /* scope: variable.language */
+  --shiki-token-variable-language: #0000ff;
+  /* scope: variable.other.constant, variable.other.enummember */
+  --shiki-token-variable-other-constant-variable-other-enummember: #0070c1;
 }
 
 :global(.dark) .shiki {
-  /* VS Code Dark+ */
-  --shiki-color-background: #1e1e1e;
   --shiki-color-text: #d4d4d4;
+  --shiki-color-background: #1e1e1e;
   --shiki-foreground: #d4d4d4;
   --shiki-background: #1e1e1e;
+  /* semantic: customLiteral */
+  --shiki-semantic-customliteral: #dcdcaa;
+  /* semantic: newOperator */
+  --shiki-semantic-newoperator: #c586c0;
+  /* semantic: numberLiteral */
+  --shiki-semantic-numberliteral: #b5cea8;
+  /* semantic: stringLiteral */
+  --shiki-semantic-stringliteral: #ce9178;
+  /* scope: comment */
   --shiki-token-comment: #6a9955;
+  /* scope: constant.character, constant.other.option */
+  --shiki-token-constant-character-constant-other-option: #569cd6;
+  /* scope: constant.character.character-class.regexp, constant.other.character-class.set.regexp, constant.other.character-class.regexp, constant.character.set.regexp */
+  --shiki-token-constant-character-character-class-regexp-constant-other-character-class-set-reg: #d16969;
+  /* scope: constant.character.escape */
+  --shiki-token-constant-character-escape: #d7ba7d;
+  /* scope: constant.language */
+  --shiki-token-constant-language: #569cd6;
+  /* scope: constant.numeric, variable.other.enummember, keyword.operator.plus.exponent, keyword.operator.minus.exponent */
+  --shiki-token-constant-numeric-variable-other-enummember-keyword-operator-plus-exponent-keywor: #b5cea8;
+  /* scope: constant.regexp */
+  --shiki-token-constant-regexp: #646695;
+  /* scope: constant.sha.git-rebase */
+  --shiki-token-constant-sha-git-rebase: #b5cea8;
+  /* scope: emphasis | fontStyle: italic */
+  --shiki-token-emphasis-italic: #d4d4d4;
+  /* scope: entity.name.function, support.function, support.constant.handlebars, source.powershell variable.other.member, entity.name.operator.custom-literal */
+  --shiki-token-entity-name-function-support-function-support-constant-handlebars-source-powersh: #dcdcaa;
+  /* scope: entity.name.label */
+  --shiki-token-entity-name-label: #c8c8c8;
+  /* scope: entity.name.selector */
+  --shiki-token-entity-name-selector: #800000;
+  /* scope: entity.name.tag */
+  --shiki-token-entity-name-tag: #569cd6;
+  /* scope: entity.name.tag.css, entity.name.tag.less */
+  --shiki-token-entity-name-tag-css-entity-name-tag-less: #d7ba7d;
+  /* scope: entity.other.attribute-name */
+  --shiki-token-entity-other-attribute-name: #9cdcfe;
+  /* scope: entity.other.attribute-name.class.css, source.css entity.other.attribute-name.class, entity.other.attribute-name.id.css, entity.other.attribute-name.parent-selector.css, entity.other.attribute-name.parent.less, source.css entity.other.attribute-name.pseudo-class, entity.other.attribute-name.pseudo-element.css, source.css.less entity.other.attribute-name.id, entity.other.attribute-name.scss */
+  --shiki-token-entity-other-attribute-name-class-css-source-css-entity-other-attribute-name-cla: #d7ba7d;
+  /* scope: header */
+  --shiki-token-header: #000080;
+  /* scope: invalid */
+  --shiki-token-invalid: #f44747;
+  /* scope: keyword */
   --shiki-token-keyword: #569cd6;
-  --shiki-token-string: #ce9178;
-  --shiki-token-constant: #b5cea8;
-  --shiki-token-function: #dcdcaa;
-  --shiki-token-type: #4ec9b0;
-  --shiki-token-property: #9cdcfe;
-  --shiki-token-tag: #569cd6;
-  --shiki-token-punctuation: #d4d4d4;
-  --shiki-token-parameter: #9cdcfe;
-  --shiki-token-string-expression: #ce9178;
-  --shiki-token-link: #4ec9b0;
+  /* scope: keyword.control */
+  --shiki-token-keyword-control: #569cd6;
+  /* scope: keyword.control, source.cpp keyword.operator.new, keyword.operator.delete, keyword.other.using, keyword.other.directive.using, keyword.other.operator, entity.name.operator */
+  --shiki-token-keyword-control-source-cpp-keyword-operator-new-keyword-operator-delete-keyword-: #c586c0;
+  /* scope: keyword.operator */
+  --shiki-token-keyword-operator: #d4d4d4;
+  /* scope: keyword.operator.new, keyword.operator.expression, keyword.operator.cast, keyword.operator.sizeof, keyword.operator.alignof, keyword.operator.typeid, keyword.operator.alignas, keyword.operator.instanceof, keyword.operator.logical.python, keyword.operator.wordlike */
+  --shiki-token-keyword-operator-new-keyword-operator-expression-keyword-operator-cast-keyword-o: #569cd6;
+  /* scope: keyword.operator.or.regexp, keyword.control.anchor.regexp */
+  --shiki-token-keyword-operator-or-regexp-keyword-control-anchor-regexp: #dcdcaa;
+  /* scope: keyword.operator.quantifier.regexp */
+  --shiki-token-keyword-operator-quantifier-regexp: #d7ba7d;
+  /* scope: keyword.other.unit */
+  --shiki-token-keyword-other-unit: #b5cea8;
+  /* scope: markup.bold */
+  --shiki-token-markup-bold-bold: #569cd6;
+  /* scope: markup.changed */
+  --shiki-token-markup-changed: #569cd6;
+  /* scope: markup.deleted */
+  --shiki-token-markup-deleted: #ce9178;
+  /* scope: markup.heading */
+  --shiki-token-markup-heading-bold: #569cd6;
+  /* scope: markup.inline.raw */
+  --shiki-token-markup-inline-raw: #ce9178;
+  /* scope: markup.inserted */
+  --shiki-token-markup-inserted: #b5cea8;
+  /* scope: markup.italic | fontStyle: italic */
+  --shiki-token-markup-italic-italic: #d4d4d4;
+  /* scope: markup.strikethrough | fontStyle: strikethrough */
+  --shiki-token-markup-strikethrough-strikethrough: #d4d4d4;
+  /* scope: markup.underline | fontStyle: underline */
+  --shiki-token-markup-underline-underline: #d4d4d4;
+  /* scope: meta.diff.header */
+  --shiki-token-meta-diff-header: #569cd6;
+  /* scope: meta.embedded, source.groovy.embedded, string meta.image.inline.markdown, variable.legacy.builtin.python */
+  --shiki-token-meta-embedded-source-groovy-embedded-string-meta-image-inline-markdown-variable-: #d4d4d4;
+  /* scope: meta.object-literal.key */
+  --shiki-token-meta-object-literal-key: #9cdcfe;
+  /* scope: meta.preprocessor, entity.name.function.preprocessor */
+  --shiki-token-meta-preprocessor-entity-name-function-preprocessor: #569cd6;
+  /* scope: meta.preprocessor.numeric */
+  --shiki-token-meta-preprocessor-numeric: #b5cea8;
+  /* scope: meta.preprocessor.string */
+  --shiki-token-meta-preprocessor-string: #ce9178;
+  /* scope: meta.structure.dictionary.key.python */
+  --shiki-token-meta-structure-dictionary-key-python: #9cdcfe;
+  /* scope: meta.template.expression */
+  --shiki-token-meta-template-expression: #d4d4d4;
+  /* scope: meta.type.cast.expr, meta.type.new.expr, support.constant.math, support.constant.dom, support.constant.json, entity.other.inherited-class, punctuation.separator.namespace.ruby */
+  --shiki-token-meta-type-cast-expr-meta-type-new-expr-support-constant-math-support-constant-do: #4ec9b0;
+  /* scope: punctuation.definition.group.regexp, punctuation.definition.group.assertion.regexp, punctuation.definition.character-class.regexp, punctuation.character.set.begin.regexp, punctuation.character.set.end.regexp, keyword.operator.negation.regexp, support.other.parenthesis.regexp */
+  --shiki-token-punctuation-definition-group-regexp-punctuation-definition-group-assertion-regex: #ce9178;
+  /* scope: punctuation.definition.list.begin.markdown */
+  --shiki-token-punctuation-definition-list-begin-markdown: #6796e6;
+  /* scope: punctuation.definition.quote.begin.markdown */
+  --shiki-token-punctuation-definition-quote-begin-markdown: #6a9955;
+  /* scope: punctuation.definition.quote.begin.markdown, punctuation.definition.list.begin.markdown */
+  --shiki-token-punctuation-definition-quote-begin-markdown-punctuation-definition-list-begin-ma: #0451a5;
+  /* scope: punctuation.definition.tag */
+  --shiki-token-punctuation-definition-tag: #808080;
+  /* scope: punctuation.definition.template-expression.begin, punctuation.definition.template-expression.end, punctuation.section.embedded */
+  --shiki-token-punctuation-definition-template-expression-begin-punctuation-definition-template: #569cd6;
+  /* scope: punctuation.section.embedded.begin.php, punctuation.section.embedded.end.php */
+  --shiki-token-punctuation-section-embedded-begin-php-punctuation-section-embedded-end-php: #569cd6;
+  /* scope: storage */
+  --shiki-token-storage: #569cd6;
+  /* scope: storage.modifier, keyword.operator.noexcept */
+  --shiki-token-storage-modifier-keyword-operator-noexcept: #569cd6;
+  /* scope: storage.modifier.import.java, variable.language.wildcard.java, storage.modifier.package.java */
+  --shiki-token-storage-modifier-import-java-variable-language-wildcard-java-storage-modifier-pa: #d4d4d4;
+  /* scope: storage.type */
+  --shiki-token-storage-type: #569cd6;
+  /* scope: string, meta.embedded.assembly */
+  --shiki-token-string-meta-embedded-assembly: #ce9178;
+  /* scope: string.comment.buffered.block.pug, string.quoted.pug, string.interpolated.pug, string.unquoted.plain.in.yaml, string.unquoted.plain.out.yaml, string.unquoted.block.yaml, string.quoted.single.yaml, string.quoted.double.xml, string.quoted.single.xml, string.unquoted.cdata.xml, string.quoted.double.html, string.quoted.single.html, string.unquoted.html, string.quoted.single.handlebars, string.quoted.double.handlebars */
+  --shiki-token-string-comment-buffered-block-pug-string-quoted-pug-string-interpolated-pug-stri: #0000ff;
+  /* scope: string.regexp */
+  --shiki-token-string-regexp: #d16969;
+  /* scope: string.tag */
+  --shiki-token-string-tag: #ce9178;
+  /* scope: string.value */
+  --shiki-token-string-value: #ce9178;
+  /* scope: strong | fontStyle: bold */
+  --shiki-token-strong-bold: #d4d4d4;
+  /* scope: support.class, support.type, entity.name.type, entity.name.namespace, entity.other.attribute, entity.name.scope-resolution, entity.name.class, storage.type.numeric.go, storage.type.byte.go, storage.type.boolean.go, storage.type.string.go, storage.type.uintptr.go, storage.type.error.go, storage.type.rune.go, storage.type.cs, storage.type.generic.cs, storage.type.modifier.cs, storage.type.variable.cs, storage.type.annotation.java, storage.type.generic.java, storage.type.java, storage.type.object.array.java, storage.type.primitive.array.java, storage.type.primitive.java, storage.type.token.java, storage.type.groovy, storage.type.annotation.groovy, storage.type.parameters.groovy, storage.type.generic.groovy, storage.type.object.array.groovy, storage.type.primitive.array.groovy, storage.type.primitive.groovy */
+  --shiki-token-support-class-support-type-entity-name-type-entity-name-namespace-entity-other-a: #4ec9b0;
+  /* scope: support.constant.property-value, support.constant.font-name, support.constant.media-type, support.constant.media, constant.other.color.rgb-value, constant.other.rgb-value, support.constant.color */
+  --shiki-token-support-constant-property-value-support-constant-font-name-support-constant-medi: #ce9178;
+  /* scope: support.function.git-rebase */
+  --shiki-token-support-function-git-rebase: #9cdcfe;
+  /* scope: support.type.property-name.json */
+  --shiki-token-support-type-property-name-json: #0451a5;
+  /* scope: support.type.vendored.property-name, support.type.property-name, source.css variable, source.coffee.embedded */
+  --shiki-token-support-type-vendored-property-name-support-type-property-name-source-css-variab: #9cdcfe;
+  /* scope: variable, meta.definition.variable.name, support.variable, entity.name.variable, constant.other.placeholder */
+  --shiki-token-variable-meta-definition-variable-name-support-variable-entity-name-variable-con: #9cdcfe;
+  /* scope: variable.language */
+  --shiki-token-variable-language: #569cd6;
+  /* scope: variable.other.constant, variable.other.enummember */
+  --shiki-token-variable-other-constant-variable-other-enummember: #4fc1ff;
 }
