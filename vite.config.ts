@@ -1,7 +1,6 @@
 import UnoCSS from '@unocss/vite';
 import { resolve } from 'path';
 // import solidDevtools from 'solid-devtools/vite';
-import { vitePluginShiki } from '@app-game/vite-plugin-shiki';
 import typegpuPlugin from 'unplugin-typegpu/vite';
 import { defineConfig } from 'vite';
 import glsl from 'vite-plugin-glsl';
@@ -10,6 +9,7 @@ import solidSvg from 'vite-plugin-solid-svg';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import wasm from 'vite-plugin-wasm';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
+import { vitePluginShiki } from './packages/vite-plugin-shiki/src/index';
 
 const webAppRoot = resolve(__dirname, 'apps/web');
 const apps = resolve(__dirname, 'apps');

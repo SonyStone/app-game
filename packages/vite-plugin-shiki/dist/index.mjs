@@ -2,10 +2,8 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { getSingletonHighlighter } from "shiki";
 //#region src/css-variable-theme.ts
-const CSS_VARIABLE_THEME_NAME = "css-variables";
-const CSS_VARIABLE_THEME = createVsCodeCssVariablesTheme();
 function createVsCodeCssVariablesTheme(options = {
-	name: CSS_VARIABLE_THEME_NAME,
+	name: "css-variables",
 	variablePrefix: `--shiki-`
 }) {
 	const variable = (name) => `var(${options.variablePrefix}${name})`;
@@ -13,17 +11,17 @@ function createVsCodeCssVariablesTheme(options = {
 		name: options.name,
 		type: "dark",
 		colors: {
-			"editor.foreground": variable("color-text"),
-			"editor.background": variable("color-background")
+			"editor.foreground": variable("foreground"),
+			"editor.background": variable("background")
 		},
-		fg: variable("color-text"),
-		bg: variable("color-background"),
+		fg: variable("foreground"),
+		bg: variable("background"),
 		semanticHighlighting: true,
 		semanticTokenColors: {
-			customLiteral: variable("semantic-customliteral"),
-			newOperator: variable("semantic-newoperator"),
-			numberLiteral: variable("semantic-numberliteral"),
-			stringLiteral: variable("semantic-stringliteral")
+			customLiteral: variable("semantic-custom-literal"),
+			newOperator: variable("semantic-new-operator"),
+			numberLiteral: variable("semantic-number-literal"),
+			stringLiteral: variable("semantic-string-literal")
 		},
 		tokenColors: [
 			{
@@ -32,7 +30,7 @@ function createVsCodeCssVariablesTheme(options = {
 			},
 			{
 				scope: ["constant.character", "constant.other.option"],
-				settings: { foreground: variable("token-constant-character-constant-other-option") }
+				settings: { foreground: variable("token-character") }
 			},
 			{
 				scope: [
@@ -41,11 +39,11 @@ function createVsCodeCssVariablesTheme(options = {
 					"constant.other.character-class.regexp",
 					"constant.character.set.regexp"
 				],
-				settings: { foreground: variable("token-constant-character-character-class-regexp-constant-other-character-class-set-reg") }
+				settings: { foreground: variable("token-regexp-character") }
 			},
 			{
 				scope: ["constant.character.escape"],
-				settings: { foreground: variable("token-constant-character-escape") }
+				settings: { foreground: variable("token-escape") }
 			},
 			{
 				scope: ["constant.language"],
@@ -58,15 +56,15 @@ function createVsCodeCssVariablesTheme(options = {
 					"keyword.operator.plus.exponent",
 					"keyword.operator.minus.exponent"
 				],
-				settings: { foreground: variable("token-constant-numeric-variable-other-enummember-keyword-operator-plus-exponent-keywor") }
+				settings: { foreground: variable("token-number") }
 			},
 			{
 				scope: ["constant.regexp"],
-				settings: { foreground: variable("token-constant-regexp") }
+				settings: { foreground: variable("token-regexp") }
 			},
 			{
 				scope: ["constant.sha.git-rebase"],
-				settings: { foreground: variable("token-constant-sha-git-rebase") }
+				settings: { foreground: variable("token-git-sha") }
 			},
 			{
 				scope: ["emphasis"],
@@ -80,27 +78,27 @@ function createVsCodeCssVariablesTheme(options = {
 					"source.powershell variable.other.member",
 					"entity.name.operator.custom-literal"
 				],
-				settings: { foreground: variable("token-entity-name-function-support-function-support-constant-handlebars-source-powersh") }
+				settings: { foreground: variable("token-function") }
 			},
 			{
 				scope: ["entity.name.label"],
-				settings: { foreground: variable("token-entity-name-label") }
+				settings: { foreground: variable("token-label") }
 			},
 			{
 				scope: ["entity.name.selector"],
-				settings: { foreground: variable("token-entity-name-selector") }
+				settings: { foreground: variable("token-selector") }
 			},
 			{
 				scope: ["entity.name.tag"],
-				settings: { foreground: variable("token-entity-name-tag") }
+				settings: { foreground: variable("token-tag") }
 			},
 			{
 				scope: ["entity.name.tag.css", "entity.name.tag.less"],
-				settings: { foreground: variable("token-entity-name-tag-css-entity-name-tag-less") }
+				settings: { foreground: variable("token-style-tag") }
 			},
 			{
 				scope: ["entity.other.attribute-name"],
-				settings: { foreground: variable("token-entity-other-attribute-name") }
+				settings: { foreground: variable("token-attribute") }
 			},
 			{
 				scope: [
@@ -114,7 +112,7 @@ function createVsCodeCssVariablesTheme(options = {
 					"source.css.less entity.other.attribute-name.id",
 					"entity.other.attribute-name.scss"
 				],
-				settings: { foreground: variable("token-entity-other-attribute-name-class-css-source-css-entity-other-attribute-name-cla") }
+				settings: { foreground: variable("token-style-attribute") }
 			},
 			{
 				scope: ["header"],
@@ -130,7 +128,7 @@ function createVsCodeCssVariablesTheme(options = {
 			},
 			{
 				scope: ["keyword.control"],
-				settings: { foreground: variable("token-keyword-control") }
+				settings: { foreground: variable("token-control") }
 			},
 			{
 				scope: [
@@ -142,11 +140,11 @@ function createVsCodeCssVariablesTheme(options = {
 					"keyword.other.operator",
 					"entity.name.operator"
 				],
-				settings: { foreground: variable("token-keyword-control-source-cpp-keyword-operator-new-keyword-operator-delete-keyword-") }
+				settings: { foreground: variable("token-keyword-special") }
 			},
 			{
 				scope: ["keyword.operator"],
-				settings: { foreground: variable("token-keyword-operator") }
+				settings: { foreground: variable("token-operator") }
 			},
 			{
 				scope: [
@@ -161,49 +159,49 @@ function createVsCodeCssVariablesTheme(options = {
 					"keyword.operator.logical.python",
 					"keyword.operator.wordlike"
 				],
-				settings: { foreground: variable("token-keyword-operator-new-keyword-operator-expression-keyword-operator-cast-keyword-operator-sizeof-keyword-operator-alignof-keyword-operator-typeid-keyword-operator-alignas-keyword-operator-instanceof-keyword-operator-logical-python-keyword-operator-wordlike") }
+				settings: { foreground: variable("token-word-operator") }
 			},
 			{
 				scope: ["keyword.operator.or.regexp", "keyword.control.anchor.regexp"],
-				settings: { foreground: variable("token-keyword-operator-or-regexp-keyword-control-anchor-regexp") }
+				settings: { foreground: variable("token-regexp-anchor") }
 			},
 			{
 				scope: ["keyword.operator.quantifier.regexp"],
-				settings: { foreground: variable("token-keyword-operator-quantifier-regexp") }
+				settings: { foreground: variable("token-regexp-quantifier") }
 			},
 			{
 				scope: ["keyword.other.unit"],
-				settings: { foreground: variable("token-keyword-other-unit") }
+				settings: { foreground: variable("token-unit") }
 			},
 			{
 				scope: ["markup.bold"],
 				settings: {
-					foreground: variable("token-markup-bold-bold"),
+					foreground: variable("token-markdown-bold"),
 					fontStyle: "bold"
 				}
 			},
 			{
 				scope: ["markup.changed"],
-				settings: { foreground: variable("token-markup-changed") }
+				settings: { foreground: variable("token-markdown-changed") }
 			},
 			{
 				scope: ["markup.deleted"],
-				settings: { foreground: variable("token-markup-deleted") }
+				settings: { foreground: variable("token-markdown-deleted") }
 			},
 			{
 				scope: ["markup.heading"],
 				settings: {
-					foreground: variable("token-markup-heading-bold"),
+					foreground: variable("token-markdown-heading"),
 					fontStyle: "bold"
 				}
 			},
 			{
 				scope: ["markup.inline.raw"],
-				settings: { foreground: variable("token-markup-inline-raw") }
+				settings: { foreground: variable("token-markdown-raw") }
 			},
 			{
 				scope: ["markup.inserted"],
-				settings: { foreground: variable("token-markup-inserted") }
+				settings: { foreground: variable("token-markdown-inserted") }
 			},
 			{
 				scope: ["markup.italic"],
@@ -219,7 +217,7 @@ function createVsCodeCssVariablesTheme(options = {
 			},
 			{
 				scope: ["meta.diff.header"],
-				settings: { foreground: variable("token-meta-diff-header") }
+				settings: { foreground: variable("token-diff-header") }
 			},
 			{
 				scope: [
@@ -228,31 +226,31 @@ function createVsCodeCssVariablesTheme(options = {
 					"string meta.image.inline.markdown",
 					"variable.legacy.builtin.python"
 				],
-				settings: { foreground: variable("token-meta-embedded-source-groovy-embedded-string-meta-image-inline-markdown-variable-legacy-builtin-python") }
+				settings: { foreground: variable("token-embedded") }
 			},
 			{
 				scope: ["meta.object-literal.key"],
-				settings: { foreground: variable("token-meta-object-literal-key") }
+				settings: { foreground: variable("token-object-key") }
 			},
 			{
 				scope: ["meta.preprocessor", "entity.name.function.preprocessor"],
-				settings: { foreground: variable("token-meta-preprocessor-entity-name-function-preprocessor") }
+				settings: { foreground: variable("token-preprocessor") }
 			},
 			{
 				scope: ["meta.preprocessor.numeric"],
-				settings: { foreground: variable("token-meta-preprocessor-numeric") }
+				settings: { foreground: variable("token-preprocessor-number") }
 			},
 			{
 				scope: ["meta.preprocessor.string"],
-				settings: { foreground: variable("token-meta-preprocessor-string") }
+				settings: { foreground: variable("token-preprocessor-string") }
 			},
 			{
 				scope: ["meta.structure.dictionary.key.python"],
-				settings: { foreground: variable("token-meta-structure-dictionary-key-python") }
+				settings: { foreground: variable("token-dictionary-key") }
 			},
 			{
 				scope: ["meta.template.expression"],
-				settings: { foreground: variable("token-meta-template-expression") }
+				settings: { foreground: variable("token-template") }
 			},
 			{
 				scope: [
@@ -264,7 +262,7 @@ function createVsCodeCssVariablesTheme(options = {
 					"entity.other.inherited-class",
 					"punctuation.separator.namespace.ruby"
 				],
-				settings: { foreground: variable("token-meta-type-cast-expr-meta-type-new-expr-support-constant-math-support-constant-dom") }
+				settings: { foreground: variable("token-type-meta") }
 			},
 			{
 				scope: [
@@ -276,23 +274,23 @@ function createVsCodeCssVariablesTheme(options = {
 					"keyword.operator.negation.regexp",
 					"support.other.parenthesis.regexp"
 				],
-				settings: { foreground: variable("token-punctuation-definition-group-regexp-punctuation-definition-group-assertion-regex") }
+				settings: { foreground: variable("token-regexp-delimiter") }
 			},
 			{
 				scope: ["punctuation.definition.list.begin.markdown"],
-				settings: { foreground: variable("token-punctuation-definition-list-begin-markdown") }
+				settings: { foreground: variable("token-markdown-list") }
 			},
 			{
 				scope: ["punctuation.definition.quote.begin.markdown"],
-				settings: { foreground: variable("token-punctuation-definition-quote-begin-markdown") }
+				settings: { foreground: variable("token-markdown-quote") }
 			},
 			{
 				scope: ["punctuation.definition.quote.begin.markdown", "punctuation.definition.list.begin.markdown"],
-				settings: { foreground: variable("token-punctuation-definition-quote-begin-markdown-punctuation-definition-list-begin-markdown") }
+				settings: { foreground: variable("token-markdown-block") }
 			},
 			{
 				scope: ["punctuation.definition.tag"],
-				settings: { foreground: variable("token-punctuation-definition-tag") }
+				settings: { foreground: variable("token-tag-delimiter") }
 			},
 			{
 				scope: [
@@ -300,11 +298,11 @@ function createVsCodeCssVariablesTheme(options = {
 					"punctuation.definition.template-expression.end",
 					"punctuation.section.embedded"
 				],
-				settings: { foreground: variable("token-punctuation-definition-template-expression-begin-punctuation-definition-template") }
+				settings: { foreground: variable("token-template-delimiter") }
 			},
 			{
 				scope: ["punctuation.section.embedded.begin.php", "punctuation.section.embedded.end.php"],
-				settings: { foreground: variable("token-punctuation-section-embedded-begin-php-punctuation-section-embedded-end-php") }
+				settings: { foreground: variable("token-php-delimiter") }
 			},
 			{
 				scope: ["storage"],
@@ -312,7 +310,7 @@ function createVsCodeCssVariablesTheme(options = {
 			},
 			{
 				scope: ["storage.modifier", "keyword.operator.noexcept"],
-				settings: { foreground: variable("token-storage-modifier-keyword-operator-noexcept") }
+				settings: { foreground: variable("token-modifier") }
 			},
 			{
 				scope: [
@@ -320,7 +318,7 @@ function createVsCodeCssVariablesTheme(options = {
 					"variable.language.wildcard.java",
 					"storage.modifier.package.java"
 				],
-				settings: { foreground: variable("token-storage-modifier-import-java-variable-language-wildcard-java-storage-modifier-package-java") }
+				settings: { foreground: variable("token-import") }
 			},
 			{
 				scope: ["storage.type"],
@@ -328,7 +326,7 @@ function createVsCodeCssVariablesTheme(options = {
 			},
 			{
 				scope: ["string", "meta.embedded.assembly"],
-				settings: { foreground: variable("token-string-meta-embedded-assembly") }
+				settings: { foreground: variable("token-string") }
 			},
 			{
 				scope: [
@@ -348,7 +346,7 @@ function createVsCodeCssVariablesTheme(options = {
 					"string.quoted.single.handlebars",
 					"string.quoted.double.handlebars"
 				],
-				settings: { foreground: variable("token-string-comment-buffered-block-pug-string-quoted-pug-string-interpolated-pug-stri") }
+				settings: { foreground: variable("token-string-text") }
 			},
 			{
 				scope: ["string.regexp"],
@@ -401,7 +399,7 @@ function createVsCodeCssVariablesTheme(options = {
 					"storage.type.primitive.array.groovy",
 					"storage.type.primitive.groovy"
 				],
-				settings: { foreground: variable("token-support-class-support-type-entity-name-type-entity-name-namespace-entity-other-a") }
+				settings: { foreground: variable("token-type") }
 			},
 			{
 				scope: [
@@ -413,15 +411,15 @@ function createVsCodeCssVariablesTheme(options = {
 					"constant.other.rgb-value",
 					"support.constant.color"
 				],
-				settings: { foreground: variable("token-support-constant-property-value-support-constant-font-name-support-constant-medi") }
+				settings: { foreground: variable("token-value") }
 			},
 			{
 				scope: ["support.function.git-rebase"],
-				settings: { foreground: variable("token-support-function-git-rebase") }
+				settings: { foreground: variable("token-rebase") }
 			},
 			{
 				scope: ["support.type.property-name.json"],
-				settings: { foreground: variable("token-support-type-property-name-json") }
+				settings: { foreground: variable("token-json-key") }
 			},
 			{
 				scope: [
@@ -430,7 +428,7 @@ function createVsCodeCssVariablesTheme(options = {
 					"source.css variable",
 					"source.coffee.embedded"
 				],
-				settings: { foreground: variable("token-support-type-vendored-property-name-support-type-property-name-source-css-variab") }
+				settings: { foreground: variable("token-property") }
 			},
 			{
 				scope: [
@@ -440,7 +438,7 @@ function createVsCodeCssVariablesTheme(options = {
 					"entity.name.variable",
 					"constant.other.placeholder"
 				],
-				settings: { foreground: variable("token-variable-meta-definition-variable-name-support-variable-entity-name-variable-con") }
+				settings: { foreground: variable("token-variable") }
 			},
 			{
 				scope: ["variable.language"],
@@ -448,7 +446,7 @@ function createVsCodeCssVariablesTheme(options = {
 			},
 			{
 				scope: ["variable.other.constant", "variable.other.enummember"],
-				settings: { foreground: variable("token-variable-other-constant-variable-other-enummember") }
+				settings: { foreground: variable("token-constant-variable") }
 			}
 		]
 	};
@@ -474,7 +472,8 @@ const DEFAULT_SUPPORTED_LANGUAGES = [
 	"plaintext"
 ];
 function vitePluginShiki(options = {}) {
-	const themes = options.themes ?? ["css-variables"];
+	const cssVariablesTheme = createVsCodeCssVariablesTheme();
+	const themes = options.themes ?? [];
 	const queryKey = options.query ?? DEFAULT_QUERY;
 	const prefix = options.prefix ?? DEFAULT_PREFIX;
 	const supportedLanguages = options.supportedLanguages ?? DEFAULT_SUPPORTED_LANGUAGES;
@@ -502,8 +501,16 @@ function vitePluginShiki(options = {}) {
 			const code = await readFile(filePath, "utf8");
 			const params = new URLSearchParams(rawQuery);
 			const language = resolveLanguage(filePath, params, defaultLanguage);
-			const theme = params.get("theme") ?? themes[0];
-			const highlightedHtml = await highlightWithTheme(await (highlighterPromise ??= createCodeHighlighter(themes, supportedLanguages)), code, language, theme);
+			const theme = params.get("theme") ?? themes[0] ?? cssVariablesTheme.name;
+			const highlighter = await (highlighterPromise ??= getSingletonHighlighter({
+				themes: [cssVariablesTheme, ...themes.filter((theme) => theme !== cssVariablesTheme.name)],
+				langs: [...supportedLanguages]
+			}));
+			if (!highlighter.getLoadedThemes().includes(theme)) await highlighter.loadTheme(theme);
+			const highlightedHtml = highlighter.codeToHtml(code, {
+				lang: language,
+				theme
+			});
 			return [
 				`export const code = ${JSON.stringify(code)};`,
 				`export const language = ${JSON.stringify(language)};`,
@@ -519,21 +526,6 @@ function vitePluginShiki(options = {}) {
 			return modules;
 		}
 	};
-}
-async function createCodeHighlighter(themes, supportedLanguages) {
-	return getSingletonHighlighter({
-		themes: themes.includes("css-variables") ? [CSS_VARIABLE_THEME, ...themes.filter((themeName) => themeName !== CSS_VARIABLE_THEME_NAME)] : [...themes],
-		langs: [...supportedLanguages]
-	});
-}
-async function highlightWithTheme(highlighter, code, language, theme) {
-	const themeInput = theme;
-	const highlightedCodeOptions = {
-		lang: language,
-		theme
-	};
-	if (!highlighter.getLoadedThemes().includes(theme)) await highlighter.loadTheme(themeInput);
-	return highlighter.codeToHtml(code, highlightedCodeOptions);
 }
 function hasQuery(id, queryKey) {
 	const [, rawQuery = ""] = id.split("?", 2);

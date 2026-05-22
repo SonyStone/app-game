@@ -10,7 +10,6 @@ import {
   onMount,
   type JSX
 } from 'solid-js';
-import s from './App.module.css';
 import { Sidebar } from './components/Sidebar';
 import {
   applyTheme,
@@ -48,7 +47,7 @@ export function App(props: { children?: JSX.Element }): JSX.Element {
   });
 
   return (
-    <div class={`flex h-screen flex-col ${s.shiki}`}>
+    <div class={`flex h-screen flex-col`}>
       <Body class="m-0 bg-stone-50 text-stone-900 dark:bg-neutral-950 dark:text-slate-200" />
 
       {/* Header */}

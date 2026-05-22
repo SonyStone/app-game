@@ -4,7 +4,7 @@ import { template } from 'solid-js/web';
 import { CodeBlock } from '../../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
 import { Card } from '../../components/ui/Card';
-import componentHtml, { code as componentCode, language as componentLanguage } from './component?shiki';
+import componentHtml, { code as componentCode, language as componentLanguage } from './component?shiki&theme=dark-plus';
 import example1Html, { code as example1Code, language as example1Language } from './pass-data-example-1?shiki';
 import example2Html, { code as example2Code, language as example2Language } from './pass-data-example-2?shiki';
 import example3Html, { code as example3Code, language as example3Language } from './pass-data-example-3?shiki';

@@ -43,7 +43,7 @@ export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): 
   const defaultLanguage = options.defaultLanguage ?? 'plaintext';
   const pluginName = options.pluginName ?? 'vite-plugin-shiki';
 
-  let highlighterPromise: ReturnType<typeof createCodeHighlighter> | undefined;
+  let highlighterPromise: ReturnType<typeof getSingletonHighlighter> | undefined;
   const virtualIdsByFile = new Map<string, Set<string>>();
 
   return {
@@ -89,12 +89,14 @@ export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): 
       const theme = params.get('theme') ?? themes[0] ?? cssVariablesTheme.name;
 
       const highlighter = await (highlighterPromise ??= getSingletonHighlighter({
-        themes: [...themes, cssVariablesTheme.name],
+        themes: [cssVariablesTheme, ...themes.filter((theme) => theme !== cssVariablesTheme.name)],
         langs: [...supportedLanguages]
       }));
 
       if (!highlighter.getLoadedThemes().includes(theme)) {
-        await highlighter.loadTheme(theme);
+        await highlighter.loadTheme(
+          theme as Parameters<Awaited<ReturnType<typeof getSingletonHighlighter>>['loadTheme']>[0]
+        );
       }
 
       const highlightedHtml = highlighter.codeToHtml(code, {
