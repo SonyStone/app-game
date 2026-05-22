@@ -7,9 +7,6 @@ props object. The component is then invoked through `untrack`, which avoids crea
 an accidental subscription just because the component was called.
 
 ```ts
-import { JSX } from 'solid-js';
-import { createComponent } from 'solid-js/web';
-
 function Hand(props: { rotate: number; class?: string; length: number; width: number }) {
   return (
     <div
