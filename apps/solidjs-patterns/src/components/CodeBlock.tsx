@@ -1,4 +1,3 @@
-import createRAF from '@solid-primitives/raf';
 import { createMemo, createSignal, type JSX } from 'solid-js';
 import s from './CodeBlock.module.css';
 
@@ -15,29 +14,7 @@ export type CodeBlockProps = {
   children?: JSX.Element;
 };
 
-const randomInRange = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-const shiftToRange = (value: number, min: number, max: number) => ((value - min) % (max - min + 1)) + min;
-const pingPongInRange = (value: number, min: number, max: number) => {
-  const range = max - min;
-  const doubleRange = range * 2;
-  const modValue = (value - min) % doubleRange;
-
-  if (modValue < range) {
-    return min + modValue;
-  } else {
-    return max - (modValue - range);
-  }
-};
-
 export function CodeBlock(props: CodeBlockProps): JSX.Element {
-  const [degree, setDegree] = createSignal(randomInRange(0, 360));
-  const [chromaScale, setChromaScale] = createSignal(1);
-  const [, start] = createRAF((t) => {
-    setDegree(shiftToRange(t / 10, 0, 360));
-    setChromaScale(pingPongInRange(t / 2000, 0.5, 2));
-  });
-  start();
-
   return (
     <div
       class={`group relative overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 ${props.class ?? ''}`}
@@ -59,12 +36,7 @@ export function CodeBlock(props: CodeBlockProps): JSX.Element {
       </div>
 
       {/* Code */}
-      <div
-        class={`text-sm [&>*]:overflow-auto [&>*]:p-4 ${s.shiki}`}
-        style={{ '--shiki-hue-offset': `${degree()}deg`, '--shiki-chroma-scale': `${chromaScale()}` }}
-      >
-        {props.children}
-      </div>
+      <div class={`text-sm [&>*]:overflow-auto [&>*]:p-4 ${s.shiki}`}>{props.children}</div>
     </div>
   );
 }

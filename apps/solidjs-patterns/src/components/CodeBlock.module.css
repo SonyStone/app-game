@@ -1,7 +1,52 @@
+@property --shiki-hue-offset {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+@property --shiki-chroma-scale {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+@keyframes shiki-hue-spin {
+  from {
+    --shiki-hue-offset: 0deg;
+  }
+
+  to {
+    --shiki-hue-offset: 360deg;
+  }
+}
+
+@keyframes shiki-chroma-pulse {
+  0%,
+  100% {
+    --shiki-chroma-scale: 0.5;
+  }
+
+  50% {
+    --shiki-chroma-scale: 2;
+  }
+}
+
 .shiki {
   --shiki-hue-offset: 0deg;
   --shiki-lightness-offset: 0%;
   --shiki-chroma-scale: 1;
+  animation:
+    shiki-hue-spin 3.61s linear infinite,
+    shiki-chroma-pulse 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shiki {
+    animation: none;
+  }
+}
+
+.shiki {
   --shiki-foreground: oklch(
     calc(0% + var(--shiki-lightness-offset)) calc(0 * var(--shiki-chroma-scale)) calc(0deg + var(--shiki-hue-offset))
   );

@@ -19,6 +19,7 @@ catalog:
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   jsdom: ^29.1.1
+  markdown-exit: ^1.0.0-beta.9
   shiki: ^4.1.0
   solid-js: ^1.9.12
   tailwind-merge: ^3.6.0

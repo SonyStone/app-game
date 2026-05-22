@@ -4,12 +4,13 @@ import { template } from 'solid-js/web';
 import { CodeBlock } from '../../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
 import { Card } from '../../components/ui/Card';
-import componentHtml, { code as componentCode, language as componentLanguage } from './component?shiki&theme=dark-plus';
+import componentHtml, { code as componentCode, language as componentLanguage } from './component?shiki';
 import example1Html, { code as example1Code, language as example1Language } from './pass-data-example-1?shiki';
 import example2Html, { code as example2Code, language as example2Language } from './pass-data-example-2?shiki';
 import example3Html, { code as example3Code, language as example3Language } from './pass-data-example-3?shiki';
 import example4Html, { code as example4Code, language as example4Language } from './pass-data-example-4?shiki';
 import example5Html, { code as example5Code, language as example5Language } from './pass-data-example-5?shiki';
+import text from './pass-data.md?markdown';
 
 // ============================================================================
 // MARK: Pass Data Page
@@ -26,6 +27,8 @@ export default function PassDataPage(): JSX.Element {
         title="Props preserve reactivity"
         description="Props can hold either plain values or getter-backed properties, so Solid can defer reads until the child actually accesses them."
       >
+        <div class="text-baseleading-6 flex flex-col gap-3 dark:text-slate-300">{template(`<div>${text}</div>`)()}</div>
+
         <div class="text-baseleading-6 flex flex-col gap-3 dark:text-slate-300">
           <p>
             A component receives a props object through a call like <InlineCode>Comp(props)</InlineCode>. When a prop

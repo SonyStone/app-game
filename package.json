@@ -67,6 +67,8 @@
     "vite-plugin-top-level-await": "1.6.0",
     "vite-plugin-wasm": "3.6.0",
     "vitest": "catalog:",
+    "@app-game/vite-plugin-shiki": "workspace:*",
+    "@app-game/vite-plugin-markdown": "workspace:*",
     "which": "^7.0.0"
   },
   "dependencies": {
@@ -144,7 +146,6 @@
     "unocss-preset-animations": "^1.3.0",
     "vite-plugin-glsl": "1.6.0",
     "wgpu-matrix": "^3.4.2",
-    "zod": "^4.4.3",
-    "@app-game/vite-plugin-shiki": "workspace:*"
+    "zod": "^4.4.3"
   }
 }
