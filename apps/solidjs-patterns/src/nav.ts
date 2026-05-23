@@ -44,22 +44,25 @@ export const navSections: NavSection[] = [
       { label: 'Component Patterns', href: './components' },
       { label: 'Control Flow', href: './control-flow' },
       { label: 'Props & Spreading', href: './props' },
-      { label: 'Pass Data', href: './pass-data' }
-    ]
-  },
-  {
-    title: 'Async',
-    items: [
-      { label: 'Resources', href: './resources' },
-      { label: 'Suspense & Lazy', href: './suspense' }
-    ]
-  },
-  {
-    title: 'Advanced',
-    items: [
-      { label: 'Primitives', href: './primitives' },
-      { label: 'Owner & Computation', href: './owner-computation' },
-      { label: 'Directives', href: './directives' }
+      { label: 'Pass Data', href: './pass-data' },
+      { label: 'Pass Data 2', href: './pass-data-2' },
+      { label: 'Pass Data 3', href: './pass-data-3' },
+      { label: 'Pass Data 4', href: './pass-data-4' }
     ]
   }
+  // {
+  //   title: 'Async',
+  //   items: [
+  //     { label: 'Resources', href: './resources' },
+  //     { label: 'Suspense & Lazy', href: './suspense' }
+  //   ]
+  // },
+  // {
+  //   title: 'Advanced',
+  //   items: [
+  //     { label: 'Primitives', href: './primitives' },
+  //     { label: 'Owner & Computation', href: './owner-computation' },
+  //     { label: 'Directives', href: './directives' }
+  //   ]
+  // }
 ];

@@ -565,6 +565,9 @@ importers:
         specifier: 'catalog:'
         version: 3.6.0
     devDependencies:
+      '@app-game/vite-plugin-markdown':
+        specifier: workspace:*
+        version: link:../../packages/vite-plugin-markdown
       '@app-game/vite-plugin-shiki':
         specifier: workspace:*
         version: link:../../packages/vite-plugin-shiki

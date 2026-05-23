@@ -6,7 +6,10 @@ import { createVsCodeCssVariablesTheme } from './css-variable-theme';
 
 const DEFAULT_QUERY = 'shiki';
 const DEFAULT_PREFIX = '\0shiki:';
-const DEFAULT_SUPPORTED_LANGUAGES = [
+const DEFAULT_DEFAULT_LANGUAGE = 'plaintext';
+const CSS_VARIABLES_THEME = createVsCodeCssVariablesTheme();
+
+export const DEFAULT_SUPPORTED_LANGUAGES = [
   'tsx',
   'typescript',
   'jsx',
@@ -34,16 +37,69 @@ export type CodeBlockHighlightPluginOptions = {
   pluginName?: string;
 };
 
+export type ShikiRendererOptions = {
+  themes?: readonly string[];
+  supportedLanguages?: readonly string[];
+  defaultLanguage?: string;
+};
+
+export type ShikiHighlightOptions = {
+  language?: string | null;
+  theme?: string;
+};
+
+export function createShikiRenderer(options: ShikiRendererOptions = {}) {
+  const themes = options.themes ?? [];
+  const supportedLanguages = options.supportedLanguages ?? DEFAULT_SUPPORTED_LANGUAGES;
+  const defaultLanguage = options.defaultLanguage ?? DEFAULT_DEFAULT_LANGUAGE;
+
+  let highlighterPromise: ReturnType<typeof getSingletonHighlighter> | undefined;
+
+  return {
+    async highlight(
+      code: string,
+      options: ShikiHighlightOptions = {}
+    ): Promise<{
+      html: string;
+      language: string;
+      theme: string;
+    }> {
+      const language = normalizeShikiLanguage(options.language) ?? defaultLanguage;
+      const theme = options.theme ?? themes[0] ?? CSS_VARIABLES_THEME.name;
+      const highlighter = await (highlighterPromise ??= getSingletonHighlighter({
+        themes: [CSS_VARIABLES_THEME, ...themes.filter((theme) => theme !== CSS_VARIABLES_THEME.name)],
+        langs: [...supportedLanguages]
+      }));
+
+      if (!highlighter.getLoadedThemes().includes(theme)) {
+        await highlighter.loadTheme(
+          theme as Parameters<Awaited<ReturnType<typeof getSingletonHighlighter>>['loadTheme']>[0]
+        );
+      }
+
+      return {
+        html: highlighter.codeToHtml(code, {
+          lang: language,
+          theme
+        }),
+        language,
+        theme
+      };
+    }
+  };
+}
+
 export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): Plugin {
-  const cssVariablesTheme = createVsCodeCssVariablesTheme();
   const themes = options.themes ?? [];
   const queryKey = options.query ?? DEFAULT_QUERY;
   const prefix = options.prefix ?? DEFAULT_PREFIX;
-  const supportedLanguages = options.supportedLanguages ?? DEFAULT_SUPPORTED_LANGUAGES;
-  const defaultLanguage = options.defaultLanguage ?? 'plaintext';
+  const defaultLanguage = options.defaultLanguage ?? DEFAULT_DEFAULT_LANGUAGE;
   const pluginName = options.pluginName ?? 'vite-plugin-shiki';
-
-  let highlighterPromise: ReturnType<typeof getSingletonHighlighter> | undefined;
+  const shikiRenderer = createShikiRenderer({
+    themes,
+    supportedLanguages: options.supportedLanguages,
+    defaultLanguage
+  });
   const virtualIdsByFile = new Map<string, Set<string>>();
 
   return {
@@ -85,23 +141,9 @@ export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): 
       const code = await readFile(filePath, 'utf8');
       const params = new URLSearchParams(rawQuery);
       const language = resolveLanguage(filePath, params, defaultLanguage);
-
-      const theme = params.get('theme') ?? themes[0] ?? cssVariablesTheme.name;
-
-      const highlighter = await (highlighterPromise ??= getSingletonHighlighter({
-        themes: [cssVariablesTheme, ...themes.filter((theme) => theme !== cssVariablesTheme.name)],
-        langs: [...supportedLanguages]
-      }));
-
-      if (!highlighter.getLoadedThemes().includes(theme)) {
-        await highlighter.loadTheme(
-          theme as Parameters<Awaited<ReturnType<typeof getSingletonHighlighter>>['loadTheme']>[0]
-        );
-      }
-
-      const highlightedHtml = highlighter.codeToHtml(code, {
-        lang: language,
-        theme
+      const { html: highlightedHtml } = await shikiRenderer.highlight(code, {
+        language,
+        theme: params.get('theme') ?? undefined
       });
 
       return [
@@ -153,16 +195,16 @@ function withQuery(path: string, query: URLSearchParams): string {
 }
 
 function resolveLanguage(filePath: string, query: URLSearchParams, defaultLanguage: string): string {
-  const explicitLanguage = normalizeLanguage(query.get('lang'));
+  const explicitLanguage = normalizeShikiLanguage(query.get('lang'));
 
   if (explicitLanguage) {
     return explicitLanguage;
   }
 
-  return normalizeLanguage(extname(filePath).slice(1)) ?? defaultLanguage;
+  return normalizeShikiLanguage(extname(filePath).slice(1)) ?? defaultLanguage;
 }
 
-function normalizeLanguage(language?: string | null): string | undefined {
+export function normalizeShikiLanguage(language?: string | null): string | undefined {
   switch (language?.toLowerCase()) {
     case 'ts':
     case 'typescript':

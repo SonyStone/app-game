@@ -1,12 +1,25 @@
-A component receives a props object through a call like `Comp(props)`. When a prop
-comes from a signal or another getter, Solid tries to keep that access lazy instead of eagerly reading it at
-the call site.
+# Pass Data [Components]
 
-In simplified terms, JSX like `{'rotate={props.subsecond}'}` becomes a getter on the
-props object. The component is then invoked through `untrack`, which avoids creating
-an accidental subscription just because the component was called.
+<doc-description>
+Practical ways to move data and behavior through a SolidJS component tree: props, refs, polymorphic components, context, resolved children, and shared roots.
+</doc-description>
 
-```ts
+## Props preserve reactivity
+
+Props can hold either plain values or getter-backed properties, so Solid can defer reads until the child actually accesses them.
+
+---
+
+A component receives a props object through a call like `Comp(props)`. When a prop comes from a signal or another getter, Solid tries to keep that access lazy instead of eagerly reading it at the call site.
+
+In simplified terms, JSX like `rotate={props.subsecond}` becomes a getter on the props object. The component is then invoked through `untrack`, which avoids creating an accidental subscription just because the component was called.
+
+props-lowering.tsx
+
+```tsx
+import { JSX } from 'solid-js';
+import { createComponent } from 'solid-js/web';
+
 function Hand(props: { rotate: number; class?: string; length: number; width: number }) {
   return (
     <div
@@ -35,3 +48,133 @@ export function App2(props: { subsecond: number }): JSX.Element {
   });
 }
 ```
+
+component.ts
+
+```tsx
+import { Component, JSX, untrack } from 'solid-js';
+
+export function createComponent<T extends Record<string, any>>(Comp: Component<T>, props: T): JSX.Element {
+  return untrack(() => Comp(props || ({} as T)));
+}
+```
+
+💡
+
+Pass a getter when the child should own the subscriptionIf you pass an already-read value, the subscription happens in the current scope. If you pass the getter itself, the child can decide when to read it and where the reactive boundary should live.
+
+## Use ref as an output channel
+
+A ref callback lets a child hand a concrete object back to its parent, usually a DOM node.
+
+`props.ref` is just another callback prop. The child exposes a DOM element or some other object, and the parent decides what to do with it.
+
+That makes `ref` similar in spirit to `onClick` or any other callback prop: the child publishes something outward instead of fully owning the interaction.
+
+ref-output.tsx
+
+```tsx
+function Component(props) {
+  return <a ref={props.ref}>Link</a>;
+}
+
+<Component
+  ref={(ref) => {
+    ref.href = 'https://solidjs.com';
+  }}
+/>;
+```
+
+## Build polymorphic components with as and Dynamic
+
+A common pattern is to accept an as prop, split it out, and render the final element through Dynamic.
+
+This lets you swap the underlying tag or component without duplicating behavior. It is the core idea behind polymorphic APIs such as button components that can also render as links.
+
+polymorphic-button.tsx
+
+```tsx
+<Button as="a" href="/docs">
+  Docs
+</Button>;
+
+function Button(props) {
+  const [local, others] = splitProps(props, ['as']);
+
+  return <Dynamic component={local.as ?? 'button'} {...others} />;
+}
+```
+
+- [Dynamic reference](https://docs.solidjs.com/reference/components/dynamic)
+- [Dynamic concepts](https://docs.solidjs.com/concepts/control-flow/dynamic)
+- [createDynamic source](https://github.com/solidjs/solid/blob/a5b51fe200fd59a158410f4008677948fec611d9/packages/solid/web/src/index.ts#L131)
+- [Kobalte Polymorphic example](https://github.com/kobaltedev/kobalte/blob/2d05356cecf7e189034f1f94f9f92f63cce216de/packages/core/src/polymorphic/polymorphic.tsx#L55)
+
+## Use context for shared subtree state
+
+Context moves shared values through a subtree without manually threading props through every intermediate component.
+
+Internally, Solid stores context on owner nodes. When a provider renders, it creates a new scope, writes a value into that owner context, and lets descendants read it with `useContext`.
+
+This works well for things like theme objects, scoped services, or state that many descendants need at the same time.
+
+context-provider.tsx
+
+```tsx
+const ValueContext = createContext(defaultValue);
+
+function ValueProvider(props) {
+  return <ValueContext.Provider value={newValue}>{props.children}</ValueContext.Provider>;
+}
+
+function Consumer() {
+  const value = useContext(ValueContext);
+
+  return <span>{value}</span>;
+}
+```
+
+⚠
+
+Context is best for stable APIsDuring HMR, editing a provider can sometimes leave descendants temporarily detached from their context until a full reload. It is a small annoyance, but it reinforces a useful rule: context is best for stable shared APIs, not rapidly changing local implementation details.
+
+## Resolve children explicitly when you need to inspect them
+
+children(() => props.children) normalizes incoming JSX so you can work with the resolved result instead of an opaque prop.
+
+The `children` helper recursively unwraps child functions until it reaches concrete JSX values: DOM nodes, strings, numbers, booleans, `null`, or`undefined`.
+
+This is useful when a component needs to normalize its children once and then treat them like regular data.
+
+resolve-children.tsx
+
+```tsx
+const resolved = children(() => props.children);
+
+type ResolvedJSXElement = number | boolean | Node | string | null | undefined;
+
+function Example(props) {
+  const content = children(() => props.children);
+
+  return <div>{content()}</div>;
+}
+```
+
+### Related primitives
+
+**solid-primitives** includes `resolveFirst` and `resolveElements`. They are similar to `children`, but also let you filter the resolved output with a predicate.
+
+`createSingletonRoot` from the rootless package creates a shared global object with its own computation context and lifecycle. A good mental model is a reference-counted smart pointer: the root exists only while something is using it.
+
+- [resolveElements / resolveFirst](https://primitives.solidjs.community/package/refs/#resolveelements)
+- [createSingletonRoot](https://primitives.solidjs.community/package/rootless/#createsingletonroot)
+
+## References
+
+Primary sources for the patterns summarized above.
+
+- [Props concept docs](https://docs.solidjs.com/concepts/components/props)
+- [createComponent source](https://github.com/solidjs/solid/blob/a5b51fe200fd59a158410f4008677948fec611d9/packages/solid/src/render/component.ts#L112)
+- [createContext source](https://github.com/solidjs/solid/blob/a5b51fe200fd59a158410f4008677948fec611d9/packages/solid/src/reactive/signal.ts#L1203)
+- [createContext docs](https://docs.solidjs.com/reference/component-apis/create-context)
+- [children / resolveChildren source](https://github.com/solidjs/solid/blob/a5b51fe200fd59a158410f4008677948fec611d9/packages/solid/src/reactive/signal.ts#L1743)

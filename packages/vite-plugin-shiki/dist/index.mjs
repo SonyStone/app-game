@@ -455,6 +455,8 @@ function createVsCodeCssVariablesTheme(options = {
 //#region src/index.ts
 const DEFAULT_QUERY = "shiki";
 const DEFAULT_PREFIX = "\0shiki:";
+const DEFAULT_DEFAULT_LANGUAGE = "plaintext";
+const CSS_VARIABLES_THEME = createVsCodeCssVariablesTheme();
 const DEFAULT_SUPPORTED_LANGUAGES = [
 	"tsx",
 	"typescript",
@@ -471,15 +473,40 @@ const DEFAULT_SUPPORTED_LANGUAGES = [
 	"toml",
 	"plaintext"
 ];
+function createShikiRenderer(options = {}) {
+	const themes = options.themes ?? [];
+	const supportedLanguages = options.supportedLanguages ?? DEFAULT_SUPPORTED_LANGUAGES;
+	const defaultLanguage = options.defaultLanguage ?? DEFAULT_DEFAULT_LANGUAGE;
+	let highlighterPromise;
+	return { async highlight(code, options = {}) {
+		const language = normalizeShikiLanguage(options.language) ?? defaultLanguage;
+		const theme = options.theme ?? themes[0] ?? CSS_VARIABLES_THEME.name;
+		const highlighter = await (highlighterPromise ??= getSingletonHighlighter({
+			themes: [CSS_VARIABLES_THEME, ...themes.filter((theme) => theme !== CSS_VARIABLES_THEME.name)],
+			langs: [...supportedLanguages]
+		}));
+		if (!highlighter.getLoadedThemes().includes(theme)) await highlighter.loadTheme(theme);
+		return {
+			html: highlighter.codeToHtml(code, {
+				lang: language,
+				theme
+			}),
+			language,
+			theme
+		};
+	} };
+}
 function vitePluginShiki(options = {}) {
-	const cssVariablesTheme = createVsCodeCssVariablesTheme();
 	const themes = options.themes ?? [];
 	const queryKey = options.query ?? DEFAULT_QUERY;
 	const prefix = options.prefix ?? DEFAULT_PREFIX;
-	const supportedLanguages = options.supportedLanguages ?? DEFAULT_SUPPORTED_LANGUAGES;
-	const defaultLanguage = options.defaultLanguage ?? "plaintext";
+	const defaultLanguage = options.defaultLanguage ?? DEFAULT_DEFAULT_LANGUAGE;
 	const pluginName = options.pluginName ?? "vite-plugin-shiki";
-	let highlighterPromise;
+	const shikiRenderer = createShikiRenderer({
+		themes,
+		supportedLanguages: options.supportedLanguages,
+		defaultLanguage
+	});
 	const virtualIdsByFile = /* @__PURE__ */ new Map();
 	return {
 		name: pluginName,
@@ -501,15 +528,9 @@ function vitePluginShiki(options = {}) {
 			const code = await readFile(filePath, "utf8");
 			const params = new URLSearchParams(rawQuery);
 			const language = resolveLanguage(filePath, params, defaultLanguage);
-			const theme = params.get("theme") ?? themes[0] ?? cssVariablesTheme.name;
-			const highlighter = await (highlighterPromise ??= getSingletonHighlighter({
-				themes: [cssVariablesTheme, ...themes.filter((theme) => theme !== cssVariablesTheme.name)],
-				langs: [...supportedLanguages]
-			}));
-			if (!highlighter.getLoadedThemes().includes(theme)) await highlighter.loadTheme(theme);
-			const highlightedHtml = highlighter.codeToHtml(code, {
-				lang: language,
-				theme
+			const { html: highlightedHtml } = await shikiRenderer.highlight(code, {
+				language,
+				theme: params.get("theme") ?? void 0
 			});
 			return [
 				`export const code = ${JSON.stringify(code)};`,
@@ -538,11 +559,11 @@ function withQuery(path, query) {
 	return `${path}?${queryString}`;
 }
 function resolveLanguage(filePath, query, defaultLanguage) {
-	const explicitLanguage = normalizeLanguage(query.get("lang"));
+	const explicitLanguage = normalizeShikiLanguage(query.get("lang"));
 	if (explicitLanguage) return explicitLanguage;
-	return normalizeLanguage(extname(filePath).slice(1)) ?? defaultLanguage;
+	return normalizeShikiLanguage(extname(filePath).slice(1)) ?? defaultLanguage;
 }
-function normalizeLanguage(language) {
+function normalizeShikiLanguage(language) {
 	switch (language?.toLowerCase()) {
 		case "ts":
 		case "typescript": return "typescript";
@@ -585,4 +606,4 @@ function trackVirtualId(virtualIdsByFile, filePath, virtualId) {
 	virtualIdsByFile.set(filePath, new Set([virtualId]));
 }
 //#endregion
-export { vitePluginShiki };
+export { DEFAULT_SUPPORTED_LANGUAGES, createShikiRenderer, normalizeShikiLanguage, vitePluginShiki };

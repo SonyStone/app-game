@@ -1,5 +1,4 @@
-import { A } from '@solidjs/router';
-import { For, Match, Switch, type JSX } from 'solid-js';
+import { type JSX } from 'solid-js';
 import { template } from 'solid-js/web';
 import { CodeBlock } from '../../components/CodeBlock';
 import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
@@ -10,7 +9,6 @@ import example2Html, { code as example2Code, language as example2Language } from
 import example3Html, { code as example3Code, language as example3Language } from './pass-data-example-3?shiki';
 import example4Html, { code as example4Code, language as example4Language } from './pass-data-example-4?shiki';
 import example5Html, { code as example5Code, language as example5Language } from './pass-data-example-5?shiki';
-import text from './pass-data.md?markdown';
 
 // ============================================================================
 // MARK: Pass Data Page
@@ -28,10 +26,6 @@ export default function PassDataPage(): JSX.Element {
         description="Props can hold either plain values or getter-backed properties, so Solid can defer reads until the child actually accesses them."
       >
         <div class="text-baseleading-6 flex flex-col gap-3 dark:text-slate-300">
-          <ReplaceTagsWithComponents htmlString={text} />
-        </div>
-
-        <div class="text-baseleading-6 flex flex-col gap-3 dark:text-slate-300">
           <p>
             A component receives a props object through a call like <InlineCode>Comp(props)</InlineCode>. When a prop
             comes from a signal or another getter, Solid tries to keep that access lazy instead of eagerly reading it at
@@ -47,11 +41,11 @@ export default function PassDataPage(): JSX.Element {
         <CodeBlock language={example1Language} code={example1Code} title="props-lowering.tsx">
           {template(example1Html)()}
         </CodeBlock>
-        <div class="absolute rounded bg-white p-2 text-black">
+        {/* <div class="absolute rounded bg-white p-2 text-black">
           <A href="https://github.com/solidjs/solid/blob/128225942095f51f9b49a3f8fdc1bd7e3b9ee97b/packages/solid/src/render/component.ts#L96">
             createComponent source
           </A>
-        </div>
+        </div> */}
         <CodeBlock language={componentLanguage} code={componentCode} title="component.ts">
           {template(componentHtml)()}
         </CodeBlock>
@@ -230,44 +224,5 @@ function ReferenceLink(props: { href: string; children: JSX.Element }): JSX.Elem
         {props.children}
       </a>
     </li>
-  );
-}
-
-const ReplaceTagsWithComponents = (props: { htmlString: string }) => {
-  const t = document.createElement('template');
-  t.innerHTML = props.htmlString;
-
-  const elements = Array.from(t.content.children);
-
-  const template = (html: string) => {
-    const t = document.createElement('template');
-    t.innerHTML = html;
-    return t.content;
-  };
-
-  return (
-    <For each={elements}>
-      {(el) => (
-        <Switch fallback={el}>
-          <Match when={el.tagName === 'P'}>
-            <MyComponent>{template(el.innerHTML)}</MyComponent>
-          </Match>
-          <Match when={el.tagName === 'PRE'}>
-            <CodeBlock class="bg-blue overflow-hidden rounded">
-              <pre>{template(el.innerHTML)}</pre>
-            </CodeBlock>
-          </Match>
-        </Switch>
-      )}
-    </For>
-  );
-};
-
-function MyComponent(props: { children?: JSX.Element }): JSX.Element {
-  return (
-    <p class="rounded bg-green-800/20 p-2 text-green-300 [&_code]:bg-green-500/50 [&_code]:text-green-100">
-      ----- <br /> {props.children}
-      <br /> -----
-    </p>
   );
 }

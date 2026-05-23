@@ -88,14 +88,14 @@ export function Callout(props: CalloutProps): JSX.Element {
 // MARK: PageHeader (internal)
 // ============================================================================
 
-function PageHeader(props: { title: string; description: string; badge?: string }): JSX.Element {
+export function PageHeader(props: { title: string; description?: string; badge?: string }): JSX.Element {
   return (
     <header class="border-b border-stone-300 pb-6 dark:border-slate-800">
       <div class="mb-2 flex items-center gap-2">
         <h1 class="text-2xl font-bold text-stone-950 dark:text-white">{props.title}</h1>
         {props.badge && <Badge variant="default">{props.badge}</Badge>}
       </div>
-      <p class="text-sm text-stone-600 dark:text-slate-400">{props.description}</p>
+      {props.description && <p class="text-sm text-stone-600 dark:text-slate-400">{props.description}</p>}
     </header>
   );
 }

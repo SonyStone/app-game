@@ -1,3 +1,4 @@
+import { vitePluginMarkdown } from '@app-game/vite-plugin-markdown';
 import { vitePluginShiki } from '@app-game/vite-plugin-shiki';
 import UnoCSS from '@unocss/vite';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,7 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [
+    vitePluginMarkdown(),
     vitePluginShiki(),
     tsconfigPaths({ root: '../..' }),
     solid(),

@@ -1,0 +1,18 @@
+<h2>Props preserve reactivity</h2>
+
+<p>
+  A component receives a props object through a call like <code>Comp(props)</code>. When a prop comes from a signal or
+  another getter, Solid tries to keep that access lazy instead of eagerly reading it at the call site.
+</p>
+<br />
+<p>
+  In simplified terms, JSX like <code>&lt;Comp rotate={props.subsecond}</code> becomes a getter on the props object. The
+  component is then invoked through <code>untrack</code>, which avoids creating an accidental subscription just because
+  the component was called.
+</p>
+
+<pre>
+  <code>Test code</code>
+</pre>
+
+<doc-custom-element />

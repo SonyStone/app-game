@@ -11,7 +11,24 @@ type CodeBlockHighlightPluginOptions = {
   defaultLanguage?: string;
   pluginName?: string;
 };
+type ShikiRendererOptions = {
+  themes?: readonly string[];
+  supportedLanguages?: readonly string[];
+  defaultLanguage?: string;
+};
+type ShikiHighlightOptions = {
+  language?: string | null;
+  theme?: string;
+};
+declare function createShikiRenderer(options?: ShikiRendererOptions): {
+  highlight(code: string, options?: ShikiHighlightOptions): Promise<{
+    html: string;
+    language: string;
+    theme: string;
+  }>;
+};
 declare function vitePluginShiki(options?: CodeBlockHighlightPluginOptions): Plugin;
+declare function normalizeShikiLanguage(language?: string | null): string | undefined;
 type ShikiQueryLanguage = DefaultLanguage;
 //#endregion
-export { CodeBlockHighlightPluginOptions, ShikiQueryLanguage, vitePluginShiki };
+export { CodeBlockHighlightPluginOptions, DEFAULT_SUPPORTED_LANGUAGES, ShikiHighlightOptions, ShikiQueryLanguage, ShikiRendererOptions, createShikiRenderer, normalizeShikiLanguage, vitePluginShiki };
