@@ -1,7 +1,8 @@
 # Pass Data
 
 <Description>
-Practical ways to move data and behavior through a SolidJS component tree: props, refs, polymorphic components, context, resolved children, and shared roots.
+  Practical ways to move data and behavior through a SolidJS component tree: props, refs, polymorphic components,
+  context, resolved children, and shared roots.
 </Description>
 
 ## Props preserve reactivity
@@ -12,7 +13,9 @@ A component receives a props object through a call like `Comp(props)`. When a pr
 
 In simplified terms, JSX like `rotate={props.subsecond}` becomes a getter on the props object. The component is then invoked through `untrack`, which avoids creating an accidental subscription just because the component was called.
 
-```tsx title="props-lowering.tsx"
+<CodeBlock title="props-lowering.tsx">
+
+```tsx
 import { JSX } from 'solid-js';
 import { createComponent } from 'solid-js/web';
 
@@ -28,24 +31,32 @@ function Hand(props: { rotate: number; class?: string; length: number; width: nu
     />
   );
 }
-
-export function App(props: { subsecond: number }): JSX.Element {
-  return <Hand rotate={props.subsecond} class="subsecond" length={85} width={5} />;
-}
-
-export function App2(props: { subsecond: number }): JSX.Element {
-  return createComponent(Hand, {
-    get rotate() {
-      return props.subsecond;
-    },
-    class: 'subsecond',
-    length: 85,
-    width: 5
-  });
-}
 ```
 
-```tsx title="component.ts"
+</CodeBlock>
+
+<SideBySideCode>
+```tsx
+<Hand rotate={props.subsecond}
+      class="subsecond"
+      length={85}
+      width={5} />
+```
+```tsx
+createComponent(Hand, {
+  get rotate() {
+    return props.subsecond;
+  },
+  class: 'subsecond',
+  length: 85,
+  width: 5
+});
+```
+</SideBySideCode>
+
+<CodeBlock title="component.ts">
+
+```tsx
 import { Component, JSX, untrack } from 'solid-js';
 
 export function createComponent<T extends Record<string, any>>(Comp: Component<T>, props: T): JSX.Element {
@@ -53,8 +64,11 @@ export function createComponent<T extends Record<string, any>>(Comp: Component<T
 }
 ```
 
+</CodeBlock>
+
 <Callout type="tip" title="Pass a getter when the child should own the subscription">
-If you pass an already-read value, the subscription happens in the current scope. If you pass the getter itself, the child can decide when to read it and where the reactive boundary should live.
+  If you pass an already-read value, the subscription happens in the current scope. If you pass the getter itself, the
+  child can decide when to read it and where the reactive boundary should live.
 </Callout>
 
 ## Use ref as an output channel
@@ -65,7 +79,9 @@ A ref callback lets a child hand a concrete object back to its parent, usually a
 
 That makes `ref` similar in spirit to `onClick` or any other callback prop: the child publishes something outward instead of fully owning the interaction.
 
-```tsx title="ref-output.tsx"
+<CodeBlock title="ref-output.tsx">
+
+```tsx
 function Component(props) {
   return <a ref={props.ref}>Link</a>;
 }
@@ -77,13 +93,17 @@ function Component(props) {
 />;
 ```
 
+</CodeBlock>
+
 ## Build polymorphic components with as and Dynamic
 
 A common pattern is to accept an as prop, split it out, and render the final element through Dynamic.
 
 This lets you swap the underlying tag or component without duplicating behavior. It is the core idea behind polymorphic APIs such as button components that can also render as links.
 
-```tsx title="polymorphic-button.tsx"
+<CodeBlock title="polymorphic-button.tsx">
+
+```tsx
 <Button as="a" href="/docs">
   Docs
 </Button>;
@@ -94,6 +114,8 @@ function Button(props) {
   return <Dynamic component={local.as ?? 'button'} {...others} />;
 }
 ```
+
+</CodeBlock>
 
 - [Dynamic reference](https://docs.solidjs.com/reference/components/dynamic)
 - [Dynamic concepts](https://docs.solidjs.com/concepts/control-flow/dynamic)
@@ -108,7 +130,9 @@ Internally, Solid stores context on owner nodes. When a provider renders, it cre
 
 This works well for things like theme objects, scoped services, or state that many descendants need at the same time.
 
-```tsx title="context-provider.tsx"
+<CodeBlock title="context-provider.tsx">
+
+```tsx
 const ValueContext = createContext(defaultValue);
 
 function ValueProvider(props) {
@@ -122,8 +146,12 @@ function Consumer() {
 }
 ```
 
+</CodeBlock>
+
 <Callout type="warning" title="Context is best for stable APIs">
-During HMR, editing a provider can sometimes leave descendants temporarily detached from their context until a full reload. It is a small annoyance, but it reinforces a useful rule: context is best for stable shared APIs, not rapidly changing local implementation details.
+  During HMR, editing a provider can sometimes leave descendants temporarily detached from their context until a full
+  reload. It is a small annoyance, but it reinforces a useful rule: context is best for stable shared APIs, not rapidly
+  changing local implementation details.
 </Callout>
 
 ## Resolve children explicitly when you need to inspect them
@@ -134,7 +162,9 @@ The `children` helper recursively unwraps child functions until it reaches concr
 
 This is useful when a component needs to normalize its children once and then treat them like regular data.
 
-```tsx title="resolve-children.tsx"
+<CodeBlock title="resolve-children.tsx">
+
+```tsx
 const resolved = children(() => props.children);
 
 type ResolvedJSXElement = number | boolean | Node | string | null | undefined;
@@ -145,6 +175,8 @@ function Example(props) {
   return <div>{content()}</div>;
 }
 ```
+
+</CodeBlock>
 
 ### Related primitives
 
@@ -167,8 +199,6 @@ Primary sources for the patterns summarized above.
 
 <ReferenceCard>
   <ReferenceLink href="https://mdxjs.com/packages/rollup/">@mdx-js/rollup</ReferenceLink>
-  <ReferenceLink href="https://mdxjs.com/guides/injecting-components/">
-    Injecting MDX components
-  </ReferenceLink>
+  <ReferenceLink href="https://mdxjs.com/guides/injecting-components/">Injecting MDX components</ReferenceLink>
   <ReferenceLink href="https://docs.solidjs.com/concepts/components/props">Solid props concept docs</ReferenceLink>
 </ReferenceCard>

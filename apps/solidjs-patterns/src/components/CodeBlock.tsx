@@ -1,23 +1,24 @@
 import { createMemo, createSignal, type JSX } from 'solid-js';
-import s from './CodeBlock.module.css';
+import { cn } from '../lib/utils';
+import s from './App.module.css';
 
 // ============================================================================
 // MARK: CodeBlock
 // ============================================================================
 
 export type CodeBlockProps = {
+  class?: string;
   code?: string;
   language?: string;
   highlightedHtml?: string;
   title?: string;
-  class?: string;
   children?: JSX.Element;
 };
 
 export function CodeBlock(props: CodeBlockProps): JSX.Element {
   return (
     <div
-      class={`group relative overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 ${props.class ?? ''}`}
+      class={`group relative overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950`}
     >
       {/* Top bar */}
       <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-2 dark:border-slate-800 dark:bg-slate-900/80">
@@ -36,7 +37,7 @@ export function CodeBlock(props: CodeBlockProps): JSX.Element {
       </div>
 
       {/* Code */}
-      <div class={`text-sm [&>*]:overflow-auto [&>*]:p-4 ${s.shiki}`}>{props.children}</div>
+      <div class={cn(`text-sm [&>*]:overflow-auto [&>*]:p-4`, s.shiki, props.class)}>{props.children}</div>
     </div>
   );
 }

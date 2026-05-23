@@ -1,7 +1,7 @@
-import { createMdxShikiCodeBlocks, type ShikiRendererOptions } from '@app-game/vite-plugin-shiki';
 import { compile, type CompileOptions } from '@mdx-js/mdx';
 import { readFile } from 'node:fs/promises';
 import type { Plugin } from 'vite';
+import { createMdxShikiCodeBlocks, type ShikiRendererOptions } from './shiki';
 
 const DEFAULT_QUERY = 'markdown';
 const DEFAULT_PREFIX = '\0markdown:';
@@ -50,7 +50,7 @@ export function vitePluginMarkdown(options: MarkdownRenderPluginOptions = {}): P
         skipSelf: true
       });
 
-      if (!resolved || !resolved.id.split('?', 2)[0]?.endsWith('.md')) {
+      if (!resolved || !isMarkdownFile(resolved.id.split('?', 2)[0])) {
         return null;
       }
 
@@ -65,7 +65,7 @@ export function vitePluginMarkdown(options: MarkdownRenderPluginOptions = {}): P
       const resolvedId = id.slice(prefix.length);
       const [filePath] = resolvedId.split('?', 2);
 
-      if (!filePath.endsWith('.md')) {
+      if (!isMarkdownFile(filePath)) {
         return null;
       }
 
@@ -147,6 +147,10 @@ function trackVirtualId(virtualIdsByFile: Map<string, Set<string>>, filePath: st
   }
 
   virtualIdsByFile.set(filePath, new Set([virtualId]));
+}
+
+function isMarkdownFile(filePath?: string): boolean {
+  return filePath?.endsWith('.md') === true || filePath?.endsWith('.mdx') === true;
 }
 
 function unwrapParagraphsInComponentChildren() {

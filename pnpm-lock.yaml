@@ -21,6 +21,9 @@ catalogs:
     '@playwright/test':
       specifier: ^1.60.0
       version: 1.60.0
+    '@solid-primitives/context':
+      specifier: 0.3.2
+      version: 0.3.2
     '@solid-primitives/cursor':
       specifier: ^0.1.2
       version: 0.1.3
@@ -318,9 +321,6 @@ importers:
       '@app-game/vite-plugin-markdown':
         specifier: workspace:*
         version: link:packages/vite-plugin-markdown
-      '@app-game/vite-plugin-shiki':
-        specifier: workspace:*
-        version: link:packages/vite-plugin-shiki
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.3.0(jiti@2.7.0))
@@ -558,6 +558,9 @@ importers:
       '@kobalte/core':
         specifier: 'catalog:'
         version: 0.13.11(solid-js@1.9.12)
+      '@solid-primitives/context':
+        specifier: 'catalog:'
+        version: 0.3.2(solid-js@1.9.12)
       '@solidjs/router':
         specifier: 'catalog:'
         version: 0.16.1(solid-js@1.9.12)
@@ -574,15 +577,9 @@ importers:
       '@app-game/vite-plugin-markdown':
         specifier: workspace:*
         version: link:../../packages/vite-plugin-markdown
-      '@app-game/vite-plugin-shiki':
-        specifier: workspace:*
-        version: link:../../packages/vite-plugin-shiki
       '@corvu/drawer':
         specifier: 'catalog:'
         version: 0.2.4(solid-js@1.9.12)
-      '@mdx-js/rollup':
-        specifier: 'catalog:'
-        version: 3.1.1(rollup@4.60.4)
       '@unocss/reset':
         specifier: 'catalog:'
         version: 66.6.8
@@ -1232,12 +1229,12 @@ importers:
 
   packages/vite-plugin-markdown:
     dependencies:
-      '@app-game/vite-plugin-shiki':
-        specifier: workspace:*
-        version: link:../vite-plugin-shiki
       '@mdx-js/mdx':
         specifier: 'catalog:'
         version: 3.1.1
+      shiki:
+        specifier: 'catalog:'
+        version: 4.1.0
       vite:
         specifier: 'catalog:'
         version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)
@@ -1248,9 +1245,9 @@ importers:
 
   packages/vite-plugin-shiki:
     dependencies:
-      shiki:
-        specifier: 'catalog:'
-        version: 4.1.0
+      '@app-game/vite-plugin-markdown':
+        specifier: workspace:*
+        version: link:../vite-plugin-markdown
       vite:
         specifier: 'catalog:'
         version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)
@@ -2473,6 +2470,11 @@ packages:
     resolution: {integrity: sha512-flMFjefduI4K4jlsN1EGQhf1lMW5ypYy1CjNHoT2n5IVEIkg29viAf2kFX/nX/DmA2FCTuPhrRMijBxVYuG4Qw==}
     peerDependencies:
       solid-js: ^1.4.4
+
+  '@solid-primitives/context@0.3.2':
+    resolution: {integrity: sha512-6fvTtpK17PFHnUf/UOc1TzBjd+kLFjtA62aRFEm1kDP9ufTo7FYW2kUzQAWbfbRHi30yjBJtopbR8qd6nShwyg==}
+    peerDependencies:
+      solid-js: ^1.6.12
 
   '@solid-primitives/cursor@0.1.3':
     resolution: {integrity: sha512-5nj+qUiBLaFTsR5RTGO2EwR8IOr7fRW+ZWW5LEAKvSWFI8mKhwrGTzFFcNZwmoFh7zanm3IOG6UYS7abfqCEew==}
@@ -6221,6 +6223,10 @@ snapshots:
       '@solid-aria/types': 0.1.4(solid-js@1.9.12)
       '@solid-aria/utils': 0.2.1(solid-js@1.9.12)
       '@solid-primitives/utils': 2.2.1(solid-js@1.9.12)
+      solid-js: 1.9.12
+
+  '@solid-primitives/context@0.3.2(solid-js@1.9.12)':
+    dependencies:
       solid-js: 1.9.12
 
   '@solid-primitives/cursor@0.1.3(solid-js@1.9.12)':

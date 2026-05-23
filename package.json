@@ -68,7 +68,6 @@
     "vite-plugin-top-level-await": "1.6.0",
     "vite-plugin-wasm": "3.6.0",
     "vitest": "catalog:",
-    "@app-game/vite-plugin-shiki": "workspace:*",
     "@app-game/vite-plugin-markdown": "workspace:*",
     "which": "^7.0.0"
   },

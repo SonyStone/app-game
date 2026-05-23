@@ -1,8 +1,10 @@
-import { type JSX } from 'solid-js';
+import { createContextProvider } from '@solid-primitives/context';
+import { Show, type JSX } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { template } from 'solid-js/web';
 import { CodeBlock } from '../../components/CodeBlock';
 import { Callout } from '../../components/PatternLayout';
-import PassDataContent from './pass-data.md?markdown';
+import PassDataContent from './pass-data.mdx?markdown';
 
 export default function PassDataPage(): JSX.Element {
   return <PassDataContent components={markdownComponents} />;
@@ -61,12 +63,42 @@ const markdownComponents = {
   code(props: JSX.IntrinsicElements['code']): JSX.Element {
     return <InlineCode>{props.children}</InlineCode>;
   },
-  ShikiCodeBlock(props: { code: string; language?: string; html: string; title?: string }): JSX.Element {
+  CodeBlock(props: { title?: string; children?: JSX.Element }): JSX.Element {
     return (
-      <CodeBlock code={props.code} language={props.language} title={props.title}>
-        {template(props.html)()}
-      </CodeBlock>
+      <CodeProvider>
+        <Show when={useCode()?.codeProps}>
+          {(codeProps) => (
+            <CodeBlock code={codeProps()?.code} language={codeProps()?.language} title={props.title}>
+              {props.children}
+            </CodeBlock>
+          )}
+        </Show>
+      </CodeProvider>
     );
+  },
+  SideBySideCode(props: { title?: string; children?: JSX.Element }): JSX.Element {
+    return (
+      <CodeProvider>
+        <Show when={useCode()?.codeProps}>
+          {(codeProps) => (
+            <CodeBlock
+              class="flex flex-wrap [&>*]:flex-grow-1"
+              code={codeProps()?.code}
+              language={codeProps()?.language}
+              title={props.title}
+            >
+              {props.children}
+            </CodeBlock>
+          )}
+        </Show>
+      </CodeProvider>
+    );
+  },
+  Shiki(props: { code: string; language?: string; html: string; title?: string }): JSX.Element {
+    const { setCodeProps } = useCode() ?? {};
+    setCodeProps?.({ code: props.code, language: props.language });
+
+    return template(props.html)();
   },
   Callout,
   Description(props: { children: JSX.Element }): JSX.Element {
@@ -107,3 +139,8 @@ function ReferenceLink(props: { href: string; children: JSX.Element }): JSX.Elem
     </li>
   );
 }
+
+const [CodeProvider, useCode] = createContextProvider((props: Partial<{ code: string; language?: string }>) => {
+  const [codeProps, setCodeProps] = createStore<Partial<{ code: string; language?: string }>>(props);
+  return { codeProps, setCodeProps };
+});

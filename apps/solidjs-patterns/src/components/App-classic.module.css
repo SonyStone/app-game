@@ -18,14 +18,14 @@
   --shiki-token-label: #000000;
   --shiki-token-selector: #800000;
   --shiki-token-tag: #800000;
-  --shiki-token-style-tag: #d7ba7d;
+  --shiki-token-style-tag: #800000;
   --shiki-token-attribute: #e50000;
   --shiki-token-style-attribute: #800000;
   --shiki-token-header: #000080;
   --shiki-token-invalid: #cd3131;
   --shiki-token-keyword: #0000ff;
   --shiki-token-control: #0000ff;
-  --shiki-token-keyword-special: #c586c0;
+  --shiki-token-keyword-special: #af00db;
   --shiki-token-operator: #000000;
   --shiki-token-word-operator: #0000ff;
   --shiki-token-regexp-anchor: #ee0000;
@@ -50,8 +50,8 @@
   --shiki-token-template: #000000;
   --shiki-token-type-meta: #267f99;
   --shiki-token-regexp-delimiter: #d16969;
-  --shiki-token-markdown-list: #6796e6;
-  --shiki-token-markdown-quote: #6a9955;
+  --shiki-token-markdown-list: #0451a5;
+  --shiki-token-markdown-quote: #0451a5;
   --shiki-token-markdown-block: #0451a5;
   --shiki-token-tag-delimiter: #800000;
   --shiki-token-template-delimiter: #0000ff;
@@ -63,8 +63,8 @@
   --shiki-token-string: #a31515;
   --shiki-token-string-text: #0000ff;
   --shiki-token-string-regexp: #811f3f;
-  --shiki-token-string-tag: #ce9178;
-  --shiki-token-string-value: #ce9178;
+  --shiki-token-string-tag: #a31515;
+  --shiki-token-string-value: #a31515;
   --shiki-token-strong: #000000;
   --shiki-token-type: #267f99;
   --shiki-token-value: #0451a5;

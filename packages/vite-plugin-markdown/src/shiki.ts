@@ -62,16 +62,16 @@ export function createShikiRenderer(options: ShikiRendererOptions = {}) {
   return {
     async highlight(
       code: string,
-      options: ShikiHighlightOptions = {}
+      highlightOptions: ShikiHighlightOptions = {}
     ): Promise<{
       html: string;
       language: string;
       theme: string;
     }> {
-      const language = normalizeShikiLanguage(options.language) ?? defaultLanguage;
-      const theme = options.theme ?? themes[0] ?? CSS_VARIABLES_THEME.name;
+      const language = normalizeShikiLanguage(highlightOptions.language) ?? defaultLanguage;
+      const theme = highlightOptions.theme ?? themes[0] ?? CSS_VARIABLES_THEME.name;
       const highlighter = await (highlighterPromise ??= getSingletonHighlighter({
-        themes: [CSS_VARIABLES_THEME, ...themes.filter((theme) => theme !== CSS_VARIABLES_THEME.name)],
+        themes: [CSS_VARIABLES_THEME, ...themes.filter((themeName) => themeName !== CSS_VARIABLES_THEME.name)],
         langs: [...supportedLanguages]
       }));
 
@@ -93,12 +93,13 @@ export function createShikiRenderer(options: ShikiRendererOptions = {}) {
   };
 }
 
+// TODO: Unneeded?
 export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): Plugin {
   const themes = options.themes ?? [];
   const queryKey = options.query ?? DEFAULT_QUERY;
   const prefix = options.prefix ?? DEFAULT_PREFIX;
   const defaultLanguage = options.defaultLanguage ?? DEFAULT_DEFAULT_LANGUAGE;
-  const pluginName = options.pluginName ?? 'vite-plugin-shiki';
+  const pluginName = options.pluginName ?? 'vite-plugin-markdown-shiki';
   const shikiRenderer = createShikiRenderer({
     themes,
     supportedLanguages: options.supportedLanguages,
@@ -179,7 +180,7 @@ export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): 
 }
 
 export function createMdxShikiCodeBlocks(options: MdxShikiCodeBlocksOptions = {}) {
-  const componentName = options.componentName ?? 'ShikiCodeBlock';
+  const componentName = options.componentName ?? 'Shiki';
   const shikiRenderer = createShikiRenderer(options);
 
   return function remarkMdxShikiCodeBlocks() {

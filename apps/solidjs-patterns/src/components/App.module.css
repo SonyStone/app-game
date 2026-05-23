@@ -1,7 +1,52 @@
+@property --shiki-hue-offset {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+@property --shiki-chroma-scale {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+@keyframes shiki-hue-spin {
+  from {
+    --shiki-hue-offset: 0deg;
+  }
+
+  to {
+    --shiki-hue-offset: 360deg;
+  }
+}
+
+@keyframes shiki-chroma-pulse {
+  0%,
+  100% {
+    --shiki-chroma-scale: 0.5;
+  }
+
+  50% {
+    --shiki-chroma-scale: 2;
+  }
+}
+
 .shiki {
   --shiki-hue-offset: 0deg;
   --shiki-lightness-offset: 0%;
   --shiki-chroma-scale: 1;
+  animation:
+    shiki-hue-spin 3.61s linear infinite,
+    shiki-chroma-pulse 6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shiki {
+    animation: none;
+  }
+}
+
+.shiki {
   --shiki-foreground: oklch(
     calc(0% + var(--shiki-lightness-offset)) calc(0 * var(--shiki-chroma-scale)) calc(0deg + var(--shiki-hue-offset))
   );
@@ -103,10 +148,7 @@
     calc(45.201% + var(--shiki-lightness-offset)) calc(0.3132 * var(--shiki-chroma-scale))
       calc(264.052deg + var(--shiki-hue-offset))
   );
-  --shiki-token-keyword-special: oklch(
-    calc(70.239% + var(--shiki-lightness-offset)) calc(0.1088 * var(--shiki-chroma-scale))
-      calc(329.423deg + var(--shiki-hue-offset))
-  );
+  --shiki-token-keyword-special: var(--shiki-semantic-new-operator);
   --shiki-token-operator: oklch(
     calc(0% + var(--shiki-lightness-offset)) calc(0 * var(--shiki-chroma-scale)) calc(0deg + var(--shiki-hue-offset))
   );
@@ -196,14 +238,8 @@
     calc(64.297% + var(--shiki-lightness-offset)) calc(0.1317 * var(--shiki-chroma-scale))
       calc(21.413deg + var(--shiki-hue-offset))
   );
-  --shiki-token-markdown-list: oklch(
-    calc(67.451% + var(--shiki-lightness-offset)) calc(0.1298 * var(--shiki-chroma-scale))
-      calc(260.521deg + var(--shiki-hue-offset))
-  );
-  --shiki-token-markdown-quote: oklch(
-    calc(63.231% + var(--shiki-lightness-offset)) calc(0.1092 * var(--shiki-chroma-scale))
-      calc(136.614deg + var(--shiki-hue-offset))
-  );
+  --shiki-token-markdown-list: var(--shiki-token-markdown-block);
+  --shiki-token-markdown-quote: var(--shiki-token-markdown-block);
   --shiki-token-markdown-block: oklch(
     calc(44.581% + var(--shiki-lightness-offset)) calc(0.151 * var(--shiki-chroma-scale))
       calc(256.303deg + var(--shiki-hue-offset))
@@ -369,10 +405,7 @@
     calc(67.134% + var(--shiki-lightness-offset)) calc(0.1118 * var(--shiki-chroma-scale))
       calc(245.54deg + var(--shiki-hue-offset))
   );
-  --shiki-token-style-tag: oklch(
-    calc(80.005% + var(--shiki-lightness-offset)) calc(0.0855 * var(--shiki-chroma-scale))
-      calc(85.139deg + var(--shiki-hue-offset))
-  );
+  --shiki-token-style-tag: var(--shiki-token-style-attribute);
   --shiki-token-attribute: oklch(
     calc(86.321% + var(--shiki-lightness-offset)) calc(0.0801 * var(--shiki-chroma-scale))
       calc(232.08deg + var(--shiki-hue-offset))
@@ -549,14 +582,8 @@
     calc(64.297% + var(--shiki-lightness-offset)) calc(0.1317 * var(--shiki-chroma-scale))
       calc(21.413deg + var(--shiki-hue-offset))
   );
-  --shiki-token-string-tag: oklch(
-    calc(71.043% + var(--shiki-lightness-offset)) calc(0.0825 * var(--shiki-chroma-scale))
-      calc(43.17deg + var(--shiki-hue-offset))
-  );
-  --shiki-token-string-value: oklch(
-    calc(71.043% + var(--shiki-lightness-offset)) calc(0.0825 * var(--shiki-chroma-scale))
-      calc(43.17deg + var(--shiki-hue-offset))
-  );
+  --shiki-token-string-tag: var(--shiki-token-string);
+  --shiki-token-string-value: var(--shiki-token-string);
   --shiki-token-strong: oklch(
     calc(86.994% + var(--shiki-lightness-offset)) calc(0 * var(--shiki-chroma-scale))
       calc(89.876deg + var(--shiki-hue-offset))

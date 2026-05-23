@@ -1,7 +1,13 @@
-import { ShikiRendererOptions } from "@app-game/vite-plugin-shiki";
 import { CompileOptions } from "@mdx-js/mdx";
 import { Plugin } from "vite";
 
+//#region src/shiki.d.ts
+type ShikiRendererOptions = {
+  themes?: readonly string[];
+  supportedLanguages?: readonly string[];
+  defaultLanguage?: string;
+};
+//#endregion
 //#region src/index.d.ts
 type MarkdownCompileOptions = Omit<CompileOptions, 'format' | 'jsxImportSource' | 'remarkPlugins'>;
 type MarkdownRenderPluginOptions = {

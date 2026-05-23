@@ -24,8 +24,8 @@
     "vite": "catalog:"
   },
   "dependencies": {
-    "@app-game/vite-plugin-shiki": "workspace:*",
-    "@mdx-js/mdx": "catalog:"
+    "@mdx-js/mdx": "catalog:",
+    "shiki": "catalog:"
   },
   "devDependencies": {
     "tsdown": "^0.22.0"

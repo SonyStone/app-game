@@ -72,7 +72,7 @@ export const markdownComponents = {
   code(props: JSX.IntrinsicElements['code']): JSX.Element {
     return <InlineCode>{props.children}</InlineCode>;
   },
-  ShikiCodeBlock(props: { code: string; language?: string; html: string; title?: string }): JSX.Element {
+  Shiki(props: { code: string; language?: string; html: string; title?: string }): JSX.Element {
     return (
       <CodeBlock code={props.code} language={props.language} title={props.title}>
         {template(props.html)()}
