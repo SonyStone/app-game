@@ -44,10 +44,7 @@ export const navSections: NavSection[] = [
       { label: 'Component Patterns', href: './components' },
       { label: 'Control Flow', href: './control-flow' },
       { label: 'Props & Spreading', href: './props' },
-      { label: 'Pass Data', href: './pass-data' },
-      { label: 'Pass Data Markdown', href: './pass-data-markdown', badge: 'MD' },
-      { label: 'Pass Data MDX', href: './pass-data-mdx', badge: 'MDX' },
-      { label: 'Pass Data MDX 2', href: './pass-data-mdx-2', badge: 'not MDX' }
+      { label: 'Pass Data', href: './pass-data' }
     ]
   }
   // {
