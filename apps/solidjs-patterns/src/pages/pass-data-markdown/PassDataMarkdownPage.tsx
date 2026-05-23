@@ -1,7 +1,7 @@
 import { type JSX } from 'solid-js';
 import { PatternLayout } from '../../components/PatternLayout';
 import { components } from '../pass-data-mdx/PassDataMdxParts';
-import PassDataContent from './pass-data-component.md?markdown&component';
+import PassDataContent from './pass-data-component.md?markdown';
 
 const markdownComponents = {
   ...components,

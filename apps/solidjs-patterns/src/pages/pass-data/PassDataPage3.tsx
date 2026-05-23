@@ -1,6 +1,6 @@
 import { ComponentProps, type JSX } from 'solid-js';
 import { components } from '../pass-data-mdx/PassDataMdxParts';
-import PassData from './pass-data.md?markdown&component';
+import PassData from './pass-data.md?markdown';
 
 declare module 'solid-js' {
   namespace JSX {

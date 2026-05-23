@@ -24,30 +24,14 @@ function vitePluginMarkdown(options = {}) {
 		},
 		async load(id) {
 			if (!id.startsWith(prefix)) return null;
-			const [filePath, rawQuery = ""] = id.slice(prefix.length).split("?", 2);
-			const query = new URLSearchParams(rawQuery);
+			const [filePath] = id.slice(prefix.length).split("?", 2);
 			trackVirtualId(virtualIdsByFile, filePath, id);
 			this.addWatchFile(filePath);
-			const markdown = await readFile(filePath, "utf8");
-			const renderer = await (markdownRendererPromise ??= createRenderer(options));
-			const html = await renderer.renderAsync(markdown);
-			const exports = [`export const markdown = ${JSON.stringify(markdown)};`, `export const html = ${JSON.stringify(html)};`];
-			let blocks;
-			if (query.has("blocks")) {
-				blocks = await createMarkdownBlocks(markdown, renderer);
-				exports.push(`export const blocks = ${JSON.stringify(blocks)};`);
-			}
-			if (query.has("component")) {
-				const nodes = await createMarkdownComponentNodes(markdown, renderer);
-				return createMarkdownComponentModule({
-					markdown,
-					html,
-					blocks,
-					nodes
-				});
-			}
-			exports.push(`export default ${JSON.stringify(html)};`);
-			return exports.join("\n");
+			const markdownRaw = await readFile(filePath, "utf8");
+			return createMarkdownComponentModule({
+				markdown: markdownRaw,
+				nodes: await createMarkdownComponentNodes(markdownRaw, await (markdownRendererPromise ??= createRenderer(options)))
+			});
 		},
 		handleHotUpdate(ctx) {
 			const virtualIds = virtualIdsByFile.get(ctx.file);
@@ -76,40 +60,6 @@ async function createRenderer(options) {
 	});
 	await options.configureMarkdown?.(renderer);
 	return renderer;
-}
-async function createMarkdownBlocks(markdown, renderer) {
-	const tokens = renderer.parse(markdown, {});
-	const blocks = [];
-	for (let index = 0; index < tokens.length;) {
-		const token = tokens[index];
-		if (token.level !== 0) {
-			index += 1;
-			continue;
-		}
-		if (token.type === "fence" || token.type === "code_block") {
-			blocks.push(await createCodeBlock(token, renderer));
-			index += 1;
-			continue;
-		}
-		if (token.nesting === 1) {
-			const nextIndex = findBlockEnd(tokens, index);
-			const blockTokens = tokens.slice(index, nextIndex);
-			blocks.push(await createContainerBlock(blockTokens, renderer));
-			index = nextIndex;
-			continue;
-		}
-		if (token.type === "html_block") {
-			blocks.push({
-				type: "html",
-				tag: null,
-				html: await renderer.renderer.renderAsync([token], renderer.options, {})
-			});
-			index += 1;
-			continue;
-		}
-		index += 1;
-	}
-	return blocks;
 }
 async function createMarkdownComponentNodes(markdown, renderer) {
 	const tokens = renderer.parse(markdown, {});
@@ -150,13 +100,7 @@ async function createMarkdownComponentNodes(markdown, renderer) {
 	return root.children;
 }
 function createMarkdownComponentModule(options) {
-	const lines = [
-		`import { createComponent } from 'solid-js';`,
-		`import { Dynamic, template } from 'solid-js/web';`,
-		`export const markdown = ${JSON.stringify(options.markdown)};`,
-		`export const html = ${JSON.stringify(options.html)};`
-	];
-	if (options.blocks) lines.push(`export const blocks = ${JSON.stringify(options.blocks)};`);
+	const lines = [`import { createComponent } from 'solid-js';`, `import { Dynamic, template } from 'solid-js/web';`];
 	lines.push(`function _DefaultHtmlBlock(props) { return template(props.html)(); }`, `function _DefaultShikiCodeBlock(props) { return template(props.html)(); }`, `export default function MarkdownContent(props = {}) {`, `  const components = props.components ?? {};`, `  const content = ${createChildrenExpression(options.nodes)};`, `  const Wrapper = components.wrapper;`, `  if (!Wrapper) {`, `    return content;`, `  }`, `  return createComponent(Dynamic, {`, `    component: Wrapper,`, `    get children() {`, `      return content;`, `    }`, `  });`, `}`);
 	return lines.join("\n");
 }
@@ -190,65 +134,10 @@ function createNodeExpression(node) {
 function serializeOptionalValue(value) {
 	return value == null ? "undefined" : JSON.stringify(value);
 }
-function findBlockEnd(tokens, startIndex) {
-	let depth = 0;
-	for (let index = startIndex; index < tokens.length; index += 1) {
-		const token = tokens[index];
-		if (token.level !== 0 && index !== startIndex) continue;
-		if (token.nesting === 1) depth += 1;
-		else if (token.nesting === -1) {
-			depth -= 1;
-			if (depth === 0) return index + 1;
-		} else if (index !== startIndex && depth === 0) return index;
-	}
-	return tokens.length;
-}
-async function createContainerBlock(blockTokens, renderer) {
-	const [openToken, inlineToken] = blockTokens;
-	const html = await renderer.renderer.renderAsync([inlineToken], renderer.options, {});
-	switch (openToken.tag) {
-		case "p": return {
-			type: "paragraph",
-			tag: openToken.tag,
-			text: inlineToken?.content ?? "",
-			html
-		};
-		case "h1":
-		case "h2":
-		case "h3":
-		case "h4":
-		case "h5":
-		case "h6": return {
-			type: "heading",
-			tag: openToken.tag,
-			level: Number(openToken.tag.slice(1)),
-			text: inlineToken?.content ?? "",
-			id: openToken.attrGet("id") ?? void 0,
-			html
-		};
-		case "ul":
-		case "ol": return {
-			type: "list",
-			tag: openToken.tag,
-			html
-		};
-		case "blockquote": return {
-			type: "blockquote",
-			tag: openToken.tag,
-			html
-		};
-		default: return {
-			type: "html",
-			tag: null,
-			html
-		};
-	}
-}
 async function createCodeBlock(token, renderer) {
 	const [rawLanguage = "", ...metaParts] = token.info.trim().split(/\s+/).filter(Boolean);
 	return {
 		type: "codeblock",
-		tag: "pre",
 		code: token.content,
 		language: normalizeShikiLanguage(rawLanguage) ?? (rawLanguage || void 0),
 		meta: metaParts.length > 0 ? metaParts.join(" ") : void 0,
