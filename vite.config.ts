@@ -10,7 +10,6 @@ import solidSvg from 'vite-plugin-solid-svg';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import wasm from 'vite-plugin-wasm';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
-import { vitePluginMarkdown2 } from './packages/vite-plugin-markdown-2/src';
 import { vitePluginMarkdown } from './packages/vite-plugin-markdown/src';
 import { createMdxShikiCodeBlocks, vitePluginShiki } from './packages/vite-plugin-shiki/src';
 
@@ -22,8 +21,7 @@ const devServerPort = Number(process.env.APP_PORT ?? process.env.PORT ?? '3120')
 export default defineConfig({
   root: webAppRoot,
   plugins: [
-    vitePluginMarkdown(),
-    vitePluginMarkdown2({
+    vitePluginMarkdown({
       themes: ['css-variables', 'dark-plus']
     }),
     vitePluginShiki({

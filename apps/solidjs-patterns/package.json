@@ -19,7 +19,6 @@
   "devDependencies": {
     "@mdx-js/rollup": "catalog:",
     "@app-game/vite-plugin-markdown": "workspace:*",
-    "@app-game/vite-plugin-markdown-2": "workspace:*",
     "@app-game/vite-plugin-shiki": "workspace:*",
     "@corvu/drawer": "catalog:",
     "@unocss/reset": "catalog:",

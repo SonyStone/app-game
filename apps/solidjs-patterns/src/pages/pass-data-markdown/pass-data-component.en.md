@@ -1,6 +1,11 @@
+<header>
 # Pass Data (Markdown Component)
 
 This page is plain markdown compiled into a component module. It preserves inline `code`, [links](https://mdxjs.com/packages/rollup/), lists, blockquotes, and fenced code blocks.
+
+</header>
+
+<Section>
 
 ## Props preserve reactivity
 
@@ -40,6 +45,8 @@ export function App2(props: { subsecond: number }): JSX.Element {
 ```
 
 > This mode is MDX-like for markdown semantics, but it still does not understand arbitrary embedded custom components.
+
+</Section>
 
 ## References
 
