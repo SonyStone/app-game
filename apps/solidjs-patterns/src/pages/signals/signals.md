@@ -1,14 +1,21 @@
-<Page
-title="Signals"
-badge="Core"
-description="Signals are the fundamental reactive primitive in SolidJS. They hold a value and notify subscribers when it changes."
+<header>
 
->
+# Signals
 
-  <Section
-    title="Basic Signal 2"
-    description="createSignal returns a getter and setter tuple. The getter is a function - calling it inside a reactive context subscribes to changes."
-  >
+<Badge>Core</Badge>
+<Description>
+Signals are the fundamental reactive primitive in SolidJS. They hold a value and notify subscribers when they
+change.
+</Description>
+
+</header>
+
+<section>
+
+## Basic Signal 2
+
+createSignal returns a getter and setter tuple. The getter is a function - calling it inside a reactive context
+subscribes to changes.
 
 ```tsx title="basic-signal.tsx"
 import { createSignal } from 'solid-js';
@@ -23,16 +30,21 @@ setCount(1);
 setCount((prev) => prev + 1); // functional update
 ```
 
-  </Section>
+</section>
 
-  <Section title="Live Demo">
-    <SignalDemo />
-  </Section>
+<section>
 
-  <Section
-    title="Equality Check"
-    description="Signals skip notifications when the new value equals the old one. Customize with the equals option."
-  >
+## Live Demo
+
+<SignalDemo />
+
+</section>
+
+<section>
+
+## Equality Check
+
+Signals skip notifications when the new value equals the old one. Customize with the `equals` option.
 
 ```tsx
 // Custom equality - always notify (useful for arrays/objects)
@@ -45,12 +57,13 @@ const [data, setData] = createSignal(initialData, { equals: () => true });
 const [pos, setPos] = createSignal({ x: 0, y: 0 }, { equals: (a, b) => a.x === b.x && a.y === b.y });
 ```
 
-  </Section>
+</section>
 
-  <Section
-    title="Signals vs State"
-    description="Unlike React useState, signals are not tied to components. They can live outside components and be shared freely."
-  >
+<section>
+
+## Signals vs State
+
+Unlike React useState, signals are not tied to components. They can live outside components and be shared freely.
 
 ```tsx
 // Global signal - lives outside any component
@@ -62,17 +75,18 @@ function ThemeToggle() {
 }
 ```
 
-  </Section>
+</section>
 
-  <Callout type="tip" title="Getter is a function">
-    Always call the getter as a function: <code>count()</code>, not <code>count</code>. Passing the getter (not
-    calling it) lets you pass reactivity around without subscribing.
-  </Callout>
+<Callout type="tip" title="Getter is a function">
+  Always call the getter as a function: <code>count()</code>, not <code>count</code>. Passing the getter (not
+  calling it) lets you pass reactivity around without subscribing.
+</Callout>
 
-  <Section
-    title="Passing Reactivity"
-    description="Pass the getter function (without calling it) to defer reading and preserve the reactive subscription at the call site."
-  >
+<section>
+
+## Passing Reactivity
+
+Pass the getter function without calling it to defer reading and preserve the reactive subscription at the call site.
 
 ```tsx
 // Pass getter - child subscribes at its own level
@@ -94,5 +108,4 @@ function Parent() {
 }
 ```
 
-  </Section>
-</Page>
+</section>

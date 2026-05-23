@@ -1,14 +1,20 @@
-<Page
-title="Stores"
-badge="State"
-description="createStore provides fine-grained reactivity for nested objects and arrays. Only the specific paths that change trigger updates."
+<header>
 
->
+# Stores
 
-  <Section
-    title="createStore basics"
-    description="createStore returns a reactive proxy (getter) and a setter. Nested property access is tracked."
-  >
+<Badge>State</Badge>
+<Description>
+createStore provides fine-grained reactivity for nested objects and arrays. Only the specific paths that change
+trigger updates.
+</Description>
+
+</header>
+
+<section>
+
+## createStore basics
+
+createStore returns a reactive proxy getter and a setter. Nested property access is tracked.
 
 ```ts
 import { createStore } from 'solid-js/store';
@@ -30,16 +36,21 @@ setState('user', 'name', 'Bob');
 setState('items', 0, 'done', true);
 ```
 
-  </Section>
+</section>
 
-  <Section title="Live Demo">
-    <StoreDemo />
-  </Section>
+<section>
 
-  <Section
-    title="Path syntax"
-    description="setState accepts a path of keys, an updater function, or a combination."
-  >
+## Live Demo
+
+<StoreDemo />
+
+</section>
+
+<section>
+
+## Path syntax
+
+setState accepts a path of keys, an updater function, or a combination.
 
 ```ts
 const [state, setState] = createStore({ count: 0, list: ['a', 'b'] });
@@ -60,12 +71,13 @@ setState('list', 1, 'London');
 setState('items', (item) => item.done, 'archived', true);
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="produce() - immer-style mutations"
-    description="produce() allows writing imperative mutation code. It uses a draft that gets applied immutably."
-  >
+  <section>
+
+## produce() - immer-style mutations
+
+produce() lets you write imperative mutation code. It uses a draft that gets applied immutably.
 
 ```ts
 import { createStore, produce } from 'solid-js/store';
@@ -85,12 +97,13 @@ setTodos(
 );
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="reconcile() - replace from external data"
-    description="reconcile diffs incoming data against the existing store, updating only changed parts."
-  >
+  <section>
+
+## reconcile() - replace from external data
+
+reconcile diffs incoming data against the existing store, updating only changed parts.
 
 ```ts
 import { createStore, reconcile } from 'solid-js/store';
@@ -106,13 +119,10 @@ async function refresh() {
 // vs setData('items', fresh) - replaces everything, loses reactivity
 ```
 
-  </Section>
+</section>
 
-  <Callout type="warning" title="Don't destructure store values">
-    Destructuring a store loses reactivity. Always access nested values through the store proxy:
-    <br />
-    <code>const {'{'} name {'}'} = state.user</code> - breaks
-    <br />
-    <code>state.user.name</code> - works
-  </Callout>
-</Page>
+<Callout type="warning" title="Don't destructure store values">
+Destructuring a store loses reactivity. Always access nested values through the store proxy:
+- `const {'{'} name {'}'} = state.user` - breaks
+- `state.user.name` - works
+</Callout>

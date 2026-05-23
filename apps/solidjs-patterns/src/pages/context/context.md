@@ -1,14 +1,22 @@
-<Page
-title="Context"
-badge="State"
-description="createContext and useContext provide a scoped dependency injection mechanism. Context values are available to all descendants without prop drilling."
+<article>
+  <header>
 
->
+# Context
 
-  <Section
-    title="createContext"
-    description="createContext creates a context object with an optional default value. The actual value is provided by a Context.Provider."
-  >
+    <Badge>State</Badge>
+    <Description>
+      createContext and useContext provide a scoped dependency injection mechanism. Context values are available to
+      all descendants without prop drilling.
+    </Description>
+
+  </header>
+
+  <section>
+
+## createContext
+
+createContext creates a context object with an optional default value. The actual value is provided by a
+`Context.Provider`.
 
 ```tsx
 import { createContext, useContext } from 'solid-js';
@@ -32,12 +40,13 @@ function Button() {
 }
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="Context with signals (reactive context)"
-    description="Wrap a signal or store in context to share reactive state without prop drilling."
-  >
+  <section>
+
+## Context with signals
+
+Wrap a signal or store in context to share reactive state without prop drilling.
 
 ```tsx
 import { createContext, createSignal, useContext, type Accessor, type Setter } from 'solid-js';
@@ -73,21 +82,27 @@ export function useCounter(): CounterContextValue {
 }
 ```
 
-  </Section>
+  </section>
 
-  <Section title="Live Demo">
+  <section>
+
+## Live Demo
+
     <ContextDemo />
-  </Section>
+
+  </section>
 
   <Callout type="tip" title="Guard with a custom hook">
     Always create a named hook (e.g. <code>useCounter()</code>) that calls <code>useContext</code> and throws if the
     provider is missing. This gives better error messages than silently returning undefined.
   </Callout>
 
-  <Section
-    title="Context vs signals"
-    description="Use context for values that need to be scoped to a subtree. For truly global state, a module-level signal or store works fine."
-  >
+  <section>
+
+## Context vs signals
+
+Use context for values that need to be scoped to a subtree. For truly global state, a module-level signal or store
+works fine.
 
 ```ts
 // Module-level signal - truly global, no provider needed
@@ -102,5 +117,5 @@ export const ThemeContext = createContext<Theme>('dark');
 // - You want to swap implementations in tests
 ```
 
-  </Section>
-</Page>
+  </section>
+</article>

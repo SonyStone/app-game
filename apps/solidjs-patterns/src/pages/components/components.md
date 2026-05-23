@@ -1,14 +1,21 @@
-<Page
-title="Component Patterns"
-badge="Components"
-description="Best practices for defining props, passing children, splitting props, and building reusable components in SolidJS."
+<article>
+  <header>
 
->
+# Component Patterns
 
-  <Section
-    title="Props & type definitions"
-    description="Use type aliases (not interfaces). For exported components, define props type separately."
-  >
+    <Badge>Components</Badge>
+    <Description>
+      Best practices for defining props, passing children, splitting props, and building reusable components in
+      SolidJS.
+    </Description>
+
+  </header>
+
+  <section>
+
+## Props & type definitions
+
+Use type aliases, not interfaces. For exported components, define the props type separately.
 
 ```tsx
 // Internal component - inline props
@@ -33,12 +40,14 @@ export function Button(props: ButtonProps): JSX.Element {
 }
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="splitProps"
-    description="splitProps separates your component's own props from props to forward. Essential for avoiding unknown DOM attribute warnings."
-  >
+  <section>
+
+## splitProps
+
+splitProps separates your component's own props from props to forward. This is essential for avoiding unknown DOM
+attribute warnings.
 
 ```tsx
 import { splitProps } from 'solid-js';
@@ -60,12 +69,13 @@ export function Input(props: InputProps): JSX.Element {
 }
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="mergeProps - default values"
-    description="mergeProps safely merges props with defaults, preserving reactivity of the original props."
-  >
+  <section>
+
+## mergeProps - default values
+
+mergeProps safely merges props with defaults while preserving the reactivity of the original props.
 
 ```tsx
 import { mergeProps } from 'solid-js';
@@ -91,7 +101,7 @@ export function Card(props: CardProps): JSX.Element {
 // function Card({ title = 'Card', ...props }) { ... }
 ```
 
-  </Section>
+  </section>
 
   <Callout type="danger" title="Never destructure props">
     Destructuring SolidJS props breaks reactivity because JSX accesses property getters lazily. Always use <code>
@@ -99,10 +109,11 @@ export function Card(props: CardProps): JSX.Element {
     </code> or <code>splitProps</code> / <code>mergeProps</code>.
   </Callout>
 
-  <Section
-    title="children helper"
-    description="Use the children() helper when you need to evaluate or inspect children - it memoizes them properly."
-  >
+  <section>
+
+## children helper
+
+Use the `children()` helper when you need to evaluate or inspect children. It memoizes them properly.
 
 ```tsx
 import { children, type JSX } from 'solid-js';
@@ -128,12 +139,13 @@ function Row(props: RowProps): JSX.Element {
 }
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="Component as prop"
-    description="Pass components as props using the Component&lt;Props&gt; type or JSX.Element for static content."
-  >
+  <section>
+
+## Component as prop
+
+Pass components as props using `Component<Props>` for dynamic component values or `JSX.Element` for static content.
 
 ```tsx
 import { type Component, type JSX } from 'solid-js';
@@ -156,5 +168,5 @@ function List<T>(props: ListProps<T>): JSX.Element {
 <List items={users} renderItem={(user) => <UserCard name={user.name} />} />;
 ```
 
-  </Section>
-</Page>
+  </section>
+</article>

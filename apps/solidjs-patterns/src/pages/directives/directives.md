@@ -1,14 +1,22 @@
-<Page
-title="Directives"
-badge="Advanced"
-description="SolidJS directives are functions that run on DOM element creation, providing a clean way to attach imperative behavior."
+<article>
+  <header>
 
->
+# Directives
 
-  <Section
-    title="Creating a directive"
-    description="A directive is a function (el, accessor) where el is the DOM element and accessor returns the value passed to use:directiveName."
-  >
+    <Badge>Advanced</Badge>
+    <Description>
+      SolidJS directives are functions that run on DOM element creation, providing a clean way to attach imperative
+      behavior.
+    </Description>
+
+  </header>
+
+  <section>
+
+## Creating a directive
+
+A directive is a function `(el, accessor)` where `el` is the DOM element and `accessor` returns the value passed to
+`use:directiveName`.
 
 ```tsx
 import { Accessor } from 'solid-js';
@@ -38,12 +46,13 @@ function Dropdown() {
 }
 ```
 
-  </Section>
+</section>
 
-  <Section
-    title="Directives with options"
-    description="Pass an options object or reactive value through the use: prop."
-  >
+  <section>
+
+## Directives with options
+
+Pass an options object or reactive value through the `use:` prop.
 
 ```tsx
 declare module 'solid-js' {
@@ -66,9 +75,13 @@ function tooltip(el: HTMLElement, accessor: Accessor<{ text: string; position?: 
 <button use:tooltip={{ text: 'Save document', position: 'top' }}>Save</button>;
 ```
 
-  </Section>
+  </section>
 
-  <Section title="autoFocus directive" description="A simple directive to focus an element on mount.">
+  <section>
+
+## autoFocus directive
+
+A simple directive to focus an element on mount.
 
 ```tsx
 declare module 'solid-js' {
@@ -89,10 +102,10 @@ function autoFocus(el: HTMLElement, accessor: Accessor<boolean>) {
 <input use:autoFocus={true} placeholder="Auto-focused" />;
 ```
 
-  </Section>
+  </section>
 
   <Callout type="info" title="Import directives to prevent tree-shaking">
     If a directive is imported but only used in JSX (via <code>use:</code>), some bundlers may tree-shake it. Import
     it explicitly: <code>import './directives/clickOutside'</code> or reference it in a variable to keep it alive.
   </Callout>
-</Page>
+</article>

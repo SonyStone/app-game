@@ -1,24 +1,12 @@
 import { createResource, createSignal, Suspense, type JSX } from 'solid-js';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { createPatternMarkdownComponents } from '../markdown-components';
+import { markdownComponents } from '../markdown-components';
 import ResourcesContent from './resources.md?markdown';
 
-// ============================================================================
-// MARK: Resources Page
-// ============================================================================
-
 export default function ResourcesPage(): JSX.Element {
-  return <ResourcesContent components={markdownComponents} />;
+  return <ResourcesContent components={{ ...markdownComponents, ResourceDemo }} />;
 }
-
-const markdownComponents = createPatternMarkdownComponents({
-  ResourceDemo
-});
-
-// ============================================================================
-// MARK: Live Demo
-// ============================================================================
 
 type Post = { id: number; title: string; body: string };
 

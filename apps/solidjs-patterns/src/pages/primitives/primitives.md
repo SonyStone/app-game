@@ -1,14 +1,21 @@
-<Page
-title="Solid Primitives"
-badge="Advanced"
-description="@solid-primitives provides community utilities built on SolidJS reactivity. Covers event listeners, storage, timers, and much more."
+<article>
+  <header>
 
->
+# Solid Primitives
 
-  <Section
-    title="Event listeners"
-    description="Use makeEventListener / createEventListener instead of manual addEventListener for automatic cleanup."
-  >
+    <Badge>Advanced</Badge>
+    <Description>
+      @solid-primitives provides community utilities built on SolidJS reactivity. It covers event listeners, storage,
+      timers, and much more.
+    </Description>
+
+  </header>
+
+  <section>
+
+## Event listeners
+
+Use makeEventListener and createEventListener instead of manual addEventListener for automatic cleanup.
 
 ```tsx
 import { makeEventListener, createEventListener } from '@solid-primitives/event-listener';
@@ -29,9 +36,13 @@ createEventListener(
 );
 ```
 
-  </Section>
+  </section>
 
-  <Section title="Keyboard" description="createKeyHold and createShortcut for keyboard interactions.">
+  <section>
+
+## Keyboard
+
+createKeyHold and createShortcut help with keyboard interactions.
 
 ```tsx
 import { createKeyHold, createShortcut } from '@solid-primitives/keyboard';
@@ -48,12 +59,13 @@ createShortcut(['Control', 'K'], () => {
 <div class={spaceHeld() ? 'zoomed' : ''}> ... </div>;
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="Storage"
-    description="createLocalStorage and createCookieStorage for persistent reactive state."
-  >
+  <section>
+
+## Storage
+
+createLocalStorage and createCookieStorage are useful for persistent reactive state.
 
 ```tsx
 import { makePersisted } from '@solid-primitives/storage';
@@ -67,9 +79,13 @@ const [theme, setTheme] = makePersisted(createSignal<'light' | 'dark'>('dark'), 
 const [prefs, setPrefs] = makePersisted(createStore({ fontSize: 14, lang: 'en' }), { name: 'user-prefs' });
 ```
 
-  </Section>
+  </section>
 
-  <Section title="Bounds & resize" description="createElementBounds for reactive element dimensions.">
+  <section>
+
+## Bounds & resize
+
+createElementBounds gives you reactive element dimensions.
 
 ```tsx
 import { createElementBounds } from '@solid-primitives/bounds';
@@ -86,10 +102,10 @@ function ResponsiveChart(): JSX.Element {
 }
 ```
 
-  </Section>
+  </section>
 
   <Callout type="tip" title="Browse all primitives">
     Over 50 primitives at <a href="https://primitives.solidjs.community">primitives.solidjs.community</a>. Each
     package is independently installable.
   </Callout>
-</Page>
+</article>

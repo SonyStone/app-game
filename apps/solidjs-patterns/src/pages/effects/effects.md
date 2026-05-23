@@ -1,14 +1,22 @@
-<Page
-title="Effects"
-badge="Core"
-description="Effects run side-effects in response to reactive changes. SolidJS provides createEffect, onMount, and onCleanup as the primary tools."
+<article>
+  <header>
 
->
+# Effects
 
-  <Section
-    title="createEffect"
-    description="Runs immediately and re-runs whenever its reactive dependencies change. Not for producing values - use createMemo for that."
-  >
+    <Badge>Core</Badge>
+    <Description>
+      Effects run side-effects in response to reactive changes. SolidJS provides createEffect, onMount, and onCleanup
+      as the primary tools.
+    </Description>
+
+  </header>
+
+  <section>
+
+## createEffect
+
+Runs immediately and re-runs whenever its reactive dependencies change. It is not for producing values, use
+`createMemo` for that.
 
 ```tsx
 import { createSignal, createEffect } from 'solid-js';
@@ -22,12 +30,13 @@ createEffect(() => {
 });
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="onCleanup"
-    description="Registers a cleanup function that runs before the effect re-runs and when the owner disposes."
-  >
+  <section>
+
+## onCleanup
+
+Registers a cleanup function that runs before the effect re-runs and when the owner disposes.
 
 ```tsx
 import { createEffect, onCleanup } from 'solid-js';
@@ -40,12 +49,13 @@ createEffect(() => {
 });
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="onMount / onCleanup in components"
-    description="onMount runs once after the component mounts. Use onCleanup for teardown."
-  >
+  <section>
+
+## onMount / onCleanup in components
+
+onMount runs once after the component mounts. Use onCleanup for teardown.
 
 ```tsx
 import { onMount, onCleanup } from 'solid-js';
@@ -71,7 +81,7 @@ function ResizeWatcher() {
 }
 ```
 
-  </Section>
+  </section>
 
   <Callout type="warning" title="Effects run after render">
     <code>createEffect</code> is scheduled after the DOM has updated. For synchronous tracking during rendering, use <code>
@@ -79,10 +89,12 @@ function ResizeWatcher() {
     </code>.
   </Callout>
 
-  <Section
-    title="on() - explicit dependencies"
-    description="on() lets you specify dependencies explicitly, avoiding implicit tracking. Useful for watching specific signals."
-  >
+  <section>
+
+## on() - explicit dependencies
+
+on() lets you specify dependencies explicitly, avoiding implicit tracking. This is useful for watching specific
+signals.
 
 ```tsx
 import { createSignal, createEffect, on } from 'solid-js';
@@ -111,12 +123,14 @@ createEffect(
 );
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="Tracking context"
-    description="Only code inside a reactive root tracks dependencies. Reading signals outside tracking context (e.g. in async callbacks) won't subscribe."
-  >
+  <section>
+
+## Tracking context
+
+Only code inside a reactive root tracks dependencies. Reading signals outside tracking context, for example in async
+callbacks, will not subscribe.
 
 ```tsx
 import { createSignal, createEffect, untrack } from 'solid-js';
@@ -135,9 +149,13 @@ createEffect(() => {
 });
 ```
 
-  </Section>
+  </section>
 
-  <Section title="Live Demo">
+  <section>
+
+## Live Demo
+
     <EffectsDemo />
-  </Section>
-</Page>
+
+  </section>
+</article>

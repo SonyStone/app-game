@@ -1,14 +1,19 @@
-<Page
-title="Suspense & Lazy"
-badge="Async"
-description="Suspense declaratively handles loading states for async resources. lazy() code-splits components."
+<header>
 
->
+# Suspense & Lazy
 
-  <Section
-    title="Suspense"
-    description="Suspense catches all pending resources in its subtree and shows the fallback until they resolve."
-  >
+<Badge>Async</Badge>
+<Description>
+Suspense declaratively handles loading states for async resources. lazy() code-splits components.
+</Description>
+
+</header>
+
+<section>
+
+## Suspense
+
+Suspense catches all pending resources in its subtree and shows the fallback until they resolve.
 
 ```tsx
 import { Suspense } from 'solid-js';
@@ -21,12 +26,13 @@ import { Suspense } from 'solid-js';
 // Both resolve before rendering children
 ```
 
-  </Section>
+</section>
 
-  <Section
-    title="SuspenseList"
-    description="Coordinates multiple Suspense boundaries, controlling order and revealing strategy."
-  >
+<section>
+
+## SuspenseList
+
+SuspenseList coordinates multiple Suspense boundaries and controls their reveal order.
 
 ```tsx
 import { SuspenseList, Suspense } from 'solid-js';
@@ -46,12 +52,13 @@ import { SuspenseList, Suspense } from 'solid-js';
 // tail: 'hidden' | 'collapsed'
 ```
 
-  </Section>
+</section>
 
-  <Section
-    title="lazy() - code splitting"
-    description="lazy wraps a dynamic import and returns a component that integrates with Suspense."
-  >
+<section>
+
+## lazy() - code splitting
+
+lazy wraps a dynamic import and returns a component that integrates with Suspense.
 
 ```tsx
 import { lazy, Suspense } from 'solid-js';
@@ -73,12 +80,14 @@ function Dashboard() {
 const routes = [{ path: '/dashboard', component: lazy(() => import('./Dashboard')) }];
 ```
 
-  </Section>
+</section>
 
-  <Section
-    title="ErrorBoundary"
-    description="Catches errors thrown in the render tree (including resource errors). Required when using Suspense with fallible resources."
-  >
+<section>
+
+## ErrorBoundary
+
+Catches errors thrown in the render tree, including resource errors. It is required when using Suspense with fallible
+resources.
 
 ```tsx
 import { ErrorBoundary, Suspense } from 'solid-js';
@@ -101,5 +110,4 @@ function App() {
 }
 ```
 
-  </Section>
-</Page>
+</section>

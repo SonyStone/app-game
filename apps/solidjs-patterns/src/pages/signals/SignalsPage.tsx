@@ -1,18 +1,12 @@
 import { createSignal, type JSX } from 'solid-js';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { createPatternMarkdownComponents } from '../markdown-components';
+import { markdownComponents } from '../markdown-components';
 import SignalsContent from './signals.md?markdown';
 
-// ============================================================================
-// MARK: Signals Page
-// ============================================================================
-
 export default function SignalsPage(): JSX.Element {
-  return <SignalsContent components={markdownComponents} />;
+  return <SignalsContent components={{ ...markdownComponents, SignalDemo }} />;
 }
-
-const markdownComponents = createPatternMarkdownComponents({ SignalDemo });
 
 // ============================================================================
 // MARK: Live Demo

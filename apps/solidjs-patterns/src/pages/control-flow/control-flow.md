@@ -1,14 +1,21 @@
-<Page
-title="Control Flow"
-badge="Components"
-description="SolidJS provides built-in control flow components that work with its fine-grained reactivity system more efficiently than JS conditional expressions."
+<article>
+  <header>
 
->
+# Control Flow
 
-  <Section
-    title="Show"
-    description="Conditionally render content. The fallback prop renders when the condition is false."
-  >
+    <Badge>Components</Badge>
+    <Description>
+      SolidJS provides built-in control flow components that work with its fine-grained reactivity system more
+      efficiently than JavaScript conditional expressions.
+    </Description>
+
+  </header>
+
+  <section>
+
+## Show
+
+Conditionally render content. The `fallback` prop renders when the condition is false.
 
 ```tsx
 import { Show } from 'solid-js';
@@ -29,12 +36,14 @@ import { Show } from 'solid-js';
 // Good: <Show when={condition()}><HeavyComponent /></Show>
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="For vs Index"
-    description="For re-creates items when the array changes (key by reference). Index is stable by position - good for static-length arrays."
-  >
+  <section>
+
+## For vs Index
+
+For re-creates items when the array changes by item identity. Index is stable by position, which makes it a better
+fit for fixed-length arrays.
 
 ```tsx
 import { For, Index } from 'solid-js';
@@ -58,9 +67,11 @@ import { For, Index } from 'solid-js';
 </Index>
 ```
 
-  </Section>
+  </section>
 
-  <Section title="Switch / Match">
+  <section>
+
+## Switch / Match
 
 ```tsx
 import { Switch, Match } from 'solid-js';
@@ -79,9 +90,13 @@ import { Switch, Match } from 'solid-js';
 </Switch>;
 ```
 
-  </Section>
+  </section>
 
-  <Section title="Dynamic" description="Render a component or HTML element determined at runtime.">
+  <section>
+
+## Dynamic
+
+Render a component or HTML element determined at runtime.
 
 ```tsx
 import { Dynamic } from 'solid-js/web';
@@ -98,9 +113,13 @@ const widgets = { button: ButtonWidget, input: InputWidget };
 <Dynamic component={widgets[type()]} {...widgetProps} />;
 ```
 
-  </Section>
+  </section>
 
-  <Section title="Live Demo: Show & Switch">
+  <section>
+
+## Live Demo: Show & Switch
+
     <ControlFlowDemo />
-  </Section>
-</Page>
+
+  </section>
+</article>

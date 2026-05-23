@@ -1,23 +1,11 @@
 import { createEffect, createSignal, type JSX } from 'solid-js';
 import { Card } from '../../components/ui/Card';
-import { createPatternMarkdownComponents } from '../markdown-components';
+import { markdownComponents } from '../markdown-components';
 import EffectsContent from './effects.md?markdown';
 
-// ============================================================================
-// MARK: Effects Page
-// ============================================================================
-
 export default function EffectsPage(): JSX.Element {
-  return <EffectsContent components={markdownComponents} />;
+  return <EffectsContent components={{ ...markdownComponents, EffectsDemo }} />;
 }
-
-const markdownComponents = createPatternMarkdownComponents({
-  EffectsDemo
-});
-
-// ============================================================================
-// MARK: Live Demo
-// ============================================================================
 
 function EffectsDemo(): JSX.Element {
   const [logs, setLogs] = createSignal<string[]>([]);

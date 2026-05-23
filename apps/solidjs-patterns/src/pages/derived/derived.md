@@ -1,14 +1,22 @@
-<Page
-title="Derived & Memo"
-badge="Core"
-description="createMemo creates a derived reactive value that re-runs only when its dependencies change. Results are memoized - multiple reads return the cached value."
+<article>
+  <header>
 
->
+# Derived & Memo
 
-  <Section
-    title="createMemo"
-    description="Memo tracks its reactive dependencies automatically. It only re-runs when a dependency changes, and caches the result between updates."
-  >
+    <Badge>Core</Badge>
+    <Description>
+      createMemo creates a derived reactive value that re-runs only when its dependencies change. Results are memoized
+      and multiple reads return the cached value.
+    </Description>
+
+  </header>
+
+  <section>
+
+## createMemo
+
+Memo tracks its reactive dependencies automatically. It only re-runs when a dependency changes and caches the result
+between updates.
 
 ```tsx
 import { createMemo, createSignal } from 'solid-js';
@@ -24,16 +32,22 @@ setFirstName('Jane');
 console.log(fullName()); // "Jane Doe" - recomputed
 ```
 
-  </Section>
+  </section>
 
-  <Section title="Live Demo">
+  <section>
+
+## Live Demo
+
     <MemoDemo />
-  </Section>
 
-  <Section
-    title="Memo vs Inline Expression"
-    description="Use memo when the computation is expensive or when the result is read multiple times. Inline expressions recompute on each read."
-  >
+  </section>
+
+  <section>
+
+## Memo vs Inline Expression
+
+Use memo when the computation is expensive or when the result is read multiple times. Inline expressions recompute on
+each read.
 
 ```tsx
 import { createMemo, createSignal } from 'solid-js';
@@ -53,14 +67,18 @@ return (
 );
 ```
 
-  </Section>
+  </section>
 
   <Callout type="tip" title="Memo = derived signal">
     Think of <code>createMemo</code> as a read-only signal whose value is derived from other reactive sources. It
     returns a getter just like <code>createSignal</code>.
   </Callout>
 
-  <Section title="Chained Memos" description="Memos can depend on other memos, forming a reactive dependency graph.">
+  <section>
+
+## Chained Memos
+
+Memos can depend on other memos, forming a reactive dependency graph.
 
 ```tsx
 import { createMemo, createSignal } from 'solid-js';
@@ -77,12 +95,13 @@ const total = createMemo(() => subtotal() - discountAmt());
 console.log(total());
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="Memo with equals"
-    description="Control when downstream effects are notified by providing a custom equality check."
-  >
+  <section>
+
+## Memo with equals
+
+Control when downstream effects are notified by providing a custom equality check.
 
 ```tsx
 import { createMemo, createSignal } from 'solid-js';
@@ -97,5 +116,5 @@ const position = createMemo(() => ({ x: data().x, y: data().y }), undefined, {
 console.log(position());
 ```
 
-  </Section>
-</Page>
+  </section>
+</article>

@@ -1,14 +1,22 @@
-<Page
-title="Resources"
-badge="Async"
-description="createResource integrates async data fetching into SolidJS reactivity. It works with Suspense and ErrorBoundary automatically."
+<article>
+  <header>
 
->
+# Resources
 
-  <Section
-    title="createResource basics"
-    description="createResource takes an optional source signal and a fetcher function. It returns a reactive resource with loading/error states."
-  >
+    <Badge>Async</Badge>
+    <Description>
+      createResource integrates async data fetching into SolidJS reactivity. It works with Suspense and ErrorBoundary
+      automatically.
+    </Description>
+
+  </header>
+
+  <section>
+
+## createResource basics
+
+createResource takes an optional source signal and a fetcher function. It returns a reactive resource with loading and
+error states.
 
 ```tsx
 import { createResource, createSignal } from 'solid-js';
@@ -28,12 +36,13 @@ user.error; // error if last fetch threw
 user.state; // 'unresolved' | 'pending' | 'ready' | 'refreshing' | 'errored'
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="With Suspense"
-    description="Wrap resource consumers in Suspense to declaratively show loading states."
-  >
+  <section>
+
+## With Suspense
+
+Wrap resource consumers in Suspense to declaratively show loading states.
 
 ```tsx
 import { createResource, Suspense } from 'solid-js';
@@ -56,16 +65,21 @@ function App() {
 }
 ```
 
-  </Section>
+  </section>
 
-  <Section title="Live Demo">
+  <section>
+
+## Live Demo
+
     <ResourceDemo />
-  </Section>
 
-  <Section
-    title="refetch and mutate"
-    description="refetch re-runs the fetcher. mutate lets you update the resource value optimistically without a network call."
-  >
+  </section>
+
+  <section>
+
+## refetch and mutate
+
+refetch re-runs the fetcher. mutate lets you update the resource value optimistically without a network call.
 
 ```tsx
 const [todos, { refetch, mutate }] = createResource(fetchTodos);
@@ -80,10 +94,10 @@ function deleteTodo(id: number) {
 <button onClick={refetch}>↺ Refresh</button>;
 ```
 
-  </Section>
+  </section>
 
   <Callout type="tip" title="initialValue">
     Pass <code>initialValue</code> in options to start with known data (e.g. SSR). The resource will be in 'ready'
     state immediately and Suspense won't trigger on first render.
   </Callout>
-</Page>
+</article>

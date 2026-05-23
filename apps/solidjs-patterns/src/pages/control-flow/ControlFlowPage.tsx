@@ -2,24 +2,12 @@ import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { createPatternMarkdownComponents } from '../markdown-components';
+import { markdownComponents } from '../markdown-components';
 import ControlFlowContent from './control-flow.md?markdown';
 
-// ============================================================================
-// MARK: Control Flow Page
-// ============================================================================
-
 export default function ControlFlowPage(): JSX.Element {
-  return <ControlFlowContent components={markdownComponents} />;
+  return <ControlFlowContent components={{ ...markdownComponents, ControlFlowDemo }} />;
 }
-
-const markdownComponents = createPatternMarkdownComponents({
-  ControlFlowDemo
-});
-
-// ============================================================================
-// MARK: Live Demo
-// ============================================================================
 
 type Status = 'idle' | 'loading' | 'success' | 'error';
 

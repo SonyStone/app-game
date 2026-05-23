@@ -1,12 +1,54 @@
 import { For, type JSX } from 'solid-js';
 import { Badge } from '../../components/ui/Badge';
 import { Card } from '../../components/ui/Card';
-import { createPatternMarkdownComponents } from '../markdown-components';
+import { markdownComponents } from '../markdown-components';
 import OwnerComputationContent from './owner-computation.md?markdown';
 
-// ============================================================================
-// MARK: Types
-// ============================================================================
+export default function OwnerComputationPage(): JSX.Element {
+  return (
+    <OwnerComputationContent
+      components={{
+        ...markdownComponents,
+        PrimitiveGrid(): JSX.Element {
+          return (
+            <div class="grid gap-3 lg:grid-cols-2">
+              <For each={PRIMITIVE_NOTES}>{(note) => <PrimitiveCard note={note} />}</For>
+            </div>
+          );
+        },
+        ShortVersionCard(): JSX.Element {
+          return (
+            <Card class="flex flex-col gap-2 text-base leading-6 dark:text-slate-300">
+              <div>
+                <span class="font-semibold text-slate-100">Short version:</span> computations create child owners, but
+                not every owner is a computation.
+              </div>
+            </Card>
+          );
+        },
+        ReferenceCard(props: { children: JSX.Element }): JSX.Element {
+          return (
+            <ul class="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900 p-4">{props.children}</ul>
+          );
+        },
+        ReferenceLink(props: { href: string; children: JSX.Element }): JSX.Element {
+          return (
+            <li>
+              <a
+                href={props.href}
+                target="_blank"
+                rel="noreferrer"
+                class="text-base text-violet-300 underline decoration-violet-800 underline-offset-4 transition-colors hover:text-violet-200"
+              >
+                {props.children}
+              </a>
+            </li>
+          );
+        }
+      }}
+    />
+  );
+}
 
 type PrimitiveNote = {
   name: string;
@@ -14,55 +56,6 @@ type PrimitiveNote = {
   timing: string;
   summary: string;
 };
-
-// ============================================================================
-// MARK: Owner & Computation Page
-// ============================================================================
-
-export default function OwnerComputationPage(): JSX.Element {
-  return <OwnerComputationContent components={markdownComponents} />;
-}
-
-const markdownComponents = createPatternMarkdownComponents({
-  PrimitiveGrid(): JSX.Element {
-    return (
-      <div class="grid gap-3 lg:grid-cols-2">
-        <For each={PRIMITIVE_NOTES}>{(note) => <PrimitiveCard note={note} />}</For>
-      </div>
-    );
-  },
-  ShortVersionCard(): JSX.Element {
-    return (
-      <Card class="flex flex-col gap-2 text-base leading-6 dark:text-slate-300">
-        <div>
-          <span class="font-semibold text-slate-100">Short version:</span> computations create child owners, but not
-          every owner is a computation.
-        </div>
-      </Card>
-    );
-  },
-  ReferenceCard(props: { children: JSX.Element }): JSX.Element {
-    return <ul class="flex flex-col gap-2 rounded-xl border border-slate-800 bg-slate-900 p-4">{props.children}</ul>;
-  },
-  ReferenceLink(props: { href: string; children: JSX.Element }): JSX.Element {
-    return (
-      <li>
-        <a
-          href={props.href}
-          target="_blank"
-          rel="noreferrer"
-          class="text-base text-violet-300 underline decoration-violet-800 underline-offset-4 transition-colors hover:text-violet-200"
-        >
-          {props.children}
-        </a>
-      </li>
-    );
-  }
-});
-
-// ============================================================================
-// MARK: Sub-Components
-// ============================================================================
 
 function PrimitiveCard(props: { note: PrimitiveNote }): JSX.Element {
   return (
@@ -76,10 +69,6 @@ function PrimitiveCard(props: { note: PrimitiveNote }): JSX.Element {
     </Card>
   );
 }
-
-// ============================================================================
-// MARK: Data
-// ============================================================================
 
 const PRIMITIVE_NOTES: PrimitiveNote[] = [
   {

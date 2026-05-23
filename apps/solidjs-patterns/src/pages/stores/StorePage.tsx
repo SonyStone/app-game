@@ -2,24 +2,12 @@ import { For, type JSX } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { createPatternMarkdownComponents } from '../markdown-components';
+import { markdownComponents } from '../markdown-components';
 import StoreContent from './stores.md?markdown';
 
-// ============================================================================
-// MARK: Store Page
-// ============================================================================
-
 export default function StorePage(): JSX.Element {
-  return <StoreContent components={markdownComponents} />;
+  return <StoreContent components={{ ...markdownComponents, StoreDemo }} />;
 }
-
-const markdownComponents = createPatternMarkdownComponents({
-  StoreDemo
-});
-
-// ============================================================================
-// MARK: Live Demo
-// ============================================================================
 
 type Todo = { id: number; text: string; done: boolean };
 

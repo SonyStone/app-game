@@ -1,24 +1,11 @@
 import { batch, createEffect, createSignal, type JSX } from 'solid-js';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { createPatternMarkdownComponents } from '../markdown-components';
 import BatchingContent from './batching.md?markdown';
 
-// ============================================================================
-// MARK: Batching Page
-// ============================================================================
-
 export default function BatchingPage(): JSX.Element {
-  return <BatchingContent components={markdownComponents} />;
+  return <BatchingContent components={{ ...markdownComponents, BatchDemo }} />;
 }
-
-const markdownComponents = createPatternMarkdownComponents({
-  BatchDemo
-});
-
-// ============================================================================
-// MARK: Live Demo
-// ============================================================================
 
 function BatchDemo(): JSX.Element {
   const [x, setX] = createSignal(0);

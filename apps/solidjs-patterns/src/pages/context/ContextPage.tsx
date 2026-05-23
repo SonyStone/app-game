@@ -1,24 +1,12 @@
 import { createContext, createSignal, useContext, type JSX } from 'solid-js';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { createPatternMarkdownComponents } from '../markdown-components';
+import { markdownComponents } from '../markdown-components';
 import ContextContent from './context.md?markdown';
 
-// ============================================================================
-// MARK: Context Page
-// ============================================================================
-
 export default function ContextPage(): JSX.Element {
-  return <ContextContent components={markdownComponents} />;
+  return <ContextContent components={{ ...markdownComponents, ContextDemo }} />;
 }
-
-const markdownComponents = createPatternMarkdownComponents({
-  ContextDemo
-});
-
-// ============================================================================
-// MARK: Live Demo
-// ============================================================================
 
 type CounterCtx = { count: () => number; inc: () => void; dec: () => void };
 const DemoContext = createContext<CounterCtx>();

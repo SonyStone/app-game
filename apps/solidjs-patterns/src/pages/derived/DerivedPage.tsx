@@ -1,24 +1,12 @@
 import { createMemo, createSignal, type JSX } from 'solid-js';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import { createPatternMarkdownComponents } from '../markdown-components';
+import { markdownComponents } from '../markdown-components';
 import DerivedContent from './derived.md?markdown';
 
-// ============================================================================
-// MARK: Derived Page
-// ============================================================================
-
 export default function DerivedPage(): JSX.Element {
-  return <DerivedContent components={markdownComponents} />;
+  return <DerivedContent components={{ ...markdownComponents, MemoDemo }} />;
 }
-
-const markdownComponents = createPatternMarkdownComponents({
-  MemoDemo
-});
-
-// ============================================================================
-// MARK: Live Demo
-// ============================================================================
 
 function MemoDemo(): JSX.Element {
   const [a, setA] = createSignal(3);

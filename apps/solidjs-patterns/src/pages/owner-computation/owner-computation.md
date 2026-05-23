@@ -1,19 +1,29 @@
-<Page
-title="Owner & Computation"
-badge="Advanced"
-description="A mental model for SolidJS internals: owner scopes, computation nodes, and how the main reactive primitives fit together."
+<article>
+  <header>
 
->   <Callout type="info" title="Start with two graphs, not one">
+# Owner & Computation
+
+    <Badge>Advanced</Badge>
+    <Description>
+      A mental model for SolidJS internals: owner scopes, computation nodes, and how the main reactive primitives fit
+      together.
+    </Description>
+
+  </header>
+
+  <Callout type="info" title="Start with two graphs, not one">
 
     Solid maintains both an ownership tree and a dependency graph. They are closely related, but they solve different
     problems: owners manage scope, cleanup, and context; computations manage reactive execution.
 
   </Callout>
 
-  <Section
-    title="Owner"
-    description="An owner is a scope node in Solid's ownership tree. It links parent/child scopes, cleanup callbacks, and context."
-  >
+  <section>
+
+## Owner
+
+An owner is a scope node in Solid's ownership tree. It links parent and child scopes, cleanup callbacks, and context.
+
     An owner is not necessarily a computation. Think of it as the scope object that ties together lifecycle, context
     propagation, and cleanup chains. It points to its parent through <code>owner</code>, its child scopes through <code>
       owned
@@ -33,12 +43,15 @@ export interface Owner {
 }
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="Computation"
-    description="A computation is an owner plus reactive execution state: a function to run, dependencies to track, and cached state to update."
-  >
+  <section>
+
+## Computation
+
+A computation is an owner plus reactive execution state: a function to run, dependencies to track, and cached state to
+update.
+
     Every <code>createEffect</code>, <code>createMemo</code>, and <code>createComputed</code> creates its own
     computation node. That node stores the function, dependency list, current state, and most recent value.
 
@@ -61,24 +74,29 @@ export interface Computation<Init, Next extends Init = Init> extends Owner {
 }
 ```
 
-  </Section>
+  </section>
 
   <Callout type="tip" title="A useful rule of thumb">
     Owners answer "who owns this scope?" and computations answer "what should re-run when dependencies change?" Many
     nodes participate in both structures, but the roles are still distinct.
   </Callout>
 
-  <Section
-    title="How common primitives map onto computations"
-    description="The main difference between these primitives is when they run and whether they are considered pure."
-  >
-    <PrimitiveGrid />
-  </Section>
+  <section>
 
-  <Section
-    title="createSelector"
-    description="createSelector is useful when many subscribers care about whether one key matches the current selection."
-  >
+## How common primitives map onto computations
+
+The main difference between these primitives is when they run and whether they are considered pure.
+
+    <PrimitiveGrid />
+
+  </section>
+
+  <section>
+
+## createSelector
+
+createSelector is useful when many subscribers care about whether one key matches the current selection.
+
     Each subscriber only reacts when its key starts matching or stops matching. For large selectable lists, that is
     much cheaper than making every item recompute a generic equality check on every update.
 
@@ -88,12 +106,15 @@ const isSelected = createSelector(selectedId);
 <For each={list()}>{(item) => <li classList={{ active: isSelected(item.id) }}>{item.name}</li>}</For>;
 ```
 
-  </Section>
+  </section>
 
-  <Section
-    title="createRoot"
-    description="createRoot creates a new owner scope without creating a computation node. It establishes ownership, not a new reactive effect."
-  >
+  <section>
+
+## createRoot
+
+createRoot creates a new owner scope without creating a computation node. It establishes ownership, not a new
+reactive effect.
+
     It helps to read the API surface this way: <code>createEffect</code> creates a computation, while <code>
       createRoot
     </code> creates a scope. Computations become children of their owner all the way up to a root owner created by <code>
@@ -105,9 +126,14 @@ const isSelected = createSelector(selectedId);
 
     <ShortVersionCard />
 
-  </Section>
+  </section>
 
-  <Section title="References" description="Primary sources for the internal details summarized above.">
+  <section>
+
+## References
+
+Primary sources for the internal details summarized above.
+
     <ReferenceCard>
       <ReferenceLink href="https://github.com/solidjs/solid/blob/a5b51fe200fd59a158410f4008677948fec611d9/packages/solid/src/reactive/signal.ts#L95">
         Owner and computation source
@@ -137,5 +163,6 @@ const isSelected = createSelector(selectedId);
         catchError docs
       </ReferenceLink>
     </ReferenceCard>
-  </Section>
-</Page>
+
+  </section>
+</article>

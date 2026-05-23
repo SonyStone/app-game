@@ -1,14 +1,22 @@
-<Page
-title="Batching & Untrack"
-badge="Core"
-description="batch() groups multiple signal updates into a single notification. untrack() reads reactive values without creating a dependency."
+<article>
+  <header>
 
->
+# Batching & Untrack
 
-  <Section
-    title="batch()"
-    description="Without batch, each setX() call triggers separate effect runs. batch defers notifications until the function completes."
-  >
+    <Badge>Core</Badge>
+    <Description>
+      batch() groups multiple signal updates into a single notification. untrack() reads reactive values without
+      creating a dependency.
+    </Description>
+
+  </header>
+
+  <section>
+
+## batch()
+
+Without batch, each setX() call triggers separate effect runs. batch defers notifications until the function
+completes.
 
 ```ts
 import { batch, createEffect, createSignal } from 'solid-js';
@@ -29,16 +37,21 @@ batch(() => {
 }); // effect: 2, 2 (single run)
 ```
 
-  </Section>
+  </section>
 
-  <Section title="Live Demo: batch">
+  <section>
+
+## Live Demo: batch
+
     <BatchDemo />
-  </Section>
 
-  <Section
-    title="untrack()"
-    description="Reads reactive values without subscribing. Use inside effects or memos to access data without triggering re-runs."
-  >
+  </section>
+
+  <section>
+
+## untrack()
+
+Reads reactive values without subscribing. Use inside effects or memos to access data without triggering re-runs.
 
 ```ts
 import { createSignal, createEffect, untrack } from 'solid-js';
@@ -56,7 +69,7 @@ createEffect(() => {
 });
 ```
 
-  </Section>
+  </section>
 
   <Callout type="info" title="batch is automatic in event handlers">
     SolidJS automatically batches updates in DOM event handlers (onClick, onInput, etc.). You only need explicit <code>
@@ -64,10 +77,11 @@ createEffect(() => {
     </code> for async contexts like setTimeout, fetch callbacks, or WebSocket handlers.
   </Callout>
 
-  <Section
-    title="Practical: multi-field form reset"
-    description="batch is ideal for resetting multiple fields at once without intermediate effect runs."
-  >
+  <section>
+
+## Practical: multi-field form reset
+
+batch is ideal for resetting multiple fields at once without intermediate effect runs.
 
 ```ts
 const [name, setName] = createSignal('');
@@ -84,5 +98,5 @@ function resetForm() {
 }
 ```
 
-  </Section>
-</Page>
+  </section>
+</article>
