@@ -2,11 +2,8 @@ import { type JSX } from 'solid-js';
 import { template } from 'solid-js/web';
 import { CodeBlock } from '../../components/CodeBlock';
 import { Callout } from '../../components/PatternLayout';
-import componentHtml, { code as componentCode, language as componentLanguage } from '../pass-data/component?shiki';
-import example1Html, {
-  code as example1Code,
-  language as example1Language
-} from '../pass-data/pass-data-example-1?shiki';
+import componentHtml, { code as componentCode, language as componentLanguage } from './component?shiki';
+import example1Html, { code as example1Code, language as example1Language } from './pass-data-example-1?shiki';
 
 export const components = {
   h2(props: JSX.IntrinsicElements['h2']): JSX.Element {

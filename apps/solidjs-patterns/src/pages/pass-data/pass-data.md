@@ -1,4 +1,4 @@
-# Pass Data [Components]
+# Pass Data
 
 <Description>
 Practical ways to move data and behavior through a SolidJS component tree: props, refs, polymorphic components, context, resolved children, and shared roots.
@@ -7,8 +7,6 @@ Practical ways to move data and behavior through a SolidJS component tree: props
 ## Props preserve reactivity
 
 Props can hold either plain values or getter-backed properties, so Solid can defer reads until the child actually accesses them.
-
----
 
 A component receives a props object through a call like `Comp(props)`. When a prop comes from a signal or another getter, Solid tries to keep that access lazy instead of eagerly reading it at the call site.
 
@@ -132,7 +130,7 @@ During HMR, editing a provider can sometimes leave descendants temporarily detac
 
 children(() => props.children) normalizes incoming JSX so you can work with the resolved result instead of an opaque prop.
 
-The `children` helper recursively unwraps child functions until it reaches concrete JSX values: DOM nodes, strings, numbers, booleans, `null`, or`undefined`.
+The `children` helper recursively unwraps child functions until it reaches concrete JSX values: DOM nodes, strings, numbers, booleans, `null`, or `undefined`.
 
 This is useful when a component needs to normalize its children once and then treat them like regular data.
 

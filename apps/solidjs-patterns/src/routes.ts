@@ -18,9 +18,6 @@ export const routes = {
 
     // testing different approaches to rendering markdown/json/html content with interactive components
     { path: '/pass-data', component: lazy(() => import('./pages/pass-data/PassDataPage')) },
-    { path: '/pass-data-2', component: lazy(() => import('./pages/pass-data/PassDataPage2')) },
-    { path: '/pass-data-3', component: lazy(() => import('./pages/pass-data/PassDataPage3')) },
-    { path: '/pass-data-4', component: lazy(() => import('./pages/pass-data/PassDataPage4')) },
     { path: '/pass-data-markdown', component: lazy(() => import('./pages/pass-data-markdown/PassDataMarkdownPage')) },
     { path: '/pass-data-mdx', component: lazy(() => import('./pages/pass-data-mdx/PassDataMdxPage')) },
     { path: '/pass-data-mdx-2', component: lazy(() => import('./pages/pass-data-mdx/PassDataMdxPage2')) },
