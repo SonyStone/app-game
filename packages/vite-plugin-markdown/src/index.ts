@@ -1,45 +1,21 @@
-import { createShikiRenderer, normalizeShikiLanguage, type ShikiRendererOptions } from '@app-game/vite-plugin-shiki';
+import { type ShikiRendererOptions } from '@app-game/vite-plugin-shiki';
 import type { MarkdownExit, MarkdownExitOptions } from 'markdown-exit';
 import { createMarkdownExit } from 'markdown-exit';
 import { readFile } from 'node:fs/promises';
 import type { Plugin } from 'vite';
+import { markdownComponentModulePlugin } from './markdownComponentModulePlugin';
+import {
+  getMarkdownComponentNodes,
+  markdownComponentPlugin,
+  type MarkdownComponentNode
+} from './markdownComponentPlugin';
+import type { MarkdownModulePlugin, MarkdownNodePlugin } from './markdownPipeline';
+import { createMarkdownShikiPlugin } from './markdownShikiPlugin';
 
 const DEFAULT_QUERY = 'markdown';
 const DEFAULT_PREFIX = '\0markdown:';
 
 type MarkdownExitOptionsArgument = MarkdownExitOptions;
-
-type MarkdownCodeBlock = {
-  type: 'codeblock';
-  code: string;
-  language?: string;
-  meta?: string;
-  html: string;
-};
-
-type MarkdownComponentNode =
-  | {
-      type: 'text';
-      value: string;
-    }
-  | {
-      type: 'element';
-      tag: string;
-      attrs?: Record<string, string>;
-      children: MarkdownComponentNode[];
-    }
-  | {
-      type: 'codeblock';
-      code: string;
-      language?: string;
-      meta?: string;
-      html: string;
-      title?: string;
-    }
-  | {
-      type: 'html';
-      html: string;
-    };
 
 export type MarkdownRenderPluginOptions = {
   query?: string;
@@ -57,6 +33,8 @@ export function vitePluginMarkdown(options: MarkdownRenderPluginOptions = {}): P
   const queryKey = options.query ?? DEFAULT_QUERY;
   const prefix = options.prefix ?? DEFAULT_PREFIX;
   const pluginName = options.pluginName ?? 'vite-plugin-markdown';
+  const nodePlugins = createMarkdownNodePlugins(options);
+  const modulePlugin = markdownComponentModulePlugin;
 
   let markdownRendererPromise: Promise<MarkdownExit> | undefined;
   const virtualIdsByFile = new Map<string, Set<string>>();
@@ -99,10 +77,9 @@ export function vitePluginMarkdown(options: MarkdownRenderPluginOptions = {}): P
 
       const markdownRaw = await readFile(filePath, 'utf8');
       const renderer = await (markdownRendererPromise ??= createRenderer(options));
-      const nodes = await createMarkdownComponentNodes(markdownRaw, renderer);
+      const nodes = await createMarkdownComponentNodes(markdownRaw, renderer, nodePlugins);
 
-      return createMarkdownComponentModule({
-        markdown: markdownRaw,
+      return renderMarkdownComponentModule(modulePlugin, {
         nodes
       });
     },
@@ -127,27 +104,21 @@ export function vitePluginMarkdown(options: MarkdownRenderPluginOptions = {}): P
   };
 }
 
-async function createRenderer(options: MarkdownRenderPluginOptions): Promise<MarkdownExit> {
-  const shikiRenderer = createShikiRenderer({
-    themes: options.themes,
-    supportedLanguages: options.supportedLanguages,
-    defaultLanguage: options.defaultLanguage
-  });
-  const markdownOptions: MarkdownExitOptionsArgument = {
-    html: true,
-    ...options.markdownOptions,
-    highlight:
-      options.markdownOptions?.highlight ??
-      (async (code: string, language?: string) => {
-        const result = await shikiRenderer.highlight(code, {
-          language: normalizeShikiLanguage(language),
-          theme: options.theme
-        });
+export {
+  createMarkdownShikiPlugin,
+  markdownComponentModulePlugin,
+  markdownComponentPlugin,
+  type MarkdownComponentNode
+};
 
-        return result.html;
-      })
+async function createRenderer(options: MarkdownRenderPluginOptions): Promise<MarkdownExit> {
+  const markdownOptions: MarkdownExitOptionsArgument = {
+    html: false,
+    ...options.markdownOptions
   };
   const renderer = createMarkdownExit(markdownOptions);
+
+  renderer.use(markdownComponentPlugin);
 
   await options.configureMarkdown?.(renderer);
 
@@ -156,7 +127,8 @@ async function createRenderer(options: MarkdownRenderPluginOptions): Promise<Mar
 
 async function createMarkdownComponentNodes(
   markdown: string,
-  renderer: MarkdownExit
+  renderer: MarkdownExit,
+  nodePlugins: readonly MarkdownNodePlugin[]
 ): Promise<MarkdownComponentNode[]> {
   const tokens = renderer.parse(markdown, {});
   const root: { children: MarkdownComponentNode[] } = { children: [] };
@@ -169,8 +141,15 @@ async function createMarkdownComponentNodes(
       continue;
     }
 
+    const pluginNodes = await resolveTokenNodes(nodePlugins, token, { renderer });
+
+    if (pluginNodes) {
+      current?.children.push(...pluginNodes);
+      continue;
+    }
+
     if (token.type === 'inline') {
-      current?.children.push(...createInlineNodes(token.children ?? []));
+      current?.children.push(...(getMarkdownComponentNodes(token) ?? createInlineNodes(token.children ?? [])));
       continue;
     }
 
@@ -180,7 +159,7 @@ async function createMarkdownComponentNodes(
     }
 
     if (token.type === 'html_block') {
-      current?.children.push(...createHtmlLikeNodes(token.content));
+      current?.children.push(...(getMarkdownComponentNodes(token) ?? [{ type: 'html', html: token.content }]));
       continue;
     }
 
@@ -207,111 +186,41 @@ async function createMarkdownComponentNodes(
     }
   }
 
-  return root.children;
+  return normalizeMarkdownComponentNodes(root.children);
 }
 
-function createMarkdownComponentModule(options: { markdown: string; nodes: MarkdownComponentNode[] }): string {
+function createMarkdownNodePlugins(options: MarkdownRenderPluginOptions): readonly MarkdownNodePlugin[] {
   return [
-    `import { createComponent } from 'solid-js';`,
-    `import { Dynamic, template } from 'solid-js/web';`,
-    ``,
-    `function _DefaultHtmlBlock(props) { return template(props.html)(); }`,
-    `function _DefaultShikiCodeBlock(props) { return template(props.html)(); }`,
-    `export default function MarkdownContent(props = {}) {`,
-    `  const components = props.components ?? {};`,
-    `  const content = ${createChildrenExpression(options.nodes)};`,
-    `  const Wrapper = components.wrapper;`,
-    `  if (!Wrapper) {`,
-    `    return content;`,
-    `  }`,
-    `  return createComponent(Dynamic, {`,
-    `    component: Wrapper,`,
-    `    get children() {`,
-    `      return content;`,
-    `    }`,
-    `  });`,
-    `}`
-  ].join('\n');
+    createMarkdownShikiPlugin({
+      theme: options.theme,
+      themes: options.themes,
+      supportedLanguages: options.supportedLanguages,
+      defaultLanguage: options.defaultLanguage
+    })
+  ];
 }
 
-function createChildrenExpression(nodes: MarkdownComponentNode[]): string {
-  if (nodes.length === 0) {
-    return 'undefined';
-  }
-
-  if (nodes.length === 1) {
-    return createNodeExpression(nodes[0]);
-  }
-
-  return `[${nodes.map((node) => createNodeExpression(node)).join(', ')}]`;
+function renderMarkdownComponentModule(
+  modulePlugin: MarkdownModulePlugin,
+  options: { nodes: MarkdownComponentNode[] }
+): string {
+  return modulePlugin.renderModule(options);
 }
 
-function createNodeExpression(node: MarkdownComponentNode): string {
-  switch (node.type) {
-    case 'text':
-      return JSON.stringify(node.value);
-    case 'html':
-      return `createComponent(Dynamic, { component: components.HtmlBlock ?? _DefaultHtmlBlock, html: ${JSON.stringify(node.html)} })`;
-    case 'codeblock':
-      return [
-        `createComponent(Dynamic, {`,
-        `component: components.ShikiCodeBlock ?? components.CodeBlock ?? _DefaultShikiCodeBlock,`,
-        `code: ${JSON.stringify(node.code)},`,
-        `language: ${serializeOptionalValue(node.language)},`,
-        `html: ${JSON.stringify(node.html)},`,
-        `meta: ${serializeOptionalValue(node.meta)},`,
-        `title: ${serializeOptionalValue(node.title)}`,
-        `})`
-      ].join(' ');
-    case 'element': {
-      const properties = [`component: components[${JSON.stringify(node.tag)}] ?? ${JSON.stringify(node.tag)}`];
+async function resolveTokenNodes(
+  nodePlugins: readonly MarkdownNodePlugin[],
+  token: ReturnType<MarkdownExit['parse']>[number],
+  context: { renderer: MarkdownExit }
+): Promise<MarkdownComponentNode[] | undefined> {
+  for (const plugin of nodePlugins) {
+    const nodes = await plugin.resolveNodes(token, context);
 
-      for (const [key, value] of Object.entries(node.attrs ?? {})) {
-        properties.push(`${JSON.stringify(key)}: ${JSON.stringify(value)}`);
-      }
-
-      if (node.children.length > 0) {
-        properties.push(`get children() { return ${createChildrenExpression(node.children)}; }`);
-      }
-
-      return `createComponent(Dynamic, { ${properties.join(', ')} })`;
+    if (nodes) {
+      return nodes;
     }
   }
-}
 
-function serializeOptionalValue(value: string | undefined): string {
-  return value == null ? 'undefined' : JSON.stringify(value);
-}
-
-async function createCodeBlock(
-  token: ReturnType<MarkdownExit['parse']>[number],
-  renderer: MarkdownExit
-): Promise<MarkdownCodeBlock> {
-  const [rawLanguage = '', ...metaParts] = token.info.trim().split(/\s+/).filter(Boolean);
-
-  return {
-    type: 'codeblock',
-    code: token.content,
-    language: normalizeShikiLanguage(rawLanguage) ?? (rawLanguage || undefined),
-    meta: metaParts.length > 0 ? metaParts.join(' ') : undefined,
-    html: await renderer.renderer.renderAsync([token], renderer.options, {})
-  };
-}
-
-async function createCodeBlockNode(
-  token: ReturnType<MarkdownExit['parse']>[number],
-  renderer: MarkdownExit
-): Promise<MarkdownComponentNode> {
-  const block = await createCodeBlock(token, renderer);
-
-  return {
-    type: 'codeblock',
-    code: block.code,
-    language: block.language,
-    meta: block.meta,
-    html: block.html,
-    title: extractTitleFromMeta(block.meta)
-  };
+  return undefined;
 }
 
 function createInlineNodes(
@@ -352,7 +261,7 @@ function createInlineNodes(
     }
 
     if (token.type === 'html_inline') {
-      current?.children.push(...createHtmlLikeNodes(token.content));
+      current?.children.push({ type: 'html', html: token.content });
       continue;
     }
 
@@ -400,303 +309,37 @@ function createSelfClosingElementNode(token: ReturnType<MarkdownExit['parse']>[n
   };
 }
 
-function createHtmlLikeNodes(html: string): MarkdownComponentNode[] {
-  const parsedNodes = parseComponentHtml(html);
-
-  if (parsedNodes) {
-    return parsedNodes;
-  }
-
-  return [{ type: 'html', html }];
-}
-
-function parseComponentHtml(source: string): MarkdownComponentNode[] | undefined {
-  const root: { children: MarkdownComponentNode[] } = { children: [] };
-  const stack: Array<{ tag?: string; children: MarkdownComponentNode[] }> = [root];
-  let cursor = 0;
-  let foundComponent = false;
-
-  while (cursor < source.length) {
-    const nextTagIndex = source.indexOf('<', cursor);
-
-    if (nextTagIndex === -1) {
-      appendTextNode(stack[stack.length - 1]?.children, source.slice(cursor));
-      break;
-    }
-
-    if (nextTagIndex > cursor) {
-      appendTextNode(stack[stack.length - 1]?.children, source.slice(cursor, nextTagIndex));
-    }
-
-    const parsedTag = parseHtmlTag(source, nextTagIndex);
-
-    if (!parsedTag) {
-      return undefined;
-    }
-
-    cursor = parsedTag.endIndex;
-
-    if (parsedTag.kind === 'close') {
-      const openNode = stack.pop();
-
-      if (!openNode?.tag || openNode.tag !== parsedTag.tag) {
-        return undefined;
-      }
-
-      continue;
-    }
-
-    const node: MarkdownComponentNode = {
-      type: 'element',
-      tag: parsedTag.tag,
-      attrs: parsedTag.attrs,
-      children: []
-    };
-
-    stack[stack.length - 1]?.children.push(node);
-
-    if (isComponentTag(parsedTag.tag)) {
-      foundComponent = true;
-    }
-
-    if (!parsedTag.selfClosing) {
-      stack.push(node);
-    }
-  }
-
-  if (stack.length !== 1 || !foundComponent) {
-    return undefined;
-  }
-
-  return normalizeHtmlLikeNodes(root.children);
-}
-
-function appendTextNode(target: MarkdownComponentNode[] | undefined, value: string): void {
-  if (!target || value.length === 0) {
-    return;
-  }
-
-  target.push({
-    type: 'text',
-    value
-  });
-}
-
-function normalizeHtmlLikeNodes(nodes: MarkdownComponentNode[]): MarkdownComponentNode[] {
+function normalizeMarkdownComponentNodes(nodes: MarkdownComponentNode[]): MarkdownComponentNode[] {
   const normalizedNodes: MarkdownComponentNode[] = [];
 
   for (const node of nodes) {
-    if (node.type === 'text') {
-      if (node.value.trim().length === 0) {
-        continue;
-      }
-
+    if (node.type !== 'element') {
       normalizedNodes.push(node);
       continue;
     }
 
-    if (node.type === 'element') {
-      normalizedNodes.push({
-        ...node,
-        children: normalizeHtmlLikeNodes(node.children)
-      });
+    const children = normalizeMarkdownComponentNodes(node.children);
+
+    if (node.tag === 'p' && shouldUnwrapComponentParagraph(children)) {
+      normalizedNodes.push(...children);
       continue;
     }
 
-    normalizedNodes.push(node);
+    normalizedNodes.push({
+      ...node,
+      children
+    });
   }
 
   return normalizedNodes;
 }
 
+function shouldUnwrapComponentParagraph(children: MarkdownComponentNode[]): boolean {
+  return children.length > 0 && children.every((child) => child.type === 'element' && isComponentTag(child.tag));
+}
+
 function isComponentTag(tag: string): boolean {
   return /^[A-Z]/.test(tag) || tag.includes('.');
-}
-
-function parseHtmlTag(
-  source: string,
-  startIndex: number
-):
-  | {
-      kind: 'open';
-      tag: string;
-      attrs?: Record<string, string>;
-      selfClosing: boolean;
-      endIndex: number;
-    }
-  | {
-      kind: 'close';
-      tag: string;
-      endIndex: number;
-    }
-  | undefined {
-  if (source[startIndex] !== '<') {
-    return undefined;
-  }
-
-  let index = startIndex + 1;
-  let quote: '"' | "'" | undefined;
-
-  while (index < source.length) {
-    const character = source[index];
-
-    if (quote) {
-      if (character === quote) {
-        quote = undefined;
-      }
-
-      index += 1;
-      continue;
-    }
-
-    if (character === '"' || character === "'") {
-      quote = character;
-      index += 1;
-      continue;
-    }
-
-    if (character === '>') {
-      break;
-    }
-
-    index += 1;
-  }
-
-  if (index >= source.length) {
-    return undefined;
-  }
-
-  const rawTag = source.slice(startIndex + 1, index).trim();
-
-  if (rawTag.length === 0 || rawTag.startsWith('!') || rawTag.startsWith('?')) {
-    return undefined;
-  }
-
-  if (rawTag.startsWith('/')) {
-    const tag = rawTag.slice(1).trim();
-
-    if (!isValidHtmlTagName(tag)) {
-      return undefined;
-    }
-
-    return {
-      kind: 'close',
-      tag,
-      endIndex: index + 1
-    };
-  }
-
-  const selfClosing = rawTag.endsWith('/');
-  const content = selfClosing ? rawTag.slice(0, -1).trim() : rawTag;
-  const tagMatch = /^([A-Za-z][A-Za-z0-9:._-]*)(?:\s+([\s\S]*))?$/.exec(content);
-
-  if (!tagMatch) {
-    return undefined;
-  }
-
-  const tag = tagMatch[1];
-
-  if (!isValidHtmlTagName(tag)) {
-    return undefined;
-  }
-
-  const attrs = parseHtmlAttributes(tagMatch[2] ?? '');
-
-  if (attrs === null) {
-    return undefined;
-  }
-
-  return {
-    kind: 'open',
-    tag,
-    attrs,
-    selfClosing,
-    endIndex: index + 1
-  };
-}
-
-function parseHtmlAttributes(source: string): Record<string, string> | undefined | null {
-  const attrs: Record<string, string> = {};
-  let index = 0;
-
-  while (index < source.length) {
-    while (index < source.length && /\s/.test(source[index])) {
-      index += 1;
-    }
-
-    if (index >= source.length) {
-      break;
-    }
-
-    const nameStart = index;
-
-    while (index < source.length && /[^\s=]/.test(source[index])) {
-      index += 1;
-    }
-
-    const name = source.slice(nameStart, index);
-
-    if (!isValidHtmlAttributeName(name)) {
-      return null;
-    }
-
-    while (index < source.length && /\s/.test(source[index])) {
-      index += 1;
-    }
-
-    if (source[index] !== '=') {
-      attrs[name] = 'true';
-      continue;
-    }
-
-    index += 1;
-
-    while (index < source.length && /\s/.test(source[index])) {
-      index += 1;
-    }
-
-    if (index >= source.length) {
-      return null;
-    }
-
-    const quote = source[index];
-
-    if (quote === '"' || quote === "'") {
-      index += 1;
-
-      const valueStart = index;
-
-      while (index < source.length && source[index] !== quote) {
-        index += 1;
-      }
-
-      if (index >= source.length) {
-        return null;
-      }
-
-      attrs[name] = source.slice(valueStart, index);
-      index += 1;
-      continue;
-    }
-
-    const valueStart = index;
-
-    while (index < source.length && /[^\s]/.test(source[index])) {
-      index += 1;
-    }
-
-    attrs[name] = source.slice(valueStart, index);
-  }
-
-  return Object.keys(attrs).length > 0 ? attrs : undefined;
-}
-
-function isValidHtmlTagName(value: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9:._-]*$/.test(value);
-}
-
-function isValidHtmlAttributeName(value: string): boolean {
-  return /^[A-Za-z_:][A-Za-z0-9:._-]*$/.test(value);
 }
 
 function createAttributesObject(token: ReturnType<MarkdownExit['parse']>[number]): Record<string, string> | undefined {
@@ -705,22 +348,6 @@ function createAttributesObject(token: ReturnType<MarkdownExit['parse']>[number]
   }
 
   return Object.fromEntries(token.attrs);
-}
-
-function extractTitleFromMeta(meta?: string): string | undefined {
-  if (!meta) {
-    return undefined;
-  }
-
-  const quotedTitle = /(?:^|\s)title=(?:"([^"]+)"|'([^']+)')/.exec(meta);
-
-  if (quotedTitle) {
-    return quotedTitle[1] ?? quotedTitle[2];
-  }
-
-  const bareTitle = /(?:^|\s)title=([^\s]+)/.exec(meta);
-
-  return bareTitle?.[1];
 }
 
 function hasQuery(id: string, queryKey: string): boolean {

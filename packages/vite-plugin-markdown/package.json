@@ -25,7 +25,8 @@
   },
   "dependencies": {
     "@app-game/vite-plugin-shiki": "workspace:*",
-    "markdown-exit": "catalog:"
+    "markdown-exit": "catalog:",
+    "parse5": "catalog:"
   },
   "devDependencies": {
     "tsdown": "^0.22.0"

@@ -1,109 +1,31 @@
-import { createShikiRenderer, normalizeShikiLanguage } from "@app-game/vite-plugin-shiki";
 import { createMarkdownExit } from "markdown-exit";
 import { readFile } from "node:fs/promises";
-//#region src/index.ts
-const DEFAULT_QUERY = "markdown";
-const DEFAULT_PREFIX = "\0markdown:";
-function vitePluginMarkdown(options = {}) {
-	const queryKey = options.query ?? DEFAULT_QUERY;
-	const prefix = options.prefix ?? DEFAULT_PREFIX;
-	const pluginName = options.pluginName ?? "vite-plugin-markdown";
-	let markdownRendererPromise;
-	const virtualIdsByFile = /* @__PURE__ */ new Map();
-	return {
-		name: pluginName,
-		enforce: "pre",
-		async resolveId(source, importer) {
-			if (!hasQuery(source, queryKey)) return null;
-			const [requestPath, rawQuery = ""] = source.split("?", 2);
-			const query = new URLSearchParams(rawQuery);
-			query.delete(queryKey);
-			const resolved = await this.resolve(withQuery(requestPath, query), importer, { skipSelf: true });
-			if (!resolved) return null;
-			return `${prefix}${withQuery(resolved.id, new URLSearchParams(rawQuery))}`;
-		},
-		async load(id) {
-			if (!id.startsWith(prefix)) return null;
-			const [filePath] = id.slice(prefix.length).split("?", 2);
-			trackVirtualId(virtualIdsByFile, filePath, id);
-			this.addWatchFile(filePath);
-			const markdownRaw = await readFile(filePath, "utf8");
-			return createMarkdownComponentModule({
-				markdown: markdownRaw,
-				nodes: await createMarkdownComponentNodes(markdownRaw, await (markdownRendererPromise ??= createRenderer(options)))
-			});
-		},
-		handleHotUpdate(ctx) {
-			const virtualIds = virtualIdsByFile.get(ctx.file);
-			if (!virtualIds?.size) return;
-			const modules = [...virtualIds].map((virtualId) => ctx.server.moduleGraph.getModuleById(virtualId)).filter((module) => module != null);
-			for (const module of modules) ctx.server.moduleGraph.invalidateModule(module);
-			return modules;
-		}
-	};
-}
-async function createRenderer(options) {
-	const shikiRenderer = createShikiRenderer({
-		themes: options.themes,
-		supportedLanguages: options.supportedLanguages,
-		defaultLanguage: options.defaultLanguage
-	});
-	const renderer = createMarkdownExit({
-		html: true,
-		...options.markdownOptions,
-		highlight: options.markdownOptions?.highlight ?? (async (code, language) => {
-			return (await shikiRenderer.highlight(code, {
-				language: normalizeShikiLanguage(language),
-				theme: options.theme
-			})).html;
-		})
-	});
-	await options.configureMarkdown?.(renderer);
-	return renderer;
-}
-async function createMarkdownComponentNodes(markdown, renderer) {
-	const tokens = renderer.parse(markdown, {});
-	const root = { children: [] };
-	const stack = [root];
-	for (const token of tokens) {
-		const current = stack[stack.length - 1];
-		if (token.hidden) continue;
-		if (token.type === "inline") {
-			current?.children.push(...createInlineNodes(token.children ?? []));
-			continue;
-		}
-		if (token.type === "fence" || token.type === "code_block") {
-			current?.children.push(await createCodeBlockNode(token, renderer));
-			continue;
-		}
-		if (token.type === "html_block") {
-			current?.children.push(...createHtmlLikeNodes(token.content));
-			continue;
-		}
-		if (token.nesting === 1) {
-			const node = {
-				type: "element",
-				tag: token.tag,
-				attrs: createAttributesObject(token),
-				children: []
-			};
-			current?.children.push(node);
-			stack.push(node);
-			continue;
-		}
-		if (token.nesting === -1) {
-			stack.pop();
-			continue;
-		}
-		if (token.nesting === 0 && token.tag) current?.children.push(createSelfClosingElementNode(token));
-	}
-	return root.children;
-}
-function createMarkdownComponentModule(options) {
-	const lines = [`import { createComponent } from 'solid-js';`, `import { Dynamic, template } from 'solid-js/web';`];
-	lines.push(`function _DefaultHtmlBlock(props) { return template(props.html)(); }`, `function _DefaultShikiCodeBlock(props) { return template(props.html)(); }`, `export default function MarkdownContent(props = {}) {`, `  const components = props.components ?? {};`, `  const content = ${createChildrenExpression(options.nodes)};`, `  const Wrapper = components.wrapper;`, `  if (!Wrapper) {`, `    return content;`, `  }`, `  return createComponent(Dynamic, {`, `    component: Wrapper,`, `    get children() {`, `      return content;`, `    }`, `  });`, `}`);
-	return lines.join("\n");
-}
+import { parseFragment } from "parse5";
+import { createShikiRenderer, normalizeShikiLanguage } from "@app-game/vite-plugin-shiki";
+//#region src/markdownComponentModulePlugin.ts
+const markdownComponentModulePlugin = { renderModule(options) {
+	return [
+		`import { createComponent } from 'solid-js';`,
+		`import { Dynamic, template } from 'solid-js/web';`,
+		``,
+		`function _DefaultHtmlBlock(props) { return template(props.html)(); }`,
+		`function _DefaultShikiCodeBlock(props) { return template(props.html)(); }`,
+		`export default function MarkdownContent(props = {}) {`,
+		`  const components = props.components ?? {};`,
+		`  const content = ${createChildrenExpression(options.nodes)};`,
+		`  const Wrapper = components.wrapper;`,
+		`  if (!Wrapper) {`,
+		`    return content;`,
+		`  }`,
+		`  return createComponent(Dynamic, {`,
+		`    component: Wrapper,`,
+		`    get children() {`,
+		`      return content;`,
+		`    }`,
+		`  });`,
+		`}`
+	].join("\n");
+} };
 function createChildrenExpression(nodes) {
 	if (nodes.length === 0) return "undefined";
 	if (nodes.length === 1) return createNodeExpression(nodes[0]);
@@ -134,26 +56,378 @@ function createNodeExpression(node) {
 function serializeOptionalValue(value) {
 	return value == null ? "undefined" : JSON.stringify(value);
 }
-async function createCodeBlock(token, renderer) {
+//#endregion
+//#region src/markdownComponentPlugin.ts
+function markdownComponentPlugin(markdown) {
+	markdown.core.ruler.push("markdown_component_nodes", (state) => {
+		for (const token of state.tokens) annotateMarkdownComponentToken(token);
+	});
+}
+function getMarkdownComponentNodes(token) {
+	return token.meta?.markdownComponentNodes;
+}
+function annotateMarkdownComponentToken(token) {
+	if (token.hidden) return;
+	if (token.type === "inline") {
+		const nodes = createInlineComponentNodes(token.children ?? [], token.content);
+		if (nodes) setMarkdownComponentNodes(token, nodes);
+		return;
+	}
+	if (token.type === "html_block") {
+		const nodes = parseComponentHtml(token.content);
+		if (nodes) setMarkdownComponentNodes(token, nodes);
+	}
+}
+function setMarkdownComponentNodes(token, nodes) {
+	token.meta = {
+		...token.meta ?? {},
+		markdownComponentNodes: nodes
+	};
+}
+function createInlineComponentNodes(tokens, content) {
+	const promotedNodes = tryCreateInlineComponentNodes(tokens, content);
+	if (promotedNodes) return promotedNodes;
+	const root = { children: [] };
+	const stack = [root];
+	for (const token of tokens) {
+		const current = stack[stack.length - 1];
+		if (token.hidden) continue;
+		if (token.type === "text") {
+			current?.children.push(...createTextLikeNodes(token.content));
+			continue;
+		}
+		if (token.type === "code_inline") {
+			current?.children.push({
+				type: "element",
+				tag: "code",
+				children: [{
+					type: "text",
+					value: token.content
+				}]
+			});
+			continue;
+		}
+		if (token.type === "softbreak") {
+			current?.children.push({
+				type: "text",
+				value: "\n"
+			});
+			continue;
+		}
+		if (token.type === "hardbreak") {
+			current?.children.push({
+				type: "element",
+				tag: "br",
+				children: []
+			});
+			continue;
+		}
+		if (token.type === "html_inline") {
+			current?.children.push(...createHtmlInlineNodes(token.content));
+			continue;
+		}
+		if (token.nesting === 1) {
+			const node = {
+				type: "element",
+				tag: token.tag,
+				attrs: createAttributesObject$1(token),
+				children: []
+			};
+			current?.children.push(node);
+			stack.push(node);
+			continue;
+		}
+		if (token.nesting === -1) {
+			stack.pop();
+			continue;
+		}
+		if (token.nesting === 0) current?.children.push(createSelfClosingElementNode$1(token));
+	}
+	return root.children.some(containsComponentNode) ? root.children : void 0;
+}
+function tryCreateInlineComponentNodes(tokens, content) {
+	if (!content || !content.includes("<") || !canPromoteInlineToken(tokens)) return;
+	return parseComponentHtml(content);
+}
+function canPromoteInlineToken(tokens) {
+	return tokens.every((token) => token.hidden || token.type === "text" || token.type === "softbreak" || token.type === "hardbreak" || token.type === "html_inline");
+}
+function createTextLikeNodes(value) {
+	if (!value.includes("<")) return [{
+		type: "text",
+		value
+	}];
+	return parseComponentHtml(value) ?? [{
+		type: "text",
+		value
+	}];
+}
+function createHtmlInlineNodes(html) {
+	return parseComponentHtml(html) ?? [{
+		type: "html",
+		html
+	}];
+}
+function createSelfClosingElementNode$1(token) {
+	if (token.content) return {
+		type: "element",
+		tag: token.tag,
+		attrs: createAttributesObject$1(token),
+		children: [{
+			type: "text",
+			value: token.content
+		}]
+	};
+	return {
+		type: "element",
+		tag: token.tag,
+		attrs: createAttributesObject$1(token),
+		children: []
+	};
+}
+function parseComponentHtml(source) {
+	const nodes = createHtmlNodes(parseFragment(source, { sourceCodeLocationInfo: true }).childNodes, source);
+	if (!nodes || !nodes.some(containsComponentNode)) return;
+	return normalizeHtmlLikeNodes(nodes);
+}
+function normalizeHtmlLikeNodes(nodes) {
+	const normalizedNodes = [];
+	for (const node of nodes) {
+		if (node.type === "text") {
+			if (node.value.trim().length === 0) continue;
+			normalizedNodes.push(node);
+			continue;
+		}
+		if (node.type === "element") {
+			normalizedNodes.push({
+				...node,
+				children: normalizeHtmlLikeNodes(node.children)
+			});
+			continue;
+		}
+		normalizedNodes.push(node);
+	}
+	return normalizedNodes;
+}
+function isComponentTag$1(tag) {
+	return /^[A-Z]/.test(tag) || tag.includes(".");
+}
+function containsComponentNode(node) {
+	if (node.type !== "element") return false;
+	return isComponentTag$1(node.tag) || node.children.some(containsComponentNode);
+}
+function createHtmlNodes(childNodes, source) {
+	const nodes = [];
+	for (const childNode of childNodes) {
+		const node = createHtmlNode(childNode, source);
+		if (node == null) return;
+		if (Array.isArray(node)) {
+			nodes.push(...node);
+			continue;
+		}
+		nodes.push(node);
+	}
+	return nodes;
+}
+function createHtmlNode(childNode, source) {
+	switch (childNode.nodeName) {
+		case "#text": return {
+			type: "text",
+			value: childNode.value
+		};
+		case "#comment": return {
+			type: "html",
+			html: `<!--${childNode.data}-->`
+		};
+		case "#documentType": return {
+			type: "html",
+			html: `<!DOCTYPE ${childNode.name}>`
+		};
+		default: return createHtmlElementNode(childNode, source);
+	}
+}
+function createHtmlElementNode(element, source) {
+	const tag = getOriginalTagName(element, source);
+	const attrs = createHtmlAttributesObject(element, source);
+	if (!tag || attrs === null) return;
+	const children = createHtmlNodes("content" in element ? element.content.childNodes : element.childNodes, source);
+	if (!children) return;
+	return {
+		type: "element",
+		tag,
+		attrs,
+		children
+	};
+}
+function getOriginalTagName(element, source) {
+	const startTag = element.sourceCodeLocation?.startTag;
+	if (!startTag) return element.tagName;
+	const rawStartTag = source.slice(startTag.startOffset, startTag.endOffset);
+	return /^<\s*([^\s/>]+)/.exec(rawStartTag)?.[1] ?? element.tagName;
+}
+function createHtmlAttributesObject(element, source) {
+	if (element.attrs.length === 0) return;
+	const locationAttrs = element.sourceCodeLocation?.attrs;
+	const attrs = {};
+	for (const attr of element.attrs) {
+		const location = locationAttrs?.[attr.name];
+		const name = location ? source.slice(location.startOffset, location.endOffset).split("=")[0]?.trim() : attr.name;
+		if (!name) return null;
+		attrs[name] = attr.value;
+	}
+	return attrs;
+}
+function createAttributesObject$1(token) {
+	if (!token.attrs?.length) return;
+	return Object.fromEntries(token.attrs);
+}
+//#endregion
+//#region src/markdownShikiPlugin.ts
+function createMarkdownShikiPlugin(options = {}) {
+	const shikiRenderer = createShikiRenderer({
+		themes: options.themes,
+		supportedLanguages: options.supportedLanguages,
+		defaultLanguage: options.defaultLanguage
+	});
+	return { async resolveNodes(token) {
+		if (token.type !== "fence" && token.type !== "code_block") return;
+		return [await createCodeBlockNode$1(token, shikiRenderer, options.theme)];
+	} };
+}
+async function createCodeBlockNode$1(token, shikiRenderer, theme) {
 	const [rawLanguage = "", ...metaParts] = token.info.trim().split(/\s+/).filter(Boolean);
+	const language = normalizeShikiLanguage(rawLanguage) ?? (rawLanguage || void 0);
+	const meta = metaParts.length > 0 ? metaParts.join(" ") : void 0;
+	const result = await shikiRenderer.highlight(token.content, {
+		language,
+		theme
+	});
 	return {
 		type: "codeblock",
 		code: token.content,
-		language: normalizeShikiLanguage(rawLanguage) ?? (rawLanguage || void 0),
-		meta: metaParts.length > 0 ? metaParts.join(" ") : void 0,
-		html: await renderer.renderer.renderAsync([token], renderer.options, {})
+		language: result.language,
+		meta,
+		html: result.html,
+		title: extractTitleFromMeta(meta)
 	};
 }
-async function createCodeBlockNode(token, renderer) {
-	const block = await createCodeBlock(token, renderer);
+function extractTitleFromMeta(meta) {
+	if (!meta) return;
+	const quotedTitle = /(?:^|\s)title=(?:"([^"]+)"|'([^']+)')/.exec(meta);
+	if (quotedTitle) return quotedTitle[1] ?? quotedTitle[2];
+	return /(?:^|\s)title=([^\s]+)/.exec(meta)?.[1];
+}
+//#endregion
+//#region src/index.ts
+const DEFAULT_QUERY = "markdown";
+const DEFAULT_PREFIX = "\0markdown:";
+function vitePluginMarkdown(options = {}) {
+	const queryKey = options.query ?? DEFAULT_QUERY;
+	const prefix = options.prefix ?? DEFAULT_PREFIX;
+	const pluginName = options.pluginName ?? "vite-plugin-markdown";
+	const nodePlugins = createMarkdownNodePlugins(options);
+	const modulePlugin = markdownComponentModulePlugin;
+	let markdownRendererPromise;
+	const virtualIdsByFile = /* @__PURE__ */ new Map();
 	return {
-		type: "codeblock",
-		code: block.code,
-		language: block.language,
-		meta: block.meta,
-		html: block.html,
-		title: extractTitleFromMeta(block.meta)
+		name: pluginName,
+		enforce: "pre",
+		async resolveId(source, importer) {
+			if (!hasQuery(source, queryKey)) return null;
+			const [requestPath, rawQuery = ""] = source.split("?", 2);
+			const query = new URLSearchParams(rawQuery);
+			query.delete(queryKey);
+			const resolved = await this.resolve(withQuery(requestPath, query), importer, { skipSelf: true });
+			if (!resolved) return null;
+			return `${prefix}${withQuery(resolved.id, new URLSearchParams(rawQuery))}`;
+		},
+		async load(id) {
+			if (!id.startsWith(prefix)) return null;
+			const [filePath] = id.slice(prefix.length).split("?", 2);
+			trackVirtualId(virtualIdsByFile, filePath, id);
+			this.addWatchFile(filePath);
+			return renderMarkdownComponentModule(modulePlugin, { nodes: await createMarkdownComponentNodes(await readFile(filePath, "utf8"), await (markdownRendererPromise ??= createRenderer(options)), nodePlugins) });
+		},
+		handleHotUpdate(ctx) {
+			const virtualIds = virtualIdsByFile.get(ctx.file);
+			if (!virtualIds?.size) return;
+			const modules = [...virtualIds].map((virtualId) => ctx.server.moduleGraph.getModuleById(virtualId)).filter((module) => module != null);
+			for (const module of modules) ctx.server.moduleGraph.invalidateModule(module);
+			return modules;
+		}
 	};
+}
+async function createRenderer(options) {
+	const renderer = createMarkdownExit({
+		html: false,
+		...options.markdownOptions
+	});
+	renderer.use(markdownComponentPlugin);
+	await options.configureMarkdown?.(renderer);
+	return renderer;
+}
+async function createMarkdownComponentNodes(markdown, renderer, nodePlugins) {
+	const tokens = renderer.parse(markdown, {});
+	const root = { children: [] };
+	const stack = [root];
+	for (const token of tokens) {
+		const current = stack[stack.length - 1];
+		if (token.hidden) continue;
+		const pluginNodes = await resolveTokenNodes(nodePlugins, token, { renderer });
+		if (pluginNodes) {
+			current?.children.push(...pluginNodes);
+			continue;
+		}
+		if (token.type === "inline") {
+			current?.children.push(...getMarkdownComponentNodes(token) ?? createInlineNodes(token.children ?? []));
+			continue;
+		}
+		if (token.type === "fence" || token.type === "code_block") {
+			current?.children.push(await createCodeBlockNode(token, renderer));
+			continue;
+		}
+		if (token.type === "html_block") {
+			current?.children.push(...getMarkdownComponentNodes(token) ?? [{
+				type: "html",
+				html: token.content
+			}]);
+			continue;
+		}
+		if (token.nesting === 1) {
+			const node = {
+				type: "element",
+				tag: token.tag,
+				attrs: createAttributesObject(token),
+				children: []
+			};
+			current?.children.push(node);
+			stack.push(node);
+			continue;
+		}
+		if (token.nesting === -1) {
+			stack.pop();
+			continue;
+		}
+		if (token.nesting === 0 && token.tag) current?.children.push(createSelfClosingElementNode(token));
+	}
+	return normalizeMarkdownComponentNodes(root.children);
+}
+function createMarkdownNodePlugins(options) {
+	return [createMarkdownShikiPlugin({
+		theme: options.theme,
+		themes: options.themes,
+		supportedLanguages: options.supportedLanguages,
+		defaultLanguage: options.defaultLanguage
+	})];
+}
+function renderMarkdownComponentModule(modulePlugin, options) {
+	return modulePlugin.renderModule(options);
+}
+async function resolveTokenNodes(nodePlugins, token, context) {
+	for (const plugin of nodePlugins) {
+		const nodes = await plugin.resolveNodes(token, context);
+		if (nodes) return nodes;
+	}
 }
 function createInlineNodes(tokens) {
 	const root = { children: [] };
@@ -195,7 +469,10 @@ function createInlineNodes(tokens) {
 			continue;
 		}
 		if (token.type === "html_inline") {
-			current?.children.push(...createHtmlLikeNodes(token.content));
+			current?.children.push({
+				type: "html",
+				html: token.content
+			});
 			continue;
 		}
 		if (token.nesting === 1) {
@@ -234,172 +511,34 @@ function createSelfClosingElementNode(token) {
 		children: []
 	};
 }
-function createHtmlLikeNodes(html) {
-	const parsedNodes = parseComponentHtml(html);
-	if (parsedNodes) return parsedNodes;
-	return [{
-		type: "html",
-		html
-	}];
-}
-function parseComponentHtml(source) {
-	const root = { children: [] };
-	const stack = [root];
-	let cursor = 0;
-	let foundComponent = false;
-	while (cursor < source.length) {
-		const nextTagIndex = source.indexOf("<", cursor);
-		if (nextTagIndex === -1) {
-			appendTextNode(stack[stack.length - 1]?.children, source.slice(cursor));
-			break;
-		}
-		if (nextTagIndex > cursor) appendTextNode(stack[stack.length - 1]?.children, source.slice(cursor, nextTagIndex));
-		const parsedTag = parseHtmlTag(source, nextTagIndex);
-		if (!parsedTag) return;
-		cursor = parsedTag.endIndex;
-		if (parsedTag.kind === "close") {
-			const openNode = stack.pop();
-			if (!openNode?.tag || openNode.tag !== parsedTag.tag) return;
-			continue;
-		}
-		const node = {
-			type: "element",
-			tag: parsedTag.tag,
-			attrs: parsedTag.attrs,
-			children: []
-		};
-		stack[stack.length - 1]?.children.push(node);
-		if (isComponentTag(parsedTag.tag)) foundComponent = true;
-		if (!parsedTag.selfClosing) stack.push(node);
-	}
-	if (stack.length !== 1 || !foundComponent) return;
-	return normalizeHtmlLikeNodes(root.children);
-}
-function appendTextNode(target, value) {
-	if (!target || value.length === 0) return;
-	target.push({
-		type: "text",
-		value
-	});
-}
-function normalizeHtmlLikeNodes(nodes) {
+function normalizeMarkdownComponentNodes(nodes) {
 	const normalizedNodes = [];
 	for (const node of nodes) {
-		if (node.type === "text") {
-			if (node.value.trim().length === 0) continue;
+		if (node.type !== "element") {
 			normalizedNodes.push(node);
 			continue;
 		}
-		if (node.type === "element") {
-			normalizedNodes.push({
-				...node,
-				children: normalizeHtmlLikeNodes(node.children)
-			});
+		const children = normalizeMarkdownComponentNodes(node.children);
+		if (node.tag === "p" && shouldUnwrapComponentParagraph(children)) {
+			normalizedNodes.push(...children);
 			continue;
 		}
-		normalizedNodes.push(node);
+		normalizedNodes.push({
+			...node,
+			children
+		});
 	}
 	return normalizedNodes;
+}
+function shouldUnwrapComponentParagraph(children) {
+	return children.length > 0 && children.every((child) => child.type === "element" && isComponentTag(child.tag));
 }
 function isComponentTag(tag) {
 	return /^[A-Z]/.test(tag) || tag.includes(".");
 }
-function parseHtmlTag(source, startIndex) {
-	if (source[startIndex] !== "<") return;
-	let index = startIndex + 1;
-	let quote;
-	while (index < source.length) {
-		const character = source[index];
-		if (quote) {
-			if (character === quote) quote = void 0;
-			index += 1;
-			continue;
-		}
-		if (character === "\"" || character === "'") {
-			quote = character;
-			index += 1;
-			continue;
-		}
-		if (character === ">") break;
-		index += 1;
-	}
-	if (index >= source.length) return;
-	const rawTag = source.slice(startIndex + 1, index).trim();
-	if (rawTag.length === 0 || rawTag.startsWith("!") || rawTag.startsWith("?")) return;
-	if (rawTag.startsWith("/")) {
-		const tag = rawTag.slice(1).trim();
-		if (!isValidHtmlTagName(tag)) return;
-		return {
-			kind: "close",
-			tag,
-			endIndex: index + 1
-		};
-	}
-	const selfClosing = rawTag.endsWith("/");
-	const content = selfClosing ? rawTag.slice(0, -1).trim() : rawTag;
-	const tagMatch = /^([A-Za-z][A-Za-z0-9:._-]*)(?:\s+([\s\S]*))?$/.exec(content);
-	if (!tagMatch) return;
-	const tag = tagMatch[1];
-	if (!isValidHtmlTagName(tag)) return;
-	const attrs = parseHtmlAttributes(tagMatch[2] ?? "");
-	if (attrs === null) return;
-	return {
-		kind: "open",
-		tag,
-		attrs,
-		selfClosing,
-		endIndex: index + 1
-	};
-}
-function parseHtmlAttributes(source) {
-	const attrs = {};
-	let index = 0;
-	while (index < source.length) {
-		while (index < source.length && /\s/.test(source[index])) index += 1;
-		if (index >= source.length) break;
-		const nameStart = index;
-		while (index < source.length && /[^\s=]/.test(source[index])) index += 1;
-		const name = source.slice(nameStart, index);
-		if (!isValidHtmlAttributeName(name)) return null;
-		while (index < source.length && /\s/.test(source[index])) index += 1;
-		if (source[index] !== "=") {
-			attrs[name] = "true";
-			continue;
-		}
-		index += 1;
-		while (index < source.length && /\s/.test(source[index])) index += 1;
-		if (index >= source.length) return null;
-		const quote = source[index];
-		if (quote === "\"" || quote === "'") {
-			index += 1;
-			const valueStart = index;
-			while (index < source.length && source[index] !== quote) index += 1;
-			if (index >= source.length) return null;
-			attrs[name] = source.slice(valueStart, index);
-			index += 1;
-			continue;
-		}
-		const valueStart = index;
-		while (index < source.length && /[^\s]/.test(source[index])) index += 1;
-		attrs[name] = source.slice(valueStart, index);
-	}
-	return Object.keys(attrs).length > 0 ? attrs : void 0;
-}
-function isValidHtmlTagName(value) {
-	return /^[A-Za-z][A-Za-z0-9:._-]*$/.test(value);
-}
-function isValidHtmlAttributeName(value) {
-	return /^[A-Za-z_:][A-Za-z0-9:._-]*$/.test(value);
-}
 function createAttributesObject(token) {
 	if (!token.attrs?.length) return;
 	return Object.fromEntries(token.attrs);
-}
-function extractTitleFromMeta(meta) {
-	if (!meta) return;
-	const quotedTitle = /(?:^|\s)title=(?:"([^"]+)"|'([^']+)')/.exec(meta);
-	if (quotedTitle) return quotedTitle[1] ?? quotedTitle[2];
-	return /(?:^|\s)title=([^\s]+)/.exec(meta)?.[1];
 }
 function hasQuery(id, queryKey) {
 	const [, rawQuery = ""] = id.split("?", 2);
@@ -420,4 +559,4 @@ function trackVirtualId(virtualIdsByFile, filePath, virtualId) {
 	virtualIdsByFile.set(filePath, new Set([virtualId]));
 }
 //#endregion
-export { vitePluginMarkdown };
+export { createMarkdownShikiPlugin, markdownComponentModulePlugin, markdownComponentPlugin, vitePluginMarkdown };

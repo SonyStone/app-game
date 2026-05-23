@@ -60,6 +60,9 @@ catalogs:
     markdown-exit:
       specifier: ^1.0.0-beta.9
       version: 1.0.0-beta.9
+    parse5:
+      specifier: ^8.0.1
+      version: 8.0.1
     shiki:
       specifier: ^4.1.0
       version: 4.1.0
@@ -1238,6 +1241,9 @@ importers:
       markdown-exit:
         specifier: 'catalog:'
         version: 1.0.0-beta.9
+      parse5:
+        specifier: 'catalog:'
+        version: 8.0.1
       vite:
         specifier: 'catalog:'
         version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)
