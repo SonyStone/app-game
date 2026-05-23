@@ -48,6 +48,10 @@ export type ShikiHighlightOptions = {
   theme?: string;
 };
 
+export type MdxShikiCodeBlocksOptions = ShikiRendererOptions & {
+  componentName?: string;
+};
+
 export function createShikiRenderer(options: ShikiRendererOptions = {}) {
   const themes = options.themes ?? [];
   const supportedLanguages = options.supportedLanguages ?? DEFAULT_SUPPORTED_LANGUAGES;
@@ -174,6 +178,38 @@ export function vitePluginShiki(options: CodeBlockHighlightPluginOptions = {}): 
   };
 }
 
+export function createMdxShikiCodeBlocks(options: MdxShikiCodeBlocksOptions = {}) {
+  const componentName = options.componentName ?? 'ShikiCodeBlock';
+  const shikiRenderer = createShikiRenderer(options);
+
+  return function remarkMdxShikiCodeBlocks() {
+    return async function transform(tree: MdxParentNode): Promise<void> {
+      await visitCodeBlocks(tree, async (node, parent, index) => {
+        const { html, language } = await shikiRenderer.highlight(node.value, {
+          language: node.lang ?? undefined
+        });
+        const title = extractCodeBlockTitle(node.meta);
+        const attributes: MdxJsxAttributeNode[] = [
+          { type: 'mdxJsxAttribute', name: 'code', value: node.value },
+          { type: 'mdxJsxAttribute', name: 'language', value: language },
+          { type: 'mdxJsxAttribute', name: 'html', value: html }
+        ];
+
+        if (title) {
+          attributes.push({ type: 'mdxJsxAttribute', name: 'title', value: title });
+        }
+
+        parent.children[index] = {
+          type: 'mdxJsxFlowElement',
+          name: componentName,
+          attributes,
+          children: []
+        } satisfies MdxJsxFlowElementNode;
+      });
+    };
+  };
+}
+
 function hasQuery(id: string, queryKey: string): boolean {
   const [, rawQuery = ''] = id.split('?', 2);
 
@@ -256,6 +292,38 @@ export function normalizeShikiLanguage(language?: string | null): string | undef
 
 export type ShikiQueryLanguage = DefaultLanguage;
 
+type MdxJsxAttributeNode = {
+  type: 'mdxJsxAttribute';
+  name: string;
+  value: string;
+};
+
+type MdxNode =
+  | {
+      type: string;
+      children?: MdxNode[];
+      value?: string;
+      lang?: string | null;
+      meta?: string | null;
+    }
+  | MdxJsxFlowElementNode;
+
+type MdxParentNode = {
+  children: MdxNode[];
+};
+
+type MdxCodeNode = MdxNode & {
+  type: 'code';
+  value: string;
+};
+
+type MdxJsxFlowElementNode = {
+  type: 'mdxJsxFlowElement';
+  name: string;
+  attributes: MdxJsxAttributeNode[];
+  children: [];
+};
+
 function trackVirtualId(virtualIdsByFile: Map<string, Set<string>>, filePath: string, virtualId: string): void {
   const knownVirtualIds = virtualIdsByFile.get(filePath);
 
@@ -265,4 +333,42 @@ function trackVirtualId(virtualIdsByFile: Map<string, Set<string>>, filePath: st
   }
 
   virtualIdsByFile.set(filePath, new Set([virtualId]));
+}
+
+async function visitCodeBlocks(
+  parent: MdxParentNode,
+  visitor: (node: MdxCodeNode, parent: MdxParentNode, index: number) => Promise<void>
+): Promise<void> {
+  for (let index = 0; index < parent.children.length; index += 1) {
+    const child = parent.children[index];
+
+    if (isCodeNode(child)) {
+      await visitor(child, parent, index);
+      continue;
+    }
+
+    if (Array.isArray(child.children)) {
+      await visitCodeBlocks(child as MdxParentNode, visitor);
+    }
+  }
+}
+
+function isCodeNode(node: MdxNode): node is MdxCodeNode {
+  return node.type === 'code' && typeof node.value === 'string';
+}
+
+function extractCodeBlockTitle(meta?: string | null): string | undefined {
+  if (!meta) {
+    return undefined;
+  }
+
+  const quotedTitle = /(?:^|\s)title=(?:"([^"]+)"|'([^']+)')/.exec(meta);
+
+  if (quotedTitle) {
+    return quotedTitle[1] ?? quotedTitle[2];
+  }
+
+  const bareTitle = /(?:^|\s)title=([^\s]+)/.exec(meta);
+
+  return bareTitle?.[1];
 }

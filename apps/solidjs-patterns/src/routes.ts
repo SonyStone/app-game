@@ -21,6 +21,9 @@ export const routes = {
     { path: '/pass-data-2', component: lazy(() => import('./pages/pass-data/PassDataPage2')) },
     { path: '/pass-data-3', component: lazy(() => import('./pages/pass-data/PassDataPage3')) },
     { path: '/pass-data-4', component: lazy(() => import('./pages/pass-data/PassDataPage4')) },
+    { path: '/pass-data-markdown', component: lazy(() => import('./pages/pass-data-markdown/PassDataMarkdownPage')) },
+    { path: '/pass-data-mdx', component: lazy(() => import('./pages/pass-data-mdx/PassDataMdxPage')) },
+    { path: '/pass-data-mdx-2', component: lazy(() => import('./pages/pass-data-mdx/PassDataMdxPage2')) },
 
     { path: '/resources', component: lazy(() => import('./pages/resources/ResourcesPage')) },
     { path: '/suspense', component: lazy(() => import('./pages/suspense/SuspensePage')) },

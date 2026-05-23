@@ -17,6 +17,7 @@
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {
+    "@mdx-js/rollup": "catalog:",
     "@app-game/vite-plugin-markdown": "workspace:*",
     "@app-game/vite-plugin-shiki": "workspace:*",
     "@corvu/drawer": "catalog:",

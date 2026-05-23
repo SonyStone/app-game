@@ -20,6 +20,9 @@ type ShikiHighlightOptions = {
   language?: string | null;
   theme?: string;
 };
+type MdxShikiCodeBlocksOptions = ShikiRendererOptions & {
+  componentName?: string;
+};
 declare function createShikiRenderer(options?: ShikiRendererOptions): {
   highlight(code: string, options?: ShikiHighlightOptions): Promise<{
     html: string;
@@ -28,7 +31,29 @@ declare function createShikiRenderer(options?: ShikiRendererOptions): {
   }>;
 };
 declare function vitePluginShiki(options?: CodeBlockHighlightPluginOptions): Plugin;
+declare function createMdxShikiCodeBlocks(options?: MdxShikiCodeBlocksOptions): () => (tree: MdxParentNode) => Promise<void>;
 declare function normalizeShikiLanguage(language?: string | null): string | undefined;
 type ShikiQueryLanguage = DefaultLanguage;
+type MdxJsxAttributeNode = {
+  type: 'mdxJsxAttribute';
+  name: string;
+  value: string;
+};
+type MdxNode = {
+  type: string;
+  children?: MdxNode[];
+  value?: string;
+  lang?: string | null;
+  meta?: string | null;
+} | MdxJsxFlowElementNode;
+type MdxParentNode = {
+  children: MdxNode[];
+};
+type MdxJsxFlowElementNode = {
+  type: 'mdxJsxFlowElement';
+  name: string;
+  attributes: MdxJsxAttributeNode[];
+  children: [];
+};
 //#endregion
-export { CodeBlockHighlightPluginOptions, DEFAULT_SUPPORTED_LANGUAGES, ShikiHighlightOptions, ShikiQueryLanguage, ShikiRendererOptions, createShikiRenderer, normalizeShikiLanguage, vitePluginShiki };
+export { CodeBlockHighlightPluginOptions, DEFAULT_SUPPORTED_LANGUAGES, MdxShikiCodeBlocksOptions, ShikiHighlightOptions, ShikiQueryLanguage, ShikiRendererOptions, createMdxShikiCodeBlocks, createShikiRenderer, normalizeShikiLanguage, vitePluginShiki };

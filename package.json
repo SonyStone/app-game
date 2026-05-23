@@ -22,6 +22,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@mdx-js/rollup": "catalog:",
     "@eslint/js": "^10.0.1",
     "@types/chroma-js": "^3.1.2",
     "@types/fs-extra": "^11.0.4",

@@ -548,6 +548,45 @@ function vitePluginShiki(options = {}) {
 		}
 	};
 }
+function createMdxShikiCodeBlocks(options = {}) {
+	const componentName = options.componentName ?? "ShikiCodeBlock";
+	const shikiRenderer = createShikiRenderer(options);
+	return function remarkMdxShikiCodeBlocks() {
+		return async function transform(tree) {
+			await visitCodeBlocks(tree, async (node, parent, index) => {
+				const { html, language } = await shikiRenderer.highlight(node.value, { language: node.lang ?? void 0 });
+				const title = extractCodeBlockTitle(node.meta);
+				parent.children[index] = {
+					type: "mdxJsxFlowElement",
+					name: componentName,
+					attributes: [
+						{
+							type: "mdxJsxAttribute",
+							name: "code",
+							value: node.value
+						},
+						{
+							type: "mdxJsxAttribute",
+							name: "language",
+							value: language
+						},
+						{
+							type: "mdxJsxAttribute",
+							name: "html",
+							value: html
+						},
+						...title ? [{
+							type: "mdxJsxAttribute",
+							name: "title",
+							value: title
+						}] : []
+					],
+					children: []
+				};
+			});
+		};
+	};
+}
 function hasQuery(id, queryKey) {
 	const [, rawQuery = ""] = id.split("?", 2);
 	if (!rawQuery) return false;
@@ -605,5 +644,24 @@ function trackVirtualId(virtualIdsByFile, filePath, virtualId) {
 	}
 	virtualIdsByFile.set(filePath, new Set([virtualId]));
 }
+async function visitCodeBlocks(parent, visitor) {
+	for (let index = 0; index < parent.children.length; index += 1) {
+		const child = parent.children[index];
+		if (isCodeNode(child)) {
+			await visitor(child, parent, index);
+			continue;
+		}
+		if (Array.isArray(child.children)) await visitCodeBlocks(child, visitor);
+	}
+}
+function isCodeNode(node) {
+	return node.type === "code" && typeof node.value === "string";
+}
+function extractCodeBlockTitle(meta) {
+	if (!meta) return;
+	const quotedTitle = /(?:^|\s)title=(?:"([^"]+)"|'([^']+)')/.exec(meta);
+	if (quotedTitle) return quotedTitle[1] ?? quotedTitle[2];
+	return /(?:^|\s)title=([^\s]+)/.exec(meta)?.[1];
+}
 //#endregion
-export { DEFAULT_SUPPORTED_LANGUAGES, createShikiRenderer, normalizeShikiLanguage, vitePluginShiki };
+export { DEFAULT_SUPPORTED_LANGUAGES, createMdxShikiCodeBlocks, createShikiRenderer, normalizeShikiLanguage, vitePluginShiki };

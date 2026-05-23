@@ -47,7 +47,10 @@ export const navSections: NavSection[] = [
       { label: 'Pass Data', href: './pass-data' },
       { label: 'Pass Data 2', href: './pass-data-2' },
       { label: 'Pass Data 3', href: './pass-data-3' },
-      { label: 'Pass Data 4', href: './pass-data-4' }
+      { label: 'Pass Data 4', href: './pass-data-4' },
+      { label: 'Pass Data Markdown', href: './pass-data-markdown', badge: 'MD' },
+      { label: 'Pass Data MDX', href: './pass-data-mdx', badge: 'MDX' },
+      { label: 'Pass Data MDX 2', href: './pass-data-mdx-2', badge: 'not MDX' }
     ]
   }
   // {

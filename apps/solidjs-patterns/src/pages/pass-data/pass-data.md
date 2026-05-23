@@ -1,8 +1,8 @@
 # Pass Data [Components]
 
-<doc-description>
+<Description>
 Practical ways to move data and behavior through a SolidJS component tree: props, refs, polymorphic components, context, resolved children, and shared roots.
-</doc-description>
+</Description>
 
 ## Props preserve reactivity
 
@@ -14,9 +14,7 @@ A component receives a props object through a call like `Comp(props)`. When a pr
 
 In simplified terms, JSX like `rotate={props.subsecond}` becomes a getter on the props object. The component is then invoked through `untrack`, which avoids creating an accidental subscription just because the component was called.
 
-props-lowering.tsx
-
-```tsx
+```tsx title="props-lowering.tsx"
 import { JSX } from 'solid-js';
 import { createComponent } from 'solid-js/web';
 
@@ -49,9 +47,7 @@ export function App2(props: { subsecond: number }): JSX.Element {
 }
 ```
 
-component.ts
-
-```tsx
+```tsx title="component.ts"
 import { Component, JSX, untrack } from 'solid-js';
 
 export function createComponent<T extends Record<string, any>>(Comp: Component<T>, props: T): JSX.Element {
@@ -59,9 +55,9 @@ export function createComponent<T extends Record<string, any>>(Comp: Component<T
 }
 ```
 
-💡
-
-Pass a getter when the child should own the subscriptionIf you pass an already-read value, the subscription happens in the current scope. If you pass the getter itself, the child can decide when to read it and where the reactive boundary should live.
+<Callout type="tip" title="Pass a getter when the child should own the subscription">
+If you pass an already-read value, the subscription happens in the current scope. If you pass the getter itself, the child can decide when to read it and where the reactive boundary should live.
+</Callout>
 
 ## Use ref as an output channel
 
@@ -71,9 +67,7 @@ A ref callback lets a child hand a concrete object back to its parent, usually a
 
 That makes `ref` similar in spirit to `onClick` or any other callback prop: the child publishes something outward instead of fully owning the interaction.
 
-ref-output.tsx
-
-```tsx
+```tsx title="ref-output.tsx"
 function Component(props) {
   return <a ref={props.ref}>Link</a>;
 }
@@ -91,9 +85,7 @@ A common pattern is to accept an as prop, split it out, and render the final ele
 
 This lets you swap the underlying tag or component without duplicating behavior. It is the core idea behind polymorphic APIs such as button components that can also render as links.
 
-polymorphic-button.tsx
-
-```tsx
+```tsx title="polymorphic-button.tsx"
 <Button as="a" href="/docs">
   Docs
 </Button>;
@@ -118,9 +110,7 @@ Internally, Solid stores context on owner nodes. When a provider renders, it cre
 
 This works well for things like theme objects, scoped services, or state that many descendants need at the same time.
 
-context-provider.tsx
-
-```tsx
+```tsx title="context-provider.tsx"
 const ValueContext = createContext(defaultValue);
 
 function ValueProvider(props) {
@@ -134,9 +124,9 @@ function Consumer() {
 }
 ```
 
-⚠
-
-Context is best for stable APIsDuring HMR, editing a provider can sometimes leave descendants temporarily detached from their context until a full reload. It is a small annoyance, but it reinforces a useful rule: context is best for stable shared APIs, not rapidly changing local implementation details.
+<Callout type="warning" title="Context is best for stable APIs">
+During HMR, editing a provider can sometimes leave descendants temporarily detached from their context until a full reload. It is a small annoyance, but it reinforces a useful rule: context is best for stable shared APIs, not rapidly changing local implementation details.
+</Callout>
 
 ## Resolve children explicitly when you need to inspect them
 
@@ -146,9 +136,7 @@ The `children` helper recursively unwraps child functions until it reaches concr
 
 This is useful when a component needs to normalize its children once and then treat them like regular data.
 
-resolve-children.tsx
-
-```tsx
+```tsx title="resolve-children.tsx"
 const resolved = children(() => props.children);
 
 type ResolvedJSXElement = number | boolean | Node | string | null | undefined;
@@ -178,3 +166,11 @@ Primary sources for the patterns summarized above.
 - [createContext source](https://github.com/solidjs/solid/blob/a5b51fe200fd59a158410f4008677948fec611d9/packages/solid/src/reactive/signal.ts#L1203)
 - [createContext docs](https://docs.solidjs.com/reference/component-apis/create-context)
 - [children / resolveChildren source](https://github.com/solidjs/solid/blob/a5b51fe200fd59a158410f4008677948fec611d9/packages/solid/src/reactive/signal.ts#L1743)
+
+<ReferenceCard>
+  <ReferenceLink href="https://mdxjs.com/packages/rollup/">@mdx-js/rollup</ReferenceLink>
+  <ReferenceLink href="https://mdxjs.com/guides/injecting-components/">
+    Injecting MDX components
+  </ReferenceLink>
+  <ReferenceLink href="https://docs.solidjs.com/concepts/components/props">Solid props concept docs</ReferenceLink>
+</ReferenceCard>

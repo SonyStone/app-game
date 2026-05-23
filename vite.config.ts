@@ -1,3 +1,4 @@
+import mdx from '@mdx-js/rollup';
 import UnoCSS from '@unocss/vite';
 import { resolve } from 'path';
 // import solidDevtools from 'solid-devtools/vite';
@@ -10,7 +11,7 @@ import topLevelAwait from 'vite-plugin-top-level-await';
 import wasm from 'vite-plugin-wasm';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 import { vitePluginMarkdown } from './packages/vite-plugin-markdown/src';
-import { vitePluginShiki } from './packages/vite-plugin-shiki/src';
+import { createMdxShikiCodeBlocks, vitePluginShiki } from './packages/vite-plugin-shiki/src';
 
 const webAppRoot = resolve(__dirname, 'apps/web');
 const apps = resolve(__dirname, 'apps');
@@ -24,6 +25,14 @@ export default defineConfig({
     vitePluginShiki({
       themes: ['css-variables', 'dark-plus']
     }),
+    {
+      ...mdx({
+        include: /\.mdx$/,
+        jsxImportSource: 'solid-js/h',
+        remarkPlugins: [createMdxShikiCodeBlocks({ themes: ['css-variables', 'dark-plus'] })]
+      }),
+      enforce: 'pre'
+    },
     wasm(),
     topLevelAwait(),
     // solidDevtools({
