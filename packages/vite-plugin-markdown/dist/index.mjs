@@ -291,25 +291,22 @@ function createMarkdownShikiPlugin(options = {}) {
 	});
 	return { async resolveNodes(token) {
 		if (token.type !== "fence" && token.type !== "code_block") return;
-		return [await createCodeBlockNode$1(token, shikiRenderer, options.theme)];
+		const [rawLanguage = "", ...metaParts] = token.info.trim().split(/\s+/).filter(Boolean);
+		const language = normalizeShikiLanguage(rawLanguage) ?? (rawLanguage || void 0);
+		const meta = metaParts.length > 0 ? metaParts.join(" ") : void 0;
+		const result = await shikiRenderer.highlight(token.content, {
+			language,
+			theme: options.theme
+		});
+		return [{
+			type: "codeblock",
+			code: token.content,
+			language: result.language,
+			meta,
+			html: result.html,
+			title: extractTitleFromMeta(meta)
+		}];
 	} };
-}
-async function createCodeBlockNode$1(token, shikiRenderer, theme) {
-	const [rawLanguage = "", ...metaParts] = token.info.trim().split(/\s+/).filter(Boolean);
-	const language = normalizeShikiLanguage(rawLanguage) ?? (rawLanguage || void 0);
-	const meta = metaParts.length > 0 ? metaParts.join(" ") : void 0;
-	const result = await shikiRenderer.highlight(token.content, {
-		language,
-		theme
-	});
-	return {
-		type: "codeblock",
-		code: token.content,
-		language: result.language,
-		meta,
-		html: result.html,
-		title: extractTitleFromMeta(meta)
-	};
 }
 function extractTitleFromMeta(meta) {
 	if (!meta) return;
@@ -511,15 +508,15 @@ function createSelfClosingElementNode(token) {
 		children: []
 	};
 }
-function normalizeMarkdownComponentNodes(nodes) {
+function normalizeMarkdownComponentNodes(nodes, parentTag) {
 	const normalizedNodes = [];
 	for (const node of nodes) {
 		if (node.type !== "element") {
 			normalizedNodes.push(node);
 			continue;
 		}
-		const children = normalizeMarkdownComponentNodes(node.children);
-		if (node.tag === "p" && shouldUnwrapComponentParagraph(children)) {
+		const children = normalizeMarkdownComponentNodes(node.children, node.tag);
+		if (node.tag === "p" && shouldUnwrapParagraph(parentTag, children)) {
 			normalizedNodes.push(...children);
 			continue;
 		}
@@ -529,6 +526,10 @@ function normalizeMarkdownComponentNodes(nodes) {
 		});
 	}
 	return normalizedNodes;
+}
+function shouldUnwrapParagraph(parentTag, children) {
+	if (parentTag && isComponentTag(parentTag)) return true;
+	return shouldUnwrapComponentParagraph(children);
 }
 function shouldUnwrapComponentParagraph(children) {
 	return children.length > 0 && children.every((child) => child.type === "element" && isComponentTag(child.tag));

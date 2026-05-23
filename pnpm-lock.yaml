@@ -12,6 +12,9 @@ catalogs:
     '@kobalte/core':
       specifier: ^0.13.11
       version: 0.13.11
+    '@mdx-js/mdx':
+      specifier: ^3.1.1
+      version: 3.1.1
     '@mdx-js/rollup':
       specifier: ^3.1.1
       version: 3.1.1
@@ -577,6 +580,9 @@ importers:
       '@app-game/vite-plugin-markdown':
         specifier: workspace:*
         version: link:../../packages/vite-plugin-markdown
+      '@app-game/vite-plugin-markdown-2':
+        specifier: workspace:*
+        version: link:../../packages/vite-plugin-markdown-2
       '@app-game/vite-plugin-shiki':
         specifier: workspace:*
         version: link:../../packages/vite-plugin-shiki
@@ -1244,6 +1250,22 @@ importers:
       parse5:
         specifier: 'catalog:'
         version: 8.0.1
+      vite:
+        specifier: 'catalog:'
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.0(typescript@6.0.3)
+
+  packages/vite-plugin-markdown-2:
+    dependencies:
+      '@app-game/vite-plugin-shiki':
+        specifier: workspace:*
+        version: link:../vite-plugin-shiki
+      '@mdx-js/mdx':
+        specifier: 'catalog:'
+        version: 3.1.1
       vite:
         specifier: 'catalog:'
         version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)

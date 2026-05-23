@@ -309,7 +309,10 @@ function createSelfClosingElementNode(token: ReturnType<MarkdownExit['parse']>[n
   };
 }
 
-function normalizeMarkdownComponentNodes(nodes: MarkdownComponentNode[]): MarkdownComponentNode[] {
+function normalizeMarkdownComponentNodes(
+  nodes: MarkdownComponentNode[],
+  parentTag?: string
+): MarkdownComponentNode[] {
   const normalizedNodes: MarkdownComponentNode[] = [];
 
   for (const node of nodes) {
@@ -318,9 +321,9 @@ function normalizeMarkdownComponentNodes(nodes: MarkdownComponentNode[]): Markdo
       continue;
     }
 
-    const children = normalizeMarkdownComponentNodes(node.children);
+    const children = normalizeMarkdownComponentNodes(node.children, node.tag);
 
-    if (node.tag === 'p' && shouldUnwrapComponentParagraph(children)) {
+    if (node.tag === 'p' && shouldUnwrapParagraph(parentTag, children)) {
       normalizedNodes.push(...children);
       continue;
     }
@@ -332,6 +335,14 @@ function normalizeMarkdownComponentNodes(nodes: MarkdownComponentNode[]): Markdo
   }
 
   return normalizedNodes;
+}
+
+function shouldUnwrapParagraph(parentTag: string | undefined, children: MarkdownComponentNode[]): boolean {
+  if (parentTag && isComponentTag(parentTag)) {
+    return true;
+  }
+
+  return shouldUnwrapComponentParagraph(children);
 }
 
 function shouldUnwrapComponentParagraph(children: MarkdownComponentNode[]): boolean {

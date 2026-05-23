@@ -1,4 +1,5 @@
 import { vitePluginMarkdown } from '@app-game/vite-plugin-markdown';
+import { vitePluginMarkdown2 } from '@app-game/vite-plugin-markdown-2';
 import { createMdxShikiCodeBlocks, vitePluginShiki } from '@app-game/vite-plugin-shiki';
 import mdx from '@mdx-js/rollup';
 import UnoCSS from '@unocss/vite';
@@ -10,6 +11,7 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 export default defineConfig({
   plugins: [
     vitePluginMarkdown(),
+    vitePluginMarkdown2(),
     vitePluginShiki(),
     {
       ...mdx({

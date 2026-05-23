@@ -87,7 +87,8 @@ export function App2(props: { subsecond: number }): JSX.Element {
 ```
 
 <Callout type="tip" title="Why this feels better than post-processing HTML">
-  The prose stays as markdown, but the rich pieces stay as real components instead of becoming DOM-replacement code after rendering.
+The prose stays as markdown, but the rich pieces stay as real components instead of becoming DOM-replacement code after rendering.
+And here a code example: `qwert`
 </Callout>
 
 ## Use Solid components where structure matters
@@ -114,7 +115,9 @@ export function createComponent<T extends Record<string, any>>(Comp: Component<T
 
 <ReferenceCard>
   <ReferenceLink href="https://mdxjs.com/packages/rollup/">@mdx-js/rollup</ReferenceLink>
-  <ReferenceLink href="https://mdxjs.com/guides/injecting-components/">Injecting MDX components</ReferenceLink>
+  <ReferenceLink href="https://mdxjs.com/guides/injecting-components/">
+  Injecting MDX components
+  </ReferenceLink>
   <ReferenceLink href="https://docs.solidjs.com/concepts/components/props">Solid props concept docs</ReferenceLink>
 </ReferenceCard>
 
