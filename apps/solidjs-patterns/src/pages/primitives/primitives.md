@@ -1,17 +1,15 @@
-<article>
-  <header>
+<Header>
 
-# Solid Primitives
+# Solid Primitives <Badge>Advanced</Badge>
 
-    <Badge>Advanced</Badge>
-    <Description>
-      @solid-primitives provides community utilities built on SolidJS reactivity. It covers event listeners, storage,
-      timers, and much more.
-    </Description>
+<Description>
+  @solid-primitives provides community utilities built on SolidJS reactivity. It covers event listeners, storage,
+  timers, and much more.
+</Description>
 
-  </header>
+</Header>
 
-  <section>
+<Section>
 
 ## Event listeners
 
@@ -36,9 +34,9 @@ createEventListener(
 );
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Keyboard
 
@@ -59,9 +57,9 @@ createShortcut(['Control', 'K'], () => {
 <div class={spaceHeld() ? 'zoomed' : ''}> ... </div>;
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Storage
 
@@ -79,9 +77,9 @@ const [theme, setTheme] = makePersisted(createSignal<'light' | 'dark'>('dark'), 
 const [prefs, setPrefs] = makePersisted(createStore({ fontSize: 14, lang: 'en' }), { name: 'user-prefs' });
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Bounds & resize
 
@@ -102,10 +100,9 @@ function ResponsiveChart(): JSX.Element {
 }
 ```
 
-  </section>
+</Section>
 
-  <Callout type="tip" title="Browse all primitives">
-    Over 50 primitives at <a href="https://primitives.solidjs.community">primitives.solidjs.community</a>. Each
-    package is independently installable.
-  </Callout>
-</article>
+<Callout type="tip" title="Browse all primitives">
+  Over 50 primitives at <a href="https://primitives.solidjs.community">primitives.solidjs.community</a>. Each
+  package is independently installable.
+</Callout>

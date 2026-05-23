@@ -1,17 +1,15 @@
-<article>
-  <header>
+<header>
 
-# Component Patterns
+# Component Patterns <Badge>Components</Badge>
 
-    <Badge>Components</Badge>
-    <Description>
-      Best practices for defining props, passing children, splitting props, and building reusable components in
-      SolidJS.
-    </Description>
+<Description>
+  Best practices for defining props, passing children, splitting props, and building reusable components in
+  SolidJS.
+</Description>
 
-  </header>
+</header>
 
-  <section>
+<Section>
 
 ## Props & type definitions
 
@@ -40,9 +38,9 @@ export function Button(props: ButtonProps): JSX.Element {
 }
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## splitProps
 
@@ -69,9 +67,9 @@ export function Input(props: InputProps): JSX.Element {
 }
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## mergeProps - default values
 
@@ -101,15 +99,13 @@ export function Card(props: CardProps): JSX.Element {
 // function Card({ title = 'Card', ...props }) { ... }
 ```
 
-  </section>
+</Section>
 
-  <Callout type="danger" title="Never destructure props">
-    Destructuring SolidJS props breaks reactivity because JSX accesses property getters lazily. Always use <code>
-      props.value
-    </code> or <code>splitProps</code> / <code>mergeProps</code>.
-  </Callout>
+<Callout type="danger" title="Never destructure props">
+Destructuring SolidJS props breaks reactivity because JSX accesses property getters lazily. Always use `props.value` or `splitProps` / `mergeProps`.
+</Callout>
 
-  <section>
+<Section>
 
 ## children helper
 
@@ -139,9 +135,9 @@ function Row(props: RowProps): JSX.Element {
 }
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Component as prop
 
@@ -168,5 +164,4 @@ function List<T>(props: ListProps<T>): JSX.Element {
 <List items={users} renderItem={(user) => <UserCard name={user.name} />} />;
 ```
 
-  </section>
-</article>
+</Section>

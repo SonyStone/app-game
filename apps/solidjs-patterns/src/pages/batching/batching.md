@@ -1,17 +1,15 @@
-<article>
-  <header>
+<Header>
 
-# Batching & Untrack
+# Batching & Untrack <Badge>Core</Badge>
 
-    <Badge>Core</Badge>
-    <Description>
-      batch() groups multiple signal updates into a single notification. untrack() reads reactive values without
-      creating a dependency.
-    </Description>
+<Description>
+  batch() groups multiple signal updates into a single notification. untrack() reads reactive values without
+  creating a dependency.
+</Description>
 
-  </header>
+</Header>
 
-  <section>
+<Section>
 
 ## batch()
 
@@ -37,17 +35,17 @@ batch(() => {
 }); // effect: 2, 2 (single run)
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Live Demo: batch
 
-    <BatchDemo />
+<BatchDemo />
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## untrack()
 
@@ -69,15 +67,13 @@ createEffect(() => {
 });
 ```
 
-  </section>
+</Section>
 
-  <Callout type="info" title="batch is automatic in event handlers">
-    SolidJS automatically batches updates in DOM event handlers (onClick, onInput, etc.). You only need explicit <code>
-      batch()
-    </code> for async contexts like setTimeout, fetch callbacks, or WebSocket handlers.
-  </Callout>
+<Callout type="info" title="batch is automatic in event handlers">
+  SolidJS automatically batches updates in DOM event handlers (onClick, onInput, etc.). You only need explicit `batch()` for async contexts like setTimeout, fetch callbacks, or WebSocket handlers.
+</Callout>
 
-  <section>
+<Section>
 
 ## Practical: multi-field form reset
 
@@ -98,5 +94,4 @@ function resetForm() {
 }
 ```
 
-  </section>
-</article>
+</Section>

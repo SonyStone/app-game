@@ -1,17 +1,15 @@
-<article>
-  <header>
+<Header>
 
-# Control Flow
+# Control Flow <Badge>Components</Badge>
 
-    <Badge>Components</Badge>
-    <Description>
-      SolidJS provides built-in control flow components that work with its fine-grained reactivity system more
-      efficiently than JavaScript conditional expressions.
-    </Description>
+<Description>
+SolidJS provides built-in control flow components that work with its fine-grained reactivity system more
+efficiently than JavaScript conditional expressions.
+</Description>
 
-  </header>
+</Header>
 
-  <section>
+<Section>
 
 ## Show
 
@@ -36,9 +34,9 @@ import { Show } from 'solid-js';
 // Good: <Show when={condition()}><HeavyComponent /></Show>
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## For vs Index
 
@@ -67,9 +65,9 @@ import { For, Index } from 'solid-js';
 </Index>
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Switch / Match
 
@@ -90,9 +88,9 @@ import { Switch, Match } from 'solid-js';
 </Switch>;
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Dynamic
 
@@ -113,13 +111,12 @@ const widgets = { button: ButtonWidget, input: InputWidget };
 <Dynamic component={widgets[type()]} {...widgetProps} />;
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Live Demo: Show & Switch
 
-    <ControlFlowDemo />
+<ControlFlowDemo />
 
-  </section>
-</article>
+</Section>

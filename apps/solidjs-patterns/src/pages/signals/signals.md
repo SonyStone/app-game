@@ -1,16 +1,15 @@
-<header>
+<Header>
 
-# Signals
+# Signals <Badge>Core</Badge>
 
-<Badge>Core</Badge>
 <Description>
 Signals are the fundamental reactive primitive in SolidJS. They hold a value and notify subscribers when they
 change.
 </Description>
 
-</header>
+</Header>
 
-<section>
+<Section>
 
 ## Basic Signal 2
 
@@ -30,17 +29,17 @@ setCount(1);
 setCount((prev) => prev + 1); // functional update
 ```
 
-</section>
+</Section>
 
-<section>
+<Section>
 
 ## Live Demo
 
 <SignalDemo />
 
-</section>
+</Section>
 
-<section>
+<Section>
 
 ## Equality Check
 
@@ -57,9 +56,9 @@ const [data, setData] = createSignal(initialData, { equals: () => true });
 const [pos, setPos] = createSignal({ x: 0, y: 0 }, { equals: (a, b) => a.x === b.x && a.y === b.y });
 ```
 
-</section>
+</Section>
 
-<section>
+<Section>
 
 ## Signals vs State
 
@@ -75,14 +74,14 @@ function ThemeToggle() {
 }
 ```
 
-</section>
+</Section>
 
 <Callout type="tip" title="Getter is a function">
-  Always call the getter as a function: <code>count()</code>, not <code>count</code>. Passing the getter (not
+  Always call the getter as a function: `count()`, not `count`. Passing the getter (not
   calling it) lets you pass reactivity around without subscribing.
 </Callout>
 
-<section>
+<Section>
 
 ## Passing Reactivity
 
@@ -108,4 +107,4 @@ function Parent() {
 }
 ```
 
-</section>
+</Section>

@@ -1,16 +1,15 @@
-<header>
+<Header>
 
-# Stores
+# Stores <Badge>State</Badge>
 
-<Badge>State</Badge>
 <Description>
 createStore provides fine-grained reactivity for nested objects and arrays. Only the specific paths that change
 trigger updates.
 </Description>
 
-</header>
+</Header>
 
-<section>
+<Section>
 
 ## createStore basics
 
@@ -36,17 +35,17 @@ setState('user', 'name', 'Bob');
 setState('items', 0, 'done', true);
 ```
 
-</section>
+</Section>
 
-<section>
+<Section>
 
 ## Live Demo
 
 <StoreDemo />
 
-</section>
+</Section>
 
-<section>
+<Section>
 
 ## Path syntax
 
@@ -71,9 +70,9 @@ setState('list', 1, 'London');
 setState('items', (item) => item.done, 'archived', true);
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## produce() - immer-style mutations
 
@@ -97,9 +96,9 @@ setTodos(
 );
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## reconcile() - replace from external data
 
@@ -119,7 +118,7 @@ async function refresh() {
 // vs setData('items', fresh) - replaces everything, loses reactivity
 ```
 
-</section>
+</Section>
 
 <Callout type="warning" title="Don't destructure store values">
 Destructuring a store loses reactivity. Always access nested values through the store proxy:

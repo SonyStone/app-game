@@ -5,13 +5,13 @@ import { Callout } from '../components/PatternLayout';
 import { Badge as UiBadge, type BadgeProps } from '../components/ui/Badge';
 
 export const markdownComponents = {
-  article(props: JSX.IntrinsicElements['article']): JSX.Element {
+  Article(props: JSX.IntrinsicElements['article']): JSX.Element {
     return <article class="flex flex-col gap-8" {...props} />;
   },
-  header(props: JSX.IntrinsicElements['header']): JSX.Element {
+  Header(props: JSX.IntrinsicElements['header']): JSX.Element {
     return <header class="flex flex-col gap-2 border-b border-stone-300 pb-6 dark:border-slate-800" {...props} />;
   },
-  section(props: JSX.IntrinsicElements['section']): JSX.Element {
+  Section(props: JSX.IntrinsicElements['section']): JSX.Element {
     return <section class="flex flex-col gap-3" {...props} />;
   },
   Description(props: { children: JSX.Element }): JSX.Element {

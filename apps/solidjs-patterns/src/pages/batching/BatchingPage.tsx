@@ -1,6 +1,7 @@
 import { batch, createEffect, createSignal, type JSX } from 'solid-js';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { markdownComponents } from '../markdown-components';
 import BatchingContent from './batching.md?markdown';
 
 export default function BatchingPage(): JSX.Element {

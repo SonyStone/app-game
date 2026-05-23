@@ -1,36 +1,32 @@
-<article>
-  <header>
+<Header>
 
-# Owner & Computation
+# Owner & Computation <Badge>Advanced</Badge>
 
-    <Badge>Advanced</Badge>
-    <Description>
-      A mental model for SolidJS internals: owner scopes, computation nodes, and how the main reactive primitives fit
-      together.
-    </Description>
+<Description>
+  A mental model for SolidJS internals: owner scopes, computation nodes, and how the main reactive primitives fit
+  together.
+</Description>
 
-  </header>
+</Header>
 
-  <Callout type="info" title="Start with two graphs, not one">
+<Callout type="info" title="Start with two graphs, not one">
 
-    Solid maintains both an ownership tree and a dependency graph. They are closely related, but they solve different
-    problems: owners manage scope, cleanup, and context; computations manage reactive execution.
+Solid maintains both an ownership tree and a dependency graph. They are closely related, but they solve different
+problems: owners manage scope, cleanup, and context; computations manage reactive execution.
 
-  </Callout>
+</Callout>
 
-  <section>
+<Section>
 
 ## Owner
 
 An owner is a scope node in Solid's ownership tree. It links parent and child scopes, cleanup callbacks, and context.
 
-    An owner is not necessarily a computation. Think of it as the scope object that ties together lifecycle, context
-    propagation, and cleanup chains. It points to its parent through <code>owner</code>, its child scopes through <code>
-      owned
-    </code>, and its teardown callbacks through <code>cleanups</code>.
+An owner is not necessarily a computation. Think of it as the scope object that ties together lifecycle, context
+propagation, and cleanup chains. It points to its parent through `owner`, its child scopes through `owned`, and its teardown callbacks through `cleanups`.
 
-    A component does not automatically become a computation node. If it contains no effect, memo, or other reactive
-    primitive, it can simply execute inside the parent's owner scope.
+A component does not automatically become a computation node. If it contains no effect, memo, or other reactive
+primitive, it can simply execute inside the parent's owner scope.
 
 ```ts title="owner.ts"
 export interface Owner {
@@ -43,21 +39,21 @@ export interface Owner {
 }
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Computation
 
 A computation is an owner plus reactive execution state: a function to run, dependencies to track, and cached state to
 update.
 
-    Every <code>createEffect</code>, <code>createMemo</code>, and <code>createComputed</code> creates its own
-    computation node. That node stores the function, dependency list, current state, and most recent value.
+Every `createEffect`, `createMemo`, and `createComputed` creates its own
+computation node. That node stores the function, dependency list, current state, and most recent value.
 
-    Internally, Solid uses a helper called <code>createComputation</code> to create those nodes in the dependency
-    graph. A computation knows its owner, the signals it depends on, and the bookkeeping needed to keep the graph in
-    sync in both directions.
+Internally, Solid uses a helper called `createComputation` to create those nodes in the dependency
+graph. A computation knows its owner, the signals it depends on, and the bookkeeping needed to keep the graph in
+sync in both directions.
 
 ```ts title="computation.ts"
 export interface Computation<Init, Next extends Init = Init> extends Owner {
@@ -74,24 +70,24 @@ export interface Computation<Init, Next extends Init = Init> extends Owner {
 }
 ```
 
-  </section>
+</Section>
 
-  <Callout type="tip" title="A useful rule of thumb">
-    Owners answer "who owns this scope?" and computations answer "what should re-run when dependencies change?" Many
-    nodes participate in both structures, but the roles are still distinct.
-  </Callout>
+<Callout type="tip" title="A useful rule of thumb">
+  Owners answer "who owns this scope?" and computations answer "what should re-run when dependencies change?" Many
+  nodes participate in both structures, but the roles are still distinct.
+</Callout>
 
-  <section>
+<Section>
 
 ## How common primitives map onto computations
 
 The main difference between these primitives is when they run and whether they are considered pure.
 
-    <PrimitiveGrid />
+<PrimitiveGrid />
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## createSelector
 
@@ -106,63 +102,58 @@ const isSelected = createSelector(selectedId);
 <For each={list()}>{(item) => <li classList={{ active: isSelected(item.id) }}>{item.name}</li>}</For>;
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## createRoot
 
 createRoot creates a new owner scope without creating a computation node. It establishes ownership, not a new
 reactive effect.
 
-    It helps to read the API surface this way: <code>createEffect</code> creates a computation, while <code>
-      createRoot
-    </code> creates a scope. Computations become children of their owner all the way up to a root owner created by <code>
-      createRoot
-    </code> or <code>render</code>.
+It helps to read the API surface this way: `createEffect` creates a computation, while `createRoot` creates a scope. Computations become children of their owner all the way up to a root owner created by `createRoot` or `render`.
 
-    In practice, <code>createRoot</code> is useful for manual lifecycle control, isolated scopes, and some tooling or
-    debugging scenarios.
+In practice, `createRoot` is useful for manual lifecycle control, isolated scopes, and some tooling or
+debugging scenarios.
 
-    <ShortVersionCard />
+<ShortVersionCard />
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## References
 
 Primary sources for the internal details summarized above.
 
-    <ReferenceCard>
-      <ReferenceLink href="https://github.com/solidjs/solid/blob/a5b51fe200fd59a158410f4008677948fec611d9/packages/solid/src/reactive/signal.ts#L95">
-        Owner and computation source
-      </ReferenceLink>
-      <ReferenceLink href="https://docs.solidjs.com/reference/secondary-primitives/create-computed">
-        createComputed docs
-      </ReferenceLink>
-      <ReferenceLink href="https://docs.solidjs.com/reference/secondary-primitives/create-render-effect">
-        createRenderEffect docs
-      </ReferenceLink>
-      <ReferenceLink href="https://docs.solidjs.com/reference/basic-reactivity/create-effect">
-        createEffect docs
-      </ReferenceLink>
-      <ReferenceLink href="https://docs.solidjs.com/reference/secondary-primitives/create-reaction">
-        createReaction docs
-      </ReferenceLink>
-      <ReferenceLink href="https://docs.solidjs.com/reference/basic-reactivity/create-memo">
-        createMemo docs
-      </ReferenceLink>
-      <ReferenceLink href="https://docs.solidjs.com/reference/secondary-primitives/create-deferred">
-        createDeferred docs
-      </ReferenceLink>
-      <ReferenceLink href="https://docs.solidjs.com/reference/secondary-primitives/create-selector">
-        createSelector docs
-      </ReferenceLink>
-      <ReferenceLink href="https://docs.solidjs.com/reference/reactive-utilities/catch-error">
-        catchError docs
-      </ReferenceLink>
-    </ReferenceCard>
+<ReferenceCard>
+  <ReferenceLink href="https://github.com/solidjs/solid/blob/a5b51fe200fd59a158410f4008677948fec611d9/packages/solid/src/reactive/signal.ts#L95">
+    Owner and computation source
+  </ReferenceLink>
+  <ReferenceLink href="https://docs.solidjs.com/reference/secondary-primitives/create-computed">
+    createComputed docs
+  </ReferenceLink>
+  <ReferenceLink href="https://docs.solidjs.com/reference/secondary-primitives/create-render-effect">
+    createRenderEffect docs
+  </ReferenceLink>
+  <ReferenceLink href="https://docs.solidjs.com/reference/basic-reactivity/create-effect">
+    createEffect docs
+  </ReferenceLink>
+  <ReferenceLink href="https://docs.solidjs.com/reference/secondary-primitives/create-reaction">
+    createReaction docs
+  </ReferenceLink>
+  <ReferenceLink href="https://docs.solidjs.com/reference/basic-reactivity/create-memo">
+    createMemo docs
+  </ReferenceLink>
+  <ReferenceLink href="https://docs.solidjs.com/reference/secondary-primitives/create-deferred">
+    createDeferred docs
+  </ReferenceLink>
+  <ReferenceLink href="https://docs.solidjs.com/reference/secondary-primitives/create-selector">
+    createSelector docs
+  </ReferenceLink>
+  <ReferenceLink href="https://docs.solidjs.com/reference/reactive-utilities/catch-error">
+    catchError docs
+  </ReferenceLink>
+</ReferenceCard>
 
-  </section>
-</article>
+</Section>

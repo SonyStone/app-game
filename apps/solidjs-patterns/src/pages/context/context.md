@@ -1,17 +1,15 @@
-<article>
-  <header>
+<Header>
 
-# Context
+# Context <Badge>State</Badge>
 
-    <Badge>State</Badge>
-    <Description>
-      createContext and useContext provide a scoped dependency injection mechanism. Context values are available to
-      all descendants without prop drilling.
-    </Description>
+<Description>
+createContext and useContext provide a scoped dependency injection mechanism. Context values are available to
+all descendants without prop drilling.
+</Description>
 
-  </header>
+</Header>
 
-  <section>
+<Section>
 
 ## createContext
 
@@ -40,9 +38,9 @@ function Button() {
 }
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Context with signals
 
@@ -82,22 +80,22 @@ export function useCounter(): CounterContextValue {
 }
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Live Demo
 
-    <ContextDemo />
+<ContextDemo />
 
-  </section>
+</Section>
 
-  <Callout type="tip" title="Guard with a custom hook">
-    Always create a named hook (e.g. <code>useCounter()</code>) that calls <code>useContext</code> and throws if the
-    provider is missing. This gives better error messages than silently returning undefined.
-  </Callout>
+<Callout type="tip" title="Guard with a custom hook">
+Always create a named hook (e.g. `useCounter()`) that calls `useContext` and throws if the
+provider is missing. This gives better error messages than silently returning undefined.
+</Callout>
 
-  <section>
+<Section>
 
 ## Context vs signals
 
@@ -117,5 +115,4 @@ export const ThemeContext = createContext<Theme>('dark');
 // - You want to swap implementations in tests
 ```
 
-  </section>
-</article>
+</Section>

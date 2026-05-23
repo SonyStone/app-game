@@ -1,16 +1,14 @@
-<article>
-  <header>
+<Header>
 
-# Props & Spreading
+# Props & Spreading <Badge>Components</Badge>
 
-    <Badge>Components</Badge>
-    <Description>
-      How SolidJS handles props spreading, forwarding, and native element attribute passing.
-    </Description>
+<Description>
+  How SolidJS handles props spreading, forwarding, and native element attribute passing.
+</Description>
 
-  </header>
+</Header>
 
-  <section>
+<Section>
 
 ## Spreading props onto native elements
 
@@ -35,9 +33,9 @@ function Input(props: InputProps): JSX.Element {
 <Input label="Email" type="email" placeholder="you@example.com" required />;
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## class prop merging
 
@@ -62,9 +60,9 @@ function Card(props: CardProps): JSX.Element {
 <Card class="border border-violet-500" />;
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## ref forwarding
 
@@ -88,11 +86,10 @@ function Form(): JSX.Element {
 }
 ```
 
-  </section>
+</Section>
 
-  <Callout type="info" title="use:directive syntax">
-    SolidJS supports custom directives via the <code>use:</code> prefix. Declare them with <code>
-      declare module 'solid-js'
-    </code> for TypeScript support. See the Directives page for details.
-  </Callout>
-</article>
+<Callout type="info" title="use:directive syntax">
+  SolidJS supports custom directives via the `use:` prefix. Declare them with `
+    declare module 'solid-js'
+  ` for TypeScript support. See the Directives page for details.
+</Callout>

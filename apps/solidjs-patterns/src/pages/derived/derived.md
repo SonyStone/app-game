@@ -1,17 +1,15 @@
-<article>
-  <header>
+<Header>
 
-# Derived & Memo
+# Derived & Memo <Badge>Core</Badge>
 
-    <Badge>Core</Badge>
-    <Description>
-      createMemo creates a derived reactive value that re-runs only when its dependencies change. Results are memoized
-      and multiple reads return the cached value.
-    </Description>
+<Description>
+  createMemo creates a derived reactive value that re-runs only when its dependencies change. Results are memoized
+  and multiple reads return the cached value.
+</Description>
 
-  </header>
+</Header>
 
-  <section>
+<Section>
 
 ## createMemo
 
@@ -32,17 +30,17 @@ setFirstName('Jane');
 console.log(fullName()); // "Jane Doe" - recomputed
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Live Demo
 
-    <MemoDemo />
+<MemoDemo />
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Memo vs Inline Expression
 
@@ -67,14 +65,14 @@ return (
 );
 ```
 
-  </section>
+</Section>
 
-  <Callout type="tip" title="Memo = derived signal">
-    Think of <code>createMemo</code> as a read-only signal whose value is derived from other reactive sources. It
-    returns a getter just like <code>createSignal</code>.
-  </Callout>
+<Callout type="tip" title="Memo = derived signal">
+  Think of `createMemo` as a read-only signal whose value is derived from other reactive sources. It
+  returns a getter just like `createSignal`.
+</Callout>
 
-  <section>
+<Section>
 
 ## Chained Memos
 
@@ -95,9 +93,9 @@ const total = createMemo(() => subtotal() - discountAmt());
 console.log(total());
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Memo with equals
 
@@ -116,5 +114,4 @@ const position = createMemo(() => ({ x: data().x, y: data().y }), undefined, {
 console.log(position());
 ```
 
-  </section>
-</article>
+</Section>

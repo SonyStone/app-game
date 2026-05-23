@@ -1,17 +1,15 @@
-<article>
-  <header>
+<Header>
 
-# Directives
+# Directives <Badge>Advanced</Badge>
 
-    <Badge>Advanced</Badge>
-    <Description>
-      SolidJS directives are functions that run on DOM element creation, providing a clean way to attach imperative
-      behavior.
-    </Description>
+<Description>
+SolidJS directives are functions that run on DOM element creation, providing a clean way to attach imperative
+behavior.
+</Description>
 
-  </header>
+</Header>
 
-  <section>
+<Section>
 
 ## Creating a directive
 
@@ -46,9 +44,9 @@ function Dropdown() {
 }
 ```
 
-</section>
+</Section>
 
-  <section>
+<Section>
 
 ## Directives with options
 
@@ -75,9 +73,9 @@ function tooltip(el: HTMLElement, accessor: Accessor<{ text: string; position?: 
 <button use:tooltip={{ text: 'Save document', position: 'top' }}>Save</button>;
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## autoFocus directive
 
@@ -102,10 +100,9 @@ function autoFocus(el: HTMLElement, accessor: Accessor<boolean>) {
 <input use:autoFocus={true} placeholder="Auto-focused" />;
 ```
 
-  </section>
+</Section>
 
-  <Callout type="info" title="Import directives to prevent tree-shaking">
-    If a directive is imported but only used in JSX (via <code>use:</code>), some bundlers may tree-shake it. Import
-    it explicitly: <code>import './directives/clickOutside'</code> or reference it in a variable to keep it alive.
-  </Callout>
-</article>
+<Callout type="info" title="Import directives to prevent tree-shaking">
+  If a directive is imported but only used in JSX (via `use:`), some bundlers may tree-shake it. Import
+  it explicitly: `import './directives/clickOutside'` or reference it in a variable to keep it alive.
+</Callout>

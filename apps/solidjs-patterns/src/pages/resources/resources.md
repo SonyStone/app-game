@@ -1,17 +1,15 @@
-<article>
-  <header>
+<Header>
 
-# Resources
+# Resources <Badge>Async</Badge>
 
-    <Badge>Async</Badge>
-    <Description>
-      createResource integrates async data fetching into SolidJS reactivity. It works with Suspense and ErrorBoundary
-      automatically.
-    </Description>
+<Description>
+  createResource integrates async data fetching into SolidJS reactivity. It works with Suspense and ErrorBoundary
+  automatically.
+</Description>
 
-  </header>
+</Header>
 
-  <section>
+<Section>
 
 ## createResource basics
 
@@ -36,9 +34,9 @@ user.error; // error if last fetch threw
 user.state; // 'unresolved' | 'pending' | 'ready' | 'refreshing' | 'errored'
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## With Suspense
 
@@ -65,17 +63,17 @@ function App() {
 }
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Live Demo
 
-    <ResourceDemo />
+<ResourceDemo />
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## refetch and mutate
 
@@ -94,10 +92,9 @@ function deleteTodo(id: number) {
 <button onClick={refetch}>↺ Refresh</button>;
 ```
 
-  </section>
+</Section>
 
-  <Callout type="tip" title="initialValue">
-    Pass <code>initialValue</code> in options to start with known data (e.g. SSR). The resource will be in 'ready'
-    state immediately and Suspense won't trigger on first render.
-  </Callout>
-</article>
+<Callout type="tip" title="initialValue">
+  Pass `initialValue` in options to start with known data (e.g. SSR). The resource will be in 'ready'
+  state immediately and Suspense won't trigger on first render.
+</Callout>

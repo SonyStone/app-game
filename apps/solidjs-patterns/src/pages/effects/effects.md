@@ -1,17 +1,15 @@
-<article>
-  <header>
+<Header>
 
-# Effects
+# Effects <Badge>Core</Badge>
 
-    <Badge>Core</Badge>
-    <Description>
-      Effects run side-effects in response to reactive changes. SolidJS provides createEffect, onMount, and onCleanup
-      as the primary tools.
-    </Description>
+<Description>
+  Effects run side-effects in response to reactive changes. SolidJS provides createEffect, onMount, and onCleanup
+  as the primary tools.
+</Description>
 
-  </header>
+</Header>
 
-  <section>
+<Section>
 
 ## createEffect
 
@@ -30,9 +28,9 @@ createEffect(() => {
 });
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## onCleanup
 
@@ -49,9 +47,9 @@ createEffect(() => {
 });
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## onMount / onCleanup in components
 
@@ -81,15 +79,15 @@ function ResizeWatcher() {
 }
 ```
 
-  </section>
+</Section>
 
-  <Callout type="warning" title="Effects run after render">
-    <code>createEffect</code> is scheduled after the DOM has updated. For synchronous tracking during rendering, use <code>
-      createRenderEffect
-    </code>.
-  </Callout>
+<Callout type="warning" title="Effects run after render">
+  `createEffect` is scheduled after the DOM has updated. For synchronous tracking during rendering, use `
+    createRenderEffect
+  `.
+</Callout>
 
-  <section>
+<Section>
 
 ## on() - explicit dependencies
 
@@ -123,9 +121,9 @@ createEffect(
 );
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Tracking context
 
@@ -149,13 +147,12 @@ createEffect(() => {
 });
 ```
 
-  </section>
+</Section>
 
-  <section>
+<Section>
 
 ## Live Demo
 
-    <EffectsDemo />
+<EffectsDemo />
 
-  </section>
-</article>
+</Section>

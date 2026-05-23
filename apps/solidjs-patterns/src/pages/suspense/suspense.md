@@ -1,8 +1,7 @@
 <header>
 
-# Suspense & Lazy
+# Suspense & Lazy <Badge>Async</Badge>
 
-<Badge>Async</Badge>
 <Description>
 Suspense declaratively handles loading states for async resources. lazy() code-splits components.
 </Description>
