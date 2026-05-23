@@ -1,79 +1,21 @@
 import { For, type JSX } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
-import { template } from 'solid-js/web';
-import { CodeBlock } from '../../components/CodeBlock';
-import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import example1Html, { code as example1Code, language as example1Language } from './store-example-1.txt?shiki&lang=tsx';
-import example2Html, { code as example2Code, language as example2Language } from './store-example-2.txt?shiki&lang=tsx';
-import example3Html, { code as example3Code, language as example3Language } from './store-example-3.txt?shiki&lang=tsx';
-import example4Html, { code as example4Code, language as example4Language } from './store-example-4.txt?shiki&lang=tsx';
+import { createPatternMarkdownComponents } from '../markdown-components';
+import StoreContent from './stores.md?markdown';
 
 // ============================================================================
 // MARK: Store Page
 // ============================================================================
 
 export default function StorePage(): JSX.Element {
-  return (
-    <PatternLayout
-      title="Stores"
-      badge="State"
-      description="createStore provides fine-grained reactivity for nested objects and arrays. Only the specific paths that change trigger updates."
-    >
-      <PatternSection
-        title="createStore basics"
-        description="createStore returns a reactive proxy (getter) and a setter. Nested property access is tracked."
-      >
-        <CodeBlock language={example1Language} code={example1Code}>
-          {template(example1Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection title="Live Demo">
-        <StoreDemo />
-      </PatternSection>
-
-      <PatternSection
-        title="Path syntax"
-        description="setState accepts a path of keys, an updater function, or a combination."
-      >
-        <CodeBlock language={example2Language} code={example2Code}>
-          {template(example2Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection
-        title="produce() — immer-style mutations"
-        description="produce() allows writing imperative mutation code. It uses a draft that gets applied immutably."
-      >
-        <CodeBlock language={example3Language} code={example3Code}>
-          {template(example3Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection
-        title="reconcile() — replace from external data"
-        description="reconcile diffs incoming data against the existing store, updating only changed parts."
-      >
-        <CodeBlock language={example4Language} code={example4Code}>
-          {template(example4Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <Callout type="warning" title="Don't destructure store values">
-        Destructuring a store loses reactivity. Always access nested values through the store proxy:
-        <br />
-        <code class="rounded bg-white/10 px-1">
-          const {'{'} name {'}'} = state.user
-        </code>{' '}
-        — breaks ❌
-        <br />
-        <code class="rounded bg-white/10 px-1">state.user.name</code> — works ✅
-      </Callout>
-    </PatternLayout>
-  );
+  return <StoreContent components={markdownComponents} />;
 }
+
+const markdownComponents = createPatternMarkdownComponents({
+  StoreDemo
+});
 
 // ============================================================================
 // MARK: Live Demo

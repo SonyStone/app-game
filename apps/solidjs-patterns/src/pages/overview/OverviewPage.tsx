@@ -2,15 +2,20 @@ import { A } from '@solidjs/router';
 import { For, type JSX } from 'solid-js';
 import { Badge } from '../../components/ui/Badge';
 import { Card, CardDescription, CardTitle } from '../../components/ui/Card';
+import { createPatternMarkdownComponents } from '../markdown-components';
+import OverviewContent from './overview.md?markdown';
 
 // ============================================================================
 // MARK: Overview Page
 // ============================================================================
 
 export default function OverviewPage(): JSX.Element {
-  return (
-    <article class="flex flex-col gap-10">
-      {/* Hero */}
+  return <OverviewContent components={markdownComponents} />;
+}
+
+const markdownComponents = createPatternMarkdownComponents({
+  OverviewHero(): JSX.Element {
+    return (
       <header class="border-b border-stone-300 pb-8 dark:border-neutral-800">
         <div class="mb-3 flex items-center gap-2">
           <h1 class="text-3xl font-bold text-stone-950 dark:text-white">SolidJS Patterns</h1>
@@ -21,8 +26,10 @@ export default function OverviewPage(): JSX.Element {
           documentation, experiments, and real-world usage.
         </p>
       </header>
-
-      {/* Quick links grid */}
+    );
+  },
+  TopicsGrid(): JSX.Element {
+    return (
       <section>
         <h2 class="mb-4 text-xs font-semibold tracking-widest text-stone-500 uppercase dark:text-neutral-500">
           Topics
@@ -52,8 +59,10 @@ export default function OverviewPage(): JSX.Element {
           </For>
         </div>
       </section>
-
-      {/* Notes section */}
+    );
+  },
+  KeyConcepts(): JSX.Element {
+    return (
       <section>
         <h2 class="mb-3 text-xs font-semibold tracking-widest text-stone-500 uppercase dark:text-neutral-500">
           Key Concepts
@@ -61,7 +70,7 @@ export default function OverviewPage(): JSX.Element {
         <div class="space-y-2 rounded-xl border border-stone-300 bg-stone-100/80 p-5 text-xs text-stone-600 dark:border-neutral-800 dark:bg-neutral-900/50 dark:text-neutral-400">
           <p>
             <span class="font-semibold text-stone-800 dark:text-neutral-300">Fine-grained reactivity: </span>
-            SolidJS tracks reactive dependencies at the signal level — components don't re-render; only the parts of the
+            SolidJS tracks reactive dependencies at the signal level - components don't re-render; only the parts of the
             DOM that depend on a changed signal update.
           </p>
           <p>
@@ -76,9 +85,9 @@ export default function OverviewPage(): JSX.Element {
           </p>
         </div>
       </section>
-    </article>
-  );
-}
+    );
+  }
+});
 
 // ============================================================================
 // MARK: Data

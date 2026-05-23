@@ -1,71 +1,20 @@
 import { createResource, createSignal, Suspense, type JSX } from 'solid-js';
-import { template } from 'solid-js/web';
-import { CodeBlock } from '../../components/CodeBlock';
-import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import example1Html, {
-  code as example1Code,
-  language as example1Language
-} from './resources-example-1.txt?shiki&lang=tsx';
-import example2Html, {
-  code as example2Code,
-  language as example2Language
-} from './resources-example-2.txt?shiki&lang=tsx';
-import example3Html, {
-  code as example3Code,
-  language as example3Language
-} from './resources-example-3.txt?shiki&lang=tsx';
+import { createPatternMarkdownComponents } from '../markdown-components';
+import ResourcesContent from './resources.md?markdown';
 
 // ============================================================================
 // MARK: Resources Page
 // ============================================================================
 
 export default function ResourcesPage(): JSX.Element {
-  return (
-    <PatternLayout
-      title="Resources"
-      badge="Async"
-      description="createResource integrates async data fetching into SolidJS reactivity. It works with Suspense and ErrorBoundary automatically."
-    >
-      <PatternSection
-        title="createResource basics"
-        description="createResource takes an optional source signal and a fetcher function. It returns a reactive resource with loading/error states."
-      >
-        <CodeBlock language={example1Language} code={example1Code}>
-          {template(example1Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection
-        title="With Suspense"
-        description="Wrap resource consumers in Suspense to declaratively show loading states."
-      >
-        <CodeBlock language={example2Language} code={example2Code}>
-          {template(example2Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection title="Live Demo">
-        <ResourceDemo />
-      </PatternSection>
-
-      <PatternSection
-        title="refetch and mutate"
-        description="refetch re-runs the fetcher. mutate lets you update the resource value optimistically without a network call."
-      >
-        <CodeBlock language={example3Language} code={example3Code}>
-          {template(example3Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <Callout type="tip" title="initialValue">
-        Pass <code class="rounded bg-white/10 px-1">initialValue</code> in options to start with known data (e.g. SSR).
-        The resource will be in 'ready' state immediately and Suspense won't trigger on first render.
-      </Callout>
-    </PatternLayout>
-  );
+  return <ResourcesContent components={markdownComponents} />;
 }
+
+const markdownComponents = createPatternMarkdownComponents({
+  ResourceDemo
+});
 
 // ============================================================================
 // MARK: Live Demo

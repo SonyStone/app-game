@@ -1,9 +1,0 @@
-import { createSignal, createEffect } from 'solid-js';
-
-const [count, setCount] = createSignal(0);
-
-createEffect(() => {
-  // Runs immediately, then on every count() change
-  console.log('count changed:', count());
-  document.title = `Count: ${count()}`;
-});

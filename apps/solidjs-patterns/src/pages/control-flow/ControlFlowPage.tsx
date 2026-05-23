@@ -1,74 +1,21 @@
 import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
-import { template } from 'solid-js/web';
-import { CodeBlock } from '../../components/CodeBlock';
-import { PatternLayout, PatternSection } from '../../components/PatternLayout';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import example1Html, {
-  code as example1Code,
-  language as example1Language
-} from './control-flow-example-1.txt?shiki&lang=tsx';
-import example2Html, {
-  code as example2Code,
-  language as example2Language
-} from './control-flow-example-2.txt?shiki&lang=tsx';
-import example3Html, {
-  code as example3Code,
-  language as example3Language
-} from './control-flow-example-3.txt?shiki&lang=tsx';
-import example4Html, {
-  code as example4Code,
-  language as example4Language
-} from './control-flow-example-4.txt?shiki&lang=tsx';
+import { createPatternMarkdownComponents } from '../markdown-components';
+import ControlFlowContent from './control-flow.md?markdown';
 
 // ============================================================================
 // MARK: Control Flow Page
 // ============================================================================
 
 export default function ControlFlowPage(): JSX.Element {
-  return (
-    <PatternLayout
-      title="Control Flow"
-      badge="Components"
-      description="SolidJS provides built-in control flow components that work with its fine-grained reactivity system more efficiently than JS conditional expressions."
-    >
-      <PatternSection
-        title="Show"
-        description="Conditionally render content. The fallback prop renders when the condition is false."
-      >
-        <CodeBlock language={example1Language} code={example1Code}>
-          {template(example1Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection
-        title="For vs Index"
-        description="For re-creates items when the array changes (key by reference). Index is stable by position — good for static-length arrays."
-      >
-        <CodeBlock language={example2Language} code={example2Code}>
-          {template(example2Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection title="Switch / Match">
-        <CodeBlock language={example3Language} code={example3Code}>
-          {template(example3Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection title="Dynamic" description="Render a component or HTML element determined at runtime.">
-        <CodeBlock language={example4Language} code={example4Code}>
-          {template(example4Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection title="Live Demo: Show & Switch">
-        <ControlFlowDemo />
-      </PatternSection>
-    </PatternLayout>
-  );
+  return <ControlFlowContent components={markdownComponents} />;
 }
+
+const markdownComponents = createPatternMarkdownComponents({
+  ControlFlowDemo
+});
 
 // ============================================================================
 // MARK: Live Demo

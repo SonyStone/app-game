@@ -1,8 +1,0 @@
-import { createEffect, onCleanup } from 'solid-js';
-
-createEffect(() => {
-  const id = setInterval(() => console.log('tick'), 1000);
-
-  // Runs before next effect execution or on dispose
-  onCleanup(() => clearInterval(id));
-});

@@ -1,8 +1,0 @@
-import { Suspense } from 'solid-js';
-
-// Shows fallback while any resource in the tree is loading
-<Suspense fallback={<p>Loading…</p>}>
-  <UserProfile />    {/* uses createResource internally */}
-  <PostList />       {/* also uses createResource */}
-</Suspense>
-// Both resolve before rendering children

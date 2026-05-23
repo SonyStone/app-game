@@ -1,72 +1,20 @@
 import { createContext, createSignal, useContext, type JSX } from 'solid-js';
-import { template } from 'solid-js/web';
-import { CodeBlock } from '../../components/CodeBlock';
-import { Callout, PatternLayout, PatternSection } from '../../components/PatternLayout';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
-import example1Html, {
-  code as example1Code,
-  language as example1Language
-} from './context-example-1.txt?shiki&lang=tsx';
-import example2Html, {
-  code as example2Code,
-  language as example2Language
-} from './context-example-2.txt?shiki&lang=tsx';
-import example3Html, {
-  code as example3Code,
-  language as example3Language
-} from './context-example-3.txt?shiki&lang=tsx';
+import { createPatternMarkdownComponents } from '../markdown-components';
+import ContextContent from './context.md?markdown';
 
 // ============================================================================
 // MARK: Context Page
 // ============================================================================
 
 export default function ContextPage(): JSX.Element {
-  return (
-    <PatternLayout
-      title="Context"
-      badge="State"
-      description="createContext and useContext provide a scoped dependency injection mechanism. Context values are available to all descendants without prop drilling."
-    >
-      <PatternSection
-        title="createContext"
-        description="createContext creates a context object with an optional default value. The actual value is provided by a Context.Provider."
-      >
-        <CodeBlock language={example1Language} code={example1Code}>
-          {template(example1Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection
-        title="Context with signals (reactive context)"
-        description="Wrap a signal or store in context to share reactive state without prop drilling."
-      >
-        <CodeBlock language={example2Language} code={example2Code}>
-          {template(example2Html)()}
-        </CodeBlock>
-      </PatternSection>
-
-      <PatternSection title="Live Demo">
-        <ContextDemo />
-      </PatternSection>
-
-      <Callout type="tip" title="Guard with a custom hook">
-        Always create a named hook (e.g. <code class="rounded bg-white/10 px-1">useCounter()</code>) that calls{' '}
-        <code class="rounded bg-white/10 px-1">useContext</code> and throws if the provider is missing. This gives
-        better error messages than silently returning undefined.
-      </Callout>
-
-      <PatternSection
-        title="Context vs signals"
-        description="Use context for values that need to be scoped to a subtree. For truly global state, a module-level signal or store works fine."
-      >
-        <CodeBlock language={example3Language} code={example3Code}>
-          {template(example3Html)()}
-        </CodeBlock>
-      </PatternSection>
-    </PatternLayout>
-  );
+  return <ContextContent components={markdownComponents} />;
 }
+
+const markdownComponents = createPatternMarkdownComponents({
+  ContextDemo
+});
 
 // ============================================================================
 // MARK: Live Demo
