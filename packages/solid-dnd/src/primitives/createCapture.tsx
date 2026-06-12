@@ -11,7 +11,23 @@ export function createCapture(props: {
   onPointerUp: (ev: PointerEvent) => void;
   onPointerCancel: (ev: PointerEvent) => void;
   onLostCapture: (ev: PointerEvent) => void;
-}) {
+}): {
+  /** Capture the pointer for reliable tracking */
+  set: (element: MinimumPointerEventTarget, pointerId: number) => void;
+  /** Release pointer capture and clean up listeners */
+  release: VoidFunction;
+  /**
+   * Transfer pointer capture from the source element to the proxy.
+   *
+   * Steps:
+   * 1. Remove all listeners from the source element
+   * 2. Release capture on the source (safe — no lostpointercapture listener)
+   * 3. Set capture on the proxy element
+   * 4. Bind listeners to the proxy
+   * 5. Update internal state to point at the proxy
+   */
+  transferToProxy: VoidFunction;
+} {
   const { getOrCreateProxy } = createProxyElement();
 
   let capturedElement: MinimumPointerEventTarget | null = null;
@@ -36,7 +52,6 @@ export function createCapture(props: {
   }
 
   return {
-    /** Capture the pointer for reliable tracking */
     set(element: MinimumPointerEventTarget, pointerId: number): void {
       if (capturedElement) {
         this.release();
@@ -47,7 +62,6 @@ export function createCapture(props: {
       capturedPointerId = pointerId;
       attachListeners(element);
     },
-    /** Release pointer capture and clean up listeners */
     release(): void {
       cleanupListeners();
 
@@ -62,16 +76,6 @@ export function createCapture(props: {
       capturedElement = null;
       capturedPointerId = null;
     },
-    /**
-     * Transfer pointer capture from the source element to the proxy.
-     *
-     * Steps:
-     * 1. Remove all listeners from the source element
-     * 2. Release capture on the source (safe — no lostpointercapture listener)
-     * 3. Set capture on the proxy element
-     * 4. Bind listeners to the proxy
-     * 5. Update internal state to point at the proxy
-     */
     transferToProxy(): void {
       if (!capturedElement || capturedPointerId === null) {
         return;
