@@ -202,3 +202,134 @@ Primary sources for the patterns summarized above.
   <ReferenceLink href="https://mdxjs.com/guides/injecting-components/">Injecting MDX components</ReferenceLink>
   <ReferenceLink href="https://docs.solidjs.com/concepts/components/props">Solid props concept docs</ReferenceLink>
 </ReferenceCard>
+
+---
+
+How does SolidJs works?
+
+<SideBySideCode title="props-lowering.tsx">
+
+{/* Example 1 */}
+
+```tsx
+<div />
+```
+
+```ts
+template(`<div>`);
+```
+
+{/* Example 2 */}
+
+{/* prettier-ignore */}
+```tsx
+<div class="flex" 
+     style="color: blue;"
+     lang="en"
+     data-user-id="123"
+     role="navigation" />
+```
+
+{/* prettier-ignore */}
+```ts
+template(`<div class=flex ` +
+         `lang=en ` +
+         `data-user-id=123 ` +
+         `role=navigation` + 
+         `style=color:blue>`);
+```
+
+{/* Example 2 */}
+
+{/* prettier-ignore */}
+```tsx
+function Example(props: {
+  class?: string;
+}) {
+  return <div class={props.class} />
+}
+```
+
+{/* prettier-ignore */}
+```ts
+const tmpl = template(`<div>`)
+
+function Example(props) {
+  return (() => {
+    const el = tmpl();
+    effect(() => {
+      className(el, props.class)
+    });
+    return el;
+  })()
+}
+
+function className(
+  node: Element,
+  value: string | null | undefined
+) {
+  if (value == null) {
+    node.removeAttribute("class");
+  } else {
+    node.className = value;
+  }
+}
+```
+
+</SideBySideCode>
+
+## spread
+
+<SideBySideCode >
+
+```tsx
+<div {...props} />
+```
+
+```js
+const tmpl = template(`<div>`);
+(() => {
+  const el = tmpl();
+  spread(el, props, false, false);
+  return el;
+})();
+```
+
+</SideBySideCode>
+
+<CodeBlock title="client.ts">
+
+{/* prettier-ignore */}
+```tsx
+type AttributeValue = string | number | boolean | null | undefined;
+type PropValue = AttributeValue | object | Function;
+type PropsRecord = Record<string, PropValue>;
+
+/**
+ * Applies a props object to a node using reactive effects.
+ */
+export function spread(
+  node: Element,
+  props: PropsRecord = {},
+  isSVG?: boolean,
+  skipChildren?: boolean
+): PropsRecord {
+  const prevProps: PropsRecord = {};
+  if (!skipChildren) {
+    effect(() => {
+      prevProps.children = insertExpression(node, props.children, prevProps.children);
+    });
+  }
+  effect(() => {
+    typeof props.ref === "function" && use(props.ref, node);
+  });
+  effect(() => {
+    assign(node, props, isSVG, true, prevProps, true);
+  });
+  
+  return prevProps;
+}
+
+```
+
+</CodeBlock>

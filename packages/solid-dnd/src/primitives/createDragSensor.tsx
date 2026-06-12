@@ -18,6 +18,8 @@ export type DragStartEvent = {
   origin: Vec2;
   /** The original PointerEvent that started the drag. */
   pointerEvent: PointerEvent;
+
+  target: DragStartEvent['pointerEvent']['target'];
 };
 
 export type DragMoveEvent = {
@@ -106,14 +108,27 @@ export function createDragSensor(
      */
     onClick?: (ev: PointerEvent) => void;
   } = {}
-) {
+): {
+  /** Whether a drag is currently in progress (threshold exceeded). */
+  isDragging: Accessor<boolean>;
+  /** Current pointer position during drag, or null when idle. */
+  position: Accessor<Vec2 | null>;
+  /** Delta from the initial pointerdown position (origin), or null when idle. */
+  delta: Accessor<Vec2 | null>;
+  /** Pointer type of the current/last drag ('mouse' | 'touch' | 'pen'). */
+  pointerType: Accessor<'mouse' | 'touch' | 'pen'>;
+  /** Bind this to `onPointerDown` on the drag handle element. */
+  onPointerDown: (ev: PointerEvent) => void;
+  /** Programmatically cancel the current drag. */
+  cancel: VoidFunction;
+} {
   const threshold = () => access(options.threshold) ?? 8;
 
   // Reactive state
   const [isDragging, setIsDragging] = createSignal(false);
   const [position, setPosition] = createSignal<Vec2 | null>(null);
   const [delta, setDelta] = createSignal<Vec2 | null>(null);
-  const [pointerType, setPointerType] = createSignal<string>('mouse');
+  const [pointerType, setPointerType] = createSignal<'mouse' | 'touch' | 'pen'>('mouse');
 
   // Internal mutable state (not reactive — perf-critical)
   let tracking = false; // pointerdown received, waiting for threshold
@@ -121,6 +136,7 @@ export function createDragSensor(
   let origin: Vec2 = Vec2Zero; // position at pointerdown
 
   let startPointerEvent: PointerEvent | null = null;
+  let target: Element | null = null;
 
   const capture = createCapture({
     onPointerMove,
@@ -145,7 +161,7 @@ export function createDragSensor(
       return;
     }
 
-    const target = ev.currentTarget as HTMLElement;
+    target = ev.currentTarget as HTMLElement;
     if (!target) {
       return;
     }
@@ -156,7 +172,7 @@ export function createDragSensor(
     origin = vec2(ev.clientX, ev.clientY);
     tracking = true;
     startPointerEvent = ev;
-    setPointerType(ev.pointerType);
+    setPointerType(ev.pointerType as 'mouse' | 'touch' | 'pen');
     setIsActive(true);
   }
 
@@ -200,7 +216,8 @@ export function createDragSensor(
       options.onDragStart?.({
         position: pos,
         origin,
-        pointerEvent: startPointerEvent!
+        pointerEvent: startPointerEvent!,
+        target: startPointerEvent!.target as HTMLElement
       });
       return;
     }
@@ -237,14 +254,14 @@ export function createDragSensor(
     resetState();
   }
 
-  function onPointerCancel(_ev: PointerEvent): void {
+  function onPointerCancel(_: PointerEvent): void {
     if (dragging) {
       options.onDragCancel?.();
     }
     resetState();
   }
 
-  function onLostCapture(_ev: PointerEvent): void {
+  function onLostCapture(_: PointerEvent): void {
     // If we lose capture unexpectedly (e.g., another element steals it),
     // treat it as a cancel.
     if (tracking || dragging) {
@@ -275,17 +292,11 @@ export function createDragSensor(
   }
 
   return {
-    /** Whether a drag is currently in progress (threshold exceeded). */
     isDragging,
-    /** Current pointer position during drag, or null when idle. */
     position,
-    /** Delta from the initial pointerdown position (origin), or null when idle. */
     delta,
-    /** Pointer type of the current/last drag ('mouse' | 'touch' | 'pen'). */
     pointerType,
-    /** Bind this to `onPointerDown` on the drag handle element. */
     onPointerDown,
-    /** Programmatically cancel the current drag. */
     cancel
   };
 }

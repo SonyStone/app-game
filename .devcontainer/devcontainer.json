@@ -7,7 +7,10 @@
   "containerUser": "node",
   "updateRemoteUserUID": true,
   "postCreateCommand": "bash /workspaces/app-game/.devcontainer/post-create.sh",
-  "forwardPorts": [3120],
+  "forwardPorts": [
+    3120,
+    3774
+  ],
   "portsAttributes": {
     "3120": {
       "label": "boxing-landing dev server",

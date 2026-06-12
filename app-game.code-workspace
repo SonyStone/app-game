@@ -12,21 +12,27 @@
     // {
     //     "path": "/workspaces/repos/react-bits",
     // },
-    {
-      "path": "/workspaces/repos/dockview",
-    },
-    {
-      "path": "/workspaces/repos/rc-dock",
-    },
-    {
-      "path": "/workspaces/repos/FlexLayout",
-    },
+    // {
+    //   "path": "/workspaces/repos/dockview",
+    // },
+    // {
+    //   "path": "/workspaces/repos/rc-dock",
+    // },
+    // {
+    //   "path": "/workspaces/repos/FlexLayout",
+    // },
     {
       "path": "/workspaces/repos/unocss",
     },
-    // {
-    //     "path": "/workspaces/repos/solid-primitives",
-    // },
+    {
+      "path": "/workspaces/repos/solid-primitives",
+    },
+    {
+      "path": "/workspaces/repos/solid",
+    },
+    {
+      "path": "/workspaces/repos/dom-expressions",
+    },
     // {
     //     "path": "/workspaces/repos/corvu",
     // },

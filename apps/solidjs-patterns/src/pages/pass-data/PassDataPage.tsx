@@ -82,7 +82,7 @@ const markdownComponents = {
         <Show when={useCode()?.codeProps}>
           {(codeProps) => (
             <CodeBlock
-              class="flex flex-wrap [&>*]:flex-grow-1"
+              class="flex flex-wrap [&>*]:min-w-1/2 [&>*]:flex-grow-1"
               code={codeProps()?.code}
               language={codeProps()?.language}
               title={props.title}
