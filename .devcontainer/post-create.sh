@@ -1,10 +1,11 @@
-mkdir -p /workspaces 
-if [ ! -f /workspaces/package.json ] && [ -f /workspaces/package.json ]; then
-  cp -rn /workspaces/. /workspaces/ 2>/dev/null || true;
-fi
+#!/usr/bin/env bash
 
-if [ ! -f /workspaces/app-game/package.json ]; then
-  cp -rn /home/node/defaults/. /workspaces/ 2>/dev/null || true;
+set -euo pipefail
+
+mkdir -p /workspaces/app-game
+
+if [ ! -f /workspaces/app-game/package.json ] && [ -d /home/node/defaults ]; then
+  cp -rn /home/node/defaults/. /workspaces/app-game/ 2>/dev/null || true
 fi
 
 pnpm config set --global store-dir /pnpm/store

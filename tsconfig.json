@@ -123,6 +123,12 @@
       "@app-game/solid-utils/*": [
         "./packages/solid-utils/*"
       ],
+      "@app-game/solid-props-proxy": [
+        "./packages/solid-props-proxy/index.tsx"
+      ],
+      "@app-game/solid-props-proxy/*": [
+        "./packages/solid-props-proxy/*"
+      ],
       "@app-game/ui-components": [
         "./packages/ui-components/index.ts"
       ],

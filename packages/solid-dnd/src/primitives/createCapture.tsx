@@ -51,58 +51,64 @@ export function createCapture(props: {
     capturedElement.removeEventListener('lostpointercapture', props.onLostCapture);
   }
 
-  return {
-    set(element: MinimumPointerEventTarget, pointerId: number): void {
-      if (capturedElement) {
-        this.release();
-      }
+  function set(element: MinimumPointerEventTarget, pointerId: number): void {
+    if (capturedElement) {
+      release();
+    }
 
-      element.setPointerCapture(pointerId);
-      capturedElement = element;
-      capturedPointerId = pointerId;
-      attachListeners(element);
-    },
-    release(): void {
-      cleanupListeners();
+    element.setPointerCapture(pointerId);
+    capturedElement = element;
+    capturedPointerId = pointerId;
+    attachListeners(element);
+  };
 
-      // Don't call releaseCapture if we already lost it.
-      if (capturedElement && capturedPointerId !== null) {
-        try {
-          capturedElement.releasePointerCapture(capturedPointerId);
-        } catch {
-          // Already released — ignore
-        }
-      }
-      capturedElement = null;
-      capturedPointerId = null;
-    },
-    transferToProxy(): void {
-      if (!capturedElement || capturedPointerId === null) {
-        return;
-      }
+  function release(): void {
+    cleanupListeners();
 
-      // Remove listeners from source — must happen BEFORE releasing capture
-      // so the lostpointercapture event (fired by releasePointerCapture)
-      // doesn't trigger our onLostCapture handler.
-      cleanupListeners();
-
-      // Release capture on the source element
+    // Don't call releaseCapture if we already lost it.
+    if (capturedElement && capturedPointerId !== null) {
       try {
         capturedElement.releasePointerCapture(capturedPointerId);
       } catch {
         // Already released — ignore
       }
-
-      // Set capture on the proxy
-      const proxy = getOrCreateProxy();
-      proxy.setPointerCapture(capturedPointerId);
-
-      // Bind listeners to the proxy
-      attachListeners(proxy);
-
-      // Update internal state
-      capturedElement = proxy;
     }
+    capturedElement = null;
+    capturedPointerId = null;
+  }
+
+  function transferToProxy(): void {
+    if (!capturedElement || capturedPointerId === null) {
+      return;
+    }
+
+    // Remove listeners from source — must happen BEFORE releasing capture
+    // so the lostpointercapture event (fired by releasePointerCapture)
+    // doesn't trigger our onLostCapture handler.
+    cleanupListeners();
+
+    // Release capture on the source element
+    try {
+      capturedElement.releasePointerCapture(capturedPointerId);
+    } catch {
+      // Already released — ignore
+    }
+
+    // Set capture on the proxy
+    const proxy = getOrCreateProxy();
+    proxy.setPointerCapture(capturedPointerId);
+
+    // Bind listeners to the proxy
+    attachListeners(proxy);
+
+    // Update internal state
+    capturedElement = proxy;
+  }
+  
+  return {
+    set,
+    release,
+    transferToProxy
   };
 }
 

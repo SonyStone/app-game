@@ -3,6 +3,13 @@
   "dockerComposeFile": "docker-compose.yml",
   "service": "app",
   "workspaceFolder": "/workspaces/app-game",
+  "mounts": [
+    "source=${localEnv:HOME}/.codex,target=/home/node/.codex,type=bind",
+    "source=${localWorkspaceFolder}/.codex/memories,target=/home/node/.codex/memories,type=bind",
+    "source=${localWorkspaceFolder}/.codex/sessions,target=/home/node/.codex/sessions,type=bind",
+    "source=${localWorkspaceFolder}/.codex/session_index.jsonl,target=/home/node/.codex/session_index.jsonl,type=bind",
+    "source=${localWorkspaceFolder}/.codex/history.jsonl,target=/home/node/.codex/history.jsonl,type=bind"
+  ],
   "remoteUser": "node",
   "containerUser": "node",
   "updateRemoteUserUID": true,
@@ -25,7 +32,16 @@
         "remote.autoForwardPortsSource": "process",
         "remote.autoForwardPortsFallback": 0,
         "remote.restoreForwardedPorts": true
-      }
+      },
+      "extensions": [
+        "OpenAI.chatgpt", // Codex
+        "Gruntfuggly.todo-tree", // ToDo tree
+        "bradlc.vscode-tailwindcss", // tailwindcss
+        "dbaeumer.vscode-eslint", // eslint
+        "esbenp.prettier-vscode", // prettier
+        "vitest.explorer", // vitest
+        "ms-playwright.playwright" // playwright
+      ]
     }
   }
 }

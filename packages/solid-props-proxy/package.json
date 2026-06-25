@@ -1,0 +1,32 @@
+{
+  "name": "@app-game/solid-props-proxy",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "exports": {
+    ".": "./src/index.tsx",
+    "./attribute-ns-patch": "./src/attribute-ns-patch.ts",
+    "./attribute-patch": "./src/attribute-patch.ts",
+    "./component": "./src/component.tsx",
+    "./event-listener-patch": "./src/event-listener-patch.ts",
+    "./spread": "./src/spread.ts",
+    "./types": "./src/types.ts",
+    "./utils": "./src/utils.ts"
+  },
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc --project tsconfig.test.json --pretty false"
+  },
+  "peerDependencies": {
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "happy-dom": "^20.9.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:"
+  }
+}

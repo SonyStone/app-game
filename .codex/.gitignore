@@ -1,0 +1,7 @@
+history.jsonl
+session_index.jsonl
+sessions/*
+!sessions/.gitignore
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

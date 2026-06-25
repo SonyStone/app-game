@@ -69,6 +69,12 @@ const routes: Routes[] = [
     name: 'Cloud Storage Tree',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./cloud-storage-tree'))
+  },
+  {
+    path: '/solid-props-proxy',
+    name: 'Solid Props Proxy',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./solid-props-proxy'))
   }
 ];
 
@@ -76,7 +82,7 @@ export const uiComponentsRoutes: Routes = {
   path: '/ui-components-examples',
   Preview: (props) => (
     <A
-      class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden overflow-hidden bg-slate-200 p-2 p-2 px-4"
+      class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 px-4"
       href={props.path}
     >
       <h2 class="text-4xl">UI/UX</h2>

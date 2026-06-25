@@ -6,6 +6,8 @@ RUN corepack enable \
   jq \
   ripgrep \
   tree \
+  ffmpeg \
+  && npm install -g @openai/codex@latest \
   && mkdir -p /pnpm/store /workspaces/repos \
   && chown -R node:node /pnpm /workspaces \
   && rm -rf /var/lib/apt/lists/*

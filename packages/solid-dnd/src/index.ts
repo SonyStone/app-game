@@ -44,12 +44,21 @@ export type {
 } from './primitives/createDisplayList';
 export { createDragOverlay } from './primitives/createDragOverlay';
 export type { DragOverlay, DragOverlayOptions } from './primitives/createDragOverlay';
-export { createDragSensor } from './primitives/createDragSensor';
+export { DragSensor, createDragSensor, createDragSensorFactory } from './primitives/createDragSensor';
 export type {
+  CreateDragSensorOptions,
+  DragCancelEvent,
   DragEndEvent,
+  DragPointerType,
+  DragSensorFactory,
   DragMoveEvent,
-  DragSensor,
+  DragSensorComponent,
+  DragSensorHandle,
+  DragSensorProps,
+  DragSensorScopeProps,
   DragSensorOptions,
+  DragSensorFactoryOptions,
+  DragSource,
   DragStartEvent
 } from './primitives/createDragSensor';
 export { createFlip } from './primitives/createFlip';

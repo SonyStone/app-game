@@ -97,7 +97,7 @@
     "@solid-primitives/memo": "catalog:",
     "@solid-primitives/mutation-observer": "^1.2.3",
     "@solid-primitives/pointer": "^0.3.5",
-    "@solid-primitives/props": "^3.2.3",
+    "@solid-primitives/props": "catalog:",
     "@solid-primitives/raf": "^2.3.4",
     "@solid-primitives/refs": "^1.1.3",
     "@solid-primitives/resize-observer": "^2.1.5",

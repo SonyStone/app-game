@@ -1,6 +1,7 @@
 import { cn } from '@app-game/utils';
-import { createDragSensor } from 'solid-dnd';
-import { children, ComponentProps, createSignal, Index, JSX, Show } from 'solid-js';
+import { PropsProxy } from '@app-game/solid-props-proxy';
+import { DragSensor } from 'solid-dnd';
+import { children, createSignal, Index, JSX } from 'solid-js';
 import { DockingNode } from './SolidDockingExample';
 import { Component1, Component2, Component3 } from './solid-docking/TestComponents';
 
@@ -68,105 +69,66 @@ function DockingTabsView(
   const [activeId, setActiveId] = createSignal(0);
 
   return (
-    <div class="bg-neutral-925 flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <div class="flex shrink-0 items-center">
-        <div class="me-1 h-6 w-6 rounded-lg border border-white"></div>
-        <Index each={resolved.toArray()}>
-          {(_, index) => {
-            return (
-              <DockingTabButton
-                index={index}
-                border={index === 1}
-                title={'Component ' + (index + 1)}
-                isActive={activeId() === index}
-                onClick={() => setActiveId(index)}
-                // isDragged={() => draggedId() === index()}
-              />
-            );
-          }}
-        </Index>
-      </div>
+    <DragSensor.Scope threshold={6}>
+      {(dragScope) => (
+        <div class="bg-neutral-925 flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <div class="relative flex shrink-0 items-center">
+            <div class="me-1 h-6 w-6 rounded-lg border border-white"></div>
+            {/* <div class="absolute inset-0 border border-white"></div> */}
+            <Index each={resolved.toArray()}>
+              {(_, index) => {
+                let ref: HTMLButtonElement | null = null;
 
-      {resolved.toArray()[activeId()]}
-    </div>
-  );
-}
+                return (
+                  // <DockingTabButton
+                  //   index={index}
+                  //   border={index === 1}
+                  //   title={'Component ' + (index + 1)}
+                  //   isActive={activeId() === index}
 
-function DockingTabButton(
-  props: Partial<{
-    index?: number;
-    panelId: string;
-    title: string;
-    closable?: boolean;
-    isActive?: boolean;
-    border?: boolean;
-    isDragged: () => boolean;
-    setTabRef: (panelId: string, element: HTMLButtonElement) => void;
-    onActivate: (panelId: string) => void;
-    onDragStart: (event: { position: { x: number; y: number } }) => void;
-    onDragMove: (event: { position: { x: number; y: number } }) => void;
-    onDragEnd: (event: { position: { x: number; y: number } }) => void;
-    onDragCancel: () => void;
-  }> &
-    ComponentProps<'button'>
-): JSX.Element {
-  const sensor = createDragSensor({
-    threshold: 6,
-    onClick: () => {
-      // props.onActivate?.(props.panelId);
-    },
-    onDragStart: (event) => {
-      props.onClick?.();
-      props.onDragStart?.({
-        position: {
-          x: event.position.x,
-          y: event.position.y
-        }
-      });
-    },
-    onDragMove: (event) => {
-      props.onDragMove?.({
-        position: {
-          x: event.position.x,
-          y: event.position.y
-        }
-      });
-    },
-    onDragEnd: (event) => {
-      props.onDragEnd?.({
-        position: {
-          x: event.position.x,
-          y: event.position.y
-        }
-      });
-    },
-    onDragCancel: () => {
-      props.onDragCancel?.();
-    }
-  });
+                  //   // isDragged={() => draggedId() === index()}
+                  // />
+                  <DragSensor
+                    data={{ index }}
+                    onDragStart={(event) => {
+                      console.log('Drag start', event.source.element, event.source.data.index);
+                    }}
+                  >
+                    <button
+                      type="button"
+                      ref={(element) => {
+                        ref = element;
+                      }}
+                      class={cn(
+                        'group outward-b-lg relative flex touch-none items-center gap-2 px-3 py-1.5 text-sm text-white',
+                        'not-[.active]:hover:bg-neutral-850 not-[.active]:text-neutral-400 not-[.active]:hover:text-neutral-200',
+                        '[&.active]:outward-bg-neutral-700 [&.active]:z-1 [&.active]:bg-neutral-700',
+                        activeId() === index && `active`,
+                        index === 1 && 'outward-border-1 [&.active]:outward-border-white'
+                        // props.isDragged?.() && 'cursor-grabbing opacity-60',
+                        // !props.isDragged?.() && 'cursor-grab'
+                      )}
+                      onClick={() => setActiveId(index)}
+                    >
+                      <span>{'Component ' + (index + 1)}</span>
+                    </button>
+                  </DragSensor>
+                );
+              }}
+            </Index>
+          </div>
 
-  return (
-    <button
-      type="button"
-      class={cn(
-        'group outward-b relative flex touch-none items-center gap-2 px-3 py-1.5 text-sm text-white',
-        'not-[.active]:hover:bg-neutral-850 not-[.active]:text-neutral-400 not-[.active]:hover:text-neutral-200',
-        '[&.active]:outward-bg-neutral-700 [&.active]:z-1 [&.active]:bg-neutral-700',
-        props.isActive && `active`,
-        props.border && 'outward-border-1 [&.active]:outward-border-white',
-        props.isDragged?.() && 'cursor-grabbing opacity-60',
-        !props.isDragged?.() && 'cursor-grab'
+          {resolved.toArray()[activeId()]}
+
+          <PropsProxy
+            target={dragScope.activeSource()?.element}
+            aria-description="Selected view"
+            style={{
+              transform: `translateX(${dragScope.delta()?.x ?? 0}px)`
+            }}
+          />
+        </div>
       )}
-      onPointerDown={sensor.onPointerDown}
-      onClick={props.onClick}
-      style={{
-        transform: `translateX(${sensor.delta()?.x ?? 0}px)`
-      }}
-    >
-      <span>{props.title}</span>
-      <Show when={props.closable}>
-        <span class="text-xs text-neutral-500">x</span>
-      </Show>
-    </button>
+    </DragSensor.Scope>
   );
 }

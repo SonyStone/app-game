@@ -19,6 +19,7 @@
     "@solid-primitives/cursor": "catalog:",
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/memo": "catalog:",
+    "@solid-primitives/refs": "^1.1.3",
     "@solid-primitives/scheduled": "catalog:",
     "@solid-primitives/set": "catalog:",
     "@solid-primitives/utils": "catalog:"

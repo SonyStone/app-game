@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "./src/index.tsx",
+    "./src/index.test.tsx",
+    "../ui-components-examples/docking/SolidTabsExample.tsx",
+    "../ui-components-examples/solid-props-proxy/index.tsx"
+  ]
+}
