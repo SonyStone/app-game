@@ -1,6 +1,5 @@
+import { PropsProxy } from '@app-game/solid-props-proxy';
 import { createMemo, createSignal, Show } from 'solid-js';
-import { PropsProxy } from '@app-game/solid-props-proxy/component';
-import type { Props } from '@app-game/solid-props-proxy/types';
 
 const testPropsArray = [
   {
@@ -43,7 +42,7 @@ export function PropsProxyExample1() {
         onClick={() => {
           console.log('Proxy onClick');
         }}
-        {...({ value: proxyCounter() + ' Not a number' } satisfies Props<HTMLInputElement>)}
+        {...{ value: proxyCounter() + ' Not a number' }}
         {...testProps()}
       />
     </Show>
