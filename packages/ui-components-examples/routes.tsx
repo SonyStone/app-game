@@ -75,6 +75,12 @@ const routes: Routes[] = [
     name: 'Solid Props Proxy',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./solid-props-proxy'))
+  },
+  {
+    path: '/cursor-emulation',
+    name: 'Cursor Emulation',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./cursor-emulation'))
   }
 ];
 

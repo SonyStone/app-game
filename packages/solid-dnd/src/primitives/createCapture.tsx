@@ -60,7 +60,7 @@ export function createCapture(props: {
     capturedElement = element;
     capturedPointerId = pointerId;
     attachListeners(element);
-  };
+  }
 
   function release(): void {
     cleanupListeners();
@@ -104,7 +104,7 @@ export function createCapture(props: {
     // Update internal state
     capturedElement = proxy;
   }
-  
+
   return {
     set,
     release,

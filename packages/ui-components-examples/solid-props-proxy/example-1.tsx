@@ -6,6 +6,7 @@ const testPropsArray = [
     'attr-asd': '123'
   },
   {
+    class: 'bg-red-300!',
     asdasdasd: 'asdasd',
     onInput: () => {
       console.log('asdasd input');

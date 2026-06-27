@@ -9,6 +9,7 @@
     "@app-game/ui-components": "workspace:*",
     "@app-game/utils": "workspace:*",
     "@solid-primitives/active-element": "catalog:",
+    "@solid-primitives/timer": "catalog:",
     "@solid-primitives/props": "catalog:",
     "solid-dnd": "workspace:*"
   },

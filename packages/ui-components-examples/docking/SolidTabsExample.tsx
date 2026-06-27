@@ -1,5 +1,5 @@
-import { cn } from '@app-game/utils';
 import { PropsProxy } from '@app-game/solid-props-proxy';
+import { cn } from '@app-game/utils';
 import { DragSensor } from 'solid-dnd';
 import { children, createSignal, Index, JSX } from 'solid-js';
 import { DockingNode } from './SolidDockingExample';

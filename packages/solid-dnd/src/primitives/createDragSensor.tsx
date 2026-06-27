@@ -3,12 +3,12 @@ import { resolveFirst } from '@solid-primitives/refs';
 import { access, isClient, type MaybeAccessor } from '@solid-primitives/utils';
 import {
   type Accessor,
-  children as resolveChildren,
   createContext,
   createEffect,
   createSignal,
   type JSX,
   onCleanup,
+  children as resolveChildren,
   useContext
 } from 'solid-js';
 import { type Vec2, of as vec2 } from '../core/vec2';

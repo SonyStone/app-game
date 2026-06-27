@@ -124,7 +124,7 @@
         "./packages/solid-utils/*"
       ],
       "@app-game/solid-props-proxy": [
-        "./packages/solid-props-proxy/index.tsx"
+        "packages/solid-props-proxy/src/index.tsx"
       ],
       "@app-game/solid-props-proxy/*": [
         "./packages/solid-props-proxy/*"
@@ -181,6 +181,7 @@
     // "rootDirs": [],                                   /* Allow multiple folders to be treated as one when resolving modules. */
     // "typeRoots": [],                                  /* Specify multiple folders that act like `./node_modules/@types`. */
     "types": [
+      "vite-plugin-solid-svg/types-component-solid",
       "vite/client",
       "vite-plugin-glsl/ext",
       "@webgpu/types",

@@ -6,4 +6,4 @@ import 'uno.css';
 import { App } from './App';
 import { StatsProvider } from './Stats.provider';
 
-createApp(App).use(MetaProvider).use(StatsProvider).use(CameraProvider).mount(document.body);
+createApp(App).use(MetaProvider).use(StatsProvider).use(CameraProvider).mount(document.getElementById('app')!);

@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "types": [
+      "vite-plugin-solid-svg/types-component-solid",
       "vite/client",
       "vite-plugin-glsl/ext",
       "@webgpu/types",
