@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@app-game/grease-pencil-typegpu": "workspace:*",
     "@app-game/solidjs-patterns": "workspace:*",
     "@app-game/solid-dnd-playground": "workspace:*",
     "@app-game/dnd-playground": "workspace:*",

@@ -8,6 +8,7 @@ import { oglRoutes } from '@app-game/ogl-examples/routes';
 import { paintRoutes } from '@app-game/paint/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
 import { pixijsRoutes } from '@app-game/pixijs-examples/routes';
+import { routes as greasePencilTypegpuRoutes } from '@app-game/grease-pencil-typegpu/routes';
 import { routes as solidDndPlaygroundRoutes } from '@app-game/solid-dnd-playground/routes';
 import { routes as solidjsPatternsRoutes } from '@app-game/solidjs-patterns/routes';
 import { threeRoutes } from '@app-game/three-examples';
@@ -38,6 +39,12 @@ export const routes: Routes[] = [
     name: 'SolidJS Patterns',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     children: [solidjsPatternsRoutes]
+  },
+  {
+    path: '/grease-pencil-typegpu',
+    name: 'Grease Pencil TypeGPU',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    children: [greasePencilTypegpuRoutes]
   },
   {
     path: '/dnd-playground',

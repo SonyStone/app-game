@@ -1,0 +1,29 @@
+{
+  "name": "@app-game/grease-pencil-typegpu",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3060",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "solid-js": "catalog:",
+    "typegpu": "^0.11.4"
+  },
+  "devDependencies": {
+    "@types/node": "25.8.0",
+    "@unocss/reset": "catalog:",
+    "@unocss/vite": "catalog:",
+    "@webgpu/types": "^0.1.70",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vite-tsconfig-paths": "catalog:"
+  },
+  "exports": {
+    "./App": "./src/App.tsx",
+    "./routes": "./src/routes.ts"
+  }
+}

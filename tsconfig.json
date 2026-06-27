@@ -36,6 +36,9 @@
       "@app-game/dnd-playground/*": [
         "./apps/dnd-playground/src/*"
       ],
+      "@app-game/grease-pencil-typegpu/*": [
+        "./apps/grease-pencil-typegpu/src/*"
+      ],
       "@app-game/app-router": [
         "./packages/app-router/index.ts"
       ],

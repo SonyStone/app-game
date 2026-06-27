@@ -52,6 +52,7 @@ export default defineConfig({
     alias: {
       '@app-game/solid-dnd-playground': resolve(apps, 'solid-dnd-playground/src'),
       '@app-game/dnd-playground': resolve(apps, 'dnd-playground/src'),
+      '@app-game/grease-pencil-typegpu': resolve(apps, 'grease-pencil-typegpu/src'),
       '@app-game/solidjs-patterns': resolve(apps, 'solidjs-patterns/src'),
       '@app-game/solid-props-proxy': resolve(packages, 'solid-props-proxy'),
       '@app-game/app-router': resolve(packages, 'app-router'),
