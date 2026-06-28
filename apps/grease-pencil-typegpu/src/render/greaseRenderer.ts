@@ -1,31 +1,31 @@
 import tgpu, { d, type TgpuRoot } from 'typegpu'
+import type {
+  DrawingWorkplane,
+  RenderLayer,
+  Stroke,
+  StrokeId,
+} from '../document'
 import {
   add3,
   clamp,
   createCameraMatrices,
-  distance3,
+  dot3,
   getCameraBasis,
-  normalize3,
   scale3,
   sub3,
   transformMat4,
   type CameraState,
   type Vec3,
-  type Vec4,
 } from './math'
+import {
+  buildDrawingVertices,
+  FLOATS_PER_VERTEX,
+  type StrokePointOverlay,
+} from './meshBuilder'
+import { getWorkplaneBasis } from './workplane'
 
-export type StrokePoint = {
-  position: Vec3
-  pressure: number
-  time: number
-}
-
-export type Stroke = {
-  id: string
-  color: Vec4
-  radius: number
-  points: StrokePoint[]
-}
+export { pointerPressure, shouldAppendPoint, smoothPoint } from './input'
+export type { StrokePointOverlay } from './meshBuilder'
 
 export type RendererStatus = {
   ok: boolean
@@ -38,7 +38,11 @@ const DrawingVertex = d.unstruct({
 })
 
 const drawingVertexLayout = tgpu.vertexLayout(d.disarrayOf(DrawingVertex))
-const FLOATS_PER_VERTEX = 7
+const DEFAULT_WORKPLANE: DrawingWorkplane = {
+  origin: [0, 0, 0],
+  rotation: [0, 0, 0],
+  gridScale: 1,
+}
 
 const shaderCode = /* wgsl */ `
 struct CameraUniforms {
@@ -90,8 +94,11 @@ export class GreaseRenderer {
   private vertexBuffer?: GPUBuffer
   private vertexCapacity = 0
   private format?: GPUTextureFormat
-  private strokes: Stroke[] = []
+  private layers: RenderLayer[] = []
+  private workplane: DrawingWorkplane = DEFAULT_WORKPLANE
   private draftStroke?: Stroke
+  private selectedStrokeIds = new Set<StrokeId>()
+  private pointOverlays: StrokePointOverlay[] = []
   private width = 1
   private height = 1
 
@@ -214,9 +221,18 @@ export class GreaseRenderer {
     this.uniformBuffer?.destroy()
   }
 
-  setStrokes(strokes: Stroke[], draftStroke?: Stroke) {
-    this.strokes = strokes
+  setScene(
+    layers: RenderLayer[],
+    workplane: DrawingWorkplane,
+    draftStroke?: Stroke,
+    selectedStrokeIds: ReadonlySet<StrokeId> = new Set<StrokeId>(),
+    pointOverlays: readonly StrokePointOverlay[] = [],
+  ) {
+    this.layers = layers
+    this.workplane = workplane
     this.draftStroke = draftStroke
+    this.selectedStrokeIds = new Set(selectedStrokeIds)
+    this.pointOverlays = [...pointOverlays]
     this.render()
   }
 
@@ -266,6 +282,7 @@ export class GreaseRenderer {
   }
 
   screenToWorld(clientX: number, clientY: number): Vec3 | undefined {
+    const basis = getWorkplaneBasis(this.workplane)
     const rect = this.canvas.getBoundingClientRect()
     const x = ((clientX - rect.left) / rect.width) * 2 - 1
     const y = 1 - ((clientY - rect.top) / rect.height) * 2
@@ -277,10 +294,15 @@ export class GreaseRenderer {
     const nearPoint: Vec3 = [near[0] / near[3], near[1] / near[3], near[2] / near[3]]
     const farPoint: Vec3 = [far[0] / far[3], far[1] / far[3], far[2] / far[3]]
     const ray = sub3(farPoint, nearPoint)
-    if (Math.abs(ray[2]) < 1e-6) return
+    const denominator = dot3(ray, basis.normal)
+    if (Math.abs(denominator) < 1e-6) return
 
-    const t = -nearPoint[2] / ray[2]
+    const t = dot3(sub3(basis.origin, nearPoint), basis.normal) / denominator
     return add3(nearPoint, scale3(ray, t))
+  }
+
+  offsetFromWorkplane(position: Vec3, distance: number): Vec3 {
+    return add3(position, scale3(getWorkplaneBasis(this.workplane).normal, distance))
   }
 
   render() {
@@ -297,10 +319,13 @@ export class GreaseRenderer {
 
     this.resize()
 
-    const vertices: number[] = []
-    appendGrid(vertices)
-    for (const stroke of this.strokes) appendStroke(vertices, stroke)
-    if (this.draftStroke) appendStroke(vertices, this.draftStroke)
+    const vertices = buildDrawingVertices({
+      layers: this.layers,
+      workplane: this.workplane,
+      draftStroke: this.draftStroke,
+      selectedStrokeIds: this.selectedStrokeIds,
+      pointOverlays: this.pointOverlays,
+    })
 
     const vertexCount = vertices.length / FLOATS_PER_VERTEX
     if (vertexCount === 0) return
@@ -352,128 +377,4 @@ export class GreaseRenderer {
       label: 'drawing vertices',
     })
   }
-}
-
-function appendGrid(vertices: number[]) {
-  const extent = 10
-  for (let i = -extent; i <= extent; i += 1) {
-    const isAxis = i === 0
-    const alpha = isAxis ? 0.46 : i % 5 === 0 ? 0.2 : 0.115
-    const width = isAxis ? 0.012 : 0.006
-    const xColor: Vec4 = isAxis
-      ? [0.86, 0.18, 0.18, alpha]
-      : [0.16, 0.18, 0.2, alpha]
-    const yColor: Vec4 = isAxis
-      ? [0.16, 0.4, 0.88, alpha]
-      : [0.16, 0.18, 0.2, alpha]
-    appendSegment(vertices, [i, -extent, -0.014], [i, extent, -0.014], width, xColor)
-    appendSegment(vertices, [-extent, i, -0.014], [extent, i, -0.014], width, yColor)
-  }
-}
-
-function appendStroke(vertices: number[], stroke: Stroke) {
-  if (stroke.points.length === 0) return
-
-  if (stroke.points.length === 1) {
-    appendDisc(
-      vertices,
-      stroke.points[0].position,
-      stroke.radius * stroke.points[0].pressure,
-      stroke.color,
-    )
-    return
-  }
-
-  for (let i = 0; i < stroke.points.length - 1; i += 1) {
-    const current = stroke.points[i]
-    const next = stroke.points[i + 1]
-    appendSegment(
-      vertices,
-      current.position,
-      next.position,
-      stroke.radius * current.pressure,
-      stroke.color,
-      stroke.radius * next.pressure,
-    )
-  }
-
-  for (const point of stroke.points) {
-    appendDisc(vertices, point.position, stroke.radius * point.pressure, stroke.color)
-  }
-}
-
-function appendSegment(
-  vertices: number[],
-  start: Vec3,
-  end: Vec3,
-  startRadius: number,
-  color: Vec4,
-  endRadius = startRadius,
-) {
-  const direction = sub3(end, start)
-  const length = Math.hypot(direction[0], direction[1])
-  if (length < 1e-5) return
-
-  const normal: Vec3 = [-direction[1] / length, direction[0] / length, 0]
-  const a = add3(start, scale3(normal, startRadius))
-  const b = add3(start, scale3(normal, -startRadius))
-  const c = add3(end, scale3(normal, endRadius))
-  const dPoint = add3(end, scale3(normal, -endRadius))
-
-  pushVertex(vertices, a, color)
-  pushVertex(vertices, b, color)
-  pushVertex(vertices, c, color)
-  pushVertex(vertices, c, color)
-  pushVertex(vertices, b, color)
-  pushVertex(vertices, dPoint, color)
-}
-
-function appendDisc(vertices: number[], center: Vec3, radius: number, color: Vec4) {
-  const segments = 14
-  const safeRadius = Math.max(radius, 0.002)
-  for (let i = 0; i < segments; i += 1) {
-    const a = (i / segments) * Math.PI * 2
-    const b = ((i + 1) / segments) * Math.PI * 2
-    pushVertex(vertices, center, color)
-    pushVertex(
-      vertices,
-      [center[0] + Math.cos(a) * safeRadius, center[1] + Math.sin(a) * safeRadius, center[2]],
-      color,
-    )
-    pushVertex(
-      vertices,
-      [center[0] + Math.cos(b) * safeRadius, center[1] + Math.sin(b) * safeRadius, center[2]],
-      color,
-    )
-  }
-}
-
-function pushVertex(vertices: number[], position: Vec3, color: Vec4) {
-  vertices.push(
-    position[0],
-    position[1],
-    position[2],
-    color[0],
-    color[1],
-    color[2],
-    color[3],
-  )
-}
-
-export function shouldAppendPoint(points: StrokePoint[], point: StrokePoint) {
-  const previous = points[points.length - 1]
-  if (!previous) return true
-  return distance3(previous.position, point.position) > 0.015
-}
-
-export function pointerPressure(event: PointerEvent) {
-  if (event.pointerType === 'mouse') return event.buttons ? 0.72 : 0.5
-  return clamp(event.pressure || 0.5, 0.08, 1)
-}
-
-export function smoothPoint(previous: Vec3, next: Vec3): Vec3 {
-  const delta = sub3(next, previous)
-  const direction = normalize3(delta)
-  const distance = Math.min(distance3(previous, next), 0.08)
-  return add3(previous, scale3(direction, distance))
 }

@@ -11,8 +11,36 @@
 }
 
 .grease-pencil-root button,
-.grease-pencil-root input {
+.grease-pencil-root input,
+.grease-pencil-root select {
   font: inherit;
+}
+
+.grease-pencil-root button {
+  border: 0;
+}
+
+.grease-pencil-root .app-toolbar {
+  display: flex;
+  min-height: 3.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid #d6d3d1;
+  background: #fafaf9;
+  padding: 0.625rem 0.75rem;
+}
+
+.grease-pencil-root .segmented-control,
+.grease-pencil-root .color-strip,
+.grease-pencil-root .frame-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 0.375rem;
+  background: #fff;
+  padding: 0.25rem;
 }
 
 .grease-pencil-root .tool-button {
@@ -23,7 +51,8 @@
 }
 
 .grease-pencil-root .tool-button:hover,
-.grease-pencil-root .command-button:hover {
+.grease-pencil-root .command-button:hover,
+.grease-pencil-root .icon-button:hover {
   background: #e7e5e4;
 }
 
@@ -44,4 +73,367 @@
   padding: 0 0.75rem;
   font-size: 0.875rem;
   color: #292524;
+}
+
+.grease-pencil-root .command-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.grease-pencil-root .command-button:disabled:hover {
+  background: #fff;
+}
+
+.grease-pencil-root .icon-button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.grease-pencil-root .icon-button:disabled:hover {
+  background: transparent;
+}
+
+.grease-pencil-root .icon-button {
+  display: inline-grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #292524;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.grease-pencil-root .color-swatch {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 0.25rem;
+}
+
+.grease-pencil-root .color-swatch-active {
+  border-color: #1c1917;
+  box-shadow: inset 0 0 0 2px #fff;
+}
+
+.grease-pencil-root .range-control {
+  display: flex;
+  height: 2.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 0.375rem;
+  background: #fff;
+  padding: 0 0.625rem;
+  font-size: 0.875rem;
+}
+
+.grease-pencil-root .frame-input {
+  width: 4rem;
+  height: 2rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 0.25rem;
+  padding: 0 0.375rem;
+  color: #292524;
+}
+
+.grease-pencil-root .workspace {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.grease-pencil-root .canvas-shell {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+
+.grease-pencil-root .status-panel {
+  pointer-events: none;
+  position: absolute;
+  left: 0.75rem;
+  top: 0.75rem;
+  max-width: min(34rem, calc(100% - 1.5rem));
+  border: 1px solid #d6d3d1;
+  border-radius: 0.375rem;
+  background: rgb(250 250 249 / 0.92);
+  padding: 0.5rem 0.75rem;
+  color: #57534e;
+  font-size: 0.875rem;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.grease-pencil-root .layer-panel {
+  display: flex;
+  width: 19rem;
+  min-width: 16rem;
+  flex-direction: column;
+  border-left: 1px solid #d6d3d1;
+  background: #fafaf9;
+}
+
+.grease-pencil-root .workplane-panel {
+  border-bottom: 1px solid #d6d3d1;
+}
+
+.grease-pencil-root .onion-panel {
+  border-bottom: 1px solid #d6d3d1;
+}
+
+.grease-pencil-root .material-panel {
+  border-bottom: 1px solid #d6d3d1;
+}
+
+.grease-pencil-root .workplane-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.grease-pencil-root .onion-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.grease-pencil-root .material-controls {
+  display: grid;
+  gap: 0.625rem;
+  padding: 0.75rem;
+}
+
+.grease-pencil-root .material-list,
+.grease-pencil-root .fill-color-strip,
+.grease-pencil-root .material-toggles {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.grease-pencil-root .material-list {
+  flex-wrap: wrap;
+}
+
+.grease-pencil-root .material-style-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.grease-pencil-root .material-fill-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.grease-pencil-root .select-control {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #57534e;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.grease-pencil-root .select-control select {
+  width: 100%;
+  min-width: 0;
+  height: 2rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 0.25rem;
+  background: #fff;
+  color: #292524;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.grease-pencil-root .material-chip {
+  display: flex;
+  max-width: 100%;
+  height: 2rem;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 0.375rem;
+  background: #fff;
+  padding: 0 0.5rem;
+  color: #57534e;
+  font-size: 0.75rem;
+}
+
+.grease-pencil-root .material-chip-active {
+  border-color: #1c1917;
+  color: #1c1917;
+  box-shadow: inset 0 0 0 1px #1c1917;
+}
+
+.grease-pencil-root .material-swatch {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: 0 0 auto;
+  border: 1px solid #d6d3d1;
+  border-radius: 50%;
+}
+
+.grease-pencil-root .material-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grease-pencil-root .panel-subtle {
+  color: #78716c;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.grease-pencil-root .toggle-control {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: #57534e;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.grease-pencil-root .toggle-control input {
+  accent-color: #1c1917;
+}
+
+.grease-pencil-root .control-group-label {
+  grid-column: 1 / -1;
+  color: #57534e;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.grease-pencil-root .number-control {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: #57534e;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.grease-pencil-root .number-control input {
+  width: 100%;
+  min-width: 0;
+  height: 2rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 0.25rem;
+  background: #fff;
+  padding: 0 0.375rem;
+  color: #292524;
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.grease-pencil-root .number-control-wide {
+  grid-column: 1 / -1;
+}
+
+.grease-pencil-root .onion-opacity {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #57534e;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.grease-pencil-root .onion-opacity input {
+  min-width: 0;
+  flex: 1;
+  accent-color: #1c1917;
+}
+
+.grease-pencil-root .panel-header {
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e7e5e4;
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.grease-pencil-root .layer-list {
+  min-height: 0;
+  overflow: auto;
+}
+
+.grease-pencil-root .layer-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  border-bottom: 1px solid #e7e5e4;
+  padding: 0.625rem 0.75rem;
+}
+
+.grease-pencil-root .layer-row-active {
+  box-shadow: inset 3px 0 0 #1c1917;
+}
+
+.grease-pencil-root .layer-row-muted {
+  color: #78716c;
+}
+
+.grease-pencil-root .layer-main {
+  min-width: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+
+.grease-pencil-root .layer-name,
+.grease-pencil-root .layer-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.grease-pencil-root .layer-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #292524;
+}
+
+.grease-pencil-root .layer-meta {
+  margin-top: 0.125rem;
+  color: #78716c;
+  font-size: 0.75rem;
+}
+
+.grease-pencil-root .layer-actions {
+  display: flex;
+  align-items: start;
+  gap: 0.125rem;
+}
+
+.grease-pencil-root .layer-opacity {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #57534e;
+  font-size: 0.75rem;
+}
+
+.grease-pencil-root .layer-opacity input {
+  min-width: 0;
+  flex: 1;
+  accent-color: #1c1917;
 }
