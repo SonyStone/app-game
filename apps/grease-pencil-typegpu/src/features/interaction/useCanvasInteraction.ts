@@ -4,6 +4,7 @@ import {
   type GreaseDocument,
   type GreaseLayer,
   type GreaseMaterial,
+  type DrawingWorkplane,
   type Stroke,
   type StrokeId,
   type StrokePointKey,
@@ -14,6 +15,7 @@ import { createSelectionInteraction } from './selectionInteraction'
 import { createStrokeDrawingInteraction } from './strokeDrawing'
 import { createViewportNavigation } from './viewportNavigation'
 import type { InteractionViewport } from './viewportPort'
+import { createWorkplaneGizmoInteraction } from './workplaneGizmoInteraction'
 
 type UseCanvasInteractionParams = {
   canvas: Accessor<HTMLCanvasElement>
@@ -22,6 +24,7 @@ type UseCanvasInteractionParams = {
   activeLayer: Accessor<GreaseLayer | undefined>
   activeDrawing: Accessor<Drawing | undefined>
   activeMaterial: Accessor<GreaseMaterial>
+  workplane: Accessor<DrawingWorkplane>
   currentFrame: Accessor<number>
   brushStrength: Accessor<number>
   eraserRadius: Accessor<number>
@@ -42,6 +45,12 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
     mode: params.mode,
     renderer: params.renderer,
     setPointerLabel: params.setPointerLabel,
+  })
+  const workplaneGizmo = createWorkplaneGizmoInteraction({
+    renderer: params.renderer,
+    setDocumentState: params.setDocumentState,
+    setPointerLabel: params.setPointerLabel,
+    workplane: params.workplane,
   })
   const strokeDrawing = createStrokeDrawingInteraction({
     activeLayer: params.activeLayer,
@@ -81,6 +90,8 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
   const onPointerDown = (event: PointerEvent) => {
     params.canvas().setPointerCapture(event.pointerId)
 
+    if (workplaneGizmo.startGizmoDrag(event)) return
+
     if (viewportNavigation.startPointer(event)) return
 
     if (params.mode() === 'select') {
@@ -102,6 +113,8 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
   }
 
   const onPointerMove = (event: PointerEvent) => {
+    if (workplaneGizmo.moveGizmoDrag(event)) return
+
     const viewMove = viewportNavigation.movePointer(event)
     if (viewMove.status !== 'unhandled') return
 
@@ -124,6 +137,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
   }
 
   const onPointerUp = (event: PointerEvent) => {
+    workplaneGizmo.endGizmoDrag(event)
     viewportNavigation.releasePointer(event)
     selection.endStrokeSelection(event)
     selection.endPointSelection(event)

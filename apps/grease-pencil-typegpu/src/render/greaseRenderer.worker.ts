@@ -14,8 +14,14 @@ type PendingSceneMessage = Extract<
 
 let engine: GreaseRenderEngine | undefined
 let pendingCamera: CameraState | undefined
+let pendingDraft: PendingDraftMessage | undefined
 let pendingScene: PendingSceneMessage | undefined
 let pendingViewport: RendererViewportSize = { width: 1, height: 1, dpr: 1 }
+
+type PendingDraftMessage = Extract<
+  GreaseRendererWorkerMessage,
+  { type: 'draft' }
+>
 
 self.onmessage = (event: MessageEvent<GreaseRendererWorkerMessage>) => {
   switch (event.data.type) {
@@ -47,6 +53,11 @@ self.onmessage = (event: MessageEvent<GreaseRendererWorkerMessage>) => {
       applyScene(event.data)
       return
     }
+    case 'draft': {
+      pendingDraft = event.data
+      applyDraft(event.data)
+      return
+    }
     case 'render': {
       engine?.render()
       return
@@ -63,16 +74,20 @@ function applyPendingState() {
   if (pendingCamera) engine?.setCamera(pendingCamera)
   engine?.resize(pendingViewport)
   if (pendingScene) applyScene(pendingScene)
+  if (pendingDraft) applyDraft(pendingDraft)
 }
 
 function applyScene(message: PendingSceneMessage) {
   engine?.setScene(
     message.layers,
     message.workplane,
-    message.draftStroke,
     new Set<StrokeId>(message.selectedStrokeIds),
     message.pointOverlays,
   )
+}
+
+function applyDraft(message: PendingDraftMessage) {
+  engine?.setDraftStroke(message.draftStroke)
 }
 
 function postMainMessage(message: GreaseRendererMainMessage) {

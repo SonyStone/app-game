@@ -18,13 +18,16 @@ export type MeshDrawBuffer = {
 export type StrokePrimitiveDrawBuffer = {
   bindGroup: TgpuBindGroup
   instanceCount: number
+  ranges?: readonly StrokeGpuPrimitiveRange[]
 }
 
+type DrawBufferSet<T> = T | readonly T[]
+
 export type DrawingPassBuffers = {
-  mesh?: MeshDrawBuffer
-  segments?: StrokePrimitiveDrawBuffer
-  discs?: StrokePrimitiveDrawBuffer
-  squares?: StrokePrimitiveDrawBuffer
+  mesh?: DrawBufferSet<MeshDrawBuffer>
+  segments?: DrawBufferSet<StrokePrimitiveDrawBuffer>
+  discs?: DrawBufferSet<StrokePrimitiveDrawBuffer>
+  squares?: DrawBufferSet<StrokePrimitiveDrawBuffer>
   strokeRanges?: readonly StrokeGpuPrimitiveRange[]
 }
 
@@ -51,17 +54,19 @@ export function submitDrawingPass(
       depthStoreOp: 'store',
     },
   })
-  if (buffers.mesh) {
+  for (const mesh of drawBufferList(buffers.mesh)) {
     gpu.meshPipeline
       .with(meshPass)
       .with(gpu.cameraBindGroup)
-      .with(drawingVertexLayout, buffers.mesh.buffer)
-      .draw(buffers.mesh.vertexCount)
+      .with(drawingVertexLayout, mesh.buffer)
+      .draw(mesh.vertexCount)
   }
   meshPass.end()
 
   const hasStrokePrimitives =
-    !!buffers.segments || !!buffers.discs || !!buffers.squares
+    drawBufferList(buffers.segments).length > 0 ||
+    drawBufferList(buffers.discs).length > 0 ||
+    drawBufferList(buffers.squares).length > 0
   if (!hasStrokePrimitives) {
     gpu.device.queue.submit([encoder.finish()])
     return
@@ -117,32 +122,38 @@ function drawStrokePrimitiveRanges(
   pass: GPURenderPassEncoder,
   pipeline: TgpuRenderPipeline,
   cameraBindGroup: TgpuBindGroup,
-  buffer: StrokePrimitiveDrawBuffer | undefined,
+  bufferSet: DrawBufferSet<StrokePrimitiveDrawBuffer> | undefined,
   vertexCount: number,
-  ranges: readonly StrokeGpuPrimitiveRange[] | undefined,
+  fallbackRanges: readonly StrokeGpuPrimitiveRange[] | undefined,
   primitiveType: 'segment' | 'disc' | 'square',
 ) {
-  if (!buffer || buffer.instanceCount === 0) return
+  const buffers = drawBufferList(bufferSet).filter(
+    (buffer) => buffer.instanceCount > 0,
+  )
+  if (buffers.length === 0) return
 
-  const boundPipeline = pipeline
-    .with(pass)
-    .with(cameraBindGroup)
-    .with(buffer.bindGroup)
-  if (ranges && ranges.length > 0) {
-    for (const range of ranges) {
-      const primitiveRange = rangeForPrimitive(range, primitiveType)
-      if (primitiveRange.count === 0) continue
-      boundPipeline.draw(
-        vertexCount,
-        primitiveRange.count,
-        0,
-        primitiveRange.start,
-      )
+  for (const buffer of buffers) {
+    const ranges = buffer.ranges ?? fallbackRanges
+    const boundPipeline = pipeline
+      .with(pass)
+      .with(cameraBindGroup)
+      .with(buffer.bindGroup)
+    if (ranges && ranges.length > 0) {
+      for (const range of ranges) {
+        const primitiveRange = rangeForPrimitive(range, primitiveType)
+        if (primitiveRange.count === 0) continue
+        boundPipeline.draw(
+          vertexCount,
+          primitiveRange.count,
+          0,
+          primitiveRange.start,
+        )
+      }
+      continue
     }
-    return
-  }
 
-  boundPipeline.draw(vertexCount, buffer.instanceCount)
+    boundPipeline.draw(vertexCount, buffer.instanceCount)
+  }
 }
 
 function rangeForPrimitive(
@@ -157,4 +168,13 @@ function rangeForPrimitive(
     case 'square':
       return { start: range.squareStart, count: range.squareCount }
   }
+}
+
+function drawBufferList<T>(
+  bufferSet: DrawBufferSet<T> | undefined,
+): readonly T[] {
+  if (!bufferSet) return []
+  return Array.isArray(bufferSet)
+    ? (bufferSet as readonly T[])
+    : [bufferSet as T]
 }

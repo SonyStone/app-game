@@ -15,6 +15,12 @@ import { getWorkplaneBasis } from './workplane'
 
 const TAU = Math.PI * 2
 
+export type ScreenPoint = {
+  x: number
+  y: number
+  depth: number
+}
+
 export function createDefaultCamera(): CameraState {
   return {
     target: [0, 0, 0],
@@ -84,6 +90,34 @@ export function screenToWorkplane(
 
   const t = dot3(sub3(basis.origin, nearPoint), basis.normal) / denominator
   return add3(nearPoint, scale3(ray, t))
+}
+
+export function worldToScreen(
+  canvas: HTMLCanvasElement,
+  camera: CameraState,
+  width: number,
+  height: number,
+  position: Vec3,
+): ScreenPoint | undefined {
+  const rect = canvas.getBoundingClientRect()
+  const clip = transformMat4(
+    createCameraMatrices(camera, width / height).viewProjection,
+    [position[0], position[1], position[2], 1],
+  )
+  if (Math.abs(clip[3]) < 1e-6) return
+
+  const ndcX = clip[0] / clip[3]
+  const ndcY = clip[1] / clip[3]
+  const ndcZ = clip[2] / clip[3]
+  if (!Number.isFinite(ndcX) || !Number.isFinite(ndcY) || !Number.isFinite(ndcZ)) {
+    return
+  }
+
+  return {
+    x: rect.left + ((ndcX + 1) / 2) * rect.width,
+    y: rect.top + ((1 - ndcY) / 2) * rect.height,
+    depth: ndcZ,
+  }
 }
 
 export function offsetFromWorkplane(

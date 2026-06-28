@@ -6,6 +6,8 @@ import type {
 } from '../document'
 import {
   buildDrawingGeometry,
+  buildCommittedDrawingGeometry,
+  buildDynamicDrawingGeometry,
   type StrokePointOverlay,
 } from './meshBuilder'
 import type { Vec3 } from './vector'
@@ -39,7 +41,6 @@ export function updateRendererScene(
   scene: RendererScene,
   layers: RenderLayer[],
   workplane: DrawingWorkplane,
-  draftStroke?: Stroke,
   selectedStrokeIds: ReadonlySet<StrokeId> = new Set<StrokeId>(),
   pointOverlays: readonly StrokePointOverlay[] = [],
 ): RendererScene {
@@ -47,20 +48,58 @@ export function updateRendererScene(
     ...scene,
     layers,
     workplane,
-    draftStroke,
     selectedStrokeIds: new Set(selectedStrokeIds),
     pointOverlays: [...pointOverlays],
   }
 }
 
+export function updateRendererDraftStroke(
+  scene: RendererScene,
+  draftStroke?: Stroke,
+): RendererScene {
+  return {
+    ...scene,
+    draftStroke,
+  }
+}
+
+export function buildRendererSceneCommittedGeometry(scene: RendererScene) {
+  return buildCommittedDrawingGeometry({
+    layers: scene.layers,
+    workplane: scene.workplane,
+    selectedStrokeIds: scene.selectedStrokeIds,
+  })
+}
+
+export function buildRendererSceneDynamicGeometry(
+  scene: RendererScene,
+  billboardNormal: Vec3,
+  cameraTarget: Vec3,
+  cameraDistance: number,
+) {
+  return buildDynamicDrawingGeometry({
+    layers: scene.layers,
+    workplane: scene.workplane,
+    billboardNormal,
+    cameraDistance,
+    cameraTarget,
+    draftStroke: scene.draftStroke,
+    pointOverlays: scene.pointOverlays,
+  })
+}
+
 export function buildRendererSceneGeometry(
   scene: RendererScene,
   billboardNormal: Vec3,
+  cameraTarget: Vec3,
+  cameraDistance: number,
 ) {
   return buildDrawingGeometry({
     layers: scene.layers,
     workplane: scene.workplane,
     billboardNormal,
+    cameraDistance,
+    cameraTarget,
     draftStroke: scene.draftStroke,
     selectedStrokeIds: scene.selectedStrokeIds,
     pointOverlays: scene.pointOverlays,

@@ -10,7 +10,11 @@ import type {
 } from './math'
 import { appendFill } from './meshFill'
 import { appendGrid } from './meshGrid'
-import { appendPointHandle } from './meshOverlays'
+import {
+  appendOrbitTarget,
+  appendPointHandle,
+  appendWorkplaneGizmo,
+} from './meshOverlays'
 import {
   getStrokeMaterial,
   getStrokeMaterialFromLayers,
@@ -23,6 +27,9 @@ import type {
 import {
   appendStrokeGpuPrimitives,
   createStrokeGpuPrimitives,
+  STROKE_POINT_FLOATS,
+  STROKE_SEGMENT_FLOATS,
+  type StrokeGpuPrimitiveRange,
   type StrokeGpuPrimitives,
 } from './strokeGpuPrimitives'
 import { getWorkplaneBasis } from './workplane'
@@ -39,6 +46,8 @@ const STROKE_DEPTH_FAR_LIMIT = 0.999999
 export type BuildDrawingVerticesParams = {
   layers: readonly RenderLayer[]
   workplane: DrawingWorkplane
+  cameraDistance: number
+  cameraTarget: Vec3
   draftStroke?: Stroke | undefined
   selectedStrokeIds?: ReadonlySet<StrokeId> | undefined
   pointOverlays?: readonly StrokePointOverlay[] | undefined
@@ -49,14 +58,29 @@ export type DrawingGeometry = {
   strokePrimitives: StrokeGpuPrimitives
 }
 
-export function buildDrawingGeometry({
+export type BuildCommittedDrawingGeometryParams = {
+  layers: readonly RenderLayer[]
+  selectedStrokeIds?: ReadonlySet<StrokeId> | undefined
+  workplane: DrawingWorkplane
+}
+
+export type BuildDynamicDrawingGeometryParams = {
+  billboardNormal: Vec3
+  cameraDistance: number
+  cameraTarget: Vec3
+  draftStroke?: Stroke | undefined
+  layers: readonly RenderLayer[]
+  pointOverlays?: readonly StrokePointOverlay[] | undefined
+  workplane: DrawingWorkplane
+}
+
+const DYNAMIC_STROKE_DEPTH = 0.9
+
+export function buildCommittedDrawingGeometry({
   layers,
   workplane,
-  billboardNormal,
-  draftStroke,
   selectedStrokeIds = new Set<StrokeId>(),
-  pointOverlays = [],
-}: BuildDrawingVerticesParams & { billboardNormal: Vec3 }): DrawingGeometry {
+}: BuildCommittedDrawingGeometryParams): DrawingGeometry {
   const basis = getWorkplaneBasis(workplane)
   const vertices: number[] = []
   const strokePrimitives = createStrokeGpuPrimitives()
@@ -84,7 +108,6 @@ export function buildDrawingGeometry({
       } satisfies StrokeRenderStyle
       const strokeStyle = {
         ...fillStyle,
-        offsetNormal: billboardNormal,
       } satisfies StrokeRenderStyle
 
       appendStrokeFill(vertices, stroke, fillStyle)
@@ -109,7 +132,7 @@ export function buildDrawingGeometry({
       radiusOffset: 0.018,
       strokeDepth: nextStrokeDepth(),
       zOffset: selectedStroke.zOffset + 0.024,
-      offsetNormal: billboardNormal,
+      offsetNormal: basis.normal,
       ...(selectedStroke.material ? { material: selectedStroke.material } : {}),
     } satisfies StrokeRenderStyle
     appendStrokeGpuPrimitives(
@@ -120,11 +143,31 @@ export function buildDrawingGeometry({
     )
   }
 
+  return {
+    strokePrimitives,
+    vertices,
+  }
+}
+
+export function buildDynamicDrawingGeometry({
+  layers,
+  workplane,
+  billboardNormal,
+  cameraDistance,
+  cameraTarget,
+  draftStroke,
+  pointOverlays = [],
+}: BuildDynamicDrawingGeometryParams): DrawingGeometry {
+  const basis = getWorkplaneBasis(workplane)
+  const vertices: number[] = []
+  const strokePrimitives = createStrokeGpuPrimitives()
+
+  appendWorkplaneGizmo(vertices, basis, billboardNormal)
   if (draftStroke) {
     const material = getStrokeMaterialFromLayers(draftStroke, layers)
     const style = {
       opacity: 1,
-      strokeDepth: nextStrokeDepth(),
+      strokeDepth: DYNAMIC_STROKE_DEPTH,
       zOffset: 0.018,
       offsetNormal: billboardNormal,
       ...(material ? { material } : {}),
@@ -135,11 +178,89 @@ export function buildDrawingGeometry({
   for (const pointOverlay of pointOverlays) {
     appendPointHandle(vertices, pointOverlay, billboardNormal)
   }
+  appendOrbitTarget(vertices, cameraTarget, billboardNormal, cameraDistance)
 
   return {
     strokePrimitives,
     vertices,
   }
+}
+
+export function buildDrawingGeometry({
+  layers,
+  workplane,
+  billboardNormal,
+  cameraDistance,
+  cameraTarget,
+  draftStroke,
+  selectedStrokeIds = new Set<StrokeId>(),
+  pointOverlays = [],
+}: BuildDrawingVerticesParams & { billboardNormal: Vec3 }): DrawingGeometry {
+  return mergeDrawingGeometry(
+    buildCommittedDrawingGeometry({
+      layers,
+      workplane,
+      selectedStrokeIds,
+    }),
+    buildDynamicDrawingGeometry({
+      layers,
+      workplane,
+      billboardNormal,
+      cameraDistance,
+      cameraTarget,
+      draftStroke,
+      pointOverlays,
+    }),
+  )
+}
+
+function mergeDrawingGeometry(
+  baseGeometry: DrawingGeometry,
+  overlayGeometry: DrawingGeometry,
+): DrawingGeometry {
+  const strokePrimitives = createStrokeGpuPrimitives()
+  strokePrimitives.segments.push(
+    ...baseGeometry.strokePrimitives.segments,
+    ...overlayGeometry.strokePrimitives.segments,
+  )
+  strokePrimitives.discs.push(
+    ...baseGeometry.strokePrimitives.discs,
+    ...overlayGeometry.strokePrimitives.discs,
+  )
+  strokePrimitives.squares.push(
+    ...baseGeometry.strokePrimitives.squares,
+    ...overlayGeometry.strokePrimitives.squares,
+  )
+  strokePrimitives.ranges.push(
+    ...baseGeometry.strokePrimitives.ranges,
+    ...offsetPrimitiveRanges(
+      overlayGeometry.strokePrimitives.ranges,
+      baseGeometry.strokePrimitives,
+    ),
+  )
+
+  return {
+    vertices: [...baseGeometry.vertices, ...overlayGeometry.vertices],
+    strokePrimitives,
+  }
+}
+
+function offsetPrimitiveRanges(
+  ranges: readonly StrokeGpuPrimitiveRange[],
+  basePrimitives: StrokeGpuPrimitives,
+) {
+  const segmentOffset = basePrimitives.segments.length / STROKE_SEGMENT_FLOATS
+  const discOffset = basePrimitives.discs.length / STROKE_POINT_FLOATS
+  const squareOffset = basePrimitives.squares.length / STROKE_POINT_FLOATS
+
+  return ranges.map((range) => ({
+    segmentStart: range.segmentStart + segmentOffset,
+    segmentCount: range.segmentCount,
+    discStart: range.discStart + discOffset,
+    discCount: range.discCount,
+    squareStart: range.squareStart + squareOffset,
+    squareCount: range.squareCount,
+  }))
 }
 
 function appendStrokeFill(

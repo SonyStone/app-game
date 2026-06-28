@@ -94,6 +94,7 @@ export {
 export {
   resetWorkplane,
   setWorkplaneOrigin,
+  setWorkplaneOriginVector,
   setWorkplaneRotation,
   setWorkplaneScale,
 } from './document/workplane'

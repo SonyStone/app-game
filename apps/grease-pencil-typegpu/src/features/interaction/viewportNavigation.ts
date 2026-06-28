@@ -37,7 +37,7 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
       lastViewPoint = undefined
       lastPinchDistance = getPointerDistance(activePointers.values())
       lastPinchCenter = getPointerCenter(activePointers.values())
-      params.setPointerLabel('Touch pan/zoom')
+      params.setPointerLabel('Touch orbit/zoom')
       return true
     }
 
@@ -48,8 +48,8 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
     viewAction = nextViewAction
     lastViewPoint = { x: event.clientX, y: event.clientY }
     params.setPointerLabel(
-      event.pointerType === 'touch' && nextViewAction === 'orbit'
-        ? 'Touch orbit'
+      event.pointerType === 'touch' && nextViewAction === 'pan'
+        ? 'Touch pan'
         : nextViewAction === 'pan'
           ? 'Pan'
           : 'Orbit',
@@ -89,7 +89,7 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
     if (activePointers.size < 2) {
       lastPinchDistance = undefined
       lastPinchCenter = undefined
-      startRemainingTouchOrbit()
+      startRemainingTouchPan()
     }
   }
 
@@ -100,29 +100,29 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
     }
     const nextCenter = getPointerCenter(activePointers.values())
     if (nextCenter && lastPinchCenter) {
-      params.renderer()?.pan(
+      params.renderer()?.orbit(
         nextCenter.x - lastPinchCenter.x,
         nextCenter.y - lastPinchCenter.y,
       )
     }
     lastPinchDistance = nextDistance
     lastPinchCenter = nextCenter
-    params.setPointerLabel('Touch pan/zoom')
+    params.setPointerLabel('Touch orbit/zoom')
   }
 
-  const startRemainingTouchOrbit = () => {
+  const startRemainingTouchPan = () => {
     if (activePointers.size !== 1) return
 
     const [remainingPointer] = activePointers.values()
     if (!remainingPointer || remainingPointer.pointerType !== 'touch') return
 
     viewPointerId = remainingPointer.pointerId
-    viewAction = 'orbit'
+    viewAction = 'pan'
     lastViewPoint = {
       x: remainingPointer.clientX,
       y: remainingPointer.clientY,
     }
-    params.setPointerLabel('Touch orbit')
+    params.setPointerLabel('Touch pan')
   }
 
   return {

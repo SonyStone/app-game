@@ -6,11 +6,11 @@ import type {
 } from '../document'
 import {
   createDepthTexture,
-  createVertexBufferState,
-  destroyGpuBuffer,
-  destroyVertexBuffer,
-  type VertexBufferState,
 } from './gpuBuffers'
+import {
+  submitDrawingPass,
+  type DrawingPassBuffers,
+} from './gpuDrawPass'
 import {
   createDrawingGpuResources,
   destroyDrawingGpuResources,
@@ -18,9 +18,18 @@ import {
   type DrawingGpuResources,
 } from './gpuSession'
 import type { CameraState } from './math'
-import { renderDrawingFrame } from './rendererFrame'
 import {
+  combineDrawingPassBuffers,
+  createDrawingFrameBufferStates,
+  destroyDrawingFrameBufferStates,
+  writeCameraFrameUniforms,
+  writeDrawingGeometryBuffers,
+} from './rendererFrame'
+import {
+  buildRendererSceneCommittedGeometry,
+  buildRendererSceneDynamicGeometry,
   createRendererScene,
+  updateRendererDraftStroke,
   updateRendererScene,
   type RendererScene,
   type StrokePointOverlay,
@@ -35,13 +44,17 @@ export class GreaseRenderEngine {
   readonly canvas: DrawingGpuCanvas
   readonly camera: CameraState = createDefaultCamera()
 
+  private committedBuffers: DrawingPassBuffers = {}
+  private committedBufferStates = createDrawingFrameBufferStates()
+  private committedDirty = true
   private depthTexture?: GPUTexture
+  private dynamicBuffers: DrawingPassBuffers = {}
+  private dynamicBufferStates = createDrawingFrameBufferStates()
+  private dynamicDirty = true
   private gpu?: DrawingGpuResources
   private scene: RendererScene = createRendererScene()
-  private strokeDiscBuffer: VertexBufferState = createVertexBufferState()
-  private strokeSegmentBuffer: VertexBufferState = createVertexBufferState()
-  private strokeSquareBuffer: VertexBufferState = createVertexBufferState()
-  private vertexBuffer: VertexBufferState = createVertexBufferState()
+  private destroyed = false
+  private renderScheduled = false
   private viewport: RendererViewportSize = { width: 1, height: 1, dpr: 1 }
   private width = 1
   private height = 1
@@ -65,11 +78,10 @@ export class GreaseRenderEngine {
   }
 
   destroy() {
+    this.destroyed = true
     this.depthTexture?.destroy()
-    destroyGpuBuffer(this.strokeDiscBuffer)
-    destroyGpuBuffer(this.strokeSegmentBuffer)
-    destroyGpuBuffer(this.strokeSquareBuffer)
-    destroyVertexBuffer(this.vertexBuffer)
+    destroyDrawingFrameBufferStates(this.committedBufferStates)
+    destroyDrawingFrameBufferStates(this.dynamicBufferStates)
     if (this.gpu) destroyDrawingGpuResources(this.gpu)
   }
 
@@ -78,13 +90,13 @@ export class GreaseRenderEngine {
     this.camera.yaw = camera.yaw
     this.camera.pitch = camera.pitch
     this.camera.distance = camera.distance
-    this.render()
+    this.dynamicDirty = true
+    this.requestRender()
   }
 
   setScene(
     layers: RenderLayer[],
     workplane: DrawingWorkplane,
-    draftStroke?: Stroke,
     selectedStrokeIds: ReadonlySet<StrokeId> = new Set<StrokeId>(),
     pointOverlays: readonly StrokePointOverlay[] = [],
   ) {
@@ -92,11 +104,18 @@ export class GreaseRenderEngine {
       this.scene,
       layers,
       workplane,
-      draftStroke,
       selectedStrokeIds,
       pointOverlays,
     )
-    this.render()
+    this.committedDirty = true
+    this.dynamicDirty = true
+    this.requestRender()
+  }
+
+  setDraftStroke(draftStroke?: Stroke) {
+    this.scene = updateRendererDraftStroke(this.scene, draftStroke)
+    this.dynamicDirty = true
+    this.requestRender()
   }
 
   resize(viewport: RendererViewportSize) {
@@ -117,23 +136,71 @@ export class GreaseRenderEngine {
     this.depthTexture = this.gpu
       ? createDepthTexture(this.gpu.device, nextWidth, nextHeight)
       : undefined
-    this.render()
+    this.requestRender()
   }
 
   render() {
-    if (!this.gpu || !this.depthTexture) return
+    this.requestRender()
+  }
 
-    renderDrawingFrame({
-      camera: this.camera,
-      depthTexture: this.depthTexture,
-      gpu: this.gpu,
-      height: this.height,
-      scene: this.scene,
-      strokeDiscBuffer: this.strokeDiscBuffer,
-      strokeSegmentBuffer: this.strokeSegmentBuffer,
-      strokeSquareBuffer: this.strokeSquareBuffer,
-      vertexBuffer: this.vertexBuffer,
-      width: this.width,
+  private requestRender() {
+    if (this.destroyed || this.renderScheduled) return
+    this.renderScheduled = true
+    scheduleRenderFrame(() => {
+      this.renderScheduled = false
+      this.renderNow()
     })
   }
+
+  private renderNow() {
+    if (this.destroyed || !this.gpu || !this.depthTexture) return
+
+    const cameraUniforms = writeCameraFrameUniforms(
+      this.gpu,
+      this.camera,
+      this.width / this.height,
+    )
+
+    if (this.committedDirty) {
+      this.committedBuffers = writeDrawingGeometryBuffers(
+        this.gpu,
+        this.committedBufferStates,
+        buildRendererSceneCommittedGeometry(this.scene),
+      )
+      this.committedDirty = false
+    }
+
+    if (this.dynamicDirty) {
+      this.dynamicBuffers = writeDrawingGeometryBuffers(
+        this.gpu,
+        this.dynamicBufferStates,
+        buildRendererSceneDynamicGeometry(
+          this.scene,
+          cameraUniforms.billboardNormal,
+          this.camera.target,
+          this.camera.distance,
+        ),
+      )
+      this.dynamicDirty = false
+    }
+
+    submitDrawingPass(
+      this.gpu,
+      this.depthTexture,
+      combineDrawingPassBuffers(this.committedBuffers, this.dynamicBuffers),
+    )
+  }
+}
+
+function scheduleRenderFrame(callback: () => void) {
+  const frameScheduler = (globalThis as typeof globalThis & {
+    requestAnimationFrame?: (callback: FrameRequestCallback) => number
+  }).requestAnimationFrame
+
+  if (typeof frameScheduler === 'function') {
+    frameScheduler(() => callback())
+    return
+  }
+
+  setTimeout(callback, 16)
 }

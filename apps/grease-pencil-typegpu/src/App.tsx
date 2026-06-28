@@ -60,6 +60,7 @@ function App() {
     activeLayer,
     activeDrawing,
     activeMaterial,
+    workplane,
     currentFrame: () => documentState().currentFrame,
     brushStrength,
     eraserRadius,

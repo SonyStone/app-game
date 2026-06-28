@@ -58,10 +58,13 @@ export function useGreaseRenderer(params: UseGreaseRendererParams) {
     renderer()?.setScene(
       [...params.renderLayers()],
       params.workplane(),
-      params.draftStroke(),
       params.selectedStrokeIds(),
       params.pointOverlays(),
     )
+  })
+
+  createEffect(() => {
+    renderer()?.setDraftStroke(params.draftStroke())
   })
 
   const zoom = (delta: number) => {

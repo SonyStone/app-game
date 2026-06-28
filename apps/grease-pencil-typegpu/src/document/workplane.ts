@@ -16,6 +16,23 @@ export function setWorkplaneOrigin(
   }
 }
 
+export function setWorkplaneOriginVector(
+  document: GreaseDocument,
+  origin: Vec3,
+): GreaseDocument {
+  return {
+    ...document,
+    workplane: {
+      ...document.workplane,
+      origin: [
+        sanitizeScalar(origin[0]),
+        sanitizeScalar(origin[1]),
+        sanitizeScalar(origin[2]),
+      ],
+    },
+  }
+}
+
 export function setWorkplaneRotation(
   document: GreaseDocument,
   axis: Axis,

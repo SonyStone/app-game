@@ -37,9 +37,12 @@ export type GreaseRendererWorkerMessage =
       type: 'scene'
       layers: RenderLayer[]
       workplane: DrawingWorkplane
-      draftStroke?: Stroke
       selectedStrokeIds: StrokeId[]
       pointOverlays: readonly StrokePointOverlay[]
+    }
+  | {
+      type: 'draft'
+      draftStroke?: Stroke
     }
   | { type: 'render' }
   | { type: 'destroy' }

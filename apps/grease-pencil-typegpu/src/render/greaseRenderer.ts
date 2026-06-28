@@ -15,6 +15,7 @@ import type {
 import type { CameraState } from './math'
 import {
   createRendererScene,
+  updateRendererDraftStroke,
   updateRendererScene,
   type RendererScene,
   type StrokePointOverlay,
@@ -25,6 +26,7 @@ import {
   orbitCamera,
   panCamera,
   screenToWorkplane,
+  worldToScreen,
   zoomCamera,
 } from './viewportCamera'
 
@@ -37,7 +39,16 @@ export class GreaseRenderer {
   readonly camera: CameraState = createDefaultCamera()
 
   private height = 1
+  private flushFrame: number | undefined
   private initialized = false
+  private pendingCamera = false
+  private pendingDraft:
+    | Extract<GreaseRendererWorkerMessage, { type: 'draft' }>
+    | undefined
+  private pendingScene:
+    | Extract<GreaseRendererWorkerMessage, { type: 'scene' }>
+    | undefined
+  private pendingViewport: RendererViewportSize | undefined
   private scene: RendererScene = createRendererScene()
   private statusResolver?: (status: RendererStatus) => void
   private viewport: RendererViewportSize = { width: 1, height: 1, dpr: 1 }
@@ -87,11 +98,16 @@ export class GreaseRenderer {
     )
     this.initialized = true
     this.postScene()
+    this.postDraft()
 
     return statusPromise
   }
 
   destroy() {
+    if (this.flushFrame !== undefined) {
+      cancelAnimationFrame(this.flushFrame)
+      this.flushFrame = undefined
+    }
     this.postWorkerMessage({ type: 'destroy' })
     this.worker.terminate()
   }
@@ -99,7 +115,6 @@ export class GreaseRenderer {
   setScene(
     layers: RenderLayer[],
     workplane: DrawingWorkplane,
-    draftStroke?: Stroke,
     selectedStrokeIds: ReadonlySet<StrokeId> = new Set<StrokeId>(),
     pointOverlays: readonly StrokePointOverlay[] = [],
   ) {
@@ -107,21 +122,20 @@ export class GreaseRenderer {
       this.scene,
       layers,
       workplane,
-      draftStroke,
       selectedStrokeIds,
       pointOverlays,
     )
     this.postScene()
   }
 
+  setDraftStroke(draftStroke?: Stroke) {
+    this.scene = updateRendererDraftStroke(this.scene, draftStroke)
+    this.postDraft()
+  }
+
   resize() {
     if (!this.measureViewport()) return
-    if (this.initialized) {
-      this.postWorkerMessage({
-        type: 'resize',
-        viewport: this.viewport,
-      })
-    }
+    this.postResize()
   }
 
   orbit(deltaX: number, deltaY: number) {
@@ -153,6 +167,16 @@ export class GreaseRenderer {
 
   offsetFromWorkplane(position: Vec3, distance: number): Vec3 {
     return offsetPointFromWorkplane(this.scene.workplane, position, distance)
+  }
+
+  projectToScreen(position: Vec3) {
+    return worldToScreen(
+      this.canvas,
+      this.camera,
+      this.width,
+      this.height,
+      position,
+    )
   }
 
   private handleWorkerMessage(message: GreaseRendererMainMessage) {
@@ -193,24 +217,77 @@ export class GreaseRenderer {
 
   private postCamera() {
     if (!this.initialized) return
-    this.postWorkerMessage({
-      type: 'camera',
-      camera: this.camera,
-    })
+    this.pendingCamera = true
+    this.scheduleWorkerFlush()
   }
 
   private postScene() {
     if (!this.initialized) return
     const scene = this.scene
-    const message = {
+    this.pendingScene = {
       type: 'scene',
       layers: scene.layers,
       workplane: scene.workplane,
-      ...(scene.draftStroke ? { draftStroke: scene.draftStroke } : {}),
       selectedStrokeIds: [...scene.selectedStrokeIds],
       pointOverlays: scene.pointOverlays,
     } satisfies GreaseRendererWorkerMessage
-    this.postWorkerMessage(message)
+    this.scheduleWorkerFlush()
+  }
+
+  private postDraft() {
+    if (!this.initialized) return
+    this.pendingDraft = {
+      type: 'draft',
+      ...(this.scene.draftStroke ? { draftStroke: this.scene.draftStroke } : {}),
+    } satisfies GreaseRendererWorkerMessage
+    this.scheduleWorkerFlush()
+  }
+
+  private postResize() {
+    if (!this.initialized) return
+    this.pendingViewport = this.viewport
+    this.scheduleWorkerFlush()
+  }
+
+  private scheduleWorkerFlush() {
+    if (this.flushFrame !== undefined) return
+    this.flushFrame = requestAnimationFrame(() => {
+      this.flushFrame = undefined
+      this.flushWorkerMessages()
+    })
+  }
+
+  private flushWorkerMessages() {
+    if (this.pendingViewport) {
+      this.postWorkerMessage({
+        type: 'resize',
+        viewport: this.pendingViewport,
+      })
+      this.pendingViewport = undefined
+    }
+
+    if (this.pendingCamera) {
+      this.postWorkerMessage({
+        type: 'camera',
+        camera: {
+          target: [...this.camera.target],
+          yaw: this.camera.yaw,
+          pitch: this.camera.pitch,
+          distance: this.camera.distance,
+        },
+      })
+      this.pendingCamera = false
+    }
+
+    if (this.pendingScene) {
+      this.postWorkerMessage(this.pendingScene)
+      this.pendingScene = undefined
+    }
+
+    if (this.pendingDraft) {
+      this.postWorkerMessage(this.pendingDraft)
+      this.pendingDraft = undefined
+    }
   }
 
   private postWorkerMessage(
