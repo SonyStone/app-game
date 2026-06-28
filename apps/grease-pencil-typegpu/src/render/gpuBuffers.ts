@@ -62,7 +62,7 @@ export function createDepthTexture(
 ) {
   return device.createTexture({
     size: [width, height],
-    format: 'depth24plus',
+    format: 'depth32float',
     usage: GPUTextureUsage.RENDER_ATTACHMENT,
     label: 'depth texture',
   })

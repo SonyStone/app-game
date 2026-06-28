@@ -9,10 +9,12 @@ import {
   type Vec3,
 } from '../../shared/vector'
 
+const MIN_STROKE_POINT_DISTANCE = 0.01
+
 export function shouldAppendPoint(points: StrokePoint[], point: StrokePoint) {
   const previous = points[points.length - 1]
   if (!previous) return true
-  return distance3(previous.position, point.position) > 0.015
+  return distance3(previous.position, point.position) > MIN_STROKE_POINT_DISTANCE
 }
 
 export function pointerPressure(event: PointerEvent) {

@@ -4,23 +4,15 @@ import type {
   Stroke,
   StrokeId,
 } from '../document'
-import {
-  type CameraState,
-  type Vec3,
-} from './math'
-import {
-  createDepthTexture,
-  createVertexBufferState,
-  destroyGpuBuffer,
-  destroyVertexBuffer,
-  type VertexBufferState,
-} from './gpuBuffers'
-import {
-  createDrawingGpuResources,
-  destroyDrawingGpuResources,
-  type DrawingGpuResources,
-} from './gpuSession'
-import { renderDrawingFrame } from './rendererFrame'
+import type { Vec3 } from '../shared/vector'
+import GreaseRendererWorker from './greaseRenderer.worker?worker'
+import type {
+  GreaseRendererMainMessage,
+  GreaseRendererWorkerMessage,
+  RendererStatus,
+  RendererViewportSize,
+} from './greaseRendererWorkerProtocol'
+import type { CameraState } from './math'
 import {
   createRendererScene,
   updateRendererScene,
@@ -38,47 +30,70 @@ import {
 
 export type { StrokePointOverlay } from './rendererScene'
 
-export type RendererStatus = {
-  ok: boolean
-  message: string
-}
+const MAX_DEVICE_PIXEL_RATIO = 2
 
 export class GreaseRenderer {
   readonly canvas: HTMLCanvasElement
   readonly camera: CameraState = createDefaultCamera()
 
-  private gpu?: DrawingGpuResources
-  private depthTexture?: GPUTexture
-  private strokeDiscBuffer: VertexBufferState = createVertexBufferState()
-  private strokeSegmentBuffer: VertexBufferState = createVertexBufferState()
-  private strokeSquareBuffer: VertexBufferState = createVertexBufferState()
-  private vertexBuffer: VertexBufferState = createVertexBufferState()
-  private scene: RendererScene = createRendererScene()
-  private width = 1
   private height = 1
+  private initialized = false
+  private scene: RendererScene = createRendererScene()
+  private statusResolver?: (status: RendererStatus) => void
+  private viewport: RendererViewportSize = { width: 1, height: 1, dpr: 1 }
+  private width = 1
+  private readonly worker = new GreaseRendererWorker()
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
+    this.worker.onmessage = (event: MessageEvent<GreaseRendererMainMessage>) => {
+      this.handleWorkerMessage(event.data)
+    }
+    this.worker.onerror = (event) => {
+      this.resolveStatus({
+        ok: false,
+        message: event.message || 'Renderer worker failed.',
+      })
+    }
+    this.worker.onmessageerror = () => {
+      this.resolveStatus({
+        ok: false,
+        message: 'Renderer worker sent an unreadable message.',
+      })
+    }
   }
 
   async init(): Promise<RendererStatus> {
-    const result = await createDrawingGpuResources(this.canvas)
-    if (!result.ok) return result
+    if (!this.canvas.transferControlToOffscreen) {
+      return {
+        ok: false,
+        message: 'OffscreenCanvas is not available in this browser.',
+      }
+    }
 
-    this.gpu = result.resources
-    this.resize()
-    this.render()
+    this.measureViewport()
+    const offscreenCanvas = this.canvas.transferControlToOffscreen()
+    const statusPromise = new Promise<RendererStatus>((resolve) => {
+      this.statusResolver = resolve
+    })
+    this.postWorkerMessage(
+      {
+        type: 'canvas',
+        canvas: offscreenCanvas,
+        camera: this.camera,
+        viewport: this.viewport,
+      },
+      [offscreenCanvas],
+    )
+    this.initialized = true
+    this.postScene()
 
-    return result
+    return statusPromise
   }
 
   destroy() {
-    this.depthTexture?.destroy()
-    destroyGpuBuffer(this.strokeDiscBuffer)
-    destroyGpuBuffer(this.strokeSegmentBuffer)
-    destroyGpuBuffer(this.strokeSquareBuffer)
-    destroyVertexBuffer(this.vertexBuffer)
-    if (this.gpu) destroyDrawingGpuResources(this.gpu)
+    this.postWorkerMessage({ type: 'destroy' })
+    this.worker.terminate()
   }
 
   setScene(
@@ -96,39 +111,32 @@ export class GreaseRenderer {
       selectedStrokeIds,
       pointOverlays,
     )
-    this.render()
+    this.postScene()
   }
 
   resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
-    const nextWidth = Math.max(1, Math.floor(this.canvas.clientWidth * dpr))
-    const nextHeight = Math.max(1, Math.floor(this.canvas.clientHeight * dpr))
-    if (nextWidth === this.width && nextHeight === this.height) return
-
-    this.width = nextWidth
-    this.height = nextHeight
-    this.canvas.width = nextWidth
-    this.canvas.height = nextHeight
-    this.depthTexture?.destroy()
-    this.depthTexture = this.gpu
-      ? createDepthTexture(this.gpu.device, nextWidth, nextHeight)
-      : undefined
-    this.render()
+    if (!this.measureViewport()) return
+    if (this.initialized) {
+      this.postWorkerMessage({
+        type: 'resize',
+        viewport: this.viewport,
+      })
+    }
   }
 
   orbit(deltaX: number, deltaY: number) {
     orbitCamera(this.camera, deltaX, deltaY)
-    this.render()
+    this.postCamera()
   }
 
   pan(deltaX: number, deltaY: number) {
     panCamera(this.camera, deltaX, deltaY)
-    this.render()
+    this.postCamera()
   }
 
   zoom(delta: number) {
     zoomCamera(this.camera, delta)
-    this.render()
+    this.postCamera()
   }
 
   screenToWorld(clientX: number, clientY: number): Vec3 | undefined {
@@ -147,22 +155,68 @@ export class GreaseRenderer {
     return offsetPointFromWorkplane(this.scene.workplane, position, distance)
   }
 
-  render() {
-    if (!this.gpu || !this.depthTexture) return
+  private handleWorkerMessage(message: GreaseRendererMainMessage) {
+    switch (message.type) {
+      case 'status': {
+        this.resolveStatus(message.status)
+        return
+      }
+    }
+  }
 
-    this.resize()
+  private resolveStatus(status: RendererStatus) {
+    this.statusResolver?.(status)
+    this.statusResolver = undefined
+  }
 
-    renderDrawingFrame({
+  private measureViewport() {
+    const rect = this.canvas.getBoundingClientRect()
+    const viewport = {
+      width: Math.max(1, rect.width || this.canvas.clientWidth || 1),
+      height: Math.max(1, rect.height || this.canvas.clientHeight || 1),
+      dpr: Math.min(window.devicePixelRatio || 1, MAX_DEVICE_PIXEL_RATIO),
+    } satisfies RendererViewportSize
+    const nextWidth = Math.max(1, Math.floor(viewport.width * viewport.dpr))
+    const nextHeight = Math.max(1, Math.floor(viewport.height * viewport.dpr))
+    const changed =
+      viewport.width !== this.viewport.width ||
+      viewport.height !== this.viewport.height ||
+      viewport.dpr !== this.viewport.dpr ||
+      nextWidth !== this.width ||
+      nextHeight !== this.height
+
+    this.viewport = viewport
+    this.width = nextWidth
+    this.height = nextHeight
+    return changed
+  }
+
+  private postCamera() {
+    if (!this.initialized) return
+    this.postWorkerMessage({
+      type: 'camera',
       camera: this.camera,
-      depthTexture: this.depthTexture,
-      gpu: this.gpu,
-      height: this.height,
-      scene: this.scene,
-      strokeDiscBuffer: this.strokeDiscBuffer,
-      strokeSegmentBuffer: this.strokeSegmentBuffer,
-      strokeSquareBuffer: this.strokeSquareBuffer,
-      vertexBuffer: this.vertexBuffer,
-      width: this.width,
     })
+  }
+
+  private postScene() {
+    if (!this.initialized) return
+    const scene = this.scene
+    const message = {
+      type: 'scene',
+      layers: scene.layers,
+      workplane: scene.workplane,
+      ...(scene.draftStroke ? { draftStroke: scene.draftStroke } : {}),
+      selectedStrokeIds: [...scene.selectedStrokeIds],
+      pointOverlays: scene.pointOverlays,
+    } satisfies GreaseRendererWorkerMessage
+    this.postWorkerMessage(message)
+  }
+
+  private postWorkerMessage(
+    message: GreaseRendererWorkerMessage,
+    transfer: Transferable[] = [],
+  ) {
+    this.worker.postMessage(message, transfer)
   }
 }

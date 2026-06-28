@@ -10,6 +10,7 @@ import {
 import type { StrokeRenderStyle } from './meshTypes'
 import {
   appendPointPrimitive,
+  STROKE_SELF_OVERLAP_DEPTH_STEP,
   type StrokeGpuPrimitives,
 } from './strokeGpuPrimitiveTypes'
 
@@ -20,7 +21,9 @@ export function appendStrokeSamplePrimitives(
   style: StrokeRenderStyle,
   strokeMode: Exclude<MaterialStrokeMode, 'line'>,
 ) {
-  for (const point of stroke.points) {
+  for (let pointIndex = 0; pointIndex < stroke.points.length; pointIndex += 1) {
+    const point = stroke.points[pointIndex]
+    if (!point) continue
     const target = strokeMode === 'dot' ? primitives.discs : primitives.squares
     appendPointPrimitive(
       target,
@@ -29,6 +32,7 @@ export function appendStrokeSamplePrimitives(
       pointColor(color, point, style),
       style.opacity,
       style.zOffset,
+      style.strokeDepth + pointIndex * STROKE_SELF_OVERLAP_DEPTH_STEP,
     )
   }
 }

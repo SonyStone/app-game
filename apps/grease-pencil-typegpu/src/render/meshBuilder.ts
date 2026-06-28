@@ -32,6 +32,9 @@ export type { StrokePointOverlay } from './meshTypes'
 export const FLOATS_PER_VERTEX = 7
 
 const SELECTED_STROKE_COLOR: Vec4 = [1, 0.58, 0.08, 0.68]
+const STROKE_DEPTH_BASE = 0.000001
+const STROKE_DEPTH_STEP = 0.00001
+const STROKE_DEPTH_FAR_LIMIT = 0.999999
 
 export type BuildDrawingVerticesParams = {
   layers: readonly RenderLayer[]
@@ -59,12 +62,19 @@ export function buildDrawingGeometry({
   const strokePrimitives = createStrokeGpuPrimitives()
   appendGrid(vertices, basis, workplane.gridScale)
   const selectedStrokes: SelectedStrokeRender[] = []
+  let strokeDepthOrder = 0
+  const nextStrokeDepth = () =>
+    Math.min(
+      STROKE_DEPTH_FAR_LIMIT,
+      STROKE_DEPTH_BASE + strokeDepthOrder++ * STROKE_DEPTH_STEP,
+    )
 
   for (const layer of layers) {
     for (const stroke of layer.strokes) {
       const material = getStrokeMaterial(stroke, layer.materials)
       const fillStyle = {
         opacity: layer.opacity,
+        strokeDepth: nextStrokeDepth(),
         zOffset: layer.zOffset,
         offsetNormal: basis.normal,
         ...(material ? { material } : {}),
@@ -97,6 +107,7 @@ export function buildDrawingGeometry({
       ignorePointOpacity: true,
       ignoreVertexColor: true,
       radiusOffset: 0.018,
+      strokeDepth: nextStrokeDepth(),
       zOffset: selectedStroke.zOffset + 0.024,
       offsetNormal: billboardNormal,
       ...(selectedStroke.material ? { material: selectedStroke.material } : {}),
@@ -113,6 +124,7 @@ export function buildDrawingGeometry({
     const material = getStrokeMaterialFromLayers(draftStroke, layers)
     const style = {
       opacity: 1,
+      strokeDepth: nextStrokeDepth(),
       zOffset: 0.018,
       offsetNormal: billboardNormal,
       ...(material ? { material } : {}),

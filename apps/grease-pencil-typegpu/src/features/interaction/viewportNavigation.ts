@@ -32,8 +32,12 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
     activePointers.set(event.pointerId, event)
 
     if (activePointers.size === 2) {
+      viewPointerId = undefined
+      viewAction = undefined
+      lastViewPoint = undefined
       lastPinchDistance = getPointerDistance(activePointers.values())
       lastPinchCenter = getPointerCenter(activePointers.values())
+      params.setPointerLabel('Touch pan/zoom')
       return true
     }
 
@@ -43,7 +47,13 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
     viewPointerId = event.pointerId
     viewAction = nextViewAction
     lastViewPoint = { x: event.clientX, y: event.clientY }
-    params.setPointerLabel(nextViewAction === 'pan' ? 'Pan' : 'Orbit')
+    params.setPointerLabel(
+      event.pointerType === 'touch' && nextViewAction === 'orbit'
+        ? 'Touch orbit'
+        : nextViewAction === 'pan'
+          ? 'Pan'
+          : 'Orbit',
+    )
     return true
   }
 
@@ -79,6 +89,7 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
     if (activePointers.size < 2) {
       lastPinchDistance = undefined
       lastPinchCenter = undefined
+      startRemainingTouchOrbit()
     }
   }
 
@@ -97,6 +108,21 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
     lastPinchDistance = nextDistance
     lastPinchCenter = nextCenter
     params.setPointerLabel('Touch pan/zoom')
+  }
+
+  const startRemainingTouchOrbit = () => {
+    if (activePointers.size !== 1) return
+
+    const [remainingPointer] = activePointers.values()
+    if (!remainingPointer || remainingPointer.pointerType !== 'touch') return
+
+    viewPointerId = remainingPointer.pointerId
+    viewAction = 'orbit'
+    lastViewPoint = {
+      x: remainingPointer.clientX,
+      y: remainingPointer.clientY,
+    }
+    params.setPointerLabel('Touch orbit')
   }
 
   return {

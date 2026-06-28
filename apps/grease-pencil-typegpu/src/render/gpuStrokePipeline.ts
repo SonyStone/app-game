@@ -1,7 +1,8 @@
 import type { TgpuRenderPipeline, TgpuRoot } from 'typegpu'
 import {
   discVertexMain,
-  fragmentMain,
+  pointFragmentMain,
+  segmentFragmentMain,
   segmentVertexMain,
   squareVertexMain,
 } from './gpuStrokeShader'
@@ -17,34 +18,28 @@ export function createStrokePrimitivePipelines(
   format: GPUTextureFormat,
 ): StrokePrimitivePipelines {
   return {
-    segment: createStrokePrimitivePipeline(root, format, segmentVertexMain),
-    disc: createStrokePrimitivePipeline(root, format, discVertexMain),
-    square: createStrokePrimitivePipeline(root, format, squareVertexMain),
+    segment: root.createRenderPipeline({
+      vertex: segmentVertexMain,
+      fragment: segmentFragmentMain,
+      ...strokePipelineState(format),
+    }),
+    disc: root.createRenderPipeline({
+      vertex: discVertexMain,
+      fragment: pointFragmentMain,
+      ...strokePipelineState(format),
+    }),
+    square: root.createRenderPipeline({
+      vertex: squareVertexMain,
+      fragment: pointFragmentMain,
+      ...strokePipelineState(format),
+    }),
   }
 }
 
-function createStrokePrimitivePipeline(
-  root: TgpuRoot,
-  format: GPUTextureFormat,
-  vertex: typeof segmentVertexMain,
-) {
-  return root.createRenderPipeline({
-    vertex,
-    fragment: fragmentMain,
+function strokePipelineState(format: GPUTextureFormat) {
+  return {
     targets: {
-      format,
-      blend: {
-        color: {
-          srcFactor: 'src-alpha',
-          dstFactor: 'one-minus-src-alpha',
-          operation: 'add',
-        },
-        alpha: {
-          srcFactor: 'one',
-          dstFactor: 'one-minus-src-alpha',
-          operation: 'add',
-        },
-      },
+      color: strokeColorTarget(format),
     },
     primitive: {
       topology: 'triangle-list',
@@ -52,8 +47,26 @@ function createStrokePrimitivePipeline(
     },
     depthStencil: {
       depthWriteEnabled: true,
-      depthCompare: 'less',
-      format: 'depth24plus',
+      depthCompare: 'greater',
+      format: 'depth32float',
     },
-  })
+  } as const
+}
+
+function strokeColorTarget(format: GPUTextureFormat) {
+  return {
+    format,
+    blend: {
+      color: {
+        srcFactor: 'src-alpha',
+        dstFactor: 'one-minus-src-alpha',
+        operation: 'add',
+      },
+      alpha: {
+        srcFactor: 'one',
+        dstFactor: 'one-minus-src-alpha',
+        operation: 'add',
+      },
+    },
+  } as const
 }

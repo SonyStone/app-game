@@ -75,6 +75,7 @@ export function renderDrawingFrame(params: RenderDrawingFrameParams) {
     ...(segments ? { segments } : {}),
     ...(discs ? { discs } : {}),
     ...(squares ? { squares } : {}),
+    strokeRanges: geometry.strokePrimitives.ranges,
   })
 }
 

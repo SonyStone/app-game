@@ -21,12 +21,14 @@ export type DrawingGpuResources = {
   cameraBindGroup: TgpuBindGroup
 }
 
+export type DrawingGpuCanvas = HTMLCanvasElement | OffscreenCanvas
+
 export type DrawingGpuInitResult =
   | { ok: true; resources: DrawingGpuResources; message: string }
   | { ok: false; message: string }
 
 export async function createDrawingGpuResources(
-  canvas: HTMLCanvasElement,
+  canvas: DrawingGpuCanvas,
 ): Promise<DrawingGpuInitResult> {
   if (!navigator.gpu) {
     return {

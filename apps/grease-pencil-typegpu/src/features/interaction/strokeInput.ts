@@ -3,8 +3,27 @@ import type { Vec3 } from '../../shared/vector'
 import { copyVec4 } from '../shared/color'
 import { pointerPressure } from './drawingInput'
 
+export type StrokeInputSample = {
+  position: Vec3
+  pressure: number
+  pointerType: string
+  time: number
+}
+
 export function isStylusBarrelButton(event: PointerEvent) {
   return event.pointerType === 'pen' && (event.buttons & 32) !== 0
+}
+
+export function strokeInputSampleFromEvent(
+  event: PointerEvent,
+  position: Vec3,
+): StrokeInputSample {
+  return {
+    position,
+    pressure: pointerPressure(event),
+    pointerType: event.pointerType,
+    time: event.timeStamp,
+  }
 }
 
 export function strokePointFromInput(
@@ -13,23 +32,35 @@ export function strokePointFromInput(
   brushStrength: number,
   position: Vec3,
 ): StrokePoint {
-  const pressure = pointerPressure(event)
+  return strokePointFromSample(
+    strokeInputSampleFromEvent(event, position),
+    material,
+    brushStrength,
+  )
+}
+
+export function strokePointFromSample(
+  sample: StrokeInputSample,
+  material: GreaseMaterial,
+  brushStrength: number,
+): StrokePoint {
+  const pressure = clamp01(sample.pressure)
   return {
-    position,
+    position: sample.position,
     pressure,
     radius: radiusFromInput(material.strokeRadius, pressure),
-    opacity: opacityFromInput(event, pressure, brushStrength),
+    opacity: opacityFromInput(sample.pointerType, pressure, brushStrength),
     vertexColor: copyVec4(material.strokeColor),
-    time: performance.now(),
+    time: Number.isFinite(sample.time) ? sample.time : performance.now(),
   }
 }
 
 function opacityFromInput(
-  event: PointerEvent,
+  pointerType: string,
   pressure: number,
   brushStrength: number,
 ) {
-  const pressureOpacity = event.pointerType === 'mouse' ? 1 : Math.max(0.12, pressure)
+  const pressureOpacity = pointerType === 'mouse' ? 1 : Math.max(0.12, pressure)
   return clamp01(brushStrength * pressureOpacity)
 }
 

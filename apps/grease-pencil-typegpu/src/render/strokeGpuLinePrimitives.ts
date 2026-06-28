@@ -3,9 +3,7 @@ import type {
   StrokeCapStyle,
   StrokeJoinStyle,
 } from '../document'
-import {
-  type Vec4,
-} from './math'
+import type { Vec4 } from './math'
 import {
   pointColor,
   strokeRadius,
@@ -14,6 +12,7 @@ import type { StrokeRenderStyle } from './meshTypes'
 import {
   appendPointPrimitive,
   appendSegmentPrimitive,
+  STROKE_SELF_OVERLAP_DEPTH_STEP,
   type StrokeGpuPrimitives,
 } from './strokeGpuPrimitiveTypes'
 
@@ -24,15 +23,28 @@ export function appendLineStrokePrimitives(
   color: Vec4,
   style: StrokeRenderStyle,
   capStyle: StrokeCapStyle,
-  _joinStyle: StrokeJoinStyle,
+  joinStyle: StrokeJoinStyle,
 ) {
   if (stroke.points.length === 1) {
     appendSinglePointStrokePrimitive(primitives, stroke, color, style, capStyle)
     return
   }
 
-  appendOpenSegmentPrimitives(primitives, stroke, color, style, capStyle)
-  appendClosingSegmentPrimitive(primitives, stroke, color, style)
+  appendOpenSegmentPrimitives(
+    primitives,
+    stroke,
+    color,
+    style,
+    capStyle,
+    joinStyle,
+  )
+  appendClosingSegmentPrimitive(
+    primitives,
+    stroke,
+    color,
+    style,
+    joinStyle,
+  )
   appendEndpointCapPrimitives(primitives, stroke, color, style, capStyle)
 }
 
@@ -53,6 +65,7 @@ function appendSinglePointStrokePrimitive(
     pointColor(color, point, style),
     style.opacity,
     style.zOffset,
+    strokePrimitiveDepth(style, 0),
   )
 }
 
@@ -62,6 +75,7 @@ function appendOpenSegmentPrimitives(
   color: Vec4,
   style: StrokeRenderStyle,
   capStyle: StrokeCapStyle,
+  joinStyle: StrokeJoinStyle,
 ) {
   const openSegmentCount = stroke.points.length - 1
   for (let index = 0; index < openSegmentCount; index += 1) {
@@ -73,9 +87,9 @@ function appendOpenSegmentPrimitives(
     const endRadius = strokeRadius(stroke, next, style)
     const previous = stroke.points[index - 1]
     const afterNext = stroke.points[index + 2]
-    const extendStart = !stroke.closed && capStyle === 'square' && index === 0
-    const extendEnd =
-      !stroke.closed && capStyle === 'square' && index === openSegmentCount - 1
+    const startCapStyle = !stroke.closed && index === 0 ? capStyle : 'join'
+    const endCapStyle =
+      !stroke.closed && index === openSegmentCount - 1 ? capStyle : 'join'
 
     appendSegmentPrimitive(
       primitives.segments,
@@ -83,14 +97,16 @@ function appendOpenSegmentPrimitives(
       current.position,
       next.position,
       afterNext?.position ?? next.position,
+      strokePrimitiveDepth(style, index),
       startRadius,
       endRadius,
       pointColor(color, current, style),
       pointColor(color, next, style),
       style.opacity,
       style.zOffset,
-      extendStart,
-      extendEnd,
+      startCapStyle,
+      endCapStyle,
+      joinStyle,
     )
   }
 }
@@ -100,6 +116,7 @@ function appendClosingSegmentPrimitive(
   stroke: Stroke,
   color: Vec4,
   style: StrokeRenderStyle,
+  joinStyle: StrokeJoinStyle,
 ) {
   if (!stroke.closed) return
 
@@ -115,14 +132,16 @@ function appendClosingSegmentPrimitive(
     last.position,
     first.position,
     second.position,
+    strokePrimitiveDepth(style, stroke.points.length - 1),
     strokeRadius(stroke, last, style),
     strokeRadius(stroke, first, style),
     pointColor(color, last, style),
     pointColor(color, first, style),
     style.opacity,
     style.zOffset,
-    false,
-    false,
+    'join',
+    'join',
+    joinStyle,
   )
 }
 
@@ -147,6 +166,7 @@ function appendEndpointCapPrimitives(
     pointColor(color, first, style),
     style.opacity,
     style.zOffset,
+    strokePrimitiveDepth(style, 0),
   )
   appendPointPrimitive(
     target,
@@ -155,5 +175,10 @@ function appendEndpointCapPrimitives(
     pointColor(color, last, style),
     style.opacity,
     style.zOffset,
+    strokePrimitiveDepth(style, Math.max(0, stroke.points.length - 2)),
   )
+}
+
+function strokePrimitiveDepth(style: StrokeRenderStyle, pointIndex: number) {
+  return style.strokeDepth + pointIndex * STROKE_SELF_OVERLAP_DEPTH_STEP
 }

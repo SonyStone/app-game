@@ -2,7 +2,6 @@ import {
   cross3,
   normalize3,
   sub3,
-  clamp,
   type Vec3,
 } from './vector'
 import {
@@ -35,15 +34,9 @@ export function createCameraMatrices(
   camera: CameraState,
   aspect: number,
 ): CameraMatrices {
-  const pitch = clamp(camera.pitch, 0.12, 1.45)
-  const cosPitch = Math.cos(pitch)
-  const position: Vec3 = [
-    camera.target[0] + camera.distance * cosPitch * Math.sin(camera.yaw),
-    camera.target[1] - camera.distance * cosPitch * Math.cos(camera.yaw),
-    camera.target[2] + camera.distance * Math.sin(pitch),
-  ]
+  const { position, up } = getCameraOrbitFrame(camera)
 
-  const view = lookAt(position, camera.target, [0, 0, 1])
+  const view = lookAt(position, camera.target, up)
   const projection = perspectiveZO((48 * Math.PI) / 180, aspect, 0.02, 200)
   const viewProjection = multiplyMat4(projection, view)
   const inverseViewProjection = invertMat4(viewProjection)
@@ -58,9 +51,29 @@ export function createCameraMatrices(
 }
 
 export function getCameraBasis(camera: CameraState) {
-  const matrices = createCameraMatrices(camera, 1)
-  const forward = normalize3(sub3(camera.target, matrices.position))
-  const right = normalize3(cross3(forward, [0, 0, 1]))
+  const { position, up: orbitUp } = getCameraOrbitFrame(camera)
+  const forward = normalize3(sub3(camera.target, position))
+  const right = normalize3(cross3(forward, orbitUp))
   const up = normalize3(cross3(right, forward))
   return { forward, right, up }
+}
+
+function getCameraOrbitFrame(camera: CameraState) {
+  const sinYaw = Math.sin(camera.yaw)
+  const cosYaw = Math.cos(camera.yaw)
+  const sinPitch = Math.sin(camera.pitch)
+  const cosPitch = Math.cos(camera.pitch)
+
+  const position: Vec3 = [
+    camera.target[0] + camera.distance * cosPitch * sinYaw,
+    camera.target[1] - camera.distance * cosPitch * cosYaw,
+    camera.target[2] + camera.distance * sinPitch,
+  ]
+  const up: Vec3 = [
+    -sinPitch * sinYaw,
+    sinPitch * cosYaw,
+    cosPitch,
+  ]
+
+  return { position, up } as const
 }

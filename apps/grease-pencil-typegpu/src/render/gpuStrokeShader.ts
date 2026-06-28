@@ -87,21 +87,31 @@ const strokeTangent = tgpu.fn([d.vec3f, d.vec3f, d.vec3f], d.vec3f)(
   },
 )
 
+const strokeCapExtension = tgpu.fn([d.f32, d.f32], d.f32)(
+  (capStyle, _joinStyle) => {
+    'use gpu'
+
+    if (capStyle > 0.5 && capStyle < 1.5) {
+      return 1
+    }
+    return 0
+  },
+)
+
 const ribbonEndpoint = tgpu.fn(
-  [d.vec4f, d.vec4f, d.vec4f, d.f32, d.f32, d.f32, d.f32],
+  [d.vec4f, d.vec4f, d.vec4f, d.f32, d.f32, d.f32, d.f32, d.f32],
   d.vec3f,
-)((previous, point, next, side, zOffset, capExtend, capDirection) => {
+)((previous, point, next, side, zOffset, capStyle, capDirection, joinStyle) => {
   'use gpu'
 
   const tangent = strokeTangent(previous.xyz, point.xyz, next.xyz)
+  const capExtend = strokeCapExtension(capStyle, joinStyle)
   const capOffset = std.mul(
     tangent,
     std.mul(std.mul(point.w, capExtend), capDirection),
   )
-  const sideOffset = std.mul(
-    strokeSideVector(previous.xyz, point.xyz, next.xyz),
-    std.mul(point.w, side),
-  )
+  const sideVector = strokeSideVector(previous.xyz, point.xyz, next.xyz)
+  const sideOffset = std.mul(sideVector, std.mul(point.w, side))
   const normalOffset = std.mul(
     cameraBindGroupLayout.$.camera.billboardNormal.xyz,
     zOffset,
@@ -119,12 +129,13 @@ export const segmentVertexMain = tgpu.vertexFn({
   out: {
     position: d.builtin.position,
     color: d.vec4f,
+    strokeDepth: d.f32,
   },
 })(({ vertexIndex, instanceIndex }) => {
   'use gpu'
 
   const localVertex = vertexIndex % 6
-  const base = instanceIndex * 7
+  const base = instanceIndex * 8
   const previous = strokeDataBindGroupLayout.$.primitiveData[base]
   const start = strokeDataBindGroupLayout.$.primitiveData[base + 1]
   const end = strokeDataBindGroupLayout.$.primitiveData[base + 2]
@@ -132,10 +143,11 @@ export const segmentVertexMain = tgpu.vertexFn({
   const startColor = strokeDataBindGroupLayout.$.primitiveData[base + 4]
   const endColor = strokeDataBindGroupLayout.$.primitiveData[base + 5]
   const options = strokeDataBindGroupLayout.$.primitiveData[base + 6]
+  const depthOptions = strokeDataBindGroupLayout.$.primitiveData[base + 7]
   const useEnd = localVertex === 2 || localVertex === 3 || localVertex === 5
   const positiveSide =
     localVertex === 0 || localVertex === 2 || localVertex === 3
-  const side = std.select(-1, 1, positiveSide)
+  const side = std.select(d.f32(-1), d.f32(1), positiveSide)
   const startPosition = ribbonEndpoint(
     previous,
     start,
@@ -144,6 +156,7 @@ export const segmentVertexMain = tgpu.vertexFn({
     options.x,
     options.y,
     -1,
+    options.w,
   )
   const endPosition = ribbonEndpoint(
     start,
@@ -153,6 +166,7 @@ export const segmentVertexMain = tgpu.vertexFn({
     options.x,
     options.z,
     1,
+    options.w,
   )
   const position = std.select(startPosition, endPosition, useEnd)
   const color = std.select(startColor, endColor, useEnd)
@@ -163,6 +177,7 @@ export const segmentVertexMain = tgpu.vertexFn({
       d.vec4f(position, d.f32(1)),
     ),
     color: d.vec4f(color),
+    strokeDepth: depthOptions.x,
   }
 })
 
@@ -174,6 +189,7 @@ export const discVertexMain = tgpu.vertexFn({
   out: {
     position: d.builtin.position,
     color: d.vec4f,
+    strokeDepth: d.f32,
   },
 })(({ vertexIndex, instanceIndex }) => {
   'use gpu'
@@ -196,10 +212,14 @@ export const discVertexMain = tgpu.vertexFn({
         d.vec4f(center, d.f32(1)),
       ),
       color: d.vec4f(color),
+      strokeDepth: options.y,
     }
   }
 
-  const angleIndex = std.add(segmentIndex, std.select(0, 1, corner === 2))
+  const angleIndex = std.add(
+    segmentIndex,
+    std.select(d.f32(0), d.f32(1), corner === 2),
+  )
   const angle = std.mul(std.div(angleIndex, DISC_SEGMENTS), TAU)
   const rightOffset = std.mul(
     cameraBindGroupLayout.$.camera.billboardRight.xyz,
@@ -216,6 +236,7 @@ export const discVertexMain = tgpu.vertexFn({
       d.vec4f(edge, d.f32(1)),
     ),
     color: d.vec4f(color),
+    strokeDepth: options.y,
   }
 })
 
@@ -227,6 +248,7 @@ export const squareVertexMain = tgpu.vertexFn({
   out: {
     position: d.builtin.position,
     color: d.vec4f,
+    strokeDepth: d.f32,
   },
 })(({ vertexIndex, instanceIndex }) => {
   'use gpu'
@@ -241,13 +263,13 @@ export const squareVertexMain = tgpu.vertexFn({
     std.mul(cameraBindGroupLayout.$.camera.billboardNormal.xyz, options.x),
   )
   const sideX = std.select(
-    1,
-    -1,
+    d.f32(1),
+    d.f32(-1),
     localVertex === 1 || localVertex === 4 || localVertex === 5,
   )
   const sideY = std.select(
-    1,
-    -1,
+    d.f32(1),
+    d.f32(-1),
     localVertex === 2 || localVertex === 3 || localVertex === 5,
   )
   const rightOffset = std.mul(
@@ -266,16 +288,42 @@ export const squareVertexMain = tgpu.vertexFn({
       d.vec4f(position, d.f32(1)),
     ),
     color: d.vec4f(color),
+    strokeDepth: options.y,
   }
 })
 
-export const fragmentMain = tgpu.fragmentFn({
+export const segmentFragmentMain = tgpu.fragmentFn({
   in: {
     color: d.vec4f,
+    strokeDepth: d.f32,
   },
-  out: d.vec4f,
-})(({ color }) => {
+  out: {
+    color: d.vec4f,
+    depth: d.builtin.fragDepth,
+  },
+})(({ color, strokeDepth }) => {
   'use gpu'
 
-  return d.vec4f(color)
+  return {
+    color: d.vec4f(color),
+    depth: strokeDepth,
+  }
+})
+
+export const pointFragmentMain = tgpu.fragmentFn({
+  in: {
+    color: d.vec4f,
+    strokeDepth: d.f32,
+  },
+  out: {
+    color: d.vec4f,
+    depth: d.builtin.fragDepth,
+  },
+})(({ color, strokeDepth }) => {
+  'use gpu'
+
+  return {
+    color: d.vec4f(color),
+    depth: strokeDepth,
+  }
 })

@@ -18,6 +18,7 @@ export type StrokeRenderStyle = {
   ignorePointOpacity?: boolean
   ignoreVertexColor?: boolean
   radiusOffset?: number
+  strokeDepth: number
   zOffset: number
   offsetNormal: Vec3
 }

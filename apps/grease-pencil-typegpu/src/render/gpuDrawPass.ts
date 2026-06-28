@@ -3,6 +3,7 @@ import type { DrawingGpuResources } from './gpuSession'
 import { drawingVertexLayout } from './gpuMeshPipeline'
 import {
   STROKE_DISC_VERTEX_COUNT,
+  type StrokeGpuPrimitiveRange,
   STROKE_SEGMENT_VERTEX_COUNT,
   STROKE_SQUARE_VERTEX_COUNT,
 } from './strokeGpuPrimitives'
@@ -24,6 +25,7 @@ export type DrawingPassBuffers = {
   segments?: StrokePrimitiveDrawBuffer
   discs?: StrokePrimitiveDrawBuffer
   squares?: StrokePrimitiveDrawBuffer
+  strokeRanges?: readonly StrokeGpuPrimitiveRange[]
 }
 
 export function submitDrawingPass(
@@ -32,10 +34,11 @@ export function submitDrawingPass(
   buffers: DrawingPassBuffers,
 ) {
   const encoder = gpu.device.createCommandEncoder()
-  const pass = encoder.beginRenderPass({
+  const view = gpu.context.getCurrentTexture().createView()
+  const meshPass = encoder.beginRenderPass({
     colorAttachments: [
       {
-        view: gpu.context.getCurrentTexture().createView(),
+        view,
         clearValue: CLEAR_COLOR,
         loadOp: 'clear',
         storeOp: 'store',
@@ -50,48 +53,108 @@ export function submitDrawingPass(
   })
   if (buffers.mesh) {
     gpu.meshPipeline
-      .with(pass)
+      .with(meshPass)
       .with(gpu.cameraBindGroup)
       .with(drawingVertexLayout, buffers.mesh.buffer)
       .draw(buffers.mesh.vertexCount)
   }
-  drawStrokePrimitive(
-    pass,
+  meshPass.end()
+
+  const hasStrokePrimitives =
+    !!buffers.segments || !!buffers.discs || !!buffers.squares
+  if (!hasStrokePrimitives) {
+    gpu.device.queue.submit([encoder.finish()])
+    return
+  }
+
+  const strokePass = encoder.beginRenderPass({
+    colorAttachments: [
+      {
+        view,
+        loadOp: 'load',
+        storeOp: 'store',
+      },
+    ],
+    depthStencilAttachment: {
+      view: depthTexture.createView(),
+      depthClearValue: 0,
+      depthLoadOp: 'clear',
+      depthStoreOp: 'store',
+    },
+  })
+  drawStrokePrimitiveRanges(
+    strokePass,
     gpu.strokePipelines.segment,
     gpu.cameraBindGroup,
     buffers.segments,
     STROKE_SEGMENT_VERTEX_COUNT,
+    buffers.strokeRanges,
+    'segment',
   )
-  drawStrokePrimitive(
-    pass,
+  drawStrokePrimitiveRanges(
+    strokePass,
     gpu.strokePipelines.disc,
     gpu.cameraBindGroup,
     buffers.discs,
     STROKE_DISC_VERTEX_COUNT,
+    buffers.strokeRanges,
+    'disc',
   )
-  drawStrokePrimitive(
-    pass,
+  drawStrokePrimitiveRanges(
+    strokePass,
     gpu.strokePipelines.square,
     gpu.cameraBindGroup,
     buffers.squares,
     STROKE_SQUARE_VERTEX_COUNT,
+    buffers.strokeRanges,
+    'square',
   )
-  pass.end()
+  strokePass.end()
   gpu.device.queue.submit([encoder.finish()])
 }
 
-function drawStrokePrimitive(
+function drawStrokePrimitiveRanges(
   pass: GPURenderPassEncoder,
   pipeline: TgpuRenderPipeline,
   cameraBindGroup: TgpuBindGroup,
   buffer: StrokePrimitiveDrawBuffer | undefined,
   vertexCount: number,
+  ranges: readonly StrokeGpuPrimitiveRange[] | undefined,
+  primitiveType: 'segment' | 'disc' | 'square',
 ) {
   if (!buffer || buffer.instanceCount === 0) return
 
-  pipeline
+  const boundPipeline = pipeline
     .with(pass)
     .with(cameraBindGroup)
     .with(buffer.bindGroup)
-    .draw(vertexCount, buffer.instanceCount)
+  if (ranges && ranges.length > 0) {
+    for (const range of ranges) {
+      const primitiveRange = rangeForPrimitive(range, primitiveType)
+      if (primitiveRange.count === 0) continue
+      boundPipeline.draw(
+        vertexCount,
+        primitiveRange.count,
+        0,
+        primitiveRange.start,
+      )
+    }
+    return
+  }
+
+  boundPipeline.draw(vertexCount, buffer.instanceCount)
+}
+
+function rangeForPrimitive(
+  range: StrokeGpuPrimitiveRange,
+  primitiveType: 'segment' | 'disc' | 'square',
+) {
+  switch (primitiveType) {
+    case 'segment':
+      return { start: range.segmentStart, count: range.segmentCount }
+    case 'disc':
+      return { start: range.discStart, count: range.discCount }
+    case 'square':
+      return { start: range.squareStart, count: range.squareCount }
+  }
 }

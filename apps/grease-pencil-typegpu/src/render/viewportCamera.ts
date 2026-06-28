@@ -13,6 +13,8 @@ import {
 import { transformMat4 } from './matrixTransform'
 import { getWorkplaneBasis } from './workplane'
 
+const TAU = Math.PI * 2
+
 export function createDefaultCamera(): CameraState {
   return {
     target: [0, 0, 0],
@@ -27,8 +29,8 @@ export function orbitCamera(
   deltaX: number,
   deltaY: number,
 ) {
-  camera.yaw -= deltaX * 0.006
-  camera.pitch = clamp(camera.pitch + deltaY * 0.005, 0.16, 1.42)
+  camera.yaw = wrapAngle(camera.yaw - deltaX * 0.006)
+  camera.pitch = wrapAngle(camera.pitch + deltaY * 0.005)
 }
 
 export function panCamera(
@@ -90,4 +92,9 @@ export function offsetFromWorkplane(
   distance: number,
 ): Vec3 {
   return add3(position, scale3(getWorkplaneBasis(workplane).normal, distance))
+}
+
+function wrapAngle(angle: number) {
+  const wrapped = ((angle + Math.PI) % TAU + TAU) % TAU - Math.PI
+  return wrapped === -Math.PI ? Math.PI : wrapped
 }
