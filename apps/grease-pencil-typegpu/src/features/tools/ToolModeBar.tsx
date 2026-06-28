@@ -1,5 +1,5 @@
 import { For } from 'solid-js'
-import { toolModeOptions, type ToolMode } from './toolMode'
+import { toolModeOptions, type ToolMode } from '../../shared/toolMode'
 
 type ToolModeBarProps = {
   mode: ToolMode

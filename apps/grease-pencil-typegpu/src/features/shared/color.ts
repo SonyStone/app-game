@@ -1,4 +1,4 @@
-import type { Vec4 } from '../../render/math'
+import type { Vec4 } from '../../shared/vector'
 
 export type ColorOption = {
   name: string

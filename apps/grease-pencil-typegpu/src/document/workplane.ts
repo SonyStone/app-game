@@ -1,6 +1,6 @@
 import { copyVec3 } from './geometry'
 import type { Axis, DrawingWorkplane, GreaseDocument } from './model'
-import type { Vec3 } from '../render/math'
+import type { Vec3 } from '../shared/vector'
 
 export function setWorkplaneOrigin(
   document: GreaseDocument,

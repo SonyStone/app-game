@@ -1,7 +1,8 @@
 import { createDocumentId } from './ids'
 import { createDefaultMaterials } from './materials'
 import { createDefaultOnionSkinSettings } from './onionSkin'
-import { createDrawing, createLayer, DEFAULT_FRAME_NUMBER } from './structure'
+import { createDrawing, createLayer } from './documentFactories'
+import { DEFAULT_FRAME_NUMBER } from './frameNumbers'
 import { createDefaultWorkplane } from './workplane'
 import type { GreaseDocument } from './model'
 

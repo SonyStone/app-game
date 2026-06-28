@@ -1,4 +1,4 @@
-import type { Vec3, Vec4 } from '../render/math'
+import type { Vec3, Vec4 } from '../shared/vector'
 
 export function copyVec3(value: Vec3): Vec3 {
   return [value[0], value[1], value[2]]

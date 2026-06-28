@@ -1,4 +1,4 @@
-import type { StrokePoint } from '../document'
+import type { StrokePoint } from '../../document'
 import {
   add3,
   clamp,
@@ -7,7 +7,7 @@ import {
   scale3,
   sub3,
   type Vec3,
-} from './math'
+} from '../../shared/vector'
 
 export function shouldAppendPoint(points: StrokePoint[], point: StrokePoint) {
   const previous = points[points.length - 1]

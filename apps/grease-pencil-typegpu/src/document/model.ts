@@ -1,4 +1,4 @@
-import type { Vec3, Vec4 } from '../render/math'
+import type { Vec3, Vec4 } from '../shared/vector'
 
 type Brand<T, Name extends string> = T & { readonly __brand: Name }
 

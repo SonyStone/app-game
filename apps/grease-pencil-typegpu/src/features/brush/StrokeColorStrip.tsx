@@ -1,5 +1,5 @@
 import { For } from 'solid-js'
-import type { Vec4 } from '../../render/math'
+import type { Vec4 } from '../../shared/vector'
 import { colorOptions, sameVec4 } from '../shared/color'
 
 type StrokeColorStripProps = {
