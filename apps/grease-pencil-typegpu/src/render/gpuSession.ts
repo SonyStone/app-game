@@ -1,16 +1,22 @@
 import tgpu from 'typegpu'
 import {
   createCameraBindGroup,
+  createCameraBindGroupLayout,
   createCameraUniformBuffer,
   createDrawingPipeline,
+  createStrokeDataBindGroupLayout,
+  createStrokePrimitivePipelines,
+  type StrokePrimitivePipelines,
 } from './gpuPipeline'
 
 export type DrawingGpuResources = {
   device: GPUDevice
   context: GPUCanvasContext
-  pipeline: GPURenderPipeline
+  meshPipeline: GPURenderPipeline
+  strokePipelines: StrokePrimitivePipelines
   uniformBuffer: GPUBuffer
-  bindGroup: GPUBindGroup
+  cameraBindGroup: GPUBindGroup
+  strokeDataBindGroupLayout: GPUBindGroupLayout
 }
 
 export type DrawingGpuInitResult =
@@ -55,8 +61,25 @@ export async function createDrawingGpuResources(
   })
 
   const uniformBuffer = createCameraUniformBuffer(device)
-  const pipeline = createDrawingPipeline(root, device, format)
-  const bindGroup = createCameraBindGroup(device, pipeline, uniformBuffer)
+  const cameraBindGroupLayout = createCameraBindGroupLayout(device)
+  const strokeDataBindGroupLayout = createStrokeDataBindGroupLayout(device)
+  const meshPipeline = createDrawingPipeline(
+    root,
+    device,
+    format,
+    cameraBindGroupLayout,
+  )
+  const strokePipelines = createStrokePrimitivePipelines(
+    device,
+    format,
+    cameraBindGroupLayout,
+    strokeDataBindGroupLayout,
+  )
+  const cameraBindGroup = createCameraBindGroup(
+    device,
+    cameraBindGroupLayout,
+    uniformBuffer,
+  )
 
   return {
     ok: true,
@@ -64,9 +87,11 @@ export async function createDrawingGpuResources(
     resources: {
       device,
       context,
-      pipeline,
+      meshPipeline,
+      strokePipelines,
       uniformBuffer,
-      bindGroup,
+      cameraBindGroup,
+      strokeDataBindGroupLayout,
     },
   }
 }

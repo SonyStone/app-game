@@ -5,9 +5,10 @@ import type {
   StrokeId,
 } from '../document'
 import {
-  buildDrawingVertices,
+  buildDrawingGeometry,
   type StrokePointOverlay,
 } from './meshBuilder'
+import type { Vec3 } from './vector'
 
 export type { StrokePointOverlay } from './meshBuilder'
 
@@ -52,10 +53,14 @@ export function updateRendererScene(
   }
 }
 
-export function buildRendererSceneVertices(scene: RendererScene) {
-  return buildDrawingVertices({
+export function buildRendererSceneGeometry(
+  scene: RendererScene,
+  billboardNormal: Vec3,
+) {
+  return buildDrawingGeometry({
     layers: scene.layers,
     workplane: scene.workplane,
+    billboardNormal,
     draftStroke: scene.draftStroke,
     selectedStrokeIds: scene.selectedStrokeIds,
     pointOverlays: scene.pointOverlays,

@@ -11,6 +11,7 @@ import {
 import {
   createDepthTexture,
   createVertexBufferState,
+  destroyGpuBuffer,
   destroyVertexBuffer,
   type VertexBufferState,
 } from './gpuBuffers'
@@ -48,6 +49,9 @@ export class GreaseRenderer {
 
   private gpu?: DrawingGpuResources
   private depthTexture?: GPUTexture
+  private strokeDiscBuffer: VertexBufferState = createVertexBufferState()
+  private strokeSegmentBuffer: VertexBufferState = createVertexBufferState()
+  private strokeSquareBuffer: VertexBufferState = createVertexBufferState()
   private vertexBuffer: VertexBufferState = createVertexBufferState()
   private scene: RendererScene = createRendererScene()
   private width = 1
@@ -70,6 +74,9 @@ export class GreaseRenderer {
 
   destroy() {
     this.depthTexture?.destroy()
+    destroyGpuBuffer(this.strokeDiscBuffer)
+    destroyGpuBuffer(this.strokeSegmentBuffer)
+    destroyGpuBuffer(this.strokeSquareBuffer)
     destroyVertexBuffer(this.vertexBuffer)
     if (this.gpu) destroyDrawingGpuResources(this.gpu)
   }
@@ -151,6 +158,9 @@ export class GreaseRenderer {
       gpu: this.gpu,
       height: this.height,
       scene: this.scene,
+      strokeDiscBuffer: this.strokeDiscBuffer,
+      strokeSegmentBuffer: this.strokeSegmentBuffer,
+      strokeSquareBuffer: this.strokeSquareBuffer,
       vertexBuffer: this.vertexBuffer,
       width: this.width,
     })
