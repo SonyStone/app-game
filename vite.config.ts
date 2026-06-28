@@ -89,7 +89,7 @@ export default defineConfig({
   },
   worker: {
     format: 'es',
-    plugins: () => [solidPlugin()]
+    plugins: () => [solidPlugin(), typegpuPlugin({})]
   },
   test: {
     environment: 'happy-dom',
