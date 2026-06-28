@@ -1,5 +1,6 @@
 import type { StoredGreaseDocument } from './storageTypes'
 import {
+  isDrawingGrid,
   isDrawingWorkplane,
   isGreaseLayer,
   isOnionSkinSettings,
@@ -26,7 +27,11 @@ export function isStoredGreaseDocument(
     typeof value.currentFrame === 'number' &&
     typeof value.activeLayerId === 'string' &&
     (!('activeMaterialId' in value) || typeof value.activeMaterialId === 'string') &&
+    (!('activeWorkplaneId' in value) ||
+      typeof value.activeWorkplaneId === 'string') &&
     (!('workplane' in value) || isDrawingWorkplane(value.workplane)) &&
+    (!('workplanes' in value) ||
+      (Array.isArray(value.workplanes) && value.workplanes.every(isDrawingGrid))) &&
     (!('onionSkin' in value) || isOnionSkinSettings(value.onionSkin)) &&
     Array.isArray(value.layers) &&
     value.layers.every(isGreaseLayer) &&

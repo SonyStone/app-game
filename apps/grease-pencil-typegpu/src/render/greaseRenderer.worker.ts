@@ -15,12 +15,18 @@ type PendingSceneMessage = Extract<
 let engine: GreaseRenderEngine | undefined
 let pendingCamera: CameraState | undefined
 let pendingDraft: PendingDraftMessage | undefined
+let pendingGizmoHighlight: PendingGizmoHighlightMessage | undefined
 let pendingScene: PendingSceneMessage | undefined
 let pendingViewport: RendererViewportSize = { width: 1, height: 1, dpr: 1 }
 
 type PendingDraftMessage = Extract<
   GreaseRendererWorkerMessage,
   { type: 'draft' }
+>
+
+type PendingGizmoHighlightMessage = Extract<
+  GreaseRendererWorkerMessage,
+  { type: 'gizmo-highlight' }
 >
 
 self.onmessage = (event: MessageEvent<GreaseRendererWorkerMessage>) => {
@@ -58,6 +64,11 @@ self.onmessage = (event: MessageEvent<GreaseRendererWorkerMessage>) => {
       applyDraft(event.data)
       return
     }
+    case 'gizmo-highlight': {
+      pendingGizmoHighlight = event.data
+      applyGizmoHighlight(event.data)
+      return
+    }
     case 'render': {
       engine?.render()
       return
@@ -75,6 +86,7 @@ function applyPendingState() {
   engine?.resize(pendingViewport)
   if (pendingScene) applyScene(pendingScene)
   if (pendingDraft) applyDraft(pendingDraft)
+  if (pendingGizmoHighlight) applyGizmoHighlight(pendingGizmoHighlight)
 }
 
 function applyScene(message: PendingSceneMessage) {
@@ -88,6 +100,10 @@ function applyScene(message: PendingSceneMessage) {
 
 function applyDraft(message: PendingDraftMessage) {
   engine?.setDraftStroke(message.draftStroke)
+}
+
+function applyGizmoHighlight(message: PendingGizmoHighlightMessage) {
+  engine?.setWorkplaneGizmoHighlight(message.highlight)
 }
 
 function postMainMessage(message: GreaseRendererMainMessage) {

@@ -9,11 +9,13 @@ import { useCanvasInteraction } from './features/interaction/useCanvasInteractio
 import type { ToolMode } from './shared/toolMode'
 import { CanvasViewport } from './features/viewport/CanvasViewport'
 import './index.css'
+import type { ViewportMode } from './shared/viewportMode'
 
 function App() {
   let canvasRef!: HTMLCanvasElement
 
   const [mode, setMode] = createSignal<ToolMode>('draw')
+  const [viewportMode, setViewportMode] = createSignal<ViewportMode>('3d')
   const [eraserRadius, setEraserRadius] = createSignal(0.18)
   const [brushStrength, setBrushStrength] = createSignal(1)
   const [pointerLabel, setPointerLabel] = createSignal('Ready')
@@ -21,6 +23,7 @@ function App() {
     activeDrawing,
     activeLayer,
     activeMaterial,
+    activeWorkplaneId,
     canMoveLayerTowardBottom,
     canMoveLayerTowardTop,
     countVisibleStrokes,
@@ -43,13 +46,16 @@ function App() {
     strokeCount,
     updateDocument,
     workplane,
+    workplanes,
   } = useDocumentSession(mode)
   const { renderer, status, zoom } = useGreaseRenderer({
     canvas: () => canvasRef,
+    activeWorkplaneId,
     draftStroke,
     pointOverlays,
     renderLayers,
     selectedStrokeIds,
+    viewportMode,
     workplane,
   })
 
@@ -57,6 +63,7 @@ function App() {
     canvas: () => canvasRef,
     renderer,
     mode,
+    viewportMode,
     activeLayer,
     activeDrawing,
     activeMaterial,
@@ -93,10 +100,12 @@ function App() {
         currentFrame={documentState().currentFrame}
         eraserRadius={eraserRadius()}
         mode={mode()}
+        viewportMode={viewportMode()}
         onDeleteSelection={canvasInteraction.deleteCurrentSelection}
         onSetBrushStrength={setBrushStrength}
         onSetEraserRadius={setEraserRadius}
         onSetMode={setMode}
+        onSetViewportMode={setViewportMode}
         updateDocument={updateDocument}
       />
 
@@ -123,6 +132,7 @@ function App() {
           activeLayerId={documentState().activeLayerId}
           activeMaterial={activeMaterial()}
           activeMaterialId={documentState().activeMaterialId}
+          activeWorkplaneId={activeWorkplaneId()}
           canMoveLayerTowardBottom={canMoveLayerTowardBottom}
           canMoveLayerTowardTop={canMoveLayerTowardTop}
           countVisibleStrokes={countVisibleStrokes}
@@ -131,6 +141,7 @@ function App() {
           onionSkin={onionSkin()}
           updateDocument={updateDocument}
           workplane={workplane()}
+          workplanes={workplanes()}
         />
       </section>
     </main>

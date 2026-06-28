@@ -1,11 +1,21 @@
 import { For } from 'solid-js'
-import type { Axis, DrawingWorkplane } from '../../document'
+import type {
+  Axis,
+  DrawingGrid,
+  DrawingWorkplane,
+  WorkplaneId,
+} from '../../document'
 
 const workplaneAxes = ['x', 'y', 'z'] as const satisfies readonly Axis[]
 
 type WorkplanePanelProps = {
+  activeWorkplaneId: WorkplaneId
   workplane: DrawingWorkplane
+  workplanes: readonly DrawingGrid[]
+  onAddWorkplane: () => void
+  onRemoveActiveWorkplane: () => void
   onReset: () => void
+  onSetActiveWorkplane: (workplaneId: WorkplaneId) => void
   onSetOrigin: (axis: Axis, value: number) => void
   onSetRotation: (axis: Axis, value: number) => void
   onSetScale: (value: number) => void
@@ -16,9 +26,44 @@ export function WorkplanePanel(props: WorkplanePanelProps) {
     <section class="workplane-panel">
       <div class="panel-header">
         <span>Drawing Grid</span>
-        <button class="command-button" type="button" onClick={props.onReset}>
-          Reset
-        </button>
+        <div class="workplane-header-actions">
+          <button class="command-button" type="button" onClick={props.onReset}>
+            Reset
+          </button>
+          <button
+            class="command-button"
+            type="button"
+            onClick={props.onAddWorkplane}
+          >
+            +
+          </button>
+          <button
+            class="command-button"
+            type="button"
+            disabled={props.workplanes.length <= 1}
+            onClick={props.onRemoveActiveWorkplane}
+          >
+            Del
+          </button>
+        </div>
+      </div>
+
+      <div class="workplane-grid-list">
+        <For each={props.workplanes}>
+          {(grid) => (
+            <button
+              class={`workplane-grid-button ${
+                grid.id === props.activeWorkplaneId
+                  ? 'workplane-grid-button-active'
+                  : ''
+              }`}
+              type="button"
+              onClick={() => props.onSetActiveWorkplane(grid.id)}
+            >
+              {grid.name}
+            </button>
+          )}
+        </For>
       </div>
 
       <div class="workplane-controls">

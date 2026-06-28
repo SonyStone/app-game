@@ -10,6 +10,7 @@ export type {
   Axis,
   DocumentId,
   Drawing,
+  DrawingGrid,
   DrawingId,
   DrawingWorkplane,
   FrameId,
@@ -31,6 +32,7 @@ export type {
   StrokeJoinStyle,
   StrokePoint,
   StrokePointKey,
+  WorkplaneId,
 } from './document/model'
 export { createStrokePointKey } from './document/ids'
 export { createInitialDocument } from './document/factory'
@@ -92,10 +94,14 @@ export {
   undoActiveDrawing,
 } from './document/strokes'
 export {
+  addWorkplane,
+  removeActiveWorkplane,
   resetWorkplane,
+  setActiveWorkplane,
   setWorkplaneOrigin,
   setWorkplaneOriginVector,
   setWorkplaneRotation,
+  setWorkplaneRotationVector,
   setWorkplaneScale,
 } from './document/workplane'
 export {

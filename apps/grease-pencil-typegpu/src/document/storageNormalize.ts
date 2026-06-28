@@ -6,7 +6,11 @@ import { clamp01 } from './storageScalarNormalize'
 import { normalizeDrawing } from './storageStrokeNormalize'
 import type { StoredGreaseDocument } from './storageTypes'
 import { sanitizeFrameNumber, sortFrames } from './frameNumbers'
-import { normalizeWorkplane } from './workplane'
+import {
+  drawingGridToWorkplane,
+  normalizeWorkplane,
+  normalizeWorkplanes,
+} from './workplane'
 
 export function normalizeStoredDocument(
   document: StoredGreaseDocument,
@@ -19,13 +23,25 @@ export function normalizeStoredDocument(
     const activeLayer =
       document.layers.find((layer) => layer.id === document.activeLayerId) ??
       document.layers[document.layers.length - 1]
+    const workplanes = normalizeWorkplanes(
+      document.workplanes,
+      document.workplane,
+    )
+    const activeWorkplane =
+      workplanes.find((grid) => grid.id === document.activeWorkplaneId) ??
+      workplanes[0]
+    const workplane = activeWorkplane
+      ? drawingGridToWorkplane(activeWorkplane)
+      : normalizeWorkplane(document.workplane)
 
     return {
       ...document,
       currentFrame: sanitizeFrameNumber(document.currentFrame),
       activeLayerId: activeLayer?.id ?? document.activeLayerId,
       activeMaterialId: activeMaterial.id,
-      workplane: normalizeWorkplane(document.workplane),
+      activeWorkplaneId: activeWorkplane?.id ?? workplanes[0]?.id,
+      workplane,
+      workplanes,
       onionSkin: normalizeOnionSkinSettings(document.onionSkin),
       layers: document.layers.map((layer) => ({
         ...layer,

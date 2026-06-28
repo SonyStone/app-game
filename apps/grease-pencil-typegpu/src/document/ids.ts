@@ -6,6 +6,7 @@ import type {
   MaterialId,
   StrokeId,
   StrokePointKey,
+  WorkplaneId,
 } from './model'
 
 export function createStrokePointKey(
@@ -37,6 +38,10 @@ export function createStrokeId() {
 
 export function createMaterialId() {
   return makeId('material') as MaterialId
+}
+
+export function createWorkplaneId() {
+  return makeId('workplane') as WorkplaneId
 }
 
 function makeId(prefix: string) {

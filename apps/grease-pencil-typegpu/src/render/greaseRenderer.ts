@@ -4,6 +4,7 @@ import type {
   Stroke,
   StrokeId,
 } from '../document'
+import type { ViewportMode } from '../shared/viewportMode'
 import type { Vec3 } from '../shared/vector'
 import GreaseRendererWorker from './greaseRenderer.worker?worker'
 import type {
@@ -13,19 +14,23 @@ import type {
   RendererViewportSize,
 } from './greaseRendererWorkerProtocol'
 import type { CameraState } from './math'
+import type { WorkplaneGizmoHighlight } from './workplaneGizmoTypes'
 import {
   createRendererScene,
   updateRendererDraftStroke,
   updateRendererScene,
+  updateRendererWorkplaneGizmoHighlight,
   type RendererScene,
   type StrokePointOverlay,
 } from './rendererScene'
 import {
   createDefaultCamera,
+  lockCameraToWorkplane,
   offsetFromWorkplane as offsetPointFromWorkplane,
   orbitCamera,
   panCamera,
   screenToWorkplane,
+  unlockCameraFromWorkplane,
   worldToScreen,
   zoomCamera,
 } from './viewportCamera'
@@ -45,12 +50,16 @@ export class GreaseRenderer {
   private pendingDraft:
     | Extract<GreaseRendererWorkerMessage, { type: 'draft' }>
     | undefined
+  private pendingGizmoHighlight:
+    | Extract<GreaseRendererWorkerMessage, { type: 'gizmo-highlight' }>
+    | undefined
   private pendingScene:
     | Extract<GreaseRendererWorkerMessage, { type: 'scene' }>
     | undefined
   private pendingViewport: RendererViewportSize | undefined
   private scene: RendererScene = createRendererScene()
   private statusResolver?: (status: RendererStatus) => void
+  private viewportMode: ViewportMode = '3d'
   private viewport: RendererViewportSize = { width: 1, height: 1, dpr: 1 }
   private width = 1
   private readonly worker = new GreaseRendererWorker()
@@ -131,6 +140,27 @@ export class GreaseRenderer {
   setDraftStroke(draftStroke?: Stroke) {
     this.scene = updateRendererDraftStroke(this.scene, draftStroke)
     this.postDraft()
+  }
+
+  setWorkplaneGizmoHighlight(highlight?: WorkplaneGizmoHighlight) {
+    this.scene = updateRendererWorkplaneGizmoHighlight(this.scene, highlight)
+    this.postWorkplaneGizmoHighlight()
+  }
+
+  setViewportMode(
+    mode: ViewportMode,
+    workplane: DrawingWorkplane,
+    snapTarget = false,
+  ) {
+    const changed = this.viewportMode !== mode
+    this.viewportMode = mode
+    if (mode === '2d') {
+      lockCameraToWorkplane(this.camera, workplane, changed || snapTarget)
+    }
+    else {
+      unlockCameraFromWorkplane(this.camera)
+    }
+    this.postCamera()
   }
 
   resize() {
@@ -243,6 +273,17 @@ export class GreaseRenderer {
     this.scheduleWorkerFlush()
   }
 
+  private postWorkplaneGizmoHighlight() {
+    if (!this.initialized) return
+    this.pendingGizmoHighlight = {
+      type: 'gizmo-highlight',
+      ...(this.scene.workplaneGizmoHighlight
+        ? { highlight: this.scene.workplaneGizmoHighlight }
+        : {}),
+    } satisfies GreaseRendererWorkerMessage
+    this.scheduleWorkerFlush()
+  }
+
   private postResize() {
     if (!this.initialized) return
     this.pendingViewport = this.viewport
@@ -270,6 +311,12 @@ export class GreaseRenderer {
       this.postWorkerMessage({
         type: 'camera',
         camera: {
+          lockedNormal: this.camera.lockedNormal
+            ? [...this.camera.lockedNormal]
+            : undefined,
+          lockedUp: this.camera.lockedUp ? [...this.camera.lockedUp] : undefined,
+          mode: this.camera.mode,
+          roll: this.camera.roll,
           target: [...this.camera.target],
           yaw: this.camera.yaw,
           pitch: this.camera.pitch,
@@ -287,6 +334,11 @@ export class GreaseRenderer {
     if (this.pendingDraft) {
       this.postWorkerMessage(this.pendingDraft)
       this.pendingDraft = undefined
+    }
+
+    if (this.pendingGizmoHighlight) {
+      this.postWorkerMessage(this.pendingGizmoHighlight)
+      this.pendingGizmoHighlight = undefined
     }
   }
 

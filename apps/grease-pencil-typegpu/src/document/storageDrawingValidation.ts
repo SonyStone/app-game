@@ -1,4 +1,5 @@
 import type {
+  DrawingGrid,
   DrawingWorkplane,
   GreaseLayer,
   LayerFrame,
@@ -22,6 +23,15 @@ export function isDrawingWorkplane(value: unknown): value is DrawingWorkplane {
     isVec3(value.origin) &&
     isVec3(value.rotation) &&
     typeof value.gridScale === 'number'
+  )
+}
+
+export function isDrawingGrid(value: unknown): value is DrawingGrid {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    isDrawingWorkplane(value)
   )
 }
 

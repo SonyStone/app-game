@@ -1,10 +1,12 @@
 import type {
+  DrawingGrid,
   DrawingWorkplane,
   GreaseLayer,
   GreaseMaterial,
   LayerId,
   MaterialId,
   OnionSkinSettings,
+  WorkplaneId,
 } from '../document'
 import { LayerSection } from './sidebar/LayerSection'
 import { MaterialSection } from './sidebar/MaterialSection'
@@ -16,6 +18,7 @@ type AppSidebarProps = {
   activeLayerId: LayerId
   activeMaterial: GreaseMaterial
   activeMaterialId: MaterialId
+  activeWorkplaneId: WorkplaneId
   canMoveLayerTowardBottom: (layerId: LayerId) => boolean
   canMoveLayerTowardTop: (layerId: LayerId) => boolean
   countVisibleStrokes: (layerId: LayerId) => number
@@ -24,13 +27,16 @@ type AppSidebarProps = {
   onionSkin: OnionSkinSettings
   updateDocument: DocumentUpdater
   workplane: DrawingWorkplane
+  workplanes: readonly DrawingGrid[]
 }
 
 export function AppSidebar(props: AppSidebarProps) {
   return (
     <aside class="layer-panel">
       <WorkplaneSection
+        activeWorkplaneId={props.activeWorkplaneId}
         workplane={props.workplane}
+        workplanes={props.workplanes}
         updateDocument={props.updateDocument}
       />
 

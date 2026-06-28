@@ -5,6 +5,7 @@ import {
   createCameraMatrices,
   dot3,
   getCameraBasis,
+  normalize3,
   scale3,
   sub3,
   type CameraState,
@@ -14,6 +15,7 @@ import { transformMat4 } from './matrixTransform'
 import { getWorkplaneBasis } from './workplane'
 
 const TAU = Math.PI * 2
+const VIEW_ROTATE_SPEED = 0.006
 
 export type ScreenPoint = {
   x: number
@@ -23,6 +25,8 @@ export type ScreenPoint = {
 
 export function createDefaultCamera(): CameraState {
   return {
+    mode: '3d',
+    roll: 0,
     target: [0, 0, 0],
     yaw: 0.68,
     pitch: 0.74,
@@ -35,8 +39,17 @@ export function orbitCamera(
   deltaX: number,
   deltaY: number,
 ) {
+  if (camera.mode === '2d') {
+    rotateCameraView(camera, deltaX)
+    return
+  }
+
   camera.yaw = wrapAngle(camera.yaw - deltaX * 0.006)
   camera.pitch = wrapAngle(camera.pitch + deltaY * 0.005)
+}
+
+export function rotateCameraView(camera: CameraState, delta: number) {
+  camera.roll = wrapAngle(camera.roll - delta * VIEW_ROTATE_SPEED)
 }
 
 export function panCamera(
@@ -58,6 +71,34 @@ export function zoomCamera(camera: CameraState, delta: number) {
     1.6,
     48,
   )
+}
+
+export function lockCameraToWorkplane(
+  camera: CameraState,
+  workplane: DrawingWorkplane,
+  snapTarget = false,
+) {
+  const basis = getWorkplaneBasis(workplane)
+  if (snapTarget || camera.mode !== '2d') {
+    camera.target = [...basis.origin]
+    camera.roll = 0
+  }
+  camera.mode = '2d'
+  camera.lockedNormal = normalize3(basis.normal)
+  camera.lockedUp = normalize3(basis.up)
+  camera.pitch = Math.asin(clamp(camera.lockedNormal[2], -1, 1))
+  camera.yaw = Math.atan2(camera.lockedNormal[0], -camera.lockedNormal[1])
+}
+
+export function unlockCameraFromWorkplane(camera: CameraState) {
+  if (camera.mode === '2d' && camera.lockedNormal) {
+    camera.pitch = Math.asin(clamp(camera.lockedNormal[2], -1, 1))
+    camera.yaw = Math.atan2(camera.lockedNormal[0], -camera.lockedNormal[1])
+  }
+  camera.mode = '3d'
+  camera.lockedNormal = undefined
+  camera.lockedUp = undefined
+  camera.roll = 0
 }
 
 export function cameraViewProjection(camera: CameraState, aspect: number) {

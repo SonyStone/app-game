@@ -33,6 +33,7 @@ export function useDocumentSession(mode: Accessor<ToolMode>) {
     activeDrawing: views.activeDrawing,
     activeLayer: views.activeLayer,
     activeMaterial: views.activeMaterial,
+    activeWorkplaneId: views.activeWorkplaneId,
     canMoveLayerTowardBottom: views.canMoveLayerTowardBottom,
     canMoveLayerTowardTop: views.canMoveLayerTowardTop,
     countVisibleStrokes: views.countVisibleStrokes,
@@ -55,5 +56,6 @@ export function useDocumentSession(mode: Accessor<ToolMode>) {
     strokeCount: views.strokeCount,
     updateDocument,
     workplane: views.workplane,
+    workplanes: views.workplanes,
   } as const
 }

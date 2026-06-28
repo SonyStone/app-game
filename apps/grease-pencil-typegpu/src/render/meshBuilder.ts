@@ -24,6 +24,7 @@ import type {
   StrokePointOverlay,
   StrokeRenderStyle,
 } from './meshTypes'
+import type { WorkplaneGizmoHighlight } from './workplaneGizmoTypes'
 import {
   appendStrokeGpuPrimitives,
   createStrokeGpuPrimitives,
@@ -42,6 +43,11 @@ const SELECTED_STROKE_COLOR: Vec4 = [1, 0.58, 0.08, 0.68]
 const STROKE_DEPTH_BASE = 0.000001
 const STROKE_DEPTH_STEP = 0.00001
 const STROKE_DEPTH_FAR_LIMIT = 0.999999
+const BASE_GRID_WORKPLANE: DrawingWorkplane = {
+  origin: [0, 0, 0],
+  rotation: [0, 0, 0],
+  gridScale: 1,
+}
 
 export type BuildDrawingVerticesParams = {
   layers: readonly RenderLayer[]
@@ -51,6 +57,7 @@ export type BuildDrawingVerticesParams = {
   draftStroke?: Stroke | undefined
   selectedStrokeIds?: ReadonlySet<StrokeId> | undefined
   pointOverlays?: readonly StrokePointOverlay[] | undefined
+  workplaneGizmoHighlight?: WorkplaneGizmoHighlight | undefined
 }
 
 export type DrawingGeometry = {
@@ -72,6 +79,7 @@ export type BuildDynamicDrawingGeometryParams = {
   layers: readonly RenderLayer[]
   pointOverlays?: readonly StrokePointOverlay[] | undefined
   workplane: DrawingWorkplane
+  workplaneGizmoHighlight?: WorkplaneGizmoHighlight | undefined
 }
 
 const DYNAMIC_STROKE_DEPTH = 0.9
@@ -84,6 +92,7 @@ export function buildCommittedDrawingGeometry({
   const basis = getWorkplaneBasis(workplane)
   const vertices: number[] = []
   const strokePrimitives = createStrokeGpuPrimitives()
+  appendBaseGrid(vertices, workplane)
   appendGrid(vertices, basis, workplane.gridScale)
   const selectedStrokes: SelectedStrokeRender[] = []
   let strokeDepthOrder = 0
@@ -157,12 +166,18 @@ export function buildDynamicDrawingGeometry({
   cameraTarget,
   draftStroke,
   pointOverlays = [],
+  workplaneGizmoHighlight,
 }: BuildDynamicDrawingGeometryParams): DrawingGeometry {
   const basis = getWorkplaneBasis(workplane)
   const vertices: number[] = []
   const strokePrimitives = createStrokeGpuPrimitives()
 
-  appendWorkplaneGizmo(vertices, basis, billboardNormal)
+  appendWorkplaneGizmo(
+    vertices,
+    basis,
+    billboardNormal,
+    workplaneGizmoHighlight,
+  )
   if (draftStroke) {
     const material = getStrokeMaterialFromLayers(draftStroke, layers)
     const style = {
@@ -195,6 +210,7 @@ export function buildDrawingGeometry({
   draftStroke,
   selectedStrokeIds = new Set<StrokeId>(),
   pointOverlays = [],
+  workplaneGizmoHighlight,
 }: BuildDrawingVerticesParams & { billboardNormal: Vec3 }): DrawingGeometry {
   return mergeDrawingGeometry(
     buildCommittedDrawingGeometry({
@@ -210,6 +226,7 @@ export function buildDrawingGeometry({
       cameraTarget,
       draftStroke,
       pointOverlays,
+      workplaneGizmoHighlight,
     }),
   )
 }
@@ -273,4 +290,34 @@ function appendStrokeFill(
   if (stroke.closed && useFill && fillColor) {
     appendFill(vertices, stroke, fillColor, style)
   }
+}
+
+function appendBaseGrid(vertices: number[], activeWorkplane: DrawingWorkplane) {
+  if (sameWorkplane(activeWorkplane, BASE_GRID_WORKPLANE)) return
+  appendGrid(
+    vertices,
+    getWorkplaneBasis(BASE_GRID_WORKPLANE),
+    BASE_GRID_WORKPLANE.gridScale,
+    {
+      alphaScale: 0.45,
+      neutral: true,
+      zOffset: -0.025,
+    },
+  )
+}
+
+function sameWorkplane(a: DrawingWorkplane, b: DrawingWorkplane) {
+  return (
+    sameVec3(a.origin, b.origin) &&
+    sameVec3(a.rotation, b.rotation) &&
+    Math.abs(a.gridScale - b.gridScale) <= 1e-6
+  )
+}
+
+function sameVec3(a: Vec3, b: Vec3) {
+  return (
+    Math.abs(a[0] - b[0]) <= 1e-6 &&
+    Math.abs(a[1] - b[1]) <= 1e-6 &&
+    Math.abs(a[2] - b[2]) <= 1e-6
+  )
 }

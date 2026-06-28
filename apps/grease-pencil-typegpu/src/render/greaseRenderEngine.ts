@@ -31,9 +31,11 @@ import {
   createRendererScene,
   updateRendererDraftStroke,
   updateRendererScene,
+  updateRendererWorkplaneGizmoHighlight,
   type RendererScene,
   type StrokePointOverlay,
 } from './rendererScene'
+import type { WorkplaneGizmoHighlight } from './workplaneGizmoTypes'
 import { createDefaultCamera } from './viewportCamera'
 import type {
   RendererStatus,
@@ -90,6 +92,12 @@ export class GreaseRenderEngine {
     this.camera.yaw = camera.yaw
     this.camera.pitch = camera.pitch
     this.camera.distance = camera.distance
+    this.camera.mode = camera.mode
+    this.camera.roll = camera.roll
+    this.camera.lockedNormal = camera.lockedNormal
+      ? [...camera.lockedNormal]
+      : undefined
+    this.camera.lockedUp = camera.lockedUp ? [...camera.lockedUp] : undefined
     this.dynamicDirty = true
     this.requestRender()
   }
@@ -114,6 +122,12 @@ export class GreaseRenderEngine {
 
   setDraftStroke(draftStroke?: Stroke) {
     this.scene = updateRendererDraftStroke(this.scene, draftStroke)
+    this.dynamicDirty = true
+    this.requestRender()
+  }
+
+  setWorkplaneGizmoHighlight(highlight?: WorkplaneGizmoHighlight) {
+    this.scene = updateRendererWorkplaneGizmoHighlight(this.scene, highlight)
     this.dynamicDirty = true
     this.requestRender()
   }

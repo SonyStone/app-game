@@ -11,6 +11,7 @@ import {
   type StrokePointOverlay,
 } from './meshBuilder'
 import type { Vec3 } from './vector'
+import type { WorkplaneGizmoHighlight } from './workplaneGizmoTypes'
 
 export type { StrokePointOverlay } from './meshBuilder'
 
@@ -26,6 +27,7 @@ export type RendererScene = {
   draftStroke?: Stroke
   selectedStrokeIds: ReadonlySet<StrokeId>
   pointOverlays: readonly StrokePointOverlay[]
+  workplaneGizmoHighlight?: WorkplaneGizmoHighlight
 }
 
 export function createRendererScene(): RendererScene {
@@ -63,6 +65,16 @@ export function updateRendererDraftStroke(
   }
 }
 
+export function updateRendererWorkplaneGizmoHighlight(
+  scene: RendererScene,
+  workplaneGizmoHighlight?: WorkplaneGizmoHighlight,
+): RendererScene {
+  return {
+    ...scene,
+    workplaneGizmoHighlight,
+  }
+}
+
 export function buildRendererSceneCommittedGeometry(scene: RendererScene) {
   return buildCommittedDrawingGeometry({
     layers: scene.layers,
@@ -85,6 +97,7 @@ export function buildRendererSceneDynamicGeometry(
     cameraTarget,
     draftStroke: scene.draftStroke,
     pointOverlays: scene.pointOverlays,
+    workplaneGizmoHighlight: scene.workplaneGizmoHighlight,
   })
 }
 
@@ -103,5 +116,6 @@ export function buildRendererSceneGeometry(
     draftStroke: scene.draftStroke,
     selectedStrokeIds: scene.selectedStrokeIds,
     pointOverlays: scene.pointOverlays,
+    workplaneGizmoHighlight: scene.workplaneGizmoHighlight,
   })
 }

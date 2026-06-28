@@ -1,4 +1,5 @@
 import type { Vec3 } from '../../shared/vector'
+import type { WorkplaneGizmoHighlight } from '../../render/workplaneGizmoTypes'
 
 export type InteractionViewport = {
   offsetFromWorkplane: (position: Vec3, distance: number) => Vec3
@@ -11,6 +12,9 @@ export type InteractionViewport = {
         depth: number
       }
     | undefined
+  setWorkplaneGizmoHighlight: (
+    highlight?: WorkplaneGizmoHighlight,
+  ) => void
   screenToWorld: (clientX: number, clientY: number) => Vec3 | undefined
   zoom: (delta: number) => void
 }

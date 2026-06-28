@@ -27,6 +27,10 @@ export function useDocumentViews(params: DocumentViewsParams) {
   })
   const renderLayers = createMemo(() => getRenderLayers(params.documentState()))
   const workplane = createMemo(() => params.documentState().workplane)
+  const activeWorkplaneId = createMemo(
+    () => params.documentState().activeWorkplaneId,
+  )
+  const workplanes = createMemo(() => params.documentState().workplanes)
   const onionSkin = createMemo(() => params.documentState().onionSkin)
   const activeMaterial = createMemo(() => getActiveMaterial(params.documentState()))
   const materials = createMemo(() => params.documentState().materials)
@@ -51,6 +55,7 @@ export function useDocumentViews(params: DocumentViewsParams) {
   return {
     activeDrawing,
     activeLayer,
+    activeWorkplaneId,
     activeMaterial,
     canMoveLayerTowardBottom,
     canMoveLayerTowardTop,
@@ -62,5 +67,6 @@ export function useDocumentViews(params: DocumentViewsParams) {
     renderLayers,
     strokeCount,
     workplane,
+    workplanes,
   } as const
 }

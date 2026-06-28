@@ -15,6 +15,7 @@ import { EditCommandBar } from '../features/editing/EditCommandBar'
 import { FrameControls } from '../features/timeline/FrameControls'
 import { ToolModeBar } from '../features/tools/ToolModeBar'
 import type { ToolMode } from '../shared/toolMode'
+import type { ViewportMode } from '../shared/viewportMode'
 import type { DocumentUpdater } from './useDocumentSession'
 
 type AppToolbarProps = {
@@ -24,10 +25,12 @@ type AppToolbarProps = {
   currentFrame: number
   eraserRadius: number
   mode: ToolMode
+  viewportMode: ViewportMode
   onDeleteSelection: () => void
   onSetBrushStrength: (brushStrength: number) => void
   onSetEraserRadius: (eraserRadius: number) => void
   onSetMode: (mode: ToolMode) => void
+  onSetViewportMode: (mode: ViewportMode) => void
   updateDocument: DocumentUpdater
 }
 
@@ -35,6 +38,27 @@ export function AppToolbar(props: AppToolbarProps) {
   return (
     <header class="app-toolbar">
       <ToolModeBar mode={props.mode} onSetMode={props.onSetMode} />
+
+      <div class="segmented-control" aria-label="Viewport mode">
+        <button
+          class={`tool-button ${
+            props.viewportMode === '3d' ? 'tool-button-active' : ''
+          }`}
+          type="button"
+          onClick={() => props.onSetViewportMode('3d')}
+        >
+          3D
+        </button>
+        <button
+          class={`tool-button ${
+            props.viewportMode === '2d' ? 'tool-button-active' : ''
+          }`}
+          type="button"
+          onClick={() => props.onSetViewportMode('2d')}
+        >
+          2D
+        </button>
+      </div>
 
       <StrokeColorStrip
         activeStrokeColor={props.activeMaterial.strokeColor}

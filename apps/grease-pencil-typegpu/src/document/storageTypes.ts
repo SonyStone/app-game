@@ -1,6 +1,7 @@
 import type { Vec4 } from '../shared/vector'
 import type {
   Drawing,
+  DrawingGrid,
   DrawingWorkplane,
   GreaseDocument,
   GreaseMaterial,
@@ -13,6 +14,7 @@ import type {
   StrokeCapStyle,
   StrokeJoinStyle,
   StrokePoint,
+  WorkplaneId,
 } from './model'
 
 export type StoredStrokePoint = Omit<
@@ -48,10 +50,18 @@ export type StoredGreaseMaterial = Omit<
 
 export type StoredGreaseDocument = Omit<
   GreaseDocument,
-  'activeMaterialId' | 'workplane' | 'onionSkin' | 'drawings' | 'materials'
+  | 'activeMaterialId'
+  | 'activeWorkplaneId'
+  | 'workplane'
+  | 'workplanes'
+  | 'onionSkin'
+  | 'drawings'
+  | 'materials'
 > & {
   activeMaterialId?: MaterialId
+  activeWorkplaneId?: WorkplaneId
   workplane?: DrawingWorkplane
+  workplanes?: DrawingGrid[]
   onionSkin?: OnionSkinSettings
   drawings: StoredDrawing[]
   materials?: StoredGreaseMaterial[]

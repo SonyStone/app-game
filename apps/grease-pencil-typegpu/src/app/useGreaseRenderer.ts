@@ -10,7 +10,9 @@ import type {
   RenderLayer,
   Stroke,
   StrokeId,
+  WorkplaneId,
 } from '../document'
+import type { ViewportMode } from '../shared/viewportMode'
 import {
   GreaseRenderer,
   type StrokePointOverlay,
@@ -21,7 +23,9 @@ type UseGreaseRendererParams = {
   draftStroke: Accessor<Stroke | undefined>
   pointOverlays: Accessor<readonly StrokePointOverlay[]>
   renderLayers: Accessor<readonly RenderLayer[]>
+  activeWorkplaneId: Accessor<WorkplaneId>
   selectedStrokeIds: Accessor<ReadonlySet<StrokeId>>
+  viewportMode: Accessor<ViewportMode>
   workplane: Accessor<DrawingWorkplane>
 }
 
@@ -65,6 +69,21 @@ export function useGreaseRenderer(params: UseGreaseRendererParams) {
 
   createEffect(() => {
     renderer()?.setDraftStroke(params.draftStroke())
+  })
+
+  let previousViewportMode: ViewportMode | undefined
+  let previousWorkplaneId: WorkplaneId | undefined
+  createEffect(() => {
+    const viewportMode = params.viewportMode()
+    const workplaneId = params.activeWorkplaneId()
+    const snapTarget =
+      viewportMode === '2d' &&
+      (previousViewportMode !== viewportMode ||
+        previousWorkplaneId !== workplaneId)
+
+    renderer()?.setViewportMode(viewportMode, params.workplane(), snapTarget)
+    previousViewportMode = viewportMode
+    previousWorkplaneId = workplaneId
   })
 
   const zoom = (delta: number) => {

@@ -1,5 +1,8 @@
 import {
   cross3,
+  dot3,
+  scale3,
+  add3,
   normalize3,
   sub3,
   type Vec3,
@@ -16,6 +19,10 @@ import {
 } from './matrixCamera'
 
 export type CameraState = {
+  lockedNormal?: Vec3
+  lockedUp?: Vec3
+  mode: '3d' | '2d'
+  roll: number
   target: Vec3
   yaw: number
   pitch: number
@@ -59,6 +66,15 @@ export function getCameraBasis(camera: CameraState) {
 }
 
 function getCameraOrbitFrame(camera: CameraState) {
+  if (camera.mode === '2d' && camera.lockedNormal && camera.lockedUp) {
+    const normal = normalize3(camera.lockedNormal)
+    const up = normalize3(rotateAroundAxis(camera.lockedUp, normal, camera.roll))
+    return {
+      position: add3(camera.target, scale3(normal, camera.distance)),
+      up,
+    } as const
+  }
+
   const sinYaw = Math.sin(camera.yaw)
   const cosYaw = Math.cos(camera.yaw)
   const sinPitch = Math.sin(camera.pitch)
@@ -76,4 +92,13 @@ function getCameraOrbitFrame(camera: CameraState) {
   ]
 
   return { position, up } as const
+}
+
+function rotateAroundAxis(vector: Vec3, axis: Vec3, angle: number): Vec3 {
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  return add3(
+    add3(scale3(vector, cos), scale3(cross3(axis, vector), sin)),
+    scale3(axis, dot3(axis, vector) * (1 - cos)),
+  )
 }

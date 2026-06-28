@@ -9,6 +9,7 @@ export type FrameId = Brand<string, 'FrameId'>
 export type StrokeId = Brand<string, 'StrokeId'>
 export type StrokePointKey = Brand<string, 'StrokePointKey'>
 export type MaterialId = Brand<string, 'MaterialId'>
+export type WorkplaneId = Brand<string, 'WorkplaneId'>
 
 export type Axis = 'x' | 'y' | 'z'
 export const strokeCapStyles = ['round', 'flat', 'square'] as const
@@ -26,6 +27,11 @@ export type DrawingWorkplane = {
   origin: Vec3
   rotation: Vec3
   gridScale: number
+}
+
+export type DrawingGrid = DrawingWorkplane & {
+  id: WorkplaneId
+  name: string
 }
 
 export type OnionSkinSettings = {
@@ -105,7 +111,9 @@ export type GreaseDocument = {
   currentFrame: number
   activeLayerId: LayerId
   activeMaterialId: MaterialId
+  activeWorkplaneId: WorkplaneId
   workplane: DrawingWorkplane
+  workplanes: DrawingGrid[]
   onionSkin: OnionSkinSettings
   layers: GreaseLayer[]
   drawings: Drawing[]

@@ -1,5 +1,6 @@
 import type { Accessor, Setter } from 'solid-js'
 import type { ToolMode } from '../../shared/toolMode'
+import type { ViewportMode } from '../../shared/viewportMode'
 import {
   getPointerCenter,
   getPointerDistance,
@@ -13,6 +14,7 @@ type ViewportNavigationParams = {
   mode: Accessor<ToolMode>
   renderer: Accessor<InteractionViewport | undefined>
   setPointerLabel: Setter<string>
+  viewportMode: Accessor<ViewportMode>
 }
 
 type PointerMoveResult =
@@ -37,7 +39,9 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
       lastViewPoint = undefined
       lastPinchDistance = getPointerDistance(activePointers.values())
       lastPinchCenter = getPointerCenter(activePointers.values())
-      params.setPointerLabel('Touch orbit/zoom')
+      params.setPointerLabel(
+        params.viewportMode() === '2d' ? 'Touch rotate/zoom' : 'Touch orbit/zoom',
+      )
       return true
     }
 
@@ -52,7 +56,9 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
         ? 'Touch pan'
         : nextViewAction === 'pan'
           ? 'Pan'
-          : 'Orbit',
+          : params.viewportMode() === '2d'
+            ? 'Rotate'
+            : 'Orbit',
     )
     return true
   }
@@ -107,7 +113,9 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
     }
     lastPinchDistance = nextDistance
     lastPinchCenter = nextCenter
-    params.setPointerLabel('Touch orbit/zoom')
+    params.setPointerLabel(
+      params.viewportMode() === '2d' ? 'Touch rotate/zoom' : 'Touch orbit/zoom',
+    )
   }
 
   const startRemainingTouchPan = () => {

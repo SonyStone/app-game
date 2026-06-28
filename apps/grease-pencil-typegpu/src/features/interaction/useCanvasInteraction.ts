@@ -10,6 +10,7 @@ import {
   type StrokePointKey,
 } from '../../document'
 import type { ToolMode } from '../../shared/toolMode'
+import type { ViewportMode } from '../../shared/viewportMode'
 import { createEraserInteraction } from './eraserInteraction'
 import { createSelectionInteraction } from './selectionInteraction'
 import { createStrokeDrawingInteraction } from './strokeDrawing'
@@ -21,6 +22,7 @@ type UseCanvasInteractionParams = {
   canvas: Accessor<HTMLCanvasElement>
   renderer: Accessor<InteractionViewport | undefined>
   mode: Accessor<ToolMode>
+  viewportMode: Accessor<ViewportMode>
   activeLayer: Accessor<GreaseLayer | undefined>
   activeDrawing: Accessor<Drawing | undefined>
   activeMaterial: Accessor<GreaseMaterial>
@@ -45,6 +47,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
     mode: params.mode,
     renderer: params.renderer,
     setPointerLabel: params.setPointerLabel,
+    viewportMode: params.viewportMode,
   })
   const workplaneGizmo = createWorkplaneGizmoInteraction({
     renderer: params.renderer,
@@ -114,6 +117,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
 
   const onPointerMove = (event: PointerEvent) => {
     if (workplaneGizmo.moveGizmoDrag(event)) return
+    workplaneGizmo.updateGizmoHover(event)
 
     const viewMove = viewportNavigation.movePointer(event)
     if (viewMove.status !== 'unhandled') return
@@ -138,6 +142,7 @@ export function useCanvasInteraction(params: UseCanvasInteractionParams) {
 
   const onPointerUp = (event: PointerEvent) => {
     workplaneGizmo.endGizmoDrag(event)
+    workplaneGizmo.updateGizmoHover(event)
     viewportNavigation.releasePointer(event)
     selection.endStrokeSelection(event)
     selection.endPointSelection(event)
