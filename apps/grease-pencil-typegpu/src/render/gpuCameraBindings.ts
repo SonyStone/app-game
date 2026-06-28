@@ -1,4 +1,26 @@
+import tgpu, { d, type TgpuRoot } from 'typegpu'
 import { CAMERA_UNIFORM_BYTES } from './cameraUniforms'
+
+export const cameraUniformsSchema = d.struct({
+  viewProjection: d.mat4x4f,
+  billboardNormal: d.vec4f,
+  billboardRight: d.vec4f,
+  billboardUp: d.vec4f,
+})
+
+export const cameraBindGroupLayout = tgpu.bindGroupLayout({
+  camera: {
+    uniform: cameraUniformsSchema,
+    visibility: ['vertex'],
+  },
+})
+
+export const strokeDataBindGroupLayout = tgpu.bindGroupLayout({
+  primitiveData: {
+    storage: d.arrayOf(d.vec4f),
+    visibility: ['vertex'],
+  },
+})
 
 export function createCameraUniformBuffer(device: GPUDevice) {
   return device.createBuffer({
@@ -8,64 +30,20 @@ export function createCameraUniformBuffer(device: GPUDevice) {
   })
 }
 
-export function createCameraBindGroupLayout(device: GPUDevice) {
-  return device.createBindGroupLayout({
-    label: 'camera bind group layout',
-    entries: [
-      {
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: {
-          type: 'uniform',
-        },
-      },
-    ],
-  })
-}
-
-export function createStrokeDataBindGroupLayout(device: GPUDevice) {
-  return device.createBindGroupLayout({
-    label: 'stroke primitive data bind group layout',
-    entries: [
-      {
-        binding: 0,
-        visibility: GPUShaderStage.VERTEX,
-        buffer: {
-          type: 'read-only-storage',
-        },
-      },
-    ],
-  })
-}
-
 export function createCameraBindGroup(
-  device: GPUDevice,
-  layout: GPUBindGroupLayout,
+  root: TgpuRoot,
   uniformBuffer: GPUBuffer,
 ) {
-  return device.createBindGroup({
-    layout,
-    entries: [
-      {
-        binding: 0,
-        resource: { buffer: uniformBuffer },
-      },
-    ],
+  return root.createBindGroup(cameraBindGroupLayout, {
+    camera: uniformBuffer,
   })
 }
 
 export function createStrokeDataBindGroup(
-  device: GPUDevice,
-  layout: GPUBindGroupLayout,
+  root: TgpuRoot,
   buffer: GPUBuffer,
 ) {
-  return device.createBindGroup({
-    layout,
-    entries: [
-      {
-        binding: 0,
-        resource: { buffer },
-      },
-    ],
+  return root.createBindGroup(strokeDataBindGroupLayout, {
+    primitiveData: buffer,
   })
 }

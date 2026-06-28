@@ -1,172 +1,281 @@
-export const strokeShaderCode = /* wgsl */ `
-const DISC_SEGMENTS: u32 = 14u;
-const DISC_VERTEX_COUNT: u32 = DISC_SEGMENTS * 3u;
-const TAU: f32 = 6.28318530718;
+import tgpu, { d, std } from 'typegpu'
+import {
+  cameraBindGroupLayout,
+  strokeDataBindGroupLayout,
+} from './gpuCameraBindings'
 
-struct CameraUniforms {
-  viewProjection: mat4x4f,
-  billboardNormal: vec4f,
-  billboardRight: vec4f,
-  billboardUp: vec4f,
-};
+const DISC_SEGMENTS = 14
+const DISC_VERTEX_COUNT = DISC_SEGMENTS * 3
+const EPSILON = 0.00001
+const TAU = 6.28318530718
 
-@group(0) @binding(0) var<uniform> camera: CameraUniforms;
-@group(1) @binding(0) var<storage, read> primitiveData: array<vec4f>;
+const safeNormalize = tgpu.fn([d.vec3f], d.vec3f)((value) => {
+  'use gpu'
 
-struct VertexOut {
-  @builtin(position) position: vec4f,
-  @location(0) color: vec4f,
-};
-
-fn safeNormalize(value: vec3f) -> vec3f {
-  let valueLength = length(value);
-  if (valueLength < 0.00001) {
-    return vec3f(0.0, 0.0, 0.0);
+  const valueLength = std.length(value)
+  if (valueLength < EPSILON) {
+    return d.vec3f(0, 0, 0)
   }
-  return value / valueLength;
-}
+  return d.vec3f(std.div(value, valueLength))
+})
 
-fn outputVertex(position: vec3f, color: vec4f) -> VertexOut {
-  var output: VertexOut;
-  output.position = camera.viewProjection * vec4f(position, 1.0);
-  output.color = color;
-  return output;
-}
+const strokeSideVector = tgpu.fn([d.vec3f, d.vec3f, d.vec3f], d.vec3f)(
+  (previous, point, next) => {
+    'use gpu'
 
-fn strokeSideVector(previous: vec3f, point: vec3f, next: vec3f) -> vec3f {
-  let previousDelta = point - previous;
-  let nextDelta = next - point;
-  let hasPrevious = length(previousDelta) >= 0.00001;
-  let hasNext = length(nextDelta) >= 0.00001;
-  if (!hasPrevious && !hasNext) {
-    return camera.billboardRight.xyz;
+    const previousDelta = std.sub(point, previous)
+    const nextDelta = std.sub(next, point)
+    const hasPrevious = std.length(previousDelta) >= EPSILON
+    const hasNext = std.length(nextDelta) >= EPSILON
+    if (!hasPrevious && !hasNext) {
+      return d.vec3f(cameraBindGroupLayout.$.camera.billboardRight.xyz)
+    }
+    if (!hasPrevious) {
+      return safeNormalize(
+        std.cross(
+          cameraBindGroupLayout.$.camera.billboardNormal.xyz,
+          nextDelta,
+        ),
+      )
+    }
+    if (!hasNext) {
+      return safeNormalize(
+        std.cross(
+          cameraBindGroupLayout.$.camera.billboardNormal.xyz,
+          previousDelta,
+        ),
+      )
+    }
+
+    const previousSide = safeNormalize(
+      std.cross(
+        cameraBindGroupLayout.$.camera.billboardNormal.xyz,
+        previousDelta,
+      ),
+    )
+    const nextSide = safeNormalize(
+      std.cross(cameraBindGroupLayout.$.camera.billboardNormal.xyz, nextDelta),
+    )
+    const miter = safeNormalize(std.add(previousSide, nextSide))
+    if (std.length(miter) < EPSILON) {
+      return d.vec3f(nextSide)
+    }
+
+    const denominator = std.abs(std.dot(miter, nextSide))
+    const miterScale = std.clamp(
+      std.div(1, std.max(denominator, 0.25)),
+      0,
+      4,
+    )
+    return d.vec3f(std.mul(miter, miterScale))
+  },
+)
+
+const strokeTangent = tgpu.fn([d.vec3f, d.vec3f, d.vec3f], d.vec3f)(
+  (previous, point, next) => {
+    'use gpu'
+
+    const previousDelta = std.sub(point, previous)
+    const nextDelta = std.sub(next, point)
+    if (std.length(nextDelta) >= EPSILON) {
+      return safeNormalize(nextDelta)
+    }
+    if (std.length(previousDelta) >= EPSILON) {
+      return safeNormalize(previousDelta)
+    }
+    return d.vec3f(0, 0, 0)
+  },
+)
+
+const ribbonEndpoint = tgpu.fn(
+  [d.vec4f, d.vec4f, d.vec4f, d.f32, d.f32, d.f32, d.f32],
+  d.vec3f,
+)((previous, point, next, side, zOffset, capExtend, capDirection) => {
+  'use gpu'
+
+  const tangent = strokeTangent(previous.xyz, point.xyz, next.xyz)
+  const capOffset = std.mul(
+    tangent,
+    std.mul(std.mul(point.w, capExtend), capDirection),
+  )
+  const sideOffset = std.mul(
+    strokeSideVector(previous.xyz, point.xyz, next.xyz),
+    std.mul(point.w, side),
+  )
+  const normalOffset = std.mul(
+    cameraBindGroupLayout.$.camera.billboardNormal.xyz,
+    zOffset,
+  )
+  return d.vec3f(
+    std.add(std.add(std.add(point.xyz, capOffset), sideOffset), normalOffset),
+  )
+})
+
+export const segmentVertexMain = tgpu.vertexFn({
+  in: {
+    vertexIndex: d.builtin.vertexIndex,
+    instanceIndex: d.builtin.instanceIndex,
+  },
+  out: {
+    position: d.builtin.position,
+    color: d.vec4f,
+  },
+})(({ vertexIndex, instanceIndex }) => {
+  'use gpu'
+
+  const localVertex = vertexIndex % 6
+  const base = instanceIndex * 7
+  const previous = strokeDataBindGroupLayout.$.primitiveData[base]
+  const start = strokeDataBindGroupLayout.$.primitiveData[base + 1]
+  const end = strokeDataBindGroupLayout.$.primitiveData[base + 2]
+  const next = strokeDataBindGroupLayout.$.primitiveData[base + 3]
+  const startColor = strokeDataBindGroupLayout.$.primitiveData[base + 4]
+  const endColor = strokeDataBindGroupLayout.$.primitiveData[base + 5]
+  const options = strokeDataBindGroupLayout.$.primitiveData[base + 6]
+  const useEnd = localVertex === 2 || localVertex === 3 || localVertex === 5
+  const positiveSide =
+    localVertex === 0 || localVertex === 2 || localVertex === 3
+  const side = std.select(-1, 1, positiveSide)
+  const startPosition = ribbonEndpoint(
+    previous,
+    start,
+    end,
+    side,
+    options.x,
+    options.y,
+    -1,
+  )
+  const endPosition = ribbonEndpoint(
+    start,
+    end,
+    next,
+    side,
+    options.x,
+    options.z,
+    1,
+  )
+  const position = std.select(startPosition, endPosition, useEnd)
+  const color = std.select(startColor, endColor, useEnd)
+
+  return {
+    position: std.mul(
+      cameraBindGroupLayout.$.camera.viewProjection,
+      d.vec4f(position, d.f32(1)),
+    ),
+    color: d.vec4f(color),
   }
-  if (!hasPrevious) {
-    return safeNormalize(cross(camera.billboardNormal.xyz, nextDelta));
-  }
-  if (!hasNext) {
-    return safeNormalize(cross(camera.billboardNormal.xyz, previousDelta));
-  }
+})
 
-  let previousSide = safeNormalize(cross(camera.billboardNormal.xyz, previousDelta));
-  let nextSide = safeNormalize(cross(camera.billboardNormal.xyz, nextDelta));
-  let miter = safeNormalize(previousSide + nextSide);
-  if (length(miter) < 0.00001) {
-    return nextSide;
-  }
+export const discVertexMain = tgpu.vertexFn({
+  in: {
+    vertexIndex: d.builtin.vertexIndex,
+    instanceIndex: d.builtin.instanceIndex,
+  },
+  out: {
+    position: d.builtin.position,
+    color: d.vec4f,
+  },
+})(({ vertexIndex, instanceIndex }) => {
+  'use gpu'
 
-  let denominator = abs(dot(miter, nextSide));
-  let miterScale = clamp(1.0 / max(denominator, 0.25), 0.0, 4.0);
-  return miter * miterScale;
-}
-
-fn strokeTangent(previous: vec3f, point: vec3f, next: vec3f) -> vec3f {
-  let previousDelta = point - previous;
-  let nextDelta = next - point;
-  if (length(nextDelta) >= 0.00001) {
-    return safeNormalize(nextDelta);
-  }
-  if (length(previousDelta) >= 0.00001) {
-    return safeNormalize(previousDelta);
-  }
-  return vec3f(0.0, 0.0, 0.0);
-}
-
-fn ribbonEndpoint(
-  previous: vec4f,
-  point: vec4f,
-  next: vec4f,
-  side: f32,
-  zOffset: f32,
-  capExtend: f32,
-  capDirection: f32,
-) -> vec3f {
-  let tangent = strokeTangent(previous.xyz, point.xyz, next.xyz);
-  let capOffset = tangent * point.w * capExtend * capDirection;
-  return point.xyz
-    + capOffset
-    + strokeSideVector(previous.xyz, point.xyz, next.xyz) * point.w * side
-    + camera.billboardNormal.xyz * zOffset;
-}
-
-@vertex
-fn segmentVertexMain(
-  @builtin(vertex_index) vertexIndex: u32,
-  @builtin(instance_index) instanceIndex: u32,
-) -> VertexOut {
-  let localVertex = vertexIndex % 6u;
-  let base = instanceIndex * 7u;
-  let previous = primitiveData[base];
-  let start = primitiveData[base + 1u];
-  let end = primitiveData[base + 2u];
-  let next = primitiveData[base + 3u];
-  let startColor = primitiveData[base + 4u];
-  let endColor = primitiveData[base + 5u];
-  let options = primitiveData[base + 6u];
-  let useEnd = localVertex == 2u || localVertex == 3u || localVertex == 5u;
-  let positiveSide = localVertex == 0u || localVertex == 2u || localVertex == 3u;
-  let color = select(startColor, endColor, useEnd);
-  let side = select(-1.0, 1.0, positiveSide);
-  let position = select(
-    ribbonEndpoint(previous, start, end, side, options.x, options.y, -1.0),
-    ribbonEndpoint(start, end, next, side, options.x, options.z, 1.0),
-    useEnd,
-  );
-  return outputVertex(position, color);
-}
-
-@vertex
-fn discVertexMain(
-  @builtin(vertex_index) vertexIndex: u32,
-  @builtin(instance_index) instanceIndex: u32,
-) -> VertexOut {
-  let localVertex = vertexIndex % DISC_VERTEX_COUNT;
-  let segmentIndex = localVertex / 3u;
-  let corner = localVertex % 3u;
-  let base = instanceIndex * 3u;
-  let centerAndRadius = primitiveData[base];
-  let color = primitiveData[base + 1u];
-  let options = primitiveData[base + 2u];
-  let center = centerAndRadius.xyz + camera.billboardNormal.xyz * options.x;
-  if (corner == 0u) {
-    return outputVertex(center, color);
+  const localVertex = vertexIndex % DISC_VERTEX_COUNT
+  const segmentIndex = std.floor(localVertex / 3)
+  const corner = localVertex % 3
+  const base = instanceIndex * 3
+  const centerAndRadius = strokeDataBindGroupLayout.$.primitiveData[base]
+  const color = strokeDataBindGroupLayout.$.primitiveData[base + 1]
+  const options = strokeDataBindGroupLayout.$.primitiveData[base + 2]
+  const center = std.add(
+    centerAndRadius.xyz,
+    std.mul(cameraBindGroupLayout.$.camera.billboardNormal.xyz, options.x),
+  )
+  if (corner === 0) {
+    return {
+      position: std.mul(
+        cameraBindGroupLayout.$.camera.viewProjection,
+        d.vec4f(center, d.f32(1)),
+      ),
+      color: d.vec4f(color),
+    }
   }
 
-  let angleIndex = segmentIndex + select(0u, 1u, corner == 2u);
-  let angle = (f32(angleIndex) / f32(DISC_SEGMENTS)) * TAU;
-  let edge = center
-    + camera.billboardRight.xyz * cos(angle) * centerAndRadius.w
-    + camera.billboardUp.xyz * sin(angle) * centerAndRadius.w;
-  return outputVertex(edge, color);
-}
-
-@vertex
-fn squareVertexMain(
-  @builtin(vertex_index) vertexIndex: u32,
-  @builtin(instance_index) instanceIndex: u32,
-) -> VertexOut {
-  let localVertex = vertexIndex % 6u;
-  let base = instanceIndex * 3u;
-  let centerAndRadius = primitiveData[base];
-  let color = primitiveData[base + 1u];
-  let options = primitiveData[base + 2u];
-  let center = centerAndRadius.xyz + camera.billboardNormal.xyz * options.x;
-  var side = vec2f(1.0, 1.0);
-  if (localVertex == 1u || localVertex == 4u || localVertex == 5u) {
-    side.x = -1.0;
+  const angleIndex = std.add(segmentIndex, std.select(0, 1, corner === 2))
+  const angle = std.mul(std.div(angleIndex, DISC_SEGMENTS), TAU)
+  const rightOffset = std.mul(
+    cameraBindGroupLayout.$.camera.billboardRight.xyz,
+    std.mul(std.cos(angle), centerAndRadius.w),
+  )
+  const upOffset = std.mul(
+    cameraBindGroupLayout.$.camera.billboardUp.xyz,
+    std.mul(std.sin(angle), centerAndRadius.w),
+  )
+  const edge = std.add(std.add(center, rightOffset), upOffset)
+  return {
+    position: std.mul(
+      cameraBindGroupLayout.$.camera.viewProjection,
+      d.vec4f(edge, d.f32(1)),
+    ),
+    color: d.vec4f(color),
   }
-  if (localVertex == 2u || localVertex == 3u || localVertex == 5u) {
-    side.y = -1.0;
+})
+
+export const squareVertexMain = tgpu.vertexFn({
+  in: {
+    vertexIndex: d.builtin.vertexIndex,
+    instanceIndex: d.builtin.instanceIndex,
+  },
+  out: {
+    position: d.builtin.position,
+    color: d.vec4f,
+  },
+})(({ vertexIndex, instanceIndex }) => {
+  'use gpu'
+
+  const localVertex = vertexIndex % 6
+  const base = instanceIndex * 3
+  const centerAndRadius = strokeDataBindGroupLayout.$.primitiveData[base]
+  const color = strokeDataBindGroupLayout.$.primitiveData[base + 1]
+  const options = strokeDataBindGroupLayout.$.primitiveData[base + 2]
+  const center = std.add(
+    centerAndRadius.xyz,
+    std.mul(cameraBindGroupLayout.$.camera.billboardNormal.xyz, options.x),
+  )
+  const sideX = std.select(
+    1,
+    -1,
+    localVertex === 1 || localVertex === 4 || localVertex === 5,
+  )
+  const sideY = std.select(
+    1,
+    -1,
+    localVertex === 2 || localVertex === 3 || localVertex === 5,
+  )
+  const rightOffset = std.mul(
+    cameraBindGroupLayout.$.camera.billboardRight.xyz,
+    std.mul(sideX, centerAndRadius.w),
+  )
+  const upOffset = std.mul(
+    cameraBindGroupLayout.$.camera.billboardUp.xyz,
+    std.mul(sideY, centerAndRadius.w),
+  )
+  const position = std.add(std.add(center, rightOffset), upOffset)
+
+  return {
+    position: std.mul(
+      cameraBindGroupLayout.$.camera.viewProjection,
+      d.vec4f(position, d.f32(1)),
+    ),
+    color: d.vec4f(color),
   }
+})
 
-  let position = center
-    + camera.billboardRight.xyz * side.x * centerAndRadius.w
-    + camera.billboardUp.xyz * side.y * centerAndRadius.w;
-  return outputVertex(position, color);
-}
+export const fragmentMain = tgpu.fragmentFn({
+  in: {
+    color: d.vec4f,
+  },
+  out: d.vec4f,
+})(({ color }) => {
+  'use gpu'
 
-@fragment
-fn fragmentMain(input: VertexOut) -> @location(0) vec4f {
-  return input.color;
-}
-`
+  return d.vec4f(color)
+})

@@ -118,11 +118,7 @@ function writeStrokePrimitiveBuffer(
   gpu.device.queue.writeBuffer(buffer, 0, new Float32Array(data))
 
   return {
-    bindGroup: createStrokeDataBindGroup(
-      gpu.device,
-      gpu.strokeDataBindGroupLayout,
-      buffer,
-    ),
+    bindGroup: createStrokeDataBindGroup(gpu.root, buffer),
     instanceCount,
   }
 }

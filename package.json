@@ -22,8 +22,9 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@mdx-js/rollup": "catalog:",
+    "@app-game/vite-plugin-markdown": "workspace:*",
     "@eslint/js": "^10.0.1",
+    "@mdx-js/rollup": "catalog:",
     "@types/chroma-js": "^3.1.2",
     "@types/fs-extra": "^11.0.4",
     "@types/hammerjs": "^2.0.46",
@@ -68,7 +69,6 @@
     "vite-plugin-top-level-await": "1.6.0",
     "vite-plugin-wasm": "3.6.0",
     "vitest": "catalog:",
-    "@app-game/vite-plugin-markdown": "workspace:*",
     "which": "^7.0.0"
   },
   "dependencies": {

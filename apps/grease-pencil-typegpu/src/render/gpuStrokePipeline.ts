@@ -1,84 +1,50 @@
-import { strokeShaderCode } from './gpuStrokeShader'
+import type { TgpuRenderPipeline, TgpuRoot } from 'typegpu'
+import {
+  discVertexMain,
+  fragmentMain,
+  segmentVertexMain,
+  squareVertexMain,
+} from './gpuStrokeShader'
 
 export type StrokePrimitivePipelines = {
-  segment: GPURenderPipeline
-  disc: GPURenderPipeline
-  square: GPURenderPipeline
+  segment: TgpuRenderPipeline
+  disc: TgpuRenderPipeline
+  square: TgpuRenderPipeline
 }
 
 export function createStrokePrimitivePipelines(
-  device: GPUDevice,
+  root: TgpuRoot,
   format: GPUTextureFormat,
-  cameraBindGroupLayout: GPUBindGroupLayout,
-  strokeDataBindGroupLayout: GPUBindGroupLayout,
 ): StrokePrimitivePipelines {
-  const shaderModule = device.createShaderModule({
-    code: strokeShaderCode,
-    label: 'grease pencil stroke primitive shader',
-  })
-  const layout = device.createPipelineLayout({
-    bindGroupLayouts: [cameraBindGroupLayout, strokeDataBindGroupLayout],
-    label: 'grease pencil stroke primitive pipeline layout',
-  })
   return {
-    segment: createStrokePrimitivePipeline(
-      device,
-      format,
-      layout,
-      shaderModule,
-      'segmentVertexMain',
-    ),
-    disc: createStrokePrimitivePipeline(
-      device,
-      format,
-      layout,
-      shaderModule,
-      'discVertexMain',
-    ),
-    square: createStrokePrimitivePipeline(
-      device,
-      format,
-      layout,
-      shaderModule,
-      'squareVertexMain',
-    ),
+    segment: createStrokePrimitivePipeline(root, format, segmentVertexMain),
+    disc: createStrokePrimitivePipeline(root, format, discVertexMain),
+    square: createStrokePrimitivePipeline(root, format, squareVertexMain),
   }
 }
 
 function createStrokePrimitivePipeline(
-  device: GPUDevice,
+  root: TgpuRoot,
   format: GPUTextureFormat,
-  layout: GPUPipelineLayout,
-  shaderModule: GPUShaderModule,
-  entryPoint: string,
+  vertex: typeof segmentVertexMain,
 ) {
-  return device.createRenderPipeline({
-    label: `grease pencil ${entryPoint} pipeline`,
-    layout,
-    vertex: {
-      module: shaderModule,
-      entryPoint,
-    },
-    fragment: {
-      module: shaderModule,
-      entryPoint: 'fragmentMain',
-      targets: [
-        {
-          format,
-          blend: {
-            color: {
-              srcFactor: 'src-alpha',
-              dstFactor: 'one-minus-src-alpha',
-              operation: 'add',
-            },
-            alpha: {
-              srcFactor: 'one',
-              dstFactor: 'one-minus-src-alpha',
-              operation: 'add',
-            },
-          },
+  return root.createRenderPipeline({
+    vertex,
+    fragment: fragmentMain,
+    targets: {
+      format,
+      blend: {
+        color: {
+          srcFactor: 'src-alpha',
+          dstFactor: 'one-minus-src-alpha',
+          operation: 'add',
         },
-      ],
+        alpha: {
+          srcFactor: 'one',
+          dstFactor: 'one-minus-src-alpha',
+          operation: 'add',
+        },
+      },
     },
     primitive: {
       topology: 'triangle-list',

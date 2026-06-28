@@ -1,89 +1,67 @@
-import tgpu, { d, type TgpuRoot } from 'typegpu'
+import tgpu, { d, std, type TgpuRoot } from 'typegpu'
+import { cameraBindGroupLayout } from './gpuCameraBindings'
 
 const DrawingVertex = d.unstruct({
   position: d.location(0, d.float32x3),
   color: d.location(1, d.float32x4),
 })
 
-const drawingVertexLayout = tgpu.vertexLayout(d.disarrayOf(DrawingVertex))
+export const drawingVertexLayout = tgpu.vertexLayout(d.disarrayOf(DrawingVertex))
 
-const shaderCode = /* wgsl */ `
-struct CameraUniforms {
-  viewProjection: mat4x4f,
-  billboardNormal: vec4f,
-  billboardRight: vec4f,
-  billboardUp: vec4f,
-};
+const meshVertexMain = tgpu.vertexFn({
+  in: {
+    position: d.vec3f,
+    color: d.vec4f,
+  },
+  out: {
+    position: d.builtin.position,
+    color: d.vec4f,
+  },
+})(({ position, color }) => {
+  'use gpu'
 
-@group(0) @binding(0) var<uniform> camera: CameraUniforms;
+  return {
+    position: std.mul(
+      cameraBindGroupLayout.$.camera.viewProjection,
+      d.vec4f(position, d.f32(1)),
+    ),
+    color: d.vec4f(color),
+  }
+})
 
-struct VertexIn {
-  @location(0) position: vec3f,
-  @location(1) color: vec4f,
-};
+const fragmentMain = tgpu.fragmentFn({
+  in: {
+    color: d.vec4f,
+  },
+  out: d.vec4f,
+})(({ color }) => {
+  'use gpu'
 
-struct VertexOut {
-  @builtin(position) position: vec4f,
-  @location(0) color: vec4f,
-};
-
-@vertex
-fn vertexMain(input: VertexIn) -> VertexOut {
-  var output: VertexOut;
-  output.position = camera.viewProjection * vec4f(input.position, 1.0);
-  output.color = input.color;
-  return output;
-}
-
-@fragment
-fn fragmentMain(input: VertexOut) -> @location(0) vec4f {
-  return input.color;
-}
-`
+  return d.vec4f(color)
+})
 
 export function createDrawingPipeline(
   root: TgpuRoot,
-  device: GPUDevice,
   format: GPUTextureFormat,
-  cameraBindGroupLayout: GPUBindGroupLayout,
 ) {
-  const shaderModule = device.createShaderModule({
-    code: shaderCode,
-    label: 'grease pencil shader',
-  })
-
-  const vertexBufferLayout = root.unwrap(drawingVertexLayout)
-  return device.createRenderPipeline({
-    label: 'grease pencil render pipeline',
-    layout: device.createPipelineLayout({
-      bindGroupLayouts: [cameraBindGroupLayout],
-      label: 'grease pencil pipeline layout',
-    }),
-    vertex: {
-      module: shaderModule,
-      entryPoint: 'vertexMain',
-      buffers: [vertexBufferLayout],
-    },
-    fragment: {
-      module: shaderModule,
-      entryPoint: 'fragmentMain',
-      targets: [
-        {
-          format,
-          blend: {
-            color: {
-              srcFactor: 'src-alpha',
-              dstFactor: 'one-minus-src-alpha',
-              operation: 'add',
-            },
-            alpha: {
-              srcFactor: 'one',
-              dstFactor: 'one-minus-src-alpha',
-              operation: 'add',
-            },
-          },
+  return root.createRenderPipeline({
+    attribs: drawingVertexLayout.attrib,
+    vertex: meshVertexMain,
+    fragment: fragmentMain,
+    targets: {
+      format,
+      blend: {
+        color: {
+          srcFactor: 'src-alpha',
+          dstFactor: 'one-minus-src-alpha',
+          operation: 'add',
         },
-      ],
+        alpha: {
+          srcFactor: 'one',
+          dstFactor: 'one-minus-src-alpha',
+          operation: 'add',
+        },
+      },
     },
     primitive: {
       topology: 'triangle-list',

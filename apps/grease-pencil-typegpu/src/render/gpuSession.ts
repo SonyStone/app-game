@@ -1,22 +1,24 @@
-import tgpu from 'typegpu'
+import tgpu, {
+  type TgpuBindGroup,
+  type TgpuRenderPipeline,
+  type TgpuRoot,
+} from 'typegpu'
 import {
   createCameraBindGroup,
-  createCameraBindGroupLayout,
   createCameraUniformBuffer,
   createDrawingPipeline,
-  createStrokeDataBindGroupLayout,
   createStrokePrimitivePipelines,
   type StrokePrimitivePipelines,
 } from './gpuPipeline'
 
 export type DrawingGpuResources = {
+  root: TgpuRoot
   device: GPUDevice
   context: GPUCanvasContext
-  meshPipeline: GPURenderPipeline
+  meshPipeline: TgpuRenderPipeline
   strokePipelines: StrokePrimitivePipelines
   uniformBuffer: GPUBuffer
-  cameraBindGroup: GPUBindGroup
-  strokeDataBindGroupLayout: GPUBindGroupLayout
+  cameraBindGroup: TgpuBindGroup
 }
 
 export type DrawingGpuInitResult =
@@ -61,37 +63,21 @@ export async function createDrawingGpuResources(
   })
 
   const uniformBuffer = createCameraUniformBuffer(device)
-  const cameraBindGroupLayout = createCameraBindGroupLayout(device)
-  const strokeDataBindGroupLayout = createStrokeDataBindGroupLayout(device)
-  const meshPipeline = createDrawingPipeline(
-    root,
-    device,
-    format,
-    cameraBindGroupLayout,
-  )
-  const strokePipelines = createStrokePrimitivePipelines(
-    device,
-    format,
-    cameraBindGroupLayout,
-    strokeDataBindGroupLayout,
-  )
-  const cameraBindGroup = createCameraBindGroup(
-    device,
-    cameraBindGroupLayout,
-    uniformBuffer,
-  )
+  const meshPipeline = createDrawingPipeline(root, format)
+  const strokePipelines = createStrokePrimitivePipelines(root, format)
+  const cameraBindGroup = createCameraBindGroup(root, uniformBuffer)
 
   return {
     ok: true,
     message: 'WebGPU ready.',
     resources: {
+      root,
       device,
       context,
       meshPipeline,
       strokePipelines,
       uniformBuffer,
       cameraBindGroup,
-      strokeDataBindGroupLayout,
     },
   }
 }

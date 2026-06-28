@@ -1,9 +1,9 @@
 export {
+  cameraBindGroupLayout,
   createCameraBindGroup,
-  createCameraBindGroupLayout,
   createCameraUniformBuffer,
   createStrokeDataBindGroup,
-  createStrokeDataBindGroupLayout,
+  strokeDataBindGroupLayout,
 } from './gpuCameraBindings'
 export { createDrawingPipeline } from './gpuMeshPipeline'
 export {
