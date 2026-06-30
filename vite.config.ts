@@ -18,6 +18,7 @@ const devServerPort = Number(process.env.APP_PORT ?? process.env.PORT ?? '3120')
 
 export default defineConfig({
   root: webAppRoot,
+  publicDir: resolve(apps, 'solid-svg-editor/public'),
   plugins: [
     vitePluginMarkdown({
       themes: ['css-variables', 'dark-plus']
@@ -53,6 +54,7 @@ export default defineConfig({
       '@app-game/solid-dnd-playground': resolve(apps, 'solid-dnd-playground/src'),
       '@app-game/dnd-playground': resolve(apps, 'dnd-playground/src'),
       '@app-game/grease-pencil-typegpu': resolve(apps, 'grease-pencil-typegpu/src'),
+      '@app-game/solid-svg-editor': resolve(apps, 'solid-svg-editor/src'),
       '@app-game/solidjs-patterns': resolve(apps, 'solidjs-patterns/src'),
       '@app-game/solid-props-proxy': resolve(packages, 'solid-props-proxy'),
       '@app-game/app-router': resolve(packages, 'app-router'),

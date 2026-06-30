@@ -39,6 +39,9 @@
       "@app-game/grease-pencil-typegpu/*": [
         "./apps/grease-pencil-typegpu/src/*"
       ],
+      "@app-game/solid-svg-editor/*": [
+        "./apps/solid-svg-editor/src/*"
+      ],
       "@app-game/app-router": [
         "./packages/app-router/index.ts"
       ],

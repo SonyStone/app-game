@@ -1,0 +1,20 @@
+{
+  "name": "@app-game/solid-svg-editor",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3140",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 4140"
+  },
+  "dependencies": {
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "25.8.0",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:"
+  }
+}

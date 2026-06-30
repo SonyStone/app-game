@@ -1,0 +1,1083 @@
+@font-face {
+  font-family: 'GodSVG Sans';
+  src: url('/assets/fonts/NotoSans-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+}
+
+@font-face {
+  font-family: 'GodSVG Mono';
+  src: url('/assets/fonts/JetBrainsMono-Medium.woff2') format('woff2');
+  font-weight: 500;
+}
+
+.app-root {
+  color-scheme: dark;
+  font-family: 'GodSVG Sans', system-ui, sans-serif;
+  background: #10121d;
+  color: #dfe7f7;
+}
+
+.app-root,
+.app-root * {
+  box-sizing: border-box;
+}
+
+html:has(.app-root),
+body:has(.app-root),
+#root:has(.app-root),
+#app:has(.app-root) {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.app-root button,
+.app-root input,
+.app-root select,
+.app-root textarea {
+  font: inherit;
+}
+
+.app-root button {
+  color: inherit;
+}
+
+.app-root img {
+  display: block;
+}
+
+.app-root {
+  --panel: color-mix(in srgb, var(--base) 82%, #273047);
+  --panel-2: color-mix(in srgb, var(--base) 70%, #28304a);
+  --panel-3: color-mix(in srgb, var(--base) 55%, #37415f);
+  --border: color-mix(in srgb, var(--base) 52%, #8fa7d7);
+  --soft-border: color-mix(in srgb, var(--base) 72%, #8fa7d7);
+  --text: #dfe7f7;
+  --muted: #98a4b8;
+  --danger: #ff8f9d;
+  --warning: #ffd761;
+  --ok: #a3ffb0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: 32px minmax(0, 1fr);
+  background: var(--base);
+  color: var(--text);
+}
+
+.app-root.theme-light {
+  color-scheme: light;
+  --text: #10203a;
+  --muted: #4f627d;
+  --panel: #dce9fb;
+  --panel-2: #cfdef1;
+  --panel-3: #b9cce5;
+  --border: #7893b9;
+  --soft-border: #a8bbd4;
+  --danger: #a91527;
+  --warning: #8a6500;
+  --ok: #247c31;
+}
+
+.app-root.theme-black {
+  --panel: #080a10;
+  --panel-2: #10131f;
+  --panel-3: #171b2a;
+  --border: #46506f;
+  --soft-border: #272e40;
+}
+
+.app-root.theme-gray {
+  --panel: #303030;
+  --panel-2: #383838;
+  --panel-3: #454545;
+  --border: #6a6a6a;
+  --soft-border: #555;
+}
+
+.app-root .hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.app-root .topbar {
+  position: relative;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 2px 8px;
+  background: #0c0e18;
+  border-bottom: 2px solid #20263a;
+}
+
+.app-root .global-actions,
+.app-root .file-actions,
+.app-root .tabs-strip,
+.app-root .viewport-left-tools,
+.app-root .zoom-widget {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.app-root .tabs-strip {
+  height: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.app-root .tab-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 210px;
+  height: 26px;
+  padding: 0 6px 0 10px;
+  border: 1px solid #22283d;
+  border-radius: 5px 5px 0 0;
+  background: #151928;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.app-root .tab-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-root .tab-button.active {
+  color: #f4f7ff;
+  border-color: #415177;
+  background: #24304d;
+}
+
+.app-root .tab-button.dirty span::after {
+  content: '*';
+  color: var(--warning);
+}
+
+.app-root .tab-close {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.app-root .tab-close:hover {
+  background: #33405f;
+}
+
+.app-root .icon-button,
+.app-root .ghost-action,
+.app-root .snap-button,
+.app-root .zoom-widget button,
+.app-root .element-title button {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--soft-border);
+  border-radius: 5px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+
+.app-root .icon-button img,
+.app-root .toolbar-action img,
+.app-root .ghost-action img,
+.app-root .snap-button img,
+.app-root .context-menu img,
+.app-root .popover img,
+.app-root .primary-action img,
+.app-root .code-toolbar img,
+.app-root .element-title img,
+.app-root .remove-attribute img,
+.app-root .transform-buttons img,
+.app-root .path-command-row img,
+.app-root .point-row img,
+.app-root .modal-panel header img {
+  width: 16px;
+  height: 16px;
+  filter: brightness(0) invert(92%) sepia(10%) saturate(778%) hue-rotate(181deg) brightness(102%) contrast(95%);
+}
+
+.app-root .icon-button:hover,
+.app-root .icon-button.active,
+.app-root .snap-button.active,
+.app-root .ghost-action:hover,
+.app-root .zoom-widget button:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel-2));
+}
+
+.app-root .icon-button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.app-root .size-button {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--warning) 50%, var(--soft-border));
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--warning);
+  cursor: pointer;
+}
+
+.app-root .toolbar-action {
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 44%, var(--soft-border));
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.app-root .toolbar-action:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel-2));
+}
+
+.app-root .workspace {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto 8px minmax(0, 1fr);
+  background: var(--base);
+}
+
+.app-root .left-workbench {
+  min-width: 320px;
+  max-width: 720px;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 31px minmax(0, 1fr);
+  padding: 6px 0 6px 6px;
+}
+
+.app-root .splitter {
+  width: 8px;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+}
+
+.app-root .splitter:hover {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.app-root .panel-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.app-root .panel-tabs button {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 5px 5px 0 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.app-root .panel-tabs button.active {
+  background: var(--panel-2);
+  border-color: var(--soft-border);
+  color: var(--text);
+}
+
+.app-root .panel-tabs img {
+  width: 16px;
+  height: 16px;
+  filter: brightness(0) invert(86%) sepia(10%) saturate(492%) hue-rotate(181deg);
+}
+
+.app-root .panel-tabs span {
+  white-space: nowrap;
+}
+
+.app-root .panel {
+  min-height: 0;
+  height: 100%;
+  border: 1px solid var(--soft-border);
+  border-radius: 6px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.app-root .inspector-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.app-root .panel-action-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-bottom: 1px solid var(--soft-border);
+  background: var(--panel-2);
+}
+
+.app-root .primary-action,
+.app-root .code-toolbar button,
+.app-root .export-controls button,
+.app-root .settings-content button {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--soft-border);
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.app-root .primary-action {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--soft-border));
+}
+
+.app-root .primary-action:hover,
+.app-root .code-toolbar button:hover,
+.app-root .export-controls button:hover,
+.app-root .settings-content button:hover {
+  border-color: var(--accent);
+}
+
+.app-root .inspector-scroll,
+.app-root .debug-panel,
+.app-root .previews-panel {
+  min-height: 0;
+  overflow: auto;
+  padding: 7px;
+}
+
+.app-root .virtual-inspector-spacer {
+  position: relative;
+  min-height: 100%;
+}
+
+.app-root .virtual-inspector-window {
+  position: absolute;
+  inset: 0 0 auto 0;
+  will-change: transform;
+}
+
+.app-root .virtual-inspector-row {
+  padding-right: 3px;
+  overflow-anchor: none;
+}
+
+.app-root .element-card {
+  --card-tint: #221331;
+  border: 1px solid color-mix(in srgb, var(--card-tint) 42%, var(--soft-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--card-tint) 72%, var(--panel));
+  margin-bottom: 7px;
+  overflow: hidden;
+}
+
+.app-root .element-card.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 68%, transparent);
+}
+
+.app-root .element-title {
+  width: 100%;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--card-tint) 50%, var(--soft-border));
+  background: color-mix(in srgb, var(--card-tint) 64%, var(--panel-2));
+  color: #eef4ff;
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.app-root .element-title:hover {
+  color: #fff;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel-2));
+}
+
+.app-root .warning-icon {
+  margin-left: auto;
+  margin-right: 6px;
+}
+
+.app-root .attribute-grid {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+}
+
+.app-root .attribute-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(72px, 0.42fr) minmax(0, 1fr) 24px;
+  align-items: start;
+  gap: 5px;
+}
+
+.app-root .attribute-row > label {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.app-root .attribute-row.unknown > label {
+  color: var(--warning);
+}
+
+.app-root .mono-input,
+.app-root .attribute-row select,
+.app-root .attribute-row input,
+.app-root .basic-node-text,
+.app-root .code-textarea,
+.app-root .snap-input,
+.app-root .settings-content input,
+.app-root .settings-content select,
+.app-root .export-controls input,
+.app-root .export-controls select {
+  min-width: 0;
+  min-height: 24px;
+  border: 1px solid var(--soft-border);
+  border-radius: 5px;
+  background: #080b12;
+  color: var(--text);
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.app-root.theme-light .mono-input,
+.app-root.theme-light .attribute-row select,
+.app-root.theme-light .attribute-row input,
+.app-root.theme-light .basic-node-text,
+.app-root.theme-light .code-textarea,
+.app-root.theme-light .snap-input,
+.app-root.theme-light .settings-content input,
+.app-root.theme-light .settings-content select,
+.app-root.theme-light .export-controls input,
+.app-root.theme-light .export-controls select {
+  background: #f8fbff;
+}
+
+.app-root .remove-attribute,
+.app-root .path-command-row button,
+.app-root .point-row button,
+.app-root .transform-buttons button,
+.app-root .add-command {
+  min-width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--soft-border);
+  border-radius: 5px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+
+.app-root .color-field,
+.app-root .transform-field,
+.app-root .points-editor,
+.app-root .path-editor {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.app-root .color-field {
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+
+.app-root .color-field input[type='color'] {
+  width: 28px;
+  padding: 1px;
+}
+
+.app-root .transform-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.app-root .path-command-list,
+.app-root .point-list {
+  display: grid;
+  gap: 3px;
+}
+
+.app-root .path-command-row {
+  display: grid;
+  grid-template-columns: 28px 48px minmax(0, 1fr) 24px 24px 24px;
+  align-items: start;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--panel-3) 65%, transparent);
+}
+
+.app-root .path-command-row.selected {
+  border-color: var(--accent);
+}
+
+.app-root .command-pill {
+  color: #f3c4ff;
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+}
+
+.app-root .path-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.app-root .path-params label {
+  display: grid;
+  grid-template-columns: auto 54px;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+  font-size: 10px;
+}
+
+.app-root .path-params input,
+.app-root .point-row input {
+  width: 58px;
+}
+
+.app-root .point-row {
+  display: grid;
+  grid-template-columns: 24px 1fr 1fr 24px;
+  gap: 3px;
+  align-items: center;
+}
+
+.app-root .children-stack {
+  padding: 0 5px 5px 12px;
+}
+
+.app-root .basic-node-text {
+  width: calc(100% - 12px);
+  min-height: 64px;
+  margin: 6px;
+  resize: vertical;
+}
+
+.app-root .code-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.app-root .code-toolbar {
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-bottom: 1px solid var(--soft-border);
+  background: var(--panel-2);
+}
+
+.app-root .code-textarea {
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 0;
+  resize: none;
+  line-height: 1.45;
+  tab-size: 2;
+}
+
+.app-root .error-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-top: 1px solid color-mix(in srgb, var(--danger) 36%, var(--soft-border));
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel-2));
+}
+
+.app-root .previews-panel {
+  display: grid;
+  grid-template-rows: minmax(180px, 42%) minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.app-root .preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.app-root .preview-tile {
+  min-height: 116px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 4px;
+  border: 1px solid var(--soft-border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  padding: 6px;
+}
+
+.app-root .preview-tile.large {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app-root .preview-tile svg {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.app-root .preview-meta,
+.app-root .export-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.app-root .debug-panel dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0 0 10px;
+}
+
+.app-root .debug-panel dt {
+  color: var(--muted);
+}
+
+.app-root .debug-panel pre {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--soft-border);
+  border-radius: 6px;
+  background: #080b12;
+  overflow: auto;
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.app-root .viewport-column {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 35px minmax(0, 1fr);
+  padding: 6px 6px 6px 0;
+}
+
+.app-root .viewport-toolbar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 0;
+  padding: 0 4px;
+  background: var(--base);
+}
+
+.app-root .snap-input {
+  width: 64px;
+  height: 26px;
+  text-align: center;
+}
+
+.app-root .zoom-widget button:not(.icon-button) {
+  width: 72px;
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+}
+
+.app-root .viewport-shell {
+  min-width: 0;
+  min-height: 0;
+  border: 2px solid #2b324c;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--canvas);
+}
+
+.app-root .viewport-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  user-select: none;
+}
+
+.app-root .rasterized {
+  image-rendering: auto;
+  filter: saturate(0.98);
+}
+
+.app-root .viewport-raster-preview {
+  image-rendering: auto;
+  pointer-events: none;
+}
+
+.app-root .svg-node-selected {
+  filter: drop-shadow(0 0 1.2px #ffffff) drop-shadow(0 0 3px var(--accent));
+}
+
+.app-root .handle {
+  fill: #f8fafc;
+  stroke: #111827;
+  cursor: grab;
+  vector-effect: non-scaling-stroke;
+}
+
+.app-root .handle.small {
+  fill: #d8e7ff;
+  stroke: #23314f;
+}
+
+.app-root .handle:hover {
+  fill: var(--accent);
+}
+
+.app-root .grid-layer {
+  pointer-events: none;
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+}
+
+.app-root .popover,
+.app-root .context-menu {
+  position: absolute;
+  z-index: 50;
+  min-width: 190px;
+  display: grid;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 96%, #000);
+  box-shadow: 0 12px 28px #0008;
+}
+
+.app-root .top-popover {
+  top: 31px;
+  left: 8px;
+}
+
+.app-root .add-popover {
+  top: 36px;
+  left: 6px;
+}
+
+.app-root .viewport-popover {
+  top: 32px;
+  left: 4px;
+}
+
+.app-root .popover button,
+.app-root .popover a,
+.app-root .context-menu button,
+.app-root .popover label {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.app-root .popover button:hover,
+.app-root .popover a:hover,
+.app-root .context-menu button:hover,
+.app-root .popover label:hover {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+.app-root .popover hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--soft-border);
+}
+
+.app-root .disabled {
+  opacity: 0.48;
+}
+
+.app-root .modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: #0008;
+}
+
+.app-root .svg-drop-overlay {
+  position: fixed;
+  inset: 44px 18px 18px;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  border: 2px dashed color-mix(in srgb, var(--accent) 78%, #ffffff);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--base) 76%, transparent);
+  color: #ffffff;
+  font-size: 18px;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 999px #0005;
+}
+
+.app-root .svg-drop-overlay img {
+  width: 42px;
+  height: 42px;
+  filter: brightness(0) invert(100%);
+}
+
+.app-root .modal-panel {
+  width: min(860px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px #000a;
+  overflow: hidden;
+}
+
+.app-root .modal-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--soft-border);
+  background: var(--panel-2);
+}
+
+.app-root .modal-panel h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.app-root .modal-panel header button {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--soft-border);
+  border-radius: 5px;
+  background: var(--panel);
+}
+
+.app-root .modal-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.app-root .settings-body {
+  min-height: 480px;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.app-root .settings-tabs {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.app-root .settings-tabs button {
+  height: 30px;
+  border: 1px solid var(--soft-border);
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--text);
+  text-align: left;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.app-root .settings-tabs button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel-2));
+}
+
+.app-root .settings-content {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.app-root .settings-content label,
+.app-root .settings-fieldset label,
+.app-root .export-controls label {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.app-root .settings-content label:has(input[type='checkbox']),
+.app-root .settings-fieldset label:has(input[type='checkbox']) {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.app-root .settings-fieldset {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--soft-border);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.app-root .palette-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app-root .shortcut-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.app-root .shortcut-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--soft-border);
+}
+
+kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid var(--soft-border);
+  border-radius: 4px;
+  background: #080b12;
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.app-root .export-modal {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 260px;
+  gap: 12px;
+}
+
+.app-root .export-preview {
+  min-height: 360px;
+  border: 1px solid var(--soft-border);
+  border-radius: 6px;
+  background: var(--panel-2);
+  padding: 10px;
+}
+
+.app-root .export-preview svg {
+  width: 100%;
+  height: 100%;
+}
+
+.app-root .export-controls {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.app-root .about-panel {
+  max-width: 560px;
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
+.app-root .about-logo {
+  width: 56px;
+  height: 56px;
+}
+
+.app-root .about-panel p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.app-root .about-panel a {
+  color: var(--accent);
+}
+
+@media (max-width: 820px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(320px, 44%) 8px minmax(0, 1fr);
+  }
+
+  .left-workbench {
+    width: 100% !important;
+    max-width: none;
+    padding-right: 6px;
+  }
+
+  .splitter {
+    width: 100%;
+    height: 8px;
+    cursor: row-resize;
+  }
+
+  .viewport-column {
+    padding-left: 6px;
+  }
+
+  .export-modal,
+  .settings-body {
+    grid-template-columns: 1fr;
+  }
+}

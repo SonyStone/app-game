@@ -10,6 +10,7 @@ import { phaserRoutes } from '@app-game/phaser-examples/routes';
 import { pixijsRoutes } from '@app-game/pixijs-examples/routes';
 import { routes as greasePencilTypegpuRoutes } from '@app-game/grease-pencil-typegpu/routes';
 import { routes as solidDndPlaygroundRoutes } from '@app-game/solid-dnd-playground/routes';
+import { routes as solidSvgEditorRoutes } from '@app-game/solid-svg-editor/routes';
 import { routes as solidjsPatternsRoutes } from '@app-game/solidjs-patterns/routes';
 import { threeRoutes } from '@app-game/three-examples';
 import { twglRoutes } from '@app-game/twgl-examples/routes';
@@ -45,6 +46,12 @@ export const routes: Routes[] = [
     name: 'Grease Pencil TypeGPU',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     children: [greasePencilTypegpuRoutes]
+  },
+  {
+    path: '/solid-svg-editor',
+    name: 'Solid SVG Editor',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    children: [solidSvgEditorRoutes]
   },
   {
     path: '/dnd-playground',
