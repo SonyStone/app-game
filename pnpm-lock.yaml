@@ -475,6 +475,9 @@ importers:
 
   apps/grease-pencil-typegpu:
     dependencies:
+      '@app-game/solid-view-cube':
+        specifier: workspace:*
+        version: link:../../packages/solid-view-cube
       solid-js:
         specifier: 'catalog:'
         version: 1.9.12
@@ -1180,6 +1183,19 @@ importers:
       '@app-game/math':
         specifier: workspace:*
         version: link:../math
+
+  packages/solid-view-cube:
+    dependencies:
+      solid-js:
+        specifier: 'catalog:'
+        version: 1.9.12
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4)
 
   packages/spector: {}
 

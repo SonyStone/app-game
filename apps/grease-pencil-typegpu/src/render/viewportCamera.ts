@@ -52,6 +52,44 @@ export function rotateCameraView(camera: CameraState, delta: number) {
   camera.roll = wrapAngle(camera.roll - delta * VIEW_ROTATE_SPEED)
 }
 
+export function rotateCameraViewByAngle(camera: CameraState, angle: number) {
+  camera.roll = wrapAngle(camera.roll + angle)
+}
+
+export function setCameraViewDirection(camera: CameraState, direction: Vec3) {
+  const viewDirection = normalize3(direction)
+  const directionLength =
+    Math.abs(viewDirection[0]) +
+    Math.abs(viewDirection[1]) +
+    Math.abs(viewDirection[2])
+  if (directionLength < 1e-6) {
+    return
+  }
+
+  const horizontalLength = Math.hypot(viewDirection[0], viewDirection[1])
+  camera.mode = '3d'
+  camera.lockedNormal = undefined
+  camera.lockedUp = undefined
+  camera.roll = 0
+  camera.pitch = Math.asin(clamp(viewDirection[2], -1, 1))
+  camera.yaw =
+    horizontalLength < 1e-6
+      ? 0
+      : Math.atan2(viewDirection[0], -viewDirection[1])
+}
+
+export function resetCameraView(camera: CameraState) {
+  const defaultCamera = createDefaultCamera()
+  camera.mode = defaultCamera.mode
+  camera.roll = defaultCamera.roll
+  camera.target = [...defaultCamera.target]
+  camera.yaw = defaultCamera.yaw
+  camera.pitch = defaultCamera.pitch
+  camera.distance = defaultCamera.distance
+  camera.lockedNormal = undefined
+  camera.lockedUp = undefined
+}
+
 export function panCamera(
   camera: CameraState,
   deltaX: number,

@@ -17,6 +17,8 @@ import {
   GreaseRenderer,
   type StrokePointOverlay,
 } from '../render/greaseRenderer'
+import type { CameraState } from '../render/math'
+import { createDefaultCamera } from '../render/viewportCamera'
 
 type UseGreaseRendererParams = {
   canvas: Accessor<HTMLCanvasElement | undefined>
@@ -30,6 +32,9 @@ type UseGreaseRendererParams = {
 }
 
 export function useGreaseRenderer(params: UseGreaseRendererParams) {
+  const [cameraState, setCameraState] = createSignal<CameraState>(
+    createDefaultCamera(),
+  )
   const [renderer, setRenderer] = createSignal<GreaseRenderer>()
   const [status, setStatus] = createSignal('Starting WebGPU...')
 
@@ -45,7 +50,8 @@ export function useGreaseRenderer(params: UseGreaseRendererParams) {
         return
       }
 
-      const nextRenderer = new GreaseRenderer(canvas)
+      const nextRenderer = new GreaseRenderer(canvas, setCameraState)
+      setCameraState(cloneCameraState(nextRenderer.camera))
       setRenderer(nextRenderer)
       const result = await nextRenderer.init()
       if (mounted) setStatus(result.message)
@@ -92,7 +98,21 @@ export function useGreaseRenderer(params: UseGreaseRendererParams) {
 
   return {
     renderer,
+    cameraState,
     status,
     zoom,
   } as const
+}
+
+function cloneCameraState(camera: CameraState): CameraState {
+  return {
+    lockedNormal: camera.lockedNormal ? [...camera.lockedNormal] : undefined,
+    lockedUp: camera.lockedUp ? [...camera.lockedUp] : undefined,
+    mode: camera.mode,
+    roll: camera.roll,
+    target: [...camera.target],
+    yaw: camera.yaw,
+    pitch: camera.pitch,
+    distance: camera.distance,
+  }
 }

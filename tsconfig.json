@@ -126,6 +126,12 @@
       "@app-game/solid-utils/*": [
         "./packages/solid-utils/*"
       ],
+      "@app-game/solid-view-cube": [
+        "./packages/solid-view-cube/src/index.ts"
+      ],
+      "@app-game/solid-view-cube/*": [
+        "./packages/solid-view-cube/*"
+      ],
       "@app-game/solid-props-proxy": [
         "packages/solid-props-proxy/src/index.tsx"
       ],

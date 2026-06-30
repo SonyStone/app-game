@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@app-game/solid-view-cube": "workspace:*",
     "solid-js": "catalog:",
     "typegpu": "^0.11.4"
   },

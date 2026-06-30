@@ -8,6 +8,10 @@ import { useSelectionShortcuts } from './app/useSelectionShortcuts'
 import { useCanvasInteraction } from './features/interaction/useCanvasInteraction'
 import type { ToolMode } from './shared/toolMode'
 import { CanvasViewport } from './features/viewport/CanvasViewport'
+import type {
+  ViewCubeActionOptions,
+  ViewCubeTarget,
+} from '@app-game/solid-view-cube'
 import './index.css'
 import type { ViewportMode } from './shared/viewportMode'
 
@@ -48,7 +52,7 @@ function App() {
     workplane,
     workplanes,
   } = useDocumentSession(mode)
-  const { renderer, status, zoom } = useGreaseRenderer({
+  const { cameraState, renderer, status, zoom } = useGreaseRenderer({
     canvas: () => canvasRef,
     activeWorkplaneId,
     draftStroke,
@@ -90,6 +94,36 @@ function App() {
     selectedStrokeIds,
   })
 
+  const setViewCubeTarget = (
+    target: ViewCubeTarget,
+    options?: ViewCubeActionOptions,
+  ) => {
+    setViewportMode('3d')
+    renderer()?.setViewDirection(target.direction, options?.animate)
+  }
+
+  const resetViewCubeHome = (options?: ViewCubeActionOptions) => {
+    setViewportMode('3d')
+    renderer()?.resetView(options?.animate)
+  }
+
+  const orbitViewCube = (deltaX: number, deltaY: number) => {
+    setViewportMode('3d')
+    const activeRenderer = renderer()
+    if (!activeRenderer) return
+    if (activeRenderer.camera.mode !== '3d') {
+      activeRenderer.setViewportMode('3d', workplane())
+    }
+    activeRenderer.orbit(deltaX, deltaY)
+  }
+
+  const rollViewCube = (
+    angle: number,
+    options?: ViewCubeActionOptions,
+  ) => {
+    renderer()?.rollView(angle, options?.animate)
+  }
+
   return (
     <main class="grease-pencil-root flex h-dvh w-full flex-col bg-stone-100 text-stone-950">
       <BodyClass class="m-0 overflow-hidden" />
@@ -111,6 +145,8 @@ function App() {
 
       <section class="workspace">
         <CanvasViewport
+          animateViewCube
+          camera={cameraState()}
           canvasRef={(canvas) => {
             canvasRef = canvas
           }}
@@ -118,10 +154,15 @@ function App() {
             activeLayer()?.name ?? 'No layer'
           } · ${strokeCount()} strokes · ${pointCount()} points · ${selectedStrokeCount()} strokes selected · ${selectedPointCount()} points selected · ${pointerLabel()}`}
           status={status()}
+          viewCubeFocalLength="34rem"
+          onHomeView={resetViewCubeHome}
+          onOrbitView={orbitViewCube}
           onPointerDown={canvasInteraction.onPointerDown}
           onPointerMove={canvasInteraction.onPointerMove}
           onPointerUp={canvasInteraction.onPointerUp}
           onPointerCancel={canvasInteraction.onPointerUp}
+          onRollView={rollViewCube}
+          onSetViewCubeTarget={setViewCubeTarget}
           onWheel={(event) => {
             event.preventDefault()
             zoom(event.deltaY)

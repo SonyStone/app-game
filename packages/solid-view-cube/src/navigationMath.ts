@@ -1,24 +1,6 @@
-import {
-  cross3,
-  dot3,
-  scale3,
-  add3,
-  normalize3,
-  sub3,
-  type Vec3,
-} from './vector'
-import {
-  invertMat4,
-} from './matrixInvert'
-import {
-  multiplyMat4,
-} from './matrixMultiply'
-import {
-  lookAt,
-  perspectiveZO,
-} from './matrixCamera'
+export type Vec3 = [number, number, number]
 
-export type CameraState = {
+export type NavigationCubeCamera = {
   lockedNormal?: Vec3
   lockedUp?: Vec3
   mode: '3d' | '2d'
@@ -29,35 +11,11 @@ export type CameraState = {
   distance: number
 }
 
-export type CameraMatrices = {
-  view: Float32Array
-  projection: Float32Array
-  viewProjection: Float32Array
-  inverseViewProjection: Float32Array
-  position: Vec3
+export function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
 }
 
-export function createCameraMatrices(
-  camera: CameraState,
-  aspect: number,
-): CameraMatrices {
-  const { position, up } = getCameraOrbitFrame(camera)
-
-  const view = lookAt(position, camera.target, up)
-  const projection = perspectiveZO((48 * Math.PI) / 180, aspect, 0.02, 200)
-  const viewProjection = multiplyMat4(projection, view)
-  const inverseViewProjection = invertMat4(viewProjection)
-
-  return {
-    view,
-    projection,
-    viewProjection,
-    inverseViewProjection,
-    position,
-  }
-}
-
-export function getCameraBasis(camera: CameraState) {
+export function getCameraBasis(camera: NavigationCubeCamera) {
   const { position, up: orbitUp } = getCameraOrbitFrame(camera)
   const forward = normalize3(sub3(camera.target, position))
   const right = normalize3(cross3(forward, orbitUp))
@@ -65,7 +23,7 @@ export function getCameraBasis(camera: CameraState) {
   return { forward, right, up }
 }
 
-function getCameraOrbitFrame(camera: CameraState) {
+function getCameraOrbitFrame(camera: NavigationCubeCamera) {
   if (camera.mode === '2d' && camera.lockedNormal && camera.lockedUp) {
     const normal = normalize3(camera.lockedNormal)
     const up = normalize3(rotateAroundAxis(camera.lockedUp, normal, camera.roll))
@@ -94,6 +52,48 @@ function getCameraOrbitFrame(camera: CameraState) {
   const up = normalize3(rotateAroundAxis(orbitUp, forward, camera.roll))
 
   return { position, up } as const
+}
+
+function add3(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+function sub3(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+function scale3(vector: Vec3, scalar: number): Vec3 {
+  return [
+    vector[0] * scalar,
+    vector[1] * scalar,
+    vector[2] * scalar,
+  ]
+}
+
+function dot3(a: Vec3, b: Vec3) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+function cross3(a: Vec3, b: Vec3): Vec3 {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ]
+}
+
+function length3(vector: Vec3) {
+  return Math.hypot(vector[0], vector[1], vector[2])
+}
+
+function normalize3(vector: Vec3): Vec3 {
+  const length = length3(vector)
+  if (length <= 1e-8) return [0, 0, 0]
+  return [
+    vector[0] / length,
+    vector[1] / length,
+    vector[2] / length,
+  ]
 }
 
 function rotateAroundAxis(vector: Vec3, axis: Vec3, angle: number): Vec3 {

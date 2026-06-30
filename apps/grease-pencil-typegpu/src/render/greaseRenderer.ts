@@ -13,7 +13,10 @@ import type {
   RendererStatus,
   RendererViewportSize,
 } from './greaseRendererWorkerProtocol'
-import type { CameraState } from './math'
+import {
+  clamp,
+  type CameraState,
+} from './math'
 import type { WorkplaneGizmoHighlight } from './workplaneGizmoTypes'
 import {
   createRendererScene,
@@ -29,7 +32,10 @@ import {
   offsetFromWorkplane as offsetPointFromWorkplane,
   orbitCamera,
   panCamera,
+  resetCameraView,
+  rotateCameraViewByAngle,
   screenToWorkplane,
+  setCameraViewDirection,
   unlockCameraFromWorkplane,
   worldToScreen,
   zoomCamera,
@@ -38,11 +44,13 @@ import {
 export type { StrokePointOverlay } from './rendererScene'
 
 const MAX_DEVICE_PIXEL_RATIO = 2
+const CAMERA_TWEEN_DURATION_MS = 280
 
 export class GreaseRenderer {
   readonly canvas: HTMLCanvasElement
   readonly camera: CameraState = createDefaultCamera()
 
+  private cameraTweenFrame: number | undefined
   private height = 1
   private flushFrame: number | undefined
   private initialized = false
@@ -62,10 +70,15 @@ export class GreaseRenderer {
   private viewportMode: ViewportMode = '3d'
   private viewport: RendererViewportSize = { width: 1, height: 1, dpr: 1 }
   private width = 1
+  private readonly onCameraChange?: (camera: CameraState) => void
   private readonly worker = new GreaseRendererWorker()
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    onCameraChange?: (camera: CameraState) => void,
+  ) {
     this.canvas = canvas
+    this.onCameraChange = onCameraChange
     this.worker.onmessage = (event: MessageEvent<GreaseRendererMainMessage>) => {
       this.handleWorkerMessage(event.data)
     }
@@ -113,6 +126,7 @@ export class GreaseRenderer {
   }
 
   destroy() {
+    this.cancelCameraTween()
     if (this.flushFrame !== undefined) {
       cancelAnimationFrame(this.flushFrame)
       this.flushFrame = undefined
@@ -153,6 +167,9 @@ export class GreaseRenderer {
     snapTarget = false,
   ) {
     const changed = this.viewportMode !== mode
+    if (!changed && !snapTarget) return
+
+    this.cancelCameraTween()
     this.viewportMode = mode
     if (mode === '2d') {
       lockCameraToWorkplane(this.camera, workplane, changed || snapTarget)
@@ -169,18 +186,41 @@ export class GreaseRenderer {
   }
 
   orbit(deltaX: number, deltaY: number) {
+    this.cancelCameraTween()
     orbitCamera(this.camera, deltaX, deltaY)
     this.postCamera()
   }
 
   pan(deltaX: number, deltaY: number) {
+    this.cancelCameraTween()
     panCamera(this.camera, deltaX, deltaY)
     this.postCamera()
   }
 
   zoom(delta: number) {
+    this.cancelCameraTween()
     zoomCamera(this.camera, delta)
     this.postCamera()
+  }
+
+  resetView(animate = false) {
+    this.viewportMode = '3d'
+    const nextCamera = cloneCameraState(this.camera)
+    resetCameraView(nextCamera)
+    this.applyCameraChange(nextCamera, animate)
+  }
+
+  rollView(angle: number, animate = false) {
+    const nextCamera = cloneCameraState(this.camera)
+    rotateCameraViewByAngle(nextCamera, angle)
+    this.applyCameraChange(nextCamera, animate)
+  }
+
+  setViewDirection(direction: Vec3, animate = false) {
+    this.viewportMode = '3d'
+    const nextCamera = cloneCameraState(this.camera)
+    setCameraViewDirection(nextCamera, direction)
+    this.applyCameraChange(nextCamera, animate)
   }
 
   screenToWorld(clientX: number, clientY: number): Vec3 | undefined {
@@ -223,6 +263,57 @@ export class GreaseRenderer {
     this.statusResolver = undefined
   }
 
+  private applyCameraChange(nextCamera: CameraState, animate: boolean) {
+    if (!animate) {
+      this.cancelCameraTween()
+      copyCameraState(this.camera, nextCamera)
+      this.postCamera()
+      return
+    }
+
+    this.startCameraTween(nextCamera)
+  }
+
+  private cancelCameraTween() {
+    if (this.cameraTweenFrame === undefined) return
+    cancelAnimationFrame(this.cameraTweenFrame)
+    this.cameraTweenFrame = undefined
+  }
+
+  private startCameraTween(nextCamera: CameraState) {
+    this.cancelCameraTween()
+
+    const fromCamera = cloneCameraState(this.camera)
+    const toCamera = cloneCameraState(nextCamera)
+    const startedAt = performance.now()
+
+    const tick = (time: number) => {
+      const progress = clamp(
+        (time - startedAt) / CAMERA_TWEEN_DURATION_MS,
+        0,
+        1,
+      )
+      interpolateCameraState(
+        this.camera,
+        fromCamera,
+        toCamera,
+        easeOutCubic(progress),
+      )
+      this.postCamera()
+
+      if (progress < 1) {
+        this.cameraTweenFrame = requestAnimationFrame(tick)
+        return
+      }
+
+      this.cameraTweenFrame = undefined
+      copyCameraState(this.camera, toCamera)
+      this.postCamera()
+    }
+
+    this.cameraTweenFrame = requestAnimationFrame(tick)
+  }
+
   private measureViewport() {
     const rect = this.canvas.getBoundingClientRect()
     const viewport = {
@@ -246,6 +337,7 @@ export class GreaseRenderer {
   }
 
   private postCamera() {
+    this.emitCameraChange()
     if (!this.initialized) return
     this.pendingCamera = true
     this.scheduleWorkerFlush()
@@ -348,4 +440,80 @@ export class GreaseRenderer {
   ) {
     this.worker.postMessage(message, transfer)
   }
+
+  private emitCameraChange() {
+    this.onCameraChange?.({
+      lockedNormal: this.camera.lockedNormal
+        ? [...this.camera.lockedNormal]
+        : undefined,
+      lockedUp: this.camera.lockedUp ? [...this.camera.lockedUp] : undefined,
+      mode: this.camera.mode,
+      roll: this.camera.roll,
+      target: [...this.camera.target],
+      yaw: this.camera.yaw,
+      pitch: this.camera.pitch,
+      distance: this.camera.distance,
+    })
+  }
+}
+
+function cloneCameraState(camera: CameraState): CameraState {
+  return {
+    lockedNormal: camera.lockedNormal ? [...camera.lockedNormal] : undefined,
+    lockedUp: camera.lockedUp ? [...camera.lockedUp] : undefined,
+    mode: camera.mode,
+    roll: camera.roll,
+    target: [...camera.target],
+    yaw: camera.yaw,
+    pitch: camera.pitch,
+    distance: camera.distance,
+  }
+}
+
+function copyCameraState(target: CameraState, source: CameraState) {
+  target.lockedNormal = source.lockedNormal ? [...source.lockedNormal] : undefined
+  target.lockedUp = source.lockedUp ? [...source.lockedUp] : undefined
+  target.mode = source.mode
+  target.roll = source.roll
+  target.target = [...source.target]
+  target.yaw = source.yaw
+  target.pitch = source.pitch
+  target.distance = source.distance
+}
+
+function interpolateCameraState(
+  target: CameraState,
+  from: CameraState,
+  to: CameraState,
+  amount: number,
+) {
+  target.mode = to.mode
+  target.lockedNormal = to.lockedNormal ? [...to.lockedNormal] : undefined
+  target.lockedUp = to.lockedUp ? [...to.lockedUp] : undefined
+  target.roll = interpolateAngle(from.roll, to.roll, amount)
+  target.yaw = interpolateAngle(from.yaw, to.yaw, amount)
+  target.pitch = interpolateAngle(from.pitch, to.pitch, amount)
+  target.distance = interpolateNumber(from.distance, to.distance, amount)
+  target.target = [
+    interpolateNumber(from.target[0], to.target[0], amount),
+    interpolateNumber(from.target[1], to.target[1], amount),
+    interpolateNumber(from.target[2], to.target[2], amount),
+  ]
+}
+
+function interpolateNumber(from: number, to: number, amount: number) {
+  return from + (to - from) * amount
+}
+
+function interpolateAngle(from: number, to: number, amount: number) {
+  return from + shortestAngleDelta(from, to) * amount
+}
+
+function shortestAngleDelta(from: number, to: number) {
+  return ((to - from + Math.PI) % (Math.PI * 2) + Math.PI * 2) %
+    (Math.PI * 2) - Math.PI
+}
+
+function easeOutCubic(progress: number) {
+  return 1 - (1 - progress) ** 3
 }
