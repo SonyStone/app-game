@@ -1,0 +1,30 @@
+{
+  "name": "@app-game/night-defense",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3150",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 4150",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@app-game/app-router": "workspace:*",
+    "@app-game/solid-pixi": "workspace:*",
+    "@solid-primitives/resize-observer": "^2.1.5",
+    "@solidjs/router": "catalog:",
+    "pixi.js": "8.18.1",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@unocss/vite": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:"
+  },
+  "exports": {
+    "./App": "./src/App.tsx",
+    "./routes": "./src/routes.tsx"
+  }
+}

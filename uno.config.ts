@@ -20,6 +20,11 @@ export default defineConfig({
     presetAnimations() as unknown as ReturnType<typeof presetWind4>
   ],
   transformers: [transformerCompileClass(), transformerVariantGroup()],
+  safelist: ['whitespace-nowrap'],
+  shortcuts: {
+    rasterized: '[filter:saturate(0.98)] [image-rendering:auto]',
+    'svg-node-selected': 'filter-[drop-shadow(0_0_1.2px_#ffffff)_drop-shadow(0_0_3px_var(--accent))]'
+  },
   theme: {
     colors: {
       'ps-bg-dark': 'var(--color-ps-bg-dark)',

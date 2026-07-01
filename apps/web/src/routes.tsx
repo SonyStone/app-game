@@ -2,13 +2,14 @@ import { Thumbnail, type Routes } from '@app-game/app-router';
 import { bookmarksExplorerRoutes } from '@app-game/bookmarks-explorer/routes';
 import { escyRoutes } from '@app-game/ecsy-pages/routes';
 import { filmAnnotationPlayerRoutes } from '@app-game/film-annotation-player/routes';
+import { routes as greasePencilTypegpuRoutes } from '@app-game/grease-pencil-typegpu/routes';
 import { gsapExamplesRoutes } from '@app-game/gsap-examples/routes';
 import { mathRoutes } from '@app-game/math-examples/routes';
+import { nightDefenseRoutes } from '@app-game/night-defense/routes';
 import { oglRoutes } from '@app-game/ogl-examples/routes';
 import { paintRoutes } from '@app-game/paint/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
 import { pixijsRoutes } from '@app-game/pixijs-examples/routes';
-import { routes as greasePencilTypegpuRoutes } from '@app-game/grease-pencil-typegpu/routes';
 import { routes as solidDndPlaygroundRoutes } from '@app-game/solid-dnd-playground/routes';
 import { routes as solidSvgEditorRoutes } from '@app-game/solid-svg-editor/routes';
 import { routes as solidjsPatternsRoutes } from '@app-game/solidjs-patterns/routes';
@@ -53,6 +54,7 @@ export const routes: Routes[] = [
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     children: [solidSvgEditorRoutes]
   },
+  nightDefenseRoutes,
   {
     path: '/dnd-playground',
     name: 'DnD Playground',

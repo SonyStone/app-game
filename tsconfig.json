@@ -39,6 +39,9 @@
       "@app-game/grease-pencil-typegpu/*": [
         "./apps/grease-pencil-typegpu/src/*"
       ],
+      "@app-game/night-defense/*": [
+        "./apps/night-defense/src/*"
+      ],
       "@app-game/solid-svg-editor/*": [
         "./apps/solid-svg-editor/src/*"
       ],

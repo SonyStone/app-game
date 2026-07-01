@@ -21,6 +21,7 @@
     "@app-game/ldtk-ts-examples": "workspace:*",
     "@app-game/litegraph-examples": "workspace:*",
     "@app-game/math-examples": "workspace:*",
+    "@app-game/night-defense": "workspace:*",
     "@app-game/ogl-examples": "workspace:*",
     "@app-game/paint": "workspace:*",
     "@app-game/phaser-examples": "workspace:*",
