@@ -56,7 +56,7 @@ export function PreviewsPanel(props: {
             <div class="preview-tile">
               <span>{nodeLabel(node)}</span>
               <svg viewBox={svgSize(props.root()).viewBox.join(" ")} preserveAspectRatio="xMidYMid meet">
-                <SvgNodeView node={node} selectedIds={() => []} selectNode={() => undefined} openContextMenu={() => undefined} />
+                <SvgNodeView node={node} selectedIds={() => []} onNodePointerDown={() => undefined} openContextMenu={() => undefined} />
               </svg>
             </div>
           )}
@@ -81,7 +81,7 @@ export function PreviewSvg(props: { readonly root: SvgElementNode }) {
           <rect x="20" y="20" width="20" height="20" fill="#aeb4bf" opacity="0.45" />
         </pattern>
       </defs>
-      <For each={props.root.children}>{(node) => <SvgNodeView node={node} selectedIds={() => []} selectNode={() => undefined} openContextMenu={() => undefined} />}</For>
+      <For each={props.root.children}>{(node) => <SvgNodeView node={node} selectedIds={() => []} onNodePointerDown={() => undefined} openContextMenu={() => undefined} />}</For>
     </svg>
   );
 }
@@ -108,4 +108,3 @@ export function DebugPanel(props: {
     </section>
   );
 }
-

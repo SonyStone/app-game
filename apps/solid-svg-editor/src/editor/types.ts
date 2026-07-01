@@ -1,10 +1,13 @@
 import type { FormatterSettings } from "../formatter";
+import type { Matrix2D, Rect } from "./geometry";
 import type { SvgElementNode, SvgNode } from "../svg-model";
 
 export type PanelId = "inspector" | "code" | "previews" | "debug";
 export type ModalId = "settings" | "export" | "about" | "donate" | "shortcuts" | undefined;
 export type ThemePreset = "dark" | "light" | "black" | "gray";
 export type ExportFormat = "svg" | "png" | "jpeg" | "webp";
+export type DragSelectionMode = "intersect" | "contain";
+export type TransformBoxHandleKind = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "rotate";
 
 export interface EditorTab {
   readonly id: string;
@@ -50,6 +53,7 @@ export interface AppSettings {
   readonly tabMiddleClickClose: boolean;
   readonly useCtrlForZoom: boolean;
   readonly rasterPreviewDuringInteraction: boolean;
+  readonly dragSelectionMode: DragSelectionMode;
 }
 
 export interface ViewRect {
@@ -75,14 +79,72 @@ export interface ContextMenuState {
   readonly nodeId: string;
 }
 
-export interface ActiveDrag {
-  readonly type: "pan" | "handle";
+export interface ActivePanDrag {
+  readonly type: "pan";
+  readonly pointerId: number;
+  readonly startWorldX: number;
+  readonly startWorldY: number;
+}
+
+export interface ActiveHandleDrag {
+  readonly type: "handle";
+  readonly pointerId: number;
+  readonly handle: HandleDescriptor;
+}
+
+export interface ActiveCanvasRotateDrag {
+  readonly type: "rotate-canvas";
+  readonly pointerId: number;
+  readonly startAngle: number;
+  readonly startRotation: number;
+}
+
+export interface ActiveMarqueeDrag {
+  readonly type: "marquee";
   readonly pointerId: number;
   readonly startClientX: number;
   readonly startClientY: number;
-  readonly startCenterX: number;
-  readonly startCenterY: number;
-  readonly handle?: HandleDescriptor;
+  readonly currentClientX: number;
+  readonly currentClientY: number;
+  readonly mode: DragSelectionMode;
+  readonly additive: boolean;
+  readonly initialSelection: readonly string[];
+}
+
+export interface ActiveTransformBoxDrag {
+  readonly type: "transform-box";
+  readonly pointerId: number;
+  readonly handleKind: TransformBoxHandleKind;
+  readonly selectedIds: readonly string[];
+  readonly startRoot: SvgElementNode;
+  readonly startBox: Rect;
+  readonly startAngle: number;
+}
+
+export interface ActiveMoveSelectionDrag {
+  readonly type: "move-selection";
+  readonly pointerId: number;
+  readonly selectedIds: readonly string[];
+  readonly startRoot: SvgElementNode;
+  readonly startClientX: number;
+  readonly startClientY: number;
+  readonly startWorldX: number;
+  readonly startWorldY: number;
+  readonly committed: boolean;
+}
+
+export type ActiveDrag = ActivePanDrag | ActiveHandleDrag | ActiveCanvasRotateDrag | ActiveMarqueeDrag | ActiveTransformBoxDrag | ActiveMoveSelectionDrag;
+
+export interface TransformBoxHandleDescriptor {
+  readonly kind: TransformBoxHandleKind;
+  readonly x: number;
+  readonly y: number;
+  readonly label: string;
+}
+
+export interface ParentTransformEntry {
+  readonly nodeId: string;
+  readonly parentTransform: Matrix2D;
 }
 
 export interface InspectorRow {

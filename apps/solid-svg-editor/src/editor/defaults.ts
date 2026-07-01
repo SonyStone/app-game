@@ -47,8 +47,9 @@ export function defaultSettings(): AppSettings {
     },
     palettes: ['#000000', '#ffffff', '#ff6666', '#66cc88', '#6699ff', '#f6c85f'],
     tabMiddleClickClose: true,
-    useCtrlForZoom: true,
-    rasterPreviewDuringInteraction: false
+    useCtrlForZoom: false,
+    rasterPreviewDuringInteraction: false,
+    dragSelectionMode: 'contain'
   };
 }
 

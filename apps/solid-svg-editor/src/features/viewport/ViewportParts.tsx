@@ -3,7 +3,7 @@ import { Dynamic } from "solid-js/web";
 
 import { attrsToObject } from "../../editor/tree-utils";
 import { createGridLines } from "../../editor/handles";
-import type { AppSettings, HandleDescriptor, ViewRect } from "../../editor/types";
+import type { AppSettings, DragSelectionMode, HandleDescriptor, TransformBoxHandleDescriptor, ViewRect } from "../../editor/types";
 import type { SvgNode } from "../../svg-model";
 import { IconButton } from "../chrome/TopBar";
 
@@ -20,6 +20,8 @@ export function ViewportToolbar(props: {
   readonly overlayReference: () => boolean;
   readonly setOverlayReference: (overlay: boolean) => void;
   readonly clearReference: () => void;
+  readonly dragSelectionMode: () => DragSelectionMode;
+  readonly setDragSelectionMode: (mode: DragSelectionMode) => void;
 }) {
   const [visualsOpen, setVisualsOpen] = createSignal(false);
   const [referenceOpen, setReferenceOpen] = createSignal(false);
@@ -77,6 +79,14 @@ export function ViewportToolbar(props: {
           disabled={!props.settings().snapEnabled}
           onChange={(event) => props.setSettings((settings) => ({ ...settings, snapSize: Math.max(0.001, Number.parseFloat(event.currentTarget.value) || 1) }))}
         />
+        <div class="selection-mode-toggle">
+          <button type="button" classList={{ active: props.dragSelectionMode() === "intersect" }} title="Select touched objects" onClick={() => props.setDragSelectionMode("intersect")}>
+            Touch
+          </button>
+          <button type="button" classList={{ active: props.dragSelectionMode() === "contain" }} title="Select enclosed objects" onClick={() => props.setDragSelectionMode("contain")}>
+            Inside
+          </button>
+        </div>
       </div>
       <div class="zoom-widget">
         <IconButton icon="/assets/icons/Minus.svg" label="Zoom out" onClick={() => props.zoomBy(1 / Math.SQRT2)} />
@@ -90,7 +100,7 @@ export function ViewportToolbar(props: {
 export function SvgNodeView(props: {
   readonly node: SvgNode;
   readonly selectedIds: () => readonly string[];
-  readonly selectNode: (id: string, event?: MouseEvent | PointerEvent) => void;
+  readonly onNodePointerDown: (id: string, event: PointerEvent) => void;
   readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
 }) {
   const node = props.node;
@@ -113,12 +123,23 @@ export function SvgNodeView(props: {
       data-node-id={node.id}
       classList={{ "svg-node-selected": selected() }}
       onPointerDown={(event: PointerEvent) => {
+        if (event.pointerType === "touch" || event.button === 1 || event.altKey) {
+          return;
+        }
+
         event.stopPropagation();
-        props.selectNode(node.id, event);
+        props.onNodePointerDown(node.id, event);
       }}
-      onContextMenu={(event: MouseEvent) => props.openContextMenu(event, node.id)}
+      onContextMenu={(event: MouseEvent) => {
+        if (event.altKey) {
+          event.preventDefault();
+          return;
+        }
+
+        props.openContextMenu(event, node.id);
+      }}
     >
-      <For each={node.children}>{(child) => <SvgNodeView node={child} selectedIds={props.selectedIds} selectNode={props.selectNode} openContextMenu={props.openContextMenu} />}</For>
+      <For each={node.children}>{(child) => <SvgNodeView node={child} selectedIds={props.selectedIds} onNodePointerDown={props.onNodePointerDown} openContextMenu={props.openContextMenu} />}</For>
     </Dynamic>
   );
 }
@@ -184,5 +205,67 @@ export function HandlesLayer(props: {
         )}
       </For>
     </g>
+  );
+}
+
+export function TransformBoxLayer(props: {
+  readonly box: () => ViewRect | undefined;
+  readonly zoom: () => number;
+  readonly onHandlePointerDown: (event: PointerEvent, handle: TransformBoxHandleDescriptor) => void;
+}) {
+  const handles = createMemo(() => {
+    const box = props.box();
+
+    if (!box || box.width <= 0 || box.height <= 0) {
+      return [] as readonly TransformBoxHandleDescriptor[];
+    }
+
+    const left = box.x;
+    const top = box.y;
+    const right = box.x + box.width;
+    const bottom = box.y + box.height;
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    const rotateOffset = 28 / props.zoom();
+
+    return [
+      { kind: "nw", x: left, y: top, label: "Resize northwest" },
+      { kind: "n", x: centerX, y: top, label: "Resize north" },
+      { kind: "ne", x: right, y: top, label: "Resize northeast" },
+      { kind: "e", x: right, y: centerY, label: "Resize east" },
+      { kind: "se", x: right, y: bottom, label: "Resize southeast" },
+      { kind: "s", x: centerX, y: bottom, label: "Resize south" },
+      { kind: "sw", x: left, y: bottom, label: "Resize southwest" },
+      { kind: "w", x: left, y: centerY, label: "Resize west" },
+      { kind: "rotate", x: centerX, y: top - rotateOffset, label: "Rotate selection" }
+    ] as const satisfies readonly TransformBoxHandleDescriptor[];
+  });
+
+  return (
+    <Show when={props.box()}>
+      {(box) => (
+        <g class="transform-box-layer">
+          <rect class="transform-box-outline" x={box().x} y={box().y} width={box().width} height={box().height} stroke-width={1.2 / props.zoom()} />
+          <line class="transform-box-rotate-line" x1={box().x + box().width / 2} y1={box().y} x2={box().x + box().width / 2} y2={box().y - 28 / props.zoom()} stroke-width={1 / props.zoom()} />
+          <For each={handles()}>
+            {(handle) => (
+              <rect
+                class={handle.kind === "rotate" ? "transform-box-handle rotate" : "transform-box-handle"}
+                data-transform-handle={handle.kind}
+                x={handle.x - 4.6 / props.zoom()}
+                y={handle.y - 4.6 / props.zoom()}
+                width={9.2 / props.zoom()}
+                height={9.2 / props.zoom()}
+                rx={1.3 / props.zoom()}
+                stroke-width={1.2 / props.zoom()}
+                onPointerDown={(event) => props.onHandlePointerDown(event, handle)}
+              >
+                <title>{handle.label}</title>
+              </rect>
+            )}
+          </For>
+        </g>
+      )}
+    </Show>
   );
 }

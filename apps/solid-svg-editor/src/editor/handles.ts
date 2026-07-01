@@ -1,6 +1,7 @@
 import { commandParameters, formatPathData, formatPoints, parsePathData, parsePoints, updateCommandValue, updatePoint, type PathCommand } from "../path-data";
 import { findNode, getAttribute, parseLength, setAttribute, updateNode, type SvgElementNode } from "../svg-model";
 
+import { identityMatrix, invertMatrix, multiplyMatrices, parseTransformList, transformPoint, type Matrix2D } from "./geometry";
 import type { HandleDescriptor, ViewRect } from "./types";
 
 export function createGridLines(viewRect: ViewRect, zoom: number, targetSpacing = 64) {
@@ -28,18 +29,25 @@ function roundGridValue(value: number): number {
 
 export function getHandles(root: SvgElementNode, selectedIds: readonly string[]): readonly HandleDescriptor[] {
   const descriptors: HandleDescriptor[] = [];
+  const selected = new Set(selectedIds);
 
-  for (const id of selectedIds) {
-    const node = findNode(root, id);
-
-    if (!node || node.kind !== "element") {
-      continue;
-    }
-
-    descriptors.push(...handlesForElement(node));
-  }
+  collectHandles(root, identityMatrix, selected, descriptors);
 
   return descriptors;
+}
+
+function collectHandles(node: SvgElementNode, inheritedTransform: Matrix2D, selectedIds: ReadonlySet<string>, descriptors: HandleDescriptor[]): void {
+  const transform = multiplyMatrices(inheritedTransform, parseTransformList(getAttribute(node, "transform", true)));
+
+  if (selectedIds.has(node.id)) {
+    descriptors.push(...handlesForElement(node).map((handle) => transformHandle(handle, transform)));
+  }
+
+  for (const child of node.children) {
+    if (child.kind === "element") {
+      collectHandles(child, transform, selectedIds, descriptors);
+    }
+  }
 }
 
 function handlesForElement(node: SvgElementNode): readonly HandleDescriptor[] {
@@ -240,4 +248,23 @@ function updatePathCommand(
 function formatHandleNumber(value: number): string {
   const rounded = Math.round(value * 1000) / 1000;
   return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+}
+
+function transformHandle(handle: HandleDescriptor, matrix: Matrix2D): HandleDescriptor {
+  const transformed = transformPoint(matrix, handle);
+  const inverse = invertMatrix(matrix);
+
+  return {
+    ...handle,
+    x: transformed.x,
+    y: transformed.y,
+    update: (root, x, y) => {
+      if (!inverse) {
+        return root;
+      }
+
+      const local = transformPoint(inverse, { x, y });
+      return handle.update(root, local.x, local.y);
+    }
+  };
 }

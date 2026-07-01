@@ -150,6 +150,17 @@ export function InspectorPanel(props: {
     onCleanup(() => observer.disconnect());
   });
 
+  createEffect(() => {
+    const ids = props.selectedIds();
+    const selectedId = ids.at(-1);
+
+    if (!selectedId) {
+      return;
+    }
+
+    queueMicrotask(() => scrollRowIntoView(selectedId));
+  });
+
   function measureRow(id: string, height: number): void {
     if (Math.abs((rowHeights.get(id) ?? 0) - height) < 1) {
       return;
@@ -157,6 +168,42 @@ export function InspectorPanel(props: {
 
     rowHeights.set(id, height);
     setHeightVersion((version) => version + 1);
+  }
+
+  function scrollRowIntoView(id: string): void {
+    const scroller = scrollerRef;
+
+    if (!scroller) {
+      return;
+    }
+
+    const layout = virtualLayout();
+    const rowIndex = layout.rows.findIndex((row) => row.node.id === id);
+
+    if (rowIndex === -1) {
+      return;
+    }
+
+    const rowTop = layout.tops[rowIndex] ?? 0;
+    const rowHeight = layout.heights[rowIndex] ?? estimateInspectorRowHeight(layout.rows[rowIndex]?.node ?? props.root());
+    const rowBottom = rowTop + rowHeight;
+    const margin = 12;
+    const viewportTop = scroller.scrollTop;
+    const viewportBottom = viewportTop + scroller.clientHeight;
+    let nextScrollTop = viewportTop;
+
+    if (rowTop < viewportTop + margin) {
+      nextScrollTop = Math.max(0, rowTop - margin);
+    } else if (rowBottom > viewportBottom - margin) {
+      nextScrollTop = Math.max(0, rowBottom - scroller.clientHeight + margin);
+    }
+
+    if (Math.abs(nextScrollTop - viewportTop) < 1) {
+      return;
+    }
+
+    scroller.scrollTo({ top: nextScrollTop });
+    setScrollTop(nextScrollTop);
   }
 
   return (

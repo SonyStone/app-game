@@ -27,16 +27,44 @@ import {
 } from "./svg-model";
 import { createInitialTab, defaultSettings } from "./editor/defaults";
 import { downloadBlob } from "./editor/export-utils";
+import {
+  formatMatrixTransform,
+  identityMatrix,
+  invertMatrix,
+  matrixAround,
+  multiplyMatrices,
+  parseTransformList,
+  radiansToDegrees,
+  rectCenter,
+  rectFromPoints,
+  rotateMatrix,
+  scaleMatrix,
+  translateMatrix,
+  unionRects,
+  type Matrix2D,
+  type Point,
+  type Rect
+} from "./editor/geometry";
 import { getHandles } from "./editor/handles";
 import { clamp, flattenAllNodes, hasSvgDrag, insertPathCommand, optimizeNode } from "./editor/tree-utils";
-import type { ActiveDrag, ContextMenuState, EditorTab, HandleDescriptor, HistoryState, ModalId, PanelId, ViewRect } from "./editor/types";
+import type { ActiveDrag, ActiveMarqueeDrag, ActiveMoveSelectionDrag, ActivePanDrag, ActiveTransformBoxDrag, ContextMenuState, DragSelectionMode, EditorTab, HandleDescriptor, HistoryState, ModalId, PanelId, TransformBoxHandleDescriptor, TransformBoxHandleKind, ViewRect } from "./editor/types";
 import { PanelTabs, TopBar } from "./features/chrome/TopBar";
 import { InspectorPanel } from "./features/inspector/InspectorPanel";
 import { CodePanel, DebugPanel, PreviewsPanel } from "./features/panels/SidePanels";
 import { AboutModal, DonateModal, ExportModal, SettingsModal, ShortcutsModal } from "./features/modals/EditorModals";
-import { GridLayer, HandlesLayer, SvgNodeView, ViewportToolbar } from "./features/viewport/ViewportParts";
+import { GridLayer, HandlesLayer, SvgNodeView, TransformBoxLayer, ViewportToolbar } from "./features/viewport/ViewportParts";
 
 type SvgSize = ReturnType<typeof svgSize>;
+type TouchPoint = { readonly pointerId: number; readonly clientX: number; readonly clientY: number };
+type TouchGesture = {
+  readonly pointerIds: readonly number[];
+  readonly startWorldX: number;
+  readonly startWorldY: number;
+  readonly startDistance: number;
+  readonly startAngle: number;
+  readonly startZoom: number;
+  readonly startRotation: number;
+};
 
 const emptySvgSize = {
   width: 0,
@@ -64,20 +92,26 @@ export function App() {
   const [isSvgDropActive, setIsSvgDropActive] = createSignal(false);
   const [historyVersion, setHistoryVersion] = createSignal(0);
   const [activeDrag, setActiveDrag] = createSignal<ActiveDrag | undefined>();
+  const [activeTouchGesture, setActiveTouchGesture] = createSignal<TouchGesture | undefined>();
   const [canvasSvg, setCanvasSvg] = createSignal<SVGSVGElement>();
   const [transientViewportPreview, setTransientViewportPreview] = createSignal(false);
   const [rasterPreviewUrl, setRasterPreviewUrl] = createSignal<string | undefined>();
+  const [viewportRotation, setViewportRotation] = createSignal(0);
+  const [selectionBox, setSelectionBox] = createSignal<Rect | undefined>();
+  const [marqueeRect, setMarqueeRect] = createSignal<Rect | undefined>();
 
   const histories = new Map<string, HistoryState>();
+  const touchPointers = new Map<number, TouchPoint>();
   let leftResizeStart: { readonly x: number; readonly width: number } | undefined;
   let importInputRef: HTMLInputElement | undefined;
   let referenceInputRef: HTMLInputElement | undefined;
   let viewportPreviewTimeout: number | undefined;
   let rasterPreviewObjectUrl: string | undefined;
   let pendingPanFrame: number | undefined;
-  let pendingPanMove: { readonly drag: ActiveDrag; readonly clientX: number; readonly clientY: number } | undefined;
+  let pendingPanMove: { readonly drag: ActivePanDrag; readonly clientX: number; readonly clientY: number } | undefined;
   let pendingHandleFrame: number | undefined;
   let pendingHandleMove: { readonly pointerId: number; readonly handle: HandleDescriptor; readonly clientX: number; readonly clientY: number } | undefined;
+  let selectionBoxFrame: number | undefined;
 
   const activeTab = createMemo(() => {
     const id = activeTabId();
@@ -86,7 +120,7 @@ export function App() {
 
   const activeRoot = createMemo(() => activeTab()?.root ?? createDefaultRoot());
   const activeCode = createMemo(() => activeTab()?.code ?? "");
-  const handleDragActive = createMemo(() => activeDrag()?.type === "handle");
+  const handleDragActive = createMemo(() => activeDrag()?.type === "handle" || activeDrag()?.type === "transform-box" || activeDrag()?.type === "move-selection");
   const exportText = createMemo<string>((previous) => {
     if (handleDragActive() && previous) {
       return previous;
@@ -111,11 +145,16 @@ export function App() {
       height: size.height / z
     };
   });
-  const handles = createMemo(() => getHandles(activeRoot(), selectedIds()));
-  const viewportIsMoving = createMemo(() => activeDrag()?.type === "pan" || transientViewportPreview());
+  const handles = createMemo(() => (selectedIds().length <= 1 ? getHandles(activeRoot(), selectedIds()) : []));
+  const viewportIsMoving = createMemo(() => activeDrag()?.type === "pan" || activeDrag()?.type === "rotate-canvas" || activeDrag()?.type === "move-selection" || Boolean(activeTouchGesture()) || transientViewportPreview());
   const useRasterPreview = createMemo(() => settings().viewRasterized || (settings().rasterPreviewDuringInteraction && viewportIsMoving()));
+  const gridViewRect = createMemo(() => createRotatedGridRect(viewRect(), viewportRotation()));
   const rasterPreviewRect = createMemo(() => createRasterPreviewRect(rootSize()));
   const rasterPreviewText = createMemo(() => serializeRoot(createRasterPreviewRoot(activeRoot(), rasterPreviewRect()), settings().exportFormatter));
+  const viewportTransform = createMemo(() => {
+    const center = cameraCenter();
+    return `rotate(${radiansToDegrees(viewportRotation())} ${center.x} ${center.y})`;
+  });
   const themeVars = createMemo(() => {
     const current = settings();
     return {
@@ -130,6 +169,7 @@ export function App() {
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("pointermove", onWindowPointerMove);
     window.addEventListener("pointerup", onWindowPointerUp);
+    window.addEventListener("pointercancel", onWindowPointerCancel);
 
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
@@ -150,6 +190,7 @@ export function App() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("pointermove", onWindowPointerMove);
       window.removeEventListener("pointerup", onWindowPointerUp);
+      window.removeEventListener("pointercancel", onWindowPointerCancel);
       resizeObserver.disconnect();
     });
   });
@@ -188,6 +229,10 @@ export function App() {
       window.cancelAnimationFrame(pendingHandleFrame);
     }
 
+    if (selectionBoxFrame !== undefined) {
+      window.cancelAnimationFrame(selectionBoxFrame);
+    }
+
     if (rasterPreviewObjectUrl) {
       URL.revokeObjectURL(rasterPreviewObjectUrl);
     }
@@ -206,7 +251,18 @@ export function App() {
     if (Number.isFinite(fitZoom) && fitZoom > 0) {
       setZoom(fitZoom);
       setCameraCenter({ x: size.viewBox[0] + size.viewBox[2] / 2, y: size.viewBox[1] + size.viewBox[3] / 2 });
+      setViewportRotation(0);
     }
+  });
+
+  createEffect(() => {
+    activeRoot();
+    selectedIds();
+    viewportRotation();
+    zoom();
+    viewportSize();
+    useRasterPreview();
+    scheduleSelectionBoxUpdate();
   });
 
   function getHistory(tabId: string): HistoryState {
@@ -279,6 +335,73 @@ export function App() {
     }));
   }
 
+  function scheduleSelectionBoxUpdate(): void {
+    if (selectionBoxFrame !== undefined) {
+      window.cancelAnimationFrame(selectionBoxFrame);
+    }
+
+    selectionBoxFrame = window.requestAnimationFrame(() => {
+      selectionBoxFrame = undefined;
+      setSelectionBox(measureSelectionBox(selectedIds()));
+    });
+  }
+
+  function measureSelectionBox(ids: readonly string[]): Rect | undefined {
+    const selected = new Set(ids.filter((id) => id !== activeRoot().id));
+
+    if (selected.size === 0 || useRasterPreview()) {
+      return undefined;
+    }
+
+    const rects: Rect[] = [];
+
+    for (const element of document.querySelectorAll<SVGGraphicsElement>("[data-node-id]")) {
+      const id = element.getAttribute("data-node-id");
+
+      if (!id || !selected.has(id)) {
+        continue;
+      }
+
+      const clientRect = element.getBoundingClientRect();
+
+      if (clientRect.width <= 0 || clientRect.height <= 0) {
+        continue;
+      }
+
+      const worldRect = clientRectToWorldRect(clientRect);
+
+      if (worldRect) {
+        rects.push(worldRect);
+      }
+    }
+
+    return unionRects(rects);
+  }
+
+  function clientRectToWorldRect(clientRect: DOMRectReadOnly): Rect | undefined {
+    return rectFromPoints([
+      clientToSvgPoint(clientRect.left, clientRect.top, false),
+      clientToSvgPoint(clientRect.right, clientRect.top, false),
+      clientToSvgPoint(clientRect.right, clientRect.bottom, false),
+      clientToSvgPoint(clientRect.left, clientRect.bottom, false)
+    ]);
+  }
+
+  function clientRectToOverlayRect(clientRect: Rect): Rect {
+    const viewport = canvasSvg()?.parentElement?.getBoundingClientRect();
+
+    if (!viewport) {
+      return clientRect;
+    }
+
+    return {
+      x: clientRect.x - viewport.left,
+      y: clientRect.y - viewport.top,
+      width: clientRect.width,
+      height: clientRect.height
+    };
+  }
+
   function keepViewportPreviewAlive(delay = 140): void {
     setTransientViewportPreview(true);
 
@@ -292,7 +415,7 @@ export function App() {
     }, delay);
   }
 
-  function schedulePanMove(drag: ActiveDrag, clientX: number, clientY: number): void {
+  function schedulePanMove(drag: ActivePanDrag, clientX: number, clientY: number): void {
     pendingPanMove = { drag, clientX, clientY };
 
     if (pendingPanFrame !== undefined) {
@@ -313,11 +436,7 @@ export function App() {
     }
 
     pendingPanMove = undefined;
-    const z = zoom();
-    setCameraCenter({
-      x: pending.drag.startCenterX - (pending.clientX - pending.drag.startClientX) / z,
-      y: pending.drag.startCenterY - (pending.clientY - pending.drag.startClientY) / z
-    });
+    setCameraCenter(centerForClientPoint({ x: pending.drag.startWorldX, y: pending.drag.startWorldY }, pending.clientX, pending.clientY, zoom(), viewportRotation()));
   }
 
   function scheduleHandleMove(pointerId: number, handle: HandleDescriptor, clientX: number, clientY: number): void {
@@ -357,6 +476,7 @@ export function App() {
     const fitZoom = Math.min(currentViewport.width / size.viewBox[2], currentViewport.height / size.viewBox[3]) * 0.86;
     setZoom(Number.isFinite(fitZoom) && fitZoom > 0 ? fitZoom : 1);
     setCameraCenter({ x: size.viewBox[0] + size.viewBox[2] / 2, y: size.viewBox[1] + size.viewBox[3] / 2 });
+    setViewportRotation(0);
   }
 
   function zoomBy(factor: number, origin?: { readonly x: number; readonly y: number }): void {
@@ -368,32 +488,27 @@ export function App() {
       return;
     }
 
-    const before = clientToSvgPoint(origin.x, origin.y);
+    const anchor = clientToSvgPoint(origin.x, origin.y, false);
     setZoom(nextZoom);
-    queueMicrotask(() => {
-      const after = clientToSvgPoint(origin.x, origin.y);
-      setCameraCenter((center) => ({ x: center.x + before.x - after.x, y: center.y + before.y - after.y }));
-    });
+    setCameraCenter(centerForClientPoint(anchor, origin.x, origin.y, nextZoom, viewportRotation()));
   }
 
-  function clientToSvgPoint(clientX: number, clientY: number): { readonly x: number; readonly y: number } {
-    const svg = canvasSvg();
+  function rotateViewportBy(delta: number, origin?: { readonly x: number; readonly y: number }): void {
+    const nextRotation = viewportRotation() + delta;
 
-    if (!svg) {
-      return { x: 0, y: 0 };
+    if (!origin) {
+      setViewportRotation(nextRotation);
+      return;
     }
 
-    const point = svg.createSVGPoint();
-    point.x = clientX;
-    point.y = clientY;
-    const matrix = svg.getScreenCTM();
+    const anchor = clientToSvgPoint(origin.x, origin.y, false);
+    setViewportRotation(nextRotation);
+    setCameraCenter(centerForClientPoint(anchor, origin.x, origin.y, zoom(), nextRotation));
+  }
 
-    if (!matrix) {
-      return { x: 0, y: 0 };
-    }
-
-    const transformed = point.matrixTransform(matrix.inverse());
-    const snap = settings().snapEnabled ? settings().snapSize : 0;
+  function clientToSvgPoint(clientX: number, clientY: number, snapToGrid = true): Point {
+    const transformed = clientToSvgPointWithCamera(clientX, clientY, cameraCenter(), zoom(), viewportRotation());
+    const snap = snapToGrid && settings().snapEnabled ? settings().snapSize : 0;
 
     if (snap > 0) {
       return {
@@ -405,7 +520,56 @@ export function App() {
     return { x: transformed.x, y: transformed.y };
   }
 
+  function clientToSvgPointWithCamera(clientX: number, clientY: number, center: Point, z: number, rotation: number): Point {
+    const offset = clientOffsetFromViewportCenter(clientX, clientY, z);
+    const worldOffset = rotatePoint(offset, -rotation);
+    return { x: center.x + worldOffset.x, y: center.y + worldOffset.y };
+  }
+
+  function centerForClientPoint(worldPoint: Point, clientX: number, clientY: number, z: number, rotation: number): Point {
+    const offset = clientOffsetFromViewportCenter(clientX, clientY, z);
+    const worldOffset = rotatePoint(offset, -rotation);
+    return { x: worldPoint.x - worldOffset.x, y: worldPoint.y - worldOffset.y };
+  }
+
+  function clientOffsetFromViewportCenter(clientX: number, clientY: number, z: number): Point {
+    const svg = canvasSvg();
+
+    if (!svg) {
+      return { x: 0, y: 0 };
+    }
+
+    const rect = svg.getBoundingClientRect();
+
+    if (rect.width <= 0 || rect.height <= 0) {
+      return { x: 0, y: 0 };
+    }
+
+    return {
+      x: (clientX - rect.left - rect.width / 2) / z,
+      y: (clientY - rect.top - rect.height / 2) / z
+    };
+  }
+
+  function angleFromViewportCenter(clientX: number, clientY: number): number {
+    const svg = canvasSvg();
+
+    if (!svg) {
+      return 0;
+    }
+
+    const rect = svg.getBoundingClientRect();
+    return Math.atan2(clientY - rect.top - rect.height / 2, clientX - rect.left - rect.width / 2);
+  }
+
   function onCanvasWheel(event: WheelEvent): void {
+    if (event.shiftKey) {
+      event.preventDefault();
+      keepViewportPreviewAlive();
+      rotateViewportBy(-event.deltaY * 0.005, { x: event.clientX, y: event.clientY });
+      return;
+    }
+
     if (settings().useCtrlForZoom && !event.ctrlKey && !event.metaKey) {
       return;
     }
@@ -416,6 +580,34 @@ export function App() {
   }
 
   function onCanvasPointerDown(event: PointerEvent): void {
+    if (event.pointerType === "touch") {
+      event.preventDefault();
+      setContextMenu(undefined);
+      beginTouchPoint(event);
+      setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
+      return;
+    }
+
+    if (event.altKey) {
+      event.preventDefault();
+      setContextMenu(undefined);
+
+      if (event.button === 0) {
+        startCanvasRotateDrag(event);
+        setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
+      }
+
+      return;
+    }
+
+    if (event.button === 1) {
+      event.preventDefault();
+      setContextMenu(undefined);
+      startPanDrag(event);
+      setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
+      return;
+    }
+
     const target = event.target as Element | null;
     const nodeElement = target?.closest("[data-node-id]");
 
@@ -428,25 +620,22 @@ export function App() {
       return;
     }
 
-    if (event.button === 0 || event.button === 1) {
-      setContextMenu(undefined);
-      setActiveDrag({
-        type: "pan",
-        pointerId: event.pointerId,
-        startClientX: event.clientX,
-        startClientY: event.clientY,
-        startCenterX: cameraCenter().x,
-        startCenterY: cameraCenter().y
-      });
-      (event.currentTarget as Element).setPointerCapture(event.pointerId);
-    }
-
     if (event.button === 0) {
-      clearSelection();
+      setContextMenu(undefined);
+      startMarqueeDrag(event);
+      setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
+      return;
     }
   }
 
   function onWindowPointerMove(event: PointerEvent): void {
+    if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+      event.preventDefault();
+      touchPointers.set(event.pointerId, pointerEventToTouchPoint(event));
+      applyTouchGesture();
+      return;
+    }
+
     const drag = activeDrag();
 
     if (!drag || drag.pointerId !== event.pointerId) {
@@ -458,16 +647,36 @@ export function App() {
       return;
     }
 
-    const handle = drag.handle;
-
-    if (!handle) {
+    if (drag.type === "rotate-canvas") {
+      setViewportRotation(drag.startRotation + angleFromViewportCenter(event.clientX, event.clientY) - drag.startAngle);
+      keepViewportPreviewAlive();
       return;
     }
 
-    scheduleHandleMove(event.pointerId, handle, event.clientX, event.clientY);
+    if (drag.type === "marquee") {
+      updateMarqueeDrag(drag, event.clientX, event.clientY);
+      return;
+    }
+
+    if (drag.type === "transform-box") {
+      updateTransformBoxDrag(drag, event.clientX, event.clientY);
+      return;
+    }
+
+    if (drag.type === "move-selection") {
+      updateMoveSelectionDrag(drag, event.clientX, event.clientY);
+      return;
+    }
+
+    scheduleHandleMove(event.pointerId, drag.handle, event.clientX, event.clientY);
   }
 
   function onWindowPointerUp(event: PointerEvent): void {
+    if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+      finishTouchPoint(event.pointerId);
+      return;
+    }
+
     const drag = activeDrag();
 
     if (drag?.pointerId === event.pointerId) {
@@ -487,10 +696,358 @@ export function App() {
 
         flushPendingHandleMove();
         syncActiveRootCode();
+      } else if (drag.type === "marquee") {
+        finishMarqueeDrag(drag, event.clientX, event.clientY);
+      } else if (drag.type === "transform-box") {
+        syncActiveRootCode();
+      } else if (drag.type === "move-selection") {
+        if (drag.committed) {
+          syncActiveRootCode();
+        }
+      } else if (drag.type === "rotate-canvas") {
+        keepViewportPreviewAlive(100);
       }
 
       setActiveDrag(undefined);
     }
+  }
+
+  function onWindowPointerCancel(event: PointerEvent): void {
+    if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+      finishTouchPoint(event.pointerId);
+      return;
+    }
+
+    const drag = activeDrag();
+
+    if (drag?.pointerId === event.pointerId) {
+      pendingPanMove = undefined;
+      pendingHandleMove = undefined;
+      setMarqueeRect(undefined);
+      setActiveDrag(undefined);
+    }
+  }
+
+  function startPanDrag(event: PointerEvent): void {
+    const point = clientToSvgPoint(event.clientX, event.clientY);
+    setActiveDrag({
+      type: "pan",
+      pointerId: event.pointerId,
+      startWorldX: point.x,
+      startWorldY: point.y
+    });
+  }
+
+  function startCanvasRotateDrag(event: PointerEvent): void {
+    setActiveDrag({
+      type: "rotate-canvas",
+      pointerId: event.pointerId,
+      startAngle: angleFromViewportCenter(event.clientX, event.clientY),
+      startRotation: viewportRotation()
+    });
+  }
+
+  function onNodePointerDown(nodeId: string, event: PointerEvent): void {
+    if (event.button !== 0) {
+      return;
+    }
+
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      selectNode(nodeId, event);
+      return;
+    }
+
+    const existing = selectedIds();
+
+    if (existing.includes(nodeId)) {
+      startMoveSelectionDrag(event, existing);
+      return;
+    }
+
+    setSelectedIds([nodeId]);
+    setSelectionPivot(nodeId);
+    setSelectedPathCommand(undefined);
+    startMoveSelectionDrag(event, [nodeId]);
+  }
+
+  function startMoveSelectionDrag(event: PointerEvent, ids: readonly string[]): void {
+    const selectedElementIds = topLevelSelectedElementIds(activeRoot(), ids);
+
+    if (selectedElementIds.length === 0) {
+      return;
+    }
+
+    const point = clientToSvgPoint(event.clientX, event.clientY, false);
+    setActiveDrag({
+      type: "move-selection",
+      pointerId: event.pointerId,
+      selectedIds: selectedElementIds,
+      startRoot: activeRoot(),
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startWorldX: point.x,
+      startWorldY: point.y,
+      committed: false
+    });
+    setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
+  }
+
+  function updateMoveSelectionDrag(drag: ActiveMoveSelectionDrag, clientX: number, clientY: number): void {
+    if (!drag.committed && Math.hypot(clientX - drag.startClientX, clientY - drag.startClientY) < 3) {
+      return;
+    }
+
+    const nextDrag = drag.committed ? drag : { ...drag, committed: true } satisfies ActiveMoveSelectionDrag;
+
+    if (!drag.committed) {
+      pushHistory();
+      setActiveDrag(nextDrag);
+    }
+
+    const point = clientToSvgPoint(clientX, clientY, false);
+    const transform = translateMatrix(point.x - drag.startWorldX, point.y - drag.startWorldY);
+    replaceRootWithoutHistory(applyGlobalTransformToSelected(drag.startRoot, drag.selectedIds, transform), false);
+  }
+
+  function startMarqueeDrag(event: PointerEvent): void {
+    const rect = normalizeClientRect(event.clientX, event.clientY, event.clientX, event.clientY);
+    setMarqueeRect(clientRectToOverlayRect(rect));
+    setActiveDrag({
+      type: "marquee",
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      currentClientX: event.clientX,
+      currentClientY: event.clientY,
+      mode: settings().dragSelectionMode,
+      additive: event.ctrlKey || event.metaKey,
+      initialSelection: selectedIds()
+    });
+  }
+
+  function updateMarqueeDrag(drag: ActiveMarqueeDrag, clientX: number, clientY: number): void {
+    const next = { ...drag, currentClientX: clientX, currentClientY: clientY } satisfies ActiveMarqueeDrag;
+    setActiveDrag(next);
+    setMarqueeRect(clientRectToOverlayRect(normalizeClientRect(drag.startClientX, drag.startClientY, clientX, clientY)));
+  }
+
+  function finishMarqueeDrag(drag: ActiveMarqueeDrag, clientX: number, clientY: number): void {
+    setMarqueeRect(undefined);
+
+    if (Math.hypot(clientX - drag.startClientX, clientY - drag.startClientY) < 4) {
+      clearSelection();
+      return;
+    }
+
+    const ids = idsInMarquee(normalizeClientRect(drag.startClientX, drag.startClientY, clientX, clientY), drag.mode);
+    const nextIds = drag.additive ? mergeSelection(drag.initialSelection, ids) : ids;
+    setSelectedIds(nextIds);
+    setSelectionPivot(nextIds.at(-1));
+    setSelectedPathCommand(undefined);
+  }
+
+  function idsInMarquee(rect: Rect, mode: DragSelectionMode): readonly string[] {
+    const ids: string[] = [];
+
+    for (const element of document.querySelectorAll<SVGGraphicsElement>("[data-node-id]")) {
+      if (!isMarqueeSelectableElement(element)) {
+        continue;
+      }
+
+      const id = element.getAttribute("data-node-id");
+
+      if (!id) {
+        continue;
+      }
+
+      const elementRect = element.getBoundingClientRect();
+
+      if (elementRect.width <= 0 || elementRect.height <= 0) {
+        continue;
+      }
+
+      const selected = mode === "contain" ? clientRectContains(rect, elementRect) : clientRectsIntersect(rect, elementRect);
+
+      if (selected) {
+        ids.push(id);
+      }
+    }
+
+    return ids;
+  }
+
+  function isMarqueeSelectableElement(element: Element): boolean {
+    return ["path", "circle", "ellipse", "rect", "line", "polygon", "polyline", "text", "image", "use"].includes(element.tagName.toLowerCase());
+  }
+
+  function mergeSelection(initial: readonly string[], added: readonly string[]): readonly string[] {
+    const ids = new Set(initial);
+
+    for (const id of added) {
+      ids.add(id);
+    }
+
+    return [...ids];
+  }
+
+  function updateTransformBoxDrag(drag: ActiveTransformBoxDrag, clientX: number, clientY: number): void {
+    const transform = transformMatrixForBoxDrag(drag, clientX, clientY);
+    replaceRootWithoutHistory(applyGlobalTransformToSelected(drag.startRoot, drag.selectedIds, transform), false);
+  }
+
+  function transformMatrixForBoxDrag(drag: ActiveTransformBoxDrag, clientX: number, clientY: number): Matrix2D {
+    const point = clientToSvgPoint(clientX, clientY, false);
+    const center = rectCenter(drag.startBox);
+
+    if (drag.handleKind === "rotate") {
+      const angle = Math.atan2(point.y - center.y, point.x - center.x);
+      return matrixAround(center, rotateMatrix(angle - drag.startAngle));
+    }
+
+    const anchor = anchorForTransformHandle(drag.startBox, drag.handleKind);
+    const startPoint = pointForTransformHandle(drag.startBox, drag.handleKind);
+    const scaleX = transformHandleChangesX(drag.handleKind) ? clampedScaleRatio(point.x, startPoint.x, anchor.x) : 1;
+    const scaleY = transformHandleChangesY(drag.handleKind) ? clampedScaleRatio(point.y, startPoint.y, anchor.y) : 1;
+
+    return matrixAround(anchor, scaleMatrix(scaleX, scaleY));
+  }
+
+  function applyGlobalTransformToSelected(root: SvgElementNode, ids: readonly string[], transform: Matrix2D): SvgElementNode {
+    const parentTransforms = createParentTransformMap(root);
+    let next = root;
+
+    for (const id of ids) {
+      const parentTransform = parentTransforms.get(id) ?? identityMatrix;
+      const parentInverse = invertMatrix(parentTransform);
+
+      if (!parentInverse) {
+        continue;
+      }
+
+      next = updateNode(next, id, (node) => {
+        if (node.kind !== "element") {
+          return node;
+        }
+
+        const currentLocal = parseTransformList(getAttribute(node, "transform", true));
+        const nextLocal = multiplyMatrices(multiplyMatrices(multiplyMatrices(parentInverse, transform), parentTransform), currentLocal);
+        return setAttribute(node, "transform", formatMatrixTransform(nextLocal));
+      });
+    }
+
+    return next;
+  }
+
+  function createParentTransformMap(root: SvgElementNode): ReadonlyMap<string, Matrix2D> {
+    const transforms = new Map<string, Matrix2D>([[root.id, identityMatrix]]);
+
+    function visit(node: SvgElementNode, inherited: Matrix2D): void {
+      const nodeTransform = multiplyMatrices(inherited, parseTransformList(getAttribute(node, "transform", true)));
+
+      for (const child of node.children) {
+        if (child.kind === "element") {
+          transforms.set(child.id, nodeTransform);
+          visit(child, nodeTransform);
+        }
+      }
+    }
+
+    visit(root, identityMatrix);
+    return transforms;
+  }
+
+  function topLevelSelectedElementIds(root: SvgElementNode, ids: readonly string[]): readonly string[] {
+    const selected = new Set(ids);
+    const result: string[] = [];
+
+    function visit(node: SvgNode, hasSelectedAncestor: boolean): void {
+      const isSelected = selected.has(node.id);
+
+      if (node.kind === "element" && node.id !== root.id && isSelected && !hasSelectedAncestor) {
+        result.push(node.id);
+      }
+
+      if (node.kind !== "element") {
+        return;
+      }
+
+      for (const child of node.children) {
+        visit(child, hasSelectedAncestor || isSelected);
+      }
+    }
+
+    visit(root, false);
+    return result;
+  }
+
+  function beginTouchPoint(event: PointerEvent): void {
+    touchPointers.set(event.pointerId, pointerEventToTouchPoint(event));
+    beginTouchGesture();
+  }
+
+  function finishTouchPoint(pointerId: number): void {
+    touchPointers.delete(pointerId);
+
+    if (touchPointers.size === 0) {
+      setActiveTouchGesture(undefined);
+      keepViewportPreviewAlive(100);
+      return;
+    }
+
+    beginTouchGesture();
+  }
+
+  function beginTouchGesture(): void {
+    const points = Array.from(touchPointers.values()).slice(0, 2);
+
+    if (points.length === 0) {
+      setActiveTouchGesture(undefined);
+      return;
+    }
+
+    const centroid = centroidOfPoints(points);
+    const anchor = clientToSvgPoint(centroid.x, centroid.y);
+    const pair = firstTwoTouchPoints(points);
+    setActiveTouchGesture({
+      pointerIds: points.map((point) => point.pointerId),
+      startWorldX: anchor.x,
+      startWorldY: anchor.y,
+      startDistance: pair ? distanceBetween(pair[0], pair[1]) : 0,
+      startAngle: pair ? angleBetween(pair[0], pair[1]) : 0,
+      startZoom: zoom(),
+      startRotation: viewportRotation()
+    });
+    keepViewportPreviewAlive();
+  }
+
+  function applyTouchGesture(): void {
+    const gesture = activeTouchGesture();
+
+    if (!gesture) {
+      return;
+    }
+
+    const points = gesture.pointerIds.map((pointerId) => touchPointers.get(pointerId)).filter((point): point is TouchPoint => Boolean(point));
+
+    if (points.length === 0) {
+      setActiveTouchGesture(undefined);
+      return;
+    }
+
+    const centroid = centroidOfPoints(points);
+    let nextZoom = gesture.startZoom;
+    let nextRotation = gesture.startRotation;
+    const pair = firstTwoTouchPoints(points);
+
+    if (pair && gesture.startDistance > 0) {
+      nextZoom = clamp(gesture.startZoom * (distanceBetween(pair[0], pair[1]) / gesture.startDistance), 0.125, 512);
+      nextRotation = gesture.startRotation + angleBetween(pair[0], pair[1]) - gesture.startAngle;
+    }
+
+    setZoom(nextZoom);
+    setViewportRotation(nextRotation);
+    setCameraCenter(centerForClientPoint({ x: gesture.startWorldX, y: gesture.startWorldY }, centroid.x, centroid.y, nextZoom, nextRotation));
+    keepViewportPreviewAlive();
   }
 
   function selectNode(nodeId: string, event?: MouseEvent | PointerEvent): void {
@@ -1106,7 +1663,7 @@ export function App() {
           aria-label="Resize sidebar"
           onPointerDown={(event) => {
             leftResizeStart = { x: event.clientX, width: leftWidth() };
-            event.currentTarget.setPointerCapture(event.pointerId);
+            setPointerCaptureSafely(event.currentTarget, event.pointerId);
           }}
           onPointerMove={(event) => {
             if (!leftResizeStart) {
@@ -1132,6 +1689,8 @@ export function App() {
             setShowReference={setShowReference}
             overlayReference={overlayReference}
             setOverlayReference={setOverlayReference}
+            dragSelectionMode={() => settings().dragSelectionMode}
+            setDragSelectionMode={(mode) => setSettings((current) => ({ ...current, dragSelectionMode: mode }))}
             clearReference={() => {
               const current = referenceImage();
 
@@ -1159,48 +1718,64 @@ export function App() {
                 </pattern>
               </defs>
               <rect x={viewRect().x} y={viewRect().y} width={viewRect().width} height={viewRect().height} fill="var(--canvas)" />
-              <Show when={settings().showGrid}>
-                <GridLayer viewRect={viewRect} zoom={zoom} color={() => settings().gridColor} moving={viewportIsMoving} />
-              </Show>
-              <rect
-                x={rootSize().viewBox[0]}
-                y={rootSize().viewBox[1]}
-                width={rootSize().viewBox[2]}
-                height={rootSize().viewBox[3]}
-                fill="url(#checkerboard)"
-                stroke="#7d8596"
-                stroke-width={1 / Math.max(zoom(), 0.001)}
-              />
-              <Show when={referenceImage() && showReference() && !overlayReference()}>
-                <image href={referenceImage()} x={rootSize().viewBox[0]} y={rootSize().viewBox[1]} width={rootSize().viewBox[2]} height={rootSize().viewBox[3]} opacity="0.62" preserveAspectRatio="xMidYMid meet" />
-              </Show>
-              <Show
-                when={useRasterPreview() ? rasterPreviewUrl() : undefined}
-                fallback={
-                  <g classList={{ rasterized: settings().viewRasterized }}>
-                    <For each={activeRoot().children}>{(node) => <SvgNodeView node={node} selectedIds={selectedIds} selectNode={selectNode} openContextMenu={openContextMenu} />}</For>
-                  </g>
-                }
-              >
-                {(href) => (
-                  <image
-                    class="viewport-raster-preview"
-                    href={href()}
-                    x={rasterPreviewRect().x}
-                    y={rasterPreviewRect().y}
-                    width={rasterPreviewRect().width}
-                    height={rasterPreviewRect().height}
-                    preserveAspectRatio="xMidYMid meet"
-                  />
-                )}
-              </Show>
-              <Show when={referenceImage() && showReference() && overlayReference()}>
-                <image href={referenceImage()} x={rootSize().viewBox[0]} y={rootSize().viewBox[1]} width={rootSize().viewBox[2]} height={rootSize().viewBox[3]} opacity="0.46" preserveAspectRatio="xMidYMid meet" />
-              </Show>
-              <Show when={settings().showHandles}>
-                <HandlesLayer handles={handles} zoom={zoom} onHandlePointerDown={startHandleDrag} />
-              </Show>
+              <g transform={viewportTransform()}>
+                <Show when={settings().showGrid}>
+                  <GridLayer viewRect={gridViewRect} zoom={zoom} color={() => settings().gridColor} moving={viewportIsMoving} />
+                </Show>
+                <rect
+                  x={rootSize().viewBox[0]}
+                  y={rootSize().viewBox[1]}
+                  width={rootSize().viewBox[2]}
+                  height={rootSize().viewBox[3]}
+                  fill="url(#checkerboard)"
+                  stroke="#7d8596"
+                  stroke-width={1 / Math.max(zoom(), 0.001)}
+                />
+                <Show when={referenceImage() && showReference() && !overlayReference()}>
+                  <image href={referenceImage()} x={rootSize().viewBox[0]} y={rootSize().viewBox[1]} width={rootSize().viewBox[2]} height={rootSize().viewBox[3]} opacity="0.62" preserveAspectRatio="xMidYMid meet" />
+                </Show>
+                <Show
+                  when={useRasterPreview() ? rasterPreviewUrl() : undefined}
+                  fallback={
+                    <g classList={{ rasterized: settings().viewRasterized }}>
+                      <For each={activeRoot().children}>{(node) => <SvgNodeView node={node} selectedIds={selectedIds} onNodePointerDown={onNodePointerDown} openContextMenu={openContextMenu} />}</For>
+                    </g>
+                  }
+                >
+                  {(href) => (
+                    <image
+                      class="viewport-raster-preview"
+                      href={href()}
+                      x={rasterPreviewRect().x}
+                      y={rasterPreviewRect().y}
+                      width={rasterPreviewRect().width}
+                      height={rasterPreviewRect().height}
+                      preserveAspectRatio="xMidYMid meet"
+                    />
+                  )}
+                </Show>
+                <Show when={referenceImage() && showReference() && overlayReference()}>
+                  <image href={referenceImage()} x={rootSize().viewBox[0]} y={rootSize().viewBox[1]} width={rootSize().viewBox[2]} height={rootSize().viewBox[3]} opacity="0.46" preserveAspectRatio="xMidYMid meet" />
+                </Show>
+                <Show when={settings().showHandles}>
+                  <HandlesLayer handles={handles} zoom={zoom} onHandlePointerDown={startHandleDrag} />
+                  <TransformBoxLayer box={selectionBox} zoom={zoom} onHandlePointerDown={startTransformBoxDrag} />
+                </Show>
+              </g>
             </svg>
+            <Show when={marqueeRect()}>
+              {(rect) => (
+                <div
+                  class="selection-marquee"
+                  style={{
+                    left: `${rect().x}px`,
+                    top: `${rect().y}px`,
+                    width: `${rect().width}px`,
+                    height: `${rect().height}px`
+                  }}
+                />
+              )}
+            </Show>
           </div>
         </main>
       </div>
@@ -1252,18 +1827,46 @@ export function App() {
   );
 
   function startHandleDrag(event: PointerEvent, handle: HandleDescriptor): void {
+    if (event.pointerType === "touch" || event.button !== 0) {
+      return;
+    }
+
     event.stopPropagation();
     pushHistory();
     setActiveDrag({
       type: "handle",
       pointerId: event.pointerId,
-      startClientX: event.clientX,
-      startClientY: event.clientY,
-      startCenterX: cameraCenter().x,
-      startCenterY: cameraCenter().y,
       handle
     });
-    (event.currentTarget as Element).setPointerCapture(event.pointerId);
+    setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
+  }
+
+  function startTransformBoxDrag(event: PointerEvent, handle: TransformBoxHandleDescriptor): void {
+    if (event.pointerType === "touch" || event.button !== 0) {
+      return;
+    }
+
+    const box = selectionBox();
+    const ids = topLevelSelectedElementIds(activeRoot(), selectedIds());
+
+    if (!box || ids.length === 0) {
+      return;
+    }
+
+    event.stopPropagation();
+    pushHistory();
+    const center = rectCenter(box);
+    const point = clientToSvgPoint(event.clientX, event.clientY, false);
+    setActiveDrag({
+      type: "transform-box",
+      pointerId: event.pointerId,
+      handleKind: handle.kind,
+      selectedIds: ids,
+      startRoot: activeRoot(),
+      startBox: box,
+      startAngle: Math.atan2(point.y - center.y, point.x - center.x)
+    });
+    setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
   }
 }
 
@@ -1271,6 +1874,21 @@ export default App;
 
 function sameSvgSize(previous: SvgSize, next: SvgSize): boolean {
   return previous.width === next.width && previous.height === next.height && previous.viewBox.every((value, index) => value === next.viewBox[index]);
+}
+
+function createRotatedGridRect(rect: ViewRect, rotation: number): ViewRect {
+  if (Math.abs(rotation) < 0.0001) {
+    return rect;
+  }
+
+  const size = Math.hypot(rect.width, rect.height);
+
+  return {
+    x: rect.x + rect.width / 2 - size / 2,
+    y: rect.y + rect.height / 2 - size / 2,
+    width: size,
+    height: size
+  };
 }
 
 function createRasterPreviewRect(size: SvgSize): ViewRect {
@@ -1282,6 +1900,141 @@ function createRasterPreviewRect(size: SvgSize): ViewRect {
     y: y - padding,
     width: width + padding * 2,
     height: height + padding * 2
+  };
+}
+
+function normalizeClientRect(startX: number, startY: number, endX: number, endY: number): Rect {
+  const x = Math.min(startX, endX);
+  const y = Math.min(startY, endY);
+  return {
+    x,
+    y,
+    width: Math.abs(endX - startX),
+    height: Math.abs(endY - startY)
+  };
+}
+
+function clientRectContains(selection: Rect, element: DOMRectReadOnly): boolean {
+  return element.left >= selection.x && element.right <= selection.x + selection.width && element.top >= selection.y && element.bottom <= selection.y + selection.height;
+}
+
+function clientRectsIntersect(selection: Rect, element: DOMRectReadOnly): boolean {
+  return element.right >= selection.x && element.left <= selection.x + selection.width && element.bottom >= selection.y && element.top <= selection.y + selection.height;
+}
+
+function pointForTransformHandle(box: Rect, kind: TransformBoxHandleKind): Point {
+  const center = rectCenter(box);
+  const left = box.x;
+  const right = box.x + box.width;
+  const top = box.y;
+  const bottom = box.y + box.height;
+
+  switch (kind) {
+    case "nw":
+      return { x: left, y: top };
+    case "n":
+      return { x: center.x, y: top };
+    case "ne":
+      return { x: right, y: top };
+    case "e":
+      return { x: right, y: center.y };
+    case "se":
+      return { x: right, y: bottom };
+    case "s":
+      return { x: center.x, y: bottom };
+    case "sw":
+      return { x: left, y: bottom };
+    case "w":
+      return { x: left, y: center.y };
+    case "rotate":
+      return { x: center.x, y: top };
+  }
+}
+
+function anchorForTransformHandle(box: Rect, kind: TransformBoxHandleKind): Point {
+  const center = rectCenter(box);
+  const left = box.x;
+  const right = box.x + box.width;
+  const top = box.y;
+  const bottom = box.y + box.height;
+
+  switch (kind) {
+    case "nw":
+      return { x: right, y: bottom };
+    case "n":
+      return { x: center.x, y: bottom };
+    case "ne":
+      return { x: left, y: bottom };
+    case "e":
+      return { x: left, y: center.y };
+    case "se":
+      return { x: left, y: top };
+    case "s":
+      return { x: center.x, y: top };
+    case "sw":
+      return { x: right, y: top };
+    case "w":
+      return { x: right, y: center.y };
+    case "rotate":
+      return center;
+  }
+}
+
+function transformHandleChangesX(kind: TransformBoxHandleKind): boolean {
+  return kind === "nw" || kind === "ne" || kind === "e" || kind === "se" || kind === "sw" || kind === "w";
+}
+
+function transformHandleChangesY(kind: TransformBoxHandleKind): boolean {
+  return kind === "nw" || kind === "n" || kind === "ne" || kind === "se" || kind === "s" || kind === "sw";
+}
+
+function clampedScaleRatio(current: number, start: number, anchor: number): number {
+  const denominator = start - anchor;
+
+  if (Math.abs(denominator) < 0.0001) {
+    return 1;
+  }
+
+  return clamp((current - anchor) / denominator, 0.02, 50);
+}
+
+function setPointerCaptureSafely(element: Element, pointerId: number): void {
+  try {
+    element.setPointerCapture(pointerId);
+  } catch {
+    // Synthetic pointer events in tests do not always create an active pointer.
+  }
+}
+
+function pointerEventToTouchPoint(event: PointerEvent): TouchPoint {
+  return { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY };
+}
+
+function centroidOfPoints(points: readonly TouchPoint[]): Point {
+  const total = points.reduce((sum, point) => ({ x: sum.x + point.clientX, y: sum.y + point.clientY }), { x: 0, y: 0 });
+  return { x: total.x / points.length, y: total.y / points.length };
+}
+
+function distanceBetween(first: TouchPoint, second: TouchPoint): number {
+  return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+}
+
+function angleBetween(first: TouchPoint, second: TouchPoint): number {
+  return Math.atan2(second.clientY - first.clientY, second.clientX - first.clientX);
+}
+
+function firstTwoTouchPoints(points: readonly TouchPoint[]): readonly [TouchPoint, TouchPoint] | undefined {
+  const first = points[0];
+  const second = points[1];
+  return first && second ? [first, second] : undefined;
+}
+
+function rotatePoint(point: Point, radians: number): Point {
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return {
+    x: point.x * cos - point.y * sin,
+    y: point.x * sin + point.y * cos
   };
 }
 

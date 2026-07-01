@@ -730,12 +730,39 @@ body:has(.app-root),
   text-align: center;
 }
 
+.app-root .selection-mode-toggle {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--soft-border);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--panel) 74%, #000);
+}
+
+.app-root .selection-mode-toggle button {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.app-root .selection-mode-toggle button.active {
+  background: color-mix(in srgb, var(--accent) 24%, var(--panel-2));
+  color: var(--text);
+}
+
 .app-root .zoom-widget button:not(.icon-button) {
   width: 72px;
   font-family: 'GodSVG Mono', ui-monospace, monospace;
 }
 
 .app-root .viewport-shell {
+  position: relative;
   min-width: 0;
   min-height: 0;
   border: 2px solid #2b324c;
@@ -780,6 +807,63 @@ body:has(.app-root),
 
 .app-root .handle:hover {
   fill: var(--accent);
+}
+
+.app-root .transform-box-layer {
+  pointer-events: none;
+}
+
+.app-root .transform-box-outline,
+.app-root .transform-box-rotate-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 7 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.app-root .transform-box-handle {
+  pointer-events: auto;
+  fill: #eef4ff;
+  stroke: #111827;
+  vector-effect: non-scaling-stroke;
+}
+
+.app-root .transform-box-handle[data-transform-handle="nw"],
+.app-root .transform-box-handle[data-transform-handle="se"] {
+  cursor: nwse-resize;
+}
+
+.app-root .transform-box-handle[data-transform-handle="ne"],
+.app-root .transform-box-handle[data-transform-handle="sw"] {
+  cursor: nesw-resize;
+}
+
+.app-root .transform-box-handle[data-transform-handle="n"],
+.app-root .transform-box-handle[data-transform-handle="s"] {
+  cursor: ns-resize;
+}
+
+.app-root .transform-box-handle[data-transform-handle="e"],
+.app-root .transform-box-handle[data-transform-handle="w"] {
+  cursor: ew-resize;
+}
+
+.app-root .transform-box-handle.rotate {
+  fill: #ffd166;
+  cursor: grab;
+}
+
+.app-root .transform-box-handle:hover {
+  fill: var(--accent);
+}
+
+.app-root .selection-marquee {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 82%, #ffffff);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: 0 0 0 1px #0008;
 }
 
 .app-root .grid-layer {
