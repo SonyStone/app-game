@@ -13,8 +13,10 @@
   },
   "devDependencies": {
     "@types/node": "25.8.0",
+    "@unocss/vite": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-solid": "catalog:"
+    "vite-plugin-solid": "catalog:",
+    "vite-plugin-solid-svg": "0.8.1"
   }
 }
