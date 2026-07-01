@@ -13,6 +13,8 @@ export function ViewportToolbar(props: {
   readonly zoom: () => number;
   readonly zoomBy: (factor: number) => void;
   readonly centerFrame: () => void;
+  readonly isFullscreen: () => boolean;
+  readonly toggleFullscreen: () => void;
   readonly openReferenceDialog: () => void;
   readonly hasReference: () => boolean;
   readonly showReference: () => boolean;
@@ -89,6 +91,7 @@ export function ViewportToolbar(props: {
         </div>
       </div>
       <div class="zoom-widget">
+        <IconButton icon="/assets/icons/Expand.svg" label={props.isFullscreen() ? "Exit fullscreen" : "Fullscreen"} active={props.isFullscreen()} onClick={props.toggleFullscreen} />
         <IconButton icon="/assets/icons/Minus.svg" label="Zoom out" onClick={() => props.zoomBy(1 / Math.SQRT2)} />
         <button type="button" onClick={props.centerFrame}>{Math.round(props.zoom() * 100)}%</button>
         <IconButton icon="/assets/icons/Plus.svg" label="Zoom in" onClick={() => props.zoomBy(Math.SQRT2)} />

@@ -200,19 +200,91 @@ export function convertCommand(commands: readonly PathCommand[], commandIndex: n
 }
 
 export function toggleRelative(commands: readonly PathCommand[], commandIndex: number): readonly PathCommand[] {
+  const start = commandStartPoints(commands)[commandIndex] ?? { x: 0, y: 0 };
+
   return commands.map((item, index) => {
     if (index !== commandIndex) {
       return item;
     }
 
     const normalized = normalizeCommand(item.command);
+    const isRelative = item.command === item.command.toLowerCase();
 
     if (normalized === "Z") {
       return { ...item, command: item.command === "Z" ? "z" : "Z" };
     }
 
-    return { ...item, command: item.command === item.command.toLowerCase() ? normalized : normalized.toLowerCase() };
+    const values = item.values.map((value, valueIndex) => {
+      const parameter = commandParameters(normalized)[valueIndex];
+
+      if (!parameter) {
+        return value;
+      }
+
+      if (parameter.name === "x" || parameter.name === "x1" || parameter.name === "x2") {
+        return isRelative ? value + start.x : value - start.x;
+      }
+
+      if (parameter.name === "y" || parameter.name === "y1" || parameter.name === "y2") {
+        return isRelative ? value + start.y : value - start.y;
+      }
+
+      return value;
+    });
+
+    return { ...item, command: isRelative ? normalized : normalized.toLowerCase(), values };
   });
+}
+
+function commandStartPoints(commands: readonly PathCommand[]): readonly { readonly x: number; readonly y: number }[] {
+  const starts: { x: number; y: number }[] = [];
+  let x = 0;
+  let y = 0;
+  let subpathStartX = 0;
+  let subpathStartY = 0;
+
+  for (const command of commands) {
+    starts.push({ x, y });
+
+    const normalized = normalizeCommand(command.command);
+    const relative = command.command === command.command.toLowerCase();
+    const params = commandParameters(normalized);
+    const endpointX = valueForParameter(command, params, "x");
+    const endpointY = valueForParameter(command, params, "y");
+
+    if (normalized === "Z") {
+      x = subpathStartX;
+      y = subpathStartY;
+      continue;
+    }
+
+    if (endpointX !== undefined) {
+      x = relative ? x + endpointX : endpointX;
+    }
+
+    if (endpointY !== undefined) {
+      y = relative ? y + endpointY : endpointY;
+    }
+
+    if (normalized === "M") {
+      subpathStartX = x;
+      subpathStartY = y;
+    }
+  }
+
+  return starts;
+}
+
+function valueForParameter(command: PathCommand, params: readonly PathParameter[], name: string): number | undefined {
+  for (let index = params.length - 1; index >= 0; index -= 1) {
+    const param = params[index];
+
+    if (param?.name === name) {
+      return command.values[param.index];
+    }
+  }
+
+  return undefined;
 }
 
 export function createCommand(command: string): PathCommand {

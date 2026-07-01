@@ -1,5 +1,5 @@
 import { attributeNumberRange, getAttributeDefault, getRecognizedAttributes } from "../svg-db";
-import { createCommand, formatPathData, parsePathData, parsePoints, type PathCommand } from "../path-data";
+import { createCommand, formatPathData, parsePathData, type PathCommand } from "../path-data";
 import { getAttribute, type SvgAttribute, type SvgElementNode, type SvgNode } from "../svg-model";
 
 import type { AppSettings, InspectorRow, OptimizerSettings, ThemePreset } from "./types";
@@ -65,7 +65,10 @@ export function flattenInspectorRows(root: SvgElementNode, previousRows: readonl
     }
   }
 
-  visit(root, 0);
+  for (const child of root.children) {
+    visit(child, 0);
+  }
+
   return rows;
 }
 
@@ -116,10 +119,19 @@ export function estimateInspectorRowHeight(node: SvgNode): number {
   const attrCount = Math.max(getRecognizedAttributes(node.name).length, node.attrs.length);
   const pathData = getAttribute(node, "d", true);
   const pointData = getAttribute(node, "points", true);
-  const pathCommandCount = pathData ? parsePathData(pathData).length : 0;
-  const pointCount = pointData ? parsePoints(pointData).length : 0;
+  const pathCommandCount = pathData ? estimatePathCommandCount(pathData) : 0;
+  const pointCount = pointData ? estimatePointCount(pointData) : 0;
 
-  return 52 + attrCount * 30 + pathCommandCount * 38 + pointCount * 34;
+  return 34 + Math.ceil(attrCount / 4) * 25 + pathCommandCount * 22 + pointCount * 28;
+}
+
+function estimatePathCommandCount(value: string): number {
+  return value.match(/[AaCcHhLlMmQqSsTtVvZz]/g)?.length ?? 0;
+}
+
+function estimatePointCount(value: string): number {
+  const parts = value.trim().split(/[\s,]+/).filter(Boolean);
+  return Math.ceil(parts.length / 2);
 }
 
 export function clamp(value: number, min: number, max: number): number {

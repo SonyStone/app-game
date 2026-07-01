@@ -16,12 +16,14 @@ import {
   getAttribute,
   insertSibling,
   moveNode,
+  moveNodesTo,
   parseSvgMarkup,
   removeAttribute,
   removeNode,
   setAttribute,
   svgSize,
   updateNode,
+  type DropPosition,
   type SvgElementNode,
   type SvgNode
 } from "./svg-model";
@@ -90,6 +92,7 @@ export function App() {
   const [showReference, setShowReference] = createSignal(true);
   const [overlayReference, setOverlayReference] = createSignal(false);
   const [isSvgDropActive, setIsSvgDropActive] = createSignal(false);
+  const [isFullscreen, setIsFullscreen] = createSignal(false);
   const [historyVersion, setHistoryVersion] = createSignal(0);
   const [activeDrag, setActiveDrag] = createSignal<ActiveDrag | undefined>();
   const [activeTouchGesture, setActiveTouchGesture] = createSignal<TouchGesture | undefined>();
@@ -103,6 +106,7 @@ export function App() {
   const histories = new Map<string, HistoryState>();
   const touchPointers = new Map<number, TouchPoint>();
   let leftResizeStart: { readonly x: number; readonly width: number } | undefined;
+  let appRootRef: HTMLDivElement | undefined;
   let importInputRef: HTMLInputElement | undefined;
   let referenceInputRef: HTMLInputElement | undefined;
   let viewportPreviewTimeout: number | undefined;
@@ -171,6 +175,10 @@ export function App() {
     window.addEventListener("pointerup", onWindowPointerUp);
     window.addEventListener("pointercancel", onWindowPointerCancel);
 
+    const syncFullscreen = () => setIsFullscreen(document.fullscreenElement === appRootRef);
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    syncFullscreen();
+
     const resizeObserver = new ResizeObserver((entries) => {
       const entry = entries[0];
 
@@ -191,6 +199,7 @@ export function App() {
       window.removeEventListener("pointermove", onWindowPointerMove);
       window.removeEventListener("pointerup", onWindowPointerUp);
       window.removeEventListener("pointercancel", onWindowPointerCancel);
+      document.removeEventListener("fullscreenchange", syncFullscreen);
       resizeObserver.disconnect();
     });
   });
@@ -1130,6 +1139,19 @@ export function App() {
     mutateRoot((root) => ids.reduce((next, id) => moveNode(next, id, direction), root));
   }
 
+  function reorderInspectorNodes(nodeIds: readonly string[], targetId: string, position: DropPosition): void {
+    const ids = nodeIds.filter((id) => id !== activeRoot().id);
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    mutateRoot((root) => moveNodesTo(root, ids, targetId, position));
+    setSelectedIds(ids);
+    setSelectionPivot(ids.at(-1));
+    setSelectedPathCommand(undefined);
+  }
+
   function selectAll(): void {
     setSelectedIds(flattenAllNodes(activeRoot()).map((node) => node.id));
   }
@@ -1535,6 +1557,17 @@ export function App() {
     setContextMenu({ x: event.clientX, y: event.clientY, nodeId });
   }
 
+  function toggleFullscreen(): void {
+    const target = appRootRef;
+
+    if (!target) {
+      return;
+    }
+
+    const action = document.fullscreenElement ? document.exitFullscreen() : target.requestFullscreen();
+    void action.catch(() => setIsFullscreen(document.fullscreenElement === target));
+  }
+
   function runContextAction(action: "duplicate" | "delete" | "move-up" | "move-down" | "insert-after"): void {
     const menu = contextMenu();
 
@@ -1559,6 +1592,7 @@ export function App() {
 
   return (
     <div
+      ref={(element) => (appRootRef = element)}
       class="app-root"
       classList={{ "theme-light": settings().themePreset === "light", "theme-black": settings().themePreset === "black", "theme-gray": settings().themePreset === "gray", "svg-drop-active": isSvgDropActive() }}
       style={themeVars()}
@@ -1638,6 +1672,7 @@ export function App() {
               removeElementAttribute={removeElementAttribute}
               updateBasicNodeText={updateBasicNodeText}
               openContextMenu={openContextMenu}
+              reorderNodes={reorderInspectorNodes}
             />
           </Show>
           <Show when={activePanel() === "code"}>
@@ -1683,6 +1718,8 @@ export function App() {
             zoom={zoom}
             zoomBy={zoomBy}
             centerFrame={centerFrame}
+            isFullscreen={isFullscreen}
+            toggleFullscreen={toggleFullscreen}
             openReferenceDialog={openReferenceDialog}
             hasReference={() => Boolean(referenceImage())}
             showReference={showReference}

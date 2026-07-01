@@ -67,6 +67,13 @@ body:has(.app-root),
   color: var(--text);
 }
 
+.app-root:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  background: var(--base);
+}
+
 .app-root.theme-light {
   color-scheme: light;
   --text: #10203a;
@@ -381,12 +388,13 @@ body:has(.app-root),
 .app-root .previews-panel {
   min-height: 0;
   overflow: auto;
-  padding: 7px;
+  padding: 5px;
 }
 
 .app-root .virtual-inspector-spacer {
   position: relative;
   min-height: 100%;
+  margin-top: 5px;
 }
 
 .app-root .virtual-inspector-window {
@@ -402,11 +410,57 @@ body:has(.app-root),
 
 .app-root .element-card {
   --card-tint: #221331;
+  position: relative;
   border: 1px solid color-mix(in srgb, var(--card-tint) 42%, var(--soft-border));
-  border-radius: 6px;
+  border-radius: 5px;
   background: color-mix(in srgb, var(--card-tint) 72%, var(--panel));
-  margin-bottom: 7px;
-  overflow: hidden;
+  margin-bottom: 4px;
+  overflow: visible;
+}
+
+.app-root .element-card[draggable='true'] {
+  cursor: grab;
+}
+
+.app-root .element-card.dragging {
+  opacity: 0.55;
+}
+
+.app-root .element-card.drop-before,
+.app-root .element-card.drop-after,
+.app-root .element-card.drop-inside {
+  overflow: visible;
+}
+
+.app-root .element-card.drop-before::before,
+.app-root .element-card.drop-after::after,
+.app-root .element-card.drop-inside::before {
+  content: '';
+  position: absolute;
+  z-index: 10;
+  pointer-events: none;
+  border-color: #78ff78;
+}
+
+.app-root .element-card.drop-before::before {
+  inset: -2px 0 auto 0;
+  border-top: 2px solid #78ff78;
+}
+
+.app-root .element-card.drop-after::after {
+  inset: auto 0 -2px 0;
+  border-bottom: 2px solid #78ff78;
+}
+
+.app-root .element-card.drop-inside::before {
+  inset: -2px;
+  border: 2px solid #78ff78;
+  border-radius: 5px;
+}
+
+.app-root .element-card.drop-invalid::before,
+.app-root .element-card.drop-invalid::after {
+  border-color: var(--warning);
 }
 
 .app-root .element-card.selected {
@@ -414,19 +468,46 @@ body:has(.app-root),
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 68%, transparent);
 }
 
-.app-root .element-title {
-  width: 100%;
-  height: 25px;
+.app-root .inspector-drag-preview {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  gap: 4px;
+  width: 360px;
+  max-width: min(360px, calc(100vw - 24px));
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.app-root .inspector-drag-preview-card {
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--card-tint) 50%, var(--soft-border));
-  background: color-mix(in srgb, var(--card-tint) 64%, var(--panel-2));
+  border: 2px solid #3d86ff;
+  border-radius: 4px;
+  background: color-mix(in srgb, #30569c 52%, var(--panel));
   color: #eef4ff;
   font-family: 'GodSVG Mono', ui-monospace, monospace;
   font-size: 12px;
+  box-shadow: 0 10px 24px rgb(0 0 0 / 30%);
+}
+
+.app-root .element-title {
+  width: 100%;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--card-tint) 50%, var(--soft-border));
+  background: color-mix(in srgb, var(--card-tint) 64%, var(--panel-2));
+  border-radius: 4px 4px 0 0;
+  color: #eef4ff;
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+  font-size: 11px;
   cursor: pointer;
 }
 
@@ -442,36 +523,140 @@ body:has(.app-root),
 
 .app-root .attribute-grid {
   display: grid;
-  gap: 4px;
-  padding: 6px;
+  gap: 2px;
+  padding: 4px;
+}
+
+.app-root .root-element-editor {
+  display: grid;
+  gap: 3px;
+  padding: 1px 4px 5px;
+}
+
+.app-root .root-editor-fields {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: end;
+  column-gap: 30px;
+  row-gap: 2px;
+}
+
+.app-root .root-editor-field {
+  display: grid;
+  gap: 0;
+  justify-items: center;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.app-root .root-editor-field legend,
+.app-root .root-editor-field span {
+  height: 15px;
+  padding: 0 2px;
+}
+
+.app-root .root-editor-field .compact-number-field {
+  width: 48px;
+}
+
+.app-root .viewbox-inputs {
+  display: flex;
+  gap: 3px;
+}
+
+.app-root .compact-attribute-grid {
+  padding: 4px;
+}
+
+.app-root .compact-attribute-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.app-root .unknown-attribute-flow,
+.app-root .root-unknown-flow {
+  padding-bottom: 2px;
+}
+
+.app-root .attribute-control {
+  min-width: 0;
+  height: 22px;
+}
+
+.app-root .attribute-control.type-transform-list {
+  width: 162px;
+}
+
+.app-root .attribute-control.type-color {
+  width: 82px;
+}
+
+.app-root .attribute-control.type-enum {
+  width: 81px;
+}
+
+.app-root .attribute-control.type-numeric,
+.app-root .attribute-control.type-list {
+  width: 54px;
+}
+
+.app-root .attribute-control.type-id,
+.app-root .attribute-control.type-href,
+.app-root .attribute-control.type-unknown {
+  width: 112px;
+}
+
+.app-root .attribute-control > input,
+.app-root .attribute-control > select,
+.app-root .attribute-control > .line-edit-button {
+  width: 100%;
 }
 
 .app-root .attribute-row {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(72px, 0.42fr) minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(64px, 0.36fr) minmax(0, 1fr) 22px;
   align-items: start;
-  gap: 5px;
+  gap: 3px;
 }
 
 .app-root .attribute-row > label {
-  min-height: 24px;
+  min-height: 22px;
   display: flex;
   align-items: center;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--muted);
   font-family: 'GodSVG Mono', ui-monospace, monospace;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .app-root .attribute-row.unknown > label {
   color: var(--warning);
 }
 
+.app-root .attribute-row.pathdata-row {
+  grid-template-columns: minmax(0, 1fr) 22px;
+}
+
+.app-root .attribute-row.pathdata-row > label {
+  display: none;
+}
+
 .app-root .mono-input,
 .app-root .attribute-row select,
 .app-root .attribute-row input,
+.app-root .compact-enum-field,
 .app-root .basic-node-text,
 .app-root .code-textarea,
 .app-root .snap-input,
@@ -480,18 +665,19 @@ body:has(.app-root),
 .app-root .export-controls input,
 .app-root .export-controls select {
   min-width: 0;
-  min-height: 24px;
+  min-height: 22px;
   border: 1px solid var(--soft-border);
   border-radius: 5px;
   background: #080b12;
   color: var(--text);
   font-family: 'GodSVG Mono', ui-monospace, monospace;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .app-root.theme-light .mono-input,
 .app-root.theme-light .attribute-row select,
 .app-root.theme-light .attribute-row input,
+.app-root.theme-light .compact-enum-field,
 .app-root.theme-light .basic-node-text,
 .app-root.theme-light .code-textarea,
 .app-root.theme-light .snap-input,
@@ -507,8 +693,8 @@ body:has(.app-root),
 .app-root .point-row button,
 .app-root .transform-buttons button,
 .app-root .add-command {
-  min-width: 24px;
-  height: 24px;
+  min-width: 22px;
+  height: 22px;
   display: inline-grid;
   place-items: center;
   border: 1px solid var(--soft-border);
@@ -522,17 +708,88 @@ body:has(.app-root),
 .app-root .points-editor,
 .app-root .path-editor {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
 }
 
-.app-root .color-field {
-  grid-template-columns: 28px minmax(0, 1fr);
+.app-root .line-edit-button {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 22px;
+  gap: 0;
+  min-width: 0;
 }
 
-.app-root .color-field input[type='color'] {
-  width: 28px;
-  padding: 1px;
+.app-root .line-edit-button > input {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.app-root .field-side-button {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--soft-border);
+  border-left: 0;
+  border-radius: 0 5px 5px 0;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+
+.app-root .color-swatch-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.app-root .color-swatch-button input[type='color'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.app-root .color-swatch {
+  --swatch-color: transparent;
+  position: relative;
+  width: 14px;
+  height: 18px;
+  border-radius: 2px;
+  border: 1px solid color-mix(in srgb, var(--soft-border) 70%, #fff);
+  background:
+    var(--swatch-color),
+    linear-gradient(45deg, #8b93a7 25%, transparent 25% 75%, #8b93a7 75%) 0 0 / 8px 8px,
+    linear-gradient(45deg, transparent 25%, #303747 25% 75%, transparent 75%) 4px 4px / 8px 8px;
+}
+
+.app-root .color-swatch.none::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  border-top: 2px solid #fff;
+  transform: rotate(-42deg);
+}
+
+.app-root .compact-number-field,
+.app-root .compact-text-field,
+.app-root .compact-enum-field {
+  width: 100%;
+  height: 22px;
+  padding: 0 5px;
+}
+
+.app-root .compact-enum-field {
+  padding-right: 18px;
+}
+
+.app-root .field-side-button:hover,
+.app-root .field-side-button:focus-visible {
+  border-color: var(--accent);
 }
 
 .app-root .transform-buttons {
@@ -541,49 +798,270 @@ body:has(.app-root),
   gap: 4px;
 }
 
+.app-root .transform-popup {
+  position: absolute;
+  z-index: 40;
+  top: 25px;
+  left: 0;
+  display: grid;
+  gap: 6px;
+  min-width: min(176px, calc(100vw - 32px));
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 35%);
+}
+
+.app-root .transform-popup-list {
+  display: grid;
+  gap: 3px;
+}
+
+.app-root .transform-popup-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 22px;
+  gap: 3px;
+  align-items: center;
+}
+
+.app-root .transform-popup-row input {
+  height: 22px;
+}
+
+.app-root .transform-kind-button,
+.app-root .transform-popup-add {
+  min-width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--soft-border);
+  border-radius: 5px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+
+.app-root .transform-popup-add {
+  width: 100%;
+  height: 28px;
+}
+
+.app-root .transform-popup-add.compact {
+  width: auto;
+}
+
+.app-root .transform-actions-menu,
+.app-root .transform-new-menu {
+  position: absolute;
+  z-index: 50;
+  top: 24px;
+  right: 0;
+  display: grid;
+  gap: 3px;
+  min-width: 142px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 34%);
+}
+
+.app-root .transform-new-menu {
+  position: static;
+  min-width: 0;
+  box-shadow: none;
+}
+
+.app-root .transform-menu-title {
+  padding: 2px 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.app-root .transform-actions-menu button,
+.app-root .transform-new-menu button {
+  width: 100%;
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: start;
+  gap: 6px;
+  border: 1px solid var(--soft-border);
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.app-root .transform-final-matrix {
+  display: grid;
+  grid-template-columns: repeat(3, 44px);
+  gap: 4px;
+}
+
+.app-root .transform-final-matrix input {
+  width: 44px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
 .app-root .path-command-list,
 .app-root .point-list {
   display: grid;
-  gap: 3px;
+  gap: 1px;
+}
+
+.app-root .path-editor {
+  gap: 2px;
+  width: 100%;
+}
+
+.app-root .path-raw {
+  width: 100%;
 }
 
 .app-root .path-command-row {
   display: grid;
-  grid-template-columns: 28px 48px minmax(0, 1fr) 24px 24px 24px;
-  align-items: start;
+  grid-template-columns: 22px minmax(0, 1fr) 22px;
+  align-items: center;
   gap: 3px;
-  padding: 3px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--panel-3) 65%, transparent);
+  position: relative;
+  height: 22px;
+  min-height: 22px;
+  padding: 2px 3px;
+  border-radius: 3px;
+  background: transparent;
+  overflow: visible;
 }
 
 .app-root .path-command-row.selected {
-  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .app-root .command-pill {
-  color: #f3c4ff;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  border-width: 2px;
+  border-radius: 4px;
+  color: #fff8ff;
   font-family: 'GodSVG Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.app-root .command-pill.absolute {
+  border-color: #e6ae5c;
+  background: #cc7a29;
+}
+
+.app-root .command-pill.absolute:hover,
+.app-root .command-pill.absolute:focus-visible {
+  border-color: #f2cb91;
+  background: #d9822b;
+}
+
+.app-root .command-pill.relative {
+  border-color: #bd73e6;
+  background: #a329cc;
+}
+
+.app-root .command-pill.relative:hover,
+.app-root .command-pill.relative:focus-visible {
+  border-color: #d291f2;
+  background: #ad2bd9;
 }
 
 .app-root .path-params {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
-}
-
-.app-root .path-params label {
-  display: grid;
-  grid-template-columns: auto 54px;
   align-items: center;
   gap: 3px;
-  color: var(--muted);
-  font-family: 'GodSVG Mono', ui-monospace, monospace;
-  font-size: 10px;
 }
 
-.app-root .path-params input,
+.app-root .path-params input {
+  width: 44px;
+  min-height: 18px;
+  height: 18px;
+  padding: 0 3px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1;
+  appearance: textfield;
+}
+
+.app-root .path-params input::-webkit-outer-spin-button,
+.app-root .path-params input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.app-root .path-params input.flag-param {
+  width: 20px;
+  text-align: center;
+}
+
+.app-root .command-menu-button {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.app-root .command-menu-button:hover,
+.app-root .command-menu-button:focus-visible {
+  border-color: var(--soft-border);
+  background: var(--panel-2);
+}
+
+.app-root .command-menu {
+  position: absolute;
+  z-index: 30;
+  top: 21px;
+  right: 2px;
+  display: grid;
+  gap: 3px;
+  min-width: 142px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 34%);
+}
+
+.app-root .command-menu button {
+  width: 100%;
+  justify-content: start;
+  gap: 6px;
+  padding: 0 6px;
+  border-color: var(--soft-border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.app-root .command-convert-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 3px;
+}
+
+.app-root .command-convert-grid button {
+  justify-content: center;
+  padding: 0;
+  font-family: 'GodSVG Mono', ui-monospace, monospace;
+}
+
 .app-root .point-row input {
   width: 58px;
 }
@@ -596,7 +1074,7 @@ body:has(.app-root),
 }
 
 .app-root .children-stack {
-  padding: 0 5px 5px 12px;
+  padding: 0 5px 5px;
 }
 
 .app-root .basic-node-text {

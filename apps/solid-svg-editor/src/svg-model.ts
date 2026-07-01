@@ -1,4 +1,4 @@
-import { defaultElements, getAttributeDefault, isRecognizedElement, type RecognizedElement } from "./svg-db";
+import { defaultElements, getAttributeDefault, isRecognizedElement, isValidChild, type RecognizedElement } from "./svg-db";
 
 export interface SvgAttribute {
   readonly name: string;
@@ -33,6 +33,7 @@ export interface SvgCDataNode {
 }
 
 export type SvgNode = SvgElementNode | SvgTextNode | SvgCommentNode | SvgCDataNode;
+export type DropPosition = "before" | "after" | "inside";
 
 export type ParseResult =
   | { readonly ok: true; readonly root: SvgElementNode }
@@ -383,6 +384,102 @@ function insertSiblingInChildren(nodes: readonly SvgNode[], targetId: string, ch
 export function moveNode(root: SvgElementNode, id: string, direction: -1 | 1): SvgElementNode {
   const children = moveInChildren(root.children, id, direction);
   return children === root.children ? root : { ...root, children };
+}
+
+export function moveNodesTo(root: SvgElementNode, ids: readonly string[], targetId: string, position: DropPosition): SvgElementNode {
+  const movingIds = topLevelNodeIds(root, ids).filter((id) => id !== root.id);
+
+  if (movingIds.length === 0 || movingIds.includes(targetId)) {
+    return root;
+  }
+
+  const target = findNode(root, targetId);
+  const targetParent = position === "inside" && target?.kind === "element" ? target : findParent(root, targetId);
+
+  if (!target || !targetParent) {
+    return root;
+  }
+
+  for (const id of movingIds) {
+    const movingNode = findNode(root, id);
+
+    if (!movingNode || nodeContainsId(movingNode, targetParent.id)) {
+      return root;
+    }
+
+    if (movingNode.kind === "element" && !isValidChild(targetParent.name, movingNode.name)) {
+      return root;
+    }
+  }
+
+  const targetIndex = position === "inside" ? 0 : targetParent.children.findIndex((child) => child.id === targetId) + (position === "after" ? 1 : 0);
+
+  if (targetIndex < 0) {
+    return root;
+  }
+
+  const movingNodes = movingIds.map((id) => findNode(root, id)).filter((node): node is SvgNode => Boolean(node));
+  const removedBeforeTarget = movingIds.filter((id) => {
+    const parent = findParent(root, id);
+
+    if (parent?.id !== targetParent.id) {
+      return false;
+    }
+
+    return parent.children.findIndex((child) => child.id === id) < targetIndex;
+  }).length;
+  const adjustedIndex = Math.max(0, targetIndex - removedBeforeTarget);
+  const withoutMoving = movingIds.reduce((next, id) => removeNode(next, id), root);
+
+  return insertChildrenAt(withoutMoving, targetParent.id, movingNodes, adjustedIndex);
+}
+
+function topLevelNodeIds(root: SvgElementNode, ids: readonly string[]): readonly string[] {
+  const selected = new Set(ids);
+  const ordered: string[] = [];
+
+  function visit(node: SvgNode, selectedAncestor: boolean): void {
+    const isSelected = selected.has(node.id);
+
+    if (isSelected && !selectedAncestor) {
+      ordered.push(node.id);
+    }
+
+    if (node.kind !== "element") {
+      return;
+    }
+
+    for (const child of node.children) {
+      visit(child, selectedAncestor || isSelected);
+    }
+  }
+
+  visit(root, false);
+  return ordered;
+}
+
+function nodeContainsId(node: SvgNode, id: string): boolean {
+  if (node.id === id) {
+    return true;
+  }
+
+  if (node.kind !== "element") {
+    return false;
+  }
+
+  return node.children.some((child) => nodeContainsId(child, id));
+}
+
+function insertChildrenAt(root: SvgElementNode, parentId: string, childrenToInsert: readonly SvgNode[], index: number): SvgElementNode {
+  return updateNode(root, parentId, (node) => {
+    if (node.kind !== "element") {
+      return node;
+    }
+
+    const nextChildren = [...node.children];
+    nextChildren.splice(Math.max(0, Math.min(index, nextChildren.length)), 0, ...childrenToInsert);
+    return { ...node, children: nextChildren, expanded: true };
+  });
 }
 
 function moveInChildren(nodes: readonly SvgNode[], id: string, direction: -1 | 1): readonly SvgNode[] {
