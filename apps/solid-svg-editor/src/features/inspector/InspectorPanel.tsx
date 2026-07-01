@@ -22,6 +22,7 @@ import {
   deleteCommand,
   deletePoint,
   formatPathData,
+  formatPathNumber,
   formatPoints,
   pathCommandLetters,
   parsePathData,
@@ -946,6 +947,7 @@ function PathCommandRow(props: {
 }) {
   const [menuOpen, setMenuOpen] = createSignal(false);
   const isRelative = () => props.command.command === props.command.command.toLowerCase();
+  const parameters = createMemo(() => commandParameters(props.command.command));
   const selected = () => {
     const current = props.selectedPathCommand();
     return current?.nodeId === props.nodeId && current.index === props.index();
@@ -987,20 +989,26 @@ function PathCommandRow(props: {
         {props.command.command}
       </button>
       <div class="path-params">
-        <For each={commandParameters(props.command.command)}>
-          {(param) => (
-            <input
-              classList={{ "flag-param": param.name === "large" || param.name === "sweep" }}
-              type="number"
-              step="0.001"
-              name={`${props.nodeId}-command-${props.index()}-${param.name}`}
-              aria-label={param.name}
-              title={param.name}
-              value={props.command.values[param.index] ?? 0}
-              onFocus={selectCurrent}
-              onChange={(event) => updateCommands(updateCommandValue(props.commands(), props.index(), param.index, Number.parseFloat(event.currentTarget.value) || 0))}
-            />
-          )}
+        <For each={parameters()}>
+          {(param) => {
+            const value = () => formatPathNumber(props.command.values[param.index] ?? 0);
+            const flag = () => param.name === "large" || param.name === "sweep";
+
+            return (
+              <input
+                classList={{ "flag-param": flag() }}
+                type="text"
+                inputMode={flag() ? "numeric" : "decimal"}
+                name={`${props.nodeId}-command-${props.index()}-${param.name}`}
+                aria-label={param.name}
+                title={param.name}
+                value={value()}
+                style={{ width: pathParamInputWidth(value(), param.name) }}
+                onFocus={selectCurrent}
+                onChange={(event) => updateCommands(updateCommandValue(props.commands(), props.index(), param.index, parsePathParamValue(event.currentTarget.value)))}
+              />
+            );
+          }}
         </For>
       </div>
       <button type="button" class="command-menu-button" title="Path command actions" onClick={() => setMenuOpen(!menuOpen())}>
@@ -1027,6 +1035,20 @@ function PathCommandRow(props: {
       </Show>
     </div>
   );
+}
+
+function parsePathParamValue(value: string): number {
+  const parsed = Number.parseFloat(value.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function pathParamInputWidth(value: string, paramName: string): string {
+  if (paramName === "large" || paramName === "sweep") {
+    return "20px";
+  }
+
+  const width = Math.min(58, Math.max(26, value.length * 6 + 12));
+  return `${width}px`;
 }
 
 function pathCommandDescription(command: string): string {
