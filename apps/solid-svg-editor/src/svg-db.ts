@@ -1,3 +1,22 @@
+import CircleElementIcon from "./svg-db-icons/element/circle.svg";
+import EllipseElementIcon from "./svg-db-icons/element/ellipse.svg";
+import GElementIcon from "./svg-db-icons/element/g.svg";
+import LineElementIcon from "./svg-db-icons/element/line.svg";
+import LinearGradientElementIcon from "./svg-db-icons/element/linearGradient.svg";
+import PathElementIcon from "./svg-db-icons/element/path.svg";
+import PolygonElementIcon from "./svg-db-icons/element/polygon.svg";
+import PolylineElementIcon from "./svg-db-icons/element/polyline.svg";
+import RadialGradientElementIcon from "./svg-db-icons/element/radialGradient.svg";
+import RectElementIcon from "./svg-db-icons/element/rect.svg";
+import StopElementIcon from "./svg-db-icons/element/stop.svg";
+import SvgElementIcon from "./svg-db-icons/element/svg.svg";
+import UnrecognizedElementIcon from "./svg-db-icons/element/unrecognized.svg";
+import UseElementIcon from "./svg-db-icons/element/use.svg";
+import CdataNodeIcon from "./svg-db-icons/element/xmlnodeCDATA.svg";
+import CommentNodeIcon from "./svg-db-icons/element/xmlnodeComment.svg";
+import TextNodeIcon from "./svg-db-icons/element/xmlnodeText.svg";
+import type { SvgIcon } from "./editor/svg-icon";
+
 export const recognizedElements = [
   "svg",
   "g",
@@ -15,6 +34,22 @@ export const recognizedElements = [
 ] as const;
 
 export type RecognizedElement = (typeof recognizedElements)[number];
+
+const elementIcons = {
+  svg: SvgElementIcon,
+  g: GElementIcon,
+  circle: CircleElementIcon,
+  ellipse: EllipseElementIcon,
+  rect: RectElementIcon,
+  path: PathElementIcon,
+  line: LineElementIcon,
+  polyline: PolylineElementIcon,
+  polygon: PolygonElementIcon,
+  stop: StopElementIcon,
+  linearGradient: LinearGradientElementIcon,
+  radialGradient: RadialGradientElementIcon,
+  use: UseElementIcon
+} as const satisfies Record<RecognizedElement, SvgIcon>;
 
 export type AttributeType =
   | "numeric"
@@ -320,21 +355,21 @@ export function getAttributeDefault(attributeName: string): string {
   return defaults[attributeName] ?? "";
 }
 
-export function iconForElement(name: string): string {
+export function iconForElement(name: string): SvgIcon {
   if (isRecognizedElement(name)) {
-    return `/assets/icons/element/${name}.svg`;
+    return elementIcons[name];
   }
 
-  return "/assets/icons/element/unrecognized.svg";
+  return UnrecognizedElementIcon;
 }
 
-export function iconForNode(kind: "text" | "comment" | "cdata"): string {
+export function iconForNode(kind: "text" | "comment" | "cdata"): SvgIcon {
   switch (kind) {
     case "text":
-      return "/assets/icons/element/xmlnodeText.svg";
+      return TextNodeIcon;
     case "comment":
-      return "/assets/icons/element/xmlnodeComment.svg";
+      return CommentNodeIcon;
     case "cdata":
-      return "/assets/icons/element/xmlnodeCDATA.svg";
+      return CdataNodeIcon;
   }
 }

@@ -1,0 +1,15 @@
+@font-face {
+  font-family: "GodSVG Sans";
+  src: url("/assets/fonts/NotoSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "GodSVG Mono";
+  src: url("/assets/fonts/JetBrainsMono-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}

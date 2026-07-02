@@ -18,7 +18,6 @@ const devServerPort = Number(process.env.APP_PORT ?? process.env.PORT ?? '3120')
 
 export default defineConfig({
   root: webAppRoot,
-  publicDir: resolve(apps, 'solid-svg-editor/public'),
   plugins: [
     vitePluginMarkdown({
       themes: ['css-variables', 'dark-plus']

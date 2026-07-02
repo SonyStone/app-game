@@ -1,14 +1,34 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, Show } from 'solid-js';
 
-import type { EditorTab, PanelId } from "../../editor/types";
+import type { SvgIcon } from '../../editor/svg-icon';
+import type { EditorTab, PanelId } from '../../editor/types';
+import { EditorIcon } from '../ui/EditorIcon';
+import CopyIcon from '../ui/icons/Copy.svg';
+import ExportIcon from '../ui/icons/Export.svg';
+import GodSvgIcon from '../ui/icons/GodSvg.svg';
+import HeartIcon from '../ui/icons/Heart.svg';
+import ImportIcon from '../ui/icons/Import.svg';
+import { MenuButton, MenuLink } from '../ui/MenuItem';
+import CreateTabIcon from './icons/CreateTab.svg';
+import DebugIcon from './icons/Debug.svg';
+import GearIcon from './icons/Gear.svg';
+import InspectorIcon from './icons/Inspector.svg';
+import LinkIcon from './icons/Link.svg';
+import MoreIcon from './icons/More.svg';
+import PreviewsIcon from './icons/Previews.svg';
+import RedoIcon from './icons/Redo.svg';
+import SaveIcon from './icons/Save.svg';
+import ShortcutPanelIcon from './icons/ShortcutPanel.svg';
+import TextFileIcon from './icons/TextFile.svg';
+import UndoIcon from './icons/Undo.svg';
 
 export function TopBar(props: {
-  readonly activeTab: () => EditorTab | undefined;
-  readonly tabs: () => readonly EditorTab[];
-  readonly activeTabId: () => string;
-  readonly fileSize: () => string;
-  readonly canUndo: () => boolean;
-  readonly canRedo: () => boolean;
+  readonly activeTab: EditorTab | undefined;
+  readonly tabs: readonly EditorTab[];
+  readonly activeTabId: string;
+  readonly fileSize: string;
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
   readonly setActiveTabId: (id: string) => void;
   readonly closeTab: (id: string) => void;
   readonly createNewTab: () => void;
@@ -27,46 +47,97 @@ export function TopBar(props: {
   const [moreOpen, setMoreOpen] = createSignal(false);
 
   return (
-    <header class="topbar">
-      <div class="global-actions">
-        <IconButton icon="/assets/icons/More.svg" label="More" onClick={() => setMoreOpen(!moreOpen())} active={moreOpen()} />
+    <header
+      class="topbar relative z-20 grid h-8 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 border-b-2 border-b-[#20263a] bg-[#0c0e18] px-2 py-0.5"
+      data-testid="topbar"
+    >
+      <div class="flex min-w-0 items-center gap-1" data-testid="topbar-left-actions">
+        <IconButton
+          icon={MoreIcon}
+          label="More"
+          testId="topbar-more-button"
+          onClick={() => setMoreOpen(!moreOpen())}
+          active={moreOpen()}
+        />
         <Show when={moreOpen()}>
-          <div class="popover top-popover">
-            <button type="button" onClick={props.openShortcuts}>
-              <img src="/assets/icons/ShortcutPanel.svg" alt="" /> Shortcuts
-            </button>
-            <button type="button" onClick={props.openAbout}>
-              <img src="/assets/logos/icon.svg" alt="" /> About
-            </button>
-            <button type="button" onClick={props.openDonate}>
-              <img src="/assets/icons/Heart.svg" alt="" /> Donate
-            </button>
-            <a href="https://github.com/MewPurPur/GodSVG" target="_blank" rel="noreferrer">
-              <img src="/assets/icons/Link.svg" alt="" /> Repository
-            </a>
-            <a href="https://godsvg.com" target="_blank" rel="noreferrer">
-              <img src="/assets/icons/Link.svg" alt="" /> Website
-            </a>
+          <div
+            class="popover top-popover absolute top-7.75 left-2 z-50 grid min-w-47.5 gap-0.5 rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--panel)_96%,#000)] p-1.25 shadow-[0_12px_28px_#0008]"
+            data-testid="topbar-more-popover"
+          >
+            <MenuButton
+              type="button"
+              icon={ShortcutPanelIcon}
+              data-testid="topbar-menu-shortcuts"
+              onClick={props.openShortcuts}
+            >
+              Shortcuts
+            </MenuButton>
+            <MenuButton type="button" icon={GodSvgIcon} data-testid="topbar-menu-about" onClick={props.openAbout}>
+              About
+            </MenuButton>
+            <MenuButton type="button" icon={HeartIcon} data-testid="topbar-menu-donate" onClick={props.openDonate}>
+              Donate
+            </MenuButton>
+            <MenuLink
+              icon={LinkIcon}
+              href="https://github.com/MewPurPur/GodSVG"
+              target="_blank"
+              rel="noreferrer"
+              data-testid="topbar-menu-repository"
+            >
+              Repository
+            </MenuLink>
+            <MenuLink
+              icon={LinkIcon}
+              href="https://godsvg.com"
+              target="_blank"
+              rel="noreferrer"
+              data-testid="topbar-menu-website"
+            >
+              Website
+            </MenuLink>
           </div>
         </Show>
-        <IconButton icon="/assets/icons/Gear.svg" label="Settings" onClick={props.openSettings} />
-        <IconButton icon="/assets/icons/Undo.svg" label="Undo" onClick={props.undo} disabled={!props.canUndo()} />
-        <IconButton icon="/assets/icons/Redo.svg" label="Redo" onClick={props.redo} disabled={!props.canRedo()} />
-        <button class="size-button" type="button" onClick={props.optimizeActive} title="Optimize">
-          {props.fileSize()}
+        <IconButton icon={GearIcon} label="Settings" testId="topbar-settings-button" onClick={props.openSettings} />
+        <IconButton
+          icon={UndoIcon}
+          label="Undo"
+          testId="topbar-undo-button"
+          onClick={props.undo}
+          disabled={!props.canUndo}
+        />
+        <IconButton
+          icon={RedoIcon}
+          label="Redo"
+          testId="topbar-redo-button"
+          onClick={props.redo}
+          disabled={!props.canRedo}
+        />
+        <button
+          class="size-button h-6.5 cursor-pointer rounded-[5px] border border-[color-mix(in_srgb,var(--warning)_50%,var(--soft-border))] bg-[var(--panel-2)] px-2 py-0 text-[var(--warning)]"
+          type="button"
+          onClick={props.optimizeActive}
+          title="Optimize"
+          data-testid="topbar-optimize-button"
+        >
+          {props.fileSize}
         </button>
       </div>
-      <div class="tabs-strip">
-        <For each={props.tabs()}>
+      <div
+        class="tabs-strip flex h-full min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]"
+        data-testid="tabs-strip"
+      >
+        <For each={props.tabs}>
           {(tab) => (
             <div
               role="tab"
               tabIndex={0}
-              class="tab-button"
-              classList={{ active: props.activeTabId() === tab.id, dirty: tab.dirty }}
+              class="tab-button relative flex h-6.5 max-w-52.5 cursor-pointer items-center gap-1.5 rounded-t-[5px] border border-[#22283d] bg-[#151928] py-0 pr-1.5 pl-2.5 text-[var(--muted)] [&.active]:border-[#415177] [&.active]:bg-[#24304d] [&.active]:text-[#f4f7ff] [&.dirty>span::after]:text-[var(--warning)] [&.dirty>span::after]:content-['*']"
+              classList={{ active: props.activeTabId === tab.id, dirty: tab.dirty }}
+              data-testid={`tab-${tab.id}`}
               onClick={() => props.setActiveTabId(tab.id)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
+                if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
                   props.setActiveTabId(tab.id);
                 }
@@ -77,10 +148,13 @@ export function TopBar(props: {
                 }
               }}
             >
-              <span>{tab.name}</span>
+              <span class="overflow-hidden text-ellipsis whitespace-nowrap" data-testid={`tab-label-${tab.id}`}>
+                {tab.name}
+              </span>
               <button
                 type="button"
-                class="tab-close"
+                class="tab-close grid h-4.5 w-4.5 cursor-pointer place-items-center rounded border-0 bg-transparent text-inherit hover:bg-[#33405f]"
+                data-testid={`tab-close-${tab.id}`}
                 onClick={(event) => {
                   event.stopPropagation();
                   props.closeTab(tab.id);
@@ -91,49 +165,73 @@ export function TopBar(props: {
             </div>
           )}
         </For>
-        <IconButton icon="/assets/icons/CreateTab.svg" label="New tab" onClick={props.createNewTab} />
+        <IconButton icon={CreateTabIcon} label="New tab" testId="new-tab-button" onClick={props.createNewTab} />
       </div>
-      <div class="file-actions">
-        <button class="toolbar-action" type="button" onClick={props.openImportDialog}>
-          <img src="/assets/icons/Import.svg" alt="" /> Import
+      <div class="flex min-w-0 items-center gap-1" data-testid="topbar-file-actions">
+        <button
+          class="toolbar-action inline-flex h-6.5 cursor-pointer items-center gap-1.5 rounded-[5px] border border-[color-mix(in_srgb,var(--accent)_44%,var(--soft-border))] bg-[var(--panel-2)] px-2.25 py-0 text-[var(--text)] hover:border-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,var(--panel-2))]"
+          type="button"
+          data-testid="import-button"
+          onClick={props.openImportDialog}
+        >
+          <EditorIcon icon={ImportIcon} /> Import
         </button>
-        <IconButton icon="/assets/icons/Save.svg" label="Save SVG" onClick={props.downloadSvg} />
-        <IconButton icon="/assets/icons/Copy.svg" label="Copy SVG text" onClick={props.copySvgText} />
-        <IconButton icon="/assets/icons/Export.svg" label="Export" onClick={props.openExport} />
+        <IconButton icon={SaveIcon} label="Save SVG" testId="save-svg-button" onClick={props.downloadSvg} />
+        <IconButton icon={CopyIcon} label="Copy SVG text" testId="copy-svg-button" onClick={props.copySvgText} />
+        <IconButton icon={ExportIcon} label="Export" testId="export-button" onClick={props.openExport} />
       </div>
     </header>
   );
 }
 
 export function IconButton(props: {
-  readonly icon: string;
+  readonly icon: SvgIcon;
   readonly label: string;
   readonly onClick: () => void;
   readonly disabled?: boolean;
   readonly active?: boolean;
+  readonly testId?: string;
 }) {
   return (
-    <button type="button" class="icon-button" classList={{ active: props.active }} title={props.label} aria-label={props.label} disabled={props.disabled} onClick={props.onClick}>
-      <img src={props.icon} alt="" />
+    <button
+      type="button"
+      class="icon-button inline-grid h-6.5 w-6.5 cursor-pointer place-items-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] p-0 hover:border-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_22%,var(--panel-2))] disabled:cursor-default disabled:opacity-[0.42] [&.active]:border-[var(--accent)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_22%,var(--panel-2))]"
+      classList={{ active: props.active }}
+      data-testid={props.testId}
+      title={props.label}
+      aria-label={props.label}
+      disabled={props.disabled}
+      onClick={props.onClick}
+    >
+      <EditorIcon icon={props.icon} />
     </button>
   );
 }
 
-export function PanelTabs(props: { readonly activePanel: () => PanelId; readonly setActivePanel: (panel: PanelId) => void }) {
+export function PanelTabs(props: {
+  readonly activePanel: PanelId;
+  readonly setActivePanel: (panel: PanelId) => void;
+}) {
   const panels = [
-    { id: "inspector", label: "Inspector", icon: "/assets/icons/Inspector.svg" },
-    { id: "code", label: "Code editor", icon: "/assets/icons/TextFile.svg" },
-    { id: "previews", label: "Previews", icon: "/assets/icons/Previews.svg" },
-    { id: "debug", label: "Debug", icon: "/assets/icons/Debug.svg" }
-  ] as const satisfies readonly { readonly id: PanelId; readonly label: string; readonly icon: string }[];
+    { id: 'inspector', label: 'Inspector', icon: InspectorIcon },
+    { id: 'code', label: 'Code editor', icon: TextFileIcon },
+    { id: 'previews', label: 'Previews', icon: PreviewsIcon },
+    { id: 'debug', label: 'Debug', icon: DebugIcon }
+  ] as const satisfies readonly { readonly id: PanelId; readonly label: string; readonly icon: SvgIcon }[];
 
   return (
-    <div class="panel-tabs">
+    <div class="panel-tabs flex min-w-0 items-center justify-center gap-1.5" data-testid="panel-tabs">
       <For each={panels}>
         {(panel) => (
-          <button type="button" classList={{ active: props.activePanel() === panel.id }} onClick={() => props.setActivePanel(panel.id)}>
-            <img src={panel.icon} alt="" />
-            <span>{panel.label}</span>
+          <button
+            type="button"
+            class="flex h-7 cursor-pointer items-center gap-1.25 rounded-t-[5px] border border-transparent bg-transparent px-1 py-0 text-[var(--muted)] [&.active]:border-[var(--soft-border)] [&.active]:bg-[var(--panel-2)] [&.active]:text-[var(--text)]"
+            classList={{ active: props.activePanel === panel.id }}
+            data-testid={`panel-tab-${panel.id}`}
+            onClick={() => props.setActivePanel(panel.id)}
+          >
+            <panel.icon />
+            <span class="whitespace-nowrap">{panel.label}</span>
           </button>
         )}
       </For>

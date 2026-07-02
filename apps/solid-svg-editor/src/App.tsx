@@ -1,9 +1,69 @@
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { cn } from '@app-game/utils/cn';
 
-import "./styles.css";
-import { humanFileSize, serializeRoot } from "./formatter";
-import { formatPathData, parsePathData, pathCommandLetters } from "./path-data";
-import { isValidChild, type RecognizedElement } from "./svg-db";
+import DuplicateIcon from './App.icons/Duplicate.svg';
+import MoveDownIcon from './App.icons/MoveDown.svg';
+import MoveUpIcon from './App.icons/MoveUp.svg';
+import { createInitialTab, defaultSettings } from './editor/defaults';
+import { downloadBlob } from './editor/export-utils';
+import './editor/fonts.module.css';
+import {
+  formatMatrixTransform,
+  identityMatrix,
+  invertMatrix,
+  matrixAround,
+  multiplyMatrices,
+  parseTransformList,
+  radiansToDegrees,
+  rectCenter,
+  rectFromPoints,
+  rotateMatrix,
+  scaleMatrix,
+  translateMatrix,
+  unionRects,
+  type Matrix2D,
+  type Point,
+  type Rect
+} from './editor/geometry';
+import { getHandles } from './editor/handles';
+import { decorativeIconProps } from './editor/svg-icon';
+import { clamp, flattenAllNodes, hasSvgDrag, insertPathCommand, optimizeNode } from './editor/tree-utils';
+import type {
+  ActiveDrag,
+  ActiveMarqueeDrag,
+  ActiveMoveSelectionDrag,
+  ActivePanDrag,
+  ActiveTransformBoxDrag,
+  ContextMenuState,
+  DragSelectionMode,
+  EditorTab,
+  HandleDescriptor,
+  HistoryState,
+  ModalId,
+  PanelId,
+  ThemePreset,
+  TransformBoxHandleDescriptor,
+  TransformBoxHandleKind,
+  ViewRect
+} from './editor/types';
+import { PanelTabs, TopBar } from './features/chrome/TopBar';
+import { InspectorPanel } from './features/inspector/InspectorPanel';
+import { AboutModal, DonateModal, ExportModal, SettingsModal, ShortcutsModal } from './features/modals/EditorModals';
+import { CodePanel, DebugPanel, PreviewsPanel } from './features/panels/SidePanels';
+import DeleteIcon from './features/ui/icons/Delete.svg';
+import ImportIcon from './features/ui/icons/Import.svg';
+import InsertAfterIcon from './features/ui/icons/InsertAfter.svg';
+import { MenuButton } from './features/ui/MenuItem';
+import {
+  GridLayer,
+  HandlesLayer,
+  SvgNodeView,
+  TransformBoxLayer,
+  ViewportToolbar
+} from './features/viewport/ViewportParts';
+import { humanFileSize, serializeRoot } from './formatter';
+import { formatPathData, parsePathData, pathCommandLetters } from './path-data';
+import { isValidChild, type RecognizedElement } from './svg-db';
 import {
   appendChild,
   cloneRoot,
@@ -26,35 +86,7 @@ import {
   type DropPosition,
   type SvgElementNode,
   type SvgNode
-} from "./svg-model";
-import { createInitialTab, defaultSettings } from "./editor/defaults";
-import { downloadBlob } from "./editor/export-utils";
-import {
-  formatMatrixTransform,
-  identityMatrix,
-  invertMatrix,
-  matrixAround,
-  multiplyMatrices,
-  parseTransformList,
-  radiansToDegrees,
-  rectCenter,
-  rectFromPoints,
-  rotateMatrix,
-  scaleMatrix,
-  translateMatrix,
-  unionRects,
-  type Matrix2D,
-  type Point,
-  type Rect
-} from "./editor/geometry";
-import { getHandles } from "./editor/handles";
-import { clamp, flattenAllNodes, hasSvgDrag, insertPathCommand, optimizeNode } from "./editor/tree-utils";
-import type { ActiveDrag, ActiveMarqueeDrag, ActiveMoveSelectionDrag, ActivePanDrag, ActiveTransformBoxDrag, ContextMenuState, DragSelectionMode, EditorTab, HandleDescriptor, HistoryState, ModalId, PanelId, TransformBoxHandleDescriptor, TransformBoxHandleKind, ViewRect } from "./editor/types";
-import { PanelTabs, TopBar } from "./features/chrome/TopBar";
-import { InspectorPanel } from "./features/inspector/InspectorPanel";
-import { CodePanel, DebugPanel, PreviewsPanel } from "./features/panels/SidePanels";
-import { AboutModal, DonateModal, ExportModal, SettingsModal, ShortcutsModal } from "./features/modals/EditorModals";
-import { GridLayer, HandlesLayer, SvgNodeView, TransformBoxLayer, ViewportToolbar } from "./features/viewport/ViewportParts";
+} from './svg-model';
 
 type SvgSize = ReturnType<typeof svgSize>;
 type TouchPoint = { readonly pointerId: number; readonly clientX: number; readonly clientY: number };
@@ -74,14 +106,33 @@ const emptySvgSize = {
   viewBox: [0, 0, 0, 0]
 } satisfies SvgSize;
 
+const appRootBaseClass = cn(
+  "app-root box-border grid h-dvh min-h-dvh w-full grid-rows-[32px_minmax(0,1fr)]",
+  "bg-[var(--base)] font-['GodSVG_Sans',system-ui,sans-serif] text-[var(--text)] [color-scheme:dark]",
+  '[--border:color-mix(in_srgb,var(--base)_52%,#8fa7d7)] [--danger:#ff8f9d] [--muted:#98a4b8] [--ok:#a3ffb0] [--panel-2:color-mix(in_srgb,var(--base)_70%,#28304a)] [--panel-3:color-mix(in_srgb,var(--base)_55%,#37415f)] [--panel:color-mix(in_srgb,var(--base)_82%,#273047)] [--soft-border:color-mix(in_srgb,var(--base)_72%,#8fa7d7)] [--text:#dfe7f7] [--warning:#ffd761]',
+  '[&_:where(*)]:box-border [&_img]:block [&:fullscreen]:h-screen [&:fullscreen]:min-h-screen [&:fullscreen]:w-screen [&:fullscreen]:bg-[var(--base)]'
+);
+
+const appRootThemeClass = {
+  dark: '',
+  light:
+    'theme-light [color-scheme:light] [--border:#7893b9] [--danger:#a91527] [--muted:#4f627d] [--ok:#247c31] [--panel-2:#cfdef1] [--panel-3:#b9cce5] [--panel:#dce9fb] [--soft-border:#a8bbd4] [--text:#10203a] [--warning:#8a6500]',
+  black:
+    'theme-black [--border:#46506f] [--panel-2:#10131f] [--panel-3:#171b2a] [--panel:#080a10] [--soft-border:#272e40]',
+  gray:
+    'theme-gray [--border:#6a6a6a] [--panel-2:#383838] [--panel-3:#454545] [--panel:#303030] [--soft-border:#555]'
+} as const satisfies Record<ThemePreset, string>;
+
 export function App() {
   const [settings, setSettings] = createSignal(defaultSettings());
   const [tabs, setTabs] = createSignal<readonly EditorTab[]>([createInitialTab()]);
-  const [activeTabId, setActiveTabId] = createSignal(tabs()[0]?.id ?? "");
-  const [activePanel, setActivePanel] = createSignal<PanelId>("inspector");
+  const [activeTabId, setActiveTabId] = createSignal(tabs()[0]?.id ?? '');
+  const [activePanel, setActivePanel] = createSignal<PanelId>('inspector');
   const [selectedIds, setSelectedIds] = createSignal<readonly string[]>([]);
   const [selectionPivot, setSelectionPivot] = createSignal<string | undefined>();
-  const [selectedPathCommand, setSelectedPathCommand] = createSignal<{ readonly nodeId: string; readonly index: number } | undefined>();
+  const [selectedPathCommand, setSelectedPathCommand] = createSignal<
+    { readonly nodeId: string; readonly index: number } | undefined
+  >();
   const [modal, setModal] = createSignal<ModalId>();
   const [contextMenu, setContextMenu] = createSignal<ContextMenuState | undefined>();
   const [leftWidth, setLeftWidth] = createSignal(408);
@@ -114,7 +165,14 @@ export function App() {
   let pendingPanFrame: number | undefined;
   let pendingPanMove: { readonly drag: ActivePanDrag; readonly clientX: number; readonly clientY: number } | undefined;
   let pendingHandleFrame: number | undefined;
-  let pendingHandleMove: { readonly pointerId: number; readonly handle: HandleDescriptor; readonly clientX: number; readonly clientY: number } | undefined;
+  let pendingHandleMove:
+    | {
+        readonly pointerId: number;
+        readonly handle: HandleDescriptor;
+        readonly clientX: number;
+        readonly clientY: number;
+      }
+    | undefined;
   let selectionBoxFrame: number | undefined;
 
   const activeTab = createMemo(() => {
@@ -123,19 +181,28 @@ export function App() {
   });
 
   const activeRoot = createMemo(() => activeTab()?.root ?? createDefaultRoot());
-  const activeCode = createMemo(() => activeTab()?.code ?? "");
-  const handleDragActive = createMemo(() => activeDrag()?.type === "handle" || activeDrag()?.type === "transform-box" || activeDrag()?.type === "move-selection");
+  const activeCode = createMemo(() => activeTab()?.code ?? '');
+  const handleDragActive = createMemo(
+    () =>
+      activeDrag()?.type === 'handle' ||
+      activeDrag()?.type === 'transform-box' ||
+      activeDrag()?.type === 'move-selection'
+  );
   const exportText = createMemo<string>((previous) => {
     if (handleDragActive() && previous) {
       return previous;
     }
 
     return serializeRoot(activeRoot(), settings().exportFormatter);
-  }, "");
+  }, '');
   const fileSize = createMemo(() => humanFileSize(new Blob([exportText()]).size));
   const canUndo = createMemo(() => getHistory(activeTabId()).past.length > 0 && historyVersion() >= 0);
   const canRedo = createMemo(() => getHistory(activeTabId()).future.length > 0 && historyVersion() >= 0);
-  const selectedNodes = createMemo(() => selectedIds().map((id) => findNode(activeRoot(), id)).filter((node): node is SvgNode => Boolean(node)));
+  const selectedNodes = createMemo(() =>
+    selectedIds()
+      .map((id) => findNode(activeRoot(), id))
+      .filter((node): node is SvgNode => Boolean(node))
+  );
   const elementCount = createMemo(() => flattenElements(activeRoot()).length);
   const rootSize = createMemo(() => svgSize(activeRoot()), emptySvgSize, { equals: sameSvgSize });
   const viewRect = createMemo((): ViewRect => {
@@ -150,11 +217,22 @@ export function App() {
     };
   });
   const handles = createMemo(() => (selectedIds().length <= 1 ? getHandles(activeRoot(), selectedIds()) : []));
-  const viewportIsMoving = createMemo(() => activeDrag()?.type === "pan" || activeDrag()?.type === "rotate-canvas" || activeDrag()?.type === "move-selection" || Boolean(activeTouchGesture()) || transientViewportPreview());
-  const useRasterPreview = createMemo(() => settings().viewRasterized || (settings().rasterPreviewDuringInteraction && viewportIsMoving()));
+  const viewportIsMoving = createMemo(
+    () =>
+      activeDrag()?.type === 'pan' ||
+      activeDrag()?.type === 'rotate-canvas' ||
+      activeDrag()?.type === 'move-selection' ||
+      Boolean(activeTouchGesture()) ||
+      transientViewportPreview()
+  );
+  const useRasterPreview = createMemo(
+    () => settings().viewRasterized || (settings().rasterPreviewDuringInteraction && viewportIsMoving())
+  );
   const gridViewRect = createMemo(() => createRotatedGridRect(viewRect(), viewportRotation()));
   const rasterPreviewRect = createMemo(() => createRasterPreviewRect(rootSize()));
-  const rasterPreviewText = createMemo(() => serializeRoot(createRasterPreviewRoot(activeRoot(), rasterPreviewRect()), settings().exportFormatter));
+  const rasterPreviewText = createMemo(() =>
+    serializeRoot(createRasterPreviewRoot(activeRoot(), rasterPreviewRect()), settings().exportFormatter)
+  );
   const viewportTransform = createMemo(() => {
     const center = cameraCenter();
     return `rotate(${radiansToDegrees(viewportRotation())} ${center.x} ${center.y})`;
@@ -162,21 +240,21 @@ export function App() {
   const themeVars = createMemo(() => {
     const current = settings();
     return {
-      "--base": current.baseColor,
-      "--accent": current.accentColor,
-      "--canvas": current.canvasColor,
-      "--grid": current.gridColor
+      '--base': current.baseColor,
+      '--accent': current.accentColor,
+      '--canvas': current.canvasColor,
+      '--grid': current.gridColor
     };
   });
 
   onMount(() => {
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("pointermove", onWindowPointerMove);
-    window.addEventListener("pointerup", onWindowPointerUp);
-    window.addEventListener("pointercancel", onWindowPointerCancel);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('pointermove', onWindowPointerMove);
+    window.addEventListener('pointerup', onWindowPointerUp);
+    window.addEventListener('pointercancel', onWindowPointerCancel);
 
     const syncFullscreen = () => setIsFullscreen(document.fullscreenElement === appRootRef);
-    document.addEventListener("fullscreenchange", syncFullscreen);
+    document.addEventListener('fullscreenchange', syncFullscreen);
     syncFullscreen();
 
     const resizeObserver = new ResizeObserver((entries) => {
@@ -188,18 +266,18 @@ export function App() {
 
       setViewportSize({ width: entry.contentRect.width, height: entry.contentRect.height });
     });
-    const viewport = document.querySelector(".viewport-shell");
+    const viewport = document.querySelector('.viewport-shell');
 
     if (viewport) {
       resizeObserver.observe(viewport);
     }
 
     onCleanup(() => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("pointermove", onWindowPointerMove);
-      window.removeEventListener("pointerup", onWindowPointerUp);
-      window.removeEventListener("pointercancel", onWindowPointerCancel);
-      document.removeEventListener("fullscreenchange", syncFullscreen);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('pointermove', onWindowPointerMove);
+      window.removeEventListener('pointerup', onWindowPointerUp);
+      window.removeEventListener('pointercancel', onWindowPointerCancel);
+      document.removeEventListener('fullscreenchange', syncFullscreen);
       resizeObserver.disconnect();
     });
   });
@@ -215,7 +293,7 @@ export function App() {
       return;
     }
 
-    const nextUrl = URL.createObjectURL(new Blob([rasterPreviewText()], { type: "image/svg+xml" }));
+    const nextUrl = URL.createObjectURL(new Blob([rasterPreviewText()], { type: 'image/svg+xml' }));
     const previousUrl = rasterPreviewObjectUrl;
     rasterPreviewObjectUrl = nextUrl;
     setRasterPreviewUrl(nextUrl);
@@ -364,8 +442,8 @@ export function App() {
 
     const rects: Rect[] = [];
 
-    for (const element of document.querySelectorAll<SVGGraphicsElement>("[data-node-id]")) {
-      const id = element.getAttribute("data-node-id");
+    for (const element of document.querySelectorAll<SVGGraphicsElement>('[data-node-id]')) {
+      const id = element.getAttribute('data-node-id');
 
       if (!id || !selected.has(id)) {
         continue;
@@ -445,7 +523,15 @@ export function App() {
     }
 
     pendingPanMove = undefined;
-    setCameraCenter(centerForClientPoint({ x: pending.drag.startWorldX, y: pending.drag.startWorldY }, pending.clientX, pending.clientY, zoom(), viewportRotation()));
+    setCameraCenter(
+      centerForClientPoint(
+        { x: pending.drag.startWorldX, y: pending.drag.startWorldY },
+        pending.clientX,
+        pending.clientY,
+        zoom(),
+        viewportRotation()
+      )
+    );
   }
 
   function scheduleHandleMove(pointerId: number, handle: HandleDescriptor, clientX: number, clientY: number): void {
@@ -471,7 +557,7 @@ export function App() {
     pendingHandleMove = undefined;
     const drag = activeDrag();
 
-    if (drag?.type !== "handle" || drag.pointerId !== pending.pointerId) {
+    if (drag?.type !== 'handle' || drag.pointerId !== pending.pointerId) {
       return;
     }
 
@@ -529,13 +615,25 @@ export function App() {
     return { x: transformed.x, y: transformed.y };
   }
 
-  function clientToSvgPointWithCamera(clientX: number, clientY: number, center: Point, z: number, rotation: number): Point {
+  function clientToSvgPointWithCamera(
+    clientX: number,
+    clientY: number,
+    center: Point,
+    z: number,
+    rotation: number
+  ): Point {
     const offset = clientOffsetFromViewportCenter(clientX, clientY, z);
     const worldOffset = rotatePoint(offset, -rotation);
     return { x: center.x + worldOffset.x, y: center.y + worldOffset.y };
   }
 
-  function centerForClientPoint(worldPoint: Point, clientX: number, clientY: number, z: number, rotation: number): Point {
+  function centerForClientPoint(
+    worldPoint: Point,
+    clientX: number,
+    clientY: number,
+    z: number,
+    rotation: number
+  ): Point {
     const offset = clientOffsetFromViewportCenter(clientX, clientY, z);
     const worldOffset = rotatePoint(offset, -rotation);
     return { x: worldPoint.x - worldOffset.x, y: worldPoint.y - worldOffset.y };
@@ -589,7 +687,7 @@ export function App() {
   }
 
   function onCanvasPointerDown(event: PointerEvent): void {
-    if (event.pointerType === "touch") {
+    if (event.pointerType === 'touch') {
       event.preventDefault();
       setContextMenu(undefined);
       beginTouchPoint(event);
@@ -618,10 +716,10 @@ export function App() {
     }
 
     const target = event.target as Element | null;
-    const nodeElement = target?.closest("[data-node-id]");
+    const nodeElement = target?.closest('[data-node-id]');
 
     if (nodeElement) {
-      const nodeId = nodeElement.getAttribute("data-node-id");
+      const nodeId = nodeElement.getAttribute('data-node-id');
 
       if (nodeId) {
         selectNode(nodeId, event);
@@ -638,7 +736,7 @@ export function App() {
   }
 
   function onWindowPointerMove(event: PointerEvent): void {
-    if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+    if (event.pointerType === 'touch' && touchPointers.has(event.pointerId)) {
       event.preventDefault();
       touchPointers.set(event.pointerId, pointerEventToTouchPoint(event));
       applyTouchGesture();
@@ -651,28 +749,28 @@ export function App() {
       return;
     }
 
-    if (drag.type === "pan") {
+    if (drag.type === 'pan') {
       schedulePanMove(drag, event.clientX, event.clientY);
       return;
     }
 
-    if (drag.type === "rotate-canvas") {
+    if (drag.type === 'rotate-canvas') {
       setViewportRotation(drag.startRotation + angleFromViewportCenter(event.clientX, event.clientY) - drag.startAngle);
       keepViewportPreviewAlive();
       return;
     }
 
-    if (drag.type === "marquee") {
+    if (drag.type === 'marquee') {
       updateMarqueeDrag(drag, event.clientX, event.clientY);
       return;
     }
 
-    if (drag.type === "transform-box") {
+    if (drag.type === 'transform-box') {
       updateTransformBoxDrag(drag, event.clientX, event.clientY);
       return;
     }
 
-    if (drag.type === "move-selection") {
+    if (drag.type === 'move-selection') {
       updateMoveSelectionDrag(drag, event.clientX, event.clientY);
       return;
     }
@@ -681,7 +779,7 @@ export function App() {
   }
 
   function onWindowPointerUp(event: PointerEvent): void {
-    if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+    if (event.pointerType === 'touch' && touchPointers.has(event.pointerId)) {
       finishTouchPoint(event.pointerId);
       return;
     }
@@ -689,7 +787,7 @@ export function App() {
     const drag = activeDrag();
 
     if (drag?.pointerId === event.pointerId) {
-      if (drag.type === "pan") {
+      if (drag.type === 'pan') {
         if (pendingPanFrame !== undefined) {
           window.cancelAnimationFrame(pendingPanFrame);
           pendingPanFrame = undefined;
@@ -697,7 +795,7 @@ export function App() {
 
         flushPendingPanMove();
         keepViewportPreviewAlive(100);
-      } else if (drag.type === "handle") {
+      } else if (drag.type === 'handle') {
         if (pendingHandleFrame !== undefined) {
           window.cancelAnimationFrame(pendingHandleFrame);
           pendingHandleFrame = undefined;
@@ -705,15 +803,15 @@ export function App() {
 
         flushPendingHandleMove();
         syncActiveRootCode();
-      } else if (drag.type === "marquee") {
+      } else if (drag.type === 'marquee') {
         finishMarqueeDrag(drag, event.clientX, event.clientY);
-      } else if (drag.type === "transform-box") {
+      } else if (drag.type === 'transform-box') {
         syncActiveRootCode();
-      } else if (drag.type === "move-selection") {
+      } else if (drag.type === 'move-selection') {
         if (drag.committed) {
           syncActiveRootCode();
         }
-      } else if (drag.type === "rotate-canvas") {
+      } else if (drag.type === 'rotate-canvas') {
         keepViewportPreviewAlive(100);
       }
 
@@ -722,7 +820,7 @@ export function App() {
   }
 
   function onWindowPointerCancel(event: PointerEvent): void {
-    if (event.pointerType === "touch" && touchPointers.has(event.pointerId)) {
+    if (event.pointerType === 'touch' && touchPointers.has(event.pointerId)) {
       finishTouchPoint(event.pointerId);
       return;
     }
@@ -740,7 +838,7 @@ export function App() {
   function startPanDrag(event: PointerEvent): void {
     const point = clientToSvgPoint(event.clientX, event.clientY);
     setActiveDrag({
-      type: "pan",
+      type: 'pan',
       pointerId: event.pointerId,
       startWorldX: point.x,
       startWorldY: point.y
@@ -749,7 +847,7 @@ export function App() {
 
   function startCanvasRotateDrag(event: PointerEvent): void {
     setActiveDrag({
-      type: "rotate-canvas",
+      type: 'rotate-canvas',
       pointerId: event.pointerId,
       startAngle: angleFromViewportCenter(event.clientX, event.clientY),
       startRotation: viewportRotation()
@@ -788,7 +886,7 @@ export function App() {
 
     const point = clientToSvgPoint(event.clientX, event.clientY, false);
     setActiveDrag({
-      type: "move-selection",
+      type: 'move-selection',
       pointerId: event.pointerId,
       selectedIds: selectedElementIds,
       startRoot: activeRoot(),
@@ -806,7 +904,7 @@ export function App() {
       return;
     }
 
-    const nextDrag = drag.committed ? drag : { ...drag, committed: true } satisfies ActiveMoveSelectionDrag;
+    const nextDrag = drag.committed ? drag : ({ ...drag, committed: true } satisfies ActiveMoveSelectionDrag);
 
     if (!drag.committed) {
       pushHistory();
@@ -822,7 +920,7 @@ export function App() {
     const rect = normalizeClientRect(event.clientX, event.clientY, event.clientX, event.clientY);
     setMarqueeRect(clientRectToOverlayRect(rect));
     setActiveDrag({
-      type: "marquee",
+      type: 'marquee',
       pointerId: event.pointerId,
       startClientX: event.clientX,
       startClientY: event.clientY,
@@ -837,7 +935,9 @@ export function App() {
   function updateMarqueeDrag(drag: ActiveMarqueeDrag, clientX: number, clientY: number): void {
     const next = { ...drag, currentClientX: clientX, currentClientY: clientY } satisfies ActiveMarqueeDrag;
     setActiveDrag(next);
-    setMarqueeRect(clientRectToOverlayRect(normalizeClientRect(drag.startClientX, drag.startClientY, clientX, clientY)));
+    setMarqueeRect(
+      clientRectToOverlayRect(normalizeClientRect(drag.startClientX, drag.startClientY, clientX, clientY))
+    );
   }
 
   function finishMarqueeDrag(drag: ActiveMarqueeDrag, clientX: number, clientY: number): void {
@@ -851,19 +951,19 @@ export function App() {
     const ids = idsInMarquee(normalizeClientRect(drag.startClientX, drag.startClientY, clientX, clientY), drag.mode);
     const nextIds = drag.additive ? mergeSelection(drag.initialSelection, ids) : ids;
     setSelectedIds(nextIds);
-    setSelectionPivot(nextIds.at(-1));
+    setSelectionPivot(nextIds[nextIds.length - 1]);
     setSelectedPathCommand(undefined);
   }
 
   function idsInMarquee(rect: Rect, mode: DragSelectionMode): readonly string[] {
     const ids: string[] = [];
 
-    for (const element of document.querySelectorAll<SVGGraphicsElement>("[data-node-id]")) {
+    for (const element of document.querySelectorAll<SVGGraphicsElement>('[data-node-id]')) {
       if (!isMarqueeSelectableElement(element)) {
         continue;
       }
 
-      const id = element.getAttribute("data-node-id");
+      const id = element.getAttribute('data-node-id');
 
       if (!id) {
         continue;
@@ -875,7 +975,8 @@ export function App() {
         continue;
       }
 
-      const selected = mode === "contain" ? clientRectContains(rect, elementRect) : clientRectsIntersect(rect, elementRect);
+      const selected =
+        mode === 'contain' ? clientRectContains(rect, elementRect) : clientRectsIntersect(rect, elementRect);
 
       if (selected) {
         ids.push(id);
@@ -886,7 +987,9 @@ export function App() {
   }
 
   function isMarqueeSelectableElement(element: Element): boolean {
-    return ["path", "circle", "ellipse", "rect", "line", "polygon", "polyline", "text", "image", "use"].includes(element.tagName.toLowerCase());
+    return ['path', 'circle', 'ellipse', 'rect', 'line', 'polygon', 'polyline', 'text', 'image', 'use'].includes(
+      element.tagName.toLowerCase()
+    );
   }
 
   function mergeSelection(initial: readonly string[], added: readonly string[]): readonly string[] {
@@ -908,7 +1011,7 @@ export function App() {
     const point = clientToSvgPoint(clientX, clientY, false);
     const center = rectCenter(drag.startBox);
 
-    if (drag.handleKind === "rotate") {
+    if (drag.handleKind === 'rotate') {
       const angle = Math.atan2(point.y - center.y, point.x - center.x);
       return matrixAround(center, rotateMatrix(angle - drag.startAngle));
     }
@@ -921,7 +1024,11 @@ export function App() {
     return matrixAround(anchor, scaleMatrix(scaleX, scaleY));
   }
 
-  function applyGlobalTransformToSelected(root: SvgElementNode, ids: readonly string[], transform: Matrix2D): SvgElementNode {
+  function applyGlobalTransformToSelected(
+    root: SvgElementNode,
+    ids: readonly string[],
+    transform: Matrix2D
+  ): SvgElementNode {
     const parentTransforms = createParentTransformMap(root);
     let next = root;
 
@@ -934,13 +1041,16 @@ export function App() {
       }
 
       next = updateNode(next, id, (node) => {
-        if (node.kind !== "element") {
+        if (node.kind !== 'element') {
           return node;
         }
 
-        const currentLocal = parseTransformList(getAttribute(node, "transform", true));
-        const nextLocal = multiplyMatrices(multiplyMatrices(multiplyMatrices(parentInverse, transform), parentTransform), currentLocal);
-        return setAttribute(node, "transform", formatMatrixTransform(nextLocal));
+        const currentLocal = parseTransformList(getAttribute(node, 'transform', true));
+        const nextLocal = multiplyMatrices(
+          multiplyMatrices(multiplyMatrices(parentInverse, transform), parentTransform),
+          currentLocal
+        );
+        return setAttribute(node, 'transform', formatMatrixTransform(nextLocal));
       });
     }
 
@@ -951,10 +1061,10 @@ export function App() {
     const transforms = new Map<string, Matrix2D>([[root.id, identityMatrix]]);
 
     function visit(node: SvgElementNode, inherited: Matrix2D): void {
-      const nodeTransform = multiplyMatrices(inherited, parseTransformList(getAttribute(node, "transform", true)));
+      const nodeTransform = multiplyMatrices(inherited, parseTransformList(getAttribute(node, 'transform', true)));
 
       for (const child of node.children) {
-        if (child.kind === "element") {
+        if (child.kind === 'element') {
           transforms.set(child.id, nodeTransform);
           visit(child, nodeTransform);
         }
@@ -972,11 +1082,11 @@ export function App() {
     function visit(node: SvgNode, hasSelectedAncestor: boolean): void {
       const isSelected = selected.has(node.id);
 
-      if (node.kind === "element" && node.id !== root.id && isSelected && !hasSelectedAncestor) {
+      if (node.kind === 'element' && node.id !== root.id && isSelected && !hasSelectedAncestor) {
         result.push(node.id);
       }
 
-      if (node.kind !== "element") {
+      if (node.kind !== 'element') {
         return;
       }
 
@@ -1036,7 +1146,9 @@ export function App() {
       return;
     }
 
-    const points = gesture.pointerIds.map((pointerId) => touchPointers.get(pointerId)).filter((point): point is TouchPoint => Boolean(point));
+    const points = gesture.pointerIds
+      .map((pointerId) => touchPointers.get(pointerId))
+      .filter((point): point is TouchPoint => Boolean(point));
 
     if (points.length === 0) {
       setActiveTouchGesture(undefined);
@@ -1055,7 +1167,15 @@ export function App() {
 
     setZoom(nextZoom);
     setViewportRotation(nextRotation);
-    setCameraCenter(centerForClientPoint({ x: gesture.startWorldX, y: gesture.startWorldY }, centroid.x, centroid.y, nextZoom, nextRotation));
+    setCameraCenter(
+      centerForClientPoint(
+        { x: gesture.startWorldX, y: gesture.startWorldY },
+        centroid.x,
+        centroid.y,
+        nextZoom,
+        nextRotation
+      )
+    );
     keepViewportPreviewAlive();
   }
 
@@ -1064,7 +1184,7 @@ export function App() {
     const existing = selectedIds();
 
     if (event?.shiftKey && selectionPivot()) {
-      const pivotIndex = flattened.indexOf(selectionPivot() ?? "");
+      const pivotIndex = flattened.indexOf(selectionPivot() ?? '');
       const currentIndex = flattened.indexOf(nodeId);
 
       if (pivotIndex !== -1 && currentIndex !== -1) {
@@ -1148,7 +1268,7 @@ export function App() {
 
     mutateRoot((root) => moveNodesTo(root, ids, targetId, position));
     setSelectedIds(ids);
-    setSelectionPivot(ids.at(-1));
+    setSelectionPivot(ids[ids.length - 1]);
     setSelectedPathCommand(undefined);
   }
 
@@ -1207,7 +1327,7 @@ export function App() {
   }
 
   function addElement(name: RecognizedElement | string): void {
-    const selectedElement = selectedNodes().find((node): node is SvgElementNode => node.kind === "element");
+    const selectedElement = selectedNodes().find((node): node is SvgElementNode => node.kind === 'element');
     const root = activeRoot();
     const parent = selectedElement && isValidChild(selectedElement.name, name) ? selectedElement : root;
     const child = createDefaultElement(name);
@@ -1215,9 +1335,10 @@ export function App() {
     setSelectedIds([child.id]);
   }
 
-  function addTextNode(kind: "text" | "comment" | "cdata"): void {
-    const selectedElement = selectedNodes().find((node): node is SvgElementNode => node.kind === "element") ?? activeRoot();
-    const text = kind === "comment" ? " Comment " : "";
+  function addTextNode(kind: 'text' | 'comment' | 'cdata'): void {
+    const selectedElement =
+      selectedNodes().find((node): node is SvgElementNode => node.kind === 'element') ?? activeRoot();
+    const text = kind === 'comment' ? ' Comment ' : '';
     const child = { id: createId(), kind, text } satisfies SvgNode;
     mutateRoot((item) => appendChild(item, selectedElement.id, child));
     setSelectedIds([child.id]);
@@ -1226,7 +1347,7 @@ export function App() {
   function updateElementAttribute(nodeId: string, name: string, value: string): void {
     mutateRoot((root) =>
       updateNode(root, nodeId, (node) => {
-        if (node.kind !== "element") {
+        if (node.kind !== 'element') {
           return node;
         }
 
@@ -1238,7 +1359,7 @@ export function App() {
   function removeElementAttribute(nodeId: string, name: string): void {
     mutateRoot((root) =>
       updateNode(root, nodeId, (node) => {
-        if (node.kind !== "element") {
+        if (node.kind !== 'element') {
           return node;
         }
 
@@ -1250,7 +1371,7 @@ export function App() {
   function updateBasicNodeText(nodeId: string, text: string): void {
     mutateRoot((root) =>
       updateNode(root, nodeId, (node) => {
-        if (node.kind === "text" || node.kind === "comment" || node.kind === "cdata") {
+        if (node.kind === 'text' || node.kind === 'comment' || node.kind === 'cdata') {
           return { ...node, text };
         }
 
@@ -1290,7 +1411,7 @@ export function App() {
     const root = createDefaultRoot();
     const tab = {
       id: createId(),
-      name: "Untitled.svg",
+      name: 'Untitled.svg',
       root,
       code: serializeRoot(root, settings().formatter),
       dirty: false,
@@ -1322,7 +1443,7 @@ export function App() {
   }
 
   function downloadSvg(): void {
-    downloadBlob(exportText(), activeTab()?.name ?? "image.svg", "image/svg+xml");
+    downloadBlob(exportText(), activeTab()?.name ?? 'image.svg', 'image/svg+xml');
     updateActiveTab((tab) => ({ ...tab, dirty: false }));
   }
 
@@ -1341,7 +1462,7 @@ export function App() {
   async function onImportFile(event: Event): Promise<void> {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
-    input.value = "";
+    input.value = '';
 
     await importSvgFile(file);
   }
@@ -1360,7 +1481,7 @@ export function App() {
 
     if (!parsed.ok) {
       updateActiveTab((tab) => ({ ...tab, code: text, parseError: parsed.message }));
-      setActivePanel("code");
+      setActivePanel('code');
       return;
     }
 
@@ -1380,24 +1501,26 @@ export function App() {
   }
 
   async function importDroppedSvg(dataTransfer: DataTransfer): Promise<void> {
-    const file = Array.from(dataTransfer.files).find((item) => item.type === "image/svg+xml" || item.name.toLowerCase().endsWith(".svg"));
+    const file = Array.from(dataTransfer.files).find(
+      (item) => item.type === 'image/svg+xml' || item.name.toLowerCase().endsWith('.svg')
+    );
 
     if (file) {
       await importSvgFile(file);
       return;
     }
 
-    const text = dataTransfer.getData("text/plain").trim();
+    const text = dataTransfer.getData('text/plain').trim();
 
-    if (text.startsWith("<svg") || text.includes("<svg")) {
-      importSvgText(text, "Dropped.svg");
+    if (text.startsWith('<svg') || text.includes('<svg')) {
+      importSvgText(text, 'Dropped.svg');
     }
   }
 
   function onReferenceFile(event: Event): void {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
-    input.value = "";
+    input.value = '';
 
     if (!file) {
       return;
@@ -1418,73 +1541,73 @@ export function App() {
     const editing = target?.matches("input, textarea, select, [contenteditable='true']") ?? false;
     const control = event.ctrlKey || event.metaKey;
 
-    if (control && event.key.toLowerCase() === "z" && event.shiftKey) {
+    if (control && event.key.toLowerCase() === 'z' && event.shiftKey) {
       event.preventDefault();
       redo();
       return;
     }
 
-    if (control && event.key.toLowerCase() === "z") {
+    if (control && event.key.toLowerCase() === 'z') {
       event.preventDefault();
       undo();
       return;
     }
 
-    if (control && event.key.toLowerCase() === "s") {
+    if (control && event.key.toLowerCase() === 's') {
       event.preventDefault();
       downloadSvg();
       return;
     }
 
-    if (control && event.key.toLowerCase() === "o") {
+    if (control && event.key.toLowerCase() === 'o') {
       event.preventDefault();
       openImportDialog();
       return;
     }
 
-    if (control && event.key.toLowerCase() === "e") {
+    if (control && event.key.toLowerCase() === 'e') {
       event.preventDefault();
-      setModal("export");
+      setModal('export');
       return;
     }
 
-    if (control && event.key.toLowerCase() === "n") {
+    if (control && event.key.toLowerCase() === 'n') {
       event.preventDefault();
       createNewTab();
       return;
     }
 
-    if (control && event.key === ",") {
+    if (control && event.key === ',') {
       event.preventDefault();
-      setModal("settings");
+      setModal('settings');
       return;
     }
 
-    if (control && event.key === "=") {
+    if (control && event.key === '=') {
       event.preventDefault();
       zoomBy(Math.SQRT2);
       return;
     }
 
-    if (control && event.key === "-") {
+    if (control && event.key === '-') {
       event.preventDefault();
       zoomBy(1 / Math.SQRT2);
       return;
     }
 
-    if (control && event.key === "0") {
+    if (control && event.key === '0') {
       event.preventDefault();
       centerFrame();
       return;
     }
 
-    if (control && event.key.toLowerCase() === "g") {
+    if (control && event.key.toLowerCase() === 'g') {
       event.preventDefault();
       setSettings((current) => ({ ...current, showGrid: !current.showGrid }));
       return;
     }
 
-    if (control && event.key.toLowerCase() === "h") {
+    if (control && event.key.toLowerCase() === 'h') {
       event.preventDefault();
       setSettings((current) => ({ ...current, showHandles: !current.showHandles }));
       return;
@@ -1494,31 +1617,31 @@ export function App() {
       return;
     }
 
-    if (control && event.key.toLowerCase() === "a") {
+    if (control && event.key.toLowerCase() === 'a') {
       event.preventDefault();
       selectAll();
       return;
     }
 
-    if (control && event.key.toLowerCase() === "d") {
+    if (control && event.key.toLowerCase() === 'd') {
       event.preventDefault();
       duplicateSelected();
       return;
     }
 
-    if (event.key === "Delete" || event.key === "Backspace") {
+    if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault();
       deleteSelected();
       return;
     }
 
-    if (event.altKey && event.key === "ArrowUp") {
+    if (event.altKey && event.key === 'ArrowUp') {
       event.preventDefault();
       moveSelected(-1);
       return;
     }
 
-    if (event.altKey && event.key === "ArrowDown") {
+    if (event.altKey && event.key === 'ArrowDown') {
       event.preventDefault();
       moveSelected(1);
       return;
@@ -1539,13 +1662,13 @@ export function App() {
     const command = absolute ? key.toUpperCase() : key.toLowerCase();
     mutateRoot((root) =>
       updateNode(root, selected.nodeId, (node) => {
-        if (node.kind !== "element") {
+        if (node.kind !== 'element') {
           return node;
         }
 
-        const commands = parsePathData(getAttribute(node, "d", true));
+        const commands = parsePathData(getAttribute(node, 'd', true));
         const nextCommands = insertPathCommand(commands, selected.index, command);
-        return setAttribute(node, "d", formatPathData(nextCommands));
+        return setAttribute(node, 'd', formatPathData(nextCommands));
       })
     );
     setSelectedPathCommand({ nodeId: selected.nodeId, index: selected.index + 1 });
@@ -1568,7 +1691,7 @@ export function App() {
     void action.catch(() => setIsFullscreen(document.fullscreenElement === target));
   }
 
-  function runContextAction(action: "duplicate" | "delete" | "move-up" | "move-down" | "insert-after"): void {
+  function runContextAction(action: 'duplicate' | 'delete' | 'move-up' | 'move-down' | 'insert-after'): void {
     const menu = contextMenu();
 
     if (!menu) {
@@ -1577,25 +1700,25 @@ export function App() {
 
     setContextMenu(undefined);
 
-    if (action === "duplicate") {
+    if (action === 'duplicate') {
       duplicateSelected();
-    } else if (action === "delete") {
+    } else if (action === 'delete') {
       deleteSelected();
-    } else if (action === "move-up") {
+    } else if (action === 'move-up') {
       moveSelected(-1);
-    } else if (action === "move-down") {
+    } else if (action === 'move-down') {
       moveSelected(1);
     } else {
-      mutateRoot((root) => insertSibling(root, menu.nodeId, createDefaultElement("g"), true));
+      mutateRoot((root) => insertSibling(root, menu.nodeId, createDefaultElement('g'), true));
     }
   }
 
   return (
     <div
       ref={(element) => (appRootRef = element)}
-      class="app-root"
-      classList={{ "theme-light": settings().themePreset === "light", "theme-black": settings().themePreset === "black", "theme-gray": settings().themePreset === "gray", "svg-drop-active": isSvgDropActive() }}
+      class={cn(appRootBaseClass, appRootThemeClass[settings().themePreset], isSvgDropActive() && 'svg-drop-active')}
       style={themeVars()}
+      data-testid="solid-svg-editor"
       onDragEnter={(event) => {
         if (hasSvgDrag(event)) {
           event.preventDefault();
@@ -1608,7 +1731,7 @@ export function App() {
           const transfer = event.dataTransfer;
 
           if (transfer) {
-            transfer.dropEffect = "copy";
+            transfer.dropEffect = 'copy';
           }
 
           setIsSvgDropActive(true);
@@ -1630,16 +1753,34 @@ export function App() {
         }
       }}
     >
-      <input ref={importInputRef} class="hidden-input" type="file" name="svg-import" aria-label="Import SVG" accept=".svg,image/svg+xml,text/xml" onChange={(event) => void onImportFile(event)} />
-      <input ref={referenceInputRef} class="hidden-input" type="file" name="reference-import" aria-label="Import reference image" accept="image/*" onChange={onReferenceFile} />
+      <input
+        ref={importInputRef}
+        class="hidden-input pointer-events-none absolute h-px w-px opacity-0"
+        type="file"
+        name="svg-import"
+        aria-label="Import SVG"
+        data-testid="svg-import-input"
+        accept=".svg,image/svg+xml,text/xml"
+        onChange={(event) => void onImportFile(event)}
+      />
+      <input
+        ref={referenceInputRef}
+        class="hidden-input pointer-events-none absolute h-px w-px opacity-0"
+        type="file"
+        name="reference-import"
+        aria-label="Import reference image"
+        data-testid="reference-import-input"
+        accept="image/*"
+        onChange={onReferenceFile}
+      />
       <TopBar
-        activeTab={activeTab}
-        tabs={tabs}
-        fileSize={fileSize}
-        canUndo={canUndo}
-        canRedo={canRedo}
+        activeTab={activeTab()}
+        tabs={tabs()}
+        fileSize={fileSize()}
+        canUndo={canUndo()}
+        canRedo={canRedo()}
         setActiveTabId={setActiveTabId}
-        activeTabId={activeTabId}
+        activeTabId={activeTabId()}
         closeTab={closeTab}
         createNewTab={createNewTab}
         openImportDialog={openImportDialog}
@@ -1648,21 +1789,28 @@ export function App() {
         undo={undo}
         redo={redo}
         optimizeActive={optimizeActive}
-        openExport={() => setModal("export")}
-        openSettings={() => setModal("settings")}
-        openAbout={() => setModal("about")}
-        openDonate={() => setModal("donate")}
-        openShortcuts={() => setModal("shortcuts")}
+        openExport={() => setModal('export')}
+        openSettings={() => setModal('settings')}
+        openAbout={() => setModal('about')}
+        openDonate={() => setModal('donate')}
+        openShortcuts={() => setModal('shortcuts')}
       />
 
-      <div class="workspace">
-        <aside class="left-workbench" style={{ width: `${leftWidth()}px` }}>
-          <PanelTabs activePanel={activePanel} setActivePanel={setActivePanel} />
-          <Show when={activePanel() === "inspector"}>
+      <div
+          class="workspace grid min-h-0 grid-cols-[auto_8px_minmax(0,1fr)] bg-[var(--base)] [@media(max-width:820px)]:grid-rows-[minmax(320px,44%)_8px_minmax(0,1fr)]"
+        data-testid="editor-workspace"
+      >
+        <aside
+            class="left-workbench grid min-h-0 max-w-180 min-w-80 grid-rows-[31px_minmax(0,1fr)] py-1.5 pr-0 pl-1.5 [@media(max-width:820px)]:!w-full"
+          style={{ width: `${leftWidth()}px` }}
+          data-testid="left-workbench"
+        >
+          <PanelTabs activePanel={activePanel()} setActivePanel={setActivePanel} />
+          <Show when={activePanel() === 'inspector'}>
             <InspectorPanel
-              root={activeRoot}
-              selectedIds={selectedIds}
-              selectedPathCommand={selectedPathCommand}
+              root={activeRoot()}
+              selectedIds={selectedIds()}
+              selectedPathCommand={selectedPathCommand()}
               setSelectedPathCommand={setSelectedPathCommand}
               selectNode={selectNode}
               clearSelection={clearSelection}
@@ -1675,27 +1823,33 @@ export function App() {
               reorderNodes={reorderInspectorNodes}
             />
           </Show>
-          <Show when={activePanel() === "code"}>
+          <Show when={activePanel() === 'code'}>
             <CodePanel
-              code={activeCode}
-              parseError={() => activeTab()?.parseError}
+              code={activeCode()}
+              parseError={activeTab()?.parseError}
               applyCode={applyCode}
               reformatPretty={() => reformatActiveCode(settings().formatter)}
               reformatCompact={() => reformatActiveCode(settings().exportFormatter)}
               copySvgText={() => void copySvgText()}
             />
           </Show>
-          <Show when={activePanel() === "previews"}>
-            <PreviewsPanel root={activeRoot} selectedNodes={selectedNodes} exportText={exportText} />
+          <Show when={activePanel() === 'previews'}>
+            <PreviewsPanel root={activeRoot()} selectedNodes={selectedNodes()} exportText={exportText()} />
           </Show>
-          <Show when={activePanel() === "debug"}>
-            <DebugPanel root={activeRoot} selectedNodes={selectedNodes} elementCount={elementCount} exportText={exportText} />
+          <Show when={activePanel() === 'debug'}>
+            <DebugPanel
+              root={activeRoot()}
+              selectedNodes={selectedNodes()}
+              elementCount={elementCount()}
+              exportText={exportText()}
+            />
           </Show>
         </aside>
         <button
-          class="splitter"
+            class="splitter w-2 cursor-col-resize border-0 bg-transparent hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)] [@media(max-width:820px)]:h-2 [@media(max-width:820px)]:cursor-row-resize"
           type="button"
           aria-label="Resize sidebar"
+          data-testid="workspace-splitter"
           onPointerDown={(event) => {
             leftResizeStart = { x: event.clientX, width: leftWidth() };
             setPointerCaptureSafely(event.currentTarget, event.pointerId);
@@ -1711,22 +1865,25 @@ export function App() {
             leftResizeStart = undefined;
           }}
         />
-        <main class="viewport-column">
+        <main
+            class="viewport-column grid min-h-0 min-w-0 grid-rows-[35px_minmax(0,1fr)] py-1.5 pr-1.5 pl-0"
+          data-testid="viewport-column"
+        >
           <ViewportToolbar
-            settings={settings}
+            settings={settings()}
             setSettings={setSettings}
-            zoom={zoom}
+            zoom={zoom()}
             zoomBy={zoomBy}
             centerFrame={centerFrame}
-            isFullscreen={isFullscreen}
+            isFullscreen={isFullscreen()}
             toggleFullscreen={toggleFullscreen}
             openReferenceDialog={openReferenceDialog}
-            hasReference={() => Boolean(referenceImage())}
-            showReference={showReference}
+            hasReference={Boolean(referenceImage())}
+            showReference={showReference()}
             setShowReference={setShowReference}
-            overlayReference={overlayReference}
+            overlayReference={overlayReference()}
             setOverlayReference={setOverlayReference}
-            dragSelectionMode={() => settings().dragSelectionMode}
+            dragSelectionMode={settings().dragSelectionMode}
             setDragSelectionMode={(mode) => setSettings((current) => ({ ...current, dragSelectionMode: mode }))}
             clearReference={() => {
               const current = referenceImage();
@@ -1738,11 +1895,12 @@ export function App() {
               setReferenceImage(undefined);
             }}
           />
-          <div class="viewport-shell">
+          <div class="viewport-shell relative min-h-0 min-w-0 overflow-hidden rounded-md border-2 border-[#2b324c] bg-[var(--canvas)]" data-testid="viewport-shell">
             <svg
               ref={setCanvasSvg}
-              class="viewport-svg"
+              class="viewport-svg block h-full w-full touch-none select-none"
               viewBox={`${viewRect().x} ${viewRect().y} ${viewRect().width} ${viewRect().height}`}
+              data-testid="viewport-svg"
               onWheel={onCanvasWheel}
               onPointerDown={onCanvasPointerDown}
               onContextMenu={(event) => event.preventDefault()}
@@ -1754,10 +1912,22 @@ export function App() {
                   <rect x="48" y="48" width="48" height="48" fill="#d4d7df" opacity="0.23" />
                 </pattern>
               </defs>
-              <rect x={viewRect().x} y={viewRect().y} width={viewRect().width} height={viewRect().height} fill="var(--canvas)" />
-              <g transform={viewportTransform()}>
+              <rect
+                x={viewRect().x}
+                y={viewRect().y}
+                width={viewRect().width}
+                height={viewRect().height}
+                fill="var(--canvas)"
+                data-testid="viewport-background"
+              />
+              <g transform={viewportTransform()} data-testid="viewport-content">
                 <Show when={settings().showGrid}>
-                  <GridLayer viewRect={gridViewRect} zoom={zoom} color={() => settings().gridColor} moving={viewportIsMoving} />
+                  <GridLayer
+                    viewRect={gridViewRect()}
+                    zoom={zoom()}
+                    color={settings().gridColor}
+                    moving={viewportIsMoving()}
+                  />
                 </Show>
                 <rect
                   x={rootSize().viewBox[0]}
@@ -1767,49 +1937,79 @@ export function App() {
                   fill="url(#checkerboard)"
                   stroke="#7d8596"
                   stroke-width={1 / Math.max(zoom(), 0.001)}
+                  data-testid="viewport-page"
                 />
                 <Show when={referenceImage() && showReference() && !overlayReference()}>
-                  <image href={referenceImage()} x={rootSize().viewBox[0]} y={rootSize().viewBox[1]} width={rootSize().viewBox[2]} height={rootSize().viewBox[3]} opacity="0.62" preserveAspectRatio="xMidYMid meet" />
+                  <image
+                    href={referenceImage()}
+                    x={rootSize().viewBox[0]}
+                    y={rootSize().viewBox[1]}
+                    width={rootSize().viewBox[2]}
+                    height={rootSize().viewBox[3]}
+                    opacity="0.62"
+                    preserveAspectRatio="xMidYMid meet"
+                    data-testid="reference-image-underlay"
+                  />
                 </Show>
                 <Show
                   when={useRasterPreview() ? rasterPreviewUrl() : undefined}
                   fallback={
-                    <g classList={{ rasterized: settings().viewRasterized }}>
-                      <For each={activeRoot().children}>{(node) => <SvgNodeView node={node} selectedIds={selectedIds} onNodePointerDown={onNodePointerDown} openContextMenu={openContextMenu} />}</For>
+                    <g classList={{ rasterized: settings().viewRasterized }} data-testid="viewport-vector-layer">
+                      <For each={activeRoot().children}>
+                        {(node) => (
+                          <SvgNodeView
+                            node={node}
+                            selectedIds={selectedIds()}
+                            onNodePointerDown={onNodePointerDown}
+                            openContextMenu={openContextMenu}
+                          />
+                        )}
+                      </For>
                     </g>
                   }
                 >
                   {(href) => (
                     <image
-                      class="viewport-raster-preview"
+                      class="viewport-raster-preview pointer-events-none [image-rendering:auto]"
                       href={href()}
                       x={rasterPreviewRect().x}
                       y={rasterPreviewRect().y}
                       width={rasterPreviewRect().width}
                       height={rasterPreviewRect().height}
                       preserveAspectRatio="xMidYMid meet"
+                      data-testid="viewport-raster-preview"
                     />
                   )}
                 </Show>
                 <Show when={referenceImage() && showReference() && overlayReference()}>
-                  <image href={referenceImage()} x={rootSize().viewBox[0]} y={rootSize().viewBox[1]} width={rootSize().viewBox[2]} height={rootSize().viewBox[3]} opacity="0.46" preserveAspectRatio="xMidYMid meet" />
+                  <image
+                    href={referenceImage()}
+                    x={rootSize().viewBox[0]}
+                    y={rootSize().viewBox[1]}
+                    width={rootSize().viewBox[2]}
+                    height={rootSize().viewBox[3]}
+                    opacity="0.46"
+                    preserveAspectRatio="xMidYMid meet"
+                    data-testid="reference-image-overlay"
+                  />
                 </Show>
                 <Show when={settings().showHandles}>
-                  <HandlesLayer handles={handles} zoom={zoom} onHandlePointerDown={startHandleDrag} />
-                  <TransformBoxLayer box={selectionBox} zoom={zoom} onHandlePointerDown={startTransformBoxDrag} />
+                  <HandlesLayer handles={handles()} zoom={zoom()} onHandlePointerDown={startHandleDrag} />
+                  <TransformBoxLayer box={selectionBox()} zoom={zoom()} onHandlePointerDown={startTransformBoxDrag} />
                 </Show>
               </g>
             </svg>
             <Show when={marqueeRect()}>
               {(rect) => (
                 <div
-                  class="selection-marquee"
+                  class="selection-marquee pointer-events-none absolute z-4 border border-[color-mix(in_srgb,var(--accent)_82%,#ffffff)] bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] shadow-[0_0_0_1px_#0008]"
                   style={{
                     left: `${rect().x}px`,
                     top: `${rect().y}px`,
                     width: `${rect().width}px`,
                     height: `${rect().height}px`
                   }}
+                  data-testid="selection-marquee"
                 />
               )}
             </Show>
@@ -1819,44 +2019,56 @@ export function App() {
 
       <Show when={contextMenu()}>
         {(menu) => (
-          <div class="context-menu" style={{ left: `${menu().x}px`, top: `${menu().y}px` }}>
-            <button type="button" onClick={() => runContextAction("duplicate")}>
-              <img src="/assets/icons/Duplicate.svg" alt="" /> Duplicate
-            </button>
-            <button type="button" onClick={() => runContextAction("move-up")}>
-              <img src="/assets/icons/MoveUp.svg" alt="" /> Move up
-            </button>
-            <button type="button" onClick={() => runContextAction("move-down")}>
-              <img src="/assets/icons/MoveDown.svg" alt="" /> Move down
-            </button>
-            <button type="button" onClick={() => runContextAction("insert-after")}>
-              <img src="/assets/icons/InsertAfter.svg" alt="" /> Insert group after
-            </button>
-            <button type="button" onClick={() => runContextAction("delete")}>
-              <img src="/assets/icons/Delete.svg" alt="" /> Delete
-            </button>
+          <div
+            class="popover context-menu absolute z-50 grid min-w-47.5 gap-0.5 rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--panel)_96%,#000)] p-1.25 shadow-[0_12px_28px_#0008]"
+            style={{ left: `${menu().x}px`, top: `${menu().y}px` }}
+            data-testid="context-menu"
+          >
+            <MenuButton type="button" icon={DuplicateIcon} data-testid="context-menu-duplicate" onClick={() => runContextAction('duplicate')}>
+              Duplicate
+            </MenuButton>
+            <MenuButton type="button" icon={MoveUpIcon} data-testid="context-menu-move-up" onClick={() => runContextAction('move-up')}>
+              Move up
+            </MenuButton>
+            <MenuButton type="button" icon={MoveDownIcon} data-testid="context-menu-move-down" onClick={() => runContextAction('move-down')}>
+              Move down
+            </MenuButton>
+            <MenuButton type="button" icon={InsertAfterIcon} data-testid="context-menu-insert-after" onClick={() => runContextAction('insert-after')}>
+              Insert group after
+            </MenuButton>
+            <MenuButton type="button" icon={DeleteIcon} data-testid="context-menu-delete" onClick={() => runContextAction('delete')}>
+              Delete
+            </MenuButton>
           </div>
         )}
       </Show>
 
-      <Show when={modal() === "settings"}>
-        <SettingsModal settings={settings} setSettings={setSettings} close={() => setModal(undefined)} reformatActiveCode={reformatActiveCode} />
+      <Show when={modal() === 'settings'}>
+        <SettingsModal
+          settings={settings()}
+          setSettings={setSettings}
+          close={() => setModal(undefined)}
+          reformatActiveCode={reformatActiveCode}
+        />
       </Show>
-      <Show when={modal() === "export"}>
-        <ExportModal root={activeRoot} exportText={exportText} close={() => setModal(undefined)} />
+      <Show when={modal() === 'export'}>
+        <ExportModal root={activeRoot()} exportText={exportText()} close={() => setModal(undefined)} />
       </Show>
-      <Show when={modal() === "about"}>
+      <Show when={modal() === 'about'}>
         <AboutModal close={() => setModal(undefined)} />
       </Show>
-      <Show when={modal() === "donate"}>
+      <Show when={modal() === 'donate'}>
         <DonateModal close={() => setModal(undefined)} />
       </Show>
-      <Show when={modal() === "shortcuts"}>
+      <Show when={modal() === 'shortcuts'}>
         <ShortcutsModal close={() => setModal(undefined)} />
       </Show>
       <Show when={isSvgDropActive()}>
-        <div class="svg-drop-overlay">
-          <img src="/assets/icons/Import.svg" alt="" />
+        <div
+          class="svg-drop-overlay pointer-events-none fixed inset-[44px_18px_18px] z-90 grid place-items-center content-center gap-3 rounded-lg border-2 border-dashed border-[color-mix(in_srgb,var(--accent)_78%,#ffffff)] bg-[color-mix(in_srgb,var(--base)_76%,transparent)] text-lg text-white shadow-[inset_0_0_0_999px_#0005]"
+          data-testid="svg-drop-overlay"
+        >
+            <ImportIcon {...decorativeIconProps} class="h-10.5 w-10.5 [filter:brightness(0)_invert(100%)]" />
           <span>Drop SVG to import</span>
         </div>
       </Show>
@@ -1864,14 +2076,14 @@ export function App() {
   );
 
   function startHandleDrag(event: PointerEvent, handle: HandleDescriptor): void {
-    if (event.pointerType === "touch" || event.button !== 0) {
+    if (event.pointerType === 'touch' || event.button !== 0) {
       return;
     }
 
     event.stopPropagation();
     pushHistory();
     setActiveDrag({
-      type: "handle",
+      type: 'handle',
       pointerId: event.pointerId,
       handle
     });
@@ -1879,7 +2091,7 @@ export function App() {
   }
 
   function startTransformBoxDrag(event: PointerEvent, handle: TransformBoxHandleDescriptor): void {
-    if (event.pointerType === "touch" || event.button !== 0) {
+    if (event.pointerType === 'touch' || event.button !== 0) {
       return;
     }
 
@@ -1895,7 +2107,7 @@ export function App() {
     const center = rectCenter(box);
     const point = clientToSvgPoint(event.clientX, event.clientY, false);
     setActiveDrag({
-      type: "transform-box",
+      type: 'transform-box',
       pointerId: event.pointerId,
       handleKind: handle.kind,
       selectedIds: ids,
@@ -1910,7 +2122,11 @@ export function App() {
 export default App;
 
 function sameSvgSize(previous: SvgSize, next: SvgSize): boolean {
-  return previous.width === next.width && previous.height === next.height && previous.viewBox.every((value, index) => value === next.viewBox[index]);
+  return (
+    previous.width === next.width &&
+    previous.height === next.height &&
+    previous.viewBox.every((value, index) => value === next.viewBox[index])
+  );
 }
 
 function createRotatedGridRect(rect: ViewRect, rotation: number): ViewRect {
@@ -1952,11 +2168,21 @@ function normalizeClientRect(startX: number, startY: number, endX: number, endY:
 }
 
 function clientRectContains(selection: Rect, element: DOMRectReadOnly): boolean {
-  return element.left >= selection.x && element.right <= selection.x + selection.width && element.top >= selection.y && element.bottom <= selection.y + selection.height;
+  return (
+    element.left >= selection.x &&
+    element.right <= selection.x + selection.width &&
+    element.top >= selection.y &&
+    element.bottom <= selection.y + selection.height
+  );
 }
 
 function clientRectsIntersect(selection: Rect, element: DOMRectReadOnly): boolean {
-  return element.right >= selection.x && element.left <= selection.x + selection.width && element.bottom >= selection.y && element.top <= selection.y + selection.height;
+  return (
+    element.right >= selection.x &&
+    element.left <= selection.x + selection.width &&
+    element.bottom >= selection.y &&
+    element.top <= selection.y + selection.height
+  );
 }
 
 function pointForTransformHandle(box: Rect, kind: TransformBoxHandleKind): Point {
@@ -1967,23 +2193,23 @@ function pointForTransformHandle(box: Rect, kind: TransformBoxHandleKind): Point
   const bottom = box.y + box.height;
 
   switch (kind) {
-    case "nw":
+    case 'nw':
       return { x: left, y: top };
-    case "n":
+    case 'n':
       return { x: center.x, y: top };
-    case "ne":
+    case 'ne':
       return { x: right, y: top };
-    case "e":
+    case 'e':
       return { x: right, y: center.y };
-    case "se":
+    case 'se':
       return { x: right, y: bottom };
-    case "s":
+    case 's':
       return { x: center.x, y: bottom };
-    case "sw":
+    case 'sw':
       return { x: left, y: bottom };
-    case "w":
+    case 'w':
       return { x: left, y: center.y };
-    case "rotate":
+    case 'rotate':
       return { x: center.x, y: top };
   }
 }
@@ -1996,33 +2222,33 @@ function anchorForTransformHandle(box: Rect, kind: TransformBoxHandleKind): Poin
   const bottom = box.y + box.height;
 
   switch (kind) {
-    case "nw":
+    case 'nw':
       return { x: right, y: bottom };
-    case "n":
+    case 'n':
       return { x: center.x, y: bottom };
-    case "ne":
+    case 'ne':
       return { x: left, y: bottom };
-    case "e":
+    case 'e':
       return { x: left, y: center.y };
-    case "se":
+    case 'se':
       return { x: left, y: top };
-    case "s":
+    case 's':
       return { x: center.x, y: top };
-    case "sw":
+    case 'sw':
       return { x: right, y: top };
-    case "w":
+    case 'w':
       return { x: right, y: center.y };
-    case "rotate":
+    case 'rotate':
       return center;
   }
 }
 
 function transformHandleChangesX(kind: TransformBoxHandleKind): boolean {
-  return kind === "nw" || kind === "ne" || kind === "e" || kind === "se" || kind === "sw" || kind === "w";
+  return kind === 'nw' || kind === 'ne' || kind === 'e' || kind === 'se' || kind === 'sw' || kind === 'w';
 }
 
 function transformHandleChangesY(kind: TransformBoxHandleKind): boolean {
-  return kind === "nw" || kind === "n" || kind === "ne" || kind === "se" || kind === "s" || kind === "sw";
+  return kind === 'nw' || kind === 'n' || kind === 'ne' || kind === 'se' || kind === 's' || kind === 'sw';
 }
 
 function clampedScaleRatio(current: number, start: number, anchor: number): number {
@@ -2076,15 +2302,19 @@ function rotatePoint(point: Point, radians: number): Point {
 }
 
 function createRasterPreviewRoot(root: SvgElementNode, rect: ViewRect): SvgElementNode {
-  const xmlns = getAttribute(root, "xmlns", true) || "http://www.w3.org/2000/svg";
-  let next = setAttribute(root, "xmlns", xmlns);
-  next = setAttribute(next, "viewBox", `${formatPreviewNumber(rect.x)} ${formatPreviewNumber(rect.y)} ${formatPreviewNumber(rect.width)} ${formatPreviewNumber(rect.height)}`);
-  next = setAttribute(next, "width", formatPreviewNumber(rect.width));
-  next = setAttribute(next, "height", formatPreviewNumber(rect.height));
+  const xmlns = getAttribute(root, 'xmlns', true) || 'http://www.w3.org/2000/svg';
+  let next = setAttribute(root, 'xmlns', xmlns);
+  next = setAttribute(
+    next,
+    'viewBox',
+    `${formatPreviewNumber(rect.x)} ${formatPreviewNumber(rect.y)} ${formatPreviewNumber(rect.width)} ${formatPreviewNumber(rect.height)}`
+  );
+  next = setAttribute(next, 'width', formatPreviewNumber(rect.width));
+  next = setAttribute(next, 'height', formatPreviewNumber(rect.height));
   return next;
 }
 
 function formatPreviewNumber(value: number): string {
   const rounded = Math.round(value * 1000) / 1000;
-  return Object.is(rounded, -0) ? "0" : String(rounded);
+  return Object.is(rounded, -0) ? '0' : String(rounded);
 }

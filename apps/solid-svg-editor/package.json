@@ -9,6 +9,7 @@
     "preview": "vite preview --port 4140"
   },
   "dependencies": {
+    "@app-game/utils": "workspace:*",
     "solid-js": "catalog:"
   },
   "devDependencies": {

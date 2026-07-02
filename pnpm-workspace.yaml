@@ -36,6 +36,8 @@ catalog:
   vitest: 4.1.6
 
 catalogMode: strict
+patchedDependencies:
+  vite-plugin-solid-svg@0.8.1: patches/vite-plugin-solid-svg@0.8.1.patch
 
 peerDependencyRules:
   allowedVersions:
