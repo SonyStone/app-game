@@ -1,10 +1,11 @@
 import { createEffect, createMemo, createSignal, For, Index, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
+import { decorativeIconProps } from '../../editor/svg-icon';
 import { iconForElement, iconForNode, isRecognizedElement, isValidChild, type RecognizedElement } from '../../svg-db';
 import { findNode, findParent, nodeLabel, type DropPosition, type SvgElementNode, type SvgNode } from '../../svg-model';
 import { AttributeGrid, RootElementEditor } from './InspectorInputs';
 import { createInspectorVirtualScroll, nodeContainsId, VirtualInspectorRowShell } from './InspectorVirtualScroll';
-import { EditorIcon } from '../ui/EditorIcon';
 import PlusIcon from '../ui/icons/Plus.svg';
 import WarningIcon from '../ui/icons/Warning.svg';
 
@@ -200,7 +201,7 @@ export function InspectorPanel(props: {
           data-testid="add-element-button"
           onClick={() => setAddOpen(!addOpen())}
         >
-          <EditorIcon icon={PlusIcon} />{' '}
+          <PlusIcon {...decorativeIconProps} />{' '}
           Add element
         </button>
         <Show when={addOpen()}>
@@ -232,7 +233,7 @@ export function InspectorPanel(props: {
                     setAddOpen(false);
                   }}
                 >
-                  <EditorIcon icon={iconForElement(name)} />{' '}
+                  <Dynamic component={iconForElement(name)} {...decorativeIconProps} />{' '}
                   {name}
                 </button>
               )}
@@ -298,7 +299,7 @@ export function InspectorPanel(props: {
             <For each={dragPreviewNodes()}>
               {(node) => (
                 <div class="flex h-6 items-center justify-center gap-1.5 rounded border-2 border-[#3d86ff] font-['GodSVG_Mono',ui-monospace,monospace] text-xs text-[#eef4ff] shadow-[0_10px_24px_rgb(0_0_0/30%)] [background:color-mix(in_srgb,#30569c_52%,var(--panel))]" data-testid={`inspector-drag-preview-node-${node.id}`}>
-                  <EditorIcon icon={node.kind === 'element' ? iconForElement(node.name) : iconForNode(node.kind)} />
+                  <Dynamic component={node.kind === 'element' ? iconForElement(node.name) : iconForNode(node.kind)} {...decorativeIconProps} />
                   <span>{inspectorTitle(node)}</span>
                 </div>
               )}
@@ -376,14 +377,14 @@ function ElementCard(props: {
         onDragStart={(event) => props.startInspectorDrag(props.node.id, event)}
         onDragEnd={props.resetInspectorDrag}
       >
-        <EditorIcon icon={props.node.kind === 'element' ? iconForElement(props.node.name) : iconForNode(props.node.kind)} />
+        <Dynamic component={props.node.kind === 'element' ? iconForElement(props.node.name) : iconForNode(props.node.kind)} {...decorativeIconProps} />
         <span>{inspectorTitle(props.node)}</span>
         <Show
           when={
             props.node.kind === 'element' && props.node.name !== 'svg' && isRecognizedElement(props.node.name) === false
           }
         >
-          <EditorIcon icon={WarningIcon} class="mr-1.5 ml-auto h-4 w-4 [filter:brightness(0)_invert(92%)_sepia(10%)_saturate(778%)_hue-rotate(181deg)_brightness(102%)_contrast(95%)]" />
+          <WarningIcon {...decorativeIconProps} />
         </Show>
       </button>
 

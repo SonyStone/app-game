@@ -9,12 +9,12 @@ import SnapIcon from "./icons/Snap.svg";
 import VisualsIcon from "./icons/Visuals.svg";
 import { attrsToObject } from "../../editor/tree-utils";
 import { createGridLines } from "../../editor/handles";
+import { decorativeIconProps } from "../../editor/svg-icon";
 import type { AppSettings, DragSelectionMode, HandleDescriptor, TransformBoxHandleDescriptor, ViewRect } from "../../editor/types";
 import type { SvgNode } from "../../svg-model";
-import { IconButton } from "../chrome/TopBar";
-import { EditorIcon } from "../ui/EditorIcon";
 import ClearIcon from "../ui/icons/Clear.svg";
 import PlusIcon from "../ui/icons/Plus.svg";
+import { IconButton } from "../ui/IconButton";
 import { MenuButton, MenuLabel } from "../ui/MenuItem";
 
 export function ViewportToolbar(props: {
@@ -90,7 +90,7 @@ export function ViewportToolbar(props: {
           data-testid="snap-toggle-button"
           onClick={() => props.setSettings((settings) => ({ ...settings, snapEnabled: !settings.snapEnabled }))}
         >
-          <EditorIcon icon={SnapIcon} />
+          <SnapIcon {...decorativeIconProps} />
         </button>
         <input
           class="snap-input block h-6.5 min-h-5.5 w-16 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] text-center font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"

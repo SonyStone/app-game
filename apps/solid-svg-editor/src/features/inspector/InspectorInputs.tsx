@@ -1,16 +1,8 @@
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
-import ArrowIcon from './icons/Arrow.svg';
-import InsertBeforeIcon from './icons/InsertBefore.svg';
-import MatrixIcon from './icons/Matrix.svg';
-import RotateIcon from './icons/Rotate.svg';
-import ScaleIcon from './icons/Scale.svg';
-import SkewXIcon from './icons/SkewX.svg';
-import SkewYIcon from './icons/SkewY.svg';
-import SmallMoreIcon from './icons/SmallMore.svg';
-import TranslateIcon from './icons/Translate.svg';
 import { parseTransformList } from '../../editor/geometry';
-import type { SvgIcon } from '../../editor/svg-icon';
+import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import {
   clampNumericAttribute,
   insertPathCommand,
@@ -45,10 +37,18 @@ import {
   isAttributeRecognized
 } from '../../svg-db';
 import { getAttribute, type SvgAttribute, type SvgElementNode } from '../../svg-model';
-import { EditorIcon } from '../ui/EditorIcon';
 import DeleteIcon from '../ui/icons/Delete.svg';
 import InsertAfterIcon from '../ui/icons/InsertAfter.svg';
 import PlusIcon from '../ui/icons/Plus.svg';
+import ArrowIcon from './icons/Arrow.svg';
+import InsertBeforeIcon from './icons/InsertBefore.svg';
+import MatrixIcon from './icons/Matrix.svg';
+import RotateIcon from './icons/Rotate.svg';
+import ScaleIcon from './icons/Scale.svg';
+import SkewXIcon from './icons/SkewX.svg';
+import SkewYIcon from './icons/SkewY.svg';
+import SmallMoreIcon from './icons/SmallMore.svg';
+import TranslateIcon from './icons/Translate.svg';
 
 const rootEditorAttributes = ['width', 'height', 'viewBox', 'xmlns'] as const;
 const transformTypes = ['matrix', 'translate', 'rotate', 'scale', 'skewX', 'skewY'] as const;
@@ -396,7 +396,7 @@ function PathDataEditor(props: {
           data-testid={`path-command-add-${props.node.id}`}
           onClick={() => updateCommands([...commands(), createCommand('M')])}
         >
-          <EditorIcon icon={PlusIcon} />
+          <PlusIcon {...decorativeIconProps} />
         </button>
       </div>
     </div>
@@ -507,7 +507,7 @@ function PathCommandRow(props: {
         data-testid={`path-command-actions-${props.nodeId}-${props.index}`}
         onClick={() => setMenuOpen(!menuOpen())}
       >
-        <EditorIcon icon={SmallMoreIcon} />
+        <SmallMoreIcon {...decorativeIconProps} />
       </button>
       <Show when={menuOpen()}>
         <div
@@ -520,7 +520,7 @@ function PathCommandRow(props: {
             data-testid={`path-command-insert-after-${props.nodeId}-${props.index}`}
             onClick={() => updateCommands(insertPathCommand(props.commands, props.index, props.command.command))}
           >
-            <EditorIcon icon={InsertAfterIcon} /> Insert after
+            <InsertAfterIcon {...decorativeIconProps} /> Insert after
           </button>
           <div class="grid grid-cols-5 gap-0.75">
             <For each={pathCommandLetters}>
@@ -547,7 +547,7 @@ function PathCommandRow(props: {
             data-testid={`path-command-delete-${props.nodeId}-${props.index}`}
             onClick={() => updateCommands(deleteCommand(props.commands, props.index))}
           >
-            <EditorIcon icon={DeleteIcon} /> Delete
+            <DeleteIcon {...decorativeIconProps} /> Delete
           </button>
         </div>
       </Show>
@@ -612,7 +612,7 @@ function PointsEditor(props: {
                 data-testid={`point-delete-${props.nodeId}-${index()}`}
                 onClick={() => props.update(formatPoints(deletePoint(points(), index())))}
               >
-                <EditorIcon icon={DeleteIcon} />
+                <DeleteIcon {...decorativeIconProps} />
               </button>
             </div>
           )}
@@ -623,7 +623,7 @@ function PointsEditor(props: {
           data-testid={`point-add-${props.nodeId}`}
           onClick={() => props.update(formatPoints(addPoint(points())))}
         >
-          <EditorIcon icon={PlusIcon} />
+          <PlusIcon {...decorativeIconProps} />
         </button>
       </div>
     </div>
@@ -684,7 +684,7 @@ function TransformField(props: {
         data-testid={`transform-popup-button-${props.nodeId}-${props.attrName}`}
         onClick={() => setPopupOpen(!popupOpen())}
       >
-        <ArrowIcon />
+        <ArrowIcon {...decorativeIconProps} />
       </button>
       <Show when={popupOpen()}>
         <div
@@ -700,7 +700,7 @@ function TransformField(props: {
                 data-testid={`transform-insert-empty-${props.nodeId}-${props.attrName}`}
                 onClick={() => setInsertMenu(0)}
               >
-                <EditorIcon icon={PlusIcon} />
+                <PlusIcon {...decorativeIconProps} />
               </button>
             }
           >
@@ -718,7 +718,7 @@ function TransformField(props: {
                       data-testid={`transform-type-button-${props.nodeId}-${index()}`}
                       onClick={() => setActiveTransformMenu(activeTransformMenu() === index() ? undefined : index())}
                     >
-                      <EditorIcon icon={transformIcon(item.type)} />
+                      <Dynamic component={transformIcon(item.type)} {...decorativeIconProps} />
                     </button>
                     <input
                       class="block h-5.5 min-h-5.5 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
@@ -734,7 +734,7 @@ function TransformField(props: {
                       data-testid={`transform-actions-button-${props.nodeId}-${index()}`}
                       onClick={() => setActiveTransformMenu(activeTransformMenu() === index() ? undefined : index())}
                     >
-                      <EditorIcon icon={SmallMoreIcon} />
+                      <SmallMoreIcon {...decorativeIconProps} />
                     </button>
                     <Show when={activeTransformMenu() === index()}>
                       <div
@@ -747,7 +747,7 @@ function TransformField(props: {
                           data-testid={`transform-insert-after-${props.nodeId}-${index()}`}
                           onClick={() => setInsertMenu(index() + 1)}
                         >
-                          <EditorIcon icon={InsertAfterIcon} /> Insert after
+                          <InsertAfterIcon {...decorativeIconProps} /> Insert after
                         </button>
                         <button
                           class="flex min-h-5.5 w-full cursor-pointer items-center justify-start gap-1.5 rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-1.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)]"
@@ -755,7 +755,7 @@ function TransformField(props: {
                           data-testid={`transform-insert-before-${props.nodeId}-${index()}`}
                           onClick={() => setInsertMenu(index())}
                         >
-                          <EditorIcon icon={InsertBeforeIcon} /> Insert before
+                          <InsertBeforeIcon {...decorativeIconProps} /> Insert before
                         </button>
                         <button
                           class="flex min-h-5.5 w-full cursor-pointer items-center justify-start gap-1.5 rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-1.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)]"
@@ -763,7 +763,7 @@ function TransformField(props: {
                           data-testid={`transform-delete-${props.nodeId}-${index()}`}
                           onClick={() => deleteTransform(index())}
                         >
-                          <EditorIcon icon={DeleteIcon} /> Delete
+                          <DeleteIcon {...decorativeIconProps} /> Delete
                         </button>
                       </div>
                     </Show>
@@ -776,7 +776,7 @@ function TransformField(props: {
                 data-testid={`transform-insert-at-end-${props.nodeId}-${props.attrName}`}
                 onClick={() => setInsertMenu(transformItems().length)}
               >
-                <EditorIcon icon={PlusIcon} />
+                <PlusIcon {...decorativeIconProps} />
               </button>
             </div>
           </Show>
@@ -800,7 +800,7 @@ function TransformField(props: {
                       }
                     }}
                   >
-                    <EditorIcon icon={transformIcon(type)} /> {type}
+                    <Dynamic component={transformIcon(type)} {...decorativeIconProps} /> {type}
                   </button>
                 )}
               </For>

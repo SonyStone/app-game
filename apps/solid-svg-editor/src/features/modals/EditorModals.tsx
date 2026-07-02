@@ -8,7 +8,6 @@ import { clamp, themePresetSettings } from "../../editor/tree-utils";
 import type { AppSettings, ExportFormat, ThemePreset } from "../../editor/types";
 import { svgSize, type SvgElementNode } from "../../svg-model";
 import { PreviewSvg } from "../panels/SidePanels";
-import { EditorIcon } from "../ui/EditorIcon";
 import ClearIcon from "../ui/icons/Clear.svg";
 import CopyIcon from "../ui/icons/Copy.svg";
 import ExportIcon from "../ui/icons/Export.svg";
@@ -314,7 +313,7 @@ function ModalFrame(props: { readonly title: string; readonly close: () => void;
         <header class="flex items-center justify-between gap-3 border-b border-[var(--soft-border)] bg-[var(--panel-2)] px-2.5 py-2" data-testid={`${modalId()}-header`}>
           <h2 class="m-0 text-[15px]" data-testid={`${modalId()}-title`}>{props.title}</h2>
           <button class="grid h-6.5 w-6.5 place-items-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel)]" type="button" data-testid={`${modalId()}-close-button`} onClick={props.close}>
-            <EditorIcon icon={ClearIcon} />
+            <ClearIcon {...decorativeIconProps} />
           </button>
         </header>
         <div class="modal-content min-h-0 overflow-auto p-3" data-testid={`${modalId()}-content`}>{props.children}</div>

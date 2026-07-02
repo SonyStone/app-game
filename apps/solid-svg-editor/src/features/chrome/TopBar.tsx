@@ -1,13 +1,14 @@
 import { createSignal, For, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 
-import type { SvgIcon } from '../../editor/svg-icon';
+import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import type { EditorTab, PanelId } from '../../editor/types';
-import { EditorIcon } from '../ui/EditorIcon';
 import CopyIcon from '../ui/icons/Copy.svg';
 import ExportIcon from '../ui/icons/Export.svg';
 import GodSvgIcon from '../ui/icons/GodSvg.svg';
 import HeartIcon from '../ui/icons/Heart.svg';
 import ImportIcon from '../ui/icons/Import.svg';
+import { IconButton } from '../ui/IconButton';
 import { MenuButton, MenuLink } from '../ui/MenuItem';
 import CreateTabIcon from './icons/CreateTab.svg';
 import DebugIcon from './icons/Debug.svg';
@@ -174,37 +175,13 @@ export function TopBar(props: {
           data-testid="import-button"
           onClick={props.openImportDialog}
         >
-          <EditorIcon icon={ImportIcon} /> Import
+          <ImportIcon {...decorativeIconProps} /> Import
         </button>
         <IconButton icon={SaveIcon} label="Save SVG" testId="save-svg-button" onClick={props.downloadSvg} />
         <IconButton icon={CopyIcon} label="Copy SVG text" testId="copy-svg-button" onClick={props.copySvgText} />
         <IconButton icon={ExportIcon} label="Export" testId="export-button" onClick={props.openExport} />
       </div>
     </header>
-  );
-}
-
-export function IconButton(props: {
-  readonly icon: SvgIcon;
-  readonly label: string;
-  readonly onClick: () => void;
-  readonly disabled?: boolean;
-  readonly active?: boolean;
-  readonly testId?: string;
-}) {
-  return (
-    <button
-      type="button"
-      class="icon-button inline-grid h-6.5 w-6.5 cursor-pointer place-items-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] p-0 hover:border-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_22%,var(--panel-2))] disabled:cursor-default disabled:opacity-[0.42] [&.active]:border-[var(--accent)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_22%,var(--panel-2))]"
-      classList={{ active: props.active }}
-      data-testid={props.testId}
-      title={props.label}
-      aria-label={props.label}
-      disabled={props.disabled}
-      onClick={props.onClick}
-    >
-      <EditorIcon icon={props.icon} />
-    </button>
   );
 }
 
@@ -230,7 +207,7 @@ export function PanelTabs(props: {
             data-testid={`panel-tab-${panel.id}`}
             onClick={() => props.setActivePanel(panel.id)}
           >
-            <panel.icon />
+            <Dynamic component={panel.icon} {...decorativeIconProps} />
             <span class="whitespace-nowrap">{panel.label}</span>
           </button>
         )}

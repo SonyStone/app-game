@@ -1,7 +1,7 @@
 import { Show, splitProps, type JSX } from "solid-js";
+import { Dynamic } from "solid-js/web";
 
-import type { SvgIcon } from "../../editor/svg-icon";
-import { EditorIcon } from "./EditorIcon";
+import { decorativeIconProps, type SvgIcon } from "../../editor/svg-icon";
 
 export function PanelButton(props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { readonly icon?: SvgIcon; readonly variant?: "primary" }) {
   const [local, buttonProps] = splitProps(props, ["children", "icon", "variant"]);
@@ -15,7 +15,7 @@ export function PanelButton(props: JSX.ButtonHTMLAttributes<HTMLButtonElement> &
         "!border-[color-mix(in_srgb,var(--accent)_52%,var(--soft-border))]": local.variant === "primary"
       }}
     >
-      <Show when={local.icon}>{(Icon) => <EditorIcon icon={Icon()} />}</Show>
+      <Show when={local.icon}>{(Icon) => <Dynamic component={Icon()} {...decorativeIconProps} />}</Show>
       {local.children}
     </button>
   );

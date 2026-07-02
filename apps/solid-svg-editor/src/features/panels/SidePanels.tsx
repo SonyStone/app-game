@@ -1,8 +1,8 @@
 import { createMemo, For, Show } from "solid-js";
 
+import { decorativeIconProps } from "../../editor/svg-icon";
 import { humanFileSize } from "../../formatter";
 import { nodeLabel, svgSize, type SvgElementNode, type SvgNode } from "../../svg-model";
-import { EditorIcon } from "../ui/EditorIcon";
 import CopyIcon from "../ui/icons/Copy.svg";
 import WarningIcon from "../ui/icons/Warning.svg";
 import { PanelButton } from "../ui/PanelButton";
@@ -41,7 +41,7 @@ export function CodePanel(props: {
       <Show when={props.parseError}>
         {(message) => (
           <div class="error-bar flex items-center gap-1.75 border-t border-t-[color-mix(in_srgb,var(--danger)_36%,var(--soft-border))] bg-[color-mix(in_srgb,var(--danger)_10%,var(--panel-2))] px-2.5 py-1.75 text-[var(--danger)]" data-testid="code-error-bar">
-            <EditorIcon icon={WarningIcon} />
+            <WarningIcon {...decorativeIconProps} />
             <span>{message()}</span>
           </div>
         )}
