@@ -157,7 +157,7 @@ export function SolidDockingExample(): JSX.Element {
         drag with root-edge docking.
       </div>
 
-      <Docking items={items()} layout={layout()} onLayoutChange={setLayout} class="h-[34rem]" />
+      <Docking items={items()} layout={layout()} onLayoutChange={setLayout} class="h-136" />
     </div>
   );
 }
@@ -628,7 +628,7 @@ function DockingTabButton(props: {
         <span class="text-xs text-neutral-500">x</span>
       </Show>
 
-      <div class={cn(props.isActive() ? 'absolute inset-x-0 bottom-[-1px] h-[1px] bg-neutral-800' : '')}></div>
+      <div class={cn(props.isActive() ? 'absolute inset-x-0 -bottom-px h-px bg-neutral-800' : '')}></div>
     </button>
   );
 }

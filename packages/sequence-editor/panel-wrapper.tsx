@@ -6,7 +6,7 @@ export function PanelWrapper(
 ) {
   return (
     <div
-      class="absolute select-none box-border [#pointer-root_&]:pointer-events-none [#pointer-root.normal_&]:pointer-events-auto z-1000"
+      class="absolute select-none box-border in-[#pointer-root]:pointer-events-none [#pointer-root.normal_&]:pointer-events-auto z-1000"
       style={{
         width: props.dimensions.width + 'px',
         height: props.dimensions.height + 'px',

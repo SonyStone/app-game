@@ -669,6 +669,9 @@ importers:
 
   apps/solid-svg-editor:
     dependencies:
+      '@app-game/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       solid-js:
         specifier: 'catalog:'
         version: 1.9.12

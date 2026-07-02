@@ -239,7 +239,7 @@ export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Elemen
         }}
       />
 
-      <div class="pointer-events-none fixed left-0 top-0 z-[10000] h-full w-full">
+      <div class="pointer-events-none fixed left-0 top-0 z-10000 h-full w-full">
         {/* SVG overlay for drawing debug graphics */}
         <svg class="absolute left-0 top-0 h-full w-full">
           {/* Transformed canvas rectangle visualization */}

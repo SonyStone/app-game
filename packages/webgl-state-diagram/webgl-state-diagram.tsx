@@ -78,14 +78,14 @@ export default () => {
   return (
     <diagram class="h-full flex font-mono">
       <draggable class="bg-[#005566cc] max-h-95vh overscroll-auto block border text-white">
-        <div class="font-bold text-center pb-1 bg-gradient-to-b from-[#ffffff4d] from-50% to-[#00000000] to-50% bg-[length:100%_2px] block">
+        <div class="font-bold text-center pb-1 bg-gradient-to-b from-[#ffffff4d] from-50% to-[#00000000] to-50% bg-size-[100%_2px] block">
           canvas
         </div>
         {canvas}
       </draggable>
 
       <draggable class="bg-[#4d0000cc] max-h-95vh overscroll-auto block border text-white">
-        <div class="font-bold text-center pb-1 bg-gradient-to-b from-[#ffffff4d] from-50% to-[#00000000] to-50% bg-[length:100%_2px] block">
+        <div class="font-bold text-center pb-1 bg-gradient-to-b from-[#ffffff4d] from-50% to-[#00000000] to-50% bg-size-[100%_2px] block">
           global state
         </div>
         <div>

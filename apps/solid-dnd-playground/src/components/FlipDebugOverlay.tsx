@@ -148,7 +148,7 @@ function OverlaySvg(props: {
   isDragging: boolean;
 }): JSX.Element {
   return (
-    <svg class="pointer-events-none fixed inset-0 z-[9999]" style={{ width: '100vw', height: '100vh' }}>
+    <svg class="pointer-events-none fixed inset-0 z-9999" style={{ width: '100vw', height: '100vh' }}>
       {/* ── Per-element FLIP trails (all cycles, secondary) ─────── */}
       <For each={props.allCycleTrails}>
         {(ct) => <For each={ct.trails}>{(t) => <ElementTrailPath trail={t} showLabel={ct.cycle === 1} />}</For>}

@@ -70,7 +70,7 @@ export const NavigationPopup = (props: {
   );
 
   return (
-    <svg class="w-30 h-30 stroke-width-1 z-1 scale-90 stroke-black transition-transform [.active_&]:scale-100">
+    <svg class="w-30 h-30 stroke-width-1 z-1 scale-90 stroke-black transition-transform in-[.active]:scale-100">
       {(() => {
         // zoom navigation element
         const nav = createZoom();

@@ -347,7 +347,7 @@ export default function CursorEmulationExample() {
         />
       </div>
 
-      <MetricsPanel class="bottom-[18.5rem]" events={eventLog()} metrics={metrics()} />
+      <MetricsPanel class="bottom-74" events={eventLog()} metrics={metrics()} />
       <CursorOverlay cursor={cursorPoint()} paths={overlayPaths()} touchPointers={touchPointers()} />
       <TimelineEditor
         elapsedMs={elapsedMs()}

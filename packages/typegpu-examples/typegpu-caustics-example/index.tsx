@@ -18,7 +18,7 @@ export default function TypeGPUExample() {
       <button class="rounded bg-blue-500 p-2 text-white" onClick={() => setRunning((v) => !v)}>
         {running() ? 'Stop' : 'Start'}
       </button>
-      <div class="grid w-full grid-cols-[200px_minmax(900px,_1fr)] gap-4 px-8">
+      <div class="grid w-full grid-cols-[200px_minmax(900px,1fr)] gap-4 px-8">
         <pre>Tile Density: {tileDensity()}</pre>
         <input
           type="range"

@@ -113,7 +113,7 @@ export const webglExamplesRoute: Routes = {
       component: () => (
         <>
           <div class="flex w-full place-content-center place-items-center bg-blue-100">WebGL Examples</div>
-          <div class="grid grid-cols-[repeat(auto-fill,_minmax(12rem,_1fr))] gap-4 p-4">
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-4 p-4">
             <For each={routes}>{({ Preview }) => <Preview />}</For>
           </div>
         </>

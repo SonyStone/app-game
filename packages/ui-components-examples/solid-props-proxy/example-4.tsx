@@ -13,7 +13,7 @@ export function PropsProxyExample4() {
       <PropsDynamic
         target={target()}
         value="Not a number"
-        class="border-red-700 shadow-[0_0_0_1px_theme(colors.red.700)]"
+        class="border-red-700 shadow-[0_0_0_1px_var(--color-red-700)]"
         data-proxy
         onInput={(event: InputEvent & { currentTarget: HTMLInputElement }) => {
           console.log('Proxy onInput:', event.currentTarget.value);

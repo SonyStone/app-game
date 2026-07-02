@@ -120,7 +120,7 @@ export const MenubarSubContent = <T extends ValidComponent = 'div'>(
     <MenubarPrimitive.Portal>
       <MenubarPrimitive.SubContent
         class={cn(
-          'bg-popover text-popover-foreground data-[expanded]:(animate-in fade-in-0 zoom-in-95 animate-duration-50) data-[closed]:(animate-out fade-out-0 zoom-out-95) z-50 min-w-[8rem] origin-[--kb-menu-content-transform-origin] overflow-hidden rounded-md border p-1 shadow-lg outline-none',
+          'bg-popover text-popover-foreground data-[expanded]:(animate-in fade-in-0 zoom-in-95 animate-duration-50) data-[closed]:(animate-out fade-out-0 zoom-out-95) z-50 min-w-32 origin-[--kb-menu-content-transform-origin] overflow-hidden rounded-md border p-1 shadow-lg outline-none',
           local.class
         )}
         {...rest}
@@ -146,7 +146,7 @@ export const MenubarContent = <T extends ValidComponent = 'div'>(
     <MenubarPrimitive.Portal>
       <MenubarPrimitive.Content
         class={cn(
-          'bg-popover text-popover-foreground data-[expanded]:(animate-in fade-in-0 zoom-in-95 animate-duration-50) data-[closed]:(animate-out fade-out-0 zoom-out-95) z-50 min-w-[12rem] origin-[--kb-menu-content-transform-origin] overflow-hidden rounded-md border p-1 shadow-md outline-none',
+          'bg-popover text-popover-foreground data-[expanded]:(animate-in fade-in-0 zoom-in-95 animate-duration-50) data-[closed]:(animate-out fade-out-0 zoom-out-95) z-50 min-w-48 origin-[--kb-menu-content-transform-origin] overflow-hidden rounded-md border p-1 shadow-md outline-none',
           local.class
         )}
         {...rest}

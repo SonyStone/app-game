@@ -351,7 +351,7 @@ export function TimelineEditor(props: {
 
         <div
           data-timeline-elapsed
-          class="justify-self-center rounded-[4px] border border-[#c8ced4] bg-white px-3 py-0.5 font-mono text-lg leading-none text-[#34495e] shadow-[inset_0_1px_0_rgb(255_255_255/0.85)]"
+          class="justify-self-center rounded-sm border border-[#c8ced4] bg-white px-3 py-0.5 font-mono text-lg leading-none text-[#34495e] shadow-[inset_0_1px_0_rgb(255_255_255/0.85)]"
         >
           {formatTimelineTime(props.elapsedMs)}
         </div>

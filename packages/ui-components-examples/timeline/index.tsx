@@ -54,7 +54,7 @@ export default function TimelineExample() {
             style={{
               'background-size': `1px ${32}px`
             }}
-            class="pl-191px relative left-0 h-full h-full w-full w-full [background-image:linear-gradient(0deg,#5C6D6B_50%,#6D7979_50%,#6D7979_100%)]"
+            class="pl-191px relative left-0 h-full h-full w-full w-full bg-[linear-gradient(0deg,#5C6D6B_50%,#6D7979_50%,#6D7979_100%)]"
           >
             {/* Timeline at the top */}
             <Timeline />

@@ -37,7 +37,7 @@ export function CodeBlock(props: CodeBlockProps): JSX.Element {
       </div>
 
       {/* Code */}
-      <div class={cn(`text-sm [&>*]:overflow-auto [&>*]:p-4`, s.shiki, props.class)}>{props.children}</div>
+      <div class={cn(`text-sm *:overflow-auto *:p-4`, s.shiki, props.class)}>{props.children}</div>
     </div>
   );
 }

@@ -48,7 +48,7 @@ const Sortable = (props: any) => {
         'transition-transform': !!state?.active.draggable
       }}
     >
-      <div class="w-1.7em filter-invert-78 h-full bg-center bg-no-repeat [background-image:var(--icon-folder)] [background-size:15px]"></div>
+      <div class="w-1.7em filter-invert-78 h-full bg-center bg-no-repeat [background-image:var(--icon-folder)] bg-size-[15px]"></div>
       {props.item}
     </div>
   );
@@ -89,7 +89,7 @@ export const SortableVerticalListExample = () => {
           }}
           class="h-28px flex cursor-pointer border border-solid border-[#252525] bg-[#474747] text-white"
         >
-          <div class="w-1.7em filter-invert-78 h-full bg-center bg-no-repeat [background-image:var(--icon-folder)] [background-size:15px]"></div>
+          <div class="w-1.7em filter-invert-78 h-full bg-center bg-no-repeat [background-image:var(--icon-folder)] bg-size-[15px]"></div>
           {activeItem()}
         </div>
       </DragOverlay>

@@ -34,13 +34,13 @@ export function DemoRotationMatrixAroundPoint() {
   return (
     <g class="translate-x-100px translate-y-300px">
       <GridSVG />
-      <g class="translate-y-[-12px]">
+      <g class="-translate-y-3">
         <circle class="hover:fill-red transition-colors" cy="0" r="10" onClick={() => setPlay(!play())} />
         <text class="pointer-events-none select-none" font-size="10" x="-9" y="2" fill="white">
           play
         </text>
       </g>
-      <g class="translate-x-[24px] translate-y-[-12px]">
+      <g class="translate-x-6 -translate-y-3">
         <circle
           class="hover:fill-red transition-colors"
           cy="0"
