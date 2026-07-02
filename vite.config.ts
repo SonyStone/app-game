@@ -35,7 +35,23 @@ export default defineConfig({
     // ? check other plugins for solid-js
     // https://github.com/thednp/vite-solid-svg
     // https://github.com/jfgodoy/vite-plugin-solid-svg
-    solidSvg(),
+    solidSvg({
+      svgo: {
+        enabled: true,
+        svgoConfig: {
+          plugins: [
+            {
+              name: 'preset-default',
+              params: {
+                overrides: {
+                  removeViewBox: false
+                }
+              }
+            }
+          ]
+        }
+      }
+    }),
     vitePluginArraybuffer(),
     glsl(),
     // viteFBXPlugin(),
