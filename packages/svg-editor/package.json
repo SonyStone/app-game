@@ -1,6 +1,7 @@
 {
   "name": "@app-game/svg-editor",
   "version": "0.0.0",
+  "description": "Legacy SVG editor prototype; active editor work lives in apps/solid-svg-editor.",
   "private": true,
   "dependencies": {
     "@app-game/components": "workspace:*",

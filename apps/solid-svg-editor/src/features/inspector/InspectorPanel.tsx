@@ -1,11 +1,13 @@
 import { createEffect, createMemo, createSignal, For, Index, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
+import { svgCapabilities } from '../../editor/capabilities';
 import { decorativeIconProps } from '../../editor/svg-icon';
-import { iconForElement, iconForNode, isRecognizedElement, isValidChild, type RecognizedElement } from '../../svg-db';
+import type { RecognizedElement } from '../../svg-db';
 import { findNode, findParent, nodeLabel, type DropPosition, type SvgElementNode, type SvgNode } from '../../svg-model';
 import { AttributeGrid, RootElementEditor } from './InspectorInputs';
 import { createInspectorVirtualScroll, nodeContainsId, VirtualInspectorRowShell } from './InspectorVirtualScroll';
+import { createRafQueue } from '../ui/createRafQueue';
 import PlusIcon from '../ui/icons/Plus.svg';
 import WarningIcon from '../ui/icons/Warning.svg';
 
@@ -36,6 +38,25 @@ export function InspectorPanel(props: {
   const [dragPreviewPoint, setDragPreviewPoint] = createSignal<{ readonly x: number; readonly y: number }>();
   const virtualScroll = createInspectorVirtualScroll({ root: () => props.root });
   let suppressNextSelectionScroll = false;
+  let pendingSelectionScrollId: string | undefined;
+  const alignSelectedRowOnSecondFrame = createRafQueue(() => {
+    const selectedId = pendingSelectionScrollId;
+
+    if (selectedId) {
+      virtualScroll.alignMountedRowToTop(selectedId);
+    }
+  });
+  const alignSelectedRowOnNextFrame = createRafQueue(() => {
+    const selectedId = pendingSelectionScrollId;
+
+    if (!selectedId) {
+      return;
+    }
+
+    virtualScroll.scrollRowToTop(selectedId);
+    virtualScroll.alignMountedRowToTop(selectedId);
+    alignSelectedRowOnSecondFrame.schedule();
+  });
 
   const dragPreviewNodes = createMemo(() =>
     draggingIds()
@@ -57,12 +78,9 @@ export function InspectorPanel(props: {
     }
 
     queueMicrotask(() => {
+      pendingSelectionScrollId = selectedId;
       virtualScroll.scrollRowToTop(selectedId);
-      requestAnimationFrame(() => {
-        virtualScroll.scrollRowToTop(selectedId);
-        virtualScroll.alignMountedRowToTop(selectedId);
-        requestAnimationFrame(() => virtualScroll.alignMountedRowToTop(selectedId));
-      });
+      alignSelectedRowOnNextFrame.schedule();
     });
   });
 
@@ -184,7 +202,7 @@ export function InspectorPanel(props: {
         return false;
       }
 
-      if (node.kind === 'element' && !isValidChild(parent.name, node.name)) {
+      if (node.kind === 'element' && !svgCapabilities.isValidChild(parent.name, node.name)) {
         return false;
       }
     }
@@ -233,7 +251,7 @@ export function InspectorPanel(props: {
                     setAddOpen(false);
                   }}
                 >
-                  <Dynamic component={iconForElement(name)} {...decorativeIconProps} />{' '}
+                  <Dynamic component={svgCapabilities.iconForElement(name)} {...decorativeIconProps} />{' '}
                   {name}
                 </button>
               )}
@@ -299,7 +317,7 @@ export function InspectorPanel(props: {
             <For each={dragPreviewNodes()}>
               {(node) => (
                 <div class="flex h-6 items-center justify-center gap-1.5 rounded border-2 border-[#3d86ff] font-['GodSVG_Mono',ui-monospace,monospace] text-xs text-[#eef4ff] shadow-[0_10px_24px_rgb(0_0_0/30%)] [background:color-mix(in_srgb,#30569c_52%,var(--panel))]" data-testid={`inspector-drag-preview-node-${node.id}`}>
-                  <Dynamic component={node.kind === 'element' ? iconForElement(node.name) : iconForNode(node.kind)} {...decorativeIconProps} />
+                  <Dynamic component={node.kind === 'element' ? svgCapabilities.iconForElement(node.name) : svgCapabilities.iconForNode(node.kind)} {...decorativeIconProps} />
                   <span>{inspectorTitle(node)}</span>
                 </div>
               )}
@@ -377,11 +395,11 @@ function ElementCard(props: {
         onDragStart={(event) => props.startInspectorDrag(props.node.id, event)}
         onDragEnd={props.resetInspectorDrag}
       >
-        <Dynamic component={props.node.kind === 'element' ? iconForElement(props.node.name) : iconForNode(props.node.kind)} {...decorativeIconProps} />
+        <Dynamic component={props.node.kind === 'element' ? svgCapabilities.iconForElement(props.node.name) : svgCapabilities.iconForNode(props.node.kind)} {...decorativeIconProps} />
         <span>{inspectorTitle(props.node)}</span>
         <Show
           when={
-            props.node.kind === 'element' && props.node.name !== 'svg' && isRecognizedElement(props.node.name) === false
+            props.node.kind === 'element' && props.node.name !== 'svg' && svgCapabilities.isRecognizedElement(props.node.name) === false
           }
         >
           <WarningIcon {...decorativeIconProps} />

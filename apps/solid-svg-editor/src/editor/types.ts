@@ -1,6 +1,8 @@
 import type { FormatterSettings } from "../formatter";
 import type { Matrix2D, Rect } from "./geometry";
+import type { SvgDocument } from "./svg-document";
 import type { SvgElementNode, SvgNode } from "../svg-model";
+import type { EditorCommandId } from "./commands";
 
 export type PanelId = "inspector" | "code" | "previews" | "debug";
 export type ModalId = "settings" | "export" | "about" | "donate" | "shortcuts" | undefined;
@@ -12,15 +14,21 @@ export type TransformBoxHandleKind = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw"
 export interface EditorTab {
   readonly id: string;
   readonly name: string;
-  readonly root: SvgElementNode;
+  readonly document: SvgDocument;
   readonly code: string;
   readonly dirty: boolean;
   readonly parseError: string | undefined;
 }
 
+export interface HistoryEntry {
+  readonly root: SvgElementNode;
+  readonly commandId: EditorCommandId | undefined;
+  readonly label: string | undefined;
+}
+
 export interface HistoryState {
-  readonly past: SvgElementNode[];
-  readonly future: SvgElementNode[];
+  readonly past: HistoryEntry[];
+  readonly future: HistoryEntry[];
 }
 
 export interface ShortcutItem {
@@ -116,7 +124,6 @@ export interface ActiveTransformBoxDrag {
   readonly pointerId: number;
   readonly handleKind: TransformBoxHandleKind;
   readonly selectedIds: readonly string[];
-  readonly startRoot: SvgElementNode;
   readonly startBox: Rect;
   readonly startAngle: number;
 }
@@ -125,7 +132,6 @@ export interface ActiveMoveSelectionDrag {
   readonly type: "move-selection";
   readonly pointerId: number;
   readonly selectedIds: readonly string[];
-  readonly startRoot: SvgElementNode;
   readonly startClientX: number;
   readonly startClientY: number;
   readonly startWorldX: number;

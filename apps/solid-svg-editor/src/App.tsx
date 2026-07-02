@@ -83,6 +83,9 @@ export function App() {
           selectedNodes={app.workspace.selectedNodes()}
           elementCount={app.workspace.elementCount()}
           exportText={app.workspace.exportText()}
+          heldKeys={app.workspace.heldKeys()}
+          viewportPointer={app.workspace.viewportPointer()}
+          recentCommandEvent={app.workspace.recentCommandEvent()}
         />
         <button
           class="splitter w-2 cursor-col-resize border-0 bg-transparent hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)] [@media(max-width:820px)]:h-2 [@media(max-width:820px)]:cursor-row-resize"
@@ -109,6 +112,7 @@ export function App() {
           setOverlayReference={app.viewport.setOverlayReference}
           clearReference={app.viewport.clearReference}
           setDragSelectionMode={app.viewport.setDragSelectionMode}
+          setViewportShell={app.viewport.setViewportShell}
           setCanvasSvg={app.viewport.setCanvasSvg}
           viewRect={app.viewport.viewRect()}
           viewportTransform={app.viewport.viewportTransform()}

@@ -1,5 +1,4 @@
 import { createMemo, createSignal, For, Show } from "solid-js";
-import { Dynamic } from "solid-js/web";
 
 import ExpandIcon from "./icons/Expand.svg";
 import FileBrowseIcon from "./icons/FileBrowse.svg";
@@ -7,15 +6,15 @@ import MinusIcon from "./icons/Minus.svg";
 import ReferenceIcon from "./icons/Reference.svg";
 import SnapIcon from "./icons/Snap.svg";
 import VisualsIcon from "./icons/Visuals.svg";
-import { attrsToObject } from "../../editor/tree-utils";
 import { createGridLines } from "../../editor/handles";
 import { decorativeIconProps } from "../../editor/svg-icon";
 import type { AppSettings, DragSelectionMode, HandleDescriptor, TransformBoxHandleDescriptor, ViewRect } from "../../editor/types";
-import type { SvgNode } from "../../svg-model";
 import ClearIcon from "../ui/icons/Clear.svg";
 import PlusIcon from "../ui/icons/Plus.svg";
 import { IconButton } from "../ui/IconButton";
 import { MenuButton, MenuLabel } from "../ui/MenuItem";
+
+export { SvgNodeView } from './svg-renderer';
 
 export function ViewportToolbar(props: {
   readonly settings: AppSettings;
@@ -120,54 +119,6 @@ export function ViewportToolbar(props: {
         <IconButton icon={PlusIcon} label="Zoom in" testId="zoom-in-button" onClick={() => props.zoomBy(Math.SQRT2)} />
       </div>
     </div>
-  );
-}
-
-export function SvgNodeView(props: {
-  readonly node: SvgNode;
-  readonly selectedIds: readonly string[];
-  readonly onNodePointerDown: (id: string, event: PointerEvent) => void;
-  readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
-}) {
-  const node = props.node;
-
-  if (node.kind === "text") {
-    return <>{node.text}</>;
-  }
-
-  if (node.kind === "comment" || node.kind === "cdata") {
-    return null;
-  }
-
-  const attrs = createMemo(() => attrsToObject(node.attrs));
-  const selected = createMemo(() => props.selectedIds.includes(node.id));
-
-  return (
-    <Dynamic
-      component={node.name}
-      {...attrs()}
-      data-node-id={node.id}
-      data-testid={`svg-node-${node.id}`}
-      classList={{ "svg-node-selected": selected() }}
-      onPointerDown={(event: PointerEvent) => {
-        if (event.pointerType === "touch" || event.button === 1 || event.altKey) {
-          return;
-        }
-
-        event.stopPropagation();
-        props.onNodePointerDown(node.id, event);
-      }}
-      onContextMenu={(event: MouseEvent) => {
-        if (event.altKey) {
-          event.preventDefault();
-          return;
-        }
-
-        props.openContextMenu(event, node.id);
-      }}
-    >
-      <For each={node.children}>{(child) => <SvgNodeView node={child} selectedIds={props.selectedIds} onNodePointerDown={props.onNodePointerDown} openContextMenu={props.openContextMenu} />}</For>
-    </Dynamic>
   );
 }
 

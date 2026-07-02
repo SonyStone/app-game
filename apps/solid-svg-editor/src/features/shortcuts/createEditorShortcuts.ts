@@ -1,13 +1,18 @@
-import { pathCommandLetters } from '../../path-data';
+import type { Accessor } from 'solid-js';
+
+import { createShortcutRegistry, pathCommandBindings, type ShortcutDescriptor } from './shortcutRegistry';
 
 export function createEditorShortcuts(options: {
+  readonly activeElement: Accessor<Element | null>;
   readonly redo: () => void;
   readonly undo: () => void;
   readonly downloadSvg: () => void;
+  readonly copySvgText: () => void;
   readonly openImportDialog: () => void;
   readonly openExport: () => void;
   readonly createNewTab: () => void;
   readonly openSettings: () => void;
+  readonly optimizeActive: () => void;
   readonly zoomIn: () => void;
   readonly zoomOut: () => void;
   readonly centerFrame: () => void;
@@ -19,123 +24,46 @@ export function createEditorShortcuts(options: {
   readonly moveSelected: (direction: -1 | 1) => void;
   readonly insertPathCommandFromKey: (key: string, absolute: boolean) => void;
 }) {
-  const pathCommandKeys = pathCommandLetters.map((letter) => letter.toLowerCase());
+  const shortcuts = [
+    shortcut('edit.undo', 'edit', 'Undo', 'Ctrl+Z', [{ key: 'z', ctrl: true }], options.undo, true),
+    shortcut('edit.redo', 'edit', 'Redo', 'Ctrl+Shift+Z', [{ key: 'z', ctrl: true, shift: true }], options.redo, true),
+    shortcut('file.save-svg', 'file', 'Save SVG', 'Ctrl+S', [{ key: 's', ctrl: true }], options.downloadSvg, true),
+    shortcut('edit.copy-svg', 'edit', 'Copy SVG text', 'Ctrl+Shift+C', [{ key: 'c', ctrl: true, shift: true }], options.copySvgText, true),
+    shortcut('file.import', 'file', 'Import', 'Ctrl+O', [{ key: 'o', ctrl: true }], options.openImportDialog, true),
+    shortcut('file.export', 'file', 'Export', 'Ctrl+E', [{ key: 'e', ctrl: true }], options.openExport, true),
+    shortcut('file.new-tab', 'file', 'New tab', 'Ctrl+N', [{ key: 'n', ctrl: true }], options.createNewTab, true),
+    shortcut('file.optimize', 'file', 'Optimize', 'Ctrl+Shift+O', [{ key: 'o', ctrl: true, shift: true }], options.optimizeActive, true),
+    shortcut('help.settings', 'help', 'Settings', 'Ctrl+,', [{ key: ',', ctrl: true }], options.openSettings, true),
+    shortcut('view.zoom-in', 'view', 'Zoom in', 'Ctrl+=', [{ key: '=', ctrl: true }], options.zoomIn, true),
+    shortcut('view.zoom-out', 'view', 'Zoom out', 'Ctrl+-', [{ key: '-', ctrl: true }], options.zoomOut, true),
+    shortcut('view.reset-zoom', 'view', 'Reset zoom', 'Ctrl+0', [{ key: '0', ctrl: true }], options.centerFrame, true),
+    shortcut('view.toggle-grid', 'view', 'Toggle grid', 'Ctrl+G', [{ key: 'g', ctrl: true }], options.toggleGrid, true),
+    shortcut('view.toggle-handles', 'view', 'Toggle handles', 'Ctrl+H', [{ key: 'h', ctrl: true }], options.toggleHandles, true),
+    shortcut('edit.select-all', 'edit', 'Select all', 'Ctrl+A', [{ key: 'a', ctrl: true }], options.selectAll),
+    shortcut('edit.duplicate', 'edit', 'Duplicate', 'Ctrl+D', [{ key: 'd', ctrl: true }], options.duplicateSelected),
+    shortcut('edit.delete', 'edit', 'Delete', 'Delete', [{ key: 'Delete' }, { key: 'Backspace' }], options.deleteSelected),
+    shortcut('edit.move-up', 'edit', 'Move up', 'Alt+ArrowUp', [{ key: 'ArrowUp', alt: true }], () => options.moveSelected(-1)),
+    shortcut('edit.move-down', 'edit', 'Move down', 'Alt+ArrowDown', [{ key: 'ArrowDown', alt: true }], () => options.moveSelected(1)),
+    shortcut('tool.insert-path-command', 'tool', 'Insert path command', 'M L H V Z A Q T C S', pathCommandBindings(), (event) =>
+      options.insertPathCommandFromKey(event.key, event.shiftKey)
+    )
+  ] as const satisfies readonly ShortcutDescriptor[];
 
-  function onKeyDown(event: KeyboardEvent): void {
-    const target = event.target as HTMLElement | null;
-    const editing = target?.matches("input, textarea, select, [contenteditable='true']") ?? false;
-    const control = event.ctrlKey || event.metaKey;
+  return createShortcutRegistry(shortcuts, { activeElement: options.activeElement });
+}
 
-    if (control && event.key.toLowerCase() === 'z' && event.shiftKey) {
-      event.preventDefault();
-      options.redo();
-      return;
-    }
-
-    if (control && event.key.toLowerCase() === 'z') {
-      event.preventDefault();
-      options.undo();
-      return;
-    }
-
-    if (control && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      options.downloadSvg();
-      return;
-    }
-
-    if (control && event.key.toLowerCase() === 'o') {
-      event.preventDefault();
-      options.openImportDialog();
-      return;
-    }
-
-    if (control && event.key.toLowerCase() === 'e') {
-      event.preventDefault();
-      options.openExport();
-      return;
-    }
-
-    if (control && event.key.toLowerCase() === 'n') {
-      event.preventDefault();
-      options.createNewTab();
-      return;
-    }
-
-    if (control && event.key === ',') {
-      event.preventDefault();
-      options.openSettings();
-      return;
-    }
-
-    if (control && event.key === '=') {
-      event.preventDefault();
-      options.zoomIn();
-      return;
-    }
-
-    if (control && event.key === '-') {
-      event.preventDefault();
-      options.zoomOut();
-      return;
-    }
-
-    if (control && event.key === '0') {
-      event.preventDefault();
-      options.centerFrame();
-      return;
-    }
-
-    if (control && event.key.toLowerCase() === 'g') {
-      event.preventDefault();
-      options.toggleGrid();
-      return;
-    }
-
-    if (control && event.key.toLowerCase() === 'h') {
-      event.preventDefault();
-      options.toggleHandles();
-      return;
-    }
-
-    if (editing) {
-      return;
-    }
-
-    if (control && event.key.toLowerCase() === 'a') {
-      event.preventDefault();
-      options.selectAll();
-      return;
-    }
-
-    if (control && event.key.toLowerCase() === 'd') {
-      event.preventDefault();
-      options.duplicateSelected();
-      return;
-    }
-
-    if (event.key === 'Delete' || event.key === 'Backspace') {
-      event.preventDefault();
-      options.deleteSelected();
-      return;
-    }
-
-    if (event.altKey && event.key === 'ArrowUp') {
-      event.preventDefault();
-      options.moveSelected(-1);
-      return;
-    }
-
-    if (event.altKey && event.key === 'ArrowDown') {
-      event.preventDefault();
-      options.moveSelected(1);
-      return;
-    }
-
-    if (pathCommandKeys.includes(event.key.toLowerCase())) {
-      options.insertPathCommandFromKey(event.key, event.shiftKey);
-    }
+function shortcut(
+  id: string,
+  category: string,
+  action: string,
+  keys: string,
+  bindings: ShortcutDescriptor['bindings'],
+  run: (event: KeyboardEvent) => void,
+  allowInEditable?: boolean
+): ShortcutDescriptor {
+  if (allowInEditable === undefined) {
+    return { id, category, action, keys, bindings, run };
   }
 
-  return { onKeyDown };
+  return { id, category, action, keys, bindings, run, allowInEditable };
 }

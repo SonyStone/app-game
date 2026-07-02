@@ -3,11 +3,11 @@ import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
 import { decorativeIconProps, type SvgIcon } from "../../editor/svg-icon";
 import { humanFileSize, type FormatterPreset, type FormatterSettings, type FormattingStyle, type ShorthandTags } from "../../formatter";
 import { copyExport, exportFile } from "../../editor/export-utils";
-import { shortcutItems } from "../../editor/defaults";
 import { clamp, themePresetSettings } from "../../editor/tree-utils";
 import type { AppSettings, ExportFormat, ThemePreset } from "../../editor/types";
 import { svgSize, type SvgElementNode } from "../../svg-model";
 import { PreviewSvg } from "../panels/SidePanels";
+import { defaultShortcutItems } from "../shortcuts/shortcutRegistry";
 import ClearIcon from "../ui/icons/Clear.svg";
 import CopyIcon from "../ui/icons/Copy.svg";
 import ExportIcon from "../ui/icons/Export.svg";
@@ -288,7 +288,7 @@ function ShortcutTable() {
   return (
     <table class="shortcut-table w-full border-collapse" data-testid="shortcut-table">
       <tbody>
-        <For each={shortcutItems}>
+        <For each={defaultShortcutItems}>
           {(item) => (
             <tr data-testid={`shortcut-row-${testIdSegment(item.category)}-${testIdSegment(item.action)}`}>
               <ShortcutCell>{item.category}</ShortcutCell>

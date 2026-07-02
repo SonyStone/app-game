@@ -1,8 +1,17 @@
-import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { createActiveElement } from '@solid-primitives/active-element';
+import { writeClipboard } from '@solid-primitives/clipboard';
+import { createEventListener } from '@solid-primitives/event-listener';
+import { useKeyDownList } from '@solid-primitives/keyboard';
+import { createPointerPosition, type PointerStateWithActive } from '@solid-primitives/pointer';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { makePersisted } from '@solid-primitives/storage';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 
+import { createEditorCommand, type EditorCommandEvent } from '../../editor/commands';
 import { defaultSettings } from '../../editor/defaults';
 import { downloadBlob } from '../../editor/export-utils';
 import type { ContextMenuState, DragSelectionMode, ModalId, PanelId } from '../../editor/types';
+import { createDefaultElement, insertSibling, svgSize } from '../../svg-model';
 import { createEditorDocuments } from '../documents/createEditorDocuments';
 import { createSvgNodeActions } from '../documents/createSvgNodeActions';
 import { createFullscreen } from '../fullscreen/createFullscreen';
@@ -18,14 +27,37 @@ import { emptySvgSize, sameSvgSize } from '../viewport/viewport-math';
 import { appRootBaseClass, appRootThemeClass, createAppThemeVars } from './app-theme';
 import { createEditorDerivedState } from './createEditorDerivedState';
 import { createResizableSidebar } from './createResizableSidebar';
-import { createDefaultElement, insertSibling, svgSize } from '../../svg-model';
+
+const inactivePointerState = {
+  pressure: 0,
+  pointerId: -1,
+  tiltX: 0,
+  tiltY: 0,
+  width: 0,
+  height: 0,
+  twist: 0,
+  pointerType: null,
+  x: 0,
+  y: 0,
+  isActive: false
+} as const satisfies PointerStateWithActive;
 
 export function createEditorAppController() {
-  const [settings, setSettings] = createSignal(defaultSettings());
+  const [settings, setSettings] = makePersisted(createSignal(defaultSettings()), {
+    name: 'solid-svg-editor-settings-v1'
+  });
   const [activePanel, setActivePanel] = createSignal<PanelId>('inspector');
   const [modal, setModal] = createSignal<ModalId>();
   const [contextMenu, setContextMenu] = createSignal<ContextMenuState | undefined>();
   const [canvasSvg, setCanvasSvg] = createSignal<SVGSVGElement>();
+  const [viewportShell, setViewportShell] = createSignal<HTMLDivElement>();
+  const [recentCommandEvent, setRecentCommandEvent] = createSignal<EditorCommandEvent>();
+  const activeElement = createActiveElement();
+  const heldKeys = useKeyDownList();
+  const viewportPointer = createPointerPosition({
+    target: () => viewportShell() ?? document.body,
+    value: inactivePointerState
+  });
 
   let appRootRef: HTMLDivElement | undefined;
   const setAppRootRef = (element: HTMLDivElement) => {
@@ -49,10 +81,11 @@ export function createEditorAppController() {
     activeCode,
     canUndo,
     canRedo,
-    pushHistory,
-    mutateRoot,
-    replaceRootWithoutHistory,
-    syncActiveRootCode,
+    commandEvents,
+    dispatchCommand,
+    beginCommandTransaction,
+    updateCommandTransaction,
+    commitCommandTransaction,
     undo,
     redo,
     applyCode,
@@ -62,6 +95,7 @@ export function createEditorAppController() {
     importSvgText,
     markActiveTabClean
   } = documents;
+  commandEvents.listen((event) => setRecentCommandEvent(event));
 
   const svgImport = createSvgImport({ importSvgText });
   const { isSvgDropActive, setImportInputRef, openImportDialog, onImportFile } = svgImport;
@@ -103,7 +137,7 @@ export function createEditorAppController() {
     setSelectionPivot,
     setSelectedPathCommand,
     clearSelection,
-    mutateRoot
+    dispatchCommand
   });
   const {
     deleteSelected,
@@ -142,6 +176,15 @@ export function createEditorAppController() {
   centerOpenedDocument = centerFrame;
 
   const { isFullscreen, toggleFullscreen } = createFullscreen(() => appRootRef);
+  const viewportShellSize = createElementSize(viewportShell);
+  createEffect(() => {
+    if (viewportShellSize.width === null || viewportShellSize.height === null) {
+      return;
+    }
+
+    setViewportSize({ width: viewportShellSize.width, height: viewportShellSize.height });
+  });
+
   const { transientViewportPreview, keepViewportPreviewAlive } = createTransientViewportPreview();
   let rasterPreviewActive: () => boolean = () => false;
   const viewportInteractions = createViewportInteractions({
@@ -153,9 +196,9 @@ export function createEditorAppController() {
     selectNode,
     clearSelection,
     setContextMenu,
-    pushHistory,
-    replaceRootWithoutHistory,
-    syncActiveRootCode,
+    beginCommandTransaction,
+    updateCommandTransaction,
+    commitCommandTransaction,
     canvasSvg,
     zoom,
     setZoom,
@@ -191,17 +234,20 @@ export function createEditorAppController() {
   }
 
   async function copySvgText(): Promise<void> {
-    await navigator.clipboard.writeText(exportText());
+    await writeClipboard(exportText());
   }
 
   const { onKeyDown } = createEditorShortcuts({
+    activeElement,
     redo,
     undo,
     downloadSvg,
+    copySvgText: () => void copySvgText(),
     openImportDialog,
     openExport: () => setModal('export'),
     createNewTab,
     openSettings: () => setModal('settings'),
+    optimizeActive,
     zoomIn: () => zoomBy(Math.SQRT2),
     zoomOut: () => zoomBy(1 / Math.SQRT2),
     centerFrame,
@@ -213,6 +259,7 @@ export function createEditorAppController() {
     moveSelected,
     insertPathCommandFromKey
   });
+  createEventListener(window, 'keydown', onKeyDown);
 
   const derived = createEditorDerivedState({
     settings,
@@ -234,30 +281,6 @@ export function createEditorAppController() {
       .filter(Boolean)
       .join(' ')
   );
-
-  onMount(() => {
-    window.addEventListener('keydown', onKeyDown);
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      const entry = entries[0];
-
-      if (!entry) {
-        return;
-      }
-
-      setViewportSize({ width: entry.contentRect.width, height: entry.contentRect.height });
-    });
-    const viewportElement = document.querySelector('.viewport-shell');
-
-    if (viewportElement) {
-      resizeObserver.observe(viewportElement);
-    }
-
-    onCleanup(() => {
-      window.removeEventListener('keydown', onKeyDown);
-      resizeObserver.disconnect();
-    });
-  });
 
   function openContextMenu(event: MouseEvent, nodeId: string): void {
     event.preventDefault();
@@ -287,7 +310,14 @@ export function createEditorAppController() {
     } else if (action === 'move-down') {
       moveSelected(1);
     } else {
-      mutateRoot((root) => insertSibling(root, menu.nodeId, createDefaultElement('g'), true));
+      const child = createDefaultElement('g');
+      dispatchCommand(
+        createEditorCommand({
+          id: 'svg.insert-group-after',
+          label: 'Insert group',
+          apply: (root) => insertSibling(root, menu.nodeId, child, true)
+        })
+      );
     }
   }
 
@@ -353,7 +383,10 @@ export function createEditorAppController() {
       reformatCompact: () => reformatActiveCode(settings().exportFormatter),
       selectedNodes,
       elementCount,
-      exportText
+      exportText,
+      heldKeys,
+      viewportPointer,
+      recentCommandEvent
     },
     viewport: {
       settings,
@@ -371,6 +404,7 @@ export function createEditorAppController() {
       setOverlayReference,
       clearReference,
       setDragSelectionMode: (mode: DragSelectionMode) => setSettings((current) => ({ ...current, dragSelectionMode: mode })),
+      setViewportShell,
       setCanvasSvg,
       viewRect,
       viewportTransform,
@@ -389,7 +423,8 @@ export function createEditorAppController() {
       onCanvasPointerDown,
       onNodePointerDown,
       startHandleDrag,
-      startTransformBoxDrag
+      startTransformBoxDrag,
+      heldKeys
     },
     contextMenu: {
       state: contextMenu,

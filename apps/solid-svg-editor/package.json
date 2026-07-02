@@ -6,18 +6,34 @@
   "scripts": {
     "dev": "vite --port 3140",
     "build": "tsc -b && vite build",
+    "test": "vitest run --config vitest.config.ts",
     "preview": "vite preview --port 4140"
   },
   "dependencies": {
     "@app-game/utils": "workspace:*",
+    "@solid-primitives/active-element": "catalog:",
+    "@solid-primitives/clipboard": "catalog:",
+    "@solid-primitives/event-bus": "catalog:",
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/fullscreen": "catalog:",
+    "@solid-primitives/keyboard": "catalog:",
+    "@solid-primitives/keyed": "catalog:",
+    "@solid-primitives/memo": "catalog:",
+    "@solid-primitives/pointer": "catalog:",
+    "@solid-primitives/raf": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
+    "@solid-primitives/scheduled": "catalog:",
+    "@solid-primitives/storage": "catalog:",
     "solid-js": "catalog:"
   },
   "devDependencies": {
     "@types/node": "25.8.0",
     "@unocss/vite": "catalog:",
+    "happy-dom": "^20.9.0",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:",
-    "vite-plugin-solid-svg": "0.8.1"
+    "vite-plugin-solid-svg": "0.8.1",
+    "vitest": "catalog:"
   }
 }

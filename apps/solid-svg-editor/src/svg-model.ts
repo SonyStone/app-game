@@ -5,8 +5,10 @@ export interface SvgAttribute {
   readonly value: string;
 }
 
+export type SvgNodeId = string & { readonly __brand: "SvgNodeId" };
+
 export interface SvgElementNode {
-  readonly id: string;
+  readonly id: SvgNodeId;
   readonly kind: "element";
   readonly name: string;
   readonly attrs: readonly SvgAttribute[];
@@ -15,19 +17,19 @@ export interface SvgElementNode {
 }
 
 export interface SvgTextNode {
-  readonly id: string;
+  readonly id: SvgNodeId;
   readonly kind: "text";
   readonly text: string;
 }
 
 export interface SvgCommentNode {
-  readonly id: string;
+  readonly id: SvgNodeId;
   readonly kind: "comment";
   readonly text: string;
 }
 
 export interface SvgCDataNode {
-  readonly id: string;
+  readonly id: SvgNodeId;
   readonly kind: "cdata";
   readonly text: string;
 }
@@ -41,10 +43,10 @@ export type ParseResult =
 
 let nextId = 1;
 
-export function createId(): string {
+export function createId(): SvgNodeId {
   const id = `x${nextId}`;
   nextId += 1;
-  return id;
+  return id as SvgNodeId;
 }
 
 export function resetIdCounter(): void {

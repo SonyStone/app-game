@@ -1,8 +1,10 @@
+import { Key } from '@solid-primitives/keyed';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
-import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
+import { decorativeIconProps } from '../../editor/svg-icon';
 import type { EditorTab, PanelId } from '../../editor/types';
+import { editorPanels } from '../panels/panelRegistry';
 import CopyIcon from '../ui/icons/Copy.svg';
 import ExportIcon from '../ui/icons/Export.svg';
 import GodSvgIcon from '../ui/icons/GodSvg.svg';
@@ -11,16 +13,12 @@ import ImportIcon from '../ui/icons/Import.svg';
 import { IconButton } from '../ui/IconButton';
 import { MenuButton, MenuLink } from '../ui/MenuItem';
 import CreateTabIcon from './icons/CreateTab.svg';
-import DebugIcon from './icons/Debug.svg';
 import GearIcon from './icons/Gear.svg';
-import InspectorIcon from './icons/Inspector.svg';
 import LinkIcon from './icons/Link.svg';
 import MoreIcon from './icons/More.svg';
-import PreviewsIcon from './icons/Previews.svg';
 import RedoIcon from './icons/Redo.svg';
 import SaveIcon from './icons/Save.svg';
 import ShortcutPanelIcon from './icons/ShortcutPanel.svg';
-import TextFileIcon from './icons/TextFile.svg';
 import UndoIcon from './icons/Undo.svg';
 
 export function TopBar(props: {
@@ -128,44 +126,44 @@ export function TopBar(props: {
         class="tabs-strip flex h-full min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]"
         data-testid="tabs-strip"
       >
-        <For each={props.tabs}>
+        <Key each={props.tabs} by="id">
           {(tab) => (
             <div
               role="tab"
               tabIndex={0}
               class="tab-button relative flex h-6.5 max-w-52.5 cursor-pointer items-center gap-1.5 rounded-t-[5px] border border-[#22283d] bg-[#151928] py-0 pr-1.5 pl-2.5 text-[var(--muted)] [&.active]:border-[#415177] [&.active]:bg-[#24304d] [&.active]:text-[#f4f7ff] [&.dirty>span::after]:text-[var(--warning)] [&.dirty>span::after]:content-['*']"
-              classList={{ active: props.activeTabId === tab.id, dirty: tab.dirty }}
-              data-testid={`tab-${tab.id}`}
-              onClick={() => props.setActiveTabId(tab.id)}
+              classList={{ active: props.activeTabId === tab().id, dirty: tab().dirty }}
+              data-testid={`tab-${tab().id}`}
+              onClick={() => props.setActiveTabId(tab().id)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
-                  props.setActiveTabId(tab.id);
+                  props.setActiveTabId(tab().id);
                 }
               }}
               onAuxClick={(event) => {
                 if (event.button === 1) {
-                  props.closeTab(tab.id);
+                  props.closeTab(tab().id);
                 }
               }}
             >
-              <span class="overflow-hidden text-ellipsis whitespace-nowrap" data-testid={`tab-label-${tab.id}`}>
-                {tab.name}
+              <span class="overflow-hidden text-ellipsis whitespace-nowrap" data-testid={`tab-label-${tab().id}`}>
+                {tab().name}
               </span>
               <button
                 type="button"
                 class="tab-close grid h-4.5 w-4.5 cursor-pointer place-items-center rounded border-0 bg-transparent text-inherit hover:bg-[#33405f]"
-                data-testid={`tab-close-${tab.id}`}
+                data-testid={`tab-close-${tab().id}`}
                 onClick={(event) => {
                   event.stopPropagation();
-                  props.closeTab(tab.id);
+                  props.closeTab(tab().id);
                 }}
               >
                 ×
               </button>
             </div>
           )}
-        </For>
+        </Key>
         <IconButton icon={CreateTabIcon} label="New tab" testId="new-tab-button" onClick={props.createNewTab} />
       </div>
       <div class="flex min-w-0 items-center gap-1" data-testid="topbar-file-actions">
@@ -189,16 +187,9 @@ export function PanelTabs(props: {
   readonly activePanel: PanelId;
   readonly setActivePanel: (panel: PanelId) => void;
 }) {
-  const panels = [
-    { id: 'inspector', label: 'Inspector', icon: InspectorIcon },
-    { id: 'code', label: 'Code editor', icon: TextFileIcon },
-    { id: 'previews', label: 'Previews', icon: PreviewsIcon },
-    { id: 'debug', label: 'Debug', icon: DebugIcon }
-  ] as const satisfies readonly { readonly id: PanelId; readonly label: string; readonly icon: SvgIcon }[];
-
   return (
     <div class="panel-tabs flex min-w-0 items-center justify-center gap-1.5" data-testid="panel-tabs">
-      <For each={panels}>
+      <For each={editorPanels}>
         {(panel) => (
           <button
             type="button"

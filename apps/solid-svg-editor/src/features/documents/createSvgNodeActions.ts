@@ -1,9 +1,11 @@
 import type { Accessor } from 'solid-js';
 
+import { svgCapabilities } from '../../editor/capabilities';
+import { createEditorCommand, type EditorCommand } from '../../editor/commands';
 import { insertPathCommand, optimizeNode } from '../../editor/tree-utils';
 import type { AppSettings } from '../../editor/types';
 import { formatPathData, parsePathData } from '../../path-data';
-import { isValidChild, type RecognizedElement } from '../../svg-db';
+import type { RecognizedElement } from '../../svg-db';
 import {
   appendChild,
   cloneWithFreshIds,
@@ -34,7 +36,7 @@ export function createSvgNodeActions(options: {
   readonly setSelectionPivot: (id: string | undefined) => void;
   readonly setSelectedPathCommand: (selection: PathCommandSelection | undefined) => void;
   readonly clearSelection: () => void;
-  readonly mutateRoot: (updater: (root: SvgElementNode) => SvgElementNode, push?: boolean) => void;
+  readonly dispatchCommand: (command: EditorCommand) => void;
 }) {
   function selectedEditableIds(): readonly string[] {
     return options.selectedIds().filter((id) => id !== options.activeRoot().id);
@@ -47,7 +49,13 @@ export function createSvgNodeActions(options: {
       return;
     }
 
-    options.mutateRoot((root) => ids.reduce((next, id) => removeNode(next, id), root));
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.delete-selection',
+        label: ids.length === 1 ? 'Delete node' : `Delete ${ids.length} nodes`,
+        apply: (root) => ids.reduce((next, id) => removeNode(next, id), root)
+      })
+    );
     options.clearSelection();
   }
 
@@ -58,19 +66,25 @@ export function createSvgNodeActions(options: {
       return;
     }
 
-    options.mutateRoot((root) => {
-      let next = root;
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.duplicate-selection',
+        label: ids.length === 1 ? 'Duplicate node' : `Duplicate ${ids.length} nodes`,
+        apply: (root) => {
+          let next = root;
 
-      for (const id of ids) {
-        const node = findNode(next, id);
+          for (const id of ids) {
+            const node = findNode(next, id);
 
-        if (node) {
-          next = insertSibling(next, id, cloneWithFreshIds(node), true);
+            if (node) {
+              next = insertSibling(next, id, cloneWithFreshIds(node), true);
+            }
+          }
+
+          return next;
         }
-      }
-
-      return next;
-    });
+      })
+    );
   }
 
   function moveSelected(direction: -1 | 1): void {
@@ -80,7 +94,13 @@ export function createSvgNodeActions(options: {
       return;
     }
 
-    options.mutateRoot((root) => ids.reduce((next, id) => moveNode(next, id, direction), root));
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.move-selection',
+        label: direction === -1 ? 'Move selection up' : 'Move selection down',
+        apply: (root) => ids.reduce((next, id) => moveNode(next, id, direction), root)
+      })
+    );
   }
 
   function reorderInspectorNodes(nodeIds: readonly string[], targetId: string, position: DropPosition): void {
@@ -90,7 +110,13 @@ export function createSvgNodeActions(options: {
       return;
     }
 
-    options.mutateRoot((root) => moveNodesTo(root, ids, targetId, position));
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.reorder-nodes',
+        label: 'Reorder nodes',
+        apply: (root) => moveNodesTo(root, ids, targetId, position)
+      })
+    );
     options.setSelectedIds(ids);
     options.setSelectionPivot(ids[ids.length - 1]);
     options.setSelectedPathCommand(undefined);
@@ -99,9 +125,15 @@ export function createSvgNodeActions(options: {
   function addElement(name: RecognizedElement | string): void {
     const selectedElement = options.selectedNodes().find((node): node is SvgElementNode => node.kind === 'element');
     const root = options.activeRoot();
-    const parent = selectedElement && isValidChild(selectedElement.name, name) ? selectedElement : root;
+    const parent = selectedElement && svgCapabilities.isValidChild(selectedElement.name, name) ? selectedElement : root;
     const child = createDefaultElement(name);
-    options.mutateRoot((item) => appendChild(item, parent.id, child));
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.add-element',
+        label: `Add ${name}`,
+        apply: (item) => appendChild(item, parent.id, child)
+      })
+    );
     options.setSelectedIds([child.id]);
   }
 
@@ -110,48 +142,76 @@ export function createSvgNodeActions(options: {
       options.selectedNodes().find((node): node is SvgElementNode => node.kind === 'element') ?? options.activeRoot();
     const text = kind === 'comment' ? ' Comment ' : '';
     const child = { id: createId(), kind, text } satisfies SvgNode;
-    options.mutateRoot((item) => appendChild(item, selectedElement.id, child));
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.add-text-node',
+        label: `Add ${kind}`,
+        apply: (item) => appendChild(item, selectedElement.id, child)
+      })
+    );
     options.setSelectedIds([child.id]);
   }
 
   function updateElementAttribute(nodeId: string, name: string, value: string): void {
-    options.mutateRoot((root) =>
-      updateNode(root, nodeId, (node) => {
-        if (node.kind !== 'element') {
-          return node;
-        }
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.set-attribute',
+        label: `Set ${name}`,
+        apply: (root) =>
+          updateNode(root, nodeId, (node) => {
+            if (node.kind !== 'element') {
+              return node;
+            }
 
-        return setAttribute(node, name, value);
+            return setAttribute(node, name, value);
+          })
       })
     );
   }
 
   function removeElementAttribute(nodeId: string, name: string): void {
-    options.mutateRoot((root) =>
-      updateNode(root, nodeId, (node) => {
-        if (node.kind !== 'element') {
-          return node;
-        }
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.remove-attribute',
+        label: `Remove ${name}`,
+        apply: (root) =>
+          updateNode(root, nodeId, (node) => {
+            if (node.kind !== 'element') {
+              return node;
+            }
 
-        return removeAttribute(node, name);
+            return removeAttribute(node, name);
+          })
       })
     );
   }
 
   function updateBasicNodeText(nodeId: string, text: string): void {
-    options.mutateRoot((root) =>
-      updateNode(root, nodeId, (node) => {
-        if (node.kind === 'text' || node.kind === 'comment' || node.kind === 'cdata') {
-          return { ...node, text };
-        }
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.update-text-node',
+        label: 'Update text node',
+        apply: (root) =>
+          updateNode(root, nodeId, (node) => {
+            if (node.kind === 'text' || node.kind === 'comment' || node.kind === 'cdata') {
+              return { ...node, text };
+            }
 
-        return node;
+            return node;
+          })
       })
     );
   }
 
   function optimizeActive(): void {
-    options.mutateRoot((root) => optimizeRoot(root, options.settings()));
+    const settings = options.settings();
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.optimize',
+        label: 'Optimize SVG',
+        apply: (root) => optimizeRoot(root, settings)
+      })
+    );
   }
 
   function insertPathCommandFromKey(key: string, absolute: boolean): void {
@@ -162,15 +222,20 @@ export function createSvgNodeActions(options: {
     }
 
     const command = absolute ? key.toUpperCase() : key.toLowerCase();
-    options.mutateRoot((root) =>
-      updateNode(root, selected.nodeId, (node) => {
-        if (node.kind !== 'element') {
-          return node;
-        }
+    options.dispatchCommand(
+      createEditorCommand({
+        id: 'svg.insert-path-command',
+        label: `Insert ${command} path command`,
+        apply: (root) =>
+          updateNode(root, selected.nodeId, (node) => {
+            if (node.kind !== 'element') {
+              return node;
+            }
 
-        const commands = parsePathData(getAttribute(node, 'd', true));
-        const nextCommands = insertPathCommand(commands, selected.index, command);
-        return setAttribute(node, 'd', formatPathData(nextCommands));
+            const commands = parsePathData(getAttribute(node, 'd', true));
+            const nextCommands = insertPathCommand(commands, selected.index, command);
+            return setAttribute(node, 'd', formatPathData(nextCommands));
+          })
       })
     );
     options.setSelectedPathCommand({ nodeId: selected.nodeId, index: selected.index + 1 });

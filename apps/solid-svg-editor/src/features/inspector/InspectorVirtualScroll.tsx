@@ -1,4 +1,5 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount, type JSX } from 'solid-js';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { createEffect, createMemo, createSignal, type JSX } from 'solid-js';
 
 import { estimateInspectorRowHeight, flattenInspectorRows } from '../../editor/tree-utils';
 import type { InspectorRow, VirtualInspectorRow } from '../../editor/types';
@@ -22,6 +23,8 @@ export function createInspectorVirtualScroll(props: { readonly root: () => SvgEl
   const virtualRowCache = new Map<string, VirtualInspectorRow>();
   let scrollerRef: HTMLDivElement | undefined;
   let virtualSpacerRef: HTMLDivElement | undefined;
+  const [scrollerElement, setScrollerElement] = createSignal<HTMLDivElement>();
+  const scrollerSize = createElementSize(scrollerElement);
 
   const rows = createMemo(
     (previous: readonly InspectorRow[] | undefined) => flattenInspectorRows(props.root(), previous),
@@ -72,7 +75,7 @@ export function createInspectorVirtualScroll(props: { readonly root: () => SvgEl
 
     const topAfterEnd =
       endIndex >= layout.rows.length ? layout.totalHeight : (layout.tops[endIndex] ?? layout.totalHeight);
-    const activeIds = new Set(layout.rows.map((row) => row.node.id));
+    const activeIds = new Set<string>(layout.rows.map((row) => row.node.id));
     const visibleRows = layout.rows.slice(startIndex, endIndex).map((row, offset) => {
       const index = startIndex + offset;
       const top = layout.tops[index] ?? 0;
@@ -114,39 +117,20 @@ export function createInspectorVirtualScroll(props: { readonly root: () => SvgEl
   });
   const virtualSpacerHeight = createMemo(() => visibleWindow().totalHeight + Math.max(0, viewportHeight() - 24));
 
-  onMount(() => {
-    const scroller = scrollerRef;
+  createEffect(() => {
+    const scroller = scrollerElement();
+    const height = scrollerSize.height;
 
-    if (!scroller) {
+    if (!scroller || height === null) {
       return;
     }
 
-    let resizeFrame: number | undefined;
-    const scheduleViewportMeasure = () => {
-      if (resizeFrame !== undefined) {
-        return;
-      }
-
-      resizeFrame = requestAnimationFrame(() => {
-        resizeFrame = undefined;
-        setViewportHeight(scroller.clientHeight);
-      });
-    };
-
-    setViewportHeight(scroller.clientHeight);
-    const observer = new ResizeObserver(scheduleViewportMeasure);
-    observer.observe(scroller);
-    onCleanup(() => {
-      observer.disconnect();
-
-      if (resizeFrame !== undefined) {
-        cancelAnimationFrame(resizeFrame);
-      }
-    });
+    setViewportHeight(height);
   });
 
   function setScrollerRef(element: HTMLDivElement): void {
     scrollerRef = element;
+    setScrollerElement(element);
   }
 
   function setVirtualSpacerRef(element: HTMLDivElement): void {
@@ -258,53 +242,24 @@ export function VirtualInspectorRowShell(props: {
   readonly measureRow: (id: string, height: number) => void;
   readonly children: JSX.Element;
 }) {
-  let rowRef: HTMLDivElement | undefined;
-  let measureFrame: number | undefined;
-  const measure = () => {
-    const element = rowRef;
-
-    if (element) {
-      props.measureRow(props.row.node.id, element.offsetHeight);
-    }
-  };
-  const scheduleMeasure = () => {
-    if (measureFrame !== undefined) {
-      return;
-    }
-
-    measureFrame = requestAnimationFrame(() => {
-      measureFrame = undefined;
-      measure();
-    });
-  };
-
-  onMount(() => {
-    const element = rowRef;
-
-    if (!element) {
-      return;
-    }
-
-    measure();
-    const observer = new ResizeObserver(scheduleMeasure);
-    observer.observe(element);
-    onCleanup(() => {
-      observer.disconnect();
-
-      if (measureFrame !== undefined) {
-        cancelAnimationFrame(measureFrame);
-      }
-    });
-  });
+  const [rowElement, setRowElement] = createSignal<HTMLDivElement>();
+  const rowSize = createElementSize(rowElement);
 
   createEffect(() => {
-    props.row.node.id;
-    queueMicrotask(scheduleMeasure);
+    const element = rowElement();
+    const id = props.row.node.id;
+    const height = rowSize.height;
+
+    if (!element || height === null) {
+      return;
+    }
+
+    props.measureRow(id, height || element.offsetHeight);
   });
 
   return (
     <div
-      ref={(element) => (rowRef = element)}
+      ref={setRowElement}
       class="pr-0.75 [overflow-anchor:none]"
       data-testid={`inspector-virtual-row-${props.row.node.id}`}
       style={{

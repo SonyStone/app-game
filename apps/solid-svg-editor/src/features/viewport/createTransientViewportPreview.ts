@@ -1,27 +1,23 @@
-import { createSignal, onCleanup } from 'solid-js';
+import { debounce } from '@solid-primitives/scheduled';
+import { createSignal } from 'solid-js';
 
 export function createTransientViewportPreview() {
   const [transientViewportPreview, setTransientViewportPreview] = createSignal(false);
-  let viewportPreviewTimeout: number | undefined;
+  const stopPreview = debounce(() => setTransientViewportPreview(false), 140);
+  const stopPreviewQuickly = debounce(() => setTransientViewportPreview(false), 100);
 
   function keepViewportPreviewAlive(delay = 140): void {
     setTransientViewportPreview(true);
+    stopPreview.clear();
+    stopPreviewQuickly.clear();
 
-    if (viewportPreviewTimeout !== undefined) {
-      window.clearTimeout(viewportPreviewTimeout);
+    if (delay <= 100) {
+      stopPreviewQuickly();
+      return;
     }
 
-    viewportPreviewTimeout = window.setTimeout(() => {
-      viewportPreviewTimeout = undefined;
-      setTransientViewportPreview(false);
-    }, delay);
+    stopPreview();
   }
-
-  onCleanup(() => {
-    if (viewportPreviewTimeout !== undefined) {
-      window.clearTimeout(viewportPreviewTimeout);
-    }
-  });
 
   return {
     transientViewportPreview,

@@ -17,7 +17,7 @@ export function createEditorSelection(options: { readonly root: Accessor<SvgElem
   );
 
   function selectNode(nodeId: string, event?: MouseEvent | PointerEvent): void {
-    const flattened = flattenAllNodes(options.root()).map((node) => node.id);
+    const flattened: readonly string[] = flattenAllNodes(options.root()).map((node) => node.id);
     const existing = selectedIds();
 
     if (event?.shiftKey && selectionPivot()) {

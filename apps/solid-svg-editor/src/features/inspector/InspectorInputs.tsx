@@ -1,6 +1,7 @@
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
+import { svgCapabilities } from '../../editor/capabilities';
 import { parseTransformList } from '../../editor/geometry';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import {
@@ -27,15 +28,6 @@ import {
   updatePoint,
   type PathCommand
 } from '../../path-data';
-import {
-  attributeEnumValues,
-  colorAttributesWithCurrentColorAllowed,
-  colorAttributesWithNoneAllowed,
-  colorAttributesWithUrlAllowed,
-  getAttributeDefault,
-  getAttributeType,
-  isAttributeRecognized
-} from '../../svg-db';
 import { getAttribute, type SvgAttribute, type SvgElementNode } from '../../svg-model';
 import DeleteIcon from '../ui/icons/Delete.svg';
 import InsertAfterIcon from '../ui/icons/InsertAfter.svg';
@@ -63,9 +55,9 @@ export function RootElementEditor(props: {
   readonly root: SvgElementNode;
   readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
 }) {
-  const rootValue = (name: string) => getAttribute(props.root, name, true) || getAttributeDefault(name);
+  const rootValue = (name: string) => getAttribute(props.root, name, true) || svgCapabilities.getAttributeDefault(name);
   const viewBoxValues = createMemo(() =>
-    listValues(rootValue('viewBox'), 4, listValues(getAttributeDefault('viewBox'), 4))
+    listValues(rootValue('viewBox'), 4, listValues(svgCapabilities.getAttributeDefault('viewBox'), 4))
   );
   const unknownAttrs = createMemo(() => props.root.attrs.filter((attr) => !isRootEditorAttribute(attr.name)));
 
@@ -164,11 +156,17 @@ export function AttributeGrid(props: {
   readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
 }) {
   const attrs = createMemo(() => orderedAttributes(props.node));
-  const unknownAttrs = createMemo(() => attrs().filter((attr) => !isAttributeRecognized(props.node.name, attr.name)));
-  const compactAttrs = createMemo(() => attrs().filter((attr) => isCompactAttribute(props.node, attr)));
-  const pathDataAttr = createMemo(() => attrs().find((attr) => getAttributeType(attr.name) === 'pathdata'));
+  const unknownAttrs = createMemo(() =>
+    attrs().filter((attr) => !svgCapabilities.isAttributeRecognized(props.node.name, attr.name))
+  );
+  const compactAttrs = createMemo(() =>
+    attrs().filter((attr) => svgCapabilities.isCompactAttribute(props.node.name, attr.name))
+  );
+  const pathDataAttr = createMemo(() =>
+    attrs().find((attr) => svgCapabilities.getAttributeType(attr.name) === 'pathdata')
+  );
   const pointsAttr = createMemo(() =>
-    attrs().find((attr) => getAttributeType(attr.name) === 'list' && attr.name === 'points')
+    attrs().find((attr) => svgCapabilities.getAttributeType(attr.name) === 'list' && attr.name === 'points')
   );
 
   return (
@@ -221,11 +219,8 @@ function AttributeControl(props: {
   readonly attr: SvgAttribute;
   readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
 }) {
-  const type = () => getAttributeType(props.attr.name);
-  const enumValues = () => {
-    const values: Record<string, readonly string[]> = attributeEnumValues;
-    return values[props.attr.name] ?? [];
-  };
+  const capability = () => svgCapabilities.getAttribute(props.attr.name);
+  const type = () => capability().type;
   const update = (value: string) => props.updateElementAttribute(props.node.id, props.attr.name, value);
 
   return (
@@ -249,7 +244,7 @@ function AttributeControl(props: {
           aria-label={props.attr.name}
           data-testid={`attribute-input-${props.node.id}-${props.attr.name}`}
           value={props.attr.value}
-          placeholder={getAttributeDefault(props.attr.name)}
+          placeholder={capability().defaultValue}
           onChange={(event) => update(clampNumericAttribute(props.attr.name, event.currentTarget.value))}
         />
       </Show>
@@ -262,7 +257,7 @@ function AttributeControl(props: {
           value={props.attr.value}
           onChange={(event) => update(event.currentTarget.value)}
         >
-          <For each={enumValues()}>{(value) => <option value={value}>{value}</option>}</For>
+          <For each={capability().enumValues}>{(value) => <option value={value}>{value}</option>}</For>
         </select>
       </Show>
       <Show when={type() === 'color'}>
@@ -306,7 +301,7 @@ function ColorField(props: {
         aria-label={props.attr.name}
         data-testid={`color-input-${props.nodeId}-${props.attr.name}`}
         value={props.attr.value}
-        placeholder={getAttributeDefault(props.attr.name)}
+        placeholder={svgCapabilities.getAttributeDefault(props.attr.name)}
         onChange={(event) => props.update(event.currentTarget.value)}
         list={`color-options-${props.nodeId}-${props.attr.name}`}
       />
@@ -337,13 +332,13 @@ function ColorField(props: {
         id={`color-options-${props.nodeId}-${props.attr.name}`}
         data-testid={`color-options-${props.nodeId}-${props.attr.name}`}
       >
-        <Show when={includesString(colorAttributesWithNoneAllowed, props.attr.name)}>
+        <Show when={svgCapabilities.getAttribute(props.attr.name).color.allowNone}>
           <option value="none" />
         </Show>
-        <Show when={includesString(colorAttributesWithUrlAllowed, props.attr.name)}>
+        <Show when={svgCapabilities.getAttribute(props.attr.name).color.allowUrl}>
           <option value="url(#linearGradient1)" />
         </Show>
-        <Show when={includesString(colorAttributesWithCurrentColorAllowed, props.attr.name)}>
+        <Show when={svgCapabilities.getAttribute(props.attr.name).color.allowCurrentColor}>
           <option value="currentColor" />
         </Show>
       </datalist>
@@ -859,21 +854,8 @@ function TransformField(props: {
   );
 }
 
-function isCompactAttribute(node: SvgElementNode, attr: SvgAttribute): boolean {
-  if (!isAttributeRecognized(node.name, attr.name)) {
-    return false;
-  }
-
-  const type = getAttributeType(attr.name);
-  return type !== 'pathdata' && !(type === 'list' && attr.name === 'points');
-}
-
 function isRootEditorAttribute(name: string): boolean {
   return rootEditorAttributes.some((attributeName) => attributeName === name);
-}
-
-function includesString(values: readonly string[], value: string): boolean {
-  return values.some((item) => item === value);
 }
 
 function listValues(value: string, count: number, fallback: readonly string[] = []): string[] {

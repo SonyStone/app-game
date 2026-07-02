@@ -1,4 +1,6 @@
-import type { ExportFormat } from "./types";
+import { newClipboardItem, writeClipboard } from '@solid-primitives/clipboard';
+
+import type { ExportFormat } from './types';
 
 interface ExportDimensions {
   readonly width: number;
@@ -9,7 +11,7 @@ interface ExportDimensions {
 export function downloadBlob(content: BlobPart, filename: string, type: string): void {
   const blob = content instanceof Blob ? content : new Blob([content], { type });
   const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
+  const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
   anchor.click();
@@ -18,7 +20,7 @@ export function downloadBlob(content: BlobPart, filename: string, type: string):
 
 export async function exportFile(format: ExportFormat, svgText: string, dimensions: ExportDimensions, scale: number, background: string): Promise<void> {
   if (format === "svg") {
-    downloadBlob(svgText, "export.svg", "image/svg+xml");
+    downloadBlob(svgText, 'export.svg', 'image/svg+xml');
     return;
   }
 
@@ -27,14 +29,13 @@ export async function exportFile(format: ExportFormat, svgText: string, dimensio
 }
 
 export async function copyExport(format: ExportFormat, svgText: string, dimensions: ExportDimensions, scale: number, background: string): Promise<void> {
-  if (format === "svg") {
-    await navigator.clipboard.writeText(svgText);
+  if (format === 'svg') {
+    await writeClipboard(svgText);
     return;
   }
 
   const blob = await rasterizeSvg(svgText, dimensions, scale, background, format);
-  const clipboardItem = new ClipboardItem({ [blob.type]: blob });
-  await navigator.clipboard.write([clipboardItem]);
+  await writeClipboard([newClipboardItem(blob.type, blob)]);
 }
 
 async function rasterizeSvg(
@@ -42,38 +43,38 @@ async function rasterizeSvg(
   dimensions: ExportDimensions,
   scale: number,
   background: string,
-  format: Exclude<ExportFormat, "svg">
+  format: Exclude<ExportFormat, 'svg'>
 ): Promise<Blob> {
-  const blob = new Blob([svgText], { type: "image/svg+xml" });
+  const blob = new Blob([svgText], { type: 'image/svg+xml' });
   const url = URL.createObjectURL(blob);
   const image = new Image();
   image.decoding = "async";
   image.src = url;
   await image.decode();
-  const canvas = document.createElement("canvas");
+  const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(dimensions.width * scale));
   canvas.height = Math.max(1, Math.round(dimensions.height * scale));
-  const context = canvas.getContext("2d");
+  const context = canvas.getContext('2d');
 
   if (!context) {
     URL.revokeObjectURL(url);
-    throw new Error("Canvas is unavailable");
+    throw new Error('Canvas is unavailable');
   }
 
-  if (format === "jpeg") {
+  if (format === 'jpeg') {
     context.fillStyle = background;
     context.fillRect(0, 0, canvas.width, canvas.height);
   }
 
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   URL.revokeObjectURL(url);
-  const mime = format === "jpeg" ? "image/jpeg" : `image/${format}`;
+  const mime = format === 'jpeg' ? 'image/jpeg' : `image/${format}`;
   const output = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((nextBlob) => {
       if (nextBlob) {
         resolve(nextBlob);
       } else {
-        reject(new Error("Raster export failed"));
+        reject(new Error('Raster export failed'));
       }
     }, mime);
   });

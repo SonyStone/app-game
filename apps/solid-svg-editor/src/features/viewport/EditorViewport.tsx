@@ -29,6 +29,7 @@ export function EditorViewport(props: {
   readonly setOverlayReference: (overlay: boolean) => void;
   readonly clearReference: () => void;
   readonly setDragSelectionMode: (mode: DragSelectionMode) => void;
+  readonly setViewportShell: (element: HTMLDivElement) => void;
   readonly setCanvasSvg: (element: SVGSVGElement) => void;
   readonly viewRect: ViewRect;
   readonly viewportTransform: string;
@@ -74,6 +75,7 @@ export function EditorViewport(props: {
         clearReference={props.clearReference}
       />
       <div
+        ref={props.setViewportShell}
         class="viewport-shell relative min-h-0 min-w-0 overflow-hidden rounded-md border-2 border-[#2b324c] bg-[var(--canvas)]"
         data-testid="viewport-shell"
       >

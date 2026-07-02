@@ -1,10 +1,14 @@
-import { createEffect, createSignal, onCleanup, onMount, type Accessor, type Setter } from 'solid-js';
+import { createEventListenerMap } from '@solid-primitives/event-listener';
+import { createEffect, createSignal, type Accessor, type Setter } from 'solid-js';
 
+import { createEditorCommand, type EditorCommand } from '../../editor/commands';
 import { rectCenter, rectFromPoints, translateMatrix, unionRects, type Point, type Rect } from '../../editor/geometry';
 import { setPointerCaptureSafely } from '../../editor/pointer';
 import { clamp } from '../../editor/tree-utils';
 import type {
+  ActiveCanvasRotateDrag,
   ActiveDrag,
+  ActiveHandleDrag,
   ActiveMarqueeDrag,
   ActiveMoveSelectionDrag,
   ActivePanDrag,
@@ -31,6 +35,9 @@ import {
   type TouchGesture,
   type TouchPoint
 } from './touch-gesture';
+import { createDefaultViewportTools } from './tools/defaultViewportTools';
+import { createViewportToolRegistry } from './tools/toolRegistry';
+import { createRafQueue } from '../ui/createRafQueue';
 
 export function createViewportInteractions(options: {
   readonly activeRoot: Accessor<SvgElementNode>;
@@ -41,9 +48,9 @@ export function createViewportInteractions(options: {
   readonly selectNode: (nodeId: string, event?: MouseEvent | PointerEvent) => void;
   readonly clearSelection: () => void;
   readonly setContextMenu: Setter<ContextMenuState | undefined>;
-  readonly pushHistory: () => void;
-  readonly replaceRootWithoutHistory: (nextRoot: SvgElementNode, syncCode?: boolean) => void;
-  readonly syncActiveRootCode: () => void;
+  readonly beginCommandTransaction: () => void;
+  readonly updateCommandTransaction: (command: EditorCommand) => void;
+  readonly commitCommandTransaction: () => void;
   readonly canvasSvg: Accessor<SVGSVGElement | undefined>;
   readonly zoom: Accessor<number>;
   readonly setZoom: Setter<number>;
@@ -67,9 +74,7 @@ export function createViewportInteractions(options: {
   const [marqueeRect, setMarqueeRect] = createSignal<Rect | undefined>();
 
   const touchPointers = new Map<number, TouchPoint>();
-  let pendingPanFrame: number | undefined;
   let pendingPanMove: { readonly drag: ActivePanDrag; readonly clientX: number; readonly clientY: number } | undefined;
-  let pendingHandleFrame: number | undefined;
   let pendingHandleMove:
     | {
         readonly pointerId: number;
@@ -78,33 +83,49 @@ export function createViewportInteractions(options: {
         readonly clientY: number;
       }
     | undefined;
-  let selectionBoxFrame: number | undefined;
+  const panMoveFrame = createRafQueue(flushPendingPanMove);
+  const handleMoveFrame = createRafQueue(flushPendingHandleMove);
+  const selectionBoxFrame = createRafQueue(() => setSelectionBox(measureSelectionBox(options.selectedIds())));
+  const toolRegistry = createViewportToolRegistry(
+    createDefaultViewportTools({
+      activeDrag,
+      clearContextMenu,
+      handleViewportWheel,
+      hasTouchPoint,
+      beginTouchPoint,
+      updateTouchPoint,
+      finishTouchPoint,
+      beginPanDrag: startPanDrag,
+      updatePanDrag,
+      finishPanDrag,
+      beginCanvasRotateDrag: startCanvasRotateDrag,
+      updateCanvasRotateDrag,
+      finishCanvasRotateDrag,
+      handleCanvasSelectionPointerDown,
+      handleNodeSelectionPointerDown,
+      updateMarqueeDrag: updateMarqueeDragFromEvent,
+      finishMarqueeDrag: finishMarqueeDragFromEvent,
+      updateMoveSelectionDrag: updateMoveSelectionDragFromEvent,
+      finishMoveSelectionDrag,
+      beginElementHandleDrag,
+      updateElementHandleDrag,
+      finishElementHandleDrag,
+      beginTransformBoxDrag,
+      updateTransformBoxDrag: updateTransformBoxDragFromEvent,
+      finishTransformBoxDrag,
+      cancelActiveDrag
+    })
+  );
 
-  onMount(() => {
-    window.addEventListener('pointermove', onWindowPointerMove);
-    window.addEventListener('pointerup', onWindowPointerUp);
-    window.addEventListener('pointercancel', onWindowPointerCancel);
-
-    onCleanup(() => {
-      window.removeEventListener('pointermove', onWindowPointerMove);
-      window.removeEventListener('pointerup', onWindowPointerUp);
-      window.removeEventListener('pointercancel', onWindowPointerCancel);
-    });
-  });
-
-  onCleanup(() => {
-    if (pendingPanFrame !== undefined) {
-      window.cancelAnimationFrame(pendingPanFrame);
-    }
-
-    if (pendingHandleFrame !== undefined) {
-      window.cancelAnimationFrame(pendingHandleFrame);
-    }
-
-    if (selectionBoxFrame !== undefined) {
-      window.cancelAnimationFrame(selectionBoxFrame);
-    }
-  });
+  createEventListenerMap(
+    window,
+    {
+      pointermove: onWindowPointerMove,
+      pointerup: onWindowPointerUp,
+      pointercancel: onWindowPointerCancel
+    },
+    { passive: false }
+  );
 
   createEffect(() => {
     options.activeRoot();
@@ -117,14 +138,7 @@ export function createViewportInteractions(options: {
   });
 
   function scheduleSelectionBoxUpdate(): void {
-    if (selectionBoxFrame !== undefined) {
-      window.cancelAnimationFrame(selectionBoxFrame);
-    }
-
-    selectionBoxFrame = window.requestAnimationFrame(() => {
-      selectionBoxFrame = undefined;
-      setSelectionBox(measureSelectionBox(options.selectedIds()));
-    });
+    selectionBoxFrame.schedule();
   }
 
   function measureSelectionBox(ids: readonly string[]): Rect | undefined {
@@ -183,17 +197,13 @@ export function createViewportInteractions(options: {
     };
   }
 
+  function clearContextMenu(): void {
+    options.setContextMenu(undefined);
+  }
+
   function schedulePanMove(drag: ActivePanDrag, clientX: number, clientY: number): void {
     pendingPanMove = { drag, clientX, clientY };
-
-    if (pendingPanFrame !== undefined) {
-      return;
-    }
-
-    pendingPanFrame = window.requestAnimationFrame(() => {
-      pendingPanFrame = undefined;
-      flushPendingPanMove();
-    });
+    panMoveFrame.schedule();
   }
 
   function flushPendingPanMove(): void {
@@ -217,15 +227,7 @@ export function createViewportInteractions(options: {
 
   function scheduleHandleMove(pointerId: number, handle: HandleDescriptor, clientX: number, clientY: number): void {
     pendingHandleMove = { pointerId, handle, clientX, clientY };
-
-    if (pendingHandleFrame !== undefined) {
-      return;
-    }
-
-    pendingHandleFrame = window.requestAnimationFrame(() => {
-      pendingHandleFrame = undefined;
-      flushPendingHandleMove();
-    });
+    handleMoveFrame.schedule();
   }
 
   function flushPendingHandleMove(): void {
@@ -243,55 +245,42 @@ export function createViewportInteractions(options: {
     }
 
     const point = options.clientToSvgPoint(pending.clientX, pending.clientY);
-    options.replaceRootWithoutHistory(pending.handle.update(options.activeRoot(), point.x, point.y), false);
+    options.updateCommandTransaction(
+      createEditorCommand({
+        id: 'viewport.drag-handle',
+        label: `Drag ${pending.handle.label}`,
+        apply: (root) => pending.handle.update(root, point.x, point.y)
+      })
+    );
   }
 
   function onCanvasWheel(event: WheelEvent): void {
+    toolRegistry.handleCanvasWheel(event);
+  }
+
+  function handleViewportWheel(event: WheelEvent): boolean {
     if (event.shiftKey) {
       event.preventDefault();
       options.keepViewportPreviewAlive();
       options.rotateViewportBy(-event.deltaY * 0.005, { x: event.clientX, y: event.clientY });
-      return;
+      return true;
     }
 
     if (options.useCtrlForZoom() && !event.ctrlKey && !event.metaKey) {
-      return;
+      return false;
     }
 
     event.preventDefault();
     options.keepViewportPreviewAlive();
     options.zoomBy(event.deltaY < 0 ? Math.SQRT2 : 1 / Math.SQRT2, { x: event.clientX, y: event.clientY });
+    return true;
   }
 
   function onCanvasPointerDown(event: PointerEvent): void {
-    if (event.pointerType === 'touch') {
-      event.preventDefault();
-      options.setContextMenu(undefined);
-      beginTouchPoint(event);
-      setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
-      return;
-    }
+    toolRegistry.handleCanvasPointerDown(event);
+  }
 
-    if (event.altKey) {
-      event.preventDefault();
-      options.setContextMenu(undefined);
-
-      if (event.button === 0) {
-        startCanvasRotateDrag(event);
-        setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
-      }
-
-      return;
-    }
-
-    if (event.button === 1) {
-      event.preventDefault();
-      options.setContextMenu(undefined);
-      startPanDrag(event);
-      setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
-      return;
-    }
-
+  function handleCanvasSelectionPointerDown(event: PointerEvent): boolean {
     const target = event.target as Element | null;
     const nodeElement = target?.closest('[data-node-id]');
 
@@ -301,117 +290,29 @@ export function createViewportInteractions(options: {
       if (nodeId) {
         options.selectNode(nodeId, event);
       }
-      return;
+      return true;
     }
 
     if (event.button === 0) {
-      options.setContextMenu(undefined);
+      clearContextMenu();
       startMarqueeDrag(event);
       setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
-      return;
+      return true;
     }
+
+    return false;
   }
 
   function onWindowPointerMove(event: PointerEvent): void {
-    if (event.pointerType === 'touch' && touchPointers.has(event.pointerId)) {
-      event.preventDefault();
-      touchPointers.set(event.pointerId, pointerEventToTouchPoint(event));
-      applyTouchGesture();
-      return;
-    }
-
-    const drag = activeDrag();
-
-    if (!drag || drag.pointerId !== event.pointerId) {
-      return;
-    }
-
-    if (drag.type === 'pan') {
-      schedulePanMove(drag, event.clientX, event.clientY);
-      return;
-    }
-
-    if (drag.type === 'rotate-canvas') {
-      options.setViewportRotation(
-        drag.startRotation + options.angleFromViewportCenter(event.clientX, event.clientY) - drag.startAngle
-      );
-      options.keepViewportPreviewAlive();
-      return;
-    }
-
-    if (drag.type === 'marquee') {
-      updateMarqueeDrag(drag, event.clientX, event.clientY);
-      return;
-    }
-
-    if (drag.type === 'transform-box') {
-      updateTransformBoxDrag(drag, event.clientX, event.clientY);
-      return;
-    }
-
-    if (drag.type === 'move-selection') {
-      updateMoveSelectionDrag(drag, event.clientX, event.clientY);
-      return;
-    }
-
-    scheduleHandleMove(event.pointerId, drag.handle, event.clientX, event.clientY);
+    toolRegistry.handleWindowPointerMove(event);
   }
 
   function onWindowPointerUp(event: PointerEvent): void {
-    if (event.pointerType === 'touch' && touchPointers.has(event.pointerId)) {
-      finishTouchPoint(event.pointerId);
-      return;
-    }
-
-    const drag = activeDrag();
-
-    if (drag?.pointerId === event.pointerId) {
-      if (drag.type === 'pan') {
-        if (pendingPanFrame !== undefined) {
-          window.cancelAnimationFrame(pendingPanFrame);
-          pendingPanFrame = undefined;
-        }
-
-        flushPendingPanMove();
-        options.keepViewportPreviewAlive(100);
-      } else if (drag.type === 'handle') {
-        if (pendingHandleFrame !== undefined) {
-          window.cancelAnimationFrame(pendingHandleFrame);
-          pendingHandleFrame = undefined;
-        }
-
-        flushPendingHandleMove();
-        options.syncActiveRootCode();
-      } else if (drag.type === 'marquee') {
-        finishMarqueeDrag(drag, event.clientX, event.clientY);
-      } else if (drag.type === 'transform-box') {
-        options.syncActiveRootCode();
-      } else if (drag.type === 'move-selection') {
-        if (drag.committed) {
-          options.syncActiveRootCode();
-        }
-      } else if (drag.type === 'rotate-canvas') {
-        options.keepViewportPreviewAlive(100);
-      }
-
-      setActiveDrag(undefined);
-    }
+    toolRegistry.handleWindowPointerUp(event);
   }
 
   function onWindowPointerCancel(event: PointerEvent): void {
-    if (event.pointerType === 'touch' && touchPointers.has(event.pointerId)) {
-      finishTouchPoint(event.pointerId);
-      return;
-    }
-
-    const drag = activeDrag();
-
-    if (drag?.pointerId === event.pointerId) {
-      pendingPanMove = undefined;
-      pendingHandleMove = undefined;
-      setMarqueeRect(undefined);
-      setActiveDrag(undefined);
-    }
+    toolRegistry.handleWindowPointerCancel(event);
   }
 
   function startPanDrag(event: PointerEvent): void {
@@ -424,6 +325,17 @@ export function createViewportInteractions(options: {
     });
   }
 
+  function updatePanDrag(drag: ActivePanDrag, event: PointerEvent): void {
+    schedulePanMove(drag, event.clientX, event.clientY);
+  }
+
+  function finishPanDrag(): void {
+    panMoveFrame.cancel();
+    flushPendingPanMove();
+    options.keepViewportPreviewAlive(100);
+    setActiveDrag(undefined);
+  }
+
   function startCanvasRotateDrag(event: PointerEvent): void {
     setActiveDrag({
       type: 'rotate-canvas',
@@ -433,27 +345,44 @@ export function createViewportInteractions(options: {
     });
   }
 
+  function updateCanvasRotateDrag(drag: ActiveCanvasRotateDrag, event: PointerEvent): void {
+    options.setViewportRotation(
+      drag.startRotation + options.angleFromViewportCenter(event.clientX, event.clientY) - drag.startAngle
+    );
+    options.keepViewportPreviewAlive();
+  }
+
+  function finishCanvasRotateDrag(): void {
+    options.keepViewportPreviewAlive(100);
+    setActiveDrag(undefined);
+  }
+
   function onNodePointerDown(nodeId: string, event: PointerEvent): void {
+    toolRegistry.handleNodePointerDown(nodeId, event);
+  }
+
+  function handleNodeSelectionPointerDown(nodeId: string, event: PointerEvent): boolean {
     if (event.button !== 0) {
-      return;
+      return false;
     }
 
     if (event.shiftKey || event.ctrlKey || event.metaKey) {
       options.selectNode(nodeId, event);
-      return;
+      return true;
     }
 
     const existing = options.selectedIds();
 
     if (existing.includes(nodeId)) {
       startMoveSelectionDrag(event, existing);
-      return;
+      return true;
     }
 
     options.setSelectedIds([nodeId]);
     options.setSelectionPivot(nodeId);
     options.setSelectedPathCommand(undefined);
     startMoveSelectionDrag(event, [nodeId]);
+    return true;
   }
 
   function startMoveSelectionDrag(event: PointerEvent, ids: readonly string[]): void {
@@ -464,11 +393,11 @@ export function createViewportInteractions(options: {
     }
 
     const point = options.clientToSvgPoint(event.clientX, event.clientY, false);
+    options.beginCommandTransaction();
     setActiveDrag({
       type: 'move-selection',
       pointerId: event.pointerId,
       selectedIds: selectedElementIds,
-      startRoot: options.activeRoot(),
       startClientX: event.clientX,
       startClientY: event.clientY,
       startWorldX: point.x,
@@ -486,16 +415,30 @@ export function createViewportInteractions(options: {
     const nextDrag = drag.committed ? drag : ({ ...drag, committed: true } satisfies ActiveMoveSelectionDrag);
 
     if (!drag.committed) {
-      options.pushHistory();
       setActiveDrag(nextDrag);
     }
 
     const point = options.clientToSvgPoint(clientX, clientY, false);
     const transform = translateMatrix(point.x - drag.startWorldX, point.y - drag.startWorldY);
-    options.replaceRootWithoutHistory(
-      applyGlobalTransformToSelected(drag.startRoot, drag.selectedIds, transform),
-      false
+    options.updateCommandTransaction(
+      createEditorCommand({
+        id: 'viewport.move-selection',
+        label: 'Move selection',
+        apply: (root) => applyGlobalTransformToSelected(root, drag.selectedIds, transform)
+      })
     );
+  }
+
+  function updateMoveSelectionDragFromEvent(drag: ActiveMoveSelectionDrag, event: PointerEvent): void {
+    updateMoveSelectionDrag(drag, event.clientX, event.clientY);
+  }
+
+  function finishMoveSelectionDrag(drag: ActiveMoveSelectionDrag): void {
+    if (drag.committed) {
+      options.commitCommandTransaction();
+    }
+
+    setActiveDrag(undefined);
   }
 
   function startMarqueeDrag(event: PointerEvent): void {
@@ -522,11 +465,16 @@ export function createViewportInteractions(options: {
     );
   }
 
+  function updateMarqueeDragFromEvent(drag: ActiveMarqueeDrag, event: PointerEvent): void {
+    updateMarqueeDrag(drag, event.clientX, event.clientY);
+  }
+
   function finishMarqueeDrag(drag: ActiveMarqueeDrag, clientX: number, clientY: number): void {
     setMarqueeRect(undefined);
 
     if (Math.hypot(clientX - drag.startClientX, clientY - drag.startClientY) < 4) {
       options.clearSelection();
+      setActiveDrag(undefined);
       return;
     }
 
@@ -535,20 +483,46 @@ export function createViewportInteractions(options: {
     options.setSelectedIds(nextIds);
     options.setSelectionPivot(nextIds[nextIds.length - 1]);
     options.setSelectedPathCommand(undefined);
+    setActiveDrag(undefined);
+  }
+
+  function finishMarqueeDragFromEvent(drag: ActiveMarqueeDrag, event: PointerEvent): void {
+    finishMarqueeDrag(drag, event.clientX, event.clientY);
   }
 
   function updateTransformBoxDrag(drag: ActiveTransformBoxDrag, clientX: number, clientY: number): void {
     const point = options.clientToSvgPoint(clientX, clientY, false);
     const transform = transformMatrixForBoxHandle(drag.startBox, drag.handleKind, point, drag.startAngle);
-    options.replaceRootWithoutHistory(
-      applyGlobalTransformToSelected(drag.startRoot, drag.selectedIds, transform),
-      false
+    options.updateCommandTransaction(
+      createEditorCommand({
+        id: 'viewport.transform-selection',
+        label: 'Transform selection',
+        apply: (root) => applyGlobalTransformToSelected(root, drag.selectedIds, transform)
+      })
     );
+  }
+
+  function updateTransformBoxDragFromEvent(drag: ActiveTransformBoxDrag, event: PointerEvent): void {
+    updateTransformBoxDrag(drag, event.clientX, event.clientY);
+  }
+
+  function finishTransformBoxDrag(): void {
+    options.commitCommandTransaction();
+    setActiveDrag(undefined);
+  }
+
+  function hasTouchPoint(pointerId: number): boolean {
+    return touchPointers.has(pointerId);
   }
 
   function beginTouchPoint(event: PointerEvent): void {
     touchPointers.set(event.pointerId, pointerEventToTouchPoint(event));
     beginTouchGesture();
+  }
+
+  function updateTouchPoint(event: PointerEvent): void {
+    touchPointers.set(event.pointerId, pointerEventToTouchPoint(event));
+    applyTouchGesture();
   }
 
   function finishTouchPoint(pointerId: number): void {
@@ -627,34 +601,54 @@ export function createViewportInteractions(options: {
   }
 
   function startHandleDrag(event: PointerEvent, handle: HandleDescriptor): void {
+    toolRegistry.handleHandlePointerDown(event, handle);
+  }
+
+  function beginElementHandleDrag(event: PointerEvent, handle: HandleDescriptor): boolean {
     if (event.pointerType === 'touch' || event.button !== 0) {
-      return;
+      return false;
     }
 
     event.stopPropagation();
-    options.pushHistory();
+    options.beginCommandTransaction();
     setActiveDrag({
       type: 'handle',
       pointerId: event.pointerId,
       handle
     });
     setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
+    return true;
+  }
+
+  function updateElementHandleDrag(drag: ActiveHandleDrag, event: PointerEvent): void {
+    scheduleHandleMove(event.pointerId, drag.handle, event.clientX, event.clientY);
+  }
+
+  function finishElementHandleDrag(): void {
+    handleMoveFrame.cancel();
+    flushPendingHandleMove();
+    options.commitCommandTransaction();
+    setActiveDrag(undefined);
   }
 
   function startTransformBoxDrag(event: PointerEvent, handle: TransformBoxHandleDescriptor): void {
+    toolRegistry.handleTransformBoxPointerDown(event, handle);
+  }
+
+  function beginTransformBoxDrag(event: PointerEvent, handle: TransformBoxHandleDescriptor): boolean {
     if (event.pointerType === 'touch' || event.button !== 0) {
-      return;
+      return false;
     }
 
     const box = selectionBox();
     const ids = topLevelSelectedElementIds(options.activeRoot(), options.selectedIds());
 
     if (!box || ids.length === 0) {
-      return;
+      return false;
     }
 
     event.stopPropagation();
-    options.pushHistory();
+    options.beginCommandTransaction();
     const center = rectCenter(box);
     const point = options.clientToSvgPoint(event.clientX, event.clientY, false);
     setActiveDrag({
@@ -662,11 +656,21 @@ export function createViewportInteractions(options: {
       pointerId: event.pointerId,
       handleKind: handle.kind,
       selectedIds: ids,
-      startRoot: options.activeRoot(),
       startBox: box,
       startAngle: Math.atan2(point.y - center.y, point.x - center.x)
     });
     setPointerCaptureSafely(event.currentTarget as Element, event.pointerId);
+    return true;
+  }
+
+  function cancelActiveDrag(): void {
+    panMoveFrame.cancel();
+    handleMoveFrame.cancel();
+    pendingPanMove = undefined;
+    pendingHandleMove = undefined;
+    options.commitCommandTransaction();
+    setMarqueeRect(undefined);
+    setActiveDrag(undefined);
   }
 
   return {

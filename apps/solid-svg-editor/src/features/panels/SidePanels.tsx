@@ -1,5 +1,7 @@
 import { createMemo, For, Show } from "solid-js";
+import type { PointerStateWithActive } from '@solid-primitives/pointer';
 
+import type { EditorCommandEvent } from "../../editor/commands";
 import { decorativeIconProps } from "../../editor/svg-icon";
 import { humanFileSize } from "../../formatter";
 import { nodeLabel, svgSize, type SvgElementNode, type SvgNode } from "../../svg-model";
@@ -103,6 +105,9 @@ export function DebugPanel(props: {
   readonly selectedNodes: readonly SvgNode[];
   readonly elementCount: number;
   readonly exportText: string;
+  readonly heldKeys: readonly string[];
+  readonly viewportPointer: PointerStateWithActive;
+  readonly recentCommandEvent: EditorCommandEvent | undefined;
 }) {
   return (
     <section class="panel debug-panel h-full min-h-0 overflow-auto rounded-md border border-[var(--soft-border)] bg-[var(--panel)] p-1.25" data-testid="debug-panel">
@@ -115,8 +120,42 @@ export function DebugPanel(props: {
         <dd data-testid="debug-export-bytes">{new Blob([props.exportText]).size}</dd>
         <dt class="text-[var(--muted)]">Root</dt>
         <dd data-testid="debug-root-name">{props.root.name}</dd>
+        <dt class="text-[var(--muted)]">Held keys</dt>
+        <dd data-testid="debug-held-keys">{props.heldKeys.join(" + ") || "none"}</dd>
+        <dt class="text-[var(--muted)]">Pointer</dt>
+        <dd data-testid="debug-pointer-state">{formatPointerState(props.viewportPointer)}</dd>
+        <dt class="text-[var(--muted)]">Last command</dt>
+        <dd data-testid="debug-last-command">{formatCommandEvent(props.recentCommandEvent)}</dd>
       </dl>
       <pre class="m-0 overflow-auto rounded-md border border-[var(--soft-border)] bg-[#080b12] p-2 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px]" data-testid="debug-selected-json">{JSON.stringify(props.selectedNodes, null, 2)}</pre>
     </section>
   );
+}
+
+function formatPointerState(pointer: PointerStateWithActive): string {
+  if (!pointer.isActive) {
+    return "inactive";
+  }
+
+  return `${pointer.pointerType ?? "pointer"} ${Math.round(pointer.x)}, ${Math.round(pointer.y)}`;
+}
+
+function formatCommandEvent(event: EditorCommandEvent | undefined): string {
+  if (!event) {
+    return "none";
+  }
+
+  if (event.type === "command.dispatched" || event.type === "command.transaction.updated") {
+    return event.label;
+  }
+
+  if (event.type === "command.transaction.started") {
+    return "transaction started";
+  }
+
+  if (event.type === "command.transaction.committed") {
+    return event.changed ? "transaction committed" : "transaction unchanged";
+  }
+
+  return event.label ?? event.type;
 }

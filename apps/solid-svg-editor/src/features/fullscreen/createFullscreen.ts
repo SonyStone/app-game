@@ -1,30 +1,23 @@
-import { createSignal, onCleanup, onMount, type Accessor } from 'solid-js';
+import { createEventListener } from '@solid-primitives/event-listener';
+import { createFullscreen as createPrimitiveFullscreen } from '@solid-primitives/fullscreen';
+import { createSignal, type Accessor } from 'solid-js';
 
-export function createFullscreen(target: Accessor<Element | undefined>) {
-  const [isFullscreen, setIsFullscreen] = createSignal(false);
-
-  const syncFullscreen = () => {
-    setIsFullscreen(document.fullscreenElement === target());
-  };
-
-  onMount(() => {
-    document.addEventListener('fullscreenchange', syncFullscreen);
-    syncFullscreen();
-
-    onCleanup(() => {
-      document.removeEventListener('fullscreenchange', syncFullscreen);
-    });
+export function createFullscreen(target: Accessor<HTMLElement | undefined>) {
+  const [fullscreenRequested, setFullscreenRequested] = createSignal(false);
+  createEventListener(document, 'fullscreenchange', () => {
+    if (document.fullscreenElement !== target()) {
+      setFullscreenRequested(false);
+    }
   });
 
-  function toggleFullscreen(): void {
-    const element = target();
+  const isFullscreen = createPrimitiveFullscreen(target, fullscreenRequested);
 
-    if (!element) {
+  function toggleFullscreen(): void {
+    if (!target()) {
       return;
     }
 
-    const action = document.fullscreenElement ? document.exitFullscreen() : element.requestFullscreen();
-    void action.catch(syncFullscreen);
+    setFullscreenRequested(!isFullscreen());
   }
 
   return {

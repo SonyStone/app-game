@@ -1,6 +1,7 @@
+import { createMemoCache } from '@solid-primitives/memo';
 import { createMemo, type Accessor } from 'solid-js';
 
-import { getHandles } from '../../editor/handles';
+import { svgCapabilities } from '../../editor/capabilities';
 import type { ActiveDrag, AppSettings } from '../../editor/types';
 import { humanFileSize, serializeRoot } from '../../formatter';
 import { flattenElements, type SvgElementNode } from '../../svg-model';
@@ -34,9 +35,14 @@ export function createEditorDerivedState(options: {
 
   const fileSize = createMemo(() => humanFileSize(new Blob([exportText()]).size));
   const elementCount = createMemo(() => flattenElements(options.activeRoot()).length);
-  const handles = createMemo(() =>
-    options.selectedIds().length <= 1 ? getHandles(options.activeRoot(), options.selectedIds()) : []
+  const handlesForSelection = createMemoCache(
+    () => {
+      const selectedIds = options.selectedIds();
+      return selectedIds.length <= 1 ? svgCapabilities.getHandles(options.activeRoot(), selectedIds) : [];
+    },
+    { size: 64 }
   );
+  const handles = createMemo(() => handlesForSelection(options.selectedIds().join('\u001f')));
 
   const viewportIsMoving = createMemo(
     () =>
