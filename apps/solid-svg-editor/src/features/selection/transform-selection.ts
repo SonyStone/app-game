@@ -1,10 +1,5 @@
 import {
-  formatMatrixTransform,
-  identityMatrix,
-  invertMatrix,
   matrixAround,
-  multiplyMatrices,
-  parseTransformList,
   rectCenter,
   rotateMatrix,
   scaleMatrix,
@@ -12,9 +7,10 @@ import {
   type Point,
   type Rect
 } from '../../editor/geometry';
+import { createTransformSelectedCommand } from '../../editor/commands/transformCommands';
 import { clamp } from '../../editor/tree-utils';
 import type { TransformBoxHandleKind } from '../../editor/types';
-import { getAttribute, setAttribute, updateNode, type SvgElementNode, type SvgNode } from '../../svg-model';
+import type { SvgElementNode, SvgNode } from '../../svg-model';
 
 export function transformMatrixForBoxHandle(
   box: Rect,
@@ -42,32 +38,7 @@ export function applyGlobalTransformToSelected(
   ids: readonly string[],
   transform: Matrix2D
 ): SvgElementNode {
-  const parentTransforms = createParentTransformMap(root);
-  let next = root;
-
-  for (const id of ids) {
-    const parentTransform = parentTransforms.get(id) ?? identityMatrix;
-    const parentInverse = invertMatrix(parentTransform);
-
-    if (!parentInverse) {
-      continue;
-    }
-
-    next = updateNode(next, id, (node) => {
-      if (node.kind !== 'element') {
-        return node;
-      }
-
-      const currentLocal = parseTransformList(getAttribute(node, 'transform', true));
-      const nextLocal = multiplyMatrices(
-        multiplyMatrices(multiplyMatrices(parentInverse, transform), parentTransform),
-        currentLocal
-      );
-      return setAttribute(node, 'transform', formatMatrixTransform(nextLocal));
-    });
-  }
-
-  return next;
+  return createTransformSelectedCommand({ ids, transform }).apply(root);
 }
 
 export function topLevelSelectedElementIds(root: SvgElementNode, ids: readonly string[]): readonly string[] {
@@ -92,24 +63,6 @@ export function topLevelSelectedElementIds(root: SvgElementNode, ids: readonly s
 
   visit(root, false);
   return result;
-}
-
-function createParentTransformMap(root: SvgElementNode): ReadonlyMap<string, Matrix2D> {
-  const transforms = new Map<string, Matrix2D>([[root.id, identityMatrix]]);
-
-  function visit(node: SvgElementNode, inherited: Matrix2D): void {
-    const nodeTransform = multiplyMatrices(inherited, parseTransformList(getAttribute(node, 'transform', true)));
-
-    for (const child of node.children) {
-      if (child.kind === 'element') {
-        transforms.set(child.id, nodeTransform);
-        visit(child, nodeTransform);
-      }
-    }
-  }
-
-  visit(root, identityMatrix);
-  return transforms;
 }
 
 function pointForTransformHandle(box: Rect, kind: TransformBoxHandleKind): Point {

@@ -1,3 +1,4 @@
+import { vitePluginMarkdown } from "@app-game/vite-plugin-markdown";
 import UnoCSS from "@unocss/vite";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
@@ -6,6 +7,7 @@ import solidSvg from "vite-plugin-solid-svg";
 
 export default defineConfig({
   plugins: [
+    vitePluginMarkdown(),
     solid(),
     solidSvg({
       svgo: {

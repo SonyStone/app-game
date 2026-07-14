@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { pathCommandSelectionTarget, type SelectionTarget } from '../src/editor/selection-targets';
 import {
   createViewportToolRegistry,
   type ViewportTool
@@ -71,5 +72,24 @@ describe('createViewportToolRegistry', () => {
     ] satisfies readonly ViewportTool[]);
 
     expect(registry.handleCanvasWheel({} as WheelEvent)).toBe(false);
+  });
+
+  it('routes typed selection-target pointer events through registered tools', () => {
+    const target = pathCommandSelectionTarget('path-1', 2);
+    let receivedTarget: SelectionTarget | undefined;
+    const registry = createViewportToolRegistry([
+      {
+        id: 'test.target',
+        label: 'Target',
+        priority: 1,
+        onSelectionTargetPointerDown: (nextTarget) => {
+          receivedTarget = nextTarget;
+          return true;
+        }
+      }
+    ] satisfies readonly ViewportTool[]);
+
+    expect(registry.handleSelectionTargetPointerDown(target, {} as PointerEvent)).toBe(true);
+    expect(receivedTarget).toEqual(target);
   });
 });

@@ -11,6 +11,21 @@ import {
 } from '../src/svg-model';
 
 describe('svg-model tree operations', () => {
+  it('keeps default constructors structural and SVG validation injectable', () => {
+    resetIdCounter();
+    const root = createDefaultRoot();
+    const group = createDefaultElement('g');
+    const rect = createDefaultElement('rect');
+    const tree = appendChild(appendChild(root, root.id, group), root.id, rect);
+
+    expect(root.attrs).toEqual([]);
+    expect(rect.attrs).toEqual([]);
+
+    const rejected = moveNodesTo(tree, [rect.id], group.id, 'inside', () => false);
+
+    expect(rejected).toBe(tree);
+  });
+
   it('updates trees immutably when adding and removing nodes', () => {
     resetIdCounter();
     const root = createDefaultRoot();

@@ -1,31 +1,43 @@
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
-import { svgCapabilities } from '../../editor/capabilities';
+import { createSvgCapabilityRegistry, type SvgCapabilityRegistry } from '../../editor/capabilities';
+import type { EditorCommand } from '../../editor/commands';
+import {
+  createConvertPathCommandCommand,
+  createDeletePathCommandIntent,
+  createInsertPathCommandIntent,
+  createTogglePathCommandRelativeCommand,
+  createUpdatePathAnchorCommand,
+  type PathCommandEditIntent
+} from '../../editor/commands/pathCommands';
+import {
+  createAddPointCommand,
+  createDeletePointCommand,
+  createUpdatePointCommand
+} from '../../editor/commands/pointCommands';
 import { parseTransformList } from '../../editor/geometry';
+import type { SvgAttributeControlContext } from '../../editor/kernel';
+import {
+  pathAnchorFromSelectionTargets,
+  pathAnchorSelectionTarget,
+  pathCommandFromSelectionTargets,
+  pathCommandSelectionTarget,
+  type SelectionTarget
+} from '../../editor/selection-targets';
+import { coreSvgCapabilityContribution } from '../../editor/svg-capabilities/coreSvgContribution';
 import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
 import {
   clampNumericAttribute,
-  insertPathCommand,
   normalizeColorInput,
   orderedAttributes
 } from '../../editor/tree-utils';
 import {
-  addPoint,
   commandParameters,
-  convertCommand,
-  createCommand,
-  deleteCommand,
-  deletePoint,
-  formatPathData,
   formatPathNumber,
-  formatPoints,
   parsePathData,
   parsePoints,
   pathCommandLetters,
-  toggleRelative,
-  updateCommandValue,
-  updatePoint,
   type PathCommand
 } from '../../path-data';
 import { getAttribute, type SvgAttribute, type SvgElementNode } from '../../svg-model';
@@ -34,6 +46,7 @@ import InsertAfterIcon from '../ui/icons/InsertAfter.svg';
 import PlusIcon from '../ui/icons/Plus.svg';
 import ArrowIcon from './icons/Arrow.svg';
 import InsertBeforeIcon from './icons/InsertBefore.svg';
+import { createCoreInspectorControlContribution } from './inspectorControlContribution';
 import MatrixIcon from './icons/Matrix.svg';
 import RotateIcon from './icons/Rotate.svg';
 import ScaleIcon from './icons/Scale.svg';
@@ -45,19 +58,32 @@ import TranslateIcon from './icons/Translate.svg';
 const rootEditorAttributes = ['width', 'height', 'viewBox', 'xmlns'] as const;
 const transformTypes = ['matrix', 'translate', 'rotate', 'scale', 'skewX', 'skewY'] as const;
 
+export const inspectorSvgCapabilities = createSvgCapabilityRegistry([
+  coreSvgCapabilityContribution,
+  createCoreInspectorControlContribution(renderDefaultAttributeControl)
+]);
+
 type TransformType = (typeof transformTypes)[number];
 type TransformItem = {
   readonly type: TransformType;
   readonly body: string;
 };
 
+function renderDefaultAttributeControl(context: SvgAttributeControlContext) {
+  return <DefaultAttributeControl context={context} />;
+}
+
 export function RootElementEditor(props: {
   readonly root: SvgElementNode;
+  readonly capabilities?: SvgCapabilityRegistry;
   readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
+  readonly dispatchCommand: (command: EditorCommand) => void;
+  readonly selectTarget: (target: SelectionTarget, event?: MouseEvent | PointerEvent) => void;
 }) {
-  const rootValue = (name: string) => getAttribute(props.root, name, true) || svgCapabilities.getAttributeDefault(name);
+  const capabilities = () => props.capabilities ?? inspectorSvgCapabilities;
+  const rootValue = (name: string) => getAttribute(props.root, name, true) || capabilities().getAttributeDefault(name);
   const viewBoxValues = createMemo(() =>
-    listValues(rootValue('viewBox'), 4, listValues(svgCapabilities.getAttributeDefault('viewBox'), 4))
+    listValues(rootValue('viewBox'), 4, listValues(capabilities().getAttributeDefault('viewBox'), 4))
   );
   const unknownAttrs = createMemo(() => props.root.attrs.filter((attr) => !isRootEditorAttribute(attr.name)));
 
@@ -73,7 +99,15 @@ export function RootElementEditor(props: {
         <div class="flex min-w-0 flex-wrap items-center gap-0.75 pb-0.5" data-testid="root-unknown-attributes">
           <For each={unknownAttrs()}>
             {(attr) => (
-              <AttributeControl node={props.root} attr={attr} updateElementAttribute={props.updateElementAttribute} />
+              <AttributeControl
+                node={props.root}
+                attr={attr}
+                capabilities={capabilities()}
+                root={props.root}
+                dispatchCommand={props.dispatchCommand}
+                selectTarget={props.selectTarget}
+                updateElementAttribute={props.updateElementAttribute}
+              />
             )}
           </For>
         </div>
@@ -94,7 +128,7 @@ export function RootElementEditor(props: {
               props.updateElementAttribute(
                 props.root.id,
                 'width',
-                clampNumericAttribute('width', event.currentTarget.value)
+                clampNumericAttribute('width', event.currentTarget.value, capabilities())
               )
             }
           />
@@ -114,7 +148,7 @@ export function RootElementEditor(props: {
               props.updateElementAttribute(
                 props.root.id,
                 'height',
-                clampNumericAttribute('height', event.currentTarget.value)
+                clampNumericAttribute('height', event.currentTarget.value, capabilities())
               )
             }
           />
@@ -136,7 +170,7 @@ export function RootElementEditor(props: {
                   onChange={(event) =>
                     updateViewBoxPart(
                       index(),
-                      clampNumericAttribute(index() < 2 ? 'x' : 'width', event.currentTarget.value)
+                      clampNumericAttribute(index() < 2 ? 'x' : 'width', event.currentTarget.value, capabilities())
                     )
                   }
                 />
@@ -150,23 +184,28 @@ export function RootElementEditor(props: {
 }
 
 export function AttributeGrid(props: {
+  readonly root?: SvgElementNode;
   readonly node: SvgElementNode;
+  readonly capabilities?: SvgCapabilityRegistry;
   readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
-  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
-  readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
+  readonly dispatchCommand: (command: EditorCommand) => void;
+  readonly selectedTargets: readonly SelectionTarget[];
+  readonly selectTarget: (target: SelectionTarget, event?: MouseEvent | PointerEvent) => void;
 }) {
-  const attrs = createMemo(() => orderedAttributes(props.node));
+  const capabilities = () => props.capabilities ?? inspectorSvgCapabilities;
+  const root = () => props.root ?? props.node;
+  const attrs = createMemo(() => orderedAttributes(props.node, capabilities()));
   const unknownAttrs = createMemo(() =>
-    attrs().filter((attr) => !svgCapabilities.isAttributeRecognized(props.node.name, attr.name))
+    attrs().filter((attr) => !capabilities().isAttributeRecognized(props.node.name, attr.name))
   );
   const compactAttrs = createMemo(() =>
-    attrs().filter((attr) => svgCapabilities.isCompactAttribute(props.node.name, attr.name))
+    attrs().filter((attr) => capabilities().isCompactAttribute(props.node.name, attr.name))
   );
   const pathDataAttr = createMemo(() =>
-    attrs().find((attr) => svgCapabilities.getAttributeType(attr.name) === 'pathdata')
+    attrs().find((attr) => capabilities().getAttributeType(attr.name) === 'pathdata')
   );
   const pointsAttr = createMemo(() =>
-    attrs().find((attr) => svgCapabilities.getAttributeType(attr.name) === 'list' && attr.name === 'points')
+    attrs().find((attr) => capabilities().getAttributeType(attr.name) === 'list' && attr.name === 'points')
   );
 
   return (
@@ -178,7 +217,15 @@ export function AttributeGrid(props: {
         >
           <For each={unknownAttrs()}>
             {(attr) => (
-              <AttributeControl node={props.node} attr={attr} updateElementAttribute={props.updateElementAttribute} />
+              <AttributeControl
+                node={props.node}
+                attr={attr}
+                capabilities={capabilities()}
+                root={root()}
+                dispatchCommand={props.dispatchCommand}
+                selectTarget={props.selectTarget}
+                updateElementAttribute={props.updateElementAttribute}
+              />
             )}
           </For>
         </div>
@@ -186,7 +233,15 @@ export function AttributeGrid(props: {
       <div class="flex min-w-0 flex-wrap items-center gap-0.75" data-testid={`compact-attributes-${props.node.id}`}>
         <For each={compactAttrs()}>
           {(attr) => (
-            <AttributeControl node={props.node} attr={attr} updateElementAttribute={props.updateElementAttribute} />
+            <AttributeControl
+              node={props.node}
+              attr={attr}
+              capabilities={capabilities()}
+              root={root()}
+              dispatchCommand={props.dispatchCommand}
+              selectTarget={props.selectTarget}
+              updateElementAttribute={props.updateElementAttribute}
+            />
           )}
         </For>
       </div>
@@ -196,6 +251,7 @@ export function AttributeGrid(props: {
             nodeId={props.node.id}
             value={attr().value}
             update={(value) => props.updateElementAttribute(props.node.id, attr().name, value)}
+            dispatchCommand={props.dispatchCommand}
           />
         )}
       </Show>
@@ -205,8 +261,9 @@ export function AttributeGrid(props: {
             node={props.node}
             value={attr().value}
             update={(value) => props.updateElementAttribute(props.node.id, attr().name, value)}
-            selectedPathCommand={props.selectedPathCommand}
-            setSelectedPathCommand={props.setSelectedPathCommand}
+            dispatchCommand={props.dispatchCommand}
+            selectedTargets={props.selectedTargets}
+            selectTarget={props.selectTarget}
           />
         )}
       </Show>
@@ -215,13 +272,32 @@ export function AttributeGrid(props: {
 }
 
 function AttributeControl(props: {
+  readonly root: SvgElementNode;
   readonly node: SvgElementNode;
   readonly attr: SvgAttribute;
+  readonly capabilities?: SvgCapabilityRegistry;
+  readonly dispatchCommand: (command: EditorCommand) => void;
+  readonly selectTarget: (target: SelectionTarget, event?: MouseEvent | PointerEvent) => void;
   readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
 }) {
-  const capability = () => svgCapabilities.getAttribute(props.attr.name);
+  const capabilities = () => props.capabilities ?? inspectorSvgCapabilities;
+  const capability = () => capabilities().getAttribute(props.attr.name);
   const type = () => capability().type;
   const update = (value: string) => props.updateElementAttribute(props.node.id, props.attr.name, value);
+  const context = (): SvgAttributeControlContext => ({
+    root: props.root,
+    node: props.node,
+    name: props.attr.name,
+    value: props.attr.value,
+    capabilities: capabilities(),
+    dispatchCommand: props.dispatchCommand,
+    selectTarget: props.selectTarget,
+    update
+  });
+  const control = () =>
+    capabilities().renderAttributeControl(context()) ?? (
+      <DefaultAttributeControl context={context()} capabilities={capabilities()} />
+    );
 
   return (
     <div
@@ -236,56 +312,85 @@ function AttributeControl(props: {
       title={props.attr.name}
       data-testid={`attribute-control-${props.node.id}-${props.attr.name}`}
     >
-      <Show when={type() === 'numeric' || (type() === 'list' && props.attr.name !== 'points')}>
+      {control()}
+    </div>
+  );
+}
+
+function DefaultAttributeControl(props: {
+  readonly context: SvgAttributeControlContext;
+  readonly capabilities?: SvgCapabilityRegistry;
+}) {
+  const capabilities = () => props.capabilities ?? inspectorSvgCapabilities;
+  const capability = () => capabilities().getAttribute(props.context.name);
+  const type = () => capability().type;
+
+  return (
+    <>
+      <Show when={type() === 'numeric' || (type() === 'list' && props.context.name !== 'points')}>
         <input
           class="block h-5.5 min-h-5.5 w-full min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
           type="text"
-          name={`${props.node.id}-${props.attr.name}`}
-          aria-label={props.attr.name}
-          data-testid={`attribute-input-${props.node.id}-${props.attr.name}`}
-          value={props.attr.value}
+          name={`${props.context.node.id}-${props.context.name}`}
+          aria-label={props.context.name}
+          data-testid={`attribute-input-${props.context.node.id}-${props.context.name}`}
+          value={props.context.value}
           placeholder={capability().defaultValue}
-          onChange={(event) => update(clampNumericAttribute(props.attr.name, event.currentTarget.value))}
+          onChange={(event) =>
+            props.context.update(clampNumericAttribute(props.context.name, event.currentTarget.value, capabilities()))
+          }
         />
       </Show>
       <Show when={type() === 'enum'}>
         <select
           class="block h-5.5 min-h-5.5 w-full min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 pr-4.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
-          name={`${props.node.id}-${props.attr.name}`}
-          aria-label={props.attr.name}
-          data-testid={`attribute-select-${props.node.id}-${props.attr.name}`}
-          value={props.attr.value}
-          onChange={(event) => update(event.currentTarget.value)}
+          name={`${props.context.node.id}-${props.context.name}`}
+          aria-label={props.context.name}
+          data-testid={`attribute-select-${props.context.node.id}-${props.context.name}`}
+          value={props.context.value}
+          onChange={(event) => props.context.update(event.currentTarget.value)}
         >
           <For each={capability().enumValues}>{(value) => <option value={value}>{value}</option>}</For>
         </select>
       </Show>
       <Show when={type() === 'color'}>
-        <ColorField nodeId={props.node.id} attr={props.attr} update={update} />
+        <ColorField
+          nodeId={props.context.node.id}
+          attr={{ name: props.context.name, value: props.context.value }}
+          capabilities={capabilities()}
+          update={props.context.update}
+        />
       </Show>
       <Show when={type() === 'transform-list'}>
-        <TransformField nodeId={props.node.id} attrName={props.attr.name} value={props.attr.value} update={update} />
+        <TransformField
+          nodeId={props.context.node.id}
+          attrName={props.context.name}
+          value={props.context.value}
+          update={props.context.update}
+        />
       </Show>
       <Show when={['id', 'href', 'unknown'].includes(type())}>
         <input
           class="block h-5.5 min-h-5.5 w-full min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-1.25 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
-          name={`${props.node.id}-${props.attr.name}`}
-          aria-label={props.attr.name}
-          data-testid={`attribute-input-${props.node.id}-${props.attr.name}`}
-          value={props.attr.value}
-          placeholder={props.attr.name}
-          onChange={(event) => update(event.currentTarget.value)}
+          name={`${props.context.node.id}-${props.context.name}`}
+          aria-label={props.context.name}
+          data-testid={`attribute-input-${props.context.node.id}-${props.context.name}`}
+          value={props.context.value}
+          placeholder={props.context.name}
+          onChange={(event) => props.context.update(event.currentTarget.value)}
         />
       </Show>
-    </div>
+    </>
   );
 }
 
 function ColorField(props: {
   readonly nodeId: string;
   readonly attr: SvgAttribute;
+  readonly capabilities?: SvgCapabilityRegistry;
   readonly update: (value: string) => void;
 }) {
+  const capabilities = () => props.capabilities ?? inspectorSvgCapabilities;
   const colorValue = () => normalizeColorInput(props.attr.value);
   const swatchValue = () => colorValue() ?? (isCssColorText(props.attr.value) ? props.attr.value : 'transparent');
   const pickerValue = () => colorValue() ?? '#000000';
@@ -301,7 +406,7 @@ function ColorField(props: {
         aria-label={props.attr.name}
         data-testid={`color-input-${props.nodeId}-${props.attr.name}`}
         value={props.attr.value}
-        placeholder={svgCapabilities.getAttributeDefault(props.attr.name)}
+        placeholder={capabilities().getAttributeDefault(props.attr.name)}
         onChange={(event) => props.update(event.currentTarget.value)}
         list={`color-options-${props.nodeId}-${props.attr.name}`}
       />
@@ -332,13 +437,13 @@ function ColorField(props: {
         id={`color-options-${props.nodeId}-${props.attr.name}`}
         data-testid={`color-options-${props.nodeId}-${props.attr.name}`}
       >
-        <Show when={svgCapabilities.getAttribute(props.attr.name).color.allowNone}>
+        <Show when={capabilities().getAttribute(props.attr.name).color.allowNone}>
           <option value="none" />
         </Show>
-        <Show when={svgCapabilities.getAttribute(props.attr.name).color.allowUrl}>
+        <Show when={capabilities().getAttribute(props.attr.name).color.allowUrl}>
           <option value="url(#linearGradient1)" />
         </Show>
-        <Show when={svgCapabilities.getAttribute(props.attr.name).color.allowCurrentColor}>
+        <Show when={capabilities().getAttribute(props.attr.name).color.allowCurrentColor}>
           <option value="currentColor" />
         </Show>
       </datalist>
@@ -350,13 +455,18 @@ function PathDataEditor(props: {
   readonly node: SvgElementNode;
   readonly value: string;
   readonly update: (value: string) => void;
-  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
-  readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
+  readonly dispatchCommand: (command: EditorCommand) => void;
+  readonly selectedTargets: readonly SelectionTarget[];
+  readonly selectTarget: (target: SelectionTarget, event?: MouseEvent | PointerEvent) => void;
 }) {
   const commands = createMemo(() => parsePathData(props.value));
 
-  function updateCommands(next: readonly PathCommand[]): void {
-    props.update(formatPathData(next));
+  function dispatchPathCommandIntent(intent: PathCommandEditIntent): void {
+    props.dispatchCommand(intent.command);
+
+    if (intent.nextTarget) {
+      props.selectTarget(intent.nextTarget);
+    }
   }
 
   return (
@@ -377,10 +487,10 @@ function PathDataEditor(props: {
               nodeId={props.node.id}
               command={command}
               index={index()}
-              commands={commands()}
-              updateCommands={updateCommands}
-              selectedPathCommand={props.selectedPathCommand}
-              setSelectedPathCommand={props.setSelectedPathCommand}
+              commandCount={commands().length}
+              dispatchCommand={props.dispatchCommand}
+              selectedTargets={props.selectedTargets}
+              selectTarget={props.selectTarget}
             />
           )}
         </For>
@@ -389,7 +499,15 @@ function PathDataEditor(props: {
           class="inline-grid h-5.5 min-w-5.5 cursor-pointer place-items-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)]"
           title="Add move command"
           data-testid={`path-command-add-${props.node.id}`}
-          onClick={() => updateCommands([...commands(), createCommand('M')])}
+          onClick={() =>
+            dispatchPathCommandIntent(
+              createInsertPathCommandIntent({
+                nodeId: props.node.id,
+                index: commands().length - 1,
+                command: 'M'
+              })
+            )
+          }
         >
           <PlusIcon {...decorativeIconProps} />
         </button>
@@ -402,26 +520,54 @@ function PathCommandRow(props: {
   readonly nodeId: string;
   readonly command: PathCommand;
   readonly index: number;
-  readonly commands: readonly PathCommand[];
-  readonly updateCommands: (next: readonly PathCommand[]) => void;
-  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
-  readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
+  readonly commandCount: number;
+  readonly dispatchCommand: (command: EditorCommand) => void;
+  readonly selectedTargets: readonly SelectionTarget[];
+  readonly selectTarget: (target: SelectionTarget, event?: MouseEvent | PointerEvent) => void;
 }) {
   const [menuOpen, setMenuOpen] = createSignal(false);
   const isRelative = () => props.command.command === props.command.command.toLowerCase();
   const parameters = createMemo(() => commandParameters(props.command.command));
   const selected = () => {
-    const current = props.selectedPathCommand;
+    const current = pathCommandFromSelectionTargets(props.selectedTargets);
     return current?.nodeId === props.nodeId && current.index === props.index;
   };
+  const selectedParameter = (parameter: string) => {
+    const current = pathAnchorFromSelectionTargets(props.selectedTargets);
+    return current?.nodeId === props.nodeId && current.commandIndex === props.index && current.parameter === parameter;
+  };
 
-  function updateCommands(next: readonly PathCommand[]): void {
-    props.updateCommands(next);
+  function dispatchCommand(command: EditorCommand): void {
+    props.dispatchCommand(command);
+    setMenuOpen(false);
+  }
+
+  function dispatchPathCommandIntent(intent: PathCommandEditIntent): void {
+    props.dispatchCommand(intent.command);
+
+    if (intent.nextTarget) {
+      props.selectTarget(intent.nextTarget);
+    }
+
     setMenuOpen(false);
   }
 
   function selectCurrent(): void {
-    props.setSelectedPathCommand({ nodeId: props.nodeId, index: props.index });
+    props.selectTarget(pathCommandSelectionTarget(props.nodeId, props.index));
+  }
+
+  function selectParameter(parameter: string): void {
+    props.selectTarget(pathAnchorSelectionTarget(props.nodeId, props.index, parameter));
+  }
+
+  function updateParameter(parameter: string, value: number): void {
+    props.dispatchCommand(
+      createUpdatePathAnchorCommand({
+        nodeId: props.nodeId,
+        commandIndex: props.index,
+        updates: [{ parameter, value }]
+      })
+    );
   }
 
   return (
@@ -454,7 +600,9 @@ function PathCommandRow(props: {
         data-testid={`path-command-toggle-${props.nodeId}-${props.index}`}
         onClick={() => {
           selectCurrent();
-          props.updateCommands(toggleRelative(props.commands, props.index));
+          props.dispatchCommand(
+            createTogglePathCommandRelativeCommand({ nodeId: props.nodeId, commandIndex: props.index })
+          );
         }}
       >
         {props.command.command}
@@ -469,7 +617,8 @@ function PathCommandRow(props: {
               <input
                 class="h-4.5 min-h-4.5 min-w-0 flex-[0_0_auto] [appearance:textfield] rounded-[3px] border border-[var(--soft-border)] bg-[#080b12] px-0.75 text-left font-['GodSVG_Mono',ui-monospace,monospace] text-[10px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
                 classList={{
-                  'text-center': flag()
+                  'text-center': flag(),
+                  'border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,#080b12)]': selectedParameter(param.name)
                 }}
                 type="text"
                 inputMode={flag() ? 'numeric' : 'decimal'}
@@ -479,17 +628,8 @@ function PathCommandRow(props: {
                 data-testid={`path-command-param-${props.nodeId}-${props.index}-${param.name}`}
                 value={value()}
                 style={{ width: pathParamInputWidth(value(), param.name) }}
-                onFocus={selectCurrent}
-                onChange={(event) =>
-                  updateCommands(
-                    updateCommandValue(
-                      props.commands,
-                      props.index,
-                      param.index,
-                      parsePathParamValue(event.currentTarget.value)
-                    )
-                  )
-                }
+                onFocus={() => selectParameter(param.name)}
+                onChange={(event) => updateParameter(param.name, parsePathParamValue(event.currentTarget.value))}
               />
             );
           }}
@@ -513,7 +653,15 @@ function PathCommandRow(props: {
             class="flex min-h-5.5 w-full cursor-pointer items-center justify-start gap-1.5 rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-1.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)]"
             type="button"
             data-testid={`path-command-insert-after-${props.nodeId}-${props.index}`}
-            onClick={() => updateCommands(insertPathCommand(props.commands, props.index, props.command.command))}
+            onClick={() =>
+              dispatchPathCommandIntent(
+                createInsertPathCommandIntent({
+                  nodeId: props.nodeId,
+                  index: props.index,
+                  command: props.command.command
+                })
+              )
+            }
           >
             <InsertAfterIcon {...decorativeIconProps} /> Insert after
           </button>
@@ -526,8 +674,12 @@ function PathCommandRow(props: {
                   title={pathCommandDescription(letter)}
                   data-testid={`path-command-convert-${props.nodeId}-${props.index}-${letter}`}
                   onClick={() =>
-                    updateCommands(
-                      convertCommand(props.commands, props.index, isRelative() ? letter.toLowerCase() : letter)
+                    dispatchCommand(
+                      createConvertPathCommandCommand({
+                        nodeId: props.nodeId,
+                        commandIndex: props.index,
+                        command: isRelative() ? letter.toLowerCase() : letter
+                      })
                     )
                   }
                 >
@@ -540,7 +692,15 @@ function PathCommandRow(props: {
             class="flex min-h-5.5 w-full cursor-pointer items-center justify-start gap-1.5 rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] px-1.5 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[var(--text)]"
             type="button"
             data-testid={`path-command-delete-${props.nodeId}-${props.index}`}
-            onClick={() => updateCommands(deleteCommand(props.commands, props.index))}
+            onClick={() =>
+              dispatchPathCommandIntent(
+                createDeletePathCommandIntent({
+                  nodeId: props.nodeId,
+                  commandIndex: props.index,
+                  commandCount: props.commandCount
+                })
+              )
+            }
           >
             <DeleteIcon {...decorativeIconProps} /> Delete
           </button>
@@ -554,8 +714,13 @@ function PointsEditor(props: {
   readonly nodeId: string;
   readonly value: string;
   readonly update: (value: string) => void;
+  readonly dispatchCommand: (command: EditorCommand) => void;
 }) {
   const points = createMemo(() => parsePoints(props.value));
+
+  function updateIndexedPoint(index: number, x: number, y: number): void {
+    props.dispatchCommand(createUpdatePointCommand({ nodeId: props.nodeId, index, x, y }));
+  }
 
   return (
     <div class="grid min-w-0 gap-0.75" data-testid={`points-editor-${props.nodeId}`}>
@@ -583,9 +748,7 @@ function PointsEditor(props: {
                 data-testid={`point-x-${props.nodeId}-${index()}`}
                 value={point[0]}
                 onChange={(event) =>
-                  props.update(
-                    formatPoints(updatePoint(points(), index(), 0, Number.parseFloat(event.currentTarget.value) || 0))
-                  )
+                  updateIndexedPoint(index(), Number.parseFloat(event.currentTarget.value) || 0, point[1])
                 }
               />
               <input
@@ -596,16 +759,16 @@ function PointsEditor(props: {
                 data-testid={`point-y-${props.nodeId}-${index()}`}
                 value={point[1]}
                 onChange={(event) =>
-                  props.update(
-                    formatPoints(updatePoint(points(), index(), 1, Number.parseFloat(event.currentTarget.value) || 0))
-                  )
+                  updateIndexedPoint(index(), point[0], Number.parseFloat(event.currentTarget.value) || 0)
                 }
               />
               <button
                 class="inline-grid h-5.5 min-w-5.5 cursor-pointer place-items-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)]"
                 type="button"
                 data-testid={`point-delete-${props.nodeId}-${index()}`}
-                onClick={() => props.update(formatPoints(deletePoint(points(), index())))}
+                onClick={() =>
+                  props.dispatchCommand(createDeletePointCommand({ nodeId: props.nodeId, index: index() }))
+                }
               >
                 <DeleteIcon {...decorativeIconProps} />
               </button>
@@ -616,7 +779,7 @@ function PointsEditor(props: {
           type="button"
           class="inline-grid h-5.5 min-w-5.5 cursor-pointer place-items-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)]"
           data-testid={`point-add-${props.nodeId}`}
-          onClick={() => props.update(formatPoints(addPoint(points())))}
+          onClick={() => props.dispatchCommand(createAddPointCommand({ nodeId: props.nodeId }))}
         >
           <PlusIcon {...decorativeIconProps} />
         </button>

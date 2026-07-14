@@ -1,21 +1,22 @@
-import CircleElementIcon from "./svg-db-icons/element/circle.svg";
-import EllipseElementIcon from "./svg-db-icons/element/ellipse.svg";
-import GElementIcon from "./svg-db-icons/element/g.svg";
-import LineElementIcon from "./svg-db-icons/element/line.svg";
-import LinearGradientElementIcon from "./svg-db-icons/element/linearGradient.svg";
-import PathElementIcon from "./svg-db-icons/element/path.svg";
-import PolygonElementIcon from "./svg-db-icons/element/polygon.svg";
-import PolylineElementIcon from "./svg-db-icons/element/polyline.svg";
-import RadialGradientElementIcon from "./svg-db-icons/element/radialGradient.svg";
-import RectElementIcon from "./svg-db-icons/element/rect.svg";
-import StopElementIcon from "./svg-db-icons/element/stop.svg";
-import SvgElementIcon from "./svg-db-icons/element/svg.svg";
-import UnrecognizedElementIcon from "./svg-db-icons/element/unrecognized.svg";
-import UseElementIcon from "./svg-db-icons/element/use.svg";
-import CdataNodeIcon from "./svg-db-icons/element/xmlnodeCDATA.svg";
-import CommentNodeIcon from "./svg-db-icons/element/xmlnodeComment.svg";
-import TextNodeIcon from "./svg-db-icons/element/xmlnodeText.svg";
-import type { SvgIcon } from "./editor/svg-icon";
+import CircleElementIcon from "../../svg-db-icons/element/circle.svg";
+import EllipseElementIcon from "../../svg-db-icons/element/ellipse.svg";
+import GElementIcon from "../../svg-db-icons/element/g.svg";
+import LineElementIcon from "../../svg-db-icons/element/line.svg";
+import LinearGradientElementIcon from "../../svg-db-icons/element/linearGradient.svg";
+import PathElementIcon from "../../svg-db-icons/element/path.svg";
+import PolygonElementIcon from "../../svg-db-icons/element/polygon.svg";
+import PolylineElementIcon from "../../svg-db-icons/element/polyline.svg";
+import RadialGradientElementIcon from "../../svg-db-icons/element/radialGradient.svg";
+import RectElementIcon from "../../svg-db-icons/element/rect.svg";
+import StopElementIcon from "../../svg-db-icons/element/stop.svg";
+import SvgElementIcon from "../../svg-db-icons/element/svg.svg";
+import UnrecognizedElementIcon from "../../svg-db-icons/element/unrecognized.svg";
+import UseElementIcon from "../../svg-db-icons/element/use.svg";
+import CdataNodeIcon from "../../svg-db-icons/element/xmlnodeCDATA.svg";
+import CommentNodeIcon from "../../svg-db-icons/element/xmlnodeComment.svg";
+import TextNodeIcon from "../../svg-db-icons/element/xmlnodeText.svg";
+import type { AttributeType, NumberRange } from "../svg-attribute-types";
+import type { SvgIcon } from "../svg-icon";
 
 export const recognizedElements = [
   "svg",
@@ -50,19 +51,6 @@ const elementIcons = {
   radialGradient: RadialGradientElementIcon,
   use: UseElementIcon
 } as const satisfies Record<RecognizedElement, SvgIcon>;
-
-export type AttributeType =
-  | "numeric"
-  | "color"
-  | "list"
-  | "pathdata"
-  | "enum"
-  | "transform-list"
-  | "id"
-  | "href"
-  | "unknown";
-
-export type NumberRange = "arbitrary" | "positive" | "unit";
 
 export const recognizedAttributes = {
   svg: [

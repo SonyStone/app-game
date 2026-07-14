@@ -1,13 +1,15 @@
-import { createMemo, createSignal, For, Show, type JSX } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onMount, Show, type JSX } from "solid-js";
 
+import { createCommandPaletteItems, filterCommandPaletteItems, type CommandPaletteItem } from "../../editor/command-palette";
+import type { EditorContributionContext, SettingsSectionContribution } from "../../editor/kernel";
 import { decorativeIconProps, type SvgIcon } from "../../editor/svg-icon";
 import { humanFileSize, type FormatterPreset, type FormatterSettings, type FormattingStyle, type ShorthandTags } from "../../formatter";
 import { copyExport, exportFile } from "../../editor/export-utils";
-import { clamp, themePresetSettings } from "../../editor/tree-utils";
-import type { AppSettings, ExportFormat, ThemePreset } from "../../editor/types";
+import { clamp } from "../../editor/tree-utils";
+import type { ExportFormat, ShortcutItem } from "../../editor/types";
 import { svgSize, type SvgElementNode } from "../../svg-model";
 import { PreviewSvg } from "../panels/SidePanels";
-import { defaultShortcutItems } from "../shortcuts/shortcutRegistry";
+import type { EditorPanelContext } from "../panels/panelRegistry";
 import ClearIcon from "../ui/icons/Clear.svg";
 import CopyIcon from "../ui/icons/Copy.svg";
 import ExportIcon from "../ui/icons/Export.svg";
@@ -16,124 +18,35 @@ import HeartIcon from "../ui/icons/Heart.svg";
 import { PanelButton } from "../ui/PanelButton";
 
 export function SettingsModal(props: {
-  readonly settings: AppSettings;
-  readonly setSettings: (setter: (settings: AppSettings) => AppSettings) => void;
   readonly close: () => void;
-  readonly reformatActiveCode: (formatter?: FormatterSettings) => void;
+  readonly sections: readonly SettingsSectionContribution<EditorPanelContext>[];
+  readonly context: EditorPanelContext;
 }) {
-  const [tab, setTab] = createSignal<"formatting" | "optimizer" | "palettes" | "shortcuts" | "theming" | "tabbar" | "other">("formatting");
-  const updateFormatter = (key: keyof FormatterSettings, value: FormatterSettings[keyof FormatterSettings], exportFormatter = false) => {
-    props.setSettings((settings) => {
-      const formatter = { ...(exportFormatter ? settings.exportFormatter : settings.formatter), [key]: value } satisfies FormatterSettings;
-      return exportFormatter ? { ...settings, exportFormatter: formatter } : { ...settings, formatter };
-    });
-  };
+  const sections = createMemo(() => [...props.sections].sort(compareSettingsSections));
+  const [tab, setTab] = createSignal<string>();
+  const activeSection = createMemo(() => sections().find((section) => section.id === tab()) ?? sections()[0]);
 
   return (
     <ModalFrame title="Settings" close={props.close}>
       <div class="settings-body grid min-h-120 grid-cols-[150px_minmax(0,1fr)] gap-3 [@media(max-width:820px)]:grid-cols-1" data-testid="settings-body">
         <nav class="settings-tabs grid content-start gap-1" data-testid="settings-tabs">
-          <For each={["formatting", "optimizer", "palettes", "shortcuts", "theming", "tabbar", "other"] as const}>
-            {(item) => (
+          <For each={sections()}>
+            {(section) => (
               <button
                 type="button"
                 class="h-7.5 cursor-pointer rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] text-left text-[var(--text)] capitalize [&.active]:border-[var(--accent)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_18%,var(--panel-2))]"
-                classList={{ active: tab() === item }}
-                data-testid={`settings-tab-${item}`}
-                onClick={() => setTab(item)}
+                classList={{ active: activeSection()?.id === section.id }}
+                data-testid={`settings-tab-${section.id}`}
+                onClick={() => setTab(section.id)}
               >
-                {item}
+                {section.label}
               </button>
             )}
           </For>
         </nav>
         <div class="settings-content grid content-start gap-2.5" data-testid="settings-content">
-          <Show when={tab() === "formatting"}>
-            <FormatterSettingsView label="Editor formatter" formatter={props.settings.formatter} update={(key, value) => updateFormatter(key, value)} />
-            <FormatterSettingsView label="Export formatter" formatter={props.settings.exportFormatter} update={(key, value) => updateFormatter(key, value, true)} />
-            <PanelButton type="button" data-testid="settings-apply-editor-formatter-button" onClick={() => props.reformatActiveCode(props.settings.formatter)}>
-              Apply editor formatter
-            </PanelButton>
-          </Show>
-          <Show when={tab() === "optimizer"}>
-            <CheckboxField>
-              <FormInput type="checkbox" data-testid="settings-optimizer-remove-comments" checked={props.settings.optimizer.removeComments} onChange={(event) => props.setSettings((settings) => ({ ...settings, optimizer: { ...settings.optimizer, removeComments: event.currentTarget.checked } }))} />
-              Remove comments
-            </CheckboxField>
-            <CheckboxField>
-              <FormInput type="checkbox" data-testid="settings-optimizer-convert-shapes" checked={props.settings.optimizer.convertShapes} onChange={(event) => props.setSettings((settings) => ({ ...settings, optimizer: { ...settings.optimizer, convertShapes: event.currentTarget.checked } }))} />
-              Convert shapes
-            </CheckboxField>
-            <CheckboxField>
-              <FormInput type="checkbox" data-testid="settings-optimizer-simplify-path-parameters" checked={props.settings.optimizer.simplifyPathParameters} onChange={(event) => props.setSettings((settings) => ({ ...settings, optimizer: { ...settings.optimizer, simplifyPathParameters: event.currentTarget.checked } }))} />
-              Simplify path parameters
-            </CheckboxField>
-          </Show>
-          <Show when={tab() === "palettes"}>
-            <div class="palette-list flex flex-wrap gap-2" data-testid="settings-palette-list">
-              <For each={props.settings.palettes}>
-                {(color, index) => (
-                  <FormInput
-                    type="color"
-                    data-testid={`settings-palette-color-${index()}`}
-                    value={color}
-                    onInput={(event) =>
-                      props.setSettings((settings) => ({
-                        ...settings,
-                        palettes: settings.palettes.map((item, itemIndex) => (itemIndex === index() ? event.currentTarget.value : item))
-                      }))
-                    }
-                  />
-                )}
-              </For>
-            </div>
-          </Show>
-          <Show when={tab() === "shortcuts"}>
-            <ShortcutTable />
-          </Show>
-          <Show when={tab() === "theming"}>
-            <SettingsField>
-              Theme
-              <FormSelect value={props.settings.themePreset} data-testid="settings-theme-select" onChange={(event) => props.setSettings((settings) => themePresetSettings(event.currentTarget.value as ThemePreset, settings))}>
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="black">Black (OLED)</option>
-                <option value="gray">Gray</option>
-              </FormSelect>
-            </SettingsField>
-            <SettingsField>
-              Accent
-              <FormInput type="color" data-testid="settings-accent-color" value={props.settings.accentColor} onInput={(event) => props.setSettings((settings) => ({ ...settings, accentColor: event.currentTarget.value }))} />
-            </SettingsField>
-            <SettingsField>
-              Canvas
-              <FormInput type="color" data-testid="settings-canvas-color" value={props.settings.canvasColor} onInput={(event) => props.setSettings((settings) => ({ ...settings, canvasColor: event.currentTarget.value }))} />
-            </SettingsField>
-            <SettingsField>
-              Grid
-              <FormInput type="color" data-testid="settings-grid-color" value={props.settings.gridColor} onInput={(event) => props.setSettings((settings) => ({ ...settings, gridColor: event.currentTarget.value }))} />
-            </SettingsField>
-          </Show>
-          <Show when={tab() === "tabbar"}>
-            <CheckboxField>
-              <FormInput type="checkbox" data-testid="settings-tab-middle-click-close" checked={props.settings.tabMiddleClickClose} onChange={(event) => props.setSettings((settings) => ({ ...settings, tabMiddleClickClose: event.currentTarget.checked }))} />
-              Middle click closes tab
-            </CheckboxField>
-          </Show>
-          <Show when={tab() === "other"}>
-            <CheckboxField>
-              <FormInput type="checkbox" data-testid="settings-use-ctrl-for-zoom" checked={props.settings.useCtrlForZoom} onChange={(event) => props.setSettings((settings) => ({ ...settings, useCtrlForZoom: event.currentTarget.checked }))} />
-              Ctrl wheel zoom
-            </CheckboxField>
-            <CheckboxField>
-              <FormInput
-                type="checkbox"
-                data-testid="settings-raster-preview-during-interaction"
-                checked={props.settings.rasterPreviewDuringInteraction}
-                onChange={(event) => props.setSettings((settings) => ({ ...settings, rasterPreviewDuringInteraction: event.currentTarget.checked }))}
-              />
-              Raster preview while panning or zooming
-            </CheckboxField>
+          <Show when={activeSection()} keyed>
+            {(section) => section.render(props.context)}
           </Show>
         </div>
       </div>
@@ -141,7 +54,14 @@ export function SettingsModal(props: {
   );
 }
 
-function FormatterSettingsView(props: {
+function compareSettingsSections(
+  first: SettingsSectionContribution<EditorPanelContext>,
+  second: SettingsSectionContribution<EditorPanelContext>
+): number {
+  return (first.order ?? 0) - (second.order ?? 0);
+}
+
+export function FormatterSettingsView(props: {
   readonly label: string;
   readonly formatter: FormatterSettings;
   readonly update: (key: keyof FormatterSettings, value: FormatterSettings[keyof FormatterSettings]) => void;
@@ -276,19 +196,116 @@ export function DonateModal(props: { readonly close: () => void }) {
   );
 }
 
-export function ShortcutsModal(props: { readonly close: () => void }) {
+export function ShortcutsModal(props: { readonly close: () => void; readonly shortcutItems: readonly ShortcutItem[] }) {
   return (
     <ModalFrame title="Shortcuts" close={props.close}>
-      <ShortcutTable />
+      <ShortcutTable items={props.shortcutItems} />
     </ModalFrame>
   );
 }
 
-function ShortcutTable() {
+export function CommandPaletteModal(props: { readonly kernel: EditorContributionContext; readonly close: () => void }) {
+  const [query, setQuery] = createSignal("");
+  const [activeIndex, setActiveIndex] = createSignal(0);
+  const items = createMemo(() => createCommandPaletteItems(props.kernel));
+  const filteredItems = createMemo(() => filterCommandPaletteItems(items(), query()));
+  let inputRef: HTMLInputElement | undefined;
+
+  createEffect(() => {
+    const lastIndex = Math.max(0, filteredItems().length - 1);
+    setActiveIndex((index) => Math.min(index, lastIndex));
+  });
+
+  onMount(() => inputRef?.focus());
+
+  function runItem(item: CommandPaletteItem | undefined): void {
+    if (!item?.enabled) {
+      return;
+    }
+
+    if (item.run()) {
+      props.close();
+    }
+  }
+
+  function onKeyDown(event: KeyboardEvent): void {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      props.close();
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveIndex((index) => Math.min(index + 1, Math.max(0, filteredItems().length - 1)));
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveIndex((index) => Math.max(0, index - 1));
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      runItem(filteredItems()[activeIndex()]);
+    }
+  }
+
+  return (
+    <ModalFrame title="Command Palette" close={props.close}>
+      <div class="command-palette grid gap-2.5" data-testid="command-palette">
+        <input
+          ref={inputRef}
+          class="h-8 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] px-2 font-['GodSVG_Mono',ui-monospace,monospace] text-[12px] text-[var(--text)] outline-none focus:border-[var(--accent)] in-[.theme-light]:bg-[#f8fbff]"
+          data-testid="command-palette-search"
+          value={query()}
+          placeholder="Search actions and commands"
+          onInput={(event) => {
+            setQuery(event.currentTarget.value);
+            setActiveIndex(0);
+          }}
+          onKeyDown={onKeyDown}
+        />
+        <div class="grid max-h-[min(440px,calc(100vh-180px))] overflow-auto" data-testid="command-palette-results">
+          <Show
+            when={filteredItems().length > 0}
+            fallback={<div class="px-2 py-6 text-center text-[var(--muted)]" data-testid="command-palette-empty">No commands</div>}
+          >
+            <For each={filteredItems()}>
+              {(item, index) => (
+                <button
+                  type="button"
+                  class="grid min-h-10 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-0 border-b border-b-[var(--soft-border)] bg-transparent px-2 py-1.5 text-left text-[var(--text)] outline-none hover:bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] disabled:cursor-default disabled:text-[var(--muted)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)]"
+                  classList={{ active: activeIndex() === index() }}
+                  data-testid={`command-palette-item-${item.kind}-${testIdSegment(item.id)}`}
+                  disabled={!item.enabled}
+                  onMouseEnter={() => setActiveIndex(index())}
+                  onClick={() => runItem(item)}
+                >
+                  <span class="grid min-w-0 gap-0.5">
+                    <span class="overflow-hidden text-ellipsis whitespace-nowrap">{item.label}</span>
+                    <span class="overflow-hidden text-ellipsis whitespace-nowrap font-['GodSVG_Mono',ui-monospace,monospace] text-[10px] text-[var(--muted)]">{item.kind}:{item.id}</span>
+                  </span>
+                  <span class="flex min-w-0 justify-end gap-1">
+                    <For each={item.shortcutKeys}>{(keys) => <Keycap>{keys}</Keycap>}</For>
+                  </span>
+                </button>
+              )}
+            </For>
+          </Show>
+        </div>
+      </div>
+    </ModalFrame>
+  );
+}
+
+export function ShortcutTable(props: { readonly items: readonly ShortcutItem[] }) {
   return (
     <table class="shortcut-table w-full border-collapse" data-testid="shortcut-table">
       <tbody>
-        <For each={defaultShortcutItems}>
+        <For each={props.items}>
           {(item) => (
             <tr data-testid={`shortcut-row-${testIdSegment(item.category)}-${testIdSegment(item.action)}`}>
               <ShortcutCell>{item.category}</ShortcutCell>
@@ -322,15 +339,15 @@ function ModalFrame(props: { readonly title: string; readonly close: () => void;
   );
 }
 
-function SettingsField(props: { readonly children: JSX.Element }) {
+export function SettingsField(props: { readonly children: JSX.Element }) {
   return <label class="grid grid-cols-[minmax(120px,auto)_minmax(0,1fr)] items-center gap-2.5">{props.children}</label>;
 }
 
-function CheckboxField(props: { readonly children: JSX.Element }) {
+export function CheckboxField(props: { readonly children: JSX.Element }) {
   return <label class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2.5">{props.children}</label>;
 }
 
-function FormInput(props: JSX.InputHTMLAttributes<HTMLInputElement>) {
+export function FormInput(props: JSX.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
@@ -339,7 +356,7 @@ function FormInput(props: JSX.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
-function FormSelect(props: JSX.SelectHTMLAttributes<HTMLSelectElement> & { readonly children: JSX.Element }) {
+export function FormSelect(props: JSX.SelectHTMLAttributes<HTMLSelectElement> & { readonly children: JSX.Element }) {
   return (
     <select
       {...props}

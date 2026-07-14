@@ -1,5 +1,3 @@
-import { defaultElements, getAttributeDefault, isRecognizedElement, isValidChild, type RecognizedElement } from "./svg-db";
-
 export interface SvgAttribute {
   readonly name: string;
   readonly value: string;
@@ -69,22 +67,16 @@ export function createElementNode(
   };
 }
 
-export function createDefaultElement(name: RecognizedElement | string): SvgElementNode {
-  const defaults: Record<string, string> = isRecognizedElement(name) ? defaultElements[name] : {};
-  return createElementNode(
-    name,
-    Object.entries(defaults).map(([attrName, value]) => ({ name: attrName, value }))
-  );
+export function createTextNode(text: string): SvgTextNode {
+  return { id: createId(), kind: "text", text };
+}
+
+export function createDefaultElement(name: string): SvgElementNode {
+  return createElementNode(name);
 }
 
 export function createDefaultRoot(): SvgElementNode {
-  const defs = defaultElements.svg;
-  return createElementNode("svg", [
-    { name: "xmlns", value: defs.xmlns },
-    { name: "width", value: defs.width },
-    { name: "height", value: defs.height },
-    { name: "viewBox", value: defs.viewBox }
-  ]);
+  return createElementNode("svg");
 }
 
 export function cloneRoot(root: SvgElementNode): SvgElementNode {
@@ -186,7 +178,7 @@ function domElementToSvgNode(element: Element): SvgElementNode {
 
 export function getAttribute(node: SvgElementNode, name: string, real = false): string {
   const attr = node.attrs.find((item) => item.name === name);
-  return attr ? attr.value : real ? "" : getAttributeDefault(name);
+  return attr ? attr.value : real ? "" : "";
 }
 
 export function hasAttribute(node: SvgElementNode, name: string): boolean {
@@ -388,7 +380,15 @@ export function moveNode(root: SvgElementNode, id: string, direction: -1 | 1): S
   return children === root.children ? root : { ...root, children };
 }
 
-export function moveNodesTo(root: SvgElementNode, ids: readonly string[], targetId: string, position: DropPosition): SvgElementNode {
+export type SvgChildValidator = (parentName: string, childName: string) => boolean;
+
+export function moveNodesTo(
+  root: SvgElementNode,
+  ids: readonly string[],
+  targetId: string,
+  position: DropPosition,
+  isValidMoveChild: SvgChildValidator = () => true
+): SvgElementNode {
   const movingIds = topLevelNodeIds(root, ids).filter((id) => id !== root.id);
 
   if (movingIds.length === 0 || movingIds.includes(targetId)) {
@@ -409,7 +409,7 @@ export function moveNodesTo(root: SvgElementNode, ids: readonly string[], target
       return root;
     }
 
-    if (movingNode.kind === "element" && !isValidChild(targetParent.name, movingNode.name)) {
+    if (movingNode.kind === "element" && !isValidMoveChild(targetParent.name, movingNode.name)) {
       return root;
     }
   }

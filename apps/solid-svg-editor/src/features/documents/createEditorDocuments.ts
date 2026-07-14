@@ -1,37 +1,54 @@
 import { createEventBus } from '@solid-primitives/event-bus';
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 
-import type { EditorCommand, EditorCommandEvent } from '../../editor/commands';
+import type { CommandTransaction, EditorCommand, EditorCommandEvent } from '../../editor/commands';
 import { pushCommandHistory, type CommandHistoryPolicy } from '../../editor/commands';
+import { svgCapabilities } from '../../editor/capabilities';
 import { createInitialTab } from '../../editor/defaults';
+import {
+  cloneHistoryState,
+  createHistoryEntry,
+  restoreRedoRoot,
+  restoreUndoRoot
+} from '../../editor/history';
+import { applyEditorOperations, isOperationBackedEditorCommand } from '../../editor/operations';
 import {
   createEmptySvgDocument,
   createSvgDocument,
   parseSvgDocument,
-  serializeSvgDocument
+  serializeSvgDocument,
+  type SvgDocumentFactoryCapabilityIndex
 } from '../../editor/svg-document';
-import type { EditorTab, HistoryEntry, HistoryState } from '../../editor/types';
+import type { EditorTab, HistoryState } from '../../editor/types';
 import { type FormatterSettings } from '../../formatter';
 import { cloneRoot, createId, type SvgElementNode } from '../../svg-model';
+
+interface ActiveCommandTransactionState {
+  readonly tabId: string;
+  readonly baseRoot: SvgElementNode;
+  readonly baseCode: string;
+  readonly baseDirty: boolean;
+  readonly baseParseError: string | undefined;
+  readonly baseHistory: HistoryState;
+  readonly controller: CommandTransaction;
+  historyPushed: boolean;
+}
 
 export function createEditorDocuments(options: {
   readonly formatter: Accessor<FormatterSettings>;
   readonly onSelectionReset: () => void;
   readonly onDocumentOpened: () => void;
   readonly onParseError: () => void;
+  readonly capabilities?: SvgDocumentFactoryCapabilityIndex;
 }) {
-  const [tabs, setTabs] = createSignal<readonly EditorTab[]>([createInitialTab()]);
+  const capabilities = options.capabilities ?? svgCapabilities;
+  const [tabs, setTabs] = createSignal<readonly EditorTab[]>([createInitialTab(capabilities)]);
   const [activeTabId, setActiveTabId] = createSignal(tabs()[0]?.id ?? '');
   const [historyVersion, setHistoryVersion] = createSignal(0);
   const commandEvents = createEventBus<EditorCommandEvent>();
   const histories = new Map<string, HistoryState>();
-  const fallbackDocument = createEmptySvgDocument();
-  let activeCommandTransaction:
-    | {
-        readonly baseRoot: SvgElementNode;
-        historyPushed: boolean;
-      }
-    | undefined;
+  const fallbackDocument = createEmptySvgDocument(capabilities);
+  let activeCommandTransaction: ActiveCommandTransactionState | undefined;
 
   const activeTab = createMemo(() => {
     const id = activeTabId();
@@ -40,6 +57,7 @@ export function createEditorDocuments(options: {
 
   const activeDocument = createMemo(() => activeTab()?.document ?? fallbackDocument);
   const activeRoot = createMemo(() => activeDocument().root);
+  const activeSpatialIndex = createMemo(() => activeDocument().spatialIndex);
   const activeCode = createMemo(() => activeTab()?.code ?? '');
   const canUndo = createMemo(() => {
     historyVersion();
@@ -66,17 +84,12 @@ export function createEditorDocuments(options: {
     setHistoryVersion((value) => value + 1);
   }
 
-  function updateActiveTab(updater: (tab: EditorTab) => EditorTab): void {
-    const id = activeTabId();
-    setTabs((items) => items.map((tab) => (tab.id === id ? updater(tab) : tab)));
+  function updateTab(tabId: string, updater: (tab: EditorTab) => EditorTab): void {
+    setTabs((items) => items.map((tab) => (tab.id === tabId ? updater(tab) : tab)));
   }
 
-  function createHistoryEntry(root: SvgElementNode, command: EditorCommand | undefined): HistoryEntry {
-    return {
-      root: cloneRoot(root),
-      commandId: command?.id,
-      label: command?.label
-    };
+  function updateActiveTab(updater: (tab: EditorTab) => EditorTab): void {
+    updateTab(activeTabId(), updater);
   }
 
   function pushHistory(command?: EditorCommand): void {
@@ -87,9 +100,47 @@ export function createEditorDocuments(options: {
     }
 
     const history = getHistory(tab.id);
-    history.past.push(createHistoryEntry(tab.document.root, command));
+    const previousEntry = history.past.at(-1);
+    const shouldMerge = command && previousEntry && canMergeHistoryEntry(previousEntry, command);
+    const nextEntry = shouldMerge
+      ? createHistoryEntry(previousEntry.beforeRoot, command, capabilities)
+      : createHistoryEntry(tab.document.root, command, capabilities);
+
+    if (shouldMerge) {
+      history.past[history.past.length - 1] = nextEntry;
+    } else {
+      history.past.push(nextEntry);
+    }
+
     history.future.length = 0;
     bumpHistoryVersion();
+  }
+
+  function pushHistoryFromRoot(tabId: string, root: SvgElementNode, command?: EditorCommand): void {
+    const history = getHistory(tabId);
+    history.past.push(createHistoryEntry(root, command, capabilities));
+    history.future.length = 0;
+    bumpHistoryVersion();
+  }
+
+  function replaceLastHistoryEntry(tabId: string, root: SvgElementNode, command: EditorCommand): void {
+    const history = getHistory(tabId);
+
+    if (history.past.length === 0) {
+      return;
+    }
+
+    history.past[history.past.length - 1] = createHistoryEntry(root, command, capabilities);
+    bumpHistoryVersion();
+  }
+
+  function restoreHistory(tabId: string, history: HistoryState): void {
+    histories.set(tabId, cloneHistoryState(history));
+    bumpHistoryVersion();
+  }
+
+  function canMergeHistoryEntry(entry: HistoryState['past'][number], command: EditorCommand): boolean {
+    return Boolean(entry.mergeKey && command.mergeKey && entry.mergeKey === command.mergeKey);
   }
 
   function commitRoot(nextRoot: SvgElementNode, push = true, command?: EditorCommand): void {
@@ -97,7 +148,7 @@ export function createEditorDocuments(options: {
       pushHistory(command);
     }
 
-    const document = createSvgDocument(nextRoot);
+    const document = createSvgDocument(nextRoot, capabilities);
     updateActiveTab((tab) => ({
       ...tab,
       document,
@@ -109,7 +160,7 @@ export function createEditorDocuments(options: {
 
   function dispatchCommand(command: EditorCommand, history: CommandHistoryPolicy = pushCommandHistory): void {
     const currentRoot = activeRoot();
-    const nextRoot = command.apply(currentRoot);
+    const nextRoot = applyCommandToRoot(command, currentRoot);
 
     if (nextRoot === currentRoot) {
       return;
@@ -137,12 +188,25 @@ export function createEditorDocuments(options: {
     });
   }
 
-  function beginCommandTransaction(): void {
-    activeCommandTransaction = {
-      baseRoot: activeRoot(),
+  function beginCommandTransaction(): CommandTransaction | undefined {
+    const tab = activeTab();
+
+    if (!tab) {
+      return undefined;
+    }
+
+    const transaction = createCommandTransaction({
+      tabId: tab.id,
+      baseRoot: cloneRoot(tab.document.root),
+      baseCode: tab.code,
+      baseDirty: tab.dirty,
+      baseParseError: tab.parseError,
+      baseHistory: cloneHistoryState(getHistory(tab.id)),
       historyPushed: false
-    };
-    commandEvents.emit({ type: 'command.transaction.started', tabId: activeTabId() });
+    });
+    activeCommandTransaction = transaction;
+    commandEvents.emit({ type: 'command.transaction.started', tabId: tab.id });
+    return transaction.controller;
   }
 
   function updateCommandTransaction(command: EditorCommand): void {
@@ -153,15 +217,25 @@ export function createEditorDocuments(options: {
       return;
     }
 
-    const nextRoot = command.apply(transaction.baseRoot);
+    transaction.controller.update(command);
+  }
+
+  function updateCommandTransactionState(transaction: ActiveCommandTransactionState, command: EditorCommand): void {
+    if (transaction.tabId !== activeTabId()) {
+      return;
+    }
+
+    const nextRoot = applyCommandToRoot(command, transaction.baseRoot);
 
     if (nextRoot === activeRoot()) {
       return;
     }
 
     if (!transaction.historyPushed) {
-      pushHistory(command);
+      pushHistoryFromRoot(transaction.tabId, transaction.baseRoot, command);
       transaction.historyPushed = true;
+    } else {
+      replaceLastHistoryEntry(transaction.tabId, transaction.baseRoot, command);
     }
 
     replaceRootWithoutHistory(nextRoot, false);
@@ -176,21 +250,86 @@ export function createEditorDocuments(options: {
 
   function commitCommandTransaction(): void {
     const transaction = activeCommandTransaction;
+
+    if (!transaction) {
+      commandEvents.emit({
+        type: 'command.transaction.committed',
+        tabId: activeTabId(),
+        changed: false
+      });
+      return;
+    }
+
+    transaction.controller.commit();
+  }
+
+  function commitCommandTransactionState(transaction: ActiveCommandTransactionState): void {
+    if (activeCommandTransaction !== transaction) {
+      return;
+    }
+
     activeCommandTransaction = undefined;
 
-    if (transaction?.historyPushed) {
+    if (transaction.historyPushed && transaction.tabId === activeTabId()) {
       syncActiveRootCode();
     }
 
     commandEvents.emit({
       type: 'command.transaction.committed',
-      tabId: activeTabId(),
-      changed: transaction?.historyPushed ?? false
+      tabId: transaction.tabId,
+      changed: transaction.historyPushed
     });
   }
 
+  function cancelCommandTransaction(): void {
+    const transaction = activeCommandTransaction;
+
+    if (!transaction) {
+      return;
+    }
+
+    transaction.controller.cancel();
+  }
+
+  function cancelCommandTransactionState(transaction: ActiveCommandTransactionState): void {
+    if (activeCommandTransaction !== transaction) {
+      return;
+    }
+
+    activeCommandTransaction = undefined;
+    restoreHistory(transaction.tabId, transaction.baseHistory);
+    updateTab(transaction.tabId, (tab) => ({
+      ...tab,
+      document: createSvgDocument(transaction.baseRoot, capabilities),
+      code: transaction.baseCode,
+      dirty: transaction.baseDirty,
+      parseError: transaction.baseParseError
+    }));
+    commandEvents.emit({
+      type: 'command.transaction.canceled',
+      tabId: transaction.tabId,
+      changed: transaction.historyPushed
+    });
+  }
+
+  function createCommandTransaction(
+    state: Omit<ActiveCommandTransactionState, 'controller'>
+  ): ActiveCommandTransactionState {
+    let transaction: ActiveCommandTransactionState;
+    const controller = {
+      tabId: state.tabId,
+      changed: () => transaction.historyPushed,
+      update: (command) => updateCommandTransactionState(transaction, command),
+      commit: () => commitCommandTransactionState(transaction),
+      cancel: () => cancelCommandTransactionState(transaction)
+    } satisfies CommandTransaction;
+
+    transaction = { ...state, controller };
+    return transaction;
+  }
+
   function replaceRootWithoutHistory(nextRoot: SvgElementNode, syncCode = true): void {
-    const document = createSvgDocument(nextRoot);
+    const document = createSvgDocument(nextRoot, capabilities);
     updateActiveTab((tab) => ({
       ...tab,
       document,
@@ -222,8 +361,9 @@ export function createEditorDocuments(options: {
       return;
     }
 
-    history.future.push(createHistoryEntry(tab.document.root, undefined));
-    const document = createSvgDocument(previous.root);
+    history.future.push(previous);
+    const restoredRoot = restoreUndoRoot(tab.document.root, previous, capabilities);
+    const document = createSvgDocument(restoredRoot, capabilities);
     updateActiveTab((item) => ({
       ...item,
       document,
@@ -249,8 +389,9 @@ export function createEditorDocuments(options: {
       return;
     }
 
-    history.past.push(createHistoryEntry(tab.document.root, undefined));
-    const document = createSvgDocument(next.root);
+    history.past.push(next);
+    const restoredRoot = restoreRedoRoot(tab.document.root, next, capabilities);
+    const document = createSvgDocument(restoredRoot, capabilities);
     updateActiveTab((item) => ({
       ...item,
       document,
@@ -263,7 +404,7 @@ export function createEditorDocuments(options: {
   }
 
   function applyCode(text: string): void {
-    const parsed = parseSvgDocument(text);
+    const parsed = parseSvgDocument(text, capabilities);
 
     updateActiveTab((tab) => {
       if (!parsed.ok) {
@@ -286,7 +427,7 @@ export function createEditorDocuments(options: {
   }
 
   function createNewTab(): void {
-    const document = createEmptySvgDocument();
+    const document = createEmptySvgDocument(capabilities);
     const tab = {
       id: createId(),
       name: 'Untitled.svg',
@@ -321,7 +462,7 @@ export function createEditorDocuments(options: {
   }
 
   function importSvgText(text: string, name: string): void {
-    const parsed = parseSvgDocument(text);
+    const parsed = parseSvgDocument(text, capabilities);
 
     if (!parsed.ok) {
       updateActiveTab((tab) => ({ ...tab, code: text, parseError: parsed.message }));
@@ -348,6 +489,14 @@ export function createEditorDocuments(options: {
     updateActiveTab((tab) => ({ ...tab, dirty: false }));
   }
 
+  function applyCommandToRoot(command: EditorCommand, root: SvgElementNode): SvgElementNode {
+    if (!isOperationBackedEditorCommand(command)) {
+      return command.apply(root);
+    }
+
+    return applyEditorOperations(root, command.resolveOperations(root), capabilities);
+  }
+
   return {
     tabs,
     activeTabId,
@@ -355,6 +504,7 @@ export function createEditorDocuments(options: {
     activeTab,
     activeDocument,
     activeRoot,
+    activeSpatialIndex,
     activeCode,
     canUndo,
     canRedo,
@@ -363,6 +513,7 @@ export function createEditorDocuments(options: {
     beginCommandTransaction,
     updateCommandTransaction,
     commitCommandTransaction,
+    cancelCommandTransaction,
     undo,
     redo,
     applyCode,

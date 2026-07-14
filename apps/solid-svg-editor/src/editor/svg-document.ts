@@ -1,15 +1,20 @@
 import { serializeRoot, type FormatterSettings } from '../formatter';
+import { svgCapabilities, type SvgCapabilityRegistry } from './capabilities';
+import { collectSvgDiagnostics } from './svg-diagnostics';
+import { createSvgResourceGraph, type SvgResourceGraph } from './svg-resource-graph';
+import { createSvgSpatialIndex, type SvgSpatialIndex } from './svg-spatial-index';
+import type { SvgDiagnostic } from './kernel';
 import {
-  createDefaultRoot,
   findNode,
   flattenElements,
   parseSvgMarkup,
   type ParseResult,
   type SvgElementNode,
-  type SvgNode
+  type SvgNode,
+  type SvgNodeId
 } from '../svg-model';
 
-export type SvgResourceKind =
+export type CoreSvgResourceKind =
   | 'paint-server'
   | 'symbol'
   | 'clip-path'
@@ -19,9 +24,14 @@ export type SvgResourceKind =
   | 'pattern'
   | 'unknown';
 
+export type SvgResourceKind = CoreSvgResourceKind | (string & {});
+
 export interface SvgDocument {
   readonly root: SvgElementNode;
   readonly resources: SvgResourceIndex;
+  readonly resourceGraph: SvgResourceGraph;
+  readonly spatialIndex: SvgSpatialIndex;
+  readonly diagnostics: readonly SvgDiagnostic[];
 }
 
 export interface SvgResourceIndex {
@@ -31,13 +41,13 @@ export interface SvgResourceIndex {
 
 export interface SvgResource {
   readonly id: string;
-  readonly nodeId: string;
+  readonly nodeId: SvgNodeId;
   readonly elementName: string;
   readonly kind: SvgResourceKind;
 }
 
 export interface SvgResourceReference {
-  readonly nodeId: string;
+  readonly nodeId: SvgNodeId;
   readonly attributeName: string;
   readonly targetId: string;
   readonly kind: SvgResourceKind;
@@ -47,57 +57,69 @@ export type SvgDocumentParseResult =
   | { readonly ok: true; readonly document: SvgDocument }
   | Extract<ParseResult, { readonly ok: false }>;
 
-const resourceElementKinds = new Map<string, SvgResourceKind>([
-  ['linearGradient', 'paint-server'],
-  ['radialGradient', 'paint-server'],
-  ['symbol', 'symbol'],
-  ['clipPath', 'clip-path'],
-  ['mask', 'mask'],
-  ['filter', 'filter'],
-  ['marker', 'marker'],
-  ['pattern', 'pattern']
-]);
+export type SvgResourceCapabilityIndex = Pick<SvgCapabilityRegistry, 'getAttribute' | 'getElement'>;
+export type SvgDocumentCapabilityIndex = SvgResourceCapabilityIndex &
+  Pick<
+    SvgCapabilityRegistry,
+    | 'getElementBounds'
+    | 'getElementDiagnostics'
+    | 'inheritedAttributeNames'
+    | 'isAttributeInherited'
+    | 'isAttributeRecognized'
+    | 'isValidChild'
+  >;
+export type SvgDocumentFactoryCapabilityIndex = SvgDocumentCapabilityIndex & Pick<SvgCapabilityRegistry, 'createElement'>;
 
-const resourceReferenceKinds = new Map<string, SvgResourceKind>([
-  ['fill', 'paint-server'],
-  ['stroke', 'paint-server'],
-  ['href', 'unknown'],
-  ['xlink:href', 'unknown'],
-  ['clip-path', 'clip-path'],
-  ['mask', 'mask'],
-  ['filter', 'filter'],
-  ['marker-start', 'marker'],
-  ['marker-mid', 'marker'],
-  ['marker-end', 'marker']
-]);
-
-export function createSvgDocument(root: SvgElementNode): SvgDocument {
-  return {
+export function createSvgDocument(
+  root: SvgElementNode,
+  capabilities: SvgDocumentCapabilityIndex = svgCapabilities
+): SvgDocument {
+  const resources = indexSvgResources(root, capabilities);
+  const resourceGraph = createSvgResourceGraph({ root, resources }, capabilities);
+  const spatialIndex = createSvgSpatialIndex(root, capabilities);
+  const document = {
     root,
-    resources: indexSvgResources(root)
+    resources,
+    resourceGraph,
+    spatialIndex,
+    diagnostics: []
+  } satisfies SvgDocument;
+
+  return {
+    ...document,
+    diagnostics: collectSvgDiagnostics(document, capabilities)
   };
 }
 
-export function createEmptySvgDocument(): SvgDocument {
-  return createSvgDocument(createDefaultRoot());
+export function createEmptySvgDocument(
+  capabilities: SvgDocumentFactoryCapabilityIndex = svgCapabilities
+): SvgDocument {
+  return createSvgDocument(capabilities.createElement('svg'), capabilities);
 }
 
-export function parseSvgDocument(markup: string): SvgDocumentParseResult {
+export function parseSvgDocument(
+  markup: string,
+  capabilities: SvgDocumentCapabilityIndex = svgCapabilities
+): SvgDocumentParseResult {
   const parsed = parseSvgMarkup(markup);
 
   if (!parsed.ok) {
     return parsed;
   }
 
-  return { ok: true, document: createSvgDocument(parsed.root) };
+  return { ok: true, document: createSvgDocument(parsed.root, capabilities) };
 }
 
 export function serializeSvgDocument(document: SvgDocument, formatter: FormatterSettings): string {
   return serializeRoot(document.root, formatter);
 }
 
-export function updateSvgDocumentRoot(document: SvgDocument, root: SvgElementNode): SvgDocument {
-  return root === document.root ? document : createSvgDocument(root);
+export function updateSvgDocumentRoot(
+  document: SvgDocument,
+  root: SvgElementNode,
+  capabilities: SvgDocumentCapabilityIndex = svgCapabilities
+): SvgDocument {
+  return root === document.root ? document : createSvgDocument(root, capabilities);
 }
 
 export function selectSvgDocumentNode(document: SvgDocument, id: string): SvgNode | undefined {
@@ -108,19 +130,23 @@ export function selectSvgDocumentElements(document: SvgDocument): readonly SvgEl
   return flattenElements(document.root);
 }
 
-export function indexSvgResources(root: SvgElementNode): SvgResourceIndex {
+export function indexSvgResources(
+  root: SvgElementNode,
+  capabilities: SvgResourceCapabilityIndex = svgCapabilities
+): SvgResourceIndex {
   const byId = new Map<string, SvgResource>();
   const references: SvgResourceReference[] = [];
 
   visitElements(root, (node) => {
     const id = node.attrs.find((attr) => attr.name === 'id')?.value.trim();
+    const resourceKind = capabilities.getElement(node.name)?.resourceKind;
 
     if (id) {
       byId.set(id, {
         id,
         nodeId: node.id,
         elementName: node.name,
-        kind: resourceElementKinds.get(node.name) ?? 'unknown'
+        kind: resourceKind ?? 'unknown'
       });
     }
 
@@ -135,7 +161,7 @@ export function indexSvgResources(root: SvgElementNode): SvgResourceIndex {
         nodeId: node.id,
         attributeName: attr.name,
         targetId,
-        kind: resourceReferenceKinds.get(attr.name) ?? 'unknown'
+        kind: capabilities.getAttribute(attr.name).resourceReferenceKind ?? 'unknown'
       });
     }
   });

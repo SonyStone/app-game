@@ -2,5 +2,14 @@ import { lazy } from 'solid-js';
 
 export const routes = {
   path: '/',
-  component: lazy(() => import('./App'))
+  children: [
+    {
+      path: '/',
+      component: lazy(() => import('./App'))
+    },
+    {
+      path: '/overview',
+      component: lazy(() => import('./pages/OverviewPage'))
+    }
+  ]
 };

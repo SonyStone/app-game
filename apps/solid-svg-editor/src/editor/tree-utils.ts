@@ -1,17 +1,20 @@
-import { attributeNumberRange, getAttributeDefault, getRecognizedAttributes } from "../svg-db";
 import { createCommand, formatPathData, parsePathData, type PathCommand } from "../path-data";
 import { getAttribute, type SvgAttribute, type SvgElementNode, type SvgNode } from "../svg-model";
 
+import { svgCapabilities, type SvgCapabilityRegistry } from "./capabilities";
 import type { AppSettings, InspectorRow, OptimizerSettings, ThemePreset } from "./types";
 
-export function orderedAttributes(node: SvgElementNode): readonly SvgAttribute[] {
-  const recognized = getRecognizedAttributes(node.name);
+export function orderedAttributes(
+  node: SvgElementNode,
+  capabilities: Pick<SvgCapabilityRegistry, "getAttributeDefault" | "getElement"> = svgCapabilities
+): readonly SvgAttribute[] {
+  const recognized = capabilities.getElement(node.name)?.attributes ?? [];
   const existing = node.attrs;
   const ordered: SvgAttribute[] = [];
 
   for (const name of recognized) {
     const attr = existing.find((item) => item.name === name);
-    ordered.push(attr ?? { name, value: getAttributeDefault(name) });
+    ordered.push(attr ?? { name, value: capabilities.getAttributeDefault(name) });
   }
 
   for (const attr of existing) {
@@ -116,7 +119,7 @@ export function estimateInspectorRowHeight(node: SvgNode): number {
     return 112;
   }
 
-  const attrCount = Math.max(getRecognizedAttributes(node.name).length, node.attrs.length);
+  const attrCount = Math.max(svgCapabilities.getElement(node.name)?.attributes.length ?? 0, node.attrs.length);
   const pathData = getAttribute(node, "d", true);
   const pointData = getAttribute(node, "points", true);
   const pathCommandCount = pathData ? estimatePathCommandCount(pathData) : 0;
@@ -138,9 +141,12 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function clampNumericAttribute(name: string, value: string): string {
-  const ranges: Record<string, string> = attributeNumberRange;
-  const range = ranges[name];
+export function clampNumericAttribute(
+  name: string,
+  value: string,
+  capabilities: Pick<SvgCapabilityRegistry, "getAttributeNumberRange"> = svgCapabilities
+): string {
+  const range = capabilities.getAttributeNumberRange(name);
 
   if (!range) {
     return value;

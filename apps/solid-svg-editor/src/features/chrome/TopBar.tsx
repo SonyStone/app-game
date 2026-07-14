@@ -1,49 +1,24 @@
 import { Key } from '@solid-primitives/keyed';
-import { createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
-import { decorativeIconProps } from '../../editor/svg-icon';
-import type { EditorTab, PanelId } from '../../editor/types';
-import { editorPanels } from '../panels/panelRegistry';
-import CopyIcon from '../ui/icons/Copy.svg';
-import ExportIcon from '../ui/icons/Export.svg';
-import GodSvgIcon from '../ui/icons/GodSvg.svg';
-import HeartIcon from '../ui/icons/Heart.svg';
-import ImportIcon from '../ui/icons/Import.svg';
+import { createAppMenuItems, topBarMenuSlots, type AppMenuItem } from '../../editor/app-menu';
+import type { EditorKernel } from '../../editor/kernel';
+import { decorativeIconProps, type SvgIcon } from '../../editor/svg-icon';
+import type { PanelId } from '../../editor/types';
+import type { EditorPanelDescriptor } from '../panels/panelRegistry';
 import { IconButton } from '../ui/IconButton';
 import { MenuButton, MenuLink } from '../ui/MenuItem';
-import CreateTabIcon from './icons/CreateTab.svg';
-import GearIcon from './icons/Gear.svg';
-import LinkIcon from './icons/Link.svg';
 import MoreIcon from './icons/More.svg';
-import RedoIcon from './icons/Redo.svg';
-import SaveIcon from './icons/Save.svg';
-import ShortcutPanelIcon from './icons/ShortcutPanel.svg';
-import UndoIcon from './icons/Undo.svg';
 
-export function TopBar(props: {
-  readonly activeTab: EditorTab | undefined;
-  readonly tabs: readonly EditorTab[];
-  readonly activeTabId: string;
-  readonly fileSize: string;
-  readonly canUndo: boolean;
-  readonly canRedo: boolean;
-  readonly setActiveTabId: (id: string) => void;
-  readonly closeTab: (id: string) => void;
-  readonly createNewTab: () => void;
-  readonly openImportDialog: () => void;
-  readonly downloadSvg: () => void;
-  readonly copySvgText: () => void;
-  readonly undo: () => void;
-  readonly redo: () => void;
-  readonly optimizeActive: () => void;
-  readonly openExport: () => void;
-  readonly openSettings: () => void;
-  readonly openAbout: () => void;
-  readonly openDonate: () => void;
-  readonly openShortcuts: () => void;
-}) {
+export function TopBar<TPanelContext>(props: { readonly kernel: EditorKernel<TPanelContext> }) {
   const [moreOpen, setMoreOpen] = createSignal(false);
+  const menuItems = createMemo(() => createAppMenuItems(props.kernel));
+  const menuItemsFor = (slot: AppMenuItem['slot']) => menuItems().filter((item) => item.slot === slot);
+  const tabs = () => props.kernel.documents.tabs();
+  const activeTabId = () => props.kernel.documents.activeTabId();
+  const setActiveTabId = props.kernel.documents.setActiveTabId;
+  const closeTab = props.kernel.documents.closeTab;
 
   return (
     <header
@@ -63,87 +38,35 @@ export function TopBar(props: {
             class="popover top-popover absolute top-7.75 left-2 z-50 grid min-w-47.5 gap-0.5 rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--panel)_96%,#000)] p-1.25 shadow-[0_12px_28px_#0008]"
             data-testid="topbar-more-popover"
           >
-            <MenuButton
-              type="button"
-              icon={ShortcutPanelIcon}
-              data-testid="topbar-menu-shortcuts"
-              onClick={props.openShortcuts}
-            >
-              Shortcuts
-            </MenuButton>
-            <MenuButton type="button" icon={GodSvgIcon} data-testid="topbar-menu-about" onClick={props.openAbout}>
-              About
-            </MenuButton>
-            <MenuButton type="button" icon={HeartIcon} data-testid="topbar-menu-donate" onClick={props.openDonate}>
-              Donate
-            </MenuButton>
-            <MenuLink
-              icon={LinkIcon}
-              href="https://github.com/MewPurPur/GodSVG"
-              target="_blank"
-              rel="noreferrer"
-              data-testid="topbar-menu-repository"
-            >
-              Repository
-            </MenuLink>
-            <MenuLink
-              icon={LinkIcon}
-              href="https://godsvg.com"
-              target="_blank"
-              rel="noreferrer"
-              data-testid="topbar-menu-website"
-            >
-              Website
-            </MenuLink>
+            <For each={menuItemsFor(topBarMenuSlots.more)}>
+              {(item) => <TopBarMenuItem item={item} onRun={() => setMoreOpen(false)} />}
+            </For>
           </div>
         </Show>
-        <IconButton icon={GearIcon} label="Settings" testId="topbar-settings-button" onClick={props.openSettings} />
-        <IconButton
-          icon={UndoIcon}
-          label="Undo"
-          testId="topbar-undo-button"
-          onClick={props.undo}
-          disabled={!props.canUndo}
-        />
-        <IconButton
-          icon={RedoIcon}
-          label="Redo"
-          testId="topbar-redo-button"
-          onClick={props.redo}
-          disabled={!props.canRedo}
-        />
-        <button
-          class="size-button h-6.5 cursor-pointer rounded-[5px] border border-[color-mix(in_srgb,var(--warning)_50%,var(--soft-border))] bg-[var(--panel-2)] px-2 py-0 text-[var(--warning)]"
-          type="button"
-          onClick={props.optimizeActive}
-          title="Optimize"
-          data-testid="topbar-optimize-button"
-        >
-          {props.fileSize}
-        </button>
+        <For each={menuItemsFor(topBarMenuSlots.primary)}>{(item) => <TopBarMenuItem item={item} />}</For>
       </div>
       <div
         class="tabs-strip flex h-full min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]"
         data-testid="tabs-strip"
       >
-        <Key each={props.tabs} by="id">
+        <Key each={tabs()} by="id">
           {(tab) => (
             <div
               role="tab"
               tabIndex={0}
               class="tab-button relative flex h-6.5 max-w-52.5 cursor-pointer items-center gap-1.5 rounded-t-[5px] border border-[#22283d] bg-[#151928] py-0 pr-1.5 pl-2.5 text-[var(--muted)] [&.active]:border-[#415177] [&.active]:bg-[#24304d] [&.active]:text-[#f4f7ff] [&.dirty>span::after]:text-[var(--warning)] [&.dirty>span::after]:content-['*']"
-              classList={{ active: props.activeTabId === tab().id, dirty: tab().dirty }}
+              classList={{ active: activeTabId() === tab().id, dirty: tab().dirty }}
               data-testid={`tab-${tab().id}`}
-              onClick={() => props.setActiveTabId(tab().id)}
+              onClick={() => setActiveTabId(tab().id)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
                   event.preventDefault();
-                  props.setActiveTabId(tab().id);
+                  setActiveTabId(tab().id);
                 }
               }}
               onAuxClick={(event) => {
                 if (event.button === 1) {
-                  props.closeTab(tab().id);
+                  closeTab(tab().id);
                 }
               }}
             >
@@ -156,7 +79,7 @@ export function TopBar(props: {
                 data-testid={`tab-close-${tab().id}`}
                 onClick={(event) => {
                   event.stopPropagation();
-                  props.closeTab(tab().id);
+                  closeTab(tab().id);
                 }}
               >
                 ×
@@ -164,32 +87,119 @@ export function TopBar(props: {
             </div>
           )}
         </Key>
-        <IconButton icon={CreateTabIcon} label="New tab" testId="new-tab-button" onClick={props.createNewTab} />
+        <For each={menuItemsFor(topBarMenuSlots.tabs)}>{(item) => <TopBarMenuItem item={item} />}</For>
       </div>
       <div class="flex min-w-0 items-center gap-1" data-testid="topbar-file-actions">
-        <button
-          class="toolbar-action inline-flex h-6.5 cursor-pointer items-center gap-1.5 rounded-[5px] border border-[color-mix(in_srgb,var(--accent)_44%,var(--soft-border))] bg-[var(--panel-2)] px-2.25 py-0 text-[var(--text)] hover:border-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,var(--panel-2))]"
-          type="button"
-          data-testid="import-button"
-          onClick={props.openImportDialog}
-        >
-          <ImportIcon {...decorativeIconProps} /> Import
-        </button>
-        <IconButton icon={SaveIcon} label="Save SVG" testId="save-svg-button" onClick={props.downloadSvg} />
-        <IconButton icon={CopyIcon} label="Copy SVG text" testId="copy-svg-button" onClick={props.copySvgText} />
-        <IconButton icon={ExportIcon} label="Export" testId="export-button" onClick={props.openExport} />
+        <For each={menuItemsFor(topBarMenuSlots.file)}>{(item) => <TopBarMenuItem item={item} />}</For>
       </div>
     </header>
   );
 }
 
+function TopBarMenuItem(props: { readonly item: AppMenuItem; readonly onRun?: () => void }) {
+  if (props.item.kind === 'link') {
+    return (
+      <MenuLink
+        {...iconProps(props.item.icon)}
+        {...testIdDataProps(props.item.testId)}
+        {...(props.item.target === undefined ? {} : { target: props.item.target })}
+        {...(props.item.rel === undefined ? {} : { rel: props.item.rel })}
+        href={props.item.href}
+      >
+        {props.item.displayLabel}
+      </MenuLink>
+    );
+  }
+
+  const item = props.item;
+  const onClick = () => {
+    if (item.run()) {
+      props.onRun?.();
+    }
+  };
+
+  if (item.presentation === 'icon-button' && item.icon !== undefined) {
+    return (
+      <IconButton
+        icon={item.icon}
+        label={item.label}
+        onClick={onClick}
+        disabled={!item.enabled}
+        {...testIdIconProps(item.testId)}
+      />
+    );
+  }
+
+  if (item.presentation === 'status-button') {
+    return (
+      <button
+        class="size-button h-6.5 cursor-pointer rounded-[5px] border border-[color-mix(in_srgb,var(--warning)_50%,var(--soft-border))] bg-[var(--panel-2)] px-2 py-0 text-[var(--warning)] disabled:cursor-default disabled:opacity-[0.42]"
+        type="button"
+        title={item.label}
+        disabled={!item.enabled}
+        onClick={onClick}
+        {...testIdDataProps(item.testId)}
+      >
+        {item.displayLabel}
+      </button>
+    );
+  }
+
+  if (item.presentation === 'text-button' || item.presentation === 'icon-button') {
+    return <TopBarTextButton item={item} onClick={onClick} />;
+  }
+
+  return (
+    <MenuButton
+      {...iconProps(item.icon)}
+      {...testIdDataProps(item.testId)}
+      type="button"
+      disabled={!item.enabled}
+      onClick={onClick}
+    >
+      {item.displayLabel}
+    </MenuButton>
+  );
+}
+
+function TopBarTextButton(props: {
+  readonly item: Extract<AppMenuItem, { readonly kind: 'action' }>;
+  readonly onClick: () => void;
+}) {
+  return (
+    <button
+      class="toolbar-action inline-flex h-6.5 cursor-pointer items-center gap-1.5 rounded-[5px] border border-[color-mix(in_srgb,var(--accent)_44%,var(--soft-border))] bg-[var(--panel-2)] px-2.25 py-0 text-[var(--text)] hover:border-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,var(--panel-2))] disabled:cursor-default disabled:opacity-[0.42]"
+      type="button"
+      disabled={!props.item.enabled}
+      onClick={props.onClick}
+      {...testIdDataProps(props.item.testId)}
+    >
+      <Show when={props.item.icon}>{(Icon) => <Dynamic component={Icon()} {...decorativeIconProps} />}</Show>
+      {props.item.displayLabel}
+    </button>
+  );
+}
+
+function iconProps(icon: SvgIcon | undefined): { readonly icon?: SvgIcon } {
+  return icon === undefined ? {} : { icon };
+}
+
+function testIdDataProps(testId: string | undefined): { readonly 'data-testid'?: string } {
+  return testId === undefined ? {} : { 'data-testid': testId };
+}
+
+function testIdIconProps(testId: string | undefined): { readonly testId?: string } {
+  return testId === undefined ? {} : { testId };
+}
+
 export function PanelTabs(props: {
+  readonly panels: readonly EditorPanelDescriptor[];
   readonly activePanel: PanelId;
   readonly setActivePanel: (panel: PanelId) => void;
 }) {
   return (
     <div class="panel-tabs flex min-w-0 items-center justify-center gap-1.5" data-testid="panel-tabs">
-      <For each={editorPanels}>
+      <For each={props.panels}>
         {(panel) => (
           <button
             type="button"

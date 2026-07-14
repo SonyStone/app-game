@@ -1,30 +1,26 @@
-import { createMemo, For, type JSX } from 'solid-js';
+import { createMemo, For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
+import type { RendererContribution } from '../../editor/kernel';
+import { nodeSelectionTarget } from '../../editor/selection-targets';
 import { attrsToObject } from '../../editor/tree-utils';
-import type { SvgNode } from '../../svg-model';
-
-export interface SvgNodeViewProps {
-  readonly node: SvgNode;
-  readonly selectedIds: readonly string[];
-  readonly onNodePointerDown: (id: string, event: PointerEvent) => void;
-  readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
-  readonly renderer?: SvgRendererAdapter;
-}
-
-export interface SvgRendererAdapter {
-  readonly renderNode: (props: SvgNodeViewProps) => JSX.Element;
-}
+import type { SvgNodeRendererAdapter, SvgNodeRenderProps } from './rendererAdapter';
 
 export const defaultSvgRendererAdapter = {
   renderNode: (props) => <DefaultSvgNodeView {...props} />
-} satisfies SvgRendererAdapter;
+} satisfies SvgNodeRendererAdapter;
 
-export function SvgNodeView(props: SvgNodeViewProps) {
+export function SvgNodeView(props: SvgNodeRenderProps) {
   return (props.renderer ?? defaultSvgRendererAdapter).renderNode(props);
 }
 
-function DefaultSvgNodeView(props: SvgNodeViewProps) {
+export function createSvgNodeRendererFromContributions(
+  renderers: readonly RendererContribution[]
+): SvgNodeRendererAdapter | undefined {
+  return [...renderers].reverse().find(hasSvgNodeRendererFactory)?.createSvgNodeRenderer?.();
+}
+
+function DefaultSvgNodeView(props: SvgNodeRenderProps) {
   const node = props.node;
 
   if (node.kind === 'text') {
@@ -51,7 +47,7 @@ function DefaultSvgNodeView(props: SvgNodeViewProps) {
         }
 
         event.stopPropagation();
-        props.onNodePointerDown(node.id, event);
+        props.onSelectionTargetPointerDown(nodeSelectionTarget(node.id), event);
       }}
       onContextMenu={(event: MouseEvent) => {
         if (event.altKey) {
@@ -59,7 +55,7 @@ function DefaultSvgNodeView(props: SvgNodeViewProps) {
           return;
         }
 
-        props.openContextMenu(event, node.id);
+        props.openSelectionTargetContextMenu(event, nodeSelectionTarget(node.id));
       }}
     >
       <For each={node.children}>
@@ -67,12 +63,21 @@ function DefaultSvgNodeView(props: SvgNodeViewProps) {
           <SvgNodeView
             node={child}
             selectedIds={props.selectedIds}
+            selectedTargets={props.selectedTargets}
             onNodePointerDown={props.onNodePointerDown}
+            onSelectionTargetPointerDown={props.onSelectionTargetPointerDown}
             openContextMenu={props.openContextMenu}
+            openSelectionTargetContextMenu={props.openSelectionTargetContextMenu}
             {...(props.renderer ? { renderer: props.renderer } : {})}
           />
         )}
       </For>
     </Dynamic>
   );
+}
+
+function hasSvgNodeRendererFactory(
+  renderer: RendererContribution
+): renderer is RendererContribution & { readonly createSvgNodeRenderer: () => SvgNodeRendererAdapter } {
+  return typeof renderer.createSvgNodeRenderer === 'function';
 }

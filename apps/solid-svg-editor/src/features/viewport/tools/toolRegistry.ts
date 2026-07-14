@@ -1,3 +1,4 @@
+import type { SelectionTarget } from '../../../editor/selection-targets';
 import type { HandleDescriptor, TransformBoxHandleDescriptor } from '../../../editor/types';
 
 export type ViewportToolId =
@@ -15,6 +16,7 @@ export interface ViewportTool {
   readonly onCanvasWheel?: (event: WheelEvent) => boolean;
   readonly onCanvasPointerDown?: (event: PointerEvent) => boolean;
   readonly onNodePointerDown?: (nodeId: string, event: PointerEvent) => boolean;
+  readonly onSelectionTargetPointerDown?: (target: SelectionTarget, event: PointerEvent) => boolean;
   readonly onWindowPointerMove?: (event: PointerEvent) => boolean;
   readonly onWindowPointerUp?: (event: PointerEvent) => boolean;
   readonly onWindowPointerCancel?: (event: PointerEvent) => boolean;
@@ -28,6 +30,7 @@ export interface ViewportToolRegistry {
   readonly handleCanvasWheel: (event: WheelEvent) => boolean;
   readonly handleCanvasPointerDown: (event: PointerEvent) => boolean;
   readonly handleNodePointerDown: (nodeId: string, event: PointerEvent) => boolean;
+  readonly handleSelectionTargetPointerDown: (target: SelectionTarget, event: PointerEvent) => boolean;
   readonly handleWindowPointerMove: (event: PointerEvent) => boolean;
   readonly handleWindowPointerUp: (event: PointerEvent) => boolean;
   readonly handleWindowPointerCancel: (event: PointerEvent) => boolean;
@@ -44,6 +47,8 @@ export function createViewportToolRegistry(tools: readonly ViewportTool[]): View
     handleCanvasWheel: (event) => runWheelHandlers(orderedTools, event),
     handleCanvasPointerDown: (event) => runCanvasPointerDownHandlers(orderedTools, event),
     handleNodePointerDown: (nodeId, event) => runNodePointerDownHandlers(orderedTools, nodeId, event),
+    handleSelectionTargetPointerDown: (target, event) =>
+      runSelectionTargetPointerDownHandlers(orderedTools, target, event),
     handleWindowPointerMove: (event) => runWindowPointerMoveHandlers(orderedTools, event),
     handleWindowPointerUp: (event) => runWindowPointerUpHandlers(orderedTools, event),
     handleWindowPointerCancel: (event) => runWindowPointerCancelHandlers(orderedTools, event),
@@ -80,6 +85,20 @@ function runNodePointerDownHandlers(
 ): boolean {
   for (const tool of tools) {
     if (tool.onNodePointerDown?.(nodeId, event)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function runSelectionTargetPointerDownHandlers(
+  tools: readonly ViewportTool[],
+  target: SelectionTarget,
+  event: PointerEvent
+): boolean {
+  for (const tool of tools) {
+    if (tool.onSelectionTargetPointerDown?.(target, event)) {
       return true;
     }
   }
