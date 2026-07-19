@@ -1,17 +1,9 @@
 import { createEffect, createMemo, createSignal, For, Index, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
-import { svgCapabilities, type SvgCapabilityRegistry } from '../../editor/capabilities';
-import type { EditorCommand } from '../../editor/commands';
-import { createSetAttributeCommand } from '../../editor/commands/attributeCommands';
-import {
-  createAddElementCommand,
-  createReorderNodesCommand,
-  createUpdateTextNodeCommand
-} from '../../editor/commands/nodeCommands';
-import type { EditorKernel } from '../../editor/kernel';
+import { svgCapabilities } from '../../editor/capabilities';
 import { decorativeIconProps } from '../../editor/svg-icon';
-import { nodeSelectionTarget, type SelectionTarget } from '../../editor/selection-targets';
+import type { RecognizedElement } from '../../svg-db';
 import { findNode, findParent, nodeLabel, type DropPosition, type SvgElementNode, type SvgNode } from '../../svg-model';
 import { AttributeGrid, RootElementEditor } from './InspectorInputs';
 import { createInspectorVirtualScroll, nodeContainsId, VirtualInspectorRowShell } from './InspectorVirtualScroll';
@@ -25,16 +17,26 @@ type InspectorDropTarget = {
   readonly valid: boolean;
 };
 
-export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKernel<TPanelContext> }) {
+export function InspectorPanel(props: {
+  readonly root: SvgElementNode;
+  readonly selectedIds: readonly string[];
+  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
+  readonly selectNode: (id: string, event?: MouseEvent | PointerEvent) => void;
+  readonly clearSelection: () => void;
+  readonly addElement: (name: RecognizedElement | string) => void;
+  readonly addTextNode: (kind: 'text' | 'comment' | 'cdata') => void;
+  readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
+  readonly removeElementAttribute: (nodeId: string, name: string) => void;
+  readonly updateBasicNodeText: (nodeId: string, text: string) => void;
+  readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
+  readonly reorderNodes: (nodeIds: readonly string[], targetId: string, position: DropPosition) => void;
+}) {
   const [addOpen, setAddOpen] = createSignal(false);
   const [draggingIds, setDraggingIds] = createSignal<readonly string[]>([]);
   const [dropTarget, setDropTarget] = createSignal<InspectorDropTarget>();
   const [dragPreviewPoint, setDragPreviewPoint] = createSignal<{ readonly x: number; readonly y: number }>();
-  const root = () => props.kernel.documents.activeRoot();
-  const capabilities = () => props.kernel.capabilities.svg;
-  const selectedIds = () => props.kernel.selection.selectedIds();
-  const selectedTargets = () => props.kernel.selection.selectedTargets();
-  const virtualScroll = createInspectorVirtualScroll({ root });
+  const virtualScroll = createInspectorVirtualScroll({ root: () => props.root });
   let suppressNextSelectionScroll = false;
   let pendingSelectionScrollId: string | undefined;
   const alignSelectedRowOnSecondFrame = createRafQueue(() => {
@@ -58,12 +60,12 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
 
   const dragPreviewNodes = createMemo(() =>
     draggingIds()
-      .map((id) => findNode(root(), id))
+      .map((id) => findNode(props.root, id))
       .filter((node): node is SvgNode => Boolean(node))
   );
 
   createEffect(() => {
-    const ids = selectedIds();
+    const ids = props.selectedIds;
     const selectedId = ids[ids.length - 1];
 
     if (!selectedId) {
@@ -84,7 +86,7 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
 
   function selectNodeFromInspector(id: string, event?: MouseEvent | PointerEvent): void {
     suppressNextSelectionScroll = true;
-    props.kernel.selection.selectNode(id, event);
+    props.selectNode(id, event);
     queueMicrotask(() => {
       suppressNextSelectionScroll = false;
     });
@@ -92,7 +94,7 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
 
   function openContextMenuFromInspector(event: MouseEvent, nodeId: string): void {
     suppressNextSelectionScroll = true;
-    props.kernel.ui.contextMenu?.open(event, nodeId);
+    props.openContextMenu(event, nodeId);
     queueMicrotask(() => {
       suppressNextSelectionScroll = false;
     });
@@ -105,7 +107,7 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
   }
 
   function dragIdsForNode(nodeId: string): readonly string[] {
-    const selected = selectedIds().filter((id) => id !== root().id);
+    const selected = props.selectedIds.filter((id) => id !== props.root.id);
     return selected.includes(nodeId) ? selected : [nodeId];
   }
 
@@ -160,49 +162,14 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
     event.preventDefault();
 
     if (target.valid) {
-      reorderNodes(draggingIds(), target.nodeId, target.position);
+      props.reorderNodes(draggingIds(), target.nodeId, target.position);
     }
 
     resetInspectorDrag();
   }
 
-  function dispatchCommand(command: EditorCommand): void {
-    props.kernel.commands.dispatch(command);
-  }
-
-  function reorderNodes(nodeIds: readonly string[], targetId: string, position: DropPosition): void {
-    const ids = nodeIds.filter((id) => id !== root().id);
-
-    if (ids.length === 0) {
-      return;
-    }
-
-    dispatchCommand(createReorderNodesCommand(ids, targetId, position));
-    props.kernel.selection.setSelectedTargets(ids.map(nodeSelectionTarget));
-  }
-
-  function addElement(name: string): void {
-    const add = createAddElementCommand({
-      root: root(),
-      selectedNodes: props.kernel.selection.selectedNodes(),
-      name,
-      capabilities: capabilities()
-    });
-
-    dispatchCommand(add.command);
-    props.kernel.selection.setSelectedTargets([nodeSelectionTarget(add.nodeId)]);
-  }
-
-  function updateElementAttribute(nodeId: string, name: string, value: string): void {
-    dispatchCommand(createSetAttributeCommand(nodeId, name, value));
-  }
-
-  function updateBasicNodeText(nodeId: string, text: string): void {
-    dispatchCommand(createUpdateTextNodeCommand(nodeId, text));
-  }
-
   function dropPositionForEvent(node: SvgNode, event: DragEvent): DropPosition {
-    if (node.id === root().id) {
+    if (node.id === props.root.id) {
       return 'inside';
     }
 
@@ -220,22 +187,22 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
   }
 
   function isDropTargetValid(ids: readonly string[], targetId: string, position: DropPosition): boolean {
-    const currentRoot = root();
-    const target = findNode(currentRoot, targetId);
-    const parent = position === 'inside' && target?.kind === 'element' ? target : findParent(currentRoot, targetId);
+    const root = props.root;
+    const target = findNode(root, targetId);
+    const parent = position === 'inside' && target?.kind === 'element' ? target : findParent(root, targetId);
 
     if (!target || !parent) {
       return false;
     }
 
     for (const id of ids) {
-      const node = findNode(currentRoot, id);
+      const node = findNode(root, id);
 
-      if (!node || node.id === currentRoot.id || nodeContainsId(node, parent.id)) {
+      if (!node || node.id === root.id || nodeContainsId(node, parent.id)) {
         return false;
       }
 
-      if (node.kind === 'element' && !capabilities().isValidChild(parent.name, node.name)) {
+      if (node.kind === 'element' && !svgCapabilities.isValidChild(parent.name, node.name)) {
         return false;
       }
     }
@@ -257,19 +224,35 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
         </button>
         <Show when={addOpen()}>
           <div class="absolute top-9 left-1.5 z-50 grid min-w-47.5 gap-0.5 rounded-md border border-[var(--border)] p-1.25 shadow-[0_12px_28px_#0008] [background:color-mix(in_srgb,var(--panel)_96%,#000)]" data-testid="add-element-menu">
-            <For each={capabilities().addableElements}>
-              {(element) => (
+            <For
+              each={
+                [
+                  'path',
+                  'circle',
+                  'ellipse',
+                  'rect',
+                  'line',
+                  'polygon',
+                  'polyline',
+                  'g',
+                  'linearGradient',
+                  'radialGradient',
+                  'stop'
+                ] as const
+              }
+            >
+              {(name) => (
                 <button
                   class="flex min-h-7 cursor-pointer items-center gap-2 rounded bg-transparent px-2 text-[var(--text)] hover:bg-[color-mix(in_srgb,var(--accent)_24%,transparent)]"
                   type="button"
-                  data-testid={`add-element-option-${element.name}`}
+                  data-testid={`add-element-option-${name}`}
                   onClick={() => {
-                    addElement(element.name);
+                    props.addElement(name);
                     setAddOpen(false);
                   }}
                 >
-                  <Dynamic component={element.icon} {...decorativeIconProps} />{' '}
-                  {element.name}
+                  <Dynamic component={svgCapabilities.iconForElement(name)} {...decorativeIconProps} />{' '}
+                  {name}
                 </button>
               )}
             </For>
@@ -282,13 +265,7 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
         ref={virtualScroll.setScrollerRef}
         onScroll={(event) => virtualScroll.setScrollTop(event.currentTarget.scrollTop)}
       >
-        <RootElementEditor
-          root={root()}
-          capabilities={capabilities()}
-          dispatchCommand={dispatchCommand}
-          selectTarget={props.kernel.selection.selectTarget}
-          updateElementAttribute={updateElementAttribute}
-        />
+        <RootElementEditor root={props.root} updateElementAttribute={props.updateElementAttribute} />
         <div
           ref={virtualScroll.setVirtualSpacerRef}
           class="relative mt-1.25 min-h-full"
@@ -305,16 +282,15 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
                 <VirtualInspectorRowShell row={row()} measureRow={virtualScroll.measureRow}>
                   <ElementCard
                     node={row().node}
-                    capabilities={capabilities()}
                     depth={row().depth}
-                    root={root()}
-                    selectedIds={selectedIds()}
-                    selectedTargets={selectedTargets()}
-                    selectTarget={props.kernel.selection.selectTarget}
+                    root={props.root}
+                    selectedIds={props.selectedIds}
+                    selectedPathCommand={props.selectedPathCommand}
+                    setSelectedPathCommand={props.setSelectedPathCommand}
                     selectNode={selectNodeFromInspector}
-                    dispatchCommand={dispatchCommand}
-                    updateElementAttribute={updateElementAttribute}
-                    updateBasicNodeText={updateBasicNodeText}
+                    updateElementAttribute={props.updateElementAttribute}
+                    removeElementAttribute={props.removeElementAttribute}
+                    updateBasicNodeText={props.updateBasicNodeText}
                     openContextMenu={openContextMenuFromInspector}
                     draggingIds={draggingIds()}
                     dropTarget={dropTarget()}
@@ -341,10 +317,7 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
             <For each={dragPreviewNodes()}>
               {(node) => (
                 <div class="flex h-6 items-center justify-center gap-1.5 rounded border-2 border-[#3d86ff] font-['GodSVG_Mono',ui-monospace,monospace] text-xs text-[#eef4ff] shadow-[0_10px_24px_rgb(0_0_0/30%)] [background:color-mix(in_srgb,#30569c_52%,var(--panel))]" data-testid={`inspector-drag-preview-node-${node.id}`}>
-                  <Dynamic
-                    component={node.kind === 'element' ? capabilities().iconForElement(node.name) : capabilities().iconForNode(node.kind)}
-                    {...decorativeIconProps}
-                  />
+                  <Dynamic component={node.kind === 'element' ? svgCapabilities.iconForElement(node.name) : svgCapabilities.iconForNode(node.kind)} {...decorativeIconProps} />
                   <span>{inspectorTitle(node)}</span>
                 </div>
               )}
@@ -358,15 +331,14 @@ export function InspectorPanel<TPanelContext>(props: { readonly kernel: EditorKe
 
 function ElementCard(props: {
   readonly node: SvgNode;
-  readonly capabilities?: SvgCapabilityRegistry;
   readonly depth: number;
   readonly root: SvgElementNode;
   readonly selectedIds: readonly string[];
-  readonly selectedTargets: readonly SelectionTarget[];
-  readonly selectTarget: (target: SelectionTarget, event?: MouseEvent | PointerEvent) => void;
+  readonly selectedPathCommand: { readonly nodeId: string; readonly index: number } | undefined;
+  readonly setSelectedPathCommand: (selection: { readonly nodeId: string; readonly index: number } | undefined) => void;
   readonly selectNode: (id: string, event?: MouseEvent | PointerEvent) => void;
-  readonly dispatchCommand: (command: EditorCommand) => void;
   readonly updateElementAttribute: (nodeId: string, name: string, value: string) => void;
+  readonly removeElementAttribute: (nodeId: string, name: string) => void;
   readonly updateBasicNodeText: (nodeId: string, text: string) => void;
   readonly openContextMenu: (event: MouseEvent, nodeId: string) => void;
   readonly draggingIds: readonly string[];
@@ -377,7 +349,6 @@ function ElementCard(props: {
   readonly resetInspectorDrag: () => void;
   readonly renderChildren?: boolean;
 }) {
-  const capabilities = () => props.capabilities ?? svgCapabilities;
   const isSelected = () => props.selectedIds.includes(props.node.id);
   const tint = () => `hsl(${268 + props.depth * 18}deg 52% ${props.depth === 0 ? 11 : 14}%)`;
   const dropState = () => (props.dropTarget?.nodeId === props.node.id ? props.dropTarget : undefined);
@@ -424,14 +395,11 @@ function ElementCard(props: {
         onDragStart={(event) => props.startInspectorDrag(props.node.id, event)}
         onDragEnd={props.resetInspectorDrag}
       >
-        <Dynamic
-          component={props.node.kind === 'element' ? capabilities().iconForElement(props.node.name) : capabilities().iconForNode(props.node.kind)}
-          {...decorativeIconProps}
-        />
+        <Dynamic component={props.node.kind === 'element' ? svgCapabilities.iconForElement(props.node.name) : svgCapabilities.iconForNode(props.node.kind)} {...decorativeIconProps} />
         <span>{inspectorTitle(props.node)}</span>
         <Show
           when={
-            props.node.kind === 'element' && props.node.name !== 'svg' && capabilities().getElement(props.node.name) === undefined
+            props.node.kind === 'element' && props.node.name !== 'svg' && svgCapabilities.isRecognizedElement(props.node.name) === false
           }
         >
           <WarningIcon {...decorativeIconProps} />
@@ -452,13 +420,10 @@ function ElementCard(props: {
         {(node) => (
           <>
             <AttributeGrid
-              root={props.root}
               node={node()}
-              capabilities={capabilities()}
-              dispatchCommand={props.dispatchCommand}
               updateElementAttribute={props.updateElementAttribute}
-              selectedTargets={props.selectedTargets}
-              selectTarget={props.selectTarget}
+              selectedPathCommand={props.selectedPathCommand}
+              setSelectedPathCommand={props.setSelectedPathCommand}
             />
             <Show when={props.renderChildren !== false && node().children.length > 0}>
               <div class="px-1.25 pb-1.25" data-testid={`inspector-node-children-${node().id}`}>
@@ -466,15 +431,14 @@ function ElementCard(props: {
                   {(child) => (
                     <ElementCard
                       node={child}
-                      capabilities={capabilities()}
                       depth={props.depth + 1}
                       root={props.root}
                       selectedIds={props.selectedIds}
-                      selectedTargets={props.selectedTargets}
-                      selectTarget={props.selectTarget}
+                      selectedPathCommand={props.selectedPathCommand}
+                      setSelectedPathCommand={props.setSelectedPathCommand}
                       selectNode={props.selectNode}
-                      dispatchCommand={props.dispatchCommand}
                       updateElementAttribute={props.updateElementAttribute}
+                      removeElementAttribute={props.removeElementAttribute}
                       updateBasicNodeText={props.updateBasicNodeText}
                       openContextMenu={props.openContextMenu}
                       draggingIds={props.draggingIds}

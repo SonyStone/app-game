@@ -1,116 +1,43 @@
 import { pathCommandLetters } from '../../path-data';
-import { createEditorRegistries } from '../../editor/contributions';
-import type {
-  EditorContribution,
-  ShortcutBinding,
-  ShortcutContribution,
-  ShortcutTarget
-} from '../../editor/kernel';
 import type { ShortcutItem } from '../../editor/types';
 import type { Accessor } from 'solid-js';
 
-export interface ShortcutDescriptor extends ShortcutContribution {
+export interface ShortcutBinding {
+  readonly key: string;
+  readonly ctrl?: boolean;
+  readonly shift?: boolean;
+  readonly alt?: boolean;
+}
+
+export interface ShortcutDescriptor extends ShortcutItem {
+  readonly id: string;
+  readonly bindings: readonly ShortcutBinding[];
+  readonly allowInEditable?: boolean;
   readonly run: (event: KeyboardEvent) => void;
 }
 
-export type ShortcutRegistryContribution = EditorContribution & {
-  readonly shortcuts?: readonly ShortcutContribution[];
-};
-
-export const coreShortcutContribution = {
-  id: 'core.shortcuts',
-  shortcuts: [
-    shortcutContribution('file.import', actionTarget('file.import'), 'file', 'Import', 'Ctrl+O', [{ key: 'o', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('file.export', actionTarget('file.export'), 'file', 'Export', 'Ctrl+E', [{ key: 'e', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('file.save-svg', actionTarget('file.save-svg'), 'file', 'Save SVG', 'Ctrl+S', [{ key: 's', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('file.new-tab', actionTarget('file.new-tab'), 'file', 'New tab', 'Ctrl+N', [{ key: 'n', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('file.optimize', commandTarget('svg.optimize'), 'file', 'Optimize', 'Ctrl+Shift+O', [{ key: 'o', ctrl: true, shift: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('edit.undo', actionTarget('edit.undo'), 'edit', 'Undo', 'Ctrl+Z', [{ key: 'z', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('edit.redo', actionTarget('edit.redo'), 'edit', 'Redo', 'Ctrl+Shift+Z', [{ key: 'z', ctrl: true, shift: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('edit.copy-svg', actionTarget('edit.copy-svg'), 'edit', 'Copy SVG text', 'Ctrl+Shift+C', [{ key: 'c', ctrl: true, shift: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('edit.duplicate', commandTarget('svg.duplicate-selection'), 'edit', 'Duplicate', 'Ctrl+D', [{ key: 'd', ctrl: true }]),
-    shortcutContribution('edit.delete', commandTarget('svg.delete-selection'), 'edit', 'Delete', 'Delete', [
-      { key: 'Delete' },
-      { key: 'Backspace' }
-    ]),
-    shortcutContribution('edit.move-up', commandTarget('svg.move-selection-up'), 'edit', 'Move up', 'Alt+ArrowUp', [
-      { key: 'ArrowUp', alt: true }
-    ]),
-    shortcutContribution('edit.move-down', commandTarget('svg.move-selection-down'), 'edit', 'Move down', 'Alt+ArrowDown', [
-      { key: 'ArrowDown', alt: true }
-    ]),
-    shortcutContribution('edit.select-all', actionTarget('edit.select-all'), 'edit', 'Select all', 'Ctrl+A', [
-      { key: 'a', ctrl: true }
-    ]),
-    shortcutContribution('command.palette', actionTarget('command.palette'), 'command', 'Command palette', 'Ctrl+K', [{ key: 'k', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('view.zoom-in', actionTarget('view.zoom-in'), 'view', 'Zoom in', 'Ctrl+=', [{ key: '=', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('view.zoom-out', actionTarget('view.zoom-out'), 'view', 'Zoom out', 'Ctrl+-', [{ key: '-', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('view.reset-zoom', actionTarget('view.reset-zoom'), 'view', 'Reset zoom', 'Ctrl+0', [{ key: '0', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('view.toggle-grid', actionTarget('view.toggle-grid'), 'view', 'Toggle grid', 'Ctrl+G', [{ key: 'g', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution('view.toggle-handles', actionTarget('view.toggle-handles'), 'view', 'Toggle handles', 'Ctrl+H', [{ key: 'h', ctrl: true }], {
-      allowInEditable: true
-    }),
-    shortcutContribution(
-      'tool.insert-path-command',
-      handlerTarget('tool.insert-path-command'),
-      'tool',
-      'Insert path command',
-      'M L H V Z A Q T C S',
-      pathCommandBindings()
-    ),
-    shortcutContribution('help.settings', actionTarget('help.settings'), 'help', 'Settings', 'Ctrl+,', [{ key: ',', ctrl: true }], {
-      allowInEditable: true
-    })
-  ]
-} as const satisfies ShortcutRegistryContribution;
-
-export const defaultShortcutItems = shortcutItemsFromContributions();
-
-export function shortcutContributionsFromContributions(
-  contributions: readonly ShortcutRegistryContribution[] = [coreShortcutContribution]
-): readonly ShortcutContribution[] {
-  return createEditorRegistries(contributions).shortcuts;
-}
-
-export function shortcutItemsFromContributions(
-  contributions: readonly ShortcutRegistryContribution[] = [coreShortcutContribution]
-): readonly ShortcutItem[] {
-  return shortcutItemsFromShortcuts(shortcutContributionsFromContributions(contributions));
-}
-
-export function shortcutItemsFromShortcuts(shortcuts: readonly ShortcutContribution[]): readonly ShortcutItem[] {
-  return shortcuts.map(({ category, action, keys }) => ({
-    category,
-    action,
-    keys
-  }));
-}
+export const defaultShortcutItems = [
+  { category: 'file', action: 'Import', keys: 'Ctrl+O' },
+  { category: 'file', action: 'Export', keys: 'Ctrl+E' },
+  { category: 'file', action: 'Save SVG', keys: 'Ctrl+S' },
+  { category: 'file', action: 'New tab', keys: 'Ctrl+N' },
+  { category: 'file', action: 'Optimize', keys: 'Ctrl+Shift+O' },
+  { category: 'edit', action: 'Undo', keys: 'Ctrl+Z' },
+  { category: 'edit', action: 'Redo', keys: 'Ctrl+Shift+Z' },
+  { category: 'edit', action: 'Copy SVG text', keys: 'Ctrl+Shift+C' },
+  { category: 'edit', action: 'Duplicate', keys: 'Ctrl+D' },
+  { category: 'edit', action: 'Delete', keys: 'Delete' },
+  { category: 'edit', action: 'Move up', keys: 'Alt+ArrowUp' },
+  { category: 'edit', action: 'Move down', keys: 'Alt+ArrowDown' },
+  { category: 'edit', action: 'Select all', keys: 'Ctrl+A' },
+  { category: 'view', action: 'Zoom in', keys: 'Ctrl+=' },
+  { category: 'view', action: 'Zoom out', keys: 'Ctrl+-' },
+  { category: 'view', action: 'Reset zoom', keys: 'Ctrl+0' },
+  { category: 'view', action: 'Toggle grid', keys: 'Ctrl+G' },
+  { category: 'view', action: 'Toggle handles', keys: 'Ctrl+H' },
+  { category: 'tool', action: 'Insert path command', keys: 'M L H V Z A Q T C S' },
+  { category: 'help', action: 'Settings', keys: 'Ctrl+,' }
+] as const satisfies readonly ShortcutItem[];
 
 export function createShortcutRegistry(
   descriptors: readonly ShortcutDescriptor[],
@@ -136,45 +63,6 @@ export function createShortcutRegistry(
 
 export function pathCommandBindings(): readonly ShortcutBinding[] {
   return pathCommandLetters.flatMap((letter) => [{ key: letter }, { key: letter, shift: true }]);
-}
-
-function shortcutContribution(
-  id: ShortcutContribution['id'],
-  target: ShortcutTarget,
-  category: string,
-  action: string,
-  keys: string,
-  bindings: readonly ShortcutBinding[],
-  options: {
-    readonly allowInEditable?: boolean;
-  } = {}
-): ShortcutContribution {
-  const base = {
-    id,
-    target,
-    category,
-    action,
-    keys,
-    bindings
-  } satisfies ShortcutContribution;
-
-  if (options.allowInEditable === undefined) {
-    return base;
-  }
-
-  return { ...base, allowInEditable: options.allowInEditable };
-}
-
-function actionTarget(id: ShortcutTarget['id']): ShortcutTarget {
-  return { kind: 'action', id };
-}
-
-function commandTarget(id: ShortcutTarget['id']): ShortcutTarget {
-  return { kind: 'command', id };
-}
-
-function handlerTarget(id: ShortcutTarget['id']): ShortcutTarget {
-  return { kind: 'handler', id };
 }
 
 function matchesBinding(event: KeyboardEvent, binding: ShortcutBinding): boolean {

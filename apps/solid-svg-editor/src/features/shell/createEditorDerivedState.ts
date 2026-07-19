@@ -1,9 +1,8 @@
 import { createMemoCache } from '@solid-primitives/memo';
 import { createMemo, type Accessor } from 'solid-js';
 
-import { svgCapabilities, type SvgCapabilityRegistry } from '../../editor/capabilities';
-import type { PathAnchorSelection, SelectionTarget } from '../../editor/selection-targets';
-import type { ActiveDrag, AppSettings, HandleDescriptor } from '../../editor/types';
+import { svgCapabilities } from '../../editor/capabilities';
+import type { ActiveDrag, AppSettings } from '../../editor/types';
 import { humanFileSize, serializeRoot } from '../../formatter';
 import { flattenElements, type SvgElementNode } from '../../svg-model';
 import type { TouchGesture } from '../viewport/touch-gesture';
@@ -14,15 +13,11 @@ export function createEditorDerivedState(options: {
   readonly settings: Accessor<AppSettings>;
   readonly activeRoot: Accessor<SvgElementNode>;
   readonly selectedIds: Accessor<readonly string[]>;
-  readonly selectedPathAnchor: Accessor<PathAnchorSelection | undefined>;
   readonly activeDrag: Accessor<ActiveDrag | undefined>;
   readonly activeTouchGesture: Accessor<TouchGesture | undefined>;
   readonly transientViewportPreview: Accessor<boolean>;
   readonly rootSize: Accessor<SvgSize>;
-  readonly capabilities?: SvgCapabilityRegistry;
 }) {
-  const capabilities = options.capabilities ?? svgCapabilities;
-
   const handleDragActive = createMemo(
     () =>
       options.activeDrag()?.type === 'handle' ||
@@ -40,18 +35,14 @@ export function createEditorDerivedState(options: {
 
   const fileSize = createMemo(() => humanFileSize(new Blob([exportText()]).size));
   const elementCount = createMemo(() => flattenElements(options.activeRoot()).length);
-  const selectedHandleNodeIds = createMemo(() => {
-    const anchor = options.selectedPathAnchor();
-    return anchor ? [anchor.nodeId] : options.selectedIds();
-  });
   const handlesForSelection = createMemoCache(
     () => {
-      const selectedIds = selectedHandleNodeIds();
-      return selectedIds.length <= 1 ? capabilities.getHandles(options.activeRoot(), selectedIds) : [];
+      const selectedIds = options.selectedIds();
+      return selectedIds.length <= 1 ? svgCapabilities.getHandles(options.activeRoot(), selectedIds) : [];
     },
     { size: 64 }
   );
-  const handles = createMemo(() => markActivePathAnchorHandle(handlesForSelection(selectedHandleNodeIds().join('\u001f')), options.selectedPathAnchor()));
+  const handles = createMemo(() => handlesForSelection(options.selectedIds().join('\u001f')));
 
   const viewportIsMoving = createMemo(
     () =>
@@ -82,36 +73,4 @@ export function createEditorDerivedState(options: {
     rasterPreviewRect,
     rasterPreviewUrl
   };
-}
-
-function markActivePathAnchorHandle(
-  handles: readonly HandleDescriptor[],
-  anchor: PathAnchorSelection | undefined
-): readonly HandleDescriptor[] {
-  if (!anchor) {
-    return handles;
-  }
-
-  let changed = false;
-  const next = handles.map((handle) => {
-    const active = handle.selectionTargets?.some((target) => pathAnchorMatchesTarget(anchor, target)) ?? false;
-
-    if (!active) {
-      return handle;
-    }
-
-    changed = true;
-    return { ...handle, active } satisfies HandleDescriptor;
-  });
-
-  return changed ? next : handles;
-}
-
-function pathAnchorMatchesTarget(anchor: PathAnchorSelection, target: SelectionTarget): boolean {
-  return (
-    target.kind === 'path-anchor' &&
-    target.nodeId === anchor.nodeId &&
-    target.commandIndex === anchor.commandIndex &&
-    target.parameter === anchor.parameter
-  );
 }

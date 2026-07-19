@@ -2,14 +2,10 @@ import type { FormatterSettings } from "../formatter";
 import type { Matrix2D, Rect } from "./geometry";
 import type { SvgDocument } from "./svg-document";
 import type { SvgElementNode, SvgNode } from "../svg-model";
-import type { EditorCommand, EditorCommandDurability, EditorCommandId } from "./commands";
-import type { EditorOperation } from "./operations";
-import type { SelectionTarget } from "./selection-targets";
+import type { EditorCommandId } from "./commands";
 
-export type CorePanelId = "inspector" | "code" | "previews" | "debug";
-export type PanelId = CorePanelId | (string & {});
-export type CoreModalId = "settings" | "export" | "about" | "donate" | "shortcuts" | "command-palette";
-export type ModalId = CoreModalId | (string & {}) | undefined;
+export type PanelId = "inspector" | "code" | "previews" | "debug";
+export type ModalId = "settings" | "export" | "about" | "donate" | "shortcuts" | undefined;
 export type ThemePreset = "dark" | "light" | "black" | "gray";
 export type ExportFormat = "svg" | "png" | "jpeg" | "webp";
 export type DragSelectionMode = "intersect" | "contain";
@@ -25,16 +21,9 @@ export interface EditorTab {
 }
 
 export interface HistoryEntry {
-  readonly beforeRoot: SvgElementNode;
-  readonly afterRoot: SvgElementNode;
-  /** @deprecated Use beforeRoot, afterRoot, operations, or inverseOperations for history replay. */
   readonly root: SvgElementNode;
   readonly commandId: EditorCommandId | undefined;
   readonly label: string | undefined;
-  readonly durability?: EditorCommandDurability;
-  readonly mergeKey?: string;
-  readonly operations?: readonly EditorOperation[];
-  readonly inverseOperations?: readonly EditorOperation[];
 }
 
 export interface HistoryState {
@@ -73,9 +62,6 @@ export interface AppSettings {
   readonly useCtrlForZoom: boolean;
   readonly rasterPreviewDuringInteraction: boolean;
   readonly dragSelectionMode: DragSelectionMode;
-  readonly disabledExtensionPackageIds: readonly string[];
-  readonly appliedExtensionPackageMigrationKeys: readonly string[];
-  readonly appliedExtensionPackageUpdateKeys: readonly string[];
 }
 
 export interface ViewRect {
@@ -85,36 +71,20 @@ export interface ViewRect {
   readonly height: number;
 }
 
-interface HandleDescriptorBase {
+export interface HandleDescriptor {
   readonly id: string;
   readonly nodeId: string;
   readonly x: number;
   readonly y: number;
   readonly label: string;
   readonly small: boolean;
-  readonly active?: boolean;
-  readonly selectionTargets?: readonly SelectionTarget[];
-}
-
-export interface CommandHandleDescriptor extends HandleDescriptorBase {
-  readonly commandMode: "command";
-  readonly createCommand: (x: number, y: number) => EditorCommand;
-  readonly update?: never;
-}
-
-export interface LegacyHandleDescriptor extends HandleDescriptorBase {
-  readonly commandMode?: "legacy";
   readonly update: (root: SvgElementNode, x: number, y: number) => SvgElementNode;
-  readonly createCommand?: never;
 }
-
-export type HandleDescriptor = CommandHandleDescriptor | LegacyHandleDescriptor;
 
 export interface ContextMenuState {
   readonly x: number;
   readonly y: number;
   readonly nodeId: string;
-  readonly target: SelectionTarget;
 }
 
 export interface ActivePanDrag {
@@ -146,7 +116,7 @@ export interface ActiveMarqueeDrag {
   readonly currentClientY: number;
   readonly mode: DragSelectionMode;
   readonly additive: boolean;
-  readonly initialSelectionTargets: readonly SelectionTarget[];
+  readonly initialSelection: readonly string[];
 }
 
 export interface ActiveTransformBoxDrag {

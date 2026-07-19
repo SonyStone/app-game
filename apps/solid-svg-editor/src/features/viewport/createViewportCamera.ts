@@ -3,13 +3,12 @@ import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js'
 import { radiansToDegrees, type Point } from '../../editor/geometry';
 import { clamp } from '../../editor/tree-utils';
 import type { AppSettings, ViewRect } from '../../editor/types';
-import type { ViewportRendererAdapter } from './rendererAdapter';
 import { createRotatedGridRect, rotatePoint, type SvgSize } from './viewport-math';
 
 export function createViewportCamera(options: {
   readonly rootSize: Accessor<SvgSize>;
   readonly settings: Accessor<AppSettings>;
-  readonly renderer: Pick<ViewportRendererAdapter, 'viewportClientRect'>;
+  readonly canvasSvg: Accessor<SVGSVGElement | undefined>;
 }) {
   const [cameraCenter, setCameraCenter] = createSignal({ x: 450, y: 450 });
   const [zoom, setZoom] = createSignal(1);
@@ -128,9 +127,15 @@ export function createViewportCamera(options: {
   }
 
   function clientOffsetFromViewportCenter(clientX: number, clientY: number, z: number): Point {
-    const rect = options.renderer.viewportClientRect();
+    const svg = options.canvasSvg();
 
-    if (!rect || rect.width <= 0 || rect.height <= 0) {
+    if (!svg) {
+      return { x: 0, y: 0 };
+    }
+
+    const rect = svg.getBoundingClientRect();
+
+    if (rect.width <= 0 || rect.height <= 0) {
       return { x: 0, y: 0 };
     }
 
@@ -141,12 +146,13 @@ export function createViewportCamera(options: {
   }
 
   function angleFromViewportCenter(clientX: number, clientY: number): number {
-    const rect = options.renderer.viewportClientRect();
+    const svg = options.canvasSvg();
 
-    if (!rect) {
+    if (!svg) {
       return 0;
     }
 
+    const rect = svg.getBoundingClientRect();
     return Math.atan2(clientY - rect.top - rect.height / 2, clientX - rect.left - rect.width / 2);
   }
 

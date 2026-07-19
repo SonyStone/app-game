@@ -1,145 +1,447 @@
+import { createActiveElement } from '@solid-primitives/active-element';
+import { writeClipboard } from '@solid-primitives/clipboard';
+import { createEventListener } from '@solid-primitives/event-listener';
 import { useKeyDownList } from '@solid-primitives/keyboard';
+import { createPointerPosition, type PointerStateWithActive } from '@solid-primitives/pointer';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 
+import { createEditorCommand, type EditorCommandEvent } from '../../editor/commands';
 import { defaultSettings } from '../../editor/defaults';
-import {
-  mergeExtensionPackageIds,
-  mergeExtensionPackageMigrationKeys,
-  mergeExtensionPackageUpdateKeys
-} from '../../editor/extension-packages';
-import type { EditorPanelContext } from '../panels/panelRegistry';
-import { createSvgNodeRendererFromContributions } from '../viewport/svg-renderer';
-import { createAppHostServices } from './createAppHostServices';
-import { createEditorDocumentServices } from './createEditorDocumentServices';
-import { createEditorFileHostServices } from './createEditorFileHostServices';
-import { createEditorOverlayServices } from './createEditorOverlayServices';
-import { createEditorSelectionServices } from './createEditorSelectionServices';
-import { createEditorShortcutRuntime } from './createEditorShortcutRuntime';
-import { createEditorViewportServices } from './createEditorViewportServices';
-import { createEditorWorkbenchServices } from './createEditorWorkbenchServices';
-import {
-  createEditorAppRegistries,
-  createEditorAppSvgCapabilities,
-  type EditorAppContributionInstallOptions
-} from './editorAppContributions';
-import { createEditorKernel } from './createEditorKernel';
+import { downloadBlob } from '../../editor/export-utils';
+import type { ContextMenuState, DragSelectionMode, ModalId, PanelId } from '../../editor/types';
+import { createDefaultElement, insertSibling, svgSize } from '../../svg-model';
+import { createEditorDocuments } from '../documents/createEditorDocuments';
+import { createSvgNodeActions } from '../documents/createSvgNodeActions';
+import { createFullscreen } from '../fullscreen/createFullscreen';
+import { createSvgImport } from '../import/createSvgImport';
+import { createReferenceImage } from '../reference/createReferenceImage';
+import type { EditorContextMenuAction } from '../selection/EditorContextMenu';
+import { createEditorSelection } from '../selection/createEditorSelection';
+import { createEditorShortcuts } from '../shortcuts/createEditorShortcuts';
+import { createTransientViewportPreview } from '../viewport/createTransientViewportPreview';
+import { createViewportCamera } from '../viewport/createViewportCamera';
+import { createViewportInteractions } from '../viewport/createViewportInteractions';
+import { emptySvgSize, sameSvgSize } from '../viewport/viewport-math';
+import { appRootBaseClass, appRootThemeClass, createAppThemeVars } from './app-theme';
+import { createEditorDerivedState } from './createEditorDerivedState';
+import { createResizableSidebar } from './createResizableSidebar';
 
-export interface CreateEditorAppControllerOptions extends EditorAppContributionInstallOptions {}
+const inactivePointerState = {
+  pressure: 0,
+  pointerId: -1,
+  tiltX: 0,
+  tiltY: 0,
+  width: 0,
+  height: 0,
+  twist: 0,
+  pointerType: null,
+  x: 0,
+  y: 0,
+  isActive: false
+} as const satisfies PointerStateWithActive;
 
-export function createEditorAppController(options: CreateEditorAppControllerOptions = {}) {
+export function createEditorAppController() {
   const [settings, setSettings] = makePersisted(createSignal(defaultSettings()), {
     name: 'solid-svg-editor-settings-v1'
   });
-  const appInstallOptions = {
-    ...options,
-    disabledPackageIds: mergeExtensionPackageIds(options.disabledPackageIds ?? [], settings().disabledExtensionPackageIds ?? []),
-    appliedMigrationKeys: mergeExtensionPackageMigrationKeys(
-      options.appliedMigrationKeys ?? [],
-      settings().appliedExtensionPackageMigrationKeys ?? []
-    ),
-    appliedUpdateKeys: mergeExtensionPackageUpdateKeys(
-      options.appliedUpdateKeys ?? [],
-      settings().appliedExtensionPackageUpdateKeys ?? []
-    )
-  } satisfies EditorAppContributionInstallOptions;
-  const appRegistries = createEditorAppRegistries(appInstallOptions);
-  const appSvgCapabilities = createEditorAppSvgCapabilities(appInstallOptions);
-  const appSvgNodeRenderer = createSvgNodeRendererFromContributions(appRegistries.renderers);
-  const workbenchServices = createEditorWorkbenchServices();
+  const [activePanel, setActivePanel] = createSignal<PanelId>('inspector');
+  const [modal, setModal] = createSignal<ModalId>();
+  const [contextMenu, setContextMenu] = createSignal<ContextMenuState | undefined>();
+  const [canvasSvg, setCanvasSvg] = createSignal<SVGSVGElement>();
+  const [viewportShell, setViewportShell] = createSignal<HTMLDivElement>();
+  const [recentCommandEvent, setRecentCommandEvent] = createSignal<EditorCommandEvent>();
+  const activeElement = createActiveElement();
   const heldKeys = useKeyDownList();
+  const viewportPointer = createPointerPosition({
+    target: () => viewportShell() ?? document.body,
+    value: inactivePointerState
+  });
+
+  let appRootRef: HTMLDivElement | undefined;
+  const setAppRootRef = (element: HTMLDivElement) => {
+    appRootRef = element;
+  };
 
   let resetDocumentSelection: () => void = () => undefined;
   let centerOpenedDocument: () => void = () => undefined;
-  const documentServices = createEditorDocumentServices({
-    capabilities: appSvgCapabilities,
+  const documents = createEditorDocuments({
     formatter: () => settings().formatter,
     onSelectionReset: () => resetDocumentSelection(),
     onDocumentOpened: () => centerOpenedDocument(),
-    onParseError: workbenchServices.showCodePanel
+    onParseError: () => setActivePanel('code')
   });
-  const { documents } = documentServices;
+  const {
+    tabs,
+    activeTabId,
+    setActiveTabId,
+    activeTab,
+    activeRoot,
+    activeCode,
+    canUndo,
+    canRedo,
+    commandEvents,
+    dispatchCommand,
+    beginCommandTransaction,
+    updateCommandTransaction,
+    commitCommandTransaction,
+    undo,
+    redo,
+    applyCode,
+    reformatActiveCode,
+    createNewTab,
+    closeTab,
+    importSvgText,
+    markActiveTabClean
+  } = documents;
+  commandEvents.listen((event) => setRecentCommandEvent(event));
 
-  const fileHost = createEditorFileHostServices({ importSvgText: documents.importSvgText });
-  const { appHost, fullscreen } = createAppHostServices({ settings, dropActive: fileHost.svgImport.dropActive });
+  const svgImport = createSvgImport({ importSvgText });
+  const { isSvgDropActive, setImportInputRef, openImportDialog, onImportFile } = svgImport;
 
-  const selectionServices = createEditorSelectionServices({
-    activeRoot: documents.activeRoot,
-    dispatchCommand: documents.dispatchCommand
-  });
-  const overlayServices = createEditorOverlayServices({ selectTarget: selectionServices.selection.selectTarget });
-  resetDocumentSelection = selectionServices.resetDocumentSelection;
+  const reference = createReferenceImage();
+  const {
+    referenceImage,
+    showReference,
+    setShowReference,
+    overlayReference,
+    setOverlayReference,
+    setReferenceInputRef,
+    openReferenceDialog,
+    onReferenceFile,
+    clearReference
+  } = reference;
 
-  const viewportServices = createEditorViewportServices({
+  const selection = createEditorSelection({ root: activeRoot });
+  const {
+    selectedIds,
+    setSelectedIds,
+    setSelectionPivot,
+    selectedPathCommand,
+    setSelectedPathCommand,
+    selectedNodes,
+    selectNode,
+    clearSelection,
+    selectAll
+  } = selection;
+  resetDocumentSelection = clearSelection;
+
+  const nodeActions = createSvgNodeActions({
     settings,
-    activeRoot: documents.activeRoot,
-    activeSpatialIndex: documents.activeSpatialIndex,
-    selectedIds: selectionServices.selection.selectedIds,
-    selectedTargets: selectionServices.selection.selectedTargets,
-    selectedPathAnchor: selectionServices.selection.selectedPathAnchor,
-    setSelectedTargets: selectionServices.selection.setSelectedTargets,
-    selectTarget: selectionServices.selection.selectTarget,
-    selectNode: selectionServices.selection.selectNode,
-    clearSelection: selectionServices.selection.clearSelection,
-    setContextMenu: overlayServices.setContextMenu,
-    openContextMenu: overlayServices.contextMenu.open,
-    beginCommandTransaction: documents.beginCommandTransaction,
-    cancelCommandTransaction: documents.cancelCommandTransaction,
+    activeRoot,
+    selectedIds,
+    selectedNodes,
+    selectedPathCommand,
+    setSelectedIds,
+    setSelectionPivot,
+    setSelectedPathCommand,
+    clearSelection,
+    dispatchCommand
+  });
+  const {
+    deleteSelected,
+    duplicateSelected,
+    moveSelected,
+    reorderInspectorNodes,
+    addElement,
+    addTextNode,
+    updateElementAttribute,
+    removeElementAttribute,
+    updateBasicNodeText,
+    optimizeActive,
+    insertPathCommandFromKey
+  } = nodeActions;
+
+  const rootSize = createMemo(() => svgSize(activeRoot()), emptySvgSize, { equals: sameSvgSize });
+  const viewport = createViewportCamera({ rootSize, settings, canvasSvg });
+  const {
+    setCameraCenter,
+    zoom,
+    setZoom,
+    viewportSize,
+    setViewportSize,
+    viewportRotation,
+    setViewportRotation,
+    viewRect,
+    gridViewRect,
+    viewportTransform,
+    centerFrame,
+    zoomBy,
+    rotateViewportBy,
+    clientToSvgPoint,
+    centerForClientPoint,
+    angleFromViewportCenter
+  } = viewport;
+  centerOpenedDocument = centerFrame;
+
+  const { isFullscreen, toggleFullscreen } = createFullscreen(() => appRootRef);
+  const viewportShellSize = createElementSize(viewportShell);
+  createEffect(() => {
+    if (viewportShellSize.width === null || viewportShellSize.height === null) {
+      return;
+    }
+
+    setViewportSize({ width: viewportShellSize.width, height: viewportShellSize.height });
+  });
+
+  const { transientViewportPreview, keepViewportPreviewAlive } = createTransientViewportPreview();
+  let rasterPreviewActive: () => boolean = () => false;
+  const viewportInteractions = createViewportInteractions({
+    activeRoot,
+    selectedIds,
+    setSelectedIds,
+    setSelectionPivot,
+    setSelectedPathCommand,
+    selectNode,
+    clearSelection,
+    setContextMenu,
+    beginCommandTransaction,
+    updateCommandTransaction,
+    commitCommandTransaction,
+    canvasSvg,
+    zoom,
+    setZoom,
+    viewportSize,
+    viewportRotation,
+    setViewportRotation,
+    setCameraCenter,
+    clientToSvgPoint,
+    centerForClientPoint,
+    angleFromViewportCenter,
+    zoomBy,
+    rotateViewportBy,
     dragSelectionMode: () => settings().dragSelectionMode,
     useCtrlForZoom: () => settings().useCtrlForZoom,
-    referenceImage: fileHost.referenceImage.image,
-    showReference: fileHost.referenceImage.show,
-    overlayReference: fileHost.referenceImage.overlay,
-    capabilities: appSvgCapabilities,
-    renderers: appRegistries.renderers,
-    toolContributions: appRegistries.tools,
-    nodeRenderer: appSvgNodeRenderer
+    useRasterPreview: () => rasterPreviewActive(),
+    keepViewportPreviewAlive
   });
-  const { exportText, elementCount } = viewportServices;
-  centerOpenedDocument = viewportServices.viewport.centerFrame;
-  const documentActions = documentServices.createUiActions({ exportText });
+  const {
+    activeDrag,
+    activeTouchGesture,
+    selectionBox,
+    marqueeRect,
+    onCanvasWheel,
+    onCanvasPointerDown,
+    onNodePointerDown,
+    startHandleDrag,
+    startTransformBoxDrag
+  } = viewportInteractions;
 
-  const kernel = createEditorKernel<EditorPanelContext>({
-    documents: documentServices.createDocumentService({ exportText, elementCount }),
-    selection: selectionServices.selection,
-    commands: documentServices.commands,
-    settings: {
-      settings,
-      setSettings
-    },
-    viewport: viewportServices.viewport,
-    resources: documentServices.resources,
-    capabilities: {
-      svg: appSvgCapabilities
-    },
-    rendering: {
-      svgNodeRenderer: appSvgNodeRenderer,
-      viewportRenderer: viewportServices.viewportRenderer
-    },
-    input: {
-      heldKeys,
-      viewportPointer: viewportServices.viewportPointer
-    },
-    ui: {
-      appHost,
-      contextMenu: overlayServices.contextMenu,
-      svgImport: fileHost.svgImport,
-      downloadSvg: documentActions.downloadSvg,
-      copySvgText: documentActions.copySvgText,
-      modal: overlayServices.modal,
-      workbench: workbenchServices.workbench,
-      fullscreen,
-      referenceImage: fileHost.referenceImage
-    },
-    registries: appRegistries
+  function downloadSvg(): void {
+    downloadBlob(exportText(), activeTab()?.name ?? 'image.svg', 'image/svg+xml');
+    markActiveTabClean();
+  }
+
+  async function copySvgText(): Promise<void> {
+    await writeClipboard(exportText());
+  }
+
+  const { onKeyDown } = createEditorShortcuts({
+    activeElement,
+    redo,
+    undo,
+    downloadSvg,
+    copySvgText: () => void copySvgText(),
+    openImportDialog,
+    openExport: () => setModal('export'),
+    createNewTab,
+    openSettings: () => setModal('settings'),
+    optimizeActive,
+    zoomIn: () => zoomBy(Math.SQRT2),
+    zoomOut: () => zoomBy(1 / Math.SQRT2),
+    centerFrame,
+    toggleGrid: () => setSettings((current) => ({ ...current, showGrid: !current.showGrid })),
+    toggleHandles: () => setSettings((current) => ({ ...current, showHandles: !current.showHandles })),
+    selectAll,
+    duplicateSelected,
+    deleteSelected,
+    moveSelected,
+    insertPathCommandFromKey
   });
-  createEditorShortcutRuntime({
-    kernel,
-    handlers: selectionServices.shortcutHandlers
+  createEventListener(window, 'keydown', onKeyDown);
+
+  const derived = createEditorDerivedState({
+    settings,
+    activeRoot,
+    selectedIds,
+    activeDrag,
+    activeTouchGesture,
+    transientViewportPreview,
+    rootSize
   });
+  const { exportText, fileSize, elementCount, handles, viewportIsMoving, useRasterPreview, rasterPreviewRect, rasterPreviewUrl } =
+    derived;
+  rasterPreviewActive = useRasterPreview;
+
+  const sidebar = createResizableSidebar({ initialWidth: 408, minWidth: 320, maxWidth: 720 });
+  const themeVars = createMemo(() => createAppThemeVars(settings()));
+  const appRootClass = createMemo(() =>
+    [appRootBaseClass, appRootThemeClass[settings().themePreset], isSvgDropActive() ? 'svg-drop-active' : '']
+      .filter(Boolean)
+      .join(' ')
+  );
+
+  function openContextMenu(event: MouseEvent, nodeId: string): void {
+    event.preventDefault();
+    selectNode(nodeId, event);
+    setContextMenu({ x: event.clientX, y: event.clientY, nodeId });
+  }
+
+  function closeModal(): void {
+    setModal(undefined);
+  }
+
+  function runContextAction(action: EditorContextMenuAction): void {
+    const menu = contextMenu();
+
+    if (!menu) {
+      return;
+    }
+
+    setContextMenu(undefined);
+
+    if (action === 'duplicate') {
+      duplicateSelected();
+    } else if (action === 'delete') {
+      deleteSelected();
+    } else if (action === 'move-up') {
+      moveSelected(-1);
+    } else if (action === 'move-down') {
+      moveSelected(1);
+    } else {
+      const child = createDefaultElement('g');
+      dispatchCommand(
+        createEditorCommand({
+          id: 'svg.insert-group-after',
+          label: 'Insert group',
+          apply: (root) => insertSibling(root, menu.nodeId, child, true)
+        })
+      );
+    }
+  }
 
   return {
-    kernel
+    root: {
+      setAppRootRef,
+      className: appRootClass,
+      themeVars,
+      onDragEnter: svgImport.onDragEnter,
+      onDragOver: svgImport.onDragOver,
+      onDragLeave: svgImport.onDragLeave,
+      onDrop: svgImport.onDrop
+    },
+    fileInputs: {
+      setImportInputRef,
+      onImportFile,
+      setReferenceInputRef,
+      onReferenceFile
+    },
+    topBar: {
+      activeTab,
+      tabs,
+      fileSize,
+      canUndo,
+      canRedo,
+      setActiveTabId,
+      activeTabId,
+      closeTab,
+      createNewTab,
+      openImportDialog,
+      downloadSvg,
+      copySvgText,
+      undo,
+      redo,
+      optimizeActive,
+      openExport: () => setModal('export'),
+      openSettings: () => setModal('settings'),
+      openAbout: () => setModal('about'),
+      openDonate: () => setModal('donate'),
+      openShortcuts: () => setModal('shortcuts')
+    },
+    workspace: {
+      sidebar,
+      activePanel,
+      setActivePanel,
+      activeRoot,
+      selectedIds,
+      selectedPathCommand,
+      setSelectedPathCommand,
+      selectNode,
+      clearSelection,
+      addElement,
+      addTextNode,
+      updateElementAttribute,
+      removeElementAttribute,
+      updateBasicNodeText,
+      openContextMenu,
+      reorderInspectorNodes,
+      activeCode,
+      parseError: () => activeTab()?.parseError,
+      applyCode,
+      reformatPretty: () => reformatActiveCode(settings().formatter),
+      reformatCompact: () => reformatActiveCode(settings().exportFormatter),
+      selectedNodes,
+      elementCount,
+      exportText,
+      heldKeys,
+      viewportPointer,
+      recentCommandEvent
+    },
+    viewport: {
+      settings,
+      setSettings,
+      zoom,
+      zoomBy,
+      centerFrame,
+      isFullscreen,
+      toggleFullscreen,
+      openReferenceDialog,
+      referenceImage,
+      showReference,
+      setShowReference,
+      overlayReference,
+      setOverlayReference,
+      clearReference,
+      setDragSelectionMode: (mode: DragSelectionMode) => setSettings((current) => ({ ...current, dragSelectionMode: mode })),
+      setViewportShell,
+      setCanvasSvg,
+      viewRect,
+      viewportTransform,
+      gridViewRect,
+      rootSize,
+      activeRoot,
+      selectedIds,
+      viewportIsMoving,
+      useRasterPreview,
+      rasterPreviewUrl,
+      rasterPreviewRect,
+      handles,
+      selectionBox,
+      marqueeRect,
+      onCanvasWheel,
+      onCanvasPointerDown,
+      onNodePointerDown,
+      startHandleDrag,
+      startTransformBoxDrag,
+      heldKeys
+    },
+    contextMenu: {
+      state: contextMenu,
+      runAction: runContextAction
+    },
+    modals: {
+      modal,
+      settings,
+      setSettings,
+      activeRoot,
+      exportText,
+      close: closeModal,
+      reformatActiveCode
+    },
+    dropOverlay: {
+      active: isSvgDropActive
+    }
   };
 }
 

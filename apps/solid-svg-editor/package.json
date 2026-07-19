@@ -27,7 +27,6 @@
     "solid-js": "catalog:"
   },
   "devDependencies": {
-    "@app-game/vite-plugin-markdown": "workspace:*",
     "@types/node": "25.8.0",
     "@unocss/vite": "catalog:",
     "happy-dom": "^20.9.0",

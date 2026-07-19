@@ -1,128 +1,124 @@
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 
+import ExpandIcon from "./icons/Expand.svg";
+import FileBrowseIcon from "./icons/FileBrowse.svg";
+import MinusIcon from "./icons/Minus.svg";
+import ReferenceIcon from "./icons/Reference.svg";
+import SnapIcon from "./icons/Snap.svg";
+import VisualsIcon from "./icons/Visuals.svg";
 import { createGridLines } from "../../editor/handles";
-import type {
-  ViewportLayerContribution,
-  ViewportLayerPlacement,
-  ViewportLayerService,
-  ViewportOverlayContribution,
-  ViewportOverlayPlacement,
-  ViewportOverlayService,
-  ViewportToolbarContribution,
-  ViewportToolbarPlacement
-} from "../../editor/kernel";
-import type { Rect } from "../../editor/geometry";
-import type { HandleDescriptor, TransformBoxHandleDescriptor, ViewRect } from "../../editor/types";
+import { decorativeIconProps } from "../../editor/svg-icon";
+import type { AppSettings, DragSelectionMode, HandleDescriptor, TransformBoxHandleDescriptor, ViewRect } from "../../editor/types";
+import ClearIcon from "../ui/icons/Clear.svg";
+import PlusIcon from "../ui/icons/Plus.svg";
+import { IconButton } from "../ui/IconButton";
+import { MenuButton, MenuLabel } from "../ui/MenuItem";
 
 export { SvgNodeView } from './svg-renderer';
 
-export function ViewportToolbar<TContext>(props: {
-  readonly items?: readonly ViewportToolbarContribution<TContext>[] | undefined;
-  readonly context?: TContext | undefined;
+export function ViewportToolbar(props: {
+  readonly settings: AppSettings;
+  readonly setSettings: (setter: (settings: AppSettings) => AppSettings) => void;
+  readonly zoom: number;
+  readonly zoomBy: (factor: number) => void;
+  readonly centerFrame: () => void;
+  readonly isFullscreen: boolean;
+  readonly toggleFullscreen: () => void;
+  readonly openReferenceDialog: () => void;
+  readonly hasReference: boolean;
+  readonly showReference: boolean;
+  readonly setShowReference: (show: boolean) => void;
+  readonly overlayReference: boolean;
+  readonly setOverlayReference: (overlay: boolean) => void;
+  readonly clearReference: () => void;
+  readonly dragSelectionMode: DragSelectionMode;
+  readonly setDragSelectionMode: (mode: DragSelectionMode) => void;
 }) {
-  const leftItems = createMemo(() => orderedToolbarItems(props.items ?? [], 'left'));
-  const rightItems = createMemo(() => orderedToolbarItems(props.items ?? [], 'right'));
+  const [visualsOpen, setVisualsOpen] = createSignal(false);
+  const [referenceOpen, setReferenceOpen] = createSignal(false);
 
   return (
     <div class="viewport-toolbar relative z-10 flex min-w-0 items-center justify-between bg-[var(--base)] px-1" data-testid="viewport-toolbar">
       <div class="viewport-left-tools flex min-w-0 items-center gap-1" data-testid="viewport-left-tools">
-        <For each={leftItems()}>{(item) => renderToolbarItem(item, props.context)}</For>
+        <IconButton icon={VisualsIcon} label="Visuals" testId="viewport-visuals-button" active={visualsOpen()} onClick={() => setVisualsOpen(!visualsOpen())} />
+        <Show when={visualsOpen()}>
+          <div
+            class="popover viewport-popover absolute top-8 left-1 z-50 grid min-w-47.5 gap-0.5 rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--panel)_96%,#000)] p-1.25 shadow-[0_12px_28px_#0008]"
+            data-testid="viewport-visuals-popover"
+          >
+            <MenuLabel data-testid="show-grid-toggle">
+              <input type="checkbox" data-testid="show-grid-checkbox" checked={props.settings.showGrid} onChange={(event) => props.setSettings((settings) => ({ ...settings, showGrid: event.currentTarget.checked }))} />
+              Grid
+            </MenuLabel>
+            <MenuLabel data-testid="show-handles-toggle">
+              <input type="checkbox" data-testid="show-handles-checkbox" checked={props.settings.showHandles} onChange={(event) => props.setSettings((settings) => ({ ...settings, showHandles: event.currentTarget.checked }))} />
+              Handles
+            </MenuLabel>
+            <MenuLabel data-testid="view-rasterized-toggle">
+              <input type="checkbox" data-testid="view-rasterized-checkbox" checked={props.settings.viewRasterized} onChange={(event) => props.setSettings((settings) => ({ ...settings, viewRasterized: event.currentTarget.checked }))} />
+              Rasterized
+            </MenuLabel>
+          </div>
+        </Show>
+        <IconButton icon={ReferenceIcon} label="Reference" testId="viewport-reference-button" active={referenceOpen()} onClick={() => setReferenceOpen(!referenceOpen())} />
+        <Show when={referenceOpen()}>
+          <div
+            class="popover viewport-popover absolute top-8 left-1 z-50 grid min-w-47.5 gap-0.5 rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--panel)_96%,#000)] p-1.25 shadow-[0_12px_28px_#0008]"
+            data-testid="viewport-reference-popover"
+          >
+            <MenuButton type="button" icon={FileBrowseIcon} data-testid="load-reference-button" onClick={props.openReferenceDialog}>
+              Load reference
+            </MenuButton>
+            <MenuButton type="button" icon={ClearIcon} data-testid="clear-reference-button" disabled={!props.hasReference} onClick={props.clearReference}>
+              Clear reference
+            </MenuButton>
+            <MenuLabel disabled={!props.hasReference} data-testid="show-reference-toggle">
+              <input type="checkbox" data-testid="show-reference-checkbox" checked={props.showReference} disabled={!props.hasReference} onChange={(event) => props.setShowReference(event.currentTarget.checked)} />
+              Show
+            </MenuLabel>
+            <MenuLabel disabled={!props.hasReference} data-testid="overlay-reference-toggle">
+              <input type="checkbox" data-testid="overlay-reference-checkbox" checked={props.overlayReference} disabled={!props.hasReference} onChange={(event) => props.setOverlayReference(event.currentTarget.checked)} />
+              Overlay
+            </MenuLabel>
+          </div>
+        </Show>
+        <button
+          class="snap-button inline-grid h-6.5 w-6.5 cursor-pointer place-items-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] p-0 hover:border-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_22%,var(--panel-2))] [&.active]:border-[var(--accent)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_22%,var(--panel-2))]"
+          type="button"
+          classList={{ active: props.settings.snapEnabled }}
+          data-testid="snap-toggle-button"
+          onClick={() => props.setSettings((settings) => ({ ...settings, snapEnabled: !settings.snapEnabled }))}
+        >
+          <SnapIcon {...decorativeIconProps} />
+        </button>
+        <input
+          class="snap-input block h-6.5 min-h-5.5 w-16 min-w-0 rounded-[5px] border border-[var(--soft-border)] bg-[#080b12] text-center font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
+          type="number"
+          min="0.001"
+          step="1"
+          name="snap-size"
+          aria-label="Snap size"
+          data-testid="snap-size-input"
+          value={props.settings.snapSize}
+          disabled={!props.settings.snapEnabled}
+          onChange={(event) => props.setSettings((settings) => ({ ...settings, snapSize: Math.max(0.001, Number.parseFloat(event.currentTarget.value) || 1) }))}
+        />
+        <div class="selection-mode-toggle inline-grid grid-flow-col gap-0.5 rounded-[5px] border border-[var(--soft-border)] bg-[color-mix(in_srgb,var(--panel)_74%,#000)] p-0.5" data-testid="selection-mode-toggle">
+          <button type="button" class="h-6 cursor-pointer rounded-[3px] border-0 bg-transparent px-2 py-0 text-[11px] text-[var(--muted)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_24%,var(--panel-2))] [&.active]:text-[var(--text)]" classList={{ active: props.dragSelectionMode === "intersect" }} title="Select touched objects" data-testid="selection-mode-intersect-button" onClick={() => props.setDragSelectionMode("intersect")}>
+            Touch
+          </button>
+          <button type="button" class="h-6 cursor-pointer rounded-[3px] border-0 bg-transparent px-2 py-0 text-[11px] text-[var(--muted)] [&.active]:bg-[color-mix(in_srgb,var(--accent)_24%,var(--panel-2))] [&.active]:text-[var(--text)]" classList={{ active: props.dragSelectionMode === "contain" }} title="Select enclosed objects" data-testid="selection-mode-contain-button" onClick={() => props.setDragSelectionMode("contain")}>
+            Inside
+          </button>
+        </div>
       </div>
       <div class="zoom-widget flex min-w-0 items-center gap-1" data-testid="zoom-widget">
-        <For each={rightItems()}>{(item) => renderToolbarItem(item, props.context)}</For>
+        <IconButton icon={ExpandIcon} label={props.isFullscreen ? "Exit fullscreen" : "Fullscreen"} testId="fullscreen-toggle-button" active={props.isFullscreen} onClick={props.toggleFullscreen} />
+        <IconButton icon={MinusIcon} label="Zoom out" testId="zoom-out-button" onClick={() => props.zoomBy(1 / Math.SQRT2)} />
+        <button class="inline-grid h-6.5 w-18 cursor-pointer place-items-center rounded-[5px] border border-[var(--soft-border)] bg-[var(--panel-2)] p-0 font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] leading-none hover:border-[var(--accent)] hover:bg-[color-mix(in_srgb,var(--accent)_22%,var(--panel-2))]" type="button" data-testid="zoom-reset-button" onClick={props.centerFrame}>{Math.round(props.zoom * 100)}%</button>
+        <IconButton icon={PlusIcon} label="Zoom in" testId="zoom-in-button" onClick={() => props.zoomBy(Math.SQRT2)} />
       </div>
     </div>
-  );
-}
-
-function orderedToolbarItems<TContext>(
-  items: readonly ViewportToolbarContribution<TContext>[],
-  placement: ViewportToolbarPlacement
-): readonly ViewportToolbarContribution<TContext>[] {
-  return [...items]
-    .filter((item) => (item.placement ?? 'left') === placement)
-    .sort((first, second) => (first.order ?? 0) - (second.order ?? 0) || first.id.localeCompare(second.id));
-}
-
-function renderToolbarItem<TContext>(
-  item: ViewportToolbarContribution<TContext>,
-  context: TContext | undefined
-) {
-  return context ? item.render(context) : null;
-}
-
-export function ViewportLayerStack<TContext>(props: {
-  readonly items?: readonly ViewportLayerContribution<TContext>[] | undefined;
-  readonly context?: TContext | undefined;
-  readonly layers: ViewportLayerService;
-  readonly placement: ViewportLayerPlacement;
-}) {
-  const items = createMemo(() => orderedLayerItems(props.items ?? [], props.placement));
-
-  return <For each={items()}>{(item) => renderLayerItem(item, props.context, props.layers)}</For>;
-}
-
-function orderedLayerItems<TContext>(
-  items: readonly ViewportLayerContribution<TContext>[],
-  placement: ViewportLayerPlacement
-): readonly ViewportLayerContribution<TContext>[] {
-  return [...items]
-    .filter((item) => item.placement === placement)
-    .sort((first, second) => (first.order ?? 0) - (second.order ?? 0) || first.id.localeCompare(second.id));
-}
-
-function renderLayerItem<TContext>(
-  item: ViewportLayerContribution<TContext>,
-  context: TContext | undefined,
-  layers: ViewportLayerService
-) {
-  return context ? item.render({ context, layers }) : null;
-}
-
-export function ViewportOverlayLayer<TContext>(props: {
-  readonly items?: readonly ViewportOverlayContribution<TContext>[] | undefined;
-  readonly context?: TContext | undefined;
-  readonly overlays: ViewportOverlayService;
-  readonly placement: ViewportOverlayPlacement;
-}) {
-  const items = createMemo(() => orderedOverlayItems(props.items ?? [], props.placement));
-
-  return <For each={items()}>{(item) => renderOverlayItem(item, props.context, props.overlays)}</For>;
-}
-
-function orderedOverlayItems<TContext>(
-  items: readonly ViewportOverlayContribution<TContext>[],
-  placement: ViewportOverlayPlacement
-): readonly ViewportOverlayContribution<TContext>[] {
-  return [...items]
-    .filter((item) => item.placement === placement)
-    .sort((first, second) => (first.order ?? 0) - (second.order ?? 0) || first.id.localeCompare(second.id));
-}
-
-function renderOverlayItem<TContext>(
-  item: ViewportOverlayContribution<TContext>,
-  context: TContext | undefined,
-  overlays: ViewportOverlayService
-) {
-  return context ? item.render({ context, overlays }) : null;
-}
-
-export function SelectionMarquee(props: { readonly rect: Rect | undefined }) {
-  return (
-    <Show when={props.rect}>
-      {(rect) => (
-        <div
-          class="selection-marquee pointer-events-none absolute z-4 border border-[color-mix(in_srgb,var(--accent)_82%,#ffffff)] bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] shadow-[0_0_0_1px_#0008]"
-          style={{
-            left: `${rect().x}px`,
-            top: `${rect().y}px`,
-            width: `${rect().width}px`,
-            height: `${rect().height}px`
-          }}
-          data-testid="selection-marquee"
-        />
-      )}
-    </Show>
   );
 }
 
@@ -176,15 +172,11 @@ export function HandlesLayer(props: {
           <g data-testid={`selection-handle-group-${handle.nodeId}-${handle.id}`}>
             <circle
               class={handle.small ? "handle small cursor-grab fill-[#d8e7ff] stroke-[#23314f] [vector-effect:non-scaling-stroke] hover:fill-[var(--accent)]" : "handle cursor-grab fill-[#f8fafc] stroke-[#111827] [vector-effect:non-scaling-stroke] hover:fill-[var(--accent)]"}
-              classList={{
-                'fill-[var(--accent)] stroke-white': handle.active
-              }}
-              data-active={handle.active ? 'true' : undefined}
               data-testid={`selection-handle-${handle.nodeId}-${handle.id}`}
               cx={handle.x}
               cy={handle.y}
-              r={(handle.active ? 5.2 : handle.small ? 3.2 : 4.6) / props.zoom}
-              stroke-width={(handle.active ? 2 : 1.4) / props.zoom}
+              r={(handle.small ? 3.2 : 4.6) / props.zoom}
+              stroke-width={1.4 / props.zoom}
               onPointerDown={(event) => props.onHandlePointerDown(event, handle)}
             />
             <title>{handle.label}</title>

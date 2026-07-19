@@ -236,7 +236,7 @@ export function toggleRelative(commands: readonly PathCommand[], commandIndex: n
   });
 }
 
-export function commandStartPoints(commands: readonly PathCommand[]): readonly { readonly x: number; readonly y: number }[] {
+function commandStartPoints(commands: readonly PathCommand[]): readonly { readonly x: number; readonly y: number }[] {
   const starts: { x: number; y: number }[] = [];
   let x = 0;
   let y = 0;

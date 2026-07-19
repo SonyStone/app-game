@@ -2,7 +2,7 @@ import { compactFormatter, prettyFormatter } from '../formatter';
 import { createId } from '../svg-model';
 
 import type { AppSettings, EditorTab } from './types';
-import { createEmptySvgDocument, serializeSvgDocument, type SvgDocumentFactoryCapabilityIndex } from './svg-document';
+import { createEmptySvgDocument, serializeSvgDocument } from './svg-document';
 
 export function defaultSettings(): AppSettings {
   return {
@@ -27,15 +27,12 @@ export function defaultSettings(): AppSettings {
     tabMiddleClickClose: true,
     useCtrlForZoom: false,
     rasterPreviewDuringInteraction: false,
-    dragSelectionMode: 'contain',
-    disabledExtensionPackageIds: [],
-    appliedExtensionPackageMigrationKeys: [],
-    appliedExtensionPackageUpdateKeys: []
+    dragSelectionMode: 'contain'
   };
 }
 
-export function createInitialTab(capabilities?: SvgDocumentFactoryCapabilityIndex): EditorTab {
-  const document = createEmptySvgDocument(capabilities);
+export function createInitialTab(): EditorTab {
+  const document = createEmptySvgDocument();
   return {
     id: createId(),
     name: 'Untitled.svg',
