@@ -43,5 +43,6 @@
         "ms-playwright.playwright" // playwright
       ]
     }
-  }
+  },
+  "shutdownAction": "none"
 }
