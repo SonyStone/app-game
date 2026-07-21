@@ -1,7 +1,8 @@
 import { ComponentProps } from 'solid-js';
+import { getRandomObject } from './getRandomObject';
+import { Item } from './Item';
 import { OriginalList } from './OriginalList';
 import { VirtualScrollNestedList } from './VirtualScrollNestedList';
-import { getRandomObject } from './getRandomObject';
 
 declare module 'solid-js' {
   namespace JSX {
@@ -15,29 +16,52 @@ declare module 'solid-js' {
 export type NestedItem = {
   id: number;
   data: Record<string, string>;
-} & {
   children: NestedItem[];
 };
 
-// Should Virtualize Nested Items too
 export default function VirtualScrollNestedExample() {
   const nestedItems: NestedItem[] = Array.from({ length: 30 }, (_, i) => ({
     id: i,
     data: getRandomObject(),
     children: Array.from({ length: 20 }, (_, j) => ({
-      id: i * 10 + j, // Unique ID for children
+      id: 30 + i * 20 + j,
       data: getRandomObject(),
       children: []
     }))
   }));
 
-  return (
-    <virtual-scroll-nested-example class="flex h-full gap-4 overflow-hidden">
-      <VirtualScrollNestedList items={nestedItems} />
+  console.log('nestedItems', nestedItems);
 
-      {/* Original non-virtualized version for comparison */}
+  return (
+    <virtual-scroll-nested-example class="flex h-full max-h-screen gap-4 overflow-hidden">
+      <div class="flex min-w-0 flex-1 flex-col">
+        <div class="bg-gray-200 p-2 text-xs font-medium">Nested virtualized</div>
+        <VirtualScrollNestedList
+          class="min-h-0 flex-1 bg-gray-50"
+          ariaLabel="Nested virtual list"
+          items={nestedItems}
+          getKey={(item) => item.id}
+          getChildren={(item) => item.children}
+          estimateOwnHeight={(item) => (Object.keys(item.data).length + 3) * 20 + 125}
+          overscan={800}
+          preview
+        >
+          {({ item, depth, children }) => (
+            <Item
+              title={`${depth === 0 ? 'Item' : 'Child'} ${item.id}`}
+              index={item.id}
+              data={item.data}
+              class={depth > 0 ? 'group-child' : 'relative'}
+              data-item-index={item.id}
+              style={{ 'overflow-anchor': 'none' }}
+            >
+              {children}
+            </Item>
+          )}
+        </VirtualScrollNestedList>
+      </div>
+
       <OriginalList items={nestedItems} rowHeight={60} />
-      {/* <FlattenedList items={nestedItems} rowHeight={60} /> */}
     </virtual-scroll-nested-example>
   );
 }

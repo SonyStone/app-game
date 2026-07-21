@@ -55,7 +55,7 @@ export function Item(
   const [error, setError] = createSignal(false);
 
   return (
-    <test-item class="contesnts">
+    <test-item class="contents">
       <li
         {...others}
         ref={(ref) => {
@@ -81,7 +81,7 @@ export function Item(
             </button>
           </Show>
           <Show when={local.onRemove}>
-            <button class=" flex h-4 w-4 place-content-center place-items-center border" onClick={local.onRemove}>
+            <button class="flex h-4 w-4 place-content-center place-items-center border" onClick={local.onRemove}>
               -
             </button>
           </Show>
@@ -122,7 +122,7 @@ export function Item(
         <button
           {...handlers}
           type="button"
-          class="inset-x border-t-5 absolute bottom-0 w-full cursor-ns-resize border-gray-300 hover:border-gray-400 active:border-gray-500 "
+          class="inset-x absolute bottom-0 w-full cursor-ns-resize border-t-5 border-gray-300 hover:border-gray-400 active:border-gray-500"
         ></button>
       </li>
     </test-item>

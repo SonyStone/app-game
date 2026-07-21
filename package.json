@@ -107,6 +107,7 @@
     "@solid-primitives/static-store": "^0.1.3",
     "@solid-primitives/storage": "^4.3.4",
     "@solid-primitives/transition-group": "^1.1.2",
+    "@solid-primitives/trigger": "catalog:",
     "@solid-primitives/utils": "catalog:",
     "@solid-primitives/virtual": "^0.2.3",
     "@solidjs/meta": "^0.29.4",

@@ -10,20 +10,9 @@ export function OriginalList(props: { items: NestedItem[]; rowHeight: number }) 
         <ul class="flex flex-col gap-2 p-2">
           <For each={props.items}>
             {(item, index) => (
-              <Item index={index()} title={`Item ${item.id}`}>
+              <Item index={index()} title={`Item ${item.id}`} data={item.data}>
                 <For each={item.children}>
-                  {(child, childIndex) => (
-                    <Item
-                      ref={(ref) => {
-                        if (item.id === 0 && child.id === 0) {
-                          console.log(`Render wtf item-${item.id}-${child.id}`, ref);
-                        }
-                      }}
-                      index={childIndex()}
-                      title={`Item ${child.id}`}
-                      data={child.data}
-                    />
-                  )}
+                  {(child, childIndex) => <Item index={childIndex()} title={`Item ${child.id}`} data={child.data} />}
                 </For>
               </Item>
             )}

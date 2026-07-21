@@ -1,4 +1,4 @@
-import { For, Setter, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 
 export function VirtualScrollPreview<T>(props: {
   totalHeight: number;
@@ -13,7 +13,6 @@ export function VirtualScrollPreview<T>(props: {
       height: number;
       top: number;
       item: unknown;
-      setElementRef: Setter<HTMLElement | undefined>;
     }[]
   >;
   scrollTo: (position: number) => void;

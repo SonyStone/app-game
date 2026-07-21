@@ -26,6 +26,7 @@ catalog:
   '@solid-primitives/set': ^0.7.3
   '@solid-primitives/storage': ^4.3.4
   '@solid-primitives/timer': 1.4.4
+  '@solid-primitives/trigger': ^1.2.3
   '@solid-primitives/utils': ^6.4.0
   '@solidjs/router': 0.16.1
   '@testing-library/jest-dom': ^6.9.1
