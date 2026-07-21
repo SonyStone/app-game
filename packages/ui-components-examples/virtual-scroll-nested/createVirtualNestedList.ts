@@ -42,7 +42,7 @@ export function createVirtualNestedList<T>(props: {
   const layout = createMemo(() => {
     trackMeasurements();
     const roots = tree();
-    const totalHeight = layoutTree(roots, measurements, estimateOwnHeight, gap());
+    const totalHeight = layoutTree(roots, measurements, estimateOwnHeight, isExpanded, gap());
     return { roots, totalHeight };
   });
   const visibleTop = createMemo(() => Math.max(0, scroll.y - overscan()));
@@ -96,13 +96,19 @@ export function createVirtualNestedList<T>(props: {
   function createTree(items: readonly T[], depth: number): NestedVirtualNode<T>[] {
     return items.map((item) => {
       const box = createNestedVirtualBox();
-      const childNodes = props.isExpanded?.(item) === false ? [] : createTree(props.getChildren(item) ?? [], depth + 1);
+      const childNodes = createTree(props.getChildren(item) ?? [], depth + 1);
+
+      const readChildrenLevel = () => {
+        layout();
+        if (!isExpanded(item)) return EMPTY_LEVEL;
+        return readLevel(childNodes, box.childrenTop, box.childrenBottom);
+      };
 
       const view: VirtualNestedItem<T> = {
         item,
         depth,
         childCount: childNodes.length,
-        children: () => readLevel(childNodes, box.childrenTop, box.childrenBottom).children,
+        children: () => readChildrenLevel().children,
         setElementRef: (element) => observeItem(element, box),
         setChildrenRef: (element) => registerChildrenElement(element, box),
         get top() {
@@ -122,12 +128,10 @@ export function createVirtualNestedList<T>(props: {
           return box.childrenBottom - box.childrenTop;
         },
         get paddingTop() {
-          layout();
-          return readLevel(childNodes, box.childrenTop, box.childrenBottom).paddingTop;
+          return readChildrenLevel().paddingTop;
         },
         get paddingBottom() {
-          layout();
-          return readLevel(childNodes, box.childrenTop, box.childrenBottom).paddingBottom;
+          return readChildrenLevel().paddingBottom;
         }
       };
 
@@ -187,6 +191,10 @@ export function createVirtualNestedList<T>(props: {
     const configured = props.estimateOwnHeight ?? DEFAULT_ESTIMATED_OWN_HEIGHT;
     const estimate = typeof configured === 'function' ? configured(item, depth) : configured;
     return positiveSize(estimate, DEFAULT_ESTIMATED_OWN_HEIGHT);
+  }
+
+  function isExpanded(item: T): boolean {
+    return props.isExpanded?.(item) !== false;
   }
 
   function handleMeasurements(entries: readonly ResizeObserverEntry[]): void {
@@ -298,6 +306,7 @@ function layoutTree<T>(
   nodes: readonly NestedVirtualNode<T>[],
   measurements: WeakMap<NestedVirtualBox, ReturnType<typeof measureOwnRegions>>,
   estimateOwnHeight: (item: T, depth: number) => number,
+  isExpanded: (item: T) => boolean,
   gap: number,
   startTop = 0
 ): number {
@@ -312,7 +321,9 @@ function layoutTree<T>(
     node.box.afterChildren = measurement?.afterChildren ?? 0;
     node.box.ownHeight = node.box.beforeChildren + node.box.afterChildren;
     node.box.childrenTop = node.box.top + node.box.beforeChildren;
-    node.box.childrenBottom = layoutTree(node.childNodes, measurements, estimateOwnHeight, gap, node.box.childrenTop);
+    node.box.childrenBottom = isExpanded(node.item)
+      ? layoutTree(node.childNodes, measurements, estimateOwnHeight, isExpanded, gap, node.box.childrenTop)
+      : node.box.childrenTop;
     node.box.bottom = node.box.childrenBottom + node.box.afterChildren + gap;
     cursor = node.box.bottom;
   }
@@ -376,3 +387,4 @@ const DEFAULT_ESTIMATED_OWN_HEIGHT = 120;
 const DEFAULT_OVERSCAN = 600;
 const DEFAULT_GAP = 8;
 const MEASUREMENT_EPSILON = 0.5;
+const EMPTY_LEVEL = { children: [], paddingTop: 0, paddingBottom: 0 } as const;

@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createVirtualNestedList } from './createVirtualNestedList';
 
@@ -81,9 +81,29 @@ describe('createVirtualNestedList', () => {
     withVirtualList(items, { isExpanded: (item) => item.id !== 'parent', overscan: 1_000 }, (virtual) => {
       const parent = virtual.children()[0];
 
-      expect(parent?.childCount).toBe(0);
+      expect(parent?.childCount).toBe(2);
       expect(parent?.children()).toEqual([]);
       expect(virtual.totalHeight).toBe(50);
+    });
+  });
+
+  it('preserves layout nodes while descendants collapse and expand', () => {
+    const [expanded, setExpanded] = createSignal(true);
+
+    withVirtualList(items, { isExpanded: () => expanded(), overscan: 1_000 }, (virtual) => {
+      const parent = virtual.children()[0];
+      const firstChild = parent?.children()[0];
+      if (!parent || !firstChild) throw new Error('Expected expanded parent and child nodes');
+
+      setExpanded(false);
+      expect(virtual.children()[0]).toBe(parent);
+      expect(parent.children()).toEqual([]);
+      expect(parent.height).toBe(10);
+
+      setExpanded(true);
+      expect(virtual.children()[0]).toBe(parent);
+      expect(parent.children()[0]).toBe(firstChild);
+      expect(parent.height).toBe(60);
     });
   });
 
