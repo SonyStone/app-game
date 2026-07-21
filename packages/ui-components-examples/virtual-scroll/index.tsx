@@ -43,7 +43,7 @@ export default function VirtualScrollExample() {
   };
 
   return (
-    <div class="flex h-full gap-10 overflow-hidden">
+    <div class="flex h-full max-h-screen gap-10 overflow-hidden">
       <VirtualListExample items={store} rowHeight={128} />
       {/* <VirtualListExample2 items={store} rowHeight={128} /> */}
       <VirtualDynamicList items={store} rowHeight={128} {...actions} />
@@ -110,13 +110,13 @@ function VirtualListExample2(props: { items: Item[]; rowHeight: number }) {
     <div class="relative flex flex-1">
       <DebugView {...virtual} />
       <div
-        class="relative h-full flex-1 flex-1 overflow-y-auto outline-none"
+        class="relative h-full flex-1 overflow-y-auto outline-none"
         ref={setScroller}
         data-testid="virtuoso-scroller"
       >
         <div
           data-testid="virtuoso-item-list"
-          class="absolute left-0 top-0 w-full contain-content"
+          class="absolute top-0 left-0 w-full contain-content"
           style={{
             transform: `translateY(${virtual.paddingTop}px)`
           }}
@@ -162,7 +162,7 @@ function VirtualDynamicList(props: {
 
   return (
     <div class="relative flex flex-1">
-      <div class="bg-warmGray z-1 absolute start-20 rounded border bg-gray-200 p-2">
+      <div class="bg-warmGray absolute start-20 z-1 rounded border bg-gray-200 p-2">
         <code>
           <pre>Total Height: {virtual.totalHeight}</pre>
           <pre>Viewport Height: {virtual.viewportHeight}</pre>

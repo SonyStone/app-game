@@ -1,6 +1,6 @@
 import { createEventBus } from '@solid-primitives/event-bus';
-import { children, ComponentProps, createSignal, onMount, Show, splitProps } from 'solid-js';
-import { ItemId } from '../virtual-scroll';
+import { children, createSignal, onMount, Show, splitProps, type ComponentProps } from 'solid-js';
+import type { ItemId } from '../virtual-scroll';
 import { getColorByIndex } from '../virtual-scroll/get-bg-color';
 
 /**
@@ -114,11 +114,11 @@ export function Item(
           />
         </div>
 
-        <div class="flex flex-col gap-2 p-2">
-          <Show when={resolved()}>
-            <ul class="flex flex-col gap-2">{resolved()}</ul>
-          </Show>
-        </div>
+        <Show when={resolved()}>
+          <div role="group" class="relative m-2 flex flex-col gap-2 border-s-2 border-slate-300">
+            {resolved()}
+          </div>
+        </Show>
         <button
           {...handlers}
           type="button"
