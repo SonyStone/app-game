@@ -29,18 +29,6 @@ const routes: Routes[] = [
     component: lazy(() => import('./css-gradient-border-glowing-animation-hover-effect'))
   },
   {
-    path: '/virtual-scroll',
-    name: 'Virtual Scroll Example',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./virtual-scroll'))
-  },
-  {
-    path: '/virtual-scroll-nested',
-    name: '[WIP] Virtual Scroll Nested Example',
-    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
-    component: lazy(() => import('./virtual-scroll-nested'))
-  },
-  {
     path: '/docking',
     name: '[WIP] Docking Example',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,

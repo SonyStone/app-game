@@ -898,6 +898,9 @@ importers:
       '@app-game/solid-utils':
         specifier: workspace:*
         version: link:../../packages/solid-utils
+      '@app-game/solid-virtual':
+        specifier: workspace:*
+        version: link:../../packages/solid-virtual
       '@app-game/solidjs-patterns':
         specifier: workspace:*
         version: link:../solidjs-patterns
@@ -1377,6 +1380,58 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4)
+
+  packages/solid-virtual:
+    dependencies:
+      '@solid-primitives/raf':
+        specifier: ^2.3.4
+        version: 2.3.4(solid-js@1.9.12)
+      '@solid-primitives/resize-observer':
+        specifier: ^2.1.5
+        version: 2.1.5(solid-js@1.9.12)
+      '@solid-primitives/scroll':
+        specifier: ^2.1.5
+        version: 2.1.5(solid-js@1.9.12)
+      '@solid-primitives/trigger':
+        specifier: 'catalog:'
+        version: 1.2.3(solid-js@1.9.12)
+      '@solid-primitives/utils':
+        specifier: 'catalog:'
+        version: 6.4.0(solid-js@1.9.12)
+      solid-js:
+        specifier: 'catalog:'
+        version: 1.9.12
+    devDependencies:
+      '@solid-primitives/event-bus':
+        specifier: 'catalog:'
+        version: 1.1.3(solid-js@1.9.12)
+      '@solid-primitives/event-listener':
+        specifier: 'catalog:'
+        version: 2.4.5(solid-js@1.9.12)
+      '@solid-primitives/set':
+        specifier: 'catalog:'
+        version: 0.7.3(solid-js@1.9.12)
+      '@solid-primitives/virtual':
+        specifier: ^0.2.3
+        version: 0.2.3(solid-js@1.9.12)
+      '@testing-library/jest-dom':
+        specifier: 'catalog:'
+        version: 6.9.1
+      jsdom:
+        specifier: 'catalog:'
+        version: 29.1.1
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4)
+      vite-plugin-solid:
+        specifier: 'catalog:'
+        version: 2.11.12(@testing-library/jest-dom@6.9.1)(solid-js@1.9.12)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4))
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4))
 
   packages/spector: {}
 

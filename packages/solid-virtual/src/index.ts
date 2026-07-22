@@ -1,3 +1,4 @@
+import { createRAF } from '@solid-primitives/raf';
 import { getElementSize, makeResizeObserver } from '@solid-primitives/resize-observer';
 import { createScrollPosition } from '@solid-primitives/scroll';
 import { createTrigger } from '@solid-primitives/trigger';
@@ -5,7 +6,7 @@ import { access, type MaybeAccessor } from '@solid-primitives/utils';
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 
 /**
- * Creates a headless dynamic-height virtualizer for flat or nested collections.
+ * Creates a headless dynamic-height virtualizer for flat or nested Solid collections.
  *
  * The returned root and every returned item expose `children()`, `paddingTop`, and
  * `paddingBottom`. Attach `setElementRef` to the complete item branch. When that
@@ -31,10 +32,20 @@ export function createVirtualNestedList<T>(props: {
   const measurements = new WeakMap<NestedVirtualBox, ReturnType<typeof measureOwnRegions>>();
   const childElements = new WeakMap<NestedVirtualBox, HTMLElement>();
   const observedItems = new Map<Element, NestedVirtualBox>();
+  const pendingResizeEntries = new Map<Element, ResizeObserverEntry>();
   const [trackMeasurements, invalidateMeasurements] = createTrigger();
   const [viewportHeight, setViewportHeight] = createSignal(0);
   const scroll = createScrollPosition(() => access(props.elementRef));
-  const resizeObserver = makeResizeObserver<Element>(handleMeasurements);
+  const [, scheduleMeasurements, cancelMeasurements] = createRAF(() => {
+    cancelMeasurements();
+    const entries = [...pendingResizeEntries.values()];
+    pendingResizeEntries.clear();
+    handleMeasurements(entries);
+  });
+  const resizeObserver = makeResizeObserver<Element>((entries) => {
+    for (const entry of entries) pendingResizeEntries.set(entry.target, entry);
+    scheduleMeasurements();
+  });
 
   const tree = createMemo(() => createTree(access(props.items), 0));
   const gap = createMemo(() => Math.max(0, access(props.gap ?? DEFAULT_GAP)));
@@ -87,9 +98,55 @@ export function createVirtualNestedList<T>(props: {
     get gap(): number {
       return gap();
     },
-    /** Scrolls the configured element to an absolute vertical position. */
-    scrollTo(position: number): void {
-      access(props.elementRef)?.scrollTo({ top: position });
+    /**
+     * Scrolls an item into view using source-item identity.
+     *
+     * Returns `false` when the item is absent, hidden below a collapsed ancestor,
+     * or the scroll element is unavailable. Repeated identical source values
+     * resolve to their first document-order occurrence.
+     */
+    scrollTo(
+      item: T,
+      options: Readonly<{
+        /** Item alignment within the viewport. Defaults to `nearest`. */
+        align?: ScrollLogicalPosition;
+        /** Native scrolling behavior. Defaults to `auto`. */
+        behavior?: ScrollBehavior;
+      }> = {}
+    ): boolean {
+      const element = access(props.elementRef);
+      if (!element) return false;
+
+      const currentLayout = layout();
+      const match = findNestedVirtualNode(currentLayout.roots, item, isExpanded);
+      if (!match?.visible) return false;
+
+      const top = alignScrollOffset({
+        align: options.align ?? 'nearest',
+        current: element.scrollTop,
+        itemStart: match.node.box.top,
+        itemEnd: match.node.box.top + match.node.box.ownHeight,
+        viewportHeight: viewportHeight(),
+        totalHeight: currentLayout.totalHeight
+      });
+      element.scrollTo({ top, behavior: options.behavior ?? 'auto' });
+      return true;
+    },
+    /** Scrolls to an absolute vertical offset, clamped to the current layout. */
+    scrollToOffset(
+      position: number,
+      options: Readonly<{
+        /** Native scrolling behavior. Defaults to `auto`. */
+        behavior?: ScrollBehavior;
+      }> = {}
+    ): boolean {
+      const element = access(props.elementRef);
+      if (!element) return false;
+
+      const maximum = Math.max(0, layout().totalHeight - viewportHeight());
+      const top = clamp(Number.isFinite(position) ? position : 0, 0, maximum);
+      element.scrollTo({ top, behavior: options.behavior ?? 'auto' });
+      return true;
     }
   };
 
@@ -373,6 +430,64 @@ function findVisibleRange<T>(
   }
 
   return { start, end: low };
+}
+
+function findNestedVirtualNode<T>(
+  nodes: readonly NestedVirtualNode<T>[],
+  item: T,
+  isExpanded: (item: T) => boolean,
+  visible = true
+): Readonly<{ node: NestedVirtualNode<T>; visible: boolean }> | undefined {
+  for (const node of nodes) {
+    if (Object.is(node.item, item)) return { node, visible };
+
+    const match = findNestedVirtualNode(node.childNodes, item, isExpanded, visible && isExpanded(node.item));
+    if (match) return match;
+  }
+
+  return undefined;
+}
+
+function alignScrollOffset(
+  options: Readonly<{
+    align: ScrollLogicalPosition;
+    current: number;
+    itemStart: number;
+    itemEnd: number;
+    viewportHeight: number;
+    totalHeight: number;
+  }>
+): number {
+  const viewportEnd = options.current + options.viewportHeight;
+  let position: number;
+
+  switch (options.align) {
+    case 'start':
+      position = options.itemStart;
+      break;
+    case 'center':
+      position = (options.itemStart + options.itemEnd - options.viewportHeight) / 2;
+      break;
+    case 'end':
+      position = options.itemEnd - options.viewportHeight;
+      break;
+    case 'nearest': {
+      const startPosition = options.itemStart;
+      const endPosition = options.itemEnd - options.viewportHeight;
+      const itemCoversViewport = options.itemStart <= options.current && options.itemEnd >= viewportEnd;
+      const itemInsideViewport = options.itemStart >= options.current && options.itemEnd <= viewportEnd;
+
+      if (itemCoversViewport || itemInsideViewport) position = options.current;
+      else {
+        const startDistance = Math.abs(startPosition - options.current);
+        const endDistance = Math.abs(endPosition - options.current);
+        position = startDistance <= endDistance ? startPosition : endPosition;
+      }
+      break;
+    }
+  }
+
+  return clamp(position, 0, Math.max(0, options.totalHeight - options.viewportHeight));
 }
 
 function positiveSize(value: number, fallback: number): number {

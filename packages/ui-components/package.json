@@ -8,9 +8,8 @@
     "./button/MatButton": "./button/MatButton.tsx",
     "./form-field/MatFormField": "./form-field/MatFormField.tsx",
     "./menu/menu": "./menu/menu.tsx",
-    "./ripple": "./ripple/index.ts"
-    ,"./solid-dockview": "./solid-dockview/index.ts"
-    ,"./virtual-scroll/create-virtual-list": "./virtual-scroll/create-virtual-list.ts"
+    "./ripple": "./ripple/index.ts",
+    "./solid-dockview": "./solid-dockview/index.ts"
   },
   "type": "module"
 }

@@ -1,6 +1,6 @@
 import { createRoot, createSignal } from 'solid-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createVirtualNestedList } from './createVirtualNestedList';
+import { createVirtualNestedList } from '../src';
 
 beforeAll(() => {
   vi.stubGlobal(
@@ -126,6 +126,86 @@ describe('createVirtualNestedList', () => {
       expect(virtual.totalHeight).toBe(30);
     });
   });
+
+  it('scrolls to a nested item that is outside the rendered range', async () => {
+    const scroller = createScroller(25);
+    const deepItems = [
+      {
+        id: 'root',
+        height: 10,
+        children: [
+          {
+            id: 'child',
+            height: 20,
+            children: [{ id: 'grandchild', height: 30, children: [] }]
+          }
+        ]
+      }
+    ] satisfies TestItem[];
+    const target = deepItems[0]?.children[0]?.children[0];
+    if (!target) throw new Error('Expected grandchild target');
+
+    await withScrollableVirtualList(deepItems, scroller.element, {}, (virtual) => {
+      expect(virtual.children()[0]?.children()[0]?.children()).toEqual([]);
+      expect(virtual.scrollTo(target, { align: 'start', behavior: 'smooth' })).toBe(true);
+      expect(scroller.scrollTo).toHaveBeenLastCalledWith({ top: 30, behavior: 'smooth' });
+    });
+  });
+
+  it('supports item alignment and clamps absolute offsets', async () => {
+    const scroller = createScroller(25);
+    const target = items[1];
+    if (!target) throw new Error('Expected sibling target');
+
+    await withScrollableVirtualList(items, scroller.element, {}, (virtual) => {
+      expect(virtual.viewportHeight).toBe(25);
+
+      expect(virtual.scrollTo(target, { align: 'center' })).toBe(true);
+      expect(scroller.scrollTo).toHaveBeenLastCalledWith({ top: 67.5, behavior: 'auto' });
+
+      expect(virtual.scrollTo(target, { align: 'end' })).toBe(true);
+      expect(scroller.scrollTo).toHaveBeenLastCalledWith({ top: 75, behavior: 'auto' });
+
+      expect(virtual.scrollTo(target, { align: 'nearest' })).toBe(true);
+      expect(scroller.scrollTo).toHaveBeenLastCalledWith({ top: 75, behavior: 'auto' });
+
+      expect(virtual.scrollToOffset(1_000)).toBe(true);
+      expect(scroller.scrollTo).toHaveBeenLastCalledWith({ top: 75, behavior: 'auto' });
+
+      expect(virtual.scrollToOffset(-100)).toBe(true);
+      expect(scroller.scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'auto' });
+
+      expect(virtual.scrollTo(target, { align: 'nearest' })).toBe(true);
+      expect(scroller.scrollTo).toHaveBeenLastCalledWith({ top: 60, behavior: 'auto' });
+    });
+  });
+
+  it('does not scroll to hidden or missing items', async () => {
+    const scroller = createScroller(25);
+    const hiddenTarget = items[0]?.children[0];
+    if (!hiddenTarget) throw new Error('Expected hidden child target');
+
+    await withScrollableVirtualList(
+      items,
+      scroller.element,
+      { isExpanded: (item) => item.id !== 'parent' },
+      (virtual) => {
+        expect(virtual.scrollTo(hiddenTarget)).toBe(false);
+        expect(virtual.scrollTo({ id: 'missing', height: 10, children: [] })).toBe(false);
+        expect(scroller.scrollTo).not.toHaveBeenCalled();
+      }
+    );
+  });
+
+  it('reports that scrolling is unavailable without a scroll element', () => {
+    withVirtualList(items, {}, (virtual) => {
+      const target = items[0];
+      if (!target) throw new Error('Expected root target');
+
+      expect(virtual.scrollTo(target)).toBe(false);
+      expect(virtual.scrollToOffset(10)).toBe(false);
+    });
+  });
 });
 
 function withVirtualList(
@@ -149,4 +229,47 @@ function withVirtualList(
       dispose();
     }
   });
+}
+
+async function withScrollableVirtualList(
+  testItems: readonly TestItem[],
+  elementRef: HTMLElement,
+  options: Partial<Pick<Parameters<typeof createVirtualNestedList<TestItem>>[0], 'gap' | 'isExpanded' | 'overscan'>>,
+  run: (virtual: ReturnType<typeof createVirtualNestedList<TestItem>>) => void
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    createRoot((dispose) => {
+      const virtual = createVirtualNestedList({
+        items: testItems,
+        getChildren: (item) => item.children,
+        elementRef,
+        estimateOwnHeight: (item) => item.height,
+        gap: 0,
+        overscan: 0,
+        ...options
+      });
+
+      queueMicrotask(() => {
+        try {
+          run(virtual);
+          resolve();
+        } catch (error: unknown) {
+          reject(error);
+        } finally {
+          dispose();
+        }
+      });
+    });
+  });
+}
+
+function createScroller(height: number) {
+  const element = document.createElement('div');
+  element.getBoundingClientRect = () => new DOMRect(0, 0, 100, height);
+  const scrollTo = vi.fn((options?: ScrollToOptions | number, y?: number) => {
+    element.scrollTop = typeof options === 'number' ? (y ?? element.scrollTop) : (options?.top ?? element.scrollTop);
+  });
+  element.scrollTo = scrollTo;
+
+  return { element, scrollTo };
 }

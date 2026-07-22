@@ -1,0 +1,70 @@
+{
+  "name": "@app-game/solid-virtual",
+  "version": "0.1.0",
+  "description": "Headless dynamic-height virtualization for flat and nested Solid collections",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src",
+    "README.md",
+    "VirtualScrollNestedList.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./createVirtualList": "./src/createVirtualList.ts",
+    "./createVirtualDynamicList": "./src/createVirtualDynamicList.ts",
+    "./routes": "./routes.tsx"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "check": "pnpm run typecheck && pnpm run test"
+  },
+  "keywords": [
+    "solid-js",
+    "virtual-list",
+    "virtual-scroll",
+    "tree"
+  ],
+  "license": "ISC",
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./src/index.ts",
+        "default": "./src/index.ts"
+      },
+      "./createVirtualList": "./src/createVirtualList.ts",
+      "./createVirtualDynamicList": "./src/createVirtualDynamicList.ts"
+    }
+  },
+  "peerDependencies": {
+    "solid-js": "catalog:"
+  },
+  "dependencies": {
+    "@solid-primitives/raf": "^2.3.4",
+    "@solid-primitives/resize-observer": "^2.1.5",
+    "@solid-primitives/scroll": "^2.1.5",
+    "@solid-primitives/trigger": "catalog:",
+    "@solid-primitives/utils": "catalog:"
+  },
+  "devDependencies": {
+    "@solid-primitives/event-bus": "catalog:",
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/set": "catalog:",
+    "@solid-primitives/virtual": "^0.2.3",
+    "@testing-library/jest-dom": "catalog:",
+    "jsdom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:"
+  }
+}

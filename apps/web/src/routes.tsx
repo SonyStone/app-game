@@ -12,6 +12,7 @@ import { phaserRoutes } from '@app-game/phaser-examples/routes';
 import { pixijsRoutes } from '@app-game/pixijs-examples/routes';
 import { routes as solidDndPlaygroundRoutes } from '@app-game/solid-dnd-playground/routes';
 import { routes as solidSvgEditorRoutes } from '@app-game/solid-svg-editor/routes';
+import { solidVirtualRoutes } from '@app-game/solid-virtual/routes';
 import { routes as solidjsPatternsRoutes } from '@app-game/solidjs-patterns/routes';
 import { threeRoutes } from '@app-game/three-examples';
 import { twglRoutes } from '@app-game/twgl-examples/routes';
@@ -64,6 +65,7 @@ export const routes: Routes[] = [
   wasmRustRoutes,
   mathRoutes,
   filmAnnotationPlayerRoutes,
+  solidVirtualRoutes,
   uiComponentsRoutes,
   gsapExamplesRoutes,
   {
