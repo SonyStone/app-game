@@ -1,7 +1,7 @@
 {
   "name": "@app-game/solid-virtual",
   "version": "0.1.0",
-  "description": "Headless dynamic-height virtualization for flat and nested Solid collections",
+  "description": "Headless fixed and dynamic-height virtualization for flat and nested Solid collections",
   "type": "module",
   "sideEffects": false,
   "main": "./src/index.ts",
@@ -18,7 +18,9 @@
       "default": "./src/index.ts"
     },
     "./createVirtualList": "./src/createVirtualList.ts",
-    "./createVirtualDynamicList": "./src/createVirtualDynamicList.ts",
+    "./createVirtualNestedList": "./src/createVirtualNestedList.ts",
+    "./createDynamicGap": "./src/createDynamicGap.ts",
+    "./createDynamicHeight": "./src/createDynamicHeight.ts",
     "./routes": "./routes.tsx"
   },
   "scripts": {
@@ -42,7 +44,9 @@
         "default": "./src/index.ts"
       },
       "./createVirtualList": "./src/createVirtualList.ts",
-      "./createVirtualDynamicList": "./src/createVirtualDynamicList.ts"
+      "./createVirtualNestedList": "./src/createVirtualNestedList.ts",
+      "./createDynamicGap": "./src/createDynamicGap.ts",
+      "./createDynamicHeight": "./src/createDynamicHeight.ts"
     }
   },
   "peerDependencies": {
@@ -56,10 +60,12 @@
     "@solid-primitives/utils": "catalog:"
   },
   "devDependencies": {
+    "@app-game/app-router": "workspace:*",
     "@solid-primitives/event-bus": "catalog:",
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/set": "catalog:",
     "@solid-primitives/virtual": "^0.2.3",
+    "@solidjs/router": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "jsdom": "catalog:",
     "typescript": "catalog:",

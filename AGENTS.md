@@ -2,7 +2,7 @@
 
 ### Newspaper code structure preference
 
-Organize code so it reads top-down like a newspaper article. Put the public API, primary entry point, and important control flow first; place progressively lower-level helpers, implementation details, internal types, and constants later. Order helpers by first conceptual use so a reader can stop once they have enough detail.
+Organize code so it reads top-down like a newspaper article. Put the public API, primary entry point, and important control flow first; place progressively lower-level helpers, implementation details, and constants later. Order helpers by first conceptual use so a reader can stop once they have enough detail.
 
 ### Types near use preference
 

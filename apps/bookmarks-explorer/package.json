@@ -1,0 +1,36 @@
+{
+  "name": "@app-game/bookmarks-explorer",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3160",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 4160",
+    "dev:extension": "vite build --watch --config vite.extension.config.ts",
+    "build:extension": "tsc -b && vite build --config vite.extension.config.ts",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@app-game/solid-virtual": "workspace:*",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.32",
+    "@types/node": "25.8.0",
+    "@unocss/reset": "catalog:",
+    "@unocss/vite": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:"
+  },
+  "exports": {
+    "./App": "./src/App.tsx",
+    "./WebApp": "./src/WebApp.tsx",
+    "./backend": "./src/explorer/backend.ts",
+    "./document-backend": "./src/backends/document/createDocumentExplorerBackend.ts",
+    "./portable": "./src/explorer/portable.ts",
+    "./tree-view": "./src/tree-view/index.ts",
+    "./routes": "./src/routes.tsx"
+  }
+}

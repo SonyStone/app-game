@@ -2,7 +2,8 @@
 
 Headless fixed-height, dynamic-height, and genuinely nested virtualization for Solid collections.
 
-The package creates no component, provider, wrapper, or application key. It returns recursive render data and ref callbacks; the caller owns all DOM and styling.
+The package creates no component, provider, wrapper, or application key. The caller owns the DOM,
+recursive JSX, expansion state, and styling.
 
 ## Install
 
@@ -10,22 +11,97 @@ The package creates no component, provider, wrapper, or application key. It retu
 pnpm add @app-game/solid-virtual solid-js
 ```
 
-## Create a virtual tree
+## Create a flat virtual list
+
+Flat fixed-height layout is the optimized default:
+
+```tsx
+import { createVirtualList } from '@app-game/solid-virtual';
+
+const virtual = createVirtualList({
+  items,
+  elementRef: scroller,
+  itemHeight: 40,
+  overscan: 600
+});
+```
+
+Pass `createDynamicHeight()` when the DOM determines item height. Use
+`createDynamicGap()` when CSS determines the space between rows:
+
+```tsx
+import { createDynamicGap, createDynamicHeight, createVirtualList } from '@app-game/solid-virtual';
+
+const gap = createDynamicGap();
+const virtual = createVirtualList({
+  items,
+  elementRef: scroller,
+  itemHeight: createDynamicHeight<Item>({
+    estimate: (item) => estimateHeight(item)
+  }),
+  overscan: 600,
+  gap
+});
+
+return (
+  <div ref={gap.setElementRef} class="flex flex-col gap-2">
+    {/* Render virtual children here. */}
+  </div>
+);
+```
+
+Attach `setElementRef` to the exact element whose direct children receive the
+CSS `row-gap`, which may differ from the scroll element. The feature observes
+that element's class, inline style, and size plus window resizes. Call
+`gap.refresh()` after an external stylesheet or ancestor-only change that does
+not trigger one of those observations.
+
+## Create a nested virtual list
+
+Use the dedicated recursive primitive to preserve actual collection levels:
 
 ```tsx
 import { createVirtualNestedList } from '@app-game/solid-virtual';
-import { createSignal, For, Show, type JSX } from 'solid-js';
-
-const [scroller, setScroller] = createSignal<HTMLDivElement>();
 
 const virtual = createVirtualNestedList({
   items,
-  getChildren: (item) => item.children,
   elementRef: scroller,
-  estimateOwnHeight: 120,
+  itemHeight: 20,
+  getChildren: (item) => item.children,
+  isExpanded: (item) => !collapsedItems.has(item),
+  overscan: 600,
+  gap: 0
+});
+```
+
+Dynamic measurement uses the same nested entry point:
+
+```tsx
+const virtual = createVirtualNestedList({
+  items,
+  elementRef: scroller,
+  itemHeight: createDynamicHeight<Item>({
+    estimate: (item) => estimateHeight(item)
+  }),
+  getChildren: (item) => item.children,
+  isExpanded,
   overscan: 600,
   gap: 8
 });
+```
+
+`createVirtualList()` owns the optimized flat fixed-height path and optional flat measurement.
+`createVirtualNestedList()` owns recursive topology and per-level ranges. It never flattens
+descendants into rows. `createDynamicHeight()` supplies optional DOM measurement to either entry
+point; the nested layout consumes its height capability without changing its recursive renderer.
+
+`itemHeight` describes only an item's own content, excluding descendants and `gap`. `overscan` and
+`gap` are always measured in pixels.
+
+## Render a nested list
+
+```tsx
+import { For, Show, type JSX } from 'solid-js';
 
 function renderLevel(
   level: Pick<typeof virtual, 'children' | 'paddingTop' | 'paddingBottom'>,
@@ -42,7 +118,7 @@ function renderLevel(
       <For each={level.children()}>
         {(node) => (
           <article ref={node.setElementRef}>
-            {node.item.title}
+            <div>{node.item.title}</div>
             <Show when={node.childCount > 0}>{renderLevel(node, node.setChildrenRef)}</Show>
           </article>
         )}
@@ -52,46 +128,48 @@ function renderLevel(
 }
 ```
 
-Attach `setElementRef` to the complete item branch. Attach `setChildrenRef` to the exact recursive child-level element. The virtualizer subtracts that child region when measuring the parent item's own height.
+The child level remains physically nested inside its parent branch.
 
-A flat list can use the same API by returning no children, or use the smaller
-`createVirtualDynamicList` entry point shown below.
+Fixed-height nested renderers may omit the measurement refs. Dynamic renderers attach
+`setElementRef` to the complete item branch and `setChildrenRef` to its exact recursive child level.
+The measurement strategy subtracts the child region from the parent's own height and anchors
+scrolling when estimates above the viewport change.
 
-## Create a dynamic flat list
+## Outputs
 
-```tsx
-import { createVirtualDynamicList } from '@app-game/solid-virtual/createVirtualDynamicList';
+Fixed flat children contain `item`, `index`, `top`, and `height`. The result supports:
 
-const virtual = createVirtualDynamicList({
-  items,
-  elementRef: scroller,
-  estimateHeight: 120,
-  overscan: 600,
-  gap: 8
-});
+```ts
+virtual.children();
+virtual.totalHeight;
+virtual.paddingTop;
+virtual.paddingBottom;
+virtual.scrollPosition;
+virtual.viewportHeight;
+virtual.itemHeight;
+virtual.gap;
+virtual.scrollToIndex(index);
+virtual.scrollToOffset(position);
 ```
 
-It delegates to the nested engine with no children, so it returns the same
-measurable `children()` records and supports `scrollTo(item)` and
-`scrollToOffset(position)`.
+Dynamic flat or nested children additionally expose layout and measurement data:
 
-## Create a fixed-height list
-
-```tsx
-import { createVirtualList } from '@app-game/solid-virtual/createVirtualList';
-
-const virtual = createVirtualList({
-  items,
-  elementRef: scroller,
-  rowHeight: 40,
-  overscan: 2
-});
+```ts
+node.item;
+node.depth;
+node.childCount;
+node.top;
+node.ownHeight;
+node.height;
+node.childrenHeight;
+node.paddingTop;
+node.paddingBottom;
+node.children();
+node.setElementRef;
+node.setChildrenRef;
 ```
 
-Each record from `children()` contains `item`, `index`, `top`, and `height`.
-Fixed lists can scroll with `scrollToIndex(index)` or `scrollToOffset(position)`.
-
-## Scroll to an item
+These modes support source-identity scrolling:
 
 ```ts
 virtual.scrollTo(item);
@@ -99,44 +177,33 @@ virtual.scrollTo(item, { align: 'center', behavior: 'smooth' });
 virtual.scrollToOffset(500);
 ```
 
-`scrollTo` uses source-item identity and returns whether it found a scrollable, currently laid-out target. An item hidden below a collapsed ancestor returns `false`; expand its ancestors first. If the same source value occurs more than once, the first document-order occurrence wins.
-
-Supported alignment values are `start`, `center`, `end`, and `nearest`. The default is `nearest`.
-
-## Expansion
-
-Expansion state stays in the application:
-
-```ts
-const virtual = createVirtualNestedList({
-  // ...
-  isExpanded: (item) => !collapsedItems.has(item)
-});
-```
-
-Collapsed descendants remain in the internal tree, preserving their measured layout data, but do not participate in the current layout or rendering.
+`scrollTo` returns `false` when the item is absent, hidden below a collapsed ancestor, or no scroll
+element is available. Repeated identical source values resolve to their first document-order
+occurrence.
 
 ## Public surface
 
-| Import                                             | Runtime export             |
-| -------------------------------------------------- | -------------------------- |
-| `@app-game/solid-virtual`                          | `createVirtualNestedList`  |
-| `@app-game/solid-virtual/createVirtualDynamicList` | `createVirtualDynamicList` |
-| `@app-game/solid-virtual/createVirtualList`        | `createVirtualList`        |
+| Import                                            | Runtime export                                                                                |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `@app-game/solid-virtual`                         | `createVirtualList`, `createVirtualNestedList`, `createDynamicHeight`, and `createDynamicGap` |
+| `@app-game/solid-virtual/createVirtualList`       | `createVirtualList`                                                                           |
+| `@app-game/solid-virtual/createVirtualNestedList` | `createVirtualNestedList`                                                                     |
+| `@app-game/solid-virtual/createDynamicHeight`     | `createDynamicHeight`                                                                         |
+| `@app-game/solid-virtual/createDynamicGap`        | `createDynamicGap`                                                                            |
 
-Derive local types from the function and returned value:
+The root export also provides `FixedVirtualListProps`, `DynamicVirtualListProps`,
+`VirtualListProps`, `VirtualNestedListProps`, `VirtualNestedList`, and `VirtualNestedItem`.
 
-```ts
-type Options<T> = Parameters<typeof createVirtualNestedList<T>>[0];
-type VirtualTree<T> = ReturnType<typeof createVirtualNestedList<T>>;
-```
+The workspace examples are available at:
 
-`VirtualNestedListProps<T>` is also exported for consumers that need the options type at an API boundary.
+- [`/solid-virtual`](./examples/fixed-height/index.tsx): fixed flat list.
+- [`/solid-virtual/dynamic-height`](./examples/dynamic-height/index.tsx): dynamic flat list with a live CSS gap control.
+- [`/solid-virtual/fixed-tree`](./examples/fixed-tree/index.tsx): fixed nested tree.
+- [`/solid-virtual/nested-tree`](./examples/nested-tree/index.tsx): dynamic nested tree.
 
-The repository examples live beside the package in `examples/`. The workspace
-route `/solid-virtual` links to the fixed/dynamic comparison and the nested SVG
-document demo. Example-only editors and `VirtualScrollPreview` are not part of
-the published runtime surface.
+Each routed example has a matching folder under `examples/`. Unrouted prototypes live in
+`experiments/`. Example-only renderers and `VirtualScrollPreview` are not part of the published
+runtime surface.
 
 ## Runtime requirements
 
@@ -144,6 +211,5 @@ the published runtime surface.
 - A browser with `ResizeObserver` for live measurement.
 - Server rendering is safe; measurement and scrolling begin when an element becomes available.
 
-Resize entries are coalesced and applied on the next animation frame. This keeps DOM writes outside the observer delivery loop and limits measurement invalidation to once per frame.
-
-Use `overflow-anchor: none` on the scroller when relying on the virtualizer's own scroll correction.
+Resize entries are coalesced and applied on the next animation frame. Use `overflow-anchor: none` on
+the scroller when relying on the virtualizer's own dynamic-height scroll correction.

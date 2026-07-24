@@ -1,17 +1,28 @@
 import { createRoot, createSignal } from 'solid-js';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createVirtualNestedList } from '../src';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createDynamicHeight,
+  createVirtualNestedList,
+  type VirtualNestedList,
+  type VirtualNestedListProps
+} from '../src';
+
+const observeElement = vi.fn();
 
 beforeAll(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
-      observe(): void {}
+      observe(element: Element): void {
+        observeElement(element);
+      }
       unobserve(): void {}
       disconnect(): void {}
     }
   );
 });
+
+beforeEach(() => observeElement.mockClear());
 
 afterAll(() => vi.unstubAllGlobals());
 
@@ -67,13 +78,68 @@ describe('createVirtualNestedList', () => {
     });
   });
 
-  it('uses the same primitive for flat input', () => {
+  it('supports root collections without descendants', () => {
     const flatItems = items.map((item) => ({ ...item, children: [] }));
 
     withVirtualList(flatItems, { overscan: 1_000 }, (virtual) => {
       expect(virtual.children().map((node) => node.item.id)).toEqual(['parent', 'sibling']);
       expect(virtual.children().every((node) => node.childCount === 0)).toBe(true);
       expect(virtual.totalHeight).toBe(50);
+    });
+  });
+
+  it('places gaps only between sibling branches at every level', () => {
+    withVirtualList(items, { gap: 10, overscan: 1_000 }, (virtual) => {
+      const parent = virtual.children()[0];
+      const sibling = virtual.children()[1];
+      if (!parent || !sibling) throw new Error('Expected parent and sibling nodes');
+
+      expect(parent.children()[0]?.top).toBe(10);
+      expect(parent.children()[1]?.top).toBe(40);
+      expect(parent.height).toBe(70);
+      expect(sibling.top).toBe(80);
+      expect(sibling.height).toBe(40);
+      expect(virtual.totalHeight).toBe(120);
+    });
+  });
+
+  it('does not observe item elements in the default fixed-height mode', () => {
+    withVirtualList(items, { overscan: 1_000 }, (virtual) => {
+      const parent = virtual.children()[0];
+      if (!parent) throw new Error('Expected a parent node');
+
+      parent.setElementRef(document.createElement('article'));
+      parent.setChildrenRef(document.createElement('div'));
+
+      expect(observeElement).not.toHaveBeenCalled();
+    });
+  });
+
+  it('activates item observation through the dynamic-height strategy', () => {
+    createRoot((dispose) => {
+      try {
+        const virtual = createVirtualNestedList({
+          items,
+          elementRef: undefined,
+          itemHeight: createDynamicHeight<TestItem>({
+            estimate: (item) => item.height
+          }),
+          getChildren: (item) => item.children,
+          gap: 0,
+          overscan: 1_000
+        });
+        const parent = virtual.children()[0];
+        if (!parent) throw new Error('Expected a parent node');
+        const element = document.createElement('article');
+
+        expect(virtual.totalHeight).toBe(100);
+        parent.setElementRef(element);
+
+        expect(observeElement).toHaveBeenCalledOnce();
+        expect(observeElement).toHaveBeenCalledWith(element);
+      } finally {
+        dispose();
+      }
     });
   });
 
@@ -104,6 +170,24 @@ describe('createVirtualNestedList', () => {
       expect(virtual.children()[0]).toBe(parent);
       expect(parent.children()[0]).toBe(firstChild);
       expect(parent.height).toBe(60);
+    });
+  });
+
+  it('preserves nested item identity while scrolling', async () => {
+    const scroller = createScroller(25);
+
+    await withScrollableVirtualList(items, scroller.element, { overscan: 0 }, (virtual) => {
+      const parent = virtual.children()[0];
+      if (!parent) throw new Error('Expected a visible parent node');
+
+      scrollTo(scroller.element, 11);
+      const initialChildren = parent.children();
+      expect(initialChildren.map((node) => node.item.id)).toEqual(['first-child', 'second-child']);
+
+      scrollTo(scroller.element, 12);
+      const nextChildren = parent.children();
+      expect(nextChildren[0]).toBe(initialChildren[0]);
+      expect(nextChildren[1]).toBe(initialChildren[1]);
     });
   });
 
@@ -208,21 +292,25 @@ describe('createVirtualNestedList', () => {
   });
 });
 
+type TestVirtualListOptions = Partial<Pick<VirtualNestedListProps<TestItem>, 'gap' | 'overscan'>> &
+  Readonly<{ isExpanded?: (item: TestItem) => boolean }>;
+
 function withVirtualList(
   testItems: readonly TestItem[],
-  options: Partial<Pick<Parameters<typeof createVirtualNestedList<TestItem>>[0], 'gap' | 'isExpanded' | 'overscan'>>,
-  run: (virtual: ReturnType<typeof createVirtualNestedList<TestItem>>) => void
+  options: TestVirtualListOptions,
+  run: (virtual: VirtualNestedList<TestItem>) => void
 ): void {
   createRoot((dispose) => {
     try {
       run(
         createVirtualNestedList({
           items: testItems,
-          getChildren: (item) => item.children,
           elementRef: undefined,
-          estimateOwnHeight: (item) => item.height,
-          gap: 0,
-          ...options
+          itemHeight: (item) => item.height,
+          getChildren: (item) => item.children,
+          ...(options.isExpanded === undefined ? {} : { isExpanded: options.isExpanded }),
+          gap: options.gap ?? 0,
+          ...(options.overscan === undefined ? {} : { overscan: options.overscan })
         })
       );
     } finally {
@@ -234,19 +322,19 @@ function withVirtualList(
 async function withScrollableVirtualList(
   testItems: readonly TestItem[],
   elementRef: HTMLElement,
-  options: Partial<Pick<Parameters<typeof createVirtualNestedList<TestItem>>[0], 'gap' | 'isExpanded' | 'overscan'>>,
-  run: (virtual: ReturnType<typeof createVirtualNestedList<TestItem>>) => void
+  options: TestVirtualListOptions,
+  run: (virtual: VirtualNestedList<TestItem>) => void
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     createRoot((dispose) => {
       const virtual = createVirtualNestedList({
         items: testItems,
-        getChildren: (item) => item.children,
         elementRef,
-        estimateOwnHeight: (item) => item.height,
-        gap: 0,
-        overscan: 0,
-        ...options
+        itemHeight: (item) => item.height,
+        getChildren: (item) => item.children,
+        ...(options.isExpanded === undefined ? {} : { isExpanded: options.isExpanded }),
+        gap: options.gap ?? 0,
+        overscan: options.overscan ?? 0
       });
 
       queueMicrotask(() => {
@@ -272,4 +360,9 @@ function createScroller(height: number) {
   element.scrollTo = scrollTo;
 
   return { element, scrollTo };
+}
+
+function scrollTo(element: HTMLElement, top: number): void {
+  element.scrollTop = top;
+  element.dispatchEvent(new Event('scroll'));
 }

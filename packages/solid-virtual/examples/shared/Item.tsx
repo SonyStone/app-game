@@ -1,6 +1,6 @@
 import { createEventBus } from '@solid-primitives/event-bus';
 import { children, createSignal, For, onMount, Show, splitProps, type ComponentProps } from 'solid-js';
-import type { ItemId } from '../virtual-scroll/types';
+import type { ItemId } from './flatItems';
 
 /** Renders one measurable, editable row with optional nested children. */
 export function Item(

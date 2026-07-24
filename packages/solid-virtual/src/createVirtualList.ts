@@ -1,138 +1,192 @@
-import { createElementSize } from '@solid-primitives/resize-observer';
-import { createScrollPosition } from '@solid-primitives/scroll';
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
 import { createMemo } from 'solid-js';
+import type { DynamicVirtualListProps as DynamicFeatureProps } from './createDynamicHeight';
+import { createVirtualListCore, type BaseVirtualListProps, type VirtualListCore } from './createVirtualListCore';
+import {
+  alignVirtualItem,
+  clampVirtualPosition,
+  createVirtualListFeatureHost,
+  isVirtualListFeature,
+  positiveVirtualSize,
+  VIRTUAL_LIST_FEATURE,
+  type VirtualFeatureList
+} from './virtualListFeature';
 
-/** Creates a headless fixed-height virtual list. */
-export function createVirtualList<T>(props: {
-  /** Items in display order. May be a reactive accessor. */
-  items: MaybeAccessor<readonly T[]>;
-  /** Fixed height of one item in pixels. */
-  rowHeight: MaybeAccessor<number>;
-  /** Scrollable element containing the rendered list. */
-  elementRef: MaybeAccessor<HTMLElement | undefined>;
-  /** Extra items rendered before and after the viewport. Defaults to `2`. */
-  overscan?: MaybeAccessor<number>;
-}) {
-  const size = createElementSize(() => access(props.elementRef));
-  const scroll = createScrollPosition(() => access(props.elementRef));
+/** Creates a flat virtual list with opt-in DOM measurement. */
+export function createVirtualList<T>(props: DynamicVirtualListProps<T>): DynamicVirtualList<T>;
+/** Creates an arithmetic fixed-height flat virtual list. */
+export function createVirtualList<T>(props: FixedVirtualListProps<T>): FixedVirtualList<T>;
+export function createVirtualList<T>(inputProps: VirtualListProps<T>): VirtualList<T> {
+  const props = createVirtualListCore<T, VirtualListProps<T>>(inputProps);
+
+  if (!isDynamicVirtualListProps(props)) return createFixedLayout(props);
+
+  const host = createVirtualListFeatureHost(props, props.itemHeight);
+  props.itemHeight[VIRTUAL_LIST_FEATURE](host);
+  return host.create();
+}
+
+export type { BaseVirtualListProps } from './createVirtualListCore';
+
+/** Options for the optimized fixed-height flat layout. */
+export type FixedVirtualListProps<T> = BaseVirtualListProps<T> &
+  Readonly<{
+    /** Exact height of one item in pixels. May be a reactive accessor. */
+    itemHeight: MaybeAccessor<number>;
+  }>;
+
+/** Options for a flat list with the dynamic-height feature. */
+export type DynamicVirtualListProps<T> = DynamicFeatureProps<T>;
+
+/** Options accepted by {@link createVirtualList}. */
+export type VirtualListProps<T> = FixedVirtualListProps<T> | DynamicVirtualListProps<T>;
+
+/** Result returned by any {@link createVirtualList} mode. */
+export type VirtualList<T> = FixedVirtualList<T> | DynamicVirtualList<T>;
+
+/** Result returned by a flat list using dynamic DOM measurement. */
+export type DynamicVirtualList<T> = VirtualFeatureList<T>;
+
+type FixedVirtualList<T> = ReturnType<typeof createFixedLayout<T>>;
+
+type FixedLayoutProps<T> = VirtualListCore<T> & Pick<FixedVirtualListProps<T>, 'itemHeight'>;
+
+function createFixedLayout<T>(props: FixedLayoutProps<T>) {
   const items = createMemo(() => access(props.items));
-  const rowHeight = createMemo(() => Math.max(1, access(props.rowHeight)));
-  const overscan = createMemo(() => Math.max(0, Math.floor(access(props.overscan ?? 2))));
-  const viewportHeight = createMemo(() => size.height ?? 0);
-  const totalHeight = createMemo(() => items().length * rowHeight());
-  const range = createMemo(() => {
-    const firstVisible = Math.floor(Math.max(0, scroll.y) / rowHeight());
-    const visibleCount = Math.ceil(viewportHeight() / rowHeight());
-    const start = Math.max(0, firstVisible - overscan());
-    const end = Math.min(items().length, firstVisible + visibleCount + overscan());
-    return { start, end };
+  const element = () => access(props.elementRef);
+  const viewportHeight = createMemo(() => access(props.viewportHeight));
+  const scrollPosition = createMemo(() => access(props.scrollPosition));
+  const gap = createMemo(() => Math.max(0, access(props.gap)));
+  const overscan = createMemo(() => Math.max(0, access(props.overscan)));
+  const itemHeight = createMemo(() => positiveVirtualSize(access(props.itemHeight), DEFAULT_ITEM_HEIGHT));
+  const stride = createMemo(() => itemHeight() + gap());
+  const totalHeight = createMemo(() => {
+    const itemCount = items().length;
+    return itemCount === 0 ? 0 : itemCount * stride() - gap();
   });
-  const visibleChildren = createMemo(() =>
-    items()
-      .slice(range().start, range().end)
-      .map((item, offset) => {
-        const index = range().start + offset;
-        return { item, index, top: index * rowHeight(), height: rowHeight() } as const;
-      })
-  );
+  const startIndex = createMemo(() => {
+    const visibleTop = Math.max(0, scrollPosition() - overscan());
+    return Math.min(items().length, Math.floor(visibleTop / stride()));
+  });
+  const endIndex = createMemo(() => {
+    const visibleBottom = scrollPosition() + viewportHeight() + overscan();
+    return Math.min(items().length, Math.ceil(visibleBottom / stride()));
+  });
+  type VisibleChild = Readonly<{ item: T; index: number; top: number; height: number }>;
+  const initialChildren: readonly VisibleChild[] = [];
+  const visibleChildren = createMemo((previous: readonly VisibleChild[]) => {
+    const currentItems = items();
+    const currentStartIndex = startIndex();
+    const currentEndIndex = endIndex();
+    const currentItemHeight = itemHeight();
+    const currentStride = stride();
+    const childCount = currentEndIndex - currentStartIndex;
+    if (childCount === 0) return previous.length === 0 ? previous : initialChildren;
+
+    const previousStart = previous[0]?.index ?? -1;
+    let next =
+      previous.length === childCount && previousStart === currentStartIndex
+        ? undefined
+        : new Array<VisibleChild>(childCount);
+
+    for (let offset = 0; offset < childCount; offset += 1) {
+      const index = currentStartIndex + offset;
+      const item = currentItems[index] as T; // `endIndex` is clamped to `currentItems.length`.
+      const previousChild = previous[index - previousStart];
+      const top = index * currentStride;
+      const child =
+        previousChild?.index === index &&
+        previousChild.item === item &&
+        previousChild.height === currentItemHeight &&
+        previousChild.top === top
+          ? previousChild
+          : { item, index, top, height: currentItemHeight };
+
+      if (!next && child !== previous[offset]) next = previous.slice();
+      if (next) next[offset] = child;
+    }
+
+    return next ?? previous;
+  }, initialChildren);
 
   return {
     /** Visible items and their absolute layout data. */
     children: visibleChildren,
-    /** Estimated total list height. */
+    /** Complete scrollable height. */
     get totalHeight(): number {
       return totalHeight();
     },
     /** Space represented before the first rendered item. */
     get paddingTop(): number {
-      return range().start * rowHeight();
+      return startIndex() * stride();
     },
     /** Space represented after the last rendered item. */
     get paddingBottom(): number {
-      return (items().length - range().end) * rowHeight();
+      return (items().length - endIndex()) * stride();
     },
     /** Current scroll offset in pixels. */
     get scrollPosition(): number {
-      return scroll.y;
+      return scrollPosition();
     },
     /** Current viewport height in pixels. */
     get viewportHeight(): number {
       return viewportHeight();
     },
     /** Fixed item height in pixels. */
-    get rowHeight(): number {
-      return rowHeight();
+    get itemHeight(): number {
+      return itemHeight();
     },
-    /** Number of items rendered outside each viewport edge. */
+    /** Configured vertical space between items. */
+    get gap(): number {
+      return gap();
+    },
+    /** Number of pixels rendered outside each viewport edge. */
     get overscan(): number {
       return overscan();
     },
     /** Index of the first rendered item. */
     get startIndex(): number {
-      return range().start;
+      return startIndex();
     },
     /** Exclusive index after the last rendered item. */
     get endIndex(): number {
-      return range().end;
+      return endIndex();
     },
     /** Scrolls an item index into view. */
     scrollToIndex(
       index: number,
       options: Readonly<{ align?: ScrollLogicalPosition; behavior?: ScrollBehavior }> = {}
     ): boolean {
-      const element = access(props.elementRef);
-      if (!element || index < 0 || index >= items().length) return false;
+      const currentElement = element();
+      if (!currentElement || index < 0 || index >= items().length) return false;
 
-      const top = alignScrollOffset({
+      const itemStart = index * stride();
+      const top = alignVirtualItem({
         align: options.align ?? 'nearest',
-        current: element.scrollTop,
-        itemStart: index * rowHeight(),
-        itemEnd: (index + 1) * rowHeight(),
+        current: currentElement.scrollTop,
+        itemStart,
+        itemEnd: itemStart + itemHeight(),
         viewportHeight: viewportHeight(),
         totalHeight: totalHeight()
       });
-      element.scrollTo({ top, behavior: options.behavior ?? 'auto' });
+      currentElement.scrollTo({ top, behavior: options.behavior ?? 'auto' });
       return true;
     },
     /** Scrolls to an absolute vertical offset, clamped to the current layout. */
     scrollToOffset(position: number, options: Readonly<{ behavior?: ScrollBehavior }> = {}): boolean {
-      const element = access(props.elementRef);
-      if (!element) return false;
+      const currentElement = element();
+      if (!currentElement) return false;
 
       const maximum = Math.max(0, totalHeight() - viewportHeight());
-      const top = clamp(Number.isFinite(position) ? position : 0, 0, maximum);
-      element.scrollTo({ top, behavior: options.behavior ?? 'auto' });
+      const top = clampVirtualPosition(Number.isFinite(position) ? position : 0, 0, maximum);
+      currentElement.scrollTo({ top, behavior: options.behavior ?? 'auto' });
       return true;
     }
   };
 }
 
-/** Props accepted by {@link createVirtualList}. */
-export type VirtualListProps<T> = Parameters<typeof createVirtualList<T>>[0];
-
-function alignScrollOffset(props: {
-  align: ScrollLogicalPosition;
-  current: number;
-  itemStart: number;
-  itemEnd: number;
-  viewportHeight: number;
-  totalHeight: number;
-}): number {
-  const maximum = Math.max(0, props.totalHeight - props.viewportHeight);
-  const aligned = (() => {
-    if (props.align === 'start') return props.itemStart;
-    if (props.align === 'center')
-      return props.itemStart - (props.viewportHeight - (props.itemEnd - props.itemStart)) / 2;
-    if (props.align === 'end') return props.itemEnd - props.viewportHeight;
-    if (props.itemStart < props.current) return props.itemStart;
-    if (props.itemEnd > props.current + props.viewportHeight) return props.itemEnd - props.viewportHeight;
-    return props.current;
-  })();
-
-  return clamp(aligned, 0, maximum);
+function isDynamicVirtualListProps<T>(props: VirtualListProps<T>): props is DynamicVirtualListProps<T> {
+  return isVirtualListFeature<T>(props.itemHeight);
 }
 
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
+const DEFAULT_ITEM_HEIGHT = 120;
