@@ -1,0 +1,72 @@
+[
+  {
+    "type": 2000,
+    "node": {
+      "type": "session",
+      "data": { "treeId": "legacy-e2e" }
+    }
+  },
+  [
+    2001,
+    {
+      "type": "savedwin",
+      "marks": { "relicons": [], "customTitle": "Legacy research window" },
+      "colapsed": true,
+      "data": { "closeDate": 1704067200000 }
+    },
+    [0]
+  ],
+  [
+    2001,
+    {
+      "marks": { "relicons": [] },
+      "data": {
+        "title": "Legacy project page",
+        "url": "https://example.com/legacy-project",
+        "favIconUrl": "https://example.com/favicon.ico"
+      }
+    },
+    [0, 0]
+  ],
+  [
+    2001,
+    {
+      "type": "group",
+      "marks": { "relicons": [], "customTitle": "Legacy references" },
+      "data": {}
+    },
+    [0, 1]
+  ],
+  [
+    2001,
+    {
+      "type": "textnote",
+      "data": { "note": "Imported legacy note" }
+    },
+    [0, 1, 0]
+  ],
+  [
+    2001,
+    {
+      "type": "separatorline",
+      "data": { "separatorIndx": 2 }
+    },
+    [0, 1, 1]
+  ],
+  [
+    2001,
+    {
+      "marks": {
+        "relicons": [],
+        "customColorActive": "#4986E7",
+        "customColorSaved": "#3460AA"
+      },
+      "data": {
+        "title": "Protected legacy document",
+        "url": "https://docs.google.com/document/d/legacy"
+      }
+    },
+    [0, 2]
+  ],
+  { "type": 11111, "time": 1704067200000 }
+]

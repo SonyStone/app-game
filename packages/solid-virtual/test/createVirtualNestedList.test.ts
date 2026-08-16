@@ -173,6 +173,36 @@ describe('createVirtualNestedList', () => {
     });
   });
 
+  it('preserves nested render identity when the source collection refreshes', () => {
+    createRoot((dispose) => {
+      try {
+        const [roots, setRoots] = createSignal<readonly TestItem[]>(items);
+        const virtual = createVirtualNestedList({
+          items: roots,
+          elementRef: undefined,
+          itemHeight: (item: TestItem) => item.height,
+          getChildren: (item) => item.children,
+          gap: 0,
+          overscan: 1_000
+        });
+        const parent = virtual.children()[0];
+        const sibling = virtual.children()[1];
+        const firstChild = parent?.children()[0];
+        if (!parent || !sibling || !firstChild) throw new Error('Expected the initial nested nodes');
+
+        const appended = { id: 'appended', height: 50, children: [] } satisfies TestItem;
+        setRoots([items[0]!, appended, items[1]!]);
+
+        expect(virtual.children()[0]).toBe(parent);
+        expect(virtual.children()[0]?.children()[0]).toBe(firstChild);
+        expect(virtual.children()[2]).toBe(sibling);
+        expect(virtual.children()[1]?.item).toBe(appended);
+      } finally {
+        dispose();
+      }
+    });
+  });
+
   it('preserves nested item identity while scrolling', async () => {
     const scroller = createScroller(25);
 

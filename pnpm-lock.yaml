@@ -510,15 +510,21 @@ importers:
         specifier: ^7.0.0
         version: 7.0.0
 
-  apps/bookmarks-explorer:
+  apps/browser-atlas:
     dependencies:
       '@app-game/solid-virtual':
         specifier: workspace:*
         version: link:../../packages/solid-virtual
+      '@solid-primitives/history':
+        specifier: ^0.2.3
+        version: 0.2.3(solid-js@1.9.12)
       solid-js:
         specifier: 'catalog:'
         version: 1.9.12
     devDependencies:
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.60.0
       '@types/chrome':
         specifier: ^0.1.32
         version: 0.1.43
@@ -863,9 +869,9 @@ importers:
       '@app-game/babylonjs-examples':
         specifier: workspace:*
         version: link:../../packages/babylonjs-examples
-      '@app-game/bookmarks-explorer':
+      '@app-game/browser-atlas':
         specifier: workspace:*
-        version: link:../bookmarks-explorer
+        version: link:../browser-atlas
       '@app-game/dnd-playground':
         specifier: workspace:*
         version: link:../dnd-playground

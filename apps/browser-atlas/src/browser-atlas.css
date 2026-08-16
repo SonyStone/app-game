@@ -1,0 +1,46 @@
+[data-browser-atlas-theme='light'] {
+  color-scheme: light;
+}
+
+[data-browser-atlas-theme='light'].bg-neutral-950,
+[data-browser-atlas-theme='light'] .bg-neutral-950 {
+  background-color: #ffffff;
+}
+
+[data-browser-atlas-theme='light'].text-neutral-100,
+[data-browser-atlas-theme='light'] .text-neutral-100,
+[data-browser-atlas-theme='light'] .text-neutral-200,
+[data-browser-atlas-theme='light'] .text-neutral-300,
+[data-browser-atlas-theme='light'] .text-white {
+  color: #171717;
+}
+
+[data-browser-atlas-theme='light'] .bg-neutral-900 {
+  background-color: #f2f2ef;
+}
+
+[data-browser-atlas-theme='light'] .bg-neutral-800 {
+  background-color: #dfdfdb;
+}
+
+[data-browser-atlas-theme='light'] .text-neutral-400 {
+  color: #525252;
+}
+
+[data-browser-atlas-theme='light'] .text-neutral-500 {
+  color: #737373;
+}
+
+[data-browser-atlas-theme='light'] .border-neutral-600,
+[data-browser-atlas-theme='light'] .border-neutral-700 {
+  border-color: #b8b8b2;
+}
+
+[data-browser-atlas-theme='light'] .hover\:bg-neutral-800:hover {
+  background-color: #d7d7d2;
+}
+
+[data-browser-atlas-theme='light'] .hover\:text-neutral-100:hover,
+[data-browser-atlas-theme='light'] .hover\:text-white:hover {
+  color: #000000;
+}

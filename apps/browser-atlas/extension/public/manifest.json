@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Browser Atlas",
+  "description": "Explore browser tabs, bookmarks, history, and saved sessions.",
+  "version": "0.0.1",
+  "action": {
+    "default_title": "Open Browser Atlas",
+    "default_icon": {
+      "16": "icons/icon.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "commands": {
+    "_execute_action": {},
+    "save_close_all_windows": {
+      "description": "Save and close all browser windows"
+    },
+    "save_close_current_tab": {
+      "description": "Save and close the current tab"
+    },
+    "save_close_current_window": {
+      "description": "Save and close the current window"
+    }
+  },
+  "permissions": ["tabs", "bookmarks", "history", "sessions", "storage", "unlimitedStorage", "favicon", "identity", "alarms"],
+  "icons": {
+    "16": "icons/icon.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

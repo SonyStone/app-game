@@ -12,7 +12,7 @@
     "@app-game/dnd-playground": "workspace:*",
     "@app-game/app-router": "workspace:*",
     "@app-game/babylonjs-examples": "workspace:*",
-    "@app-game/bookmarks-explorer": "workspace:*",
+    "@app-game/browser-atlas": "workspace:*",
     "@app-game/ecsy-pages": "workspace:*",
     "@app-game/excalibur-examples": "workspace:*",
     "@app-game/film-annotation-player": "workspace:*",

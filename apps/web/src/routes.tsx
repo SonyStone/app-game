@@ -1,5 +1,5 @@
 import { Thumbnail, type Routes } from '@app-game/app-router';
-import { bookmarksExplorerRoutes } from '@app-game/bookmarks-explorer/routes';
+import { browserAtlasRoutes } from '@app-game/browser-atlas/routes';
 import { escyRoutes } from '@app-game/ecsy-pages/routes';
 import { filmAnnotationPlayerRoutes } from '@app-game/film-annotation-player/routes';
 import { routes as greasePencilTypegpuRoutes } from '@app-game/grease-pencil-typegpu/routes';
@@ -84,7 +84,7 @@ export const routes: Routes[] = [
   phaserRoutes,
   pixijsRoutes,
   escyRoutes,
-  bookmarksExplorerRoutes,
+  browserAtlasRoutes,
   {
     path: '/wip',
     Preview: () => (

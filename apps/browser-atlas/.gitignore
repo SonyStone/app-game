@@ -1,0 +1,6 @@
+node_modules
+dist
+dist-extension
+playwright-report
+test-results
+*.local

@@ -73,7 +73,13 @@ function createNestedLayout<T>(
   const overscan = createMemo(() => Math.max(0, access(core.overscan)));
   let ensureLayout = (): void => undefined;
   const measurement = heightStrategy?.createController<NestedNodeBox>(() => ensureLayout());
-  const tree = createMemo(() => createTree(items(), 0));
+  let nodesByItem = new Map<T, NestedNode<T>>();
+  const tree = createMemo(() => {
+    const nextNodesByItem = new Map<T, NestedNode<T>>();
+    const roots = createTree(items(), 0, nextNodesByItem);
+    nodesByItem = nextNodesByItem;
+    return roots;
+  });
   const layout = createMemo(() => {
     measurement?.trackMeasurements();
     const roots = tree();
@@ -136,50 +142,67 @@ function createNestedLayout<T>(
     }
   };
 
-  function createTree(items: readonly T[], depth: number): NestedNode<T>[] {
+  function createTree(
+    items: readonly T[],
+    depth: number,
+    nextNodesByItem: Map<T, NestedNode<T>>
+  ): NestedNode<T>[] {
     return items.map((item) => {
-      const box = createNestedNodeBox();
-      const childNodes = createTree(options.getChildren(item) ?? EMPTY_ITEMS, depth + 1);
-
-      const readChildrenLevel = () => {
-        layout();
-        if (!isExpanded(item)) return EMPTY_LEVEL;
-        return readLevel(childNodes, box.childrenTop, box.childrenBottom);
-      };
-
-      const view: VirtualFeatureItem<T> = {
-        item,
-        depth,
-        childCount: childNodes.length,
-        children: () => readChildrenLevel().children,
-        setElementRef: (element) => measurement?.setElementRef(element, box),
-        setChildrenRef: (element) => measurement?.setChildrenRef(element, box),
-        get top() {
-          layout();
-          return box.top;
-        },
-        get ownHeight() {
-          layout();
-          return box.ownHeight;
-        },
-        get height() {
-          layout();
-          return box.bottom - box.top;
-        },
-        get childrenHeight() {
-          layout();
-          return box.childrenBottom - box.childrenTop;
-        },
-        get paddingTop() {
-          return readChildrenLevel().paddingTop;
-        },
-        get paddingBottom() {
-          return readChildrenLevel().paddingBottom;
-        }
-      };
-
-      return { item, depth, childNodes, box, view };
+      const childNodes = createTree(options.getChildren(item) ?? EMPTY_ITEMS, depth + 1, nextNodesByItem);
+      const node = nodesByItem.get(item) ?? createNestedNode(item);
+      node.depth = depth;
+      node.childNodes = childNodes;
+      nextNodesByItem.set(item, node);
+      return node;
     });
+  }
+
+  function createNestedNode(item: T): NestedNode<T> {
+    const box = createNestedNodeBox();
+    let node: NestedNode<T>;
+    const readChildrenLevel = () => {
+      layout();
+      if (!isExpanded(node.item)) return EMPTY_LEVEL;
+      return readLevel(node.childNodes, box.childrenTop, box.childrenBottom);
+    };
+    const view: VirtualFeatureItem<T> = {
+      get item() {
+        return node.item;
+      },
+      get depth() {
+        return node.depth;
+      },
+      get childCount() {
+        return node.childNodes.length;
+      },
+      children: () => readChildrenLevel().children,
+      setElementRef: (element) => measurement?.setElementRef(element, box),
+      setChildrenRef: (element) => measurement?.setChildrenRef(element, box),
+      get top() {
+        layout();
+        return box.top;
+      },
+      get ownHeight() {
+        layout();
+        return box.ownHeight;
+      },
+      get height() {
+        layout();
+        return box.bottom - box.top;
+      },
+      get childrenHeight() {
+        layout();
+        return box.childrenBottom - box.childrenTop;
+      },
+      get paddingTop() {
+        return readChildrenLevel().paddingTop;
+      },
+      get paddingBottom() {
+        return readChildrenLevel().paddingBottom;
+      }
+    };
+    node = { item, depth: 0, childNodes: [], box, view };
+    return node;
   }
 
   function readLevel(nodes: readonly NestedNode<T>[], top: number, bottom: number): NestedLevel<T> {
@@ -221,13 +244,13 @@ function createNestedLayout<T>(
   }
 }
 
-type NestedNode<T> = Readonly<{
+type NestedNode<T> = {
   item: T;
   depth: number;
-  childNodes: readonly NestedNode<T>[];
+  childNodes: NestedNode<T>[];
   box: NestedNodeBox;
   view: VirtualFeatureItem<T>;
-}>;
+};
 
 type NestedNodeBox = VirtualMeasurementBox & {
   top: number;
