@@ -1,6 +1,6 @@
 import { Read, System, SystemData, World } from '@app-game/ecsy';
 import { Application, Container, Graphics } from 'pixi.js';
-import { onCleanup } from 'solid-js';
+import { onCleanup, onSettled } from 'solid-js';
 import { Vector2 } from '../utils';
 
 const NUM_ELEMENTS = 500;
@@ -183,7 +183,9 @@ export function build(app: Application) {
   app.ticker.add(run);
 
   function stop() {
+    app.ticker.remove(run);
     world.stop();
+    container.destroy({ children: true });
   }
 
   let lastTime = performance.now();
@@ -193,29 +195,50 @@ export function build(app: Application) {
 }
 
 export default function CirclesBoxesPixijs() {
-  const app = new Application({
-    width: window.document.body.clientWidth,
-    height: window.document.body.clientHeight,
-    backgroundColor: 0xffffff,
-    resolution: window.devicePixelRatio || 1,
-    antialias: true
-    // resolution: 1,
+  const canvas = (<canvas />) as HTMLCanvasElement;
+  let disposed = false;
+  let disposeApp: (() => void) | undefined;
+
+  onSettled(() => {
+    void initialize();
   });
-
-  function resizeCanvas() {
-    app.renderer.resize(window.document.body.clientWidth, window.document.body.clientHeight);
-  }
-
-  window.addEventListener('resize', resizeCanvas, false);
-
-  const destory = build(app);
 
   onCleanup(() => {
-    window.removeEventListener('resize', resizeCanvas);
-    destory();
-    app.stop();
-    app.destroy();
+    disposed = true;
+    disposeApp?.();
   });
 
-  return <>{app.view}</>;
+  async function initialize(): Promise<void> {
+    const app = new Application();
+    await app.init({
+      canvas,
+      width: window.document.body.clientWidth,
+      height: window.document.body.clientHeight,
+      backgroundColor: 0xffffff,
+      resolution: window.devicePixelRatio || 1,
+      antialias: true
+    });
+
+    function resizeCanvas() {
+      app.renderer.resize(window.document.body.clientWidth, window.document.body.clientHeight);
+    }
+
+    window.addEventListener('resize', resizeCanvas, false);
+    const destroyWorld = build(app);
+
+    const dispose = () => {
+      window.removeEventListener('resize', resizeCanvas);
+      destroyWorld();
+      app.stop();
+      app.destroy();
+    };
+
+    if (disposed) {
+      dispose();
+    } else {
+      disposeApp = dispose;
+    }
+  }
+
+  return canvas;
 }

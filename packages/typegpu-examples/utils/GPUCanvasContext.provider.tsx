@@ -2,10 +2,10 @@
 
 import { createContextProvider } from '@app-game/solid-utils';
 import type { JSX } from '@solidjs/web';
-import { merge, Show } from 'solid-js';
+import { merge, Show, untrack } from 'solid-js';
 
 const [Provider, useGPUCanvasContext] = createContextProvider<GPUCanvasContext, { value: GPUCanvasContext }>(
-  (props) => props.value,
+  (props) => untrack(() => props.value),
   {
     errorMessage: 'GPUCanvasContextProvider is missing'
   }
@@ -32,7 +32,7 @@ export function GPUCanvasContextProvider(
     <Show when={props.canvas} fallback={props.noCanvas}>
       {(canvas) => (
         <Show when={canvas().getContext('webgpu')} fallback={props.noWebGPUContext}>
-          {(canvasContext) => <Provider value={canvasContext()}>{props.children}</Provider>}
+          {(canvasContext) => <Provider value={untrack(canvasContext)}>{props.children}</Provider>}
         </Show>
       )}
     </Show>

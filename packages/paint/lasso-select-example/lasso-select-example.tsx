@@ -13,7 +13,7 @@ import {
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { createSignal, createTrackedEffect } from 'solid-js';
+import { createSignal, createTrackedEffect, untrack } from 'solid-js';
 
 import { Attribute } from '@app-game/ogl/core/geometry';
 import { Square } from '@app-game/ogl/extras/square';
@@ -33,22 +33,26 @@ export default function LassoSelectExample() {
   const gl = renderer.gl;
   gl.clearColor(1, 1, 1, 1);
 
-  const [position, setPosition] = makePersisted(createSignal<Vec3Tuple>([0.3 * 2, 0.5, 0.6 * 2]), {
-    storage: sessionStorage,
-    name: 'cameraPosition',
-    serialize: (v) => JSON.stringify(v.map((v) => +v.toFixed(3)))
-  });
-  const [target, setTtarget] = makePersisted(createSignal<Vec3Tuple>([0, 0.3, 0]), {
-    storage: sessionStorage,
-    name: 'cameraTarget',
-    serialize: (v) => JSON.stringify(v.map((v) => +v.toFixed(3)))
-  });
+  const [position, setPosition] = untrack(() =>
+    makePersisted(createSignal<Vec3Tuple>([0.3 * 2, 0.5, 0.6 * 2], { ownedWrite: true }), {
+      storage: sessionStorage,
+      name: 'cameraPosition',
+      serialize: (v) => JSON.stringify(v.map((v) => +v.toFixed(3)))
+    })
+  );
+  const [target, setTtarget] = untrack(() =>
+    makePersisted(createSignal<Vec3Tuple>([0, 0.3, 0], { ownedWrite: true }), {
+      storage: sessionStorage,
+      name: 'cameraTarget',
+      serialize: (v) => JSON.stringify(v.map((v) => +v.toFixed(3)))
+    })
+  );
   const camera = (() => {
     const camera = new Camera({ fov: 35 });
-    camera.position.copy(position());
+    camera.position.copy(untrack(position));
     return camera;
   })();
-  const targetVec3 = new Vec3().copy(target());
+  const targetVec3 = new Vec3().copy(untrack(target));
   const controls = new Orbit(camera, { target: targetVec3 });
   const scene = new Transform();
 
@@ -111,7 +115,7 @@ export default function LassoSelectExample() {
     const mesh = new Mesh(gl, {
       geometry,
       program,
-      mode: meshMode()
+      mode: untrack(meshMode)
     });
 
     let isDrawing = false;
@@ -215,7 +219,7 @@ export default function LassoSelectExample() {
     gl.clearColor(1, 1, 1, 0);
     renderer.render({ scene, camera });
     lasso.uTime.value = t * 0.001;
-    lasso.mesh.mode = lasso.meshMode();
+    lasso.mesh.mode = untrack(lasso.meshMode);
     edge.uTime.value = t * 0.001;
     gl.renderer.render({
       scene: lasso.mesh,
@@ -227,7 +231,7 @@ export default function LassoSelectExample() {
       clear: false
     });
   });
-  start();
+  untrack(start);
 
   return (
     <>

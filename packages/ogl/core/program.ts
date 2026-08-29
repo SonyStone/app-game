@@ -305,6 +305,11 @@ function setUniform(
   location: WebGLUniformLocation,
   value: Float32Array[] | Float32Array | number[] | number
 ) {
+  const wrappedValue = (value as { value?: unknown })?.value;
+  if (Array.isArray(wrappedValue) || ArrayBuffer.isView(wrappedValue)) {
+    value = wrappedValue as Float32Array | number[];
+  }
+
   value = (value as Float32Array[] | Float32Array | number[]).length
     ? flatten(value as Float32Array[] | Float32Array | number[])
     : value;

@@ -1,9 +1,9 @@
 import { Camera, Mat4, Orbit, Transform, Vec3, Vec4 } from '@app-game/ogl';
-import { Vec4Tuple } from '@app-game/ogl/math/vec-4';
+import type { Vec4Tuple } from '@app-game/ogl/math/vec-4';
 import { validate } from '@app-game/utils/validate';
 import { createEventBus } from '@solid-primitives/event-bus';
 import createRAF from '@solid-primitives/raf';
-import { onSettled } from 'solid-js';
+import { onCleanup, onSettled, untrack } from 'solid-js';
 import { Cube } from './cube';
 import { Grid } from './grid';
 import { OnScreenCube } from './on-screen-cube';
@@ -40,25 +40,27 @@ export default function CameraProjectionSVG() {
 
   const { listen, emit } = createEventBus<void>();
 
+  let controls: Orbit | undefined;
+  function update() {
+    controls?.update();
+    scene.updateMatrixWorld();
+    camera.updateMatrixWorld();
+
+    transformMatrix = new Mat4();
+    transformMatrix.multiply(camera.viewMatrix, scene.worldMatrix);
+    transformMatrix.multiply(camera.projectionMatrix, transformMatrix);
+    emit();
+  }
+
+  const [, start, stop] = createRAF(update);
+
   onSettled(() => {
-    const controls = new Orbit(camera, { element: svg as any as HTMLElement, target: new Vec3(1, 1, 0) });
-
-    function update(t: number) {
-      controls.update();
-      scene.updateMatrixWorld();
-      camera.updateMatrixWorld();
-
-      // projectionMatrix * viewMatrix * worldMatrix * position
-      {
-        transformMatrix = new Mat4();
-        transformMatrix.multiply(camera.viewMatrix, scene.worldMatrix);
-        transformMatrix.multiply(camera.projectionMatrix, transformMatrix);
-      }
-      emit();
-    }
-
-    const [running, start, stop] = createRAF(update);
-    start();
+    controls = new Orbit(camera, { element: svg as any as HTMLElement, target: new Vec3(1, 1, 0) });
+    untrack(start);
+  });
+  onCleanup(() => {
+    stop();
+    controls?.remove();
   });
 
   return (

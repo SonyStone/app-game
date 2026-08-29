@@ -1,7 +1,7 @@
 import { Mesh, OGLRenderingContext, Program, Texture } from '@app-game/ogl';
 import { Square } from '@app-game/ogl/extras/square';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { createTrackedEffect } from 'solid-js';
+import { createTrackedEffect, untrack } from 'solid-js';
 
 import fragment from './square.frag?raw';
 import vertex from './square.vert?raw';
@@ -13,12 +13,13 @@ export const createSquareMesh = (props: {
   position?: { top: number; bottom: number; left: number; right: number };
   zIndex?: MaybeAccessor<number>;
 }) => {
-  const { gl } = props;
-  const tMap = { value: access(props.texture) };
-  const zIndex = { value: access(props.zIndex) };
+  const gl = untrack(() => props.gl);
+  const initialPosition = untrack(() => props.position);
+  const tMap = { value: untrack(() => access(props.texture)) };
+  const zIndex = { value: untrack(() => access(props.zIndex)) ?? 0 };
   const mesh = new Mesh(gl, {
-    geometry: new Square(gl, { position: props.position }),
-    program: new Program(props.gl, {
+    geometry: new Square(gl, { position: initialPosition }),
+    program: new Program(gl, {
       vertex,
       fragment,
       uniforms: {
@@ -26,7 +27,7 @@ export const createSquareMesh = (props: {
         zIndex
       },
       depthTest: true,
-      transparent: access(props.transparent) ?? false,
+      transparent: untrack(() => access(props.transparent)) ?? false,
       blendFunc: { src: gl.SRC_ALPHA, dst: gl.ONE_MINUS_SRC_ALPHA, srcAlpha: gl.ONE, dstAlpha: gl.ONE_MINUS_SRC_ALPHA }
     })
   });
@@ -36,7 +37,7 @@ export const createSquareMesh = (props: {
   });
 
   createTrackedEffect(() => {
-    zIndex.value = access(props.zIndex);
+    zIndex.value = access(props.zIndex) ?? 0;
   });
 
   createTrackedEffect(() => {

@@ -21,7 +21,8 @@ import { uiComponentsRoutes } from '@app-game/ui-components-examples/routes';
 import { wasmRustRoutes } from '@app-game/wasm-rust-pages/routes';
 import { webglExamplesRoute } from '@app-game/webgl-examples/routes';
 import { webgpuRoutes } from '@app-game/webgpu-examples/routes';
-import { lazy } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
+import { lazy, onSettled } from 'solid-js';
 import HomePage from './home-page';
 import wireframeThumbnail from './thumbnail/wireframe-thumbnail.png?url';
 
@@ -36,6 +37,10 @@ export const routes: Routes[] = [
     name: 'Solid DnD Playground',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     children: [solidDndPlaygroundRoutes]
+  },
+  {
+    path: '/sortable-overlay',
+    component: SortableOverlayRedirect
   },
   {
     path: '/solidjs-patterns',
@@ -205,3 +210,11 @@ export const routes: Routes[] = [
     )
   }
 ];
+
+function SortableOverlayRedirect() {
+  const navigate = useNavigate();
+  onSettled(() => {
+    queueMicrotask(() => navigate('/solid-dnd/sortable-overlay', { replace: true }));
+  });
+  return null;
+}

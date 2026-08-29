@@ -4,7 +4,6 @@ import { Line } from '@app-game/math/line';
 import { Mat2x3 } from '@app-game/math/m2x3';
 import { createStruct } from '@app-game/math/utils/create-struct';
 import { Vec2 } from '@app-game/math/v2';
-import { createEventListener } from '@solid-primitives/event-listener';
 import { createMemo, createSignal, createTrackedEffect } from 'solid-js';
 import { SVGEditPoint } from './svg-edit-point';
 import { SVGSegmentAngleVisualization } from './svg-segment-angle-visualization';
@@ -53,16 +52,23 @@ export function TestRotationMatrixBetweenPointPairs(props: {
     const debugLayer = props.debugLayer;
     if (!root || !debugLayer) return;
 
-    createEventListener(root, 'pointerdown', (e) => {
+    const handlePointerDown = (e: PointerEvent) => {
       debugLayer.updateCircule('pointer ' + e.pointerId, [e.clientX, e.clientY]);
-    });
+    };
 
-    createEventListener(root, 'pointermove', (e) => {
+    const handlePointerMove = (e: PointerEvent) => {
       if (e.pressure === 0) {
         return;
       }
       debugLayer.updateCircule('pointer ' + e.pointerId, [e.clientX, e.clientY]);
-    });
+    };
+
+    root.addEventListener('pointerdown', handlePointerDown);
+    root.addEventListener('pointermove', handlePointerMove);
+    return () => {
+      root.removeEventListener('pointerdown', handlePointerDown);
+      root.removeEventListener('pointermove', handlePointerMove);
+    };
   });
 
   return (

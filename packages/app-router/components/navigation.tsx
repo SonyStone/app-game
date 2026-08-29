@@ -13,7 +13,7 @@ export function Navigation(props: Partial<{ routes: Routes[]; parentPath: string
       <For each={merged.routes}>
         {({ path, name, Preview, children }) => (
           <>
-            <LinkPreview path={merged.parentPath + path} name={name} as={Preview} />
+            <LinkPreview path={resolvePreviewPath(merged.parentPath, path)} name={name} as={Preview} />
             {/* <Show when={!!children}>
               <For each={children}>
                 {(child) => <LinkPreview path={path + child.path} name={child.name} as={child.Preview} />}
@@ -24,4 +24,9 @@ export function Navigation(props: Partial<{ routes: Routes[]; parentPath: string
       </For>
     </div>
   );
+}
+
+function resolvePreviewPath(parentPath: string, routePath: Routes['path']): string {
+  const path = String(routePath);
+  return parentPath === '.' ? path.replace(/^\/+/, '') : parentPath + path;
 }

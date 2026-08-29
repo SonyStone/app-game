@@ -1,6 +1,6 @@
 import createRAF from '@solid-primitives/raf';
 import { createRootPool } from '@solid-primitives/rootless';
-import { createSignal, createTrackedEffect, Show, untrack } from 'solid-js';
+import { createSignal, createTrackedEffect, onCleanup, Show, untrack } from 'solid-js';
 
 export default function SolidRootlessTest() {
   return (
@@ -58,7 +58,8 @@ function CreateRootPoolExample() {
   const [running, start, stop] = createRAF((t: number) => {
     setFrequentlyChangedCondition(!!((t * 10) % 10));
   });
-  start();
+  untrack(start);
+  onCleanup(stop);
 
   return (
     <div class="flex flex-col gap-2 place-self-start border p-4">

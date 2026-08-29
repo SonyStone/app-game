@@ -1,5 +1,4 @@
 import { cn } from '@app-game/utils/cn';
-import { makeEventListener } from '@solid-primitives/event-listener';
 import type { ComponentProps, JSX } from '@solidjs/web';
 import { createMemo, createSignal, createTrackedEffect, Errored, For, onCleanup, onSettled } from 'solid-js';
 import { Sidebar } from './components/Sidebar';
@@ -30,12 +29,14 @@ export function App(props: { children?: JSX.Element }): JSX.Element {
 
   onSettled(() => {
     const mediaQuery = window.matchMedia(THEME_MEDIA_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => {
+      setSystemTheme(event.matches ? 'dark' : 'light');
+    };
 
     setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
+    mediaQuery.addEventListener('change', handleChange);
 
-    makeEventListener(mediaQuery, 'change', (event) => {
-      setSystemTheme(event.matches ? 'dark' : 'light');
-    });
+    return () => mediaQuery.removeEventListener('change', handleChange);
   });
 
   return (

@@ -1,4 +1,4 @@
-import { createMemo, createSignal, Errored, Show } from 'solid-js';
+import { createMemo, createSignal, Errored, onCleanup, Show } from 'solid-js';
 
 import s from './App.module.scss';
 import { Frame } from './interfaces/Frame';
@@ -49,6 +49,14 @@ export default function App() {
 }
 
 export function VideoApp() {
+  let disposeRewindHold: (() => void) | undefined;
+  let disposeFastForwardHold: (() => void) | undefined;
+
+  onCleanup(() => {
+    disposeRewindHold?.();
+    disposeFastForwardHold?.();
+  });
+
   const [
     {
       currentFrame,
@@ -169,7 +177,9 @@ export function VideoApp() {
               <SkipPreviousIcon></SkipPreviousIcon>
             </button>
             <button
-              ref={(element) => onHold(element, () => () => setCurrentFrame((currentFrame() - 1) as Frame))}
+              ref={(element) => {
+                disposeRewindHold = onHold(element, () => () => setCurrentFrame((currentFrame() - 1) as Frame));
+              }}
               onClick={() => setCurrentFrame((currentFrame() - 1) as Frame)}
             >
               <FastRewindIcon></FastRewindIcon>
@@ -188,7 +198,9 @@ export function VideoApp() {
             </Show>
 
             <button
-              ref={(element) => onHold(element, () => () => setCurrentFrame((currentFrame() + 1) as Frame))}
+              ref={(element) => {
+                disposeFastForwardHold = onHold(element, () => () => setCurrentFrame((currentFrame() + 1) as Frame));
+              }}
               onClick={() => setCurrentFrame((currentFrame() + 1) as Frame)}
             >
               <FastForwardIcon></FastForwardIcon>

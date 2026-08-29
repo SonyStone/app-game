@@ -1,12 +1,16 @@
 import { Ripple } from '@app-game/ui-components/ripple';
+import { useHref, useResolvedPath } from '@solidjs/router';
 
 import { Show } from 'solid-js';
 
 export function Thumbnail(props: { thumbnail?: string; href: string; name?: string }) {
+  const resolvedPath = useResolvedPath(() => props.href);
+  const href = useHref(resolvedPath);
+
   return (
     <a
       class="rounded-2 group relative flex aspect-square h-full w-full flex-col overflow-hidden rounded-3xl border border-gray-200 bg-slate-200 bg-white p-8 shadow-sm transition-shadow hover:shadow-md"
-      href={props.href}
+      href={href()}
     >
       <Ripple class="text-slate/20 z-2" />
       <Show when={!!props.name}>

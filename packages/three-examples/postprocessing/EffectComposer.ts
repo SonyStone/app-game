@@ -1,17 +1,7 @@
-import {
-  BufferGeometry,
-  Clock,
-  Float32BufferAttribute,
-  Mesh,
-  OrthographicCamera,
-  Vector2,
-  WebGLRenderer,
-  WebGLRenderTarget,
-} from 'three';
+import { Timer, Vector2, WebGLRenderer, WebGLRenderTarget } from 'three';
 import { CopyShader } from '../shaders/CopyShader.js';
+import { ClearMaskPass, MaskPass } from './MaskPass.js';
 import { ShaderPass } from './ShaderPass.js';
-import { MaskPass } from './MaskPass.js';
-import { ClearMaskPass } from './MaskPass.js';
 
 export class EffectComposer {
   renderer: WebGLRenderer;
@@ -31,7 +21,7 @@ export class EffectComposer {
 
   copyPass: ShaderPass;
 
-  clock: Clock;
+  clock: Timer;
 
   constructor(renderer: WebGLRenderer, renderTarget?: WebGLRenderTarget) {
     this.renderer = renderer;
@@ -42,10 +32,7 @@ export class EffectComposer {
       this._width = size.width;
       this._height = size.height;
 
-      renderTarget = new WebGLRenderTarget(
-        this._width * this._pixelRatio,
-        this._height * this._pixelRatio
-      );
+      renderTarget = new WebGLRenderTarget(this._width * this._pixelRatio, this._height * this._pixelRatio);
       renderTarget.texture.name = 'EffectComposer.rt1';
     } else {
       this._pixelRatio = 1;
@@ -76,7 +63,7 @@ export class EffectComposer {
 
     this.copyPass = new ShaderPass(CopyShader);
 
-    this.clock = new Clock();
+    this.clock = new Timer();
   }
 
   swapBuffers() {
@@ -87,18 +74,12 @@ export class EffectComposer {
 
   addPass(pass: any) {
     this.passes.push(pass);
-    pass.setSize(
-      this._width * this._pixelRatio,
-      this._height * this._pixelRatio
-    );
+    pass.setSize(this._width * this._pixelRatio, this._height * this._pixelRatio);
   }
 
   insertPass(pass: any, index: number) {
     this.passes.splice(index, 0, pass);
-    pass.setSize(
-      this._width * this._pixelRatio,
-      this._height * this._pixelRatio
-    );
+    pass.setSize(this._width * this._pixelRatio, this._height * this._pixelRatio);
   }
 
   removePass(pass: any) {
@@ -123,6 +104,7 @@ export class EffectComposer {
     // deltaTime value is in seconds
 
     if (deltaTime === undefined) {
+      this.clock.update();
       deltaTime = this.clock.getDelta();
     }
 
@@ -136,13 +118,7 @@ export class EffectComposer {
       if (pass.enabled === false) continue;
 
       pass.renderToScreen = this.renderToScreen && this.isLastEnabledPass(i);
-      pass.render(
-        this.renderer,
-        this.writeBuffer,
-        this.readBuffer,
-        deltaTime,
-        maskActive
-      );
+      pass.render(this.renderer, this.writeBuffer, this.readBuffer, deltaTime, maskActive);
 
       if (pass.needsSwap) {
         if (maskActive) {
@@ -152,12 +128,7 @@ export class EffectComposer {
           //context.stencilFunc( context.NOTEQUAL, 1, 0xffffffff );
           stencil.setFunc(context.NOTEQUAL, 1, 0xffffffff);
 
-          this.copyPass.render(
-            this.renderer,
-            this.writeBuffer,
-            this.readBuffer,
-            deltaTime
-          );
+          this.copyPass.render(this.renderer, this.writeBuffer, this.readBuffer, deltaTime);
 
           //context.stencilFunc( context.EQUAL, 1, 0xffffffff );
           stencil.setFunc(context.EQUAL, 1, 0xffffffff);
@@ -186,10 +157,7 @@ export class EffectComposer {
       this._height = size.height;
 
       renderTarget = this.renderTarget1.clone();
-      renderTarget.setSize(
-        this._width * this._pixelRatio,
-        this._height * this._pixelRatio
-      );
+      renderTarget.setSize(this._width * this._pixelRatio, this._height * this._pixelRatio);
     }
 
     this.renderTarget1.dispose();

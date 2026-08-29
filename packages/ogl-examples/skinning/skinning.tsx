@@ -21,7 +21,7 @@ import meshFragment from './mesh.frag?raw';
 import meshVertex from './mesh.vert?raw';
 
 import createRAF from '@solid-primitives/raf';
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup, untrack } from 'solid-js';
 import { Timeline } from '../../sequence-editor/timeline';
 import shadowFragment from './shadow.frag?raw';
 import shadowVertex from './shadow.vert?raw';
@@ -154,9 +154,8 @@ export default function App() {
     // Control animation but updating the elapsed value.
     // It uses modulo to repeat the animation range,
     // so below is playing a never-ending loop.
-    if (animation()) {
-      animation()!.elapsed += 0.05;
-    }
+    const currentAnimation = untrack(animation);
+    if (currentAnimation) currentAnimation.elapsed += 0.05;
 
     // Calling 'update' updates the bones with all of the
     // attached animations based on their weights.
@@ -169,7 +168,7 @@ export default function App() {
   }
 
   const [running, start, stop] = createRAF(update);
-  start();
+  untrack(start);
 
   onCleanup(() => {
     window.removeEventListener('resize', resize, false);

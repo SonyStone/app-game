@@ -16,7 +16,7 @@ import {
   Vec2,
   type FlipAnimateEntry
 } from 'solid-dnd';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show, untrack } from 'solid-js';
 import { AnimationControls } from '../components/AnimationControls';
 import EventLog, { createEventLogger } from '../components/EventLog';
 import { FlipDebugOverlay } from '../components/FlipDebugOverlay';
@@ -98,21 +98,6 @@ export default function NestedOverlayDemo(): JSX.Element {
   }, 16);
 
   // ── Animate display key changes during drag ─────────────────────────────
-  createEffect(
-    () => {
-      // Access all display lists to trigger on any change
-      const place = dropPlace();
-      if (!place) return null;
-      return display.getDisplayKeys(place.parent);
-    },
-    () => {
-      if (sensor.isDragging() && animEnabled()) {
-        flip.playFromFirst();
-      }
-    },
-    { defer: true }
-  );
-
   function resetDragState() {
     throttledSetDropPlace.clear();
     pendingDragId = null;
@@ -187,6 +172,20 @@ export default function NestedOverlayDemo(): JSX.Element {
       flip.animate(() => resetDragState(), { duration: animEnabled() ? animDuration() : 0 });
     }
   });
+
+  createEffect(
+    () => {
+      // Access all display lists to trigger on any change
+      const place = dropPlace();
+      return [place ? display.getDisplayKeys(place.parent) : null, sensor.isDragging(), animEnabled()] as const;
+    },
+    ([, dragging, animationEnabled]) => {
+      if (dragging && animationEnabled) {
+        untrack(() => flip.playFromFirst());
+      }
+    },
+    { defer: true }
+  );
 
   createBodyCursor(() => (sensor.isDragging() ? 'grabbing' : null));
 

@@ -88,6 +88,8 @@ function AppCanvas(props: { render?: (view: GPUTextureView) => void }) {
   const [show, setShow] = createSignal(true);
   const [canvasRef, setCanvasRef] = createSignal<HTMLCanvasElement | undefined>();
 
+  onCleanup(() => setCanvasRef(undefined));
+
   return (
     <div class="flex flex-1 flex-col gap-2">
       <div class="flex gap-2">
@@ -107,13 +109,7 @@ function AppCanvas(props: { render?: (view: GPUTextureView) => void }) {
         </TypeGPUCanvasContextProvider>
       </GPUCanvasContextProvider>
       <Show when={show()}>
-        <canvas
-          class="max-w-600px aspect-square w-full border"
-          ref={(ref) => {
-            setCanvasRef(ref);
-            onCleanup(() => setCanvasRef(undefined));
-          }}
-        />
+        <canvas class="max-w-600px aspect-square w-full border" ref={setCanvasRef} />
       </Show>
     </div>
   );

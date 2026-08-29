@@ -2650,10 +2650,10 @@ function ExplorerPane(props: {
 
   function UnavailableTreeStatus() {
     const error = () => selectedBackend().sources.error(selectedSource());
-    return error() ? (
-      <TreeStatus tone="error">{formatError(error())}</TreeStatus>
-    ) : (
-      <TreeStatus>Loading data…</TreeStatus>
+    return (
+      <Show when={error()} fallback={<TreeStatus>Loading data…</TreeStatus>}>
+        {(reason) => <TreeStatus tone="error">{formatError(reason())}</TreeStatus>}
+      </Show>
     );
   }
 }

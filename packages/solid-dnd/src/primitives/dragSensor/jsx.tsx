@@ -1,8 +1,7 @@
-import { createEventListener } from '@solid-primitives/event-listener';
 import { resolveFirst } from '@solid-primitives/refs';
 import { isClient } from '@solid-primitives/utils';
 import type { JSX } from '@solidjs/web';
-import { createContext, createTrackedEffect, children as resolveChildren, useContext } from 'solid-js';
+import { createContext, createTrackedEffect, onCleanup, children as resolveChildren, useContext } from 'solid-js';
 import {
   createDragSensorFactory,
   type CreateDragSensorOptions,
@@ -115,16 +114,24 @@ function DragSensorTarget<TData = unknown, TElement extends HTMLElement = HTMLEl
     (item): item is TElement => isHTMLElement(item),
     (item): item is TElement => isHTMLElement(item)
   );
+  let currentTarget: TElement | undefined;
 
   createTrackedEffect(() => {
     const target = element();
+    if (target === currentTarget) {
+      return;
+    }
+
+    currentTarget?.removeEventListener('pointerdown', sensor.onPointerDown);
+    currentTarget = target;
 
     if (!target) {
       return;
     }
 
-    createEventListener(target, 'pointerdown', sensor.onPointerDown);
+    target.addEventListener('pointerdown', sensor.onPointerDown);
   });
+  onCleanup(() => currentTarget?.removeEventListener('pointerdown', sensor.onPointerDown));
 
   return resolved();
 }

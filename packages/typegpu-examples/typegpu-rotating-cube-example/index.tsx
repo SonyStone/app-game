@@ -219,9 +219,10 @@ function App(props: { running: boolean; msaa: boolean }) {
     return d.vec4f(diffuseColor.x * light, diffuseColor.y * light, diffuseColor.z * light, diffuseColor.w);
   });
 
-  // Create depth texture
-  const [depthTextureView, setDepthTextureView] = createSignal<GPUTextureView | null>(null);
-  const [depthTextureViewMsaa, setDepthTextureViewMsaa] = createSignal<GPUTextureView | null>(null);
+  // These views belong to the render loop, so keeping them outside Solid's
+  // reactive graph avoids deferred updates between texture creation and use.
+  let depthTextureView: GPUTextureView | null = null;
+  let depthTextureViewMsaa: GPUTextureView | null = null;
   let depthTexture: GPUTexture | null = null;
   let depthTextureMsaa: GPUTexture | null = null;
 
@@ -271,9 +272,9 @@ function App(props: { running: boolean; msaa: boolean }) {
     accumulatedTime += (now - lastFrameTime) / 1000;
     lastFrameTime = now;
 
-    const { width, height } = size();
+    const { width, height } = untrack(size);
     const canvasTexture = context.getCurrentTexture();
-    const useMsaa = props.msaa;
+    const useMsaa = untrack(() => props.msaa);
 
     // Update multisample texture if size changed (only needed for MSAA)
     if (useMsaa) {
@@ -307,7 +308,7 @@ function App(props: { running: boolean; msaa: boolean }) {
           sampleCount: 4,
           usage: GPUTextureUsage.RENDER_ATTACHMENT
         });
-        setDepthTextureViewMsaa(depthTextureMsaa.createView());
+        depthTextureViewMsaa = depthTextureMsaa.createView();
       }
     }
 
@@ -320,7 +321,7 @@ function App(props: { running: boolean; msaa: boolean }) {
           format: 'depth24plus',
           usage: GPUTextureUsage.RENDER_ATTACHMENT
         });
-        setDepthTextureView(depthTexture.createView());
+        depthTextureView = depthTexture.createView();
       }
     }
 
@@ -377,7 +378,7 @@ function App(props: { running: boolean; msaa: boolean }) {
 
     if (useMsaa) {
       // Render with multisampling
-      const dtView = depthTextureViewMsaa();
+      const dtView = depthTextureViewMsaa;
       if (!dtView || !multisampleTexture) return;
 
       const multisampleView = multisampleTexture.createView();
@@ -408,7 +409,7 @@ function App(props: { running: boolean; msaa: boolean }) {
       );
     } else {
       // Render without multisampling
-      const dtView = depthTextureView();
+      const dtView = depthTextureView;
       if (!dtView) return;
 
       root['~unstable'].beginRenderPass(

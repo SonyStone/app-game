@@ -1,6 +1,6 @@
 import { Color, Polyline, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import createRAF from '@solid-primitives/raf';
-import { onCleanup } from 'solid-js';
+import { onCleanup, untrack } from 'solid-js';
 
 interface Line {
   spring: number;
@@ -177,7 +177,7 @@ export default function App() {
   }
 
   const [running, start, stop] = createRAF(update);
-  start();
+  untrack(start);
 
   onCleanup(() => {
     window.removeEventListener('resize', resize, false);

@@ -1,5 +1,5 @@
 import { Camera, Geometry, Mesh, Program, Renderer, Transform } from '@app-game/ogl';
-import { createTrackedEffect } from 'solid-js';
+import { createTrackedEffect, untrack } from 'solid-js';
 
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
@@ -89,7 +89,7 @@ export default function PaintAppOGL() {
   }
 
   const [running, start, stop] = createRAF(update);
-  start();
+  untrack(start);
 
   return gl.canvas;
 }

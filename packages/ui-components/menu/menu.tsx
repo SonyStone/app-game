@@ -1,7 +1,7 @@
 import { computePosition, offset } from '@floating-ui/dom';
 import type { JSX } from '@solidjs/web';
 import { Portal } from '@solidjs/web';
-import { For, Show, createSignal, onCleanup, onSettled } from 'solid-js';
+import { For, Show, createSignal, onSettled } from 'solid-js';
 import { Ripple } from '../ripple/Ripple';
 
 type MenuItem = {
@@ -40,10 +40,10 @@ export function Menu(): JSX.Element {
 
     document.addEventListener('pointerdown', closeOnOutsidePointer);
     document.addEventListener('keydown', closeOnEscape);
-    onCleanup(() => {
+    return () => {
       document.removeEventListener('pointerdown', closeOnOutsidePointer);
       document.removeEventListener('keydown', closeOnEscape);
-    });
+    };
   });
 
   const openMenu = () => {

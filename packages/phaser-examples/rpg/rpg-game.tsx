@@ -4,6 +4,9 @@ import { onCleanup, onSettled } from 'solid-js';
 
 import cloudCityMap from './cloud-city-map.json?url';
 
+// grid-engine still reads Phaser from the browser global at runtime.
+globalThis.Phaser = Phaser;
+
 import CaptureMenu from '@app-game/spector/embedded-frontend-2/capture-menu';
 import { Spector } from '@app-game/spector/spector';
 import { Title } from '@solidjs/meta';

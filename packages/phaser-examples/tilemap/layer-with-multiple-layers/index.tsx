@@ -1,4 +1,4 @@
-import { Scene } from 'phaser';
+import Phaser, { Scene } from 'phaser';
 
 import { onCleanup } from 'solid-js';
 import kenny_platformer_64x64 from './kenny_platformer_64x64.png?url';

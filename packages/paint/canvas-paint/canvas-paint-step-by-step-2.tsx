@@ -19,7 +19,7 @@ import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/
 import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createSignal, createTrackedEffect, onSettled } from 'solid-js';
+import { createSignal, createTrackedEffect, untrack } from 'solid-js';
 import { BlendModes, ColorBlendModes } from '../brush-example/blend-modes';
 import { BlendMesh } from '../brush-example/blend/blend-mesh';
 import { BrushStrokeMesh } from '../brush-example/brush-instancing/brush-stroke-mesh';
@@ -156,109 +156,107 @@ export default function CanvasPaintStepByStep() {
     // controls.update();
     renderer.render({ scene, camera });
   });
-  start();
+  untrack(start);
 
-  onSettled(() => {
-    void (async () => {
-      makeEventListener(pointerTarget, 'pointerdown', (e: PointerEvent) => {
-        if (e.pressure === 0 || e.buttons !== 1) {
-          return;
-        }
-        let x = e.clientX;
-        let y = e.clientY;
+  makeEventListener(pointerTarget, 'pointerdown', (e: PointerEvent) => {
+    if (e.pressure === 0 || e.buttons !== 1) {
+      return;
+    }
+    let x = e.clientX;
+    let y = e.clientY;
 
-        const intersectPoint = raycast.cast(mouseNormalize(e, gl.canvas as unknown as HTMLElement));
-        if (intersectPoint) {
-          setBrushPos(intersectPoint);
-        }
-      });
-      makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
-        const events = e.getCoalescedEvents();
-        if (events.length === 0) {
-          events.push(e);
-        }
-        for (const event of events) {
-          if (e.pressure === 0 || e.buttons !== 1) {
-            continue;
-          }
-          let x = event.clientX;
-          let y = event.clientY;
-
-          const intersectPoint = raycast.cast(mouseNormalize(event, gl.canvas as unknown as HTMLElement));
-          if (intersectPoint) {
-            setBrushPos(intersectPoint);
-          }
-        }
-      });
-
-      makeEventListener(pointerTarget, 'pointerup', (e) => {});
-
-      backgroundMesh.render(swapBuffers.read);
-      await timeout(TIMEOUT);
-      backgroundMesh.render(swapBuffers.write);
-
-      await timeout(TIMEOUT);
-
-      brushSpotMesh.render(brushTexture);
-
-      brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 300], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
-      brushStrokeMesh.setInstancedCount(1);
-      markForUpdate();
-      render(true);
-
-      await timeout(TIMEOUT);
-
-      brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 320], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
-      brushStrokeMesh.setInstancedCount(1);
-      markForUpdate();
-      render(true);
-
-      await timeout(TIMEOUT);
-
-      brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 340], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
-      brushStrokeMesh.setInstancedCount(1);
-      markForUpdate();
-      render(true);
-
-      await timeout(TIMEOUT);
-
-      const points = createZigZagPoints([gl.canvas.clientWidth, gl.canvas.clientHeight])
-        .map((point) => interpoletePoints(point))
-        .flat();
-
-      for (let index = 0; index < points.length; index++) {
-        const point = points[index];
-        brushStrokeMesh.setBrushSpot(
-          instance,
-          pointToCanvasPoint(point, gl.canvas.clientWidth, gl.canvas.clientHeight),
-          easeInCirc(index / points.length)
-        );
-        brushStrokeMesh.setInstancedCount(instance);
-        instance++;
-
-        markForUpdate();
-        if (index % 10 === 0) {
-          render(true);
-          await timeout(TIMEOUT);
-        }
-      }
-
-      render(true);
-      await timeout(TIMEOUT);
-
-      brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 360], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
-      brushStrokeMesh.setInstancedCount(1);
-      render(true);
-
-      await timeout(TIMEOUT);
-
-      brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 380], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
-      brushStrokeMesh.setInstancedCount(1);
-      render(true);
-
-      await timeout(TIMEOUT);
-    })();
+    const intersectPoint = raycast.cast(mouseNormalize(e, gl.canvas as unknown as HTMLElement));
+    if (intersectPoint) {
+      setBrushPos(intersectPoint);
+    }
   });
+  makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
+    const events = e.getCoalescedEvents();
+    if (events.length === 0) {
+      events.push(e);
+    }
+    for (const event of events) {
+      if (e.pressure === 0 || e.buttons !== 1) {
+        continue;
+      }
+      let x = event.clientX;
+      let y = event.clientY;
+
+      const intersectPoint = raycast.cast(mouseNormalize(event, gl.canvas as unknown as HTMLElement));
+      if (intersectPoint) {
+        setBrushPos(intersectPoint);
+      }
+    }
+  });
+
+  makeEventListener(pointerTarget, 'pointerup', () => {});
+
+  void (async () => {
+    backgroundMesh.render(swapBuffers.read);
+    await timeout(TIMEOUT);
+    backgroundMesh.render(swapBuffers.write);
+
+    await timeout(TIMEOUT);
+
+    brushSpotMesh.render(brushTexture);
+
+    brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 300], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
+    brushStrokeMesh.setInstancedCount(1);
+    markForUpdate();
+    render(true);
+
+    await timeout(TIMEOUT);
+
+    brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 320], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
+    brushStrokeMesh.setInstancedCount(1);
+    markForUpdate();
+    render(true);
+
+    await timeout(TIMEOUT);
+
+    brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 340], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
+    brushStrokeMesh.setInstancedCount(1);
+    markForUpdate();
+    render(true);
+
+    await timeout(TIMEOUT);
+
+    const points = createZigZagPoints([gl.canvas.clientWidth, gl.canvas.clientHeight])
+      .map((point) => interpoletePoints(point))
+      .flat();
+
+    for (let index = 0; index < points.length; index++) {
+      const point = points[index];
+      brushStrokeMesh.setBrushSpot(
+        instance,
+        pointToCanvasPoint(point, gl.canvas.clientWidth, gl.canvas.clientHeight),
+        easeInCirc(index / points.length)
+      );
+      brushStrokeMesh.setInstancedCount(instance);
+      instance++;
+
+      markForUpdate();
+      if (index % 10 === 0) {
+        render(true);
+        await timeout(TIMEOUT);
+      }
+    }
+
+    render(true);
+    await timeout(TIMEOUT);
+
+    brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 360], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
+    brushStrokeMesh.setInstancedCount(1);
+    render(true);
+
+    await timeout(TIMEOUT);
+
+    brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 380], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
+    brushStrokeMesh.setInstancedCount(1);
+    render(true);
+
+    await timeout(TIMEOUT);
+  })();
 
   return (
     <>

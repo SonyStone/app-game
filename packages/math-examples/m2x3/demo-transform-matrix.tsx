@@ -5,8 +5,7 @@ import { Transform } from '@app-game/math/transform';
 import { Degrees } from '@app-game/math/types';
 import { degToRad } from '@app-game/math/utils/trigonometry';
 import { Vec2 } from '@app-game/math/v2';
-import { createEventListener } from '@solid-primitives/event-listener';
-import { createSignal, createTrackedEffect, untrack } from 'solid-js';
+import { createEffect, createSignal, createTrackedEffect } from 'solid-js';
 import { useTransformHandler } from './use-transform-handler';
 
 export function TestTransformMatrix(props: { debugLayer?: ReturnType<typeof useDebugLayer> }) {
@@ -27,15 +26,18 @@ export function TestTransformMatrix(props: { debugLayer?: ReturnType<typeof useD
     debugLayer: props.debugLayer
   });
 
-  createTrackedEffect(() => {
-    mat().decompose(transform);
-    setTranslation(untrack(translation));
-    setScale(untrack(scale));
-    setRotation(untrack(rotation));
+  createEffect(mat, (matrix) => {
+    matrix.decompose(transform);
+    setTranslation(transform.position);
+    setScale(transform.scale);
+    setRotation(transform.rotation);
   });
 
   createTrackedEffect(() => {
-    createEventListener(ref(), 'wheel', handleWheel, { passive: false });
+    const element = ref();
+    if (!element) return;
+    element.addEventListener('wheel', handleWheel, { passive: false });
+    return () => element.removeEventListener('wheel', handleWheel);
   });
 
   return (

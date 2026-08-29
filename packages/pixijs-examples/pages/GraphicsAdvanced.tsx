@@ -46,16 +46,18 @@ export default function GraphicsAdvanced(): JSX.Element {
             realPath2.position.y = 150;
           }}
         />
-        <Show when={texture()}>
-          <Graphics
-            ref={(bezier2) => {
-              bezier2.bezierCurveTo(0, -100, 150, 150, 240, 100);
-              bezier2.stroke({ width: 10, texture: texture() });
+        <Show when={texture()} keyed>
+          {(resolvedTexture) => (
+            <Graphics
+              ref={(bezier2) => {
+                bezier2.bezierCurveTo(0, -100, 150, 150, 240, 100);
+                bezier2.stroke({ width: 10, texture: resolvedTexture });
 
-              bezier2.position.x = 320;
-              bezier2.position.y = 150;
-            }}
-          />
+                bezier2.position.x = 320;
+                bezier2.position.y = 150;
+              }}
+            />
+          )}
         </Show>
         {/* ARC */}
         <Graphics
@@ -72,13 +74,15 @@ export default function GraphicsAdvanced(): JSX.Element {
           }}
         />
         {/* ARC 3 */}
-        <Show when={texture()}>
-          <Graphics
-            ref={(arc3) => {
-              arc3.arc(650, 420, 60, 2 * Math.PI, (2.5 * Math.PI) / 2);
-              arc3.stroke({ width: 20, texture: texture() });
-            }}
-          />
+        <Show when={texture()} keyed>
+          {(resolvedTexture) => (
+            <Graphics
+              ref={(arc3) => {
+                arc3.arc(650, 420, 60, 2 * Math.PI, (2.5 * Math.PI) / 2);
+                arc3.stroke({ width: 20, texture: resolvedTexture });
+              }}
+            />
+          )}
         </Show>
 
         {/* Hole */}
@@ -94,14 +98,16 @@ export default function GraphicsAdvanced(): JSX.Element {
         />
 
         {/* Line Texture Style */}
-        <Show when={texture()}>
-          <Graphics
-            ref={(beatifulRect) => {
-              beatifulRect.rect(80, 350, 150, 150);
-              beatifulRect.fill(0xff0000);
-              beatifulRect.stroke({ width: 20, texture: texture() });
-            }}
-          />
+        <Show when={texture()} keyed>
+          {(resolvedTexture) => (
+            <Graphics
+              ref={(beatifulRect) => {
+                beatifulRect.rect(80, 350, 150, 150);
+                beatifulRect.fill(0xff0000);
+                beatifulRect.stroke({ width: 20, texture: resolvedTexture });
+              }}
+            />
+          )}
         </Show>
       </Container>
     </Container>

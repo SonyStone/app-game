@@ -1,4 +1,4 @@
-import { createTrackedEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup, untrack } from 'solid-js';
 import {
   BoxGeometry,
   Camera,
@@ -111,7 +111,7 @@ export default function PostprocessingSmaa() {
   }
 
   const [running, start, stop] = createRAF(animate);
-  start();
+  untrack(start);
 
   onCleanup(() => {
     scene.clear();

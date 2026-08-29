@@ -1,7 +1,7 @@
 import { OGLRenderingContext, Texture } from '@app-game/ogl';
 import { RenderTarget } from '@app-game/ogl/core/render-target';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { createSignal } from 'solid-js';
+import { createSignal, untrack } from 'solid-js';
 import { BlendModes, ColorBlendModes } from '../blend-modes';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
 import { BlendMesh } from './blend-mesh';
@@ -19,7 +19,10 @@ export const createBlendRenderTarget = (props: {
   opacity?: MaybeAccessor<number | undefined>;
 }) => {
   const { gl, target = new RenderTarget(gl, DEFAULTS_RENDER_TARGET_OPTIONS) } = props;
-  const [layer, setLayer] = createSignal(access(target), { equals: () => false });
+  const [layer, setLayer] = createSignal(
+    untrack(() => access(target)),
+    { equals: () => false }
+  );
 
   const mesh = new BlendMesh(gl);
 

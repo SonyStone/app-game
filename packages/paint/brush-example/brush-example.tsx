@@ -2,7 +2,7 @@ import { Camera, GridHelper, Orbit, Renderer, Transform, Vec3 } from '@app-game/
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { Show, createMemo, createSignal, createTrackedEffect } from 'solid-js';
+import { Show, createMemo, createSignal, createTrackedEffect, untrack } from 'solid-js';
 
 import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
 import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
@@ -27,22 +27,26 @@ export default function OglSwapTexturesView() {
   gl.clearColor(1, 1, 1, 1);
 
   const MOVE_BACK = 2;
-  const [position, setPosition] = makePersisted(createSignal<Vec3Tuple>([0.3 * MOVE_BACK, 0.5, 0.6 * MOVE_BACK]), {
-    storage: sessionStorage,
-    name: 'cameraPosition',
-    serialize: (v) => JSON.stringify(v.map((v) => +v.toFixed(3)))
-  });
-  const [target, setTtarget] = makePersisted(createSignal<Vec3Tuple>([0, 0.3, 0]), {
-    storage: sessionStorage,
-    name: 'cameraTarget',
-    serialize: (v) => JSON.stringify(v.map((v) => +v.toFixed(3)))
-  });
+  const [position, setPosition] = untrack(() =>
+    makePersisted(createSignal<Vec3Tuple>([0.3 * MOVE_BACK, 0.5, 0.6 * MOVE_BACK], { ownedWrite: true }), {
+      storage: sessionStorage,
+      name: 'cameraPosition',
+      serialize: (v) => JSON.stringify(v.map((v) => +v.toFixed(3)))
+    })
+  );
+  const [target, setTtarget] = untrack(() =>
+    makePersisted(createSignal<Vec3Tuple>([0, 0.3, 0], { ownedWrite: true }), {
+      storage: sessionStorage,
+      name: 'cameraTarget',
+      serialize: (v) => JSON.stringify(v.map((v) => +v.toFixed(3)))
+    })
+  );
   const camera = (() => {
     const camera = new Camera({ fov: 35 });
-    camera.position.copy(position());
+    camera.position.copy(untrack(position));
     return camera;
   })();
-  const targetVec3 = new Vec3().copy(target());
+  const targetVec3 = new Vec3().copy(untrack(target));
   const controls = new Orbit(camera, { element: canvas as unknown as HTMLElement, target: targetVec3 });
   const scene = new Transform();
 
@@ -71,36 +75,43 @@ export default function OglSwapTexturesView() {
     gl.clearColor(1, 1, 1, 0);
     renderer.render({ scene, camera });
   });
-  start();
+  untrack(start);
 
-  const [blendMode, setBlendMode] = makePersisted(createSignal(BlendModes.NORMAL), {
-    storage: sessionStorage,
-    name: 'blendMode'
-  });
-  const [colorBlendMode, setColorBlendMode] = makePersisted(createSignal(ColorBlendModes.USING_GAMMA), {
-    storage: sessionStorage,
-    name: 'colorBlendMode'
-  });
+  const [blendMode, setBlendMode] = untrack(() =>
+    makePersisted(createSignal(BlendModes.NORMAL, { ownedWrite: true }), {
+      storage: sessionStorage,
+      name: 'blendMode'
+    })
+  );
+  const [colorBlendMode, setColorBlendMode] = untrack(() =>
+    makePersisted(createSignal(ColorBlendModes.USING_GAMMA, { ownedWrite: true }), {
+      storage: sessionStorage,
+      name: 'colorBlendMode'
+    })
+  );
   const [opacity, setOpacity] = createSignal(1.0);
   const [instancedCount, setInstancedCount] = createSignal(300);
-  const [brushColor, setBrushColor] = makePersisted(
-    createSignal<[number, number, number]>(normalizedToRgb([0.27, 0.66, 0.93])),
-    {
+  const [brushColor, setBrushColor] = untrack(() =>
+    makePersisted(createSignal<[number, number, number]>(normalizedToRgb([0.27, 0.66, 0.93]), { ownedWrite: true }), {
       storage: sessionStorage,
       name: 'brushColor'
-    }
+    })
   );
-  const [backgroundType, setBackgroundType] = makePersisted(createSignal<'color' | 'red-bricks'>('color'), {
-    storage: sessionStorage,
-    name: 'backgroundType'
-  });
-  const [backgroundColor, setBackgroundColor] = makePersisted(createSignal<[number, number, number]>([10, 30, 70]), {
-    storage: sessionStorage,
-    name: 'backgroundColor'
-  });
+  const [backgroundType, setBackgroundType] = untrack(() =>
+    makePersisted(createSignal<'color' | 'red-bricks'>('color', { ownedWrite: true }), {
+      storage: sessionStorage,
+      name: 'backgroundType'
+    })
+  );
+  const [backgroundColor, setBackgroundColor] = untrack(() =>
+    makePersisted(createSignal<[number, number, number]>([10, 30, 70], { ownedWrite: true }), {
+      storage: sessionStorage,
+      name: 'backgroundColor'
+    })
+  );
   const colorTexture = createColorTexture(gl, backgroundColor);
   const redBricks = createMemo(() => loadTextureAsync(gl, large_red_bricks_diff_1k), {
-    loadingValue: colorTexture()
+    loadingValue: untrack(colorTexture)
   });
   const background = () => {
     switch (backgroundType()) {

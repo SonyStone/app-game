@@ -1,7 +1,7 @@
 import { createBodyCursor } from '@solid-primitives/cursor';
 import type { JSX } from '@solidjs/web';
 import { createDnd, Place, reorderItems, type FlipAnimateEntry, type GapKey } from 'solid-dnd';
-import { createSignal, createStore, For, Show } from 'solid-js';
+import { createMemo, createSignal, createStore, For, Show, untrack } from 'solid-js';
 import EventLog, { createEventLogger } from '../components/EventLog';
 import { FlipDebugOverlay } from '../components/FlipDebugOverlay';
 import { OrderDisplay } from '../components/OrderDisplay';
@@ -34,7 +34,7 @@ export default function SortableOverlayDemo(): JSX.Element {
   const isGrid = () => options.layout === 'grid';
   const isHorizontal = () => options.layout === 'horizontal';
 
-  const [items, setItems] = createSignal(createDemoItems(options.itemCount));
+  const [items, setItems] = createSignal(createDemoItems(untrack(() => options.itemCount)));
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement | undefined>(undefined);
   const [flipEntries, setFlipEntries] = createSignal<ReadonlyArray<FlipAnimateEntry<string | GapKey>>>([]);
 
@@ -75,6 +75,20 @@ export default function SortableOverlayDemo(): JSX.Element {
 
     dnd.drag.flip.animate(fn, { container });
   }
+
+  const debugContext = createMemo(() =>
+    dnd.isDragging()
+      ? {
+          dragging: dnd.drag.draggedItems(),
+          place: Place.label(dnd.drag.dropPlace()),
+          pointer: dnd.drag.sensor.position(),
+          layout: dnd.detectedLayout().mode,
+          columns: dnd.detectedColumns(),
+          items: items(),
+          displayKeys: dnd.display.displayKeys()
+        }
+      : undefined
+  );
 
   return (
     <div class="flex flex-col gap-6" data-testid="sortable-overlay-demo">
@@ -200,18 +214,7 @@ export default function SortableOverlayDemo(): JSX.Element {
         isAnimating={dnd.isAnimating()}
         enabled={options.debugEnabled}
         isDragging={dnd.isDragging()}
-        debugContext={(() =>
-          dnd.isDragging()
-            ? {
-                dragging: dnd.drag.draggedItems(),
-                place: Place.label(dnd.drag.dropPlace()),
-                pointer: dnd.drag.sensor.position(),
-                layout: dnd.detectedLayout().mode,
-                columns: dnd.detectedColumns(),
-                items: items(),
-                displayKeys: dnd.display.displayKeys()
-              }
-            : undefined)()}
+        debugContext={debugContext()}
       />
 
       <OrderDisplay items={items()} columns={dnd.detectedColumns()} />

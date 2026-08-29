@@ -4,8 +4,6 @@
 // TODO: be able to pass in new camera position
 
 import { Vec2 } from '@app-game/math';
-import { makeEventListenerStack } from '@solid-primitives/event-listener';
-import { onSettled } from 'solid-js';
 import type { Camera } from '../core/camera';
 import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';
@@ -276,7 +274,7 @@ export class Orbit {
       }
     }
 
-    const [listenMouse, clearMouse] = makeEventListenerStack(window, { capture: false });
+    const [listenMouse, clearMouse] = createEventListenerStack(window, { capture: false });
 
     const onMouseDown = (e: MouseEvent) => {
       if (!this.enabled) return;
@@ -394,7 +392,7 @@ export class Orbit {
       e.preventDefault();
     };
 
-    const [listen, clear] = makeEventListenerStack(element);
+    const [listen, clear] = createEventListenerStack(element);
 
     function addHandlers() {
       listen('contextmenu', onContextMenu, false);
@@ -410,8 +408,40 @@ export class Orbit {
       clearMouse();
     };
 
-    onSettled(() => {
-      addHandlers();
-    });
+    addHandlers();
   }
+}
+
+type EventListenerTarget = Pick<EventTarget, 'addEventListener' | 'removeEventListener'>;
+type Listen = <EventType extends Event>(
+  type: string,
+  listener: (event: EventType) => void,
+  options?: boolean | AddEventListenerOptions
+) => void;
+
+/** Creates an explicitly disposable event-listener stack without depending on Solid ownership. */
+function createEventListenerStack(
+  target: EventListenerTarget,
+  defaultOptions?: boolean | AddEventListenerOptions
+): [listen: Listen, clear: () => void] {
+  const listeners: Array<{
+    type: string;
+    listener: EventListener;
+    options: boolean | AddEventListenerOptions | undefined;
+  }> = [];
+
+  const listen: Listen = (type, listener, options) => {
+    const resolvedOptions = options === undefined ? defaultOptions : options;
+    const eventListener = listener as EventListener;
+    target.addEventListener(type, eventListener, resolvedOptions);
+    listeners.push({ type, listener: eventListener, options: resolvedOptions });
+  };
+
+  const clear = () => {
+    for (const { type, listener, options } of listeners.splice(0)) {
+      target.removeEventListener(type, listener, options);
+    }
+  };
+
+  return [listen, clear];
 }

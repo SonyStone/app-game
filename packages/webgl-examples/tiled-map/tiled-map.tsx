@@ -72,36 +72,34 @@ export default function TiledMap() {
 
   onSettled(() => {
     setCameraPan([-gl.canvas.width / 2, -gl.canvas.height / 2]);
+  });
 
-    createEventListener(window, 'wheel', (event) => {
-      setZoom((prev) => prev + event.deltaY * 0.0001);
-    });
-    let isDown = false;
-    createEventListener(window, 'pointerdown', () => {
-      isDown = true;
-    });
-    createEventListener(window, 'pointerup', () => {
-      isDown = false;
-    });
-    createEventListener(window, 'pointermove', (event: PointerEvent) => {
-      if (!isDown) {
-        return;
-      }
-      if (event.altKey) {
-        setRotation((prev) => prev + event.movementX * 0.01);
-      } else {
-        setCameraPan((prev) => [prev[0] - event.movementX, prev[1] + event.movementY]);
-      }
-    });
+  createEventListener(window, 'wheel', (event) => {
+    setZoom((prev) => prev + event.deltaY * 0.0001);
+  });
+  let isDown = false;
+  createEventListener(window, 'pointerdown', () => {
+    isDown = true;
+  });
+  createEventListener(window, 'pointerup', () => {
+    isDown = false;
+  });
+  createEventListener(window, 'pointermove', (event: PointerEvent) => {
+    if (!isDown) return;
+    if (event.altKey) {
+      setRotation((prev) => prev + event.movementX * 0.01);
+    } else {
+      setCameraPan((prev) => [prev[0] - event.movementX, prev[1] + event.movementY]);
+    }
+  });
 
-    createTrackedEffect(() => {
-      m3.camera2D(zoom(), rotation(), cameraPan(), resize.width, resize.height, cameraMatrix);
-      gl.bindBuffer(gl.UNIFORM_BUFFER, camera.buffer);
-      gl.bufferSubData(gl.UNIFORM_BUFFER, 0, cameraMatrix);
-      gl.bindBuffer(gl.UNIFORM_BUFFER, null);
+  createTrackedEffect(() => {
+    m3.camera2D(zoom(), rotation(), cameraPan(), resize.width, resize.height, cameraMatrix);
+    gl.bindBuffer(gl.UNIFORM_BUFFER, camera.buffer);
+    gl.bufferSubData(gl.UNIFORM_BUFFER, 0, cameraMatrix);
+    gl.bindBuffer(gl.UNIFORM_BUFFER, null);
 
-      render();
-    });
+    render();
   });
 
   const render = () => {

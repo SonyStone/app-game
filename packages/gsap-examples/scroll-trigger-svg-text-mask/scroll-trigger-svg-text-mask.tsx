@@ -42,9 +42,9 @@ export default function ScrollTriggerSVGTextMask() {
       left: '50%',
       x: '-50%'
     });
-    const tween2 = gsap.set(scrollDist, { width: '100%', height: '200%' });
+    const tween2 = gsap.set(scrollDist, { width: '100%', height: '200vh' });
 
-    gsap
+    const timeline = gsap
       .timeline({ scrollTrigger: { trigger: scrollDist, start: 'top top', end: 'bottom bottom', scrub: 1 } })
       .fromTo('.sky', { y: 0 }, { y: -200 }, 0)
       .fromTo('.cloud1', { y: 100 }, { y: -800 }, 0)
@@ -70,6 +70,8 @@ export default function ScrollTriggerSVGTextMask() {
     arrowBtn.addEventListener('click', clickHandler);
 
     return () => {
+      timeline.scrollTrigger?.kill();
+      timeline.kill();
       tween1.revert();
       tween2.revert();
       arrowBtn.removeEventListener('mouseenter', mouseenterHandler);

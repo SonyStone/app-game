@@ -20,7 +20,7 @@ export function createDockViewContext(props: DockViewProps) {
   const element = document.createElement('div');
   useSyncDOMAttrs(element, props, dockViewPropKeys);
 
-  const [extraRenders, updateExtraRenders] = createSignal<Accessor<JSXElement>[]>([]);
+  const [extraRenders, updateExtraRenders] = createSignal<Accessor<JSXElement>[]>([], { ownedWrite: true });
   const addExtraRender = (render: Accessor<JSXElement>) => {
     updateExtraRenders((x) => x.concat(render));
     return () => {
@@ -48,22 +48,32 @@ export function createDockViewContext(props: DockViewProps) {
 
   // add event listeners
   dockviewEventNames.forEach((eventName) => {
+    let disposable: { dispose(): void } | undefined;
+
     watch(
       () => props[eventName],
       (listener: any) => {
+        disposable?.dispose();
+        disposable = undefined;
+
         if (typeof listener !== 'function') return;
 
-        const disposable = dockview[eventName](listener);
-        onCleanup(() => disposable.dispose());
+        disposable = dockview[eventName](listener);
       }
     );
+
+    onCleanup(() => disposable?.dispose());
   });
 
   const setPanelOpenStatus = keyedDebounce(
     (panel: DockviewPanel, isOpen: boolean) => (panelStateLUT.get(panel)!.isOpen = isOpen)
   );
-  dockview.onDidAddPanel((panel) => setPanelOpenStatus(panel as DockviewPanel, true));
-  dockview.onDidRemovePanel((panel) => setPanelOpenStatus(panel as DockviewPanel, false));
+  const addPanelDisposable = dockview.onDidAddPanel((panel) => setPanelOpenStatus(panel as DockviewPanel, true));
+  const removePanelDisposable = dockview.onDidRemovePanel((panel) => setPanelOpenStatus(panel as DockviewPanel, false));
+  onCleanup(() => {
+    addPanelDisposable.dispose();
+    removePanelDisposable.dispose();
+  });
 
   return {
     element,

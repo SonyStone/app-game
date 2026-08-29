@@ -155,7 +155,9 @@ export default function GpuTextRendering() {
         {canvas}
       </div>
       <div id="toolbar" class={s.toolbar}>
-        <a href="/post/war-and-peace-and-webgl/">Resolution independent GPU text rendering</a>
+        <a href="https://wdobbie.com/post/war-and-peace-and-webgl/" target="_blank" rel="noreferrer">
+          Resolution independent GPU text rendering
+        </a>
         <br />
         Drag to pan, right mouse (or alt) drag to zoom
         <label>

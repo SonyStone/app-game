@@ -113,12 +113,14 @@ export function createTreeView<T>(props: {
 
   function createItemController(id: string, initialItem: T): TreeItemController<T> {
     let currentItem = initialItem;
-    const [itemVersion, setItemVersion] = createSignal(0);
+    const [itemVersion, setItemVersion] = createSignal(0, { ownedWrite: true });
     const [layout, setLayout] = createSignal<TreeItemLayout>(EMPTY_TREE_ITEM_LAYOUT, {
-      equals: equalTreeItemLayout
+      equals: equalTreeItemLayout,
+      ownedWrite: true
     });
     const [childViews, setChildViews] = createSignal<readonly TreeViewItem<T>[]>([], {
-      equals: equalItemArrays
+      equals: equalItemArrays,
+      ownedWrite: true
     });
 
     const view: TreeViewItem<T> = {

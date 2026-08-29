@@ -1,6 +1,6 @@
 import { Renderer } from '@app-game/ogl';
 import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
-import { For, onCleanup, onSettled } from 'solid-js';
+import { For, onCleanup } from 'solid-js';
 import { createSquareMesh } from '../brush-example/square/create-square-mesh';
 import OffscreenCanvasWorker from './offscreen-canvas.worker?worker';
 
@@ -21,15 +21,11 @@ export default function OffscreenCanvasSupportCheck() {
       description: 'webgl2 transferControlToOffscreen',
       canvas: (() => {
         const canvasEl = (<canvas class="h-50px w-50px touch-none" height={50} width={50} />) as HTMLCanvasElement;
-        // should be mounted before use
-        onSettled(() => {
-          // takes some time to render
-          const canvas = canvasEl.transferControlToOffscreen();
-          const renderer = new Renderer({ dpr: 2, canvas, height: 50, width: 50 });
-          const gl = renderer.gl;
-          const mesh = createSquareMesh({ gl, texture: createTexture4colors(gl) });
-          renderer.render({ scene: mesh });
-        });
+        const canvas = canvasEl.transferControlToOffscreen();
+        const renderer = new Renderer({ dpr: 2, canvas, height: 50, width: 50 });
+        const gl = renderer.gl;
+        const mesh = createSquareMesh({ gl, texture: createTexture4colors(gl) });
+        renderer.render({ scene: mesh });
         return canvasEl;
       })()
     },
@@ -39,12 +35,8 @@ export default function OffscreenCanvasSupportCheck() {
         const worker = new OffscreenCanvasWorker();
         const canvasEl = (<canvas class="h-50px w-50px touch-none" height={50} width={50} />) as HTMLCanvasElement;
 
-        onSettled(() => {
-          // should be mounted before use
-          const canvas = canvasEl.transferControlToOffscreen();
-          // takes way more time to render
-          worker.postMessage({ canvas }, [canvas]);
-        });
+        const canvas = canvasEl.transferControlToOffscreen();
+        worker.postMessage({ canvas }, [canvas]);
 
         onCleanup(() => {
           worker.terminate();

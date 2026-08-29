@@ -60,9 +60,9 @@ export function FlipDebugOverlay(props: {
 
   // Clear element trails on new drag session
   createEffect(
-    () => props.isDragging,
-    (dragging) => {
-      if (dragging && props.enabled) {
+    () => [props.isDragging, props.enabled] as const,
+    ([dragging, enabled]) => {
+      if (dragging && enabled) {
         clearTrails();
       }
     }

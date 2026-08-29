@@ -1,6 +1,4 @@
-import { createEventListener } from '@solid-primitives/event-listener';
-import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { createSignal, createTrackedEffect, onSettled } from 'solid-js';
+import { createEffect, createSignal, onSettled } from 'solid-js';
 import { AppWebGL, greet } from './wasm_bindgen/pkg/wasm_bindgen_example';
 
 export default function WasmBindgen() {
@@ -8,36 +6,38 @@ export default function WasmBindgen() {
 
   const [App, setApp] = createSignal<AppWebGL | null>(null);
 
-  createTrackedEffect(() => {
-    const app = App();
-    if (app) {
-      app.render();
+  createEffect(App, (app) => {
+    if (!app) return;
 
-      canvas.width = canvas.clientWidth;
-      canvas.height = canvas.clientHeight;
+    app.render();
 
-      createResizeObserver(canvas as unknown as Element, ({ width, height }) => app.resize(width, height));
-      createEventListener(canvas as unknown as EventTarget, 'pointerdown', (event) =>
-        app.on_pointer_down(event as PointerEvent)
-      );
-      createEventListener(canvas as unknown as EventTarget, 'pointerenter', (event) =>
-        app.on_pointer_enter(event as PointerEvent)
-      );
-      createEventListener(canvas as unknown as EventTarget, 'pointerleave', (event) =>
-        app.on_pointer_leave(event as PointerEvent)
-      );
-      createEventListener(canvas as unknown as EventTarget, 'pointermove', (event) =>
-        app.on_pointer_move(event as PointerEvent)
-      );
-      createEventListener(canvas as unknown as EventTarget, 'pointerup', (event) =>
-        app.on_pointer_up(event as PointerEvent)
-      );
-      createEventListener(canvas as unknown as EventTarget, 'wheel', (event) => {
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+
+    const resizeObserver = new ResizeObserver(([entry]) => {
+      if (entry) app.resize(entry.contentRect.width, entry.contentRect.height);
+    });
+    resizeObserver.observe(canvas);
+
+    const listeners = {
+      pointerdown: (event: Event) => app.on_pointer_down(event as PointerEvent),
+      pointerenter: (event: Event) => app.on_pointer_enter(event as PointerEvent),
+      pointerleave: (event: Event) => app.on_pointer_leave(event as PointerEvent),
+      pointermove: (event: Event) => app.on_pointer_move(event as PointerEvent),
+      pointerup: (event: Event) => app.on_pointer_up(event as PointerEvent),
+      wheel: (event: Event) => {
         app.on_wheel(event as WheelEvent);
         event.preventDefault();
-      });
-      app.init();
-    }
+      }
+    } satisfies Record<string, EventListener>;
+
+    for (const [type, listener] of Object.entries(listeners)) canvas.addEventListener(type, listener);
+    app.init();
+
+    return () => {
+      resizeObserver.disconnect();
+      for (const [type, listener] of Object.entries(listeners)) canvas.removeEventListener(type, listener);
+    };
   });
 
   onSettled(() => {

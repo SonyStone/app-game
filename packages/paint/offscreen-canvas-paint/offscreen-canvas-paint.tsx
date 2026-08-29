@@ -12,44 +12,40 @@ export default function OffscreenCanvasPaint() {
   const pointerEvents = createPointerEvents();
   const pointerTarget = canvas as unknown as HTMLElement;
 
+  makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
+    const events = e.getCoalescedEvents();
+    if (events.length === 0) events.push(e);
+    for (const event of events) {
+      worker.postMessage({
+        type: 'pointermove',
+        event: {
+          pressure: event.pressure,
+          buttons: event.buttons,
+          x: event.clientX,
+          y: event.clientY
+        }
+      });
+    }
+  });
+
+  makeEventListener(pointerTarget, 'pointerup', (event: PointerEvent) => {
+    worker.postMessage({
+      type: 'pointerup',
+      event: {
+        pressure: event.pressure,
+        buttons: event.buttons,
+        x: event.clientX,
+        y: event.clientY
+      }
+    });
+  });
+
   onSettled(() => {
     void (async () => {
       // should be mounted before use
       const offscreenCanvas = canvas.transferControlToOffscreen();
       // takes way more time to render
       worker.postMessage({ canvas: offscreenCanvas, type: 'canvas' }, [offscreenCanvas]);
-
-      onSettled(() => {
-        makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
-          const events = e.getCoalescedEvents();
-          if (events.length === 0) {
-            events.push(e);
-          }
-          for (const event of events) {
-            worker.postMessage({
-              type: 'pointermove',
-              event: {
-                pressure: event.pressure,
-                buttons: event.buttons,
-                x: event.clientX,
-                y: event.clientY
-              }
-            });
-          }
-        });
-
-        makeEventListener(pointerTarget, 'pointerup', (event: PointerEvent) => {
-          worker.postMessage({
-            type: 'pointerup',
-            event: {
-              pressure: event.pressure,
-              buttons: event.buttons,
-              x: event.clientX,
-              y: event.clientY
-            }
-          });
-        });
-      });
 
       await pointerEvents.apply(canvas as unknown as Element);
     })();

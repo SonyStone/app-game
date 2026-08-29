@@ -1,4 +1,4 @@
-import { useLocation } from '@solidjs/router';
+import { useHref, useLocation, useResolvedPath } from '@solidjs/router';
 import type { JSX } from '@solidjs/web';
 import { createSignal, For, Show } from 'solid-js';
 import { navSections } from '../nav';
@@ -50,14 +50,17 @@ function SidebarContent(props: { onNavigate?: () => void }): JSX.Element {
 
 function NavLink(props: { href: string; label: string; onNavigate?: () => void }): JSX.Element {
   const location = useLocation();
+  const resolvedPath = useResolvedPath(() => props.href);
+  const href = useHref(resolvedPath);
   const isActive = () => {
-    if (props.href === '/') return location.pathname === '/' || location.pathname === '/sensor';
-    return location.pathname === props.href;
+    const path = resolvedPath();
+    if (!path) return false;
+    return location.pathname === path || (props.href === '' && location.pathname === `${path}/sensor`);
   };
 
   return (
     <a
-      href={props.href}
+      href={href()}
       onClick={() => props.onNavigate?.()}
       class={`flex items-center rounded-md px-2 py-1.5 text-xs transition-colors ${
         isActive()

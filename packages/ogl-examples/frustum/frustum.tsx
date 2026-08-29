@@ -13,7 +13,7 @@ import {
 import { EyeSpaceFrustum } from '@app-game/ogl/extras/eye-space-frustum';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createTrackedEffect } from 'solid-js';
+import { createTrackedEffect, untrack } from 'solid-js';
 
 export default function Frustum() {
   const canvas = (<canvas />) as HTMLCanvasElement;
@@ -109,7 +109,7 @@ export default function Frustum() {
   console.log(`camera`, frustum.camera);
 
   const [running, start, stop] = createRAF(update);
-  start();
+  untrack(start);
 
   return canvas;
 }

@@ -1,9 +1,8 @@
 import { Camera, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import { toRadian } from '@app-game/ogl/extras/path/utils';
-import { createSkipper } from '@app-game/tanki/create-skipper';
 import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import createRAF from '@solid-primitives/raf';
-import { createStore, createTrackedEffect, For, storePath } from 'solid-js';
+import { createStore, createTrackedEffect, For, onCleanup, storePath, untrack } from 'solid-js';
 
 import { NormalBox } from './camera-projection-webgl2/normal-box.component';
 import { GridHelperComponent } from './grid-helper.component';
@@ -32,15 +31,15 @@ export default function AffineTransformations3D() {
       camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
     });
 
-    const skipper = createSkipper(100);
     function update(t: number) {
       controls.update();
       renderer.render({ scene, camera });
       // console.log(`camera 3d`, scene, camera);
     }
 
-    const [running, start, stop] = createRAF(update);
-    start();
+    const [, start, stop] = createRAF(update);
+    untrack(start);
+    onCleanup(stop);
 
     return { canvas, gl, scene };
   })();

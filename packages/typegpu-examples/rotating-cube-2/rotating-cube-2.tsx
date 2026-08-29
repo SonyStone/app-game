@@ -1,11 +1,27 @@
 import { Meta, Title } from '@solidjs/meta';
 import { onCleanup } from 'solid-js';
-import * as d from 'typegpu/data';
 import { mat4, vec3 } from 'wgpu-matrix';
-import { TypeGPUProvider, useTypeGPU } from '../utils/TypeGPU';
 import shaderSrc from './rotating-cube-2.wgsl?raw';
 
 export default function RotatingCube2() {
+  let disposed = false;
+  let disposeRenderer: (() => void) | undefined;
+
+  onCleanup(() => {
+    disposed = true;
+    disposeRenderer?.();
+  });
+
+  function initialize(canvas: HTMLCanvasElement) {
+    void createRotatingCube(canvas).then((dispose) => {
+      if (disposed) {
+        dispose?.();
+      } else {
+        disposeRenderer = dispose;
+      }
+    });
+  }
+
   return (
     <>
       <Title>Rotating Cube 2</Title>
@@ -16,9 +32,7 @@ export default function RotatingCube2() {
       <div id="fail">
         <div class="content"></div>
       </div>
-      <TypeGPUProvider class="max-w-600px aspect-square w-full">
-        <App />
-      </TypeGPUProvider>
+      <canvas ref={initialize} class="max-w-600px aspect-square w-full" />
     </>
   );
 }
@@ -62,110 +76,8 @@ const POSITIONS = new Float32Array([
    -1, -1, -1
   ]);
 
-const POSITIONS_2 = [
-  d.vec3f(1, 1, -1),
-  d.vec3f(1, 1, 1),
-  d.vec3f(1, -1, 1),
-  d.vec3f(1, -1, -1),
-  d.vec3f(-1, 1, 1),
-  d.vec3f(-1, 1, -1),
-  d.vec3f(-1, -1, -1),
-  d.vec3f(-1, -1, 1),
-  d.vec3f(-1, 1, 1),
-  d.vec3f(1, 1, 1),
-  d.vec3f(1, 1, -1),
-  d.vec3f(-1, 1, -1),
-  d.vec3f(-1, -1, -1),
-  d.vec3f(1, -1, -1),
-  d.vec3f(1, -1, 1),
-  d.vec3f(-1, -1, 1),
-  d.vec3f(1, 1, 1),
-  d.vec3f(-1, 1, 1),
-  d.vec3f(-1, -1, 1),
-  d.vec3f(1, -1, 1),
-  d.vec3f(-1, 1, -1),
-  d.vec3f(1, 1, -1),
-  d.vec3f(1, -1, -1),
-  d.vec3f(-1, -1, -1)
-];
-
-const NORMALS = [
-  d.vec3f(1, 0, 0),
-  d.vec3f(1, 0, 0),
-  d.vec3f(1, 0, 0),
-  d.vec3f(1, 0, 0),
-  d.vec3f(-1, 0, 0),
-  d.vec3f(-1, 0, 0),
-  d.vec3f(-1, 0, 0),
-  d.vec3f(-1, 0, 0),
-  d.vec3f(0, 1, 0),
-  d.vec3f(0, 1, 0),
-  d.vec3f(0, 1, 0),
-  d.vec3f(0, 1, 0),
-  d.vec3f(0, -1, 0),
-  d.vec3f(0, -1, 0),
-  d.vec3f(0, -1, 0),
-  d.vec3f(0, -1, 0),
-  d.vec3f(0, 0, 1),
-  d.vec3f(0, 0, 1),
-  d.vec3f(0, 0, 1),
-  d.vec3f(0, 0, 1),
-  d.vec3f(0, 0, -1),
-  d.vec3f(0, 0, -1),
-  d.vec3f(0, 0, -1),
-  d.vec3f(0, 0, -1)
-];
-
-const TEXCOORDS = [
-  d.vec2f(1, 0),
-  d.vec2f(0, 0),
-  d.vec2f(0, 1),
-  d.vec2f(1, 1),
-  d.vec2f(1, 0),
-  d.vec2f(0, 0),
-  d.vec2f(0, 1),
-  d.vec2f(1, 1),
-  d.vec2f(1, 0),
-  d.vec2f(0, 0),
-  d.vec2f(0, 1),
-  d.vec2f(1, 1),
-  d.vec2f(1, 0),
-  d.vec2f(1, 1),
-  d.vec2f(1, 0),
-  d.vec2f(0, 0),
-  d.vec2f(0, 1),
-  d.vec2f(1, 1),
-  d.vec2f(1, 0),
-  d.vec2f(0, 0),
-  d.vec2f(0, 1),
-  d.vec2f(1, 1),
-  d.vec2f(1, 0),
-  d.vec2f(0, 0),
-  d.vec2f(0, 1),
-  d.vec2f(1, 1)
-];
-
-const INDEXES = [
-  0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15, 16, 17, 18, 16, 18, 19, 20, 21, 22,
-  20, 22, 23
-];
-
-function App() {
-  const { root } = useTypeGPU();
-
-  const PositionSchema = d.vec3f;
-  const NormalSchema = d.vec3f;
-  const TexcoordSchema = d.vec2f;
-
-  const positionBuffer = root.createBuffer(d.arrayOf(PositionSchema, 24), POSITIONS_2).$usage('vertex');
-  const normalBuffer = root.createBuffer(d.arrayOf(NormalSchema, 24), NORMALS).$usage('vertex');
-  const texcoordBuffer = root.createBuffer(d.arrayOf(TexcoordSchema, 24), TEXCOORDS).$usage('vertex');
-  const indexBuffer = root.createBuffer(d.arrayOf(d.u16, 36), INDEXES).$usage('index');
-
-  return null;
-}
-
-async function main(canvas: HTMLCanvasElement) {
+/** Starts the legacy WGSL cube renderer and returns its resource cleanup. */
+async function createRotatingCube(canvas: HTMLCanvasElement): Promise<(() => void) | undefined> {
   const adapter = await navigator.gpu?.requestAdapter();
   const device = await adapter?.requestDevice();
   if (!device) {
@@ -175,7 +87,7 @@ async function main(canvas: HTMLCanvasElement) {
 
   const context = canvas.getContext('webgpu')!;
 
-  const presentationFormat = (navigator.gpu!.getPreferredCanvasFormat as any)(adapter);
+  const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
   context.configure({
     device,
     format: presentationFormat
@@ -193,14 +105,18 @@ async function main(canvas: HTMLCanvasElement) {
     sampleCount: 4 // can be 1 or 4
   };
 
-  function createBuffer(device: GPUDevice, data: Float32Array | Uint16Array, usage: number) {
+  function createBuffer(device: GPUDevice, data: Float32Array | Uint16Array, usage: GPUBufferUsageFlags) {
     const buffer = device.createBuffer({
       size: data.byteLength,
       usage,
       mappedAtCreation: true
     });
-    const dst = new (data as any).constructor(buffer.getMappedRange());
-    dst.set(data);
+    const mappedRange = buffer.getMappedRange();
+    if (data instanceof Float32Array) {
+      new Float32Array(mappedRange).set(data);
+    } else {
+      new Uint16Array(mappedRange).set(data);
+    }
     buffer.unmap();
     return buffer;
   }
@@ -442,7 +358,9 @@ async function main(canvas: HTMLCanvasElement) {
     device.queue.writeBuffer(vsUniformBuffer, 0, vsUniformValues);
     device.queue.writeBuffer(fsUniformBuffer, 0, fsUniformValues);
 
-    const colorAttachments = renderPassDescriptor.colorAttachments as Array<GPURenderPassColorAttachment | null | undefined>;
+    const colorAttachments = renderPassDescriptor.colorAttachments as Array<
+      GPURenderPassColorAttachment | null | undefined
+    >;
 
     if (canvasInfo.sampleCount === 1) {
       const colorTexture = context.getCurrentTexture();
@@ -469,15 +387,26 @@ async function main(canvas: HTMLCanvasElement) {
   }
   animationFrameId = requestAnimationFrame(render);
 
-  onCleanup(() => {
+  return () => {
+    canvasInfo.renderTarget?.destroy();
+    canvasInfo.depthTexture?.destroy();
+    positionBuffer.destroy();
+    normalBuffer.destroy();
+    texcoordBuffer.destroy();
+    indicesBuffer.destroy();
+    vsUniformBuffer.destroy();
+    fsUniformBuffer.destroy();
+    tex.destroy();
     device.destroy();
     cancelAnimationFrame(animationFrameId);
-  });
+  };
 }
 
 function fail(msg: string) {
-  const elem = document.querySelector('#fail')! as HTMLDivElement;
-  const contentElem = elem.querySelector('.content')!;
+  const elem = document.querySelector<HTMLDivElement>('#fail');
+  const contentElem = elem?.querySelector<HTMLElement>('.content');
+  if (!elem || !contentElem) return;
+
   elem.style.display = '';
   contentElem.textContent = msg;
 }

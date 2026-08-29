@@ -1,6 +1,7 @@
 import { Container, Graphics, RenderLayer, Text } from '@app-game/solid-pixi';
 import { ContainerOptions, Container as _Container } from 'pixi.js';
-import { createTrackedEffect, onCleanup } from 'solid-js';
+import type { Accessor } from 'solid-js';
+import { createSignal, createTrackedEffect, onCleanup } from 'solid-js';
 
 export function CharacterUI(
   props: Partial<{ name: string; layer: ReturnType<typeof RenderLayer> }> & ContainerOptions
@@ -9,14 +10,11 @@ export function CharacterUI(
   const label = (
     <Text text={props.name} resolution={2} style={{ fontSize: 16, fill: 0x000000 }} anchor={0.5} />
   ) as ReturnType<typeof Text>;
+  const [container, setContainer] = createSignal<_Container | undefined>(undefined, { ownedWrite: true });
+  useAttachToRenderLayer(container, () => props.layer);
 
   return (
-    <Container
-      ref={(ref) => {
-        useAttachToRenderLayer(ref, { layer: props.layer });
-      }}
-      {...props}
-    >
+    <Container ref={setContainer} {...props}>
       <Graphics
         ref={(bg) => {
           bg.roundRect(
@@ -33,12 +31,35 @@ export function CharacterUI(
   );
 }
 
-function useAttachToRenderLayer(container: _Container, props: { layer?: ReturnType<typeof RenderLayer> }) {
+function useAttachToRenderLayer(
+  container: Accessor<_Container | undefined>,
+  layer: Accessor<ReturnType<typeof RenderLayer> | undefined>
+) {
+  let attachedLayer: ReturnType<typeof RenderLayer> | undefined;
+  let attachedContainer: _Container | undefined;
+
   createTrackedEffect(() => {
-    props.layer?.attach(container);
+    const nextContainer = container();
+    const nextLayer = layer();
+
+    if (nextContainer === attachedContainer && nextLayer === attachedLayer) {
+      return;
+    }
+
+    if (attachedLayer && attachedContainer) {
+      attachedLayer.detach(attachedContainer);
+    }
+
+    attachedContainer = nextContainer;
+    attachedLayer = nextLayer;
+    if (nextLayer && nextContainer) {
+      nextLayer.attach(nextContainer);
+    }
   });
 
   onCleanup(() => {
-    props.layer?.detach(container);
+    if (attachedLayer && attachedContainer) {
+      attachedLayer.detach(attachedContainer);
+    }
   });
 }

@@ -2,7 +2,7 @@ import { FVec3, m4 } from '@app-game/math';
 import { DEG_TO_RAD } from '@app-game/math/constants';
 import { Spherical, setFromSpherical } from '@app-game/math/spherical';
 import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@app-game/webgl/static-variables';
-import { Accessor, Setter, createTrackedEffect, onSettled } from 'solid-js';
+import { Accessor, Setter, createTrackedEffect, onCleanup, onSettled, untrack } from 'solid-js';
 
 import createRAF from '@solid-primitives/raf';
 import { createMouseRotate } from './create-mouse-rotate';
@@ -40,10 +40,9 @@ export interface Context {
 export function Main(prop: { ctx: Context }) {
   let id: number;
 
-  window.dispatchEvent(new Event('resize'));
   const ctx = prop.ctx;
   const gl = ctx.gl;
-  const camera = ctx.camera();
+  const camera = untrack(ctx.camera);
 
   const box = [
     0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5, -0.5, -0.5, -0.5, -0.5, 0.5,
@@ -124,12 +123,8 @@ export function Main(prop: { ctx: Context }) {
 
   const element = ctx.canvas as unknown as HTMLElement;
 
-  const { radius, setRadius } = createMouseWheelZoom(element);
-  const { theta, setTheta, phi, setPhi } = createMouseRotate(element);
-
-  setRadius(camera.spherical.radius);
-  setPhi(camera.spherical.phi);
-  setTheta(camera.spherical.theta);
+  const { radius } = createMouseWheelZoom(element, camera.spherical.radius);
+  const { theta, phi } = createMouseRotate(element, camera.spherical.theta, camera.spherical.phi);
 
   createTrackedEffect(() => {
     camera.spherical.radius = radius();
@@ -139,53 +134,58 @@ export function Main(prop: { ctx: Context }) {
   });
 
   const up = FVec3.create(0, 1, 0);
+  let shaderImage: Awaited<ReturnType<typeof createImage>> | undefined;
+
+  function render(context: Context) {
+    if (!shaderImage) {
+      return;
+    }
+
+    const gl = context.gl;
+
+    gl.clearColor(0.0, 0.0, 0.0, 1);
+    gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT);
+
+    updateViewportSize(ctx);
+    gl.viewport(0, 0, ctx.viewportWidth, ctx.viewportHeight);
+
+    shader.camera.set(updateCamera(ctx.transition()));
+
+    drawPoints(gl, shader, room, [0.3, 0.3, 0.3]);
+    drawPoints(gl, shader, roomDoor, [0.7, 0.7, 0.7]);
+    drawPoints(gl, shader, balconyDoor, [0.7, 0.7, 0.7]);
+
+    shelves.forEach((shelf) => drawPoints(gl, shader, shelf, [0.3, 0.8, 0.8]));
+
+    rails.forEach((rail) => drawPoints(gl, shader, rail, [0.8, 0.3, 0.8]));
+
+    drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
+    shaderImage.bind();
+    shader.camera.set(updateCamera(ctx.transition() / 2));
+    drawPoints(gl, shader, washingMashine, [0.6, 0.1, 0.1]);
+
+    drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
+    shader.camera.set(updateCamera(0));
+    drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
+
+    gl.flush();
+  }
+
+  function handleRaf(time: number) {
+    ctx.renderDeltaTime = (time - ctx.renderTime) * 0.001;
+    ctx.renderTime = time;
+
+    render(ctx);
+    ctx.setCamera(camera);
+  }
+
+  const [, start, stop] = createRAF(handleRaf);
+  onCleanup(stop);
 
   onSettled(() => {
     void (async () => {
-      const shaderImage = await createImage(gl);
-      // await new Promise((res) => setTimeout(() => res(0), 1000));
-
-      function render(context: Context) {
-        const gl = context.gl;
-
-        gl.clearColor(0.0, 0.0, 0.0, 1);
-        gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT);
-
-        updateViewportSize(ctx);
-        gl.viewport(0, 0, ctx.viewportWidth, ctx.viewportHeight);
-
-        shader.camera.set(updateCamera(ctx.transition()));
-
-        drawPoints(gl, shader, room, [0.3, 0.3, 0.3]);
-        drawPoints(gl, shader, roomDoor, [0.7, 0.7, 0.7]);
-        drawPoints(gl, shader, balconyDoor, [0.7, 0.7, 0.7]);
-
-        shelves.forEach((shelf) => drawPoints(gl, shader, shelf, [0.3, 0.8, 0.8]));
-
-        rails.forEach((rail) => drawPoints(gl, shader, rail, [0.8, 0.3, 0.8]));
-
-        drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
-        shaderImage.bind();
-        shader.camera.set(updateCamera(ctx.transition() / 2));
-        drawPoints(gl, shader, washingMashine, [0.6, 0.1, 0.1]);
-
-        drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
-        shader.camera.set(updateCamera(0));
-        drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
-
-        gl.flush();
-      }
-
-      function handleRaf(time: number) {
-        ctx.renderTime = time;
-        ctx.renderDeltaTime = (time - ctx.renderTime) * 0.001;
-
-        render(ctx);
-        ctx.setCamera(camera);
-      }
-
-      const [running, start, stop] = createRAF(handleRaf);
-      start();
+      shaderImage = await createImage(gl);
+      untrack(start);
     })();
   });
 

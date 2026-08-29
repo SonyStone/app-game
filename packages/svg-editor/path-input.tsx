@@ -1,5 +1,5 @@
 import { trackStore } from '@solid-primitives/deep';
-import { createStore, createTrackedEffect, For, type Element as JSXElement, Match, Switch, untrack } from 'solid-js';
+import { createEffect, createStore, For, type Element as JSXElement, Match, Switch, untrack } from 'solid-js';
 import { PathCommand, SVGPathParser } from './svg-path-parser';
 
 type MoveCommand = Extract<PathCommand, { type: 'M' | 'm' }>;
@@ -9,14 +9,22 @@ type VerticalCommand = Extract<PathCommand, { type: 'V' | 'v' }>;
 export function PathInput(props: { value: string; onChange: (value: string) => void }) {
   const [state, setState] = createStore<PathCommand[]>([]);
 
-  createTrackedEffect(() => {
-    setState(() => SVGPathParser.parse(props.value));
-  });
+  createEffect(
+    () => props.value,
+    (value) => {
+      setState(() => SVGPathParser.parse(value));
+    }
+  );
 
-  createTrackedEffect(() => {
-    trackStore(state);
-    props.onChange(SVGPathParser.serialize(state));
-  });
+  createEffect(
+    () => {
+      trackStore(state);
+      return SVGPathParser.serialize(state);
+    },
+    (value) => {
+      props.onChange(value);
+    }
+  );
 
   function NumberInput(props: { value: number; onChange: (value: number) => void }) {
     return (

@@ -28,11 +28,10 @@ export function createGapState(_options?: {}) {
   const [height, setHeight] = createSignal(0);
   const [width, setWidth] = createSignal(0);
 
+  onCleanup(() => setElement(undefined));
+
   function setRef(nextElement: HTMLElement): void {
     setElement(nextElement);
-    onCleanup(() => {
-      setElement((current) => (current === nextElement ? undefined : current));
-    });
   }
 
   function setSizeFromElement(source: Pick<HTMLElement, 'getBoundingClientRect'>): void {

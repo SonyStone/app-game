@@ -6,7 +6,7 @@ import { createWindowSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { Container as _Container, Graphics as _Graphics, Sprite as _Sprite, Color, Point, Ticker } from 'pixi.js';
 import 'pixi.js/math-extras';
-import { createStore, createTrackedEffect, onCleanup, onSettled, storePath } from 'solid-js';
+import { createStore, createTrackedEffect, onCleanup, onSettled, storePath, untrack } from 'solid-js';
 import bunnyUrl from './bunny.png?url';
 import { Collider } from './Collider';
 import { RigidBody as _RigidBody, Rapier2D, useRapier2D } from './Rapier2D';
@@ -16,7 +16,7 @@ import { useWorld, World } from './World';
 
 export default function TankiPage() {
   const size = createWindowSize();
-  const canvas = (<canvas class="touch-none" width={size.width} height={size.height} />) as HTMLCanvasElement;
+  const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
 
   return (
     <>
@@ -44,11 +44,14 @@ function App() {
 
   let wakeLockSentinel: WakeLockSentinel | null = null;
   onSettled(() => {
-    createTrackedEffect(() => {
-      void (async () => {
-        wakeLockSentinel = await navigator.wakeLock.request('screen');
-      })();
-    });
+    void navigator.wakeLock
+      .request('screen')
+      .then((sentinel) => {
+        wakeLockSentinel = sentinel;
+      })
+      .catch(() => {
+        wakeLockSentinel = null;
+      });
   });
   onCleanup(() => {
     console.log('Releasing wake lock');
@@ -71,9 +74,7 @@ function App() {
     const { alpha, beta, gamma } = event;
     if (alpha === null || beta === null || gamma === null) return;
     setDevicemotion(storePath('orientation', { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 }));
-    const gravity = new Point(devicemotion.orientation.gamma, devicemotion.orientation.beta)
-      .normalize()
-      .multiplyScalar(9.81);
+    const gravity = new Point(gamma, beta).normalize().multiplyScalar(9.81);
     setDevicemotion(storePath('gravity', { x: gravity.x, y: -gravity.y }));
     world.gravity = { x: gravity.x, y: -gravity.y };
     // world.gravity = { x: 0, y: 0 };
@@ -81,6 +82,7 @@ function App() {
 
   const [debugRender, debugRenderUpdate] = createDebugRender();
   const [texture] = useAsset(bunnyUrl);
+  const bunnyTexture = untrack(texture);
 
   // Create the world bounds
   {
@@ -118,7 +120,7 @@ function App() {
   ].map((pos) => {
     const bunny = (
       <Sprite
-        texture={texture()}
+        texture={bunnyTexture}
         anchor={{ x: 0.5, y: 0.5 }}
         scale={{ x: 0.1, y: 0.1 }}
         position={{ x: pos.x, y: pos.y }}
@@ -130,7 +132,7 @@ function App() {
     return { bunny, rigidBody };
   });
 
-  addEventListener('devicemotion', (event) => {
+  createEventListener(window, 'devicemotion', (event) => {
     if (!event) return;
     const { x, y } = event.acceleration ?? { x: 0, y: 0 };
     const { alpha, beta, gamma } = event.rotationRate ?? { alpha: 0, beta: 0, gamma: 0 };
@@ -151,9 +153,11 @@ function App() {
     }
   });
 
+  let sceneContainer!: _Container;
+  let motionGraphics!: _Graphics;
   const stage = (
     <Container>
-      <Container scale={{ x: 20, y: 20 }} position={{ x: size.width / 2, y: size.height / 2 }}>
+      <Container ref={(container) => (sceneContainer = container)} scale={{ x: 20, y: 20 }}>
         {bunnies.map(({ bunny }) => bunny)}
         {debugRender}
         <Graphics
@@ -171,70 +175,76 @@ function App() {
         />
         <Graphics
           ref={(graphics) => {
-            // acceleration
-            graphics.clear();
-            graphics
-              .setStrokeStyle({
-                width: 0.5,
-                color: 0x0000ff
-              })
-              .moveTo(0, 0)
-              .lineTo(-devicemotion.acceleration.x, devicemotion.acceleration.y)
-              .stroke();
-
-            // rotationRate
-            graphics
-              .setStrokeStyle({
-                width: 0.5,
-                color: 0x00ffff
-              })
-              .moveTo(0, 0)
-              .lineTo(-devicemotion.rotationRate.alpha, 0)
-              .stroke();
-
-            // gravity
-            graphics
-              .setStrokeStyle({
-                width: 0.5,
-                color: 0xffff00
-              })
-              .moveTo(0, 0)
-              .lineTo(devicemotion.gravity.x, -devicemotion.gravity.y)
-              .stroke();
+            motionGraphics = graphics;
           }}
         />
       </Container>
     </Container>
   ) as _Container & JSX.Element;
 
+  createTrackedEffect(() => {
+    sceneContainer.position.set(size.width / 2, size.height / 2);
+
+    const acceleration = { ...devicemotion.acceleration };
+    const rotationRate = { ...devicemotion.rotationRate };
+    const gravity = { ...devicemotion.gravity };
+
+    motionGraphics.clear();
+    motionGraphics
+      .setStrokeStyle({
+        width: 0.5,
+        color: 0x0000ff
+      })
+      .moveTo(0, 0)
+      .lineTo(-acceleration.x, acceleration.y)
+      .stroke();
+
+    motionGraphics
+      .setStrokeStyle({
+        width: 0.5,
+        color: 0x00ffff
+      })
+      .moveTo(0, 0)
+      .lineTo(-rotationRate.alpha, 0)
+      .stroke();
+
+    motionGraphics
+      .setStrokeStyle({
+        width: 0.5,
+        color: 0xffff00
+      })
+      .moveTo(0, 0)
+      .lineTo(gravity.x, -gravity.y)
+      .stroke();
+  });
+
   // <Collider x={0} y={-10} angle={angle()} hx={10} hy={2} />;
 
   const ticker = new Ticker();
+  const [, start, stop] = createRAF(() => {
+    ticker.update();
+    const eventQueue = new rapier2D.EventQueue(true);
+    world.step(eventQueue);
 
-  onSettled(() => {
-    const [running, start, stop] = createRAF((delta) => {
-      ticker.update();
-      const eventQueue = new rapier2D.EventQueue(true);
-      world.step(eventQueue);
-
-      eventQueue.drainCollisionEvents((handle1, handle2, started) => {
-        if (started) {
-          navigator.vibrate(10);
-        }
-      });
-
-      for (const { bunny, rigidBody } of bunnies) {
-        bunny.x = rigidBody.translation().x;
-        bunny.y = -rigidBody.translation().y;
-        bunny.rotation = -rigidBody.rotation();
+    eventQueue.drainCollisionEvents((handle1, handle2, started) => {
+      if (started) {
+        navigator.vibrate(10);
       }
-
-      debugRenderUpdate();
-
-      renderer.render({ container: stage });
     });
-    start();
+
+    for (const { bunny, rigidBody } of bunnies) {
+      bunny.x = rigidBody.translation().x;
+      bunny.y = -rigidBody.translation().y;
+      bunny.rotation = -rigidBody.rotation();
+    }
+
+    debugRenderUpdate();
+
+    renderer.render({ container: stage });
   });
+
+  onSettled(() => untrack(start));
+  onCleanup(stop);
 
   return <></>;
 }

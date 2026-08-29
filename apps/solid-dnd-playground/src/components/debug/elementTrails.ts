@@ -1,5 +1,5 @@
 import { access, GapKey, type FlipAnimateEntry, type MaybeAccessor } from 'solid-dnd';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup, untrack } from 'solid-js';
 import { getCenter, type Point } from './gapTrail';
 
 // ============================================================================
@@ -57,13 +57,16 @@ export function useElementTrails(opts: {
   addCycleMarker: () => number;
 }) {
   const [allCycleTrails, setAllCycleTrails] = createSignal<CycleTrails[]>([]);
+  let elemRafId: number | null = null;
+  let elemRunning = false;
 
   createEffect(
-    () => access(opts.entries),
-    (entries) => {
-      if (!access(opts.enabled) || entries.length === 0) return;
+    () => [access(opts.entries), access(opts.enabled)] as const,
+    ([entries, enabled]) => {
+      stopSampling();
+      if (!enabled || entries.length === 0) return;
 
-      const currentCycle = opts.addCycleMarker();
+      const currentCycle = untrack(opts.addCycleMarker);
 
       // Build per-element trails for this cycle
       const newTrails: ElementTrail[] = entries.map((e, i) => ({
@@ -77,8 +80,7 @@ export function useElementTrails(opts: {
       setAllCycleTrails((prev) => [...prev, { cycle: currentCycle, trails: newTrails }]);
 
       // Start RAF sampling for element positions during this FLIP animation
-      let elemRafId: number | null = null;
-      let elemRunning = true;
+      elemRunning = true;
 
       function sampleElements() {
         if (!elemRunning) return;
@@ -88,7 +90,7 @@ export function useElementTrails(opts: {
           if (!last || last.cycle !== currentCycle) return prev;
 
           const updatedTrails = last.trails.map((t) => {
-            const el = opts.getElement(t.key);
+            const el = untrack(() => opts.getElement(t.key));
             if (!el?.isConnected) return t;
             const center = getCenter(el);
             const lastPt = t.trail[t.trail.length - 1];
@@ -98,7 +100,7 @@ export function useElementTrails(opts: {
           return [...prev.slice(0, -1), { ...last, trails: updatedTrails }];
         });
 
-        if (access(opts.isAnimating)) {
+        if (untrack(() => access(opts.isAnimating))) {
           elemRafId = requestAnimationFrame(sampleElements);
         } else {
           // Final sample
@@ -106,7 +108,7 @@ export function useElementTrails(opts: {
             const last = prev[prev.length - 1];
             if (!last || last.cycle !== currentCycle) return prev;
             const updatedTrails = last.trails.map((t) => {
-              const el = opts.getElement(t.key);
+              const el = untrack(() => opts.getElement(t.key));
               if (!el?.isConnected) return t;
               const center = getCenter(el);
               return { ...t, trail: [...t.trail, center] };
@@ -118,14 +120,19 @@ export function useElementTrails(opts: {
       }
 
       elemRafId = requestAnimationFrame(sampleElements);
-
-      onCleanup(() => {
-        elemRunning = false;
-        if (elemRafId !== null) cancelAnimationFrame(elemRafId);
-      });
     },
     { defer: true }
   );
+
+  onCleanup(stopSampling);
+
+  function stopSampling(): void {
+    elemRunning = false;
+    if (elemRafId !== null) {
+      cancelAnimationFrame(elemRafId);
+      elemRafId = null;
+    }
+  }
 
   /** Clear all accumulated trails (call on drag session start). */
   function clear() {

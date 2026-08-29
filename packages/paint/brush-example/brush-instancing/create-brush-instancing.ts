@@ -2,7 +2,7 @@ import { Vec2 } from '@app-game/math';
 import { OGLRenderingContext, Texture } from '@app-game/ogl';
 import { RenderTarget, RenderTargetOptions } from '@app-game/ogl/core/render-target';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { createSignal } from 'solid-js';
+import { createSignal, untrack } from 'solid-js';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
 import { BrushStrokeMesh } from './brush-stroke-mesh';
 
@@ -38,7 +38,10 @@ export const createBrushInstancing = ({
   beforeRender?: () => void;
   afterRender?: () => void;
 }) => {
-  const [layer, setLayer] = createSignal(access(target), { equals: () => false });
+  const [layer, setLayer] = createSignal(
+    untrack(() => access(target)),
+    { equals: () => false }
+  );
 
   let needsUpdate = true;
 

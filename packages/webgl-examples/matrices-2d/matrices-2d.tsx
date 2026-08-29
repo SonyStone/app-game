@@ -5,7 +5,7 @@ import { createBuffer } from '@app-game/webgl/webgl-objects/buffer';
 import { createWebGL2Renderer } from '@app-game/webgl/webgl-objects/context';
 import { createProgram } from '@app-game/webgl/webgl-objects/program';
 import { createVertexArray } from '@app-game/webgl/webgl-objects/vertex-array-object';
-import { createSignal, createTrackedEffect, onSettled } from 'solid-js';
+import { createSignal, createTrackedEffect } from 'solid-js';
 
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
@@ -91,10 +91,9 @@ export default function Matrices2d() {
     gl.draw.triangles(18);
   }
 
-  onSettled(() => {
-    createTrackedEffect(() => {
-      drawScene();
-    });
+  createTrackedEffect(() => {
+    translation();
+    drawScene();
   });
 
   return (

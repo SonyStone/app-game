@@ -1,6 +1,6 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
-import { createMemo, createSignal, For, onSettled, Show, type Accessor, type Setter } from 'solid-js';
+import { createMemo, createSignal, For, Show, type Accessor, type Setter } from 'solid-js';
 import { formatShortcut, KeyboardDisplay, LayoutToggle, type KeyboardLayout } from './keyboard-display';
 
 // ============================================================================
@@ -103,29 +103,27 @@ export default function ShortcutSettings(): JSX.Element {
   });
 
   // Track keyboard input when not editing
-  onSettled(() => {
-    makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
-      // Don't track if we're editing a shortcut
-      if (editingActionId()) return;
+  makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
+    // Don't track if we're editing a shortcut
+    if (editingActionId()) return;
 
-      e.preventDefault();
-      setPressedKeys((prev) => new Set([...prev, e.code]));
+    e.preventDefault();
+    setPressedKeys((prev) => new Set([...prev, e.code]));
+  });
+
+  makeEventListener(window, 'keyup', (e: KeyboardEvent) => {
+    if (editingActionId()) return;
+
+    setPressedKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(e.code);
+      return next;
     });
+  });
 
-    makeEventListener(window, 'keyup', (e: KeyboardEvent) => {
-      if (editingActionId()) return;
-
-      setPressedKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(e.code);
-        return next;
-      });
-    });
-
-    // Clear keys when window loses focus
-    makeEventListener(window, 'blur', () => {
-      setPressedKeys(new Set<string>());
-    });
+  // Clear keys when window loses focus
+  makeEventListener(window, 'blur', () => {
+    setPressedKeys(new Set<string>());
   });
 
   // Group actions by category
@@ -347,19 +345,17 @@ function ShortcutCaptureOverlay(props: {
   };
 
   // Handle keyboard input (physical keyboard)
-  onSettled(() => {
-    makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
+  makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
 
-      if (e.code === 'Escape') {
-        props.onCancel();
-        return;
-      }
+    if (e.code === 'Escape') {
+      props.onCancel();
+      return;
+    }
 
-      // Add the key to selected keys
-      setSelectedKeys((prev) => new Set([...prev, e.code]));
-    });
+    // Add the key to selected keys
+    setSelectedKeys((prev) => new Set([...prev, e.code]));
   });
 
   // Handle clicking on the visual keyboard

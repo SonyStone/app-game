@@ -10,7 +10,7 @@
 
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
-import { createEffect, createSignal, type Accessor } from 'solid-js';
+import { createSignal, type Accessor } from 'solid-js';
 import { useCanvasTransform } from '../canvas/useCanvasTransform';
 import { usePointerInput } from '../canvas/usePointerInput';
 import type { CanvasTransform, StrokePoint } from '../types';
@@ -62,40 +62,27 @@ export interface CanvasViewProps {
 export function CanvasView(props: CanvasViewProps): JSX.Element {
   const [canvasRef, setCanvasRef] = createSignal<HTMLCanvasElement | undefined>(undefined);
 
-  // Setup pointer input for drawing
-  createEffect(canvasRef, () => {
-    if (!canvasRef()) return;
-
-    usePointerInput({
-      canvas: canvasRef,
-      transform: props.transform,
-      onStroke: props.onStroke,
-      onStrokeEnd: props.onStrokeEnd,
-      brushSize: props.brushSize,
-      brushSpacing: props.brushSpacing,
-      canvasWidth: props.canvasWidth,
-      canvasHeight: props.canvasHeight,
-      forcePanMode: props.forcePanMode
-    });
+  usePointerInput({
+    canvas: canvasRef,
+    transform: props.transform,
+    onStroke: props.onStroke,
+    onStrokeEnd: props.onStrokeEnd,
+    brushSize: props.brushSize,
+    brushSpacing: props.brushSpacing,
+    canvasWidth: props.canvasWidth,
+    canvasHeight: props.canvasHeight,
+    forcePanMode: props.forcePanMode
   });
 
-  // Setup canvas transform (pan, zoom, rotate)
-  createEffect(
-    () => canvasRef(),
-    () => {
-      if (!canvasRef()) return;
-
-      useCanvasTransform({
-        canvas: canvasRef,
-        transform: props.transform,
-        onTransformChange: props.onTransformChange,
-        debug: props.debug,
-        canvasWidth: props.canvasWidth,
-        canvasHeight: props.canvasHeight,
-        forcePanMode: props.forcePanMode
-      });
-    }
-  );
+  useCanvasTransform({
+    canvas: canvasRef,
+    transform: props.transform,
+    onTransformChange: props.onTransformChange,
+    debug: props.debug,
+    canvasWidth: props.canvasWidth,
+    canvasHeight: props.canvasHeight,
+    forcePanMode: props.forcePanMode
+  });
 
   createResizeObserver(canvasRef, () => {
     props.onResize?.();

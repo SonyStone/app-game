@@ -1,10 +1,10 @@
-import { createMemo, createSignal, Errored, For } from 'solid-js';
+import { createMemo, createSignal, Errored, For, onCleanup } from 'solid-js';
 
 import { Frame } from './interfaces/Frame';
 import { TimelinePosition } from './interfaces/TimelinePosition';
 import s from './Timeline.module.scss';
 import { onDrag } from './utils/onDrag';
-import { onResize } from './utils/onResize';
+import { createResizeObserver } from './utils/resizeObserver';
 
 const PADDING = 8 as TimelinePosition;
 
@@ -15,6 +15,8 @@ export default function Timeline(props: {
   setCurrentFrame: (frame: Frame) => void;
   pause: () => void;
 }) {
+  let disposeDrag: (() => void) | undefined;
+
   const [size, setSize] = createSignal<{ width: number; height: number }>({
     width: 0,
     height: 0
@@ -26,13 +28,19 @@ export default function Timeline(props: {
 
   const position = createMemo(() => (props.currentFrame / ratio() || 0) + PADDING);
 
+  const observeSize = createResizeObserver({
+    onResize: (nextSize) => setSize(nextSize)
+  });
+
+  onCleanup(() => disposeDrag?.());
+
   function getPosition(frame: Frame) {
     return (100 / props.totalFrames) * frame;
   }
 
   return (
     <Errored fallback={<div>Error in Timeline</div>}>
-      <div class={s.host} ref={(element) => onResize(element, () => setSize)}>
+      <div class={s.host} ref={observeSize}>
         <div class={s.sliderThumb} style={{ transform: `translate(${position()}px)` }}>
           <span>{props.currentFrame}</span>
         </div>
@@ -60,8 +68,8 @@ export default function Timeline(props: {
             <line x1={0} y1={10} x2={0} y2={28} />
             <path d="M-8,36 h16 l-7.5,-8 h-1 z"></path>
             <rect
-              ref={(element) =>
-                onDrag(element, () => (event) => {
+              ref={(element) => {
+                disposeDrag = onDrag(element, () => (event) => {
                   // console.log(`event`, event.type);
 
                   if (event.type === 'pointerdown') {
@@ -70,8 +78,8 @@ export default function Timeline(props: {
                   const clipPosition = event.offsetX - PADDING;
                   const frame = Math.round(clipPosition * ratio()) as Frame;
                   props.setCurrentFrame(frame);
-                })
-              }
+                });
+              }}
               x={-12}
               y={24}
               height={20}

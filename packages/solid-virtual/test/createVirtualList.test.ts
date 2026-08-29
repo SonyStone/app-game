@@ -3,10 +3,16 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createDynamicHeight } from '../src/createDynamicHeight';
 import { createVirtualList } from '../src/createVirtualList';
 
+let notifyResize: ((entry: ResizeObserverEntry) => void) | undefined;
+
 beforeAll(() => {
   vi.stubGlobal(
     'ResizeObserver',
     class {
+      constructor(callback: ResizeObserverCallback) {
+        notifyResize = (entry) => callback([entry], this);
+      }
+
       observe(): void {}
       unobserve(): void {}
       disconnect(): void {}
@@ -174,7 +180,55 @@ describe('createVirtualList', () => {
       dispose();
     });
   });
+
+  it('ignores delayed measurements from virtual rows removed from the document', async () => {
+    const scroller = createScroller(40);
+    const itemElement = document.createElement('article');
+    itemElement.getBoundingClientRect = () => new DOMRect(0, 0, 100, 80);
+    scroller.element.append(itemElement);
+    document.body.append(scroller.element);
+
+    const { dispose, virtual } = createRoot((dispose) => ({
+      dispose,
+      virtual: createVirtualList({
+        items: ['item'],
+        elementRef: scroller.element,
+        itemHeight: createDynamicHeight({ estimate: 120 }),
+        overscan: 1_000
+      })
+    }));
+
+    try {
+      const item = virtual.children()[0];
+      if (!item || !notifyResize) throw new Error('Expected a measurable virtual item');
+
+      item.setElementRef(itemElement);
+      notifyResize(createResizeEntry(itemElement));
+      await waitForAnimationFrame();
+      expect(virtual.totalHeight).toBe(80);
+
+      itemElement.remove();
+      itemElement.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
+      notifyResize(createResizeEntry(itemElement));
+      await waitForAnimationFrame();
+
+      expect(virtual.totalHeight).toBe(80);
+      expect(scroller.element.scrollTop).toBe(0);
+    } finally {
+      dispose();
+      scroller.element.remove();
+    }
+  });
 });
+
+function createResizeEntry(target: Element): ResizeObserverEntry {
+  return { target } as ResizeObserverEntry;
+}
+
+async function waitForAnimationFrame(): Promise<void> {
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  flush();
+}
 
 function createScroller(height: number) {
   const element = document.createElement('div');

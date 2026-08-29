@@ -1,5 +1,5 @@
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
-import { createSignal, createTrackedEffect, type Accessor } from 'solid-js';
+import { createSignal, createTrackedEffect, onCleanup, type Accessor } from 'solid-js';
 import {
   createDragSensorFactory,
   type CreateDragSensorOptions,
@@ -100,20 +100,24 @@ export function createDragSensorTarget<TData = unknown, TElement extends HTMLEle
   options: CreateDragSensorOptions<TData, TElement> = {}
 ): DragSensorHandle<TData, TElement> {
   const sensor = scope.createSensor<TData, TElement>(options);
+  let currentElement: TElement | undefined;
 
   createTrackedEffect(() => {
     const element = access(target);
+    if (element === currentElement) {
+      return;
+    }
+
+    currentElement?.removeEventListener('pointerdown', sensor.onPointerDown);
+    currentElement = element ?? undefined;
 
     if (!element) {
       return;
     }
 
     element.addEventListener('pointerdown', sensor.onPointerDown);
-
-    return () => {
-      element.removeEventListener('pointerdown', sensor.onPointerDown);
-    };
   });
+  onCleanup(() => currentElement?.removeEventListener('pointerdown', sensor.onPointerDown));
 
   return sensor;
 }

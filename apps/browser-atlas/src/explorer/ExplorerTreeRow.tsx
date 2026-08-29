@@ -1,4 +1,4 @@
-import { createSignal, createTrackedEffect, Match, Switch } from 'solid-js';
+import { createSignal, createTrackedEffect, Match, Show, Switch } from 'solid-js';
 import { noFaviconUrl } from '../assets';
 import type { BrowserAtlasAppearanceSettings } from '../settings';
 import type { ExplorerTreeGroupNode, ExplorerTreeLinkNode, ExplorerTreeNode } from './model';
@@ -212,29 +212,28 @@ function NodeDeleteButton(props: {
   node: ExplorerTreeGroupNode | ExplorerTreeLinkNode;
   onDelete: ExplorerTreeRowProps['onDelete'];
 }) {
-  if (!isDeletablePersistentItem(props.node)) {
-    return null;
-  }
   return (
-    <button
-      type="button"
-      class="h-4 flex-none px-1 leading-4 text-red-500 hover:bg-red-950 hover:text-red-200"
-      title={
-        props.node.reference.kind === 'tab' || props.node.reference.kind === 'window'
-          ? 'Permanently close this browser item'
-          : 'Delete this saved item'
-      }
-      aria-label={`Delete ${props.node.title}`}
-      draggable="false"
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        props.onDelete?.(props.node);
-      }}
-    >
-      ×
-    </button>
+    <Show when={isDeletablePersistentItem(props.node)}>
+      <button
+        type="button"
+        class="h-4 flex-none px-1 leading-4 text-red-500 hover:bg-red-950 hover:text-red-200"
+        title={
+          props.node.reference.kind === 'tab' || props.node.reference.kind === 'window'
+            ? 'Permanently close this browser item'
+            : 'Delete this saved item'
+        }
+        aria-label={`Delete ${props.node.title}`}
+        draggable="false"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          props.onDelete?.(props.node);
+        }}
+      >
+        ×
+      </button>
+    </Show>
   );
 }
 

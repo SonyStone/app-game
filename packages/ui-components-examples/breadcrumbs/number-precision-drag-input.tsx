@@ -1,6 +1,7 @@
 import { computePosition, offset, shift } from '@floating-ui/dom';
-import { Accessor, createEffect, createSignal, onCleanup, untrack } from 'solid-js';
+import { Accessor, untrack } from 'solid-js';
 
+/** Binds middle-button precision dragging and returns an explicit disposer. */
 export function numberPrecisionDragInput(
   element: HTMLElement,
   props: {
@@ -10,7 +11,7 @@ export function numberPrecisionDragInput(
     max?: '100' | '10' | '1' | '.1' | '.01' | '.001' | '.0001';
     min?: '100' | '10' | '1' | '.1' | '.01' | '.001' | '.0001';
   }
-) {
+): () => void {
   const elements = ['100', '10', '1', '.1', '.01', '.001', '.0001'].map(
     (v, i) =>
       (
@@ -36,15 +37,10 @@ export function numberPrecisionDragInput(
     <div class="absolute top-0 left-0 flex w-10 cursor-e-resize flex-col border border-black bg-white">{elements}</div>
   ) as HTMLElement;
 
-  const [show, setShow] = createSignal(false);
-
-  createEffect(show, (next, previous) => {
-    if (next) {
-      document.body.appendChild(testElement);
-    } else if (previous === true) {
-      document.body.removeChild(testElement);
-    }
-  });
+  const showPrecisionMenu = () => {
+    if (!testElement.isConnected) document.body.appendChild(testElement);
+  };
+  const hidePrecisionMenu = () => testElement.remove();
 
   let prevNumber = 0;
   let prevElement: HTMLElement | undefined;
@@ -64,7 +60,7 @@ export function numberPrecisionDragInput(
       element.addEventListener('pointerup', pointerupHandler as EventListener);
       element.removeEventListener('pointerdown', pointerdownHandler as EventListener);
 
-      setShow(true);
+      showPrecisionMenu();
       computePosition(element, testElement, {
         placement: 'top-end',
         middleware: [
@@ -142,14 +138,16 @@ export function numberPrecisionDragInput(
     prevElement = undefined;
     value = 0;
 
-    setShow(false);
+    hidePrecisionMenu();
     element.addEventListener('pointerdown', pointerdownHandler as EventListener);
   };
 
   element.addEventListener('pointerdown', pointerdownHandler as EventListener);
 
-  onCleanup(() => {
-    setShow(false);
+  return () => {
+    hidePrecisionMenu();
     element.removeEventListener('pointerdown', pointerdownHandler as EventListener);
-  });
+    element.removeEventListener('pointermove', pointermoveHandler as EventListener);
+    element.removeEventListener('pointerup', pointerupHandler as EventListener);
+  };
 }

@@ -3,7 +3,7 @@ import { distance } from '@app-game/ogl/math/functions/vec-2-func';
 import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import type { ComponentProps } from '@solidjs/web';
 import { RAD_TO_DEG } from 'pixi.js';
-import { createMemo, createSignal, omit } from 'solid-js';
+import { createMemo, createSignal, omit, untrack } from 'solid-js';
 
 /**
  * ```
@@ -32,8 +32,9 @@ import { createMemo, createSignal, omit } from 'solid-js';
 export default function TrigonometryExample() {
   const [angle, setAngle] = createSignal(30);
 
-  const [opposite, setOpposite] = createSignal(toFixed(calcOpposite(angle())));
-  const [adjacent, setAdjacent] = createSignal(toFixed(calcAdjacent(angle())));
+  const initialAngle = untrack(angle);
+  const [opposite, setOpposite] = createSignal(toFixed(calcOpposite(initialAngle)));
+  const [adjacent, setAdjacent] = createSignal(toFixed(calcAdjacent(initialAngle)));
 
   return (
     <div class="flex h-full w-full place-content-center place-items-center">
@@ -119,6 +120,8 @@ const Input = (
   props: { value: number; onChange: (value: number) => void } & Omit<ComponentProps<'input'>, 'value' | 'onChange'>
 ) => {
   const others = omit(props, 'value', 'onChange');
+  const initialValue = untrack(() => props.value);
+  const onChange = untrack(() => props.onChange);
 
   return (
     <input
@@ -131,8 +134,8 @@ const Input = (
       }}
       ref={(ref) => {
         numberPrecisionDragInput(ref, {
-          value: props.value,
-          onChange: props.onChange,
+          value: initialValue,
+          onChange,
           step: '.01',
           max: '.1',
           min: '.001'

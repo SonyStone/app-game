@@ -6,10 +6,13 @@ import { OrbitControls } from './controls/OrbitControls';
 import { copy } from './utils/object3d';
 
 export function createResize() {
-  const [resize, setResize] = createSignal<{ width: number; height: number }>({
-    width: window.innerWidth,
-    height: window.innerHeight
-  });
+  const [resize, setResize] = createSignal<{ width: number; height: number }>(
+    {
+      width: window.innerWidth,
+      height: window.innerHeight
+    },
+    { ownedWrite: true }
+  );
 
   function onWindowResize() {
     setResize({ width: window.innerWidth, height: window.innerHeight });

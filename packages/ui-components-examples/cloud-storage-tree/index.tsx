@@ -1,6 +1,6 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
-import { createSignal, onSettled, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 
 import { Breadcrumbs } from './Breadcrumbs';
 import { CloudStorageProvider, useCloudStorage } from './CloudStorageContext';
@@ -31,58 +31,56 @@ function CloudStorageApp(): JSX.Element {
   const [isSidebarOpen, setSidebarOpen] = createSignal(false);
 
   // Global keyboard shortcuts
-  onSettled(() => {
-    makeEventListener(document, 'keydown', (e: KeyboardEvent) => {
-      // Don't handle shortcuts when dialog is open or typing in input
-      if (state.dialog.type !== null) return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  makeEventListener(document, 'keydown', (e: KeyboardEvent) => {
+    // Don't handle shortcuts when dialog is open or typing in input
+    if (state.dialog.type !== null) return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      // Ctrl+A - Select all
-      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
-        e.preventDefault();
-        actions.selectAll();
-      }
+    // Ctrl+A - Select all
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+      e.preventDefault();
+      actions.selectAll();
+    }
 
-      // Delete - Delete selected
-      if (e.key === 'Delete' && state.selection.selectedIds.size > 0) {
-        e.preventDefault();
-        actions.openDialog('delete');
-      }
+    // Delete - Delete selected
+    if (e.key === 'Delete' && state.selection.selectedIds.size > 0) {
+      e.preventDefault();
+      actions.openDialog('delete');
+    }
 
-      // F2 - Rename (single selection)
-      if (e.key === 'F2' && state.selection.selectedIds.size === 1) {
-        e.preventDefault();
-        const selectedId = Array.from(state.selection.selectedIds)[0];
-        const selectedItem = state.items.find((item) => item.id === selectedId);
-        if (selectedItem) {
-          actions.openDialog('rename', selectedId, selectedItem.name);
-        }
+    // F2 - Rename (single selection)
+    if (e.key === 'F2' && state.selection.selectedIds.size === 1) {
+      e.preventDefault();
+      const selectedId = Array.from(state.selection.selectedIds)[0];
+      const selectedItem = state.items.find((item) => item.id === selectedId);
+      if (selectedItem) {
+        actions.openDialog('rename', selectedId, selectedItem.name);
       }
+    }
 
-      // Escape - Clear selection
-      if (e.key === 'Escape') {
-        actions.clearSelection();
-        actions.closeContextMenu();
-      }
+    // Escape - Clear selection
+    if (e.key === 'Escape') {
+      actions.clearSelection();
+      actions.closeContextMenu();
+    }
 
-      // Enter - Open selected folder
-      if (e.key === 'Enter' && state.selection.selectedIds.size === 1) {
-        const selectedId = Array.from(state.selection.selectedIds)[0];
-        const selectedItem = state.items.find((item) => item.id === selectedId);
-        if (selectedItem?.type === 'folder') {
-          actions.navigateToFolder(selectedId);
-        }
+    // Enter - Open selected folder
+    if (e.key === 'Enter' && state.selection.selectedIds.size === 1) {
+      const selectedId = Array.from(state.selection.selectedIds)[0];
+      const selectedItem = state.items.find((item) => item.id === selectedId);
+      if (selectedItem?.type === 'folder') {
+        actions.navigateToFolder(selectedId);
       }
+    }
 
-      // Backspace - Go to parent folder
-      if (e.key === 'Backspace' && state.breadcrumbs.length > 1) {
-        e.preventDefault();
-        const parentId = state.breadcrumbs[state.breadcrumbs.length - 2]?.id;
-        if (parentId) {
-          actions.navigateToFolder(parentId);
-        }
+    // Backspace - Go to parent folder
+    if (e.key === 'Backspace' && state.breadcrumbs.length > 1) {
+      e.preventDefault();
+      const parentId = state.breadcrumbs[state.breadcrumbs.length - 2]?.id;
+      if (parentId) {
+        actions.navigateToFolder(parentId);
       }
-    });
+    }
   });
 
   return (

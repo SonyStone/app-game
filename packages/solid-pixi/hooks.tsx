@@ -60,7 +60,7 @@ export function useSpritesheet<T extends SpritesheetData>(
     progress: Accessor<Progress>;
   }
 ] {
-  const [progress, setProgress] = createSignal(0 as Progress);
+  const [progress, setProgress] = createSignal(0 as Progress, { ownedWrite: true });
 
   const name = () => {
     const s = access(source);
@@ -116,7 +116,7 @@ export function useAsset<T extends AssetType = Texture>(
     progress: Accessor<number>;
   }
 ] {
-  const [progress, setProgress] = createSignal<Progress>(0 as Progress);
+  const [progress, setProgress] = createSignal<Progress>(0 as Progress, { ownedWrite: true });
 
   const name = () => {
     const s = access(source);
@@ -163,7 +163,7 @@ export function useAssets<T extends Record<string, AssetType> = Record<string, A
     progress: Accessor<Progress>;
   }
 ] {
-  const [progress, setProgress] = createSignal<Progress>(0 as Progress);
+  const [progress, setProgress] = createSignal<Progress>(0 as Progress, { ownedWrite: true });
 
   const names = () => {
     const s = access(sources);
@@ -207,7 +207,7 @@ export function useBundle<T extends Record<string, AssetType> = any>(
     progress: Accessor<Progress>;
   }
 ] {
-  const [progress, setProgress] = createSignal<Progress>(0 as Progress);
+  const [progress, setProgress] = createSignal<Progress>(0 as Progress, { ownedWrite: true });
 
   const name = () => {
     return access(bundleId);

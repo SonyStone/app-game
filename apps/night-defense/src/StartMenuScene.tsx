@@ -1,56 +1,22 @@
 import { Container, Graphics, Text } from '@app-game/solid-pixi';
-import { createWindowSize } from '@solid-primitives/resize-observer';
-import { useLocation, useNavigate } from '@solidjs/router';
 import { Graphics as PixiGraphics, Text as PixiText, Rectangle, TextStyle } from 'pixi.js';
-import { createTrackedEffect } from 'solid-js';
+import { onCleanup } from 'solid-js';
 
 export default function StartMenuScene() {
-  const size = createWindowSize();
-  const location = useLocation();
-  const navigate = useNavigate();
-
   let background!: PixiGraphics;
   let title!: PixiText;
   let subtitle!: PixiText;
   let button!: PixiGraphics;
   let buttonText!: PixiText;
+  let layoutFrame = 0;
+  const hitArea = new Rectangle();
 
-  createTrackedEffect(() => {
-    const width = Math.max(1, size.width);
-    const height = Math.max(1, size.height);
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const buttonWidth = Math.min(320, width - 48);
-    const buttonHeight = 68;
-
-    background
-      .clear()
-      .rect(0, 0, width, height)
-      .fill({ color: 0x07110d })
-      .circle(centerX, height * 0.74, Math.min(width, height) * 0.24)
-      .stroke({ color: 0x1f6b46, alpha: 0.28, width: 2 });
-
-    title.x = centerX;
-    title.y = Math.max(86, height * 0.22);
-    subtitle.x = centerX;
-    subtitle.y = title.y + 70;
-    button.x = centerX - buttonWidth / 2;
-    button.y = centerY + 44;
-    button.clear().roundRect(0, 0, buttonWidth, buttonHeight, 8).fill({ color: 0x34d399 }).stroke({
-      color: 0xd1fae5,
-      alpha: 0.86,
-      width: 2
-    });
-    buttonText.x = centerX;
-    buttonText.y = button.y + buttonHeight / 2;
-  });
-
-  return (
+  const scene = (
     <Container
       eventMode="static"
       interactive
-      hitArea={new Rectangle(0, 0, Math.max(1, size.width), Math.max(1, size.height))}
-      onpointerdown={() => navigate(playPath(location.pathname))}
+      hitArea={hitArea}
+      onpointerdown={() => navigateToPlay(window.location.pathname)}
     >
       <Graphics
         ref={(graphics) => {
@@ -118,10 +84,56 @@ export default function StartMenuScene() {
       />
     </Container>
   );
+
+  window.addEventListener('resize', scheduleLayout);
+  layoutMenu(window.innerWidth, window.innerHeight);
+  onCleanup(() => {
+    window.removeEventListener('resize', scheduleLayout);
+    cancelAnimationFrame(layoutFrame);
+  });
+
+  function scheduleLayout(): void {
+    cancelAnimationFrame(layoutFrame);
+    layoutFrame = requestAnimationFrame(() => layoutMenu(window.innerWidth, window.innerHeight));
+  }
+
+  function layoutMenu(width: number, height: number): void {
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const buttonWidth = Math.min(320, width - 48);
+    const buttonHeight = 68;
+    hitArea.width = width;
+    hitArea.height = height;
+
+    background
+      .clear()
+      .rect(0, 0, width, height)
+      .fill({ color: 0x07110d })
+      .circle(centerX, height * 0.74, Math.min(width, height) * 0.24)
+      .stroke({ color: 0x1f6b46, alpha: 0.28, width: 2 });
+
+    title.x = centerX;
+    title.y = Math.max(86, height * 0.22);
+    subtitle.x = centerX;
+    subtitle.y = title.y + 70;
+    button.x = centerX - buttonWidth / 2;
+    button.y = centerY + 44;
+    button.clear().roundRect(0, 0, buttonWidth, buttonHeight, 8).fill({ color: 0x34d399 }).stroke({
+      color: 0xd1fae5,
+      alpha: 0.86,
+      width: 2
+    });
+    buttonText.x = centerX;
+    buttonText.y = button.y + buttonHeight / 2;
+  }
+
+  return scene;
 }
 
-function playPath(pathname: string) {
+function navigateToPlay(pathname: string): void {
   const base = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  const nextPath = base.length === 0 ? '/play' : `${base}/play`;
 
-  return base.length === 0 ? '/play' : `${base}/play`;
+  window.history.pushState(window.history.state, '', nextPath);
+  window.dispatchEvent(new PopStateEvent('popstate'));
 }

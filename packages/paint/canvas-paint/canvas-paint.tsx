@@ -3,7 +3,7 @@ import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { createSignal, createTrackedEffect, onSettled, untrack } from 'solid-js';
+import { createSignal, createTrackedEffect, untrack } from 'solid-js';
 import { SquareComponent } from '../brush-example/square/square.component';
 import { hexToRgb, normalizedToRgb, rgbToHex } from '../brush-example/utils/color-functions';
 import { createPointerEvents } from './apply-pointer-events';
@@ -45,47 +45,43 @@ export default function CanvasPaint() {
   const pointerEvents = createPointerEvents();
   const pointerTarget = canvasEl as unknown as HTMLElement;
 
-  onSettled(() => {
-    void (async () => {
-      makeEventListener(pointerTarget, 'pointerdown', (e: PointerEvent) => {
-        if (e.pressure === 0 || e.buttons !== 1) {
-          return;
-        }
-        const x = e.clientX;
-        const y = e.clientY;
+  makeEventListener(pointerTarget, 'pointerdown', (e: PointerEvent) => {
+    if (e.pressure === 0 || e.buttons !== 1) {
+      return;
+    }
+    const x = e.clientX;
+    const y = e.clientY;
 
-        brushStroke.add([x, y], e.pressure);
-      });
-      makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
-        const events = e.getCoalescedEvents();
-        if (events.length === 0) {
-          events.push(e);
-        }
-        for (const event of events) {
-          if (e.pressure === 0 || e.buttons !== 1) {
-            continue;
-          }
-          let x = event.clientX;
-          let y = event.clientY;
-
-          brushStroke.add([x, y], e.pressure);
-
-          if (untrack(updateOnEvent)) {
-            brushStroke.render(true);
-          }
-        }
-      });
-
-      makeEventListener(pointerTarget, 'pointerup', (e) => {
-        brushStroke.end();
-        if (untrack(updateOnEvent)) {
-          brushStroke.render(false);
-        }
-      });
-
-      await pointerEvents.apply(canvasEl as unknown as Element);
-    })();
+    brushStroke.add([x, y], e.pressure);
   });
+  makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
+    const events = e.getCoalescedEvents();
+    if (events.length === 0) {
+      events.push(e);
+    }
+    for (const event of events) {
+      if (e.pressure === 0 || e.buttons !== 1) {
+        continue;
+      }
+      let x = event.clientX;
+      let y = event.clientY;
+
+      brushStroke.add([x, y], e.pressure);
+
+      if (untrack(updateOnEvent)) {
+        brushStroke.render(true);
+      }
+    }
+  });
+
+  makeEventListener(pointerTarget, 'pointerup', () => {
+    brushStroke.end();
+    if (untrack(updateOnEvent)) {
+      brushStroke.render(false);
+    }
+  });
+
+  void pointerEvents.apply(canvasEl as unknown as Element);
 
   const [, start, stop] = createRAF((t?: number | any) => {
     if (!untrack(updateOnEvent)) {
@@ -95,7 +91,7 @@ export default function CanvasPaint() {
   createTrackedEffect(() => {
     updateOnEvent() ? stop() : start();
   });
-  start();
+  untrack(start);
 
   return (
     <>

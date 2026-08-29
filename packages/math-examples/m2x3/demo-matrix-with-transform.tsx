@@ -8,21 +8,16 @@ import { degToRad } from '@app-game/math/utils/trigonometry';
 import { createSignal } from 'solid-js';
 
 export function TestMatrixWithTransform(props: { debugLayer?: ReturnType<typeof useDebugLayer> }) {
-  const [mat, setMat] = createSignal(
-    Mat2x3.create().compose(
-      Transform.create()
-        .setPosition(400, 300)
-        .setRotation(degToRad(45 as Degrees))
-        .setScale(1.15)
-    ),
-    { equals: () => false }
+  const initialMatrix = Mat2x3.create().compose(
+    Transform.create()
+      .setPosition(400, 300)
+      .setRotation(degToRad(45 as Degrees))
+      .setScale(1.15)
   );
+  rotateAroundPoint(initialMatrix.value, initialMatrix.value, degToRad(30 as Degrees), [450, 350]);
+  scaleAroundPoint(initialMatrix.value, initialMatrix.value, [1.5, 1.5], [450, 350]);
 
-  setMat((mat) => {
-    rotateAroundPoint(mat.value, mat.value, degToRad(30 as Degrees), [450, 350]);
-    scaleAroundPoint(mat.value, mat.value, [1.5, 1.5], [450, 350]);
-    return mat;
-  });
+  const [mat] = createSignal(initialMatrix);
 
   return (
     <>

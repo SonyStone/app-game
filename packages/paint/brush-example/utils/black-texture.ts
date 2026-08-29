@@ -6,7 +6,7 @@ export const createColorTexture = (
   gl: OGLRenderingContext,
   color: MaybeAccessor<[number, number, number] | [number, number, number, number]>
 ) => {
-  let uColor = access(color);
+  let uColor = untrack(() => access(color));
   const image = new Uint8Array([uColor[0], uColor[1], uColor[2], uColor[3] ?? 255]);
   const [texture, setTexture] = createSignal<Texture>(
     new Texture(gl, {

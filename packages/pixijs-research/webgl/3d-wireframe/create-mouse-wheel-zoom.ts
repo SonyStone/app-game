@@ -1,11 +1,11 @@
 import { clamp } from '@app-game/math/utils/clamp';
 import { createSignal, onCleanup } from 'solid-js';
 
-export function createMouseWheelZoom(element: HTMLElement) {
+export function createMouseWheelZoom(element: HTMLElement, initialRadius = 0) {
   let scale = 1;
   const dollyScale = Math.pow(0.95, 1);
 
-  const [radius, setRadius] = createSignal(0);
+  const [radius, setRadius] = createSignal(initialRadius);
 
   const onMouseWheel = (event: WheelEvent) => {
     event.preventDefault();

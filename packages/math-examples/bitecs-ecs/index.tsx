@@ -12,7 +12,7 @@ import {
   query,
   removeEntity
 } from 'bitecs';
-import { createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
+import { createSignal, For, onCleanup, onSettled, Show, untrack } from 'solid-js';
 
 const components = {
   // They can be any shape you want
@@ -75,8 +75,9 @@ function Systems(props: { children?: JSX.Element }) {
     }
   };
 
-  const [, start] = createRAF(update);
-  start();
+  const [, start, stop] = createRAF(update);
+  untrack(start);
+  onCleanup(stop);
 
   return <SystemsProvider value={systems}>{props.children}</SystemsProvider>;
 }

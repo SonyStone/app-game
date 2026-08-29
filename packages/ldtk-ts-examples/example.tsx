@@ -1,4 +1,5 @@
-import { Game, GameObjects, Scene } from 'phaser';
+import Phaser, { Game, GameObjects, Scene } from 'phaser';
+import { onCleanup } from 'solid-js';
 
 import { World } from '@/ldtk-ts/index';
 import cavernas from './Cavernas_by_Adam_Saltsman.png?url';
@@ -96,6 +97,7 @@ function run() {
 }
 
 export default function App() {
-  run();
+  const game = run();
+  onCleanup(() => game.destroy(true));
   return <></>;
 }

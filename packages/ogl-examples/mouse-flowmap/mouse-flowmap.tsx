@@ -1,7 +1,7 @@
 import { Vec2 } from '@app-game/math';
 import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createTrackedEffect } from 'solid-js';
+import { createTrackedEffect, untrack } from 'solid-js';
 
 import fragment from './mouse-flowmap.frag?raw';
 import vertex from './mouse-flowmap.vert?raw';
@@ -125,7 +125,7 @@ export default function MouseFlowmap() {
 
   const [, start] = createRAF(targetFPS(update, 240));
 
-  start();
+  untrack(start);
 
   return <>{gl.canvas}</>;
 }

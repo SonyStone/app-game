@@ -290,8 +290,16 @@ function createMeasurementController<T, Box extends VirtualMeasurementBox>(
     handleMeasurements(entries);
   });
   const resizeObserver = makeResizeObserver<Element>((entries) => {
+    pruneDisconnectedItems();
     for (const entry of entries) pendingResizeEntries.set(entry.target, entry);
     scheduleMeasurements();
+  });
+
+  onCleanup(() => {
+    cancelMeasurements();
+    for (const element of observedItems.keys()) resizeObserver.unobserve(element);
+    observedItems.clear();
+    pendingResizeEntries.clear();
   });
 
   return {
@@ -301,22 +309,24 @@ function createMeasurementController<T, Box extends VirtualMeasurementBox>(
     },
     setChildrenRef(element, box): void {
       childElements.set(box, element);
-      onCleanup(() => {
-        if (childElements.get(box) === element) childElements.delete(box);
-      });
     },
     setElementRef(element, box): void {
       if (observedItems.get(element) === box) return;
 
+      pruneDisconnectedItems();
       observedItems.set(element, box);
       resizeObserver.observe(element);
-      onCleanup(() => {
-        if (observedItems.get(element) !== box) return;
-        observedItems.delete(element);
-        resizeObserver.unobserve(element);
-      });
     }
   };
+
+  function pruneDisconnectedItems(): void {
+    for (const [element] of observedItems) {
+      if (element.isConnected) continue;
+      observedItems.delete(element);
+      resizeObserver.unobserve(element);
+      pendingResizeEntries.delete(element);
+    }
+  }
 
   function handleMeasurements(entries: readonly ResizeObserverEntry[]): void {
     const scroller = access(host.core.elementRef);
@@ -328,6 +338,8 @@ function createMeasurementController<T, Box extends VirtualMeasurementBox>(
     let measurementsChanged = false;
 
     for (const entry of entries) {
+      if (!entry.target.isConnected) continue;
+
       const box = observedItems.get(entry.target);
       if (!box) continue;
 

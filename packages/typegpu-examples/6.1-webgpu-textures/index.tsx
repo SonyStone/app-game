@@ -1,6 +1,6 @@
 import { Range2D } from '@app-game/components/ui/range-2d';
 import { Meta, Title } from '@solidjs/meta';
-import { createMemo, createSignal, createTrackedEffect } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect, untrack } from 'solid-js';
 import * as d from 'typegpu/data';
 import { ResizeContainer } from '../ui/ResizeContainer';
 import { TypeGPUProvider, useTypeGPU } from '../utils/TypeGPU';
@@ -109,8 +109,10 @@ function App(props: {
 
   // --- Just shemas, shader and pipeline setup ---
 
-  const position = root.createUniform(d.vec2f, d.vec2f(props.offset[0], props.offset[1]));
-  const scale = root.createUniform(d.vec2f, d.vec2f(props.scale[0], props.scale[1]));
+  const initialOffset = untrack(() => props.offset);
+  const initialScale = untrack(() => props.scale);
+  const position = root.createUniform(d.vec2f, d.vec2f(initialOffset[0], initialOffset[1]));
+  const scale = root.createUniform(d.vec2f, d.vec2f(initialScale[0], initialScale[1]));
 
   const testTexture = createTestTexture();
   const texture = root['~unstable']

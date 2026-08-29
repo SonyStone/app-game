@@ -1,6 +1,6 @@
 import { createContextProvider } from '@app-game/solid-utils';
 import type { JSX } from '@solidjs/web';
-import { omit, onCleanup } from 'solid-js';
+import { omit, onCleanup, untrack } from 'solid-js';
 import { useGPU } from './GPU.provider';
 import { useGPUCanvasContext } from './GPUCanvasContext.provider';
 import { useTypeGPURoot } from './TypeGPURoot.provider';
@@ -18,7 +18,7 @@ const [Provider, useTypeGPUCanvasContext] = createContextProvider<
   {
     value: GPUCanvasContext;
   }
->((props) => props.value, {
+>((props) => untrack(() => props.value), {
   errorMessage: 'TypeGPUCanvasContextProvider is missing'
 });
 

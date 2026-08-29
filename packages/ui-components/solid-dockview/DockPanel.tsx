@@ -5,6 +5,7 @@ import {
   type Element as JSXElement,
   ParentProps,
   createMemo,
+  createSignal,
   createTrackedEffect,
   onCleanup,
   useContext
@@ -96,16 +97,16 @@ export function DockPanel(props: DockPanelProps) {
     }
   });
 
+  const [contentElement, setContentElement] = createSignal<HTMLDivElement>();
+  createTrackedEffect(() => {
+    const div = contentElement();
+    if (div) {
+      div.className = props.class || 'solid-dockview-panel-content';
+    }
+  });
+
   return (
-    <Portal
-      mount={contentPlaceholder}
-      ref={(div: HTMLDivElement) => {
-        const className = createMemo(() => props.class || 'solid-dockview-panel-content');
-        createTrackedEffect(() => {
-          div.className = className();
-        });
-      }}
-    >
+    <Portal mount={contentPlaceholder} ref={setContentElement}>
       {tab()}
       {props.children}
     </Portal>
@@ -116,16 +117,19 @@ function setupEvents(panelState: PanelState) {
   const { panel, context, props } = panelState;
   const { dockview } = context;
 
+  let visibilityDisposable: { dispose(): void } | undefined;
   createTrackedEffect(() => {
+    visibilityDisposable?.dispose();
+    visibilityDisposable = undefined;
+
     const callback = props.onVisibilityChange;
     if (typeof callback !== 'function') return;
 
-    const disposable = panel.api.onDidVisibilityChange((visible) => {
+    visibilityDisposable = panel.api.onDidVisibilityChange((visible) => {
       callback({ visible: visible.isVisible, panel, dockview });
     });
-
-    return () => disposable.dispose();
   });
+  onCleanup(() => visibilityDisposable?.dispose());
 
   // event of panel open/close
   watch(
@@ -141,28 +145,33 @@ function setupTab(props: DockPanelProps, panel: DockviewPanel, placeholder: HTML
   const closeButton = createCloseButton();
 
   const computedTitle = createMemo(() => props.title);
+  let titleObserver: MutationObserver | undefined;
   watch(computedTitle, (title) => {
+    titleObserver?.disconnect();
+    titleObserver = undefined;
+
     if (title instanceof HTMLElement) {
       const sync = () => panel.setTitle(title.textContent?.trim() || '');
-      const observer = new MutationObserver(sync);
-      observer.observe(title, { childList: true, subtree: true, characterData: true });
-      onCleanup(() => observer.disconnect());
+      titleObserver = new MutationObserver(sync);
+      titleObserver.observe(title, { childList: true, subtree: true, characterData: true });
       sync();
     } else {
       panel.setTitle(String(title));
     }
   });
+  onCleanup(() => titleObserver?.disconnect());
 
   const className = createMemo(() => props.tabClass || 'default-tab');
+  const [tabElement, setTabElement] = createSignal<HTMLDivElement>();
+  createTrackedEffect(() => {
+    const div = tabElement();
+    if (div) {
+      div.className = className();
+    }
+  });
+
   return createMemo(() => (
-    <Portal
-      mount={placeholder}
-      ref={(div: HTMLDivElement) => {
-        createTrackedEffect(() => {
-          div.className = className();
-        });
-      }}
-    >
+    <Portal mount={placeholder} ref={setTabElement}>
       {/* <div class="default-tab"> */}
       <div class="tab-content">{computedTitle()}</div>
       <div class="action-container" onMouseDown={(e) => e.preventDefault()}>

@@ -1,5 +1,5 @@
 import type { JSX } from '@solidjs/web';
-import { createTrackedEffect, onCleanup, Show } from 'solid-js';
+import { createTrackedEffect, Show } from 'solid-js';
 
 import { useCloudStorage } from './CloudStorageContext';
 
@@ -40,15 +40,16 @@ export function ContextMenu(): JSX.Element {
       };
 
       // Delay to avoid immediate closing from the same click
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         document.addEventListener('click', handleClickOutside);
         document.addEventListener('keydown', handleEscape);
       }, 0);
 
-      onCleanup(() => {
+      return () => {
+        clearTimeout(timeout);
         document.removeEventListener('click', handleClickOutside);
         document.removeEventListener('keydown', handleEscape);
-      });
+      };
     }
   });
 

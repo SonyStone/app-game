@@ -33,7 +33,7 @@ import JingliuHeadPosition from './JingliuMod/Jingliuf0000Mod/JingliuHeadPositio
 import JingliuHeadTexcoord from './JingliuMod/Jingliuf0000Mod/JingliuHeadTexcoord.buf?Float32Array';
 import HeaderFile from './JingliuMod/Jingliuf0000Mod/backup_DISABLEDJingliu.txt?raw';
 
-import { createTrackedEffect } from 'solid-js';
+import { createTrackedEffect, untrack } from 'solid-js';
 import { checkerTexture } from './checker-texture';
 
 import createRAF from '@solid-primitives/raf';
@@ -181,5 +181,5 @@ function simpleBufferView(canvas: HTMLCanvasElement) {
     controls.update();
     renderer.render({ scene, camera });
   });
-  start();
+  untrack(start);
 }

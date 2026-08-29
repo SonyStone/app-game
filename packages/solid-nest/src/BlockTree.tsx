@@ -1,6 +1,7 @@
 import type { JSX } from '@solidjs/web';
 import { Dynamic } from '@solidjs/web';
-import { Accessor, Component, createMemo, createTrackedEffect, For, onSettled, Show } from 'solid-js';
+import type { Accessor, Component } from 'solid-js';
+import { createMemo, createTrackedEffect, For, onCleanup, onSettled, Show, untrack } from 'solid-js';
 import { BlockItem, Item, ItemId } from './Item';
 import {
   AnimationState,
@@ -118,6 +119,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
   let focusElement!: HTMLDivElement;
 
   onSettled(injectCSS);
+  onCleanup(() => itemElements.clear());
 
   const options = createMemo(() => ({
     transitionDuration: props.transitionDuration ?? 200,
@@ -309,6 +311,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
     styles?: Accessor<Map<string, AnimationState>>
   ) => {
     const inWrapParent = itemProps.parentLayout === 'wrap';
+    const itemChildren = createMemo(() => tree().children(item.id));
 
     if (item.kind === 'container') {
       const isWrap = item.layout === 'wrap';
@@ -333,9 +336,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
             ...(inWrapParent ? { width: '100%' } : {})
           }}
         >
-          <For each={tree().children(item.id)}>
-            {(child) => renderItem(child, tree, { parentLayout: item.layout }, styles)}
-          </For>
+          <For each={itemChildren()}>{(child) => renderItem(child, tree, { parentLayout: item.layout }, styles)}</For>
           <Show when={!isWrap}>
             <div class={spacerClass} style={spacerStyle(styles?.().get(item.id))} />
             <div style={{ 'margin-top': '-1px', 'padding-bottom': '1px' }} />
@@ -347,16 +348,17 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
     if (item.kind === 'block') {
       // In Legacy API every block gets an empty container child.
       // Only treat it as a "group" if those containers actually hold real blocks.
-      const hasRealChildren = tree()
-        .children(item.id)
-        .some((c) => {
+      const hasRealChildren = createMemo(() =>
+        itemChildren().some((c) => {
           if (c.kind !== 'container') return false;
           return tree()
             .children(c.id)
             .some((gc) => gc.kind !== 'placeholder');
-        });
-      const isWrapLeaf = inWrapParent && !hasRealChildren;
-      const isWrapGroup = inWrapParent && hasRealChildren;
+        })
+      );
+      const initiallyHasRealChildren = untrack(hasRealChildren);
+      const isWrapLeaf = inWrapParent && !initiallyHasRealChildren;
+      const isWrapGroup = inWrapParent && initiallyHasRealChildren;
       return (
         <div
           class={blockClass}
@@ -385,7 +387,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
               selected={selectedBlocks().includes(item.key)}
               dragging={itemProps.dragging === true}
             >
-              <For each={tree().children(item.id)}>{(child) => renderItem(child, tree, {}, styles)}</For>
+              <For each={itemChildren()}>{(child) => renderItem(child, tree, {}, styles)}</For>
             </Dynamic>
           </div>
         </div>
@@ -438,7 +440,9 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
       }}
     >
       <div ref={focusElement} tabindex={-1} />
-      {renderItem(root(), tree, {}, styles)}
+      <Show when={root()} keyed>
+        {(rootItem) => renderItem(rootItem, tree, {}, styles)}
+      </Show>
       {/* Drag ghost */}
       <Show when={dragTree()} keyed>
         {(tree) => {

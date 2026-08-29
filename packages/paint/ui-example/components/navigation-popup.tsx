@@ -2,44 +2,9 @@ import { Vec2 } from '@app-game/math';
 import { Mat3 } from '@app-game/ogl';
 import { distance, normalize } from '@app-game/ogl/math/functions/vec-2-func';
 import { createEventBus } from '@solid-primitives/event-bus';
-import { takeUntilCleanup } from '@utils/takeUntilCleanup';
-import { concat, fromEvent, merge, of, ReplaySubject, switchMap, take, takeUntil, tap } from 'rxjs';
-import { createSignal, createTrackedEffect, For, merge as mergeProps, onCleanup, Show, untrack } from 'solid-js';
+import { createSignal, createTrackedEffect, For, merge as mergeProps, Show, untrack } from 'solid-js';
 import { Cap } from './cap';
 import { Donut } from './donut';
-
-const createPointerEvent = (element: Element) => {
-  const down$ = fromEvent<PointerEvent>(element, 'pointerdown').pipe(
-    tap((event) => {
-      element.setPointerCapture(event.pointerId);
-    })
-  );
-
-  const replay$ = new ReplaySubject<PointerEvent>(1);
-
-  const up$ = merge(
-    fromEvent<PointerEvent>(element, 'pointerup'),
-    fromEvent<PointerEvent>(element, 'pointercancel'),
-    fromEvent<PointerEvent>(element, 'pointerout')
-  ).pipe(
-    tap((event) => {
-      element.releasePointerCapture(event.pointerId);
-      replay$.next(event);
-    }),
-    take(1)
-  );
-
-  const move$ = fromEvent<PointerEvent>(element, 'pointermove').pipe(takeUntil(up$));
-
-  onCleanup(() => {
-    replay$.unsubscribe();
-  });
-
-  return down$.pipe(
-    switchMap((start) => concat(of(start), move$, replay$)),
-    takeUntilCleanup()
-  );
-};
 
 /**
  * ```
@@ -69,160 +34,120 @@ export const NavigationPopup = (props: {
     props
   );
 
+  const zoom = createZoom();
+  zoom.active.listen((value) => props.navigationIsActive?.(value));
+  createTrackedEffect(() => {
+    props.zoomDelta?.(zoom.zoom());
+  });
+
+  const rotate = createRotate();
+  rotate.active.listen((value) => props.navigationIsActive?.(value));
+  createTrackedEffect(() => {
+    props.rotationDelta?.(rotate.angle());
+  });
+
+  const translate = createTranslate();
+  translate.active.listen((value) => props.navigationIsActive?.(value));
+  createTrackedEffect(() => {
+    props.positionDelta?.(translate.position());
+  });
+
   return (
     <svg class="stroke-width-1 z-1 h-30 w-30 scale-90 stroke-black transition-transform in-[.active]:scale-100">
-      {(() => {
-        // zoom navigation element
-        const nav = createZoom();
-        nav.active.listen((value) => props.navigationIsActive?.(value));
+      <Cap
+        x={merged.x}
+        y={merged.y}
+        radius={merged.radius}
+        horizontalMove={merged.horizontalMove}
+        up={true}
+        isActive={props.isActive}
+        class="fill-blue-400 transition-colors [&.active]:cursor-zoom-in [&.active]:fill-blue-200 [&.hover]:fill-blue-300"
+        onPointerLeave={zoom.end}
+        onPointerDown={(event: PointerEvent) => zoom.start({ x: event.clientX, y: event.clientY })}
+        onPointerUp={zoom.end}
+        onPointerMove={(event: PointerEvent) => zoom.move({ x: event.clientX, y: event.clientY })}
+        onPointerCancel={zoom.end}
+      />
 
-        createTrackedEffect(() => {
-          props.zoomDelta?.(nav.zoom());
-        });
+      <Cap
+        x={merged.x}
+        y={merged.y}
+        radius={merged.radius}
+        horizontalMove={merged.horizontalMove + merged.gap}
+        class="fill-blue-400 transition-colors [&.active]:cursor-e-resize [&.active]:fill-blue-200 [&.hover]:fill-blue-300"
+        isActive={props.isActive}
+        onPointerOver={(e: PointerEvent) => {
+          const element = e.target as SVGElement;
+          element.classList.add('hover');
+        }}
+        onPointerLeave={(e: PointerEvent) => {
+          const element = e.target as SVGElement;
+          element.classList.remove('hover');
+          element.classList.remove('active');
+          rotate.end();
+        }}
+        onPointerDown={(e: PointerEvent) => {
+          const element = e.target as SVGElement;
+          element.setPointerCapture(e.pointerId);
+          element.classList.add('active');
+          rotate.start({ x: e.clientX, y: e.clientY });
+        }}
+        onPointerUp={(e: PointerEvent) => {
+          const element = e.target as SVGElement;
+          element.releasePointerCapture(e.pointerId);
+          element.classList.remove('active');
+          rotate.end();
+        }}
+        onPointerMove={(e: PointerEvent) => {
+          rotate.move({ x: e.clientX, y: e.clientY });
+        }}
+        onPointerCancel={(e: PointerEvent) => {
+          const element = e.target as SVGElement;
+          element.classList.remove('hover');
+          rotate.end();
+        }}
+      />
 
-        return (
-          <Cap
-            ref={(element: Element) => {
-              createPointerEvent(element).subscribe({
-                next: (n) => {
-                  console.log(`log-next`, n);
-                },
-                error: (e) => {
-                  console.log(`log-error`, e);
-                },
-                complete: () => {
-                  console.log(`log-complete`);
-                }
-              });
-            }}
-            x={merged.x}
-            y={merged.y}
-            radius={merged.radius}
-            horizontalMove={merged.horizontalMove}
-            up={true}
-            isActive={props.isActive}
-            class="fill-blue-400 transition-colors [&.active]:cursor-zoom-in [&.active]:fill-blue-200 [&.hover]:fill-blue-300"
-            onPointerLeave={() => {
-              nav.end();
-            }}
-            onPointerDown={(e: PointerEvent) => {
-              nav.start({ x: e.clientX, y: e.clientY });
-            }}
-            onPointerUp={() => {
-              nav.end();
-            }}
-            onPointerMove={(e: PointerEvent) => {
-              nav.move({ x: e.clientX, y: e.clientY });
-            }}
-            onPointerCancel={() => {
-              nav.end();
-            }}
-          />
-        );
-      })()}
-
-      {(() => {
-        // rotate navigation element
-        const nav = createRotate();
-        nav.active.listen((value) => props.navigationIsActive?.(value));
-
-        createTrackedEffect(() => {
-          props.rotationDelta?.(nav.angle());
-        });
-
-        return (
-          <Cap
-            x={merged.x}
-            y={merged.y}
-            radius={merged.radius}
-            horizontalMove={merged.horizontalMove + merged.gap}
-            class="fill-blue-400 transition-colors [&.active]:cursor-e-resize [&.active]:fill-blue-200 [&.hover]:fill-blue-300"
-            isActive={props.isActive}
-            onPointerOver={(e: PointerEvent) => {
-              const element = e.target as SVGElement;
-              element.classList.add('hover');
-            }}
-            onPointerLeave={(e: PointerEvent) => {
-              const element = e.target as SVGElement;
-              element.classList.remove('hover');
-              element.classList.remove('active');
-              nav.end();
-            }}
-            onPointerDown={(e: PointerEvent) => {
-              const element = e.target as SVGElement;
-              element.setPointerCapture(e.pointerId);
-              element.classList.add('active');
-              nav.start({ x: e.clientX, y: e.clientY });
-            }}
-            onPointerUp={(e: PointerEvent) => {
-              const element = e.target as SVGElement;
-              element.releasePointerCapture(e.pointerId);
-              element.classList.remove('active');
-              nav.end();
-            }}
-            onPointerMove={(e: PointerEvent) => {
-              nav.move({ x: e.clientX, y: e.clientY });
-            }}
-            onPointerCancel={(e: PointerEvent) => {
-              const element = e.target as SVGElement;
-              element.classList.remove('hover');
-              nav.end();
-            }}
-          />
-        );
-      })()}
-
-      {(() => {
-        const nav = createTranslate();
-        nav.active.listen((value) => props.navigationIsActive?.(value));
-
-        createTrackedEffect(() => {
-          props.positionDelta?.(nav.position());
-        });
-
-        return (
-          <Donut
-            x={merged.x}
-            y={merged.y}
-            inner_radius={merged.radius + merged.gap}
-            outer_radius={merged.radius + merged.thickness}
-            class={[
-              'fill-red-400 transition-colors [&.active]:cursor-move [&.active]:fill-red-200 [&.hover]:fill-red-300',
-              { 'pointer-events-auto': Boolean(props.isActive), 'pointer-events-none': !props.isActive }
-            ]}
-            onPointerOver={(e: PointerEvent) => {
-              const element = e.target as SVGElement;
-              element.classList.add('hover');
-            }}
-            onPointerLeave={(e: PointerEvent) => {
-              const element = e.target as SVGElement;
-              element.classList.remove('hover');
-              element.classList.remove('active');
-              nav.end();
-            }}
-            onPointerDown={(e: PointerEvent) => {
-              const element = e.target as SVGElement;
-              element.setPointerCapture(e.pointerId);
-              element.classList.add('active');
-              nav.start({ x: e.clientX, y: e.clientY });
-            }}
-            onPointerUp={(e: PointerEvent) => {
-              const element = e.target as SVGElement;
-              element.releasePointerCapture(e.pointerId);
-              element.classList.remove('active');
-              nav.end();
-            }}
-            onPointerMove={(e: PointerEvent) => {
-              nav.move({ x: e.clientX, y: e.clientY });
-            }}
-            onPointerCancel={(e: PointerEvent) => {
-              const element = e.target as SVGElement;
-              element.classList.remove('hover');
-              nav.end();
-            }}
-          />
-        );
-      })()}
+      <Donut
+        x={merged.x}
+        y={merged.y}
+        inner_radius={merged.radius + merged.gap}
+        outer_radius={merged.radius + merged.thickness}
+        class={[
+          'fill-red-400 transition-colors [&.active]:cursor-move [&.active]:fill-red-200 [&.hover]:fill-red-300',
+          { 'pointer-events-auto': Boolean(props.isActive), 'pointer-events-none': !props.isActive }
+        ]}
+        onPointerOver={(e: PointerEvent) => {
+          const element = e.target as SVGElement;
+          element.classList.add('hover');
+        }}
+        onPointerLeave={(e: PointerEvent) => {
+          const element = e.target as SVGElement;
+          element.classList.remove('hover');
+          element.classList.remove('active');
+          translate.end();
+        }}
+        onPointerDown={(e: PointerEvent) => {
+          const element = e.target as SVGElement;
+          element.setPointerCapture(e.pointerId);
+          element.classList.add('active');
+          translate.start({ x: e.clientX, y: e.clientY });
+        }}
+        onPointerUp={(e: PointerEvent) => {
+          const element = e.target as SVGElement;
+          element.releasePointerCapture(e.pointerId);
+          element.classList.remove('active');
+          translate.end();
+        }}
+        onPointerMove={(e: PointerEvent) => {
+          translate.move({ x: e.clientX, y: e.clientY });
+        }}
+        onPointerCancel={(e: PointerEvent) => {
+          const element = e.target as SVGElement;
+          element.classList.remove('hover');
+          translate.end();
+        }}
+      />
 
       <Show when={true}>
         <For

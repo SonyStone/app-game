@@ -10,7 +10,7 @@ import {
   type FederatedPointerEvent,
   type Ticker
 } from 'pixi.js';
-import { createTrackedEffect, onCleanup } from 'solid-js';
+import { createEffect, onCleanup } from 'solid-js';
 
 const WAVE_RAMP_SECONDS = 75;
 const NIGHT_FALL_SECONDS = 12;
@@ -141,10 +141,6 @@ export function NightDefenseScene(props: SceneProps) {
   let lastWidth = 0;
   let lastHeight = 0;
 
-  createTrackedEffect(() => {
-    resizeScene(props.width, props.height);
-  });
-
   const tickerCallback = (ticker: Ticker) => {
     const dt = Math.min(ticker.deltaMS / 1000, 0.05);
     const width = sceneWidth(props.width);
@@ -159,8 +155,6 @@ export function NightDefenseScene(props: SceneProps) {
 
     renderScene(game, visibility, width, height);
   };
-
-  app.ticker.add(tickerCallback);
 
   onCleanup(() => {
     app.ticker.remove(tickerCallback);
@@ -334,7 +328,7 @@ export function NightDefenseScene(props: SceneProps) {
     }
   }
 
-  return (
+  const scene = (
     <Container
       ref={(container) => {
         rootLayer = container;
@@ -454,6 +448,15 @@ export function NightDefenseScene(props: SceneProps) {
       />
     </Container>
   );
+
+  resizeScene(props.width, props.height);
+  createEffect(
+    () => [props.width, props.height] as const,
+    ([width, height]) => resizeScene(width, height)
+  );
+  app.ticker.add(tickerCallback);
+
+  return scene;
 
   function renderScene(state: GameState, grid: VisibilityGrid, width: number, height: number) {
     const tower = towerPosition(width, height);

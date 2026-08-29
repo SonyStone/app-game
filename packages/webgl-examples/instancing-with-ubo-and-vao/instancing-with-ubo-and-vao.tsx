@@ -176,7 +176,7 @@ export default function InstancingWithUBOandVAO() {
 
   const [running, start, stop] = createRAF(render);
 
-  start();
+  untrack(start);
 
   return (
     <>

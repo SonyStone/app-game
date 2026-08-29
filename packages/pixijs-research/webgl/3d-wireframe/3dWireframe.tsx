@@ -1,7 +1,7 @@
 import * as m4 from '@app-game/math/m4';
 import { create, setFromSpherical, setFromVec3 } from '@app-game/math/spherical';
 import { clamp } from '@app-game/math/utils/clamp';
-import { For, createMemo, createSignal, createTrackedEffect } from 'solid-js';
+import { For, createMemo, createSignal, createTrackedEffect, onCleanup, untrack } from 'solid-js';
 
 import { round } from '@app-game/gsap/core/utils';
 import { FVec3 } from '@app-game/math';
@@ -21,10 +21,11 @@ export default function Wireframe() {
   }
 
   window.addEventListener('resize', handleWindowResize);
+  onCleanup(() => window.removeEventListener('resize', handleWindowResize));
 
   const { cameraType } = useCamera();
 
-  const [transition, setTransition] = createSignal(cameraType() === 'perspective' ? 1 : 0);
+  const [transition, setTransition] = createSignal(untrack(cameraType) === 'perspective' ? 1 : 0);
 
   createTrackedEffect(() => {
     setTransition(cameraType() === 'perspective' ? 1 : 0);

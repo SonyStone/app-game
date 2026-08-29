@@ -1,6 +1,6 @@
 import { Camera, Color, Mesh, Orbit, Plane, Program, Renderer, Texture, Transform } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createTrackedEffect } from 'solid-js';
+import { createTrackedEffect, untrack } from 'solid-js';
 
 import leaf from './leaf.jpg?url';
 
@@ -80,7 +80,7 @@ export default function SortTransparency() {
 
   const [running, start, stop] = createRAF(update);
 
-  start();
+  untrack(start);
 
   return <>{gl.canvas}</>;
 }

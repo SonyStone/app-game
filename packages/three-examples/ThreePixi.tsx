@@ -1,53 +1,45 @@
 import { Application, Container, Sprite, Texture } from 'pixi.js';
-import { onCleanup } from 'solid-js';
+import { createEffect, createMemo, onCleanup } from 'solid-js';
 import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
-
-function createApplication() {
-  // const renderer =
-
-  const renderer = new Application();
-  renderer.init({
-    width: 640,
-    height: 360,
-    backgroundAlpha: 0.5
-  });
-  const stage = new Container();
-
-  return {
-    stage,
-    renderer: renderer.renderer
-  };
-}
+import bunnyUrl from '../tanki/bunny.png?url';
 
 export default function ThreePixi() {
   // Pixi.js
   const pixi = (function () {
-    const { renderer, stage } = createApplication();
-    const texture = Texture.from('bunny.png');
-    const sprite = new Sprite(texture);
-    stage.addChild(sprite);
-
-    let elapsed = 0.0;
-    let id: number;
-    function animate() {
-      id = requestAnimationFrame(animate);
-      const delta = 1;
-      elapsed += delta;
-      sprite.x = 100.0 + Math.cos(elapsed / 50.0) * 100.0;
-      renderer.render(stage);
-    }
-    animate();
-
-    // const app = new Application({ width: 640, height: 360 });
-    // console.log(`app`, app);
-
-    onCleanup(() => {
-      stage.destroy();
-      renderer.destroy();
-      cancelAnimationFrame(id);
+    const canvas = (<canvas />) as HTMLCanvasElement;
+    const initialized = createMemo(async () => {
+      const app = new Application();
+      await app.init({ canvas, width: 640, height: 360, backgroundAlpha: 0.5 });
+      return app;
     });
 
-    return renderer.view;
+    let disposePixi: (() => void) | undefined;
+    createEffect(initialized, (app) => {
+      disposePixi?.();
+
+      const stage = new Container();
+      const sprite = new Sprite(Texture.from(bunnyUrl));
+      stage.addChild(sprite);
+
+      let elapsed = 0;
+      let id = 0;
+      function animate() {
+        id = requestAnimationFrame(animate);
+        elapsed += 1;
+        sprite.x = 100 + Math.cos(elapsed / 50) * 100;
+        app.renderer.render(stage);
+      }
+      animate();
+
+      disposePixi = () => {
+        cancelAnimationFrame(id);
+        stage.destroy({ children: true });
+        app.destroy();
+      };
+    });
+    onCleanup(() => disposePixi?.());
+
+    return canvas;
   })();
 
   // Three.js

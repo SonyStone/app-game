@@ -1,3 +1,4 @@
+import { useHref, useResolvedPath } from '@solidjs/router';
 import type { JSX } from '@solidjs/web';
 import { For } from 'solid-js';
 import { Badge } from '../../components/ui/Badge';
@@ -31,28 +32,7 @@ export default function OverviewPage(): JSX.Element {
                 Topics
               </h2>
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <For each={quickLinks}>
-                  {(link) => (
-                    <a href={link.href} class="group">
-                      <Card class="transition-colors hover:border-stone-400 hover:bg-stone-100 dark:hover:border-neutral-700 dark:hover:bg-neutral-800/50">
-                        <div class="flex items-start justify-between gap-2">
-                          <div>
-                            <CardTitle class="mb-1 text-stone-950 transition-colors group-hover:text-violet-700 dark:text-neutral-100 dark:group-hover:text-violet-300">
-                              {link.title}
-                            </CardTitle>
-                            <CardDescription>{link.description}</CardDescription>
-                          </div>
-                          <span class="mt-0.5 text-xl">{link.icon}</span>
-                        </div>
-                        {link.tags && (
-                          <div class="mt-3 flex flex-wrap gap-1">
-                            <For each={link.tags}>{(tag) => <Badge variant="outline">{tag}</Badge>}</For>
-                          </div>
-                        )}
-                      </Card>
-                    </a>
-                  )}
-                </For>
+                <For each={quickLinks}>{(link) => <QuickLink link={link} />}</For>
               </div>
             </section>
           );
@@ -88,72 +68,98 @@ export default function OverviewPage(): JSX.Element {
   );
 }
 
+function QuickLink(props: { link: (typeof quickLinks)[number] }): JSX.Element {
+  const resolvedPath = useResolvedPath(() => props.link.href);
+  const href = useHref(resolvedPath);
+
+  return (
+    <a href={href()} class="group">
+      <Card class="transition-colors hover:border-stone-400 hover:bg-stone-100 dark:hover:border-neutral-700 dark:hover:bg-neutral-800/50">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle class="mb-1 text-stone-950 transition-colors group-hover:text-violet-700 dark:text-neutral-100 dark:group-hover:text-violet-300">
+              {props.link.title}
+            </CardTitle>
+            <CardDescription>{props.link.description}</CardDescription>
+          </div>
+          <span class="mt-0.5 text-xl">{props.link.icon}</span>
+        </div>
+        {props.link.tags && (
+          <div class="mt-3 flex flex-wrap gap-1">
+            <For each={props.link.tags}>{(tag) => <Badge variant="outline">{tag}</Badge>}</For>
+          </div>
+        )}
+      </Card>
+    </a>
+  );
+}
+
 const quickLinks = [
   {
-    href: './signals',
+    href: 'signals',
     title: 'Signals',
     description: 'createSignal, primitive reactive values, getters & setters.',
     icon: '⚡',
     tags: ['createSignal']
   },
   {
-    href: './derived',
+    href: 'derived',
     title: 'Derived & Memo',
     description: 'createMemo for derived state and expensive computations.',
     icon: '🧮',
     tags: ['createMemo']
   },
   {
-    href: './effects',
+    href: 'effects',
     title: 'Effects',
     description: 'createEffect, createTrackedEffect, onSettled, and cleanup patterns.',
     icon: '🔄',
     tags: ['createEffect', 'onSettled']
   },
   {
-    href: './batching',
+    href: 'batching',
     title: 'Scheduling & Untrack',
     description: 'Automatic update staging, flush(), and non-tracking reads.',
     icon: '📦',
     tags: ['flush', 'untrack']
   },
   {
-    href: './stores',
+    href: 'stores',
     title: 'Stores',
     description: 'createStore for nested/mutable reactive objects.',
     icon: '🗄️',
     tags: ['createStore', 'storePath', 'reconcile']
   },
   {
-    href: './context',
+    href: 'context',
     title: 'Context',
     description: 'createContext and useContext for dependency injection.',
     icon: '🌐',
     tags: ['createContext', 'useContext']
   },
   {
-    href: './components',
+    href: 'components',
     title: 'Component Patterns',
     description: 'Props, children, omit, and merge best practices.',
     icon: '🧩',
     tags: ['omit', 'merge']
   },
   {
-    href: './control-flow',
+    href: 'control-flow',
     title: 'Control Flow',
     description: 'Show, For, Switch, keyed lists, Dynamic, and Portal.',
     icon: '🔀',
     tags: ['Show', 'For', 'Switch']
   },
   {
-    href: './resources',
+    href: 'resources',
     title: 'Resources',
     description: 'Async createMemo with Loading, latest, and refresh.',
     icon: '🌊',
     tags: ['createMemo', 'Loading']
   },
   {
-    href: './primitives',
+    href: 'primitives',
     title: 'Primitives',
     description: '@solid-primitives patterns and utilities.',
     icon: '🛠️',

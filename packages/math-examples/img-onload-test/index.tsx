@@ -9,7 +9,8 @@ import {
   For,
   type Element as JSXElement,
   onCleanup,
-  Show
+  Show,
+  untrack
 } from 'solid-js';
 import { createRootMapPool } from './createRootMapPool';
 import { createImageCache } from './ImageCache';
@@ -46,20 +47,18 @@ export default function ImgOnLoadTest() {
 
 function ImagesRootMapPool() {
   const imagePool = createRootMapPool<number, string, JSXElement>((key, src) => {
+    onCleanup(() => {
+      console.log('🥲 Image cleaned up:', key);
+    });
     createTrackedEffect(() => {
       console.log('Creating POOLED image for src:', src());
     });
-    const [loadedCount, setLoadedCount] = createSignal(0);
+    const [loadedCount, setLoadedCount] = createSignal(0, { ownedWrite: true });
 
     return (
       <>
         <img
           id={`pooled-image-seed-${key}`}
-          ref={() => {
-            onCleanup(() => {
-              console.log('🥲 Image cleaned up:', key);
-            });
-          }}
           height={20}
           width={20}
           src={src()}
@@ -182,17 +181,23 @@ function ImageCreateAndDestroy() {
 
   function addImage() {
     const newImage = image.cloneNode(true) as HTMLImageElement;
-    spread(newImage, {
-      get height() {
-        return imageSize();
-      },
-      get width() {
-        return imageSize();
-      },
-      onload: (e: Event) => console.log('🥲 Cloned Image loaded:', e)
-    });
+    const size = untrack(imageSize);
+    newImage.height = size;
+    newImage.width = size;
+    newImage.onload = (event) => console.log('🥲 Cloned Image loaded:', event);
     holder.appendChild(newImage);
   }
+
+  const offscreenImage = (<img />) as HTMLImageElement;
+  spread(offscreenImage, {
+    get height() {
+      return imageSize();
+    },
+    get width() {
+      return imageSize();
+    },
+    src: getImageSrc('off')
+  });
 
   return (
     <div class="flex flex-col gap-4 rounded-md border border-gray-300 p-2">
@@ -230,21 +235,7 @@ function ImageCreateAndDestroy() {
           patchLogDomManipulation(ref);
         }}
       >
-        {(() => {
-          const img = (<img />) as HTMLImageElement;
-          spread(img, {
-            get height() {
-              return imageSize();
-            },
-            get width() {
-              return imageSize();
-            },
-            get src() {
-              return getImageSrc('off');
-            }
-          });
-          return img;
-        })()}
+        {offscreenImage}
         <Show when={toggle()}>
           <div
             id="2"

@@ -1,4 +1,5 @@
-import { Accessor, createSignal, createTrackedEffect, onCleanup } from 'solid-js';
+import type { Accessor } from 'solid-js';
+import { createSignal, createTrackedEffect, onCleanup, untrack } from 'solid-js';
 import { ItemId } from './Item';
 import { AnimationState, calculateTransitionStyles } from './calculateTransitionStyles';
 import { measureBlocks, measureInnerBlocks } from './measure';
@@ -9,12 +10,12 @@ export function createAnimations<K, T>(
   itemElements: Map<ItemId, HTMLElement>,
   options: Accessor<{ transitionDuration: number }>
 ) {
-  const [tree, setTree] = createSignal(input());
+  const [tree, setTree] = createSignal(untrack(input));
   const [styles, setStyles] = createSignal(new Map<ItemId, AnimationState>());
-  const [animationState, setAnimationState] = createSignal<{
-    step: number;
-    fn: Generator<number>;
-  }>();
+  const [animationState, setAnimationState] = createSignal<{ step: number; fn: Generator<number> } | undefined>(
+    undefined,
+    { ownedWrite: true }
+  );
 
   function* animate(prev: VirtualTree<K, T>, next: VirtualTree<K, T>) {
     const initRects = measureInnerBlocks(itemElements);
@@ -44,7 +45,7 @@ export function createAnimations<K, T>(
     setStyles(new Map());
   }
 
-  let prevTree = tree();
+  let prevTree = untrack(tree);
   createTrackedEffect(() => {
     const nextTree = input();
     if (itemElements.has(nextTree.root.id)) {
@@ -53,7 +54,13 @@ export function createAnimations<K, T>(
     prevTree = nextTree;
   });
 
+  let timer: ReturnType<typeof setTimeout> | undefined;
   createTrackedEffect(() => {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timer = undefined;
+    }
+
     const state = animationState();
     if (!state) return;
 
@@ -65,11 +72,13 @@ export function createAnimations<K, T>(
 
     const next = { step: state.step + 1, fn: state.fn };
     if (result.value > 0) {
-      const timer = setTimeout(() => setAnimationState(next), result.value);
-      onCleanup(() => clearTimeout(timer));
+      timer = setTimeout(() => setAnimationState(next), result.value);
     } else {
       setAnimationState(next);
     }
+  });
+  onCleanup(() => {
+    if (timer !== undefined) clearTimeout(timer);
   });
 
   return { tree, styles };

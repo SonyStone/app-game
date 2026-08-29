@@ -1,5 +1,3 @@
-import { createEventListenerMap } from '@solid-primitives/event-listener';
-import { createMutationObserver } from '@solid-primitives/mutation-observer';
 import { ReactiveSet } from '@solid-primitives/set';
 import { createMemo, createSignal, createTrackedEffect, For, Match, Show, Switch } from 'solid-js';
 import { SVGNode } from './svg-node';
@@ -214,11 +212,22 @@ export function useSvgSelect<T>() {
     if (!svg) return;
 
     spatialIndex.initializeSpatialIndex(svg);
-    createMutationObserver(svg, { childList: true }, () => {
+    const observer = new MutationObserver(() => {
       spatialIndex.initializeSpatialIndex(svg);
     });
+    observer.observe(svg, { childList: true });
 
-    createEventListenerMap(svg, eventListenerMap, { passive: true, capture: true, once: false });
+    const listeners = Object.entries(eventListenerMap) as Array<[string, EventListener]>;
+    for (const [type, listener] of listeners) {
+      svg.addEventListener(type, listener, { passive: true, capture: true });
+    }
+
+    return () => {
+      observer.disconnect();
+      for (const [type, listener] of listeners) {
+        svg.removeEventListener(type, listener, { capture: true });
+      }
+    };
   });
 
   return {

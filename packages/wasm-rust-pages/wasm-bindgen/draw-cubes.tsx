@@ -1,4 +1,3 @@
-import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { createSignal, onSettled } from 'solid-js';
 import { App } from './wasm_bindgen/libs/from-webgl-state-diagram/draw-cubes/pkg/draw_cubes';
 import { App as App2 } from './wasm_bindgen/libs/from-webgl-state-diagram/samplers/pkg/samplers';
@@ -30,17 +29,15 @@ function DrawCubes() {
       setFrameTook(performance.now() - now);
     };
 
-    createResizeObserver(
-      () => canvas as unknown as Element,
-      () => {
-        update();
-      }
-    );
+    const observer = new ResizeObserver(update);
+    observer.observe(canvas);
 
     // const [, start] = createRAF(() => {
     //   update();
     // });
     // start();
+
+    return () => observer.disconnect();
   });
 
   return (
@@ -75,12 +72,10 @@ function Samplers() {
       setFrameTook(performance.now() - now);
     };
 
-    createResizeObserver(
-      () => canvas as unknown as Element,
-      () => {
-        update();
-      }
-    );
+    const observer = new ResizeObserver(update);
+    observer.observe(canvas);
+
+    return () => observer.disconnect();
   });
 
   return (

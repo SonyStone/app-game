@@ -29,7 +29,7 @@ import {
   linear
 } from '@app-game/penner-easing-equations';
 import { Container, Graphics, Sprite, Text, useApplication, useAsset } from '@app-game/solid-pixi';
-import { createMemo, For, Loading, onSettled } from 'solid-js';
+import { createMemo, For, Loading, untrack } from 'solid-js';
 import { createElapsedMS } from '../useTick';
 
 const ANIMATION_EASING_FUNCTIONS = [
@@ -99,7 +99,7 @@ export default function AnimationsExample() {
         <Container x={app.screen.width / 2} y={50}>
           <For each={store}>
             {(item, index) => {
-              const easingFunction = getAnimation(index());
+              const easingFunction = getAnimation(untrack(index));
               const animationName = easingFunction.name;
               const startPosition = -200;
               const deltaPosition = 200;
@@ -129,12 +129,7 @@ export default function AnimationsExample() {
                     }}
                   />
                   <Sprite
-                    ref={(container) => {
-                      onSettled(() => {
-                        container.pivot.x = container.width / 2;
-                        container.pivot.y = container.height / 2;
-                      });
-                    }}
+                    anchor={0.5}
                     texture={texture()}
                     x={easingFunction(pingPongTime(), startPosition, deltaPosition, animationDuration)}
                   />

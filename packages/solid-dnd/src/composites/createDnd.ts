@@ -1,5 +1,5 @@
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
-import { createEffect, createMemo, createSignal, mapArray, onCleanup, type Accessor } from 'solid-js';
+import { createEffect, createMemo, createSignal, mapArray, onCleanup, untrack, type Accessor } from 'solid-js';
 import * as Place from '../core/place';
 import { fromElement } from '../core/rect';
 import type { GridConfig, LayoutMode } from '../core/types';
@@ -79,6 +79,7 @@ export function createDnd<TItem extends object, K extends string>(options: {
     return map;
   });
   const itemRefs = new Map<K, HTMLElement>();
+  onCleanup(() => itemRefs.clear());
   const gap = createGapState();
 
   const [dropPlace, setDropPlace] = createSignal<Place.Place<K> | undefined>(undefined, {
@@ -263,27 +264,28 @@ export function createDnd<TItem extends object, K extends string>(options: {
     containerKey: options.containerKey
   });
   createEffect(
-    () => display.displayKeys(),
-    () => {
-      if (sensor.isDragging() && isAnimEnabled()) {
-        flip.playFromFirst();
+    () => [display.displayKeys(), sensor.isDragging(), isAnimEnabled()] as const,
+    ([, dragging, animationEnabled]) => {
+      if (dragging && animationEnabled) {
+        untrack(() => flip.playFromFirst());
       }
     },
     { defer: true }
   );
 
   createEffect(
-    () => flip.isAnimating(),
-    (animating) => {
-      if (!animating && moveSwallowed && sensor.isDragging()) {
-        const position = insertionPosition();
+    () => [flip.isAnimating(), sensor.isDragging(), insertionPosition()] as const,
+    ([animating, dragging, position]) => {
+      if (!animating && moveSwallowed && dragging) {
         if (!position) {
           return;
         }
 
         moveSwallowed = false;
-        flip.captureFirst();
-        updateDropPlace(position);
+        untrack(() => {
+          flip.captureFirst();
+          updateDropPlace(position);
+        });
       }
     }
   );
@@ -337,9 +339,6 @@ export function createDnd<TItem extends object, K extends string>(options: {
       gap: false,
       ref(element: HTMLElement) {
         itemRefs.set(key, element);
-        onCleanup(() => {
-          itemRefs.delete(key);
-        });
       },
       key: key,
       get item() {

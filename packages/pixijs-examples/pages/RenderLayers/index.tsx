@@ -1,7 +1,7 @@
 import { Container, RenderLayer, Sprite, TilingSprite, useAssets } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { DisplacementFilter, Texture } from 'pixi.js';
-import { createMemo, For } from 'solid-js';
+import { For, Loading, Show, untrack } from 'solid-js';
 import { useTick as useTicker } from '../../useTick';
 import { Fish } from './Fish';
 
@@ -22,17 +22,23 @@ export default function RenderLayers() {
     `https://pixijs.com/assets/pond/displacement_fish2.png`
   ]);
 
-  // displacementMap.source.wrapMode = 'repeat';
+  return (
+    <Loading>
+      <Show when={assets()} keyed>
+        {(resolvedAssets) => <Pond assets={resolvedAssets} />}
+      </Show>
+    </Loading>
+  );
+}
+
+function Pond(props: { assets: Record<string, Texture> }) {
+  const assets = untrack(() => props.assets);
   const size = createWindowSize();
 
-  const displacementSpriteTexture = createMemo(() => {
-    const texture = assets()?.['https://pixijs.com/assets/pond/displacement_map.png'];
-    if (!texture) return undefined;
-    texture.source.addressMode = 'repeat';
-    return texture;
-  });
+  const displacementSpriteTexture = assets['https://pixijs.com/assets/pond/displacement_map.png'];
+  displacementSpriteTexture.source.addressMode = 'repeat';
 
-  const displacementSprite = (<Sprite texture={displacementSpriteTexture()} />) as ReturnType<typeof Sprite>;
+  const displacementSprite = (<Sprite texture={displacementSpriteTexture} />) as ReturnType<typeof Sprite>;
   const displacementFilter = new DisplacementFilter({
     sprite: displacementSprite,
     scale: 40
@@ -42,7 +48,7 @@ export default function RenderLayers() {
 
   const waterOverlay = (
     <TilingSprite
-      texture={assets()?.['https://pixijs.com/assets/pond/overlay.png']}
+      texture={assets['https://pixijs.com/assets/pond/overlay.png']}
       width={SIZE.width}
       height={SIZE.height}
     />
@@ -66,13 +72,13 @@ export default function RenderLayers() {
     <Container>
       <Container pivot={{ x: 100 * 3, y: 100 * 3 }} x={size.width / 2} y={size.height / 2} filters={displacementFilter}>
         {/* background */}
-        <Sprite texture={assets()?.['https://pixijs.com/assets/pond/displacement_BG.jpg']} />
+        <Sprite texture={assets['https://pixijs.com/assets/pond/displacement_BG.jpg']} />
         {displacementSprite}
         <For each={fishes}>
           {(fish, index) => (
             <Fish
               name={NAMES[index() % NAMES.length]}
-              texture={assets()?.[TEXTURES[index() % TEXTURES.length]]}
+              texture={assets[TEXTURES[index() % TEXTURES.length]]}
               x={fish.x}
               y={fish.y}
               layer={uiLayer}

@@ -16,7 +16,7 @@ const routes: Routes[] = [
   },
   {
     path: '/three-pixi',
-    name: 'ThreePixi (not working)',
+    name: 'ThreePixi',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('./ThreePixi'))
   },

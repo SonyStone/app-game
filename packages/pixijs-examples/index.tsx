@@ -1,5 +1,6 @@
 import { Application, Stage } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
+import { useHref, useResolvedPath } from '@solidjs/router';
 
 import { JSX } from '@solidjs/web/jsx-runtime';
 import { gsap } from 'gsap';
@@ -24,13 +25,7 @@ export default function App(props: { children?: JSX.Element }) {
   return (
     <>
       <div class="absolute top-0 left-0 z-10 flex flex-col gap-2 bg-white p-2">
-        <For each={routes}>
-          {(route) => (
-            <a href={'.' + route.path} class="text-blue-500 hover:underline">
-              {route.name}
-            </a>
-          )}
-        </For>
+        <For each={routes}>{(route) => <ExampleLink href={route.path.replace(/^\//, '')} name={route.name} />}</For>
       </div>
       <Show when={false}>
         <OffscreenCanvas worker={new OffscreenCanvasWorker()} width={size.width} height={size.height} />
@@ -39,10 +34,10 @@ export default function App(props: { children?: JSX.Element }) {
         <Application resizeTo={window} canvas={canvas} background={'#1099bb'} useBackBuffer={true} antialias={true}>
           <Stage>
             <Transition
-              onEnter={(el, done) => {
+              onEnter={(element, done) => {
                 gsap
                   .fromTo(
-                    el,
+                    element,
                     {
                       pixi: {
                         x: size.width / 2,
@@ -67,19 +62,15 @@ export default function App(props: { children?: JSX.Element }) {
                       duration: 0.3
                     }
                   )
-                  .eventCallback('onComplete', () => {
-                    done();
-                  });
+                  .eventCallback('onComplete', done);
               }}
-              onExit={(el, done) => {
+              onExit={(element, done) => {
                 gsap
-                  .to(el, {
+                  .to(element, {
                     pixi: { y: -size.height },
                     duration: 0.5
                   })
-                  .eventCallback('onComplete', () => {
-                    done();
-                  });
+                  .eventCallback('onComplete', done);
               }}
             >
               {props.children}
@@ -88,5 +79,16 @@ export default function App(props: { children?: JSX.Element }) {
         </Application>
       </Show>
     </>
+  );
+}
+
+function ExampleLink(props: { href: string; name: string }) {
+  const resolvedPath = useResolvedPath(() => props.href);
+  const href = useHref(resolvedPath);
+
+  return (
+    <a href={href()} class="text-blue-500 hover:underline">
+      {props.name}
+    </a>
   );
 }

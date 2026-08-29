@@ -1,6 +1,6 @@
 import { OGLRenderingContext, RenderTarget, Texture } from '@app-game/ogl';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { createSignal, createTrackedEffect } from 'solid-js';
+import { createSignal, createTrackedEffect, untrack } from 'solid-js';
 
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../../defaults';
 
@@ -12,9 +12,12 @@ export const createTextureToRenderTarget = (props: {
   target?: MaybeAccessor<RenderTarget>;
 }) => {
   const { gl, target = new RenderTarget(gl, DEFAULTS_RENDER_TARGET_OPTIONS) } = props;
-  const [layer, setLayer] = createSignal(access(target), { equals: () => false });
+  const [layer, setLayer] = createSignal(
+    untrack(() => access(target)),
+    { equals: () => false }
+  );
 
-  const mesh = new TextureMesh(gl, { texture: access(props.texture) });
+  const mesh = new TextureMesh(gl, { texture: untrack(() => access(props.texture)) });
 
   createTrackedEffect(() => {
     mesh.setMap(access(props.texture));

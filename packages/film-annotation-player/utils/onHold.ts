@@ -1,4 +1,3 @@
-import { createSubscription } from '@utils/createSubscription';
 import { animationFrameScheduler, fromEvent, merge, switchMapTo, takeUntil, timer } from 'rxjs';
 
 declare module '@solidjs/web' {
@@ -9,7 +8,8 @@ declare module '@solidjs/web' {
   }
 }
 
-export function onHold(element: HTMLElement, accessor: () => (event: number) => void) {
+/** Binds repeated hold events and returns a disposer for the subscription. */
+export function onHold(element: HTMLElement, accessor: () => (event: number) => void): () => void {
   const setDrag = accessor();
 
   const start$ = fromEvent(element, 'pointerdown');
@@ -17,7 +17,6 @@ export function onHold(element: HTMLElement, accessor: () => (event: number) => 
 
   const frameByFrame = start$.pipe(switchMapTo(timer(250, 50, animationFrameScheduler).pipe(takeUntil(end$))));
 
-  const subscription = createSubscription();
-
-  subscription.add(frameByFrame.subscribe((event) => setDrag(event)));
+  const subscription = frameByFrame.subscribe((event) => setDrag(event));
+  return () => subscription.unsubscribe();
 }

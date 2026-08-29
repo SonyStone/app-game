@@ -1,6 +1,6 @@
 // @ts-expect-error dat.gui does not ship types in this workspace
 import * as dat from 'dat.gui';
-import { Scene } from 'phaser';
+import Phaser, { Scene } from 'phaser';
 import { onCleanup } from 'solid-js';
 
 class Example extends Scene {

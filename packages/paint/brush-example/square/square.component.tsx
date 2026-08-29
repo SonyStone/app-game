@@ -1,6 +1,6 @@
 import { OGLRenderingContext, Texture, Transform } from '@app-game/ogl';
 import { MaybeAccessor } from '@solid-primitives/utils';
-import { onCleanup } from 'solid-js';
+import { onCleanup, untrack } from 'solid-js';
 import { createSquareMesh } from './create-square-mesh';
 
 export const SquareComponent = (props: {
@@ -12,10 +12,11 @@ export const SquareComponent = (props: {
   zIndex?: MaybeAccessor<number>;
 }) => {
   const mesh = createSquareMesh(props);
+  const parent = untrack(() => props.parent);
 
-  mesh.setParent(props.parent);
+  mesh.setParent(parent);
   onCleanup(() => {
-    props.parent.removeChild(mesh);
+    parent.removeChild(mesh);
   });
 
   return <></>;

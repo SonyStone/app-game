@@ -1,5 +1,5 @@
 import { access, findGapElement, MaybeAccessor, type GapKey } from 'solid-dnd';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup, untrack } from 'solid-js';
 
 // ============================================================================
 // MARK: Types
@@ -60,7 +60,7 @@ export function useGapTrail(opts: {
     function sample() {
       if (!gapSampling) return;
 
-      const gapEl = findGapElement(opts.getElement);
+      const gapEl = untrack(() => findGapElement(opts.getElement));
       if (gapEl) {
         const center = getCenter(gapEl);
         setGapTrail((prev) => {
@@ -87,23 +87,25 @@ export function useGapTrail(opts: {
   }
 
   createEffect(
-    () => access(opts.isDragging),
-    (dragging) => {
-      if (!access(opts.enabled)) return;
+    () => [access(opts.isDragging), access(opts.enabled)] as const,
+    ([dragging, enabled]) => {
+      if (!enabled) return;
 
-      if (dragging) {
-        setGapTrail([]);
-        setCycleMarkers([]);
-        cycleCounter = 0;
-        startGapSampling();
-      } else {
-        const gapEl = findGapElement(opts.getElement);
-        if (gapEl) {
-          const center = getCenter(gapEl);
-          setGapTrail((prev) => [...prev, center]);
+      untrack(() => {
+        if (dragging) {
+          setGapTrail([]);
+          setCycleMarkers([]);
+          cycleCounter = 0;
+          startGapSampling();
+        } else {
+          const gapEl = findGapElement(opts.getElement);
+          if (gapEl) {
+            const center = getCenter(gapEl);
+            setGapTrail((prev) => [...prev, center]);
+          }
+          stopGapSampling();
         }
-        stopGapSampling();
-      }
+      });
     }
   );
 
@@ -113,7 +115,7 @@ export function useGapTrail(opts: {
   function addCycleMarker(): number {
     cycleCounter++;
     const current = cycleCounter;
-    const gapEl = findGapElement(opts.getElement);
+    const gapEl = untrack(() => findGapElement(opts.getElement));
     if (gapEl) {
       const center = getCenter(gapEl);
       setCycleMarkers((prev) => [...prev, { number: current, position: center }]);

@@ -15,7 +15,7 @@ import {
 
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createTrackedEffect } from 'solid-js';
+import { createTrackedEffect, untrack } from 'solid-js';
 import fragment from './helpers.frag?raw';
 import vertex from './helpers.vert?raw';
 
@@ -79,7 +79,7 @@ export default function Helpers() {
   }
 
   const [, start] = createRAF(update);
-  start();
+  untrack(start);
 
   return gl.canvas;
 }

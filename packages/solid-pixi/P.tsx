@@ -47,7 +47,7 @@ import {
   type TextOptions,
   type TilingSpriteOptions
 } from 'pixi.js';
-import { omit, type Ref } from 'solid-js';
+import { omit, snapshot, untrack, type Ref } from 'solid-js';
 import { CommonPropKeys } from './interfaces';
 import { insert, spread } from './runtime';
 
@@ -55,11 +55,21 @@ function createPixiComponent<T, O>(PixiComponent: new (options: O) => T) {
   return function (props: Omit<Partial<O>, 'children'> & Partial<{ children: JSX.Element; as: T; ref: Ref<T> }>) {
     const pixis = omit(props, ...CommonPropKeys);
 
-    const as = props.as || new PixiComponent(pixis as O);
+    const as = untrack(() => props.as ?? new PixiComponent(snapshot(pixis) as O));
+    const ref = untrack(() => props.ref);
+    applyComponentRef(ref, as);
     spread(as, pixis);
     insert(as, () => props.children);
     return as as T & JSX.Element;
   };
+}
+
+function applyComponentRef<T>(ref: Ref<T>, value: T): void {
+  if (Array.isArray(ref)) {
+    for (const nestedRef of ref) applyComponentRef(nestedRef, value);
+    return;
+  }
+  if (typeof ref === 'function') (ref as (value: T) => void)(value);
 }
 
 /** Base class for grouping objects */

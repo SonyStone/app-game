@@ -83,7 +83,7 @@ export function createExplorerSources(backend: ExplorerBackend) {
       }
     }
 
-    void load();
+    queueMicrotask(() => void load());
     return { value, loading, error, load } as const;
   }
 }

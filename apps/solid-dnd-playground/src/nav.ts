@@ -15,17 +15,17 @@ export type NavSection = {
 export const navSections: NavSection[] = [
   {
     title: 'Draggable',
-    items: [{ label: 'Sensor', href: './' }]
+    items: [{ label: 'Sensor', href: '' }]
   },
   {
     title: 'Sortable',
-    items: [{ label: 'Sortable overlay', href: './sortable-overlay' }]
+    items: [{ label: 'Sortable overlay', href: 'sortable-overlay' }]
   },
   {
     title: 'Containers',
     items: [
-      { label: 'Nested', href: './nested' },
-      { label: 'Nested overlay', href: './nested-overlay' }
+      { label: 'Nested', href: 'nested' },
+      { label: 'Nested overlay', href: 'nested-overlay' }
     ]
   }
 ];

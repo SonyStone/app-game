@@ -1,6 +1,6 @@
 import { createEventBus } from '@solid-primitives/event-bus';
 import type { ComponentProps } from '@solidjs/web';
-import { children, createSignal, For, omit, onSettled, Show } from 'solid-js';
+import { children, createSignal, For, omit, Show, untrack } from 'solid-js';
 import type { ItemId } from './flatItems';
 
 /** Renders one measurable, editable row with optional nested children. */
@@ -52,12 +52,10 @@ export function Item(
   let elementRef!: HTMLElement;
   let height = 0;
 
-  onSettled(() => {
-    height = elementRef.offsetHeight;
-    listen(({ deltaY, type }) => {
-      elementRef.style.height = height + deltaY + 'px';
-      if (type === 'end') height = elementRef.offsetHeight;
-    });
+  listen(({ deltaY, type }) => {
+    if (type === 'start') height = elementRef.offsetHeight;
+    elementRef.style.height = height + deltaY + 'px';
+    if (type === 'end') height = elementRef.offsetHeight;
   });
 
   return (
@@ -65,8 +63,9 @@ export function Item(
       <li
         {...others}
         ref={(element) => {
-          if (others.ref instanceof Function) others.ref(element);
-          else if (others.ref) others.ref = element;
+          const externalRef = untrack(() => others.ref);
+          if (externalRef instanceof Function) externalRef(element);
+          else if (externalRef) others.ref = element;
           elementRef = element;
         }}
         class={[

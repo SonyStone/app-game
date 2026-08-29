@@ -1,86 +1,34 @@
+import { For } from 'solid-js';
+
 import { World } from './World';
 
-class Store {
-  entities = [
-    {
-      props: {
-        position: { x: 3, y: 3 },
-        shape: 'box',
-      },
-    },
-    {
-      props: {
-        position: { x: 3, y: 3 },
-        shape: 'box',
-      },
-    },
-  ];
-
-  run() {
-    for (const id in this.entities) {
-      const entity = this.entities[id];
-      entity.props.position;
-    }
-  }
-}
-
-// const Renderable = { ...Position, ...Shape }
-
-interface Entity {
-  [key: string]: any;
-}
-
-interface Point {
-  x: number;
-  y: number;
-}
-
-interface Position {
-  position: Point;
-}
-
-interface Shape {
-  shape: string;
-}
-
+/** Shows the entities currently represented by the unfinished ECS prototype. */
 export default function Main() {
-  const entites: Entity = [
-    {
-      position: { x: 3, y: 3 },
-    },
-    {},
-    {},
+  const entities = [
+    { name: 'Human', position: { x: 10, y: 10 } },
+    { name: 'Sheep', position: { x: 1, y: 20 } },
+    { name: 'Plant', position: { x: 3, y: 14 } },
+    { name: 'Tree', position: { x: 30, y: 10 } }
   ];
 
-  const wd = new World({
+  new World({
     systems: [],
-    entities: [
-      {
-        name: 'Human',
-        props: {
-          position: { x: 10, y: 10 },
-        },
-      },
-      {
-        name: 'Sheep',
-        props: {
-          position: { x: 1, y: 20 },
-        },
-      },
-      {
-        name: 'Plant',
-        props: {
-          position: { x: 3, y: 14 },
-        },
-      },
-      {
-        name: 'tree',
-        props: {
-          position: { x: 30, y: 10 },
-        },
-      },
-    ],
+    entities: entities.map(({ name, position }) => ({ name, props: { position } }))
   });
 
-  return <></>;
+  return (
+    <main class="p-6">
+      <h1 class="mb-2 text-2xl font-bold">Game ECS</h1>
+      <p class="mb-4">Work in progress: the prototype world currently contains these entities.</p>
+      <ul class="list-disc pl-6">
+        <For each={entities}>
+          {(entity) => (
+            <li>
+              {entity.name}: ({entity.position.x}, {entity.position.y})
+            </li>
+          )}
+        </For>
+      </ul>
+    </main>
+  );
 }

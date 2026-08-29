@@ -3,7 +3,7 @@ import { createTimer } from '@app-game/utils/timeout';
 import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createSignal, createTrackedEffect, onSettled } from 'solid-js';
+import { createSignal, createTrackedEffect, onSettled, untrack } from 'solid-js';
 import { BlendModes, ColorBlendModes } from '../brush-example/blend-modes';
 import { BlendMesh } from '../brush-example/blend/blend-mesh';
 import { BrushStrokeMesh } from '../brush-example/brush-instancing/brush-stroke-mesh';
@@ -104,7 +104,7 @@ export default function CanvasPaintStepByStep() {
     render();
     renderer.render({ scene });
   });
-  start();
+  untrack(start);
 
   onSettled(() => {
     void (async () => {

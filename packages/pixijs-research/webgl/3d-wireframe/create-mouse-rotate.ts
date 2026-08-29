@@ -1,15 +1,15 @@
 import { Vec2 } from '@app-game/math';
 import { createSignal, onCleanup } from 'solid-js';
 
-export function createMouseRotate(element: HTMLElement) {
+export function createMouseRotate(element: HTMLElement, initialTheta = 0, initialPhi = 0) {
   const rotateStart = new Vec2();
   const rotateEnd = new Vec2();
   const rotateDelta = new Vec2();
   let thetaDelta = 0;
   let phiDelta = 0;
 
-  const [theta, setTheta] = createSignal(0);
-  const [phi, setPhi] = createSignal(0);
+  const [theta, setTheta] = createSignal(initialTheta);
+  const [phi, setPhi] = createSignal(initialPhi);
 
   const onPointerMove = (event: PointerEvent) => {
     if (event.pointerType === 'touch') {

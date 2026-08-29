@@ -198,15 +198,15 @@ export default function CirclesBoxesDOM() {
 
   window.addEventListener('resize', resizeCanvas, false);
 
-  let destory: () => void;
+  let destroy: (() => void) | undefined;
 
   onSettled(() => {
-    destory = build(div);
+    destroy = build(div);
   });
 
   onCleanup(() => {
     window.removeEventListener('resize', resizeCanvas);
-    destory();
+    destroy?.();
   });
 
   return div;

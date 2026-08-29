@@ -1,5 +1,5 @@
 import { createEventBus } from '@solid-primitives/event-bus';
-import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { createMemo, createSignal, untrack, type Accessor } from 'solid-js';
 
 import type { EditorCommand, EditorCommandEvent } from '../../editor/commands';
 import { pushCommandHistory, type CommandHistoryPolicy } from '../../editor/commands';
@@ -21,7 +21,7 @@ export function createEditorDocuments(options: {
   readonly onParseError: () => void;
 }) {
   const [tabs, setTabs] = createSignal<readonly EditorTab[]>([createInitialTab()]);
-  const [activeTabId, setActiveTabId] = createSignal(tabs()[0]?.id ?? '');
+  const [activeTabId, setActiveTabId] = createSignal(untrack(tabs)[0]?.id ?? '');
   const [historyVersion, setHistoryVersion] = createSignal(0);
   const commandEvents = createEventBus<EditorCommandEvent>();
   const histories = new Map<string, HistoryState>();

@@ -1,3 +1,4 @@
+import { untrack } from 'solid-js';
 import { clamp, distance, eventPoint, type Point } from './geometry';
 
 export type PinchScaleController = {
@@ -18,7 +19,7 @@ export type PinchScaleControllerOptions = {
 export function createPinchScaleController(options: PinchScaleControllerOptions): PinchScaleController {
   const pointers = new Map<number, Point>();
   let startDistance: number | undefined;
-  let startScale = options.getScale();
+  let startScale = untrack(options.getScale);
 
   return {
     onPointerDown(event) {

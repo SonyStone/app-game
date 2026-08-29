@@ -1,10 +1,9 @@
-import { Resizable, ResizableHandle, ResizablePanel } from '@app-game/components/ui/resizable';
 import { Meta, Title } from '@solidjs/meta';
-import type { JSX } from '@solidjs/web';
 import { createSignal, createTrackedEffect } from 'solid-js';
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 import * as std from 'typegpu/std';
+import { ResizeContainer } from '../ui/ResizeContainer';
 import { TypeGPUProvider, useTypeGPU } from '../utils/TypeGPU';
 
 type Examples = 'threeColors' | 'checkerboard';
@@ -34,18 +33,6 @@ export default function WebGPUInterStageVariables() {
         </ResizeContainer>
       </div>
     </>
-  );
-}
-
-function ResizeContainer(props: { children: JSX.Element }) {
-  return (
-    <Resizable class="flex-1 overflow-hidden border-0">
-      <ResizablePanel class="flex w-0 flex-grow flex-col overflow-hidden border-0" initialSize={0.3} minSize={0.1}>
-        {props.children}
-      </ResizablePanel>
-      <ResizableHandle withHandle orientation="vertical" class="border-0 bg-inherit hover:bg-blue-400" />
-      <ResizablePanel initialSize={0.7} />
-    </Resizable>
   );
 }
 
@@ -100,7 +87,7 @@ const checkerboard = (() => {
     let cyan = vec4f(0, 1, 1, 1);
 
     let grid = vec2u(in.pos.xy) / 8;
-    let checker = (grid.x + grid.y) % 2 == 1;
+    let checker = (grid.x + grid.y) % 2 === 1;
 
     return select(red, cyan, checker);
   }`;
@@ -114,7 +101,7 @@ const checkerboard = (() => {
     const red = d.vec4f(1, 0, 0, 1);
     const cyan = d.vec4f(0, 1, 1, 1);
     const grid = std.div(d.vec2u(pos.xy), 8);
-    const checker = (grid.x + grid.y) % 2 == 1;
+    const checker = (grid.x + grid.y) % 2 === 1;
     return std.select(red, cyan, checker);
   });
 

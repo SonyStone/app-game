@@ -1,6 +1,6 @@
 import { Vec2Tuple } from '@app-game/ogl/math/vec-2_old';
 import type { ComponentProps } from '@solidjs/web';
-import { createMemo, createTrackedEffect, onSettled } from 'solid-js';
+import { createMemo, createTrackedEffect } from 'solid-js';
 import useDrag from './use-drag';
 
 declare module '@solidjs/web' {
@@ -43,25 +43,22 @@ type Which = keyof typeof comps;
 export default function PanelResizeHandle(props: { which: Which; onDrag?: (vec: Vec2Tuple) => void }) {
   let element!: HTMLElement;
 
-  onSettled(() => {
-    const drag = useDrag(element);
+  const drag = useDrag(() => element);
 
-    createTrackedEffect(() => {
-      const { domDragStarted, startPos, detected, totalDistanceMoved, dragMovement, movement } = drag();
+  createTrackedEffect(() => {
+    const { domDragStarted, movement } = drag();
 
-      const which = props.which;
+    const which = props.which;
 
-      props.onDrag?.(movement);
+    props.onDrag?.(movement);
 
-      if (domDragStarted) {
-        if (which.startsWith('Bottom')) {
-          // Math.max(dragMovement, )
-          console.log(`dragMovement`, movement[1]);
-        } else if (which.startsWith('Top')) {
-          console.log(`dragMovement`, movement[1]);
-        }
+    if (domDragStarted) {
+      if (which.startsWith('Bottom')) {
+        console.log(`dragMovement`, movement[1]);
+      } else if (which.startsWith('Top')) {
+        console.log(`dragMovement`, movement[1]);
       }
-    });
+    }
   });
 
   const isDragging = createMemo(() => false);

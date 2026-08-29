@@ -43,11 +43,11 @@ export default function PaintApp() {
     // Clear the canvas
     gl.clear();
 
-    // Tell it to use our program (pair of shaders)
-    program.use();
-
     const matrix = projection(canvas.width, canvas.height).translate([256, 256]);
     program.matrix(matrix.value);
+
+    // Tell it to use our program (pair of shaders) after supplying its uniforms.
+    program.use();
 
     // draw
     // Bind the attribute/buffer set we want.

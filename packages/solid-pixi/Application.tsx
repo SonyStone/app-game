@@ -1,6 +1,16 @@
 import { createContextProvider } from '@app-game/solid-utils';
 import { type ApplicationOptions, DOMAdapter, Application as PixiApplication, WebWorkerAdapter } from 'pixi.js';
-import { type Element as JSXElement, Show, createMemo, createTrackedEffect, latest, omit, onCleanup } from 'solid-js';
+import {
+  createComponent,
+  createEffect,
+  createRoot,
+  flatten,
+  type Element as JSXElement,
+  omit,
+  onCleanup,
+  snapshot,
+  untrack
+} from 'solid-js';
 import { CommonPropKeys, type CommonProps } from './interfaces';
 
 export const [ApplicationProvider, useApplication] = createContextProvider<PixiApplication>();
@@ -23,29 +33,47 @@ const ApplicationPropKeys = [...CommonPropKeys, 'fallback'] as const;
  */
 export const Application = (props: ApplicationProps & { offscreen?: boolean }) => {
   const pixis = omit(props, ...ApplicationPropKeys);
+  const canvas = untrack(() => props.canvas) as HTMLCanvasElement;
+  const instance = untrack(() => props.as) ?? new PixiApplication();
+  const applicationRef = untrack(() => props.ref);
+  const options = untrack(() => snapshot(pixis)) as Partial<ApplicationOptions>;
+  let disposeContent: (() => void) | undefined;
+  let disposed = false;
+  let initialized = false;
 
-  if (props.offscreen) {
+  if (untrack(() => props.offscreen)) {
     DOMAdapter.set(WebWorkerAdapter);
   }
 
-  const app = createMemo(async () => {
-    const instance = props.as || new PixiApplication();
-    await instance.init(pixis);
-    return instance;
-  });
+  void instance.init(options).then(() => {
+    initialized = true;
+    if (disposed) {
+      instance.destroy(true, { children: true });
+      return;
+    }
 
-  createTrackedEffect(() => {
-    const instance = latest(app);
-    if (instance) props.ref?.(instance);
+    applicationRef?.(instance);
+    disposeContent = createRoot((dispose) => {
+      const content = createComponent(ApplicationProvider, {
+        value: instance,
+        get children() {
+          return props.children;
+        }
+      });
+
+      createEffect(
+        () => flatten(content),
+        () => undefined
+      );
+      return dispose;
+    });
   });
 
   onCleanup(() => {
-    latest(app)?.destroy(true, { children: true });
+    disposed = true;
+    disposeContent?.();
+    if (initialized) instance.destroy(true, { children: true });
   });
 
-  <Show when={latest(app)} fallback={props.fallback}>
-    {(app) => <ApplicationProvider value={app()}>{props.children}</ApplicationProvider>}
-  </Show>;
-
-  return props.canvas as HTMLCanvasElement;
+  return canvas;
 };

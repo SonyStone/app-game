@@ -1,9 +1,9 @@
 import { Vec2 } from '@app-game/math/v2';
-import { createTrackedEffect } from 'solid-js';
+import { createTrackedEffect, untrack } from 'solid-js';
 import { usePointMove } from './use-point-move';
 
 export function SVGEditPoint(props: { point?: Vec2; onChange?: (point: Vec2) => void }) {
-  const point = usePointMove(props.point);
+  const point = usePointMove(untrack(() => props.point));
 
   createTrackedEffect(() => {
     props.onChange?.(point.translation());

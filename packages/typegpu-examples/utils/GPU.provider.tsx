@@ -1,12 +1,12 @@
 import { createContextProvider } from '@app-game/solid-utils';
 import type { JSX } from '@solidjs/web';
-import { merge, Show } from 'solid-js';
+import { merge, Show, untrack } from 'solid-js';
 
 /**
  * Check if the browser supports WebGPU
  * And provide the GPU non null object.
  */
-const [Provider, useGPU] = createContextProvider<GPU, { value: GPU }>((props) => props.value, {
+const [Provider, useGPU] = createContextProvider<GPU, { value: GPU }>((props) => untrack(() => props.value), {
   errorMessage: 'GPUProvider is missing',
   defaultValue: navigator.gpu
 });
@@ -21,7 +21,7 @@ export function GPUProvider(props: Partial<{ children: JSX.Element; noGPU?: JSX.
 
   return (
     <Show when={navigator.gpu} fallback={props.noGPU}>
-      {(gpu) => <Provider value={gpu()}>{props.children}</Provider>}
+      {(gpu) => <Provider value={untrack(gpu)}>{props.children}</Provider>}
     </Show>
   );
 }

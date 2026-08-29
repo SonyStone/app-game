@@ -1,12 +1,12 @@
 import { createContextProvider } from '@app-game/solid-utils';
 import type { JSX } from '@solidjs/web';
-import { createMemo, Errored, isPending, latest, Match, merge, onCleanup, Switch } from 'solid-js';
+import { createMemo, Errored, isPending, latest, Match, merge, onCleanup, Switch, untrack } from 'solid-js';
 import tgpu, { TgpuRoot } from 'typegpu';
 import { useGPU } from './GPU.provider';
 
 const [Provider, useTypeGPURoot] = createContextProvider<TgpuRoot, { value: TgpuRoot }>(
   (props) => {
-    const root = props.value;
+    const root = untrack(() => props.value);
 
     onCleanup(() => {
       root.destroy();
@@ -40,7 +40,9 @@ export function TypeGPURootProvider(
     <Errored fallback={props.error}>
       <Switch>
         <Match when={isPending(root)}>{props.loading}</Match>
-        <Match when={latest(root)}>{(root) => <Provider value={root()}>{props.children}</Provider>}</Match>
+        <Match when={latest(root)}>
+          {(resolvedRoot) => <Provider value={untrack(resolvedRoot)}>{props.children}</Provider>}
+        </Match>
       </Switch>
     </Errored>
   );

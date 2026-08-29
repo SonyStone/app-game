@@ -1,5 +1,5 @@
 import type { JSX } from '@solidjs/web';
-import { createSignal, createTrackedEffect, onCleanup, Show } from 'solid-js';
+import { createSignal, createTrackedEffect, Show } from 'solid-js';
 
 import { useCloudStorage } from './CloudStorageContext';
 
@@ -22,7 +22,7 @@ export function DialogOverlay(): JSX.Element {
       };
 
       document.addEventListener('keydown', handleEscape);
-      onCleanup(() => document.removeEventListener('keydown', handleEscape));
+      return () => document.removeEventListener('keydown', handleEscape);
     }
   });
 

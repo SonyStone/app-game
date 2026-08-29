@@ -1,6 +1,6 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
-import { createMemo, createSignal, onSettled } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import { formatShortcut, KeyboardDisplay, LayoutToggle, type KeyboardLayout } from './keyboard-display';
 
 // ============================================================================
@@ -35,55 +35,53 @@ export default function InputVisualizer(): JSX.Element {
     return formatShortcut(keys);
   });
 
-  onSettled(() => {
-    makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
-      e.preventDefault();
-      const key = e.code;
-      setPressedKeys((prev) => {
-        const next = new Set([...prev, key]);
-        // Update last shortcut when we have at least one key
-        if (next.size > 0) {
-          setLastShortcut(formatShortcut(next));
-        }
-        return next;
-      });
-      setLastEvent(`↓ ${e.code} (key: "${e.key}")`);
+  makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
+    e.preventDefault();
+    const key = e.code;
+    setPressedKeys((prev) => {
+      const next = new Set([...prev, key]);
+      // Update last shortcut when we have at least one key
+      if (next.size > 0) {
+        setLastShortcut(formatShortcut(next));
+      }
+      return next;
     });
+    setLastEvent(`↓ ${e.code} (key: "${e.key}")`);
+  });
 
-    makeEventListener(window, 'keyup', (e: KeyboardEvent) => {
-      e.preventDefault();
-      const key = e.code;
-      setPressedKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
-      setLastEvent(`↑ ${e.code} (key: "${e.key}")`);
+  makeEventListener(window, 'keyup', (e: KeyboardEvent) => {
+    e.preventDefault();
+    const key = e.code;
+    setPressedKeys((prev) => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
     });
+    setLastEvent(`↑ ${e.code} (key: "${e.key}")`);
+  });
 
-    makeEventListener(window, 'mousedown', (e: MouseEvent) => {
-      setMouseButtons((prev) => ({
-        ...prev,
-        left: e.button === 0 ? true : prev.left,
-        middle: e.button === 1 ? true : prev.middle,
-        right: e.button === 2 ? true : prev.right
-      }));
-      setLastEvent(`↓ Mouse ${getMouseButtonName(e.button)}`);
-    });
+  makeEventListener(window, 'mousedown', (e: MouseEvent) => {
+    setMouseButtons((prev) => ({
+      ...prev,
+      left: e.button === 0 ? true : prev.left,
+      middle: e.button === 1 ? true : prev.middle,
+      right: e.button === 2 ? true : prev.right
+    }));
+    setLastEvent(`↓ Mouse ${getMouseButtonName(e.button)}`);
+  });
 
-    makeEventListener(window, 'mouseup', (e: MouseEvent) => {
-      setMouseButtons((prev) => ({
-        ...prev,
-        left: e.button === 0 ? false : prev.left,
-        middle: e.button === 1 ? false : prev.middle,
-        right: e.button === 2 ? false : prev.right
-      }));
-      setLastEvent(`↑ Mouse ${getMouseButtonName(e.button)}`);
-    });
+  makeEventListener(window, 'mouseup', (e: MouseEvent) => {
+    setMouseButtons((prev) => ({
+      ...prev,
+      left: e.button === 0 ? false : prev.left,
+      middle: e.button === 1 ? false : prev.middle,
+      right: e.button === 2 ? false : prev.right
+    }));
+    setLastEvent(`↑ Mouse ${getMouseButtonName(e.button)}`);
+  });
 
-    makeEventListener(window, 'contextmenu', (e: MouseEvent) => {
-      e.preventDefault();
-    });
+  makeEventListener(window, 'contextmenu', (e: MouseEvent) => {
+    e.preventDefault();
   });
 
   return (

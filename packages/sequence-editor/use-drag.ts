@@ -1,22 +1,20 @@
-import { createSignal, onCleanup, untrack } from "solid-js"
+import { createSignal, createTrackedEffect } from 'solid-js';
 
 type Vec2Tuple = [number, number];
 
-export default function useDrag(
-  target: HTMLElement | SVGElement,
-) {
+export default function useDrag(target: () => HTMLElement | SVGElement | undefined) {
   const [state, setState] = createSignal({
     domDragStarted: false,
     startPos: [0, 0] as Vec2Tuple,
     detected: false,
     totalDistanceMoved: 0,
     dragMovement: [0, 0] as Vec2Tuple,
-    movement: [0, 0] as Vec2Tuple,
-  })
+    movement: [0, 0] as Vec2Tuple
+  });
 
   function dragStartHandler(event: PointerEvent) {
-    event.stopPropagation()
-    event.preventDefault()
+    event.stopPropagation();
+    event.preventDefault();
 
     setState({
       domDragStarted: true,
@@ -27,13 +25,12 @@ export default function useDrag(
       movement: [0, 0] as Vec2Tuple
     });
 
-    (target as HTMLElement).removeEventListener('pointerdown', dragStartHandler)
+    activeTarget?.removeEventListener('pointerdown', dragStartHandler as EventListener);
     addDragListeners();
   }
 
   function dragHandler(event: PointerEvent) {
-
-    const distanceMoved = Math.abs(event.movementY) + Math.abs(event.movementX)
+    const distanceMoved = Math.abs(event.movementY) + Math.abs(event.movementX);
 
     setState((state) => ({
       domDragStarted: true,
@@ -46,33 +43,36 @@ export default function useDrag(
   }
 
   function dragEndHandler(event: PointerEvent) {
-    removeDragListeners()
+    removeDragListeners();
 
     setState((state) => ({ ...state, domDragStarted: false }));
 
-    (target as HTMLElement).addEventListener('pointerdown', dragStartHandler);
+    activeTarget?.addEventListener('pointerdown', dragStartHandler as EventListener);
   }
 
   function addDragListeners() {
-    document.addEventListener('pointermove', dragHandler)
-    document.addEventListener('pointerup', dragEndHandler)
-    document.addEventListener('pointercancel', dragEndHandler)
+    document.addEventListener('pointermove', dragHandler);
+    document.addEventListener('pointerup', dragEndHandler);
+    document.addEventListener('pointercancel', dragEndHandler);
   }
 
   function removeDragListeners() {
-    document.removeEventListener('pointermove', dragHandler)
-    document.removeEventListener('pointerup', dragEndHandler)
-    document.removeEventListener('pointercancel', dragEndHandler)
+    document.removeEventListener('pointermove', dragHandler);
+    document.removeEventListener('pointerup', dragEndHandler);
+    document.removeEventListener('pointercancel', dragEndHandler);
   }
 
+  let activeTarget: HTMLElement | SVGElement | undefined;
+  createTrackedEffect(() => {
+    activeTarget = target();
+    if (!activeTarget) return;
+    activeTarget.addEventListener('pointerdown', dragStartHandler as EventListener);
 
-
-  (target as HTMLElement).addEventListener('pointerdown', dragStartHandler)
-
-  onCleanup(() => {
-    removeDragListeners();
-    (target as HTMLElement).removeEventListener('pointerdown', dragStartHandler)
-  })
+    return () => {
+      activeTarget?.removeEventListener('pointerdown', dragStartHandler as EventListener);
+      removeDragListeners();
+    };
+  });
 
   return state;
 }

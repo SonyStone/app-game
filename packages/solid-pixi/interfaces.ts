@@ -7,4 +7,4 @@ export interface CommonProps<Component = Renderable, Data = object> {
   as?: Component;
 }
 
-export const CommonPropKeys: (keyof CommonProps<Renderable>)[] = ['children', 'as'] as const;
+export const CommonPropKeys: (keyof CommonProps<Renderable>)[] = ['children', 'ref', 'as'] as const;

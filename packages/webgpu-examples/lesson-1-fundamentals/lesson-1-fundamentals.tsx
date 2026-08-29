@@ -1,6 +1,6 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Meta, Title } from '@solidjs/meta';
-import { createStore, For, type Element as JSXElement, onCleanup, onSettled } from 'solid-js';
+import { createSignal, For, onCleanup, onSettled } from 'solid-js';
 import code from './lesson-1-fundamentals.wgsl?raw';
 
 export default function Lesson1Fundamentals() {
@@ -8,9 +8,10 @@ export default function Lesson1Fundamentals() {
   let device: GPUDevice | undefined;
   let render: () => void;
 
-  const [logs, setLogs] = createStore<JSXElement[]>([]);
-  const addLog = (log: JSXElement) => {
-    setLogs(() => [...logs, log]);
+  type LogEntry = { kind: 'error' | 'info'; message: string };
+  const [logs, setLogs] = createSignal<LogEntry[]>([], { ownedWrite: true });
+  const addLog = (entry: LogEntry) => {
+    setLogs((current) => [...current, entry]);
   };
 
   onSettled(() => {
@@ -18,15 +19,13 @@ export default function Lesson1Fundamentals() {
       // 1. start off by requesting an adapter, and then requesting a device from the adapter.
       const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
       const info = adapter?.info; // new API to get adapter info
-      addLog(
-        <span>
-          WebGPU adapter vendor: <span class="text-blue-700">{info?.vendor}</span>, architecture:{' '}
-          <span class="text-blue-700">{info?.architecture}</span>
-        </span>
-      );
+      addLog({
+        kind: 'info',
+        message: `WebGPU adapter vendor: ${info?.vendor ?? 'unknown'}, architecture: ${info?.architecture ?? 'unknown'}`
+      });
       device = await adapter?.requestDevice(); // GPUDevice object representing a connection to the physical or software device.
       if (!device) {
-        addLog(<span class="text-red-500">WebGPU is not supported</span>);
+        addLog({ kind: 'error', message: 'WebGPU is not supported' });
         return;
       }
 
@@ -40,7 +39,7 @@ export default function Lesson1Fundamentals() {
       const context = canvas.getContext('webgpu')!;
       const presentationFormat = navigator.gpu?.getPreferredCanvasFormat();
       if (!presentationFormat) {
-        addLog(<span class="text-red-500">WebGPU is not supported</span>);
+        addLog({ kind: 'error', message: 'WebGPU is not supported' });
         return { context, presentationFormat };
       }
       context.configure({
@@ -132,7 +131,9 @@ export default function Lesson1Fundamentals() {
         <a class="text-blue underline" href="https://webgpufundamentals.org/webgpu/lessons/webgpu-fundamentals.html">
           WebGPU Fundamentals
         </a>
-        <For each={logs}>{(log) => log}</For>
+        <For each={logs()}>
+          {(log) => <span class={log.kind === 'error' ? 'text-red-500' : 'text-blue-700'}>{log.message}</span>}
+        </For>
       </div>
     </>
   );

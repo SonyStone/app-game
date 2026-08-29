@@ -2,7 +2,6 @@ import {
   AnimationAction,
   AnimationClip,
   AnimationMixer,
-  Clock,
   Color,
   DirectionalLight,
   Fog,
@@ -16,20 +15,21 @@ import {
   PerspectiveCamera,
   PlaneGeometry,
   Scene,
+  Timer,
   Vector3,
-  WebGLRenderer,
-} from "three";
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
-import s from "./Main.module.scss";
+  WebGLRenderer
+} from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import s from './Main.module.scss';
 
-import { For, onCleanup } from "solid-js";
-import gatherObjects from "./assets/gather-objects.fbx?url";
-import girlWalk from "./assets/girl-walk.fbx?url";
-import lookAround from "./assets/look-around.fbx?url";
-import pushButton from "./assets/push-button.fbx?url";
-import run from "./assets/run.fbx?url";
-import stumbleBackwards from "./assets/stumble-backwards.fbx?url";
-import JoyStick from "./JoyStick";
+import { For, onCleanup } from 'solid-js';
+import gatherObjects from './assets/gather-objects.fbx?url';
+import girlWalk from './assets/girl-walk.fbx?url';
+import lookAround from './assets/look-around.fbx?url';
+import pushButton from './assets/push-button.fbx?url';
+import run from './assets/run.fbx?url';
+import stumbleBackwards from './assets/stumble-backwards.fbx?url';
+import JoyStick from './JoyStick';
 
 enum Modes {
   NONE,
@@ -37,27 +37,23 @@ enum Modes {
   INITIALISING,
   CREATING_LEVEL,
   ACTIVE,
-  GAMEOVER,
+  GAMEOVER
 }
 
 export default function Main() {
   const canvas = (<canvas class={s.canvas}></canvas>) as HTMLCanvasElement;
 
   const renderer = new WebGLRenderer({
-    canvas,
+    canvas
   });
 
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
 
-  const clock = new Clock();
-  const camera = new PerspectiveCamera(
-    75,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    1000
-  );
+  const timer = new Timer();
+  timer.connect(document);
+  const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
   const scene = new Scene();
 
   scene.background = new Color(0xa0a0a0);
@@ -80,10 +76,7 @@ export default function Main() {
 
   // ground
   {
-    var mesh = new Mesh(
-      new PlaneGeometry(2000, 2000),
-      new MeshPhongMaterial({ color: 0x999999, depthWrite: false })
-    );
+    var mesh = new Mesh(new PlaneGeometry(2000, 2000), new MeshPhongMaterial({ color: 0x999999, depthWrite: false }));
     mesh.rotation.x = -Math.PI / 2;
     mesh.receiveShadow = true;
     scene.add(mesh);
@@ -96,7 +89,7 @@ export default function Main() {
 
   const loader = new FBXLoader();
 
-  const cams = ["front", "back", "wide", "overhead", "collect"];
+  const cams = ['front', 'back', 'wide', 'overhead', 'collect'];
 
   const player: {
     mixer: AnimationMixer;
@@ -117,7 +110,7 @@ export default function Main() {
     move?: { forward: number; turn: number };
   } = {
     animationClips: {},
-    animationActions: {},
+    animationActions: {}
   } as any;
   let cameraFade = 0;
 
@@ -163,7 +156,7 @@ export default function Main() {
   let environmentProxy = undefined;
   function createDummyEnvironment() {
     const env = new Group();
-    env.name = "Environment";
+    env.name = 'Environment';
     scene.add(env);
 
     // const geometry = new BoxBufferGeometry(150, 150, 150);
@@ -180,14 +173,7 @@ export default function Main() {
     environmentProxy = env;
   }
 
-  const anims = [
-    gatherObjects,
-    lookAround,
-    pushButton,
-    run,
-    stumbleBackwards,
-    girlWalk,
-  ];
+  const anims = [gatherObjects, lookAround, pushButton, run, stumbleBackwards, girlWalk];
 
   function loadNextAnim(loader: FBXLoader) {
     // let anim = anims.pop()!;
@@ -197,10 +183,7 @@ export default function Main() {
         loader.loadAsync(anim).then((object: Group) => {
           const clip = object.animations[0];
           player.animationClips[anim] = clip;
-          player.animationActions[anim] = player.mixer.clipAction(
-            clip,
-            player.root
-          );
+          player.animationActions[anim] = player.mixer.clipAction(clip, player.root);
         })
       )
     ).then(() => {
@@ -209,12 +192,11 @@ export default function Main() {
   }
 
   let id: number;
-  function animate() {
-    const dt = clock.getDelta();
+  function animate(time?: number) {
+    timer.update(time);
+    const dt = timer.getDelta();
 
-    id = requestAnimationFrame(function () {
-      animate();
-    });
+    id = requestAnimationFrame(animate);
 
     if (player.mixer != undefined) {
       player.mixer.update(dt);
@@ -226,10 +208,7 @@ export default function Main() {
     }
 
     if (player.cameras != undefined && player.cameras.active != undefined) {
-      camera.position.lerp(
-        player.cameras.active.getWorldPosition(new Vector3()),
-        cameraFade
-      );
+      camera.position.lerp(player.cameras.active.getWorldPosition(new Vector3()), cameraFade);
       const pos = player.object.position.clone();
       pos.y += 90;
       camera.lookAt(pos);
@@ -257,7 +236,7 @@ export default function Main() {
     player.mixer = mixer;
     player.root = mixer.getRoot() as Group;
 
-    object.name = "Character";
+    object.name = 'Character';
 
     object.traverse(function (child: Object3D) {
       if ((child as any).isMesh) {
@@ -270,10 +249,7 @@ export default function Main() {
     player.object = object;
     const clip = object.animations[0];
     player.animationClips[girlWalk] = clip;
-    player.animationActions[girlWalk] = player.mixer.clipAction(
-      clip,
-      player.root
-    );
+    player.animationActions[girlWalk] = player.mixer.clipAction(clip, player.root);
 
     createCameras(object);
     loadNextAnim(loader);
@@ -286,6 +262,7 @@ export default function Main() {
 
   onCleanup(() => {
     renderer.dispose();
+    timer.dispose();
     scene.clear();
     cancelAnimationFrame(id);
   });
@@ -301,9 +278,7 @@ export default function Main() {
             player.cameras.active = (player.cameras as any)[value];
           }}
         >
-          <For each={cams}>
-            {(item) => <option value={item}>{item}</option>}
-          </For>
+          <For each={cams}>{(item) => <option value={item}>{item}</option>}</For>
         </select>
 
         <select
@@ -313,9 +288,7 @@ export default function Main() {
             action(value);
           }}
         >
-          <For each={anims}>
-            {(item) => <option value={item}>{item}</option>}
-          </For>
+          <For each={anims}>{(item) => <option value={item}>{item}</option>}</For>
         </select>
       </div>
       <JoyStick maxRadius={30} onMove={playerControl} />

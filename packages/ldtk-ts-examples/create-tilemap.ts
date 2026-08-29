@@ -1,5 +1,6 @@
-import { Level } from "@/ldtk-ts/typedef";
-import { Scene } from "phaser";
+import { Level } from '@/ldtk-ts/typedef';
+import * as Phaser from 'phaser';
+import { Scene } from 'phaser';
 
 export function createTilemap(this: Scene, level: Level) {
   const layers: Phaser.Tilemaps.LayerData[] = [];
@@ -10,13 +11,13 @@ export function createTilemap(this: Scene, level: Level) {
       __cHei: height,
       __gridSize: tileWidth,
       __gridSize: tileHeight,
-      autoLayerTiles,
+      autoLayerTiles
     } = layerInstance;
 
     const layerData = new Phaser.Tilemaps.LayerData({
       name,
       tileWidth,
-      tileHeight,
+      tileHeight
     });
 
     const data: (Phaser.Tilemaps.Tile | null)[][] = [];
@@ -31,16 +32,7 @@ export function createTilemap(this: Scene, level: Level) {
       const { t, f, px } = autoLayerTiles[index];
       const x = px[0] / tileWidth;
       const y = px[1] / tileHeight;
-      const tile = new Phaser.Tilemaps.Tile(
-        layerData,
-        t,
-        x,
-        y,
-        tileWidth,
-        tileHeight,
-        tileWidth,
-        tileHeight
-      );
+      const tile = new Phaser.Tilemaps.Tile(layerData, t, x, y, tileWidth, tileHeight, tileWidth, tileHeight);
 
       tile.flipX = f === 1 || f === 3 ? true : false;
       tile.flipY = f === 2 || f === 3 ? true : false;
@@ -53,24 +45,19 @@ export function createTilemap(this: Scene, level: Level) {
     layers.push(layerData);
   }
 
-  const {
-    __cWid: width,
-    __cHei: height,
-    __gridSize: tileWidth,
-    __gridSize: tileHeight,
-  } = level.layerInstances![0];
+  const { __cWid: width, __cHei: height, __gridSize: tileWidth, __gridSize: tileHeight } = level.layerInstances![0];
 
   const layerData = layers[0];
 
   const mapData = new Phaser.Tilemaps.MapData({
-    name: "",
+    name: '',
     width,
     height,
     tileWidth,
     tileHeight,
     orientation: Phaser.Tilemaps.Orientation.ORTHOGONAL,
     layers,
-    objects: [],
+    objects: []
   });
 
   mapData.width = layerData.width = width;

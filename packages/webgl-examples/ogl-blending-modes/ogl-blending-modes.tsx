@@ -2,7 +2,7 @@ import { GridHelperComponent } from '@app-game/math-examples/grid-helper.compone
 import { Camera, Orbit, Renderer, Texture, Transform, Vec3 } from '@app-game/ogl';
 import { BLENDING_FACTOR } from '@app-game/webgl/static-variables';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { For, createTrackedEffect } from 'solid-js';
+import { For, createTrackedEffect, untrack } from 'solid-js';
 
 import { PlaneComponent } from './plane.component';
 
@@ -75,7 +75,7 @@ export default function OglBlendingModes() {
     program.uniforms.u_time.value = t * 0.001;
     renderer.render({ scene, camera });
   });
-  start();
+  untrack(start);
 
   const blendsFactorsX = [
     BLENDING_FACTOR.ZERO,

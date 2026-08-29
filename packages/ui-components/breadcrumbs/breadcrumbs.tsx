@@ -5,7 +5,7 @@ import { Portal } from '@solidjs/web';
 import { toObservable } from '@utils/toObservable';
 import { toSignal } from '@utils/toSignal';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
-import { For, Show, createMemo, createSignal, createTrackedEffect, merge, untrack } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, merge, onCleanup, untrack } from 'solid-js';
 import { Ripple } from '../ripple/Ripple';
 
 declare module '@solidjs/web' {
@@ -51,27 +51,31 @@ export const Breadcrumbs = (props: {
   const merged = merge({ items: [], collapseFrom: Boundary.START }, props);
 
   const defaultChopSize = createMemo(() => halve(merged.items.length));
+  const initialItems = untrack(() => merged.items);
 
   const [state, setState] = createSignal<OverflowListState<any>>({
-    chopSize: defaultChopSize(),
+    chopSize: untrack(defaultChopSize),
     lastChopSize: undefined,
     overflow: [],
-    visible: merged.items,
+    visible: initialItems,
     repartitioning: false
   });
 
   const overflowLength = toSignal(
     toObservable(createMemo(() => state().overflow.length)).pipe(debounceTime(1), distinctUntilChanged()),
-    state().overflow.length
+    untrack(() => state().overflow.length)
   );
 
-  createTrackedEffect(() => {
-    setState((prev) => ({
-      ...prev,
-      chopSize: defaultChopSize(),
-      visible: merged.items
-    }));
-  });
+  createEffect(
+    () => [defaultChopSize(), merged.items] as const,
+    ([chopSize, items]) => {
+      setState((prev) => ({
+        ...prev,
+        chopSize,
+        visible: items
+      }));
+    }
+  );
 
   const minVisible = 0;
 
@@ -89,6 +93,7 @@ export const Breadcrumbs = (props: {
         ...prev,
         repartitioning: true
       });
+      requestAnimationFrame(repartition);
       return;
     }
 
@@ -105,7 +110,7 @@ export const Breadcrumbs = (props: {
     if (shouldShrink || shouldGrow) {
       let visible;
       let overflow;
-      if (merged.collapseFrom === Boundary.END) {
+      if (untrack(() => merged.collapseFrom) === Boundary.END) {
         const result = shiftElements(prev.visible, prev.overflow, prev.chopSize * (shouldShrink ? 1 : -1));
         visible = result[0];
         overflow = result[1];
@@ -127,8 +132,8 @@ export const Breadcrumbs = (props: {
         visible
       });
 
-      // repition until no more repartition are needed
-      repartition();
+      // Continue after Solid has committed the state update used by the next partition step.
+      requestAnimationFrame(repartition);
     } else {
       // repartition complete!
       setState({
@@ -141,14 +146,19 @@ export const Breadcrumbs = (props: {
   };
 
   const [showOverflow, setShowOverflow] = createSignal(false);
+  const [listElement, setListElement] = createSignal<HTMLUListElement>();
   let overflowButtonRef: HTMLButtonElement;
+  let initialRepartitionTimer: ReturnType<typeof setTimeout> | undefined;
+
+  createResizeObserver(listElement, repartition);
+  onCleanup(() => clearTimeout(initialRepartitionTimer));
 
   return (
     <ul
       class="m-0 flex min-w-0 flex-nowrap place-content-start p-0"
       ref={(element) => {
-        createResizeObserver(element, repartition);
-        setTimeout(repartition, 0);
+        setListElement(element);
+        initialRepartitionTimer = setTimeout(repartition, 0);
       }}
     >
       <Show when={merged.collapseFrom === Boundary.START && overflowLength() > 0}>

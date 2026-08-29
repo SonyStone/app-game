@@ -5,7 +5,7 @@ import { useKeyDownList } from '@solid-primitives/keyboard';
 import { createPointerPosition, type PointerStateWithActive } from '@solid-primitives/pointer';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { createMemo, createSignal, createTrackedEffect } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect, untrack } from 'solid-js';
 
 import { createEditorCommand, type EditorCommandEvent } from '../../editor/commands';
 import { defaultSettings } from '../../editor/defaults';
@@ -43,9 +43,11 @@ const inactivePointerState = {
 } as const satisfies PointerStateWithActive;
 
 export function createEditorAppController() {
-  const [settings, setSettings] = makePersisted(createSignal(defaultSettings()), {
-    name: 'solid-svg-editor-settings-v1'
-  });
+  const [settings, setSettings] = untrack(() =>
+    makePersisted(createSignal(defaultSettings(), { ownedWrite: true }), {
+      name: 'solid-svg-editor-settings-v1'
+    })
+  );
   const [activePanel, setActivePanel] = createSignal<PanelId>('inspector');
   const [modal, setModal] = createSignal<ModalId>();
   const [contextMenu, setContextMenu] = createSignal<ContextMenuState | undefined>();

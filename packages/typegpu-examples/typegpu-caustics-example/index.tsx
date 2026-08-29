@@ -76,7 +76,7 @@ function App(props: { tileDensity: number; running: boolean; speed: number }) {
   const angle = 0.2;
   /** The bigger the number, the denser the pool tile texture is */
   const tileDensity = root.createUniform(d.f32);
-  tileDensity.write(props.tileDensity);
+  tileDensity.write(untrack(() => props.tileDensity));
   createTrackedEffect(() => {
     tileDensity.write(props.tileDensity);
   });
@@ -157,7 +157,7 @@ function App(props: { tileDensity: number; running: boolean; speed: number }) {
   const render = (timestamp: number) => {
     const timeFrame = (frame * 0.01) % 1000;
     time.write(timeFrame);
-    frame += 1 + props.speed;
+    frame += 1 + untrack(() => props.speed);
 
     pipeline
       .withColorAttachment({

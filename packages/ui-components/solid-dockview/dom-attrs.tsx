@@ -8,11 +8,11 @@ export function useSyncDOMAttrs(el: HTMLElement, props: any, excludeKeys: readon
   const assignDomAttrs = assignDomAttrs$1 as (
     element: HTMLElement,
     props: Record<string, any>,
-    isSVG?: boolean,
     skipChildren?: boolean,
-    prevProps?: Record<string, any>
+    prevProps?: Record<string, any>,
+    skipRef?: boolean
   ) => void;
 
   const prevProps = {} as any;
-  createTrackedEffect(() => assignDomAttrs(el, doms, false, true, prevProps));
+  createTrackedEffect(() => assignDomAttrs(el, doms, true, prevProps));
 }

@@ -1,7 +1,7 @@
 import { cn } from '@app-game/utils/cn';
-import type { JSX } from '@solidjs/web';
+import { Dynamic, type JSX } from '@solidjs/web';
 import { createDragSensor } from 'solid-dnd';
-import { For, Show, createMemo, createSignal, createTrackedEffect } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { Component1, Component2, Component3, Component4, Component5 } from './solid-docking/TestComponents';
 
 /**
@@ -164,16 +164,20 @@ export function SolidDockingExample(): JSX.Element {
 }
 
 export function Docking(props: DockingProps): JSX.Element {
-  const [layout, setLayout] = createSignal(props.layout);
+  const [layout, setLayout] = createSignal(untrack(() => props.layout));
   const [dragState, setDragState] = createSignal<DockingDragState>();
   const dropTargetRefs = new Map<string, HTMLElement>();
+  onCleanup(() => dropTargetRefs.clear());
 
   const dropTarget = createMemo(() => resolveDropTarget(dragState(), dropTargetRefs));
   const rootDropTarget = createMemo(() => (dropTarget()?.nodeId === ROOT_DROP_TARGET_ID ? dropTarget() : undefined));
 
-  createTrackedEffect(() => {
-    setLayout(props.layout);
-  });
+  createEffect(
+    () => props.layout,
+    (nextLayout) => {
+      setLayout(nextLayout);
+    }
+  );
 
   function updateLayout(nextLayout: DockingNode): void {
     setLayout(nextLayout);
@@ -249,30 +253,35 @@ function DockingNodeView(props: {
   onTabDragMove: (position: { x: number; y: number }) => void;
   onTabDragEnd: () => void;
 }): JSX.Element {
-  return props.node.type === 'split' ? (
-    <DockingSplitView
-      node={props.node}
-      items={props.items}
-      onNodeChange={props.onNodeChange}
-      dragState={props.dragState}
-      dropTarget={props.dropTarget}
-      registerDropTarget={props.registerDropTarget}
-      onTabDragStart={props.onTabDragStart}
-      onTabDragMove={props.onTabDragMove}
-      onTabDragEnd={props.onTabDragEnd}
-    />
-  ) : (
-    <DockingTabsView
-      node={props.node}
-      items={props.items}
-      onNodeChange={props.onNodeChange}
-      dragState={props.dragState}
-      dropTarget={props.dropTarget}
-      registerDropTarget={props.registerDropTarget}
-      onTabDragStart={props.onTabDragStart}
-      onTabDragMove={props.onTabDragMove}
-      onTabDragEnd={props.onTabDragEnd}
-    />
+  return (
+    <Show
+      when={props.node.type === 'split'}
+      fallback={
+        <DockingTabsView
+          node={props.node as DockingTabsNode}
+          items={props.items}
+          onNodeChange={props.onNodeChange}
+          dragState={props.dragState}
+          dropTarget={props.dropTarget}
+          registerDropTarget={props.registerDropTarget}
+          onTabDragStart={props.onTabDragStart}
+          onTabDragMove={props.onTabDragMove}
+          onTabDragEnd={props.onTabDragEnd}
+        />
+      }
+    >
+      <DockingSplitView
+        node={props.node as DockingSplitNode}
+        items={props.items}
+        onNodeChange={props.onNodeChange}
+        dragState={props.dragState}
+        dropTarget={props.dropTarget}
+        registerDropTarget={props.registerDropTarget}
+        onTabDragStart={props.onTabDragStart}
+        onTabDragMove={props.onTabDragMove}
+        onTabDragEnd={props.onTabDragEnd}
+      />
+    </Show>
   );
 }
 
@@ -551,7 +560,7 @@ function DockingTabsView(props: {
           </div>
         }
       >
-        {(item) => item().render()}
+        {(item) => <Dynamic component={item().render} />}
       </Show>
     </div>
   );

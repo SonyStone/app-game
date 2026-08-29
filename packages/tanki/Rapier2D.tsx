@@ -1,6 +1,6 @@
 import { createContextProvider } from '@app-game/solid-utils';
 import type { JSX } from '@solidjs/web';
-import { createMemo, latest, Show } from 'solid-js';
+import { createMemo, latest, Show, untrack } from 'solid-js';
 
 export type Rapier = typeof import('@dimforge/rapier2d-simd');
 
@@ -14,7 +14,7 @@ export function Rapier2D(props: Partial<{ children: JSX.Element }>) {
 
   return (
     <Show when={latest(rapier2d)}>
-      {(renderer) => <Rapier2DProvider value={renderer()}>{props.children}</Rapier2DProvider>}
+      {(rapier) => <Rapier2DProvider value={untrack(rapier)}>{props.children}</Rapier2DProvider>}
     </Show>
   );
 }
