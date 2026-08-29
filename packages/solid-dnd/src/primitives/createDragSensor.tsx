@@ -6,7 +6,6 @@ import {
   type Accessor,
   createContext,
   createSignal,
-  createTrackedEffect,
   onCleanup,
   children as resolveChildren,
   useContext
@@ -543,24 +542,7 @@ function DragSensorTarget<TData = unknown, TElement extends HTMLElement = HTMLEl
     (item): item is TElement => isHTMLElement(item),
     (item): item is TElement => isHTMLElement(item)
   );
-  let currentTarget: TElement | undefined;
-
-  createTrackedEffect(() => {
-    const target = element() ?? undefined;
-    if (target === currentTarget) {
-      return;
-    }
-
-    currentTarget?.removeEventListener('pointerdown', sensor.onPointerDown);
-    currentTarget = target;
-
-    if (!target) {
-      return;
-    }
-
-    target.addEventListener('pointerdown', sensor.onPointerDown);
-  });
-  onCleanup(() => currentTarget?.removeEventListener('pointerdown', sensor.onPointerDown));
+  createEventListener(() => element() ?? undefined, 'pointerdown', sensor.onPointerDown);
 
   return resolved();
 }

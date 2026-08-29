@@ -1,11 +1,6 @@
 import { lazy } from 'solid-js';
 import App from './App';
 
-const sortableOverlayRoute = {
-  path: '/sortable-overlay',
-  component: lazy(() => import('./demos/SortableOverlayDemo'))
-} as const;
-
 export const routes = {
   path: '/',
   component: App,
@@ -14,7 +9,10 @@ export const routes = {
       path: ['/sensor', '/'],
       component: lazy(() => import('./demos/SensorDemo'))
     },
-    sortableOverlayRoute,
+    {
+      path: '/sortable-overlay',
+      component: lazy(() => import('./demos/SortableOverlayDemo'))
+    },
     {
       path: '/nested',
       component: lazy(() => import('./demos/NestedDemo'))
@@ -24,4 +22,4 @@ export const routes = {
       component: lazy(() => import('./demos/NestedOverlayDemo'))
     }
   ]
-};
+} as const;

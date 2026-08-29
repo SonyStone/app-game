@@ -1,9 +1,9 @@
-import { RouteDefinition } from '@solidjs/router';
+import type { RouteDefinition } from '@solidjs/router';
 import type { JSX } from '@solidjs/web';
-import { Component } from 'solid-js';
+import type { Component } from 'solid-js';
 
 export type Routes = Pick<RouteDefinition, 'path' | 'component'> & {
   name?: string | JSX.Element;
   Preview?: Component<{ name: string; path: string }>;
-  children?: Routes[];
+  children?: readonly Routes[];
 };

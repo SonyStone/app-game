@@ -1,4 +1,5 @@
-import { createSignal, createTrackedEffect } from 'solid-js';
+import { createEventListener } from '@solid-primitives/event-listener';
+import { createSignal } from 'solid-js';
 
 type Vec2Tuple = [number, number];
 
@@ -24,9 +25,6 @@ export default function useDrag(target: () => HTMLElement | SVGElement | undefin
       dragMovement: [0, 0] as Vec2Tuple,
       movement: [0, 0] as Vec2Tuple
     });
-
-    activeTarget?.removeEventListener('pointerdown', dragStartHandler as EventListener);
-    addDragListeners();
   }
 
   function dragHandler(event: PointerEvent) {
@@ -43,36 +41,13 @@ export default function useDrag(target: () => HTMLElement | SVGElement | undefin
   }
 
   function dragEndHandler(event: PointerEvent) {
-    removeDragListeners();
-
     setState((state) => ({ ...state, domDragStarted: false }));
-
-    activeTarget?.addEventListener('pointerdown', dragStartHandler as EventListener);
   }
 
-  function addDragListeners() {
-    document.addEventListener('pointermove', dragHandler);
-    document.addEventListener('pointerup', dragEndHandler);
-    document.addEventListener('pointercancel', dragEndHandler);
-  }
-
-  function removeDragListeners() {
-    document.removeEventListener('pointermove', dragHandler);
-    document.removeEventListener('pointerup', dragEndHandler);
-    document.removeEventListener('pointercancel', dragEndHandler);
-  }
-
-  let activeTarget: HTMLElement | SVGElement | undefined;
-  createTrackedEffect(() => {
-    activeTarget = target();
-    if (!activeTarget) return;
-    activeTarget.addEventListener('pointerdown', dragStartHandler as EventListener);
-
-    return () => {
-      activeTarget?.removeEventListener('pointerdown', dragStartHandler as EventListener);
-      removeDragListeners();
-    };
-  });
+  createEventListener(() => (state().domDragStarted ? undefined : target()), 'pointerdown', dragStartHandler);
+  createEventListener(() => (state().domDragStarted ? document : undefined), 'pointermove', dragHandler);
+  createEventListener(() => (state().domDragStarted ? document : undefined), 'pointerup', dragEndHandler);
+  createEventListener(() => (state().domDragStarted ? document : undefined), 'pointercancel', dragEndHandler);
 
   return state;
 }

@@ -1,5 +1,7 @@
+import { createEventListenerMap } from '@solid-primitives/event-listener';
+import { createMutationObserver } from '@solid-primitives/mutation-observer';
 import { ReactiveSet } from '@solid-primitives/set';
-import { createMemo, createSignal, createTrackedEffect, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect, For, Match, Show, Switch, untrack } from 'solid-js';
 import { SVGNode } from './svg-node';
 
 export const SVG_GRAPHICS_ELEMENTS = ['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'path'] as const;
@@ -10,7 +12,7 @@ export type DataWrapper<T, N> = T & {
 
 export function useSvgSelect<T>() {
   const selectedElementsIdsMap = new ReactiveSet<T>();
-  const [svgRef, setSvgRef] = createSignal<SVGSVGElement | null>(null);
+  const [svgRef, setSvgRef] = createSignal<SVGSVGElement | undefined>(undefined, { ownedWrite: true });
   const spatialIndex = useSpatialIndex();
 
   const [rectSelection, setRectSelection] = createSignal<{
@@ -207,27 +209,21 @@ export function useSvgSelect<T>() {
     }
   };
 
+  createEventListenerMap(() => svgRef() ?? [], eventListenerMap, { passive: true, capture: true });
+  createMutationObserver(
+    () => svgRef() ?? [],
+    { childList: true },
+    () => {
+      const svg = untrack(svgRef);
+      if (svg) spatialIndex.initializeSpatialIndex(svg);
+    }
+  );
+
   createTrackedEffect(() => {
     const svg = svgRef();
     if (!svg) return;
 
     spatialIndex.initializeSpatialIndex(svg);
-    const observer = new MutationObserver(() => {
-      spatialIndex.initializeSpatialIndex(svg);
-    });
-    observer.observe(svg, { childList: true });
-
-    const listeners = Object.entries(eventListenerMap) as Array<[string, EventListener]>;
-    for (const [type, listener] of listeners) {
-      svg.addEventListener(type, listener, { passive: true, capture: true });
-    }
-
-    return () => {
-      observer.disconnect();
-      for (const [type, listener] of listeners) {
-        svg.removeEventListener(type, listener, { capture: true });
-      }
-    };
   });
 
   return {

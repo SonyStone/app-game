@@ -1,14 +1,15 @@
 import { Container, Graphics, Text } from '@app-game/solid-pixi';
+import { createWindowSize } from '@solid-primitives/resize-observer';
 import { Graphics as PixiGraphics, Text as PixiText, Rectangle, TextStyle } from 'pixi.js';
-import { onCleanup } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 
 export default function StartMenuScene() {
+  const size = createWindowSize();
   let background!: PixiGraphics;
   let title!: PixiText;
   let subtitle!: PixiText;
   let button!: PixiGraphics;
   let buttonText!: PixiText;
-  let layoutFrame = 0;
   const hitArea = new Rectangle();
 
   const scene = (
@@ -85,17 +86,7 @@ export default function StartMenuScene() {
     </Container>
   );
 
-  window.addEventListener('resize', scheduleLayout);
-  layoutMenu(window.innerWidth, window.innerHeight);
-  onCleanup(() => {
-    window.removeEventListener('resize', scheduleLayout);
-    cancelAnimationFrame(layoutFrame);
-  });
-
-  function scheduleLayout(): void {
-    cancelAnimationFrame(layoutFrame);
-    layoutFrame = requestAnimationFrame(() => layoutMenu(window.innerWidth, window.innerHeight));
-  }
+  createTrackedEffect(() => layoutMenu(Math.max(1, size.width), Math.max(1, size.height)));
 
   function layoutMenu(width: number, height: number): void {
     const centerX = width / 2;

@@ -1,7 +1,8 @@
+import { createEventListener } from '@solid-primitives/event-listener';
 import { resolveFirst } from '@solid-primitives/refs';
 import { isClient } from '@solid-primitives/utils';
 import type { JSX } from '@solidjs/web';
-import { createContext, createTrackedEffect, onCleanup, children as resolveChildren, useContext } from 'solid-js';
+import { createContext, children as resolveChildren, useContext } from 'solid-js';
 import {
   createDragSensorFactory,
   type CreateDragSensorOptions,
@@ -96,8 +97,8 @@ const DragSensorJSXContext = createContext<DragSensorFactory>();
  * Target component implementation.
  *
  * Design notes:
- * - Uses native `addEventListener` because the child element is discovered at
- *   runtime with `resolveFirst`.
+ * - Passes the resolved child accessor to `createEventListener`, so listener
+ *   replacement and cleanup remain owned by the component.
  * - Does not add DOM. Layout and CSS selectors see only the original child.
  * - Cleans up the listener whenever the resolved child changes or unmounts.
  * - Shares drag state through context when rendered inside
@@ -114,24 +115,7 @@ function DragSensorTarget<TData = unknown, TElement extends HTMLElement = HTMLEl
     (item): item is TElement => isHTMLElement(item),
     (item): item is TElement => isHTMLElement(item)
   );
-  let currentTarget: TElement | undefined;
-
-  createTrackedEffect(() => {
-    const target = element();
-    if (target === currentTarget) {
-      return;
-    }
-
-    currentTarget?.removeEventListener('pointerdown', sensor.onPointerDown);
-    currentTarget = target;
-
-    if (!target) {
-      return;
-    }
-
-    target.addEventListener('pointerdown', sensor.onPointerDown);
-  });
-  onCleanup(() => currentTarget?.removeEventListener('pointerdown', sensor.onPointerDown));
+  createEventListener(() => element() ?? undefined, 'pointerdown', sensor.onPointerDown);
 
   return resolved();
 }

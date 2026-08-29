@@ -1,4 +1,5 @@
 import { cn } from '@app-game/utils/cn';
+import { createEventListener } from '@solid-primitives/event-listener';
 import type { ComponentProps, JSX } from '@solidjs/web';
 import { createMemo, createSignal, createTrackedEffect, Errored, For, onCleanup, onSettled } from 'solid-js';
 import { Sidebar } from './components/Sidebar';
@@ -20,6 +21,9 @@ import {
 export function App(props: { children?: JSX.Element }): JSX.Element {
   const [themeMode, setThemeMode] = createSignal<ThemeMode>(getStoredThemeMode());
   const [systemTheme, setSystemTheme] = createSignal<ResolvedTheme>(getSystemTheme());
+  const [themeMediaQuery, setThemeMediaQuery] = createSignal<MediaQueryList | undefined>(undefined, {
+    ownedWrite: true
+  });
   const resolvedTheme = createMemo(() => resolveTheme(themeMode(), systemTheme()));
 
   createTrackedEffect(() => {
@@ -27,16 +31,14 @@ export function App(props: { children?: JSX.Element }): JSX.Element {
     applyTheme(themeMode(), systemTheme());
   });
 
+  createEventListener(themeMediaQuery, 'change', (event) => {
+    setSystemTheme(event.matches ? 'dark' : 'light');
+  });
+
   onSettled(() => {
     const mediaQuery = window.matchMedia(THEME_MEDIA_QUERY);
-    const handleChange = (event: MediaQueryListEvent) => {
-      setSystemTheme(event.matches ? 'dark' : 'light');
-    };
-
     setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
-    mediaQuery.addEventListener('change', handleChange);
-
-    return () => mediaQuery.removeEventListener('change', handleChange);
+    setThemeMediaQuery(mediaQuery);
   });
 
   return (

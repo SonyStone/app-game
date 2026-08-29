@@ -1,3 +1,4 @@
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { createSignal, onSettled } from 'solid-js';
 import { App } from './wasm_bindgen/libs/from-webgl-state-diagram/draw-cubes/pkg/draw_cubes';
 import { App as App2 } from './wasm_bindgen/libs/from-webgl-state-diagram/samplers/pkg/samplers';
@@ -13,32 +14,26 @@ export default function FromWebglStateDiagram() {
 
 function DrawCubes() {
   const canvas = (<canvas class="h-[80vh] max-w-full touch-none" tabindex={0} />) as HTMLCanvasElement;
-  const [frameTook, setFrameTook] = createSignal<number>(0);
+  const [frameTook, setFrameTook] = createSignal<number>(0, { ownedWrite: true });
+  let app: ReturnType<typeof App.new> | undefined;
+
+  createResizeObserver(canvas, update);
 
   onSettled(() => {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
-    const app = App.new(canvas);
+    app = App.new(canvas);
     app.render();
-
-    const update = () => {
-      canvas.width = canvas.clientWidth;
-      canvas.height = canvas.clientHeight;
-      const now = performance.now();
-      app.render();
-      setFrameTook(performance.now() - now);
-    };
-
-    const observer = new ResizeObserver(update);
-    observer.observe(canvas);
-
-    // const [, start] = createRAF(() => {
-    //   update();
-    // });
-    // start();
-
-    return () => observer.disconnect();
   });
+
+  function update(): void {
+    if (!app) return;
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    const now = performance.now();
+    app.render();
+    setFrameTook(performance.now() - now);
+  }
 
   return (
     <>
@@ -56,27 +51,26 @@ function DrawCubes() {
 
 function Samplers() {
   const canvas = (<canvas class="h-[80vh] max-w-full touch-none" tabindex={0} />) as HTMLCanvasElement;
-  const [frameTook, setFrameTook] = createSignal<number>(0);
+  const [frameTook, setFrameTook] = createSignal<number>(0, { ownedWrite: true });
+  let app: ReturnType<typeof App2.new> | undefined;
+
+  createResizeObserver(canvas, update);
 
   onSettled(() => {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
-    const app = App2.new(canvas);
+    app = App2.new(canvas);
     app.render();
-
-    const update = () => {
-      canvas.width = canvas.clientWidth;
-      canvas.height = canvas.clientHeight;
-      const now = performance.now();
-      app.render();
-      setFrameTook(performance.now() - now);
-    };
-
-    const observer = new ResizeObserver(update);
-    observer.observe(canvas);
-
-    return () => observer.disconnect();
   });
+
+  function update(): void {
+    if (!app) return;
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    const now = performance.now();
+    app.render();
+    setFrameTook(performance.now() - now);
+  }
 
   return (
     <div class="flex flex-col gap-1 px-1">

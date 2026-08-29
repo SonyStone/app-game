@@ -1,5 +1,6 @@
+import { createEventListener } from '@solid-primitives/event-listener';
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
-import { createSignal, createTrackedEffect, onCleanup, type Accessor } from 'solid-js';
+import { createSignal, type Accessor } from 'solid-js';
 import {
   createDragSensorFactory,
   type CreateDragSensorOptions,
@@ -12,8 +13,8 @@ import {
  * Accessor accepted by the ref-binding variants.
  *
  * The target can be a plain element, a signal/accessor returning an element, or
- * `null`/`undefined` while the element is not mounted yet. The binding effect
- * attaches `pointerdown` when an element appears and removes it on cleanup.
+ * `null`/`undefined` while the element is not mounted yet. The event-listener
+ * primitive attaches `pointerdown` when an element appears and owns cleanup.
  */
 export type DragSensorTargetAccessor<TElement extends HTMLElement = HTMLElement> = MaybeAccessor<
   TElement | null | undefined
@@ -100,24 +101,7 @@ export function createDragSensorTarget<TData = unknown, TElement extends HTMLEle
   options: CreateDragSensorOptions<TData, TElement> = {}
 ): DragSensorHandle<TData, TElement> {
   const sensor = scope.createSensor<TData, TElement>(options);
-  let currentElement: TElement | undefined;
-
-  createTrackedEffect(() => {
-    const element = access(target);
-    if (element === currentElement) {
-      return;
-    }
-
-    currentElement?.removeEventListener('pointerdown', sensor.onPointerDown);
-    currentElement = element ?? undefined;
-
-    if (!element) {
-      return;
-    }
-
-    element.addEventListener('pointerdown', sensor.onPointerDown);
-  });
-  onCleanup(() => currentElement?.removeEventListener('pointerdown', sensor.onPointerDown));
+  createEventListener(() => access(target) ?? undefined, 'pointerdown', sensor.onPointerDown);
 
   return sensor;
 }
@@ -168,7 +152,7 @@ export function createDragSensorRef<TData = unknown, TElement extends HTMLElemen
   options: CreateDragSensorOptions<TData, TElement> = {},
   scope: DragSensorFactory = createDragSensorFactory()
 ): DragSensorRefBinding<TData, TElement> {
-  const [element, setElement] = createSignal<TElement>();
+  const [element, setElement] = createSignal<TElement | undefined>(undefined, { ownedWrite: true });
   const sensor = createDragSensorTarget(scope, element, options);
 
   return {

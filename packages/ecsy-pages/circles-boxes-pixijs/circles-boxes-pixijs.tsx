@@ -1,4 +1,5 @@
 import { Read, System, SystemData, World } from '@app-game/ecsy';
+import { createEventListener } from '@solid-primitives/event-listener';
 import { Application, Container, Graphics } from 'pixi.js';
 import { onCleanup, onSettled } from 'solid-js';
 import { Vector2 } from '../utils';
@@ -196,8 +197,13 @@ export function build(app: Application) {
 
 export default function CirclesBoxesPixijs() {
   const canvas = (<canvas />) as HTMLCanvasElement;
+  let app: Application | undefined;
   let disposed = false;
   let disposeApp: (() => void) | undefined;
+
+  createEventListener(window, 'resize', () => {
+    app?.renderer.resize(window.document.body.clientWidth, window.document.body.clientHeight);
+  });
 
   onSettled(() => {
     void initialize();
@@ -209,8 +215,8 @@ export default function CirclesBoxesPixijs() {
   });
 
   async function initialize(): Promise<void> {
-    const app = new Application();
-    await app.init({
+    const initializedApp = new Application();
+    await initializedApp.init({
       canvas,
       width: window.document.body.clientWidth,
       height: window.document.body.clientHeight,
@@ -218,19 +224,15 @@ export default function CirclesBoxesPixijs() {
       resolution: window.devicePixelRatio || 1,
       antialias: true
     });
+    app = initializedApp;
 
-    function resizeCanvas() {
-      app.renderer.resize(window.document.body.clientWidth, window.document.body.clientHeight);
-    }
-
-    window.addEventListener('resize', resizeCanvas, false);
-    const destroyWorld = build(app);
+    const destroyWorld = build(initializedApp);
 
     const dispose = () => {
-      window.removeEventListener('resize', resizeCanvas);
+      app = undefined;
       destroyWorld();
-      app.stop();
-      app.destroy();
+      initializedApp.stop();
+      initializedApp.destroy();
     };
 
     if (disposed) {

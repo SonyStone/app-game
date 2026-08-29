@@ -1,6 +1,6 @@
-import { preventDefault, stopPropagation } from '@solid-primitives/event-listener';
+import { createEventListener, preventDefault, stopPropagation } from '@solid-primitives/event-listener';
 import type { Accessor } from 'solid-js';
-import { createSignal, onCleanup } from 'solid-js';
+import { createSignal } from 'solid-js';
 
 interface Pointerdrag {
   (element: HTMLElement): void;
@@ -14,8 +14,8 @@ export function createPointerdrag() {
   const [pointerDown, setPointerDown] = createSignal<PointerEvent>();
   const [pointerMove, setPointerMove] = createSignal<PointerEvent>();
   const [pointerUp, setPointerUp] = createSignal<PointerEvent>();
-  const [pressed, setPressed] = createSignal<boolean>(false);
-  let currentElement: Element | undefined;
+  const [pressed, setPressed] = createSignal<boolean>(false, { ownedWrite: true });
+  const [element, setElement] = createSignal<HTMLElement | undefined>(undefined, { ownedWrite: true });
 
   const downHandler = preventDefault(
     stopPropagation((event: PointerEvent) => {
@@ -23,12 +23,6 @@ export function createPointerdrag() {
       setPointerMove(undefined);
       setPointerUp(undefined);
       setPressed(true);
-
-      currentElement?.removeEventListener('pointerdown', downHandler as EventListener);
-      document.addEventListener('pointermove', moveHandler as EventListener);
-      document.addEventListener('pointerleave', upHandler as EventListener);
-      document.addEventListener('pointercancel', upHandler as EventListener);
-      document.addEventListener('pointerup', upHandler as EventListener);
     })
   );
 
@@ -46,29 +40,18 @@ export function createPointerdrag() {
       setPointerMove(undefined);
       setPointerUp(event);
       setPressed(false);
-
-      clearDocumentListeners();
-      currentElement?.addEventListener('pointerdown', downHandler as EventListener);
     })
   );
 
-  function clearDocumentListeners(): void {
-    document.removeEventListener('pointermove', moveHandler as EventListener);
-    document.removeEventListener('pointerleave', upHandler as EventListener);
-    document.removeEventListener('pointercancel', upHandler as EventListener);
-    document.removeEventListener('pointerup', upHandler as EventListener);
-  }
+  createEventListener(() => (pressed() ? undefined : element()), 'pointerdown', downHandler);
+  createEventListener(() => (pressed() ? document : undefined), 'pointermove', moveHandler);
+  createEventListener(() => (pressed() ? document : undefined), 'pointerleave', upHandler);
+  createEventListener(() => (pressed() ? document : undefined), 'pointercancel', upHandler);
+  createEventListener(() => (pressed() ? document : undefined), 'pointerup', upHandler);
 
-  function bind(element: Element): void {
-    currentElement?.removeEventListener('pointerdown', downHandler as EventListener);
-    currentElement = element;
-    currentElement.addEventListener('pointerdown', downHandler as EventListener);
+  function bind(nextElement: HTMLElement): void {
+    setElement(nextElement);
   }
-
-  onCleanup(() => {
-    currentElement?.removeEventListener('pointerdown', downHandler as EventListener);
-    clearDocumentListeners();
-  });
 
   return Object.defineProperties(bind, {
     down: {
