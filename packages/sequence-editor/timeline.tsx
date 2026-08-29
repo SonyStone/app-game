@@ -2,8 +2,7 @@ import { createPointerEventsHandler } from '@app-game/hammer/pointerevent';
 import { Vec2 } from '@app-game/math';
 import { Animation, AnimationFrame } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { For, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { For, createSignal, createStore, createTrackedEffect, onCleanup, onSettled, storePath } from 'solid-js';
 import GraphEditorToggle from './graph-editor-toggle';
 import PanelResizers from './panel-resizers';
 
@@ -11,7 +10,7 @@ const AXIS_COLORS = ['#ff0000', '#00ff00', '#0000ff'];
 const AXIS_NAME = ['x', 'y', 'z'];
 
 export function Timeline(props: { animation?: Animation }) {
-  createEffect(() => {
+  createTrackedEffect(() => {
     console.log(`data?`, props.animation?.data?.frames);
   });
 
@@ -19,8 +18,8 @@ export function Timeline(props: { animation?: Animation }) {
 
   const [frames, setFrames] = createStore<AnimationFrame[]>([]);
 
-  createEffect(() => {
-    setFrames(props.animation?.data?.frames ?? []);
+  createTrackedEffect(() => {
+    setFrames(() => props.animation?.data?.frames ?? []);
   });
 
   const [position, setPosition] = createSignal<Vec2>(new Vec2().set(0, 0), { equals: (v1, v2) => !v1.isEqual(v2) });
@@ -49,10 +48,12 @@ export function Timeline(props: { animation?: Animation }) {
       dataset = (e.target as any).dataset as any;
 
       if (dataset?.name === 'keyframe') {
-        setFrames(dataset.item, 'position', dataset.axis, (p: number) => {
-          posStart = p;
-          return posStart + input.delta.y;
-        });
+        setFrames(
+          storePath(dataset.item, 'position', dataset.axis, (p: number) => {
+            posStart = p;
+            return posStart + input.delta.y;
+          })
+        );
       }
 
       if (!dataset) {
@@ -70,7 +71,7 @@ export function Timeline(props: { animation?: Animation }) {
       const input = pointerEventsHandler(e);
 
       if (dataset?.name === 'keyframe') {
-        setFrames(dataset.item, 'position', dataset.axis, () => posStart + input.delta.y);
+        setFrames(storePath(dataset.item, 'position', dataset.axis, () => posStart + input.delta.y));
       }
 
       if (!dataset?.name) {
@@ -93,9 +94,11 @@ export function Timeline(props: { animation?: Animation }) {
       }
 
       if (dataset?.name === 'keyframe') {
-        setFrames(dataset.item, 'position', dataset.axis, () => {
-          return posStart + input.delta.y;
-        });
+        setFrames(
+          storePath(dataset.item, 'position', dataset.axis, () => {
+            return posStart + input.delta.y;
+          })
+        );
         dataset = undefined;
       }
 
@@ -104,7 +107,7 @@ export function Timeline(props: { animation?: Animation }) {
       elementRef.addEventListener('pointerdown', onStart);
     }
 
-    onMount(() => {
+    onSettled(() => {
       elementRef.addEventListener('pointerdown', onStart);
     });
 
@@ -137,7 +140,7 @@ export function Timeline(props: { animation?: Animation }) {
         top: dimensions().top + 'px',
         left: dimensions().left + 'px'
       }}
-      class=":uno: h-90 bg-blue fixed overflow-hidden"
+      class=":uno: bg-blue fixed h-90 overflow-hidden"
     >
       <PanelResizers onDimensionsChange={setDimensions} />
       <GraphEditorToggle />

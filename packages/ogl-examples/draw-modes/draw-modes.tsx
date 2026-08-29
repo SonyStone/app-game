@@ -1,8 +1,9 @@
 import { Camera, Geometry, Mesh, Program, Renderer, Transform } from '@app-game/ogl';
+import { createTrackedEffect } from 'solid-js';
 
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { effect } from 'solid-js/web';
+
 import fragment from './vertex.frag?raw';
 import vertex from './vertex.vert?raw';
 
@@ -17,7 +18,7 @@ export default function PaintAppOGL() {
 
   const size = createWindowSize();
 
-  effect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(size.width, size.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
   });

@@ -1,4 +1,5 @@
-import { JSX, mergeProps } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { merge } from 'solid-js';
 import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, WebGLRenderer } from 'three';
 import { RenderProps } from '../core';
 
@@ -39,7 +40,7 @@ export type Props = Omit<RenderProps<HTMLElement>, 'size' | 'events'> & {
 // ];
 
 export function Canvas(props: Props) {
-  props = mergeProps(
+  props = merge(
     {
       height: '100vh',
       width: '100vw'
@@ -56,7 +57,7 @@ export function Canvas(props: Props) {
         position: 'relative',
         overflow: 'hidden'
       }}
-      tabIndex={props.tabIndex}
+      tabindex={props.tabIndex}
     >
       {canvas}
     </div>
@@ -97,7 +98,7 @@ export function Canvas(props: Props) {
   // insert(
   //   root[0].scene as unknown as Instance,
   //   (
-  //     (<ThreeContext.Provider value={root}>{props.children}</ThreeContext.Provider>) as unknown as Accessor<Instance[]>
+  //     (<ThreeContext value={root}>{props.children}</ThreeContext>) as unknown as Accessor<Instance[]>
   //   )()
   // );
 

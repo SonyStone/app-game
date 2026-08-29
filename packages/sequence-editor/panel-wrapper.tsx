@@ -1,4 +1,4 @@
-import { ComponentProps } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
 import PanelResizers from './panel-resizers';
 
 export function PanelWrapper(
@@ -6,7 +6,7 @@ export function PanelWrapper(
 ) {
   return (
     <div
-      class="absolute select-none box-border in-[#pointer-root]:pointer-events-none [#pointer-root.normal_&]:pointer-events-auto z-1000"
+      class="absolute z-1000 box-border select-none in-[#pointer-root]:pointer-events-none [#pointer-root.normal_&]:pointer-events-auto"
       style={{
         width: props.dimensions.width + 'px',
         height: props.dimensions.height + 'px',

@@ -2,15 +2,15 @@
 
 import { cn } from '@app-game/utils/cn';
 import { createEventListener } from '@solid-primitives/event-listener';
-import { ComponentProps, createMemo, createSignal, For, Show, splitProps, type JSX } from 'solid-js';
-import { createStore } from 'solid-js/store';
-import { Portal } from 'solid-js/web';
+import type { ComponentProps, JSX } from '@solidjs/web';
+import { Portal } from '@solidjs/web';
+import { createMemo, createSignal, createStore, For, omit, Show } from 'solid-js';
 import { SolidDockView } from '../solid-dockview';
 import { RoundOutBordersExample } from './RoundOutBordersExample';
 import { SolidDockingExample } from './SolidDockingExample';
 import { SolidTabsExample } from './SolidTabsExample';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'dockview-demo': ComponentProps<'div'>;
@@ -197,7 +197,7 @@ export default function DockingExample() {
 
         <SolidDockingExample />
 
-        <Unwrap data={state} />
+        <Unwrap data={state as unknown as PanelViewState} />
 
         {/* Panels */}
         <div class="flex h-0 flex-1 flex-col overflow-hidden">
@@ -317,8 +317,8 @@ function Tabs(props: Partial<{ children: JSX.Element }>) {
 }
 
 function PanelContainer(props: ComponentProps<'div'>) {
-  const [local, rest] = splitProps(props, ['class']);
-  return <panel-container class={cn('flex h-full w-full flex-col rounded bg-[#000c18] p-1', local.class)} {...rest} />;
+  const rest = omit(props, 'class');
+  return <panel-container class={cn('flex h-full w-full flex-col rounded bg-[#000c18] p-1', props.class)} {...rest} />;
 }
 
 function Sash(props: { type?: 'horizontal' | 'vertical' }) {

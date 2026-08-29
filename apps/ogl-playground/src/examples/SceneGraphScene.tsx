@@ -1,34 +1,18 @@
-import {
-  Box,
-  Camera,
-  Mesh,
-  Program,
-  Sphere,
-  createShared,
-  useTime,
-} from '@work-ilyas/solid-ogl';
-import { createEffect, For, Match, Switch, type Component } from 'solid-js';
-import sceneGraphVertex from './scene-graph.vert?raw';
+import { Box, Camera, Mesh, Program, Sphere, createShared, useTime } from '@work-ilyas/solid-ogl';
+import { For, Match, Switch, createTrackedEffect, type Component } from 'solid-js';
 import sceneGraphFragment from './scene-graph.frag?raw';
+import sceneGraphVertex from './scene-graph.vert?raw';
 
 const random = createRng(7);
 
 export function SceneGraphScene(props: { makeDefault?: boolean }) {
-  const BoxGeometry = createShared(() => (
-    <Box width={0.3} height={0.3} depth={0.3} />
-  ));
+  const BoxGeometry = createShared(() => <Box width={0.3} height={0.3} depth={0.3} />);
   const SphereGeometry = createShared(() => <Sphere radius={0.15} />);
-  const SharedProgram = createShared(() => (
-    <Program vertex={sceneGraphVertex} fragment={sceneGraphFragment} />
-  ));
+  const SharedProgram = createShared(() => <Program vertex={sceneGraphVertex} fragment={sceneGraphFragment} />);
 
   return (
     <>
-      <Camera
-        makeDefault={props.makeDefault}
-        position={[0, 1, 7]}
-        lookAt={[0, 0, 0]}
-      />
+      <Camera makeDefault={props.makeDefault} position={[0, 1, 7]} lookAt={[0, 0, 0]} />
       <SceneGraphBranch
         descendantCount={50}
         kind="sphere"
@@ -59,7 +43,7 @@ function SceneGraphBranch(props: {
         const speed = props.speed;
         const time = useTime();
 
-        createEffect(() => {
+        createTrackedEffect(() => {
           const t = time();
           node.rotation.y = t * speed * 0.8;
           node.rotation.x = t * speed * 0.6;
@@ -67,7 +51,8 @@ function SceneGraphBranch(props: {
         });
       }}
       position={props.position}
-      scale={props.scale}>
+      scale={props.scale}
+    >
       <Switch>
         <Match when={props.kind === 'box'}>
           <props.BoxGeometry />
@@ -83,11 +68,7 @@ function SceneGraphBranch(props: {
           <SceneGraphBranch
             descendantCount={childDescendantCount}
             kind={random() > 0.5 ? 'box' : 'sphere'}
-            position={[
-              (random() - 0.5) * 3,
-              (random() - 0.5) * 3,
-              (random() - 0.5) * 3,
-            ]}
+            position={[(random() - 0.5) * 3, (random() - 0.5) * 3, (random() - 0.5) * 3]}
             scale={random() * 0.3 + 0.7}
             speed={(random() - 0.5) * 0.7}
             BoxGeometry={props.BoxGeometry}
@@ -107,10 +88,7 @@ function getDescendantCount(descendantCount: number) {
   while (remainingDescendants > 0) {
     const remainingAfterChild = remainingDescendants - 1;
     const maxChildDescendants = Math.min(remainingAfterChild, 6);
-    const descendantCount =
-      maxChildDescendants > 0
-        ? Math.floor(random() * (maxChildDescendants + 1))
-        : 0;
+    const descendantCount = maxChildDescendants > 0 ? Math.floor(random() * (maxChildDescendants + 1)) : 0;
 
     childDescendantCounts.push(descendantCount);
     remainingDescendants -= descendantCount + 1;

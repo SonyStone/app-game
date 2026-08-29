@@ -1,22 +1,13 @@
-import {
-  For,
-  createEffect,
-  createMemo,
-  createSignal,
-  createUniqueId,
-  mergeProps,
-  onCleanup,
-  type Component,
-  type JSX,
-} from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { useMotionRoot } from './motion-root';
-import { useParallax } from './parallax';
-import type { ParticlesBackgroundProps } from './particles-background';
+import type { JSX } from '@solidjs/web';
+import { Portal } from '@solidjs/web';
+import { For, createMemo, createSignal, createTrackedEffect, createUniqueId, merge, onCleanup } from 'solid-js';
 import dust1AlphaSrc from './assets/dust1-alpha.png';
 import dust2AlphaSrc from './assets/dust2-alpha.png';
 import dust3AlphaSrc from './assets/dust3-alpha.png';
 import s from './layered-particles-background.module.css';
+import { useMotionRoot } from './motion-root';
+import { useParallax } from './parallax';
+import type { ParticlesBackgroundProps } from './particles-background';
 
 type RgbColor = readonly [number, number, number];
 
@@ -47,11 +38,9 @@ type Speck = {
 const defaultColors = ['#f6f2ea', '#dc2626', '#f59e0b'] as const;
 const dustTextures = [dust1AlphaSrc, dust2AlphaSrc, dust3AlphaSrc] as const;
 
-const mergeClassNames = (...values: Array<string | undefined>) =>
-  values.filter(Boolean).join(' ');
+const mergeClassNames = (...values: Array<string | undefined>) => values.filter(Boolean).join(' ');
 
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const hexToRgb = (hex: string): RgbColor => {
   let normalized = hex.replace(/^#/, '');
@@ -82,7 +71,7 @@ const createSpecks = (
   speed: number,
   palette: readonly string[],
   particleBaseSize: number,
-  sizeRandomness: number,
+  sizeRandomness: number
 ) => {
   const total = clamp(Math.round(particleCount / 5), 22, 64);
   const baseSize = clamp(particleBaseSize / 34, 3, 10);
@@ -103,7 +92,7 @@ const createSpecks = (
       left: Math.random() * 100,
       opacity: 0.55 + Math.random() * 0.35,
       size,
-      top: Math.random() * 100,
+      top: Math.random() * 100
     } satisfies Speck;
   });
 };
@@ -139,10 +128,8 @@ const layeredParticlesStyles = `
   }
 `;
 
-export function LayeredParticlesBackground(
-  rawProps: ParticlesBackgroundProps,
-): JSX.Element {
-  const props = mergeProps(
+export function LayeredParticlesBackground(rawProps: ParticlesBackgroundProps): JSX.Element {
+  const props = merge(
     {
       particleCount: 200,
       particleSpread: 10,
@@ -156,18 +143,12 @@ export function LayeredParticlesBackground(
       cameraDistance: 20,
       disableRotation: false,
       pixelRatio: 1,
-      portal: true,
+      portal: true
     },
-    rawProps,
+    rawProps
   );
 
-  const {
-    mouse,
-    parallaxOffsetX,
-    parallaxOffsetY,
-    scroll,
-    shouldReduceMotion,
-  } = useMotionRoot();
+  const { mouse, parallaxOffsetX, parallaxOffsetY, scroll, shouldReduceMotion } = useMotionRoot();
   const parallax = useParallax();
   const consumerId = createUniqueId();
 
@@ -176,9 +157,7 @@ export function LayeredParticlesBackground(
   const [specks, setSpecks] = createSignal<Speck[]>([]);
 
   const palette = createMemo(() => {
-    const colors = props.particleColors?.length
-      ? props.particleColors
-      : defaultColors;
+    const colors = props.particleColors?.length ? props.particleColors : defaultColors;
 
     return colors;
   });
@@ -194,7 +173,7 @@ export function LayeredParticlesBackground(
       'pointer-events': 'none',
       position: 'fixed',
       'z-index': 20,
-      ...(props.style ?? {}),
+      ...(props.style ?? {})
     } as JSX.CSSProperties;
   });
 
@@ -207,7 +186,7 @@ export function LayeredParticlesBackground(
 
     return {
       height: container?.clientHeight || window.innerHeight || 1,
-      width: container?.clientWidth || window.innerWidth || 1,
+      width: container?.clientWidth || window.innerWidth || 1
     };
   });
 
@@ -218,9 +197,7 @@ export function LayeredParticlesBackground(
 
     return {
       x: (parallaxOffsetX() / width) * spread * motionScale,
-      y:
-        (parallaxOffsetY() / height) * spread * motionScale +
-        (scroll.y / height) * 2.2,
+      y: (parallaxOffsetY() / height) * spread * motionScale + (scroll.y / height) * 2.2
     };
   });
 
@@ -231,28 +208,28 @@ export function LayeredParticlesBackground(
       {
         backgroundImage: `url(${dustTextures[0]})`,
         depth: 1,
-        class: s.img1,
+        class: s.img1
       },
       {
         backgroundImage: `url(${dustTextures[1]})`,
         depth: 2,
-        class: s.img2,
+        class: s.img2
       },
       {
         backgroundImage: `url(${dustTextures[2]})`,
         depth: 3,
-        class: s.img3,
-      },
+        class: s.img3
+      }
     ];
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (containerRef() && !mounted()) {
       setMounted(true);
     }
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!parallax) {
       return;
     }
@@ -260,20 +237,12 @@ export function LayeredParticlesBackground(
     parallax.setConsumerActivity(consumerId, mounted());
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!mounted()) {
       return;
     }
 
-    setSpecks(
-      createSpecks(
-        props.particleCount,
-        props.speed,
-        palette(),
-        props.particleBaseSize,
-        props.sizeRandomness,
-      ),
-    );
+    setSpecks(createSpecks(props.particleCount, props.speed, palette(), props.particleBaseSize, props.sizeRandomness));
   });
 
   onCleanup(() => {
@@ -285,13 +254,14 @@ export function LayeredParticlesBackground(
       ref={setContainerRef}
       class={mergeClassNames(props.class, props.className)}
       style={rootStyle()}
-      aria-hidden="true">
+      aria-hidden="true"
+    >
       <style>{layeredParticlesStyles}</style>
       <div
         style={
           {
             inset: '0',
-            position: 'absolute',
+            position: 'absolute'
           } as JSX.CSSProperties
         }
       />
@@ -300,9 +270,10 @@ export function LayeredParticlesBackground(
           {
             inset: '0',
             overflow: 'hidden',
-            position: 'absolute',
+            position: 'absolute'
           } as JSX.CSSProperties
-        }>
+        }
+      >
         <For each={layers()}>
           {(layer) => (
             <div
@@ -313,13 +284,14 @@ export function LayeredParticlesBackground(
                   position: 'absolute',
                   transform: `translate3d(${sceneOffset().x * layer.depth}px, ${sceneOffset().y * layer.depth}px, 0)`,
                   'transform-style': 'preserve-3d',
-                  'backface-visibility': 'hidden',
+                  'backface-visibility': 'hidden'
                 } as JSX.CSSProperties
-              }>
+              }
+            >
               <div
                 class={[s.img, layer.class].join(' ')}
                 style={{
-                  'background-image': layer.backgroundImage,
+                  'background-image': layer.backgroundImage
                 }}
               />
             </div>
@@ -333,11 +305,10 @@ export function LayeredParticlesBackground(
             overflow: 'hidden',
             position: 'absolute',
             transform: `translate3d(${sceneOffset().x * 0.12}px, ${sceneOffset().y * 0.12}px, 0)`,
-            transition: shouldReduceMotion()
-              ? 'transform 220ms ease-out'
-              : 'transform 100ms linear',
+            transition: shouldReduceMotion() ? 'transform 220ms ease-out' : 'transform 100ms linear'
           } as JSX.CSSProperties
-        }>
+        }
+      >
         <For each={specks()}>
           {(speck) => (
             <div
@@ -345,9 +316,10 @@ export function LayeredParticlesBackground(
                 {
                   left: `${speck.left}%`,
                   position: 'absolute',
-                  top: `${speck.top}%`,
+                  top: `${speck.top}%`
                 } as JSX.CSSProperties
-              }>
+              }
+            >
               <span
                 style={
                   {
@@ -359,7 +331,7 @@ export function LayeredParticlesBackground(
                       : `layered-particles-twinkle ${speck.duration}s cubic-bezier(0.25, 0.25, 0.75, 0.75) ${speck.delay}s infinite`,
                     background: `radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95), ${toRgba(
                       speck.color,
-                      props.alphaParticles ? 0.45 : 0.72,
+                      props.alphaParticles ? 0.45 : 0.72
                     )} 48%, transparent 72%)`,
                     'border-radius': '9999px',
                     'box-shadow': `0 0 ${speck.size * 7}px ${toRgba(speck.color, 0.42)}`,
@@ -368,7 +340,7 @@ export function LayeredParticlesBackground(
                     height: `${speck.size}px`,
                     'mix-blend-mode': 'screen',
                     opacity: 0,
-                    width: `${speck.size}px`,
+                    width: `${speck.size}px`
                   } as JSX.CSSProperties
                 }
               />

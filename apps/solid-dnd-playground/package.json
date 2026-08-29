@@ -10,7 +10,6 @@
     "kill": "pkill -9 -f \"vite\" 2>/dev/null; sleep 1; echo \"All vite processes killed\""
   },
   "dependencies": {
-    "@corvu/drawer": "catalog:",
     "@solid-primitives/cursor": "catalog:",
     "@solid-primitives/scheduled": "catalog:",
     "solid-dnd": "workspace:*"

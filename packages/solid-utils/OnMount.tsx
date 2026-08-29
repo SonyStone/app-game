@@ -1,4 +1,5 @@
-import { JSX, children, createEffect, createSignal } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { children, createSignal, createTrackedEffect } from 'solid-js';
 
 /**
  * Allows to delay the mounting of children into the DOM
@@ -11,7 +12,7 @@ export function OnMount(props: { children: JSX.Element }) {
   const resolved = children(() => props.children);
   const [node, setNode] = createSignal<JSX.Element>(null);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     setNode(resolved());
   });
 

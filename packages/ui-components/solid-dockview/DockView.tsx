@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import type { DockviewComponent, DockviewComponentOptions } from 'dockview-core';
-import { createSignal, For, JSX, onCleanup, onMount, ParentProps } from 'solid-js';
+import { createSignal, For, onCleanup, onSettled, ParentProps } from 'solid-js';
 import { createDockViewContext, DockViewContext } from './context';
 import { HTMLDomAttrs } from './dom-attrs';
 import { DockviewEventListeners, dockviewEventNames } from './events';
@@ -61,7 +62,7 @@ export function DockView(props: DockViewProps & HTMLDomAttrs) {
   }
 
   const [ready, setReady] = createSignal(false);
-  onMount(() => {
+  onSettled(() => {
     const { clientWidth, clientHeight } = context.element;
     context.dockview.layout(clientWidth, clientHeight);
     setReady(true);
@@ -74,10 +75,10 @@ export function DockView(props: DockViewProps & HTMLDomAttrs) {
   });
 
   return (
-    <DockViewContext.Provider value={context}>
+    <DockViewContext value={context}>
       {context.element}
       {ready() && props.children}
       <For each={context.extraRenders()}>{(el) => el()}</For>
-    </DockViewContext.Provider>
+    </DockViewContext>
   );
 }

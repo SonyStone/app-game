@@ -1,5 +1,4 @@
-import { createSignal } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
+import { createSignal, createStore, type Store, type StoreSetter } from 'solid-js';
 import { InsertEvent, Place, RemoveEvent, ReorderEvent, Selection, SelectionEvent } from '.';
 
 type Block<T> = { key: unknown; children?: T[] };
@@ -24,7 +23,7 @@ type Block<T> = { key: unknown; children?: T[] };
 export function createBlockTree<T extends Block<T>>(init: T) {
   type K = T['key'];
 
-  const [root, setRoot] = createStore(init);
+  const [root, setRoot] = createStore(init as Exclude<T, Function>) as [Store<T>, StoreSetter<T>];
   const [selection, setSelection] = createSignal<Selection<K>>({});
 
   return {
@@ -48,7 +47,7 @@ export function createBlockTree<T extends Block<T>>(init: T) {
     },
 
     onInsert(event: InsertEvent<K, T>) {
-      setRoot(produce((root) => insertBlocks(root, event.blocks, event.place)));
+      setRoot((root) => insertBlocks(root, event.blocks, event.place));
     },
 
     onReorder(event: ReorderEvent<K>) {
@@ -57,11 +56,11 @@ export function createBlockTree<T extends Block<T>>(init: T) {
         removeBlocks(root, event.keys, blocks);
         insertBlocks(root, blocks, event.place);
       };
-      setRoot(produce(moveBlocks));
+      setRoot(moveBlocks);
     },
 
     onRemove(event: RemoveEvent<K>) {
-      setRoot(produce((root) => removeBlocks(root, event.keys)));
+      setRoot((root) => removeBlocks(root, event.keys));
     },
 
     toggleBlockSelected(key: K, selected: boolean) {
@@ -86,13 +85,11 @@ export function createBlockTree<T extends Block<T>>(init: T) {
     },
 
     updateBlock(key: K, updates: Partial<T>) {
-      setRoot(
-        produce((root) => {
-          const block = findBlock(root, key);
-          if (!block) return;
-          Object.assign(block, updates);
-        })
-      );
+      setRoot((root) => {
+        const block = findBlock(root, key);
+        if (!block) return;
+        Object.assign(block, updates);
+      });
     }
   };
 }

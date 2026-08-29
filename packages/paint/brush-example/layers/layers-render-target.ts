@@ -4,7 +4,8 @@ import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
 import { Square } from '@app-game/ogl/extras/square';
 import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { effect } from 'solid-js/web';
+import { createTrackedEffect } from 'solid-js';
+
 import { BlendModes } from '../blend-modes';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
 import fragment from './layers-texture.frag?raw';
@@ -72,7 +73,7 @@ export const createLayersRenderTarget = ({
   opacity.value = 0.9;
   const layer2 = new RenderTarget(gl, options);
   // ! render to render target
-  effect(() => {
+  createTrackedEffect(() => {
     brushInput.value = access(texture);
     gl.renderer.render({
       scene: mesh,

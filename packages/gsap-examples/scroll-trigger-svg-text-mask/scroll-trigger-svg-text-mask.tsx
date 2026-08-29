@@ -2,7 +2,7 @@ import { Meta, Title } from '@solidjs/meta';
 import gsap from 'gsap';
 import ScrollToPlugin from 'gsap/ScrollToPlugin';
 import ScrollTrigger from 'gsap/ScrollTrigger';
-import { onCleanup, onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 
 import cloud1 from './cloud1.png?url';
 import cloud1Mask from './cloud1Mask.jpg?url';
@@ -31,7 +31,7 @@ export default function ScrollTriggerSVGTextMask() {
     { img: cloud3, height: 800, className: 'cloud3' }
   ].map(({ img, height, className }) => <image class={className} href={img} width="1200" height={height} />);
 
-  onMount(() => {
+  onSettled(() => {
     const tween1 = gsap.set(main, {
       position: 'fixed',
       background: '#fff',
@@ -69,13 +69,13 @@ export default function ScrollTriggerSVGTextMask() {
     arrowBtn.addEventListener('mouseleave', mouseleaveHandler);
     arrowBtn.addEventListener('click', clickHandler);
 
-    onCleanup(() => {
+    return () => {
       tween1.revert();
       tween2.revert();
       arrowBtn.removeEventListener('mouseenter', mouseenterHandler);
       arrowBtn.removeEventListener('mouseleave', mouseleaveHandler);
       arrowBtn.removeEventListener('click', clickHandler);
-    });
+    };
   });
 
   return (
@@ -83,7 +83,7 @@ export default function ScrollTriggerSVGTextMask() {
       <Title>ScrollTrigger: SVG Text Mask</Title>
       <Meta name="description" content="ScrollTrigger: SVG Text Mask" />
       <div ref={(ref) => (scrollDist = ref)}></div>
-      <div ref={(ref) => (main = ref)} class="text-7.4rem font-bold ">
+      <div ref={(ref) => (main = ref)} class="text-7.4rem font-bold">
         <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
           <mask id="m">
             <g class="cloud1">

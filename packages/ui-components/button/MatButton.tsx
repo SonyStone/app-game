@@ -1,5 +1,5 @@
-import { Component, mergeProps } from 'solid-js';
-import { JSX } from 'solid-js/jsx-runtime';
+import { JSX } from '@solidjs/web/jsx-runtime';
+import { Component, merge } from 'solid-js';
 import { Ripple } from '../ripple/Ripple';
 import s from './MatButton.module.scss';
 
@@ -11,7 +11,7 @@ export default function MatButton(
   }> &
     JSX.ButtonHTMLAttributes<HTMLButtonElement>
 ): JSX.Element {
-  const rest = mergeProps(
+  const rest = merge(
     {
       as: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props}></button>,
       color: 'primary',

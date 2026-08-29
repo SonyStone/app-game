@@ -4,8 +4,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@app-game/components/ui/dropdown-menu';
-import { batch, ComponentProps, For, JSXElement, Match, Show, Switch } from 'solid-js';
-import { produce, unwrap } from 'solid-js/store';
+import type { ComponentProps } from '@solidjs/web';
+import { For, Match, Show, snapshot, storePath, Switch, type Element as JSXElement, type StoreSetter } from 'solid-js';
 import { PathInput } from '../path-input';
 import { SVGNode } from '../svg-node';
 import { useSvgSelect } from '../use-svg-select';
@@ -14,7 +14,7 @@ import { SVGRender } from './editor-view';
 
 // TODO: Change onClicks to command pattern
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
@@ -26,7 +26,7 @@ declare module 'solid-js' {
 export function LayersView(props: {
   select: ReturnType<typeof useSvgSelect<SVGNode>>;
   map: Map<SVGNode, Wrapped<SVGNode>>;
-  setState: (key: 'children', updater: (children: SVGNode[]) => SVGNode[]) => void;
+  setState: StoreSetter<SVGNode>;
   state: SVGNode;
 }) {
   return (
@@ -38,15 +38,12 @@ export function LayersView(props: {
             {(child) => (
               <DropdownMenuItem
                 onClick={() => {
-                  props.setState(
-                    'children',
-                    produce((children) => {
-                      children?.push({
-                        component: child as SVGNode['component'],
-                        children: []
-                      });
-                    })
-                  );
+                  props.setState((state) => {
+                    state.children?.push({
+                      component: child as SVGNode['component'],
+                      children: []
+                    });
+                  });
                 }}
               >
                 {child}
@@ -74,16 +71,16 @@ function ListItem(props: {
     <li
       class={[
         props.select.selectedElementsIdsMap.has(props.child) ? 'selected' : '',
-        'border-1.5 [&.selected]:(border-blue-400 bg-blue-50) flex flex-shrink-0 flex-col overflow-hidden  rounded bg-white [&:not(:has(.group-child:hover))]:hover:bg-blue-50'
+        'border-1.5 [&.selected]:(border-blue-400 bg-blue-50) flex flex-shrink-0 flex-col overflow-hidden rounded bg-white [&:not(:has(.group-child:hover))]:hover:bg-blue-50'
       ].join(' ')}
       onClick={(e) => {
         e.stopPropagation();
-        batch(() => {
+        {
           if (!e.shiftKey) {
             props.select.selectedElementsIdsMap.clear();
           }
           props.select.selectedElementsIdsMap.add(props.child);
-        });
+        }
       }}
     >
       <div class="border-b-1.5 flex w-full flex-grow place-items-center hover:bg-blue-200 [.selected>&]:border-blue-400">
@@ -96,11 +93,10 @@ function ListItem(props: {
           <DropdownMenuContent>
             <DropdownMenuItem
               onClick={() => {
-                props.map.get(props.child)?.updateParent(
-                  produce((children: SVGNode[]) => {
-                    children.push(structuredClone(unwrap(props.child)));
-                  })
-                );
+                props.map.get(props.child)?.updateParent((children: SVGNode[]) => {
+                  children.push(structuredClone(snapshot(props.child)));
+                  return children;
+                });
               }}
             >
               Duplicate
@@ -127,7 +123,7 @@ function ListItem(props: {
             <select
               value={props.child.stroke || 'black'}
               onChange={(e) => {
-                props.map.get(props.child)?.update('stroke', e.target.value);
+                props.map.get(props.child)?.update(storePath('stroke', e.currentTarget.value));
               }}
             >
               <option value="black">Black</option>
@@ -140,7 +136,7 @@ function ListItem(props: {
             <select
               value={props.child?.fill || 'black'}
               onChange={(e) => {
-                props.map.get(props.child)?.update('fill', e.target.value);
+                props.map.get(props.child)?.update(storePath('fill', e.currentTarget.value));
               }}
             >
               <option value="black">Black</option>
@@ -156,7 +152,7 @@ function ListItem(props: {
                 <PathInput
                   value={props.child?.d || ''}
                   onChange={(e) => {
-                    props.map.get(props.child)?.update('d', e);
+                    props.map.get(props.child)?.update(storePath('d', e));
                   }}
                 />
               </div>

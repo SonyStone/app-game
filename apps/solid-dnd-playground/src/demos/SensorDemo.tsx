@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import { createDragSensor } from 'solid-dnd';
-import { Show, type JSX } from 'solid-js';
+import { Show } from 'solid-js';
 import { DebugOverlay } from '../components/DebugOverlay';
 import EventLog, { createEventLogger } from '../components/EventLog';
 import { StateCard } from '../components/StateCard';

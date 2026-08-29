@@ -1,7 +1,14 @@
+import { Portal } from '@solidjs/web';
 import { AddPanelOptions, AddPanelPositionOptions, DockviewComponent, DockviewPanel } from 'dockview-core';
 import { createCloseButton } from 'dockview-core/dist/esm/svg';
-import { JSXElement, ParentProps, createEffect, createMemo, onCleanup, useContext } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import {
+  type Element as JSXElement,
+  ParentProps,
+  createMemo,
+  createTrackedEffect,
+  onCleanup,
+  useContext
+} from 'solid-js';
 import { DockViewContext, PanelContentRendererParams } from './context';
 import { PanelState, panelStateLUT } from './global-api';
 import { watch, withReactiveProps } from './utils';
@@ -92,9 +99,11 @@ export function DockPanel(props: DockPanelProps) {
   return (
     <Portal
       mount={contentPlaceholder}
-      ref={(div) => {
+      ref={(div: HTMLDivElement) => {
         const className = createMemo(() => props.class || 'solid-dockview-panel-content');
-        createEffect(() => (div.className = className()));
+        createTrackedEffect(() => {
+          div.className = className();
+        });
       }}
     >
       {tab()}
@@ -107,14 +116,15 @@ function setupEvents(panelState: PanelState) {
   const { panel, context, props } = panelState;
   const { dockview } = context;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const callback = props.onVisibilityChange;
     if (typeof callback !== 'function') return;
 
     const disposable = panel.api.onDidVisibilityChange((visible) => {
       callback({ visible: visible.isVisible, panel, dockview });
     });
-    onCleanup(() => disposable.dispose());
+
+    return () => disposable.dispose();
   });
 
   // event of panel open/close
@@ -147,8 +157,10 @@ function setupTab(props: DockPanelProps, panel: DockviewPanel, placeholder: HTML
   return createMemo(() => (
     <Portal
       mount={placeholder}
-      ref={(div) => {
-        createEffect(() => (div.className = className()));
+      ref={(div: HTMLDivElement) => {
+        createTrackedEffect(() => {
+          div.className = className();
+        });
       }}
     >
       {/* <div class="default-tab"> */}

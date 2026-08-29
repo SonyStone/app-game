@@ -8,9 +8,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@solid-primitives/raf": "^2.3.4",
-    "@solid-primitives/resize-observer": "^2.1.5",
+    "@solid-primitives/raf": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
     "ogl": "^1.0.11",
-    "solid-js": "^1.9.5"
+    "solid-js": "catalog:"
   }
 }

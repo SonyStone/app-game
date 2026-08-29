@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect, onCleanup, onSettled } from 'solid-js';
 import { OrthographicCamera, PerspectiveCamera } from 'three';
 
 import { createContextProvider } from '@app-game/solid-utils';
@@ -54,7 +54,7 @@ export const [CameraProvider, useCamera] = createContextProvider(() => {
     return currentCamera;
   });
 
-  onMount(() => {
+  onSettled(() => {
     const currentCamera = camera();
 
     currentCamera.position.z = 300;
@@ -62,7 +62,7 @@ export const [CameraProvider, useCamera] = createContextProvider(() => {
 
   const resize = createResize();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const { width, height } = resize();
     const currentCamera = camera();
 

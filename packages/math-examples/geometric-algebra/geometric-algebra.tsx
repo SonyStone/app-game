@@ -1,6 +1,8 @@
 import * as v3 from '@app-game/math/v3-builder';
-import { animationFrameScheduler, interval, map, ObservableInput, of, from as rxFrom, switchMap, tap } from 'rxjs';
-import { createMemo, createSignal, from, observable } from 'solid-js';
+import { toObservable } from '@utils/toObservable';
+import { toSignal } from '@utils/toSignal';
+import { animationFrameScheduler, interval, map, of, switchMap, tap } from 'rxjs';
+import { createMemo, createSignal } from 'solid-js';
 
 import { Vec2, Vec3 } from '@app-game/math';
 import { TypedArray } from '@app-game/math/utils/typed-array';
@@ -22,7 +24,7 @@ export default function GeometricAlgebra() {
 
   const [toggle, setToggle] = createSignal<boolean>(false);
 
-  const value = from(rxFrom<ObservableInput<boolean>>(observable(toggle)).pipe(toggler()));
+  const value = toSignal(toObservable(toggle).pipe(toggler()), 0);
 
   ganja();
 
@@ -50,7 +52,7 @@ export default function GeometricAlgebra() {
         />
 
         <polyline
-          class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round] [stroke-dasharray:0.1_0.05]"
+          class="stroke-width-0.02px fill-none stroke-current [stroke-dasharray:0.1_0.05] [stroke-linecap:round]"
           points={j([
             v_1.toString(),
             new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 2))
@@ -59,7 +61,7 @@ export default function GeometricAlgebra() {
           ])}
         />
         <polyline
-          class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round] [stroke-dasharray:0.1_0.05]"
+          class="stroke-width-0.02px fill-none stroke-current [stroke-dasharray:0.1_0.05] [stroke-linecap:round]"
           points={j([
             v_2.toString(),
             new Vec2(new Float32Array(buffer, Float32Array.BYTES_PER_ELEMENT * Vec2.ELEMENTS * 3))
@@ -118,11 +120,11 @@ export default function GeometricAlgebra() {
         />
 
         <polyline
-          class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round] [stroke-dasharray:0.1_0.05]"
+          class="stroke-width-0.02px fill-none stroke-current [stroke-dasharray:0.1_0.05] [stroke-linecap:round]"
           points={j([v_1().toString(), new Vec2().addFrom(v_1(), v_2()).toString()])}
         />
         <polyline
-          class="stroke-width-0.02px fill-none stroke-current [stroke-linecap:round] [stroke-dasharray:0.1_0.05]"
+          class="stroke-width-0.02px fill-none stroke-current [stroke-dasharray:0.1_0.05] [stroke-linecap:round]"
           points={j([v_2().toString(), new Vec2().addFrom(v_1(), v_2()).toString()])}
         />
         <text class="bg-white fill-current" x={v_1().x + 0.025} y={v_1().y - 0.025}>
@@ -146,7 +148,7 @@ export default function GeometricAlgebra() {
       <button class="rounded border px-2" onClick={() => setToggle(!toggle())}>
         pause
       </button>
-      <svg class="scale-80 origin-tl text-0.125px text-black" height={400} width={800} viewBox="0 0 4 1.8">
+      <svg class="origin-tl text-0.125px scale-80 text-black" height={400} width={800} viewBox="0 0 4 1.8">
         <g class="origin-c color-red scale-90">
           <Line1 />
         </g>

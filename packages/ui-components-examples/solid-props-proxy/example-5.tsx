@@ -1,5 +1,6 @@
 import { combineProps } from '@solid-primitives/props';
-import { ComponentProps, createSignal, mergeProps, Show } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { createSignal, merge, Show } from 'solid-js';
 import { Props } from './Props';
 
 export function PropsProxyExample5() {
@@ -41,7 +42,7 @@ export function PropsProxyExample5() {
   return (
     <div class="flex flex-col gap-3 bg-neutral-950 p-2 text-white">
       <div class="flex gap-2">
-        <input {...mergeProps(inputProps, props)} />
+        <input {...merge(inputProps, props)} />
         <input {...combineProps(inputProps, props)} />
 
         <button

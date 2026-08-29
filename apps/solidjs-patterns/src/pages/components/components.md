@@ -3,7 +3,7 @@
 # Component Patterns <Badge>Components</Badge>
 
 <Description>
-  Best practices for defining props, passing children, splitting props, and building reusable components in
+  Best practices for defining props, passing children, forwarding props, and building reusable components in
   SolidJS.
 </Description>
 
@@ -42,25 +42,24 @@ export function Button(props: ButtonProps): JSX.Element {
 
 <Section>
 
-## splitProps
+## omit
 
-splitProps separates your component's own props from props to forward. This is essential for avoiding unknown DOM
-attribute warnings.
+`omit` creates a reactive view without component-only keys. Read local values from the original props object and
+spread the remaining view onto the native element.
 
 ```tsx
-import { splitProps } from 'solid-js';
+import { omit } from 'solid-js';
 
 type InputProps = JSX.InputHTMLAttributes<HTMLInputElement> & {
   label?: string;
 };
 
 export function Input(props: InputProps): JSX.Element {
-  // Split out 'label' - forward rest to <input>
-  const [local, rest] = splitProps(props, ['label']);
+  const rest = omit(props, 'label');
 
   return (
     <div>
-      {local.label && <label>{local.label}</label>}
+      {props.label && <label>{props.label}</label>}
       <input {...rest} />
     </div>
   );
@@ -71,12 +70,12 @@ export function Input(props: InputProps): JSX.Element {
 
 <Section>
 
-## mergeProps - default values
+## merge - default values
 
-mergeProps safely merges props with defaults while preserving the reactivity of the original props.
+`merge` combines defaults and props while preserving reactive property access.
 
 ```tsx
-import { mergeProps } from 'solid-js';
+import { merge } from 'solid-js';
 
 type CardProps = {
   title?: string;
@@ -86,7 +85,7 @@ type CardProps = {
 
 export function Card(props: CardProps): JSX.Element {
   // Props with defaults - reactive to changes
-  const merged = mergeProps({ variant: 'default' as const, title: 'Card' }, props);
+  const merged = merge({ variant: 'default' as const, title: 'Card' }, props);
 
   return (
     <div class={merged.variant === 'outlined' ? 'border' : 'bg-neutral-800'}>
@@ -102,7 +101,7 @@ export function Card(props: CardProps): JSX.Element {
 </Section>
 
 <Callout type="danger" title="Never destructure props">
-Destructuring SolidJS props breaks reactivity because JSX accesses property getters lazily. Always use `props.value` or `splitProps` / `mergeProps`.
+Destructuring SolidJS props breaks reactivity because JSX accesses property getters lazily. Always use `props.value`, `omit`, or `merge`.
 </Callout>
 
 <Section>
@@ -112,7 +111,8 @@ Destructuring SolidJS props breaks reactivity because JSX accesses property gett
 Use the `children()` helper when you need to evaluate or inspect children. It memoizes them properly.
 
 ```tsx
-import { children, type JSX } from 'solid-js';
+import { children } from 'solid-js';
+import type { JSX } from '@solidjs/web';
 
 type RowProps = { children: JSX.Element };
 
@@ -144,7 +144,8 @@ function Row(props: RowProps): JSX.Element {
 Pass components as props using `Component<Props>` for dynamic component values or `JSX.Element` for static content.
 
 ```tsx
-import { type Component, type JSX } from 'solid-js';
+import type { Component } from 'solid-js';
+import type { JSX } from '@solidjs/web';
 
 type ListProps<T> = {
   items: T[];

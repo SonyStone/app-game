@@ -1,5 +1,4 @@
-import { createMemo, createSignal } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createMemo, createSignal, createStore, storePath } from 'solid-js';
 
 /** Creates a headless hierarchical view that reconciles row models by stable item ID. */
 export function createTreeView<T>(props: {
@@ -39,21 +38,19 @@ export function createTreeView<T>(props: {
     },
     /** Updates expansion state without mutating the source item. */
     setExpanded(item: T, expanded: boolean): void {
-      setExpandedById(props.getId(item), expanded);
+      setExpandedById(storePath(props.getId(item), expanded));
     },
     /** Toggles a branch while preserving its state across source refreshes. */
     toggle(item: T): void {
-      setExpandedById(props.getId(item), !readExpanded(item));
+      setExpandedById(storePath(props.getId(item), !readExpanded(item)));
     },
     /** Expands every branch and returns the prior collapsed set for one-step restoration. */
     expandAll(): TreeExpansionSnapshot {
       const items = flattenAllItems(children());
-      const collapsedIds = items
-        .filter((item) => item.childCount > 0 && !item.isExpanded)
-        .map((item) => item.id);
+      const collapsedIds = items.filter((item) => item.childCount > 0 && !item.isExpanded).map((item) => item.id);
       for (const item of items) {
         if (item.childCount > 0) {
-          setExpandedById(item.id, true);
+          setExpandedById(storePath(item.id, true));
         }
       }
       return { collapsedIds };
@@ -71,7 +68,7 @@ export function createTreeView<T>(props: {
       const collapsedIds = new Set(snapshot.collapsedIds);
       for (const item of flattenAllItems(children())) {
         if (item.childCount > 0) {
-          setExpandedById(item.id, !collapsedIds.has(item.id));
+          setExpandedById(storePath(item.id, !collapsedIds.has(item.id)));
         }
       }
     },
@@ -79,7 +76,7 @@ export function createTreeView<T>(props: {
     restoreExpansion(snapshot: TreeExpansionSnapshot): void {
       for (const id of snapshot.collapsedIds) {
         if (controllersById.has(id)) {
-          setExpandedById(id, false);
+          setExpandedById(storePath(id, false));
         }
       }
     }
@@ -148,10 +145,10 @@ export function createTreeView<T>(props: {
         return readExpanded(currentItem);
       },
       setExpanded(expanded: boolean): void {
-        setExpandedById(id, expanded);
+        setExpandedById(storePath(id, expanded));
       },
       toggle(): void {
-        setExpandedById(id, !readExpanded(currentItem));
+        setExpandedById(storePath(id, !readExpanded(currentItem)));
       }
     };
 

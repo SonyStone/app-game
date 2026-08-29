@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
 
 export const Frequency = (
   props: { freq?: number; changeFreq?: (value: number) => void; max?: number } & ComponentProps<'div'>

@@ -1,12 +1,12 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { resolveFirst } from '@solid-primitives/refs';
 import { access, isClient, type MaybeAccessor } from '@solid-primitives/utils';
+import type { JSX } from '@solidjs/web';
 import {
   type Accessor,
   createContext,
-  createEffect,
   createSignal,
-  type JSX,
+  createTrackedEffect,
   onCleanup,
   children as resolveChildren,
   useContext
@@ -544,7 +544,7 @@ function DragSensorTarget<TData = unknown, TElement extends HTMLElement = HTMLEl
     (item): item is TElement => isHTMLElement(item)
   );
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const target = element();
 
     if (!target) {
@@ -552,9 +552,10 @@ function DragSensorTarget<TData = unknown, TElement extends HTMLElement = HTMLEl
     }
 
     target.addEventListener('pointerdown', sensor.onPointerDown);
-    onCleanup(() => {
+
+    return () => {
       target.removeEventListener('pointerdown', sensor.onPointerDown);
-    });
+    };
   });
 
   return resolved();
@@ -564,11 +565,7 @@ function DragSensorScope(props: DragSensorScopeProps): JSX.Element {
   const scope = createDragSensorFactory(props);
   const child = props.children;
 
-  return (
-    <DragSensorContext.Provider value={scope}>
-      {typeof child === 'function' ? child(scope) : child}
-    </DragSensorContext.Provider>
-  );
+  return <DragSensorContext value={scope}>{typeof child === 'function' ? child(scope) : child}</DragSensorContext>;
 }
 
 export const DragSensor = Object.assign(DragSensorTarget, {

@@ -1,6 +1,6 @@
-import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { Show, createEffect, createSignal } from 'solid-js';
+import { createWindowSize } from '@solid-primitives/resize-observer';
+import { Show, createSignal, createTrackedEffect } from 'solid-js';
 
 import { Camera, Renderer, Transform, Vec3 } from '@app-game/ogl';
 
@@ -23,7 +23,7 @@ export default () => {
   const scene = new Transform();
 
   const resize = createWindowSize();
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(resize.width, resize.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
     update();

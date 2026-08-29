@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { splitProps, type JSX } from 'solid-js';
+import { omit } from 'solid-js';
 import { cn } from '../../lib/utils';
 
 // ============================================================================
@@ -31,11 +32,11 @@ export type BadgeProps = JSX.HTMLAttributes<HTMLSpanElement> &
   };
 
 export function Badge(props: BadgeProps): JSX.Element {
-  const [local, rest] = splitProps(props, ['variant', 'class', 'children']);
+  const rest = omit(props, 'variant', 'class', 'children');
 
   return (
-    <span {...rest} class={cn(badgeVariants({ variant: local.variant }), local.class)}>
-      {local.children}
+    <span {...rest} class={cn(badgeVariants({ variant: props.variant }), props.class)}>
+      {props.children}
     </span>
   );
 }

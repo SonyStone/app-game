@@ -1,6 +1,6 @@
 import { createPointerEventsHandler, HammerInput, MinimumInputEvent } from '@app-game/hammer/pointerevent';
 import createRAF from '@solid-primitives/raf';
-import { createEffect, createRoot, createSignal } from 'solid-js';
+import { createRoot, createSignal, createTrackedEffect } from 'solid-js';
 
 export type WorkerMessage =
   | {
@@ -29,7 +29,7 @@ createRoot(() => {
   const [offscreenCanvas, setOffscreenCanvas] = createSignal<OffscreenCanvas | undefined>(undefined);
   let ctx: OffscreenCanvasRenderingContext2D | undefined = undefined;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const canvas = offscreenCanvas();
     if (!canvas) {
       return;

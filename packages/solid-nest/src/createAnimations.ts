@@ -1,4 +1,4 @@
-import { Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { Accessor, createSignal, createTrackedEffect, onCleanup } from 'solid-js';
 import { ItemId } from './Item';
 import { AnimationState, calculateTransitionStyles } from './calculateTransitionStyles';
 import { measureBlocks, measureInnerBlocks } from './measure';
@@ -45,7 +45,7 @@ export function createAnimations<K, T>(
   }
 
   let prevTree = tree();
-  createEffect(() => {
+  createTrackedEffect(() => {
     const nextTree = input();
     if (itemElements.has(nextTree.root.id)) {
       setAnimationState({ step: 0, fn: animate(prevTree, nextTree) });
@@ -53,7 +53,7 @@ export function createAnimations<K, T>(
     prevTree = nextTree;
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const state = animationState();
     if (!state) return;
 

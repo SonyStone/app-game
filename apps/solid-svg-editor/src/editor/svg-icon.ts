@@ -1,8 +1,9 @@
-import type { Component, ComponentProps } from "solid-js";
+import type { ComponentProps } from '@solidjs/web';
+import type { Component } from 'solid-js';
 
-export type SvgIcon = Component<ComponentProps<"svg">>;
+export type SvgIcon = Component<ComponentProps<'svg'>>;
 
 export const decorativeIconProps = {
-  "aria-hidden": "true",
-  focusable: "false"
+  'aria-hidden': 'true',
+  focusable: 'false'
 } as const;

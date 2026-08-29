@@ -1,4 +1,4 @@
-import { ComponentProps } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
 
 export default function VscTriangleUp(props: ComponentProps<'svg'>) {
   return (

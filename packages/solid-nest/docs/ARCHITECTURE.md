@@ -264,7 +264,7 @@ const treeProps = createBlockTree({ key: 'root', children: [...] });
 return <BlockTree {...treeProps}>{(block) => <MyBlock {...block} />}</BlockTree>;
 ```
 
-> **Note**: The playground app does NOT use `createBlockTree` — it manages state manually with `createStore` + `produce`.
+> **Note**: The playground app does NOT use `createBlockTree` — it manages state manually with `createStore` draft callbacks.
 
 ---
 
@@ -647,10 +647,10 @@ Located at `apps/dnd-playground/`, this is a Vite + SolidJS app that exercises s
   selection={selection()}
   onSelectionChange={setSelection}
   onReorder={(event) => {
-    setRoot(produce((draft) => {
+    setRoot((draft) => {
       removeBlocks(draft, event.keys, blocks);
       insertBlocks(draft, blocks, event.place);
-    }));
+    });
   }}
   onRemove={(event) => { ... }}
 >

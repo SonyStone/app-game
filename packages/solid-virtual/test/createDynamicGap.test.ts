@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, flush } from 'solid-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createDynamicGap } from '../src/createDynamicGap';
 import { createDynamicHeight } from '../src/createDynamicHeight';
@@ -25,6 +25,7 @@ describe('createDynamicGap', () => {
       document.body.append(container);
       container.style.rowGap = '10px';
       gap.setElementRef(container);
+      flush();
 
       const virtual = createVirtualList({
         items: ['a', 'b', 'c'],
@@ -49,6 +50,7 @@ describe('createDynamicGap', () => {
         document.body.append(container);
         container.style.rowGap = '8px';
         gap.setElementRef(container);
+        flush();
 
         queueMicrotask(() => {
           container.style.rowGap = '16px';
@@ -78,6 +80,7 @@ describe('createDynamicGap', () => {
         document.body.append(container);
         container.style.rowGap = '8px';
         gap.setElementRef(container);
+        flush();
         const initialReadCount = getComputedStyleSpy.mock.calls.length;
 
         container.style.paddingTop = '100px';
@@ -108,6 +111,7 @@ describe('createDynamicGap', () => {
 
       expect(gap()).toBe(6);
       gap.setElementRef(container);
+      flush();
 
       expect(gap()).toBe(0);
       container.remove();

@@ -1,4 +1,4 @@
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 import {
   BoxGeometry,
   BufferGeometry,
@@ -79,7 +79,7 @@ export default function Three() {
     renderer.render(scene, currentCamera);
   }
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     currentCamera = camera();
 
     cancelAnimationFrame(id);
@@ -88,7 +88,7 @@ export default function Three() {
     render();
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const { width, height } = resize();
     renderer.setSize(width, height);
     render();

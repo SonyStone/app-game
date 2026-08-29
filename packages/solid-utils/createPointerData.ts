@@ -62,9 +62,11 @@ export function createPointerData(element: HTMLElement) {
 
       return pointerData;
     },
-    pointerData,
     {
-      equals: (_, next) => next.distance === 0
+      ...{
+        equals: (_, next) => next.distance === 0
+      },
+      loadingValue: pointerData
     }
   );
 }

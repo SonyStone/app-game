@@ -1,5 +1,5 @@
+import { JSX } from '@solidjs/web/jsx-runtime';
 import { type Renderable } from 'pixi.js';
-import { JSX } from 'solid-js/jsx-runtime';
 
 export interface CommonProps<Component = Renderable, Data = object> {
   children?: JSX.Element;

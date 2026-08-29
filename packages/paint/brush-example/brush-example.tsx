@@ -2,7 +2,7 @@ import { Camera, GridHelper, Orbit, Renderer, Transform, Vec3 } from '@app-game/
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { Show, createEffect, createMemo, createResource, createSignal } from 'solid-js';
+import { Show, createMemo, createSignal, createTrackedEffect } from 'solid-js';
 
 import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
 import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
@@ -48,7 +48,7 @@ export default function OglSwapTexturesView() {
 
   {
     const resize = createWindowSize();
-    createEffect(() => {
+    createTrackedEffect(() => {
       renderer.setSize(resize.width, resize.height);
       camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
     });
@@ -99,8 +99,8 @@ export default function OglSwapTexturesView() {
     name: 'backgroundColor'
   });
   const colorTexture = createColorTexture(gl, backgroundColor);
-  const [redBricks] = createResource(() => loadTextureAsync(gl, large_red_bricks_diff_1k), {
-    initialValue: colorTexture()
+  const redBricks = createMemo(() => loadTextureAsync(gl, large_red_bricks_diff_1k), {
+    loadingValue: colorTexture()
   });
   const background = () => {
     switch (backgroundType()) {
@@ -173,11 +173,16 @@ export default function OglSwapTexturesView() {
         texture={() => brushInstancing().texture}
         transparent
       />
-      <PlaneWithTextureComponent gl={gl} parent={scene} position={[0, 0.5, 0.0]} texture={() => layers2.layer().texture} />
+      <PlaneWithTextureComponent
+        gl={gl}
+        parent={scene}
+        position={[0, 0.5, 0.0]}
+        texture={() => layers2.layer().texture}
+      />
       <Show when={false}>
         <></>
       </Show>
-      <div class="absolute bottom-0 end-0 flex flex-col border bg-white p-2">
+      <div class="absolute end-0 bottom-0 flex flex-col border bg-white p-2">
         <div>
           <label for="blend-mode-select">Blend Mode:</label>
           <select

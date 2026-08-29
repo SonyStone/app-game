@@ -1,7 +1,7 @@
 import { createBodyCursor } from '@solid-primitives/cursor';
+import type { JSX } from '@solidjs/web';
 import { createDnd, Place, reorderItems, type FlipAnimateEntry, type GapKey } from 'solid-dnd';
-import { createSignal, For, Show, type JSX } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createSignal, createStore, For, Show } from 'solid-js';
 import EventLog, { createEventLogger } from '../components/EventLog';
 import { FlipDebugOverlay } from '../components/FlipDebugOverlay';
 import { OrderDisplay } from '../components/OrderDisplay';
@@ -10,6 +10,7 @@ import { SortableItem } from '../components/SortableItem';
 import { SortableOverlayItem } from '../components/SortableOverlayItem';
 import { StateCard } from '../components/StateCard';
 import { createDemoItems } from '../data';
+import type { UrlStoreSetter } from '../utils/makeUrlSearchParams';
 import { makeUrlSearchParams } from '../utils/makeUrlSearchParams';
 
 type Layout = 'vertical' | 'horizontal' | 'grid';
@@ -265,13 +266,21 @@ function ControlBar(props: {
     columns: number;
     itemCount: number;
   };
-  setOptions: (...args: readonly unknown[]) => void;
+  setOptions: UrlStoreSetter<{
+    layout: Layout;
+    animEnabled: boolean;
+    animDuration: number;
+    easing: string;
+    debugEnabled: boolean;
+    columns: number;
+    itemCount: number;
+  }>;
   isAnimating: boolean;
   onLayoutChange: (layout: Layout) => void;
   onColumnsChange: (columns: number) => void;
   onItemCountChange: (count: number) => void;
 }): JSX.Element {
-  const set = props.setOptions as (key: string, value: unknown) => void;
+  const set = props.setOptions;
 
   return (
     <div class="flex flex-col items-start gap-4 rounded-lg border border-white/10 bg-white/5 px-4 py-3">

@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import type { Vec2 } from 'solid-dnd';
-import { Show, type JSX } from 'solid-js';
+import { Show } from 'solid-js';
 
 // ============================================================================
 // MARK: DebugOverlay

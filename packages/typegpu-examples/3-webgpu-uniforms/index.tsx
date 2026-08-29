@@ -1,7 +1,7 @@
 import { hex2rgb } from '@app-game/chroma/io/hex/hex2rgb';
 import { Range2D } from '@app-game/components/ui/range-2d';
 import { Meta, Title } from '@solidjs/meta';
-import { createEffect, createSignal } from 'solid-js';
+import { createSignal, createTrackedEffect } from 'solid-js';
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 import * as std from 'typegpu/std';
@@ -138,7 +138,7 @@ function App(props: { color: HexColor; scale: [number, number]; offset: [number,
     return { posOffset, colorOffset, bindGroup, ourStruct };
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     size();
     const color = hex2rgb(props.color);
 

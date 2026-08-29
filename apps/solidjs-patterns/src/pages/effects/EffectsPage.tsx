@@ -1,4 +1,5 @@
-import { createEffect, createSignal, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, createTrackedEffect } from 'solid-js';
 import { Card } from '../../components/ui/Card';
 import { markdownComponents } from '../markdown-components';
 import EffectsContent from './effects.md?markdown';
@@ -14,7 +15,7 @@ function EffectsDemo(): JSX.Element {
   const addLog = (msg: string) =>
     setLogs((prev) => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 8));
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const c = count();
     if (c === 0) {
       addLog('effect ran: count = 0 (initial)');

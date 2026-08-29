@@ -1,4 +1,4 @@
-import { createEffect, createSignal, Match, onCleanup, Switch } from 'solid-js';
+import { createSignal, createTrackedEffect, Match, Switch } from 'solid-js';
 import { noFaviconUrl } from '../assets';
 import type { BrowserAtlasAppearanceSettings } from '../settings';
 import type { ExplorerTreeGroupNode, ExplorerTreeLinkNode, ExplorerTreeNode } from './model';
@@ -98,8 +98,8 @@ function activateWindowOnSingleClick(
   if (
     !props.activateOnSingleClick ||
     event.detail !== 1 ||
-    props.node.reference.kind !== 'window' && props.node.reference.kind !== 'saved-window' ||
-    event.target instanceof Element && event.target.closest('button')
+    (props.node.reference.kind !== 'window' && props.node.reference.kind !== 'saved-window') ||
+    (event.target instanceof Element && event.target.closest('button'))
   ) {
     return;
   }
@@ -133,11 +133,13 @@ function LinkLabel(props: {
     <>
       <FaviconIcon url={props.node.faviconUrl} />
       <span
-        class="truncate"
-        classList={{
-          'font-bold': props.node.active === true,
-          'text-blue-400': props.node.keepOnClose === true
-        }}
+        class={[
+          'truncate',
+          {
+            'font-bold': props.node.active === true,
+            'text-blue-400': props.node.keepOnClose === true
+          }
+        ]}
         style={{ color: explorerLinkTitleColor(props.node, props.appearance) }}
       >
         {props.node.title}
@@ -157,7 +159,7 @@ function LinkLabel(props: {
           title={props.node.description}
           target="_blank"
           rel="noopener noreferrer"
-          draggable={false}
+          draggable="false"
           onClick={(event) => props.onLinkClick?.(props.node, event)}
           onAuxClick={(event) => props.onLinkClick?.(props.node, event)}
         >
@@ -217,11 +219,13 @@ function NodeDeleteButton(props: {
     <button
       type="button"
       class="h-4 flex-none px-1 leading-4 text-red-500 hover:bg-red-950 hover:text-red-200"
-      title={props.node.reference.kind === 'tab' || props.node.reference.kind === 'window'
-        ? 'Permanently close this browser item'
-        : 'Delete this saved item'}
+      title={
+        props.node.reference.kind === 'tab' || props.node.reference.kind === 'window'
+          ? 'Permanently close this browser item'
+          : 'Delete this saved item'
+      }
       aria-label={`Delete ${props.node.title}`}
-      draggable={false}
+      draggable="false"
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.preventDefault();
@@ -248,7 +252,7 @@ function NodeActionButton(props: {
             class="ml-1 h-4 flex-none px-1 leading-4 text-emerald-400 hover:bg-emerald-950 hover:text-emerald-200"
             title={currentAction().title}
             aria-label={`${currentAction().label} ${props.node.title}`}
-            draggable={false}
+            draggable="false"
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => {
               event.preventDefault();
@@ -298,9 +302,7 @@ function isSavedOrganizer(node: ExplorerTreeGroupNode | ExplorerTreeLinkNode): b
 }
 
 function isDeletablePersistentItem(node: ExplorerTreeGroupNode | ExplorerTreeLinkNode): boolean {
-  return node.reference.kind === 'tab' ||
-    node.reference.kind === 'window' ||
-    node.reference.kind.startsWith('saved-');
+  return node.reference.kind === 'tab' || node.reference.kind === 'window' || node.reference.kind.startsWith('saved-');
 }
 
 function activateOrganizerAction(
@@ -320,13 +322,14 @@ function FaviconIcon(props: { url: string | null }) {
   const [source, setSource] = createSignal(noFaviconUrl);
   let image: HTMLImageElement | undefined;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const faviconUrl = props.url;
     setSource(noFaviconUrl);
     if (!faviconUrl || !image) {
       return;
     }
-    onCleanup(observeWhenVisible(image, () => setSource(faviconUrl)));
+
+    return observeWhenVisible(image, () => setSource(faviconUrl));
   });
 
   return (
@@ -335,7 +338,7 @@ function FaviconIcon(props: { url: string | null }) {
       class="mr-1 h-4 w-4 flex-none"
       src={source()}
       alt=""
-      draggable={false}
+      draggable="false"
       decoding="async"
       onError={() => {
         if (source() !== noFaviconUrl) {

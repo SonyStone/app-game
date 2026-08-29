@@ -74,40 +74,43 @@ function createFixedLayout<T>(props: FixedLayoutProps<T>) {
   });
   type VisibleChild = Readonly<{ item: T; index: number; top: number; height: number }>;
   const initialChildren: readonly VisibleChild[] = [];
-  const visibleChildren = createMemo((previous: readonly VisibleChild[]) => {
-    const currentItems = items();
-    const currentStartIndex = startIndex();
-    const currentEndIndex = endIndex();
-    const currentItemHeight = itemHeight();
-    const currentStride = stride();
-    const childCount = currentEndIndex - currentStartIndex;
-    if (childCount === 0) return previous.length === 0 ? previous : initialChildren;
+  const visibleChildren = createMemo(
+    (previous: readonly VisibleChild[]) => {
+      const currentItems = items();
+      const currentStartIndex = startIndex();
+      const currentEndIndex = endIndex();
+      const currentItemHeight = itemHeight();
+      const currentStride = stride();
+      const childCount = currentEndIndex - currentStartIndex;
+      if (childCount === 0) return previous.length === 0 ? previous : initialChildren;
 
-    const previousStart = previous[0]?.index ?? -1;
-    let next =
-      previous.length === childCount && previousStart === currentStartIndex
-        ? undefined
-        : new Array<VisibleChild>(childCount);
+      const previousStart = previous[0]?.index ?? -1;
+      let next =
+        previous.length === childCount && previousStart === currentStartIndex
+          ? undefined
+          : new Array<VisibleChild>(childCount);
 
-    for (let offset = 0; offset < childCount; offset += 1) {
-      const index = currentStartIndex + offset;
-      const item = currentItems[index] as T; // `endIndex` is clamped to `currentItems.length`.
-      const previousChild = previous[index - previousStart];
-      const top = index * currentStride;
-      const child =
-        previousChild?.index === index &&
-        previousChild.item === item &&
-        previousChild.height === currentItemHeight &&
-        previousChild.top === top
-          ? previousChild
-          : { item, index, top, height: currentItemHeight };
+      for (let offset = 0; offset < childCount; offset += 1) {
+        const index = currentStartIndex + offset;
+        const item = currentItems[index] as T; // `endIndex` is clamped to `currentItems.length`.
+        const previousChild = previous[index - previousStart];
+        const top = index * currentStride;
+        const child =
+          previousChild?.index === index &&
+          previousChild.item === item &&
+          previousChild.height === currentItemHeight &&
+          previousChild.top === top
+            ? previousChild
+            : { item, index, top, height: currentItemHeight };
 
-      if (!next && child !== previous[offset]) next = previous.slice();
-      if (next) next[offset] = child;
-    }
+        if (!next && child !== previous[offset]) next = previous.slice();
+        if (next) next[offset] = child;
+      }
 
-    return next ?? previous;
-  }, initialChildren);
+      return next ?? previous;
+    },
+    { loadingValue: initialChildren }
+  );
 
   return {
     /** Visible items and their absolute layout data. */

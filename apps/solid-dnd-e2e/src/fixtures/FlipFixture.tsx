@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import { createFlip, reorderItems } from 'solid-dnd';
-import { createSignal, For, type JSX } from 'solid-js';
+import { createSignal, For } from 'solid-js';
 
 // ============================================================================
 // MARK: FlipFixture — tests FLIP animation in a real browser

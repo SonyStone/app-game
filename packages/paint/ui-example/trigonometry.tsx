@@ -1,8 +1,9 @@
 import { DEG_TO_RAD } from '@app-game/math';
 import { distance } from '@app-game/ogl/math/functions/vec-2-func';
 import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
+import type { ComponentProps } from '@solidjs/web';
 import { RAD_TO_DEG } from 'pixi.js';
-import { ComponentProps, createMemo, createSignal, splitProps } from 'solid-js';
+import { createMemo, createSignal, omit } from 'solid-js';
 
 /**
  * ```
@@ -117,21 +118,21 @@ const Hypotenuse = (props: { angle: number }) => {
 const Input = (
   props: { value: number; onChange: (value: number) => void } & Omit<ComponentProps<'input'>, 'value' | 'onChange'>
 ) => {
-  const [local, others] = splitProps(props, ['value', 'onChange']);
+  const others = omit(props, 'value', 'onChange');
 
   return (
     <input
       class="w-16"
-      value={local.value}
+      value={props.value}
       type="number"
       onInput={(e) => {
         const value = parseFloat(e.target.value);
-        local.onChange(value);
+        props.onChange(value);
       }}
       ref={(ref) => {
         numberPrecisionDragInput(ref, {
-          value: local.value,
-          onChange: local.onChange,
+          value: props.value,
+          onChange: props.onChange,
           step: '.01',
           max: '.1',
           min: '.001'
@@ -181,7 +182,7 @@ const Line = (props: { x1: number; y1: number; x2: number; y2: number }) => (
       x2={props.x2}
       y2={props.y2}
       stroke-width="0.01"
-      class="peer pointer-events-none stroke-black  transition-colors peer-hover:stroke-red-300"
+      class="peer pointer-events-none stroke-black transition-colors peer-hover:stroke-red-300"
     />
   </g>
 );
@@ -198,7 +199,7 @@ const Arc = (props: { x1: number; y1: number; x2: number; y2: number }) => (
     <path
       fill="none"
       stroke-width="0.01"
-      class="peer pointer-events-none stroke-black  transition-colors peer-hover:stroke-red-300"
+      class="peer pointer-events-none stroke-black transition-colors peer-hover:stroke-red-300"
       d={`M ${props.x1},${props.y1} A 1 1 0 0 ${props.y1 > props.y2 ? 0 : 1} ${props.x2},${props.y2}`}
     ></path>
   </g>

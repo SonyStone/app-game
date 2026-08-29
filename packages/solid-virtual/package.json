@@ -53,9 +53,9 @@
     "solid-js": "catalog:"
   },
   "dependencies": {
-    "@solid-primitives/raf": "^2.3.4",
-    "@solid-primitives/resize-observer": "^2.1.5",
-    "@solid-primitives/scroll": "^2.1.5",
+    "@solid-primitives/raf": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
+    "@solid-primitives/scroll": "catalog:",
     "@solid-primitives/trigger": "catalog:",
     "@solid-primitives/utils": "catalog:"
   },
@@ -64,7 +64,7 @@
     "@solid-primitives/event-bus": "catalog:",
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/set": "catalog:",
-    "@solid-primitives/virtual": "^0.2.3",
+    "@solid-primitives/virtual": "catalog:",
     "@solidjs/router": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "jsdom": "catalog:",

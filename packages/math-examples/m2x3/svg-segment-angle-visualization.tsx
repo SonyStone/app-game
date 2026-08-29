@@ -2,8 +2,8 @@ import { Radians } from '@app-game/math/types';
 import { createStruct } from '@app-game/math/utils/create-struct';
 import { radToDeg } from '@app-game/math/utils/trigonometry';
 import { Vec2 } from '@app-game/math/v2';
-import { createMemo, mergeProps, Show } from 'solid-js';
-import { JSX } from 'solid-js/jsx-runtime';
+import { JSX } from '@solidjs/web/jsx-runtime';
+import { createMemo, merge, Show } from 'solid-js';
 
 // Reusable struct for calculations
 const [segmentStruct] = createStruct({
@@ -59,7 +59,7 @@ export function SVGSegmentAngleVisualization(props: {
     textProps: { fill: 'black', 'font-size': '10px' }
   };
 
-  const merged = mergeProps(defaultProps, props);
+  const merged = merge(defaultProps, props);
 
   // --- Calculations ---
 

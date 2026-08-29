@@ -1,6 +1,6 @@
 import { createProgram } from '@app-game/webgl/createProgram';
 import { createWebGL2Context } from '@app-game/webgl/webgl-objects/context';
-import { onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 import { GLTileCanvas } from './GLTileCanvas';
 import fragmentShaderSource from './tiles.frag?raw';
 import vertexShaderSource from './tiles.vert?raw';
@@ -10,7 +10,7 @@ export default function TileBasedCanvas() {
     <canvas id="canvas" class="touch-none border border-black" width="800" height="600" />
   ) as HTMLCanvasElement;
 
-  onMount(() => {
+  onSettled(() => {
     const gl = createWebGL2Context(canvas);
 
     const program = createProgram(gl, vertexShaderSource, fragmentShaderSource);

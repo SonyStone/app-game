@@ -1,6 +1,6 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { Dynamic } from '@solidjs/web';
 import { createSignal, For } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { SVGNode } from '../svg-node';
 import { DataWrapper, OutlinePreview, useSvgSelect } from '../use-svg-select';
 

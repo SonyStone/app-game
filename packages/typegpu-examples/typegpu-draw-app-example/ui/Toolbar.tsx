@@ -11,7 +11,8 @@
  * - Collapsible for full screen drawing
  */
 
-import { createSignal, type Accessor, type JSX, type Setter } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, type Accessor, type Setter } from 'solid-js';
 import { BLEND_MODE_LABELS, COLOR_BLEND_MODE_LABELS } from '../constants';
 import { BlendMode, ColorBlendMode } from '../types';
 import { BrushSettings } from './BrushSettings.js';
@@ -61,7 +62,7 @@ export function Toolbar(props: ToolbarProps): JSX.Element {
     <>
       {/* Collapsed state - just show toggle button */}
       {collapsed() ? (
-        <div class="z-1000 absolute left-2 top-2">
+        <div class="absolute top-2 left-2 z-1000">
           <button
             onClick={() => setCollapsed(false)}
             class="min-w-8 cursor-pointer rounded border border-neutral-600 bg-neutral-700 px-1.5 py-1 text-sm text-neutral-400"

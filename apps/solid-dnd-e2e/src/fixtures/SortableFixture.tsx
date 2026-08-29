@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import { createDragSensor, createFlip, createSortable, Place, Rect, reorderItems } from 'solid-dnd';
-import { batch, createMemo, createSignal, For, Show, type JSX } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 
 // ============================================================================
 // MARK: SortableFixture — full drag-to-reorder with FLIP in a real browser
@@ -52,10 +53,10 @@ export default function SortableFixture(): JSX.Element {
     },
     onDragStart: (e) => {
       const id = pendingDragId;
-      batch(() => {
+      {
         setDraggedIds(id ? [id] : []);
         setDropPlace(sortable.getInsertionPoint(e.position));
-      });
+      }
     },
     onDragMove: (e) => {
       setDropPlace(sortable.getInsertionPoint(e.position));

@@ -14,7 +14,7 @@ export function MapToggle(props: {
           : 'border-transparent bg-zinc-100 text-zinc-500 hover:text-zinc-950'
       }`}
       aria-label={props.visible ? 'Hide scroll map' : 'Show scroll map'}
-      aria-pressed={props.visible}
+      aria-pressed={props.visible ? 'true' : 'false'}
       onClick={() => props.onChange(!props.visible)}
     >
       Map

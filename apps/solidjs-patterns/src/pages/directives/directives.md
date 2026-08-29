@@ -1,46 +1,37 @@
 <Header>
 
-# Directives <Badge>Advanced</Badge>
+# Ref Behaviors <Badge>Advanced</Badge>
 
 <Description>
-SolidJS directives are functions that run on DOM element creation, providing a clean way to attach imperative
-behavior.
+  Solid 2 uses explicit ref callbacks for attaching imperative DOM behavior. Setup functions can return cleanup work
+  and keep their reactive inputs explicit.
 </Description>
 
 </Header>
 
 <Section>
 
-## Creating a directive
+## Extract a DOM behavior
 
-A directive is a function `(el, accessor)` where `el` is the DOM element and `accessor` returns the value passed to
-`use:directiveName`.
+Write a normal setup function that receives the element and the values it needs. Register teardown with the current
+owner.
 
 ```tsx
-import { Accessor } from 'solid-js';
+import { onCleanup } from 'solid-js';
 
-// Must declare the type for TypeScript
-declare module 'solid-js' {
-  namespace JSX {
-    interface Directives {
-      clickOutside: () => void;
-    }
-  }
-}
-
-// Directive function
-function clickOutside(el: Element, accessor: Accessor<() => void>) {
-  const handler = (e: MouseEvent) => {
-    if (!el.contains(e.target as Node)) accessor()?.();
+function attachClickOutside(element: Element, close: () => void): void {
+  const handler = (event: MouseEvent) => {
+    if (event.target instanceof Node && !element.contains(event.target)) close();
   };
+
   document.addEventListener('click', handler);
   onCleanup(() => document.removeEventListener('click', handler));
 }
 
-// Usage
 function Dropdown() {
   const [open, setOpen] = createSignal(false);
-  return <div use:clickOutside={() => setOpen(false)}>...</div>;
+
+  return <div ref={(element) => attachClickOutside(element, () => setOpen(false))}>...</div>;
 }
 ```
 
@@ -48,61 +39,40 @@ function Dropdown() {
 
 <Section>
 
-## Directives with options
+## Reactive options
 
-Pass an options object or reactive value through the `use:` prop.
+Pass accessors when the attached behavior should respond to changing inputs.
 
 ```tsx
-declare module 'solid-js' {
-  namespace JSX {
-    interface Directives {
-      tooltip: { text: string; position?: 'top' | 'bottom' };
-    }
-  }
-}
-
-function tooltip(el: HTMLElement, accessor: Accessor<{ text: string; position?: string }>) {
-  createEffect(() => {
-    const opts = accessor();
-    el.title = opts.text;
-    // reactive - updates when opts changes
+function attachTooltip(element: HTMLElement, text: () => string): void {
+  createEffect(text, (value) => {
+    element.title = value;
   });
 }
 
-// Usage
-<button use:tooltip={{ text: 'Save document', position: 'top' }}>Save</button>;
+<button ref={(element) => attachTooltip(element, tooltipText)}>Save</button>;
 ```
 
 </Section>
 
 <Section>
 
-## autoFocus directive
+## One-time setup
 
-A simple directive to focus an element on mount.
+Use the ref callback itself for work that only needs the connected element.
 
 ```tsx
-declare module 'solid-js' {
-  namespace JSX {
-    interface Directives {
-      autoFocus: boolean;
-    }
-  }
-}
-
-function autoFocus(el: HTMLElement, accessor: Accessor<boolean>) {
-  createEffect(() => {
-    if (accessor()) el.focus();
-  });
-}
-
-// Usage
-<input use:autoFocus={true} placeholder="Auto-focused" />;
+<input
+  ref={(element) => {
+    element.focus();
+  }}
+  placeholder="Auto-focused"
+/>
 ```
 
 </Section>
 
-<Callout type="info" title="Import directives to prevent tree-shaking">
-  If a directive is imported but only used in JSX (via `use:`), some bundlers may tree-shake it. Import
-  it explicitly: `import './directives/clickOutside'` or reference it in a variable to keep it alive.
+<Callout type="info" title="Keep ownership local">
+  Call setup helpers from JSX so their effects and cleanup callbacks are owned by the component that rendered the
+  element.
 </Callout>

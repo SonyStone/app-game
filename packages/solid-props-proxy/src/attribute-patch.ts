@@ -5,7 +5,6 @@ import {
   isEqual,
   isHTMLElement,
   isRecord,
-  noop,
   removeArrayItem,
   restoreAttribute,
   runCleanupUpdate,
@@ -120,12 +119,7 @@ export function getAttributePatch(element: Element): AttributePatch {
  *
  * Cleanup updates can replace the value without recreating the native method patch.
  */
-export function setAttribute(
-  element: Element,
-  name: string,
-  value: unknown,
-  combine?: ProxyValueCombiner
-): Cleanup {
+export function setAttribute(element: Element, name: string, value: unknown, combine?: ProxyValueCombiner): Cleanup {
   const nextValue = value == null ? null : String(value);
   const cleanup = getAttributePatch(element).lock(name, nextValue, combine);
 
@@ -154,23 +148,6 @@ export function setClassName(element: Element, value: unknown): Cleanup {
   }
 
   return setProperty(element, 'className', combineClassValue(element.className, [value]), true);
-}
-
-/** Applies a Solid classList object as a stackable class overlay. */
-export function setClassList(element: Element, value: unknown): Cleanup {
-  if (!isRecord(value)) {
-    return noop;
-  }
-
-  if (isHTMLElement(element)) {
-    const cleanup = lockProperty(element, 'className', value, combineClassValue);
-
-    if (cleanup) {
-      return cleanup;
-    }
-  }
-
-  return getAttributePatch(element).lock('class', value, combineClassValue);
 }
 
 /** Applies a style prop as either a style attribute or per-declaration style overlay. */
@@ -292,12 +269,7 @@ function readStyleSnapshot(style: CSSStyleDeclaration, name: string): StyleSnaps
  * Element properties use descriptor patches when possible so external writes update
  * the base value below the proxy layer.
  */
-export function setProperty(
-  target: object,
-  key: string,
-  value: unknown,
-  alwaysSetOnRestore: boolean
-): Cleanup {
+export function setProperty(target: object, key: string, value: unknown, alwaysSetOnRestore: boolean): Cleanup {
   if (typeof Element !== 'undefined' && target instanceof Element) {
     const cleanup = lockProperty(target, key, value);
 
@@ -693,7 +665,7 @@ function resolveAttributeStateValue(state: AttributeState): AttributeValue {
   return value == null ? null : String(value);
 }
 
-/** Combines class/classList overlay layers with a base class string. */
+/** Combines Solid 2 class-value overlay layers with a base class string. */
 export function combineClassValue(base: unknown, layers: readonly unknown[]): string {
   const classNames = splitClassNames(String(base ?? ''));
 
@@ -706,6 +678,13 @@ export function combineClassValue(base: unknown, layers: readonly unknown[]): st
 
 /** Applies one class overlay layer to a mutable class name list. */
 function applyClassLayer(classNames: string[], layer: unknown): void {
+  if (Array.isArray(layer)) {
+    for (const nestedLayer of layer) {
+      applyClassLayer(classNames, nestedLayer);
+    }
+    return;
+  }
+
   if (isRecord(layer)) {
     for (const [key, enabled] of Object.entries(layer)) {
       for (const className of splitClassNames(key)) {

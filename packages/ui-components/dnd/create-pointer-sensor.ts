@@ -1,99 +1,97 @@
-import { onCleanup, onMount } from 'solid-js'
+import { onCleanup, onSettled } from 'solid-js';
 
-import { Coordinates, Id, SensorActivator, useDragDropContext } from './drag-drop-context'
-import { Transform } from './utils/layout'
+import { Coordinates, Id, SensorActivator, useDragDropContext } from './drag-drop-context';
+import { Transform } from './utils/layout';
 
-const ACTIVATION_DISTANCE = 10 // pixels
+const ACTIVATION_DISTANCE = 10; // pixels
 
-const ACTIVATION_DELAY = 250 // milliseconds
+const ACTIVATION_DELAY = 250; // milliseconds
 
 export const createPointerSensor = (id: Id = 'pointer-sensor'): void => {
-  const [
-    state,
-    { addSensor, removeSensor, sensorStart, sensorMove, sensorEnd, dragStart, dragEnd },
-  ] = useDragDropContext()!
+  const [state, { addSensor, removeSensor, sensorStart, sensorMove, sensorEnd, dragStart, dragEnd }] =
+    useDragDropContext()!;
 
-  onMount(() => {
-    addSensor({ id, activators: { pointerdown: attach } })
-  })
+  onSettled(() => {
+    addSensor({ id, activators: { pointerdown: attach } });
+  });
 
   onCleanup(() => {
-    removeSensor(id)
-  })
+    removeSensor(id);
+  });
 
-  const isActiveSensor = () => state.active.sensorId === id
+  const isActiveSensor = () => state.active.sensorId === id;
 
-  const initialCoordinates: Coordinates = { x: 0, y: 0 }
+  const initialCoordinates: Coordinates = { x: 0, y: 0 };
 
-  let activationDelayTimeoutId: number | null = null
-  let activationDraggableId: Id | null = null
+  let activationDelayTimeoutId: number | null = null;
+  let activationDraggableId: Id | null = null;
 
   const attach: SensorActivator<'pointerdown'> = (event, draggableId) => {
-    if (event.button !== 0) return
+    if (event.button !== 0) return;
 
-    document.addEventListener('pointermove', onPointerMove)
-    document.addEventListener('pointerup', onPointerUp)
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerup', onPointerUp);
 
-    activationDraggableId = draggableId
-    initialCoordinates.x = event.clientX
-    initialCoordinates.y = event.clientY
+    activationDraggableId = draggableId;
+    initialCoordinates.x = event.clientX;
+    initialCoordinates.y = event.clientY;
 
-    activationDelayTimeoutId = window.setTimeout(onActivate, ACTIVATION_DELAY)
-  }
+    activationDelayTimeoutId = window.setTimeout(onActivate, ACTIVATION_DELAY);
+  };
 
   const detach = (): void => {
     if (activationDelayTimeoutId) {
-      clearTimeout(activationDelayTimeoutId)
-      activationDelayTimeoutId = null
+      clearTimeout(activationDelayTimeoutId);
+      activationDelayTimeoutId = null;
     }
 
-    document.removeEventListener('pointermove', onPointerMove)
-    document.removeEventListener('pointerup', onPointerUp)
-    document.removeEventListener('selectionchange', clearSelection)
-  }
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('selectionchange', clearSelection);
+  };
 
   const onActivate = (): void => {
     if (!state.active.sensor) {
-      sensorStart(id, initialCoordinates)
-      dragStart(activationDraggableId!)
+      sensorStart(id, initialCoordinates);
+      dragStart(activationDraggableId!);
 
-      clearSelection()
-      document.addEventListener('selectionchange', clearSelection)
+      clearSelection();
+      document.addEventListener('selectionchange', clearSelection);
     } else if (!isActiveSensor()) {
-      detach()
+      detach();
     }
-  }
+  };
 
   const onPointerMove = (event: PointerEvent): void => {
-    const coordinates: Coordinates = { x: event.clientX, y: event.clientY }
+    const coordinates: Coordinates = { x: event.clientX, y: event.clientY };
 
     if (!state.active.sensor) {
       const transform: Transform = {
         x: coordinates.x - initialCoordinates.x,
-        y: coordinates.y - initialCoordinates.y,
-      }
+        y: coordinates.y - initialCoordinates.y
+      };
 
       if (Math.sqrt(transform.x ** 2 + transform.y ** 2) > ACTIVATION_DISTANCE) {
-        onActivate()
+        onActivate();
       }
     }
 
     if (isActiveSensor()) {
-      event.preventDefault()
-      sensorMove(coordinates)
+      event.preventDefault();
+      sensorMove(coordinates);
     }
-  }
+  };
 
   const onPointerUp = (event: PointerEvent): void => {
-    detach()
+    detach();
     if (isActiveSensor()) {
-      event.preventDefault()
-      dragEnd()
-      sensorEnd()
+      event.preventDefault();
+      dragEnd();
+      sensorEnd();
     }
-  }
+  };
 
   const clearSelection = () => {
-    window.getSelection()?.removeAllRanges()
-  }
-}
+    window.getSelection()?.removeAllRanges();
+  };
+};

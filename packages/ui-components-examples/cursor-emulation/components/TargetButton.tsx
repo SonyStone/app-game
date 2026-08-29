@@ -10,11 +10,13 @@ export function TargetButton(props: {
 }) {
   return (
     <button
-      class="relative z-20 min-w-36 border border-zinc-950 px-7 py-4 text-lg font-semibold shadow-[6px_6px_0_#18181b] transition active:translate-x-1 active:translate-y-1 active:shadow-[2px_2px_0_#18181b]"
-      classList={{
-        'bg-amber-300 text-zinc-950': props.clicked,
-        'bg-emerald-500 text-zinc-950': !props.clicked
-      }}
+      class={[
+        'relative z-20 min-w-36 border border-zinc-950 px-7 py-4 text-lg font-semibold shadow-[6px_6px_0_#18181b] transition active:translate-x-1 active:translate-y-1 active:shadow-[2px_2px_0_#18181b]',
+        {
+          'bg-amber-300 text-zinc-950': props.clicked,
+          'bg-emerald-500 text-zinc-950': !props.clicked
+        }
+      ]}
       data-cursor-target={props.label}
       onClick={props.onClick}
       onMouseDown={props.onMouseDown}

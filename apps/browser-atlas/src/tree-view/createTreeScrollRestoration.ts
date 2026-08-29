@@ -1,5 +1,5 @@
-import type { JSX } from 'solid-js';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, createTrackedEffect, onCleanup } from 'solid-js';
 
 /** Creates optional per-key scroll persistence for a tree's scrolling container. */
 export function createTreeScrollRestoration(props: {
@@ -20,7 +20,7 @@ export function createTreeScrollRestoration(props: {
   let restoringKey: string | undefined;
   let restoreCurrentPosition: (() => void) | undefined;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const currentElement = element();
     const currentKey = props.key();
     if (!currentElement || activeKey === currentKey) {
@@ -66,7 +66,6 @@ export function createTreeScrollRestoration(props: {
         restoreCurrentPosition = undefined;
       }
     }, RESTORE_SETTLE_TIME_MS);
-
   });
 
   onCleanup(finishActiveContext);

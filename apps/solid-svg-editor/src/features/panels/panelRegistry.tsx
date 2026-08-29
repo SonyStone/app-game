@@ -1,9 +1,9 @@
-import type { JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
 
+import type { PointerStateWithActive } from '@solid-primitives/pointer';
 import type { EditorCommandEvent } from '../../editor/commands';
 import type { SvgIcon } from '../../editor/svg-icon';
 import type { PanelId } from '../../editor/types';
-import type { PointerStateWithActive } from '@solid-primitives/pointer';
 import type { RecognizedElement } from '../../svg-db';
 import type { DropPosition, SvgElementNode, SvgNode } from '../../svg-model';
 import DebugIcon from '../chrome/icons/Debug.svg';

@@ -1,6 +1,6 @@
+import { createRenderer } from '@solidjs/universal';
 import { Camera, Geometry, Mesh, Polyline, Program, Transform } from 'ogl';
 import { createRenderEffect, getOwner, runWithOwner } from 'solid-js';
-import { createRenderer } from 'solid-js/universal';
 import { resolveRegistration, toTagName } from './registry';
 import {
   applyPropertyValue,
@@ -9,25 +9,11 @@ import {
   insertChildAt,
   isTransform,
   parsePath,
-  setValueAtPath,
+  setValueAtPath
 } from './shared';
-import type {
-  AnyInstance,
-  OglHostNode,
-  OglNode,
-  OglParent,
-  OglRoot,
-  OglRuntimeProps,
-  OglTextNode,
-} from './types';
+import type { AnyInstance, OglHostNode, OglNode, OglParent, OglRoot, OglRuntimeProps, OglTextNode } from './types';
 
-const RESERVED_PROPS = new Set([
-  'args',
-  'attach',
-  'children',
-  'makeDefault',
-  'ref',
-]);
+const RESERVED_PROPS = new Set(['args', 'attach', 'children', 'makeDefault', 'ref']);
 
 const updateDefaultCamera = (node: OglNode) => {
   const root = node.root;
@@ -75,9 +61,7 @@ const maybeAttachNode = (node: OglNode) => {
 const applyNodeProp = (node: OglNode, name: string, value: unknown) => {
   if (name === 'ref') {
     if (typeof value === 'function' && node.instance !== undefined) {
-      const owner = node.owner as
-        | Parameters<typeof runWithOwner>[0]
-        | undefined;
+      const owner = node.owner as Parameters<typeof runWithOwner>[0] | undefined;
 
       if (owner) {
         runWithOwner(owner, () => value(node.instance));
@@ -131,11 +115,7 @@ const detachNode = (node: OglNode) => {
   if (node.attachment.kind === 'transform') {
     node.attachment.parent.removeChild(node.attachment.child);
   } else {
-    setValueAtPath(
-      node.attachment.owner,
-      node.attachment.path,
-      node.attachment.previous,
-    );
+    setValueAtPath(node.attachment.owner, node.attachment.path, node.attachment.previous);
   }
 
   node.attachment = undefined;
@@ -154,8 +134,7 @@ const attachNode = (parent: OglParent, node: OglNode) => {
     return;
   }
 
-  const parentInstance =
-    parent.kind === 'root' ? root.state.scene : parent.instance;
+  const parentInstance = parent.kind === 'root' ? root.state.scene : parent.instance;
   if (!parentInstance) {
     return;
   }
@@ -167,7 +146,7 @@ const attachNode = (parent: OglParent, node: OglNode) => {
     node.attachment = {
       kind: 'transform',
       parent: parentInstance,
-      child: childTransform,
+      child: childTransform
     };
   } else {
     const path = resolveAttachmentPath(parentInstance, node);
@@ -179,7 +158,7 @@ const attachNode = (parent: OglParent, node: OglNode) => {
       kind: 'property',
       owner: parentInstance as AnyInstance,
       path,
-      previous: getValueAtPath(parentInstance as AnyInstance, path),
+      previous: getValueAtPath(parentInstance as AnyInstance, path)
     };
     setValueAtPath(parentInstance as AnyInstance, path, node.instance);
   }
@@ -197,18 +176,13 @@ const instantiateNode = (node: OglNode, root: OglRoot) => {
     return;
   }
 
-  const registration =
-    resolveRegistration(node.type) ?? resolveRegistration(toTagName(node.type));
+  const registration = resolveRegistration(node.type) ?? resolveRegistration(toTagName(node.type));
   if (!registration) {
-    throw new Error(
-      `Unknown OGL intrinsic \"${node.type}\". Register it with extend().`,
-    );
+    throw new Error(`Unknown OGL intrinsic \"${node.type}\". Register it with extend().`);
   }
 
   const args = Array.isArray(node.props.args) ? [...node.props.args] : [];
-  const constructorArgs = registration.requiresGl
-    ? [root.state.gl, ...args]
-    : args;
+  const constructorArgs = registration.requiresGl ? [root.state.gl, ...args] : args;
   node.instance = new registration.constructor(...constructorArgs);
   node.root = root;
 
@@ -233,8 +207,7 @@ const mountNode = (parent: OglParent, node: OglNode) => {
   attachNode(parent, node);
 };
 
-const isTextNode = (node: OglHostNode): node is OglTextNode =>
-  node.kind === 'text';
+const isTextNode = (node: OglHostNode): node is OglTextNode => node.kind === 'text';
 
 const oglRenderer: any = createRenderer({
   createElement(type: string): OglNode {
@@ -244,14 +217,14 @@ const oglRenderer: any = createRenderer({
       parent: null,
       children: [],
       props: {},
-      owner: getOwner(),
+      owner: getOwner()
     };
   },
   createTextNode(value: string): OglTextNode {
     return {
       kind: 'text',
       value,
-      parent: null,
+      parent: null
     };
   },
   replaceText(node: OglTextNode, value: string) {
@@ -270,20 +243,12 @@ const oglRenderer: any = createRenderer({
       attachNode(node.parent, node);
     }
   },
-  insertNode(
-    parent: OglParent | null,
-    node: OglHostNode,
-    anchor?: OglHostNode,
-  ) {
+  insertNode(parent: OglParent | null, node: OglHostNode, anchor?: OglHostNode) {
     if (!parent || isTextNode(node)) {
       return;
     }
 
-    insertChildAt(
-      parent.children,
-      node,
-      anchor && !isTextNode(anchor) ? anchor : undefined,
-    );
+    insertChildAt(parent.children, node, anchor && !isTextNode(anchor) ? anchor : undefined);
     node.parent = parent;
     mountNode(parent, node);
   },
@@ -315,41 +280,33 @@ const oglRenderer: any = createRenderer({
     const siblings = parent.children;
     const index = siblings.indexOf(node);
     return index === -1 ? undefined : siblings[index + 1];
-  },
+  }
 } as any);
 
-const spreadExpression = (
-  node: OglHostNode,
-  props: OglRuntimeProps = {},
-  prevProps: OglRuntimeProps = {},
-) => {
-  createRenderEffect(() => {
-    if (isTextNode(node)) {
-      return;
+const spreadExpression = (node: OglHostNode, props: OglRuntimeProps = {}, prevProps: OglRuntimeProps = {}) => {
+  if (isTextNode(node)) {
+    return;
+  }
+
+  for (const [name, value] of Object.entries(props)) {
+    if (value === prevProps[name]) {
+      continue;
     }
 
-    for (const [name, value] of Object.entries(props)) {
-      if (value === prevProps[name]) {
-        continue;
-      }
-
-      oglRenderer.setProp(node, name, value, prevProps[name]);
-      prevProps[name] = value;
-    }
-  });
-
-  return prevProps;
+    oglRenderer.setProp(node, name, value, prevProps[name]);
+    prevProps[name] = value;
+  }
 };
+
+const readSpreadProps = (props: OglRuntimeProps) => Object.fromEntries(Object.entries(props)) as OglRuntimeProps;
 
 export const spread = <T>(node: OglHostNode, accessor: T | (() => T)) => {
   if (typeof accessor === 'function') {
     const getter = accessor as () => T;
-    createRenderEffect((current) =>
-      spreadExpression(
-        node,
-        getter() as OglRuntimeProps,
-        current as OglRuntimeProps,
-      ),
+    const previousProps: OglRuntimeProps = {};
+    createRenderEffect(
+      () => readSpreadProps(getter() as OglRuntimeProps),
+      (props) => spreadExpression(node, props, previousProps)
     );
     return;
   }
@@ -367,6 +324,5 @@ export const {
   insert,
   setProp,
   mergeProps,
-  use,
-  render,
+  render
 } = oglRenderer;

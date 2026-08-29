@@ -1,12 +1,9 @@
-import { Router } from '@solidjs/router';
+import { createRouter } from '@solidjs/router';
 
 import { routes } from './routes';
 
+const Router = createRouter({ routes });
+
 export function App() {
-  return (
-    <>
-      <Router>{routes}</Router>
-      {/* <Noise /> */}
-    </>
-  );
+  return <Router />;
 }

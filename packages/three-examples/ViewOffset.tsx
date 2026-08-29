@@ -1,4 +1,4 @@
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 import {
   BoxGeometry,
   GridHelper,
@@ -48,7 +48,7 @@ export default function ViewOffset() {
 
   let width: number;
   let height: number;
-  createEffect(() => {
+  createTrackedEffect(() => {
     const size = resize();
     width = size.width;
     height = size.height;

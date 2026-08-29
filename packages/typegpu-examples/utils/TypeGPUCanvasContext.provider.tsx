@@ -1,5 +1,6 @@
 import { createContextProvider } from '@app-game/solid-utils';
-import { JSX, onCleanup, splitProps } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { omit, onCleanup } from 'solid-js';
 import { useGPU } from './GPU.provider';
 import { useGPUCanvasContext } from './GPUCanvasContext.provider';
 import { useTypeGPURoot } from './TypeGPURoot.provider';
@@ -26,7 +27,7 @@ export { useTypeGPUCanvasContext };
 export function TypeGPUCanvasContextProvider(
   props: Partial<{ children: JSX.Element }> & Omit<GPUCanvasConfiguration, 'device' | 'format'>
 ) {
-  const [local, configuration] = splitProps(props, ['children']);
+  const configuration = omit(props, 'children');
 
   const gpu = useGPU();
   const root = useTypeGPURoot();
@@ -43,5 +44,5 @@ export function TypeGPUCanvasContextProvider(
     context.unconfigure();
   });
 
-  return <Provider value={context}>{local.children}</Provider>;
+  return <Provider value={context}>{props.children}</Provider>;
 }

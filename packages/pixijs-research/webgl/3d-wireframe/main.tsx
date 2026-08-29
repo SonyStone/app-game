@@ -2,7 +2,7 @@ import { FVec3, m4 } from '@app-game/math';
 import { DEG_TO_RAD } from '@app-game/math/constants';
 import { Spherical, setFromSpherical } from '@app-game/math/spherical';
 import { GL_CLEAR_MASK, GL_DRAW_ARRAYS_MODE } from '@app-game/webgl/static-variables';
-import { Accessor, Setter, createEffect, onMount } from 'solid-js';
+import { Accessor, Setter, createTrackedEffect, onSettled } from 'solid-js';
 
 import createRAF from '@solid-primitives/raf';
 import { createMouseRotate } from './create-mouse-rotate';
@@ -131,7 +131,7 @@ export function Main(prop: { ctx: Context }) {
   setPhi(camera.spherical.phi);
   setTheta(camera.spherical.theta);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     camera.spherical.radius = radius();
     camera.spherical.phi = phi();
     camera.spherical.theta = theta();
@@ -140,51 +140,53 @@ export function Main(prop: { ctx: Context }) {
 
   const up = FVec3.create(0, 1, 0);
 
-  onMount(async () => {
-    const shaderImage = await createImage(gl);
-    // await new Promise((res) => setTimeout(() => res(0), 1000));
+  onSettled(() => {
+    void (async () => {
+      const shaderImage = await createImage(gl);
+      // await new Promise((res) => setTimeout(() => res(0), 1000));
 
-    function render(context: Context) {
-      const gl = context.gl;
+      function render(context: Context) {
+        const gl = context.gl;
 
-      gl.clearColor(0.0, 0.0, 0.0, 1);
-      gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT);
+        gl.clearColor(0.0, 0.0, 0.0, 1);
+        gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT);
 
-      updateViewportSize(ctx);
-      gl.viewport(0, 0, ctx.viewportWidth, ctx.viewportHeight);
+        updateViewportSize(ctx);
+        gl.viewport(0, 0, ctx.viewportWidth, ctx.viewportHeight);
 
-      shader.camera.set(updateCamera(ctx.transition()));
+        shader.camera.set(updateCamera(ctx.transition()));
 
-      drawPoints(gl, shader, room, [0.3, 0.3, 0.3]);
-      drawPoints(gl, shader, roomDoor, [0.7, 0.7, 0.7]);
-      drawPoints(gl, shader, balconyDoor, [0.7, 0.7, 0.7]);
+        drawPoints(gl, shader, room, [0.3, 0.3, 0.3]);
+        drawPoints(gl, shader, roomDoor, [0.7, 0.7, 0.7]);
+        drawPoints(gl, shader, balconyDoor, [0.7, 0.7, 0.7]);
 
-      shelves.forEach((shelf) => drawPoints(gl, shader, shelf, [0.3, 0.8, 0.8]));
+        shelves.forEach((shelf) => drawPoints(gl, shader, shelf, [0.3, 0.8, 0.8]));
 
-      rails.forEach((rail) => drawPoints(gl, shader, rail, [0.8, 0.3, 0.8]));
+        rails.forEach((rail) => drawPoints(gl, shader, rail, [0.8, 0.3, 0.8]));
 
-      drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
-      shaderImage.bind();
-      shader.camera.set(updateCamera(ctx.transition() / 2));
-      drawPoints(gl, shader, washingMashine, [0.6, 0.1, 0.1]);
+        drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
+        shaderImage.bind();
+        shader.camera.set(updateCamera(ctx.transition() / 2));
+        drawPoints(gl, shader, washingMashine, [0.6, 0.1, 0.1]);
 
-      drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
-      shader.camera.set(updateCamera(0));
-      drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
+        drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
+        shader.camera.set(updateCamera(0));
+        drawPoints(gl, shader, camera_box, [0.2, 1, 0.1]);
 
-      gl.flush();
-    }
+        gl.flush();
+      }
 
-    function handleRaf(time: number) {
-      ctx.renderTime = time;
-      ctx.renderDeltaTime = (time - ctx.renderTime) * 0.001;
+      function handleRaf(time: number) {
+        ctx.renderTime = time;
+        ctx.renderDeltaTime = (time - ctx.renderTime) * 0.001;
 
-      render(ctx);
-      ctx.setCamera(camera);
-    }
+        render(ctx);
+        ctx.setCamera(camera);
+      }
 
-    const [running, start, stop] = createRAF(handleRaf);
-    start();
+      const [running, start, stop] = createRAF(handleRaf);
+      start();
+    })();
   });
 
   return <></>;

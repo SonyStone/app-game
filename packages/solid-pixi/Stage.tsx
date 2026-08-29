@@ -1,5 +1,5 @@
 import { Container } from 'pixi.js';
-import type { JSXElement } from 'solid-js';
+import { type Element as JSXElement } from 'solid-js';
 import { useApplication } from './Application';
 import { insert } from './runtime';
 

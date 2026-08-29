@@ -1,5 +1,5 @@
 import { noop, trueFn } from '@solid-primitives/utils';
-import { batch, createRoot, createSignal, getOwner, onCleanup, Setter, Signal, type Accessor } from 'solid-js';
+import { createRoot, createSignal, getOwner, onCleanup, runWithOwner, Setter, Signal, type Accessor } from 'solid-js';
 
 /**
  * Callback function for {@link createRootMapPool}. Called when a new root is created.
@@ -110,15 +110,17 @@ export function createRootMapPool<TKey, TArg, TResult>(
 
     if (root) {
       pool.delete(key);
-      batch(() => {
+      {
         root!.set(() => arg);
         root!.setA(true);
-      });
+      }
     } else {
-      root = createRoot((dispose) => mapRoot(key, dispose, createSignal(arg)), owner);
+      root = runWithOwner(owner, () =>
+        createRoot((dispose) => mapRoot(key, dispose, createSignal(arg as Exclude<TArg, Function>) as Signal<TArg>))
+      );
     }
 
-    onCleanup(() => cleanupRoot(root));
+    onCleanup(() => cleanupRoot(root!));
 
     return root.v;
   };

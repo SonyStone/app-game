@@ -1,7 +1,7 @@
 /* @refresh reload */
-import { Router } from '@solidjs/router';
+import { createRouter } from '@solidjs/router';
+import { render } from '@solidjs/web';
 import '@unocss/reset/tailwind.css';
-import { render } from 'solid-js/web';
 import 'uno.css';
 import { routes } from './routes';
 import './styles.css';
@@ -9,4 +9,6 @@ import './styles.css';
 const root = document.getElementById('app');
 if (!root) throw new Error('Root element not found');
 
-render(() => <Router>{routes}</Router>, root);
+const Router = createRouter({ routes: [routes] });
+
+render(() => <Router />, root);

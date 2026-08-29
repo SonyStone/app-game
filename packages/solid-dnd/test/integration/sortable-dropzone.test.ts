@@ -1,4 +1,4 @@
-import { batch, createRoot, createSignal } from 'solid-js';
+import { createRoot, createSignal, flush } from 'solid-js';
 import { GAP_KEY } from 'src/core/displayList';
 import type { Place } from 'src/core/place';
 import * as Rect from 'src/core/rect';
@@ -50,8 +50,8 @@ describe('sortable + display list integration', () => {
     createRoot((dispose) => {
       const { rects, containerRect } = makeLayout();
       const [items] = createSignal(['a', 'b', 'c', 'd']);
-      const [draggedKeys, setDraggedKeys] = createSignal<string[]>([]);
-      const [dropPlace, setDropPlace] = createSignal<Place<string> | undefined>(undefined);
+      const [draggedKeys, setDraggedKeys] = createSignal<string[]>([], { ownedWrite: true });
+      const [dropPlace, setDropPlace] = createSignal<Place<string> | undefined>(undefined, { ownedWrite: true });
 
       const sortable = createSortable<string>({
         containerKey: 'list',
@@ -72,11 +72,12 @@ describe('sortable + display list integration', () => {
       expect(display.displayKeys()).toEqual(['a', 'b', 'c', 'd']);
 
       // Simulate dragging 'b' — pointer at y=110 (below center of 'c' at 120)
-      batch(() => {
+      {
         setDraggedKeys(['b']);
         const place = sortable.getInsertionPoint(Vec2.of(100, 110));
         setDropPlace(place);
-      });
+        flush();
+      }
 
       // Pointer at y=110 < center of c (120), so place = before 'c'
       expect(dropPlace()).toEqual({ parent: 'list', before: 'c' });
@@ -92,7 +93,7 @@ describe('sortable + display list integration', () => {
       const { rects, containerRect } = makeLayout();
       const [items] = createSignal(['a', 'b', 'c', 'd']);
       const [draggedKeys] = createSignal(['a']);
-      const [dropPlace, setDropPlace] = createSignal<Place<string> | undefined>(undefined);
+      const [dropPlace, setDropPlace] = createSignal<Place<string> | undefined>(undefined, { ownedWrite: true });
 
       const sortable = createSortable<string>({
         containerKey: 'list',
@@ -111,16 +112,19 @@ describe('sortable + display list integration', () => {
 
       // Pointer near top → before 'b' (first non-dragged item)
       setDropPlace(sortable.getInsertionPoint(Vec2.of(100, 60)));
+      flush();
       expect(dropPlace()).toEqual({ parent: 'list', before: 'b' });
       expect(display.displayKeys()).toEqual([GAP_KEY, 'b', 'c', 'd']);
 
       // Pointer moves to middle → before 'c'
       setDropPlace(sortable.getInsertionPoint(Vec2.of(100, 110)));
+      flush();
       expect(dropPlace()).toEqual({ parent: 'list', before: 'c' });
       expect(display.displayKeys()).toEqual(['b', GAP_KEY, 'c', 'd']);
 
       // Pointer moves to bottom → append
       setDropPlace(sortable.getInsertionPoint(Vec2.of(100, 195)));
+      flush();
       expect(dropPlace()).toEqual({ parent: 'list', before: null });
       expect(display.displayKeys()).toEqual(['b', 'c', 'd', GAP_KEY]);
 
@@ -131,7 +135,7 @@ describe('sortable + display list integration', () => {
   it('reorderItems produces correct new order from sortable place', () => {
     createRoot((dispose) => {
       const { rects, containerRect } = makeLayout();
-      const [items, setItems] = createSignal(['a', 'b', 'c', 'd']);
+      const [items, setItems] = createSignal(['a', 'b', 'c', 'd'], { ownedWrite: true });
       const [draggedKeys] = createSignal(['b']);
 
       const sortable = createSortable<string>({
@@ -149,6 +153,7 @@ describe('sortable + display list integration', () => {
       // Apply the reorder
       const newOrder = reorderItems(items(), ['b'], place!, (k) => k);
       setItems(newOrder);
+      flush();
 
       expect(items()).toEqual(['a', 'c', 'b', 'd']);
 
@@ -187,7 +192,7 @@ describe('sortable + selection + display list integration', () => {
   it('multi-select drag moves all selected items', () => {
     createRoot((dispose) => {
       const { rects, containerRect } = makeLayout();
-      const [items, setItems] = createSignal(['a', 'b', 'c', 'd']);
+      const [items, setItems] = createSignal(['a', 'b', 'c', 'd'], { ownedWrite: true });
       const itemKeys = () => items();
 
       const selection = createSelection<string>({
@@ -196,7 +201,9 @@ describe('sortable + selection + display list integration', () => {
 
       // Select 'a' and 'b'
       selection.handleClick('a', { ctrlKey: false, metaKey: false, shiftKey: false });
+      flush();
       selection.handleClick('b', { ctrlKey: false, metaKey: false, shiftKey: true });
+      flush();
       expect(selection.selected()).toEqual(['a', 'b']);
 
       const draggedKeys = () => selection.selected();
@@ -227,6 +234,7 @@ describe('sortable + selection + display list integration', () => {
       const place = sortable.getInsertionPoint(Vec2.of(100, 160));
       const newOrder = reorderItems(items(), ['a', 'b'], place!, (k) => k);
       setItems(newOrder);
+      flush();
 
       expect(items()).toEqual(['c', 'a', 'b', 'd']);
 
@@ -244,6 +252,7 @@ describe('sortable + selection + display list integration', () => {
 
       // Select 'c'
       selection.handleClick('c', { ctrlKey: false, metaKey: false, shiftKey: false });
+      flush();
       expect(selection.selected()).toEqual(['c']);
 
       const sortable = createSortable<string>({
@@ -260,7 +269,9 @@ describe('sortable + selection + display list integration', () => {
 
       // Clear and select different item
       selection.clear();
+      flush();
       selection.handleClick('d', { ctrlKey: false, metaKey: false, shiftKey: false });
+      flush();
       expect(selection.selected()).toEqual(['d']);
 
       // Now 'd' is dragged, pointer at y=10 → before 'a'
@@ -290,7 +301,7 @@ describe('sortable grid + display list integration', () => {
 
       const [items] = createSignal(['a', 'b', 'c', 'd']);
       const [draggedKeys] = createSignal(['b']);
-      const [dropPlace, setDropPlace] = createSignal<Place<string> | undefined>(undefined);
+      const [dropPlace, setDropPlace] = createSignal<Place<string> | undefined>(undefined, { ownedWrite: true });
 
       const sortable = createSortable<string>({
         containerKey: 'grid',
@@ -311,11 +322,13 @@ describe('sortable grid + display list integration', () => {
 
       // Pointer in first cell → before 'a'
       setDropPlace(sortable.getInsertionPoint(Vec2.of(50, 40)));
+      flush();
       expect(dropPlace()?.before).toBe('a');
       expect(display.displayKeys()).toEqual([GAP_KEY, 'a', 'c', 'd']);
 
       // Pointer in last cell → before 'd' or append depending on exact position
       setDropPlace(sortable.getInsertionPoint(Vec2.of(160, 130)));
+      flush();
       // Should resolve to some valid place in the grid
       expect(dropPlace()).toBeDefined();
 

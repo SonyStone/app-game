@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect, type Accessor } from 'solid-js';
 
 import { radiansToDegrees, type Point } from '../../editor/geometry';
 import { clamp } from '../../editor/tree-utils';
@@ -34,7 +34,7 @@ export function createViewportCamera(options: {
     return `rotate(${radiansToDegrees(viewportRotation())} ${center.x} ${center.y})`;
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const size = options.rootSize();
     const currentViewport = viewportSize();
 

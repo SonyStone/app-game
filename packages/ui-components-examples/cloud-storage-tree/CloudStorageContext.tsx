@@ -1,5 +1,15 @@
-import { Accessor, createContext, createSignal, JSX, onCleanup, onMount, Setter, useContext } from 'solid-js';
-import { createStore, SetStoreFunction } from 'solid-js/store';
+import type { JSX } from '@solidjs/web';
+import {
+  Accessor,
+  createContext,
+  createSignal,
+  createStore,
+  onSettled,
+  Setter,
+  storePath,
+  StoreSetter,
+  useContext
+} from 'solid-js';
 
 import { mockJrpcService } from './mock-jrpc.service';
 import type { ContextMenuState, DialogState, FileSystemNode, SelectionState } from './types';
@@ -41,7 +51,7 @@ export type CloudStorageActions = {
 
 type CloudStorageContextValue = {
   state: CloudStorageState;
-  setState: SetStoreFunction<CloudStorageState>;
+  setState: StoreSetter<CloudStorageState>;
   actions: CloudStorageActions;
   treeData: Accessor<Map<string, FileSystemNode[]>>;
   setTreeData: Setter<Map<string, FileSystemNode[]>>;
@@ -128,15 +138,15 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
       await actions.navigateToFolder(folderId, pushHistory);
     } else {
       // Path not found, go to root
-      setState('error', `Folder not found: ${path}`);
+      setState(storePath('error', `Folder not found: ${path}`));
       await actions.navigateToFolder('root', pushHistory);
     }
   };
 
   const actions: CloudStorageActions = {
     async navigateToFolder(folderId: string, pushHistory = true) {
-      setState('isLoading', true);
-      setState('error', null);
+      setState(storePath('isLoading', true));
+      setState(storePath('error', null));
 
       try {
         const [response, breadcrumbs] = await Promise.all([
@@ -144,20 +154,22 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
           mockJrpcService.getBreadcrumbs(folderId)
         ]);
 
-        setState('currentFolderId', folderId);
-        setState('items', response.items);
-        setState('breadcrumbs', breadcrumbs);
-        setState('selection', { selectedIds: new Set(), lastSelectedId: null });
+        setState(storePath('currentFolderId', folderId));
+        setState(storePath('items', response.items));
+        setState(storePath('breadcrumbs', breadcrumbs));
+        setState(storePath('selection', { selectedIds: new Set<string>(), lastSelectedId: null }));
 
         // Update browser history
         updateUrlHash(folderId, pushHistory);
 
         // Auto-expand all folders in the breadcrumb path
-        setState('expandedFolders', (prev) => {
-          const next = new Set(prev);
-          breadcrumbs.forEach((crumb) => next.add(crumb.id));
-          return next;
-        });
+        setState(
+          storePath('expandedFolders', (prev) => {
+            const next = new Set(prev);
+            breadcrumbs.forEach((crumb) => next.add(crumb.id));
+            return next;
+          })
+        );
 
         // Load tree data for this folder
         setTreeData((prev) => {
@@ -183,24 +195,26 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
           });
         }
       } catch (err) {
-        setState('error', err instanceof Error ? err.message : 'Failed to load folder');
+        setState(storePath('error', err instanceof Error ? err.message : 'Failed to load folder'));
       } finally {
-        setState('isLoading', false);
+        setState(storePath('isLoading', false));
       }
     },
 
     toggleExpand(folderId: string) {
       const isExpanded = state.expandedFolders.has(folderId);
 
-      setState('expandedFolders', (prev) => {
-        const next = new Set(prev);
-        if (isExpanded) {
-          next.delete(folderId);
-        } else {
-          next.add(folderId);
-        }
-        return next;
-      });
+      setState(
+        storePath('expandedFolders', (prev) => {
+          const next = new Set(prev);
+          if (isExpanded) {
+            next.delete(folderId);
+          } else {
+            next.add(folderId);
+          }
+          return next;
+        })
+      );
 
       // Load children if expanding and not loaded yet
       if (!isExpanded && !treeData().has(folderId)) {
@@ -215,72 +229,78 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
     },
 
     selectItem(id: string, isCtrlKey: boolean, isShiftKey: boolean) {
-      setState('selection', (prev) => {
-        const next = new Set(prev.selectedIds);
+      setState(
+        storePath('selection', (prev) => {
+          const next = new Set(prev.selectedIds);
 
-        if (isShiftKey && prev.lastSelectedId) {
-          // Range selection
-          const allIds = state.items.map((item) => item.id);
-          const startIdx = allIds.indexOf(prev.lastSelectedId);
-          const endIdx = allIds.indexOf(id);
+          if (isShiftKey && prev.lastSelectedId) {
+            // Range selection
+            const allIds = state.items.map((item) => item.id);
+            const startIdx = allIds.indexOf(prev.lastSelectedId);
+            const endIdx = allIds.indexOf(id);
 
-          if (startIdx !== -1 && endIdx !== -1) {
-            const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
-            for (let i = from; i <= to; i++) {
-              next.add(allIds[i]);
+            if (startIdx !== -1 && endIdx !== -1) {
+              const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+              for (let i = from; i <= to; i++) {
+                next.add(allIds[i]);
+              }
             }
-          }
 
-          return { selectedIds: next, lastSelectedId: id };
-        } else if (isCtrlKey) {
-          // Toggle selection
-          if (next.has(id)) {
-            next.delete(id);
+            return { selectedIds: next, lastSelectedId: id };
+          } else if (isCtrlKey) {
+            // Toggle selection
+            if (next.has(id)) {
+              next.delete(id);
+            } else {
+              next.add(id);
+            }
+            return { selectedIds: next, lastSelectedId: id };
           } else {
-            next.add(id);
+            // Single selection
+            return { selectedIds: new Set([id]), lastSelectedId: id };
           }
-          return { selectedIds: next, lastSelectedId: id };
-        } else {
-          // Single selection
-          return { selectedIds: new Set([id]), lastSelectedId: id };
-        }
-      });
+        })
+      );
     },
 
     clearSelection() {
-      setState('selection', { selectedIds: new Set(), lastSelectedId: null });
+      setState(storePath('selection', { selectedIds: new Set<string>(), lastSelectedId: null }));
     },
 
     selectAll() {
-      setState('selection', {
-        selectedIds: new Set(state.items.map((item) => item.id)),
-        lastSelectedId: state.items[state.items.length - 1]?.id ?? null
-      });
+      setState(
+        storePath('selection', {
+          selectedIds: new Set(state.items.map((item) => item.id)),
+          lastSelectedId: state.items[state.items.length - 1]?.id ?? null
+        })
+      );
     },
 
     openContextMenu(x: number, y: number, targetIds: string[]) {
-      setState('contextMenu', {
-        isOpen: true,
-        x,
-        y,
-        targetIds
-      });
+      setState(
+        storePath('contextMenu', {
+          isOpen: true,
+          x,
+          y,
+          targetIds
+        })
+      );
     },
 
     closeContextMenu() {
-      setState('contextMenu', 'isOpen', false);
+      setState(storePath('contextMenu', 'isOpen', false));
     },
 
     openDialog(type, targetId, initialValue) {
-      setState('dialog', { type, targetId, initialValue });
+      setState(storePath('dialog', { type, targetId, initialValue }));
     },
 
     closeDialog() {
-      setState('dialog', { type: null, targetId: undefined, initialValue: undefined });
+      setState(storePath('dialog', { type: null, targetId: undefined, initialValue: undefined }));
     },
 
     async createFolder(name: string) {
-      setState('isLoading', true);
+      setState(storePath('isLoading', true));
       try {
         await mockJrpcService.createFolder({
           parentPath: state.currentFolderId,
@@ -289,14 +309,14 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
         await actions.refresh();
         actions.closeDialog();
       } catch (err) {
-        setState('error', err instanceof Error ? err.message : 'Failed to create folder');
+        setState(storePath('error', err instanceof Error ? err.message : 'Failed to create folder'));
       } finally {
-        setState('isLoading', false);
+        setState(storePath('isLoading', false));
       }
     },
 
     async createFile(name: string) {
-      setState('isLoading', true);
+      setState(storePath('isLoading', true));
       try {
         await mockJrpcService.createFile({
           parentPath: state.currentFolderId,
@@ -305,16 +325,16 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
         await actions.refresh();
         actions.closeDialog();
       } catch (err) {
-        setState('error', err instanceof Error ? err.message : 'Failed to create file');
+        setState(storePath('error', err instanceof Error ? err.message : 'Failed to create file'));
       } finally {
-        setState('isLoading', false);
+        setState(storePath('isLoading', false));
       }
     },
 
     async rename(newName: string) {
       if (!state.dialog.targetId) return;
 
-      setState('isLoading', true);
+      setState(storePath('isLoading', true));
       try {
         await mockJrpcService.rename({
           path: state.dialog.targetId,
@@ -323,9 +343,9 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
         await actions.refresh();
         actions.closeDialog();
       } catch (err) {
-        setState('error', err instanceof Error ? err.message : 'Failed to rename');
+        setState(storePath('error', err instanceof Error ? err.message : 'Failed to rename'));
       } finally {
-        setState('isLoading', false);
+        setState(storePath('isLoading', false));
       }
     },
 
@@ -333,22 +353,22 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
       const idsToDelete = Array.from(state.selection.selectedIds);
       if (idsToDelete.length === 0) return;
 
-      setState('isLoading', true);
+      setState(storePath('isLoading', true));
       try {
         await mockJrpcService.delete({ paths: idsToDelete });
         await actions.refresh();
         actions.closeDialog();
         actions.clearSelection();
       } catch (err) {
-        setState('error', err instanceof Error ? err.message : 'Failed to delete');
+        setState(storePath('error', err instanceof Error ? err.message : 'Failed to delete'));
       } finally {
-        setState('isLoading', false);
+        setState(storePath('isLoading', false));
       }
     },
 
     async refresh() {
       const response = await mockJrpcService.listFolder(state.currentFolderId);
-      setState('items', response.items);
+      setState(storePath('items', response.items));
 
       // Update tree data for current folder
       setTreeData((prev) => {
@@ -362,7 +382,7 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
       const selectedIds = Array.from(state.selection.selectedIds);
       if (selectedIds.length === 0) return;
 
-      setState('isLoading', true);
+      setState(storePath('isLoading', true));
       try {
         for (const id of selectedIds) {
           const item = state.items.find((i) => i.id === id);
@@ -371,16 +391,16 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
           }
         }
       } catch (err) {
-        setState('error', err instanceof Error ? err.message : 'Failed to download');
+        setState(storePath('error', err instanceof Error ? err.message : 'Failed to download'));
       } finally {
-        setState('isLoading', false);
+        setState(storePath('isLoading', false));
       }
     },
 
     async uploadFiles(files: FileList) {
       if (files.length === 0) return;
 
-      setState('isLoading', true);
+      setState(storePath('isLoading', true));
       try {
         for (const file of Array.from(files)) {
           await mockJrpcService.uploadFile({
@@ -391,15 +411,15 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
         }
         await actions.refresh();
       } catch (err) {
-        setState('error', err instanceof Error ? err.message : 'Failed to upload');
+        setState(storePath('error', err instanceof Error ? err.message : 'Failed to upload'));
       } finally {
-        setState('isLoading', false);
+        setState(storePath('isLoading', false));
       }
     }
   };
 
   // Handle browser back/forward navigation and initial load
-  onMount(() => {
+  onSettled(() => {
     const handlePopState = (e: PopStateEvent) => {
       const path = e.state?.path ?? getFolderPathFromHash();
       // Navigate by path without pushing to history
@@ -407,7 +427,6 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
     };
 
     window.addEventListener('popstate', handlePopState);
-    onCleanup(() => window.removeEventListener('popstate', handlePopState));
 
     // Initial load - use folder path from URL hash if present
     const initialPath = getFolderPathFromHash();
@@ -416,11 +435,13 @@ export function CloudStorageProvider(props: { children: JSX.Element }): JSX.Elem
     } else {
       navigateByPath(initialPath, false);
     }
+
+    return () => window.removeEventListener('popstate', handlePopState);
   });
 
   return (
-    <CloudStorageContext.Provider value={{ state, setState, actions, treeData, setTreeData }}>
+    <CloudStorageContext value={{ state, setState, actions, treeData, setTreeData }}>
       {props.children}
-    </CloudStorageContext.Provider>
+    </CloudStorageContext>
   );
 }

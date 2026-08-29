@@ -1,4 +1,5 @@
-import { Show, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Show } from 'solid-js';
 import type { DemoItem } from '../data';
 import { CheckIcon, GripIcon } from './icons';
 import { GHOST_CLASS } from './styles';
@@ -31,7 +32,7 @@ export function ListItem(props: ListItemProps): JSX.Element {
       ref={props.ref}
       onPointerDown={props.onPointerDown}
       role="option"
-      aria-selected={props.isSelected}
+      aria-selected={props.isSelected ? 'true' : 'false'}
       aria-roledescription="sortable item"
       class={`flex cursor-grab touch-none items-center gap-3 rounded-lg border px-4 py-3 transition-all select-none ${stateClass()}`}
     >

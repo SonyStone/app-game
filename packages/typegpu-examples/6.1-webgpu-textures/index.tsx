@@ -1,6 +1,6 @@
 import { Range2D } from '@app-game/components/ui/range-2d';
 import { Meta, Title } from '@solidjs/meta';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect } from 'solid-js';
 import * as d from 'typegpu/data';
 import { ResizeContainer } from '../ui/ResizeContainer';
 import { TypeGPUProvider, useTypeGPU } from '../utils/TypeGPU';
@@ -149,7 +149,7 @@ function App(props: {
     .withFragment(fragment, { format: presentationFormat })
     .createPipeline();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     size();
     const _pixelScale = props.pixelScale;
     position.write(d.vec2f(props.offset[0], props.offset[1]));

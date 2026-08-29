@@ -1,19 +1,18 @@
+import type { ComponentProps, JSX } from '@solidjs/web';
+import { spread } from '@solidjs/web';
 import {
   Accessor,
-  batch,
-  ComponentProps,
-  createEffect,
   createMemo,
   createRoot,
   createSignal,
+  createTrackedEffect,
   getOwner,
-  JSX,
-  mergeProps,
+  merge,
   onCleanup,
+  runWithOwner,
   Setter,
   Signal
 } from 'solid-js';
-import { spread } from 'solid-js/web';
 
 /**
  * The possible states of an image in the cache.
@@ -81,7 +80,7 @@ export function createImageCache() {
       const img = (sourceRoot.img as HTMLImageElement).cloneNode() as HTMLImageElement;
       spread(
         img,
-        mergeProps(props(), {
+        merge(props(), {
           id: 'clone',
           src: sourceRoot.src,
           onLoad: () => console.warn('4️⃣❗❗ Cloned image loaded:', sourceRoot.src)
@@ -104,22 +103,22 @@ export function createImageCache() {
   };
 
   const cleanupRoot = (root: Root) => {
-    batch(() => {
+    {
       root.setProps({});
       root.refcount--;
-    });
+    }
   };
 
   return (props: JSX.ImgHTMLAttributes<HTMLImageElement>): JSX.Element => {
     console.log('0️⃣ImageCache render for src:', props.src);
     return createMemo(() => {
-      const src = props.src;
-      const root = cache.get(props.src);
+      const src = typeof props.src === 'string' ? props.src : undefined;
+      const root = cache.get(src);
 
       // Create New image on start
       if (!root) {
         console.log('3️⃣Creating NEW DOM element and loading:', src);
-        const newRoot = createRoot((dispose) => mapRoot(src, dispose, createSignal(props)), owner);
+        const newRoot = runWithOwner(owner, () => createRoot((dispose) => mapRoot(src, dispose, createSignal(props))));
         cache.set(newRoot.src, newRoot);
 
         onCleanup(() => {
@@ -132,10 +131,10 @@ export function createImageCache() {
       // Reuse existing inactive image
       if (root && root.refcount === 0) {
         console.log('2️⃣Reusing DOM element from cache for:', src, ' refcount:', root.refcount);
-        batch(() => {
+        {
           root!.setProps(props);
           root!.refcount = 1;
-        });
+        }
 
         onCleanup(() => {
           cleanupRoot(root);
@@ -143,7 +142,7 @@ export function createImageCache() {
 
         const [node, setNode] = createSignal<JSX.Element | null>(null);
 
-        createEffect(() => {
+        createTrackedEffect(() => {
           setNode(root.img);
         });
 
@@ -155,7 +154,9 @@ export function createImageCache() {
       {
         console.log('3️⃣ Cloning DOM element from cache for:', src, ' refcount:', root.refcount);
         // Need to clone the existing component
-        const clonedRoot = createRoot((dispose) => cloneRoot(root!, dispose, createSignal(props)), owner);
+        const clonedRoot = runWithOwner(owner, () =>
+          createRoot((dispose) => cloneRoot(root!, dispose, createSignal(props)))
+        );
         root.refcount++;
         onCleanup(() => {
           cleanupRoot(root);

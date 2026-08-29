@@ -1,7 +1,8 @@
 import { combineProps } from '@solid-primitives/props';
 import { ReactiveSet } from '@solid-primitives/set';
-import { createEffect, createSignal, JSX, mergeProps, onCleanup, Show, splitProps } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import type { JSX } from '@solidjs/web';
+import { Dynamic } from '@solidjs/web';
+import { createSignal, createTrackedEffect, merge, omit, onCleanup, Show } from 'solid-js';
 
 export function PropsProxyExample4() {
   const [target, setTarget] = createSignal<ProxyTargetHandle<HTMLInputElement> | null>(null);
@@ -72,18 +73,18 @@ function CombineProps(
     ref?: ((el: ProxyTargetHandle<HTMLInputElement> | null) => void) | undefined;
   }
 ) {
-  const [local, rest] = splitProps(props, ['component', 'ref']);
+  const rest = omit(props, 'component', 'ref');
 
   const set = new ReactiveSet<SolidProps>([]);
-  const combinedProps = combineProps(rest, ...set) as JSX.InputHTMLAttributes<HTMLInputElement>;
+  const combinedProps = combineProps(rest as SolidProps, ...set) as JSX.InputHTMLAttributes<HTMLInputElement>;
 
   return (
     <Dynamic
-      component={local.component}
+      component={props.component}
       {...combinedProps}
       ref={(element: HTMLInputElement | null | undefined) => {
         if (!element) {
-          local.ref?.(null);
+          props.ref?.(null);
           return;
         }
         const target = element as ProxyTargetHandle<HTMLInputElement>;
@@ -93,9 +94,9 @@ function CombineProps(
             set.delete(props);
           };
         };
-        local.ref?.(target);
+        props.ref?.(target);
         onCleanup(() => {
-          local.ref?.(null);
+          props.ref?.(null);
         });
       }}
     />
@@ -108,18 +109,18 @@ function MergeProps(
     ref?: ((el: ProxyTargetHandle<HTMLInputElement> | null) => void) | undefined;
   }
 ) {
-  const [local, rest] = splitProps(props, ['component', 'ref']);
+  const rest = omit(props, 'component', 'ref');
 
   const set = new ReactiveSet<SolidProps>([]);
-  const mergedProps = mergeProps(rest, ...set) as JSX.InputHTMLAttributes<HTMLInputElement>;
+  const mergedProps = merge(rest, ...set) as JSX.InputHTMLAttributes<HTMLInputElement>;
 
   return (
     <Dynamic
-      component={local.component}
+      component={props.component}
       {...mergedProps}
       ref={(element: HTMLInputElement | null | undefined) => {
         if (!element) {
-          local.ref?.(null);
+          props.ref?.(null);
           return;
         }
         const target = element as ProxyTargetHandle<HTMLInputElement>;
@@ -129,9 +130,9 @@ function MergeProps(
             set.delete(props);
           };
         };
-        local.ref?.(target);
+        props.ref?.(target);
         onCleanup(() => {
-          local.ref?.(null);
+          props.ref?.(null);
         });
       }}
     />
@@ -141,17 +142,18 @@ function MergeProps(
 function PropsDynamic<T extends Element>(
   props: { target: ProxyTargetHandle<T> | null | undefined } & SolidProps
 ): JSX.Element {
-  const [local, rest] = splitProps(props, ['target']);
+  const rest = omit(props, 'target');
 
-  createEffect(() => {
-    const target = local.target;
+  createTrackedEffect(() => {
+    const target = props.target;
 
     if (!target?.[PROXY]) {
       return;
     }
 
     const cleanup = target[PROXY](rest);
-    onCleanup(cleanup);
+
+    return cleanup;
   });
 
   return null;

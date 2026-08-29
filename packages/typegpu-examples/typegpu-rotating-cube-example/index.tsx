@@ -1,6 +1,6 @@
 import createRAF from '@solid-primitives/raf';
 import { Meta, Title } from '@solidjs/meta';
-import { createEffect, createSignal, on, onCleanup, untrack } from 'solid-js';
+import { createEffect, createSignal, createTrackedEffect, onCleanup, untrack } from 'solid-js';
 import tgpu, { RenderFlag, SampledFlag, TgpuTexture } from 'typegpu';
 import * as d from 'typegpu/data';
 import * as std from 'typegpu/std';
@@ -24,8 +24,7 @@ export default function TypeGPURotatingCubeExample() {
             {running() ? 'Pause' : 'Play'}
           </button>
           <button
-            class="max-w-40 rounded p-2 text-white"
-            classList={{ 'bg-green-500': msaa(), 'bg-gray-500': !msaa() }}
+            class={['max-w-40 rounded p-2 text-white', { 'bg-green-500': msaa(), 'bg-gray-500': !msaa() }]}
             onClick={() => setMsaa((v) => !v)}
           >
             MSAA: {msaa() ? 'ON' : 'OFF'}
@@ -442,7 +441,7 @@ function App(props: { running: boolean; msaa: boolean }) {
   const [running, start, stop] = createRAF(render);
 
   // Reset lastFrameTime when starting to prevent time jump
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (props.running) {
       lastFrameTime = performance.now();
       start();
@@ -451,28 +450,24 @@ function App(props: { running: boolean; msaa: boolean }) {
     }
   });
 
-  createEffect(
-    on(size, () => {
-      if (!untrack(running)) {
-        // Reset lastFrameTime to prevent time jump when resizing while paused
-        lastFrameTime = performance.now();
-        render();
-      }
-    })
-  );
+  createEffect(size, () => {
+    if (!untrack(running)) {
+      // Reset lastFrameTime to prevent time jump when resizing while paused
+      lastFrameTime = performance.now();
+      render();
+    }
+  });
 
   // Re-render when MSAA toggle changes (even when paused)
   createEffect(
-    on(
-      () => props.msaa,
-      () => {
-        if (!untrack(running)) {
-          // Reset lastFrameTime to prevent time jump when toggling MSAA while paused
-          lastFrameTime = performance.now();
-          render();
-        }
+    () => props.msaa,
+    () => {
+      if (!untrack(running)) {
+        // Reset lastFrameTime to prevent time jump when toggling MSAA while paused
+        lastFrameTime = performance.now();
+        render();
       }
-    )
+    }
   );
 
   onCleanup(() => {

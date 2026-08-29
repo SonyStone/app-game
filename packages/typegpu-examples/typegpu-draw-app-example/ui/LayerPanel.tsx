@@ -10,7 +10,8 @@
  * - Reorder layers (drag or buttons)
  */
 
-import { createSignal, For, Show, type Accessor, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, For, Show, type Accessor } from 'solid-js';
 
 /** Layer data for UI display */
 export interface LayerItem {
@@ -105,7 +106,7 @@ export function LayerPanel(props: LayerPanelProps): JSX.Element {
 
   return (
     <div
-      class={`min-w-50 max-h-100 flex flex-col overflow-hidden rounded border border-neutral-700 bg-neutral-800 ${props.class ?? ''}`}
+      class={`flex max-h-100 min-w-50 flex-col overflow-hidden rounded border border-neutral-700 bg-neutral-800 ${props.class ?? ''}`}
     >
       {/* Header */}
       <div class="flex items-center justify-between border-b border-neutral-600 bg-neutral-700 px-3 py-2">
@@ -167,13 +168,13 @@ export function LayerPanel(props: LayerPanelProps): JSX.Element {
                       onInput={(e) => setEditingName(e.currentTarget.value)}
                       onBlur={finishEditing}
                       onKeyDown={handleKeyDown}
-                      class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded border border-neutral-600 bg-neutral-700 px-1 py-0.5 text-xs text-neutral-400"
+                      class="flex-1 overflow-hidden rounded border border-neutral-600 bg-neutral-700 px-1 py-0.5 text-xs text-ellipsis whitespace-nowrap text-neutral-400"
                       autofocus
                     />
                   }
                 >
                   <span
-                    class="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-neutral-400"
+                    class="flex-1 overflow-hidden text-xs text-ellipsis whitespace-nowrap text-neutral-400"
                     onDblClick={() => startEditing(layer)}
                     title="Double-click to rename"
                   >

@@ -3,15 +3,14 @@
   "compilerOptions": {
     "types": [
       "vite-plugin-solid-svg/types-component-solid",
+      "@app-game/vite-plugin-markdown/client",
       "vite/client",
       "vite-plugin-glsl/ext",
       "@webgpu/types",
       "node"
     ]
   },
-  "include": [
-    "src/**/*"
-  ],
+  "include": ["src/**/*"],
   "exclude": [
     "src/gpu-text-rendering/app.ts",
     "src/gpu-text-rendering/canvas.ts",

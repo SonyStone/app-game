@@ -1,22 +1,19 @@
+import type { JSX } from '@solidjs/web';
+import { Portal } from '@solidjs/web';
 import { Camera, Geometry, Mesh, Program, Renderer } from 'ogl';
 import {
-  createUniqueId,
-  createEffect,
   createMemo,
   createSignal,
-  mergeProps,
+  createTrackedEffect,
+  createUniqueId,
+  merge,
   onCleanup,
-  type Component,
-  type JSX,
+  type Component
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import { useMotionRoot } from './motion-root';
 import { useParallax } from './parallax';
 
-export type ParticlesBackgroundProps = Omit<
-  JSX.HTMLAttributes<HTMLDivElement>,
-  'children'
-> & {
+export type ParticlesBackgroundProps = Omit<JSX.HTMLAttributes<HTMLDivElement>, 'children'> & {
   particleCount?: number;
   particleSpread?: number;
   speed?: number;
@@ -37,11 +34,9 @@ type RgbColor = readonly [number, number, number];
 
 const defaultColors = ['#ffffff', '#ffffff', '#ffffff'] as const;
 
-const mergeClassNames = (...values: Array<string | undefined>) =>
-  values.filter(Boolean).join(' ');
+const mergeClassNames = (...values: Array<string | undefined>) => values.filter(Boolean).join(' ');
 
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(max, Math.max(min, value));
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const vertex = /* glsl */ `
   attribute vec3 position;
@@ -150,17 +145,11 @@ const hexToRgb = (hex: string): RgbColor => {
 
   const value = Number.parseInt(normalized, 16);
 
-  return [
-    ((value >> 16) & 255) / 255,
-    ((value >> 8) & 255) / 255,
-    (value & 255) / 255,
-  ] as const;
+  return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255] as const;
 };
 
-export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
-  rawProps,
-) => {
-  const props = mergeProps(
+export const ParticlesBackground: Component<ParticlesBackgroundProps> = (rawProps) => {
+  const props = merge(
     {
       particleCount: 200,
       particleSpread: 10,
@@ -174,18 +163,12 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
       cameraDistance: 20,
       disableRotation: false,
       pixelRatio: 1,
-      portal: true,
+      portal: true
     },
-    rawProps,
+    rawProps
   );
 
-  const {
-    mouse,
-    parallaxOffsetX,
-    parallaxOffsetY,
-    shouldReduceMotion,
-    scroll,
-  } = useMotionRoot();
+  const { mouse, parallaxOffsetX, parallaxOffsetY, shouldReduceMotion, scroll } = useMotionRoot();
   const parallax = useParallax();
   const consumerId = createUniqueId();
   const [mounted, setMounted] = createSignal(false);
@@ -202,9 +185,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
   const pointer = { x: 0, y: 0 };
 
   const palette = createMemo(() => {
-    const colors = props.particleColors?.length
-      ? props.particleColors
-      : defaultColors;
+    const colors = props.particleColors?.length ? props.particleColors : defaultColors;
 
     return colors.map(hexToRgb);
   });
@@ -224,7 +205,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
     const { width, height } = getViewport();
     renderer.setSize(width, height);
     camera.perspective({
-      aspect: renderer.gl.canvas.width / renderer.gl.canvas.height,
+      aspect: renderer.gl.canvas.width / renderer.gl.canvas.height
     });
   };
 
@@ -234,10 +215,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
     }
 
     const gl = renderer.gl;
-    const totalParticleCount = Math.max(
-      props.particleCount,
-      Math.round(props.particleCount * 3.2),
-    );
+    const totalParticleCount = Math.max(props.particleCount, Math.round(props.particleCount * 3.2));
     const positions = new Float32Array(totalParticleCount * 3);
     const randoms = new Float32Array(totalParticleCount * 4);
     const colors = new Float32Array(totalParticleCount * 3);
@@ -259,10 +237,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
 
       const radius = Math.cbrt(Math.random());
       positions.set([x * radius, y * radius, z * radius], index * 3);
-      randoms.set(
-        [Math.random(), Math.random(), Math.random(), Math.random()],
-        index * 4,
-      );
+      randoms.set([Math.random(), Math.random(), Math.random(), Math.random()], index * 4);
 
       const tierRoll = Math.random();
       let sizeScale = 0.8 + Math.random() * 0.5;
@@ -288,17 +263,14 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
       }
 
       settings.set([sizeScale, alphaScale, brightnessScale, tier], index * 4);
-      colors.set(
-        activePalette[Math.floor(Math.random() * activePalette.length)],
-        index * 3,
-      );
+      colors.set(activePalette[Math.floor(Math.random() * activePalette.length)], index * 3);
     }
 
     const nextGeometry = new Geometry(gl, {
       position: { size: 3, data: positions },
       random: { size: 4, data: randoms },
       color: { size: 3, data: colors },
-      settings: { size: 4, data: settings },
+      settings: { size: 4, data: settings }
     });
 
     program = new Program(gl, {
@@ -309,20 +281,20 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
         uSpread: { value: props.particleSpread },
         uBaseSize: { value: props.particleBaseSize * props.pixelRatio },
         uSizeRandomness: { value: props.sizeRandomness },
-        uAlphaParticles: { value: props.alphaParticles ? 1 : 0 },
+        uAlphaParticles: { value: props.alphaParticles ? 1 : 0 }
       },
       transparent: true,
-      depthTest: false,
+      depthTest: false
     });
 
     particleMesh = new Mesh(gl, {
       mode: gl.POINTS,
       geometry: nextGeometry,
-      program,
+      program
     });
   };
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!parallax) {
       return;
     }
@@ -334,7 +306,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
     parallax?.removeConsumerActivity(consumerId);
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const container = containerRef();
     const canvas = canvasRef();
 
@@ -346,7 +318,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
       canvas,
       dpr: props.pixelRatio,
       depth: false,
-      alpha: true,
+      alpha: true
     });
 
     const gl = renderer.gl;
@@ -376,24 +348,17 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
 
       program.uniforms.uTime.value = elapsed * 0.001;
       program.uniforms.uSpread.value = props.particleSpread;
-      program.uniforms.uBaseSize.value =
-        props.particleBaseSize * props.pixelRatio;
+      program.uniforms.uBaseSize.value = props.particleBaseSize * props.pixelRatio;
       program.uniforms.uSizeRandomness.value = props.sizeRandomness;
       program.uniforms.uAlphaParticles.value = props.alphaParticles ? 1 : 0;
       camera.position.set(0, 0, props.cameraDistance);
 
       const { width, height } = getViewport();
-      const parallaxX =
-        (parallaxOffsetX() / width) * props.particleSpread * 0.9;
-      const parallaxY =
-        (parallaxOffsetY() / height) * props.particleSpread * 0.9;
+      const parallaxX = (parallaxOffsetX() / width) * props.particleSpread * 0.9;
+      const parallaxY = (parallaxOffsetY() / height) * props.particleSpread * 0.9;
       const scrollDrift = clamp((scroll.y / height) * 0.18, 0, 0.45);
-      const hoverX = props.moveParticlesOnHover
-        ? -pointer.x * props.particleHoverFactor
-        : 0;
-      const hoverY = props.moveParticlesOnHover
-        ? -pointer.y * props.particleHoverFactor
-        : 0;
+      const hoverX = props.moveParticlesOnHover ? -pointer.x * props.particleHoverFactor : 0;
+      const hoverY = props.moveParticlesOnHover ? -pointer.y * props.particleHoverFactor : 0;
 
       particleMesh.position.x = hoverX + parallaxX;
       particleMesh.position.y = hoverY + parallaxY + scrollDrift;
@@ -402,12 +367,8 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
         particleMesh.rotation.x = 0;
         particleMesh.rotation.y = 0;
       } else {
-        particleMesh.rotation.x =
-          Math.sin(elapsed * 0.0002) * 0.1 +
-          (parallaxOffsetY() / height) * 0.12;
-        particleMesh.rotation.y =
-          Math.cos(elapsed * 0.0005) * 0.15 -
-          (parallaxOffsetX() / width) * 0.14;
+        particleMesh.rotation.x = Math.sin(elapsed * 0.0002) * 0.1 + (parallaxOffsetY() / height) * 0.12;
+        particleMesh.rotation.y = Math.cos(elapsed * 0.0005) * 0.15 - (parallaxOffsetX() / width) * 0.14;
         particleMesh.rotation.z += 0.01 * props.speed;
       }
 
@@ -417,7 +378,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
     animationFrameId = window.requestAnimationFrame(animate);
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const container = containerRef();
 
     if (!mounted() || !container || !props.moveParticlesOnHover) {
@@ -430,12 +391,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
     const y = mouse.y - window.scrollY;
     const { isInside } = mouse;
     const rect = container.getBoundingClientRect();
-    const isOverContainer =
-      isInside &&
-      x >= rect.left &&
-      x <= rect.right &&
-      y >= rect.top &&
-      y <= rect.bottom;
+    const isOverContainer = isInside && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 
     if (!isOverContainer) {
       pointer.x = 0;
@@ -447,7 +403,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
     pointer.y = -(((y - rect.top) / rect.height) * 2 - 1);
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!mounted()) {
       return;
     }
@@ -460,7 +416,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
     rebuildParticles();
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!mounted()) {
       return;
     }
@@ -474,7 +430,7 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
     }
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!mounted()) {
       return;
     }
@@ -498,10 +454,11 @@ export const ParticlesBackground: Component<ParticlesBackgroundProps> = (
       class={mergeClassNames(
         'pointer-events-none fixed inset-0 z-20 overflow-hidden mix-blend-screen',
         props.class,
-        props.className,
+        props.className
       )}
       style={props.style}
-      aria-hidden="true">
+      aria-hidden="true"
+    >
       <canvas ref={setCanvasRef} class="h-full w-full" />
     </div>
   );

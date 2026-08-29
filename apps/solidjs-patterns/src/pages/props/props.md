@@ -15,21 +15,23 @@
 Spread remaining props onto the native element. SolidJS handles the DOM attributes correctly.
 
 ```tsx
+import { omit } from 'solid-js';
+
 type InputProps = JSX.InputHTMLAttributes<HTMLInputElement> & {
   label?: string;
 };
 
 function Input(props: InputProps): JSX.Element {
-  const [local, rest] = splitProps(props, ['label']);
+  const rest = omit(props, 'label');
   return (
     <div>
-      {local.label && <label>{local.label}</label>}
+      {props.label && <label>{props.label}</label>}
       <input {...rest} /> {/* all native attrs forwarded */}
     </div>
   );
 }
 
-// Usage - className, onInput, etc. forwarded automatically
+// Usage - class, onInput, etc. forwarded automatically
 <Input label="Email" type="email" placeholder="you@example.com" required />;
 ```
 
@@ -39,19 +41,18 @@ function Input(props: InputProps): JSX.Element {
 
 ## class prop merging
 
-SolidJS uses `class`, not `className`. Merge it with a utility when you need conditional classes.
+Solid 2's `class` accepts strings, records, and nested arrays, so values compose without a classList prop.
 
 ```tsx
-import { cn } from '../lib/utils'; // clsx + tailwind-merge
-import { splitProps } from 'solid-js';
+import { omit } from 'solid-js';
 
 type CardProps = JSX.HTMLAttributes<HTMLDivElement> & { class?: string };
 
 function Card(props: CardProps): JSX.Element {
-  const [local, rest] = splitProps(props, ['class', 'children']);
+  const rest = omit(props, 'class', 'children');
   return (
-    <div {...rest} class={cn('rounded-xl bg-neutral-900 p-4', local.class)}>
-      {local.children}
+    <div {...rest} class={['rounded-xl bg-neutral-900 p-4', props.class]}>
+      {props.children}
     </div>
   );
 }
@@ -66,30 +67,30 @@ function Card(props: CardProps): JSX.Element {
 
 ## ref forwarding
 
-Forward refs to DOM elements using the `ref` prop. SolidJS refs are assigned on mount, not wrapped in a callback.
+Forward refs to DOM elements with an explicit callback so assignment is visible at the JSX boundary.
 
 ```tsx
+import { onSettled } from 'solid-js';
+
 type InputProps = JSX.InputHTMLAttributes<HTMLInputElement> & {
   ref?: HTMLInputElement | ((el: HTMLInputElement) => void);
 };
 
 function FancyInput(props: InputProps): JSX.Element {
-  const [local, rest] = splitProps(props, []);
-  return <input {...rest} class="fancy-input" />;
+  return <input {...props} class={['fancy-input', props.class]} />;
 }
 
 // Usage - ref is assigned when mounted
 function Form(): JSX.Element {
   let inputRef!: HTMLInputElement;
-  onMount(() => inputRef.focus());
-  return <FancyInput ref={inputRef} />;
+  onSettled(() => inputRef.focus());
+  return <FancyInput ref={(element) => (inputRef = element)} />;
 }
 ```
 
 </Section>
 
-<Callout type="info" title="use:directive syntax">
-  SolidJS supports custom directives via the `use:` prefix. Declare them with `
-    declare module 'solid-js'
-  ` for TypeScript support. See the Directives page for details.
+<Callout type="info" title="Attach behavior with refs">
+  Solid 2 favors explicit ref callbacks for attaching behavior to DOM elements. A callback makes ownership and cleanup
+  visible without relying on the removed `use:` directive transform.
 </Callout>

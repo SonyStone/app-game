@@ -1,6 +1,7 @@
 import { combineProps } from '@solid-primitives/props';
-import { createEffect, createSignal, JSX, onCleanup, Show, splitProps } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import type { JSX } from '@solidjs/web';
+import { Dynamic } from '@solidjs/web';
+import { createSignal, createTrackedEffect, omit, onCleanup, Show } from 'solid-js';
 
 /**
  * Using a wraper around target component to make it work with PropsProxy
@@ -73,7 +74,7 @@ function ProxyTarget(
     ref?: (handle: ProxyTargetHandle<HTMLInputElement> | null) => void;
   }
 ): JSX.Element {
-  const [local, restProps] = splitProps(props, ['component', 'ref']);
+  const restProps = omit(props, 'component', 'ref');
   const [element, setElement] = createSignal<HTMLInputElement | null>(null);
   const [overlays, setOverlays] = createSignal<readonly SolidProps[]>([]);
   const setTargetElement = (nextElement: Element) => {
@@ -91,33 +92,37 @@ function ProxyTarget(
     }
   };
 
-  createEffect(() => {
-    local.ref?.(handle);
+  createTrackedEffect(() => {
+    props.ref?.(handle);
   });
 
   onCleanup(() => {
-    local.ref?.(null);
+    props.ref?.(null);
   });
 
-  const combinedProps = combineProps(restProps, ...overlays()) as JSX.InputHTMLAttributes<HTMLInputElement>;
+  const combinedProps = combineProps(
+    restProps as SolidProps,
+    ...overlays()
+  ) as JSX.InputHTMLAttributes<HTMLInputElement>;
 
-  return <Dynamic component={local.component} {...combinedProps} ref={setTargetElement} />;
+  return <Dynamic component={props.component} {...combinedProps} ref={setTargetElement} />;
 }
 
 function PropsProxy<T extends Element>(
   props: { target: ProxyTargetHandle<T> | null | undefined } & SolidProps
 ): JSX.Element {
-  const [local, restProps] = splitProps(props, ['target']);
+  const restProps = omit(props, 'target');
 
-  createEffect(() => {
-    const target = local.target;
+  createTrackedEffect(() => {
+    const target = props.target;
 
     if (!target) {
       return;
     }
 
     const cleanup = target.addOverlay(restProps);
-    onCleanup(cleanup);
+
+    return cleanup;
   });
 
   return null;

@@ -1,4 +1,5 @@
-import { createMemo, createSignal, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createMemo, createSignal } from 'solid-js';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { markdownComponents } from '../markdown-components';

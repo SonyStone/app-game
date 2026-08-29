@@ -1,162 +1,120 @@
 import { computePosition, offset } from '@floating-ui/dom';
-import { createButton } from '@solid-aria/button';
-import { ForItems, Item } from '@solid-aria/collection';
-import { FocusScope } from '@solid-aria/focus';
-import { createFocus } from '@solid-aria/interactions';
-import {
-  AriaMenuItemProps,
-  AriaMenuProps,
-  AriaMenuTriggerProps,
-  createMenu,
-  createMenuItem,
-  createMenuTrigger
-} from '@solid-aria/menu';
-import { AriaOverlayProps, DismissButton, createOverlay } from '@solid-aria/overlays';
-import { combineProps } from '@solid-primitives/props';
-import { FlowProps, JSX, ParentProps, Show, createSignal } from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { Transition } from 'solid-transition-group';
+import type { JSX } from '@solidjs/web';
+import { Portal } from '@solidjs/web';
+import { For, Show, createSignal, onCleanup, onSettled } from 'solid-js';
 import { Ripple } from '../ripple/Ripple';
 
-type MenuButtonProps = FlowProps<AriaMenuTriggerProps & AriaMenuProps & { label: JSX.Element }>;
+type MenuItem = {
+  /** Stable value passed to the action callback. */
+  key: string;
+  /** Visible item label. */
+  label: string;
+};
 
-function MenuButton(props: MenuButtonProps) {
-  let ref: HTMLButtonElement | undefined;
+const ITEMS: readonly MenuItem[] = [
+  { key: 'copy', label: 'Copy' },
+  { key: 'cut', label: 'Cut' },
+  { key: 'paste', label: 'Paste' }
+];
 
-  // Get props for the menu trigger and menu elements
-  const { menuTriggerProps, menuProps, state } = createMenuTrigger({}, () => ref);
+/** Renders the menu example without Solid-1-only ARIA and transition packages. */
+export function Menu(): JSX.Element {
+  const [open, setOpen] = createSignal(false);
+  let trigger: HTMLButtonElement | undefined;
+  let popup: HTMLDivElement | undefined;
 
-  // Get props for the button based on the trigger props from createMenuTrigger
-  const { buttonProps } = createButton(menuTriggerProps, () => ref);
+  onSettled(() => {
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+
+      if (target instanceof Node && !trigger?.contains(target) && !popup?.contains(target)) {
+        setOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && open()) {
+        setOpen(false);
+        trigger?.focus();
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    onCleanup(() => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    });
+  });
+
+  const openMenu = () => {
+    setOpen(true);
+    queueMicrotask(() => popup?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus());
+  };
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
-      <button {...buttonProps} ref={ref} class="relative px-4 py-2 rounded-2 border flex gap-2">
-        {props.label}
-        <span aria-hidden="true" class={['transition-transform', state.isOpen() ? 'rotate-180' : ''].join(' ')}>
+    <div class="relative inline-block">
+      <button
+        ref={(element) => {
+          trigger = element;
+        }}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open() ? 'true' : 'false'}
+        class="rounded-2 relative flex gap-2 border px-4 py-2"
+        onClick={() => (open() ? setOpen(false) : openMenu())}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            openMenu();
+          }
+        }}
+      >
+        Actions
+        <span aria-hidden="true" class={['transition-transform', { 'rotate-180': open() }]}>
           ▼
         </span>
         <Ripple />
       </button>
 
       <Portal>
-        <Transition
-          onEnter={(el, done) => {
-            const a = el.animate([{ opacity: 0, transform: 'translateY(-10%)' }, { opacity: 1 }], {
-              duration: 150
-            });
-            a.finished.then(done);
-          }}
-          onExit={(el, done) => {
-            const a = el.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-10%)' }], {
-              duration: 100
-            });
-            a.finished.then(done);
-          }}
-        >
-          <Show when={state.isOpen()}>
-            <div
-              ref={(menuRef) => {
-                computePosition(ref!, menuRef, {
-                  placement: 'bottom-start',
-                  middleware: [offset()]
-                }).then((pos) => {
-                  menuRef.style.left = pos.x + 'px';
-                  menuRef.style.top = pos.y + 'px';
-                });
-              }}
-              class="bg-white border shadow rounded-2 absolute overflow-hidden"
-            >
-              <MenuPopup {...(menuProps as AriaMenuProps)} onAction={props.onAction} onClose={() => state.close()}>
-                {props.children}
-              </MenuPopup>
-            </div>
-          </Show>
-        </Transition>
+        <Show when={open()}>
+          <div
+            ref={(element) => {
+              popup = element;
+              void element.animate([{ opacity: 0, transform: 'translateY(-10%)' }, { opacity: 1 }], {
+                duration: 150
+              }).finished;
+              void computePosition(trigger!, element, {
+                placement: 'bottom-start',
+                middleware: [offset()]
+              }).then(({ x, y }) => {
+                element.style.left = `${x}px`;
+                element.style.top = `${y}px`;
+              });
+            }}
+            role="menu"
+            class="rounded-2 absolute overflow-hidden border bg-white shadow"
+          >
+            <For each={ITEMS}>
+              {(item) => (
+                <button
+                  type="button"
+                  role="menuitem"
+                  class="hover:bg-gray focus:bg-gray relative block w-full cursor-pointer px-4 py-2 text-left outline-none focus:text-white"
+                  onClick={() => {
+                    console.log(item.key);
+                    setOpen(false);
+                    trigger?.focus();
+                  }}
+                >
+                  {item.label}
+                  <Ripple />
+                </button>
+              )}
+            </For>
+          </div>
+        </Show>
       </Portal>
     </div>
-  );
-}
-
-function MenuPopup(props: ParentProps<AriaMenuProps & AriaOverlayProps>) {
-  let ref: HTMLUListElement | undefined;
-
-  // Get props for the menu element
-  const { MenuProvider, menuProps, state } = createMenu(props, () => ref);
-
-  // Handle events that should cause the menu to close,
-  // e.g. blur, clicking outside, or pressing the escape key.
-  let overlayRef: HTMLDivElement | undefined;
-  const { overlayProps } = createOverlay(
-    {
-      onClose: props.onClose,
-      shouldCloseOnBlur: true,
-      isOpen: true,
-      isDismissable: true
-    },
-    () => overlayRef
-  );
-
-  // Wrap in <FocusScope> so that focus is restored back to the
-  // trigger when the menu is closed. In addition, add hidden
-  // <DismissButton> components at the start and end of the list
-  // to allow screen reader users to dismiss the popup easily.
-  return (
-    <MenuProvider>
-      <FocusScope restoreFocus>
-        <div {...overlayProps} ref={overlayRef}>
-          <DismissButton onDismiss={props.onClose} />
-          <ul {...menuProps} ref={ref} class="list-none border-none p-0 m-0">
-            <ForItems in={state.collection()}>
-              {(item) => (
-                <MenuItem key={item().key} onAction={props.onAction} onClose={props.onClose}>
-                  {item().children}
-                </MenuItem>
-              )}
-            </ForItems>
-          </ul>
-          <DismissButton onDismiss={props.onClose} />
-        </div>
-      </FocusScope>
-    </MenuProvider>
-  );
-}
-
-function MenuItem(props: ParentProps<AriaMenuItemProps>) {
-  let ref: HTMLLIElement | undefined;
-
-  // Get props for the menu item element
-  const { menuItemProps } = createMenuItem(props, () => ref);
-
-  // Handle focus events so we can apply highlighted
-  // style to the focused menu item
-  const [isFocused, setIsFocused] = createSignal(false);
-  const { focusProps } = createFocus({ onFocusChange: setIsFocused });
-
-  const rootProps = combineProps(menuItemProps, focusProps);
-
-  return (
-    <li
-      {...rootProps}
-      ref={ref}
-      class="relative outline-none cursor-pointer px-4 py-2"
-      style={{
-        background: isFocused() ? 'gray' : 'transparent',
-        color: isFocused() ? 'white' : 'black'
-      }}
-    >
-      {props.children}
-      <Ripple />
-    </li>
-  );
-}
-
-export function Menu() {
-  return (
-    <MenuButton label="Actions" onAction={(key) => console.log(key)}>
-      <Item key="copy">Copy</Item>
-      <Item key="cut">Cut</Item>
-      <Item key="paste">Paste</Item>
-    </MenuButton>
   );
 }

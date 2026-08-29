@@ -1,6 +1,6 @@
 import { Container, Graphics } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, createSignal, Show } from 'solid-js';
+import { createSignal, createTrackedEffect, Show } from 'solid-js';
 
 export default function GraphicsSvg() {
   const [toggle, setToggle] = createSignal(false);
@@ -32,7 +32,7 @@ export default function GraphicsSvg() {
         x={size.width / 2}
         y={size.height / 2}
         ref={(graphics) => {
-          createEffect(() => {
+          createTrackedEffect(() => {
             toggle();
             graphics.clear();
             graphics.svg(svg as unknown as string);

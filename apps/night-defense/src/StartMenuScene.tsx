@@ -1,8 +1,8 @@
 import { Container, Graphics, Text } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Graphics as PixiGraphics, Rectangle, Text as PixiText, TextStyle } from 'pixi.js';
-import { createEffect } from 'solid-js';
+import { Graphics as PixiGraphics, Text as PixiText, Rectangle, TextStyle } from 'pixi.js';
+import { createTrackedEffect } from 'solid-js';
 
 export default function StartMenuScene() {
   const size = createWindowSize();
@@ -15,7 +15,7 @@ export default function StartMenuScene() {
   let button!: PixiGraphics;
   let buttonText!: PixiText;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const width = Math.max(1, size.width);
     const height = Math.max(1, size.height);
     const centerX = width / 2;

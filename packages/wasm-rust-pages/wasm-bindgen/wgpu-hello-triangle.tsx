@@ -1,5 +1,5 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 import { HelloTriangle } from './wasm_bindgen/libs/start_wgpu/pkg/start_wgpu';
 
 export default function WgpuTest() {
@@ -9,13 +9,15 @@ export default function WgpuTest() {
 
   let resize: (width: number, height: number) => void;
 
-  onMount(async () => {
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
+  onSettled(() => {
+    void (async () => {
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
 
-    const app = await HelloTriangle.new(canvas);
-    app.redraw();
-    resize = () => app.resize(canvas.clientWidth, canvas.clientHeight);
+      const app = await HelloTriangle.new(canvas);
+      app.redraw();
+      resize = () => app.resize(canvas.clientWidth, canvas.clientHeight);
+    })();
   });
 
   return (

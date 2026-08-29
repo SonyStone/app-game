@@ -1,5 +1,6 @@
-import { ComponentProps, createEffect, createSignal, onCleanup, Show, type JSX } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
+import { cn } from '@app-game/utils/cn';
+import type { ComponentProps, JSX } from '@solidjs/web';
+import { createSignal, createStore, createTrackedEffect, onCleanup, Show } from 'solid-js';
 import { BlockTree } from 'solid-nest';
 import {
   countBrushes,
@@ -102,29 +103,23 @@ export default function App(): JSX.Element {
             }
           }}
           onReorder={(event: any) => {
-            setRoot(
-              produce((draft: any) => {
-                const blocks: any[] = [];
-                removeBlocks(draft, event.keys, blocks);
-                insertBlocks(draft, blocks, event.place);
-              })
-            );
+            setRoot((draft: any) => {
+              const blocks: any[] = [];
+              removeBlocks(draft, event.keys, blocks);
+              insertBlocks(draft, blocks, event.place);
+            });
             setLastEvent(`Reorder: [${event.keys.join(', ')}]`);
           }}
           onInsert={(event: any) => {
-            setRoot(
-              produce((draft: any) => {
-                insertBlocks(draft, event.blocks, event.place);
-              })
-            );
+            setRoot((draft: any) => {
+              insertBlocks(draft, event.blocks, event.place);
+            });
             setLastEvent(`Insert: ${event.blocks.length} block(s)`);
           }}
           onRemove={(event: any) => {
-            setRoot(
-              produce((draft: any) => {
-                removeBlocks(draft, event.keys);
-              })
-            );
+            setRoot((draft: any) => {
+              removeBlocks(draft, event.keys);
+            });
             setLastEvent(`Remove: [${event.keys.join(', ')}]`);
           }}
           multiselect={true}
@@ -245,8 +240,8 @@ function BrushItem(props: { block: BrushBlock; selected: boolean; dragging: bool
 }
 
 function Body(props: Pick<ComponentProps<'body'>, 'class'>) {
-  createEffect(() => {
-    document.body.className = props.class || '';
+  createTrackedEffect(() => {
+    document.body.className = cn(props.class);
   });
 
   onCleanup(() => {

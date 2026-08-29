@@ -12,7 +12,7 @@
   "dependencies": {
     "@app-game/app-router": "workspace:*",
     "@app-game/solid-pixi": "workspace:*",
-    "@solid-primitives/resize-observer": "^2.1.5",
+    "@solid-primitives/resize-observer": "catalog:",
     "@solidjs/router": "catalog:",
     "pixi.js": "8.18.1",
     "solid-js": "catalog:"

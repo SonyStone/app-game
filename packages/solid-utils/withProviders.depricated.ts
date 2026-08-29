@@ -1,6 +1,6 @@
+import { createComponent } from '@solidjs/web';
+import { JSX } from '@solidjs/web/jsx-runtime';
 import { Component } from 'solid-js';
-import { JSX } from 'solid-js/jsx-runtime';
-import { createComponent } from 'solid-js/web';
 
 interface Provider {
   provider: Component;

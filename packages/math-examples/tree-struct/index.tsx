@@ -1,4 +1,5 @@
-import { ComponentProps, createSignal } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { createSignal } from 'solid-js';
 import { ImageCache, ImageCacheProvider, ImageStore } from './ImageCache';
 import { TreeStruct } from './tree-struct';
 import { TreeStructSimple } from './TreeStructSimple';
@@ -15,7 +16,7 @@ export default function TreeStructExample() {
   );
 }
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'app-image-hidder': ComponentProps<'div'>;

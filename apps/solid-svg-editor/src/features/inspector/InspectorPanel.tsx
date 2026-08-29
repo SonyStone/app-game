@@ -1,15 +1,15 @@
-import { createEffect, createMemo, createSignal, For, Index, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import { Dynamic } from '@solidjs/web';
+import { createMemo, createSignal, createTrackedEffect, For, Show } from 'solid-js';
 
 import { svgCapabilities } from '../../editor/capabilities';
 import { decorativeIconProps } from '../../editor/svg-icon';
 import type { RecognizedElement } from '../../svg-db';
 import { findNode, findParent, nodeLabel, type DropPosition, type SvgElementNode, type SvgNode } from '../../svg-model';
-import { AttributeGrid, RootElementEditor } from './InspectorInputs';
-import { createInspectorVirtualScroll, nodeContainsId, VirtualInspectorRowShell } from './InspectorVirtualScroll';
 import { createRafQueue } from '../ui/createRafQueue';
 import PlusIcon from '../ui/icons/Plus.svg';
 import WarningIcon from '../ui/icons/Warning.svg';
+import { AttributeGrid, RootElementEditor } from './InspectorInputs';
+import { createInspectorVirtualScroll, nodeContainsId, VirtualInspectorRowShell } from './InspectorVirtualScroll';
 
 type InspectorDropTarget = {
   readonly nodeId: string;
@@ -64,7 +64,7 @@ export function InspectorPanel(props: {
       .filter((node): node is SvgNode => Boolean(node))
   );
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const ids = props.selectedIds;
     const selectedId = ids[ids.length - 1];
 
@@ -211,19 +211,27 @@ export function InspectorPanel(props: {
   }
 
   return (
-    <section class="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-md border border-[var(--soft-border)] bg-[var(--panel)]" data-testid="inspector-panel">
-      <div class="relative flex items-center gap-1.5 border-b border-[var(--soft-border)] bg-[var(--panel-2)] p-1.5" data-testid="inspector-toolbar">
+    <section
+      class="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-md border border-[var(--soft-border)] bg-[var(--panel)]"
+      data-testid="inspector-panel"
+    >
+      <div
+        class="relative flex items-center gap-1.5 border-b border-[var(--soft-border)] bg-[var(--panel-2)] p-1.5"
+        data-testid="inspector-toolbar"
+      >
         <button
           class="inline-flex min-h-6.5 cursor-pointer items-center justify-center gap-1.5 rounded-[5px] border border-[color-mix(in_srgb,var(--accent)_52%,var(--soft-border))] bg-[var(--panel-2)] px-2.5 text-[var(--text)] hover:border-[var(--accent)]"
           type="button"
           data-testid="add-element-button"
           onClick={() => setAddOpen(!addOpen())}
         >
-          <PlusIcon {...decorativeIconProps} />{' '}
-          Add element
+          <PlusIcon {...decorativeIconProps} /> Add element
         </button>
         <Show when={addOpen()}>
-          <div class="absolute top-9 left-1.5 z-50 grid min-w-47.5 gap-0.5 rounded-md border border-[var(--border)] p-1.25 shadow-[0_12px_28px_#0008] [background:color-mix(in_srgb,var(--panel)_96%,#000)]" data-testid="add-element-menu">
+          <div
+            class="absolute top-9 left-1.5 z-50 grid min-w-47.5 gap-0.5 rounded-md border border-[var(--border)] p-1.25 shadow-[0_12px_28px_#0008] [background:color-mix(in_srgb,var(--panel)_96%,#000)]"
+            data-testid="add-element-menu"
+          >
             <For
               each={
                 [
@@ -251,8 +259,7 @@ export function InspectorPanel(props: {
                     setAddOpen(false);
                   }}
                 >
-                  <Dynamic component={svgCapabilities.iconForElement(name)} {...decorativeIconProps} />{' '}
-                  {name}
+                  <Dynamic component={svgCapabilities.iconForElement(name)} {...decorativeIconProps} /> {name}
                 </button>
               )}
             </For>
@@ -277,7 +284,7 @@ export function InspectorPanel(props: {
             data-testid="inspector-visible-window"
             style={{ transform: `translateY(${virtualScroll.visibleWindow().paddingTop}px)` }}
           >
-            <Index each={virtualScroll.visibleWindow().rows}>
+            <For keyed={false} each={virtualScroll.visibleWindow().rows}>
               {(row) => (
                 <VirtualInspectorRowShell row={row()} measureRow={virtualScroll.measureRow}>
                   <ElementCard
@@ -302,7 +309,7 @@ export function InspectorPanel(props: {
                   />
                 </VirtualInspectorRowShell>
               )}
-            </Index>
+            </For>
             <div style={{ height: `${virtualScroll.visibleWindow().paddingBottom}px` }} />
           </div>
         </div>
@@ -316,8 +323,18 @@ export function InspectorPanel(props: {
           >
             <For each={dragPreviewNodes()}>
               {(node) => (
-                <div class="flex h-6 items-center justify-center gap-1.5 rounded border-2 border-[#3d86ff] font-['GodSVG_Mono',ui-monospace,monospace] text-xs text-[#eef4ff] shadow-[0_10px_24px_rgb(0_0_0/30%)] [background:color-mix(in_srgb,#30569c_52%,var(--panel))]" data-testid={`inspector-drag-preview-node-${node.id}`}>
-                  <Dynamic component={node.kind === 'element' ? svgCapabilities.iconForElement(node.name) : svgCapabilities.iconForNode(node.kind)} {...decorativeIconProps} />
+                <div
+                  class="flex h-6 items-center justify-center gap-1.5 rounded border-2 border-[#3d86ff] font-['GodSVG_Mono',ui-monospace,monospace] text-xs text-[#eef4ff] shadow-[0_10px_24px_rgb(0_0_0/30%)] [background:color-mix(in_srgb,#30569c_52%,var(--panel))]"
+                  data-testid={`inspector-drag-preview-node-${node.id}`}
+                >
+                  <Dynamic
+                    component={
+                      node.kind === 'element'
+                        ? svgCapabilities.iconForElement(node.name)
+                        : svgCapabilities.iconForNode(node.kind)
+                    }
+                    {...decorativeIconProps}
+                  />
                   <span>{inspectorTitle(node)}</span>
                 </div>
               )}
@@ -356,17 +373,19 @@ function ElementCard(props: {
 
   return (
     <article
-      class="relative mb-1 overflow-visible rounded-[5px] border border-[color-mix(in_srgb,var(--card-tint)_42%,var(--soft-border))] [background:color-mix(in_srgb,var(--card-tint)_72%,var(--panel))]"
-      classList={{
-        'cursor-grab': props.node.id !== props.root.id,
-        'border-[var(--accent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_68%,transparent)]':
-          isSelected(),
-        'opacity-[0.55]': isDragging()
-      }}
+      class={[
+        'relative mb-1 overflow-visible rounded-[5px] border border-[color-mix(in_srgb,var(--card-tint)_42%,var(--soft-border))] [background:color-mix(in_srgb,var(--card-tint)_72%,var(--panel))]',
+        {
+          'cursor-grab': props.node.id !== props.root.id,
+          'border-[var(--accent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_68%,transparent)]':
+            isSelected(),
+          'opacity-[0.55]': isDragging()
+        }
+      ]}
       data-inspector-node-id={props.node.id}
       data-testid={`inspector-node-${props.node.id}`}
       style={{ '--card-tint': tint() }}
-      draggable={props.node.id !== props.root.id}
+      draggable={props.node.id !== props.root.id ? 'true' : 'false'}
       onDragStart={(event) => props.startInspectorDrag(props.node.id, event)}
       onDragOver={(event) => props.updateInspectorDropTarget(props.node, event)}
       onDrop={(event) => props.dropInspectorNodes(props.node, event)}
@@ -375,31 +394,42 @@ function ElementCard(props: {
       <Show when={dropState()}>
         {(target) => (
           <div
-            class="pointer-events-none absolute z-10 border-[#78ff78]"
-            classList={{
-              'inset-x-0 -top-0.5 border-t-2': target().position === 'before',
-              'inset-x-0 -bottom-0.5 border-b-2': target().position === 'after',
-              '-inset-0.5 rounded-[5px] border-2': target().position === 'inside',
-              'border-[var(--warning)]': !target().valid
-            }}
+            class={[
+              'pointer-events-none absolute z-10 border-[#78ff78]',
+              {
+                'inset-x-0 -top-0.5 border-t-2': target().position === 'before',
+                'inset-x-0 -bottom-0.5 border-b-2': target().position === 'after',
+                '-inset-0.5 rounded-[5px] border-2': target().position === 'inside',
+                'border-[var(--warning)]': !target().valid
+              }
+            ]}
           />
         )}
       </Show>
       <button
         type="button"
         class="flex h-5.5 w-full cursor-pointer items-center justify-center gap-1.25 rounded-t border-0 border-b border-b-[color-mix(in_srgb,var(--card-tint)_50%,var(--soft-border))] font-['GodSVG_Mono',ui-monospace,monospace] text-[11px] text-[#eef4ff] [background:color-mix(in_srgb,var(--card-tint)_64%,var(--panel-2))] hover:bg-[color-mix(in_srgb,var(--accent)_14%,var(--panel-2))] hover:text-white"
-        draggable={props.node.id !== props.root.id}
+        draggable={props.node.id !== props.root.id ? 'true' : 'false'}
         data-testid={`inspector-node-header-${props.node.id}`}
         onClick={(event) => props.selectNode(props.node.id, event)}
         onContextMenu={(event) => props.openContextMenu(event, props.node.id)}
         onDragStart={(event) => props.startInspectorDrag(props.node.id, event)}
         onDragEnd={props.resetInspectorDrag}
       >
-        <Dynamic component={props.node.kind === 'element' ? svgCapabilities.iconForElement(props.node.name) : svgCapabilities.iconForNode(props.node.kind)} {...decorativeIconProps} />
+        <Dynamic
+          component={
+            props.node.kind === 'element'
+              ? svgCapabilities.iconForElement(props.node.name)
+              : svgCapabilities.iconForNode(props.node.kind)
+          }
+          {...decorativeIconProps}
+        />
         <span>{inspectorTitle(props.node)}</span>
         <Show
           when={
-            props.node.kind === 'element' && props.node.name !== 'svg' && svgCapabilities.isRecognizedElement(props.node.name) === false
+            props.node.kind === 'element' &&
+            props.node.name !== 'svg' &&
+            svgCapabilities.isRecognizedElement(props.node.name) === false
           }
         >
           <WarningIcon {...decorativeIconProps} />

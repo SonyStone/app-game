@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { splitProps, type JSX } from 'solid-js';
+import { omit } from 'solid-js';
 import { cn } from '../../lib/utils';
 
 // ============================================================================
@@ -40,11 +41,11 @@ export type ButtonProps = JSX.ButtonHTMLAttributes<HTMLButtonElement> &
   };
 
 export function Button(props: ButtonProps): JSX.Element {
-  const [local, rest] = splitProps(props, ['variant', 'size', 'class', 'children']);
+  const rest = omit(props, 'variant', 'size', 'class', 'children');
 
   return (
-    <button {...rest} class={cn(buttonVariants({ variant: local.variant, size: local.size }), local.class)}>
-      {local.children}
+    <button {...rest} class={cn(buttonVariants({ variant: props.variant, size: props.size }), props.class)}>
+      {props.children}
     </button>
   );
 }

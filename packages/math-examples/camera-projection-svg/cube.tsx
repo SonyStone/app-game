@@ -1,7 +1,7 @@
 import { Vec3 } from '@app-game/ogl';
 import { Vec4Tuple } from '@app-game/ogl/math/vec-4';
 import { Listen } from '@solid-primitives/event-bus';
-import { Index, Show, createSignal } from 'solid-js';
+import { For, Show, createSignal } from 'solid-js';
 import { Polygon } from './polygon';
 
 export const Cube = (props: { worldSpaceToScreenSpace: (point: Vec4Tuple) => Vec4Tuple; update: Listen<void> }) => {
@@ -31,13 +31,13 @@ export const Cube = (props: { worldSpaceToScreenSpace: (point: Vec4Tuple) => Vec
   return (
     <>
       {/* cube */}
-      <Index each={vertex()}>
+      <For keyed={false} each={vertex()}>
         {(point) => <circle class="text-green" fill="currentcolor" cx={point()[0]} cy={point()[1]} r=".02" />}
-      </Index>
+      </For>
       <Show when={vertex().length > 0}>
         <Polygon vertexs={vertex()} indexs={indexs} offset={0} fill="red" />
 
-        <Index each={indexs}>
+        <For keyed={false} each={indexs}>
           {(id, i) => (
             <Show when={vertex()}>
               {(item) =>
@@ -55,7 +55,7 @@ export const Cube = (props: { worldSpaceToScreenSpace: (point: Vec4Tuple) => Vec
               }
             </Show>
           )}
-        </Index>
+        </For>
       </Show>
     </>
   );

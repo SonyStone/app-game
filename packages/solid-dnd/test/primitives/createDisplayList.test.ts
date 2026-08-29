@@ -1,4 +1,4 @@
-import { createRoot, createSignal } from 'solid-js';
+import { createRoot, createSignal, flush } from 'solid-js';
 import { GAP_KEY } from 'src/core/displayList';
 import type { Place } from 'src/core/place';
 import { createDisplayList, createTreeDisplayList } from 'src/primitives/createDisplayList';
@@ -69,36 +69,39 @@ describe('createDisplayList', () => {
   });
 
   it('reacts to signal changes', () => {
-    createRoot((dispose) => {
-      const [draggedKeys, setDraggedKeys] = createSignal<string[]>([]);
-      const [place, setPlace] = createSignal<Place<string> | undefined>(undefined);
-
-      const display = createDisplayList<string>({
+    const [draggedKeys, setDraggedKeys] = createSignal<string[]>([]);
+    const [place, setPlace] = createSignal<Place<string> | undefined>(undefined);
+    const { display, dispose } = createRoot((dispose) => ({
+      dispose,
+      display: createDisplayList<string>({
         keys: () => ['a', 'b', 'c'],
         draggedKeys,
         place,
         containerKey: 'list'
-      });
+      })
+    }));
 
-      // Initially: just keys, no gap
-      expect(display.displayKeys()).toEqual(['a', 'b', 'c']);
+    // Initially: just keys, no gap
+    expect(display.displayKeys()).toEqual(['a', 'b', 'c']);
 
-      // Start dragging 'b', place before 'c'
-      setDraggedKeys(['b']);
-      setPlace({ parent: 'list', before: 'c' });
-      expect(display.displayKeys()).toEqual(['a', GAP_KEY, 'c']);
+    // Start dragging 'b', place before 'c'
+    setDraggedKeys(['b']);
+    setPlace({ parent: 'list', before: 'c' });
+    flush();
+    expect(display.displayKeys()).toEqual(['a', GAP_KEY, 'c']);
 
-      // Move insertion point to end
-      setPlace({ parent: 'list', before: null });
-      expect(display.displayKeys()).toEqual(['a', 'c', GAP_KEY]);
+    // Move insertion point to end
+    setPlace({ parent: 'list', before: null });
+    flush();
+    expect(display.displayKeys()).toEqual(['a', 'c', GAP_KEY]);
 
-      // Stop dragging
-      setDraggedKeys([]);
-      setPlace(undefined);
-      expect(display.displayKeys()).toEqual(['a', 'b', 'c']);
+    // Stop dragging
+    setDraggedKeys([]);
+    setPlace(undefined);
+    flush();
+    expect(display.displayKeys()).toEqual(['a', 'b', 'c']);
 
-      dispose();
-    });
+    dispose();
   });
 
   it('handles multiple dragged keys', () => {

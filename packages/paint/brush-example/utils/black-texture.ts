@@ -1,7 +1,6 @@
 import { OGLRenderingContext, Texture } from '@app-game/ogl';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { createSignal, untrack } from 'solid-js';
-import { effect } from 'solid-js/web';
+import { createSignal, createTrackedEffect, untrack } from 'solid-js';
 
 export const createColorTexture = (
   gl: OGLRenderingContext,
@@ -21,7 +20,7 @@ export const createColorTexture = (
     { equals: () => false }
   );
 
-  effect(() => {
+  createTrackedEffect(() => {
     const t = untrack(texture);
     uColor = access(color);
     image[0] = uColor[0];

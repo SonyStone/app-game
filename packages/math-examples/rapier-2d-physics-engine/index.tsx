@@ -1,7 +1,6 @@
 import { toRadian } from '@app-game/ogl/extras/path/utils';
 import createRAF from '@solid-primitives/raf';
-import { lazy, onCleanup } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, lazy, onCleanup, storePath } from 'solid-js';
 
 const TestRapier2D = lazy(async () => {
   const RAPIER = await import('@dimforge/rapier2d-simd');
@@ -54,11 +53,11 @@ const TestRapier2D = lazy(async () => {
     const [running, start, stop] = createRAF(() => {
       // Step the physics world.
       world.step();
-      setSteate('rigidBody', 'translation', rigidBody.translation());
-      setSteate('rigidBody', 'rotation', rigidBody.rotation());
+      setSteate(storePath('rigidBody', 'translation', rigidBody.translation()));
+      setSteate(storePath('rigidBody', 'rotation', rigidBody.rotation()));
 
-      setSteate('collider', 'translation', collider.translation());
-      setSteate('collider', 'rotation', collider.rotation());
+      setSteate(storePath('collider', 'translation', collider.translation()));
+      setSteate(storePath('collider', 'rotation', collider.rotation()));
 
       {
         const { vertices, colors } = world.debugRender();

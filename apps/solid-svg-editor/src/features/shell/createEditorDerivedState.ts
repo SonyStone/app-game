@@ -5,8 +5,8 @@ import { svgCapabilities } from '../../editor/capabilities';
 import type { ActiveDrag, AppSettings } from '../../editor/types';
 import { humanFileSize, serializeRoot } from '../../formatter';
 import { flattenElements, type SvgElementNode } from '../../svg-model';
-import type { TouchGesture } from '../viewport/touch-gesture';
 import { createRasterPreview } from '../viewport/createRasterPreview';
+import type { TouchGesture } from '../viewport/touch-gesture';
 import { createRasterPreviewRect, createRasterPreviewRoot, type SvgSize } from '../viewport/viewport-math';
 
 export function createEditorDerivedState(options: {
@@ -25,13 +25,16 @@ export function createEditorDerivedState(options: {
       options.activeDrag()?.type === 'move-selection'
   );
 
-  const exportText = createMemo<string>((previous) => {
-    if (handleDragActive() && previous) {
-      return previous;
-    }
+  const exportText = createMemo<string>(
+    (previous) => {
+      if (handleDragActive() && previous) {
+        return previous;
+      }
 
-    return serializeRoot(options.activeRoot(), options.settings().exportFormatter);
-  }, '');
+      return serializeRoot(options.activeRoot(), options.settings().exportFormatter);
+    },
+    { loadingValue: '' }
+  );
 
   const fileSize = createMemo(() => humanFileSize(new Blob([exportText()]).size));
   const elementCount = createMemo(() => flattenElements(options.activeRoot()).length);
@@ -59,7 +62,10 @@ export function createEditorDerivedState(options: {
 
   const rasterPreviewRect = createMemo(() => createRasterPreviewRect(options.rootSize()));
   const rasterPreviewText = createMemo(() =>
-    serializeRoot(createRasterPreviewRoot(options.activeRoot(), rasterPreviewRect()), options.settings().exportFormatter)
+    serializeRoot(
+      createRasterPreviewRoot(options.activeRoot(), rasterPreviewRect()),
+      options.settings().exportFormatter
+    )
   );
   const rasterPreviewUrl = createRasterPreview({ enabled: useRasterPreview, text: rasterPreviewText });
 

@@ -1,4 +1,5 @@
-import { createMemo, createSignal, onCleanup, onMount, type ComponentProps } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { createMemo, createSignal, onCleanup, onSettled } from 'solid-js';
 import { CursorOverlay, type CursorOverlayPath, type TouchPointerView } from './CursorOverlay';
 import { MetricsPanel, type LoggedEvent, type MetricValue } from './components/MetricsPanel';
 import { TargetButton } from './components/TargetButton';
@@ -25,7 +26,7 @@ import {
 } from './timeline';
 import { createCursorClickTimeline, createPinchInOutTimeline } from './timelinePresets';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'cursor-emulation': ComponentProps<'div'>;
@@ -299,15 +300,15 @@ export default function CursorEmulationExample() {
     setPointerMoveCount(0);
   }
 
-  onMount(() => {
+  onSettled(() => {
     const timeoutId = window.setTimeout(playClick, 500);
 
     window.addEventListener('resize', handleResize);
 
-    onCleanup(() => {
+    return () => {
       window.clearTimeout(timeoutId);
       window.removeEventListener('resize', handleResize);
-    });
+    };
   });
 
   onCleanup(cancelPlayback);

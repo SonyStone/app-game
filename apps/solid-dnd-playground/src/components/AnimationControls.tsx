@@ -1,4 +1,5 @@
-import { Show, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Show } from 'solid-js';
 
 export type AnimationControlsProps = {
   enabled?: boolean;

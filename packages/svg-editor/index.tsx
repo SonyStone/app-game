@@ -4,9 +4,7 @@ import { createUndoHistory } from '@solid-primitives/history';
 import { toObservable } from '@utils/toObservable';
 import { toSignal } from '@utils/toSignal';
 import { debounceTime } from 'rxjs';
-import { createMemo, Show } from 'solid-js';
-import { createStore, reconcile, unwrap } from 'solid-js/store';
-import { TmTextarea } from 'tm-textarea/solid';
+import { createMemo, createStore, reconcile, Show, snapshot } from 'solid-js';
 import { EditView } from './components/editor-view';
 import { LayersView } from './components/layers-view';
 import { Toolbar } from './components/toolbar';
@@ -32,8 +30,7 @@ export default function SVGEditorApp() {
           trackStore(state);
           return state;
         },
-        state,
-        { equals: false }
+        { ...{ equals: false }, loadingValue: state }
       )
     ).pipe(debounceTime(500)),
     state
@@ -42,7 +39,7 @@ export default function SVGEditorApp() {
   const history = createUndoHistory(
     () => {
       debounceState();
-      const copy = structuredClone(unwrap(state));
+      const copy = structuredClone(snapshot(state));
       return () => setState(reconcile(copy));
     },
     { limit: 100 }
@@ -61,7 +58,7 @@ export default function SVGEditorApp() {
                 minSize={0.1}
               >
                 <button
-                  class="select-none self-end rounded bg-blue-500 px-2 py-1 text-white hover:bg-blue-600"
+                  class="self-end rounded bg-blue-500 px-2 py-1 text-white select-none hover:bg-blue-600"
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(svgToString(state));
@@ -83,22 +80,19 @@ export default function SVGEditorApp() {
                 initialSize={0.3}
                 minSize={0.1}
               >
-                <TmTextarea
-                  grammar="tsx"
-                  theme="min-light"
+                <textarea
                   value={svgToString(state, { indent: true, indentSize: 2 })}
-                  editable={true}
                   style={{
                     padding: '10px',
                     'font-size': '12pt'
                   }}
-                  onInput={(e) => setState(svgParser(e.currentTarget.value))}
+                  onInput={(e) => setState(() => svgParser(e.currentTarget.value))}
                 />
               </ResizablePanel>
               <ResizableHandle withHandle orientation="vertical" class="border-0 bg-inherit hover:bg-blue-400" />
             </Show>
             <ResizablePanel
-              class="flex h-0 flex-grow select-none flex-col overflow-hidden border-0"
+              class="flex h-0 flex-grow flex-col overflow-hidden border-0 select-none"
               initialSize={0.4}
               minSize={0.1}
             >

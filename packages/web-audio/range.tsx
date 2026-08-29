@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
 
 let global_id = 0;
 

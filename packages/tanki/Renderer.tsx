@@ -1,25 +1,21 @@
 import { createContextProvider } from '@app-game/solid-utils';
+import type { JSX } from '@solidjs/web';
 import { AutoDetectOptions, autoDetectRenderer, Renderer as PixiRenderer } from 'pixi.js';
-import { createResource, JSX, onCleanup, Show, splitProps } from 'solid-js';
+import { createMemo, latest, omit, onCleanup, Show } from 'solid-js';
 
 const [Provider, useRenderer] = createContextProvider<PixiRenderer>();
 export { useRenderer };
 
 export function RendererProvider(props: Partial<AutoDetectOptions> & Partial<{ children: JSX.Element }>) {
-  const [common, options] = splitProps(props, ['children']);
+  const options = omit(props, 'children');
 
-  const [renderer] = createResource(
-    () => autoDetectRenderer,
-    async (fn) => {
-      return await fn(options);
-    }
-  );
+  const renderer = createMemo(() => autoDetectRenderer(options));
 
   onCleanup(() => {
-    renderer()?.destroy();
+    latest(renderer)?.destroy();
   });
 
-  <Show when={renderer()}>{(renderer) => <Provider value={renderer()}>{common.children}</Provider>}</Show>;
+  <Show when={latest(renderer)}>{(renderer) => <Provider value={renderer()}>{props.children}</Provider>}</Show>;
 
   return <></>;
 }

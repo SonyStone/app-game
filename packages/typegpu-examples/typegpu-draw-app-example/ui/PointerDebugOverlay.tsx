@@ -10,8 +10,8 @@
 
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { ReactiveMap } from '@solid-primitives/map';
-import { createMemo, createSignal, For, Show, type Accessor, type JSX } from 'solid-js';
-import { createStore, reconcile } from 'solid-js/store';
+import type { JSX } from '@solidjs/web';
+import { createMemo, createSignal, createStore, For, reconcile, Show, storePath, type Accessor } from 'solid-js';
 
 // ============================================================================
 // Types
@@ -95,11 +95,11 @@ export function updatePointerDebug(id: number, info: PointerDebugInfo | null) {
 }
 
 export function updateTwoFingerDebug(info: TwoFingerDebugInfo | null) {
-  setPointerDebugStore('twoFingerGesture', reconcile(info));
+  setPointerDebugStore(storePath('twoFingerGesture', reconcile(info)));
 }
 
 export function updateCanvasTransformDebug(info: CanvasTransformDebugInfo | null) {
-  setPointerDebugStore('canvasTransform', reconcile(info));
+  setPointerDebugStore(storePath('canvasTransform', reconcile(info)));
 }
 
 // ============================================================================
@@ -239,9 +239,9 @@ export function PointerDebugOverlay(props: PointerDebugOverlayProps): JSX.Elemen
         }}
       />
 
-      <div class="pointer-events-none fixed left-0 top-0 z-10000 h-full w-full">
+      <div class="pointer-events-none fixed top-0 left-0 z-10000 h-full w-full">
         {/* SVG overlay for drawing debug graphics */}
-        <svg class="absolute left-0 top-0 h-full w-full">
+        <svg class="absolute top-0 left-0 h-full w-full">
           {/* Transformed canvas rectangle visualization */}
           {canvasTransform()?.canvasRect && canvasTransform()?.canvasSize && (
             <CanvasRectVisualization transform={canvasTransform()!} />
@@ -598,7 +598,7 @@ function PointerLabel(props: { pointer: PointerDebugInfo }): JSX.Element {
 
   return (
     <div
-      class="absolute whitespace-nowrap font-mono text-xs"
+      class="absolute font-mono text-xs whitespace-nowrap"
       style={{
         left: `${props.pointer.x + 25}px`,
         top: `${props.pointer.y - 10}px`,
@@ -616,7 +616,7 @@ function PointerLabel(props: { pointer: PointerDebugInfo }): JSX.Element {
 function TwoFingerGestureInfo(props: { gesture: TwoFingerDebugInfo }): JSX.Element {
   return (
     <div
-      class="absolute whitespace-nowrap rounded bg-black/70 px-2 py-1 font-mono text-sm font-bold text-red-500"
+      class="absolute rounded bg-black/70 px-2 py-1 font-mono text-sm font-bold whitespace-nowrap text-red-500"
       style={{
         left: `${props.gesture.center.x + 15}px`,
         top: `${props.gesture.center.y + 15}px`,
@@ -645,7 +645,7 @@ function DebugLegend(): JSX.Element {
 
 function CanvasTransformInfo(props: { transform: CanvasTransformDebugInfo }): JSX.Element {
   return (
-    <div class="min-w-50 absolute right-2.5 top-2.5 rounded bg-black/85 p-2.5 font-mono text-xs text-white">
+    <div class="absolute top-2.5 right-2.5 min-w-50 rounded bg-black/85 p-2.5 font-mono text-xs text-white">
       <div class="mb-1.5 font-bold text-cyan-400">Canvas Transform</div>
       <div>
         <span class="text-neutral-500">panX:</span>{' '}

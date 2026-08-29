@@ -1,6 +1,6 @@
 import { Camera, Color, Mesh, Orbit, Plane, Program, Renderer, Texture, Transform } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 
 import leaf from './leaf.jpg?url';
 
@@ -23,7 +23,7 @@ export default function SortTransparency() {
 
   const resize = createWindowSize();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(resize.width, resize.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
   });

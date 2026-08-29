@@ -1,5 +1,5 @@
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
-import { createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
+import { createSignal, createTrackedEffect, type Accessor } from 'solid-js';
 import {
   createDragSensorFactory,
   type CreateDragSensorOptions,
@@ -45,15 +45,17 @@ export type DragSensorRefBinding<TData = unknown, TElement extends HTMLElement =
  * - `target`: bind to an existing element accessor instead of using the returned
  *   `ref` callback.
  */
-export type DragSensorBindingOptions<TData = unknown, TElement extends HTMLElement = HTMLElement> =
-  CreateDragSensorOptions<TData, TElement> & {
-    /** Existing shared drag coordinator. */
-    scope?: DragSensorFactory;
-    /** Defaults for a private coordinator when `scope` is omitted. */
-    scopeOptions?: DragSensorFactoryOptions;
-    /** Optional element/accessor target. Omit to use the returned `ref`. */
-    target?: DragSensorTargetAccessor<TElement>;
-  };
+export type DragSensorBindingOptions<
+  TData = unknown,
+  TElement extends HTMLElement = HTMLElement
+> = CreateDragSensorOptions<TData, TElement> & {
+  /** Existing shared drag coordinator. */
+  scope?: DragSensorFactory;
+  /** Defaults for a private coordinator when `scope` is omitted. */
+  scopeOptions?: DragSensorFactoryOptions;
+  /** Optional element/accessor target. Omit to use the returned `ref`. */
+  target?: DragSensorTargetAccessor<TElement>;
+};
 
 /**
  * Creates an explicit shared drag scope.
@@ -99,7 +101,7 @@ export function createDragSensorTarget<TData = unknown, TElement extends HTMLEle
 ): DragSensorHandle<TData, TElement> {
   const sensor = scope.createSensor<TData, TElement>(options);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const element = access(target);
 
     if (!element) {
@@ -107,9 +109,10 @@ export function createDragSensorTarget<TData = unknown, TElement extends HTMLEle
     }
 
     element.addEventListener('pointerdown', sensor.onPointerDown);
-    onCleanup(() => {
+
+    return () => {
       element.removeEventListener('pointerdown', sensor.onPointerDown);
-    });
+    };
   });
 
   return sensor;
@@ -205,69 +208,5 @@ export function createDragSensorBinding<TData = unknown, TElement extends HTMLEl
     ref: setRefElement,
     element: refElement,
     scope
-  };
-}
-
-/**
- * Creates a Solid `use:` directive for drag targets.
- *
- * Directives keep markup flat and declarative:
- *
- * ```tsx
- * const scope = createDragSensorScope({ threshold: 6 });
- * const dragSensor = createDragSensorDirective(scope);
- *
- * return <button use:dragSensor={{ data: { index }, onDragStart: handleStart }} />;
- * ```
- *
- * The directive receives an accessor for its options, so this implementation
- * proxies option reads and callbacks to the latest accessor value. That makes
- * changing `data`, `disabled`, or callbacks over time behave as expected without
- * rebinding the native listener.
- */
-export function createDragSensorDirective(scope: DragSensorFactory = createDragSensorFactory()) {
-  return function dragSensor<TData = unknown, TElement extends HTMLElement = HTMLElement>(
-    element: TElement,
-    options: Accessor<CreateDragSensorOptions<TData, TElement>>
-  ): DragSensorHandle<TData, TElement> {
-    const sensor = scope.createSensor<TData, TElement>(createOptionsProxy(options));
-
-    element.addEventListener('pointerdown', sensor.onPointerDown);
-    onCleanup(() => {
-      element.removeEventListener('pointerdown', sensor.onPointerDown);
-    });
-
-    return sensor;
-  };
-}
-
-/**
- * Creates an option object whose fields delegate to the current directive value.
- *
- * `scope.createSensor()` snapshots the options object once, so plain values
- * would go stale if the directive expression changes. Getters and callback
- * wrappers preserve live reads.
- */
-function createOptionsProxy<TData, TElement extends HTMLElement>(
-  options: Accessor<CreateDragSensorOptions<TData, TElement>>
-): CreateDragSensorOptions<TData, TElement> {
-  return {
-    get data() {
-      return options().data;
-    },
-    get threshold() {
-      return options().threshold;
-    },
-    get proxyCapture() {
-      return options().proxyCapture;
-    },
-    get disabled() {
-      return options().disabled;
-    },
-    onClick: (event, source) => options().onClick?.(event, source),
-    onDragStart: (event) => options().onDragStart?.(event),
-    onDragMove: (event) => options().onDragMove?.(event),
-    onDragEnd: (event) => options().onDragEnd?.(event),
-    onDragCancel: (event) => options().onDragCancel?.(event)
   };
 }

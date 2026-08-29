@@ -22,7 +22,7 @@ export function createDynamicGap(
     setElementRef: (element: HTMLElement) => void;
   }> {
   const fallback = nonNegativeGap(options.fallback ?? DEFAULT_GAP);
-  const [gap, setGap] = createSignal(fallback);
+  const [gap, setGap] = createSignal(fallback, { ownedWrite: true });
   let element: HTMLElement | undefined;
   let stopObserving = (): void => undefined;
 

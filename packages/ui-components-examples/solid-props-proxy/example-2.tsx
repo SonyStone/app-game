@@ -1,5 +1,6 @@
-import { createEffect, createSignal, JSX, onCleanup, Show, splitProps } from 'solid-js';
-import { spread } from 'solid-js/web';
+import type { JSX } from '@solidjs/web';
+import { spread } from '@solidjs/web';
+import { createSignal, createTrackedEffect, omit, Show } from 'solid-js';
 
 /**
  * A simple example of PropsProxy
@@ -43,10 +44,10 @@ export function PropsProxyExample2() {
 function TestProxy<T extends Element>(
   props: { component: T | null } & (T extends Element ? JSX.HTMLAttributes<T> : Record<string, unknown>)
 ) {
-  const [local, restProps] = splitProps(props, ['component']);
+  const restProps = omit(props, 'component');
 
-  createEffect(() => {
-    const target = local.component;
+  createTrackedEffect(() => {
+    const target = props.component;
     if (!target) {
       return;
     }
@@ -61,7 +62,7 @@ function TestProxy<T extends Element>(
 
     const applied = record['value'];
 
-    onCleanup(() => {
+    return () => {
       target.removeAttribute('data-proxy');
 
       if (!Object.is(record['value'], applied)) {
@@ -69,7 +70,7 @@ function TestProxy<T extends Element>(
       }
 
       record['value'] = original;
-    });
+    };
   });
 
   return null;

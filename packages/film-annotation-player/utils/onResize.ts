@@ -1,6 +1,6 @@
 import { createResizeObserver, ResizeHandler } from './resizeObserver';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface Directives {
       onResize: ResizeHandler;
@@ -10,7 +10,7 @@ declare module 'solid-js' {
 
 export function onResize(element: HTMLElement, accessor: () => ResizeHandler) {
   const refCallback = createResizeObserver({
-    onResize: accessor(),
+    onResize: accessor()
   });
 
   refCallback(element);

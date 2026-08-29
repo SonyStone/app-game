@@ -2,7 +2,8 @@ import { createVirtualNestedList, type VirtualNestedItem } from '@app-game/solid
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createScrollPosition } from '@solid-primitives/scroll';
 import { ReactiveSet } from '@solid-primitives/set';
-import { createMemo, createSignal, For, Show, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { makeUrlSearchParams } from '../shared/makeUrlSearchParams';
 import { MapToggle } from '../shared/MapToggle';
 import { ScrollModeToggle, type ScrollMode } from '../shared/ScrollModeToggle';
@@ -248,16 +249,18 @@ function BookmarkRow(props: {
 
   return (
     <div
-      class="group relative mx-1 flex min-w-max cursor-default items-center rounded-md px-1.5 pe-6 text-sm text-zinc-700 transition-colors select-none hover:bg-zinc-100 hover:text-zinc-950"
-      classList={{
-        'before:absolute before:top-1/2 before:-left-6 before:w-5 before:border-t before:border-zinc-200':
-          props.depth > 0,
-        'bg-zinc-100 text-zinc-950': props.selected
-      }}
+      class={[
+        'group relative mx-1 flex min-w-max cursor-default items-center rounded-md px-1.5 pe-6 text-sm text-zinc-700 transition-colors select-none hover:bg-zinc-100 hover:text-zinc-950',
+        {
+          'before:absolute before:top-1/2 before:-left-6 before:w-5 before:border-t before:border-zinc-200':
+            props.depth > 0,
+          'bg-zinc-100 text-zinc-950': props.selected
+        }
+      ]}
       role="treeitem"
       aria-level={props.depth + 1}
-      aria-expanded={hasChildren() ? props.expanded : undefined}
-      aria-selected={props.selected}
+      aria-expanded={hasChildren() ? (props.expanded ? 'true' : 'false') : undefined}
+      aria-selected={props.selected ? 'true' : 'false'}
       style={{ height: `${ITEM_HEIGHT}px` }}
       onClick={props.onSelected}
     >
@@ -276,8 +279,10 @@ function BookmarkRow(props: {
       </Show>
       <BookmarkIcon item={props.item} />
       <span
-        class="max-w-[42rem] overflow-hidden text-ellipsis whitespace-nowrap"
-        classList={{ 'font-medium text-zinc-900': props.item.kind !== 'bookmark' }}
+        class={[
+          'max-w-[42rem] overflow-hidden text-ellipsis whitespace-nowrap',
+          { 'font-medium text-zinc-900': props.item.kind !== 'bookmark' }
+        ]}
         title={props.item.title}
       >
         {props.item.title}

@@ -1,6 +1,7 @@
 import { Resizable, ResizableHandle, ResizablePanel } from '@app-game/components/ui/resizable';
 import { Meta, Title } from '@solidjs/meta';
-import { createEffect, createSignal, JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, createTrackedEffect } from 'solid-js';
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 import * as std from 'typegpu/std';
@@ -138,7 +139,7 @@ function App(props: { selectedExample: Examples }) {
     checkerboard: pipelineCheckerboard
   } as const;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     size();
 
     const pipeline = options[props.selectedExample];

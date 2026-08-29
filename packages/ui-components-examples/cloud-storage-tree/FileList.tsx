@@ -1,4 +1,5 @@
-import { createSignal, For, JSX, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, For, Show } from 'solid-js';
 
 import { useCloudStorage } from './CloudStorageContext';
 import { getFileIcon } from './TreeView';
@@ -99,7 +100,7 @@ export function FileList(): JSX.Element {
           }
         >
           {/* Table Header */}
-          <div class="mb-1 grid grid-cols-[1fr_auto] gap-2 border-b border-neutral-700 px-2 py-2 text-xs font-medium uppercase tracking-wide text-neutral-500 sm:grid-cols-[1fr_100px]">
+          <div class="mb-1 grid grid-cols-[1fr_auto] gap-2 border-b border-neutral-700 px-2 py-2 text-xs font-medium tracking-wide text-neutral-500 uppercase sm:grid-cols-[1fr_100px]">
             <span>Name</span>
             <span class="text-right">Size</span>
           </div>

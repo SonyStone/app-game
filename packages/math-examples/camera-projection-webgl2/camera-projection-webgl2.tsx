@@ -2,7 +2,7 @@ import { Camera, Orbit, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import { Ripple } from '@app-game/ui-components/ripple';
 import { createEventBus } from '@solid-primitives/event-bus';
 import createRAF from '@solid-primitives/raf';
-import { onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 import { GridHelperComponent } from '../grid-helper.component';
 import { NormalBox } from './normal-box.component';
 import { ScreenBox } from './screen-box';
@@ -11,7 +11,9 @@ import { ScreenPointIntersection } from './screen-point-intersection';
 export default function CameraProjectionWebGL2() {
   const click = createEventBus<MouseEvent>();
   const updateScreenBox = createEventBus<void>();
-  const canvas = (<canvas class="w-400px h-400px border-t" onClick={(event) => click.emit(event)} />) as HTMLCanvasElement;
+  const canvas = (
+    <canvas class="w-400px h-400px border-t" onClick={(event) => click.emit(event)} />
+  ) as HTMLCanvasElement;
   const renderer = new Renderer({ dpr: 2, canvas, height: 400, width: 400 });
   const gl = renderer.gl;
   gl.clearColor(1, 1, 1, 1);
@@ -30,7 +32,7 @@ export default function CameraProjectionWebGL2() {
   const [running, start, stop] = createRAF(update);
   start();
 
-  onMount(() => {
+  onSettled(() => {
     updateScreenBox.emit();
   });
 

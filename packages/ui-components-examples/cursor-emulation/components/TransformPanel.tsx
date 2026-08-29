@@ -24,21 +24,25 @@ export function TransformPanel(props: {
         <For each={Array.from({ length: 24 })}>
           {(_, index) => (
             <span
-              class="border-r border-b border-zinc-300"
-              classList={{
-                'bg-cyan-100': props.tone === 'cyan' && index() % 5 === 0,
-                'bg-rose-100': props.tone === 'rose' && index() % 5 === 0
-              }}
+              class={[
+                'border-r border-b border-zinc-300',
+                {
+                  'bg-cyan-100': props.tone === 'cyan' && index() % 5 === 0,
+                  'bg-rose-100': props.tone === 'rose' && index() % 5 === 0
+                }
+              ]}
             />
           )}
         </For>
       </div>
       <div
-        class="pointer-events-none grid h-24 w-24 place-items-center border border-zinc-950 font-semibold transition-transform duration-75"
-        classList={{
-          'bg-cyan-300': props.tone === 'cyan',
-          'bg-rose-300': props.tone === 'rose'
-        }}
+        class={[
+          'pointer-events-none grid h-24 w-24 place-items-center border border-zinc-950 font-semibold transition-transform duration-75',
+          {
+            'bg-cyan-300': props.tone === 'cyan',
+            'bg-rose-300': props.tone === 'rose'
+          }
+        ]}
         style={{ transform: `scale(${props.scale})` }}
       >
         {props.scale.toFixed(2)}

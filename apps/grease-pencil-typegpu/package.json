@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@app-game/solid-view-cube": "workspace:*",
+    "@app-game/utils": "workspace:*",
     "solid-js": "catalog:",
     "typegpu": "^0.11.4"
   },

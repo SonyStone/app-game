@@ -3,10 +3,10 @@ import { Container, Graphics, Sprite, useAsset } from '@app-game/solid-pixi';
 import { createEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
+import type { JSX } from '@solidjs/web';
 import { Container as _Container, Graphics as _Graphics, Sprite as _Sprite, Color, Point, Ticker } from 'pixi.js';
 import 'pixi.js/math-extras';
-import { createEffect, JSX, onCleanup, onMount } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, createTrackedEffect, onCleanup, onSettled, storePath } from 'solid-js';
 import bunnyUrl from './bunny.png?url';
 import { Collider } from './Collider';
 import { RigidBody as _RigidBody, Rapier2D, useRapier2D } from './Rapier2D';
@@ -43,9 +43,11 @@ function App() {
   const rapier2D = useRapier2D();
 
   let wakeLockSentinel: WakeLockSentinel | null = null;
-  onMount(() => {
-    createEffect(async () => {
-      wakeLockSentinel = await navigator.wakeLock.request('screen');
+  onSettled(() => {
+    createTrackedEffect(() => {
+      void (async () => {
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+      })();
     });
   });
   onCleanup(() => {
@@ -53,7 +55,7 @@ function App() {
     wakeLockSentinel?.release();
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.resize(size.width, size.height);
   });
 
@@ -68,11 +70,11 @@ function App() {
     if (!event) return;
     const { alpha, beta, gamma } = event;
     if (alpha === null || beta === null || gamma === null) return;
-    setDevicemotion('orientation', { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 });
+    setDevicemotion(storePath('orientation', { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 }));
     const gravity = new Point(devicemotion.orientation.gamma, devicemotion.orientation.beta)
       .normalize()
       .multiplyScalar(9.81);
-    setDevicemotion('gravity', { x: gravity.x, y: -gravity.y });
+    setDevicemotion(storePath('gravity', { x: gravity.x, y: -gravity.y }));
     world.gravity = { x: gravity.x, y: -gravity.y };
     // world.gravity = { x: 0, y: 0 };
   });
@@ -95,7 +97,7 @@ function App() {
       return collider;
     });
 
-    createEffect(() => {
+    createTrackedEffect(() => {
       const width = size.width / 20;
       const height = size.height / 20;
 
@@ -134,8 +136,8 @@ function App() {
     const { alpha, beta, gamma } = event.rotationRate ?? { alpha: 0, beta: 0, gamma: 0 };
     if (x === null || y === null) return;
     if (alpha === null || beta === null || gamma === null) return;
-    setDevicemotion('acceleration', { x: x ?? 0, y: y ?? 0, z: 0 });
-    setDevicemotion('rotationRate', { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 });
+    setDevicemotion(storePath('acceleration', { x: x ?? 0, y: y ?? 0, z: 0 }));
+    setDevicemotion(storePath('rotationRate', { alpha: alpha ?? 0, beta: beta ?? 0, gamma: gamma ?? 0 }));
     for (const { rigidBody } of bunnies) {
       // rigidBody.applyImpulse({ x: -x * 2, y: -y * 2 }, true);
 
@@ -209,7 +211,7 @@ function App() {
 
   const ticker = new Ticker();
 
-  onMount(() => {
+  onSettled(() => {
     const [running, start, stop] = createRAF((delta) => {
       ticker.update();
       const eventQueue = new rapier2D.EventQueue(true);

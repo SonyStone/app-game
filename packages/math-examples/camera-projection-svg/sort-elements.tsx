@@ -1,4 +1,5 @@
-import { JSX, children, createMemo } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { children, createMemo } from 'solid-js';
 
 // TODO: Only works for the first run
 export const SortElements = (props: { children: JSX.Element }) => {

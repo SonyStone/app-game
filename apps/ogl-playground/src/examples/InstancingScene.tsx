@@ -1,15 +1,8 @@
-import {
-  Camera,
-  Geometry,
-  Mesh,
-  Program,
-  Texture,
-  useTime,
-} from '@work-ilyas/solid-ogl';
-import { createEffect, createMemo, createResource, Show } from 'solid-js';
-import type { CameraSceneProps } from './types';
-import dataSrc from './acorn.json?url';
+import { Camera, Geometry, Mesh, Program, Texture, useTime } from '@work-ilyas/solid-ogl';
+import { createMemo, createTrackedEffect, latest, Show } from 'solid-js';
 import textureSrc from './acorn.jpg?url';
+import dataSrc from './acorn.json?url';
+import type { CameraSceneProps } from './types';
 
 const INSTANCE_COUNT = 20;
 
@@ -87,10 +80,7 @@ function createInstanceAttributes(count: number) {
   const random = new Float32Array(count * 3);
 
   for (let index = 0; index < count; index += 1) {
-    offset.set(
-      [Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1],
-      index * 3,
-    );
+    offset.set([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1], index * 3);
     random.set([Math.random(), Math.random(), Math.random()], index * 3);
   }
 
@@ -99,11 +89,11 @@ function createInstanceAttributes(count: number) {
 
 export function InstancingScene(props: CameraSceneProps) {
   const time = useTime();
-  const [model] = createResource(loadAcornModel);
-  const [image] = createResource(() => loadImage(textureSrc));
+  const model = createMemo(loadAcornModel);
+  const image = createMemo(() => loadImage(textureSrc));
 
   const geometryArgs = createMemo(() => {
-    const acorn = model();
+    const acorn = latest(model);
 
     if (!acorn) {
       return undefined;
@@ -119,20 +109,20 @@ export function InstancingScene(props: CameraSceneProps) {
         offset: {
           instanced: 1,
           size: 3,
-          data: instanceAttributes.offset,
+          data: instanceAttributes.offset
         },
         random: {
           instanced: 1,
           size: 3,
-          data: instanceAttributes.random,
-        },
-      },
+          data: instanceAttributes.random
+        }
+      }
     ] as const;
   });
 
   const sceneAssets = createMemo(() => {
     const loadedGeometry = geometryArgs();
-    const loadedImage = image();
+    const loadedImage = latest(image);
 
     if (!loadedGeometry || !loadedImage) {
       return undefined;
@@ -140,24 +130,15 @@ export function InstancingScene(props: CameraSceneProps) {
 
     return {
       geometry: loadedGeometry,
-      image: loadedImage,
+      image: loadedImage
     };
   });
 
-  const rotation = createMemo<[number, number, number]>(() => [
-    0,
-    -time() * 0.3,
-    0,
-  ]);
+  const rotation = createMemo<[number, number, number]>(() => [0, -time() * 0.3, 0]);
 
   return (
     <>
-      <Camera
-        makeDefault={props.makeDefault}
-        fov={15}
-        position={[0, 0, 15]}
-        lookAt={[0, 0, 0]}
-      />
+      <Camera makeDefault={props.makeDefault} fov={15} position={[0, 0, 15]} lookAt={[0, 0, 0]} />
 
       <Show when={sceneAssets()} keyed>
         {(assets) => (
@@ -165,7 +146,7 @@ export function InstancingScene(props: CameraSceneProps) {
             <Geometry args={assets.geometry} />
             <Program
               ref={(instance) => {
-                createEffect(() => {
+                createTrackedEffect(() => {
                   instance.uniforms.uTime.value = time();
                 });
               }}
@@ -175,10 +156,11 @@ export function InstancingScene(props: CameraSceneProps) {
                   fragment: instancingFragment,
                   uniforms: {
                     uTime: { value: 0 },
-                    tMap: { value: null },
-                  },
-                },
-              ]}>
+                    tMap: { value: null }
+                  }
+                }
+              ]}
+            >
               <Texture attach="uniforms.tMap.value" image={assets.image} />
             </Program>
           </Mesh>

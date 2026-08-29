@@ -1,18 +1,19 @@
-import { ComponentProps, createEffect, JSX, onCleanup, splitProps, ValidComponent } from 'solid-js';
+import type { ComponentProps, JSX, ValidComponent } from '@solidjs/web';
+import { createTrackedEffect, omit } from 'solid-js';
 
 export function Props<T extends ValidComponent>(
   props: { ref: (props: ComponentProps<T> | null) => void } & ComponentProps<T> & {
       children?: (props: ComponentProps<T>) => JSX.Element;
     }
 ): JSX.Element {
-  const [local, rest] = splitProps(props, ['ref']);
+  const rest = omit(props, 'ref');
 
-  createEffect(() => {
-    local.ref?.(rest);
+  createTrackedEffect(() => {
+    props.ref?.(rest);
 
-    onCleanup(() => {
-      local.ref?.(null);
-    });
+    return () => {
+      props.ref?.(null);
+    };
   });
 
   return rest.children?.(rest) ?? null;

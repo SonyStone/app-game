@@ -1,11 +1,11 @@
 import { Application, Stage } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { A } from '@solidjs/router';
+
+import { JSX } from '@solidjs/web/jsx-runtime';
 import { gsap } from 'gsap';
 import { PixiPlugin } from 'gsap/PixiPlugin';
 import { Graphics, VERSION } from 'pixi.js';
 import { For, Show } from 'solid-js';
-import { JSX } from 'solid-js/jsx-runtime';
 import { OffscreenCanvas } from './OffscreenCanvas';
 import { Transition } from './Transition';
 import OffscreenCanvasWorker from './offscreen-canvas.worker?worker';
@@ -23,12 +23,12 @@ export default function App(props: { children?: JSX.Element }) {
 
   return (
     <>
-      <div class="absolute left-0 top-0 z-10 flex flex-col gap-2 bg-white p-2">
+      <div class="absolute top-0 left-0 z-10 flex flex-col gap-2 bg-white p-2">
         <For each={routes}>
           {(route) => (
-            <A href={'.' + route.path} class="text-blue-500 hover:underline">
+            <a href={'.' + route.path} class="text-blue-500 hover:underline">
               {route.name}
-            </A>
+            </a>
           )}
         </For>
       </div>

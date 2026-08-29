@@ -1,4 +1,5 @@
-import { createContext, createSignal, useContext, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createContext, createSignal, useContext } from 'solid-js';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { markdownComponents } from '../markdown-components';
@@ -14,9 +15,9 @@ const DemoContext = createContext<CounterCtx>();
 function DemoProvider(props: { children: JSX.Element }): JSX.Element {
   const [count, setCount] = createSignal(0);
   return (
-    <DemoContext.Provider value={{ count, inc: () => setCount((c) => c + 1), dec: () => setCount((c) => c - 1) }}>
+    <DemoContext value={{ count, inc: () => setCount((c) => c + 1), dec: () => setCount((c) => c - 1) }}>
       {props.children}
-    </DemoContext.Provider>
+    </DemoContext>
   );
 }
 

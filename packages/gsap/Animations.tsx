@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, onCleanup } from 'solid-js';
+import { createSignal, createTrackedEffect, For, onCleanup } from 'solid-js';
 
 import PauseIcon from '@app-game/film-annotation-player/icons/pause.svg';
 import PlayIcon from '@app-game/film-annotation-player/icons/play.svg';
@@ -22,7 +22,7 @@ export default function () {
   let step: number = 1;
   let wait = 10;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     spd = speed();
   });
 
@@ -48,7 +48,7 @@ export default function () {
     setTime(frame);
   }
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (play()) {
       tick(0);
     } else {

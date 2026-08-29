@@ -4,8 +4,8 @@ import CaptureMenu from '@app-game/spector/embedded-frontend-2/capture-menu';
 import { Spector } from '@app-game/spector/spector';
 import * as twgl from '@app-game/twgl';
 import { Title } from '@solidjs/meta';
-import { onCleanup, onMount } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { Portal } from '@solidjs/web';
+import { onCleanup, onSettled } from 'solid-js';
 import fs from './shader.frag?raw';
 import vs from './shader.vert?raw';
 
@@ -146,7 +146,7 @@ export default function UniformBufferObjects() {
     id = requestAnimationFrame(render);
   }
 
-  onMount(() => {
+  onSettled(() => {
     id = requestAnimationFrame(render);
     const spector = new Spector();
     spector.displayUI();

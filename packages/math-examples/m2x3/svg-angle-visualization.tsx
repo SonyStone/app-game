@@ -2,7 +2,7 @@ import { Degrees, Radians } from '@app-game/math/types';
 import { createStruct } from '@app-game/math/utils/create-struct';
 import { radToDeg } from '@app-game/math/utils/trigonometry';
 import { Vec2 } from '@app-game/math/v2';
-import { createMemo, mergeProps } from 'solid-js';
+import { createMemo, merge } from 'solid-js';
 
 // one struct is enough for all angle visualizations
 const [struct] = createStruct({
@@ -33,7 +33,7 @@ export function SVGAngleVisualization(props: {
   /** Radius of the angle arc */
   radius?: number;
 }) {
-  const merged = mergeProps(
+  const merged = merge(
     {
       radius: 40,
       class: '',
@@ -59,7 +59,7 @@ export function SVGAngleVisualization(props: {
 
   const angle = createMemo(() => Vec2.angle(vectorToFirstPoint(), vectorToSecondPoint()));
   const angleDegrees = createMemo(() => Math.abs(Math.floor(radToDeg(angle() as Radians))) as Degrees);
-  const sweepFlag = createMemo(() => Vec2.crossProduct(vectorToFirstPoint(), vectorToSecondPoint()) >= 0, 0);
+  const sweepFlag = createMemo(() => Vec2.crossProduct(vectorToFirstPoint(), vectorToSecondPoint()) >= 0);
 
   const arcPath = () =>
     angleDegrees() === 180

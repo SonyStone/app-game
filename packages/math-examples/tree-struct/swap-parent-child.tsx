@@ -1,6 +1,6 @@
-import { ComponentProps, JSX } from 'solid-js';
+import type { ComponentProps, JSX } from '@solidjs/web';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'parent-div': ComponentProps<'div'>;

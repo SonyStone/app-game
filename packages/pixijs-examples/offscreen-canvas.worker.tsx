@@ -1,8 +1,9 @@
 import { Application, Stage } from '@app-game/solid-pixi';
+import type { JSX } from '@solidjs/web';
 import { gsap } from 'gsap';
 import { PixiPlugin } from 'gsap/PixiPlugin';
 import { Graphics, VERSION } from 'pixi.js';
-import { createMemo, createRoot, createSignal, JSX, lazy, Show } from 'solid-js';
+import { createMemo, createRoot, createSignal, lazy, Show } from 'solid-js';
 import { Transition } from './Transition';
 
 export const routes = [

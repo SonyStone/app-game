@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, on } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 
 type Diff<A, B> = Exclude<A, B> | Exclude<B, A>;
 
@@ -25,7 +25,7 @@ export function watch<T>(
   defer?: boolean,
   equals?: (a: T, b: T) => boolean
 ) {
-  createEffect(on(createMemo(expr, undefined, { equals }), callback, { defer }));
+  createEffect(createMemo(expr, { equals }), callback, { defer });
 }
 
 /**
@@ -61,7 +61,7 @@ export function keyedDebounce<U, T extends any[]>(fn: (key: U, ...args: T) => vo
 
 export function withReactiveProps<T>(obj: T, keys: (keyof T)[]): T {
   keys.forEach((key) => {
-    const [get, set] = createSignal(obj[key]);
+    const [get, set] = createSignal(obj[key] as Exclude<T[keyof T], Function>);
     Object.defineProperty(obj, key, { get, set });
   });
   return obj;

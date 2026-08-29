@@ -1,4 +1,5 @@
-import { createSignal, onCleanup, onMount, untrack, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, onCleanup, onSettled, untrack } from 'solid-js';
 import tgpu, { type TgpuRoot } from 'typegpu';
 import { BlendPass } from './blend/BlendPass';
 import { SwapBuffer } from './blend/SwapBuffer';
@@ -246,9 +247,11 @@ export default function TypeGPUDrawApp(): JSX.Element {
     }
   };
 
-  onMount(async () => {
-    await initWebGPU();
-    start();
+  onSettled(() => {
+    void (async () => {
+      await initWebGPU();
+      start();
+    })();
   });
 
   onCleanup(() => {

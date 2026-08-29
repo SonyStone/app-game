@@ -1,5 +1,5 @@
+import type { JSX } from '@solidjs/web';
 import { createDragSensor } from 'solid-dnd';
-import { type JSX } from 'solid-js';
 
 // ============================================================================
 // MARK: DragFixture — tests createDragSensor in a real browser

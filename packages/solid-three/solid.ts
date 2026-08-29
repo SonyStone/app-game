@@ -1,5 +1,5 @@
+import { createRenderer } from '@solidjs/universal';
 import { useContext } from 'solid-js';
-import { createRenderer } from 'solid-js/universal';
 import { Scene } from 'three';
 import { catalogue, Instance, ThreeRenderer } from './core/renderer';
 import { ThreeContext } from './core/store';
@@ -25,7 +25,7 @@ export function createSolidRenderer({
 }: ThreeRenderer) {
   return createRenderer<Instance>({
     // @ts-ignore
-    createElement(element: string, args) {
+    createElement(element: string, staticProps) {
       log('three', 'createElement', element);
       if (element === 'scene') {
         return prepare<Instance>(new Scene() as unknown as Instance);
@@ -34,7 +34,8 @@ export function createSolidRenderer({
       return createInstance(
         element,
         {
-          args
+          ...staticProps,
+          args: Array.isArray(staticProps?.args) ? staticProps.args : []
         },
         root
       );

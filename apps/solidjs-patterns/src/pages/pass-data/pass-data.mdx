@@ -16,8 +16,8 @@ In simplified terms, JSX like `rotate={props.subsecond}` becomes a getter on the
 <CodeBlock title="props-lowering.tsx">
 
 ```tsx
-import { JSX } from 'solid-js';
-import { createComponent } from 'solid-js/web';
+import type { JSX } from '@solidjs/web';
+import { createComponent } from '@solidjs/web';
 
 function Hand(props: { rotate: number; class?: string; length: number; width: number }) {
   return (
@@ -57,7 +57,9 @@ createComponent(Hand, {
 <CodeBlock title="component.ts">
 
 ```tsx
-import { Component, JSX, untrack } from 'solid-js';
+import type { Component } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { untrack } from 'solid-js';
 
 export function createComponent<T extends Record<string, any>>(Comp: Component<T>, props: T): JSX.Element {
   return untrack(() => Comp(props || ({} as T)));
@@ -97,7 +99,7 @@ function Component(props) {
 
 ## Build polymorphic components with as and Dynamic
 
-A common pattern is to accept an as prop, split it out, and render the final element through Dynamic.
+A common pattern is to accept an `as` prop, omit it from forwarded props, and render the final element through Dynamic.
 
 This lets you swap the underlying tag or component without duplicating behavior. It is the core idea behind polymorphic APIs such as button components that can also render as links.
 
@@ -109,9 +111,9 @@ This lets you swap the underlying tag or component without duplicating behavior.
 </Button>;
 
 function Button(props) {
-  const [local, others] = splitProps(props, ['as']);
+  const others = omit(props, 'as');
 
-  return <Dynamic component={local.as ?? 'button'} {...others} />;
+  return <Dynamic component={props.as ?? 'button'} {...others} />;
 }
 ```
 
@@ -136,7 +138,7 @@ This works well for things like theme objects, scoped services, or state that ma
 const ValueContext = createContext(defaultValue);
 
 function ValueProvider(props) {
-  return <ValueContext.Provider value={newValue}>{props.children}</ValueContext.Provider>;
+  return <ValueContext value={newValue}>{props.children}</ValueContext>;
 }
 
 function Consumer() {

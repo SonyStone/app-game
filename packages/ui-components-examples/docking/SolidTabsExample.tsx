@@ -1,7 +1,8 @@
 import { PropsProxy } from '@app-game/solid-props-proxy';
 import { cn } from '@app-game/utils';
+import type { JSX } from '@solidjs/web';
 import { DragSensor } from 'solid-dnd';
-import { children, createSignal, Index, JSX } from 'solid-js';
+import { children, createSignal, For } from 'solid-js';
 import { DockingNode } from './SolidDockingExample';
 import { Component1, Component2, Component3 } from './solid-docking/TestComponents';
 
@@ -75,7 +76,7 @@ function DockingTabsView(
           <div class="relative flex shrink-0 items-center">
             <div class="me-1 h-6 w-6 rounded-lg border border-white"></div>
             {/* <div class="absolute inset-0 border border-white"></div> */}
-            <Index each={resolved.toArray()}>
+            <For keyed={false} each={resolved.toArray()}>
               {(_, index) => {
                 let ref: HTMLButtonElement | null = null;
 
@@ -115,7 +116,7 @@ function DockingTabsView(
                   </DragSensor>
                 );
               }}
-            </Index>
+            </For>
           </div>
 
           {resolved.toArray()[activeId()]}

@@ -1,6 +1,6 @@
 import { Navigation, Thumbnail, type Routes } from '@app-game/app-router';
 import { Ripple } from '@app-game/ui-components/ripple';
-import { A } from '@solidjs/router';
+
 import { lazy } from 'solid-js';
 import typegpuCausticsExampleThumbnail from './typegpu-caustics-example/thumbnail.png?url';
 import typegpuHelloTriangleThumbnail from './typegpu-hello-triangle/thumbnail.png?url';
@@ -114,8 +114,8 @@ export const typegpuRoutes: Routes = {
   path: '/typegpu-examples',
   name: 'TypeGPU',
   Preview: (props) => (
-    <A
-      class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 p-2 px-4"
+    <a
+      class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 px-4"
       href={props.path}
     >
       <h2 class="text-4xl">
@@ -128,7 +128,7 @@ export const typegpuRoutes: Routes = {
         <span class="text-4rem leading-6">🤨</span>
       </div>
       <Ripple class="text-slate/20" />
-    </A>
+    </a>
   ),
   children: [
     {

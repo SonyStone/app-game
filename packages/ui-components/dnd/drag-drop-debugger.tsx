@@ -1,20 +1,21 @@
-import { Component, For, JSX, mergeProps, onCleanup, onMount, Show } from 'solid-js'
-import { Portal } from 'solid-js/web'
+import type { JSX } from '@solidjs/web';
+import { Portal } from '@solidjs/web';
+import { Component, For, merge, onCleanup, onSettled, Show } from 'solid-js';
 
-import { Id, useDragDropContext } from './drag-drop-context'
-import { Layout } from './utils/layout'
-import { layoutStyle, transformStyle } from './utils/style'
+import { Id, useDragDropContext } from './drag-drop-context';
+import { Layout } from './utils/layout';
+import { layoutStyle, transformStyle } from './utils/style';
 
 interface HighlighterProps {
-  id: Id
-  layout: Layout
-  active?: boolean
-  color?: string
-  style?: JSX.CSSProperties
+  id: Id;
+  layout: Layout;
+  active?: boolean;
+  color?: string;
+  style?: JSX.CSSProperties;
 }
 
-const Highlighter: Component<HighlighterProps> = props => {
-  props = mergeProps({ color: 'red', active: false }, props)
+const Highlighter: Component<HighlighterProps> = (props) => {
+  props = merge({ color: 'red', active: false }, props);
   return (
     <div
       style={{
@@ -28,42 +29,42 @@ const Highlighter: Component<HighlighterProps> = props => {
         color: props.color,
         'align-items': 'flex-end',
         'justify-content': 'flex-end',
-        ...props.style,
+        ...props.style
       }}
     >
       {props.id}
     </div>
-  )
-}
+  );
+};
 
 export const DragDropDebugger = () => {
-  const [state, { recomputeLayouts }] = useDragDropContext()!
+  const [state, { recomputeLayouts }] = useDragDropContext()!;
 
-  let ticking = false
+  let ticking = false;
 
   const update = () => {
     if (!ticking) {
       window.requestAnimationFrame(function () {
-        recomputeLayouts()
-        ticking = false
-      })
+        recomputeLayouts();
+        ticking = false;
+      });
 
-      ticking = true
+      ticking = true;
     }
-  }
+  };
 
-  onMount(() => {
-    document.addEventListener('scroll', update)
-  })
+  onSettled(() => {
+    document.addEventListener('scroll', update);
+  });
 
   onCleanup(() => {
-    document.removeEventListener('scroll', update)
-  })
+    document.removeEventListener('scroll', update);
+  });
 
   return (
     <Portal mount={document.body}>
       <For each={Object.values(state.droppables)}>
-        {droppable =>
+        {(droppable) =>
           droppable ? (
             <Highlighter
               id={droppable.id}
@@ -74,7 +75,7 @@ export const DragDropDebugger = () => {
         }
       </For>
       <For each={Object.values(state.draggables)}>
-        {draggable =>
+        {(draggable) =>
           draggable ? (
             <Highlighter
               id={draggable.id}
@@ -84,25 +85,25 @@ export const DragDropDebugger = () => {
               style={{
                 'align-items': 'flex-start',
                 'justify-content': 'flex-start',
-                ...transformStyle(draggable.transform),
+                ...transformStyle(draggable.transform)
               }}
             />
           ) : null
         }
       </For>
       <Show when={state.active.overlay} keyed>
-        {overlay => (
+        {(overlay) => (
           <Highlighter
             id={overlay.id}
             layout={overlay.layout}
             active={true}
             color="orange"
             style={{
-              ...transformStyle(overlay.transform),
+              ...transformStyle(overlay.transform)
             }}
           />
         )}
       </Show>
     </Portal>
-  )
-}
+  );
+};

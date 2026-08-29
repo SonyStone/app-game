@@ -4,8 +4,9 @@ import { Degrees } from '@app-game/math/types';
 import { degToRad } from '@app-game/math/utils/trigonometry';
 import { Vec2 } from '@app-game/math/v2';
 import { toObservable } from '@utils/toObservable';
+import { toSignal } from '@utils/toSignal';
 import { animationFrames, map, merge, of, Subject, switchScan } from 'rxjs';
-import { Accessor, createMemo, createSignal, from } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import { usePointMove } from './use-point-move';
 
 export function DemoRotationMatrixAroundPoint() {
@@ -15,19 +16,20 @@ export function DemoRotationMatrixAroundPoint() {
 
   const [play, setPlay] = createSignal(false);
   const reset = new Subject<void>();
-  const angle = from(
+  const angle = toSignal(
     merge(toObservable(play), reset).pipe(
       switchScan((acc, isPlay) => {
         if (isPlay === true) {
           return animationFrames().pipe(map(({ elapsed }) => ((acc + elapsed / 10) % 360) as Degrees));
         }
         if (isPlay === false) {
-          return of(acc);
+          return of(acc as Degrees);
         }
-        return of(0);
+        return of(0 as Degrees);
       }, 0)
-    )
-  ) as Accessor<Degrees>;
+    ),
+    0 as Degrees
+  );
 
   const matCss = createMemo(() => mat.identity().rotateOrigin(degToRad(angle()), origin.translation()).toCssMatrix());
 

@@ -8,7 +8,8 @@
  * - Brush spacing
  */
 
-import type { Accessor, JSX, Setter } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Accessor, Setter } from 'solid-js';
 
 export interface BrushSettingsProps {
   /** Brush size in pixels */

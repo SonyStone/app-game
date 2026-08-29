@@ -1,8 +1,9 @@
+import { createRenderer } from '@solidjs/universal';
+import type { JSX } from '@solidjs/web';
 import { Container, type Particle, type ParticleContainer, Text } from 'pixi.js';
-import { type JSX, createRenderEffect } from 'solid-js';
-import { createRenderer } from 'solid-js/universal';
+import { createRenderEffect } from 'solid-js';
 
-export const { effect, memo, createComponent, createTextNode, insertNode, insert, setProp, mergeProps, use, ...other } =
+export const { effect, memo, createComponent, createTextNode, insertNode, insert, setProp, mergeProps, ...other } =
   createRenderer<Container>({
     createElement() {
       return new Container({});
@@ -71,32 +72,43 @@ export const { effect, memo, createComponent, createTextNode, insertNode, insert
     }
   });
 
-function spreadExpression(node: unknown, props: any = {}, prevProps: any = {}) {
-  let renderable = props?.renderable ?? true;
-  createRenderEffect(() => props.ref?.(node));
-  createRenderEffect(() => {
-    // Makes sure that we render one last time before the component's `renderable` prop is set to `true`, and then
-    // stops until its `renderable` prop is set to `false` again.
-    if (!renderable && props.renderable === false) return;
-    for (const prop in props) {
-      if (prop === 'children' || prop === 'ref') continue;
-      const value = props[prop];
-      if (value === prevProps[prop]) continue;
-      setProp(node as any, prop, value, prevProps[prop]);
-      prevProps[prop] = value;
-    }
+function applySpreadProps(node: unknown, props: any, previousProps: any, wasRenderable: boolean) {
+  if (!wasRenderable && props.renderable === false) return wasRenderable;
 
-    renderable = props.renderable ?? true;
-  });
-  return prevProps;
+  if (props.ref !== previousProps.ref) {
+    props.ref?.(node);
+    previousProps.ref = props.ref;
+  }
+  for (const prop in props) {
+    if (prop === 'children' || prop === 'ref') continue;
+    const value = props[prop];
+    if (value === previousProps[prop]) continue;
+    setProp(node as any, prop, value, previousProps[prop]);
+    previousProps[prop] = value;
+  }
+
+  return props.renderable ?? true;
 }
+
+function readSpreadProps(props: any) {
+  const values: any = {};
+  for (const prop in props) values[prop] = props[prop];
+  return values;
+}
+
 export function _spread<T>(node: unknown, accessor: T | (() => T)) {
   if (typeof accessor === 'function') {
-    createRenderEffect((current) =>
-      // @ts-expect-error // This expression is not callable.
-      spreadExpression(node, accessor(), current)
+    const previousProps: any = {};
+    let renderable = true;
+    createRenderEffect(
+      () => readSpreadProps((accessor as () => T)()),
+      (props) => {
+        renderable = applySpreadProps(node, props, previousProps, renderable);
+      }
     );
-  } else spreadExpression(node, accessor, undefined);
+  } else {
+    applySpreadProps(node, accessor, {}, true);
+  }
 }
 
 export const spread = _spread;

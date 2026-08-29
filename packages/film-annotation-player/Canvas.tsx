@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import { exhaustMap, last, map, startWith, takeUntil } from 'rxjs';
-import { JSX, createEffect, createMemo } from 'solid-js';
+import { createMemo, createTrackedEffect } from 'solid-js';
 
 import s from './Canvas.module.scss';
 import { stroke } from './croquis/brush/simple';
@@ -34,11 +35,11 @@ export default function Canvas(
     return `matrix(${scaleX}, ${skewY}, ${skewX}, ${scaleY}, ${translateX}, ${translateY})`;
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     canvas.style.transform = resizeTo();
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const { height, width } = props.dimentions;
     canvas.height = height;
     canvas.width = width;
@@ -60,7 +61,9 @@ export default function Canvas(
         return pointermove(ctx.canvas as unknown as HTMLElement).pipe(
           startWith(event),
           map((event) => context.move(getStylusState(event))),
-          takeUntil(pointerup(ctx.canvas as unknown as HTMLElement).pipe(map((event) => context.up(getStylusState(event))))),
+          takeUntil(
+            pointerup(ctx.canvas as unknown as HTMLElement).pipe(map((event) => context.up(getStylusState(event))))
+          ),
           last()
         );
       }),

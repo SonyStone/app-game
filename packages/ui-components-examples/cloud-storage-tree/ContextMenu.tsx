@@ -1,4 +1,5 @@
-import { createEffect, JSX, onCleanup, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createTrackedEffect, onCleanup, Show } from 'solid-js';
 
 import { useCloudStorage } from './CloudStorageContext';
 
@@ -24,7 +25,7 @@ export function ContextMenu(): JSX.Element {
   let menuRef: HTMLDivElement | undefined;
 
   // Close on click outside
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (state.contextMenu.isOpen) {
       const handleClickOutside = (e: MouseEvent) => {
         if (menuRef && !menuRef.contains(e.target as Node)) {
@@ -187,7 +188,7 @@ export function ContextMenu(): JSX.Element {
     <Show when={state.contextMenu.isOpen}>
       <div
         ref={menuRef}
-        class="z-1000 min-w-45 fixed rounded-lg border border-neutral-700 bg-neutral-800 py-1 shadow-xl"
+        class="fixed z-1000 min-w-45 rounded-lg border border-neutral-700 bg-neutral-800 py-1 shadow-xl"
         style={{
           left: `${getPosition().x}px`,
           top: `${getPosition().y}px`

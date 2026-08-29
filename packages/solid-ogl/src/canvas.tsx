@@ -1,34 +1,18 @@
+import createRAF from '@solid-primitives/raf';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
+import type { JSX } from '@solidjs/web';
 import { Camera, Renderer, Transform } from 'ogl';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  mergeProps,
-  onCleanup,
-  type Component,
-  type JSX,
-} from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect, merge, onCleanup, type Component } from 'solid-js';
 import { OglContext } from './context';
 import { render } from './renderer';
 import { applyPropertyValue } from './shared';
-import type {
-  AnyInstance,
-  CanvasProps,
-  OglCanvasElement,
-  OglRoot,
-  OglRootState,
-} from './types';
-import createRAF from '@solid-primitives/raf';
+import type { AnyInstance, OglCanvasElement, OglRoot, OglRootState } from './types';
 
 const resizeRoot = (state: OglRootState, width: number, height: number) => {
   const safeWidth = width || 1;
   const safeHeight = height || 1;
 
-  if (
-    state.renderer.width === safeWidth &&
-    state.renderer.height === safeHeight
-  ) {
+  if (state.renderer.width === safeWidth && state.renderer.height === safeHeight) {
     return;
   }
 
@@ -45,10 +29,9 @@ const resizeRoot = (state: OglRootState, width: number, height: number) => {
   state.render();
 };
 
-const createResizeHandler =
-  (state: OglRootState, canvas: HTMLCanvasElement) => () => {
-    resizeRoot(state, canvas.clientWidth || 1, canvas.clientHeight || 1);
-  };
+const createResizeHandler = (state: OglRootState, canvas: HTMLCanvasElement) => () => {
+  resizeRoot(state, canvas.clientWidth || 1, canvas.clientHeight || 1);
+};
 
 export const Canvas: Component<
   Omit<JSX.CanvasHTMLAttributes<HTMLCanvasElement>, 'children'> & {
@@ -66,7 +49,7 @@ export const Canvas: Component<
     className?: string;
   }
 > = (rawProps) => {
-  const props = mergeProps(
+  const props = merge(
     {
       dpr: 1,
       frameloop: 'always' as const,
@@ -76,15 +59,13 @@ export const Canvas: Component<
       style: {
         display: 'block',
         width: '100%',
-        height: '100%',
-      } as JSX.CSSProperties,
+        height: '100%'
+      } as JSX.CSSProperties
     },
-    rawProps,
+    rawProps
   );
 
-  const className = createMemo(() =>
-    [props.class, props.className].filter(Boolean).join(' '),
-  );
+  const className = createMemo(() => [props.class, props.className].filter(Boolean).join(' '));
 
   const canvas = (
     <canvas
@@ -97,7 +78,7 @@ export const Canvas: Component<
       style={props.style}
       id={props.id}
       role={props.role}
-      tabIndex={props.tabIndex}
+      tabindex={props.tabIndex}
       aria-label={props['aria-label']}
       aria-hidden={props['aria-hidden']}
       aria-describedby={props['aria-describedby']}
@@ -116,14 +97,14 @@ export const Canvas: Component<
     canvas,
     dpr: props.dpr,
     alpha: true,
-    ...(props.renderer ?? {}),
+    ...(props.renderer ?? {})
   });
   if (props.clearColor) {
     const [red, green, blue, alpha = 1] = props.clearColor;
     renderer.gl.clearColor(red, green, blue, alpha);
   }
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (props.clearColor) {
       const [red, green, blue, alpha = 1] = props.clearColor;
       renderer.gl.clearColor(red, green, blue, alpha);
@@ -139,14 +120,10 @@ export const Canvas: Component<
 
   const defaultCamera = new Camera(renderer.gl, {
     fov: 45,
-    ...(cameraOptions ?? {}),
+    ...(cameraOptions ?? {})
   });
 
-  applyPropertyValue(
-    defaultCamera as unknown as AnyInstance,
-    'position',
-    cameraPosition ?? [0, 0, 5],
-  );
+  applyPropertyValue(defaultCamera as unknown as AnyInstance, 'position', cameraPosition ?? [0, 0, 5]);
 
   const [camera, setCamera] = createSignal(defaultCamera);
   const [time, setTime] = createSignal(0);
@@ -200,7 +177,7 @@ export const Canvas: Component<
       renderScene();
     },
     resize() {},
-    resetTiming,
+    resetTiming
   };
 
   (canvas as OglCanvasElement).__oglState = state;
@@ -208,19 +185,14 @@ export const Canvas: Component<
   const root: OglRoot = {
     kind: 'root',
     children: [],
-    state,
+    state
   };
 
   const resize = createResizeHandler(state, canvas);
   state.resize = resize;
   resize();
 
-  const dispose = (render as any)(
-    () => (
-      <OglContext.Provider value={state}>{props.children}</OglContext.Provider>
-    ),
-    root as any,
-  );
+  const dispose = (render as any)(() => <OglContext value={state}>{props.children}</OglContext>, root as any);
 
   const [, start] = createRAF((timestamp) => {
     if (skipNextFrame) {

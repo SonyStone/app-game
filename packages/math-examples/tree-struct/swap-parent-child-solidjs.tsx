@@ -1,6 +1,7 @@
-import { ComponentProps, createSignal, onMount } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { createSignal, onSettled } from 'solid-js';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'parent-div': ComponentProps<'div'>;
@@ -35,7 +36,7 @@ export function SwapParentChildSolidJS() {
     setIsParentFirst(!isParentFirst());
   };
 
-  onMount(() => {
+  onSettled(() => {
     // Initial setup: Parent contains Child
     if (parentRef && childRef) {
       parentRef.appendChild(childRef);

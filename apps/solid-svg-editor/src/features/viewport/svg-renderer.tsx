@@ -1,5 +1,6 @@
-import { createMemo, For, type JSX } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import type { JSX } from '@solidjs/web';
+import { Dynamic } from '@solidjs/web';
+import { createMemo, For } from 'solid-js';
 
 import { attrsToObject } from '../../editor/tree-utils';
 import type { SvgNode } from '../../svg-model';
@@ -44,7 +45,7 @@ function DefaultSvgNodeView(props: SvgNodeViewProps) {
       {...attrs()}
       data-node-id={node.id}
       data-testid={`svg-node-${node.id}`}
-      classList={{ 'svg-node-selected': selected() }}
+      class={{ 'svg-node-selected': selected() }}
       onPointerDown={(event: PointerEvent) => {
         if (event.pointerType === 'touch' || event.button === 1 || event.altKey) {
           return;

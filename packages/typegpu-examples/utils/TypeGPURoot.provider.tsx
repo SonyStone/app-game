@@ -1,5 +1,6 @@
 import { createContextProvider } from '@app-game/solid-utils';
-import { createResource, JSX, Match, mergeProps, onCleanup, Switch } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createMemo, Errored, isPending, latest, Match, merge, onCleanup, Switch } from 'solid-js';
 import tgpu, { TgpuRoot } from 'typegpu';
 import { useGPU } from './GPU.provider';
 
@@ -27,16 +28,20 @@ const defaultProps = {
 export function TypeGPURootProvider(
   props: Partial<{ children: JSX.Element; loading?: JSX.Element; error?: JSX.Element }>
 ) {
-  props = mergeProps(defaultProps, props);
+  props = merge(defaultProps, props);
 
   const gpu = useGPU();
-  const [root] = createResource(gpu, () => tgpu.init());
+  const root = createMemo(() => {
+    void gpu;
+    return tgpu.init();
+  });
 
   return (
-    <Switch>
-      <Match when={root.error}>{props.error}</Match>
-      <Match when={root.loading}>{props.loading}</Match>
-      <Match when={root()}>{(root) => <Provider value={root()}>{props.children}</Provider>}</Match>
-    </Switch>
+    <Errored fallback={props.error}>
+      <Switch>
+        <Match when={isPending(root)}>{props.loading}</Match>
+        <Match when={latest(root)}>{(root) => <Provider value={root()}>{props.children}</Provider>}</Match>
+      </Switch>
+    </Errored>
   );
 }

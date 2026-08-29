@@ -1,16 +1,16 @@
 import { Key } from '@solid-primitives/keyed';
+import { Dynamic } from '@solidjs/web';
 import { createSignal, For, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 
 import { decorativeIconProps } from '../../editor/svg-icon';
 import type { EditorTab, PanelId } from '../../editor/types';
 import { editorPanels } from '../panels/panelRegistry';
+import { IconButton } from '../ui/IconButton';
 import CopyIcon from '../ui/icons/Copy.svg';
 import ExportIcon from '../ui/icons/Export.svg';
 import GodSvgIcon from '../ui/icons/GodSvg.svg';
 import HeartIcon from '../ui/icons/Heart.svg';
 import ImportIcon from '../ui/icons/Import.svg';
-import { IconButton } from '../ui/IconButton';
 import { MenuButton, MenuLink } from '../ui/MenuItem';
 import CreateTabIcon from './icons/CreateTab.svg';
 import GearIcon from './icons/Gear.svg';
@@ -130,9 +130,11 @@ export function TopBar(props: {
           {(tab) => (
             <div
               role="tab"
-              tabIndex={0}
-              class="tab-button relative flex h-6.5 max-w-52.5 cursor-pointer items-center gap-1.5 rounded-t-[5px] border border-[#22283d] bg-[#151928] py-0 pr-1.5 pl-2.5 text-[var(--muted)] [&.active]:border-[#415177] [&.active]:bg-[#24304d] [&.active]:text-[#f4f7ff] [&.dirty>span::after]:text-[var(--warning)] [&.dirty>span::after]:content-['*']"
-              classList={{ active: props.activeTabId === tab().id, dirty: tab().dirty }}
+              tabindex={0}
+              class={[
+                "tab-button relative flex h-6.5 max-w-52.5 cursor-pointer items-center gap-1.5 rounded-t-[5px] border border-[#22283d] bg-[#151928] py-0 pr-1.5 pl-2.5 text-[var(--muted)] [&.active]:border-[#415177] [&.active]:bg-[#24304d] [&.active]:text-[#f4f7ff] [&.dirty>span::after]:text-[var(--warning)] [&.dirty>span::after]:content-['*']",
+                { active: props.activeTabId === tab().id, dirty: tab().dirty }
+              ]}
               data-testid={`tab-${tab().id}`}
               onClick={() => props.setActiveTabId(tab().id)}
               onKeyDown={(event) => {
@@ -183,18 +185,17 @@ export function TopBar(props: {
   );
 }
 
-export function PanelTabs(props: {
-  readonly activePanel: PanelId;
-  readonly setActivePanel: (panel: PanelId) => void;
-}) {
+export function PanelTabs(props: { readonly activePanel: PanelId; readonly setActivePanel: (panel: PanelId) => void }) {
   return (
     <div class="panel-tabs flex min-w-0 items-center justify-center gap-1.5" data-testid="panel-tabs">
       <For each={editorPanels}>
         {(panel) => (
           <button
             type="button"
-            class="flex h-7 cursor-pointer items-center gap-1.25 rounded-t-[5px] border border-transparent bg-transparent px-1 py-0 text-[var(--muted)] [&.active]:border-[var(--soft-border)] [&.active]:bg-[var(--panel-2)] [&.active]:text-[var(--text)]"
-            classList={{ active: props.activePanel === panel.id }}
+            class={[
+              'flex h-7 cursor-pointer items-center gap-1.25 rounded-t-[5px] border border-transparent bg-transparent px-1 py-0 text-[var(--muted)] [&.active]:border-[var(--soft-border)] [&.active]:bg-[var(--panel-2)] [&.active]:text-[var(--text)]',
+              { active: props.activePanel === panel.id }
+            ]}
             data-testid={`panel-tab-${panel.id}`}
             onClick={() => props.setActivePanel(panel.id)}
           >

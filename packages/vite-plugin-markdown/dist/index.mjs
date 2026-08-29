@@ -536,7 +536,7 @@ function extractCodeBlockTitle(meta) {
 //#region src/index.ts
 const DEFAULT_QUERY = "markdown";
 const DEFAULT_PREFIX = "\0markdown:";
-const DEFAULT_JSX_IMPORT_SOURCE = "solid-js/h";
+const DEFAULT_JSX_IMPORT_SOURCE = "@solidjs/h";
 function vitePluginMarkdown(options = {}) {
 	const queryKey = options.query ?? DEFAULT_QUERY;
 	const prefix = options.prefix ?? DEFAULT_PREFIX;

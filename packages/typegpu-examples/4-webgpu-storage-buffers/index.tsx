@@ -1,7 +1,7 @@
 import { hex2rgb } from '@app-game/chroma/io/hex/hex2rgb';
 import { Range2D } from '@app-game/components/ui/range-2d';
 import { Meta, Title } from '@solidjs/meta';
-import { createEffect, createSignal } from 'solid-js';
+import { createSignal, createTrackedEffect } from 'solid-js';
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 import * as std from 'typegpu/std';
@@ -134,15 +134,13 @@ function App(props: { color: HexColor; scale: [number, number]; offset: [number,
   // --- Real data write into the GPU starts here ---
 
   // 4️⃣ Create storage buffer for one bind group
-  const ourStruct = root
-    .createBuffer(ourStructShema(1000))
-    .$usage('storage');
+  const ourStruct = root.createBuffer(ourStructShema(1000)).$usage('storage');
   ourStruct.write(
     Array.from({ length: 1000 }).map(() => ({
-        color: d.vec4f(rand(0, 255) / 255, rand(0, 255) / 255, rand(0, 255) / 255, 1),
-        scale: d.vec2f(1, 1),
-        offset: d.vec2f(rand(-1, 1), rand(-1, 1))
-      }))
+      color: d.vec4f(rand(0, 255) / 255, rand(0, 255) / 255, rand(0, 255) / 255, 1),
+      scale: d.vec2f(1, 1),
+      offset: d.vec2f(rand(-1, 1), rand(-1, 1))
+    }))
   );
   const circle = createCircleVertices2({
     radius: 0.5,
@@ -162,15 +160,13 @@ function App(props: { color: HexColor; scale: [number, number]; offset: [number,
   {
     const circleVerticesSchema = d.arrayOf(d.vec2f);
 
-    const { vertexData, numVertices }: { vertexData: d.v2f[]; numVertices: number } =
-      createCircleVertices2({
-        radius: 0.5,
-        innerRadius: 0.25
-      });
+    const { vertexData, numVertices }: { vertexData: d.v2f[]; numVertices: number } = createCircleVertices2({
+      radius: 0.5,
+      innerRadius: 0.25
+    });
 
     const circleBuffer = root.createBuffer(circleVerticesSchema(numVertices)).$usage('storage');
     circleBuffer.write(vertexData);
-
   }
 
   // 4️⃣ And create storage buffer for the circle vertices
@@ -182,7 +178,7 @@ function App(props: { color: HexColor; scale: [number, number]; offset: [number,
     circles: circleBuffer.buffer
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     size();
     const color = hex2rgb(props.color);
 

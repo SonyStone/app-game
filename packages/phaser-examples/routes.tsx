@@ -1,6 +1,6 @@
 import { Navigation, SectionTitle, Thumbnail, type Routes } from '@app-game/app-router';
 import { Ripple } from '@app-game/ui-components/ripple';
-import { A } from '@solidjs/router';
+
 import { lazy } from 'solid-js';
 import baseTileSizeThumbnail from './base-tile-size-thumbnail.png?url';
 import breakoutThumbnail from './breakout-thumbnail.png?url';
@@ -52,10 +52,10 @@ export const phaserRoutes: Routes = {
   path: '/phaser-examples',
   name: 'Phaser Examples',
   Preview: (props) => (
-    <A href={props.path} class="rounded-2 relative">
+    <a href={props.path} class="rounded-2 relative">
       <SectionTitle name={props.name} />
       <Ripple class="text-slate/20" />
-    </A>
+    </a>
   ),
   children: [
     {

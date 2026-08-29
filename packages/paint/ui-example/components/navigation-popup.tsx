@@ -4,7 +4,7 @@ import { distance, normalize } from '@app-game/ogl/math/functions/vec-2-func';
 import { createEventBus } from '@solid-primitives/event-bus';
 import { takeUntilCleanup } from '@utils/takeUntilCleanup';
 import { concat, fromEvent, merge, of, ReplaySubject, switchMap, take, takeUntil, tap } from 'rxjs';
-import { createEffect, createSignal, For, mergeProps, onCleanup, Show, untrack } from 'solid-js';
+import { createSignal, createTrackedEffect, For, merge as mergeProps, onCleanup, Show, untrack } from 'solid-js';
 import { Cap } from './cap';
 import { Donut } from './donut';
 
@@ -70,13 +70,13 @@ export const NavigationPopup = (props: {
   );
 
   return (
-    <svg class="w-30 h-30 stroke-width-1 z-1 scale-90 stroke-black transition-transform in-[.active]:scale-100">
+    <svg class="stroke-width-1 z-1 h-30 w-30 scale-90 stroke-black transition-transform in-[.active]:scale-100">
       {(() => {
         // zoom navigation element
         const nav = createZoom();
         nav.active.listen((value) => props.navigationIsActive?.(value));
 
-        createEffect(() => {
+        createTrackedEffect(() => {
           props.zoomDelta?.(nav.zoom());
         });
 
@@ -126,7 +126,7 @@ export const NavigationPopup = (props: {
         const nav = createRotate();
         nav.active.listen((value) => props.navigationIsActive?.(value));
 
-        createEffect(() => {
+        createTrackedEffect(() => {
           props.rotationDelta?.(nav.angle());
         });
 
@@ -136,7 +136,7 @@ export const NavigationPopup = (props: {
             y={merged.y}
             radius={merged.radius}
             horizontalMove={merged.horizontalMove + merged.gap}
-            class=" fill-blue-400 transition-colors [&.active]:cursor-e-resize [&.active]:fill-blue-200 [&.hover]:fill-blue-300"
+            class="fill-blue-400 transition-colors [&.active]:cursor-e-resize [&.active]:fill-blue-200 [&.hover]:fill-blue-300"
             isActive={props.isActive}
             onPointerOver={(e: PointerEvent) => {
               const element = e.target as SVGElement;
@@ -176,7 +176,7 @@ export const NavigationPopup = (props: {
         const nav = createTranslate();
         nav.active.listen((value) => props.navigationIsActive?.(value));
 
-        createEffect(() => {
+        createTrackedEffect(() => {
           props.positionDelta?.(nav.position());
         });
 
@@ -186,8 +186,10 @@ export const NavigationPopup = (props: {
             y={merged.y}
             inner_radius={merged.radius + merged.gap}
             outer_radius={merged.radius + merged.thickness}
-            class="fill-red-400 transition-colors [&.active]:cursor-move [&.active]:fill-red-200 [&.hover]:fill-red-300"
-            classList={{ 'pointer-events-auto': props.isActive, 'pointer-events-none': !props.isActive }}
+            class={[
+              'fill-red-400 transition-colors [&.active]:cursor-move [&.active]:fill-red-200 [&.hover]:fill-red-300',
+              { 'pointer-events-auto': Boolean(props.isActive), 'pointer-events-none': !props.isActive }
+            ]}
             onPointerOver={(e: PointerEvent) => {
               const element = e.target as SVGElement;
               element.classList.add('hover');

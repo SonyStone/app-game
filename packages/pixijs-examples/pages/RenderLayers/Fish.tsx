@@ -1,6 +1,6 @@
 import { Container, RenderLayer, Sprite } from '@app-game/solid-pixi';
 import { ContainerOptions, Texture } from 'pixi.js';
-import { splitProps } from 'solid-js';
+import { omit } from 'solid-js';
 import { useTick } from '../../useTick';
 import { CharacterUI } from './CharacterUI';
 
@@ -12,10 +12,10 @@ export function Fish(
   }> &
     ContainerOptions
 ) {
-  const [local, rest] = splitProps(props, ['name', 'texture', 'layer']);
+  const rest = omit(props, 'name', 'texture', 'layer');
 
-  const ui = (<CharacterUI name={local.name ?? ''} y={0} layer={local.layer} />) as ReturnType<typeof CharacterUI>;
-  const fishView = (<Sprite texture={local.texture} anchor={0.5} />) as ReturnType<typeof Sprite>;
+  const ui = (<CharacterUI name={props.name ?? ''} y={0} layer={props.layer} />) as ReturnType<typeof CharacterUI>;
+  const fishView = (<Sprite texture={props.texture} anchor={0.5} />) as ReturnType<typeof Sprite>;
   const container = (
     <Container cullable {...rest}>
       {fishView}

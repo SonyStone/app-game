@@ -10,18 +10,12 @@ import {
   Program,
   Sphere,
   useTime,
-  VertexNormalsHelper,
+  VertexNormalsHelper
 } from '@work-ilyas/solid-ogl';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  Show,
-} from 'solid-js';
-import type { CameraSceneProps, OrbitLike } from './types';
-import helperVertex from './helper.vert?raw';
+import { createMemo, createSignal, createTrackedEffect, onCleanup, Show } from 'solid-js';
 import helperFragment from './helper.frag?raw';
+import helperVertex from './helper.vert?raw';
+import type { CameraSceneProps, OrbitLike } from './types';
 
 export function HelpersScene(props: CameraSceneProps) {
   const [camera, setCamera] = createSignal<unknown>();
@@ -35,20 +29,16 @@ export function HelpersScene(props: CameraSceneProps) {
       args={[
         {
           vertex: helperVertex,
-          fragment: helperFragment,
-        },
+          fragment: helperFragment
+        }
       ]}
     />
   ));
 
-  const sphereScale = createMemo(() => [
-    1,
-    Math.cos(time() * 1.2) * 2,
-    1,
-  ]);
+  const sphereScale = createMemo(() => [1, Math.cos(time() * 1.2) * 2, 1]);
   const cubeRotation = createMemo(() => [0, -time(), 0]);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     time();
     controls()?.update();
   });
@@ -84,7 +74,8 @@ export function HelpersScene(props: CameraSceneProps) {
           setSphereMesh(instance);
         }}
         position={[-0.75, 0.5, 0]}
-        scale={sphereScale()}>
+        scale={sphereScale()}
+      >
         <Sphere />
         <DemoProgram />
       </Mesh>
@@ -94,7 +85,8 @@ export function HelpersScene(props: CameraSceneProps) {
           setCubeMesh(instance);
         }}
         position={[0.75, 0.5, 0]}
-        rotation={cubeRotation()}>
+        rotation={cubeRotation()}
+      >
         <Box />
         <DemoProgram />
       </Mesh>
@@ -117,10 +109,7 @@ export function HelpersScene(props: CameraSceneProps) {
         )}
       </Show>
 
-      <GridHelper
-        args={[{ size: 10, divisions: 10 }]}
-        position={[0, -0.001, 0]}
-      />
+      <GridHelper args={[{ size: 10, divisions: 10 }]} position={[0, -0.001, 0]} />
       <AxesHelper args={[{ size: 6, symmetric: true }]} />
     </>
   );

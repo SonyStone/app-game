@@ -3,14 +3,14 @@ import { createMediaQuery } from '@solid-primitives/media';
 import { createMousePosition } from '@solid-primitives/mouse';
 import { createScrollPosition } from '@solid-primitives/scroll';
 import {
-  createMemo,
   createContext,
+  createMemo,
   createSignal,
-  mergeProps,
+  merge,
   useContext,
   type Accessor,
-  type ParentProps,
   type ParentComponent,
+  type ParentProps
 } from 'solid-js';
 
 type MotionRootContextValue = {
@@ -30,29 +30,22 @@ export type MotionRootProviderProps = ParentProps<{
   respectReducedMotion?: boolean;
 }>;
 
-export const MotionRootProvider: ParentComponent<MotionRootProviderProps> = (
-  rawProps,
-) => {
-  const props = mergeProps({ respectReducedMotion: true }, rawProps);
+export const MotionRootProvider: ParentComponent<MotionRootProviderProps> = (rawProps) => {
+  const props = merge({ respectReducedMotion: true }, rawProps);
   const gyroscope = createGyroscope(50);
   const mouse = createMousePosition();
   const scroll = createScrollPosition();
-  const prefersReducedMotion = createMediaQuery(
-    '(prefers-reduced-motion: reduce)',
-    false,
-  );
+  const prefersReducedMotion = createMediaQuery('(prefers-reduced-motion: reduce)', false);
   const [parallaxOffsetX, setParallaxOffsetX] = createSignal(0);
   const [parallaxOffsetY, setParallaxOffsetY] = createSignal(0);
-  const shouldReduceMotion = createMemo(
-    () => props.respectReducedMotion && prefersReducedMotion(),
-  );
+  const shouldReduceMotion = createMemo(() => props.respectReducedMotion && prefersReducedMotion());
   const setParallaxOffsets = (x: number, y: number) => {
     setParallaxOffsetX(x);
     setParallaxOffsetY(y);
   };
 
   return (
-    <MotionRootContext.Provider
+    <MotionRootContext
       value={{
         gyroscope,
         mouse,
@@ -61,10 +54,11 @@ export const MotionRootProvider: ParentComponent<MotionRootProviderProps> = (
         shouldReduceMotion,
         parallaxOffsetX,
         parallaxOffsetY,
-        setParallaxOffsets,
-      }}>
+        setParallaxOffsets
+      }}
+    >
       {props.children}
-    </MotionRootContext.Provider>
+    </MotionRootContext>
   );
 };
 

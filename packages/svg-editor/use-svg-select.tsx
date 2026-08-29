@@ -1,7 +1,7 @@
 import { createEventListenerMap } from '@solid-primitives/event-listener';
 import { createMutationObserver } from '@solid-primitives/mutation-observer';
 import { ReactiveSet } from '@solid-primitives/set';
-import { batch, createEffect, createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect, For, Match, Show, Switch } from 'solid-js';
 import { SVGNode } from './svg-node';
 
 export const SVG_GRAPHICS_ELEMENTS = ['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'path'] as const;
@@ -103,10 +103,10 @@ export function useSvgSelect<T>() {
           if (e.ctrlKey || e.metaKey) {
             selectedElementsIdsMap.add(target._inner_id);
           } else {
-            batch(() => {
+            {
               selectedElementsIdsMap.clear();
               selectedElementsIdsMap.add(target._inner_id);
-            });
+            }
           }
         }
       }
@@ -155,18 +155,18 @@ export function useSvgSelect<T>() {
             );
 
             if (e.ctrlKey || e.metaKey) {
-              batch(() => {
+              {
                 for (const element of elementsInLasso as DataWrapper<SVGGraphicsElement, SVGNode>[]) {
                   selectedElementsIdsMap.add(element._inner_id);
                 }
-              });
+              }
             } else {
-              batch(() => {
+              {
                 selectedElementsIdsMap.clear();
                 for (const element of elementsInLasso as DataWrapper<SVGGraphicsElement, SVGNode>[]) {
                   selectedElementsIdsMap.add(element._inner_id);
                 }
-              });
+              }
             }
           }
 
@@ -189,18 +189,18 @@ export function useSvgSelect<T>() {
         const elementsInSelection = spatialIndex.getElementsInRect(minX, minY, maxX, maxY);
 
         if (e.ctrlKey || e.metaKey) {
-          batch(() => {
+          {
             for (const element of elementsInSelection as DataWrapper<SVGGraphicsElement, SVGNode>[]) {
               selectedElementsIdsMap.add(element._inner_id);
             }
-          });
+          }
         } else {
-          batch(() => {
+          {
             selectedElementsIdsMap.clear();
             for (const element of elementsInSelection as DataWrapper<SVGGraphicsElement, SVGNode>[]) {
               selectedElementsIdsMap.add(element._inner_id);
             }
-          });
+          }
         }
 
         setRectSelection(null);
@@ -209,7 +209,7 @@ export function useSvgSelect<T>() {
     }
   };
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const svg = svgRef();
     if (!svg) return;
 
@@ -288,7 +288,7 @@ export const OutlinePreview = (props: { selectedElements: SVGNode[] }) => (
         <Match when={selected.component === SVG_GRAPHICS_ELEMENTS[6]}>
           <path
             d={selected.d ?? ''}
-            class="contain-layout contain-style contain-paint pointer-events-none fill-none stroke-[rgb(245,92,54)] stroke-2 [vector-effect:non-scaling-stroke]"
+            class="pointer-events-none fill-none stroke-[rgb(245,92,54)] stroke-2 contain-layout contain-paint contain-style [vector-effect:non-scaling-stroke]"
             transform="matrix(1, 0, 0, 1, 0, 0)"
             data-ignore-selection={true}
           />
@@ -298,7 +298,7 @@ export const OutlinePreview = (props: { selectedElements: SVGNode[] }) => (
             cx={selected.cx}
             cy={selected.cy}
             r={selected.r}
-            class="contain-layout contain-style contain-paint pointer-events-none fill-none stroke-[rgb(245,92,54)] stroke-2 [vector-effect:non-scaling-stroke]"
+            class="pointer-events-none fill-none stroke-[rgb(245,92,54)] stroke-2 contain-layout contain-paint contain-style [vector-effect:non-scaling-stroke]"
             transform="matrix(1, 0, 0, 1, 0, 0)"
             data-ignore-selection={true}
           />
@@ -309,7 +309,7 @@ export const OutlinePreview = (props: { selectedElements: SVGNode[] }) => (
             y1={selected.y1}
             x2={selected.x2}
             y2={selected.y2}
-            class="contain-layout contain-style contain-paint pointer-events-none fill-none stroke-[rgb(245,92,54)] stroke-2 [vector-effect:non-scaling-stroke]"
+            class="pointer-events-none fill-none stroke-[rgb(245,92,54)] stroke-2 contain-layout contain-paint contain-style [vector-effect:non-scaling-stroke]"
             data-ignore-selection={true}
           />
         </Match>
@@ -328,7 +328,7 @@ export const BoxesPreview = (props: { selectedElements: SVGNode[] }) => (
           y={y}
           width={width}
           height={height}
-          class="stroke-dashed pointer-events-none fill-none stroke-blue-500 stroke-1 [vector-effect:non-scaling-stroke] [stroke-dasharray:4,2]"
+          class="stroke-dashed pointer-events-none fill-none stroke-blue-500 stroke-1 [stroke-dasharray:4,2] [vector-effect:non-scaling-stroke]"
           data-ignore-selection={true}
         />
       );
@@ -359,7 +359,7 @@ export const RectangleSelectionPreview = (props: {
       return (
         <rect
           {...rect()}
-          class="stroke-dashed pointer-events-none fill-blue-200/30 stroke-blue-500 stroke-1 [vector-effect:non-scaling-stroke] [stroke-dasharray:4,2]"
+          class="stroke-dashed pointer-events-none fill-blue-200/30 stroke-blue-500 stroke-1 [stroke-dasharray:4,2] [vector-effect:non-scaling-stroke]"
           data-ignore-selection={true}
         />
       );
@@ -383,7 +383,7 @@ export const LassoSelectionPreview = (props: {
       return (
         <polygon
           points={pointsData()}
-          class="stroke-dashed pointer-events-none fill-green-200/30 stroke-green-500 stroke-1 [vector-effect:non-scaling-stroke] [stroke-dasharray:4,2]"
+          class="stroke-dashed pointer-events-none fill-green-200/30 stroke-green-500 stroke-1 [stroke-dasharray:4,2] [vector-effect:non-scaling-stroke]"
           data-ignore-selection={true}
         />
       );

@@ -1,6 +1,7 @@
-import { For, Show } from 'solid-js';
 import type { Setter } from 'solid-js';
+import { For, Show } from 'solid-js';
 
+import type { Rect } from '../../editor/geometry';
 import type {
   AppSettings,
   DragSelectionMode,
@@ -8,7 +9,6 @@ import type {
   TransformBoxHandleDescriptor,
   ViewRect
 } from '../../editor/types';
-import type { Rect } from '../../editor/geometry';
 import type { SvgElementNode } from '../../svg-model';
 import { GridLayer, HandlesLayer, SvgNodeView, TransformBoxLayer, ViewportToolbar } from './ViewportParts';
 import type { SvgSize } from './viewport-math';
@@ -137,7 +137,7 @@ export function EditorViewport(props: {
             <Show
               when={props.useRasterPreview ? props.rasterPreviewUrl : undefined}
               fallback={
-                <g classList={{ rasterized: props.settings.viewRasterized }} data-testid="viewport-vector-layer">
+                <g class={{ rasterized: props.settings.viewRasterized }} data-testid="viewport-vector-layer">
                   <For each={props.root.children}>
                     {(node) => (
                       <SvgNodeView

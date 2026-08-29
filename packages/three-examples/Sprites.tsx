@@ -1,15 +1,6 @@
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 import * as THREE from 'three';
-import {
-  BoxGeometry,
-  Camera,
-  Color,
-  GridHelper,
-  Mesh,
-  MeshBasicMaterial,
-  Scene,
-  WebGLRenderer,
-} from 'three';
+import { BoxGeometry, Camera, Color, GridHelper, Mesh, MeshBasicMaterial, Scene, WebGLRenderer } from 'three';
 
 import { useCamera } from './Camera.provider';
 import s from './SvgLoader.module.scss';
@@ -30,7 +21,7 @@ export default function Sprites() {
 
   let currentCamera!: Camera;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const { width, height } = resize();
     currentCamera = camera();
     renderer.setSize(width, height);

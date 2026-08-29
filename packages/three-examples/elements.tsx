@@ -1,10 +1,5 @@
-import { createEffect, onCleanup } from 'solid-js';
-import {
-  BoxGeometry,
-  ColorRepresentation,
-  Mesh,
-  MeshBasicMaterial,
-} from 'three';
+import { createTrackedEffect, onCleanup } from 'solid-js';
+import { BoxGeometry, ColorRepresentation, Mesh, MeshBasicMaterial } from 'three';
 
 import { ParentProvider, useParent } from './parent.provider';
 
@@ -24,7 +19,7 @@ export function Cube(props: {
   const material = new MeshBasicMaterial({ color: props.color ?? 0x00ff00 });
   const cube = new Mesh(geometry, material);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     cube.position.setX(props.x ?? 0);
     cube.position.setY(props.y ?? 0);
     cube.position.setZ(props.z ?? 0);

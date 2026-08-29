@@ -1,9 +1,7 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import type { Simplify } from '@solid-primitives/utils';
-import type { Accessor, Setter, Signal } from 'solid-js';
-import { untrack } from 'solid-js';
-import type { SetStoreFunction, Store } from 'solid-js/store';
-import { reconcile } from 'solid-js/store';
+import type { Accessor, Setter, Signal, Store, StoreSetter } from 'solid-js';
+import { reconcile, untrack } from 'solid-js';
 
 type ParamValue = string | number | boolean;
 type ParamRecord = Record<string, ParamValue>;
@@ -15,6 +13,8 @@ type UrlSearchParamsOptions = {
   /** Use `pushState` instead of `replaceState` so each change creates a browser history entry. @default false */
   readonly push?: boolean;
 };
+
+export type UrlStoreSetter<T extends ParamRecord> = <K extends keyof T>(key: K, value: T[K]) => void;
 
 /**
  * Wraps a `createSignal` or `createStore` to sync its state with URL search
@@ -46,14 +46,14 @@ export function makeUrlSearchParams<T extends ParamRecord>(
 ): [get: Accessor<WidenBooleans<T>>, set: Setter<WidenBooleans<T>>];
 
 export function makeUrlSearchParams<T extends ParamRecord>(
-  signal: [Store<T>, SetStoreFunction<T>],
+  signal: [Store<T>, StoreSetter<T>],
   options?: UrlSearchParamsOptions
-): [get: Store<WidenBooleans<T>>, set: SetStoreFunction<WidenBooleans<T>>];
+): [get: Store<WidenBooleans<T>>, set: UrlStoreSetter<WidenBooleans<T>>];
 
 export function makeUrlSearchParams<T extends ParamRecord>(
-  signal: Signal<T> | [Store<T>, SetStoreFunction<T>],
+  signal: Signal<T> | [Store<T>, StoreSetter<T>],
   options?: UrlSearchParamsOptions
-): [get: Accessor<T> | Store<T>, set: Setter<T> | SetStoreFunction<T>] {
+): [get: Accessor<T> | Store<T>, set: Setter<T> | UrlStoreSetter<T>] {
   const isSignal = typeof signal[0] === 'function';
   const push = options?.push ?? false;
 
@@ -65,7 +65,7 @@ export function makeUrlSearchParams<T extends ParamRecord>(
     if (isSignal) {
       (signal[1] as Setter<T>)(() => merged);
     } else {
-      (signal[1] as SetStoreFunction<T>)(reconcile(merged));
+      (signal[1] as StoreSetter<T>)(reconcile(merged));
     }
   };
 
@@ -94,11 +94,13 @@ export function makeUrlSearchParams<T extends ParamRecord>(
   }
 
   const store = signal[0] as Store<T>;
-  const originalSet = signal[1] as SetStoreFunction<T>;
-  const wrappedSet = ((...args: readonly unknown[]) => {
-    (originalSet as (...a: readonly unknown[]) => void)(...args);
+  const originalSet = signal[1] as StoreSetter<T>;
+  const wrappedSet = ((key: keyof T, value: T[keyof T]) => {
+    originalSet((state) => {
+      state[key] = value;
+    });
     writeToUrl(readStore(store), defaults, push);
-  }) as SetStoreFunction<T>;
+  }) as UrlStoreSetter<T>;
 
   return [signal[0], wrappedSet];
 }

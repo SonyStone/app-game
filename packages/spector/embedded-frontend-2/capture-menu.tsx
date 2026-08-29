@@ -1,9 +1,9 @@
-import { ComponentProps, Show } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import type { ComponentProps } from '@solidjs/web';
+import { createStore, Show } from 'solid-js';
 import { canvasList } from '../patch-canvas-element';
 import { LogLevel } from '../shared/utils/logger';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'spector-capture-menu': ComponentProps<'div'>;
@@ -62,7 +62,7 @@ export default function CaptureMenu(props: { options?: ICaptureMenuOptions }) {
   const canvases = canvasList;
 
   return (
-    <spector-capture-menu class="z-99999 left-50% -translate-x-50% text-#f9f9f9 absolute top-2.5 font-['Consolas']">
+    <spector-capture-menu class="left-50% -translate-x-50% text-#f9f9f9 absolute top-2.5 z-99999 font-['Consolas']">
       <div class="bg-#2c2c2c flex place-content-between gap-2 p-2">
         <CanvasList showList={false} />
         <CaptureMenuActions
@@ -134,14 +134,14 @@ const CaptureMenuActions = (props: {
   <div class="flex gap-2">
     <button
       onClick={props.onCaptureRequested}
-      class="bg-#2c2c2c w-5.5 h-5.5 rounded-full border-2 border-red-600"
+      class="bg-#2c2c2c h-5.5 w-5.5 rounded-full border-2 border-red-600"
     ></button>
     <Show
       when={!props.play}
       fallback={
         <button
           onClick={props.onPauseRequested}
-          class="bg-#2c2c2c border-#f9f9f9 w-5.5 h-5.5 flex place-content-center place-items-center overflow-hidden rounded-full border-2 text-2xl"
+          class="bg-#2c2c2c border-#f9f9f9 flex h-5.5 w-5.5 place-content-center place-items-center overflow-hidden rounded-full border-2 text-2xl"
         >
           ⏸️
         </button>
@@ -149,13 +149,13 @@ const CaptureMenuActions = (props: {
     >
       <button
         onClick={props.onPlayRequested}
-        class="bg-#2c2c2c border-#f9f9f9 w-5.5 h-5.5 flex place-content-center place-items-center overflow-hidden rounded-full border-2 text-2xl"
+        class="bg-#2c2c2c border-#f9f9f9 flex h-5.5 w-5.5 place-content-center place-items-center overflow-hidden rounded-full border-2 text-2xl"
       >
         ▶️
       </button>
       <button
         onClick={props.onPlayNextFrameRequested}
-        class="bg-#2c2c2c border-#f9f9f9 w-5.5 h-5.5 flex place-content-center place-items-center overflow-hidden rounded-full border-2 text-2xl"
+        class="bg-#2c2c2c border-#f9f9f9 flex h-5.5 w-5.5 place-content-center place-items-center overflow-hidden rounded-full border-2 text-2xl"
       >
         ⏯️
       </button>

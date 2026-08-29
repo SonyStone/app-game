@@ -1,4 +1,5 @@
-import { batch, createEffect, createSignal, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createEffect, createSignal, flush } from 'solid-js';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { markdownComponents } from '../markdown-components';
@@ -13,13 +14,16 @@ function BatchDemo(): JSX.Element {
   const [y, setY] = createSignal(0);
   const [effectRunCount, setEffectRunCount] = createSignal(0);
   const [logs, setLogs] = createSignal<string[]>([]);
+  let runCount = 0;
 
-  createEffect(() => {
-    const xv = x();
-    const yv = y();
-    setEffectRunCount((c) => c + 1);
-    setLogs((prev) => [`effect #${effectRunCount() + 1}: x=${xv}, y=${yv}`, ...prev].slice(0, 6));
-  });
+  createEffect(
+    () => [x(), y()] as const,
+    ([xValue, yValue]) => {
+      runCount += 1;
+      setEffectRunCount(runCount);
+      setLogs((previous) => [`effect #${runCount}: x=${xValue}, y=${yValue}`, ...previous].slice(0, 6));
+    }
+  );
 
   return (
     <Card class="flex flex-col gap-4">
@@ -32,19 +36,18 @@ function BatchDemo(): JSX.Element {
             setY((v) => v + 1);
           }}
         >
-          set x+y (no batch — 2 effects)
+          set x+y (automatic — 1 effect)
         </Button>
         <Button
           size="sm"
           variant="default"
-          onClick={() =>
-            batch(() => {
-              setX((v) => v + 1);
-              setY((v) => v + 1);
-            })
-          }
+          onClick={() => {
+            setX((value) => value + 1);
+            flush();
+            setY((value) => value + 1);
+          }}
         >
-          set x+y (batch — 1 effect)
+          flush between updates — 2 effects
         </Button>
       </div>
       <div class="flex gap-6 font-mono text-sm">

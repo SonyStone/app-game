@@ -1,5 +1,5 @@
 declare module '*?markdown' {
-  const MarkdownContent: (props: { components?: Record<string, any> }) => import('solid-js').JSX.Element;
+  const MarkdownContent: (props: { components?: Record<string, any> }) => import('@solidjs/web').JSX.Element;
   export default MarkdownContent;
 }
 

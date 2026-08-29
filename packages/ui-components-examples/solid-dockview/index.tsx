@@ -1,6 +1,6 @@
 import { DockPanel, DockView, openPanel } from '@app-game/ui-components/solid-dockview';
 import 'dockview-core/dist/styles/dockview.css';
-import { For, createEffect, createSignal } from 'solid-js';
+import { For, createSignal, createTrackedEffect } from 'solid-js';
 
 import { DockviewComponent } from 'dockview-core';
 import { StarSVG } from './StarSVG';
@@ -50,7 +50,7 @@ export function SolidDockView() {
     ]);
 
     // after next rendering, move the panel to given group
-    createEffect(() => {
+    createTrackedEffect(() => {
       const panel = currentDockview.panels.find((x) => x.id === id);
       panel?.api.moveTo({ group });
     });

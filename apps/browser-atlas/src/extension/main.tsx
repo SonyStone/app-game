@@ -1,6 +1,6 @@
 /* @refresh reload */
+import { render } from '@solidjs/web';
 import '@unocss/reset/tailwind.css';
-import { render } from 'solid-js/web';
 import 'uno.css';
 import { BrowserAtlas } from '../App';
 import { createChromeExplorerBackend } from '../backends/chrome/createChromeExplorerBackend';

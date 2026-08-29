@@ -1,25 +1,22 @@
-import {
-  createEffect,
-  createSignal,
-} from 'solid-js'
+import { createSignal, createTrackedEffect } from 'solid-js';
 import {
   createInitialDocument,
   loadDocumentFromStorage,
   saveDocumentToStorage,
-  type GreaseDocument,
-} from '../document'
+  type GreaseDocument
+} from '../document';
 
 export function useStoredDocument() {
   const [documentState, setDocumentState] = createSignal<GreaseDocument>(
-    loadDocumentFromStorage() ?? createInitialDocument(),
-  )
+    loadDocumentFromStorage() ?? createInitialDocument()
+  );
 
-  createEffect(() => {
-    saveDocumentToStorage(documentState())
-  })
+  createTrackedEffect(() => {
+    saveDocumentToStorage(documentState());
+  });
 
   return {
     documentState,
-    setDocumentState,
-  } as const
+    setDocumentState
+  } as const;
 }

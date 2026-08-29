@@ -9,14 +9,16 @@ import {
   Texture,
   type UnresolvedAsset
 } from 'pixi.js';
-import {
-  type Accessor,
-  createResource,
-  createSignal,
-  type Resource,
-  type ResourceActions,
-  type ResourceOptions
-} from 'solid-js';
+import { type Accessor, createSignal, type MemoOptions, refresh, type Setter, type SourceAccessor } from 'solid-js';
+
+type Resource<T> = SourceAccessor<T | undefined>;
+type ResourceActions<T> = {
+  mutate: Setter<T>;
+  refetch: () => void;
+};
+type ResourceOptions<T> = Omit<MemoOptions<T | undefined>, 'loadingValue'> & {
+  initialValue?: T;
+};
 
 type AssetType = Texture | FontFace | string;
 
@@ -29,9 +31,9 @@ export function useAssetInit(
     return JSON.stringify(s);
   };
 
-  const [resource] = createResource(
-    source,
-    async (opts) => {
+  const [resource] = createAsyncResource(
+    async () => {
+      const opts = access(source);
       await Assets.init(opts);
       return true;
     },
@@ -67,9 +69,9 @@ export function useSpritesheet<T extends SpritesheetData>(
     return t.label || String(t.uid);
   };
 
-  const [resource, resourceActions] = createResource<Spritesheet<T>, string | SpriteSheetConstruction<T>>(
-    source,
-    async (urlOrOpts) => {
+  const [resource, resourceActions] = createAsyncResource<Spritesheet<T>>(
+    async () => {
+      const urlOrOpts = access(source);
       setProgress(0 as Progress);
       if (typeof urlOrOpts === 'string') {
         const asset = await Assets.load<Spritesheet<T>>(urlOrOpts, (progressValue) => {
@@ -110,7 +112,7 @@ export function useAsset<T extends AssetType = Texture>(
   opts?: ResourceOptions<T>
 ): [
   asset: Resource<T>,
-  actions: ResourceActions<T | undefined, string | UnresolvedAsset> & {
+  actions: ResourceActions<T | undefined> & {
     progress: Accessor<number>;
   }
 ] {
@@ -121,9 +123,9 @@ export function useAsset<T extends AssetType = Texture>(
     return typeof s === 'string' ? s : s.name || s.alias || s.url;
   };
 
-  const [resource, resourceActions] = createResource<T, string | UnresolvedAsset<T>, string | UnresolvedAsset<T>>(
-    source,
-    async (urlOrAsset) => {
+  const [resource, resourceActions] = createAsyncResource<T>(
+    async () => {
+      const urlOrAsset = access(source);
       setProgress(0 as Progress);
       const asset = await Assets.load<T>(urlOrAsset, (progressValue) => {
         setProgress(progressValue as Progress);
@@ -157,7 +159,7 @@ export function useAssets<T extends Record<string, AssetType> = Record<string, A
   opts?: ResourceOptions<T>
 ): [
   assets: Resource<T>,
-  actions: ResourceActions<T | undefined, (string | UnresolvedAsset<T>)[]> & {
+  actions: ResourceActions<T | undefined> & {
     progress: Accessor<Progress>;
   }
 ] {
@@ -170,9 +172,9 @@ export function useAssets<T extends Record<string, AssetType> = Record<string, A
     );
   };
 
-  const [assets, actions] = createResource<T, (string | UnresolvedAsset<T>)[], (string | UnresolvedAsset<T>)[]>(
-    sources,
-    async (s) => {
+  const [assets, actions] = createAsyncResource<T>(
+    async () => {
+      const s = access(sources);
       setProgress(0 as Progress);
       const assets = await Assets.load(s as string[], (progress) => {
         setProgress(progress as Progress);
@@ -201,7 +203,7 @@ export function useBundle<T extends Record<string, AssetType> = any>(
   opts?: ResourceOptions<T>
 ): [
   asset: Resource<T>,
-  actions: ResourceActions<T | undefined, string | UnresolvedAsset> & {
+  actions: ResourceActions<T | undefined> & {
     progress: Accessor<Progress>;
   }
 ] {
@@ -211,9 +213,9 @@ export function useBundle<T extends Record<string, AssetType> = any>(
     return access(bundleId);
   };
 
-  const [resource, resourceActions] = createResource<T, [string, AssetsBundle['assets'] | undefined]>(
-    () => [access(bundleId), access(bundle)],
-    async ([_bundleId, _bundle]) => {
+  const [resource, resourceActions] = createAsyncResource<T>(
+    async () => {
+      const [_bundleId, _bundle] = [access(bundleId), access(bundle)] as const;
       setProgress(0 as Progress);
       if (_bundle) {
         Assets.addBundle(_bundleId, _bundle);
@@ -234,4 +236,23 @@ export function useBundle<T extends Record<string, AssetType> = any>(
       progress: progress
     }
   ] as const;
+}
+
+/** Adapts Solid 2's writable async signal to the resource-shaped asset API. */
+function createAsyncResource<T>(
+  load: () => Promise<T>,
+  options?: ResourceOptions<T>
+): [Resource<T>, ResourceActions<T | undefined>] {
+  const [resource, mutate] = createSignal<T | undefined>(load, {
+    ...options,
+    loadingValue: options?.initialValue
+  });
+
+  return [
+    resource,
+    {
+      mutate,
+      refetch: () => refresh(resource)
+    }
+  ];
 }

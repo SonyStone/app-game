@@ -1,5 +1,6 @@
 import { createBodyCursor } from '@solid-primitives/cursor';
 import { throttle } from '@solid-primitives/scheduled';
+import type { JSX } from '@solidjs/web';
 import {
   createDragOverlay,
   createDragSensor,
@@ -15,7 +16,7 @@ import {
   Vec2,
   type FlipAnimateEntry
 } from 'solid-dnd';
-import { batch, createEffect, createMemo, createSignal, For, on, Show, type JSX } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import { AnimationControls } from '../components/AnimationControls';
 import EventLog, { createEventLogger } from '../components/EventLog';
 import { FlipDebugOverlay } from '../components/FlipDebugOverlay';
@@ -98,20 +99,18 @@ export default function NestedOverlayDemo(): JSX.Element {
 
   // ── Animate display key changes during drag ─────────────────────────────
   createEffect(
-    on(
-      () => {
-        // Access all display lists to trigger on any change
-        const place = dropPlace();
-        if (!place) return null;
-        return display.getDisplayKeys(place.parent);
-      },
-      () => {
-        if (sensor.isDragging() && animEnabled()) {
-          flip.playFromFirst();
-        }
-      },
-      { defer: true }
-    )
+    () => {
+      // Access all display lists to trigger on any change
+      const place = dropPlace();
+      if (!place) return null;
+      return display.getDisplayKeys(place.parent);
+    },
+    () => {
+      if (sensor.isDragging() && animEnabled()) {
+        flip.playFromFirst();
+      }
+    },
+    { defer: true }
   );
 
   function resetDragState() {
@@ -153,13 +152,13 @@ export default function NestedOverlayDemo(): JSX.Element {
       if (animEnabled()) flip.captureFirst();
 
       // 3. Set drag state (batched so display keys compute once with final state)
-      batch(() => {
+      {
         setDraggedId(id);
         const node = NODES[id];
         const tag = node?.isGroup ? '📁' : '📄';
         logger.addLog(`▶ DRAG  ${tag} "${id}" at (${e.position.x.toFixed(0)}, ${e.position.y.toFixed(0)})`);
         setDropPlace(nestable.getInsertionPoint(e.position));
-      });
+      }
     },
     onDragMove: (e) => {
       // Skip recalculation while FLIP is animating — mid-animation rects

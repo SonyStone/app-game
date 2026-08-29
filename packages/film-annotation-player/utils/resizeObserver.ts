@@ -1,5 +1,5 @@
 import { createContextProvider } from '@app-game/solid-utils';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createSignal, createTrackedEffect, onCleanup } from 'solid-js';
 
 export type ResizeHandler = (size: { width: number; height: number }, ref: Element) => void;
 
@@ -43,7 +43,8 @@ export function createResizeObserver<T extends Element>(props: {
     }
   });
 
-  createEffect((oldRefs?: T[]) => {
+  let oldRefs: T[] = [];
+  createTrackedEffect(() => {
     let refs: T[] = [];
     if (props.refs) {
       const optsRefs = typeof props.refs === 'function' ? props.refs() : props.refs;
@@ -51,7 +52,6 @@ export function createResizeObserver<T extends Element>(props: {
       else refs.push(optsRefs);
     }
     refs = refs.concat(otherRefs());
-    oldRefs = oldRefs || [];
     oldRefs.forEach((oldRef) => {
       if (!refs.includes(oldRef)) {
         resizeObserver.unobserve(oldRef);
@@ -59,11 +59,11 @@ export function createResizeObserver<T extends Element>(props: {
       }
     });
     refs.forEach((ref) => {
-      if (!oldRefs!.includes(ref)) {
+      if (!oldRefs.includes(ref)) {
         resizeObserver.observe(ref);
       }
     });
-    return refs;
+    oldRefs = refs;
   });
 
   onCleanup(() => resizeObserver.disconnect());

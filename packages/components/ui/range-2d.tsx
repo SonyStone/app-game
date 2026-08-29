@@ -1,6 +1,6 @@
 import { cn } from '@app-game/utils/cn';
 import { createElementClientRect } from '@utils/createElementClientRect';
-import { createMemo, createSignal, onMount, Show } from 'solid-js';
+import { createMemo, createSignal, onSettled, Show } from 'solid-js';
 
 export interface Range2DProps {
   value: [number, number];
@@ -17,7 +17,9 @@ export interface Range2DProps {
 
 function createIsMounted() {
   const [isMounted, setIsMounted] = createSignal(false);
-  onMount(() => setIsMounted(true));
+  onSettled(() => {
+    setIsMounted(true);
+  });
   return isMounted;
 }
 
@@ -160,7 +162,7 @@ export function Range2D(props: Range2DProps) {
   return (
     <div
       ref={setContainerRef}
-      class={cn(`relative h-64 w-64 select-none bg-gray-100`, props.class)}
+      class={cn(`relative h-64 w-64 bg-gray-100 select-none`, props.class)}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

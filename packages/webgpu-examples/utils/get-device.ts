@@ -1,4 +1,4 @@
-import { createEffect, createSignal } from 'solid-js';
+import { createSignal, createTrackedEffect } from 'solid-js';
 
 export const createWebGPUDevice = () => {
   const [device, setDevice] = createSignal<GPUDevice | undefined>(undefined);
@@ -20,21 +20,25 @@ export const createWebGPUDevice = () => {
     return device;
   };
 
-  createEffect(async () => {
-    setDevice(await getDevice());
+  createTrackedEffect(() => {
+    void (async () => {
+      setDevice(await getDevice());
+    })();
   });
 
-  createEffect(async () => {
-    const info = await device()?.lost;
-    if (!info) {
-      return;
-    }
-    console.error(`WebGPU device was lost: ${info.message}`);
-    // 'reason' will be 'destroyed' if we intentionally destroy the device.
-    if (info.reason !== 'destroyed') {
-      // try again
-      setDevice(await getDevice());
-    }
+  createTrackedEffect(() => {
+    void (async () => {
+      const info = await device()?.lost;
+      if (!info) {
+        return;
+      }
+      console.error(`WebGPU device was lost: ${info.message}`);
+      // 'reason' will be 'destroyed' if we intentionally destroy the device.
+      if (info.reason !== 'destroyed') {
+        // try again
+        setDevice(await getDevice());
+      }
+    })();
   });
 
   return device;

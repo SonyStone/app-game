@@ -1,5 +1,5 @@
 import { access, asArray } from '@solid-primitives/utils';
-import { onCleanup, Owner, runWithOwner } from 'solid-js';
+import { onCleanup, type Owner, runWithOwner } from 'solid-js';
 
 /**
  * Links a cleanup function to one or more owner contexts, ensuring proper resource disposal.
@@ -22,6 +22,6 @@ import { onCleanup, Owner, runWithOwner } from 'solid-js';
  * );
  * ```
  */
-export function linkCleanupToOwners(cleanupFn: VoidFunction, ...owners: (typeof Owner | undefined)[]) {
+export function linkCleanupToOwners(cleanupFn: VoidFunction, ...owners: (Owner | null | undefined)[]) {
   asArray(access(owners)).forEach((owner) => owner && runWithOwner(owner, onCleanup.bind(void 0, cleanupFn)));
 }

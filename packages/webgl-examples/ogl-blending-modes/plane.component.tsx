@@ -1,8 +1,7 @@
 import { Mesh, NormalProgram, OGLRenderingContext, Plane, Program, Transform } from '@app-game/ogl';
 import { BlendFunc } from '@app-game/ogl/core/renderer';
 import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
-import { onCleanup } from 'solid-js';
-import { effect } from 'solid-js/web';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 
 export function PlaneComponent(props: {
   gl: OGLRenderingContext;
@@ -17,17 +16,17 @@ export function PlaneComponent(props: {
   const plane = new Mesh(gl, { geometry: new Plane(gl), program: program ?? new NormalProgram(gl) });
   plane.setParent(parent);
 
-  effect(() => {
+  createTrackedEffect(() => {
     if (props.blendFunc && program) {
       program.blendFunc = props.blendFunc;
     }
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     plane.position.set(props.position ?? [0, 0, 0]);
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     plane.rotation.set(props.rotation ?? [0, 0, 0]);
   });
 

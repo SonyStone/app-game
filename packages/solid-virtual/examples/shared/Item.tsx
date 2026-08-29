@@ -1,5 +1,6 @@
 import { createEventBus } from '@solid-primitives/event-bus';
-import { children, createSignal, For, onMount, Show, splitProps, type ComponentProps } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { children, createSignal, For, omit, onSettled, Show } from 'solid-js';
 import type { ItemId } from './flatItems';
 
 /** Renders one measurable, editable row with optional nested children. */
@@ -30,7 +31,8 @@ export function Item(
   }> &
     ComponentProps<'li'>
 ) {
-  const [local, others] = splitProps(props, [
+  const others = omit(
+    props,
     'title',
     'index',
     'children',
@@ -43,14 +45,14 @@ export function Item(
     'onItemIdChange',
     'expanded',
     'onExpandedChange'
-  ]);
-  const resolved = children(() => local.children);
+  );
+  const resolved = children(() => props.children);
   const [error, setError] = createSignal(false);
   const { listen, handlers } = createDragHandler({ pointerCapture: true });
   let elementRef!: HTMLElement;
   let height = 0;
 
-  onMount(() => {
+  onSettled(() => {
     height = elementRef.offsetHeight;
     listen(({ deltaY, type }) => {
       elementRef.style.height = height + deltaY + 'px';
@@ -69,54 +71,54 @@ export function Item(
         }}
         class={[
           'relative flex min-h-9 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm transition-colors hover:border-zinc-300',
-          local.class
+          props.class
         ]
           .filter(Boolean)
           .join(' ')}
       >
         <header class="flex h-9 w-full shrink-0 items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-2.5 text-xs">
-          <Show when={local.onExpandedChange}>
+          <Show when={props.onExpandedChange}>
             <button
               type="button"
               class="grid h-5 w-5 shrink-0 place-items-center rounded text-zinc-500 hover:bg-zinc-200 hover:text-zinc-950"
-              aria-label={local.expanded ? 'Collapse element' : 'Expand element'}
-              aria-expanded={local.expanded}
-              onClick={() => local.onExpandedChange?.(!local.expanded)}
+              aria-label={props.expanded ? 'Collapse element' : 'Expand element'}
+              aria-expanded={props.expanded === undefined ? undefined : props.expanded ? 'true' : 'false'}
+              onClick={() => props.onExpandedChange?.(!props.expanded)}
             >
-              {local.expanded ? '−' : '+'}
+              {props.expanded ? '−' : '+'}
             </button>
           </Show>
-          <span class="font-mono text-[10px] text-zinc-400">{String(local.index ?? 0).padStart(3, '0')}</span>
-          <span class="min-w-0 truncate font-medium text-zinc-800">{local.title}</span>
-          <Show when={local.onAdd}>
+          <span class="font-mono text-[10px] text-zinc-400">{String(props.index ?? 0).padStart(3, '0')}</span>
+          <span class="min-w-0 truncate font-medium text-zinc-800">{props.title}</span>
+          <Show when={props.onAdd}>
             <button
               type="button"
               class="ms-auto grid h-6 w-6 place-items-center rounded border border-zinc-200 bg-white text-sm text-zinc-500 hover:border-zinc-300 hover:text-zinc-950"
               aria-label="Add item after"
-              onClick={local.onAdd}
+              onClick={props.onAdd}
             >
               +
             </button>
           </Show>
-          <Show when={local.onRemove}>
+          <Show when={props.onRemove}>
             <button
               type="button"
               class="grid h-6 w-6 place-items-center rounded border border-zinc-200 bg-white text-sm text-zinc-500 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
               aria-label="Remove item"
-              onClick={local.onRemove}
+              onClick={props.onRemove}
             >
               −
             </button>
           </Show>
         </header>
 
-        <Show when={local.expanded !== false}>
+        <Show when={props.expanded !== false}>
           <Show
-            when={local.onAttributeChange}
+            when={props.onAttributeChange}
             fallback={
               <textarea
-                rows={Math.min(16, Object.values(local.data ?? {}).length + 2)}
-                value={JSON.stringify(local.data, null, 2)}
+                rows={Math.min(16, Object.values(props.data ?? {}).length + 2)}
+                value={JSON.stringify(props.data, null, 2)}
                 class={[
                   'm-3 min-h-20 resize-y rounded-md border bg-zinc-50 p-3 font-mono text-[11px] leading-5 text-zinc-700 outline-none focus:border-zinc-400',
                   error() ? 'border-red-400 ring-2 ring-red-100' : 'border-zinc-200'
@@ -124,7 +126,7 @@ export function Item(
                 spellcheck={false}
                 onInput={(event) => {
                   try {
-                    local.onValueChange?.(JSON.parse(event.currentTarget.value));
+                    props.onValueChange?.(JSON.parse(event.currentTarget.value));
                     setError(false);
                   } catch {
                     setError(true);
@@ -134,16 +136,16 @@ export function Item(
             }
           >
             <div class="grid gap-2 p-3">
-              <For each={Object.keys(local.data ?? {})}>
+              <For each={Object.keys(props.data ?? {})}>
                 {(name) => (
                   <label class="grid gap-1">
                     <span class="font-mono text-[10px] text-zinc-500">{name}</span>
                     <textarea
-                      rows={attributeRows(local.data?.[name] ?? '')}
-                      value={local.data?.[name] ?? ''}
+                      rows={attributeRows(props.data?.[name] ?? '')}
+                      value={props.data?.[name] ?? ''}
                       class="min-h-8 resize-y rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 font-mono text-[11px] leading-5 text-zinc-700 outline-none focus:border-zinc-400 focus:bg-white"
                       spellcheck={false}
-                      onInput={(event) => local.onAttributeChange?.(name, event.currentTarget.value)}
+                      onInput={(event) => props.onAttributeChange?.(name, event.currentTarget.value)}
                     />
                   </label>
                 )}
@@ -151,12 +153,12 @@ export function Item(
             </div>
           </Show>
 
-          <Show when={local.onItemIdChange}>
+          <Show when={props.onItemIdChange}>
             <label class="flex items-center gap-3 border-t border-zinc-200 bg-zinc-50 px-3 py-2">
               <span class="font-mono text-[10px] text-zinc-400 uppercase">ID</span>
               <input
-                value={local.title}
-                onInput={(event) => local.onItemIdChange?.(event.currentTarget.value as ItemId)}
+                value={props.title}
+                onInput={(event) => props.onItemIdChange?.(event.currentTarget.value as ItemId)}
                 type="text"
                 class="min-w-0 flex-1 bg-transparent font-mono text-xs text-zinc-700 outline-none"
               />

@@ -23,6 +23,7 @@
     "solid-js": "catalog:"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "catalog:",
     "happy-dom": "^20.9.0",
     "typescript": "catalog:",
     "vite": "catalog:",

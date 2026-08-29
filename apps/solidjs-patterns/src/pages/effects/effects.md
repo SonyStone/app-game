@@ -3,8 +3,8 @@
 # Effects <Badge>Core</Badge>
 
 <Description>
-  Effects run side-effects in response to reactive changes. SolidJS provides createEffect, onMount, and onCleanup
-  as the primary tools.
+  Solid 2 effects separate dependency computation from side-effect application. onSettled and onCleanup cover
+  component lifecycle work.
 </Description>
 
 </Header>
@@ -13,18 +13,17 @@
 
 ## createEffect
 
-Runs immediately and re-runs whenever its reactive dependencies change. It is not for producing values, use
-`createMemo` for that.
+Pass a pure source computation first and the side effect second. The source tracks dependencies; the callback receives
+the latest and previous values.
 
 ```tsx
-import { createSignal, createEffect } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 
 const [count, setCount] = createSignal(0);
 
-createEffect(() => {
-  // Runs immediately, then on every count() change
-  console.log('count changed:', count());
-  document.title = `Count: ${count()}`;
+createEffect(count, (value, previous) => {
+  console.log('count changed:', value, 'was:', previous);
+  document.title = `Count: ${value}`;
 });
 ```
 
@@ -32,118 +31,59 @@ createEffect(() => {
 
 <Section>
 
-## onCleanup
+## Cleanup
 
-Registers a cleanup function that runs before the effect re-runs and when the owner disposes.
+Return a cleanup from the effect callback. It runs before the next callback and when the owner disposes.
 
 ```tsx
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect } from 'solid-js';
 
-createEffect(() => {
-  const id = setInterval(() => console.log('tick'), 1000);
-
-  // Runs before next effect execution or on dispose
-  onCleanup(() => clearInterval(id));
-});
+createEffect(
+  () => intervalMs(),
+  (delay) => {
+    const id = setInterval(() => console.log('tick'), delay);
+    return () => clearInterval(id);
+  }
+);
 ```
 
 </Section>
 
 <Section>
 
-## onMount / onCleanup in components
+## onSettled and onCleanup in components
 
-onMount runs once after the component mounts. Use onCleanup for teardown.
+`onSettled` runs after the component's initial render has settled. Return teardown work directly or register it with
+`onCleanup`.
 
 ```tsx
-import { onMount, onCleanup } from 'solid-js';
+import { onSettled } from 'solid-js';
 
 function ResizeWatcher() {
-  onMount(() => {
+  onSettled(() => {
     const handler = () => console.log(window.innerWidth);
     window.addEventListener('resize', handler);
-    onCleanup(() => window.removeEventListener('resize', handler));
+    return () => window.removeEventListener('resize', handler);
   });
-  return null;
-}
 
-// Better: use @solid-primitives/event-listener
-import { makeEventListener } from '@solid-primitives/event-listener';
-
-function ResizeWatcher() {
-  onMount(() => {
-    makeEventListener(window, 'resize', () => console.log(window.innerWidth));
-    // Cleaned up automatically on unmount
-  });
   return null;
 }
 ```
 
 </Section>
 
-<Callout type="warning" title="Effects run after render">
-  `createEffect` is scheduled after the DOM has updated. For synchronous tracking during rendering, use `
-    createRenderEffect
-  `.
-</Callout>
-
 <Section>
 
-## on() - explicit dependencies
+## Dynamic dependency sets
 
-on() lets you specify dependencies explicitly, avoiding implicit tracking. This is useful for watching specific
-signals.
-
-```tsx
-import { createSignal, createEffect, on } from 'solid-js';
-
-const [source, setSource] = createSignal(0);
-const [other, setOther] = createSignal('hello');
-
-// Only re-runs when source changes - other is not tracked
-createEffect(
-  on(source, (value, prevValue) => {
-    console.log('source:', value, 'was:', prevValue);
-    // Safe to read other() here without subscribing
-    console.log('other snapshot:', other());
-  })
-);
-
-// Defer first run (don't run on init)
-createEffect(
-  on(
-    source,
-    () => {
-      console.log('source changed (not initial)');
-    },
-    { defer: true }
-  )
-);
-```
-
-</Section>
-
-<Section>
-
-## Tracking context
-
-Only code inside a reactive root tracks dependencies. Reading signals outside tracking context, for example in async
-callbacks, will not subscribe.
+Use `createTrackedEffect` when dependencies must be discovered inside the side-effect body. Prefer `createEffect` when
+you can describe the source separately.
 
 ```tsx
-import { createSignal, createEffect, untrack } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 
-const [a, setA] = createSignal(1);
-const [b, setB] = createSignal(2);
-
-createEffect(() => {
-  // Tracks a - effect re-runs when a changes
-  const aVal = a();
-
-  // Does NOT track b - untrack reads without subscribing
-  const bVal = untrack(() => b());
-
-  console.log(aVal + bVal);
+createTrackedEffect(() => {
+  console.log(enabled() ? primary() : fallback());
 });
 ```
 
@@ -151,8 +91,17 @@ createEffect(() => {
 
 <Section>
 
-## Live Demo
+## Reading without tracking
 
-<EffectsDemo />
+`untrack` reads reactive state without adding it to the current computation's dependency set.
+
+```tsx
+import { createEffect, untrack } from 'solid-js';
+
+createEffect(a, (aValue) => {
+  const bValue = untrack(b);
+  console.log(aValue + bValue);
+});
+```
 
 </Section>

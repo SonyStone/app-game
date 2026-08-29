@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
+import { createSignal, createTrackedEffect, onCleanup, type Accessor } from 'solid-js';
 
 export function createRasterPreview(options: { readonly enabled: Accessor<boolean>; readonly text: Accessor<string> }) {
   const [rasterPreviewUrl, setRasterPreviewUrl] = createSignal<string | undefined>();
@@ -13,7 +13,7 @@ export function createRasterPreview(options: { readonly enabled: Accessor<boolea
     setRasterPreviewUrl(undefined);
   }
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!options.enabled()) {
       clearRasterPreview();
       return;

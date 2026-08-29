@@ -5,8 +5,8 @@ import { createBuffer } from '@app-game/webgl/webgl-objects/buffer';
 import { createWebGL2Renderer } from '@app-game/webgl/webgl-objects/context';
 import { createProgram } from '@app-game/webgl/webgl-objects/program';
 import { createVertexArray } from '@app-game/webgl/webgl-objects/vertex-array-object';
-import { createSignal, onMount } from 'solid-js';
-import { effect } from 'solid-js/web';
+import { createSignal, createTrackedEffect, onSettled } from 'solid-js';
+
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 
@@ -91,28 +91,16 @@ export default function Matrices2d() {
     gl.draw.triangles(18);
   }
 
-  onMount(() => {
-    effect(() => {
+  onSettled(() => {
+    createTrackedEffect(() => {
       drawScene();
     });
   });
 
   return (
     <>
-      <RangeInput
-        name="x"
-        value={translation().x}
-        onChange={(v) =>
-          serTranslation((vec) => Vec2.create(v, vec.y))
-        }
-      />
-      <RangeInput
-        name="y"
-        value={translation().y}
-        onChange={(v) =>
-          serTranslation((vec) => Vec2.create(vec.x, v))
-        }
-      />
+      <RangeInput name="x" value={translation().x} onChange={(v) => serTranslation((vec) => Vec2.create(v, vec.y))} />
+      <RangeInput name="y" value={translation().y} onChange={(v) => serTranslation((vec) => Vec2.create(vec.x, v))} />
       {canvas}
     </>
   );

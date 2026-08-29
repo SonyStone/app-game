@@ -1,7 +1,7 @@
 import { createSubscription } from '@utils/createSubscription';
 import { animationFrameScheduler, fromEvent, merge, switchMapTo, takeUntil, timer } from 'rxjs';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface Directives {
       onHold: (event: number) => void;

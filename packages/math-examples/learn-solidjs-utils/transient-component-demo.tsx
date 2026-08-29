@@ -3,8 +3,18 @@ import { createStruct } from '@app-game/math/utils/create-struct';
 import { Vec2 } from '@app-game/math/v2';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { access } from '@solid-primitives/utils';
+import type { JSX } from '@solidjs/web';
 import { createManagedRoot } from '@utils/createManagedRoot';
-import { Accessor, children, createEffect, createMemo, createSignal, getOwner, JSX, onCleanup, Owner } from 'solid-js';
+import {
+  Accessor,
+  children,
+  createMemo,
+  createSignal,
+  createTrackedEffect,
+  getOwner,
+  onCleanup,
+  Owner
+} from 'solid-js';
 import { SVGAngleVisualization } from '../m2x3/svg-angle-visualization';
 
 export function TransientComponentDemo() {
@@ -13,7 +23,7 @@ export function TransientComponentDemo() {
   const contentContainer = (<div />) as HTMLElement;
 
   const svgOverlay = (
-    <svg class="pointer-events-none fixed right-0 top-0 z-10 h-screen w-screen touch-none" />
+    <svg class="pointer-events-none fixed top-0 right-0 z-10 h-screen w-screen touch-none" />
   ) as SVGSVGElement;
 
   const componentFactories = {
@@ -61,7 +71,7 @@ export function TransientComponentDemo() {
           (
             <FadeOut {...props()} onFinish={dispose}>
               <g
-                class="pointer-events-none select-none transition-transform duration-100 ease-in-out"
+                class="pointer-events-none transition-transform duration-100 ease-in-out select-none"
                 style={{ transform: `translate(${props().x}px, ${props().y}px)` }}
               >
                 <g class="animate-spin">
@@ -89,8 +99,7 @@ export function TransientComponentDemo() {
           }
           return struct.firstPoint;
         },
-        struct.firstPoint,
-        { equals: false }
+        { ...{ equals: false }, loadingValue: struct.firstPoint }
       );
 
       const secondPoint = createMemo(
@@ -101,8 +110,7 @@ export function TransientComponentDemo() {
           }
           return struct.secondPoint;
         },
-        struct.secondPoint,
-        { equals: false }
+        { ...{ equals: false }, loadingValue: struct.secondPoint }
       );
 
       struct.cornerPoint.set(window.innerWidth / 2, window.innerHeight / 2);
@@ -150,7 +158,7 @@ export function TransientComponentDemo() {
   return (
     <>
       {svgOverlay}
-      <div class="flex w-fit select-none flex-col gap-2 rounded border p-2">
+      <div class="flex w-fit flex-col gap-2 rounded border p-2 select-none">
         <p>Transient Component Demo</p>
         <button
           class="border px-2"
@@ -161,7 +169,7 @@ export function TransientComponentDemo() {
           add element 1
         </button>
         <button
-          class=" border px-2"
+          class="border px-2"
           onClick={(event: MouseEvent) => {
             componentFactories.notification({ text: event.timeStamp, name: 'element-2' });
           }}
@@ -195,7 +203,7 @@ function FadeOut(props: { children: JSX.Element; onFinish?: VoidFunction }) {
 
   const resolved = children(() => props.children);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     element = resolved() as Element;
     animation = fadeOut(element);
     animation.finished
@@ -207,7 +215,7 @@ function FadeOut(props: { children: JSX.Element; onFinish?: VoidFunction }) {
       });
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!animation) {
       return;
     }

@@ -3,8 +3,10 @@ import { For } from 'solid-js';
 export const ToolSelectPanel = (props: { isActive?: boolean }) => {
   return (
     <div
-      class="absolute right-full flex w-40 translate-x-10 flex-col rounded border border-black bg-white p-1 text-xs transition-transform in-[.active]:translate-x-0"
-      classList={{ 'pointer-events-auto': props.isActive, 'pointer-events-none': !props.isActive }}
+      class={[
+        'absolute right-full flex w-40 translate-x-10 flex-col rounded border border-black bg-white p-1 text-xs transition-transform in-[.active]:translate-x-0',
+        { 'pointer-events-auto': Boolean(props.isActive), 'pointer-events-none': !props.isActive }
+      ]}
     >
       Tools
       <div class="flex flex-wrap gap-1">

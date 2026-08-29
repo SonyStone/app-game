@@ -1,112 +1,88 @@
-<header>
+<Header>
 
-# Suspense & Lazy <Badge>Async</Badge>
+# Loading, Reveal & Lazy <Badge>Async</Badge>
 
 <Description>
-Suspense declaratively handles loading states for async resources. lazy() code-splits components.
+  Solid 2 coordinates pending async computations with Loading and Reveal. lazy() still code-splits components, while
+  Errored handles failures.
 </Description>
 
-</header>
+</Header>
 
-<section>
+<Section>
 
-## Suspense
+## Loading
 
-Suspense catches all pending resources in its subtree and shows the fallback until they resolve.
+`Loading` catches pending async computations in its subtree and shows its fallback until they resolve.
 
 ```tsx
-import { Suspense } from 'solid-js';
+import { Loading } from 'solid-js';
 
-// Shows fallback while any resource in the tree is loading
-<Suspense fallback={<p>Loading...</p>}>
-  <UserProfile /> {/* uses createResource internally */}
-  <PostList /> {/* also uses createResource */}
-</Suspense>;
-// Both resolve before rendering children
+<Loading fallback={<p>Loading...</p>}>
+  <UserProfile />
+  <PostList />
+</Loading>;
 ```
 
-</section>
+</Section>
 
-<section>
+<Section>
 
-## SuspenseList
+## Reveal
 
-SuspenseList coordinates multiple Suspense boundaries and controls their reveal order.
+`Reveal` coordinates multiple loading boundaries and controls their reveal order.
 
 ```tsx
-import { SuspenseList, Suspense } from 'solid-js';
+import { Loading, Reveal } from 'solid-js';
 
-<SuspenseList revealOrder="forwards" tail="collapsed">
-  <Suspense fallback={<Skeleton />}>
+<Reveal order="forwards">
+  <Loading fallback={<Skeleton />}>
     <Header />
-  </Suspense>
-  <Suspense fallback={<Skeleton />}>
-    <Body /> {/* waits for Header, then reveals */}
-  </Suspense>
-  <Suspense fallback={<Skeleton />}>
-    <Footer />
-  </Suspense>
-</SuspenseList>;
-// revealOrder: 'forwards' | 'backwards' | 'together'
-// tail: 'hidden' | 'collapsed'
+  </Loading>
+  <Loading fallback={<Skeleton />}>
+    <Main />
+  </Loading>
+</Reveal>;
 ```
 
-</section>
+</Section>
 
-<section>
+<Section>
 
-## lazy() - code splitting
+## lazy
 
-lazy wraps a dynamic import and returns a component that integrates with Suspense.
-
-```tsx
-import { lazy, Suspense } from 'solid-js';
-
-// Component is loaded on first render
-const HeavyChart = lazy(() => import('./HeavyChart'));
-const DataTable = lazy(() => import('./DataTable'));
-
-function Dashboard() {
-  return (
-    <Suspense fallback={<div>Loading dashboard...</div>}>
-      <HeavyChart />
-      <DataTable />
-    </Suspense>
-  );
-}
-
-// With @solidjs/router (auto Suspense)
-const routes = [{ path: '/dashboard', component: lazy(() => import('./Dashboard')) }];
-```
-
-</section>
-
-<section>
-
-## ErrorBoundary
-
-Catches errors thrown in the render tree, including resource errors. It is required when using Suspense with fallible
-resources.
+`lazy` wraps a dynamic import and returns a component that participates in a `Loading` boundary.
 
 ```tsx
-import { ErrorBoundary, Suspense } from 'solid-js';
+import { lazy, Loading } from 'solid-js';
+
+const Dashboard = lazy(() => import('./Dashboard'));
 
 function App() {
   return (
-    <ErrorBoundary
-      fallback={(err, reset) => (
-        <div>
-          <p>Error: {err.message}</p>
-          <button onClick={reset}>Retry</button>
-        </div>
-      )}
-    >
-      <Suspense fallback={<Spinner />}>
-        <DataView />
-      </Suspense>
-    </ErrorBoundary>
+    <Loading fallback={<div>Loading dashboard...</div>}>
+      <Dashboard />
+    </Loading>
   );
 }
 ```
 
-</section>
+</Section>
+
+<Section>
+
+## Errored
+
+`Errored` catches errors in the render tree, including rejected async computations.
+
+```tsx
+import { Errored, Loading } from 'solid-js';
+
+<Errored fallback={(error, reset) => <button onClick={reset}>Retry: {error().message}</button>}>
+  <Loading fallback={<Spinner />}>
+    <Dashboard />
+  </Loading>
+</Errored>;
+```
+
+</Section>

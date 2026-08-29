@@ -1,5 +1,6 @@
 import { createContextProvider } from '@app-game/solid-utils';
-import { JSX, mergeProps, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { merge, Show } from 'solid-js';
 
 /**
  * Check if the browser supports WebGPU
@@ -16,7 +17,7 @@ const defaultProps = {
 };
 
 export function GPUProvider(props: Partial<{ children: JSX.Element; noGPU?: JSX.Element }>) {
-  props = mergeProps(defaultProps, props);
+  props = merge(defaultProps, props);
 
   return (
     <Show when={navigator.gpu} fallback={props.noGPU}>

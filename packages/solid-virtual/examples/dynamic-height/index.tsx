@@ -1,6 +1,5 @@
 import { createDynamicGap, createDynamicHeight, createVirtualList } from '@app-game/solid-virtual';
-import { createMemo, createSignal, For, Show } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createMemo, createSignal, createStore, For, Show, storePath } from 'solid-js';
 import { createFlatItem, createFlatItems, type FlatItem, type ItemId } from '../shared/flatItems';
 import { Item as ExampleItem } from '../shared/Item';
 import { makeUrlSearchParams } from '../shared/makeUrlSearchParams';
@@ -33,11 +32,11 @@ export default function DynamicHeightExample() {
     },
     updateItem(item: FlatItem, data: Record<string, string>): void {
       const position = items.indexOf(item);
-      if (position >= 0) setItems(position, 'data', data);
+      if (position >= 0) setItems(storePath(position, 'data', data));
     },
     updateItemId(item: FlatItem, id: ItemId): void {
       const position = items.indexOf(item);
-      if (position >= 0) setItems(position, 'id', id);
+      if (position >= 0) setItems(storePath(position, 'id', id));
     }
   };
 

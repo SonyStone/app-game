@@ -12,8 +12,10 @@ export function TreeDropIndicator(props: { feedback: TreeDropFeedbackState }) {
   return (
     <>
       <div
-        class="pointer-events-none fixed z-50 border-sky-300 bg-sky-400/20 shadow-[0_0_8px_rgb(56_189_248_/_0.8)]"
-        classList={{ 'border-2': isInside(), 'h-1 border-x-2 border-y-0': !isInside() }}
+        class={[
+          'pointer-events-none fixed z-50 border-sky-300 bg-sky-400/20 shadow-[0_0_8px_rgb(56_189_248_/_0.8)]',
+          { 'border-2': isInside(), 'h-1 border-x-2 border-y-0': !isInside() }
+        ]}
         style={{
           top: `${isInside() ? props.feedback.rect.top : markerTop()}px`,
           left: `${props.feedback.rect.left}px`,
@@ -22,8 +24,10 @@ export function TreeDropIndicator(props: { feedback: TreeDropFeedbackState }) {
         }}
       />
       <span
-        class="pointer-events-none fixed z-50 h-3 w-3 rotate-45 border-2 border-sky-200 bg-sky-500"
-        classList={{ hidden: isInside() }}
+        class={[
+          'pointer-events-none fixed z-50 h-3 w-3 rotate-45 border-2 border-sky-200 bg-sky-500',
+          { hidden: isInside() }
+        ]}
         style={{
           top: `${markerTop() - 4}px`,
           left: `${props.feedback.rect.left + 2}px`

@@ -1,5 +1,5 @@
 import { Meta, Title } from '@solidjs/meta';
-import { createEffect } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 import tgpu, { RenderFlag, SampledFlag, TgpuTexture } from 'typegpu';
 import { builtin, vec2f, vec4f } from 'typegpu/data';
 import { ResizeContainer } from '../ui/ResizeContainer';
@@ -72,7 +72,7 @@ function App() {
         RenderFlag)
     | undefined = undefined;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     size();
 
     const canvasTexture = context.getCurrentTexture();

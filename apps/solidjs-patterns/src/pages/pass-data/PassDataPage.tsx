@@ -1,7 +1,7 @@
 import { createContextProvider } from '@solid-primitives/context';
-import { Show, type JSX } from 'solid-js';
-import { createStore } from 'solid-js/store';
-import { template } from 'solid-js/web';
+import type { JSX } from '@solidjs/web';
+import { template } from '@solidjs/web';
+import { createStore, Show } from 'solid-js';
 import { CodeBlock } from '../../components/CodeBlock';
 import { Callout } from '../../components/PatternLayout';
 import PassDataContent from './pass-data.mdx?markdown';
@@ -96,7 +96,7 @@ const markdownComponents = {
   },
   Shiki(props: { code: string; language?: string; html: string; title?: string }): JSX.Element {
     const { setCodeProps } = useCode() ?? {};
-    setCodeProps?.({ code: props.code, language: props.language });
+    setCodeProps?.(() => ({ code: props.code, language: props.language }));
 
     return template(props.html)();
   },

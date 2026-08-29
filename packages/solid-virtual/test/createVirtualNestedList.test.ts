@@ -1,4 +1,4 @@
-import { createRoot, createSignal } from 'solid-js';
+import { createRoot, createSignal, flush } from 'solid-js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createDynamicHeight,
@@ -162,11 +162,13 @@ describe('createVirtualNestedList', () => {
       if (!parent || !firstChild) throw new Error('Expected expanded parent and child nodes');
 
       setExpanded(false);
+      flush();
       expect(virtual.children()[0]).toBe(parent);
       expect(parent.children()).toEqual([]);
       expect(parent.height).toBe(10);
 
       setExpanded(true);
+      flush();
       expect(virtual.children()[0]).toBe(parent);
       expect(parent.children()[0]).toBe(firstChild);
       expect(parent.height).toBe(60);
@@ -174,33 +176,32 @@ describe('createVirtualNestedList', () => {
   });
 
   it('preserves nested render identity when the source collection refreshes', () => {
-    createRoot((dispose) => {
-      try {
-        const [roots, setRoots] = createSignal<readonly TestItem[]>(items);
-        const virtual = createVirtualNestedList({
-          items: roots,
-          elementRef: undefined,
-          itemHeight: (item: TestItem) => item.height,
-          getChildren: (item) => item.children,
-          gap: 0,
-          overscan: 1_000
-        });
-        const parent = virtual.children()[0];
-        const sibling = virtual.children()[1];
-        const firstChild = parent?.children()[0];
-        if (!parent || !sibling || !firstChild) throw new Error('Expected the initial nested nodes');
+    const [roots, setRoots] = createSignal<readonly TestItem[]>(items);
+    const { dispose, virtual } = createRoot((dispose) => ({
+      dispose,
+      virtual: createVirtualNestedList({
+        items: roots,
+        elementRef: undefined,
+        itemHeight: (item: TestItem) => item.height,
+        getChildren: (item) => item.children,
+        gap: 0,
+        overscan: 1_000
+      })
+    }));
+    const parent = virtual.children()[0];
+    const sibling = virtual.children()[1];
+    const firstChild = parent?.children()[0];
+    if (!parent || !sibling || !firstChild) throw new Error('Expected the initial nested nodes');
 
-        const appended = { id: 'appended', height: 50, children: [] } satisfies TestItem;
-        setRoots([items[0]!, appended, items[1]!]);
+    const appended = { id: 'appended', height: 50, children: [] } satisfies TestItem;
+    setRoots([items[0]!, appended, items[1]!]);
+    flush();
 
-        expect(virtual.children()[0]).toBe(parent);
-        expect(virtual.children()[0]?.children()[0]).toBe(firstChild);
-        expect(virtual.children()[2]).toBe(sibling);
-        expect(virtual.children()[1]?.item).toBe(appended);
-      } finally {
-        dispose();
-      }
-    });
+    expect(virtual.children()[0]).toBe(parent);
+    expect(virtual.children()[0]?.children()[0]).toBe(firstChild);
+    expect(virtual.children()[2]).toBe(sibling);
+    expect(virtual.children()[1]?.item).toBe(appended);
+    dispose();
   });
 
   it('preserves nested item identity while scrolling', async () => {
@@ -330,23 +331,24 @@ function withVirtualList(
   options: TestVirtualListOptions,
   run: (virtual: VirtualNestedList<TestItem>) => void
 ): void {
-  createRoot((dispose) => {
-    try {
-      run(
-        createVirtualNestedList({
-          items: testItems,
-          elementRef: undefined,
-          itemHeight: (item) => item.height,
-          getChildren: (item) => item.children,
-          ...(options.isExpanded === undefined ? {} : { isExpanded: options.isExpanded }),
-          gap: options.gap ?? 0,
-          ...(options.overscan === undefined ? {} : { overscan: options.overscan })
-        })
-      );
-    } finally {
-      dispose();
-    }
-  });
+  const { dispose, virtual } = createRoot((dispose) => ({
+    dispose,
+    virtual: createVirtualNestedList({
+      items: testItems,
+      elementRef: undefined,
+      itemHeight: (item) => item.height,
+      getChildren: (item) => item.children,
+      ...(options.isExpanded === undefined ? {} : { isExpanded: options.isExpanded }),
+      gap: options.gap ?? 0,
+      ...(options.overscan === undefined ? {} : { overscan: options.overscan })
+    })
+  }));
+
+  try {
+    run(virtual);
+  } finally {
+    dispose();
+  }
 }
 
 async function withScrollableVirtualList(
@@ -395,4 +397,5 @@ function createScroller(height: number) {
 function scrollTo(element: HTMLElement, top: number): void {
   element.scrollTop = top;
   element.dispatchEvent(new Event('scroll'));
+  flush();
 }

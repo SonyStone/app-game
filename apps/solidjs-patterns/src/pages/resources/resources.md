@@ -1,64 +1,53 @@
 <Header>
 
-# Resources <Badge>Async</Badge>
+# Async memos <Badge>Async</Badge>
 
 <Description>
-  createResource integrates async data fetching into SolidJS reactivity. It works with Suspense and ErrorBoundary
-  automatically.
+  Solid 2 uses promise-returning createMemo computations for reactive data fetching. Loading, Errored, isPending,
+  latest, and refresh provide boundary and status control.
 </Description>
 
 </Header>
 
 <Section>
 
-## createResource basics
+## Async createMemo basics
 
-createResource takes an optional source signal and a fetcher function. It returns a reactive resource with loading and
-error states.
+Return a promise from `createMemo`. Reactive values read before the promise is created become dependencies, so a
+changed source starts a new request.
 
 ```tsx
-import { createResource, createSignal } from 'solid-js';
+import { createMemo, createSignal, isPending, refresh } from 'solid-js';
 
-// Simple fetch - runs once
-const [user] = createResource(() => fetchUser(1));
-
-// Reactive source - refetches when id() changes
 const [id, setId] = createSignal(1);
-const [user, { refetch, mutate }] = createResource(id, fetchUser);
-// fetcher signature: (id: number) => Promise<User>
+const user = createMemo(() => fetchUser(id()));
 
-// Access state
-user(); // current data (undefined while loading)
-user.loading; // boolean - true while fetching
-user.error; // error if last fetch threw
-user.state; // 'unresolved' | 'pending' | 'ready' | 'refreshing' | 'errored'
+user(); // resolved data; suspends while the current request is pending
+isPending(user); // pending state for this computation
+refresh(user); // rerun the computation without changing id
 ```
 
 </Section>
 
 <Section>
 
-## With Suspense
+## Loading and Errored boundaries
 
-Wrap resource consumers in Suspense to declaratively show loading states.
+`Loading` renders a fallback while a descendant async computation is pending. `Errored` handles failures and exposes
+a reset callback.
 
 ```tsx
-import { createResource, Suspense } from 'solid-js';
-import { ErrorBoundary } from 'solid-js';
+import { createMemo, Errored, Loading } from 'solid-js';
 
 function UserProfile(props: { id: number }) {
-  const [user] = createResource(() => props.id, fetchUser);
-  return <div>{user()?.name}</div>;
-  // No explicit loading check - Suspense handles it
-}
+  const user = createMemo(() => fetchUser(props.id));
 
-function App() {
   return (
-    <ErrorBoundary fallback={<p>Failed to load</p>}>
-      <Suspense fallback={<Spinner />}>
-        <UserProfile id={1} />
-      </Suspense>
-    </ErrorBoundary>
+    <Errored fallback={(error, reset) => <button onClick={reset}>Retry: {error().message}</button>}>
+      <Loading fallback={<Spinner />}>
+        <div>{user().name}</div>
+      </Loading>
+    </Errored>
   );
 }
 ```
@@ -75,26 +64,25 @@ function App() {
 
 <Section>
 
-## refetch and mutate
+## Keep stale data visible with latest
 
-refetch re-runs the fetcher. mutate lets you update the resource value optimistically without a network call.
+`latest` returns the last resolved value while a refresh is pending. This is useful when replacing the whole view with
+a loading fallback would be distracting.
 
 ```tsx
-const [todos, { refetch, mutate }] = createResource(fetchTodos);
+import { createMemo, isPending, latest, refresh } from 'solid-js';
 
-// Optimistic delete
-function deleteTodo(id: number) {
-  mutate((todos) => todos?.filter((t) => t.id !== id));
-  apiDeleteTodo(id).catch(() => refetch()); // rollback on error
-}
+const todos = createMemo(fetchTodos);
+const visibleTodos = () => latest(todos) ?? [];
 
-// Manual refresh
-<button onClick={refetch}>↺ Refresh</button>;
+<button disabled={isPending(todos)} onClick={() => refresh(todos)}>
+  Refresh
+</button>;
 ```
 
 </Section>
 
-<Callout type="tip" title="initialValue">
-  Pass `initialValue` in options to start with known data (e.g. SSR). The resource will be in 'ready'
-  state immediately and Suspense won't trigger on first render.
+<Callout type="tip" title="Seed the first render">
+  Pass `{ loadingValue: initialData }` to createMemo when SSR or cached data should remain available during the first
+  request.
 </Callout>

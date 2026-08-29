@@ -47,7 +47,7 @@ export class SVGPathParser {
     return commands;
   }
 
-  static serialize(commands: PathCommand[]): string {
+  static serialize(commands: readonly PathCommand[]): string {
     return commands.map((cmd) => this.commandToString(cmd)).join(' ');
   }
 

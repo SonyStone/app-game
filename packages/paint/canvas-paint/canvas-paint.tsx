@@ -3,7 +3,7 @@ import { makeEventListener } from '@solid-primitives/event-listener';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { createEffect, createSignal, onMount, untrack } from 'solid-js';
+import { createSignal, createTrackedEffect, onSettled, untrack } from 'solid-js';
 import { SquareComponent } from '../brush-example/square/square.component';
 import { hexToRgb, normalizedToRgb, rgbToHex } from '../brush-example/utils/color-functions';
 import { createPointerEvents } from './apply-pointer-events';
@@ -18,7 +18,7 @@ export default function CanvasPaint() {
   const gl = renderer.gl;
 
   const resize = createWindowSize();
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(resize.width, resize.height);
   });
 
@@ -45,44 +45,46 @@ export default function CanvasPaint() {
   const pointerEvents = createPointerEvents();
   const pointerTarget = canvasEl as unknown as HTMLElement;
 
-  onMount(async () => {
-    makeEventListener(pointerTarget, 'pointerdown', (e: PointerEvent) => {
-      if (e.pressure === 0 || e.buttons !== 1) {
-        return;
-      }
-      const x = e.clientX;
-      const y = e.clientY;
-
-      brushStroke.add([x, y], e.pressure);
-    });
-    makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
-      const events = e.getCoalescedEvents();
-      if (events.length === 0) {
-        events.push(e);
-      }
-      for (const event of events) {
+  onSettled(() => {
+    void (async () => {
+      makeEventListener(pointerTarget, 'pointerdown', (e: PointerEvent) => {
         if (e.pressure === 0 || e.buttons !== 1) {
-          continue;
+          return;
         }
-        let x = event.clientX;
-        let y = event.clientY;
+        const x = e.clientX;
+        const y = e.clientY;
 
         brushStroke.add([x, y], e.pressure);
-
-        if (untrack(updateOnEvent)) {
-          brushStroke.render(true);
+      });
+      makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
+        const events = e.getCoalescedEvents();
+        if (events.length === 0) {
+          events.push(e);
         }
-      }
-    });
+        for (const event of events) {
+          if (e.pressure === 0 || e.buttons !== 1) {
+            continue;
+          }
+          let x = event.clientX;
+          let y = event.clientY;
 
-    makeEventListener(pointerTarget, 'pointerup', (e) => {
-      brushStroke.end();
-      if (untrack(updateOnEvent)) {
-        brushStroke.render(false);
-      }
-    });
+          brushStroke.add([x, y], e.pressure);
 
-    await pointerEvents.apply(canvasEl as unknown as Element);
+          if (untrack(updateOnEvent)) {
+            brushStroke.render(true);
+          }
+        }
+      });
+
+      makeEventListener(pointerTarget, 'pointerup', (e) => {
+        brushStroke.end();
+        if (untrack(updateOnEvent)) {
+          brushStroke.render(false);
+        }
+      });
+
+      await pointerEvents.apply(canvasEl as unknown as Element);
+    })();
   });
 
   const [, start, stop] = createRAF((t?: number | any) => {
@@ -90,14 +92,14 @@ export default function CanvasPaint() {
       brushStroke.render();
     }
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     updateOnEvent() ? stop() : start();
   });
   start();
 
   return (
     <>
-      <div class="absolute bottom-2 start-2 flex flex-col bg-white px-1">
+      <div class="absolute start-2 bottom-2 flex flex-col bg-white px-1">
         <button onClick={() => setUpdateOnEvent(!untrack(updateOnEvent))}>
           update on "{updateOnEvent() ? 'event' : 'requestAnimationFrame'}"
         </button>
@@ -129,7 +131,7 @@ export default function CanvasPaint() {
       </div>
       {canvasEl}
       <SquareComponent gl={gl} parent={brushStroke.scene} texture={brushStroke.layer()} zIndex={0.9} />
-      <pre class="absolute right-0 top-0 bg-white">Brush</pre>
+      <pre class="absolute top-0 right-0 bg-white">Brush</pre>
       <SquareComponent
         gl={gl}
         parent={brushStroke.scene}

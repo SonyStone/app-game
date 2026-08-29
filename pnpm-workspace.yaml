@@ -3,32 +3,38 @@ packages:
   - packages/*
 
 catalog:
-  '@corvu/drawer': ^0.2.4
-  '@kobalte/core': ^0.13.11
   '@mdx-js/mdx': ^3.1.1
   '@mdx-js/rollup': ^3.1.1
   '@playwright/test': ^1.60.0
-  '@solid-primitives/active-element': ^2.1.5
-  '@solid-primitives/clipboard': ^1.6.4
-  '@solid-primitives/context': 0.3.2
-  '@solid-primitives/cursor': ^0.1.2
-  '@solid-primitives/event-bus': 1.1.3
-  '@solid-primitives/event-listener': ^2.4.5
-  '@solid-primitives/fullscreen': ^1.3.4
-  '@solid-primitives/keyboard': ^1.3.5
-  '@solid-primitives/keyed': ^1.5.3
-  '@solid-primitives/memo': ^1.4.5
-  '@solid-primitives/pointer': ^0.3.5
-  '@solid-primitives/props': 3.2.3
-  '@solid-primitives/raf': ^2.3.4
-  '@solid-primitives/resize-observer': ^2.1.5
-  '@solid-primitives/scheduled': ^1.5.3
-  '@solid-primitives/set': ^0.7.3
-  '@solid-primitives/storage': ^4.3.4
-  '@solid-primitives/timer': 1.4.4
-  '@solid-primitives/trigger': ^1.2.3
-  '@solid-primitives/utils': ^6.4.0
-  '@solidjs/router': 0.16.1
+  '@solid-primitives/active-element': 3.0.0-next.2
+  '@solid-primitives/clipboard': 2.0.0-next.17
+  '@solid-primitives/context': 2.0.0-next.2
+  '@solid-primitives/cursor': 1.0.0-next.2
+  '@solid-primitives/devices': 3.0.0-next.2
+  '@solid-primitives/event-bus': 3.0.0-next.3
+  '@solid-primitives/event-listener': 3.0.0-next.3
+  '@solid-primitives/fullscreen': 2.0.0-next.3
+  '@solid-primitives/history': 1.0.0-next.3
+  '@solid-primitives/intersection-observer': 3.0.0-next.3
+  '@solid-primitives/keyboard': 2.0.0-next.5
+  '@solid-primitives/keyed': 3.0.0-next.2
+  '@solid-primitives/memo': 2.0.0-next.2
+  '@solid-primitives/media': 4.0.0-next.2
+  '@solid-primitives/mouse': 4.0.0-next.3
+  '@solid-primitives/pointer': 1.0.0-next.2
+  '@solid-primitives/props': 4.0.0-next.3
+  '@solid-primitives/raf': 4.0.0-next.2
+  '@solid-primitives/refs': 3.0.0-next.2
+  '@solid-primitives/resize-observer': 4.0.0-next.3
+  '@solid-primitives/scheduled': 2.0.0-next.2
+  '@solid-primitives/set': 1.0.0-next.2
+  '@solid-primitives/scroll': 3.0.0-next.4
+  '@solid-primitives/storage': 5.0.0-next.4
+  '@solid-primitives/timer': 1.4.5-next.1
+  '@solid-primitives/trigger': 3.0.0-next.2
+  '@solid-primitives/utils': 7.0.0-next.4
+  '@solid-primitives/virtual': 1.0.0-next.4
+  '@solidjs/router': 2.0.0-next.18
   '@testing-library/jest-dom': ^6.9.1
   '@unocss/reset': 66.6.8
   '@unocss/vite': 66.6.8
@@ -36,12 +42,12 @@ catalog:
   clsx: ^2.1.1
   jsdom: ^29.1.1
   shiki: ^4.1.0
-  solid-js: ^1.9.12
+  solid-js: 2.0.0-rc.4
   tailwind-merge: ^3.6.0
   typegpu-runtime-inspector-mcp: ^0.3.0
   typescript: ^6.0.3
   vite: 8.0.13
-  vite-plugin-solid: 2.11.12
+  vite-plugin-solid: 3.0.0-next.27
   vite-tsconfig-paths: ^6.1.1
   vitest: 4.1.6
 
@@ -53,3 +59,4 @@ peerDependencyRules:
   allowedVersions:
     grid-engine>phaser: 4.1.0
     tsconfck>typescript: 6.0.3
+    vite-plugin-solid-svg>solid-js: 2.0.0-rc.4

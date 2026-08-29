@@ -1,7 +1,6 @@
 import { toObservable } from '@utils/toObservable';
 import { delay, filter, tap } from 'rxjs';
 import { createMemo, createSignal, Show, untrack } from 'solid-js';
-import { Motion, Presence } from 'solid-motionone';
 
 export default function App() {
   const [show, setShow] = createSignal(true);
@@ -9,33 +8,38 @@ export default function App() {
 
   return (
     <div class="flex flex-col">
-      <h1>Hello, Solid Motion One!</h1>
+      <h1>Solid 2 Web Animations</h1>
       <button onClick={() => setShow(!show())}>Toggle Animation</button>
-      <Motion.div animate={{ opacity: [0, 1] }} transition={{ duration: 1, easing: 'ease-in-out' }}>
-        <h1>Hello, Solid Motion One!</h1>
-      </Motion.div>
+      <div
+        ref={(element) => {
+          void element.animate([{ opacity: 0 }, { opacity: 1 }], {
+            duration: 1_000,
+            easing: 'ease-in-out',
+            fill: 'both'
+          }).finished;
+        }}
+      >
+        <h1>Hello, Web Animations!</h1>
+      </div>
       <Show when={show()}>
-        <Motion.div
-          animate={{ rotate: 180, backgroundColor: 'yellow' }}
-          transition={{
-            duration: 1,
-            rotate: { duration: 2 }
+        <div
+          ref={(element) => {
+            void element.animate(
+              [
+                { transform: 'rotate(0deg)', backgroundColor: 'transparent' },
+                { transform: 'rotate(180deg)', backgroundColor: 'yellow' }
+              ],
+              { duration: 2_000, fill: 'both' }
+            ).finished;
           }}
         >
-          <h1>Hello, Solid Motion One!</h1>
-        </Motion.div>
+          <h1>Hello, Web Animations!</h1>
+        </div>
       </Show>
-      <Motion.button onClick={() => setBg('blue')} animate={{ backgroundColor: bg() }} transition={{ duration: 3 }}>
+      <button onClick={() => setBg('blue')} style={{ 'background-color': bg(), transition: 'background-color 3s' }}>
         Click Me
-      </Motion.button>
-      <Motion.div
-        class="w-100px h-100px bg-#9911ff rounded-10px flex items-center justify-center"
-        animate={{ scale: 1.2 }}
-        transition={{ duration: 0.3 }}
-        hover={{ scale: 1.5 }}
-        // whileHover={{ scale: 1.2 }}
-        // whileTap={{ scale: 0.8 }}
-      />
+      </button>
+      <div class="w-100px h-100px bg-#9911ff rounded-10px flex scale-120 items-center justify-center transition-transform duration-300 hover:scale-150" />
       <Example2 />
       <ExampleOfLayoutAnimation />
     </div>
@@ -47,18 +51,21 @@ function Example2() {
 
   return (
     <div>
-      <Presence exitBeforeEnter>
-        <Show when={show()}>
-          <Motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: '100%' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <h2>Animated Content</h2>
-          </Motion.div>
-        </Show>
-      </Presence>
+      <Show when={show()}>
+        <div
+          ref={(element) => {
+            void element.animate(
+              [
+                { opacity: 0, height: '0' },
+                { opacity: 1, height: `${element.scrollHeight}px` }
+              ],
+              { duration: 300, fill: 'both' }
+            ).finished;
+          }}
+        >
+          <h2>Animated Content</h2>
+        </div>
+      </Show>
       <button onClick={() => setShow((p) => !p)}>Toggle</button>
     </div>
   );
@@ -104,13 +111,16 @@ function ExampleOfLayoutAnimation() {
     'place-content-center place-items-center'
   ];
 
-  const index = createMemo((prev: number) => {
-    toggle();
-    while (true) {
-      const newIndex = Math.floor(Math.random() * positions.length);
-      if (newIndex !== prev) return newIndex;
-    }
-  }, 0);
+  const index = createMemo(
+    (prev: number) => {
+      toggle();
+      while (true) {
+        const newIndex = Math.floor(Math.random() * positions.length);
+        if (newIndex !== prev) return newIndex;
+      }
+    },
+    { loadingValue: 0 }
+  );
 
   const position = createMemo(() => positions[index()]);
 
@@ -118,7 +128,7 @@ function ExampleOfLayoutAnimation() {
     <div class="p-4">
       <h2>Layout Animation Example</h2>
       <button
-        class={['w-200px h-200px bg-#9911ff44 p-10px rounded-30px box-content flex  cursor-pointer', position()].join(
+        class={['w-200px h-200px bg-#9911ff44 p-10px rounded-30px box-content flex cursor-pointer', position()].join(
           ' '
         )}
         onClick={() => {

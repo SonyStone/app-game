@@ -1,6 +1,7 @@
 import { toRadian } from '@app-game/ogl/extras/path/utils';
 import { insert, spread } from '@app-game/solid-pixi';
-import { createEffect, JSX, onCleanup } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 import { RigidBody as _RigidBody, useRapier2D } from './Rapier2D';
 import { useWorld } from './World';
 
@@ -14,7 +15,7 @@ export const RigidBody = (() =>
       .setRotation(toRadian(props.angle));
     const rigidBody = world.createRigidBody(rigidBodyDesc);
 
-    createEffect(() => {
+    createTrackedEffect(() => {
       rigidBody.setTranslation({ x: props.x, y: props.y }, true);
       rigidBody.setRotation(toRadian(props.angle), true);
     });

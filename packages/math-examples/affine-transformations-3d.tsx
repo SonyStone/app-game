@@ -3,9 +3,8 @@ import { toRadian } from '@app-game/ogl/extras/path/utils';
 import { createSkipper } from '@app-game/tanki/create-skipper';
 import { numberPrecisionDragInput } from '@app-game/ui-components-examples/breadcrumbs/number-precision-drag-input';
 import createRAF from '@solid-primitives/raf';
-import { Index } from 'solid-js';
-import { createStore } from 'solid-js/store';
-import { effect } from 'solid-js/web';
+import { createStore, createTrackedEffect, For, storePath } from 'solid-js';
+
 import { NormalBox } from './camera-projection-webgl2/normal-box.component';
 import { GridHelperComponent } from './grid-helper.component';
 
@@ -29,7 +28,7 @@ export default function AffineTransformations3D() {
 
     const scene = new Transform();
 
-    effect(() => {
+    createTrackedEffect(() => {
       camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
     });
 
@@ -69,10 +68,10 @@ export default function AffineTransformations3D() {
             const m30 = matrix[0][2]; // x
             const m31 = matrix[1][2]; // y
 
-            setMatrix(0, 0, cos * m10 - sin * m11);
-            setMatrix(0, 1, sin * m10 + cos * m11);
-            setMatrix(1, 0, cos * m20 - sin * m21);
-            setMatrix(1, 1, sin * m20 + cos * m21);
+            setMatrix(storePath(0, 0, cos * m10 - sin * m11));
+            setMatrix(storePath(0, 1, sin * m10 + cos * m11));
+            setMatrix(storePath(1, 0, cos * m20 - sin * m21));
+            setMatrix(storePath(1, 1, sin * m20 + cos * m21));
           }}
         >
           <input
@@ -92,10 +91,10 @@ export default function AffineTransformations3D() {
         </form>
         <table>
           <tbody>
-            <Index each={matrix}>
+            <For keyed={false} each={matrix}>
               {(row, rowIndex) => (
                 <tr>
-                  <Index each={row()}>
+                  <For keyed={false} each={row()}>
                     {(cell, colIndex) => (
                       <td class="border-e border-t">
                         <input
@@ -104,23 +103,23 @@ export default function AffineTransformations3D() {
                           type="number"
                           onInput={(e) => {
                             const value = parseFloat(e.target.value);
-                            setMatrix(rowIndex, colIndex, value);
+                            setMatrix(storePath(rowIndex, colIndex, value));
                           }}
                           ref={(ref) => {
                             numberPrecisionDragInput(ref, {
                               value: cell,
                               onChange: (value) => {
-                                setMatrix(rowIndex, colIndex, value);
+                                setMatrix(storePath(rowIndex, colIndex, value));
                               }
                             });
                           }}
                         />
                       </td>
                     )}
-                  </Index>
+                  </For>
                 </tr>
               )}
-            </Index>
+            </For>
           </tbody>
         </table>
         {canvas.canvas}

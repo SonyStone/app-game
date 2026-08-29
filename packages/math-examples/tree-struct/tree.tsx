@@ -1,4 +1,5 @@
-import { Accessor, createMemo, createRoot, createSignal, JSX, JSXElement, onCleanup } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Accessor, createMemo, createRoot, createSignal, type Element as JSXElement, onCleanup } from 'solid-js';
 
 type NodeId = string | number;
 

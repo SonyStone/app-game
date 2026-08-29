@@ -1,5 +1,6 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { createMemo, createSignal, For, onMount, Show, type Accessor, type JSX, type Setter } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createMemo, createSignal, For, onSettled, Show, type Accessor, type Setter } from 'solid-js';
 import { formatShortcut, KeyboardDisplay, LayoutToggle, type KeyboardLayout } from './keyboard-display';
 
 // ============================================================================
@@ -102,7 +103,7 @@ export default function ShortcutSettings(): JSX.Element {
   });
 
   // Track keyboard input when not editing
-  onMount(() => {
+  onSettled(() => {
     makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
       // Don't track if we're editing a shortcut
       if (editingActionId()) return;
@@ -171,7 +172,7 @@ export default function ShortcutSettings(): JSX.Element {
   };
 
   return (
-    <div class="flex min-h-screen select-none flex-col bg-neutral-900 text-white">
+    <div class="flex min-h-screen flex-col bg-neutral-900 text-white select-none">
       {/* Header */}
       <header class="flex items-center justify-between border-b border-neutral-700 p-4">
         <h1 class="text-xl font-bold">Shortcut Settings</h1>
@@ -263,7 +264,7 @@ function CategorySection(props: {
         <span class="text-sm text-neutral-500">({props.category.actions.length})</span>
       </button>
       <Show when={props.expanded}>
-        <div class="ml-2 mt-1 border-l border-neutral-700 pl-2">
+        <div class="mt-1 ml-2 border-l border-neutral-700 pl-2">
           <For each={props.category.actions}>
             {(action) => (
               <ActionRow
@@ -346,7 +347,7 @@ function ShortcutCaptureOverlay(props: {
   };
 
   // Handle keyboard input (physical keyboard)
-  onMount(() => {
+  onSettled(() => {
     makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();

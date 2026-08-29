@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import { isGapKey, type FlipAnimateEntry, type GapKey } from 'solid-dnd';
-import { createEffect, createSignal, For, on, Show, type JSX } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import {
   pointsToSvg,
   roundPt,
@@ -59,14 +60,12 @@ export function FlipDebugOverlay(props: {
 
   // Clear element trails on new drag session
   createEffect(
-    on(
-      () => props.isDragging,
-      (dragging) => {
-        if (dragging && props.enabled) {
-          clearTrails();
-        }
+    () => props.isDragging,
+    (dragging) => {
+      if (dragging && props.enabled) {
+        clearTrails();
       }
-    )
+    }
   );
 
   // ── Copy feedback (with proper cleanup) ─────────────────────────────────

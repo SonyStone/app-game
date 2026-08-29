@@ -1,4 +1,5 @@
-import { createComponent, JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createComponent } from 'solid-js';
 
 /**
  * Higher-order function that wraps a component with multiple providers.

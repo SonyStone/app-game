@@ -1,5 +1,5 @@
 import { Meta, Title } from '@solidjs/meta';
-import { createEffect } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 import tgpu from 'typegpu';
 import { builtin, vec2f, vec4f } from 'typegpu/data';
 import { TypeGPUProvider, useTypeGPU } from '../utils/TypeGPU';
@@ -76,7 +76,7 @@ function App() {
     .withFragment(fragment, { format: presentationFormat })
     .createPipeline();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     size();
     pipeline
       .withColorAttachment({

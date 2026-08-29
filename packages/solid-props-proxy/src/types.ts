@@ -1,4 +1,4 @@
-import type { ComponentProps, JSX } from 'solid-js';
+import type { ComponentProps, JSX } from '@solidjs/web';
 
 /** Object record used for dynamic prop and DOM slot access. */
 export type AnyRecord = Record<string, unknown>;

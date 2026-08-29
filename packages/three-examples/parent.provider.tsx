@@ -4,11 +4,7 @@ import { Object3D } from 'three';
 const ParentContext = createContext<Object3D>();
 
 export function ParentProvider(props: { children: any; object3D: Object3D }) {
-  return (
-    <ParentContext.Provider value={props.object3D}>
-      {props.children}
-    </ParentContext.Provider>
-  );
+  return <ParentContext value={props.object3D}>{props.children}</ParentContext>;
 }
 
 export function useParent() {

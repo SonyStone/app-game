@@ -1,4 +1,4 @@
-import { createMemo, createSignal, ErrorBoundary, Show } from 'solid-js';
+import { createMemo, createSignal, Errored, Show } from 'solid-js';
 
 import s from './App.module.scss';
 import { Frame } from './interfaces/Frame';
@@ -27,7 +27,7 @@ import Rewind from './Rewind';
 import Timeline from './Timeline';
 import { createFileDrop } from './utils/file-drop';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface ExplicitAttributes {
       type: string;
@@ -37,14 +37,14 @@ declare module 'solid-js' {
 
 export default function App() {
   return (
-    <ErrorBoundary
+    <Errored
       fallback={(error) => {
         console.error(error);
         return <div>Error in the Player</div>;
       }}
     >
       <VideoApp></VideoApp>
-    </ErrorBoundary>
+    </Errored>
   );
 }
 
@@ -133,7 +133,7 @@ export function VideoApp() {
               brushColor={brushColor()}
               brushComposite={brushComposite()}
             />
-            <video ref={setMedia} src={fileSrc() ?? src()} class={s.video} controls={false} attr:type="video/mp4" />
+            <video ref={setMedia} src={fileSrc() ?? src()} class={s.video} controls={false} />
           </div>
         </div>
         <div class={s.player}>
@@ -169,7 +169,7 @@ export function VideoApp() {
               <SkipPreviousIcon></SkipPreviousIcon>
             </button>
             <button
-              use:onHold={() => setCurrentFrame((currentFrame() - 1) as Frame)}
+              ref={(element) => onHold(element, () => () => setCurrentFrame((currentFrame() - 1) as Frame))}
               onClick={() => setCurrentFrame((currentFrame() - 1) as Frame)}
             >
               <FastRewindIcon></FastRewindIcon>
@@ -188,7 +188,7 @@ export function VideoApp() {
             </Show>
 
             <button
-              use:onHold={() => setCurrentFrame((currentFrame() + 1) as Frame)}
+              ref={(element) => onHold(element, () => () => setCurrentFrame((currentFrame() + 1) as Frame))}
               onClick={() => setCurrentFrame((currentFrame() + 1) as Frame)}
             >
               <FastForwardIcon></FastForwardIcon>

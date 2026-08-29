@@ -1,16 +1,6 @@
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 import * as THREE from 'three';
-import {
-  Camera,
-  Color,
-  GridHelper,
-  Group,
-  Mesh,
-  MeshPhongMaterial,
-  PointLight,
-  Scene,
-  WebGLRenderer
-} from 'three';
+import { Camera, Color, GridHelper, Group, Mesh, MeshPhongMaterial, PointLight, Scene, WebGLRenderer } from 'three';
 
 import { useCamera } from './Camera.provider';
 import Controls from './Controls';
@@ -37,7 +27,7 @@ export default function SvgLoader() {
   controls.init(renderer.domElement as unknown as HTMLElement);
 
   let currentCamera!: Camera;
-  createEffect(() => {
+  createTrackedEffect(() => {
     const { width, height } = resize();
     currentCamera = camera();
     renderer.setSize(width, height);
@@ -52,10 +42,12 @@ export default function SvgLoader() {
 
   const scene = new Scene();
 
-  createEffect(async () => {
-    const group = await loadSVG(hexagon);
-    scene.add(group);
-    render();
+  createTrackedEffect(() => {
+    void (async () => {
+      const group = await loadSVG(hexagon);
+      scene.add(group);
+      render();
+    })();
   });
 
   scene.background = new Color(0xf6f6f6);

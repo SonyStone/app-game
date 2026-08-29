@@ -1,6 +1,6 @@
 import createRAF from '@solid-primitives/raf';
 import { createRootPool } from '@solid-primitives/rootless';
-import { createEffect, createSignal, Show, untrack } from 'solid-js';
+import { createSignal, createTrackedEffect, Show, untrack } from 'solid-js';
 
 export default function SolidRootlessTest() {
   return (
@@ -22,7 +22,7 @@ function CreateRootPoolExample() {
   const useCounter1 = createRootPool((arg: () => number, active = () => true, dispose = () => {}) => {
     const [count, setCount] = createSignal<number>(arg());
 
-    createEffect(() => {
+    createTrackedEffect(() => {
       if (!active()) return;
       // so some side effect
       console.log('count', count());
@@ -30,7 +30,7 @@ function CreateRootPoolExample() {
 
     return (
       <button
-        class="flex select-none place-items-center gap-2 overflow-hidden rounded bg-amber-200 ps-2"
+        class="flex place-items-center gap-2 overflow-hidden rounded bg-amber-200 ps-2 select-none"
         onClick={() => setCount(count() + 1)}
       >
         Count: {count()}
@@ -45,7 +45,7 @@ function CreateRootPoolExample() {
 
     return (
       <button
-        class="flex select-none place-items-center gap-2 overflow-hidden rounded bg-amber-200 ps-2"
+        class="flex place-items-center gap-2 overflow-hidden rounded bg-amber-200 ps-2 select-none"
         onClick={() => setCount(count() + 1)}
       >
         Count: {count()}

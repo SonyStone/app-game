@@ -1,6 +1,6 @@
 import createRAF from '@solid-primitives/raf';
 import { withWrapper } from '@utils/withProviders';
-import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, createTrackedEffect, onCleanup, Show } from 'solid-js';
 import tgpu from 'typegpu';
 import { builtin, vec2f, vec4f } from 'typegpu/data';
 import { GPUProvider, useGPU } from '../utils/GPU.provider';
@@ -130,7 +130,7 @@ function App(props: { running?: boolean; render?: (view: GPUTextureView) => void
 
   const [running, start, stop] = createRAF(render);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (props.running) {
       start();
     } else {

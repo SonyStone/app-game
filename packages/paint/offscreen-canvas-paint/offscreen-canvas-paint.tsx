@@ -1,4 +1,4 @@
-import { createEffect, onMount } from 'solid-js';
+import { createTrackedEffect, onSettled } from 'solid-js';
 
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { createWindowSize } from '@solid-primitives/resize-observer';
@@ -12,21 +12,35 @@ export default function OffscreenCanvasPaint() {
   const pointerEvents = createPointerEvents();
   const pointerTarget = canvas as unknown as HTMLElement;
 
-  onMount(async () => {
-    // should be mounted before use
-    const offscreenCanvas = canvas.transferControlToOffscreen();
-    // takes way more time to render
-    worker.postMessage({ canvas: offscreenCanvas, type: 'canvas' }, [offscreenCanvas]);
+  onSettled(() => {
+    void (async () => {
+      // should be mounted before use
+      const offscreenCanvas = canvas.transferControlToOffscreen();
+      // takes way more time to render
+      worker.postMessage({ canvas: offscreenCanvas, type: 'canvas' }, [offscreenCanvas]);
 
-    onMount(() => {
-      makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
-        const events = e.getCoalescedEvents();
-        if (events.length === 0) {
-          events.push(e);
-        }
-        for (const event of events) {
+      onSettled(() => {
+        makeEventListener(pointerTarget, 'pointermove', (e: PointerEvent) => {
+          const events = e.getCoalescedEvents();
+          if (events.length === 0) {
+            events.push(e);
+          }
+          for (const event of events) {
+            worker.postMessage({
+              type: 'pointermove',
+              event: {
+                pressure: event.pressure,
+                buttons: event.buttons,
+                x: event.clientX,
+                y: event.clientY
+              }
+            });
+          }
+        });
+
+        makeEventListener(pointerTarget, 'pointerup', (event: PointerEvent) => {
           worker.postMessage({
-            type: 'pointermove',
+            type: 'pointerup',
             event: {
               pressure: event.pressure,
               buttons: event.buttons,
@@ -34,27 +48,15 @@ export default function OffscreenCanvasPaint() {
               y: event.clientY
             }
           });
-        }
-      });
-
-      makeEventListener(pointerTarget, 'pointerup', (event: PointerEvent) => {
-        worker.postMessage({
-          type: 'pointerup',
-          event: {
-            pressure: event.pressure,
-            buttons: event.buttons,
-            x: event.clientX,
-            y: event.clientY
-          }
         });
       });
-    });
 
-    await pointerEvents.apply(canvas as unknown as Element);
+      await pointerEvents.apply(canvas as unknown as Element);
+    })();
   });
 
   const resize = createWindowSize();
-  createEffect(() => {
+  createTrackedEffect(() => {
     worker.postMessage({ resize, type: 'resize' });
     setSize(resize.width, resize.height, canvas);
   });

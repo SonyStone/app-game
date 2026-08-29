@@ -1,8 +1,9 @@
 import { Vec2Tuple } from '@app-game/ogl/math/vec-2_old';
-import { ComponentProps, createEffect, createMemo, onMount } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { createMemo, createTrackedEffect, onSettled } from 'solid-js';
 import useDrag from './use-drag';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'resize-handle': ComponentProps<'div'> & { 'attr:which': string };
@@ -42,10 +43,10 @@ type Which = keyof typeof comps;
 export default function PanelResizeHandle(props: { which: Which; onDrag?: (vec: Vec2Tuple) => void }) {
   let element!: HTMLElement;
 
-  onMount(() => {
+  onSettled(() => {
     const drag = useDrag(element);
 
-    createEffect(() => {
+    createTrackedEffect(() => {
       const { domDragStarted, startPos, detected, totalDistanceMoved, dragMovement, movement } = drag();
 
       const which = props.which;

@@ -4,7 +4,8 @@
  * Wraps the native color input with a label
  */
 
-import type { Accessor, JSX, Setter } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Accessor, Setter } from 'solid-js';
 
 export interface ColorPickerProps {
   /** Current color (hex format) */

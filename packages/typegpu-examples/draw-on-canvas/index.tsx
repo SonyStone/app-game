@@ -1,5 +1,5 @@
 import { Meta, Title } from '@solidjs/meta';
-import { createEffect } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 import { TgpuRoot } from 'typegpu';
 import * as d from 'typegpu/data';
 import { ResizeContainer } from '../ui/ResizeContainer';
@@ -36,7 +36,7 @@ function App(props: { transform: d.m3x3f }) {
     textureView
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     size();
 
     resolution.write(d.vec2f(size().width, size().height));

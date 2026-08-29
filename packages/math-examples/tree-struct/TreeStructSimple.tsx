@@ -1,9 +1,10 @@
-import { ComponentProps, createMemo, createSignal, For, Show } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { ImageCache, ImageCacheProvider, ImageStore } from './ImageCache';
 import { TreeNode } from './tree';
 import { exampleTrees } from './tree-struct';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'app-tree-struct-simple': ComponentProps<'div'>;

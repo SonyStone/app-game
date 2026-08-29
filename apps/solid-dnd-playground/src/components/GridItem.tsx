@@ -1,4 +1,4 @@
-import type { JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
 import type { DemoItem } from '../data';
 import { GHOST_CLASS } from './styles';
 
@@ -30,7 +30,7 @@ export function GridItem(props: GridItemProps): JSX.Element {
       ref={props.ref}
       onPointerDown={props.onPointerDown}
       role="option"
-      aria-selected={props.isSelected}
+      aria-selected={props.isSelected ? 'true' : 'false'}
       aria-roledescription="sortable item"
       class={`flex cursor-grab touch-none flex-col items-center gap-2 rounded-lg border p-4 transition-all select-none active:cursor-grabbing ${stateClass()}`}
     >

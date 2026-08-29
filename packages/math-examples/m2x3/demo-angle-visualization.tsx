@@ -48,9 +48,11 @@ function create3Poinnt(props: [number, number, number, number, number, number]) 
         update();
         return v;
       },
-      v,
       {
-        equals: false
+        ...{
+          equals: false
+        },
+        loadingValue: v
       }
     )
   );

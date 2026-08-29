@@ -1,4 +1,4 @@
-import { Accessor, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
+import { Accessor, createMemo, createSignal, createTrackedEffect, untrack } from 'solid-js';
 import { EventHandler, ReorderEvent } from '../events';
 import { createBlockItemId, ItemId } from '../Item';
 import { measureBlocks } from '../measure';
@@ -31,7 +31,7 @@ export function createDnd<K, T>(
   const [dragState, setDragState] = createSignal<DragState<K>>();
   const [pointerPos, setPointerPos] = createSignal(Vec2.Zero);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const state = clickedBlock();
     if (!state) return;
 
@@ -93,11 +93,11 @@ export function createDnd<K, T>(
     document.addEventListener('pointerup', onup);
     document.addEventListener('pointercancel', oncancel);
 
-    onCleanup(() => {
+    return () => {
       document.removeEventListener('pointermove', onmove);
       document.removeEventListener('pointerup', onup);
       document.removeEventListener('pointercancel', oncancel);
-    });
+    };
   });
 
   // Remove the selected blocks

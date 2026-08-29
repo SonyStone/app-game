@@ -1,8 +1,8 @@
-import { onCleanup, onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 import s from './style.module.scss';
 
 export default function Example() {
-  onMount(() => {
+  onSettled(() => {
     const cards = document.querySelectorAll('.' + s.card);
 
     cards.forEach((card) => {
@@ -21,11 +21,11 @@ export default function Example() {
       this.style.setProperty('--start', (angle + 60).toString());
     }
 
-    onCleanup(() => {
+    return () => {
       cards.forEach((card) => {
         card.removeEventListener('pointermove', handleMouseMove as any);
       });
-    });
+    };
   });
 
   return (

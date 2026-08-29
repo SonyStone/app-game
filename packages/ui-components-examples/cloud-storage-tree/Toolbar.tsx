@@ -1,4 +1,5 @@
-import { JSX, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Show } from 'solid-js';
 
 import { useCloudStorage } from './CloudStorageContext';
 

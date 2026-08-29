@@ -1,5 +1,6 @@
-import { Accessor, Component, createEffect, createMemo, For, JSX, onCleanup, onMount, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import type { JSX } from '@solidjs/web';
+import { Dynamic } from '@solidjs/web';
+import { Accessor, Component, createMemo, createTrackedEffect, For, onSettled, Show } from 'solid-js';
 import { BlockItem, Item, ItemId } from './Item';
 import {
   AnimationState,
@@ -116,7 +117,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
   const itemElements = new Map<ItemId, HTMLElement>();
   let focusElement!: HTMLDivElement;
 
-  onMount(injectCSS);
+  onSettled(injectCSS);
 
   const options = createMemo(() => ({
     transitionDuration: props.transitionDuration ?? 200,
@@ -246,10 +247,11 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
 
   let removeClickHandler: (() => void) | undefined;
 
-  onMount(() => {
+  onSettled(() => {
     const ondown = () => removeClickHandler?.();
     document.addEventListener('pointerdown', ondown, { capture: true });
-    onCleanup(() => document.removeEventListener('pointerdown', ondown, { capture: true }));
+
+    return () => document.removeEventListener('pointerdown', ondown, { capture: true });
   });
 
   const handlePointerDown = (item: BlockItem<K, T>) => (ev: PointerEvent) => {
@@ -288,7 +290,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
     }
   };
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const selection = props.selection;
     if (!selection) return;
 
@@ -435,7 +437,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
         ['--solidnest-duration']: `${options().transitionDuration}ms`
       }}
     >
-      <div ref={focusElement} tabIndex={-1} />
+      <div ref={focusElement} tabindex={-1} />
       {renderItem(root(), tree, {}, styles)}
       {/* Drag ghost */}
       <Show when={dragTree()} keyed>

@@ -9,9 +9,9 @@ import {
   Subject,
   switchMap,
   takeUntil,
-  withLatestFrom,
+  withLatestFrom
 } from 'rxjs';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createSignal, createTrackedEffect, onCleanup } from 'solid-js';
 import { stroke } from './croquis/brush/simple';
 import { getStylusState } from './croquis/stylus';
 import { pointerdown, pointermove, pointerup } from './events/pointer';
@@ -35,7 +35,7 @@ export function currentImage(
                 ctx,
                 color,
                 size,
-                globalCompositeOperation,
+                globalCompositeOperation
               },
               getStylusState(event)
             );
@@ -43,11 +43,7 @@ export function currentImage(
             return pointermove(ctx.canvas).pipe(
               startWith(event),
               map((event) => context.move(getStylusState(event))),
-              takeUntil(
-                pointerup(ctx.canvas).pipe(
-                  map((event) => context.up(getStylusState(event)))
-                )
-              ),
+              takeUntil(pointerup(ctx.canvas).pipe(map((event) => context.up(getStylusState(event))))),
               last()
             );
           }),
@@ -71,7 +67,7 @@ export function currentImage(
 
   const [image, setImage] = createSignal<ImageData | undefined>();
 
-  createEffect(() => destination.next(image()));
+  createTrackedEffect(() => destination.next(image()));
 
   const subscription = source.subscribe((img) => setImage(img));
 

@@ -1,45 +1,42 @@
 <Header>
 
-# Batching & Untrack <Badge>Core</Badge>
+# Scheduling & Untrack <Badge>Core</Badge>
 
 <Description>
-  batch() groups multiple signal updates into a single notification. untrack() reads reactive values without
-  creating a dependency.
+  Solid stages updates automatically until the current microtask ends. flush() applies pending work immediately,
+  while untrack() reads reactive values without creating a dependency.
 </Description>
 
 </Header>
 
 <Section>
 
-## batch()
+## Automatic batching
 
-Without batch, each setX() call triggers separate effect runs. batch defers notifications until the function
-completes.
+Solid 2 stages signal and store updates automatically. Subscribers see one settled state after synchronous work
+finishes, regardless of whether updates happen in an event handler, timer, or promise callback.
 
 ```ts
-import { batch, createEffect, createSignal } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 
 const [x, setX] = createSignal(0);
 const [y, setY] = createSignal(0);
 
-createEffect(() => console.log(x(), y()));
+createEffect(
+  () => [x(), y()] as const,
+  ([nextX, nextY]) => console.log(nextX, nextY)
+);
 
-// Without batch - effect runs twice
-setX(1); // effect: 1, 0
-setY(1); // effect: 1, 1
-
-// With batch - effect runs once
-batch(() => {
-  setX(2); // queued
-  setY(2); // queued
-}); // effect: 2, 2 (single run)
+setX(1);
+setY(1);
+// effect: 1, 1 (single run after the current microtask)
 ```
 
 </Section>
 
 <Section>
 
-## Live Demo: batch
+## Live Demo: automatic scheduling
 
 <BatchDemo />
 
@@ -58,26 +55,25 @@ const [trigger, setTrigger] = createSignal(0);
 const [data, setData] = createSignal('hello');
 
 // Effect only re-runs when trigger changes
-createEffect(() => {
-  trigger(); // subscribed
-
+createEffect(trigger, () => {
   // Read data without subscribing - won't re-run when data changes
-  const snapshot = untrack(() => data());
+  const snapshot = untrack(data);
   console.log('triggered, data snapshot:', snapshot);
 });
 ```
 
 </Section>
 
-<Callout type="info" title="batch is automatic in event handlers">
-  SolidJS automatically batches updates in DOM event handlers (onClick, onInput, etc.). You only need explicit `batch()` for async contexts like setTimeout, fetch callbacks, or WebSocket handlers.
+<Callout type="warning" title="flush is an imperative escape hatch">
+  Use `flush()` only when code must observe pending reactive work immediately, such as measuring DOM after a state
+  change. Normal application updates should rely on automatic scheduling.
 </Callout>
 
 <Section>
 
 ## Practical: multi-field form reset
 
-batch is ideal for resetting multiple fields at once without intermediate effect runs.
+Multiple setters can be called directly. Subscribers receive the final state once synchronous work settles.
 
 ```ts
 const [name, setName] = createSignal('');
@@ -85,11 +81,9 @@ const [email, setEmail] = createSignal('');
 const [age, setAge] = createSignal(0);
 
 function resetForm() {
-  batch(() => {
-    setName('');
-    setEmail('');
-    setAge(0);
-  });
+  setName('');
+  setEmail('');
+  setAge(0);
   // Subscribers notified once, with all fields reset
 }
 ```

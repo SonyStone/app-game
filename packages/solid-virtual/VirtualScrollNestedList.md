@@ -45,7 +45,8 @@ SVG attributes live directly on the object. Direct text uses `textContent`. This
 
 The record value includes `number` and `NestedItem[]` because TypeScript string index signatures also cover named `index` and `children` properties. An intersection with plain `Record<string, string>` would incorrectly require those properties to be strings.
 
-Example wraps parsed records with `createMutable`. Each SVG attribute has its own labeled textarea. Editing mutates that attribute directly and updates both virtualized and regular views.
+The example wraps parsed records with `createStore`. Each SVG attribute has its own labeled textarea. Editing uses a
+`storePath` update and refreshes both virtualized and regular views.
 
 Attribute editors are keyed by attribute name, not `[name, value]` entry tuples. Changing a value therefore updates the existing textarea instead of replacing its DOM node, focus, or caret.
 

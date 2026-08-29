@@ -1,7 +1,8 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { resolveFirst } from '@solid-primitives/refs';
 import { isClient } from '@solid-primitives/utils';
-import { createContext, createEffect, type JSX, children as resolveChildren, useContext } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createContext, createTrackedEffect, children as resolveChildren, useContext } from 'solid-js';
 import {
   createDragSensorFactory,
   type CreateDragSensorOptions,
@@ -115,7 +116,7 @@ function DragSensorTarget<TData = unknown, TElement extends HTMLElement = HTMLEl
     (item): item is TElement => isHTMLElement(item)
   );
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const target = element();
 
     if (!target) {
@@ -140,9 +141,7 @@ function DragSensorScope(props: DragSensorJSXScopeProps): JSX.Element {
   const child = props.children;
 
   return (
-    <DragSensorJSXContext.Provider value={scope}>
-      {typeof child === 'function' ? child(scope) : child}
-    </DragSensorJSXContext.Provider>
+    <DragSensorJSXContext value={scope}>{typeof child === 'function' ? child(scope) : child}</DragSensorJSXContext>
   );
 }
 

@@ -15,7 +15,6 @@ export type {
 export type { ObjectMap } from './core/utils';
 export * from './hooks';
 export * from './renderer';
-export * from './three-types';
 export * from './web/Canvas';
 export { createPointerEvents as events } from './web/events';
 export { ThreeJSX };

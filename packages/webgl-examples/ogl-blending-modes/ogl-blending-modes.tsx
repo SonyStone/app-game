@@ -2,8 +2,8 @@ import { GridHelperComponent } from '@app-game/math-examples/grid-helper.compone
 import { Camera, Orbit, Renderer, Texture, Transform, Vec3 } from '@app-game/ogl';
 import { BLENDING_FACTOR } from '@app-game/webgl/static-variables';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { For } from 'solid-js';
-import { effect } from 'solid-js/web';
+import { For, createTrackedEffect } from 'solid-js';
+
 import { PlaneComponent } from './plane.component';
 
 import { TextureProgram } from './texture-program/texture-program';
@@ -30,7 +30,7 @@ export default function OglBlendingModes() {
 
   const size = createWindowSize();
 
-  effect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(size.width, size.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
   });

@@ -1,4 +1,4 @@
-import { type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
 import { markdownComponents } from '../markdown-components';
 import PropsContent from './props.md?markdown';
 

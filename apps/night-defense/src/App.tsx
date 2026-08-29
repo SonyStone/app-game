@@ -1,5 +1,5 @@
 import { Application, Stage } from '@app-game/solid-pixi';
-import type { JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
 
 type AppProps = {
   children?: JSX.Element;

@@ -1,6 +1,7 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createScrollPosition } from '@solid-primitives/scroll';
-import { createMemo, createSignal, For, Show, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { NestedItem } from '.';
 import { Item } from '../shared/Item';
 import { VirtualScrollPreview } from '../shared/VirtualPreview';

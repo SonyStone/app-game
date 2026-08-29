@@ -1,5 +1,5 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { createSignal, onMount } from 'solid-js';
+import { createSignal, onSettled } from 'solid-js';
 import { App } from './wasm_bindgen/libs/from-webgl-state-diagram/draw-cubes/pkg/draw_cubes';
 import { App as App2 } from './wasm_bindgen/libs/from-webgl-state-diagram/samplers/pkg/samplers';
 
@@ -13,10 +13,10 @@ export default function FromWebglStateDiagram() {
 }
 
 function DrawCubes() {
-  const canvas = (<canvas class="h-[80vh] max-w-full touch-none" tabIndex={0} />) as HTMLCanvasElement;
+  const canvas = (<canvas class="h-[80vh] max-w-full touch-none" tabindex={0} />) as HTMLCanvasElement;
   const [frameTook, setFrameTook] = createSignal<number>(0);
 
-  onMount(() => {
+  onSettled(() => {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
     const app = App.new(canvas);
@@ -58,10 +58,10 @@ function DrawCubes() {
 }
 
 function Samplers() {
-  const canvas = (<canvas class="h-[80vh] max-w-full touch-none" tabIndex={0} />) as HTMLCanvasElement;
+  const canvas = (<canvas class="h-[80vh] max-w-full touch-none" tabindex={0} />) as HTMLCanvasElement;
   const [frameTook, setFrameTook] = createSignal<number>(0);
 
-  onMount(() => {
+  onSettled(() => {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
     const app = App2.new(canvas);

@@ -2,7 +2,8 @@ import { DEFAULT_ALTITUDE_ANGLE, HammerInput, createPointerEventsHandler } from 
 import { clamp, radToDeg } from '@app-game/pixijs-research/math/MathUtils';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { Title } from '@solidjs/meta';
-import { ComponentProps, Show, createMemo, createSignal } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { Show, createMemo, createSignal } from 'solid-js';
 import { MathUtils } from 'three';
 import { useOffscreenCanvas } from './offscreen-canvas';
 import type { WorkerMessage } from './offscreen-canvas.worker';
@@ -88,7 +89,7 @@ export default function Multitouch() {
       <svg
         viewBox="0 0 100 100"
         xmlns="http://www.w3.org/2000/svg"
-        class="md:h-120 md:w-120 pointer-events-none absolute end-2 top-2 h-60 w-60"
+        class="pointer-events-none absolute end-2 top-2 h-60 w-60 md:h-120 md:w-120"
       >
         <g transform="scale(0.9)" transform-origin="50 50">
           <line x1="0" y1="100" x2="100" y2="100" stroke="black" stroke-width="1" />

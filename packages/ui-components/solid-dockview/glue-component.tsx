@@ -1,3 +1,4 @@
+import { Portal } from '@solidjs/web';
 import {
   CreateComponentOptions,
   DockviewGroupPanel,
@@ -8,8 +9,7 @@ import {
   IWatermarkRenderer,
   WatermarkRendererInitParameters
 } from 'dockview-core';
-import { Accessor, createMemo, JSXElement, createComponent as solidCreateComponent } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { Accessor, createMemo, type Element as JSXElement, createComponent as solidCreateComponent } from 'solid-js';
 import { PanelContentRendererParams } from './context';
 import { DockViewProps } from './DockView';
 import { DockViewGroupHeaderComponentProps, DockViewWatermarkProps } from './user-component';
@@ -45,7 +45,7 @@ export function createWatermarkComponent(props: DockViewProps, addExtraRender: A
       const jsxRender = () => (
         <Portal
           mount={outerElement}
-          ref={(div) => {
+          ref={(div: HTMLDivElement) => {
             div.style.display = 'contents';
           }}
         >
@@ -104,7 +104,7 @@ export function createGroupHeaderComponent(
           return (
             <Portal
               mount={outerElement}
-              ref={(div) => {
+              ref={(div: HTMLDivElement) => {
                 div.style.display = 'contents';
               }}
             >

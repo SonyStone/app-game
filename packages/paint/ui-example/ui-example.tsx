@@ -2,7 +2,7 @@ import { Mat2x3 } from '@app-game/math/m2x3';
 import { createStruct } from '@app-game/math/utils/create-struct';
 import { WindowEventListener } from '@solid-primitives/event-listener';
 import { createKeyHold } from '@solid-primitives/keyboard';
-import { createEffect, createMemo, createSignal, onMount, untrack } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect, onSettled, untrack } from 'solid-js';
 import { ColorWheelPanel } from './components/color-wheel-panel';
 import { LayersPanel } from './components/layers-panel';
 import { NavigationPopup } from './components/navigation-popup';
@@ -13,7 +13,7 @@ export default function PaintUIExample() {
   const [isOpen, setIsOpen] = (() => {
     const [isOpen, setIsOpen] = createSignal(false);
     const pressing = createKeyHold(' ', { preventDefault: false });
-    createEffect(() => {
+    createTrackedEffect(() => {
       if (pressing()) {
         setIsOpen(true);
       } else {
@@ -44,7 +44,7 @@ export default function PaintUIExample() {
 
   struct.canvas.identity();
 
-  onMount(() => {
+  onSettled(() => {
     struct.canvas.value[Mat2x3.M02] = window.innerWidth / 2;
     struct.canvas.value[Mat2x3.M12] = window.innerHeight / 2;
   });
@@ -62,8 +62,7 @@ export default function PaintUIExample() {
 
       return struct.canvas;
     },
-    struct.canvas,
-    { equals: false }
+    { ...{ equals: false }, loadingValue: struct.canvas }
   );
 
   return (
@@ -92,7 +91,7 @@ export default function PaintUIExample() {
           }
         }}
       />
-      <div class="transform-origin-center transform-scale-100 flex h-full w-full touch-none select-none overflow-hidden">
+      <div class="transform-origin-center transform-scale-100 flex h-full w-full touch-none overflow-hidden select-none">
         <NavigationPopup isActive />
 
         <div
@@ -121,7 +120,7 @@ export default function PaintUIExample() {
           }}
           class={[
             isOpen() ? 'active opacity-100' : 'opacity-0',
-            'pointer-events-none fixed left-0 top-0 transition-opacity'
+            'pointer-events-none fixed top-0 left-0 transition-opacity'
           ].join(' ')}
           style={{ transform: `translate(${position().x - 60}px, ${position().y - 60}px)` }}
         >
@@ -153,7 +152,7 @@ const NavigationPopupWithSVG = (props: {
   navigationIsActive?: (value: boolean) => void;
 }) => {
   return (
-    <div class="relative flex select-none drop-shadow-lg">
+    <div class="relative flex drop-shadow-lg select-none">
       <NavigationPopup {...props} />
 
       <ToolSelectPanel isActive={props.isActive} />

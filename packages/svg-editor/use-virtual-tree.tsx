@@ -1,6 +1,5 @@
 import { ReactiveMap } from '@solid-primitives/map';
-import { createMemo, For, onCleanup, untrack } from 'solid-js';
-import { produce, SetStoreFunction } from 'solid-js/store';
+import { createMemo, For, onCleanup, storePath, StoreSetter, untrack } from 'solid-js';
 import { SVGNode } from './svg-node';
 
 const CHILDREN_KEY = 'children';
@@ -8,11 +7,11 @@ const CHILDREN_KEY = 'children';
 export type Wrapped<T extends { [CHILDREN_KEY]?: T[] }> = {
   path: () => (string | number)[];
   remove: () => void;
-  update: SetStoreFunction<SVGNode>;
-  updateParent: SetStoreFunction<SVGNode>;
+  update: StoreSetter<SVGNode>;
+  updateParent: (update: (children: SVGNode[]) => SVGNode[] | void) => void;
 };
 
-export function useVirtualTree(rootProps: { state: SVGNode; setState: SetStoreFunction<SVGNode> }) {
+export function useVirtualTree(rootProps: { state: SVGNode; setState: StoreSetter<SVGNode> }) {
   const map = new ReactiveMap<SVGNode, Wrapped<SVGNode>>();
 
   function VirtualElement(props: { node: SVGNode; key?: string | number; path: (string | number)[] }) {
@@ -23,26 +22,21 @@ export function useVirtualTree(rootProps: { state: SVGNode; setState: SetStoreFu
 
     map.set(props.node, {
       path: path,
-      update: (...args: unknown[]) => {
-        // @ts-expect-error A spread argument must either have a tuple type or be passed to a rest parameter.
-        rootProps.setState(...untrack(path), ...args);
+      update: (update) => {
+        rootProps.setState(dynamicStorePath([...untrack(path), update]));
       },
-      updateParent: (...args: unknown[]) => {
-        rootProps.setState(
-          // @ts-expect-error A spread argument must either have a tuple type or be passed to a rest parameter.
-          ...props.path,
-          CHILDREN_KEY,
-          ...args
-        );
+      updateParent: (update) => {
+        rootProps.setState(dynamicStorePath([...props.path, CHILDREN_KEY, update]));
       },
       remove: () => {
         rootProps.setState(
-          // @ts-expect-error A spread argument must either have a tuple type or be passed to a rest parameter.
-          ...props.path,
-          CHILDREN_KEY,
-          produce((children: SVGNode[]) => {
-            children.splice(props.key as number, 1);
-          })
+          dynamicStorePath([
+            ...props.path,
+            CHILDREN_KEY,
+            (children: SVGNode[]) => {
+              children.splice(props.key as number, 1);
+            }
+          ])
         );
       }
     });
@@ -61,4 +55,8 @@ export function useVirtualTree(rootProps: { state: SVGNode; setState: SetStoreFu
   <VirtualElement node={rootProps.state} path={[]} />;
 
   return map;
+}
+
+function dynamicStorePath(parts: readonly unknown[]): (state: SVGNode) => SVGNode | void {
+  return (storePath as unknown as (...path: readonly unknown[]) => (state: SVGNode) => SVGNode | void)(...parts);
 }

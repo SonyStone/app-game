@@ -1,5 +1,5 @@
 import { Meta, Title } from '@solidjs/meta';
-import { createEffect, createResource } from 'solid-js';
+import { createMemo, createTrackedEffect, latest } from 'solid-js';
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 import { TypeGPUProvider, useTypeGPU } from '../utils/TypeGPU';
@@ -58,15 +58,15 @@ function App() {
   const pipeline = root['~unstable'].withCompute(computeSomething).createPipeline();
 
   const input = [1, 2, 3, 4];
-  const [data] = createResource(input, async (input) => {
+  const data = createMemo(async () => {
     dataBuffer.write(input);
     pipeline.dispatchWorkgroups(input.length);
 
     return await dataBuffer.read();
   });
 
-  createEffect(() => {
-    console.log('Data after compute shader: ', data());
+  createTrackedEffect(() => {
+    console.log('Data after compute shader: ', latest(data));
   });
 
   (async () => {
@@ -90,7 +90,7 @@ function App() {
       <h2>Input Data</h2>
       <pre>{JSON.stringify(input, null, 2)}</pre>
       <h2>Output Data</h2>
-      <pre>{JSON.stringify(data(), null, 2)}</pre>
+      <pre>{JSON.stringify(latest(data), null, 2)}</pre>
     </>
   );
 }

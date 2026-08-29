@@ -1,7 +1,8 @@
-import { ComponentProps, createSignal, Show } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import type { ComponentProps } from '@solidjs/web';
+import { Portal } from '@solidjs/web';
+import { createSignal, Show } from 'solid-js';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'parent-div': ComponentProps<'div'>;

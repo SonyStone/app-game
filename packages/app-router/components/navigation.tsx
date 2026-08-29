@@ -1,14 +1,15 @@
 import { cn } from '@app-game/utils';
-import { ComponentProps, For, mergeProps, splitProps } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { For, merge, omit } from 'solid-js';
 import { Routes } from '../routes.interface';
 import { LinkPreview } from './link-preview';
 
 export function Navigation(props: Partial<{ routes: Routes[]; parentPath: string }> & ComponentProps<'div'>) {
-  const [local, others] = splitProps(props, ['routes', 'parentPath', 'class']);
-  const merged = mergeProps({ parentPath: '' }, local);
+  const others = omit(props, 'routes', 'parentPath', 'class');
+  const merged = merge({ parentPath: '', routes: [] as Routes[] }, props);
 
   return (
-    <div class={cn('grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-4 p-4', local.class)} {...others}>
+    <div class={cn('grid grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] gap-4 p-4', props.class)} {...others}>
       <For each={merged.routes}>
         {({ path, name, Preview, children }) => (
           <>

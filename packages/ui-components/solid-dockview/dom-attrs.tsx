@@ -1,9 +1,10 @@
-import { JSX, createEffect, splitProps } from 'solid-js';
-import { assign as assignDomAttrs$1 } from 'solid-js/web';
+import type { JSX } from '@solidjs/web';
+import { assign as assignDomAttrs$1 } from '@solidjs/web';
+import { createTrackedEffect, omit } from 'solid-js';
 
 export type HTMLDomAttrs = JSX.HTMLAttributes<HTMLElement>;
 export function useSyncDOMAttrs(el: HTMLElement, props: any, excludeKeys: readonly string[]) {
-  const [, doms] = splitProps(props, excludeKeys);
+  const doms = omit(props, ...excludeKeys);
   const assignDomAttrs = assignDomAttrs$1 as (
     element: HTMLElement,
     props: Record<string, any>,
@@ -13,5 +14,5 @@ export function useSyncDOMAttrs(el: HTMLElement, props: any, excludeKeys: readon
   ) => void;
 
   const prevProps = {} as any;
-  createEffect(() => assignDomAttrs(el, doms, false, true, prevProps));
+  createTrackedEffect(() => assignDomAttrs(el, doms, false, true, prevProps));
 }

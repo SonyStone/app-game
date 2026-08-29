@@ -1,4 +1,6 @@
-import { ComponentProps, createEffect, ErrorBoundary, onCleanup, type JSX } from 'solid-js';
+import { cn } from '@app-game/utils/cn';
+import type { ComponentProps, JSX } from '@solidjs/web';
+import { createTrackedEffect, Errored, onCleanup } from 'solid-js';
 import Sidebar from './components/Sidebar';
 
 // ============================================================================
@@ -23,9 +25,9 @@ export default function App(props: { children?: JSX.Element }): JSX.Element {
 
         <main class="flex-1 overflow-y-auto p-6">
           <div class="mx-auto max-w-2xl">
-            <ErrorBoundary fallback={(err, reset) => <DemoError error={err} reset={reset} />}>
+            <Errored fallback={(err, reset) => <DemoError error={toError(err())} reset={reset} />}>
               {props.children}
-            </ErrorBoundary>
+            </Errored>
           </div>
         </main>
       </div>
@@ -57,8 +59,8 @@ function DemoError(props: { error: Error; reset: () => void }): JSX.Element {
 }
 
 function Body(props: Pick<ComponentProps<'body'>, 'class'>) {
-  createEffect(() => {
-    document.body.className = props.class || '';
+  createTrackedEffect(() => {
+    document.body.className = cn(props.class);
   });
 
   onCleanup(() => {
@@ -66,4 +68,8 @@ function Body(props: Pick<ComponentProps<'body'>, 'class'>) {
   });
 
   return null;
+}
+
+function toError(reason: unknown): Error {
+  return reason instanceof Error ? reason : new Error(String(reason));
 }

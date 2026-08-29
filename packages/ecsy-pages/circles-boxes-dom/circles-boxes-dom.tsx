@@ -1,5 +1,5 @@
 import { Read, System, SystemData, World } from '@app-game/ecsy';
-import { onCleanup, onMount } from 'solid-js';
+import { onCleanup, onSettled } from 'solid-js';
 import { Vector2 } from '../utils';
 
 const NUM_ELEMENTS = 500;
@@ -200,7 +200,7 @@ export default function CirclesBoxesDOM() {
 
   let destory: () => void;
 
-  onMount(() => {
+  onSettled(() => {
     destory = build(div);
   });
 

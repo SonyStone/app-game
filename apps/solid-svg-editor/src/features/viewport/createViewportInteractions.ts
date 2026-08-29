@@ -1,5 +1,5 @@
 import { createEventListenerMap } from '@solid-primitives/event-listener';
-import { createEffect, createSignal, type Accessor, type Setter } from 'solid-js';
+import { createSignal, createTrackedEffect, type Accessor, type Setter } from 'solid-js';
 
 import { createEditorCommand, type EditorCommand } from '../../editor/commands';
 import { rectCenter, rectFromPoints, translateMatrix, unionRects, type Point, type Rect } from '../../editor/geometry';
@@ -26,6 +26,9 @@ import {
   topLevelSelectedElementIds,
   transformMatrixForBoxHandle
 } from '../selection/transform-selection';
+import { createRafQueue } from '../ui/createRafQueue';
+import { createDefaultViewportTools } from './tools/defaultViewportTools';
+import { createViewportToolRegistry } from './tools/toolRegistry';
 import {
   angleBetween,
   centroidOfPoints,
@@ -35,9 +38,6 @@ import {
   type TouchGesture,
   type TouchPoint
 } from './touch-gesture';
-import { createDefaultViewportTools } from './tools/defaultViewportTools';
-import { createViewportToolRegistry } from './tools/toolRegistry';
-import { createRafQueue } from '../ui/createRafQueue';
 
 export function createViewportInteractions(options: {
   readonly activeRoot: Accessor<SvgElementNode>;
@@ -59,7 +59,13 @@ export function createViewportInteractions(options: {
   readonly setViewportRotation: Setter<number>;
   readonly setCameraCenter: Setter<Point>;
   readonly clientToSvgPoint: (clientX: number, clientY: number, snapToGrid?: boolean) => Point;
-  readonly centerForClientPoint: (worldPoint: Point, clientX: number, clientY: number, z: number, rotation: number) => Point;
+  readonly centerForClientPoint: (
+    worldPoint: Point,
+    clientX: number,
+    clientY: number,
+    z: number,
+    rotation: number
+  ) => Point;
   readonly angleFromViewportCenter: (clientX: number, clientY: number) => number;
   readonly zoomBy: (factor: number, origin?: { readonly x: number; readonly y: number }) => void;
   readonly rotateViewportBy: (delta: number, origin?: { readonly x: number; readonly y: number }) => void;
@@ -127,7 +133,7 @@ export function createViewportInteractions(options: {
     { passive: false }
   );
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     options.activeRoot();
     options.selectedIds();
     options.viewportRotation();

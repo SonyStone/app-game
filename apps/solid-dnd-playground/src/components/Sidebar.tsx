@@ -1,6 +1,6 @@
-import Drawer from '@corvu/drawer';
-import { A, useLocation } from '@solidjs/router';
-import { createSignal, For, type JSX } from 'solid-js';
+import { useLocation } from '@solidjs/router';
+import type { JSX } from '@solidjs/web';
+import { createSignal, For, Show } from 'solid-js';
 import { navSections } from '../nav';
 
 // ============================================================================
@@ -56,7 +56,7 @@ function NavLink(props: { href: string; label: string; onNavigate?: () => void }
   };
 
   return (
-    <A
+    <a
       href={props.href}
       onClick={() => props.onNavigate?.()}
       class={`flex items-center rounded-md px-2 py-1.5 text-xs transition-colors ${
@@ -67,7 +67,7 @@ function NavLink(props: { href: string; label: string; onNavigate?: () => void }
     >
       <span class={`mr-2 inline-block h-1.5 w-1.5 rounded-full ${isActive() ? 'bg-blue-400' : 'bg-neutral-600'}`} />
       {props.label}
-    </A>
+    </a>
   );
 }
 
@@ -89,28 +89,26 @@ function MobileDrawer(): JSX.Element {
         <HamburgerIcon />
       </button>
 
-      <Drawer side="left" open={open()} onOpenChange={setOpen}>
-        {(drawerProps) => (
-          <Drawer.Portal>
-            <Drawer.Overlay
-              class="fixed inset-0 z-100 transition-colors duration-300"
-              style={{ 'background-color': `rgb(0 0 0 / ${0.6 * drawerProps.openPercentage})` }}
-            />
-            <Drawer.Content class="fixed inset-y-0 left-0 z-101 flex w-64 flex-col border-r border-white/10 bg-[#1a1a2e] data-transitioning:transition-transform data-transitioning:duration-300 data-transitioning:ease-[cubic-bezier(0.32,0.72,0,1)]">
-              {/* Drawer header */}
-              <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                <Drawer.Label class="text-sm font-bold text-white">Navigation</Drawer.Label>
-                <Drawer.Close class="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-white/10 hover:text-white">
-                  <CloseIcon />
-                </Drawer.Close>
-              </div>
+      <Show when={open()}>
+        <div class="fixed inset-0 z-100 bg-black/60 md:hidden" onClick={() => setOpen(false)} />
+        <aside class="fixed inset-y-0 left-0 z-101 flex w-64 flex-col border-r border-white/10 bg-[#1a1a2e] md:hidden">
+          {/* Drawer header */}
+          <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <div class="text-sm font-bold text-white">Navigation</div>
+            <button
+              type="button"
+              aria-label="Close navigation"
+              class="flex h-6 w-6 items-center justify-center rounded text-neutral-400 hover:bg-white/10 hover:text-white"
+              onClick={() => setOpen(false)}
+            >
+              <CloseIcon />
+            </button>
+          </div>
 
-              {/* Nav links */}
-              <SidebarContent onNavigate={() => setOpen(false)} />
-            </Drawer.Content>
-          </Drawer.Portal>
-        )}
-      </Drawer>
+          {/* Nav links */}
+          <SidebarContent onNavigate={() => setOpen(false)} />
+        </aside>
+      </Show>
     </>
   );
 }

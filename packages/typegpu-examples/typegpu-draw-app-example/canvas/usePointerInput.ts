@@ -1,4 +1,4 @@
-import { Accessor, createEffect, createSignal, on, onCleanup } from 'solid-js';
+import { Accessor, createEffect, createSignal } from 'solid-js';
 import { CanvasTransform, Point2D, StrokePoint } from '../types';
 
 export interface PointerInputOptions {
@@ -497,27 +497,25 @@ export function usePointerInput(options: PointerInputOptions) {
   };
 
   // Attach event listeners reactively when canvas becomes available
-  createEffect(
-    on(canvas, (canvasEl) => {
-      if (!canvasEl) return;
+  createEffect(canvas, (canvasEl) => {
+    if (!canvasEl) return;
 
-      canvasEl.addEventListener('pointerdown', handlePointerDown);
-      canvasEl.addEventListener('pointermove', handlePointerMove);
-      canvasEl.addEventListener('pointerup', handlePointerUp);
-      canvasEl.addEventListener('pointerleave', handlePointerLeave);
-      canvasEl.addEventListener('pointercancel', handlePointerUp);
-      canvasEl.addEventListener('contextmenu', handleContextMenu);
+    canvasEl.addEventListener('pointerdown', handlePointerDown);
+    canvasEl.addEventListener('pointermove', handlePointerMove);
+    canvasEl.addEventListener('pointerup', handlePointerUp);
+    canvasEl.addEventListener('pointerleave', handlePointerLeave);
+    canvasEl.addEventListener('pointercancel', handlePointerUp);
+    canvasEl.addEventListener('contextmenu', handleContextMenu);
 
-      onCleanup(() => {
-        canvasEl.removeEventListener('pointerdown', handlePointerDown);
-        canvasEl.removeEventListener('pointermove', handlePointerMove);
-        canvasEl.removeEventListener('pointerup', handlePointerUp);
-        canvasEl.removeEventListener('pointerleave', handlePointerLeave);
-        canvasEl.removeEventListener('pointercancel', handlePointerUp);
-        canvasEl.removeEventListener('contextmenu', handleContextMenu);
-      });
-    })
-  );
+    return () => {
+      canvasEl.removeEventListener('pointerdown', handlePointerDown);
+      canvasEl.removeEventListener('pointermove', handlePointerMove);
+      canvasEl.removeEventListener('pointerup', handlePointerUp);
+      canvasEl.removeEventListener('pointerleave', handlePointerLeave);
+      canvasEl.removeEventListener('pointercancel', handlePointerUp);
+      canvasEl.removeEventListener('contextmenu', handleContextMenu);
+    };
+  });
 
   return {
     isDrawing

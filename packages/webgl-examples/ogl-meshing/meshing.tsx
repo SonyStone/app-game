@@ -1,6 +1,6 @@
 import { Camera, Geometry, Mesh, Orbit, Program, Renderer, Transform, Vec3 } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 import fragment from './meshing.frag?raw';
 import vertex from './meshing.vert?raw';
 
@@ -18,7 +18,7 @@ export default function Meshing() {
 
   const resize = createWindowSize();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(resize.width, resize.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
   });

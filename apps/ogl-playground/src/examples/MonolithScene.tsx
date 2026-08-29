@@ -1,5 +1,5 @@
 import { Box, Mesh, Program, useTime } from '@work-ilyas/solid-ogl';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect } from 'solid-js';
 import fragment from '../monolith.frag?raw';
 import vertex from '../monolith.vert?raw';
 import { ExampleControlsPortal } from './controls-context';
@@ -17,30 +17,18 @@ export function MonolithScene() {
     const currentTone = tone();
 
     return [
-      [
-        0.98 - currentTone * 0.22,
-        0.7 - currentTone * 0.3,
-        0.3 + currentTone * 0.35,
-      ],
-      [
-        0.08 + currentTone * 0.12,
-        0.12 + currentTone * 0.24,
-        0.2 + currentTone * 0.4,
-      ],
+      [0.98 - currentTone * 0.22, 0.7 - currentTone * 0.3, 0.3 + currentTone * 0.35],
+      [0.08 + currentTone * 0.12, 0.12 + currentTone * 0.24, 0.2 + currentTone * 0.4]
     ] as const;
   });
 
-  const rotation = createMemo(() => [
-    time() * speed(),
-    time() * speed() * 0.72,
-    0,
-  ]);
+  const rotation = createMemo(() => [time() * speed(), time() * speed() * 0.72, 0]);
   const animatedScale = createMemo(() => {
     const animatedPulse = 1 + Math.sin(time() * 1.6) * pulse();
     return scale() * animatedPulse;
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!programRef) {
       return;
     }
@@ -55,9 +43,7 @@ export function MonolithScene() {
     <>
       <ExampleControlsPortal id="monolith">
         <section class="grid gap-4 rounded-2xl border border-stone-800 bg-stone-900/60 p-4">
-          <h2 class="text-sm font-semibold text-stone-100">
-            Monolith controls
-          </h2>
+          <h2 class="text-sm font-semibold text-stone-100">Monolith controls</h2>
 
           <label class="grid gap-2">
             <div class="flex items-center justify-between gap-3 text-sm text-stone-300">
@@ -138,10 +124,10 @@ export function MonolithScene() {
               uniforms: {
                 uTime: { value: time() },
                 uColorA: { value: palette()[0] },
-                uColorB: { value: palette()[1] },
+                uColorB: { value: palette()[1] }
               },
-              cullFace: null,
-            },
+              cullFace: null
+            }
           ]}
         />
       </Mesh>

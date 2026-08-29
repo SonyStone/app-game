@@ -3,8 +3,8 @@ import { createProgram } from '@app-game/webgl/createProgram';
 import { createWebGL2Context } from '@app-game/webgl/webgl-objects/context';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, createSignal, untrack } from 'solid-js';
-import { effect } from 'solid-js/web';
+import { createSignal, createTrackedEffect, untrack } from 'solid-js';
+
 import { CUBE, CUBE_WIREFRAME_INDICES, INSTANCES } from './cube-mesh';
 import fragmentShaderSource from './shader.frag?raw';
 import vertexShaderSource from './shader.vert?raw';
@@ -17,7 +17,7 @@ import wireframeVertexShaderSource from './wireframe.vert?raw';
 
 export default function InstancingWithUBOandVAO() {
   const canvas = (
-    <canvas id="canvas" class="z-2 pointer-events-none relative h-full w-full touch-none border border-black" />
+    <canvas id="canvas" class="pointer-events-none relative z-2 h-full w-full touch-none border border-black" />
   ) as HTMLCanvasElement;
 
   const [numInstances, setNumInstances] = createSignal(INSTANCES.instances.numInstances / 4);
@@ -31,7 +31,7 @@ export default function InstancingWithUBOandVAO() {
   const gl = createWebGL2Context(canvas);
 
   const resize = createWindowSize();
-  createEffect(() => {
+  createTrackedEffect(() => {
     gl.canvas.width = resize.width;
     gl.canvas.height = resize.height;
     setAspect(gl.canvas.width / gl.canvas.height);
@@ -141,7 +141,7 @@ export default function InstancingWithUBOandVAO() {
     gl.bindBuffer(gl.UNIFORM_BUFFER, null);
   };
 
-  effect(() => {
+  createTrackedEffect(() => {
     if (depthTest()) {
       gl.enable(gl.DEPTH_TEST);
       gl.enable(gl.CULL_FACE);
@@ -180,8 +180,8 @@ export default function InstancingWithUBOandVAO() {
 
   return (
     <>
-      <div class="z-3 pointer-events-none absolute inset-x-0 top-0 p-1">
-        <div class="shadow-blueGray  w-600px  pointer-events-auto flex max-w-full flex-col gap-1 rounded bg-white p-2 shadow">
+      <div class="pointer-events-none absolute inset-x-0 top-0 z-3 p-1">
+        <div class="shadow-blueGray w-600px pointer-events-auto flex max-w-full flex-col gap-1 rounded bg-white p-2 shadow">
           <div class="flex gap-2">
             <input
               class="w-full"

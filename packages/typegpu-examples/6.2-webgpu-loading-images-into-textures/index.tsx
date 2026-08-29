@@ -1,6 +1,6 @@
 import { Range2D } from '@app-game/components/ui/range-2d';
 import { Meta, Title } from '@solidjs/meta';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect } from 'solid-js';
 import * as d from 'typegpu/data';
 import { shaders } from '../6.1-webgpu-textures/shaders';
 import { ResizeContainer } from '../ui/ResizeContainer';
@@ -158,7 +158,7 @@ function App(props: {
     .withFragment(fragment, { format: presentationFormat })
     .createPipeline();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     size();
     const _ = props.pixelScale;
     const _bindGroup = bindGroup();

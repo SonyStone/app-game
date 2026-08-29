@@ -33,7 +33,7 @@ import JingliuHeadPosition from './JingliuMod/Jingliuf0000Mod/JingliuHeadPositio
 import JingliuHeadTexcoord from './JingliuMod/Jingliuf0000Mod/JingliuHeadTexcoord.buf?Float32Array';
 import HeaderFile from './JingliuMod/Jingliuf0000Mod/backup_DISABLEDJingliu.txt?raw';
 
-import { createEffect } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 import { checkerTexture } from './checker-texture';
 
 import createRAF from '@solid-primitives/raf';
@@ -80,7 +80,7 @@ function simpleBufferView(canvas: HTMLCanvasElement) {
   const controls = new Orbit(camera, { target: new Vec3(0, 1.43, 0) });
 
   const resize = createWindowSize();
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(resize.width, resize.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
   });

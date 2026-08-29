@@ -3,7 +3,7 @@ import { createTimer } from '@app-game/utils/timeout';
 import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, createSignal, onMount } from 'solid-js';
+import { createSignal, createTrackedEffect, onSettled } from 'solid-js';
 import { BlendModes, ColorBlendModes } from '../brush-example/blend-modes';
 import { BlendMesh } from '../brush-example/blend/blend-mesh';
 import { BrushStrokeMesh } from '../brush-example/brush-instancing/brush-stroke-mesh';
@@ -31,7 +31,7 @@ export default function CanvasPaintStepByStep() {
   const gl = renderer.gl;
 
   const resize = createWindowSize();
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(resize.width, resize.height);
   });
 
@@ -106,75 +106,77 @@ export default function CanvasPaintStepByStep() {
   });
   start();
 
-  onMount(async () => {
-    backgroundMesh.render(swapBuffers.read);
-    await timeout(TIMEOUT);
-    backgroundMesh.render(swapBuffers.write);
+  onSettled(() => {
+    void (async () => {
+      backgroundMesh.render(swapBuffers.read);
+      await timeout(TIMEOUT);
+      backgroundMesh.render(swapBuffers.write);
 
-    await timeout(TIMEOUT);
+      await timeout(TIMEOUT);
 
-    brushSpotMesh.render(brushTexture);
+      brushSpotMesh.render(brushTexture);
 
-    brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 300], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
-    brushStrokeMesh.setInstancedCount(1);
-    markForUpdate();
-    render(true);
-
-    await timeout(TIMEOUT);
-
-    brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 320], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
-    brushStrokeMesh.setInstancedCount(1);
-    markForUpdate();
-    render(true);
-
-    await timeout(TIMEOUT);
-
-    brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 340], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
-    brushStrokeMesh.setInstancedCount(1);
-    markForUpdate();
-    render(true);
-
-    await timeout(TIMEOUT);
-
-    const points = createZigZagPoints([gl.canvas.clientWidth, gl.canvas.clientHeight])
-      .map((point) => interpoletePoints(point))
-      .flat();
-
-    console.log(`🎨 points`, points.length);
-
-    for (let index = 0; index < points.length; index++) {
-      const point = points[index];
-      brushStrokeMesh.setBrushSpot(
-        instance,
-        pointToCanvasPoint(point, gl.canvas.clientWidth, gl.canvas.clientHeight),
-        easeInCirc(index / points.length)
-      );
-      brushStrokeMesh.setInstancedCount(instance);
-      instance++;
-
+      brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 300], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
+      brushStrokeMesh.setInstancedCount(1);
       markForUpdate();
-      if (index % 10 === 0) {
-        await timeout(TIMEOUT);
+      render(true);
+
+      await timeout(TIMEOUT);
+
+      brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 320], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
+      brushStrokeMesh.setInstancedCount(1);
+      markForUpdate();
+      render(true);
+
+      await timeout(TIMEOUT);
+
+      brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 340], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
+      brushStrokeMesh.setInstancedCount(1);
+      markForUpdate();
+      render(true);
+
+      await timeout(TIMEOUT);
+
+      const points = createZigZagPoints([gl.canvas.clientWidth, gl.canvas.clientHeight])
+        .map((point) => interpoletePoints(point))
+        .flat();
+
+      console.log(`🎨 points`, points.length);
+
+      for (let index = 0; index < points.length; index++) {
+        const point = points[index];
+        brushStrokeMesh.setBrushSpot(
+          instance,
+          pointToCanvasPoint(point, gl.canvas.clientWidth, gl.canvas.clientHeight),
+          easeInCirc(index / points.length)
+        );
+        brushStrokeMesh.setInstancedCount(instance);
+        instance++;
+
+        markForUpdate();
+        if (index % 10 === 0) {
+          await timeout(TIMEOUT);
+        }
       }
-    }
 
-    render(true);
-    await timeout(TIMEOUT);
+      render(true);
+      await timeout(TIMEOUT);
 
-    brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 360], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
-    brushStrokeMesh.setInstancedCount(1);
-    render(true);
+      brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 360], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
+      brushStrokeMesh.setInstancedCount(1);
+      render(true);
 
-    await timeout(TIMEOUT);
+      await timeout(TIMEOUT);
 
-    brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 380], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
-    brushStrokeMesh.setInstancedCount(1);
-    render(true);
+      brushStrokeMesh.setBrushSpot(0, pointToCanvasPoint([300, 380], gl.canvas.clientWidth, gl.canvas.clientHeight), 1);
+      brushStrokeMesh.setInstancedCount(1);
+      render(true);
 
-    await timeout(TIMEOUT);
+      await timeout(TIMEOUT);
 
-    stop();
-    console.log(`🎨 done`);
+      stop();
+      console.log(`🎨 done`);
+    })();
   });
 
   console.clear();
@@ -183,7 +185,7 @@ export default function CanvasPaintStepByStep() {
     <>
       {canvasEl}
       <SquareComponent gl={gl} parent={scene} texture={targetTexture()} zIndex={0.9} />
-      <pre class="absolute right-0 top-0 bg-white">Brush</pre>
+      <pre class="absolute top-0 right-0 bg-white">Brush</pre>
       <SquareComponent
         gl={gl}
         parent={scene}

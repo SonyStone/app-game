@@ -1,4 +1,4 @@
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 import {
   BoxGeometry,
   Camera,
@@ -74,7 +74,7 @@ export default function PostprocessingSmaa() {
   );
   composer.addPass(pass);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const { width, height } = resize();
 
     renderer.setSize(width, height);
@@ -92,7 +92,7 @@ export default function PostprocessingSmaa() {
 
   let currentCamera!: Camera;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     currentCamera = camera();
     renderPass.setCamera(currentCamera);
 

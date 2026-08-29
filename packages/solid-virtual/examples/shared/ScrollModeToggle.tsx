@@ -22,7 +22,7 @@ function ModeButton(props: { active: boolean; onClick: () => void; children: str
       class={`rounded px-2.5 py-1 text-[11px] font-medium transition-colors ${
         props.active ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-950'
       }`}
-      aria-pressed={props.active}
+      aria-pressed={props.active ? 'true' : 'false'}
       onClick={props.onClick}
     >
       {props.children}

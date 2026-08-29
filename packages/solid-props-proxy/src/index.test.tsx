@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { createEffect, createRoot, createSignal, type Setter } from 'solid-js';
-import { render } from 'solid-js/web';
+import { render } from '@solidjs/web';
+import { createRoot, createSignal, createTrackedEffect, type Setter } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { getAttributeNSPatch } from './attribute-ns-patch';
 import { getAttributePatch } from './attribute-patch';
@@ -126,12 +126,12 @@ describe('createSpread', () => {
     expect(button.className).toBe('base');
   });
 
-  it('combines classList with the current class attribute', () => {
+  it('combines a class record with the current class attribute', () => {
     const button = document.createElement('button');
     button.className = 'base muted';
 
     const cleanup = applySpread(button, {
-      classList: {
+      class: {
         active: true,
         muted: false
       }
@@ -486,24 +486,22 @@ describe('createSpread', () => {
     expect(buttonRecord.$$clickData).toBe('original-data');
   });
 
-  it('updates class layers without changing class/classList order', () => {
+  it('updates nested Solid 2 class values without changing layer order', () => {
     const button = document.createElement('button');
-    const classList = { active: false };
+    const classState = { active: false };
     button.className = 'base';
 
     createRoot((dispose) => {
       const spread = createSpreadController(() => button);
 
       spread({
-        class: 'active muted',
-        classList
+        class: ['active muted', classState]
       });
 
       expect(button.className).toBe('base muted');
 
       spread({
-        class: 'active selected',
-        classList
+        class: ['active selected', classState]
       });
 
       expect(button.className).toBe('base selected');
@@ -523,7 +521,7 @@ describe('createSpread', () => {
       const spread = createSpreadController(() => input);
       setValue = nextValue;
 
-      createEffect(() => {
+      createTrackedEffect(() => {
         spread({ value: value() });
       });
 

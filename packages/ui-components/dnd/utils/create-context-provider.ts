@@ -1,4 +1,4 @@
-import { Component, createContext, createComponent, useContext } from 'solid-js'
+import { Component, createComponent, createContext, useContext } from 'solid-js';
 
 /**
  * Create the context provider component & useContext function with types
@@ -25,19 +25,19 @@ import { Component, createContext, createComponent, useContext } from 'solid-js'
  * ```
  */
 export default function createContextProvider<T, P extends Record<string, any>>(
-  factoryFn: <A>(props: P) => T,
+  factoryFn: <A>(props: P) => T
 ): [provider: Component<P>, useContext: () => T] {
-  const ctx = createContext<any>()
+  const ctx = createContext<any>();
 
-  const Provider: Component<any> = props =>
-    createComponent(ctx.Provider, {
+  const Provider: Component<any> = (props) =>
+    createComponent(ctx, {
       value: factoryFn(props),
       get children() {
-        return props.children
-      },
-    })
+        return props.children;
+      }
+    });
 
-  const useProvider = () => useContext(ctx)
+  const useProvider = () => useContext(ctx);
 
-  return [Provider, useProvider]
+  return [Provider, useProvider];
 }

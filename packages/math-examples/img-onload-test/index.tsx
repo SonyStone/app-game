@@ -1,22 +1,21 @@
 import { createRootPool } from '@solid-primitives/rootless';
+import type { ComponentProps, JSX } from '@solidjs/web';
+import { spread } from '@solidjs/web';
 import {
   children,
-  ComponentProps,
-  createEffect,
   createMemo,
   createSignal,
+  createTrackedEffect,
   For,
-  JSX,
-  JSXElement,
+  type Element as JSXElement,
   onCleanup,
   Show
 } from 'solid-js';
-import { spread } from 'solid-js/web';
 import { createRootMapPool } from './createRootMapPool';
 import { createImageCache } from './ImageCache';
 import { patchLogDomManipulation } from './patchLogDomManipulation';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'app-img-onload-test': ComponentProps<'div'>;
@@ -31,7 +30,7 @@ const TEN_ITEMS = Array.from({ length: 2 }, (_, i) => i + 1);
 export default function ImgOnLoadTest() {
   return (
     <app-img-onload-test class="flex flex-col place-items-center gap-4 p-4">
-      <div class="flex flex place-items-start gap-4">
+      <div class="flex place-items-start gap-4">
         <div class="flex flex-col items-center gap-4 border border-transparent p-2">
           Image OnLoad Test
           {/* <img height={200} width={200} src={imageUrl()} onLoad={(e) => console.log('🥲 Image loaded:', e)} /> */}
@@ -47,7 +46,7 @@ export default function ImgOnLoadTest() {
 
 function ImagesRootMapPool() {
   const imagePool = createRootMapPool<number, string, JSXElement>((key, src) => {
-    createEffect(() => {
+    createTrackedEffect(() => {
       console.log('Creating POOLED image for src:', src());
     });
     const [loadedCount, setLoadedCount] = createSignal(0);
@@ -137,7 +136,7 @@ function OnMount(props: { children: JSX.Element }) {
   const resolved = children(() => props.children);
   const [node, setNode] = createSignal<JSX.Element>(null);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     // let node = resolved();
     // if (node instanceof HTMLElement && document.body.contains(node)) {
     //   node = node.cloneNode(true);
@@ -341,14 +340,14 @@ function ImageMoveAround() {
 
 function ImagesRootPool() {
   const imagePool = createRootPool<string, JSXElement>((src) => {
-    const src2 = createMemo(() => src(), '', {
+    const src2 = createMemo(() => src(), {
       equals: (a, b) => {
         console.log('Comparing image src for pooling:', a, b, a === b);
         return a === b;
       }
     });
     console.log('Creating POOLED image');
-    createEffect(() => {
+    createTrackedEffect(() => {
       console.log('Creating POOLED image for src:', src2());
     });
     return <img height={20} width={20} src={src()} onLoad={(e) => console.log('🥲 Image loaded:', e)} />;

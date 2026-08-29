@@ -1,13 +1,13 @@
 import { Mat3 } from '@app-game/math';
 import { createWebGL2Renderer } from '@app-game/webgl/webgl-objects/context';
-import { onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 import fragmentShaderSource from './fragment-shader.frag?raw';
 import vertexShaderSource from './vertex-shader.vert?raw';
 
 export default function PaintApp() {
   const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
 
-  onMount(() => {
+  onSettled(() => {
     const gl = createWebGL2Renderer(canvas);
 
     // create GLSL shaders, upload the GLSL source, compile the shaders

@@ -1,4 +1,5 @@
-import { ComponentProps, createMemo } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { createMemo } from 'solid-js';
 
 export const Polygon = (
   props: { vertexs: number[][]; indexs: number[]; offset: number } & ComponentProps<'polygon'>

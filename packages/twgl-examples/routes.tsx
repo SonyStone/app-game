@@ -3,7 +3,7 @@ import { SectionTitle } from '@app-game/app-router/components/section-title';
 import { Thumbnail } from '@app-game/app-router/components/thumbnail';
 import { Routes } from '@app-game/app-router/routes.interface';
 import { Ripple } from '@app-game/ui-components/ripple/Ripple';
-import { A } from '@solidjs/router';
+
 import { lazy } from 'solid-js';
 import twglThumbnail from './thumbnail/chrome_2023-11-18_15-44-48.png?url';
 
@@ -32,10 +32,10 @@ export const twglRoutes: Routes = {
   path: '/twgl-examples',
   name: 'twgl Examples',
   Preview: (props) => (
-    <A href={props.path} class="rounded-2 relative">
+    <a href={props.path} class="rounded-2 relative">
       <SectionTitle name={props.name} />
       <Ripple class="text-slate/20" />
-    </A>
+    </a>
   ),
   children: [
     {

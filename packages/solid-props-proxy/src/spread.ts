@@ -1,9 +1,9 @@
 import type { MaybeAccessor } from '@solid-primitives/utils';
 import { access } from '@solid-primitives/utils';
-import { createEffect, createMemo, onCleanup, untrack } from 'solid-js';
-import { Aliases, ChildProperties, getPropAlias, Properties, SVGNamespace } from 'solid-js/web';
+import { ChildProperties, DOMWithState, Namespaces } from '@solidjs/web';
+import { createMemo, createTrackedEffect, onCleanup, untrack } from 'solid-js';
 import { setAttributeNS } from './attribute-ns-patch';
-import { setAttribute, setBoolAttribute, setClassList, setClassName, setProperty, setStyle } from './attribute-patch';
+import { setAttribute, setBoolAttribute, setClassName, setProperty, setStyle } from './attribute-patch';
 import { setEventListener, setSolidEvent } from './event-listener-patch';
 import type { Cleanup, Props } from './types';
 import { cleanupAll, isEqual, noop, readProps, runCleanupUpdate, toPropertyName } from './utils';
@@ -22,9 +22,7 @@ type AppliedProp = {
  * The returned function applies props using DOM-expression-style assignment, tracks
  * the current target accessor, and restores prior values when props or targets change.
  */
-export function createSpread<T extends object>(
-  target: MaybeAccessor<T | null | undefined>
-): (props: Props<T>) => void {
+export function createSpread<T extends object>(target: MaybeAccessor<T | null | undefined>): (props: Props<T>) => void {
   let currentTarget: T | undefined;
   let latestProps: Props<T> | undefined;
   const applied = new Map<string, AppliedProp>();
@@ -55,7 +53,7 @@ export function createSpread<T extends object>(
 
   onCleanup(disposeCurrent);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const currentTarget = ensureCurrent();
 
     if (currentTarget && latestProps) {
@@ -83,11 +81,7 @@ export function createSpread<T extends object>(
  * This mirrors dom-expressions' assign step while keeping cleanup state for
  * reversible overlays on existing DOM nodes or plain objects.
  */
-function assign<T extends object>(
-  target: T,
-  props: Props<T>,
-  applied: Map<string, AppliedProp>
-): void {
+function assign<T extends object>(target: T, props: Props<T>, applied: Map<string, AppliedProp>): void {
   const entries = readProps(props);
   const nextKeys = new Set(Object.keys(entries));
   const syncProp = (prop: string, value: unknown, apply: () => Cleanup): void => {
@@ -159,10 +153,6 @@ function assignProp(element: Element, prop: string, value: unknown, props: objec
     return setStyle(element, value);
   }
 
-  if (prop === 'classList') {
-    return setClassList(element, value);
-  }
-
   if (prop === 'class' || prop === 'className') {
     return setClassName(element, value);
   }
@@ -189,24 +179,23 @@ function assignProp(element: Element, prop: string, value: unknown, props: objec
 
   const isForcedProp = prop.startsWith('prop:');
   const childProp = ChildProperties.has(prop);
-  const propAlias = getPropAlias(prop, element.tagName);
-  const elementProp = Properties.has(prop);
+  const elementProp = Boolean(DOMWithState[element.tagName]?.[prop]);
   const customElement = element.nodeName.includes('-') || 'is' in props;
 
-  if (isForcedProp || childProp || (!isSVG && (propAlias || elementProp)) || customElement) {
+  if (isForcedProp || childProp || (!isSVG && elementProp) || customElement) {
     const propertyName = isForcedProp
       ? prop.slice(5)
       : customElement && !elementProp && !childProp
         ? toPropertyName(prop)
-        : propAlias || prop;
+        : prop;
     return setProperty(element, propertyName, value, true);
   }
 
-  const namespace = isSVG && prop.includes(':') ? SVGNamespace[prop.split(':')[0] ?? ''] : undefined;
+  const namespace = isSVG && prop.includes(':') ? Namespaces[prop.split(':')[0] ?? ''] : undefined;
 
   if (namespace) {
     return setAttributeNS(element, namespace, prop, value);
   }
 
-  return setAttribute(element, Aliases[prop] ?? prop, value);
+  return setAttribute(element, prop, value);
 }

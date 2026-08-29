@@ -1,4 +1,5 @@
-import { JSX } from 'solid-js';
+import type { JSX as WebJSX } from '@solidjs/web';
+import type { Element as SolidElement } from 'solid-js';
 import * as THREE from 'three';
 import { BufferGeometry, Material } from 'three';
 import { EventHandlers } from './core/events';
@@ -49,8 +50,8 @@ export type Object3DNode<T, P> = Overwrite<
     layers?: Layers;
     dispose?: (() => void) | null;
 
-    geometry?: JSX.Element | BufferGeometry | null;
-    material?: JSX.Element | Material | null;
+    geometry?: WebJSX.Element | BufferGeometry | null;
+    material?: WebJSX.Element | Material | null;
   }
 > &
   EventHandlers;
@@ -120,10 +121,7 @@ export type TetrahedronBufferGeometryProps = BufferGeometryNode<
   typeof THREE.TetrahedronGeometry
 >;
 export type TorusBufferGeometryProps = BufferGeometryNode<THREE.TorusGeometry, typeof THREE.TorusGeometry>;
-export type TorusKnotBufferGeometryProps = BufferGeometryNode<
-  THREE.TorusKnotGeometry,
-  typeof THREE.TorusKnotGeometry
->;
+export type TorusKnotBufferGeometryProps = BufferGeometryNode<THREE.TorusKnotGeometry, typeof THREE.TorusKnotGeometry>;
 export type TubeBufferGeometryProps = BufferGeometryNode<THREE.TubeGeometry, typeof THREE.TubeGeometry>;
 export type WireframeGeometryProps = BufferGeometryNode<THREE.WireframeGeometry, typeof THREE.WireframeGeometry>;
 export type TetrahedronGeometryProps = BufferGeometryNode<THREE.TetrahedronGeometry, typeof THREE.TetrahedronGeometry>;
@@ -233,155 +231,159 @@ export type FogProps = Node<THREE.Fog, typeof THREE.Fog>;
 export type FogExp2Props = Node<THREE.FogExp2, typeof THREE.FogExp2>;
 export type ShapeProps = Node<THREE.Shape, typeof THREE.Shape>;
 
-declare module 'solid-js' {
-  namespace JSX {
-    interface IntrinsicElements {
-      // `audio` works but conflicts with @types/react. Try using Audio from react-three-fiber/components instead
-      // audio: AudioProps
-      audioListener: AudioListenerProps;
-      positionalAudio: PositionalAudioProps;
+export namespace JSX {
+  type Element = SolidElement | THREE.Object3D | ArrayElement;
+  interface ArrayElement extends Array<Element> {}
+  interface ElementChildrenAttribute {
+    children: {};
+  }
 
-      mesh: MeshProps;
-      instancedMesh: InstancedMeshProps;
-      scene: SceneProps;
-      sprite: SpriteProps;
-      lOD: LODProps;
-      skinnedMesh: SkinnedMeshProps;
-      skeleton: SkeletonProps;
-      bone: BoneProps;
-      lineSegments: LineSegmentsProps;
-      lineLoop: LineLoopProps;
-      // see `audio`
-      // line: LineProps
-      points: PointsProps;
-      group: GroupProps;
+  interface IntrinsicElements {
+    // `audio` works but conflicts with @types/react. Try using Audio from react-three-fiber/components instead
+    // audio: AudioProps
+    audioListener: AudioListenerProps;
+    positionalAudio: PositionalAudioProps;
 
-      // cameras
-      camera: CameraProps;
-      perspectiveCamera: PerspectiveCameraProps;
-      orthographicCamera: OrthographicCameraProps;
-      cubeCamera: CubeCameraProps;
-      arrayCamera: ArrayCameraProps;
+    mesh: MeshProps;
+    instancedMesh: InstancedMeshProps;
+    scene: SceneProps;
+    sprite: SpriteProps;
+    lOD: LODProps;
+    skinnedMesh: SkinnedMeshProps;
+    skeleton: SkeletonProps;
+    bone: BoneProps;
+    lineSegments: LineSegmentsProps;
+    lineLoop: LineLoopProps;
+    // see `audio`
+    // line: LineProps
+    points: PointsProps;
+    group: GroupProps;
 
-      // geometry
-      instancedBufferGeometry: InstancedBufferGeometryProps;
-      bufferGeometry: BufferGeometryProps;
-      boxBufferGeometry: BoxBufferGeometryProps;
-      circleBufferGeometry: CircleBufferGeometryProps;
-      coneBufferGeometry: ConeBufferGeometryProps;
-      cylinderBufferGeometry: CylinderBufferGeometryProps;
-      dodecahedronBufferGeometry: DodecahedronBufferGeometryProps;
-      extrudeBufferGeometry: ExtrudeBufferGeometryProps;
-      icosahedronBufferGeometry: IcosahedronBufferGeometryProps;
-      latheBufferGeometry: LatheBufferGeometryProps;
-      octahedronBufferGeometry: OctahedronBufferGeometryProps;
-      planeBufferGeometry: PlaneBufferGeometryProps;
-      polyhedronBufferGeometry: PolyhedronBufferGeometryProps;
-      ringBufferGeometry: RingBufferGeometryProps;
-      shapeBufferGeometry: ShapeBufferGeometryProps;
-      sphereBufferGeometry: SphereBufferGeometryProps;
-      tetrahedronBufferGeometry: TetrahedronBufferGeometryProps;
-      torusBufferGeometry: TorusBufferGeometryProps;
-      torusKnotBufferGeometry: TorusKnotBufferGeometryProps;
-      tubeBufferGeometry: TubeBufferGeometryProps;
-      wireframeGeometry: WireframeGeometryProps;
-      tetrahedronGeometry: TetrahedronGeometryProps;
-      octahedronGeometry: OctahedronGeometryProps;
-      icosahedronGeometry: IcosahedronGeometryProps;
-      dodecahedronGeometry: DodecahedronGeometryProps;
-      polyhedronGeometry: PolyhedronGeometryProps;
-      tubeGeometry: TubeGeometryProps;
-      torusKnotGeometry: TorusKnotGeometryProps;
-      torusGeometry: TorusGeometryProps;
-      sphereGeometry: SphereGeometryProps;
-      ringGeometry: RingGeometryProps;
-      planeGeometry: PlaneGeometryProps;
-      latheGeometry: LatheGeometryProps;
-      shapeGeometry: ShapeGeometryProps;
-      extrudeGeometry: ExtrudeGeometryProps;
-      edgesGeometry: EdgesGeometryProps;
-      coneGeometry: ConeGeometryProps;
-      cylinderGeometry: CylinderGeometryProps;
-      circleGeometry: CircleGeometryProps;
-      boxGeometry: BoxGeometryProps;
+    // cameras
+    camera: CameraProps;
+    perspectiveCamera: PerspectiveCameraProps;
+    orthographicCamera: OrthographicCameraProps;
+    cubeCamera: CubeCameraProps;
+    arrayCamera: ArrayCameraProps;
 
-      // materials
-      material: MaterialProps;
-      shadowMaterial: ShadowMaterialProps;
-      spriteMaterial: SpriteMaterialProps;
-      rawShaderMaterial: RawShaderMaterialProps;
-      shaderMaterial: ShaderMaterialProps;
-      pointsMaterial: PointsMaterialProps;
-      meshPhysicalMaterial: MeshPhysicalMaterialProps;
-      meshStandardMaterial: MeshStandardMaterialProps;
-      meshPhongMaterial: MeshPhongMaterialProps;
-      meshToonMaterial: MeshToonMaterialProps;
-      meshNormalMaterial: MeshNormalMaterialProps;
-      meshLambertMaterial: MeshLambertMaterialProps;
-      meshDepthMaterial: MeshDepthMaterialProps;
-      meshDistanceMaterial: MeshDistanceMaterialProps;
-      meshBasicMaterial: MeshBasicMaterialProps;
-      meshMatcapMaterial: MeshMatcapMaterialProps;
-      lineDashedMaterial: LineDashedMaterialProps;
-      lineBasicMaterial: LineBasicMaterialProps;
+    // geometry
+    instancedBufferGeometry: InstancedBufferGeometryProps;
+    bufferGeometry: BufferGeometryProps;
+    boxBufferGeometry: BoxBufferGeometryProps;
+    circleBufferGeometry: CircleBufferGeometryProps;
+    coneBufferGeometry: ConeBufferGeometryProps;
+    cylinderBufferGeometry: CylinderBufferGeometryProps;
+    dodecahedronBufferGeometry: DodecahedronBufferGeometryProps;
+    extrudeBufferGeometry: ExtrudeBufferGeometryProps;
+    icosahedronBufferGeometry: IcosahedronBufferGeometryProps;
+    latheBufferGeometry: LatheBufferGeometryProps;
+    octahedronBufferGeometry: OctahedronBufferGeometryProps;
+    planeBufferGeometry: PlaneBufferGeometryProps;
+    polyhedronBufferGeometry: PolyhedronBufferGeometryProps;
+    ringBufferGeometry: RingBufferGeometryProps;
+    shapeBufferGeometry: ShapeBufferGeometryProps;
+    sphereBufferGeometry: SphereBufferGeometryProps;
+    tetrahedronBufferGeometry: TetrahedronBufferGeometryProps;
+    torusBufferGeometry: TorusBufferGeometryProps;
+    torusKnotBufferGeometry: TorusKnotBufferGeometryProps;
+    tubeBufferGeometry: TubeBufferGeometryProps;
+    wireframeGeometry: WireframeGeometryProps;
+    tetrahedronGeometry: TetrahedronGeometryProps;
+    octahedronGeometry: OctahedronGeometryProps;
+    icosahedronGeometry: IcosahedronGeometryProps;
+    dodecahedronGeometry: DodecahedronGeometryProps;
+    polyhedronGeometry: PolyhedronGeometryProps;
+    tubeGeometry: TubeGeometryProps;
+    torusKnotGeometry: TorusKnotGeometryProps;
+    torusGeometry: TorusGeometryProps;
+    sphereGeometry: SphereGeometryProps;
+    ringGeometry: RingGeometryProps;
+    planeGeometry: PlaneGeometryProps;
+    latheGeometry: LatheGeometryProps;
+    shapeGeometry: ShapeGeometryProps;
+    extrudeGeometry: ExtrudeGeometryProps;
+    edgesGeometry: EdgesGeometryProps;
+    coneGeometry: ConeGeometryProps;
+    cylinderGeometry: CylinderGeometryProps;
+    circleGeometry: CircleGeometryProps;
+    boxGeometry: BoxGeometryProps;
 
-      // primitive
-      primitive: PrimitiveProps;
+    // materials
+    material: MaterialProps;
+    shadowMaterial: ShadowMaterialProps;
+    spriteMaterial: SpriteMaterialProps;
+    rawShaderMaterial: RawShaderMaterialProps;
+    shaderMaterial: ShaderMaterialProps;
+    pointsMaterial: PointsMaterialProps;
+    meshPhysicalMaterial: MeshPhysicalMaterialProps;
+    meshStandardMaterial: MeshStandardMaterialProps;
+    meshPhongMaterial: MeshPhongMaterialProps;
+    meshToonMaterial: MeshToonMaterialProps;
+    meshNormalMaterial: MeshNormalMaterialProps;
+    meshLambertMaterial: MeshLambertMaterialProps;
+    meshDepthMaterial: MeshDepthMaterialProps;
+    meshDistanceMaterial: MeshDistanceMaterialProps;
+    meshBasicMaterial: MeshBasicMaterialProps;
+    meshMatcapMaterial: MeshMatcapMaterialProps;
+    lineDashedMaterial: LineDashedMaterialProps;
+    lineBasicMaterial: LineBasicMaterialProps;
 
-      // lights and other
-      light: LightProps;
-      spotLightShadow: SpotLightShadowProps;
-      spotLight: SpotLightProps;
-      pointLight: PointLightProps;
-      rectAreaLight: RectAreaLightProps;
-      hemisphereLight: HemisphereLightProps;
-      directionalLightShadow: DirectionalLightShadowProps;
-      directionalLight: DirectionalLightProps;
-      ambientLight: AmbientLightProps;
-      lightShadow: LightShadowProps;
-      lightProbe: LightProbeProps;
+    // primitive
+    primitive: PrimitiveProps;
 
-      // helpers
-      spotLightHelper: SpotLightHelperProps;
-      skeletonHelper: SkeletonHelperProps;
-      pointLightHelper: PointLightHelperProps;
-      hemisphereLightHelper: HemisphereLightHelperProps;
-      gridHelper: GridHelperProps;
-      polarGridHelper: PolarGridHelperProps;
-      directionalLightHelper: DirectionalLightHelperProps;
-      cameraHelper: CameraHelperProps;
-      boxHelper: BoxHelperProps;
-      box3Helper: Box3HelperProps;
-      planeHelper: PlaneHelperProps;
-      arrowHelper: ArrowHelperProps;
-      axesHelper: AxesHelperProps;
+    // lights and other
+    light: LightProps;
+    spotLightShadow: SpotLightShadowProps;
+    spotLight: SpotLightProps;
+    pointLight: PointLightProps;
+    rectAreaLight: RectAreaLightProps;
+    hemisphereLight: HemisphereLightProps;
+    directionalLightShadow: DirectionalLightShadowProps;
+    directionalLight: DirectionalLightProps;
+    ambientLight: AmbientLightProps;
+    lightShadow: LightShadowProps;
+    lightProbe: LightProbeProps;
 
-      // textures
-      texture: TextureProps;
-      videoTexture: VideoTextureProps;
-      dataTexture: DataTextureProps;
-      dataTexture3D: DataTexture3DProps;
-      compressedTexture: CompressedTextureProps;
-      cubeTexture: CubeTextureProps;
-      canvasTexture: CanvasTextureProps;
-      depthTexture: DepthTextureProps;
+    // helpers
+    spotLightHelper: SpotLightHelperProps;
+    skeletonHelper: SkeletonHelperProps;
+    pointLightHelper: PointLightHelperProps;
+    hemisphereLightHelper: HemisphereLightHelperProps;
+    gridHelper: GridHelperProps;
+    polarGridHelper: PolarGridHelperProps;
+    directionalLightHelper: DirectionalLightHelperProps;
+    cameraHelper: CameraHelperProps;
+    boxHelper: BoxHelperProps;
+    box3Helper: Box3HelperProps;
+    planeHelper: PlaneHelperProps;
+    arrowHelper: ArrowHelperProps;
+    axesHelper: AxesHelperProps;
 
-      // misc
-      raycaster: RaycasterProps;
-      vector2: Vector2Props;
-      vector3: Vector3Props;
-      vector4: Vector4Props;
-      euler: EulerProps;
-      matrix3: Matrix3Props;
-      matrix4: Matrix4Props;
-      quaternion: QuaternionProps;
-      bufferAttribute: BufferAttributeProps;
-      float32BufferAttribute: Float32BufferAttributeProps;
-      instancedBufferAttribute: InstancedBufferAttributeProps;
-      color: ColorProps;
-      fog: FogProps;
-      fogExp2: FogExp2Props;
-      shape: ShapeProps;
-    }
+    // textures
+    texture: TextureProps;
+    videoTexture: VideoTextureProps;
+    dataTexture: DataTextureProps;
+    dataTexture3D: DataTexture3DProps;
+    compressedTexture: CompressedTextureProps;
+    cubeTexture: CubeTextureProps;
+    canvasTexture: CanvasTextureProps;
+    depthTexture: DepthTextureProps;
+
+    // misc
+    raycaster: RaycasterProps;
+    vector2: Vector2Props;
+    vector3: Vector3Props;
+    vector4: Vector4Props;
+    euler: EulerProps;
+    matrix3: Matrix3Props;
+    matrix4: Matrix4Props;
+    quaternion: QuaternionProps;
+    bufferAttribute: BufferAttributeProps;
+    float32BufferAttribute: Float32BufferAttributeProps;
+    instancedBufferAttribute: InstancedBufferAttributeProps;
+    color: ColorProps;
+    fog: FogProps;
+    fogExp2: FogExp2Props;
+    shape: ShapeProps;
   }
 }

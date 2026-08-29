@@ -10,7 +10,7 @@ import {
   GL_STATIC_VARIABLES,
   GL_TEXTURES
 } from '@app-game/webgl/static-variables';
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 
 import { getAttributeData } from '@app-game/pixijs-research/webgl/getAttributeData';
 import { getUniformData } from '@app-game/pixijs-research/webgl/getUniformData';
@@ -224,7 +224,7 @@ export default function main() {
   const cameraObj = useCamera();
   let cameraType: ReturnType<typeof cameraObj.cameraType>;
   let resize: ReturnType<typeof cameraObj.resize>;
-  createEffect(() => {
+  createTrackedEffect(() => {
     cameraType = cameraObj.cameraType();
     resize = cameraObj.resize();
 

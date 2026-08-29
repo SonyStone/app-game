@@ -240,7 +240,7 @@ Foundational utility types, functions, and constants used across the `@solid-pri
 - `Noop` — `(...a: any[]) => void`.
 - `AnyFunction` — `(...args: any[]) => any`.
 - `AnyClass` — `new (...args: any[]) => any`.
-- `Directive<P>` — Type for SolidJS `use:` directives. `(el: Element, props: Accessor<P>) => void`.
+- Ref attachment callbacks — `(element: Element) => void` functions that make DOM behavior explicit in Solid 2.
 - `SetterParam<T>` — Parameter type of a `Setter<T>` (either `T` or `(prev: T) => T`).
 
 **Object types:**
@@ -539,9 +539,10 @@ Destructure reactive objects into individual signals. `destructure({ x, y })` re
 
 Create deeply immutable reactive objects. `createImmutable` — like `createStore` but prevents mutations, useful for passing read-only state to children.
 
-### `@solid-primitives/mutable`
+### Solid stores
 
-Mutable reactive objects (like Vue's reactivity model). `createMutable` — direct property assignment triggers reactive updates.
+Solid 2's built-in `createStore` supports focused `storePath` updates and draft callbacks. Prefer that API over the
+Solid 1 mutable-store wrapper.
 
 ### `@solid-primitives/lifecycle`
 

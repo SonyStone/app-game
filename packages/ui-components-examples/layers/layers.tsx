@@ -1,98 +1,75 @@
-import {
-  closestCenter,
-  createSortable,
-  DragDropProvider,
-  DragDropSensors,
-  DragEventHandler,
-  DragOverlay,
-  Id,
-  SortableProvider,
-  useDragDropContext
-} from '@thisbeyond/solid-dnd';
+import type { JSX } from '@solidjs/web';
 import { createSignal, For } from 'solid-js';
 import folder from './folder.png?url';
 
-export default function Layers() {
-  console.log(folder);
+type LayerId = number;
+
+/** Renders a native HTML drag-and-drop layer sorting example. */
+export default function Layers(): JSX.Element {
   return (
-    <div
-      style={{
-        '--icon-folder': `url(${folder})`
-      }}
-    >
+    <div style={{ '--icon-folder': `url(${folder})` }}>
       <div class="w-268px bg-[#474747]">
-        {/* <For each={[1, 2, 3, 4, 5]}>
-          {() => (
-            <div class="h-28px cursor-pointer border border-solid border-[#252525]">
-              <div class="w-1.7em filter-invert-78 h-full bg-center bg-no-repeat [background-image:var(--icon-folder)] [background-size:15px]"></div>
-            </div>
-          )}
-        </For> */}
         <SortableVerticalListExample />
       </div>
     </div>
   );
 }
 
-const Sortable = (props: any) => {
-  const sortable = createSortable(props.item);
-  const context = useDragDropContext();
-  const state = context?.[0];
-  return (
-    <div
-      // @ts-expect-error solid-dnd provides the sortable directive at runtime.
-      use:sortable
-      class="h-28px flex cursor-pointer border border-solid border-[#252525] text-white"
-      classList={{
-        'opacity-25': sortable.isActiveDraggable,
-        'transition-transform': !!state?.active.draggable
-      }}
-    >
-      <div class="w-1.7em filter-invert-78 h-full bg-center bg-no-repeat [background-image:var(--icon-folder)] bg-size-[15px]"></div>
-      {props.item}
-    </div>
-  );
-};
+/** Reorders layer rows using browser drag events, with no Solid-1-only directives. */
+export function SortableVerticalListExample(): JSX.Element {
+  const [items, setItems] = createSignal<LayerId[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  const [activeItem, setActiveItem] = createSignal<LayerId>();
 
-export const SortableVerticalListExample = () => {
-  const [items, setItems] = createSignal<Id[]>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-  const [activeItem, setActiveItem] = createSignal<Id | null>(null);
-  const ids = () => items();
+  const moveActiveItem = (target: LayerId) => {
+    const active = activeItem();
 
-  const onDragStart: DragEventHandler = ({ draggable }) => setActiveItem(draggable.id);
-
-  const onDragEnd: DragEventHandler = ({ draggable, droppable }) => {
-    if (draggable && droppable) {
-      const currentItems = ids();
-      const fromIndex = currentItems.indexOf(draggable.id);
-      const toIndex = currentItems.indexOf(droppable.id);
-      if (fromIndex !== toIndex) {
-        const updatedItems = currentItems.slice();
-        updatedItems.splice(toIndex, 0, ...updatedItems.splice(fromIndex, 1));
-        setItems(updatedItems);
-      }
+    if (active === undefined || active === target) {
+      return;
     }
+
+    setItems((current) => {
+      const next = current.slice();
+      const fromIndex = next.indexOf(active);
+      const toIndex = next.indexOf(target);
+
+      next.splice(toIndex, 0, ...next.splice(fromIndex, 1));
+      return next;
+    });
   };
 
   return (
-    <DragDropProvider onDragStart={onDragStart} onDragEnd={onDragEnd} collisionDetector={closestCenter}>
-      <DragDropSensors />
-      <div class="column self-stretch">
-        <SortableProvider ids={ids()}>
-          <For each={items()}>{(item) => <Sortable item={item} />}</For>
-        </SortableProvider>
-      </div>
-      <DragOverlay>
-        <div
-          style={{
-            '--icon-folder': `url(${folder})`
-          }}
-          class="h-28px flex cursor-pointer border border-solid border-[#252525] bg-[#474747] text-white"
-        >
-          <div class="w-1.7em filter-invert-78 h-full bg-center bg-no-repeat [background-image:var(--icon-folder)] bg-size-[15px]"></div>
-          {activeItem()}
-        </div>
-      </DragOverlay>
-    </DragDropProvider>
+    <div class="column self-stretch">
+      <For each={items()}>
+        {(item) => (
+          <div
+            draggable="true"
+            class={[
+              'h-28px flex cursor-grab border border-solid border-[#252525] text-white',
+              { 'opacity-25': activeItem() === item }
+            ]}
+            onDragStart={(event) => {
+              setActiveItem(item);
+              event.dataTransfer?.setData('text/plain', String(item));
+
+              if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = 'move';
+              }
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              moveActiveItem(item);
+              setActiveItem(undefined);
+            }}
+            onDragEnd={() => setActiveItem(undefined)}
+          >
+            <div class="w-1.7em filter-invert-78 h-full [background-image:var(--icon-folder)] bg-size-[15px] bg-center bg-no-repeat" />
+            {item}
+          </div>
+        )}
+      </For>
+    </div>
   );
-};
+}

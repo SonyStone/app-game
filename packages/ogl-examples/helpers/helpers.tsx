@@ -15,7 +15,7 @@ import {
 
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 import fragment from './helpers.frag?raw';
 import vertex from './helpers.vert?raw';
 
@@ -31,7 +31,7 @@ export default function Helpers() {
 
   const resize = createWindowSize();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(resize.width, resize.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
   });

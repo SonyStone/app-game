@@ -1,4 +1,4 @@
-import { onCleanup, onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 import { Camera } from './camera';
 import { Context } from './context';
 import { DotManager } from './dot-manager';
@@ -13,7 +13,7 @@ export default function WebglWhiteboard() {
     <canvas id="canvas" class="touch-none border border-black" width="800" height="600" />
   ) as HTMLCanvasElement;
 
-  onMount(() => {
+  onSettled(() => {
     const context = new Context(canvas);
     const pointer = new Pointer(context);
     const keyboard = new Keyboard();
@@ -29,7 +29,7 @@ export default function WebglWhiteboard() {
     pointer.subscribe('down', renderer.render);
     pointer.subscribe('drag', renderer.render);
 
-    onCleanup(() => {
+    return () => {
       pointer.unsubscribe('down', renderer.render);
       pointer.unsubscribe('drag', renderer.render);
       dotManager.destroy();
@@ -37,7 +37,7 @@ export default function WebglWhiteboard() {
       uiColorPicker.destroy();
       uiScaleSlider.destroy();
       camera.destroy();
-    });
+    };
   });
 
   return (

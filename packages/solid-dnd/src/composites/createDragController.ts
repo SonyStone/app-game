@@ -1,7 +1,7 @@
 import { createLazyMemo } from '@solid-primitives/memo';
 import { ReactiveSet } from '@solid-primitives/set';
 import { type MaybeAccessor, access, defer } from '@solid-primitives/utils';
-import { type Accessor, batch, createEffect, createMemo, createSignal } from 'solid-js';
+import { type Accessor, createMemo, createSignal, createTrackedEffect } from 'solid-js';
 import { GapKey, isGapKey } from '..';
 import * as Place from '../core/place';
 import { type Vec2, of as vec2, Zero as Vec2Zero } from '../core/vec2';
@@ -278,12 +278,12 @@ export function createDragController<K>(options: {
       }
 
       // 4. Set drag state (batched so displayKeys computes once)
-      batch(() => {
+      {
         for (const id of ids) {
           dragging.draggedIdsSet.add(id);
         }
         updateDropPlace(insertionPos() ?? e.position);
-      });
+      }
 
       options.onDragStart?.(ids, e.position);
     },
@@ -327,33 +327,35 @@ export function createDragController<K>(options: {
 
   // MARK: Animate display key changes during drag
   if (options.displayKeys) {
-    createEffect(
-      defer(options.displayKeys, () => {
-        if (sensor.isDragging() && isAnimEnabled()) {
-          flip.playFromFirst();
-        }
-      })
-    );
+    const trackDisplayKeys = defer(options.displayKeys, () => {
+      if (sensor.isDragging() && isAnimEnabled()) {
+        flip.playFromFirst();
+      }
+    });
+    createTrackedEffect(() => {
+      void trackDisplayKeys();
+    });
   }
 
   // MARK: Re-evaluate insertion when FLIP ends (swallowed moves)
-  createEffect(
-    defer(
-      () => flip.isAnimating(),
-      (animating) => {
-        if (!animating && moveSwallowed && sensor.isDragging()) {
-          moveSwallowed = false;
-          const pos = insertionPos();
-          if (!pos) {
-            return;
-          }
-
-          flip.captureFirst();
-          updateDropPlace(pos);
+  const trackFlipAnimation = defer(
+    () => flip.isAnimating(),
+    (animating) => {
+      if (!animating && moveSwallowed && sensor.isDragging()) {
+        moveSwallowed = false;
+        const pos = insertionPos();
+        if (!pos) {
+          return;
         }
+
+        flip.captureFirst();
+        updateDropPlace(pos);
       }
-    )
+    }
   );
+  createTrackedEffect(() => {
+    void trackFlipAnimation();
+  });
 
   // MARK: Per-item pointer down
   function onPointerDown(id: Exclude<K, GapKey>, ev: PointerEvent): void {

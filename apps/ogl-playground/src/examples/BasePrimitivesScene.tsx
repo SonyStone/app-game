@@ -1,25 +1,8 @@
-import {
-  Box,
-  Camera,
-  Cylinder,
-  Mesh,
-  Orbit,
-  Plane,
-  Program,
-  Sphere,
-  useTime,
-} from '@work-ilyas/solid-ogl';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onCleanup,
-  Show,
-} from 'solid-js';
-import type { CameraSceneProps, OrbitLike } from './types';
-import primitiveVertex from './primitive.vert?raw';
+import { Box, Camera, Cylinder, Mesh, Orbit, Plane, Program, Sphere, useTime } from '@work-ilyas/solid-ogl';
+import { createMemo, createSignal, createTrackedEffect, For, onCleanup, Show } from 'solid-js';
 import primitiveFragment from './primitive.frag?raw';
+import primitiveVertex from './primitive.vert?raw';
+import type { CameraSceneProps, OrbitLike } from './types';
 
 type PrimitiveShape = {
   key: string;
@@ -32,7 +15,7 @@ const primitiveShapes: readonly PrimitiveShape[] = [
   { key: 'plane', kind: 'plane', position: [0, 1.3, 0], speed: 0.8 },
   { key: 'sphere', kind: 'sphere', position: [1.3, 0, 0], speed: 1.1 },
   { key: 'box', kind: 'box', position: [0, -1.3, 0], speed: 1.35 },
-  { key: 'cylinder', kind: 'cylinder', position: [-1.3, 0, 0], speed: 0.7 },
+  { key: 'cylinder', kind: 'cylinder', position: [-1.3, 0, 0], speed: 0.7 }
 ];
 
 export function BasePrimitivesScene(props: CameraSceneProps) {
@@ -40,7 +23,7 @@ export function BasePrimitivesScene(props: CameraSceneProps) {
   const [controls, setControls] = createSignal<OrbitLike>();
   const time = useTime();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     time();
     controls()?.update();
   });
@@ -91,8 +74,8 @@ export function BasePrimitivesScene(props: CameraSceneProps) {
                   {
                     vertex: primitiveVertex,
                     fragment: primitiveFragment,
-                    cullFace: false,
-                  },
+                    cullFace: false
+                  }
                 ]}
               />
             </Mesh>

@@ -1,4 +1,5 @@
-import { Accessor, Component, createMemo, JSX, splitProps, untrack } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Accessor, Component, createMemo, omit, untrack } from 'solid-js';
 import { roots } from './core';
 import { createThreeRenderer } from './core/renderer';
 import { createSolidRenderer } from './solid';
@@ -17,8 +18,7 @@ export const {
   insert,
   spread,
   setProp,
-  mergeProps,
-  use
+  mergeProps
 } = threeRenderer;
 
 export * from 'solid-js';
@@ -36,9 +36,9 @@ type DynamicProps<T extends Record<string, any>> = T & {
  * @description https://www.solidjs.com/docs/latest/api#%3Cdynamic%3E
  */
 export function Dynamic<T extends Record<string, any>>(props: DynamicProps<T>): Accessor<JSX.Element> {
-  const [p, others] = splitProps(props, ['component']);
+  const others = omit(props, 'component');
   return createMemo(() => {
-    const component = p.component as Function | string;
+    const component = props.component as Function | string;
     switch (typeof component) {
       case 'function':
         return untrack(() => component(others));

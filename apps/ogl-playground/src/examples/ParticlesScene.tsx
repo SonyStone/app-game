@@ -1,14 +1,8 @@
-import {
-  Camera,
-  Geometry,
-  Mesh,
-  Program,
-  useTime,
-} from '@work-ilyas/solid-ogl';
-import { createEffect, createMemo } from 'solid-js';
-import type { CameraSceneProps, ParticleProgramLike } from './types';
-import particlesVertex from './particles.vert?raw';
+import { Camera, Geometry, Mesh, Program, useTime } from '@work-ilyas/solid-ogl';
+import { createMemo, createTrackedEffect } from 'solid-js';
 import particlesFragment from './particles.frag?raw';
+import particlesVertex from './particles.vert?raw';
+import type { CameraSceneProps, ParticleProgramLike } from './types';
 
 const POINTS_MODE = 0;
 
@@ -18,17 +12,14 @@ function createParticleGeometryArgs(count: number): unknown[] {
 
   for (let index = 0; index < count; index += 1) {
     position.set([Math.random(), Math.random(), Math.random()], index * 3);
-    random.set(
-      [Math.random(), Math.random(), Math.random(), Math.random()],
-      index * 4,
-    );
+    random.set([Math.random(), Math.random(), Math.random(), Math.random()], index * 4);
   }
 
   return [
     {
       position: { size: 3, data: position },
-      random: { size: 4, data: random },
-    },
+      random: { size: 4, data: random }
+    }
   ];
 }
 
@@ -37,13 +28,9 @@ export function ParticlesScene(props: CameraSceneProps) {
   const geometryArgs = createParticleGeometryArgs(160);
   const time = useTime();
 
-  const rotation = createMemo(() => [
-    Math.sin(time() * 0.2) * 0.1,
-    Math.cos(time() * 0.5) * 0.15,
-    time() * 0.8,
-  ]);
+  const rotation = createMemo(() => [Math.sin(time() * 0.2) * 0.1, Math.cos(time() * 0.5) * 0.15, time() * 0.8]);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!programRef) {
       return;
     }
@@ -65,11 +52,11 @@ export function ParticlesScene(props: CameraSceneProps) {
               vertex: particlesVertex,
               fragment: particlesFragment,
               uniforms: {
-                uTime: { value: 0 },
+                uTime: { value: 0 }
               },
               transparent: true,
-              depthTest: false,
-            },
+              depthTest: false
+            }
           ]}
         />
       </Mesh>

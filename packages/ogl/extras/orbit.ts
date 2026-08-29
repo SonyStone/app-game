@@ -5,7 +5,7 @@
 
 import { Vec2 } from '@app-game/math';
 import { makeEventListenerStack } from '@solid-primitives/event-listener';
-import { onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 import type { Camera } from '../core/camera';
 import { Mat4 } from '../math/mat-4';
 import { Vec3 } from '../math/vec-3';
@@ -410,7 +410,7 @@ export class Orbit {
       clearMouse();
     };
 
-    onMount(() => {
+    onSettled(() => {
       addHandlers();
     });
   }

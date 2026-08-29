@@ -1,6 +1,7 @@
+import { createContextProvider } from '@app-game/solid-utils';
 import createRAF from '@solid-primitives/raf';
 import { createStaticStore } from '@solid-primitives/static-store';
-import { createContextProvider } from '@app-game/solid-utils';
+import type { JSX } from '@solidjs/web';
 import {
   addComponent,
   addEntity,
@@ -11,7 +12,7 @@ import {
   query,
   removeEntity
 } from 'bitecs';
-import { createSignal, For, JSX, onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
 
 const components = {
   // They can be any shape you want
@@ -284,7 +285,7 @@ function TestECS() {
 function DrawWorld() {
   const world = useWorldContext();
 
-  onMount(() => {
+  onSettled(() => {
     const componentNames = Object.entries(world.components).reduce(
       (acc, [key, comp]) => {
         acc.set(comp, key);

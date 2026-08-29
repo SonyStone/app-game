@@ -68,9 +68,9 @@ export function createSelection<K>(options: {
   /** Called whenever the selection changes. */
   onSelectionChange?: (keys: ReadonlyArray<K>) => void;
 }) {
-  const [selected, setSelected] = createSignal<Exclude<K, GapKey>[]>([]);
+  const [selected, setSelected] = createSignal<Exclude<K, GapKey>[]>([], { ownedWrite: true });
 
-  const [anchor, setAnchor] = createSignal<K | null>(null);
+  const [anchor, setAnchor] = createSignal<K | null>(null, { ownedWrite: true });
 
   // Fast lookup set, derived from selected()
   const selectedSet = createMemo(() => new Set(selected()));

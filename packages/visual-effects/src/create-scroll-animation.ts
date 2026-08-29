@@ -1,4 +1,4 @@
-import { onMount, onCleanup, type Accessor } from 'solid-js';
+import { onSettled, type Accessor } from 'solid-js';
 
 export interface ScrollAnimationOptions {
   threshold?: number;
@@ -8,15 +8,11 @@ export interface ScrollAnimationOptions {
 
 export function createScrollAnimation(
   elementRef: Accessor<HTMLElement | undefined>,
-  options: ScrollAnimationOptions = {},
+  options: ScrollAnimationOptions = {}
 ) {
-  const {
-    threshold = 0.1,
-    rootMargin = '0px 0px -50px 0px',
-    once = true,
-  } = options;
+  const { threshold = 0.1, rootMargin = '0px 0px -50px 0px', once = true } = options;
 
-  onMount(() => {
+  onSettled(() => {
     const element = elementRef();
     if (!element || typeof IntersectionObserver === 'undefined') {
       return;
@@ -42,13 +38,13 @@ export function createScrollAnimation(
           }
         });
       },
-      { threshold, rootMargin },
+      { threshold, rootMargin }
     );
 
     observer.observe(element);
 
-    onCleanup(() => {
+    return () => {
       observer.disconnect();
-    });
+    };
   });
 }

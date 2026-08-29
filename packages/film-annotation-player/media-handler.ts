@@ -14,7 +14,7 @@ import {
   switchMap,
   timer
 } from 'rxjs';
-import { Accessor, createEffect, createMemo, createSignal, untrack } from 'solid-js';
+import { Accessor, createMemo, createSignal, createTrackedEffect, untrack } from 'solid-js';
 import { EXAMPLE_VIDEOS } from './example-videos';
 import { Dimensions } from './interfaces/Dimensions.interface';
 import { Frame } from './interfaces/Frame';
@@ -309,11 +309,11 @@ function createCurrentFrame(props: {
     return videoTimeToFrame(media?.currentTime ?? 0, _frameSize);
   }
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     _frameSize = props.frameSize() ?? 0;
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const localFrame = getLocalFrame();
     _currentFrame = currentFrame() ?? 0;
     if (_currentFrame !== localFrame) {

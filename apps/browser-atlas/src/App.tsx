@@ -1,8 +1,10 @@
 import { createVirtualNestedList } from '@app-game/solid-virtual';
-import type { Accessor, JSX } from 'solid-js';
-import { createEffect, createMemo, createSignal, For, Match, onCleanup, Show, Switch } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import type { Accessor } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect, For, Match, onCleanup, Show, Switch } from 'solid-js';
 import type { DocumentExplorerBackend } from './backends/document/createDocumentExplorerBackend';
 import { createDocumentExplorerBackend } from './backends/document/createDocumentExplorerBackend';
+import './browser-atlas.css';
 import type {
   ExplorerBackend,
   ExplorerCloudBackupAttempt,
@@ -10,8 +12,8 @@ import type {
   ExplorerCloudBackupStatus,
   ExplorerCloudBackupSummary,
   ExplorerCommand,
-  ExplorerDeleteTarget,
   ExplorerDeletedItemSummary,
+  ExplorerDeleteTarget,
   ExplorerImportTarget,
   ExplorerTreeSnapshotSummary,
   PersistentItemReference,
@@ -19,40 +21,24 @@ import type {
   PersistentMovePlacement,
   PersistentOrganizerPlacement
 } from './explorer/backend';
-import {
-  readExplorerClipboard,
-  serializeClipboardText,
-  writeExplorerClipboard
-} from './explorer/clipboard';
-import { affectedSources, createExplorerDragAndDrop } from './explorer/createExplorerDragAndDrop';
+import { readExplorerClipboard, serializeClipboardText, writeExplorerClipboard } from './explorer/clipboard';
 import type { ExplorerOrganizerKind } from './explorer/createExplorerDragAndDrop';
+import { affectedSources, createExplorerDragAndDrop } from './explorer/createExplorerDragAndDrop';
 import { createExplorerSources } from './explorer/createExplorerSources';
 import { ExplorerTreeRow } from './explorer/ExplorerTreeRow';
+import type { ExplorerHtmlRow } from './explorer/files';
 import {
   createExplorerDocumentSnapshot,
-  downloadExplorerHtml,
   downloadExplorerDocument,
+  downloadExplorerHtml,
   downloadExplorerSourceText,
   readExplorerFile
 } from './explorer/files';
-import type { ExplorerHtmlRow } from './explorer/files';
 import type { ExplorerSourceId, ExplorerTreeNode } from './explorer/model';
 import { equalExplorerTreeNodes, EXPLORER_SOURCES, getExplorerChildren } from './explorer/model';
 import type { PortableExplorerNode } from './explorer/portable';
 import { createPortableExplorerNode, portableChildren, portableVisibleChildren } from './explorer/portable';
 import { BrowserAtlasAboutDialog, BrowserAtlasHelpDialog } from './help/BrowserAtlasInfoDialog';
-import { createTreeKeyboardNavigation } from './tree-view/createTreeKeyboardNavigation';
-import type {
-  TreeKeyboardMoveDirection,
-  TreeKeyboardOrganizerRequest
-} from './tree-view/createTreeKeyboardNavigation';
-import { createTreeScrollRestoration } from './tree-view/createTreeScrollRestoration';
-import { createTreeView } from './tree-view/createTreeView';
-import type { TreeExpansionSnapshot, TreeViewItem } from './tree-view/createTreeView';
-import { TreeDropIndicator } from './tree-view/TreeDropIndicator';
-import { TreeSelectionIndicator } from './tree-view/TreeSelectionIndicator';
-import { TreeView } from './tree-view/TreeView';
-import type { TreeCollapsedSummary } from './tree-view/TreeView';
 import {
   DEFAULT_BROWSER_ATLAS_SETTINGS,
   readBrowserAtlasSettings,
@@ -62,7 +48,15 @@ import {
   type BrowserAtlasColorOverride,
   type BrowserAtlasSettings
 } from './settings';
-import './browser-atlas.css';
+import type { TreeKeyboardMoveDirection, TreeKeyboardOrganizerRequest } from './tree-view/createTreeKeyboardNavigation';
+import { createTreeKeyboardNavigation } from './tree-view/createTreeKeyboardNavigation';
+import { createTreeScrollRestoration } from './tree-view/createTreeScrollRestoration';
+import type { TreeExpansionSnapshot, TreeViewItem } from './tree-view/createTreeView';
+import { createTreeView } from './tree-view/createTreeView';
+import { TreeDropIndicator } from './tree-view/TreeDropIndicator';
+import { TreeSelectionIndicator } from './tree-view/TreeSelectionIndicator';
+import type { TreeCollapsedSummary } from './tree-view/TreeView';
+import { TreeView } from './tree-view/TreeView';
 
 /** Props for the shared browser and website explorer composition. */
 export type BrowserAtlasProps = {
@@ -163,7 +157,7 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
         <button
           type="button"
           class="h-6 px-2 text-xs text-neutral-300 hover:bg-neutral-800 hover:text-white"
-          aria-expanded={settingsOpen()}
+          aria-expanded={settingsOpen() ? 'true' : 'false'}
           onClick={() => {
             setInfoDialog(null);
             setSettingsOpen((open) => !open);
@@ -324,10 +318,7 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
     setOperationError(reason instanceof Error ? reason.message : 'The file operation could not be completed.');
   }
 
-  function updateSetting<TKey extends keyof BrowserAtlasSettings>(
-    key: TKey,
-    value: BrowserAtlasSettings[TKey]
-  ): void {
+  function updateSetting<TKey extends keyof BrowserAtlasSettings>(key: TKey, value: BrowserAtlasSettings[TKey]): void {
     const nextSettings = { ...settings(), [key]: value } satisfies BrowserAtlasSettings;
     setSettings(nextSettings);
     void writeBrowserAtlasSettings(nextSettings).catch(showOperationError);
@@ -344,9 +335,7 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
   function openStandaloneWindow(): void {
     const runtime = getBrowserActionRuntime();
     if (runtime) {
-      void runtime
-        .sendMessage({ kind: 'open-browser-atlas-standalone' })
-        .catch(showOperationError);
+      void runtime.sendMessage({ kind: 'open-browser-atlas-standalone' }).catch(showOperationError);
       return;
     }
     const url = new URL(globalThis.location.href);
@@ -645,9 +634,7 @@ function ExplorerPane(props: {
   });
   const searchMatches = createMemo(() => {
     const query = searchQuery().trim().toLocaleLowerCase();
-    return query
-      ? tree.visibleItems().filter((item) => explorerNodeSearchText(item.item).includes(query))
-      : [];
+    return query ? tree.visibleItems().filter((item) => explorerNodeSearchText(item.item).includes(query)) : [];
   });
   const virtualTree = createVirtualNestedList({
     items: tree.children,
@@ -672,11 +659,7 @@ function ExplorerPane(props: {
       if (node.kind === 'message') {
         return;
       }
-      if (
-        savedOrganizerId(node) ||
-        node.reference.kind === 'window' ||
-        node.reference.kind === 'saved-window'
-      ) {
+      if (savedOrganizerId(node) || node.reference.kind === 'window' || node.reference.kind === 'saved-window') {
         void editPersistentItemTitle(node);
         return;
       }
@@ -685,10 +668,7 @@ function ExplorerPane(props: {
       }
     },
     onSaveClose(node) {
-      if (
-        node.kind !== 'message' &&
-        (node.reference.kind === 'tab' || node.reference.kind === 'window')
-      ) {
+      if (node.kind !== 'message' && (node.reference.kind === 'tab' || node.reference.kind === 'window')) {
         const item = findTreeItemPath(tree.children(), (candidate) => candidate.item.id === node.id).at(-1);
         handleNodeAction(node, item);
       }
@@ -751,7 +731,7 @@ function ExplorerPane(props: {
     defaultPosition: () => (selectedSource() === 'explore' ? 'end' : 'start')
   });
   props.registerController({ applyClone, revealBrowserWindow });
-  createEffect(() => {
+  createTrackedEffect(() => {
     const clone = pendingClone();
     if (
       !clone ||
@@ -774,7 +754,7 @@ function ExplorerPane(props: {
       });
     });
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     const windowId = pendingBrowserWindowReveal();
     const backend = selectedBackend();
     if (
@@ -803,27 +783,30 @@ function ExplorerPane(props: {
       navigation.focus(refreshedWindow);
     });
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     selectedBackendId();
     selectedSource();
     setSnapshotHistory({ status: 'closed' });
     setDeletionHistory({ status: 'closed' });
     setCloudBackupPanel({ status: 'closed' });
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     const backendId = selectedBackendId();
     const cloudBackups = selectedBackend().backend.cloudBackups;
     setCloudBackupAttempt({ status: 'none' });
     if (!cloudBackups) {
       return;
     }
-    void cloudBackups.lastAttempt().then((attempt) => {
-      if (selectedBackendId() === backendId) {
-        setCloudBackupAttempt(attempt);
-      }
-    }).catch(() => undefined);
+    void cloudBackups
+      .lastAttempt()
+      .then((attempt) => {
+        if (selectedBackendId() === backendId) {
+          setCloudBackupAttempt(attempt);
+        }
+      })
+      .catch(() => undefined);
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     const focusedWindowId = focusedBrowserWindowId();
     if (focusedWindowId === null || focusedWindowId === observedFocusedWindowId) {
       return;
@@ -847,7 +830,7 @@ function ExplorerPane(props: {
   });
   return (
     <section
-      class="relative flex min-w-0 flex-1 flex-col border-r border-neutral-700 last:border-r-0 print:block print:border-0 print:overflow-visible"
+      class="relative flex min-w-0 flex-1 flex-col border-r border-neutral-700 last:border-r-0 print:block print:overflow-visible print:border-0"
       aria-label={props.label}
       onKeyDown={handlePaneKeyboardShortcut}
     >
@@ -867,13 +850,15 @@ function ExplorerPane(props: {
               <button
                 type="button"
                 role="tab"
-                aria-selected={selectedSource() === source.id}
-                class="h-7 border border-b-0 px-2 text-xs"
-                classList={{
-                  'border-neutral-600 bg-neutral-800 text-white': selectedSource() === source.id,
-                  'border-transparent text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100':
-                    selectedSource() !== source.id
-                }}
+                aria-selected={selectedSource() === source.id ? 'true' : 'false'}
+                class={[
+                  'h-7 border border-b-0 px-2 text-xs',
+                  {
+                    'border-neutral-600 bg-neutral-800 text-white': selectedSource() === source.id,
+                    'border-transparent text-neutral-400 hover:bg-neutral-800 hover:text-neutral-100':
+                      selectedSource() !== source.id
+                  }
+                ]}
                 onClick={() => setSelectedSource(source.id)}
               >
                 {source.label}
@@ -911,9 +896,9 @@ function ExplorerPane(props: {
             <PaneAction
               title="Open a new browser window; drag it to place it precisely"
               label="Window"
-              dragProps={canCreateWindowAtPlacement()
-                ? props.dragAndDrop.windowDragProps(selectedBackendId())
-                : undefined}
+              dragProps={
+                canCreateWindowAtPlacement() ? props.dragAndDrop.windowDragProps(selectedBackendId()) : undefined
+              }
               onClick={createWindow}
             />
           </Show>
@@ -946,7 +931,11 @@ function ExplorerPane(props: {
             />
           </Show>
           <Show when={canSaveCloseAllWindows()}>
-            <PaneAction title="Save and close all other browser windows" label="Save all" onClick={saveCloseAllWindows} />
+            <PaneAction
+              title="Save and close all other browser windows"
+              label="Save all"
+              onClick={saveCloseAllWindows}
+            />
           </Show>
           <Show when={canUseUndoHistory()}>
             <PaneAction
@@ -998,7 +987,11 @@ function ExplorerPane(props: {
           <Show when={canFocusCurrentWindow()}>
             <PaneAction title="Focus the current browser window" label="Current" onClick={focusCurrentWindow} />
           </Show>
-          <PaneAction title="Scroll up to the previous open window (W)" label="Prev window" onClick={scrollToPreviousOpenWindow} />
+          <PaneAction
+            title="Scroll up to the previous open window (W)"
+            label="Prev window"
+            onClick={scrollToPreviousOpenWindow}
+          />
           <PaneAction title="Undo the last tree scroll (S)" label="Undo scroll" onClick={undoScroll} />
           <PaneAction title="Clone this view into the other pane (C)" label={props.cloneLabel} onClick={cloneView} />
           <button
@@ -1048,7 +1041,10 @@ function ExplorerPane(props: {
       </Show>
 
       <Show when={searchOpen()}>
-        <div class="flex h-8 flex-none items-center gap-1 border-b border-neutral-700 bg-neutral-900 px-2 print:hidden" role="search">
+        <div
+          class="flex h-8 flex-none items-center gap-1 border-b border-neutral-700 bg-neutral-900 px-2 print:hidden"
+          role="search"
+        >
           <input
             ref={(element) => {
               searchInput = element;
@@ -1064,9 +1060,30 @@ function ExplorerPane(props: {
           <span class="w-12 text-center text-[0.65rem] text-neutral-400" role="status">
             {searchMatches().length === 0 ? '0 / 0' : `${searchIndex() + 1} / ${searchMatches().length}`}
           </span>
-          <button type="button" class="h-6 px-1 text-neutral-400 hover:text-white" title="Previous match" onClick={() => selectSearchMatch(-1)}>↑</button>
-          <button type="button" class="h-6 px-1 text-neutral-400 hover:text-white" title="Next match" onClick={() => selectSearchMatch(1)}>↓</button>
-          <button type="button" class="h-6 px-1 text-neutral-400 hover:text-white" title="Close search" onClick={closeSearch}>×</button>
+          <button
+            type="button"
+            class="h-6 px-1 text-neutral-400 hover:text-white"
+            title="Previous match"
+            onClick={() => selectSearchMatch(-1)}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            class="h-6 px-1 text-neutral-400 hover:text-white"
+            title="Next match"
+            onClick={() => selectSearchMatch(1)}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            class="h-6 px-1 text-neutral-400 hover:text-white"
+            title="Close search"
+            onClick={closeSearch}
+          >
+            ×
+          </button>
         </div>
       </Show>
 
@@ -1210,12 +1227,7 @@ function ExplorerPane(props: {
     });
   }
 
-  function confirmOperation(
-    title: string,
-    message: string,
-    confirmLabel: string,
-    danger = false
-  ): Promise<boolean> {
+  function confirmOperation(title: string, message: string, confirmLabel: string, danger = false): Promise<boolean> {
     return new Promise((resolve) => {
       setContextMenu(null);
       setOperationDialog({ kind: 'confirm', title, message, confirmLabel, danger, resolve });
@@ -1297,12 +1309,7 @@ function ExplorerPane(props: {
       selectedBackend().label(),
       selectedSource(),
       visibleHtmlRows(),
-      root
-        ? portableVisibleChildren(
-            root,
-            new Map(tree.visibleItems().map((item) => [item.id, item.isExpanded]))
-          )
-        : []
+      root ? portableVisibleChildren(root, new Map(tree.visibleItems().map((item) => [item.id, item.isExpanded]))) : []
     );
   }
 
@@ -1350,11 +1357,14 @@ function ExplorerPane(props: {
       return;
     }
     const currentPosition = element.scrollTop;
-    const destination = tree.visibleItems().findLast((item, index) =>
-      index * TREE_ROW_HEIGHT < currentPosition - 1 &&
-      item.item.kind === 'group' &&
-      item.item.reference.kind === 'window'
-    );
+    const destination = tree
+      .visibleItems()
+      .findLast(
+        (item, index) =>
+          index * TREE_ROW_HEIGHT < currentPosition - 1 &&
+          item.item.kind === 'group' &&
+          item.item.reference.kind === 'window'
+      );
     if (!destination) {
       return;
     }
@@ -1550,9 +1560,7 @@ function ExplorerPane(props: {
     }
     const title = await requestOperationText('Rename item', node.title.replace(/ \(focused\)$/u, ''), 'Rename');
     if (title !== null) {
-      void props
-        .onCommand(selectedBackendId(), { kind: 'rename-persistent-item', item, title })
-        .catch(props.onError);
+      void props.onCommand(selectedBackendId(), { kind: 'rename-persistent-item', item, title }).catch(props.onError);
     }
   }
 
@@ -1575,8 +1583,7 @@ function ExplorerPane(props: {
 
   function canCreateWindowAtPlacement(): boolean {
     return (
-      selectedSource() === 'explore' &&
-      selectedBackend().backend.capabilities.commands['create-window-at-placement']
+      selectedSource() === 'explore' && selectedBackend().backend.capabilities.commands['create-window-at-placement']
     );
   }
 
@@ -1592,10 +1599,12 @@ function ExplorerPane(props: {
   }
 
   function createGoogleDoc(): void {
-    void props.onCommand(selectedBackendId(), {
-      kind: 'create-google-doc-at-placement',
-      placement: { kind: 'tree-end' }
-    }).catch(props.onError);
+    void props
+      .onCommand(selectedBackendId(), {
+        kind: 'create-google-doc-at-placement',
+        placement: { kind: 'tree-end' }
+      })
+      .catch(props.onError);
   }
 
   function canCreateSavedOrganizer(): boolean {
@@ -1607,11 +1616,13 @@ function ExplorerPane(props: {
   }
 
   async function saveCloseAllWindows(): Promise<void> {
-    if (!await confirmOperation(
-      'Save and close all windows?',
-      'Every browser window except this Browser Atlas window will be saved and closed.',
-      'Save and close'
-    )) {
+    if (
+      !(await confirmOperation(
+        'Save and close all windows?',
+        'Every browser window except this Browser Atlas window will be saved and closed.',
+        'Save and close'
+      ))
+    ) {
       return;
     }
     await props.onCommand(selectedBackendId(), { kind: 'save-close-all-windows' }).catch(props.onError);
@@ -1711,7 +1722,7 @@ function ExplorerPane(props: {
   function runDeleteCommand(command: Extract<ExplorerCommand, { kind: 'delete-tree-item' }>): void {
     void props
       .onCommand(selectedBackendId(), command)
-      .then(() => deletionHistory().status === 'closed' ? undefined : loadDeletionHistory())
+      .then(() => (deletionHistory().status === 'closed' ? undefined : loadDeletionHistory()))
       .catch(props.onError);
   }
 
@@ -1742,17 +1753,19 @@ function ExplorerPane(props: {
   }
 
   async function restoreLatestTreeSnapshot(): Promise<void> {
-    if (!await confirmOperation(
-      'Restore latest local backup?',
-      'The current saved tree will be replaced with the latest local snapshot.',
-      'Restore',
-      true
-    )) {
+    if (
+      !(await confirmOperation(
+        'Restore latest local backup?',
+        'The current saved tree will be replaced with the latest local snapshot.',
+        'Restore',
+        true
+      ))
+    ) {
       return;
     }
     await props
       .onCommand(selectedBackendId(), { kind: 'restore-latest-tree-snapshot' })
-      .then(() => snapshotHistory().status === 'closed' ? undefined : loadSnapshotHistory())
+      .then(() => (snapshotHistory().status === 'closed' ? undefined : loadSnapshotHistory()))
       .catch(props.onError);
   }
 
@@ -1788,12 +1801,14 @@ function ExplorerPane(props: {
     if (!history) {
       return;
     }
-    if (!await confirmOperation(
-      'Restore local backup?',
-      `The current saved tree will be replaced with the backup from ${formatSnapshotTime(createdAt)}.`,
-      'Restore',
-      true
-    )) {
+    if (
+      !(await confirmOperation(
+        'Restore local backup?',
+        `The current saved tree will be replaced with the backup from ${formatSnapshotTime(createdAt)}.`,
+        'Restore',
+        true
+      ))
+    ) {
       return;
     }
     setSnapshotHistory({ status: 'loading' });
@@ -1990,12 +2005,15 @@ function ExplorerPane(props: {
 
   async function restoreCloudBackup(backupId: string): Promise<void> {
     const cloudBackups = selectedBackend().backend.cloudBackups;
-    if (!cloudBackups || !await confirmOperation(
-      'Restore cloud backup?',
-      'The current saved tree will be replaced with this cloud backup.',
-      'Restore',
-      true
-    )) {
+    if (
+      !cloudBackups ||
+      !(await confirmOperation(
+        'Restore cloud backup?',
+        'The current saved tree will be replaced with this cloud backup.',
+        'Restore',
+        true
+      ))
+    ) {
       return;
     }
     setCloudBackupPanel({ status: 'loading' });
@@ -2028,12 +2046,15 @@ function ExplorerPane(props: {
 
   async function deleteCloudBackup(backupId: string): Promise<void> {
     const cloudBackups = selectedBackend().backend.cloudBackups;
-    if (!cloudBackups || !await confirmOperation(
-      'Delete cloud backup?',
-      'This cloud backup will be permanently deleted.',
-      'Delete',
-      true
-    )) {
+    if (
+      !cloudBackups ||
+      !(await confirmOperation(
+        'Delete cloud backup?',
+        'This cloud backup will be permanently deleted.',
+        'Delete',
+        true
+      ))
+    ) {
       return;
     }
     setCloudBackupPanel({ status: 'loading' });
@@ -2100,19 +2121,14 @@ function ExplorerPane(props: {
     return findTreeItemPath(
       tree.children(),
       (item) =>
-        item.item.kind === 'group' &&
-        item.item.reference.kind === 'window' &&
-        item.item.reference.id === windowId
+        item.item.kind === 'group' && item.item.reference.kind === 'window' && item.item.reference.id === windowId
     );
   }
 
   function focusedWindowPath(): readonly TreeViewItem<ExplorerTreeNode>[] {
     return findTreeItemPath(
       tree.children(),
-      (item) =>
-        item.item.kind === 'group' &&
-        item.item.reference.kind === 'window' &&
-        item.item.reference.focused
+      (item) => item.item.kind === 'group' && item.item.reference.kind === 'window' && item.item.reference.focused
     );
   }
 
@@ -2163,13 +2179,8 @@ function ExplorerPane(props: {
     if (!item || !source) {
       return false;
     }
-    const items = [
-      source,
-      ...(!item.isExpanded ? nestedPersistentOrganizerReferences(item.children()) : [])
-    ];
-    void props
-      .onCommand(selectedBackendId(), { kind: 'flatten-persistent-tabs', items })
-      .catch(props.onError);
+    const items = [source, ...(!item.isExpanded ? nestedPersistentOrganizerReferences(item.children()) : [])];
+    void props.onCommand(selectedBackendId(), { kind: 'flatten-persistent-tabs', items }).catch(props.onError);
     return true;
   }
 
@@ -2178,12 +2189,12 @@ function ExplorerPane(props: {
     requestedPlacement?: PersistentOrganizerPlacement
   ): Promise<void> {
     const selectedNode = navigation.selectedItem();
-    const target = selectedNode && selectedNode.kind !== 'message' ? persistentTargetForNode(selectedNode) : ROOT_TARGET;
+    const target =
+      selectedNode && selectedNode.kind !== 'message' ? persistentTargetForNode(selectedNode) : ROOT_TARGET;
     const placement = requestedPlacement ?? { kind: 'inside', target, position: 'last' };
     const defaultValue = itemKind === 'group' ? 'New group' : itemKind === 'note' ? 'New note' : '';
-    const requestedTitle = itemKind === 'separator'
-      ? ''
-      : await requestOperationText(`Create ${itemKind}`, defaultValue, 'Create');
+    const requestedTitle =
+      itemKind === 'separator' ? '' : await requestOperationText(`Create ${itemKind}`, defaultValue, 'Create');
     if (requestedTitle !== null) {
       const command = createSavedOrganizerCommand(itemKind, placement, requestedTitle);
       await props.onCommand(selectedBackendId(), command).catch(props.onError);
@@ -2191,9 +2202,7 @@ function ExplorerPane(props: {
   }
 
   function editInlineTabNote(node: Extract<ExplorerTreeNode, { kind: 'link' }>): void {
-    const existingNote = node.children.find(
-      (child) => child.kind === 'link' && child.reference.kind === 'saved-note'
-    );
+    const existingNote = node.children.find((child) => child.kind === 'link' && child.reference.kind === 'saved-note');
     if (existingNote?.kind === 'link') {
       handleNodeAction(existingNote);
       return;
@@ -2385,7 +2394,11 @@ function ExplorerPane(props: {
       selectedBackend().backend.capabilities.commands['import-items'] &&
       clipboardImportTarget(node, selectedBackend())
     ) {
-      clipboardActions.push({ label: 'Paste as last child', shortcut: 'Ctrl/Cmd+V', run: () => void pasteContextNode(node) });
+      clipboardActions.push({
+        label: 'Paste as last child',
+        shortcut: 'Ctrl/Cmd+V',
+        run: () => void pasteContextNode(node)
+      });
     }
 
     const generalActions: ExplorerContextMenuAction[] = [];
@@ -2440,9 +2453,7 @@ function ExplorerPane(props: {
       });
     }
 
-    const organizerActions = canCreateSavedOrganizer()
-      ? createContextOrganizerActions(node)
-      : [];
+    const organizerActions = canCreateSavedOrganizer() ? createContextOrganizerActions(node) : [];
     const moveActions = createContextMoveActions(item);
     const utilityActions = createContextUtilityActions(item);
     const globalActions = createContextGlobalActions();
@@ -2458,12 +2469,8 @@ function ExplorerPane(props: {
 
   function createContextGlobalActions(): ExplorerContextMenuAction[] {
     return [
-      ...(canUndoTree()
-        ? [{ label: 'Undo tree change', shortcut: 'Ctrl/Cmd+Z', run: undoTree }]
-        : []),
-      ...(canRedoTree()
-        ? [{ label: 'Redo tree change', shortcut: 'Ctrl/Cmd+Shift+Z', run: redoTree }]
-        : []),
+      ...(canUndoTree() ? [{ label: 'Undo tree change', shortcut: 'Ctrl/Cmd+Z', run: undoTree }] : []),
+      ...(canRedoTree() ? [{ label: 'Redo tree change', shortcut: 'Ctrl/Cmd+Shift+Z', run: redoTree }] : []),
       { label: 'Scroll up to previous open window', shortcut: 'W', run: scrollToPreviousOpenWindow },
       { label: 'Undo tree scroll', shortcut: 'S', run: undoScroll },
       { label: 'Clone view into other pane', shortcut: 'C', run: cloneView },
@@ -2542,17 +2549,20 @@ function ExplorerPane(props: {
     ] as const satisfies readonly (ExplorerContextMenuActionLabel & { direction: TreeKeyboardMoveDirection })[];
     return requests.flatMap((request) =>
       persistentMovePlacement(path, request.direction)
-        ? [{ label: request.label, shortcut: request.shortcut, run: () => moveItemFromKeyboard(node, request.direction) }]
+        ? [
+            {
+              label: request.label,
+              shortcut: request.shortcut,
+              run: () => moveItemFromKeyboard(node, request.direction)
+            }
+          ]
         : []
     );
   }
 
   function createContextUtilityActions(item: TreeViewItem<ExplorerTreeNode>): ExplorerContextMenuAction[] {
     const node = item.item;
-    if (
-      node.kind === 'message' ||
-      !selectedBackend().backend.capabilities.commands['reposition-persistent-item']
-    ) {
+    if (node.kind === 'message' || !selectedBackend().backend.capabilities.commands['reposition-persistent-item']) {
       return [];
     }
     const path = findTreeItemPath(tree.children(), (candidate) => candidate.id === item.id);
@@ -2579,9 +2589,9 @@ function ExplorerPane(props: {
     }
     if (persistentMoveSource(path, node, 'tree-end')) {
       actions.push({
-          label: 'Move containing window/group to tree end',
-          shortcut: 'E',
-          run: () => moveItemFromKeyboard(node, 'tree-end')
+        label: 'Move containing window/group to tree end',
+        shortcut: 'E',
+        run: () => moveItemFromKeyboard(node, 'tree-end')
       });
     }
     return actions;
@@ -2684,7 +2694,7 @@ function ExplorerOperationDialog(props: {
         aria-label={props.state.title}
         onSubmit={(event) => {
           event.preventDefault();
-          props.onConfirm(props.state.kind === 'prompt' ? input?.value ?? '' : true);
+          props.onConfirm(props.state.kind === 'prompt' ? (input?.value ?? '') : true);
         }}
         onKeyDown={(event) => {
           event.stopPropagation();
@@ -2724,11 +2734,13 @@ function ExplorerOperationDialog(props: {
           </button>
           <button
             type="submit"
-            class="h-8 rounded px-3 text-xs font-medium text-white"
-            classList={{
-              'bg-red-700 hover:bg-red-600': props.state.kind === 'confirm' && props.state.danger,
-              'bg-blue-700 hover:bg-blue-600': props.state.kind === 'prompt' || !props.state.danger
-            }}
+            class={[
+              'h-8 rounded px-3 text-xs font-medium text-white',
+              {
+                'bg-red-700 hover:bg-red-600': props.state.kind === 'confirm' && props.state.danger,
+                'bg-blue-700 hover:bg-blue-600': props.state.kind === 'prompt' || !props.state.danger
+              }
+            ]}
           >
             {props.state.confirmLabel}
           </button>
@@ -2807,7 +2819,7 @@ function ExplorerContextMenu(props: {
         style={{ left: `${position().x}px`, top: `${position().y}px` }}
         role="menu"
         aria-label="Tree commands"
-        tabIndex={-1}
+        tabindex={-1}
         onKeyDown={(event) => {
           if (event.key === 'Escape') {
             event.preventDefault();
@@ -2818,11 +2830,7 @@ function ExplorerContextMenu(props: {
       >
         <For each={props.sections}>
           {(section, sectionIndex) => (
-            <section
-              class="py-1"
-              classList={{ 'border-t border-neutral-700': sectionIndex() > 0 }}
-              aria-label={section.label}
-            >
+            <section class={['py-1', { 'border-t border-neutral-700': sectionIndex() > 0 }]} aria-label={section.label}>
               <h2 class="px-3 py-1 text-[0.65rem] font-semibold tracking-wide text-neutral-500 uppercase">
                 {section.label}
               </h2>
@@ -2855,8 +2863,14 @@ function ExplorerContextMenu(props: {
     queueMicrotask(() => {
       const bounds = element.getBoundingClientRect();
       setPosition({
-        x: Math.max(CONTEXT_MENU_VIEWPORT_GAP, Math.min(props.x, window.innerWidth - bounds.width - CONTEXT_MENU_VIEWPORT_GAP)),
-        y: Math.max(CONTEXT_MENU_VIEWPORT_GAP, Math.min(props.y, window.innerHeight - bounds.height - CONTEXT_MENU_VIEWPORT_GAP))
+        x: Math.max(
+          CONTEXT_MENU_VIEWPORT_GAP,
+          Math.min(props.x, window.innerWidth - bounds.width - CONTEXT_MENU_VIEWPORT_GAP)
+        ),
+        y: Math.max(
+          CONTEXT_MENU_VIEWPORT_GAP,
+          Math.min(props.y, window.innerHeight - bounds.height - CONTEXT_MENU_VIEWPORT_GAP)
+        )
       });
       element.focus();
     });
@@ -2912,11 +2926,9 @@ function explorerNodeSearchText(node: ExplorerTreeNode): string {
   if (node.kind === 'message') {
     return node.title.toLocaleLowerCase();
   }
-  return [
-    node.title,
-    node.kind === 'link' ? node.url : '',
-    node.kind === 'link' ? node.description : ''
-  ].join('\n').toLocaleLowerCase();
+  return [node.title, node.kind === 'link' ? node.url : '', node.kind === 'link' ? node.description : '']
+    .join('\n')
+    .toLocaleLowerCase();
 }
 
 function createExplorerCollapsedSummary(node: ExplorerTreeNode): TreeCollapsedSummary {
@@ -2932,8 +2944,7 @@ function createExplorerCollapsedSummary(node: ExplorerTreeNode): TreeCollapsedSu
     segments.push({ text: `●${statistics.liveTabs}`, title: `${statistics.liveTabs} live tabs` });
   }
   return {
-    accessibleLabel:
-      `Hidden: ${statistics.nodes} nodes, ${statistics.liveWindows} live windows, ${statistics.liveTabs} live tabs`,
+    accessibleLabel: `Hidden: ${statistics.nodes} nodes, ${statistics.liveWindows} live windows, ${statistics.liveTabs} live tabs`,
     segments
   };
 }
@@ -2957,9 +2968,7 @@ function countExplorerDescendants(node: ExplorerTreeNode): ExplorerDescendantSta
         descendants.liveWindows +
         (child.kind === 'group' && child.reference.kind === 'window' ? 1 : 0),
       liveTabs:
-        statistics.liveTabs +
-        descendants.liveTabs +
-        (child.kind === 'link' && child.reference.kind === 'tab' ? 1 : 0)
+        statistics.liveTabs + descendants.liveTabs + (child.kind === 'link' && child.reference.kind === 'tab' ? 1 : 0)
     };
   }, EMPTY_EXPLORER_DESCENDANT_STATISTICS);
 }
@@ -2992,10 +3001,12 @@ function consumeKeyboardShortcut(event: KeyboardEvent): void {
 }
 
 function isEditableKeyboardTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLInputElement ||
+  return (
+    target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement ||
-    (target instanceof HTMLElement && target.isContentEditable);
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
 }
 
 type ExpandAllUndo = Readonly<{
@@ -3082,9 +3093,7 @@ function savedOrganizerId(node: Exclude<ExplorerTreeNode, { kind: 'message' }>):
   }
 }
 
-function persistentTargetForNode(
-  node: Exclude<ExplorerTreeNode, { kind: 'message' }>
-): PersistentItemTarget {
+function persistentTargetForNode(node: Exclude<ExplorerTreeNode, { kind: 'message' }>): PersistentItemTarget {
   switch (node.reference.kind) {
     case 'tab':
       return { kind: 'live-tab', tabId: node.reference.id, windowId: node.reference.windowId };
@@ -3186,10 +3195,7 @@ function nestedPersistentOrganizerReferences(
         node.reference.kind === 'saved-group')
         ? persistentMoveSourceForNode(node)
         : undefined;
-    return [
-      ...(ownReference ? [ownReference] : []),
-      ...nestedPersistentOrganizerReferences(item.children())
-    ];
+    return [...(ownReference ? [ownReference] : []), ...nestedPersistentOrganizerReferences(item.children())];
   });
 }
 
@@ -3246,12 +3252,8 @@ function persistentMovePlacement(
   }
 }
 
-function persistentReferenceForTreeItem(
-  item: TreeViewItem<ExplorerTreeNode>
-): PersistentItemReference | undefined {
-  return item.item.kind === 'message'
-    ? undefined
-    : persistentItemReference(persistentTargetForNode(item.item));
+function persistentReferenceForTreeItem(item: TreeViewItem<ExplorerTreeNode>): PersistentItemReference | undefined {
+  return item.item.kind === 'message' ? undefined : persistentItemReference(persistentTargetForNode(item.item));
 }
 
 function findNextSiblingOrAncestorSibling(
@@ -3338,9 +3340,7 @@ function clipboardImportTarget(
   }
 }
 
-function deleteTargetForNode(
-  node: Exclude<ExplorerTreeNode, { kind: 'message' }>
-): ExplorerDeleteTarget | undefined {
+function deleteTargetForNode(node: Exclude<ExplorerTreeNode, { kind: 'message' }>): ExplorerDeleteTarget | undefined {
   if (node.kind === 'group') {
     switch (node.reference.kind) {
       case 'window':
@@ -3403,11 +3403,8 @@ function persistentDeleteMode(
   target: ExplorerDeleteTarget,
   item: TreeViewItem<ExplorerTreeNode>
 ): Extract<ExplorerCommand, { kind: 'delete-tree-item' }>['mode'] {
-  const canPromoteChildren =
-    target.kind === 'live-tab' || target.kind === 'live-window' || target.kind === 'saved';
-  return canPromoteChildren && item.childCount > 0 && item.isExpanded
-    ? 'promote-children'
-    : 'subtree';
+  const canPromoteChildren = target.kind === 'live-tab' || target.kind === 'live-window' || target.kind === 'saved';
+  return canPromoteChildren && item.childCount > 0 && item.isExpanded ? 'promote-children' : 'subtree';
 }
 
 function nodeChildCount(node: ExplorerTreeNode): number {
@@ -3458,7 +3455,9 @@ function DeletedItemsHistoryPanel(props: {
       </div>
       <Switch>
         <Match when={props.state.status === 'loading'}>
-          <p class="py-2 text-neutral-400" role="status">Loading deleted items…</p>
+          <p class="py-2 text-neutral-400" role="status">
+            Loading deleted items…
+          </p>
         </Match>
         <Match when={props.state.status === 'error' ? props.state : undefined}>
           {(state) => (
@@ -3488,12 +3487,15 @@ function DeletedItemsHistoryPanel(props: {
                       data-deletion-id={item.deletionId}
                     >
                       <div class="min-w-0 flex-1">
-                        <span class="block truncate text-neutral-200" title={item.title}>{item.title}</span>
+                        <span class="block truncate text-neutral-200" title={item.title}>
+                          {item.title}
+                        </span>
                         <span class="block text-neutral-400">
                           {item.itemKind} · {item.nodeCount} {item.nodeCount === 1 ? 'node' : 'nodes'}
                         </span>
                         <span class="block text-neutral-500">
-                          {formatDeletionTime(item.deletedAt)} · {item.mode === 'subtree' ? 'complete hierarchy' : 'children retained'}
+                          {formatDeletionTime(item.deletedAt)} ·{' '}
+                          {item.mode === 'subtree' ? 'complete hierarchy' : 'children retained'}
                         </span>
                       </div>
                       <button
@@ -3546,7 +3548,9 @@ function LocalSnapshotHistoryPanel(props: {
       </div>
       <Switch>
         <Match when={props.state.status === 'loading'}>
-          <p class="py-2 text-neutral-400" role="status">Loading local backups…</p>
+          <p class="py-2 text-neutral-400" role="status">
+            Loading local backups…
+          </p>
         </Match>
         <Match when={props.state.status === 'error' ? props.state : undefined}>
           {(state) => (
@@ -3578,7 +3582,7 @@ function LocalSnapshotHistoryPanel(props: {
                       <div class="mb-2 min-w-0">
                         <time
                           class="block truncate text-neutral-200"
-                          dateTime={new Date(snapshot.createdAt).toISOString()}
+                          datetime={new Date(snapshot.createdAt).toISOString()}
                           title={new Date(snapshot.createdAt).toISOString()}
                         >
                           {formatSnapshotTime(snapshot.createdAt)}
@@ -3658,7 +3662,9 @@ function CloudBackupPanel(props: {
       </div>
       <Switch>
         <Match when={props.state.status === 'loading'}>
-          <p class="py-2 text-neutral-400" role="status">Loading cloud backups…</p>
+          <p class="py-2 text-neutral-400" role="status">
+            Loading cloud backups…
+          </p>
         </Match>
         <Match when={props.state.status === 'error' ? props.state : undefined}>
           {(state) => (
@@ -3727,125 +3733,122 @@ function CloudBackupReadyPanel(props: {
         <Match when={props.state.connection.status === 'connected' ? props.state.connection : undefined}>
           {(connection) => (
             <>
-            <div class="mb-3 flex items-center gap-2 text-neutral-400">
-              <span>Connected</span>
-              <Show when={connection().accountLabel}>
-                {(accountLabel) => <span class="truncate text-neutral-200">· {accountLabel()}</span>}
+              <div class="mb-3 flex items-center gap-2 text-neutral-400">
+                <span>Connected</span>
+                <Show when={connection().accountLabel}>
+                  {(accountLabel) => <span class="truncate text-neutral-200">· {accountLabel()}</span>}
+                </Show>
+                <button type="button" class="ml-auto text-neutral-400 hover:text-white" onClick={props.onDisconnect}>
+                  Disconnect
+                </button>
+              </div>
+              <label class="mb-2 block text-neutral-300">
+                <span class="mb-1 block">Machine label</span>
+                <input
+                  type="text"
+                  class="h-7 w-full rounded border border-neutral-600 bg-neutral-950 px-2 text-neutral-100 outline-none focus:border-blue-500"
+                  aria-label="Backup machine label"
+                  placeholder="For example: work or home"
+                  value={props.state.configuration.machineLabel}
+                  onInput={(event) =>
+                    props.onConfigurationChange({
+                      ...props.state.configuration,
+                      machineLabel: event.currentTarget.value
+                    })
+                  }
+                />
+              </label>
+              <label class="mb-3 flex items-start gap-2 text-neutral-300">
+                <input
+                  type="checkbox"
+                  class="mt-0.5"
+                  aria-label="Automatic daily cloud backups"
+                  checked={props.state.configuration.automaticBackups}
+                  onChange={(event) =>
+                    props.onConfigurationChange({
+                      ...props.state.configuration,
+                      automaticBackups: event.currentTarget.checked
+                    })
+                  }
+                />
+                <span>Create an automatic backup when the newest daily copy is at least 24 hours old.</span>
+              </label>
+              <div class="mb-3 flex gap-2 border-b border-neutral-700 pb-3">
+                <button
+                  type="button"
+                  class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
+                  onClick={props.onSaveConfiguration}
+                >
+                  Save preferences
+                </button>
+                <button
+                  type="button"
+                  class="rounded border border-blue-600 bg-blue-950 px-2 py-1 text-blue-100 hover:bg-blue-900"
+                  aria-label="Create cloud backup"
+                  onClick={props.onCreate}
+                >
+                  Backup now
+                </button>
+              </div>
+              <Show
+                when={props.state.backups.length > 0}
+                fallback={<p class="py-2 text-neutral-400">No cloud backups yet.</p>}
+              >
+                <ol class="space-y-2">
+                  <For each={props.state.backups}>
+                    {(backup) => (
+                      <li
+                        class="rounded border border-neutral-700 bg-neutral-950 p-2"
+                        data-cloud-backup-id={backup.backupId}
+                      >
+                        <div class="mb-2 min-w-0">
+                          <time
+                            class="block truncate text-neutral-200"
+                            datetime={new Date(backup.createdAt).toISOString()}
+                            title={new Date(backup.createdAt).toISOString()}
+                          >
+                            {formatSnapshotTime(backup.createdAt)}
+                          </time>
+                          <span class="block text-neutral-400">
+                            {backup.mode === 'automatic' ? 'Automatic' : 'Manual'}
+                            {backup.machineLabel ? ` · ${backup.machineLabel}` : ''}
+                          </span>
+                          <span class="block text-neutral-500">
+                            {backup.nodeCount} {backup.nodeCount === 1 ? 'node' : 'nodes'} ·{' '}
+                            {formatCloudBackupSize(backup.sizeBytes)}
+                          </span>
+                        </div>
+                        <div class="flex gap-2">
+                          <button
+                            type="button"
+                            class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
+                            aria-label={`Open cloud backup from ${formatSnapshotTime(backup.createdAt)}`}
+                            onClick={() => props.onOpen(backup.backupId)}
+                          >
+                            Open
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
+                            aria-label={`Restore cloud backup from ${formatSnapshotTime(backup.createdAt)}`}
+                            onClick={() => props.onRestore(backup.backupId)}
+                          >
+                            Restore
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded border border-red-800 px-2 py-1 text-red-300 hover:bg-red-950"
+                            aria-label={`Delete cloud backup from ${formatSnapshotTime(backup.createdAt)}`}
+                            onClick={() => props.onDelete(backup.backupId)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </li>
+                    )}
+                  </For>
+                </ol>
               </Show>
-              <button
-                type="button"
-                class="ml-auto text-neutral-400 hover:text-white"
-                onClick={props.onDisconnect}
-              >
-                Disconnect
-              </button>
-            </div>
-            <label class="mb-2 block text-neutral-300">
-              <span class="mb-1 block">Machine label</span>
-              <input
-                type="text"
-                class="h-7 w-full rounded border border-neutral-600 bg-neutral-950 px-2 text-neutral-100 outline-none focus:border-blue-500"
-                aria-label="Backup machine label"
-                placeholder="For example: work or home"
-                value={props.state.configuration.machineLabel}
-                onInput={(event) =>
-                  props.onConfigurationChange({
-                    ...props.state.configuration,
-                    machineLabel: event.currentTarget.value
-                  })
-                }
-              />
-            </label>
-            <label class="mb-3 flex items-start gap-2 text-neutral-300">
-              <input
-                type="checkbox"
-                class="mt-0.5"
-                aria-label="Automatic daily cloud backups"
-                checked={props.state.configuration.automaticBackups}
-                onChange={(event) =>
-                  props.onConfigurationChange({
-                    ...props.state.configuration,
-                    automaticBackups: event.currentTarget.checked
-                  })
-                }
-              />
-              <span>Create an automatic backup when the newest daily copy is at least 24 hours old.</span>
-            </label>
-            <div class="mb-3 flex gap-2 border-b border-neutral-700 pb-3">
-              <button
-                type="button"
-                class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                onClick={props.onSaveConfiguration}
-              >
-                Save preferences
-              </button>
-              <button
-                type="button"
-                class="rounded border border-blue-600 bg-blue-950 px-2 py-1 text-blue-100 hover:bg-blue-900"
-                aria-label="Create cloud backup"
-                onClick={props.onCreate}
-              >
-                Backup now
-              </button>
-            </div>
-            <Show
-              when={props.state.backups.length > 0}
-              fallback={<p class="py-2 text-neutral-400">No cloud backups yet.</p>}
-            >
-              <ol class="space-y-2">
-                <For each={props.state.backups}>
-                  {(backup) => (
-                    <li
-                      class="rounded border border-neutral-700 bg-neutral-950 p-2"
-                      data-cloud-backup-id={backup.backupId}
-                    >
-                      <div class="mb-2 min-w-0">
-                        <time
-                          class="block truncate text-neutral-200"
-                          dateTime={new Date(backup.createdAt).toISOString()}
-                          title={new Date(backup.createdAt).toISOString()}
-                        >
-                          {formatSnapshotTime(backup.createdAt)}
-                        </time>
-                        <span class="block text-neutral-400">
-                          {backup.mode === 'automatic' ? 'Automatic' : 'Manual'}
-                          {backup.machineLabel ? ` · ${backup.machineLabel}` : ''}
-                        </span>
-                        <span class="block text-neutral-500">
-                          {backup.nodeCount} {backup.nodeCount === 1 ? 'node' : 'nodes'} · {formatCloudBackupSize(backup.sizeBytes)}
-                        </span>
-                      </div>
-                      <div class="flex gap-2">
-                        <button
-                          type="button"
-                          class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                          aria-label={`Open cloud backup from ${formatSnapshotTime(backup.createdAt)}`}
-                          onClick={() => props.onOpen(backup.backupId)}
-                        >
-                          Open
-                        </button>
-                        <button
-                          type="button"
-                          class="rounded border border-neutral-600 px-2 py-1 text-neutral-200 hover:bg-neutral-800"
-                          aria-label={`Restore cloud backup from ${formatSnapshotTime(backup.createdAt)}`}
-                          onClick={() => props.onRestore(backup.backupId)}
-                        >
-                          Restore
-                        </button>
-                        <button
-                          type="button"
-                          class="rounded border border-red-800 px-2 py-1 text-red-300 hover:bg-red-950"
-                          aria-label={`Delete cloud backup from ${formatSnapshotTime(backup.createdAt)}`}
-                          onClick={() => props.onDelete(backup.backupId)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  )}
-                </For>
-              </ol>
-            </Show>
             </>
           )}
         </Match>
@@ -3863,12 +3866,14 @@ function CloudBackupAttemptStatus(props: { attempt: ExplorerCloudBackupAttempt }
       data-cloud-backup-attempt={props.attempt.status}
     >
       <span
-        class="h-2 w-2 flex-none rounded-full"
-        classList={{
-          'bg-neutral-500': indicator().tone === 'none',
-          'bg-emerald-500': indicator().tone === 'success',
-          'bg-red-500': indicator().tone === 'failure'
-        }}
+        class={[
+          'h-2 w-2 flex-none rounded-full',
+          {
+            'bg-neutral-500': indicator().tone === 'none',
+            'bg-emerald-500': indicator().tone === 'success',
+            'bg-red-500': indicator().tone === 'failure'
+          }
+        ]}
         aria-hidden="true"
       />
       {indicator().label}
@@ -3925,11 +3930,13 @@ function PaneAction(props: {
     <button
       {...props.dragProps}
       type="button"
-      class="h-6 flex-none px-1 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-white"
-      classList={{
-        'cursor-grab active:cursor-grabbing': props.dragProps?.draggable === true,
-        'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-neutral-400': props.disabled === true
-      }}
+      class={[
+        'h-6 flex-none px-1 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-white',
+        {
+          'cursor-grab active:cursor-grabbing': props.dragProps?.draggable === 'true',
+          'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-neutral-400': props.disabled === true
+        }
+      ]}
       title={props.title}
       disabled={props.disabled}
       aria-description={props.indicator?.label}
@@ -3940,12 +3947,14 @@ function PaneAction(props: {
       <Show when={props.indicator}>
         {(indicator) => (
           <span
-            class="ml-1 inline-block h-1.5 w-3 rounded-sm align-middle"
-            classList={{
-              'bg-neutral-500': indicator().tone === 'none',
-              'bg-emerald-500': indicator().tone === 'success',
-              'bg-red-500': indicator().tone === 'failure'
-            }}
+            class={[
+              'ml-1 inline-block h-1.5 w-3 rounded-sm align-middle',
+              {
+                'bg-neutral-500': indicator().tone === 'none',
+                'bg-emerald-500': indicator().tone === 'success',
+                'bg-red-500': indicator().tone === 'failure'
+              }
+            ]}
             aria-hidden="true"
           />
         )}
@@ -3956,10 +3965,7 @@ function PaneAction(props: {
 
 function TreeStatus(props: { children: string; tone?: 'muted' | 'error' }) {
   return (
-    <p
-      class="p-3 text-xs"
-      classList={{ 'text-neutral-400': props.tone !== 'error', 'text-red-400': props.tone === 'error' }}
-    >
+    <p class={['p-3 text-xs', { 'text-neutral-400': props.tone !== 'error', 'text-red-400': props.tone === 'error' }]}>
       {props.children}
     </p>
   );

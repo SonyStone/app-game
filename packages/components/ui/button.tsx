@@ -1,11 +1,7 @@
-import type { ButtonRootProps } from '@kobalte/core/button';
-import { Button as ButtonPrimitive } from '@kobalte/core/button';
-import type { PolymorphicProps } from '@kobalte/core/polymorphic';
-import { cn } from '@app-game/utils/cn';
+import type { JSX } from '@solidjs/web';
 import type { VariantProps } from 'class-variance-authority';
 import { cva } from 'class-variance-authority';
-import type { ValidComponent } from 'solid-js';
-import { splitProps } from 'solid-js';
+import { omit } from 'solid-js';
 
 export const buttonVariants = cva(
   'inline-flex items-center justify-center rounded-md text-sm font-medium transition-shadow focus-visible:(outline-none ring-1.5 ring-ring) disabled:(pointer-events-none opacity-50) bg-inherit',
@@ -33,24 +29,27 @@ export const buttonVariants = cva(
   }
 );
 
-type buttonProps<T extends ValidComponent = 'button'> = ButtonRootProps<T> &
+export type ButtonProps = Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, 'class'> &
   VariantProps<typeof buttonVariants> & {
-    class?: string;
+    /** Additional Solid 2 class values composed after the variant classes. */
+    class?: JSX.ClassValue;
   };
 
-export const Button = <T extends ValidComponent = 'button'>(props: PolymorphicProps<T, buttonProps<T>>) => {
-  const [local, rest] = splitProps(props as buttonProps, ['class', 'variant', 'size']);
+/** Renders the shared button styles on a native, accessible button element. */
+export function Button(props: ButtonProps): JSX.Element {
+  const rest = omit(props, 'class', 'variant', 'size');
 
   return (
-    <ButtonPrimitive
-      class={cn(
-        buttonVariants({
-          size: local.size,
-          variant: local.variant
-        }),
-        local.class
-      )}
+    <button
       {...rest}
+      type={props.type ?? 'button'}
+      class={[
+        buttonVariants({
+          size: props.size,
+          variant: props.variant
+        }),
+        props.class
+      ]}
     />
   );
-};
+}

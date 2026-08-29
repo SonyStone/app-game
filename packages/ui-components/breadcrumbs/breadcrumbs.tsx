@@ -1,14 +1,14 @@
 import { computePosition, offset } from '@floating-ui/dom';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
+import type { ComponentProps } from '@solidjs/web';
+import { Portal } from '@solidjs/web';
 import { toObservable } from '@utils/toObservable';
 import { toSignal } from '@utils/toSignal';
 import { debounceTime, distinctUntilChanged } from 'rxjs';
-import { ComponentProps, For, Show, createEffect, createMemo, createSignal, mergeProps, untrack } from 'solid-js';
-import { Portal } from 'solid-js/web';
-import { Transition } from 'solid-transition-group';
+import { For, Show, createMemo, createSignal, createTrackedEffect, merge, untrack } from 'solid-js';
 import { Ripple } from '../ripple/Ripple';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'overflow-list-spacer': ComponentProps<'div'>;
@@ -48,7 +48,7 @@ export const Breadcrumbs = (props: {
    */
   collapseFrom?: Boundary;
 }) => {
-  const merged = mergeProps({ items: [], collapseFrom: Boundary.START }, props);
+  const merged = merge({ items: [], collapseFrom: Boundary.START }, props);
 
   const defaultChopSize = createMemo(() => halve(merged.items.length));
 
@@ -65,7 +65,7 @@ export const Breadcrumbs = (props: {
     state().overflow.length
   );
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     setState((prev) => ({
       ...prev,
       chopSize: defaultChopSize(),
@@ -166,51 +166,39 @@ export const Breadcrumbs = (props: {
         </button>
         <Portal>
           <Show when={showOverflow()}>
-            <div onClick={(e) => setShowOverflow(false)} class="z-1000 fixed bottom-0 end-0 start-0 top-0"></div>
+            <div onClick={(e) => setShowOverflow(false)} class="fixed start-0 end-0 top-0 bottom-0 z-1000"></div>
           </Show>
-          <Transition
-            onEnter={(el, done) => {
-              const a = el.animate([{ opacity: 0, transform: 'translateY(-10%)' }, { opacity: 1 }], {
-                duration: 150
-              });
-              a.finished.then(done);
-            }}
-            onExit={(el, done) => {
-              const a = el.animate([{ opacity: 1 }, { opacity: 0, transform: 'translateY(-10%)' }], {
-                duration: 100
-              });
-              a.finished.then(done);
-            }}
-          >
-            <Show when={showOverflow()}>
-              <div
-                ref={(ref) => {
-                  computePosition(overflowButtonRef, ref, {
-                    placement: 'bottom-start',
-                    middleware: [offset()]
-                  }).then((pos) => {
-                    ref.style.left = pos.x + 'px';
-                    ref.style.top = pos.y + 'px';
-                  });
-                }}
-                class="z-1001 absolute left-0 top-0 flex flex-col rounded border bg-white shadow"
-              >
-                <For each={state().overflow}>
-                  {(item) => (
-                    <a class="hover:bg-light relative truncate rounded px-1" href={item.href}>
-                      {item.text}
-                      <Ripple />
-                    </a>
-                  )}
-                </For>
-              </div>
-            </Show>
-          </Transition>
+          <Show when={showOverflow()}>
+            <div
+              ref={(ref) => {
+                void ref.animate([{ opacity: 0, transform: 'translateY(-10%)' }, { opacity: 1 }], {
+                  duration: 150
+                }).finished;
+                void computePosition(overflowButtonRef, ref, {
+                  placement: 'bottom-start',
+                  middleware: [offset()]
+                }).then((pos) => {
+                  ref.style.left = `${pos.x}px`;
+                  ref.style.top = `${pos.y}px`;
+                });
+              }}
+              class="absolute top-0 left-0 z-1001 flex flex-col rounded border bg-white shadow"
+            >
+              <For each={state().overflow}>
+                {(item) => (
+                  <a class="hover:bg-light relative truncate rounded px-1" href={item.href}>
+                    {item.text}
+                    <Ripple />
+                  </a>
+                )}
+              </For>
+            </div>
+          </Show>
         </Portal>
       </Show>
       <For each={state().visible}>
         {(item, index) => (
-          <li class="flex flex-shrink-0 flex-nowrap items-center overflow-hidden truncate">
+          <li class="flex flex-shrink-0 flex-nowrap items-center truncate overflow-hidden">
             <Show when={index() !== 0 || state().overflow.length > 0}>
               <span class="px-1">&gt;</span>
             </Show>

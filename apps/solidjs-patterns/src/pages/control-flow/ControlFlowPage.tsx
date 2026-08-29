@@ -1,4 +1,5 @@
-import { createSignal, Match, Show, Switch, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, Match, Show, Switch } from 'solid-js';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';

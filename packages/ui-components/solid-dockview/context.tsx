@@ -1,5 +1,5 @@
 import { DockviewComponent, DockviewComponentOptions, DockviewPanel } from 'dockview-core';
-import { Accessor, JSXElement, createContext, createSignal, onCleanup } from 'solid-js';
+import { Accessor, type Element as JSXElement, createContext, createSignal, onCleanup } from 'solid-js';
 
 import { dockViewPropKeys } from './DockView';
 import { useSyncDOMAttrs } from './dom-attrs';

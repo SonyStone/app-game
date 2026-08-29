@@ -1,5 +1,6 @@
 import { createContextProvider } from '@app-game/solid-utils';
-import { JSX, onCleanup } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { onCleanup } from 'solid-js';
 import { Rapier, useRapier2D } from './Rapier2D';
 
 export type World = InstanceType<Rapier['World']>;

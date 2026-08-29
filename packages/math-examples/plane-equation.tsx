@@ -1,6 +1,6 @@
-import { ComponentProps } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       math: ComponentProps<'div'> & Partial<{ display: 'block' | 'inline' }>;

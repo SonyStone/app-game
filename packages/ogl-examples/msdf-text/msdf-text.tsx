@@ -1,6 +1,6 @@
 import { Camera, Geometry, Mesh, Orbit, Program, Renderer, Text, Texture, Transform } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 
 import firaSansBoldData from './FiraSans-Bold.json?url';
 import firaSansBoldImg from './FiraSans-Bold.png?url';
@@ -20,7 +20,7 @@ export default function MsdfText() {
 
   const resize = createWindowSize();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(resize.width, resize.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
   });

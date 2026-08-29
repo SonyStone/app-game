@@ -1,8 +1,7 @@
 import { Mesh, OGLRenderingContext, Plane, Texture, Transform } from '@app-game/ogl';
 import { TextureProgram } from '@app-game/ogl/extras/texture-program';
 import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
-import { Accessor, onCleanup } from 'solid-js';
-import { effect } from 'solid-js/web';
+import { Accessor, createTrackedEffect, onCleanup } from 'solid-js';
 
 export const PlaneWithTextureComponent = (props: {
   gl: OGLRenderingContext;
@@ -26,21 +25,21 @@ export const PlaneWithTextureComponent = (props: {
     })
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     if (typeof props.texture === 'function') {
       tMap.value = props.texture();
     }
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     plane.program.setTransparent(props.transparent ?? false);
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     plane.position.set(props.position ?? [0, 0, 0]);
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     plane.rotation.set(props.rotation ?? [0, 0, 0]);
   });
 

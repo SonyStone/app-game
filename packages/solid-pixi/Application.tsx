@@ -1,8 +1,7 @@
 import { createContextProvider } from '@app-game/solid-utils';
 import { type ApplicationOptions, DOMAdapter, Application as PixiApplication, WebWorkerAdapter } from 'pixi.js';
-import { type JSXElement, Show, createResource, onCleanup, splitProps } from 'solid-js';
+import { type Element as JSXElement, Show, createMemo, createTrackedEffect, latest, omit, onCleanup } from 'solid-js';
 import { CommonPropKeys, type CommonProps } from './interfaces';
-import { effect } from './runtime';
 
 export const [ApplicationProvider, useApplication] = createContextProvider<PixiApplication>();
 
@@ -23,29 +22,28 @@ const ApplicationPropKeys = [...CommonPropKeys, 'fallback'] as const;
  * @param props.ApplicationOptions - PIXI.Application options to initialize with
  */
 export const Application = (props: ApplicationProps & { offscreen?: boolean }) => {
-  const [common, pixis] = splitProps(props, ApplicationPropKeys);
+  const pixis = omit(props, ...ApplicationPropKeys);
 
   if (props.offscreen) {
     DOMAdapter.set(WebWorkerAdapter);
   }
 
-  const [app] = createResource(
-    () => (common.as || new PixiApplication()) as PixiApplication,
-    async (app) => {
-      await app.init(pixis);
-      return app;
-    }
-  );
+  const app = createMemo(async () => {
+    const instance = props.as || new PixiApplication();
+    await instance.init(pixis);
+    return instance;
+  });
 
-  effect(() => {
-    if (app()) common.ref?.(app()!);
+  createTrackedEffect(() => {
+    const instance = latest(app);
+    if (instance) props.ref?.(instance);
   });
 
   onCleanup(() => {
-    app()?.destroy(true, { children: true });
+    latest(app)?.destroy(true, { children: true });
   });
 
-  <Show when={app()} fallback={common.fallback}>
+  <Show when={latest(app)} fallback={props.fallback}>
     {(app) => <ApplicationProvider value={app()}>{props.children}</ApplicationProvider>}
   </Show>;
 

@@ -1,4 +1,4 @@
-import type { JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
 
 export function StateCard(props: { label: string; value: string; active?: boolean; testId?: string }): JSX.Element {
   return (

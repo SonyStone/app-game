@@ -1,4 +1,4 @@
-import { createRoot, createSignal } from 'solid-js';
+import { createRoot, createSignal, flush } from 'solid-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createDynamicHeight } from '../src/createDynamicHeight';
 import { createVirtualList } from '../src/createVirtualList';
@@ -38,27 +38,29 @@ describe('createVirtualList', () => {
   });
 
   it('reacts to accessor-based layout props through normalized getters', () => {
-    createRoot((dispose) => {
-      const [gap, setGap] = createSignal(0);
-      const [overscan, setOverscan] = createSignal(20);
-      const virtual = createVirtualList({
+    const [gap, setGap] = createSignal(0);
+    const [overscan, setOverscan] = createSignal(20);
+    const { dispose, virtual } = createRoot((dispose) => ({
+      dispose,
+      virtual: createVirtualList({
         items: ['a', 'b', 'c'],
         itemHeight: 20,
         elementRef: undefined,
         gap,
         overscan
-      });
+      })
+    }));
 
-      expect(virtual.children().map((child) => child.item)).toEqual(['a']);
-      expect(virtual.totalHeight).toBe(60);
+    expect(virtual.children().map((child) => child.item)).toEqual(['a']);
+    expect(virtual.totalHeight).toBe(60);
 
-      setGap(10);
-      setOverscan(60);
-      expect(virtual.children().map((child) => child.item)).toEqual(['a', 'b']);
-      expect(virtual.children()[1]?.top).toBe(30);
-      expect(virtual.totalHeight).toBe(80);
-      dispose();
-    });
+    setGap(10);
+    setOverscan(60);
+    flush();
+    expect(virtual.children().map((child) => child.item)).toEqual(['a', 'b']);
+    expect(virtual.children()[1]?.top).toBe(30);
+    expect(virtual.totalHeight).toBe(80);
+    dispose();
   });
 
   it('scrolls to indexes and clamps absolute offsets', async () => {
@@ -128,25 +130,28 @@ describe('createVirtualList', () => {
   });
 
   it('preserves the visible array when an item update does not affect it', () => {
-    createRoot((dispose) => {
-      const [items, setItems] = createSignal<readonly string[]>(['a', 'b', 'c']);
-      const virtual = createVirtualList({
+    const [items, setItems] = createSignal<readonly string[]>(['a', 'b', 'c']);
+    const { dispose, virtual } = createRoot((dispose) => ({
+      dispose,
+      virtual: createVirtualList({
         items,
         itemHeight: 20,
         elementRef: undefined,
         overscan: 40
-      });
-      const initialChildren = virtual.children();
+      })
+    }));
+    const initialChildren = virtual.children();
 
-      setItems(['a', 'b', 'changed']);
-      expect(virtual.children()).toBe(initialChildren);
+    setItems(['a', 'b', 'changed']);
+    flush();
+    expect(virtual.children()).toBe(initialChildren);
 
-      setItems(['changed', 'b', 'c']);
-      const changedChildren = virtual.children();
-      expect(changedChildren).not.toBe(initialChildren);
-      expect(changedChildren[1]).toBe(initialChildren[1]);
-      dispose();
-    });
+    setItems(['changed', 'b', 'c']);
+    flush();
+    const changedChildren = virtual.children();
+    expect(changedChildren).not.toBe(initialChildren);
+    expect(changedChildren[1]).toBe(initialChildren[1]);
+    dispose();
   });
 
   it('adds dynamic height without enabling nesting', () => {
@@ -169,7 +174,6 @@ describe('createVirtualList', () => {
       dispose();
     });
   });
-
 });
 
 function createScroller(height: number) {
@@ -186,4 +190,5 @@ function createScroller(height: number) {
 function scrollTo(element: HTMLElement, top: number): void {
   element.scrollTop = top;
   element.dispatchEvent(new Event('scroll'));
+  flush();
 }

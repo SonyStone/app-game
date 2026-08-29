@@ -1,6 +1,6 @@
 import { SectionTitle, Thumbnail, type Routes } from '@app-game/app-router';
 import { Ripple } from '@app-game/ui-components/ripple';
-import { A } from '@solidjs/router';
+
 import { lazy } from 'solid-js';
 
 export const routes = [
@@ -76,10 +76,10 @@ export const pixijsRoutes: Routes = {
   path: '/pixijs-examples',
   name: 'PixiJS Examples',
   Preview: (props) => (
-    <A href={props.path} class="rounded-2 relative">
+    <a href={props.path} class="rounded-2 relative">
       <SectionTitle name={props.name} />
       <Ripple class="text-slate/20" />
-    </A>
+    </a>
   ),
   component: lazy(() => import('./index')),
   children: routes

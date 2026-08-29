@@ -1,6 +1,6 @@
 import createRAF from '@solid-primitives/raf';
 import { perlin3d } from '@typegpu/noise';
-import { createEffect, createSignal, on, untrack } from 'solid-js';
+import { createEffect, createSignal, createTrackedEffect, untrack } from 'solid-js';
 import tgpu from 'typegpu';
 import * as d from 'typegpu/data';
 import * as std from 'typegpu/std';
@@ -30,7 +30,7 @@ export default function TypeGPUExample() {
         />
         <pre>speed: {speed()}</pre>
         <input
-          class=" flex-grow"
+          class="flex-grow"
           type="range"
           min="-25"
           max="25"
@@ -50,7 +50,7 @@ export default function TypeGPUExample() {
         />
         <pre>Height: {height()} px</pre>
         <input
-          class=" flex-grow"
+          class="flex-grow"
           type="range"
           min="100"
           max="1000"
@@ -77,7 +77,7 @@ function App(props: { tileDensity: number; running: boolean; speed: number }) {
   /** The bigger the number, the denser the pool tile texture is */
   const tileDensity = root.createUniform(d.f32);
   tileDensity.write(props.tileDensity);
-  createEffect(() => {
+  createTrackedEffect(() => {
     tileDensity.write(props.tileDensity);
   });
 
@@ -170,14 +170,12 @@ function App(props: { tileDensity: number; running: boolean; speed: number }) {
 
   const [running, start, stop] = createRAF(render);
 
-  createEffect(
-    on(size, () => {
-      if (!untrack(running)) {
-        render(frame);
-      }
-    })
-  );
-  createEffect(() => {
+  createEffect(size, () => {
+    if (!untrack(running)) {
+      render(frame);
+    }
+  });
+  createTrackedEffect(() => {
     if (props.running) {
       start();
     } else {

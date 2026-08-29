@@ -1,5 +1,6 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { createMemo, createSignal, onMount, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createMemo, createSignal, onSettled } from 'solid-js';
 import { formatShortcut, KeyboardDisplay, LayoutToggle, type KeyboardLayout } from './keyboard-display';
 
 // ============================================================================
@@ -34,7 +35,7 @@ export default function InputVisualizer(): JSX.Element {
     return formatShortcut(keys);
   });
 
-  onMount(() => {
+  onSettled(() => {
     makeEventListener(window, 'keydown', (e: KeyboardEvent) => {
       e.preventDefault();
       const key = e.code;
@@ -86,7 +87,7 @@ export default function InputVisualizer(): JSX.Element {
   });
 
   return (
-    <div class="flex min-h-screen select-none flex-col gap-6 bg-neutral-900 p-6 text-white">
+    <div class="flex min-h-screen flex-col gap-6 bg-neutral-900 p-6 text-white select-none">
       <header class="text-center">
         <h1 class="text-2xl font-bold">Input Visualizer</h1>
         <p class="text-neutral-400">Press any key or mouse button to see it highlighted</p>

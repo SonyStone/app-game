@@ -13,8 +13,8 @@ all descendants without prop drilling.
 
 ## createContext
 
-createContext creates a context object with an optional default value. The actual value is provided by a
-`Context.Provider`.
+`createContext` creates a context component with an optional default value. Render that component directly to provide
+a scoped value.
 
 ```tsx
 import { createContext, useContext } from 'solid-js';
@@ -25,9 +25,9 @@ const ThemeContext = createContext<'light' | 'dark'>('dark');
 // Provide a value to descendants
 function App() {
   return (
-    <ThemeContext.Provider value="light">
+    <ThemeContext value="light">
       <Page />
-    </ThemeContext.Provider>
+    </ThemeContext>
   );
 }
 
@@ -61,7 +61,7 @@ export function CounterProvider(props: { children: JSX.Element }) {
   const [count, setCount] = createSignal(0);
 
   return (
-    <CounterContext.Provider
+    <CounterContext
       value={{
         count,
         increment: () => setCount((c) => c + 1),
@@ -69,7 +69,7 @@ export function CounterProvider(props: { children: JSX.Element }) {
       }}
     >
       {props.children}
-    </CounterContext.Provider>
+    </CounterContext>
   );
 }
 

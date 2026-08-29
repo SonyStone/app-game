@@ -1,7 +1,7 @@
 import { Container, HTMLText, Sprite, useAsset } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { Ticker } from 'pixi.js';
-import { Suspense } from 'solid-js';
+import { Loading } from 'solid-js';
 import { useTick } from '../useTick';
 import ParticleContainerExample from './ParticleContainerExample';
 
@@ -11,7 +11,7 @@ export default function BasicExample() {
 
   return (
     <Container>
-      <Suspense>
+      <Loading>
         <ParticleContainerExample />
         <HTMLTextExample />
         <Sprite
@@ -28,7 +28,7 @@ export default function BasicExample() {
           x={size.width / 2}
           y={size.height / 2}
         />
-      </Suspense>
+      </Loading>
     </Container>
   );
 }

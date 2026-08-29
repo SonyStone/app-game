@@ -1,6 +1,13 @@
-import { from, Observable } from 'rxjs';
-import { Accessor, observable } from 'solid-js';
+import { Observable } from 'rxjs';
+import { type Accessor, createRoot, createTrackedEffect } from 'solid-js';
 
 export function toObservable<T>(input: Accessor<T>): Observable<T> {
-  return from(observable(input));
+  return new Observable<T>((subscriber) =>
+    createRoot((dispose) => {
+      createTrackedEffect(() => {
+        subscriber.next(input());
+      });
+      return dispose;
+    })
+  );
 }

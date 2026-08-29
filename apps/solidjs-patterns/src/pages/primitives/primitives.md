@@ -17,10 +17,10 @@ Use makeEventListener and createEventListener instead of manual addEventListener
 
 ```tsx
 import { makeEventListener, createEventListener } from '@solid-primitives/event-listener';
-import { onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 
 // makeEventListener - in reactive scope (auto cleanup)
-onMount(() => {
+onSettled(() => {
   makeEventListener(window, 'resize', (e) => {
     console.log('resized:', window.innerWidth);
   });
@@ -68,7 +68,6 @@ createLocalStorage and createCookieStorage are useful for persistent reactive st
 ```tsx
 import { makePersisted } from '@solid-primitives/storage';
 import { createSignal, createStore } from 'solid-js';
-import { createStore } from 'solid-js/store';
 
 // Persist a signal to localStorage
 const [theme, setTheme] = makePersisted(createSignal<'light' | 'dark'>('dark'), { name: 'theme' });

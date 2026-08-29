@@ -5,8 +5,7 @@
  * All drawing-related state is managed here.
  */
 
-import { batch, createMemo, createSignal } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
+import { createMemo, createSignal, createStore, storePath } from 'solid-js';
 import type {
   BlendMode,
   BrushSettings,
@@ -74,22 +73,19 @@ export function createToolState(initial?: Partial<ToolState>) {
     state,
 
     // Setters
-    setTool: (tool: ToolState['currentTool']) => setState('currentTool', tool),
-    setBrushId: (id: string) => setState('currentBrushId', id),
-    setBlendMode: (mode: BlendMode) => setState('blendMode', mode),
-    setColorBlendMode: (mode: ColorBlendMode) => setState('colorBlendMode', mode),
+    setTool: (tool: ToolState['currentTool']) => setState(storePath('currentTool', tool)),
+    setBrushId: (id: string) => setState(storePath('currentBrushId', id)),
+    setBlendMode: (mode: BlendMode) => setState(storePath('blendMode', mode)),
+    setColorBlendMode: (mode: ColorBlendMode) => setState(storePath('colorBlendMode', mode)),
 
     // Brush settings
-    setBrushColor: (color: string) => setState('brush', 'color', color),
-    setBrushSize: (size: number) => setState('brush', 'size', size),
-    setBrushOpacity: (opacity: number) => setState('brush', 'opacity', opacity),
-    setBrushHardness: (hardness: number) => setState('brush', 'hardness', hardness),
-    setBrushSpacing: (spacing: number) => setState('brush', 'spacing', spacing),
+    setBrushColor: (color: string) => setState(storePath('brush', 'color', color)),
+    setBrushSize: (size: number) => setState(storePath('brush', 'size', size)),
+    setBrushOpacity: (opacity: number) => setState(storePath('brush', 'opacity', opacity)),
+    setBrushHardness: (hardness: number) => setState(storePath('brush', 'hardness', hardness)),
+    setBrushSpacing: (spacing: number) => setState(storePath('brush', 'spacing', spacing)),
     setBrushSettings: (settings: Partial<BrushSettings>) =>
-      setState(
-        'brush',
-        produce((brush) => Object.assign(brush, settings))
-      )
+      setState(storePath('brush', (brush) => Object.assign(brush, settings)))
   };
 }
 
@@ -130,38 +126,32 @@ export function createCanvasState(initial?: Partial<CanvasState>) {
     displayAspectRatio,
 
     // Setters
-    setDimensions: (width: number, height: number) =>
-      batch(() => {
-        setState('width', width);
-        setState('height', height);
-      }),
+    setDimensions: (width: number, height: number) => {
+      setState(storePath('width', width));
+      setState(storePath('height', height));
+    },
 
-    setDisplayDimensions: (width: number, height: number) =>
-      batch(() => {
-        setState('displayWidth', width);
-        setState('displayHeight', height);
-      }),
+    setDisplayDimensions: (width: number, height: number) => {
+      setState(storePath('displayWidth', width));
+      setState(storePath('displayHeight', height));
+    },
 
-    setBackgroundColor: (color: string) => setState('backgroundColor', color),
+    setBackgroundColor: (color: string) => setState(storePath('backgroundColor', color)),
 
     // Transform
-    setTransform: (transform: CanvasTransform) => setState('transform', transform),
-    setPan: (x: number, y: number) =>
-      batch(() => {
-        setState('transform', 'panX', x);
-        setState('transform', 'panY', y);
-      }),
-    setZoom: (zoom: number) => setState('transform', 'zoom', zoom),
-    setRotation: (rotation: number) => setState('transform', 'rotation', rotation),
+    setTransform: (transform: CanvasTransform) => setState(storePath('transform', transform)),
+    setPan: (x: number, y: number) => {
+      setState(storePath('transform', 'panX', x));
+      setState(storePath('transform', 'panY', y));
+    },
+    setZoom: (zoom: number) => setState(storePath('transform', 'zoom', zoom)),
+    setRotation: (rotation: number) => setState(storePath('transform', 'rotation', rotation)),
 
     // Convenience methods
-    resetTransform: () => setState('transform', DEFAULT_TRANSFORM),
+    resetTransform: () => setState(storePath('transform', DEFAULT_TRANSFORM)),
 
     updateTransform: (partial: Partial<CanvasTransform>) =>
-      setState(
-        'transform',
-        produce((t) => Object.assign(t, partial))
-      )
+      setState(storePath('transform', (t) => Object.assign(t, partial)))
   };
 }
 
@@ -190,33 +180,29 @@ export function createLayerState(initial?: Partial<LayerState>) {
 
     // Layer management
     addLayer: (layer: Layer) => {
-      setState('layers', (layers) => [...layers, layer]);
-      setState('activeLayerId', layer.id);
+      setState(storePath('layers', (layers) => [...layers, layer]));
+      setState(storePath('activeLayerId', layer.id));
     },
 
     removeLayer: (id: string) => {
       const index = state.layers.findIndex((l) => l.id === id);
       if (index === -1) return;
 
-      setState('layers', (layers) => layers.filter((l) => l.id !== id));
+      setState(storePath('layers', (layers) => layers.filter((l) => l.id !== id)));
 
       // Select another layer if active was removed
       if (state.activeLayerId === id) {
         const newActive = state.layers[Math.min(index, state.layers.length - 1)]?.id ?? null;
-        setState('activeLayerId', newActive);
+        setState(storePath('activeLayerId', newActive));
       }
     },
 
-    setActiveLayer: (id: string) => setState('activeLayerId', id),
+    setActiveLayer: (id: string) => setState(storePath('activeLayerId', id)),
 
     updateLayer: (id: string, updates: Partial<Layer>) => {
       const index = state.layers.findIndex((l) => l.id === id);
       if (index === -1) return;
-      setState(
-        'layers',
-        index,
-        produce((layer) => Object.assign(layer, updates))
-      );
+      setState(storePath('layers', index, (layer) => Object.assign(layer, updates)));
     },
 
     moveLayer: (id: string, newIndex: number) => {
@@ -224,8 +210,7 @@ export function createLayerState(initial?: Partial<LayerState>) {
       if (currentIndex === -1 || newIndex < 0 || newIndex >= state.layers.length) return;
 
       setState(
-        'layers',
-        produce((layers) => {
+        storePath('layers', (layers) => {
           const [layer] = layers.splice(currentIndex, 1);
           layers.splice(newIndex, 0, layer);
         })
@@ -234,17 +219,17 @@ export function createLayerState(initial?: Partial<LayerState>) {
 
     setLayerVisibility: (id: string, visible: boolean) => {
       const index = state.layers.findIndex((l) => l.id === id);
-      if (index !== -1) setState('layers', index, 'visible', visible);
+      if (index !== -1) setState(storePath('layers', index, 'visible', visible));
     },
 
     setLayerOpacity: (id: string, opacity: number) => {
       const index = state.layers.findIndex((l) => l.id === id);
-      if (index !== -1) setState('layers', index, 'opacity', opacity);
+      if (index !== -1) setState(storePath('layers', index, 'opacity', opacity));
     },
 
     setLayerBlendMode: (id: string, blendMode: Layer['blendMode']) => {
       const index = state.layers.findIndex((l) => l.id === id);
-      if (index !== -1) setState('layers', index, 'blendMode', blendMode);
+      if (index !== -1) setState(storePath('layers', index, 'blendMode', blendMode));
     }
   };
 }

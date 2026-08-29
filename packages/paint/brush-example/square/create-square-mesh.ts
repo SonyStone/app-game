@@ -1,7 +1,8 @@
 import { Mesh, OGLRenderingContext, Program, Texture } from '@app-game/ogl';
 import { Square } from '@app-game/ogl/extras/square';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { effect } from 'solid-js/web';
+import { createTrackedEffect } from 'solid-js';
+
 import fragment from './square.frag?raw';
 import vertex from './square.vert?raw';
 
@@ -30,15 +31,15 @@ export const createSquareMesh = (props: {
     })
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     tMap.value = access(props.texture);
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     zIndex.value = access(props.zIndex);
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     mesh.program.setTransparent(access(props.transparent) ?? false);
   });
 

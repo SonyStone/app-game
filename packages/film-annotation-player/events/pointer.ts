@@ -1,15 +1,6 @@
-import {
-  exhaustMap,
-  first,
-  fromEvent,
-  merge,
-  Observable,
-  startWith,
-  takeUntil,
-  tap,
-} from 'rxjs';
+import { exhaustMap, first, fromEvent, merge, Observable, startWith, takeUntil, tap } from 'rxjs';
 
-export function pointerdown(element: HTMLElement): Observable<PointerEvent> {
+export function pointerdown(element: Element): Observable<PointerEvent> {
   return fromEvent<PointerEvent>(element, 'pointerdown').pipe(
     tap((evt) => {
       element.setPointerCapture(evt.pointerId);
@@ -19,11 +10,11 @@ export function pointerdown(element: HTMLElement): Observable<PointerEvent> {
   );
 }
 
-export function pointermove(element: HTMLElement): Observable<PointerEvent> {
+export function pointermove(element: Element): Observable<PointerEvent> {
   return fromEvent<PointerEvent>(element, 'pointermove');
 }
 
-export function pointerup(element: HTMLElement): Observable<PointerEvent> {
+export function pointerup(element: Element): Observable<PointerEvent> {
   return merge(
     fromEvent<PointerEvent>(element, 'pointerup'),
     fromEvent<PointerEvent>(element, 'pointerleave'),
@@ -37,15 +28,13 @@ export function pointerup(element: HTMLElement): Observable<PointerEvent> {
   );
 }
 
-export function pointerdrag(element: HTMLElement): Observable<PointerEvent> {
+export function pointerdrag(element: Element): Observable<PointerEvent> {
   return pointerdown(element).pipe(
-    exhaustMap((event) =>
-      pointermove(element).pipe(startWith(event), takeUntil(pointerup(element)))
-    )
+    exhaustMap((event) => pointermove(element).pipe(startWith(event), takeUntil(pointerup(element))))
   );
 }
 
-export function createPointerEvent(element: HTMLElement): Observable<PointerEvent> {
+export function createPointerEvent(element: Element): Observable<PointerEvent> {
   return fromEvent<PointerEvent>(element, 'pointerdown').pipe(
     tap((evt) => {
       element.setPointerCapture(evt.pointerId);

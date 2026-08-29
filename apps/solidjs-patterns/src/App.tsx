@@ -1,15 +1,7 @@
+import { cn } from '@app-game/utils/cn';
 import { makeEventListener } from '@solid-primitives/event-listener';
-import {
-  ComponentProps,
-  createEffect,
-  createMemo,
-  createSignal,
-  ErrorBoundary,
-  For,
-  onCleanup,
-  onMount,
-  type JSX
-} from 'solid-js';
+import type { ComponentProps, JSX } from '@solidjs/web';
+import { createMemo, createSignal, createTrackedEffect, Errored, For, onCleanup, onSettled } from 'solid-js';
 import { Sidebar } from './components/Sidebar';
 import {
   applyTheme,
@@ -31,12 +23,12 @@ export function App(props: { children?: JSX.Element }): JSX.Element {
   const [systemTheme, setSystemTheme] = createSignal<ResolvedTheme>(getSystemTheme());
   const resolvedTheme = createMemo(() => resolveTheme(themeMode(), systemTheme()));
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     persistThemeMode(themeMode());
     applyTheme(themeMode(), systemTheme());
   });
 
-  onMount(() => {
+  onSettled(() => {
     const mediaQuery = window.matchMedia(THEME_MEDIA_QUERY);
 
     setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
@@ -69,9 +61,9 @@ export function App(props: { children?: JSX.Element }): JSX.Element {
 
         <main class="flex-1 overflow-y-auto">
           <div class="mx-auto max-w-3xl px-6 py-8">
-            <ErrorBoundary fallback={(err, reset) => <PageError error={err} reset={reset} />}>
+            <Errored fallback={(err, reset) => <PageError error={toError(err())} reset={reset} />}>
               {props.children}
-            </ErrorBoundary>
+            </Errored>
           </div>
         </main>
       </div>
@@ -99,7 +91,7 @@ function ThemeToggle(props: {
             title={
               option.value === 'system' ? `Follow system appearance (${props.resolvedTheme})` : `${option.label} theme`
             }
-            aria-pressed={props.themeMode === option.value}
+            aria-pressed={props.themeMode === option.value ? 'true' : 'false'}
             onClick={() => props.onChange(option.value)}
           >
             {option.label}
@@ -134,8 +126,8 @@ function PageError(props: { error: Error; reset: () => void }): JSX.Element {
 }
 
 function Body(props: Pick<ComponentProps<'body'>, 'class'>): null {
-  createEffect(() => {
-    document.body.className = props.class ?? '';
+  createTrackedEffect(() => {
+    document.body.className = cn(props.class);
   });
 
   onCleanup(() => {
@@ -143,6 +135,10 @@ function Body(props: Pick<ComponentProps<'body'>, 'class'>): null {
   });
 
   return null;
+}
+
+function toError(reason: unknown): Error {
+  return reason instanceof Error ? reason : new Error(String(reason));
 }
 
 const themeOptions = [

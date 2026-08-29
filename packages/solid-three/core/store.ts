@@ -1,5 +1,4 @@
-import { createContext } from 'solid-js';
-import { createStore, SetStoreFunction, Store } from 'solid-js/store';
+import { createContext, createStore, Store, storePath, StoreSetter } from 'solid-js';
 import * as THREE from 'three';
 import * as ReactThreeFiber from '../three-types';
 import { DomEvent, EventManager, PointerCaptureTarget, ThreeEvent } from './events';
@@ -126,7 +125,7 @@ export type StoreProps = {
 
 export type ApplyProps = (instance: Instance, newProps: InstanceProps) => void;
 
-export type ThreeStore = [Store<RootState>, SetStoreFunction<RootState>];
+export type ThreeStore = [Store<RootState>, StoreSetter<RootState>];
 
 const ThreeContext = createContext<ThreeStore>(null!);
 
@@ -183,8 +182,8 @@ const createThreeStore = (
   const camera = isCamera
     ? (cameraOptions as Camera)
     : orthographic
-    ? new THREE.OrthographicCamera(0, 0, 0, 0, 0.1, 1000)
-    : new THREE.PerspectiveCamera(75, 0, 0.1, 1000);
+      ? new THREE.OrthographicCamera(0, 0, 0, 0, 0.1, 1000)
+      : new THREE.PerspectiveCamera(75, 0, 0.1, 1000);
   if (!isCamera) {
     camera.position.z = 5;
     if (cameraOptions) applyProps(camera as any, cameraOptions as any);
@@ -290,11 +289,11 @@ const createThreeStore = (
         if (performanceTimeout) clearTimeout(performanceTimeout);
         // Set lower bound performance
         if (state.performance.current !== state.performance.min) {
-          setStore('performance', 'current', state.performance.min);
+          setStore(storePath('performance', 'current', state.performance.min));
         }
         // Go back to upper bound performance after a while unless something regresses meanwhile
         performanceTimeout = setTimeout(
-          () => setStore('performance', 'current', store.performance.max),
+          () => setStore(storePath('performance', 'current', store.performance.max)),
           state.performance.debounce
         );
       }
@@ -317,19 +316,21 @@ const createThreeStore = (
 
     setSize: (width: number, height: number) => {
       const newSize = { width, height };
-      setStore('size', newSize);
-      setStore('viewport', {
-        ...store.viewport,
-        ...getCurrentViewport(camera, defaultTarget, newSize)
-      });
+      setStore(storePath('size', newSize));
+      setStore(
+        storePath('viewport', {
+          ...store.viewport,
+          ...getCurrentViewport(camera, defaultTarget, newSize)
+        })
+      );
     },
 
     setDpr: (dpr: Dpr) => {
-      setStore('viewport', 'dpr', calculateDpr(dpr));
+      setStore(storePath('viewport', 'dpr', calculateDpr(dpr)));
     },
 
     setFrameloop: (frameloop: 'always' | 'demand' | 'never' = 'always') => {
-      setStore('frameloop', frameloop);
+      setStore(storePath('frameloop', frameloop));
     },
 
     events: { connected: false },
@@ -349,26 +350,30 @@ const createThreeStore = (
 
       xr,
       subscribe: (ref: RenderCallback, priority = 0) => {
-        setStore('internal', (internal) => ({
-          ...internal,
-          // If this subscription was given a priority, it takes rendering into its own hands
-          // For that reason we switch off automatic rendering and increase the manual flag
-          // As long as this flag is positive there can be no internal rendering at all
-          // because there could be multiple render subscriptions
-          priority: internal.priority + (priority > 0 ? 1 : 0),
-          // Register subscriber and sort layers from lowest to highest, meaning,
-          // highest priority renders last (on top of the other frames)
-          subscribers: [...internal.subscribers, { ref, priority }].sort((a, b) => a.priority - b.priority)
-        }));
+        setStore(
+          storePath('internal', (internal) => ({
+            ...internal,
+            // If this subscription was given a priority, it takes rendering into its own hands
+            // For that reason we switch off automatic rendering and increase the manual flag
+            // As long as this flag is positive there can be no internal rendering at all
+            // because there could be multiple render subscriptions
+            priority: internal.priority + (priority > 0 ? 1 : 0),
+            // Register subscriber and sort layers from lowest to highest, meaning,
+            // highest priority renders last (on top of the other frames)
+            subscribers: [...internal.subscribers, { ref, priority }].sort((a, b) => a.priority - b.priority)
+          }))
+        );
 
         return () => {
-          setStore('internal', (internal) => ({
-            ...internal,
-            // Decrease manual flag if this subscription had a priority
-            priority: internal.priority - (priority > 0 ? 1 : 0),
-            // Remove subscriber from list
-            subscribers: internal.subscribers.filter((s) => s.ref !== ref)
-          }));
+          setStore(
+            storePath('internal', (internal) => ({
+              ...internal,
+              // Decrease manual flag if this subscription had a priority
+              priority: internal.priority - (priority > 0 ? 1 : 0),
+              // Remove subscriber from list
+              subscribers: internal.subscribers.filter((s) => s.ref !== ref)
+            }))
+          );
         };
       }
     }

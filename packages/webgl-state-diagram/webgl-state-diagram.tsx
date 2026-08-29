@@ -1,7 +1,8 @@
-import { ComponentProps, For } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { For } from 'solid-js';
 import { WebGL2DebugWrapper } from './gl-debug-wrapper';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       diagram: ComponentProps<'div'>;
@@ -76,16 +77,16 @@ export default () => {
   ] as const;
 
   return (
-    <diagram class="h-full flex font-mono">
-      <draggable class="bg-[#005566cc] max-h-95vh overscroll-auto block border text-white">
-        <div class="font-bold text-center pb-1 bg-gradient-to-b from-[#ffffff4d] from-50% to-[#00000000] to-50% bg-size-[100%_2px] block">
+    <diagram class="flex h-full font-mono">
+      <draggable class="max-h-95vh block overscroll-auto border bg-[#005566cc] text-white">
+        <div class="block bg-gradient-to-b from-[#ffffff4d] from-50% to-[#00000000] to-50% bg-size-[100%_2px] pb-1 text-center font-bold">
           canvas
         </div>
         {canvas}
       </draggable>
 
-      <draggable class="bg-[#4d0000cc] max-h-95vh overscroll-auto block border text-white">
-        <div class="font-bold text-center pb-1 bg-gradient-to-b from-[#ffffff4d] from-50% to-[#00000000] to-50% bg-size-[100%_2px] block">
+      <draggable class="max-h-95vh block overscroll-auto border bg-[#4d0000cc] text-white">
+        <div class="block bg-gradient-to-b from-[#ffffff4d] from-50% to-[#00000000] to-50% bg-size-[100%_2px] pb-1 text-center font-bold">
           global state
         </div>
         <div>
@@ -95,8 +96,8 @@ export default () => {
               <For each={commonState}>
                 {(item) => (
                   <tr>
-                    <td class="border border-#ffffff80 p-1 whitespace-pre">{item[0]}</td>
-                    <td class="border border-#ffffff80 p-1 whitespace-pre">{String(item[1])}</td>
+                    <td class="border-#ffffff80 border p-1 whitespace-pre">{item[0]}</td>
+                    <td class="border-#ffffff80 border p-1 whitespace-pre">{String(item[1])}</td>
                   </tr>
                 )}
               </For>

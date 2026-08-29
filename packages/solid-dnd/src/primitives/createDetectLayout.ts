@@ -1,5 +1,5 @@
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect } from 'solid-js';
 import { detectLayout, type DetectedLayout } from '../core/detectLayout';
 
 export type CreateDetectLayoutOptions = Parameters<typeof createDetectLayout>[0];
@@ -8,7 +8,7 @@ export type DetectLayoutState = ReturnType<typeof createDetectLayout>;
 export function createDetectLayout(container: MaybeAccessor<HTMLElement | undefined>) {
   const [detectedLayout, setDetectedLayout] = createSignal<DetectedLayout>({ mode: 'vertical' });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const element = access(container);
     if (!element) {
       return;

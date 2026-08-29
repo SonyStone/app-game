@@ -1,4 +1,4 @@
-import { Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { Accessor, createSignal, createTrackedEffect } from 'solid-js';
 
 /**
  * Creates a reactive signal that tracks an element's bounding client rectangle.
@@ -24,7 +24,7 @@ import { Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 export function createElementClientRect<T extends Element>(element: Accessor<T | undefined>): Accessor<DOMRect | null> {
   const [rect, setRect] = createSignal<DOMRect | null>(null);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const el = element();
     if (!el) {
       setRect(null);
@@ -50,11 +50,11 @@ export function createElementClientRect<T extends Element>(element: Accessor<T |
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleScroll, { passive: true });
 
-    onCleanup(() => {
+    return () => {
       resizeObserver.disconnect();
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleScroll);
-    });
+    };
   });
 
   return rect;

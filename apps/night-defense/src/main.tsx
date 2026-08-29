@@ -1,5 +1,5 @@
-import { Router } from '@solidjs/router';
-import { render } from 'solid-js/web';
+import { createRouter } from '@solidjs/router';
+import { render } from '@solidjs/web';
 import { standaloneNightDefenseRoutes } from './routes';
 import './styles.css';
 
@@ -9,4 +9,6 @@ if (!root) {
   throw new Error('Night Defense root element was not found.');
 }
 
-render(() => <Router>{standaloneNightDefenseRoutes}</Router>, root);
+const Router = createRouter({ routes: [standaloneNightDefenseRoutes] });
+
+render(() => <Router />, root);

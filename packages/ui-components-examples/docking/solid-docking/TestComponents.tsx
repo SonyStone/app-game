@@ -1,7 +1,7 @@
-import { ComponentProps, JSX } from 'solid-js';
+import type { ComponentProps, JSX } from '@solidjs/web';
 import { DockingNode } from '../SolidDockingExample';
 
-declare module 'solid-js' {
+declare module '@solidjs/web' {
   namespace JSX {
     interface IntrinsicElements {
       'test-component-1': ComponentProps<'div'>;

@@ -1,7 +1,7 @@
-import { createMemo, mergeProps } from 'solid-js';
+import { createMemo, merge } from 'solid-js';
 
 export function GridSVG(props: { color?: string; size?: number } = {}) {
-  const merged = mergeProps({ color: 'red', size: 10 }, props);
+  const merged = merge({ color: 'red', size: 10 }, props);
 
   const path = createMemo(() => {
     return Array.from({ length: merged.size }, (_, i) => i)

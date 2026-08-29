@@ -1,95 +1,95 @@
-import { createEffect, createSignal, onCleanup, onMount, Setter } from 'solid-js'
+import { createSignal, createTrackedEffect, onCleanup, onSettled, Setter } from 'solid-js';
 
-import { Id, Listeners, useDragDropContext } from './drag-drop-context'
-import { elementLayout, noopTransform, Transform, isTransformsAreEqual } from './utils/layout'
-import { transformStyle } from './utils/style'
+import { Id, Listeners, useDragDropContext } from './drag-drop-context';
+import { elementLayout, isTransformsAreEqual, noopTransform, Transform } from './utils/layout';
+import { transformStyle } from './utils/style';
 
 interface Draggable {
-  (element: HTMLElement, accessor?: () => { skipTransform?: boolean }): void
-  ref: Setter<HTMLElement | null>
-  get isActiveDraggable(): boolean
-  get dragActivators(): Listeners
-  get transform(): Transform
+  (element: HTMLElement, accessor?: () => { skipTransform?: boolean }): void;
+  ref: Setter<HTMLElement | null>;
+  get isActiveDraggable(): boolean;
+  get dragActivators(): Listeners;
+  get transform(): Transform;
 }
 
 export const createDraggable = (id: Id, data: Record<string, any> = {}): Draggable => {
-  const [state, { addDraggable, removeDraggable, draggableActivators }] = useDragDropContext()
-  const [node, setNode] = createSignal<HTMLElement | null>(null)
+  const [state, { addDraggable, removeDraggable, draggableActivators }] = useDragDropContext();
+  const [node, setNode] = createSignal<HTMLElement | null>(null);
 
-  onMount(() => {
-    const resolvedNode = node()
+  onSettled(() => {
+    const resolvedNode = node();
 
     if (resolvedNode) {
       addDraggable({
         id,
         node: resolvedNode,
         layout: elementLayout(resolvedNode),
-        data,
-      })
+        data
+      });
     }
-  })
+  });
 
-  onCleanup(() => removeDraggable(id))
+  onCleanup(() => removeDraggable(id));
 
   const transform = () => {
-    return state.draggables[id]?.transform || noopTransform()
-  }
+    return state.draggables[id]?.transform || noopTransform();
+  };
 
   return Object.defineProperties(
     (element: HTMLElement, accessor?: () => { skipTransform?: boolean }) => {
-      const config = accessor ? accessor() : {}
+      const config = accessor ? accessor() : {};
 
-      createEffect(() => {
-        const resolvedNode = node()
-        const activators = draggableActivators(id)
+      createTrackedEffect(() => {
+        const resolvedNode = node();
+        const activators = draggableActivators(id);
 
         if (resolvedNode) {
           for (const key in activators) {
-            resolvedNode.addEventListener(key, activators[key]!)
+            resolvedNode.addEventListener(key, activators[key]!);
           }
         }
 
-        onCleanup(() => {
+        return () => {
           if (resolvedNode) {
             for (const key in activators) {
-              resolvedNode.removeEventListener(key, activators[key]!)
+              resolvedNode.removeEventListener(key, activators[key]!);
             }
           }
-        })
-      })
+        };
+      });
 
-      setNode(element)
+      setNode(element);
 
       if (!config.skipTransform) {
-        createEffect(() => {
-          const resolvedTransform = transform()
+        createTrackedEffect(() => {
+          const resolvedTransform = transform();
 
           if (!isTransformsAreEqual(resolvedTransform, noopTransform())) {
-            const style = transformStyle(transform())
-            element.style.setProperty('transform', style.transform ?? null)
+            const style = transformStyle(transform());
+            element.style.setProperty('transform', style.transform ?? null);
           } else {
-            element.style.removeProperty('transform')
+            element.style.removeProperty('transform');
           }
-        })
+        });
       }
     },
     {
       ref: {
         enumerable: true,
-        value: setNode,
+        value: setNode
       },
       isActiveDraggable: {
         enumerable: true,
-        get: () => state.active.draggableId === id,
+        get: () => state.active.draggableId === id
       },
       dragActivators: {
         enumerable: true,
-        get: () => draggableActivators(id, true),
+        get: () => draggableActivators(id, true)
       },
       transform: {
         enumerable: true,
-        get: transform,
-      },
-    },
-  ) as Draggable
-}
+        get: transform
+      }
+    }
+  ) as Draggable;
+};

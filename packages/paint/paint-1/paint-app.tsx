@@ -1,6 +1,6 @@
 import { GL_CAPABILITIES, GL_DRAW_ARRAYS_MODE, GL_FUNC_SEPARATE } from '@app-game/webgl/static-variables';
 import { createPointerData } from '@utils/createPointerData';
-import { createEffect } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 import { postQuadNDC } from './quads-2';
 
 import { createShaderProgram } from '../fungi/create-shader-program';
@@ -113,7 +113,7 @@ export default function Paint() {
 
   const size = createWindowSize();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const data = pointer();
 
     // Compute the Drawing Area
@@ -126,7 +126,7 @@ export default function Paint() {
     render();
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const { width, height } = size;
     setCanvasSize(canvas, width, height);
     setWebglViewport(gl, width, height);

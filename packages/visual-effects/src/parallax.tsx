@@ -1,31 +1,27 @@
 import { createVisibilityObserver } from '@solid-primitives/intersection-observer';
+import type { JSX } from '@solidjs/web';
+import { Dynamic } from '@solidjs/web';
 import {
-  createUniqueId,
   createContext,
-  createEffect,
   createMemo,
   createSignal,
-  mergeProps,
+  createTrackedEffect,
+  createUniqueId,
+  merge,
+  omit,
   onCleanup,
-  splitProps,
   useContext,
   type Accessor,
-  type JSX,
   type ParentComponent,
-  type ParentProps,
+  type ParentProps
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import {
-  createParallaxMotion,
-  PARALLAX_MOTION_DEFAULTS,
-  type ParallaxMotionOptions,
-} from './parallax-motion';
+import { createParallaxMotion, PARALLAX_MOTION_DEFAULTS, type ParallaxMotionOptions } from './parallax-motion';
 
 const DEFAULTS = {
   ...PARALLAX_MOTION_DEFAULTS,
   invertX: true,
   invertY: true,
-  precision: 1,
+  precision: 1
 };
 
 /**
@@ -36,10 +32,7 @@ const DEFAULTS = {
  * their configured depth.
  */
 export type ParallaxProviderProps = ParentProps<
-  Omit<
-    ParallaxMotionOptions,
-    'active' | 'pauseWhenOutOfView' | 'publishToMotionRoot'
-  > & {
+  Omit<ParallaxMotionOptions, 'active' | 'pauseWhenOutOfView' | 'publishToMotionRoot'> & {
     disabled?: boolean;
     gyroscope?: boolean;
     hoverOnly?: boolean;
@@ -77,94 +70,66 @@ const ParallaxContext = createContext<ParallaxContextValue>();
 
 export const useParallax = () => useContext(ParallaxContext) ?? null;
 
-export const ParallaxProvider: ParentComponent<ParallaxProviderProps> = (
-  props,
-) => {
-  const merged = mergeProps(DEFAULTS, props);
-  const [local] = splitProps(merged, [
-    'children',
-    'disabled',
-    'gyroscope',
-    'hoverOnly',
-    'calibrationThreshold',
-    'calibrationDelay',
-    'supportDelay',
-    'calibrateX',
-    'calibrateY',
-    'invertX',
-    'invertY',
-    'limitX',
-    'limitY',
-    'scalarX',
-    'scalarY',
-    'frictionX',
-    'frictionY',
-    'originX',
-    'originY',
-    'precision',
-    'onReady',
-  ]);
-  const [consumerActivity, setConsumerActivityState] = createSignal<
-    Record<string, boolean>
-  >({});
+export const ParallaxProvider: ParentComponent<ParallaxProviderProps> = (props) => {
+  const merged = merge(DEFAULTS, props);
 
-  const hasActiveConsumers = createMemo(() =>
-    Object.values(consumerActivity()).some(Boolean),
-  );
+  const [consumerActivity, setConsumerActivityState] = createSignal<Record<string, boolean>>({});
+
+  const hasActiveConsumers = createMemo(() => Object.values(consumerActivity()).some(Boolean));
 
   const motion = createParallaxMotion({
     active: hasActiveConsumers,
     get calibrationDelay() {
-      return local.calibrationDelay;
+      return merged.calibrationDelay;
     },
     get calibrationThreshold() {
-      return local.calibrationThreshold;
+      return merged.calibrationThreshold;
     },
     get calibrateX() {
-      return local.calibrateX;
+      return merged.calibrateX;
     },
     get calibrateY() {
-      return local.calibrateY;
+      return merged.calibrateY;
     },
     get disabled() {
-      return local.disabled;
+      return merged.disabled;
     },
     get frictionX() {
-      return local.frictionX;
+      return merged.frictionX;
     },
     get frictionY() {
-      return local.frictionY;
+      return merged.frictionY;
     },
     get gyroscope() {
-      return local.gyroscope;
+      return merged.gyroscope;
     },
     get hoverOnly() {
-      return local.hoverOnly;
+      return merged.hoverOnly;
     },
     get limitX() {
-      return local.limitX;
+      return merged.limitX;
     },
     get limitY() {
-      return local.limitY;
+      return merged.limitY;
     },
-    onReady: local.onReady,
+    onReady: merged.onReady,
     get originX() {
-      return local.originX;
+      return merged.originX;
     },
     get originY() {
-      return local.originY;
+      return merged.originY;
     },
     pauseWhenOutOfView: true,
     publishToMotionRoot: true,
     get scalarX() {
-      return local.scalarX;
+      return merged.scalarX;
     },
     get scalarY() {
-      return local.scalarY;
+      return merged.scalarY;
     },
     get supportDelay() {
-      return local.supportDelay;
-    },
+      return merged.supportDelay;
+    }
   });
 
   const updateConsumerActivity = (consumerId: string, isActive: boolean) => {
@@ -175,7 +140,7 @@ export const ParallaxProvider: ParentComponent<ParallaxProviderProps> = (
 
       return {
         ...current,
-        [consumerId]: isActive,
+        [consumerId]: isActive
       };
     });
   };
@@ -193,18 +158,19 @@ export const ParallaxProvider: ParentComponent<ParallaxProviderProps> = (
   };
 
   return (
-    <ParallaxContext.Provider
+    <ParallaxContext
       value={{
         offsetX: motion.offsetX,
         offsetY: motion.offsetY,
-        invertX: () => local.invertX,
-        invertY: () => local.invertY,
-        precision: () => local.precision,
+        invertX: () => merged.invertX,
+        invertY: () => merged.invertY,
+        precision: () => merged.precision,
         removeConsumerActivity,
-        setConsumerActivity: updateConsumerActivity,
-      }}>
-      {local.children}
-    </ParallaxContext.Provider>
+        setConsumerActivity: updateConsumerActivity
+      }}
+    >
+      {merged.children}
+    </ParallaxContext>
   );
 };
 
@@ -227,32 +193,21 @@ export const ParallaxLayer: ParentComponent<ParallaxLayerProps> = (props) => {
     throw new Error('ParallaxLayer must be used inside ParallaxProvider.');
   }
 
-  const merged = mergeProps(
+  const merged = merge(
     {
       as: 'div' as const,
-      depth: 0,
+      depth: 0
     },
-    props,
+    props
   );
 
-  const [local, others] = splitProps(merged, [
-    'as',
-    'class',
-    'style',
-    'children',
-    'depth',
-    'depthX',
-    'depthY',
-    'precision',
-  ]);
+  const others = omit(merged, 'as', 'class', 'style', 'children', 'depth', 'depthX', 'depthY', 'precision');
 
   let layerRef: HTMLElement | undefined;
 
-  const isLayerVisible = createVisibilityObserver({ initialValue: true })(
-    () => layerRef,
-  );
+  const isLayerVisible = createVisibilityObserver({ initialValue: true })(() => layerRef);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     scene.setConsumerActivity(layerId, isLayerVisible());
   });
 
@@ -260,36 +215,40 @@ export const ParallaxLayer: ParentComponent<ParallaxLayerProps> = (props) => {
     scene.removeConsumerActivity(layerId);
   });
 
-  const frozenTransform = createMemo<string>((previousTransform) => {
-    if (!isLayerVisible()) {
-      return previousTransform;
-    }
+  const frozenTransform = createMemo<string>(
+    (previousTransform) => {
+      if (!isLayerVisible()) {
+        return previousTransform;
+      }
 
-    const depthX = local.depthX ?? local.depth;
-    const depthY = local.depthY ?? local.depth;
-    const precision = local.precision ?? scene.precision();
-    const translateX = scene.offsetX() * depthX * (scene.invertX() ? -1 : 1);
-    const translateY = scene.offsetY() * depthY * (scene.invertY() ? -1 : 1);
+      const depthX = merged.depthX ?? merged.depth;
+      const depthY = merged.depthY ?? merged.depth;
+      const precision = merged.precision ?? scene.precision();
+      const translateX = scene.offsetX() * depthX * (scene.invertX() ? -1 : 1);
+      const translateY = scene.offsetY() * depthY * (scene.invertY() ? -1 : 1);
 
-    return `translate3d(${translateX.toFixed(precision)}px, ${translateY.toFixed(precision)}px, 0)`;
-  }, 'translate3d(0.0px, 0.0px, 0)');
+      return `translate3d(${translateX.toFixed(precision)}px, ${translateY.toFixed(precision)}px, 0)`;
+    },
+    { loadingValue: 'translate3d(0.0px, 0.0px, 0)' }
+  );
 
   const layerStyle = createMemo<JSX.CSSProperties>(() => ({
-    ...(local.style ?? {}),
+    ...(merged.style ?? {}),
     transform: frozenTransform(),
-    'will-change': 'transform',
+    'will-change': 'transform'
   }));
 
   return (
     <Dynamic
-      component={local.as}
+      component={merged.as}
       ref={(element: Element) => {
         layerRef = element as HTMLElement;
       }}
-      class={local.class}
+      class={merged.class}
       style={layerStyle()}
-      {...others}>
-      {local.children}
+      {...others}
+    >
+      {merged.children}
     </Dynamic>
   );
 };

@@ -1,5 +1,5 @@
-import { type JSX } from 'solid-js';
-import { template } from 'solid-js/web';
+import type { JSX } from '@solidjs/web';
+import { template } from '@solidjs/web';
 import { CodeBlock } from '../components/CodeBlock';
 import { Callout } from '../components/PatternLayout';
 import { Badge as UiBadge, type BadgeProps } from '../components/ui/Badge';

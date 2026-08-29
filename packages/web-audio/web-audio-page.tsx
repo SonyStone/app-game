@@ -1,5 +1,4 @@
-import { createEffect, onCleanup } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, createTrackedEffect, onCleanup, storePath } from 'solid-js';
 import { Osc1Type } from './osc1-type';
 import { QwertyPianoBoard } from './qwerty-piano-board';
 import { Range } from './range';
@@ -23,16 +22,16 @@ export default function WebAudioPage() {
     gain: 0.25
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     ocs1.frequency.value = ocs1Settings.frequency;
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     ocs1.detune.value = ocs1Settings.detune;
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     ocs1.type = ocs1Settings.type;
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     gain1.gain.value = ocs1Settings.gain;
   });
 
@@ -44,19 +43,19 @@ export default function WebAudioPage() {
     type: filter.type
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     filter.frequency.value = filterSetting.frequency;
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     filter.detune.value = filterSetting.detune;
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     filter.Q.value = filterSetting.Q;
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     filter.gain.value = filterSetting.gain;
   });
-  createEffect(() => {
+  createTrackedEffect(() => {
     filter.type = filterSetting.type;
   });
 
@@ -89,41 +88,46 @@ export default function WebAudioPage() {
         <h2>Oscillator 1</h2>
         <Range
           value={ocs1Settings.frequency}
-          valueChange={(value) => setOcs1Settings('frequency', value)}
+          valueChange={(value) => setOcs1Settings(storePath('frequency', value))}
           name={'frequency'}
           max={5000}
         />
         <Range
           value={ocs1Settings.detune}
-          valueChange={(value) => setOcs1Settings('detune', value)}
+          valueChange={(value) => setOcs1Settings(storePath('detune', value))}
           name={'detune'}
           max={100}
         />
         <Range
           value={ocs1Settings.gain}
-          valueChange={(value) => setOcs1Settings('gain', value)}
+          valueChange={(value) => setOcs1Settings(storePath('gain', value))}
           name={'gain'}
           max={1}
           step={0.001}
         />
-        <Osc1Type type={ocs1Settings.type} changeType={(value) => setOcs1Settings('type', value)} />
+        <Osc1Type type={ocs1Settings.type} changeType={(value) => setOcs1Settings(storePath('type', value))} />
 
         <h2>Filter</h2>
         <Range
           value={filterSetting.frequency}
-          valueChange={(value) => setFilterSetting('frequency', value)}
+          valueChange={(value) => setFilterSetting(storePath('frequency', value))}
           name={'frequency'}
           max={10000}
         />
         <Range
           value={filterSetting.detune}
-          valueChange={(value) => setFilterSetting('detune', value)}
+          valueChange={(value) => setFilterSetting(storePath('detune', value))}
           name={'detune'}
         />
-        <Range value={filterSetting.Q} valueChange={(value) => setFilterSetting('Q', value)} name={'Q'} max={10} />
+        <Range
+          value={filterSetting.Q}
+          valueChange={(value) => setFilterSetting(storePath('Q', value))}
+          name={'Q'}
+          max={10}
+        />
         <Range
           value={filterSetting.gain}
-          valueChange={(value) => setFilterSetting('gain', value)}
+          valueChange={(value) => setFilterSetting(storePath('gain', value))}
           name={'gain'}
           max={10}
         />
@@ -131,26 +135,26 @@ export default function WebAudioPage() {
           <h2>Piano Keyboard</h2>
           <Range
             value={keyboardSettings.width}
-            valueChange={(value) => setKeyboardSettings('width', value)}
+            valueChange={(value) => setKeyboardSettings(storePath('width', value))}
             name={'width'}
             max={3500}
           />
           <Range
             value={keyboardSettings.height}
-            valueChange={(value) => setKeyboardSettings('height', value)}
+            valueChange={(value) => setKeyboardSettings(storePath('height', value))}
             name={'height'}
             max={500}
           />
           <Range
             value={keyboardSettings.borderWidth}
-            valueChange={(value) => setKeyboardSettings('borderWidth', value)}
+            valueChange={(value) => setKeyboardSettings(storePath('borderWidth', value))}
             name={'borderWidth'}
             step={0.5}
             max={5}
           />
           <Range
             value={keyboardSettings.octaves}
-            valueChange={(value) => setKeyboardSettings('octaves', value)}
+            valueChange={(value) => setKeyboardSettings(storePath('octaves', value))}
             name={'octaves'}
             step={1}
             min={1}
@@ -161,7 +165,7 @@ export default function WebAudioPage() {
             width={keyboardSettings.width}
             height={keyboardSettings.height}
             borderWidth={keyboardSettings.borderWidth}
-            onFrequencyChange={(value) => setOcs1Settings('frequency', value)}
+            onFrequencyChange={(value) => setOcs1Settings(storePath('frequency', value))}
           />
         </div>
       </div>

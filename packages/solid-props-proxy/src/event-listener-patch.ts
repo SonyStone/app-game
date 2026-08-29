@@ -1,4 +1,4 @@
-import { DelegatedEvents, delegateEvents } from 'solid-js/web';
+import { DelegatedEvents, delegateEvents } from '@solidjs/web';
 import type { AnyRecord, Cleanup, EventOptions, SolidEventHandler, SolidEventTupleHandler } from './types';
 import { eventCapture, eventKey, isEqual, noop, readEventTuple, restoreObjectKey } from './utils';
 
@@ -70,12 +70,7 @@ export function getEventListenerPatch(element: Element): EventListenerPatch {
  * While active, later user addEventListener calls for the same event phase are queued
  * and replayed after the overlay is cleaned up.
  */
-export function setEventListener(
-  element: Element,
-  name: string,
-  value: unknown,
-  capture: boolean
-): Cleanup {
+export function setEventListener(element: Element, name: string, value: unknown, capture: boolean): Cleanup {
   if (!value) {
     return noop;
   }

@@ -1,7 +1,7 @@
 import { Container, Sprite, useApplication, useAssets } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { FederatedPointerEvent, Graphics, Point, RenderTexture, Texture } from 'pixi.js';
-import { createEffect } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 
 export default function AdvancedScratchCard() {
   const app = useApplication();
@@ -15,7 +15,7 @@ export default function AdvancedScratchCard() {
   const stageSize = { width, height };
 
   const renderTexture = RenderTexture.create(stageSize);
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderTexture.resize(size.width, size.height);
   });
 

@@ -1,4 +1,4 @@
-import type { JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal } from 'solid-js';
 import type { TreeViewItem, TreeViewModel } from './createTreeView';
 
@@ -51,8 +51,8 @@ export function createTreeKeyboardNavigation<T>(props: {
     rowProps(item: TreeViewItem<T>): JSX.HTMLAttributes<HTMLDivElement> {
       return {
         ref: (element) => elements.set(item.id, element),
-        tabIndex: isTabStop(item) ? 0 : -1,
-        'aria-selected': selectedId() === item.id,
+        tabindex: isTabStop(item) ? 0 : -1,
+        'aria-selected': selectedId() === item.id ? 'true' : 'false',
         onFocus: () => setFocusedId(item.id),
         onClick: () => {
           setSelectedId(item.id);
@@ -204,16 +204,18 @@ export function createTreeKeyboardNavigation<T>(props: {
         focusByOffset(item, PAGE_ROW_OFFSET);
         break;
       case 'Enter':
-        if (props.onInsertOrganizer?.(item.item, {
-          itemKind: 'note',
-          placement: event.shiftKey
-            ? event.altKey || event.ctrlKey || event.metaKey
-              ? 'parent'
-              : 'before'
-            : event.altKey || event.ctrlKey || event.metaKey
-              ? 'tree-end'
-              : 'after'
-        })) {
+        if (
+          props.onInsertOrganizer?.(item.item, {
+            itemKind: 'note',
+            placement: event.shiftKey
+              ? event.altKey || event.ctrlKey || event.metaKey
+                ? 'parent'
+                : 'before'
+              : event.altKey || event.ctrlKey || event.metaKey
+                ? 'tree-end'
+                : 'after'
+          })
+        ) {
           break;
         }
         if (item.childCount > 0) {
@@ -223,14 +225,16 @@ export function createTreeKeyboardNavigation<T>(props: {
         }
         break;
       case 'Insert':
-        if (!props.onInsertOrganizer?.(item.item, {
-          itemKind: 'note',
-          placement: event.shiftKey
-            ? 'parent'
-            : event.altKey || event.ctrlKey || event.metaKey
-              ? 'first-child'
-              : 'last-child'
-        })) {
+        if (
+          !props.onInsertOrganizer?.(item.item, {
+            itemKind: 'note',
+            placement: event.shiftKey
+              ? 'parent'
+              : event.altKey || event.ctrlKey || event.metaKey
+                ? 'first-child'
+                : 'last-child'
+          })
+        ) {
           return;
         }
         break;
@@ -380,14 +384,7 @@ export type TreeKeyboardOrganizerRequest = Readonly<{
 }>;
 
 /** Structural move direction used by the original Tabs Outliner keyboard map. */
-export type TreeKeyboardMoveDirection =
-  | 'indent'
-  | 'outdent'
-  | 'up'
-  | 'down'
-  | 'first'
-  | 'last'
-  | 'tree-end';
+export type TreeKeyboardMoveDirection = 'indent' | 'outdent' | 'up' | 'down' | 'first' | 'last' | 'tree-end';
 
 function keyboardMoveDirection(event: KeyboardEvent): TreeKeyboardMoveDirection | undefined {
   if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {

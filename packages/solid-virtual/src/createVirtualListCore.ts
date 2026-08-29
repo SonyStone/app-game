@@ -1,7 +1,7 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createScrollPosition } from '@solid-primitives/scroll';
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
-import { mergeProps } from 'solid-js';
+import { merge } from 'solid-js';
 
 /** Options shared by flat and nested virtual lists. */
 export type BaseVirtualListProps<T> = Readonly<{
@@ -30,7 +30,7 @@ export function createVirtualListCore<T, Props extends BaseVirtualListProps<T>>(
   const viewportSize = createElementSize(() => access(inputProps.elementRef));
   const scroll = createScrollPosition(() => access(inputProps.elementRef));
 
-  return mergeProps({ gap: DEFAULT_GAP, overscan: DEFAULT_OVERSCAN }, inputProps, {
+  return merge({ gap: DEFAULT_GAP, overscan: DEFAULT_OVERSCAN }, inputProps, {
     get viewportHeight(): number {
       return viewportSize.height ?? 0;
     },

@@ -1,4 +1,4 @@
-import { Accessor, createEffect, on, onCleanup } from 'solid-js';
+import { Accessor, createEffect } from 'solid-js';
 import { CanvasTransform } from '../types';
 import { updateCanvasTransformDebug, updatePointerDebug, updateTwoFingerDebug } from '../ui/PointerDebugOverlay';
 import { calculateTwoFingerTransform, getMidpoint } from './twoFingerTransform';
@@ -584,52 +584,50 @@ export function useCanvasTransform(options: CanvasTransformOptions) {
   };
 
   // Attach event listeners reactively when canvas becomes available
-  createEffect(
-    on(canvas, (canvasEl) => {
-      if (!canvasEl) return;
+  createEffect(canvas, (canvasEl) => {
+    if (!canvasEl) return;
 
+    // Mouse events
+    canvasEl.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    canvasEl.addEventListener('wheel', handleWheel, { passive: false });
+    canvasEl.addEventListener('contextmenu', handleContextMenu);
+
+    // Touch gestures via pointer events (allows distinguishing touch from pen)
+    canvasEl.addEventListener('pointerdown', handleTouchPointerDown);
+    canvasEl.addEventListener('pointermove', handleTouchPointerMove);
+    canvasEl.addEventListener('pointerup', handleTouchPointerUp);
+    canvasEl.addEventListener('pointercancel', handleTouchPointerUp);
+
+    // Force pan mode via pointer events (allows distinguishing mouse from pen)
+    canvasEl.addEventListener('pointerdown', handleForcePanPointerDown);
+    canvasEl.addEventListener('pointermove', handleForcePanPointerMove);
+    canvasEl.addEventListener('pointerup', handleForcePanPointerUp);
+    canvasEl.addEventListener('pointercancel', handleForcePanPointerUp);
+
+    // Prevent default touch actions to avoid browser gestures interfering
+    canvasEl.style.touchAction = 'none';
+
+    return () => {
       // Mouse events
-      canvasEl.addEventListener('mousedown', handleMouseDown);
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      canvasEl.addEventListener('wheel', handleWheel, { passive: false });
-      canvasEl.addEventListener('contextmenu', handleContextMenu);
+      canvasEl.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      canvasEl.removeEventListener('wheel', handleWheel);
+      canvasEl.removeEventListener('contextmenu', handleContextMenu);
 
-      // Touch gestures via pointer events (allows distinguishing touch from pen)
-      canvasEl.addEventListener('pointerdown', handleTouchPointerDown);
-      canvasEl.addEventListener('pointermove', handleTouchPointerMove);
-      canvasEl.addEventListener('pointerup', handleTouchPointerUp);
-      canvasEl.addEventListener('pointercancel', handleTouchPointerUp);
+      // Touch gestures via pointer events
+      canvasEl.removeEventListener('pointerdown', handleTouchPointerDown);
+      canvasEl.removeEventListener('pointermove', handleTouchPointerMove);
+      canvasEl.removeEventListener('pointerup', handleTouchPointerUp);
+      canvasEl.removeEventListener('pointercancel', handleTouchPointerUp);
 
-      // Force pan mode via pointer events (allows distinguishing mouse from pen)
-      canvasEl.addEventListener('pointerdown', handleForcePanPointerDown);
-      canvasEl.addEventListener('pointermove', handleForcePanPointerMove);
-      canvasEl.addEventListener('pointerup', handleForcePanPointerUp);
-      canvasEl.addEventListener('pointercancel', handleForcePanPointerUp);
-
-      // Prevent default touch actions to avoid browser gestures interfering
-      canvasEl.style.touchAction = 'none';
-
-      onCleanup(() => {
-        // Mouse events
-        canvasEl.removeEventListener('mousedown', handleMouseDown);
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-        canvasEl.removeEventListener('wheel', handleWheel);
-        canvasEl.removeEventListener('contextmenu', handleContextMenu);
-
-        // Touch gestures via pointer events
-        canvasEl.removeEventListener('pointerdown', handleTouchPointerDown);
-        canvasEl.removeEventListener('pointermove', handleTouchPointerMove);
-        canvasEl.removeEventListener('pointerup', handleTouchPointerUp);
-        canvasEl.removeEventListener('pointercancel', handleTouchPointerUp);
-
-        // Force pan mode via pointer events
-        canvasEl.removeEventListener('pointerdown', handleForcePanPointerDown);
-        canvasEl.removeEventListener('pointermove', handleForcePanPointerMove);
-        canvasEl.removeEventListener('pointerup', handleForcePanPointerUp);
-        canvasEl.removeEventListener('pointercancel', handleForcePanPointerUp);
-      });
-    })
-  );
+      // Force pan mode via pointer events
+      canvasEl.removeEventListener('pointerdown', handleForcePanPointerDown);
+      canvasEl.removeEventListener('pointermove', handleForcePanPointerMove);
+      canvasEl.removeEventListener('pointerup', handleForcePanPointerUp);
+      canvasEl.removeEventListener('pointercancel', handleForcePanPointerUp);
+    };
+  });
 }

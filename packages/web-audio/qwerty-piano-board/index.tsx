@@ -1,4 +1,4 @@
-import { Index, createEffect, createMemo, createSignal, mergeProps, onCleanup } from 'solid-js';
+import { For, createMemo, createSignal, createTrackedEffect, merge, onCleanup } from 'solid-js';
 import { createKeys } from './create-keys';
 import { getFrequencyOfNote } from './get-note-frequency';
 import { orderNotes } from './order-notes';
@@ -19,7 +19,7 @@ export const QwertyPianoBoard = (props: {
   musicalTyping?: false;
   onFrequencyChange?: (frequency: number) => void;
 }) => {
-  const settings = mergeProps(
+  const settings = merge(
     {
       id: 'keyboard',
       octaves: 3,
@@ -44,7 +44,7 @@ export const QwertyPianoBoard = (props: {
   const whiteNotes = createMemo(() => orderNotes(['C', 'D', 'E', 'F', 'G', 'A', 'B'], settings.startNote));
   const notesWithSharps = createMemo(() => orderNotes(['C', 'D', 'F', 'G', 'A'], settings.startNote));
   const totalWhiteKeys = createMemo(() => settings.octaves * 7);
-  createEffect(() => {
+  createTrackedEffect(() => {
     console.log('totalWhiteKeys', totalWhiteKeys());
   });
   const whiteKeyWidth = createMemo(() => settings.width / totalWhiteKeys() - settings.borderWidth);
@@ -60,7 +60,7 @@ export const QwertyPianoBoard = (props: {
   );
 
   const [title, setTitle] = createSignal(0);
-  createEffect(() => {
+  createTrackedEffect(() => {
     const frequency = title();
     if (isNumber(frequency)) {
       props.onFrequencyChange?.(frequency);
@@ -222,7 +222,7 @@ export const QwertyPianoBoard = (props: {
           onPointerLeave={pointerHandler}
           onPointerCancel={pointerHandler}
         >
-          <Index each={keys()}>
+          <For keyed={false} each={keys()}>
             {(key, index) => (
               <li
                 class="transition-colors"
@@ -258,7 +258,7 @@ export const QwertyPianoBoard = (props: {
                 }}
               ></li>
             )}
-          </Index>
+          </For>
         </ul>
       </div>
     </>

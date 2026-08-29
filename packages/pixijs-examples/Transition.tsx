@@ -1,7 +1,8 @@
 import { resolveFirst } from '@solid-primitives/refs';
 import { createSwitchTransition } from '@solid-primitives/transition-group';
+import type { JSX } from '@solidjs/web';
 import { Container as _Container } from 'pixi.js';
-import { FlowComponent, JSX, JSXElement } from 'solid-js';
+import { FlowComponent, type Element as JSXElement } from 'solid-js';
 
 const TRANSITION_MODE_MAP = {
   inout: 'in-out',

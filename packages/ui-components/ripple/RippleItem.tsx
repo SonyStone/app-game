@@ -1,5 +1,5 @@
-import { onCleanup, onMount } from 'solid-js';
-import { style } from 'solid-js/web';
+import { style } from '@solidjs/web';
+import { onCleanup, onSettled } from 'solid-js';
 
 import s from './RippleItem.module.css';
 
@@ -37,7 +37,7 @@ export function RippleItem({ event, onFadeOut }: Props) {
     ></div>
   ) as HTMLElement;
 
-  onMount(() => {
+  onSettled(() => {
     enforceStyleRecalculation(node);
     style(node, {
       transform: 'scale(1)'

@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import { Camera, Renderer, type Transform } from 'ogl';
-import type { Accessor, JSX } from 'solid-js';
+import { Accessor } from 'solid-js';
 import type { Canvas } from './canvas';
 
 export type AnyInstance = Record<string, unknown>;
@@ -11,16 +12,9 @@ type SetterArgument<T> = T extends {
   ? TValue
   : never;
 
-type ReservedOglPropKeys =
-  | 'args'
-  | 'attach'
-  | 'children'
-  | 'makeDefault'
-  | 'ref';
+type ReservedOglPropKeys = 'args' | 'attach' | 'children' | 'makeDefault' | 'ref';
 
-type AssignableProp<T> = T extends { set: (...args: any[]) => unknown }
-  ? T | SetterArgument<T> | readonly number[]
-  : T;
+type AssignableProp<T> = T extends { set: (...args: any[]) => unknown } ? T | SetterArgument<T> | readonly number[] : T;
 
 type OglInstanceProps<TInstance> = Partial<{
   [K in keyof TInstance as K extends ReservedOglPropKeys
@@ -40,10 +34,7 @@ type OglLookAtProp<TInstance> = TInstance extends {
 
 type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
-export type OglBaseProps<
-  TInstance = unknown,
-  TArgs extends readonly unknown[] = readonly unknown[],
-> = {
+export type OglBaseProps<TInstance = unknown, TArgs extends readonly unknown[] = readonly unknown[]> = {
   args?: TArgs | readonly unknown[];
   attach?: string;
   makeDefault?: boolean;
@@ -54,7 +45,7 @@ export type OglBaseProps<
 export type OglElementProps<
   TInstance = unknown,
   TArgs extends readonly unknown[] = readonly unknown[],
-  TConstructorProps extends object = {},
+  TConstructorProps extends object = {}
 > = Simplify<
   OglBaseProps<TInstance, TArgs> &
     Partial<Omit<TConstructorProps, ReservedOglPropKeys>> &
@@ -63,20 +54,14 @@ export type OglElementProps<
 >;
 
 export type OglRuntimeProps = OglBaseProps<unknown> & Record<string, unknown>;
-export type OglAttachProps<TInstance = unknown> = Pick<
-  OglBaseProps<TInstance>,
-  'attach' | 'ref'
->;
+export type OglAttachProps<TInstance = unknown> = Pick<OglBaseProps<TInstance>, 'attach' | 'ref'>;
 
 export type ConstructorRegistration = {
   constructor: OglConstructor;
   requiresGl?: boolean;
 };
 
-export type RegisteredConstructors = Record<
-  string,
-  OglConstructor | ConstructorRegistration
->;
+export type RegisteredConstructors = Record<string, OglConstructor | ConstructorRegistration>;
 
 export type Attachment =
   | {

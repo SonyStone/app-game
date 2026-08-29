@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, flush } from 'solid-js';
 import type { DragEndEvent, DragMoveEvent, DragStartEvent } from 'src/primitives/createDragSensor';
 import { createDragSensor } from 'src/primitives/createDragSensor';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -74,22 +74,27 @@ function firePointerDown(el: HTMLElement, x: number, y: number, opts?: Partial<P
   // So we dispatch on the element, which sets currentTarget automatically.
   // But first, we need to attach the handler. Let's use dispatchEvent.
   el.dispatchEvent(ev);
+  flush();
 }
 
 function firePointerMove(el: HTMLElement, x: number, y: number, opts?: Partial<PointerEventInit>): void {
   el.dispatchEvent(pointer('pointermove', x, y, opts));
+  flush();
 }
 
 function firePointerUp(el: HTMLElement, x: number, y: number, opts?: Partial<PointerEventInit>): void {
   el.dispatchEvent(pointer('pointerup', x, y, opts));
+  flush();
 }
 
 function firePointerCancel(el: HTMLElement): void {
   el.dispatchEvent(pointer('pointercancel', 0, 0));
+  flush();
 }
 
 function fireEscapeKey(): void {
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  flush();
 }
 
 // ============================================================================
@@ -361,6 +366,7 @@ describe('createDragSensor', () => {
       expect(sensor.isDragging()).toBe(true);
 
       sensor.cancel();
+      flush();
 
       expect(onDragCancel).toHaveBeenCalledOnce();
       expect(sensor.isDragging()).toBe(false);
@@ -501,6 +507,7 @@ describe('createDragSensor', () => {
       firePointerDown(el, 100, 100);
       firePointerMove(el, 120, 100);
       sensor.cancel();
+      flush();
       expect(onDragStart).toHaveBeenCalledOnce();
 
       // Second drag — should work
@@ -635,6 +642,7 @@ describe('createDragSensor', () => {
 
       // Events dispatched on the proxy (simulating pointer capture delivery)
       proxy.dispatchEvent(pointer('pointermove', 150, 160));
+      flush();
 
       expect(onDragMove).toHaveBeenCalledOnce();
       expect(onDragMove).toHaveBeenCalledWith(
@@ -654,6 +662,7 @@ describe('createDragSensor', () => {
 
       const proxy = document.querySelector('[data-dnd-capture-proxy]') as HTMLElement;
       proxy.dispatchEvent(pointer('pointerup', 130, 140));
+      flush();
 
       expect(onDragEnd).toHaveBeenCalledOnce();
       expect(sensor.isDragging()).toBe(false);
@@ -707,6 +716,7 @@ describe('createDragSensor', () => {
 
       const proxy = document.querySelector('[data-dnd-capture-proxy]') as HTMLElement;
       proxy.dispatchEvent(pointer('pointerup', 130, 140));
+      flush();
 
       // Second drag
       firePointerDown(el, 200, 200);

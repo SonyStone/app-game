@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
 
 export const Gain = (props: { gain?: number; changeGain?: (value: number) => void } & ComponentProps<'div'>) => {
   return (

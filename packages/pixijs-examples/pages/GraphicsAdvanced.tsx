@@ -1,6 +1,7 @@
 import { Container, Graphics, useAsset } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { JSX, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Show } from 'solid-js';
 
 export default function GraphicsAdvanced(): JSX.Element {
   const [texture] = useAsset('https://pixijs.com/assets/bg_rotate.jpg');

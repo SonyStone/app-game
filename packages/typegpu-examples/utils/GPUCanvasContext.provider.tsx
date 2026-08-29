@@ -1,7 +1,8 @@
 // @refresh reload
 
 import { createContextProvider } from '@app-game/solid-utils';
-import { JSX, mergeProps, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { merge, Show } from 'solid-js';
 
 const [Provider, useGPUCanvasContext] = createContextProvider<GPUCanvasContext, { value: GPUCanvasContext }>(
   (props) => props.value,
@@ -25,7 +26,7 @@ export function GPUCanvasContextProvider(
     noWebGPUContext?: JSX.Element;
   }>
 ) {
-  props = mergeProps(defaultProps, props);
+  props = merge(defaultProps, props);
 
   return (
     <Show when={props.canvas} fallback={props.noCanvas}>

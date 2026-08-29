@@ -5,11 +5,13 @@ export function TreeSelectionIndicator(props: { selected: boolean; focused: bool
   return (
     <Show when={props.selected || props.focused}>
       <span
-        class="pointer-events-none absolute inset-0"
-        classList={{
-          'bg-blue-500/15': props.selected,
-          'ring-1 ring-inset ring-blue-400': props.focused
-        }}
+        class={[
+          'pointer-events-none absolute inset-0',
+          {
+            'bg-blue-500/15': props.selected,
+            'ring-1 ring-blue-400 ring-inset': props.focused
+          }
+        ]}
         aria-hidden="true"
       />
     </Show>

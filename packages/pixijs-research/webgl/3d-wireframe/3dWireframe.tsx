@@ -1,7 +1,7 @@
 import * as m4 from '@app-game/math/m4';
 import { create, setFromSpherical, setFromVec3 } from '@app-game/math/spherical';
 import { clamp } from '@app-game/math/utils/clamp';
-import { For, createEffect, createMemo, createSignal } from 'solid-js';
+import { For, createMemo, createSignal, createTrackedEffect } from 'solid-js';
 
 import { round } from '@app-game/gsap/core/utils';
 import { FVec3 } from '@app-game/math';
@@ -26,7 +26,7 @@ export default function Wireframe() {
 
   const [transition, setTransition] = createSignal(cameraType() === 'perspective' ? 1 : 0);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     setTransition(cameraType() === 'perspective' ? 1 : 0);
   });
 
@@ -78,7 +78,7 @@ export default function Wireframe() {
           step={0.01}
           value={transition()}
           onInput={(e) => setTransition(parseFloat((e.target as any).value))}
-          onwheel={(e) => {
+          onWheel={(e) => {
             setTransition(clamp(transition() + (e.deltaY > 0 ? 0.1 : -0.1), 0, 1.25));
           }}
         />
@@ -100,7 +100,7 @@ export default function Wireframe() {
                   onChange={(e) => {
                     setValue(parseFloat((e.target as any).value));
                   }}
-                  onwheel={(e) => {
+                  onWheel={(e) => {
                     setValue(value() + (e.deltaY > 0 ? 0.1 : -0.1));
                   }}
                 ></input>
@@ -127,7 +127,7 @@ export default function Wireframe() {
                   onChange={(e) => {
                     setValue(parseFloat((e.target as any).value));
                   }}
-                  onwheel={(e) => {
+                  onWheel={(e) => {
                     setValue(value() + (e.deltaY > 0 ? 0.1 : -0.1));
                   }}
                 ></input>
@@ -156,7 +156,7 @@ export default function Wireframe() {
                   onChange={(e) => {
                     setValue(parseFloat((e.target as any).value));
                   }}
-                  onwheel={(e) => {
+                  onWheel={(e) => {
                     setValue(value() + (e.deltaY > 0 ? 0.1 : -0.1));
                   }}
                 ></input>

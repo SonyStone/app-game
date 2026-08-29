@@ -1,5 +1,5 @@
-import { For, type JSX } from 'solid-js';
-import { createStore, produce } from 'solid-js/store';
+import type { JSX } from '@solidjs/web';
+import { createStore, For, storePath } from 'solid-js';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
 import { markdownComponents } from '../markdown-components';
@@ -14,8 +14,8 @@ type Todo = { id: number; text: string; done: boolean };
 function StoreDemo(): JSX.Element {
   const [todos, setTodos] = createStore<Todo[]>([
     { id: 1, text: 'Learn createStore', done: false },
-    { id: 2, text: 'Try produce()', done: false },
-    { id: 3, text: 'Use reconcile()', done: false }
+    { id: 2, text: 'Try a draft callback', done: false },
+    { id: 3, text: 'Use storePath()', done: false }
   ]);
 
   let nextId = 4;
@@ -24,19 +24,19 @@ function StoreDemo(): JSX.Element {
   const addTodo = () => {
     const text = inputRef.value.trim();
     if (!text) return;
-    setTodos(
-      produce((draft) => {
-        draft.push({ id: nextId++, text, done: false });
-      })
-    );
+    setTodos((draft) => {
+      draft.push({ id: nextId++, text, done: false });
+    });
     inputRef.value = '';
   };
 
   const toggle = (id: number) =>
     setTodos(
-      (t) => t.id === id,
-      'done',
-      (d) => !d
+      storePath(
+        (todo) => todo.id === id,
+        'done',
+        (done) => !done
+      )
     );
 
   const remove = (id: number) => setTodos((ts) => ts.filter((t) => t.id !== id));

@@ -1,4 +1,4 @@
-import { JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
 import { calculateLayout } from './calculateLayout';
 import { DropzoneItemId, isPlaceholderId, ItemId } from './Item';
 import { BlockMeasurements } from './measure';

@@ -1,5 +1,5 @@
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
-import { batch, createSignal } from 'solid-js';
+import { createSignal, flush } from 'solid-js';
 import { type Rect } from '../core/rect';
 import {
   buildFlipAnimateEntries,
@@ -117,7 +117,7 @@ export function createFlip<K>(
     onAnimate?: (entries: ReadonlyArray<FlipAnimateEntry<K>>) => void;
   } & FlipElementSource<K>
 ) {
-  const [isAnimating, setIsAnimating] = createSignal(false);
+  const [isAnimating, setIsAnimating] = createSignal(false, { ownedWrite: true });
   const snapshot = createFlipSnapshot<K>();
   const animationSchedule = createFlipAnimationSchedule<K>();
 
@@ -221,10 +221,12 @@ export function createFlip<K>(
     if (batch.animations.length === 0) {
       runPendingCleanup();
       setIsAnimating(false);
+      flush();
       return;
     }
 
     setIsAnimating(true);
+    flush();
     activeAnimations = batch.animations;
 
     const currentBatch = batch.animations;
@@ -243,6 +245,7 @@ export function createFlip<K>(
     activeAnimations = [];
     runPendingCleanup();
     setIsAnimating(false);
+    flush();
   }
 
   function runPendingCleanup(): void {
@@ -263,6 +266,7 @@ export function createFlip<K>(
     runPendingCleanup();
     if (isAnimating()) {
       setIsAnimating(false);
+      flush();
     }
   }
 
@@ -303,7 +307,7 @@ export function createFlip<K>(
       animateDurationOverride = overrides?.duration;
       layoutContainer = overrides?.container ?? null;
       captureFirst();
-      batch(() => fn());
+      fn();
       playFromFirst();
       animateDurationOverride = undefined;
       layoutContainer = null;

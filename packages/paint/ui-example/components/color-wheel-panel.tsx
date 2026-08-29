@@ -1,8 +1,10 @@
 export const ColorWheelPanel = (props: { isActive?: boolean }) => {
   return (
     <div
-      class="w-30 h-30 absolute bottom-full flex translate-y-10 flex-col gap-1 rounded border border-black bg-white p-1 text-xs transition-transform in-[.active]:translate-y-0"
-      classList={{ 'pointer-events-auto': props.isActive, 'pointer-events-none': !props.isActive }}
+      class={[
+        'absolute bottom-full flex h-30 w-30 translate-y-10 flex-col gap-1 rounded border border-black bg-white p-1 text-xs transition-transform in-[.active]:translate-y-0',
+        { 'pointer-events-auto': Boolean(props.isActive), 'pointer-events-none': !props.isActive }
+      ]}
     >
       Color wheel
       <div class="flex min-h-0 place-content-center place-items-center overflow-hidden">

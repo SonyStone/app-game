@@ -1,14 +1,14 @@
 import type { VirtualNestedItem, VirtualNestedList } from '@app-game/solid-virtual';
-import type { JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
 import { For, Show } from 'solid-js';
 import {
   lineVerticalUrl,
   linetoLastSubnodeUrl,
   linetoSubnodeUrl,
-  nodeAnchorCollapsedUrl,
   nodeAnchorCollapsedProtectedUrl,
-  nodeAnchorExpandedUrl,
+  nodeAnchorCollapsedUrl,
   nodeAnchorExpandedProtectedUrl,
+  nodeAnchorExpandedUrl,
   nodeAnchorNoSubnodesProtectedUrl,
   nodeAnchorNoSubnodesUrl
 } from '../assets';
@@ -58,10 +58,7 @@ export type TreeCollapsedSummarySegment = Readonly<{
   title: string;
 }>;
 
-type TreeLevelModel<T> = Pick<
-  VirtualNestedList<TreeViewItem<T>>,
-  'children' | 'paddingTop' | 'paddingBottom'
->;
+type TreeLevelModel<T> = Pick<VirtualNestedList<TreeViewItem<T>>, 'children' | 'paddingTop' | 'paddingBottom'>;
 
 function TreeLevel<T>(props: {
   level: TreeLevelModel<T>;
@@ -137,7 +134,7 @@ function TreeBranch<T>(props: {
         {...props.rowProps?.(item())}
         data-node-id={item().id}
         role="treeitem"
-        aria-expanded={item().childCount > 0 ? item().isExpanded : undefined}
+        aria-expanded={item().childCount > 0 ? (item().isExpanded ? 'true' : 'false') : undefined}
         aria-level={item().depth + 1}
         class={`relative flex h-5 min-w-0 items-center overflow-hidden ${props.rowClass?.(item()) ?? ''}`}
       >
@@ -154,10 +151,7 @@ function TreeBranch<T>(props: {
         />
 
         <Show when={item().childCount > 0 && !item().isExpanded}>
-          <CollapsedSummaryButton
-            item={item()}
-            summary={props.collapsedSummary?.(item())}
-          />
+          <CollapsedSummaryButton item={item()} summary={props.collapsedSummary?.(item())} />
         </Show>
 
         {props.children(item())}
@@ -178,11 +172,9 @@ function TreeBranch<T>(props: {
   );
 }
 
-function CollapsedSummaryButton<T>(props: {
-  item: TreeViewItem<T>;
-  summary: TreeCollapsedSummary | undefined;
-}) {
-  const segments = () => props.summary?.segments ?? [{ text: String(props.item.descendantCount), title: 'Hidden nodes' }];
+function CollapsedSummaryButton<T>(props: { item: TreeViewItem<T>; summary: TreeCollapsedSummary | undefined }) {
+  const segments = () =>
+    props.summary?.segments ?? [{ text: String(props.item.descendantCount), title: 'Hidden nodes' }];
   return (
     <button
       type="button"

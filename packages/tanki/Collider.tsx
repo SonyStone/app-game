@@ -1,6 +1,7 @@
 import { toRadian } from '@app-game/ogl/extras/path/utils';
 import { insert, spread } from '@app-game/solid-pixi';
-import { createEffect, JSX, onCleanup } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 import { Collider as _Collider, RigidBody, useRapier2D } from './Rapier2D';
 import { useWorld } from './World';
 
@@ -20,7 +21,7 @@ export const Collider = (() =>
     const colliderDesc = physics.ColliderDesc.cuboid(props.hx ?? 1, props.hy ?? 1);
     const collider = world.createCollider(colliderDesc, props.parent as RigidBody);
 
-    createEffect(() => {
+    createTrackedEffect(() => {
       collider.setTranslation({ x: props.x ?? 0, y: props.y ?? 0 });
       collider.setRotation(toRadian(props.angle ?? 0));
     });

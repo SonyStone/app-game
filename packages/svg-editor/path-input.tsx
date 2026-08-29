@@ -1,6 +1,5 @@
 import { trackStore } from '@solid-primitives/deep';
-import { createEffect, Index, JSXElement, Match, Switch, untrack } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, createTrackedEffect, For, type Element as JSXElement, Match, Switch, untrack } from 'solid-js';
 import { PathCommand, SVGPathParser } from './svg-path-parser';
 
 type MoveCommand = Extract<PathCommand, { type: 'M' | 'm' }>;
@@ -10,11 +9,11 @@ type VerticalCommand = Extract<PathCommand, { type: 'V' | 'v' }>;
 export function PathInput(props: { value: string; onChange: (value: string) => void }) {
   const [state, setState] = createStore<PathCommand[]>([]);
 
-  createEffect(() => {
-    setState(SVGPathParser.parse(props.value));
+  createTrackedEffect(() => {
+    setState(() => SVGPathParser.parse(props.value));
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     trackStore(state);
     props.onChange(SVGPathParser.serialize(state));
   });
@@ -43,7 +42,7 @@ export function PathInput(props: { value: string; onChange: (value: string) => v
             props.onChange?.(e.target.value);
           }}
         />
-        <Index each={state}>
+        <For keyed={false} each={state}>
           {(item, index) => (
             <Switch>
               <Match when={item().type === 'M' || item().type === 'm'}>
@@ -53,34 +52,38 @@ export function PathInput(props: { value: string; onChange: (value: string) => v
 
                     return (
                       <>
-                  <Button
-                    uppercase={command.type === 'M'}
-                    onClick={() => {
-                      const newType = untrack(item).type === 'M' ? 'm' : 'M';
-                      const newCommands = convertPathCommand(state, index, newType);
-                      setState(newCommands);
-                    }}
-                  >
-                    {command.type}
-                  </Button>
-                  x:{' '}
-                  <NumberInput
-                    value={command.x}
-                    onChange={(value) => {
-                      setState(updateCommand(state, index, (current) =>
-                        isMoveCommand(current) ? { ...current, x: value } : current
-                      ));
-                    }}
-                  />
-                  y:{' '}
-                  <NumberInput
-                    value={command.y}
-                    onChange={(value) => {
-                      setState(updateCommand(state, index, (current) =>
-                        isMoveCommand(current) ? { ...current, y: value } : current
-                      ));
-                    }}
-                  />
+                        <Button
+                          uppercase={command.type === 'M'}
+                          onClick={() => {
+                            const newType = untrack(item).type === 'M' ? 'm' : 'M';
+                            const newCommands = convertPathCommand(state, index, newType);
+                            setState(() => newCommands);
+                          }}
+                        >
+                          {command.type}
+                        </Button>
+                        x:{' '}
+                        <NumberInput
+                          value={command.x}
+                          onChange={(value) => {
+                            setState(() =>
+                              updateCommand(state, index, (current) =>
+                                isMoveCommand(current) ? { ...current, x: value } : current
+                              )
+                            );
+                          }}
+                        />
+                        y:{' '}
+                        <NumberInput
+                          value={command.y}
+                          onChange={(value) => {
+                            setState(() =>
+                              updateCommand(state, index, (current) =>
+                                isMoveCommand(current) ? { ...current, y: value } : current
+                              )
+                            );
+                          }}
+                        />
                       </>
                     );
                   })()}
@@ -93,25 +96,27 @@ export function PathInput(props: { value: string; onChange: (value: string) => v
 
                     return (
                       <>
-                  <Button
-                    uppercase={command.type === 'H'}
-                    onClick={() => {
-                      const newType = untrack(item).type === 'H' ? 'h' : 'H';
-                      const newCommands = convertPathCommand(state, index, newType);
-                      setState(newCommands);
-                    }}
-                  >
-                    {command.type}
-                  </Button>
-                  x:{' '}
-                  <NumberInput
-                    value={command.x}
-                    onChange={(value) => {
-                      setState(updateCommand(state, index, (current) =>
-                        isHorizontalCommand(current) ? { ...current, x: value } : current
-                      ));
-                    }}
-                  />
+                        <Button
+                          uppercase={command.type === 'H'}
+                          onClick={() => {
+                            const newType = untrack(item).type === 'H' ? 'h' : 'H';
+                            const newCommands = convertPathCommand(state, index, newType);
+                            setState(() => newCommands);
+                          }}
+                        >
+                          {command.type}
+                        </Button>
+                        x:{' '}
+                        <NumberInput
+                          value={command.x}
+                          onChange={(value) => {
+                            setState(() =>
+                              updateCommand(state, index, (current) =>
+                                isHorizontalCommand(current) ? { ...current, x: value } : current
+                              )
+                            );
+                          }}
+                        />
                       </>
                     );
                   })()}
@@ -124,25 +129,27 @@ export function PathInput(props: { value: string; onChange: (value: string) => v
 
                     return (
                       <>
-                  <Button
-                    uppercase={command.type === 'V'}
-                    onClick={() => {
-                      const newType = untrack(item).type === 'V' ? 'v' : 'V';
-                      const newCommands = convertPathCommand(state, index, newType);
-                      setState(newCommands);
-                    }}
-                  >
-                    {command.type}
-                  </Button>
-                  y:{' '}
-                  <NumberInput
-                    value={command.y}
-                    onChange={(value) => {
-                      setState(updateCommand(state, index, (current) =>
-                        isVerticalCommand(current) ? { ...current, y: value } : current
-                      ));
-                    }}
-                  />
+                        <Button
+                          uppercase={command.type === 'V'}
+                          onClick={() => {
+                            const newType = untrack(item).type === 'V' ? 'v' : 'V';
+                            const newCommands = convertPathCommand(state, index, newType);
+                            setState(() => newCommands);
+                          }}
+                        >
+                          {command.type}
+                        </Button>
+                        y:{' '}
+                        <NumberInput
+                          value={command.y}
+                          onChange={(value) => {
+                            setState(() =>
+                              updateCommand(state, index, (current) =>
+                                isVerticalCommand(current) ? { ...current, y: value } : current
+                              )
+                            );
+                          }}
+                        />
                       </>
                     );
                   })()}
@@ -150,7 +157,7 @@ export function PathInput(props: { value: string; onChange: (value: string) => v
               </Match>
             </Switch>
           )}
-        </Index>
+        </For>
       </div>
     </>
   );
@@ -160,7 +167,7 @@ function Button(props: { uppercase: boolean; children?: JSXElement; onClick?: ()
   return (
     <button
       class={[
-        'rounded  px-1.5 py-0.5',
+        'rounded px-1.5 py-0.5',
         props.uppercase ? 'bg-orange-100 hover:bg-orange-200' : 'bg-purple-100 hover:bg-purple-200'
       ].join(' ')}
       onClick={props.onClick}
@@ -183,7 +190,7 @@ function isVerticalCommand(command: PathCommand): command is VerticalCommand {
 }
 
 function updateCommand(
-  commands: PathCommand[],
+  commands: readonly PathCommand[],
   index: number,
   update: (command: PathCommand) => PathCommand
 ): PathCommand[] {
@@ -192,7 +199,11 @@ function updateCommand(
   return nextCommands;
 }
 
-function convertPathCommand(commands: PathCommand[], index: number, newType: PathCommand['type']): PathCommand[] {
+function convertPathCommand(
+  commands: readonly PathCommand[],
+  index: number,
+  newType: PathCommand['type']
+): PathCommand[] {
   const newCommands = [...commands];
   const command = commands[index];
 

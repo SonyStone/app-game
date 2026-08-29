@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
 
 export const Detune = (props: { detune?: number; changeDetune?: (value: number) => void } & ComponentProps<'div'>) => {
   return (

@@ -1,16 +1,16 @@
 import { Container, Graphics, Sprite, Text, useApplication } from '@app-game/solid-pixi';
 import {
   Container as PixiContainer,
-  type FederatedPointerEvent,
   Graphics as PixiGraphics,
-  Rectangle,
-  RenderTexture,
   Sprite as PixiSprite,
   Text as PixiText,
+  Rectangle,
+  RenderTexture,
   TextStyle,
+  type FederatedPointerEvent,
   type Ticker
 } from 'pixi.js';
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 
 const WAVE_RAMP_SECONDS = 75;
 const NIGHT_FALL_SECONDS = 12;
@@ -141,7 +141,7 @@ export function NightDefenseScene(props: SceneProps) {
   let lastWidth = 0;
   let lastHeight = 0;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     resizeScene(props.width, props.height);
   });
 
@@ -271,13 +271,17 @@ export function NightDefenseScene(props: SceneProps) {
   }
 
   function paintLightBetween(from: PointerSample, to: PointerSample, radius = BRUSH_RADIUS) {
-    lightLine.clear().moveTo(from.x, from.y).lineTo(to.x, to.y).stroke({
-      width: radius * 1.38,
-      color: 0xffffff,
-      alpha: 0.74,
-      cap: 'round',
-      join: 'round'
-    });
+    lightLine
+      .clear()
+      .moveTo(from.x, from.y)
+      .lineTo(to.x, to.y)
+      .stroke({
+        width: radius * 1.38,
+        color: 0xffffff,
+        alpha: 0.74,
+        cap: 'round',
+        join: 'round'
+      });
     lightLine.blendMode = 'normal';
     app.renderer.render({
       container: lightLine,
@@ -777,8 +781,7 @@ function updateShots(state: GameState, dt: number) {
 
     const fromX = shot.x;
     const fromY = shot.y;
-    const targetIndex =
-      shot.targetId === null ? -1 : state.enemies.findIndex((enemy) => enemy.id === shot.targetId);
+    const targetIndex = shot.targetId === null ? -1 : state.enemies.findIndex((enemy) => enemy.id === shot.targetId);
 
     if (targetIndex >= 0) {
       const target = state.enemies[targetIndex];
@@ -1064,11 +1067,17 @@ function drawField(graphics: PixiGraphics, width: number, height: number, elapse
   graphics.rect(0, height * 0.68, width, height * 0.32).fill({ color: 0x10201a, alpha: 0.88 });
 
   for (let x = 42; x < width; x += 76) {
-    graphics.moveTo(x, 0).lineTo(x + 18, height).stroke({ width: 1, color: 0x2c4535, alpha: 0.12 });
+    graphics
+      .moveTo(x, 0)
+      .lineTo(x + 18, height)
+      .stroke({ width: 1, color: 0x2c4535, alpha: 0.12 });
   }
 
   for (let y = 54; y < height; y += 74) {
-    graphics.moveTo(0, y).lineTo(width, y + 14).stroke({ width: 1, color: 0x375742, alpha: 0.1 });
+    graphics
+      .moveTo(0, y)
+      .lineTo(width, y + 14)
+      .stroke({ width: 1, color: 0x375742, alpha: 0.1 });
   }
 
   graphics.circle(width * 0.5, height - 90, Math.max(width, height)).stroke({
@@ -1086,12 +1095,15 @@ function drawTower(
   aimTargetId: number | null,
   enemies: readonly Enemy[]
 ) {
-  const target = aimTargetId === null ? null : enemies.find((enemy) => enemy.id === aimTargetId) ?? null;
+  const target = aimTargetId === null ? null : (enemies.find((enemy) => enemy.id === aimTargetId) ?? null);
 
   graphics.clear();
 
   if (target) {
-    graphics.moveTo(x, y - 14).lineTo(target.x, target.y).stroke({ width: 2, color: 0xbfffe0, alpha: 0.32 });
+    graphics
+      .moveTo(x, y - 14)
+      .lineTo(target.x, target.y)
+      .stroke({ width: 2, color: 0xbfffe0, alpha: 0.32 });
   }
 
   graphics.circle(x, y, 35).fill({ color: 0x07100c, alpha: 0.92 });

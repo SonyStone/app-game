@@ -5,7 +5,7 @@ import { createMdxShikiCodeBlocks, type ShikiRendererOptions } from './shiki';
 
 const DEFAULT_QUERY = 'markdown';
 const DEFAULT_PREFIX = '\0markdown:';
-const DEFAULT_JSX_IMPORT_SOURCE = 'solid-js/h';
+const DEFAULT_JSX_IMPORT_SOURCE = '@solidjs/h';
 
 type MarkdownCompileOptions = Omit<CompileOptions, 'format' | 'jsxImportSource' | 'remarkPlugins'>;
 

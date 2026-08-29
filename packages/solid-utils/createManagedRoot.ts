@@ -1,4 +1,4 @@
-import { createRoot, getOwner, onCleanup, Owner } from 'solid-js';
+import { createRoot, getOwner, onCleanup, type Owner } from 'solid-js';
 import { linkCleanupToOwners } from './link-cleanup-to-owners';
 
 /**
@@ -33,7 +33,7 @@ import { linkCleanupToOwners } from './link-cleanup-to-owners';
  * activateTooltip();
  * ```
  */
-export function createManagedRoot(rootFn: (dispose: VoidFunction) => void, ...owners: (typeof Owner | undefined)[]) {
+export function createManagedRoot(rootFn: (dispose: VoidFunction) => void, ...owners: (Owner | null | undefined)[]) {
   // Default to current owner if none provided
   if (owners?.length === 0) owners = [getOwner()];
 

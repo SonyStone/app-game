@@ -1,7 +1,7 @@
 import { OGLRenderingContext, Texture } from '@app-game/ogl';
 import { RenderTargetOptions } from '@app-game/ogl/core/render-target';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { createEffect } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
 import { curve } from '../utils/curve';
 import { createBrushInstancing } from './create-brush-instancing';
@@ -55,7 +55,7 @@ export const createBrushInstancingRenderTarget = ({
     realInstancedCount = i;
   };
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const num = access(instancedCount) ?? 300;
 
     // update the instanced count and attributes

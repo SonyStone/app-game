@@ -1,48 +1,43 @@
-import type { Resource } from 'solid-js';
-import { createResource, onCleanup, onMount } from 'solid-js';
+import { createSignal, onSettled } from 'solid-js';
 import type { ExplorerBackend } from './backend';
 import type { ExplorerSourceId, ExplorerTreeNode } from './model';
 
 /** Creates Solid resources and subscriptions over an injected explorer backend. */
 export function createExplorerSources(backend: ExplorerBackend) {
-  const [explore, exploreControls] = createResource(() => backend.load('explore'));
-  const [bookmarks, bookmarksControls] = createResource(() => backend.load('bookmarks'));
-  const [history, historyControls] = createResource(() => backend.load('history'));
-
-  const resources = { explore, bookmarks, history } satisfies Record<ExplorerSourceId, Resource<ExplorerTreeNode>>;
-  const controls = {
-    explore: exploreControls,
-    bookmarks: bookmarksControls,
-    history: historyControls
-  } satisfies Record<ExplorerSourceId, Pick<typeof exploreControls, 'refetch'>>;
+  const resources = {
+    explore: createExplorerSource('explore'),
+    bookmarks: createExplorerSource('bookmarks'),
+    history: createExplorerSource('history')
+  } satisfies Record<ExplorerSourceId, ReturnType<typeof createExplorerSource>>;
   const refreshTimers: Record<ExplorerSourceId, ReturnType<typeof setTimeout> | undefined> = {
     explore: undefined,
     bookmarks: undefined,
     history: undefined
   };
 
-  onMount(() => {
+  onSettled(() => {
     const unsubscribe = backend.subscribe(scheduleRefresh);
-    onCleanup(() => {
+
+    return () => {
       unsubscribe();
       for (const source of EXPLORER_SOURCE_IDS) {
         clearScheduledRefresh(source);
       }
-    });
+    };
   });
 
   return {
     /** Returns the current tree for a source, or undefined while it loads. */
     tree(source: ExplorerSourceId): ExplorerTreeNode | undefined {
-      return resources[source]();
+      return resources[source].value();
     },
     /** Reports whether a source is currently loading or refreshing. */
     loading(source: ExplorerSourceId): boolean {
-      return resources[source].loading;
+      return resources[source].loading();
     },
     /** Returns the last loading failure for a source. */
     error(source: ExplorerSourceId): unknown {
-      return resources[source].error;
+      return resources[source].error();
     },
     /** Reloads a source from the injected backend. */
     refresh(source: ExplorerSourceId): void {
@@ -57,7 +52,7 @@ export function createExplorerSources(backend: ExplorerBackend) {
 
   function refreshNow(source: ExplorerSourceId): void {
     clearScheduledRefresh(source);
-    void controls[source].refetch();
+    void resources[source].load();
   }
 
   function clearScheduledRefresh(source: ExplorerSourceId): void {
@@ -66,6 +61,30 @@ export function createExplorerSources(backend: ExplorerBackend) {
       clearTimeout(timer);
       refreshTimers[source] = undefined;
     }
+  }
+
+  function createExplorerSource(source: ExplorerSourceId) {
+    const [value, setValue] = createSignal<ExplorerTreeNode>();
+    const [loading, setLoading] = createSignal(false);
+    const [error, setError] = createSignal<unknown>();
+    let requestId = 0;
+
+    async function load(): Promise<void> {
+      const currentRequestId = ++requestId;
+      setLoading(true);
+      setError(undefined);
+      try {
+        const nextValue = await backend.load(source);
+        if (requestId === currentRequestId) setValue(nextValue);
+      } catch (reason: unknown) {
+        if (requestId === currentRequestId) setError(reason);
+      } finally {
+        if (requestId === currentRequestId) setLoading(false);
+      }
+    }
+
+    void load();
+    return { value, loading, error, load } as const;
   }
 }
 

@@ -4,7 +4,7 @@ import { createProgram } from '@app-game/webgl/createProgram';
 import { createWebGL2Context } from '@app-game/webgl/webgl-objects/context';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, createSignal, onMount } from 'solid-js';
+import { createSignal, createTrackedEffect, onSettled } from 'solid-js';
 import { INSTANCES, PLANE, PLANE_WIREFRAME_INDICES } from './plane-mesh';
 import solidFragSource from './solid.frag?raw';
 import solidVertSource from './solid.vert?raw';
@@ -18,7 +18,7 @@ import wireframeVertSource from './wireframe.vert?raw';
 
 export default function TiledMap() {
   const canvas = (
-    <canvas id="canvas" class="z-2 pointer-events-none relative h-full w-full touch-none border border-black" />
+    <canvas id="canvas" class="pointer-events-none relative z-2 h-full w-full touch-none border border-black" />
   ) as HTMLCanvasElement;
 
   const gl = createWebGL2Context(canvas);
@@ -27,7 +27,7 @@ export default function TiledMap() {
   const [rotation, setRotation] = createSignal(toRadian(0)); // Rotation in radians
 
   const resize = createWindowSize();
-  createEffect(() => {
+  createTrackedEffect(() => {
     gl.canvas.width = resize.width;
     gl.canvas.height = resize.height;
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
@@ -70,7 +70,7 @@ export default function TiledMap() {
   // std140 padding
   const cameraMatrix = new Float32Array(12);
 
-  onMount(() => {
+  onSettled(() => {
     setCameraPan([-gl.canvas.width / 2, -gl.canvas.height / 2]);
 
     createEventListener(window, 'wheel', (event) => {
@@ -94,7 +94,7 @@ export default function TiledMap() {
       }
     });
 
-    createEffect(() => {
+    createTrackedEffect(() => {
       m3.camera2D(zoom(), rotation(), cameraPan(), resize.width, resize.height, cameraMatrix);
       gl.bindBuffer(gl.UNIFORM_BUFFER, camera.buffer);
       gl.bufferSubData(gl.UNIFORM_BUFFER, 0, cameraMatrix);
@@ -121,8 +121,8 @@ export default function TiledMap() {
 
   return (
     <>
-      <div class="z-3 pointer-events-none absolute inset-x-0 top-0 p-1">
-        <div class="shadow-blueGray  w-600px  pointer-events-auto flex max-w-full flex-col gap-1 rounded bg-white p-2 shadow">
+      <div class="pointer-events-none absolute inset-x-0 top-0 z-3 p-1">
+        <div class="shadow-blueGray w-600px pointer-events-auto flex max-w-full flex-col gap-1 rounded bg-white p-2 shadow">
           <span>WebGL Tiled Map / Chunk-Based Rendering</span>
         </div>
       </div>

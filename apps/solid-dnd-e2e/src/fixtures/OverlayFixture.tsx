@@ -1,3 +1,4 @@
+import type { JSX } from '@solidjs/web';
 import {
   createDisplayList,
   createDragController,
@@ -8,7 +9,7 @@ import {
   type DragController,
   type GapKey
 } from 'solid-dnd';
-import { createEffect, createMemo, createSignal, For, on, Show, type JSX } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 
 // ============================================================================
 // MARK: OverlayFixture — tests createDragController in a real browser
@@ -83,15 +84,13 @@ export default function OverlayFixture(): JSX.Element {
   // Wired manually because displayKeys couldn't be passed to
   // createDragController (display list didn't exist at that point).
   createEffect(
-    on(
-      () => display.displayKeys(),
-      () => {
-        if (drag.sensor.isDragging()) {
-          drag.flip.playFromFirst();
-        }
-      },
-      { defer: true }
-    )
+    () => display.displayKeys(),
+    () => {
+      if (drag.sensor.isDragging()) {
+        drag.flip.playFromFirst();
+      }
+    },
+    { defer: true }
   );
 
   // ── Item lookup ─────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
-import { ComponentProps, createSignal } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { createSignal } from 'solid-js';
 import { Props } from './Props';
 
 export function PropsProxyExample7() {

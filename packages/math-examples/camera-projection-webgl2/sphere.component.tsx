@@ -1,7 +1,6 @@
 import { Mesh, NormalProgram, OGLRenderingContext, Sphere, Transform } from '@app-game/ogl';
 import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
-import { onCleanup } from 'solid-js';
-import { effect } from 'solid-js/web';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 
 export function SphereComponent(props: {
   gl: OGLRenderingContext;
@@ -17,7 +16,7 @@ export function SphereComponent(props: {
   });
   scene.addChild(mesh);
 
-  effect(() => {
+  createTrackedEffect(() => {
     mesh.position.set(props.position ?? [0, 0, 0]);
   });
 

@@ -1,33 +1,27 @@
+import type { JSX } from '@solidjs/web';
 import {
   createContext,
-  createEffect,
   createMemo,
   createSignal,
+  createTrackedEffect,
   For,
   onCleanup,
   useContext,
   type Accessor,
   type Component,
-  type JSX,
-  type ParentComponent,
+  type ParentComponent
 } from 'solid-js';
 import type { DemoId } from './types';
 
-export type RegisterExampleControls = (
-  id: DemoId,
-  controls?: JSX.Element,
-) => void;
+export type RegisterExampleControls = (id: DemoId, controls?: JSX.Element) => void;
 
 const ExampleControlsRegisterContext = createContext<RegisterExampleControls>();
-const ExampleControlsSelectedContext =
-  createContext<Accessor<readonly JSX.Element[]>>();
+const ExampleControlsSelectedContext = createContext<Accessor<readonly JSX.Element[]>>();
 
 export const ExampleControlsProvider: ParentComponent<{
   selectedIds: Accessor<readonly DemoId[]>;
 }> = (props) => {
-  const [controls, setControls] = createSignal<
-    Partial<Record<DemoId, JSX.Element>>
-  >({});
+  const [controls, setControls] = createSignal<Partial<Record<DemoId, JSX.Element>>>({});
 
   const register = (id: DemoId, control?: JSX.Element) => {
     setControls((current) => {
@@ -39,7 +33,7 @@ export const ExampleControlsProvider: ParentComponent<{
 
       return {
         ...current,
-        [id]: control,
+        [id]: control
       };
     });
   };
@@ -54,24 +48,20 @@ export const ExampleControlsProvider: ParentComponent<{
   });
 
   return (
-    <ExampleControlsRegisterContext.Provider value={register}>
-      <ExampleControlsSelectedContext.Provider value={selectedControls}>
-        {props.children}
-      </ExampleControlsSelectedContext.Provider>
-    </ExampleControlsRegisterContext.Provider>
+    <ExampleControlsRegisterContext value={register}>
+      <ExampleControlsSelectedContext value={selectedControls}>{props.children}</ExampleControlsSelectedContext>
+    </ExampleControlsRegisterContext>
   );
 };
 
-export const ExampleControlsPortal: ParentComponent<{ id: DemoId }> = (
-  props,
-) => {
+export const ExampleControlsPortal: ParentComponent<{ id: DemoId }> = (props) => {
   const register = useContext(ExampleControlsRegisterContext);
 
   if (!register) {
     throw new Error('Example controls must be used within the playground.');
   }
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     register(props.id, props.children);
   });
 
@@ -86,9 +76,7 @@ export const ExampleControlsMount: Component = () => {
   const selectedControls = useContext(ExampleControlsSelectedContext);
 
   if (!selectedControls) {
-    throw new Error(
-      'Example controls mount must be used within the playground.',
-    );
+    throw new Error('Example controls mount must be used within the playground.');
   }
 
   return <For each={selectedControls()}>{(controls) => controls}</For>;

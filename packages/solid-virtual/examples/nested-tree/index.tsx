@@ -1,8 +1,8 @@
 import { createDynamicGap, createDynamicHeight, createVirtualNestedList } from '@app-game/solid-virtual';
 import { ReactiveSet } from '@solid-primitives/set';
-import { createMemo, createSignal, For, Show, type JSX } from 'solid-js';
-import { createMutable } from 'solid-js/store';
-import { Dynamic, SVGElements } from 'solid-js/web';
+import type { JSX } from '@solidjs/web';
+import { Dynamic, SVGElements } from '@solidjs/web';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import tigerSvg from '../../../three-examples/svg/tiger.svg?raw';
 import { Item } from '../shared/Item';
 import { makeUrlSearchParams } from '../shared/makeUrlSearchParams';
@@ -28,7 +28,7 @@ export default function NestedTreeExample() {
   const [mode, setMode] = createSignal<ScrollMode>('virtual');
   const [mapVisible, setMapVisible] = makeUrlSearchParams(createSignal(false), { key: 'map' });
   const collapsedIndexes = new ReactiveSet<number>();
-  const nestedItems = createMutable(parseSvgTree(tigerSvg));
+  const nestedItems = parseSvgTree(tigerSvg);
   const elementCount = countTreeItems(nestedItems);
 
   return (
@@ -171,7 +171,7 @@ function VirtualTree(props: {
                 class={node.depth > 0 ? 'group-child' : ''}
                 role="treeitem"
                 aria-level={node.depth + 1}
-                aria-expanded={hasChildren ? props.isExpanded(node.item) : undefined}
+                aria-expanded={hasChildren ? (props.isExpanded(node.item) ? 'true' : 'false') : undefined}
                 data-item-index={node.item.index}
                 style={{ 'overflow-anchor': 'none' }}
               >

@@ -1,4 +1,4 @@
-import { createRoot } from 'solid-js';
+import { createRoot, flush } from 'solid-js';
 import { createSelection, type Selection, type SelectionOptions } from 'src/primitives/createSelection';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -15,7 +15,21 @@ const shift = { ctrlKey: false, metaKey: false, shiftKey: true };
 function withSelection<K>(options: SelectionOptions<K>, fn: (sel: Selection<K>) => void): void {
   createRoot((dispose) => {
     const sel = createSelection(options);
-    fn(sel);
+    fn({
+      ...sel,
+      handleClick(key, event) {
+        sel.handleClick(key, event);
+        flush();
+      },
+      select(keys) {
+        sel.select(keys);
+        flush();
+      },
+      clear() {
+        sel.clear();
+        flush();
+      }
+    });
     dispose();
   });
 }

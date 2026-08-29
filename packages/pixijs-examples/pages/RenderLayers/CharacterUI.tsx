@@ -1,6 +1,6 @@
 import { Container, Graphics, RenderLayer, Text } from '@app-game/solid-pixi';
 import { ContainerOptions, Container as _Container } from 'pixi.js';
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 
 export function CharacterUI(
   props: Partial<{ name: string; layer: ReturnType<typeof RenderLayer> }> & ContainerOptions
@@ -34,7 +34,7 @@ export function CharacterUI(
 }
 
 function useAttachToRenderLayer(container: _Container, props: { layer?: ReturnType<typeof RenderLayer> }) {
-  createEffect(() => {
+  createTrackedEffect(() => {
     props.layer?.attach(container);
   });
 

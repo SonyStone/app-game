@@ -1,6 +1,6 @@
 import { Camera, Polyline, useTime } from '@work-ilyas/solid-ogl';
-import { createEffect } from 'solid-js';
 import { Color, Vec3, type Polyline as OglPolyline } from 'ogl';
+import { createTrackedEffect } from 'solid-js';
 import type { CameraSceneProps } from './types';
 
 const polylineVertex = /* glsl */ `
@@ -77,10 +77,10 @@ function createLines() {
     { color: '#ef5d60', thickness: 24, offset: -0.55, phase: 0.8, speed: 1.2 },
     { color: '#ec4067', thickness: 20, offset: 0.0, phase: 1.6, speed: 1.4 },
     { color: '#a01a7d', thickness: 26, offset: 0.55, phase: 2.2, speed: 1.1 },
-    { color: '#311847', thickness: 32, offset: 1.2, phase: 3.0, speed: 0.9 },
+    { color: '#311847', thickness: 32, offset: 1.2, phase: 3.0, speed: 0.9 }
   ].map<LineState>((line) => ({
     ...line,
-    points: Array.from({ length: 20 }, () => new Vec3()),
+    points: Array.from({ length: 20 }, () => new Vec3())
   }));
 }
 
@@ -88,7 +88,7 @@ export function PolylinesScene(props: CameraSceneProps) {
   const time = useTime();
   const lines = createLines();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const elapsed = time();
 
     for (const line of lines) {
@@ -112,11 +112,7 @@ export function PolylinesScene(props: CameraSceneProps) {
 
   return (
     <>
-      <Camera
-        makeDefault={props.makeDefault}
-        position={[0, 0, 6]}
-        lookAt={[0, 0, 0]}
-      />
+      <Camera makeDefault={props.makeDefault} position={[0, 0, 6]} lookAt={[0, 0, 0]} />
 
       {lines.map((line) => (
         <Polyline
@@ -132,9 +128,9 @@ export function PolylinesScene(props: CameraSceneProps) {
               fragment: polylineFragment,
               uniforms: {
                 uColor: { value: new Color(line.color) },
-                uThickness: { value: line.thickness },
-              },
-            },
+                uThickness: { value: line.thickness }
+              }
+            }
           ]}
         />
       ))}

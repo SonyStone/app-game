@@ -1,10 +1,10 @@
-import { onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 import { App } from './wasm_bindgen/libs/custom-renderer-examples/pkg/custom_renderer_examples';
 
 export default function CustomRenderer() {
-  const canvas = (<canvas class="h-[80vh] max-w-full touch-none" tabIndex={0} />) as HTMLCanvasElement;
+  const canvas = (<canvas class="h-[80vh] max-w-full touch-none" tabindex={0} />) as HTMLCanvasElement;
 
-  onMount(() => {
+  onSettled(() => {
     App.new(canvas);
   });
 

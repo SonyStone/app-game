@@ -5,7 +5,7 @@ import { useKeyDownList } from '@solid-primitives/keyboard';
 import { createPointerPosition, type PointerStateWithActive } from '@solid-primitives/pointer';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect } from 'solid-js';
 
 import { createEditorCommand, type EditorCommandEvent } from '../../editor/commands';
 import { defaultSettings } from '../../editor/defaults';
@@ -23,7 +23,7 @@ import { createEditorShortcuts } from '../shortcuts/createEditorShortcuts';
 import { createTransientViewportPreview } from '../viewport/createTransientViewportPreview';
 import { createViewportCamera } from '../viewport/createViewportCamera';
 import { createViewportInteractions } from '../viewport/createViewportInteractions';
-import { emptySvgSize, sameSvgSize } from '../viewport/viewport-math';
+import { sameSvgSize } from '../viewport/viewport-math';
 import { appRootBaseClass, appRootThemeClass, createAppThemeVars } from './app-theme';
 import { createEditorDerivedState } from './createEditorDerivedState';
 import { createResizableSidebar } from './createResizableSidebar';
@@ -153,7 +153,7 @@ export function createEditorAppController() {
     insertPathCommandFromKey
   } = nodeActions;
 
-  const rootSize = createMemo(() => svgSize(activeRoot()), emptySvgSize, { equals: sameSvgSize });
+  const rootSize = createMemo(() => svgSize(activeRoot()), { equals: sameSvgSize });
   const viewport = createViewportCamera({ rootSize, settings, canvasSvg });
   const {
     setCameraCenter,
@@ -177,7 +177,7 @@ export function createEditorAppController() {
 
   const { isFullscreen, toggleFullscreen } = createFullscreen(() => appRootRef);
   const viewportShellSize = createElementSize(viewportShell);
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (viewportShellSize.width === null || viewportShellSize.height === null) {
       return;
     }
@@ -270,8 +270,16 @@ export function createEditorAppController() {
     transientViewportPreview,
     rootSize
   });
-  const { exportText, fileSize, elementCount, handles, viewportIsMoving, useRasterPreview, rasterPreviewRect, rasterPreviewUrl } =
-    derived;
+  const {
+    exportText,
+    fileSize,
+    elementCount,
+    handles,
+    viewportIsMoving,
+    useRasterPreview,
+    rasterPreviewRect,
+    rasterPreviewUrl
+  } = derived;
   rasterPreviewActive = useRasterPreview;
 
   const sidebar = createResizableSidebar({ initialWidth: 408, minWidth: 320, maxWidth: 720 });
@@ -403,7 +411,8 @@ export function createEditorAppController() {
       overlayReference,
       setOverlayReference,
       clearReference,
-      setDragSelectionMode: (mode: DragSelectionMode) => setSettings((current) => ({ ...current, dragSelectionMode: mode })),
+      setDragSelectionMode: (mode: DragSelectionMode) =>
+        setSettings((current) => ({ ...current, dragSelectionMode: mode })),
       setViewportShell,
       setCanvasSvg,
       viewRect,

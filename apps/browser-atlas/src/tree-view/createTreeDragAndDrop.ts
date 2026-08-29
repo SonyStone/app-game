@@ -50,7 +50,7 @@ export function createTreeDragAndDrop<TNode, TItem, TTarget>(props: {
 
       return {
         ...createDragSourceProps(() => props.createItem(node), draggable),
-        ...createDropZoneProps(node),
+        ...createDropZoneProps(node)
       } as const;
     },
     /** Native drag properties for a non-tree handle that creates or supplies an item. */
@@ -103,9 +103,7 @@ export function createTreeDragAndDrop<TNode, TItem, TTarget>(props: {
 
         event.preventDefault();
         event.stopPropagation();
-        const effect = dragItem
-          ? props.getDropEffect(itemToDrop, target, dragModifiers(event))
-          : 'copy';
+        const effect = dragItem ? props.getDropEffect(itemToDrop, target, dragModifiers(event)) : 'copy';
         clearDragState();
         setDropping(true);
 
@@ -119,7 +117,7 @@ export function createTreeDragAndDrop<TNode, TItem, TTarget>(props: {
 
   function createDragSourceProps(readDragItem: () => TItem | null, draggable: boolean) {
     return {
-      draggable,
+      draggable: draggable ? 'true' : 'false',
       onDragStart(event: TreeDragEvent) {
         const item = readDragItem();
         if (!item || !event.dataTransfer) {
@@ -268,10 +266,7 @@ function readRect(element: HTMLElement): TreeDropFeedbackState['rect'] {
   return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
 }
 
-function equalDropFeedback(
-  left: TreeDropFeedbackState | null,
-  right: TreeDropFeedbackState | null
-): boolean {
+function equalDropFeedback(left: TreeDropFeedbackState | null, right: TreeDropFeedbackState | null): boolean {
   return (
     left === right ||
     (left !== null &&

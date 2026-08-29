@@ -1,14 +1,5 @@
-import {
-  Camera,
-  createShared,
-  Geometry,
-  Mesh,
-  Program,
-  Transform,
-  useOgl,
-  useTime,
-} from '@work-ilyas/solid-ogl';
-import { createEffect, For } from 'solid-js';
+import { Camera, createShared, Geometry, Mesh, Program, Transform, useOgl, useTime } from '@work-ilyas/solid-ogl';
+import { createTrackedEffect, For } from 'solid-js';
 import type { CameraSceneProps } from './types';
 
 const drawModesVertex = /* glsl */ `
@@ -44,18 +35,16 @@ const geometryArgs = [
   {
     position: {
       size: 3,
-      data: new Float32Array([
-        -0.5, 0.5, 0, -0.5, -0.5, 0, 0.5, 0.5, 0, 0.5, -0.5, 0,
-      ]),
+      data: new Float32Array([-0.5, 0.5, 0, -0.5, -0.5, 0, 0.5, 0.5, 0, 0.5, -0.5, 0])
     },
     uv: {
       size: 2,
-      data: new Float32Array([0, 1, 1, 1, 0, 0, 1, 0]),
+      data: new Float32Array([0, 1, 1, 1, 0, 0, 1, 0])
     },
     index: {
-      data: new Uint16Array([0, 1, 2, 1, 3, 2]),
-    },
-  },
+      data: new Uint16Array([0, 1, 2, 1, 3, 2])
+    }
+  }
 ] as const;
 
 const drawModes = [
@@ -64,13 +53,13 @@ const drawModes = [
   {
     id: 'line-loop',
     position: [-1.4, -1.4, 0] as const,
-    mode: 'LINE_LOOP' as const,
+    mode: 'LINE_LOOP' as const
   },
   {
     id: 'triangles',
     position: [1.4, -1.4, 0] as const,
-    mode: 'TRIANGLES' as const,
-  },
+    mode: 'TRIANGLES' as const
+  }
 ] as const;
 
 type DrawModesProgramLike = {
@@ -95,14 +84,14 @@ export function DrawModesScene(props: CameraSceneProps) {
           vertex: drawModesVertex,
           fragment: drawModesFragment,
           uniforms: {
-            uTime: { value: 0 },
-          },
-        },
+            uTime: { value: 0 }
+          }
+        }
       ]}
     />
   ));
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!programRef) {
       return;
     }
@@ -112,11 +101,7 @@ export function DrawModesScene(props: CameraSceneProps) {
 
   return (
     <>
-      <Camera
-        makeDefault={props.makeDefault}
-        position={[0, 0, 15]}
-        lookAt={[0, 0, 0]}
-      />
+      <Camera makeDefault={props.makeDefault} position={[0, 0, 15]} lookAt={[0, 0, 0]} />
 
       <For each={drawModes}>
         {(mode) => (

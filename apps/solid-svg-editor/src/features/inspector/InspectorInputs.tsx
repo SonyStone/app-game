@@ -1,5 +1,5 @@
+import { Dynamic } from '@solidjs/web';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 
 import { svgCapabilities } from '../../editor/capabilities';
 import { parseTransformList } from '../../editor/geometry';
@@ -225,14 +225,16 @@ function AttributeControl(props: {
 
   return (
     <div
-      class="h-5.5 min-w-0"
-      classList={{
-        'w-20.5': type() === 'color',
-        'w-20.25': type() === 'enum',
-        'w-28': type() === 'href' || type() === 'id' || type() === 'unknown',
-        'w-13.5': type() === 'list' || type() === 'numeric',
-        'w-40.5': type() === 'transform-list'
-      }}
+      class={[
+        'h-5.5 min-w-0',
+        {
+          'w-20.5': type() === 'color',
+          'w-20.25': type() === 'enum',
+          'w-28': type() === 'href' || type() === 'id' || type() === 'unknown',
+          'w-13.5': type() === 'list' || type() === 'numeric',
+          'w-40.5': type() === 'transform-list'
+        }
+      ]}
       title={props.attr.name}
       data-testid={`attribute-control-${props.node.id}-${props.attr.name}`}
     >
@@ -426,10 +428,12 @@ function PathCommandRow(props: {
 
   return (
     <div
-      class="relative flex min-h-5.5 items-start gap-0.75 overflow-visible rounded-[3px] bg-transparent px-0.75 py-0.5"
-      classList={{
-        'border-[var(--accent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_68%,transparent)]': selected()
-      }}
+      class={[
+        'relative flex min-h-5.5 items-start gap-0.75 overflow-visible rounded-[3px] bg-transparent px-0.75 py-0.5',
+        {
+          'border-[var(--accent)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_68%,transparent)]': selected()
+        }
+      ]}
       data-testid={`path-command-row-${props.nodeId}-${props.index}`}
       onFocusOut={(event) => {
         const nextFocus = event.relatedTarget;
@@ -443,13 +447,15 @@ function PathCommandRow(props: {
     >
       <button
         type="button"
-        class="static mt-0 grid h-4.5 min-h-4.5 w-4.5 min-w-4.5 flex-[0_0_auto] cursor-pointer place-items-center rounded border-2 p-0 font-['GodSVG_Mono',ui-monospace,monospace] text-xs leading-none text-[#fff8ff]"
-        classList={{
-          'border-[#bd73e6] bg-[#a329cc] hover:border-[#d291f2] hover:bg-[#ad2bd9] focus-visible:border-[#d291f2] focus-visible:bg-[#ad2bd9]':
-            isRelative(),
-          'border-[#e6ae5c] bg-[#cc7a29] hover:border-[#f2cb91] hover:bg-[#d9822b] focus-visible:border-[#f2cb91] focus-visible:bg-[#d9822b]':
-            !isRelative()
-        }}
+        class={[
+          "static mt-0 grid h-4.5 min-h-4.5 w-4.5 min-w-4.5 flex-[0_0_auto] cursor-pointer place-items-center rounded border-2 p-0 font-['GodSVG_Mono',ui-monospace,monospace] text-xs leading-none text-[#fff8ff]",
+          {
+            'border-[#bd73e6] bg-[#a329cc] hover:border-[#d291f2] hover:bg-[#ad2bd9] focus-visible:border-[#d291f2] focus-visible:bg-[#ad2bd9]':
+              isRelative(),
+            'border-[#e6ae5c] bg-[#cc7a29] hover:border-[#f2cb91] hover:bg-[#d9822b] focus-visible:border-[#f2cb91] focus-visible:bg-[#d9822b]':
+              !isRelative()
+          }
+        ]}
         title={pathCommandDescription(props.command.command)}
         data-testid={`path-command-toggle-${props.nodeId}-${props.index}`}
         onClick={() => {
@@ -467,12 +473,14 @@ function PathCommandRow(props: {
 
             return (
               <input
-                class="h-4.5 min-h-4.5 min-w-0 flex-[0_0_auto] [appearance:textfield] rounded-[3px] border border-[var(--soft-border)] bg-[#080b12] px-0.75 text-left font-['GodSVG_Mono',ui-monospace,monospace] text-[10px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
-                classList={{
-                  'text-center': flag()
-                }}
+                class={[
+                  "h-4.5 min-h-4.5 min-w-0 flex-[0_0_auto] [appearance:textfield] rounded-[3px] border border-[var(--soft-border)] bg-[#080b12] px-0.75 text-left font-['GodSVG_Mono',ui-monospace,monospace] text-[10px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]",
+                  {
+                    'text-center': flag()
+                  }
+                ]}
                 type="text"
-                inputMode={flag() ? 'numeric' : 'decimal'}
+                inputmode={flag() ? 'numeric' : 'decimal'}
                 name={`${props.nodeId}-command-${props.index}-${param.name}`}
                 aria-label={param.name}
                 title={param.name}
@@ -808,42 +816,42 @@ function TransformField(props: {
             <input
               class="block h-5 min-h-5 w-11 min-w-0 rounded border border-[var(--soft-border)] bg-[var(--panel)] px-1 font-['GodSVG_Mono',ui-monospace,monospace] text-[10px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
               value={formatMiniNumber(finalMatrix().a)}
-              readOnly
+              readonly
               aria-label="matrix a"
               data-testid={`transform-matrix-a-${props.nodeId}-${props.attrName}`}
             />
             <input
               class="block h-5 min-h-5 w-11 min-w-0 rounded border border-[var(--soft-border)] bg-[var(--panel)] px-1 font-['GodSVG_Mono',ui-monospace,monospace] text-[10px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
               value={formatMiniNumber(finalMatrix().c)}
-              readOnly
+              readonly
               aria-label="matrix c"
               data-testid={`transform-matrix-c-${props.nodeId}-${props.attrName}`}
             />
             <input
               class="block h-5 min-h-5 w-11 min-w-0 rounded border border-[var(--soft-border)] bg-[var(--panel)] px-1 font-['GodSVG_Mono',ui-monospace,monospace] text-[10px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
               value={formatMiniNumber(finalMatrix().e)}
-              readOnly
+              readonly
               aria-label="matrix e"
               data-testid={`transform-matrix-e-${props.nodeId}-${props.attrName}`}
             />
             <input
               class="block h-5 min-h-5 w-11 min-w-0 rounded border border-[var(--soft-border)] bg-[var(--panel)] px-1 font-['GodSVG_Mono',ui-monospace,monospace] text-[10px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
               value={formatMiniNumber(finalMatrix().b)}
-              readOnly
+              readonly
               aria-label="matrix b"
               data-testid={`transform-matrix-b-${props.nodeId}-${props.attrName}`}
             />
             <input
               class="block h-5 min-h-5 w-11 min-w-0 rounded border border-[var(--soft-border)] bg-[var(--panel)] px-1 font-['GodSVG_Mono',ui-monospace,monospace] text-[10px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
               value={formatMiniNumber(finalMatrix().d)}
-              readOnly
+              readonly
               aria-label="matrix d"
               data-testid={`transform-matrix-d-${props.nodeId}-${props.attrName}`}
             />
             <input
               class="block h-5 min-h-5 w-11 min-w-0 rounded border border-[var(--soft-border)] bg-[var(--panel)] px-1 font-['GodSVG_Mono',ui-monospace,monospace] text-[10px] leading-none text-[var(--text)] in-[.theme-light]:bg-[#f8fbff]"
               value={formatMiniNumber(finalMatrix().f)}
-              readOnly
+              readonly
               aria-label="matrix f"
               data-testid={`transform-matrix-f-${props.nodeId}-${props.attrName}`}
             />

@@ -1,4 +1,5 @@
-import { ComponentProps, createMemo } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { createMemo } from 'solid-js';
 
 export const Donut = (
   props: { x: number; y: number; inner_radius: number; outer_radius: number } & ComponentProps<'path'>

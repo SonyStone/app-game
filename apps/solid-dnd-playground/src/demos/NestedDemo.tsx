@@ -1,7 +1,8 @@
 import { createBodyCursor } from '@solid-primitives/cursor';
 import { throttle } from '@solid-primitives/scheduled';
+import type { JSX } from '@solidjs/web';
 import { createDragSensor, createFlip, createNestable, Place, Rect, Tree } from 'solid-dnd';
-import { batch, createMemo, createSignal, For, Show, type JSX } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { DropIndicator } from '../components/DropIndicator';
 import EventLog, { createEventLogger } from '../components/EventLog';
 import { GroupNode } from '../components/GroupNode';
@@ -82,13 +83,13 @@ export default function NestedDemo(): JSX.Element {
     onDragStart: (e) => {
       const id = pendingDragId;
       if (!id) return;
-      batch(() => {
+      {
         setDraggedId(id);
         const node = NODES[id];
         const tag = node?.isGroup ? '📁' : '📄';
         logger.addLog(`▶ DRAG  ${tag} "${id}" at (${e.position.x.toFixed(0)}, ${e.position.y.toFixed(0)})`);
         setDropPlace(nestable.getInsertionPoint(e.position));
-      });
+      }
     },
     onDragMove: (e) => {
       throttledSetDropPlace(e.position);

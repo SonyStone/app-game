@@ -1,6 +1,6 @@
 import { Renderer } from '@app-game/ogl';
 import createRAF from '@solid-primitives/raf';
-import { createEffect, createRoot, createSignal } from 'solid-js';
+import { createRoot, createSignal, createTrackedEffect } from 'solid-js';
 import { createSquareMesh } from '../brush-example/square/create-square-mesh';
 import { createBrushStroke } from '../canvas-paint/brush-stroke';
 
@@ -9,7 +9,7 @@ createRoot((dispose) => {
   let renderer: Renderer;
   let brushStroke: ReturnType<typeof createBrushStroke>;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const { width, height } = resize();
     renderer?.setSize(width, height);
   });

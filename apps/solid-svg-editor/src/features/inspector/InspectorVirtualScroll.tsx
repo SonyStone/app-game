@@ -1,5 +1,6 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { createEffect, createMemo, createSignal, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createMemo, createSignal, createTrackedEffect } from 'solid-js';
 
 import { estimateInspectorRowHeight, flattenInspectorRows } from '../../editor/tree-utils';
 import type { InspectorRow, VirtualInspectorRow } from '../../editor/types';
@@ -28,7 +29,7 @@ export function createInspectorVirtualScroll(props: { readonly root: () => SvgEl
 
   const rows = createMemo(
     (previous: readonly InspectorRow[] | undefined) => flattenInspectorRows(props.root(), previous),
-    emptyInspectorRows
+    { loadingValue: emptyInspectorRows }
   );
   const virtualLayout = createMemo(() => {
     heightVersion();
@@ -117,7 +118,7 @@ export function createInspectorVirtualScroll(props: { readonly root: () => SvgEl
   });
   const virtualSpacerHeight = createMemo(() => visibleWindow().totalHeight + Math.max(0, viewportHeight() - 24));
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const scroller = scrollerElement();
     const height = scrollerSize.height;
 
@@ -245,7 +246,7 @@ export function VirtualInspectorRowShell(props: {
   const [rowElement, setRowElement] = createSignal<HTMLDivElement>();
   const rowSize = createElementSize(rowElement);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const element = rowElement();
     const id = props.row.node.id;
     const height = rowSize.height;

@@ -1,5 +1,6 @@
 import { createContextProvider } from '@app-game/solid-utils';
-import { createMemo, JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createMemo } from 'solid-js';
 
 const [ImageCacheProvider, useImageCache] = createContextProvider(() => {
   // Cache to store actual DOM img elements

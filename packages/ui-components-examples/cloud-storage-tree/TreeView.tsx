@@ -1,4 +1,5 @@
-import { createContext, For, JSX, Show, useContext } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createContext, For, Show, useContext } from 'solid-js';
 
 import { useCloudStorage } from './CloudStorageContext';
 
@@ -25,11 +26,11 @@ export function TreeView(props: TreeViewProps): JSX.Element {
   const rootChildCount = () => treeData().get('root')?.length ?? 0;
 
   return (
-    <TreeViewContext.Provider value={{ onNavigate: props.onNavigate }}>
+    <TreeViewContext value={{ onNavigate: props.onNavigate }}>
       <div class={`flex flex-col overflow-auto bg-neutral-900 ${props.class ?? ''}`}>
         <TreeNode nodeId="root" name="storage:" type="folder" level={0} childCount={rootChildCount()} />
       </div>
-    </TreeViewContext.Provider>
+    </TreeViewContext>
   );
 }
 

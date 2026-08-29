@@ -51,7 +51,7 @@ export const navSections: NavSection[] = [
   //   title: 'Async',
   //   items: [
   //     { label: 'Resources', href: './resources' },
-  //     { label: 'Suspense & Lazy', href: './suspense' }
+  //     { label: 'Loading & Lazy', href: './suspense' }
   //   ]
   // },
   // {

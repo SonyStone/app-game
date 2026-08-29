@@ -5,7 +5,7 @@ import { Mat2x3 } from '@app-game/math/m2x3';
 import { createStruct } from '@app-game/math/utils/create-struct';
 import { Vec2 } from '@app-game/math/v2';
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, createTrackedEffect } from 'solid-js';
 import { SVGEditPoint } from './svg-edit-point';
 import { SVGSegmentAngleVisualization } from './svg-segment-angle-visualization';
 
@@ -31,9 +31,11 @@ export function TestRotationMatrixBetweenPointPairs(props: {
         update();
         return v;
       },
-      v,
       {
-        equals: false
+        ...{
+          equals: false
+        },
+        loadingValue: v
       }
     )
   );
@@ -46,7 +48,7 @@ export function TestRotationMatrixBetweenPointPairs(props: {
       .toCssMatrix();
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const root = props.root;
     const debugLayer = props.debugLayer;
     if (!root || !debugLayer) return;

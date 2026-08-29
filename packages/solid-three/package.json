@@ -3,7 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "exports": {
-    ".": "./index.tsx"
+    ".": "./index.tsx",
+    "./jsx-runtime": {
+      "types": "./three-types.ts",
+      "default": "./renderer.tsx"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./three-types.ts",
+      "default": "./renderer.tsx"
+    }
   },
   "type": "module"
 }

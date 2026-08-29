@@ -9,13 +9,13 @@
   },
   "dependencies": {
     "@work-ilyas/solid-ogl": "workspace:*",
-    "@solid-primitives/devices": "^1.3.1",
-    "@solid-primitives/intersection-observer": "^2.2.4",
-    "@solid-primitives/media": "^2.3.3",
-    "@solid-primitives/mouse": "^2.1.6",
-    "@solid-primitives/resize-observer": "^2.1.5",
-    "@solid-primitives/scroll": "^2.1.3",
+    "@solid-primitives/devices": "catalog:",
+    "@solid-primitives/intersection-observer": "catalog:",
+    "@solid-primitives/media": "catalog:",
+    "@solid-primitives/mouse": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
+    "@solid-primitives/scroll": "catalog:",
     "ogl": "^1.0.11",
-    "solid-js": "^1.9.5"
+    "solid-js": "catalog:"
   }
 }

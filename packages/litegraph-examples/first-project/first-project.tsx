@@ -1,10 +1,10 @@
 import { LGraph, LGraphCanvas, LiteGraph, type LGraphNode } from 'litegraph.js';
-import { onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 
 export default function FirstProject() {
   const canvasEl = (<canvas width={1024} height={1024} />) as HTMLCanvasElement;
 
-  onMount(() => {
+  onSettled(() => {
     const graph = new LGraph();
 
     // debugger;

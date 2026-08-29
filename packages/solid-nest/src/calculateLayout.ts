@@ -2,7 +2,7 @@ import { Item, ItemId } from './Item';
 import { BlockMeasurements } from './measure';
 import { VirtualTree } from './virtual-tree';
 
-const ZeroMeasurement = { children: [], bottom: 0 };
+const ZeroMeasurement: BlockMeasurements = { container: new DOMRect(), children: [], bottom: 0 };
 
 export function calculateLayout<K>(
   tree: VirtualTree<K, any>,

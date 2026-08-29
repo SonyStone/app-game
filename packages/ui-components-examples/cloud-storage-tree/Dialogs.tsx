@@ -1,4 +1,5 @@
-import { createEffect, createSignal, JSX, onCleanup, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, createTrackedEffect, onCleanup, Show } from 'solid-js';
 
 import { useCloudStorage } from './CloudStorageContext';
 
@@ -12,7 +13,7 @@ export function DialogOverlay(): JSX.Element {
   const isOpen = () => state.dialog.type !== null;
 
   // Close on escape
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (isOpen()) {
       const handleEscape = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -28,7 +29,7 @@ export function DialogOverlay(): JSX.Element {
   return (
     <Show when={isOpen()}>
       <div
-        class="z-1000 fixed inset-0 flex items-center justify-center bg-black/60 p-4"
+        class="fixed inset-0 z-1000 flex items-center justify-center bg-black/60 p-4"
         onClick={(e) => {
           if (e.target === e.currentTarget) {
             actions.closeDialog();
@@ -62,7 +63,7 @@ function CreateFolderDialog(): JSX.Element {
   const [error, setError] = createSignal('');
   let inputRef: HTMLInputElement | undefined;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     inputRef?.focus();
   });
 
@@ -136,7 +137,7 @@ function CreateFileDialog(): JSX.Element {
   const [error, setError] = createSignal('');
   let inputRef: HTMLInputElement | undefined;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     inputRef?.focus();
   });
 
@@ -210,7 +211,7 @@ function RenameDialog(): JSX.Element {
   const [error, setError] = createSignal('');
   let inputRef: HTMLInputElement | undefined;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     inputRef?.focus();
     inputRef?.select();
   });

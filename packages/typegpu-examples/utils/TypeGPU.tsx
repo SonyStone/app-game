@@ -1,6 +1,7 @@
-import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { createContextProvider2 } from '@app-game/solid-utils';
-import { ComponentProps, createEffect, createSignal, JSX, splitProps } from 'solid-js';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import type { ComponentProps, JSX } from '@solidjs/web';
+import { createSignal, createTrackedEffect, omit } from 'solid-js';
 import { GPUProvider, useGPU } from './GPU.provider';
 import { GPUCanvasContextProvider } from './GPUCanvasContext.provider';
 import { TypeGPUCanvasContextProvider, useTypeGPUCanvasContext } from './TypeGPUCanvasContext.provider';
@@ -29,7 +30,7 @@ const [Provider, use] = createContextProvider2({
       setSize({ width, height });
     });
 
-    createEffect(() => {
+    createTrackedEffect(() => {
       const { width, height } = size();
 
       canvas.width = width / props.pixelScale;
@@ -70,7 +71,7 @@ export const useTypeGPU = use;
 export function TypeGPUProvider(
   props: Partial<{ children: JSX.Element; pixelScale: number }> & ComponentProps<'canvas'>
 ) {
-  const [local, canvasProps] = splitProps(props, ['children', 'pixelScale']);
+  const canvasProps = omit(props, 'children', 'pixelScale');
 
   const loading = <div>Initializing TypeGPU...</div>;
   const error = <div>Error initializing TypeGPU</div>;
@@ -82,7 +83,7 @@ export function TypeGPUProvider(
         <canvas ref={setCanvas} {...canvasProps} />
         <GPUCanvasContextProvider canvas={canvas()} noWebGPUContext={error} noCanvas={error}>
           <TypeGPUCanvasContextProvider>
-            <Provider pixelScale={local.pixelScale ?? 1}>{local.children}</Provider>
+            <Provider pixelScale={props.pixelScale ?? 1}>{props.children}</Provider>
           </TypeGPUCanvasContextProvider>
         </GPUCanvasContextProvider>
       </TypeGPURootProvider>

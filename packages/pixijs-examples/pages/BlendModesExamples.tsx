@@ -2,7 +2,7 @@ import { Container, Sprite, useApplication, useAsset } from '@app-game/solid-pix
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { BLEND_MODES, Ticker } from 'pixi.js';
 import 'pixi.js/advanced-blend-modes';
-import { For, Suspense } from 'solid-js';
+import { For, Loading } from 'solid-js';
 import pandaUrl from './panda.png?url';
 import rainbowGradientUrl from './rainbow-gradient.png?url';
 
@@ -47,7 +47,7 @@ export default function PixijsBlendModesExamles() {
 
   return (
     <Container>
-      <Suspense>
+      <Loading>
         <Container pivot={{ x: 100 * 3, y: 100 * 3 }} x={size.width / 2} y={size.height / 2}>
           <For each={pandas}>
             {(panda, index) => (
@@ -78,7 +78,7 @@ export default function PixijsBlendModesExamles() {
             )}
           </For>
         </Container>
-      </Suspense>
+      </Loading>
     </Container>
   );
 }

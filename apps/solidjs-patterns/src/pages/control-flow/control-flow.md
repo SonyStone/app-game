@@ -38,13 +38,13 @@ import { Show } from 'solid-js';
 
 <Section>
 
-## For vs Index
+## Keyed and positional For
 
-For re-creates items when the array changes by item identity. Index is stable by position, which makes it a better
-fit for fixed-length arrays.
+`For` is keyed by item identity by default. Pass `keyed={false}` to keep rows stable by position, which is useful for
+fixed-length primitive arrays.
 
 ```tsx
-import { For, Index } from 'solid-js';
+import { For } from 'solid-js';
 
 // For - keyed by item identity (reference)
 // Good for: lists that add/remove/reorder items
@@ -55,14 +55,14 @@ import { For, Index } from 'solid-js';
   )}
 </For>
 
-// Index - keyed by array position
+// Positional For - keyed by array position
 // Good for: fixed-length lists, primitive arrays
-<Index each={scores()}>
+<For each={scores()} keyed={false}>
   {(score, index) => (
     // score is an Accessor (reactive), index is a number
     <span>#{index}: {score()}</span>
   )}
-</Index>
+</For>
 ```
 
 </Section>
@@ -97,7 +97,7 @@ import { Switch, Match } from 'solid-js';
 Render a component or HTML element determined at runtime.
 
 ```tsx
-import { Dynamic } from 'solid-js/web';
+import { Dynamic } from '@solidjs/web';
 
 const [tag, setTag] = createSignal<'h1' | 'h2' | 'p'>('h1');
 

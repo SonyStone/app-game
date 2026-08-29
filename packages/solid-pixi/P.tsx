@@ -1,3 +1,4 @@
+import type { JSX } from '@solidjs/web';
 import {
   AnimatedSprite as _AnimatedSprite,
   BitmapText as _BitmapText,
@@ -46,17 +47,17 @@ import {
   type TextOptions,
   type TilingSpriteOptions
 } from 'pixi.js';
-import { JSX, splitProps, type Ref } from 'solid-js';
+import { omit, type Ref } from 'solid-js';
 import { CommonPropKeys } from './interfaces';
 import { insert, spread } from './runtime';
 
 function createPixiComponent<T, O>(PixiComponent: new (options: O) => T) {
   return function (props: Omit<Partial<O>, 'children'> & Partial<{ children: JSX.Element; as: T; ref: Ref<T> }>) {
-    const [common, pixis] = splitProps(props, CommonPropKeys);
+    const pixis = omit(props, ...CommonPropKeys);
 
-    const as = common.as || new PixiComponent(pixis as O);
+    const as = props.as || new PixiComponent(pixis as O);
     spread(as, pixis);
-    insert(as, () => common.children);
+    insert(as, () => props.children);
     return as as T & JSX.Element;
   };
 }

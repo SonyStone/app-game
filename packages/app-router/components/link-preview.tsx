@@ -1,4 +1,5 @@
-import { Component, JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Component } from 'solid-js';
 
 export const LinkPreview = (props: {
   path: string;

@@ -1,5 +1,5 @@
 import { access, findGapElement, MaybeAccessor, type GapKey } from 'solid-dnd';
-import { createEffect, createSignal, on, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 
 // ============================================================================
 // MARK: Types
@@ -87,26 +87,24 @@ export function useGapTrail(opts: {
   }
 
   createEffect(
-    on(
-      () => access(opts.isDragging),
-      (dragging) => {
-        if (!access(opts.enabled)) return;
+    () => access(opts.isDragging),
+    (dragging) => {
+      if (!access(opts.enabled)) return;
 
-        if (dragging) {
-          setGapTrail([]);
-          setCycleMarkers([]);
-          cycleCounter = 0;
-          startGapSampling();
-        } else {
-          const gapEl = findGapElement(opts.getElement);
-          if (gapEl) {
-            const center = getCenter(gapEl);
-            setGapTrail((prev) => [...prev, center]);
-          }
-          stopGapSampling();
+      if (dragging) {
+        setGapTrail([]);
+        setCycleMarkers([]);
+        cycleCounter = 0;
+        startGapSampling();
+      } else {
+        const gapEl = findGapElement(opts.getElement);
+        if (gapEl) {
+          const center = getCenter(gapEl);
+          setGapTrail((prev) => [...prev, center]);
         }
+        stopGapSampling();
       }
-    )
+    }
   );
 
   onCleanup(() => stopGapSampling());

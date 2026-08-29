@@ -1,5 +1,6 @@
+import type { JSX } from '@solidjs/web';
 import { GapKey } from 'solid-dnd';
-import { Show, type JSX } from 'solid-js';
+import { Show } from 'solid-js';
 import type { DemoItem } from '../data';
 
 /** Floating overlay showing the primary dragged grid item with a "+N more" badge. */

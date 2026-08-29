@@ -1,5 +1,5 @@
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
-import { batch, createEffect, createMemo, createSignal, mapArray, on, onCleanup, type Accessor } from 'solid-js';
+import { createEffect, createMemo, createSignal, mapArray, onCleanup, type Accessor } from 'solid-js';
 import * as Place from '../core/place';
 import { fromElement } from '../core/rect';
 import type { GridConfig, LayoutMode } from '../core/types';
@@ -203,10 +203,10 @@ export function createDnd<TItem extends object, K extends string>(options: {
         flip.captureFirst();
       }
 
-      batch(() => {
+      {
         setDraggedIds(keys);
         updateDropPlace(insertionPosition() ?? event.position);
-      });
+      }
 
       options.onDragStart?.(keys, event.position);
     },
@@ -263,33 +263,29 @@ export function createDnd<TItem extends object, K extends string>(options: {
     containerKey: options.containerKey
   });
   createEffect(
-    on(
-      () => display.displayKeys(),
-      () => {
-        if (sensor.isDragging() && isAnimEnabled()) {
-          flip.playFromFirst();
-        }
-      },
-      { defer: true }
-    )
+    () => display.displayKeys(),
+    () => {
+      if (sensor.isDragging() && isAnimEnabled()) {
+        flip.playFromFirst();
+      }
+    },
+    { defer: true }
   );
 
   createEffect(
-    on(
-      () => flip.isAnimating(),
-      (animating) => {
-        if (!animating && moveSwallowed && sensor.isDragging()) {
-          const position = insertionPosition();
-          if (!position) {
-            return;
-          }
-
-          moveSwallowed = false;
-          flip.captureFirst();
-          updateDropPlace(position);
+    () => flip.isAnimating(),
+    (animating) => {
+      if (!animating && moveSwallowed && sensor.isDragging()) {
+        const position = insertionPosition();
+        if (!position) {
+          return;
         }
+
+        moveSwallowed = false;
+        flip.captureFirst();
+        updateDropPlace(position);
       }
-    )
+    }
   );
 
   function defaultDraggedKeys(key: K, currentSelection: Selection<K>): ReadonlyArray<K> {

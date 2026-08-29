@@ -1,6 +1,6 @@
 import { Mesh, OGLRenderingContext, Plane, Program, Texture, Transform, Vec3 } from '@app-game/ogl';
-import { onCleanup } from 'solid-js';
-import { effect } from 'solid-js/web';
+import { createTrackedEffect, onCleanup } from 'solid-js';
+
 import brushFragment from './brush-shader.frag?raw';
 import brushVertex from './brush-shader.vert?raw';
 
@@ -32,7 +32,7 @@ export function Brush1Component(props: { gl: OGLRenderingContext; brushScene: Tr
     brushScene.removeChild(mesh);
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     mesh.position.set(props.position.x, props.position.y, 0);
   });
 

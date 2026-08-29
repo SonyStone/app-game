@@ -13,7 +13,7 @@ import {
 import { EyeSpaceFrustum } from '@app-game/ogl/extras/eye-space-frustum';
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { effect } from 'solid-js/web';
+import { createTrackedEffect } from 'solid-js';
 
 export default function Frustum() {
   const canvas = (<canvas />) as HTMLCanvasElement;
@@ -94,7 +94,7 @@ export default function Frustum() {
   })();
 
   const size = createWindowSize();
-  effect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(size.width, size.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
     frustum.camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });

@@ -1,18 +1,10 @@
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import {
-  createEffect,
-  createSignal,
-  mergeProps,
-  onCleanup,
-  onMount,
-  type Accessor,
-} from 'solid-js';
+import { createSignal, createTrackedEffect, merge, onCleanup, onSettled, type Accessor } from 'solid-js';
 import { useMotionRoot } from './motion-root';
 
 const MAGIC_NUMBER = 30;
 
-export const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
+export const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 export const normalizePointerToViewport = ({
   clientX,
@@ -20,7 +12,7 @@ export const normalizePointerToViewport = ({
   originX,
   originY,
   viewportHeight,
-  viewportWidth,
+  viewportWidth
 }: {
   clientX: number;
   clientY: number;
@@ -36,7 +28,7 @@ export const normalizePointerToViewport = ({
 
   return {
     x: (clientX - centerX) / radiusX,
-    y: (clientY - centerY) / radiusY,
+    y: (clientY - centerY) / radiusY
   };
 };
 
@@ -82,20 +74,16 @@ export const PARALLAX_MOTION_DEFAULTS = {
   originX: 0.5,
   originY: 0.5,
   active: true,
-  publishToMotionRoot: false,
+  publishToMotionRoot: false
 } satisfies Required<Omit<ParallaxMotionOptions, 'onReady'>>;
 
-export const createParallaxMotion = (
-  rawOptions: ParallaxMotionOptions = {},
-) => {
-  const options = mergeProps(PARALLAX_MOTION_DEFAULTS, rawOptions);
-  const { gyroscope, mouse, setParallaxOffsets, shouldReduceMotion } =
-    useMotionRoot();
+export const createParallaxMotion = (rawOptions: ParallaxMotionOptions = {}) => {
+  const options = merge(PARALLAX_MOTION_DEFAULTS, rawOptions);
+  const { gyroscope, mouse, setParallaxOffsets, shouldReduceMotion } = useMotionRoot();
   const windowSize = createWindowSize();
   const [offsetX, setOffsetX] = createSignal(0);
   const [offsetY, setOffsetY] = createSignal(0);
-  const isActive = () =>
-    typeof options.active === 'function' ? options.active() : options.active;
+  const isActive = () => (typeof options.active === 'function' ? options.active() : options.active);
 
   let frameId: number | undefined;
   let calibrationTimer: number | undefined;
@@ -123,12 +111,12 @@ export const createParallaxMotion = (
     setOffsetY(0);
   };
 
-  onMount(() => {
+  onSettled(() => {
     mounted = true;
     queueCalibration(options.calibrationDelay);
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const beta = gyroscope.beta;
     const gamma = gyroscope.gamma;
 
@@ -141,7 +129,7 @@ export const createParallaxMotion = (
     }
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     if (!options.publishToMotionRoot) {
       return;
     }
@@ -149,12 +137,8 @@ export const createParallaxMotion = (
     setParallaxOffsets(offsetX(), offsetY());
   });
 
-  createEffect(() => {
-    if (
-      options.disabled ||
-      (options.pauseWhenOutOfView && !isActive()) ||
-      shouldReduceMotion()
-    ) {
+  createTrackedEffect(() => {
+    if (options.disabled || (options.pauseWhenOutOfView && !isActive()) || shouldReduceMotion()) {
       readyCalled = false;
       resetOffsets();
 
@@ -187,16 +171,14 @@ export const createParallaxMotion = (
           originX: options.originX,
           originY: options.originY,
           viewportHeight,
-          viewportWidth,
+          viewportWidth
         });
 
         pointerX = normalizedPointer.x;
         pointerY = normalizedPointer.y;
       }
 
-      const orientationActive =
-        options.gyroscope &&
-        performance.now() - lastOrientationAt < options.supportDelay * 2;
+      const orientationActive = options.gyroscope && performance.now() - lastOrientationAt < options.supportDelay * 2;
 
       let inputX = pointerX;
       let inputY = pointerY;
@@ -220,12 +202,8 @@ export const createParallaxMotion = (
         portrait = false;
       }
 
-      const calibratedInputX = orientationActive
-        ? inputX - calibrationX
-        : inputX;
-      const calibratedInputY = orientationActive
-        ? inputY - calibrationY
-        : inputY;
+      const calibratedInputX = orientationActive ? inputX - calibrationX : inputX;
+      const calibratedInputY = orientationActive ? inputY - calibrationY : inputY;
 
       if (
         orientationActive &&
@@ -273,12 +251,12 @@ export const createParallaxMotion = (
 
     frameId = requestAnimationFrame(updateFrame);
 
-    onCleanup(() => {
+    return () => {
       if (frameId !== undefined) {
         cancelAnimationFrame(frameId);
         frameId = undefined;
       }
-    });
+    };
   });
 
   onCleanup(() => {
@@ -292,6 +270,6 @@ export const createParallaxMotion = (
   return {
     offsetX,
     offsetY,
-    resetOffsets,
+    resetOffsets
   };
 };

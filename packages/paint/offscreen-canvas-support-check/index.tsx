@@ -1,6 +1,6 @@
 import { Renderer } from '@app-game/ogl';
 import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
-import { For, onCleanup, onMount } from 'solid-js';
+import { For, onCleanup, onSettled } from 'solid-js';
 import { createSquareMesh } from '../brush-example/square/create-square-mesh';
 import OffscreenCanvasWorker from './offscreen-canvas.worker?worker';
 
@@ -22,7 +22,7 @@ export default function OffscreenCanvasSupportCheck() {
       canvas: (() => {
         const canvasEl = (<canvas class="h-50px w-50px touch-none" height={50} width={50} />) as HTMLCanvasElement;
         // should be mounted before use
-        onMount(() => {
+        onSettled(() => {
           // takes some time to render
           const canvas = canvasEl.transferControlToOffscreen();
           const renderer = new Renderer({ dpr: 2, canvas, height: 50, width: 50 });
@@ -39,7 +39,7 @@ export default function OffscreenCanvasSupportCheck() {
         const worker = new OffscreenCanvasWorker();
         const canvasEl = (<canvas class="h-50px w-50px touch-none" height={50} width={50} />) as HTMLCanvasElement;
 
-        onMount(() => {
+        onSettled(() => {
           // should be mounted before use
           const canvas = canvasEl.transferControlToOffscreen();
           // takes way more time to render

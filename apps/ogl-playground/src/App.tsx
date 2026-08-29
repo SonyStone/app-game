@@ -1,12 +1,9 @@
 import { Canvas, Transform, type OglRootState } from '@work-ilyas/solid-ogl';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
-import { demos } from './examples/demo-data';
+import { createMemo, createSignal, createTrackedEffect, For, Show } from 'solid-js';
 import { BasePrimitivesScene } from './examples/BasePrimitivesScene';
+import { ExampleControlsMount, ExampleControlsProvider } from './examples/controls-context';
+import { demos } from './examples/demo-data';
 import { DrawModesScene } from './examples/DrawModesScene';
-import {
-  ExampleControlsMount,
-  ExampleControlsProvider,
-} from './examples/controls-context';
 import { HelpersScene } from './examples/HelpersScene';
 import { InstancingScene } from './examples/InstancingScene';
 import { MonolithScene } from './examples/MonolithScene';
@@ -21,26 +18,16 @@ const FPS_HISTORY_SIZE = 72;
 const FPS_GRAPH_MAX = 120;
 
 export default function App() {
-  const [focusedDemoId, setFocusedDemoId] = makeUrlSearchParams(
-    createSignal<DemoId>('monolith'),
-    { key: 'active' },
-  );
-  const [selectedDemoIds, setSelectedDemoIds] = makeUrlSearchParams(
-    createSignal<DemoId[]>(['monolith']),
-    { key: 'selected' },
-  );
+  const [focusedDemoId, setFocusedDemoId] = makeUrlSearchParams(createSignal<DemoId>('monolith'), { key: 'active' });
+  const [selectedDemoIds, setSelectedDemoIds] = makeUrlSearchParams(createSignal<DemoId[]>(['monolith']), {
+    key: 'selected'
+  });
   const [oglState, setOglState] = createSignal<OglRootState>();
-  const [fpsHistory, setFpsHistory] = createSignal<number[]>(
-    Array.from({ length: FPS_HISTORY_SIZE }, () => 0),
-  );
+  const [fpsHistory, setFpsHistory] = createSignal<number[]>(Array.from({ length: FPS_HISTORY_SIZE }, () => 0));
 
-  const selectedDemos = createMemo(() =>
-    demos.filter((demo) => selectedDemoIds().includes(demo.id)),
-  );
+  const selectedDemos = createMemo(() => demos.filter((demo) => selectedDemoIds().includes(demo.id)));
   const selectedDemo = createMemo(() => {
-    const focusedDemo = selectedDemos().find(
-      (demo) => demo.id === focusedDemoId(),
-    );
+    const focusedDemo = selectedDemos().find((demo) => demo.id === focusedDemoId());
 
     return focusedDemo ?? selectedDemos()[0] ?? demos[0];
   });
@@ -81,12 +68,8 @@ export default function App() {
     }
   };
 
-  const currentFpsFill = createMemo(
-    () => `${(Math.min(currentFps(), 120) / 120) * 100}%`,
-  );
-  const averageFpsFill = createMemo(
-    () => `${(Math.min(averageFps(), 120) / 120) * 100}%`,
-  );
+  const currentFpsFill = createMemo(() => `${(Math.min(currentFps(), 120) / 120) * 100}%`);
+  const averageFpsFill = createMemo(() => `${(Math.min(averageFps(), 120) / 120) * 100}%`);
   const fpsStats = createMemo(() => {
     const samples = fpsHistory().filter((value) => value > 0);
 
@@ -96,7 +79,7 @@ export default function App() {
 
     return {
       min: Math.min(...samples),
-      max: Math.max(...samples),
+      max: Math.max(...samples)
     };
   });
   const fpsGraphPoints = createMemo(() => {
@@ -106,16 +89,14 @@ export default function App() {
 
     return history
       .map((value, index) => {
-        const x =
-          history.length === 1 ? 0 : (index / (history.length - 1)) * width;
-        const y =
-          height - (Math.min(value, FPS_GRAPH_MAX) / FPS_GRAPH_MAX) * height;
+        const x = history.length === 1 ? 0 : (index / (history.length - 1)) * width;
+        const y = height - (Math.min(value, FPS_GRAPH_MAX) / FPS_GRAPH_MAX) * height;
         return `${x.toFixed(2)},${y.toFixed(2)}`;
       })
       .join(' ');
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const state = oglState();
     if (!state) {
       return;
@@ -138,9 +119,7 @@ export default function App() {
         <aside class="w-full shrink-0 overflow-auto border-b border-stone-800 bg-stone-950/90 p-4 lg:w-96 lg:border-r lg:border-b-0">
           <div class="flex h-full flex-col gap-5">
             <header class="grid gap-2">
-              <p class="text-xs uppercase tracking-[0.24em] text-amber-300/80">
-                solid-ogl playground
-              </p>
+              <p class="text-xs tracking-[0.24em] text-amber-300/80 uppercase">solid-ogl playground</p>
               {/* <h1 class="text-lg font-semibold text-stone-50">
                 Wrapper stress demos
               </h1>
@@ -159,15 +138,17 @@ export default function App() {
 
                   return (
                     <div
-                      class="rounded-xl border px-3 py-3 transition"
-                      classList={{
-                        'border-amber-300/70 bg-amber-300/10 text-stone-50 shadow-[0_0_0_1px_rgba(253,230,138,0.15)]':
-                          active(),
-                        'border-teal-400/30 bg-teal-400/5 text-stone-100':
-                          checked() && !active(),
-                        'border-stone-800 bg-stone-900/70 text-stone-300 hover:border-stone-700 hover:bg-stone-900':
-                          !checked(),
-                      }}>
+                      class={[
+                        'rounded-xl border px-3 py-3 transition',
+                        {
+                          'border-amber-300/70 bg-amber-300/10 text-stone-50 shadow-[0_0_0_1px_rgba(253,230,138,0.15)]':
+                            active(),
+                          'border-teal-400/30 bg-teal-400/5 text-stone-100': checked() && !active(),
+                          'border-stone-800 bg-stone-900/70 text-stone-300 hover:border-stone-700 hover:bg-stone-900':
+                            !checked()
+                        }
+                      ]}
+                    >
                       <div class="flex items-start gap-3">
                         <input
                           class="mt-1 h-4 w-4 shrink-0 rounded border-stone-700 bg-stone-950 accent-amber-300"
@@ -178,17 +159,10 @@ export default function App() {
                           onChange={() => toggleDemoSelection(demo.id)}
                         />
 
-                        <button
-                          class="min-w-0 flex-1 text-left"
-                          type="button"
-                          onClick={() => focusDemo(demo.id)}>
+                        <button class="min-w-0 flex-1 text-left" type="button" onClick={() => focusDemo(demo.id)}>
                           <div class="flex items-center justify-between gap-3">
-                            <strong class="text-sm font-medium">
-                              {demo.title}
-                            </strong>
-                            <span class="text-[11px] uppercase tracking-[0.18em] text-stone-500">
-                              {demo.id}
-                            </span>
+                            <strong class="text-sm font-medium">{demo.title}</strong>
+                            <span class="text-[11px] tracking-[0.18em] text-stone-500 uppercase">{demo.id}</span>
                           </div>
                           {/* <p class="mt-2 text-sm leading-6 text-stone-400">
                             {demo.summary}
@@ -204,24 +178,19 @@ export default function App() {
             <section class="grid gap-3 rounded-2xl border border-stone-800 bg-stone-900/60 p-4">
               <div class="flex items-center justify-between gap-3">
                 <div>
-                  <p class="text-xs uppercase tracking-[0.22em] text-stone-500">
-                    fps meter
-                  </p>
+                  <p class="text-xs tracking-[0.22em] text-stone-500 uppercase">fps meter</p>
                   {/* <p class="mt-1 text-sm text-stone-300">
                     Live frame timing from the playground render loop.
                   </p> */}
                 </div>
-                <strong class="text-2xl font-mono text-stone-50">
-                  {currentFps().toFixed(1)}
-                </strong>
+                <strong class="font-mono text-2xl text-stone-50">{currentFps().toFixed(1)}</strong>
               </div>
 
               <div class="grid gap-2 rounded-xl border border-stone-800 bg-stone-950/70 p-3">
-                <div class="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-stone-500">
+                <div class="flex items-center justify-between gap-3 text-xs tracking-[0.18em] text-stone-500 uppercase">
                   <span>Frame history</span>
                   <span>
-                    {fpsStats().min.toFixed(1)} - {fpsStats().max.toFixed(1)}{' '}
-                    fps
+                    {fpsStats().min.toFixed(1)} - {fpsStats().max.toFixed(1)} fps
                   </span>
                 </div>
                 <svg
@@ -229,7 +198,8 @@ export default function App() {
                   viewBox="0 0 100 40"
                   preserveAspectRatio="none"
                   aria-label="FPS history graph"
-                  role="img">
+                  role="img"
+                >
                   <path
                     d="M 0 40 L 0 22 L 100 22"
                     fill="none"
@@ -253,14 +223,14 @@ export default function App() {
                     stroke-linejoin="round"
                   />
                 </svg>
-                <div class="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-stone-500">
+                <div class="flex items-center justify-between gap-3 text-[11px] tracking-[0.18em] text-stone-500 uppercase">
                   <span>Recent frame drops appear as downward spikes.</span>
                   <span>Cap: {FPS_GRAPH_MAX}</span>
                 </div>
               </div>
 
               <div class="grid gap-2">
-                <div class="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-stone-500">
+                <div class="flex items-center justify-between gap-3 text-xs tracking-[0.18em] text-stone-500 uppercase">
                   <span>Current</span>
                   <span>{currentFps().toFixed(1)} fps</span>
                 </div>
@@ -273,7 +243,7 @@ export default function App() {
               </div>
 
               <div class="grid gap-2">
-                <div class="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-stone-500">
+                <div class="flex items-center justify-between gap-3 text-xs tracking-[0.18em] text-stone-500 uppercase">
                   <span>Average</span>
                   <span>{averageFps().toFixed(1)} fps</span>
                 </div>
@@ -291,7 +261,8 @@ export default function App() {
             <button
               class="mt-auto rounded-xl border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 transition hover:border-stone-500 hover:bg-stone-800"
               type="button"
-              onClick={() => oglState()?.resetTiming()}>
+              onClick={() => oglState()?.resetTiming()}
+            >
               Reset animation time
             </button>
           </div>
@@ -307,7 +278,8 @@ export default function App() {
                 setOglState(state);
                 state.camera().position.set(0, 0, 8.5);
                 state.camera().lookAt([0, 0, 0]);
-              }}>
+              }}
+            >
               <Show when={isDemoSelected('monolith')}>
                 <Transform rotation={[0.3, -0.45, 0]}>
                   <MonolithScene />
@@ -315,9 +287,7 @@ export default function App() {
               </Show>
 
               <Show when={isDemoSelected('primitives')}>
-                <BasePrimitivesScene
-                  makeDefault={selectedDemo().id === 'primitives'}
-                />
+                <BasePrimitivesScene makeDefault={selectedDemo().id === 'primitives'} />
               </Show>
 
               <Show when={isDemoSelected('helpers')}>
@@ -325,39 +295,27 @@ export default function App() {
               </Show>
 
               <Show when={isDemoSelected('scene-graph')}>
-                <SceneGraphScene
-                  makeDefault={selectedDemo().id === 'scene-graph'}
-                />
+                <SceneGraphScene makeDefault={selectedDemo().id === 'scene-graph'} />
               </Show>
 
               <Show when={isDemoSelected('particles')}>
-                <ParticlesScene
-                  makeDefault={selectedDemo().id === 'particles'}
-                />
+                <ParticlesScene makeDefault={selectedDemo().id === 'particles'} />
               </Show>
 
               <Show when={isDemoSelected('draw-modes')}>
-                <DrawModesScene
-                  makeDefault={selectedDemo().id === 'draw-modes'}
-                />
+                <DrawModesScene makeDefault={selectedDemo().id === 'draw-modes'} />
               </Show>
 
               <Show when={isDemoSelected('instancing')}>
-                <InstancingScene
-                  makeDefault={selectedDemo().id === 'instancing'}
-                />
+                <InstancingScene makeDefault={selectedDemo().id === 'instancing'} />
               </Show>
 
               <Show when={isDemoSelected('polylines')}>
-                <PolylinesScene
-                  makeDefault={selectedDemo().id === 'polylines'}
-                />
+                <PolylinesScene makeDefault={selectedDemo().id === 'polylines'} />
               </Show>
 
               <Show when={isDemoSelected('render-to-texture')}>
-                <RenderToTextureScene
-                  makeDefault={selectedDemo().id === 'render-to-texture'}
-                />
+                <RenderToTextureScene makeDefault={selectedDemo().id === 'render-to-texture'} />
               </Show>
             </Canvas>
           </div>

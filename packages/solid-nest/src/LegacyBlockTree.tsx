@@ -1,4 +1,5 @@
-import { Component, createMemo, JSX, splitProps } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Component, createMemo, omit } from 'solid-js';
 import { BlockTree as AdvancedBlockTree, Container } from './BlockTree';
 import { DragContainerProps } from './components/DragContainer';
 import {
@@ -89,7 +90,7 @@ export type BlockProps<K, T> = {
 };
 
 export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
-  const [ownProps, rest] = splitProps(props, ['root', 'getChildren']);
+  const rest = omit(props, 'root', 'getChildren');
 
   const container = (block: T): Container<K, T> => {
     return {
@@ -104,7 +105,7 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
         return props.getOptions?.(block)?.layout;
       },
       getBlocks() {
-        return ownProps.getChildren?.(block) ?? [];
+        return props.getChildren?.(block) ?? [];
       }
     };
   };

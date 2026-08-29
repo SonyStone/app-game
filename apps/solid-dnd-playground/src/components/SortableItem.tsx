@@ -1,4 +1,5 @@
-import { Show, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Show } from 'solid-js';
 import type { DemoItem } from '../data';
 import { CheckIcon, GripIcon } from './icons';
 import { GHOST_CLASS } from './styles';
@@ -46,7 +47,7 @@ export function SortableItem(props: SortableItemProps): JSX.Element {
       data-item-id={props.itemId}
       data-testid={props.testId}
       role="option"
-      aria-selected={props.isSelected}
+      aria-selected={props.isSelected ? 'true' : 'false'}
       aria-roledescription="sortable item"
       class={`cursor-grab touch-none rounded-lg border transition-all select-none active:cursor-grabbing ${stateClass()} ${props.class ?? ''}`}
     >

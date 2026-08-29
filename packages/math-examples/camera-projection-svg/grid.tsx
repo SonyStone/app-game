@@ -1,6 +1,6 @@
 import { Vec4Tuple } from '@app-game/ogl/math/vec-4';
 import { Listen } from '@solid-primitives/event-bus';
-import { Index, createSignal } from 'solid-js';
+import { For, createSignal } from 'solid-js';
 
 export function Grid(props: { worldSpaceToScreenSpace: (point: Vec4Tuple) => Vec4Tuple; update: Listen<void> }) {
   const lines = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map((line) => [
@@ -19,7 +19,7 @@ export function Grid(props: { worldSpaceToScreenSpace: (point: Vec4Tuple) => Vec
 
   return (
     <g>
-      <Index each={getScreenPoints()}>
+      <For keyed={false} each={getScreenPoints()}>
         {(line) => (
           <>
             <line
@@ -40,7 +40,7 @@ export function Grid(props: { worldSpaceToScreenSpace: (point: Vec4Tuple) => Vec
             />
           </>
         )}
-      </Index>
+      </For>
     </g>
   );
 }

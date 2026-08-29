@@ -16,7 +16,7 @@ export function numberPrecisionDragInput(
       (
         <div
           data-value={v}
-          class="hover:bg-yellow flex h-10 place-content-center place-items-center  border-b border-black last:border-b-0"
+          class="hover:bg-yellow flex h-10 place-content-center place-items-center border-b border-black last:border-b-0"
         >
           {v}
         </div>
@@ -33,20 +33,18 @@ export function numberPrecisionDragInput(
   };
 
   const testElement = (
-    <div class="absolute left-0 top-0 flex w-10 cursor-e-resize flex-col border border-black bg-white">{elements}</div>
+    <div class="absolute top-0 left-0 flex w-10 cursor-e-resize flex-col border border-black bg-white">{elements}</div>
   ) as HTMLElement;
 
   const [show, setShow] = createSignal(false);
 
-  createEffect((prev) => {
-    const next = show();
+  createEffect(show, (next, previous) => {
     if (next) {
       document.body.appendChild(testElement);
-    } else if (prev === true) {
+    } else if (previous === true) {
       document.body.removeChild(testElement);
     }
-    return next;
-  }, undefined);
+  });
 
   let prevNumber = 0;
   let prevElement: HTMLElement | undefined;
@@ -72,8 +70,9 @@ export function numberPrecisionDragInput(
         middleware: [
           offset(({ rects }) => ({
             mainAxis:
-              -rects.floating.height / 2 - rects.reference.height / 2 +
-              (props.step ? elementsPos[props.step] ?? 0 : 0),
+              -rects.floating.height / 2 -
+              rects.reference.height / 2 +
+              (props.step ? (elementsPos[props.step] ?? 0) : 0),
             alignmentAxis: rects.reference.width - e.offsetX - rects.floating.width / 2
           })),
           shift({

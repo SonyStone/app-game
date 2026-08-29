@@ -5,7 +5,7 @@ import { compileShader } from '@app-game/webgl/compileShader';
 import { linkProgram } from '@app-game/webgl/linkProgram';
 import { GL_BUFFER_TYPE, GL_BUFFER_USAGE, GL_SHADER_TYPE } from '@app-game/webgl/static-variables';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect, onCleanup } from 'solid-js';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 import fragmentSrc from './instanced-drawing.frag?raw';
 import vertexSrc from './instanced-drawing.vert?raw';
 
@@ -13,7 +13,7 @@ export default function InstancedDrawing() {
   const canvas = (<canvas height={800} width={800} />) as HTMLCanvasElement;
 
   const resize = createWindowSize();
-  createEffect(() => {
+  createTrackedEffect(() => {
     canvas.width = resize.width;
     canvas.height = resize.height;
   });
@@ -109,7 +109,7 @@ export default function InstancedDrawing() {
   gl.bufferData(
     gl.ARRAY_BUFFER,
     // prettier-ignore
-    new Float32Array([ 
+    new Float32Array([
       1, 0, 0, 1,  // red
       0, 1, 0, 1,  // green
       0, 0, 1, 1,  // blue

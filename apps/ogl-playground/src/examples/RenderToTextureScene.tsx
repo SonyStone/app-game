@@ -1,20 +1,6 @@
-import {
-  Box,
-  Camera,
-  Mesh,
-  Program,
-  RenderTarget,
-  Texture,
-  useOgl,
-  useTime,
-} from '@work-ilyas/solid-ogl';
-import { createEffect, createSignal } from 'solid-js';
-import type {
-  Camera as OglCamera,
-  Mesh as OglMesh,
-  RenderTarget as OglRenderTarget,
-  Texture as OglTexture,
-} from 'ogl';
+import { Box, Camera, Mesh, Program, RenderTarget, Texture, useOgl, useTime } from '@work-ilyas/solid-ogl';
+import type { Camera as OglCamera, Mesh as OglMesh, RenderTarget as OglRenderTarget, Texture as OglTexture } from 'ogl';
+import { createSignal, createTrackedEffect } from 'solid-js';
 import type { CameraSceneProps } from './types';
 
 const texturedVertex = /* glsl */ `
@@ -53,9 +39,7 @@ const texturedFragment = /* glsl */ `
   }
 `;
 
-const dataTexture = new Uint8Array([
-  191, 25, 54, 255, 96, 18, 54, 255, 96, 18, 54, 255, 37, 13, 53, 255,
-]);
+const dataTexture = new Uint8Array([191, 25, 54, 255, 96, 18, 54, 255, 96, 18, 54, 255, 37, 13, 53, 255]);
 
 type TexturedProgramLike = {
   uniforms: {
@@ -74,7 +58,7 @@ export function RenderToTextureScene(props: CameraSceneProps) {
   let sourceProgramRef: TexturedProgramLike | undefined;
   let displayProgramRef: TexturedProgramLike | undefined;
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const baseTexture = texture();
     const renderTarget = target();
 
@@ -87,7 +71,7 @@ export function RenderToTextureScene(props: CameraSceneProps) {
     }
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const elapsed = time();
     const offscreenMesh = sourceMesh();
     const visibleMesh = displayMesh();
@@ -112,7 +96,7 @@ export function RenderToTextureScene(props: CameraSceneProps) {
     ogl.renderer.render({
       scene: offscreenMesh,
       camera: offscreenCamera,
-      target: renderTarget,
+      target: renderTarget
     });
     offscreenMesh.visible = false;
   });
@@ -126,8 +110,8 @@ export function RenderToTextureScene(props: CameraSceneProps) {
         args={[
           {
             width: 512,
-            height: 512,
-          },
+            height: 512
+          }
         ]}
       />
       <Texture
@@ -141,8 +125,8 @@ export function RenderToTextureScene(props: CameraSceneProps) {
             height: 2,
             magFilter: ogl.gl.NEAREST,
             minFilter: ogl.gl.NEAREST,
-            generateMipmaps: false,
-          },
+            generateMipmaps: false
+          }
         ]}
       />
 
@@ -157,7 +141,8 @@ export function RenderToTextureScene(props: CameraSceneProps) {
         ref={(instance) => {
           setSourceMesh(instance as unknown as OglMesh);
         }}
-        visible={false}>
+        visible={false}
+      >
         <Box />
         <Program
           ref={(instance) => {
@@ -168,22 +153,19 @@ export function RenderToTextureScene(props: CameraSceneProps) {
               vertex: texturedVertex,
               fragment: texturedFragment,
               uniforms: {
-                tMap: { value: null },
-              },
-            },
+                tMap: { value: null }
+              }
+            }
           ]}
         />
       </Mesh>
 
-      <Camera
-        makeDefault={props.makeDefault}
-        position={[0, 1, 5]}
-        lookAt={[0, 0, 0]}
-      />
+      <Camera makeDefault={props.makeDefault} position={[0, 1, 5]} lookAt={[0, 0, 0]} />
       <Mesh
         ref={(instance) => {
           setDisplayMesh(instance as unknown as OglMesh);
-        }}>
+        }}
+      >
         <Box />
         <Program
           ref={(instance) => {
@@ -194,9 +176,9 @@ export function RenderToTextureScene(props: CameraSceneProps) {
               vertex: texturedVertex,
               fragment: texturedFragment,
               uniforms: {
-                tMap: { value: null },
-              },
-            },
+                tMap: { value: null }
+              }
+            }
           ]}
         />
       </Mesh>

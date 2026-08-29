@@ -1,12 +1,12 @@
 import { Meta, Title } from '@solidjs/meta';
-import { onCleanup, onMount } from 'solid-js';
+import { onCleanup, onSettled } from 'solid-js';
 import { mat4, vec3 } from 'wgpu-matrix';
 import shaderSrc from './rotating-cube-2.wgsl?raw';
 
 export default function RotatingCube2() {
   const canvas = (<canvas class="max-w-600px aspect-square w-full" />) as HTMLCanvasElement;
 
-  onMount(() => {
+  onSettled(() => {
     main(canvas);
   });
 
@@ -271,7 +271,9 @@ async function main(canvas: HTMLCanvasElement) {
     device.queue.writeBuffer(vsUniformBuffer, 0, vsUniformValues);
     device.queue.writeBuffer(fsUniformBuffer, 0, fsUniformValues);
 
-    const colorAttachments = renderPassDescriptor.colorAttachments as Array<GPURenderPassColorAttachment | null | undefined>;
+    const colorAttachments = renderPassDescriptor.colorAttachments as Array<
+      GPURenderPassColorAttachment | null | undefined
+    >;
 
     if (canvasInfo.sampleCount === 1) {
       const colorTexture = context.getCurrentTexture();

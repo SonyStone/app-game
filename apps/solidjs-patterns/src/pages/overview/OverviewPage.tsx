@@ -1,5 +1,5 @@
-import { A } from '@solidjs/router';
-import { For, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { For } from 'solid-js';
 import { Badge } from '../../components/ui/Badge';
 import { Card, CardDescription, CardTitle } from '../../components/ui/Card';
 import { markdownComponents } from '../markdown-components';
@@ -33,7 +33,7 @@ export default function OverviewPage(): JSX.Element {
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <For each={quickLinks}>
                   {(link) => (
-                    <A href={link.href} class="group">
+                    <a href={link.href} class="group">
                       <Card class="transition-colors hover:border-stone-400 hover:bg-stone-100 dark:hover:border-neutral-700 dark:hover:bg-neutral-800/50">
                         <div class="flex items-start justify-between gap-2">
                           <div>
@@ -50,7 +50,7 @@ export default function OverviewPage(): JSX.Element {
                           </div>
                         )}
                       </Card>
-                    </A>
+                    </a>
                   )}
                 </For>
               </div>
@@ -106,23 +106,23 @@ const quickLinks = [
   {
     href: './effects',
     title: 'Effects',
-    description: 'createEffect, on(), onMount, and onCleanup patterns.',
+    description: 'createEffect, createTrackedEffect, onSettled, and cleanup patterns.',
     icon: '🔄',
-    tags: ['createEffect', 'on']
+    tags: ['createEffect', 'onSettled']
   },
   {
     href: './batching',
-    title: 'Batching & Untrack',
-    description: 'batch() for grouping updates, untrack() to read without subscribing.',
+    title: 'Scheduling & Untrack',
+    description: 'Automatic update staging, flush(), and non-tracking reads.',
     icon: '📦',
-    tags: ['batch', 'untrack']
+    tags: ['flush', 'untrack']
   },
   {
     href: './stores',
     title: 'Stores',
     description: 'createStore for nested/mutable reactive objects.',
     icon: '🗄️',
-    tags: ['createStore', 'produce', 'reconcile']
+    tags: ['createStore', 'storePath', 'reconcile']
   },
   {
     href: './context',
@@ -134,23 +134,23 @@ const quickLinks = [
   {
     href: './components',
     title: 'Component Patterns',
-    description: 'Props, children, splitProps, mergeProps best practices.',
+    description: 'Props, children, omit, and merge best practices.',
     icon: '🧩',
-    tags: ['splitProps', 'mergeProps']
+    tags: ['omit', 'merge']
   },
   {
     href: './control-flow',
     title: 'Control Flow',
-    description: 'Show, For, Switch, Index, Dynamic, Portal.',
+    description: 'Show, For, Switch, keyed lists, Dynamic, and Portal.',
     icon: '🔀',
     tags: ['Show', 'For', 'Switch']
   },
   {
     href: './resources',
     title: 'Resources',
-    description: 'createResource for async data fetching with Suspense.',
+    description: 'Async createMemo with Loading, latest, and refresh.',
     icon: '🌊',
-    tags: ['createResource', 'Suspense']
+    tags: ['createMemo', 'Loading']
   },
   {
     href: './primitives',

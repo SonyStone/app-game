@@ -1,6 +1,7 @@
 import { cn } from '@app-game/utils/cn';
+import type { JSX } from '@solidjs/web';
 import { createDragSensor } from 'solid-dnd';
-import { For, Show, createEffect, createMemo, createSignal, type JSX } from 'solid-js';
+import { For, Show, createMemo, createSignal, createTrackedEffect } from 'solid-js';
 import { Component1, Component2, Component3, Component4, Component5 } from './solid-docking/TestComponents';
 
 /**
@@ -170,7 +171,7 @@ export function Docking(props: DockingProps): JSX.Element {
   const dropTarget = createMemo(() => resolveDropTarget(dragState(), dropTargetRefs));
   const rootDropTarget = createMemo(() => (dropTarget()?.nodeId === ROOT_DROP_TARGET_ID ? dropTarget() : undefined));
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     setLayout(props.layout);
   });
 

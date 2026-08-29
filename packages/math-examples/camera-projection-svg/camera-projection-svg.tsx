@@ -3,7 +3,7 @@ import { Vec4Tuple } from '@app-game/ogl/math/vec-4';
 import { validate } from '@app-game/utils/validate';
 import { createEventBus } from '@solid-primitives/event-bus';
 import createRAF from '@solid-primitives/raf';
-import { onMount } from 'solid-js';
+import { onSettled } from 'solid-js';
 import { Cube } from './cube';
 import { Grid } from './grid';
 import { OnScreenCube } from './on-screen-cube';
@@ -40,7 +40,7 @@ export default function CameraProjectionSVG() {
 
   const { listen, emit } = createEventBus<void>();
 
-  onMount(() => {
+  onSettled(() => {
     const controls = new Orbit(camera, { element: svg as any as HTMLElement, target: new Vec3(1, 1, 0) });
 
     function update(t: number) {
@@ -65,7 +65,7 @@ export default function CameraProjectionSVG() {
     <div>
       <div>Camera Projection on SVG canvas</div>
       <svg
-        class="h-full w-full touch-none select-none border"
+        class="h-full w-full touch-none border select-none"
         ref={(ref) => (svg = ref)}
         height={400}
         width={400}

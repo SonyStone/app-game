@@ -1,21 +1,20 @@
 import { Box, Mesh, NormalProgram, OGLRenderingContext, Transform } from '@app-game/ogl';
 import { Vec3Tuple } from '@app-game/ogl/math/vec-3';
-import { onCleanup } from 'solid-js';
-import { effect } from 'solid-js/web';
+import { createTrackedEffect, onCleanup } from 'solid-js';
 
 export function NormalBox(props: {
   gl: OGLRenderingContext;
   scene: Transform;
   position?: Vec3Tuple;
-  matrix?: number[][];
+  matrix?: readonly (readonly number[])[];
 }) {
   const { gl, scene } = props;
   const mesh = new Mesh(gl, { geometry: new Box(gl), program: new NormalProgram(gl) });
-  effect(() => {
+  createTrackedEffect(() => {
     mesh.position.set(props.position ?? [0, 0, 0]);
   });
 
-  effect(() => {
+  createTrackedEffect(() => {
     const matrix = props.matrix;
     if (!matrix) {
       return;

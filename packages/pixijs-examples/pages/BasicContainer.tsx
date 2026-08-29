@@ -1,9 +1,9 @@
 import { Container, Sprite, useAsset } from '@app-game/solid-pixi';
 import { createWindowSize } from '@solid-primitives/resize-observer';
+import { Portal } from '@solidjs/web';
 import { gsap } from 'gsap';
 import { Ticker } from 'pixi.js';
-import { createSignal, For, onMount, Suspense } from 'solid-js';
-import { Portal } from 'solid-js/web';
+import { createSignal, For, Loading, onSettled } from 'solid-js';
 import { Transition } from '../Transition';
 import { useTick } from '../useTick';
 
@@ -30,7 +30,7 @@ export default function BasicContainer() {
 
   return (
     <Container>
-      <Suspense>
+      <Loading>
         <Transition
           onEnter={(el, done) => {
             gsap
@@ -68,7 +68,7 @@ export default function BasicContainer() {
           {show() && (
             <Container
               ref={(container) => {
-                onMount(() => {
+                onSettled(() => {
                   container.pivot.x = container.width / 2;
                   container.pivot.y = container.height / 2;
                 });
@@ -84,7 +84,7 @@ export default function BasicContainer() {
             </Container>
           )}
         </Transition>
-      </Suspense>
+      </Loading>
     </Container>
   );
 }

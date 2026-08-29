@@ -1,9 +1,7 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import type { Simplify } from '@solid-primitives/utils';
-import type { Accessor, Setter, Signal } from 'solid-js';
-import { untrack } from 'solid-js';
-import type { SetStoreFunction, Store } from 'solid-js/store';
-import { reconcile } from 'solid-js/store';
+import type { Accessor, Setter, Signal, Store, StoreSetter } from 'solid-js';
+import { reconcile, untrack } from 'solid-js';
 
 type ParamPrimitive = string | number | boolean;
 type ParamValue = ParamPrimitive | ParamPrimitive[];
@@ -34,31 +32,23 @@ type UrlSearchParamsOptions<Key extends string | undefined = undefined> = {
  */
 export function makeUrlSearchParams<T extends ParamRecord>(
   signal: Signal<T>,
-  options?: UrlSearchParamsOptions,
+  options?: UrlSearchParamsOptions
 ): [get: Accessor<WidenBooleans<T>>, set: Setter<WidenBooleans<T>>];
 
 export function makeUrlSearchParams<T extends ParamValue, Key extends string>(
   signal: Signal<T>,
-  options: UrlSearchParamsOptions<Key> & { readonly key: Key },
+  options: UrlSearchParamsOptions<Key> & { readonly key: Key }
 ): [get: Accessor<WidenSignalValue<T>>, set: Setter<WidenSignalValue<T>>];
 
 export function makeUrlSearchParams<T extends ParamRecord>(
-  signal: [Store<T>, SetStoreFunction<T>],
-  options?: UrlSearchParamsOptions,
-): [get: Store<WidenBooleans<T>>, set: SetStoreFunction<WidenBooleans<T>>];
+  signal: [Store<T>, StoreSetter<T>],
+  options?: UrlSearchParamsOptions
+): [get: Store<WidenBooleans<T>>, set: StoreSetter<WidenBooleans<T>>];
 
 export function makeUrlSearchParams<T extends ParamRecord | ParamValue>(
-  signal:
-    | Signal<T>
-    | [
-        Store<Extract<T, ParamRecord>>,
-        SetStoreFunction<Extract<T, ParamRecord>>,
-      ],
-  options?: UrlSearchParamsOptions,
-): [
-  get: Accessor<T> | Store<Extract<T, ParamRecord>>,
-  set: Setter<T> | SetStoreFunction<Extract<T, ParamRecord>>,
-] {
+  signal: Signal<T> | [Store<Extract<T, ParamRecord>>, StoreSetter<Extract<T, ParamRecord>>],
+  options?: UrlSearchParamsOptions
+): [get: Accessor<T> | Store<Extract<T, ParamRecord>>, set: Setter<T> | StoreSetter<Extract<T, ParamRecord>>] {
   const isSignal = typeof signal[0] === 'function';
   const push = options?.push ?? false;
 
@@ -71,13 +61,11 @@ export function makeUrlSearchParams<T extends ParamRecord | ParamValue>(
       const key = options?.key;
 
       if (!key) {
-        throw new Error(
-          'makeUrlSearchParams() requires options.key when used with a non-record signal.',
-        );
+        throw new Error('makeUrlSearchParams() requires options.key when used with a non-record signal.');
       }
 
       const defaults: ParamRecord = {
-        [key]: cloneParamValue(defaultValue as ParamValue),
+        [key]: cloneParamValue(defaultValue as ParamValue)
       };
       const initial = parseSearch(defaults);
 
@@ -99,14 +87,8 @@ export function makeUrlSearchParams<T extends ParamRecord | ParamValue>(
       });
 
       const wrappedSet = ((...args: Parameters<Setter<T>>) => {
-        const result = (originalSet as (...a: Parameters<Setter<T>>) => T)(
-          ...args,
-        );
-        writeToUrl(
-          { [key]: cloneParamValue(untrack(getValue) as ParamValue) },
-          defaults,
-          push,
-        );
+        const result = (originalSet as (...a: Parameters<Setter<T>>) => T)(...args);
+        writeToUrl({ [key]: cloneParamValue(untrack(getValue) as ParamValue) }, defaults, push);
         return result;
       }) as Setter<T>;
 
@@ -127,21 +109,12 @@ export function makeUrlSearchParams<T extends ParamRecord | ParamValue>(
     }
 
     makeEventListener(window, 'popstate', () => {
-      applyState({ ...defaults, ...parseSearch(defaults) } as Extract<
-        T,
-        ParamRecord
-      >);
+      applyState({ ...defaults, ...parseSearch(defaults) } as Extract<T, ParamRecord>);
     });
 
     const wrappedSet = ((...args: Parameters<Setter<T>>) => {
-      const result = (originalSet as (...a: Parameters<Setter<T>>) => T)(
-        ...args,
-      );
-      writeToUrl(
-        cloneParamRecord(untrack(getValue) as Extract<T, ParamRecord>),
-        defaults,
-        push,
-      );
+      const result = (originalSet as (...a: Parameters<Setter<T>>) => T)(...args);
+      writeToUrl(cloneParamRecord(untrack(getValue) as Extract<T, ParamRecord>), defaults, push);
       return result;
     }) as Setter<T>;
 
@@ -149,7 +122,7 @@ export function makeUrlSearchParams<T extends ParamRecord | ParamValue>(
   }
 
   const store = signal[0] as Store<Extract<T, ParamRecord>>;
-  const originalSet = signal[1] as SetStoreFunction<Extract<T, ParamRecord>>;
+  const originalSet = signal[1] as StoreSetter<Extract<T, ParamRecord>>;
   const defaults = readStore(store);
 
   const applyState = (merged: Extract<T, ParamRecord>): void => {
@@ -164,16 +137,13 @@ export function makeUrlSearchParams<T extends ParamRecord | ParamValue>(
   }
 
   makeEventListener(window, 'popstate', () => {
-    applyState({ ...defaults, ...parseSearch(defaults) } as Extract<
-      T,
-      ParamRecord
-    >);
+    applyState({ ...defaults, ...parseSearch(defaults) } as Extract<T, ParamRecord>);
   });
 
   const wrappedSet = ((...args: readonly unknown[]) => {
     (originalSet as (...a: readonly unknown[]) => void)(...args);
     writeToUrl(readStore(store), defaults, push);
-  }) as SetStoreFunction<Extract<T, ParamRecord>>;
+  }) as StoreSetter<Extract<T, ParamRecord>>;
 
   return [signal[0], wrappedSet];
 }
@@ -216,9 +186,7 @@ function readStore<T extends ParamRecord>(store: Store<T>): T {
     const snapshot = {} as T;
 
     for (const key of Object.keys(store)) {
-      snapshot[key as keyof T] = cloneParamValue(
-        store[key as keyof T] as ParamValue,
-      ) as T[keyof T];
+      snapshot[key as keyof T] = cloneParamValue(store[key as keyof T] as ParamValue) as T[keyof T];
     }
 
     return snapshot;
@@ -247,10 +215,7 @@ function cloneParamValue<T extends ParamValue>(value: T): T {
   return (Array.isArray(value) ? [...value] : value) as T;
 }
 
-function deserializeParamValue(
-  raw: string,
-  fallback: ParamValue,
-): ParamValue | undefined {
+function deserializeParamValue(raw: string, fallback: ParamValue): ParamValue | undefined {
   try {
     const parsed = JSON.parse(raw) as unknown;
 
@@ -266,10 +231,7 @@ function deserializeParamValue(
   return undefined;
 }
 
-function deserializeParamArray(
-  rawValues: string[],
-  fallback: ParamPrimitive[],
-): ParamPrimitive[] | undefined {
+function deserializeParamArray(rawValues: string[], fallback: ParamPrimitive[]): ParamPrimitive[] | undefined {
   if (rawValues.length === 0) {
     return undefined;
   }
@@ -296,10 +258,7 @@ function deserializeParamArray(
   return parsedValues;
 }
 
-function deserializeRepeatedParamValue(
-  raw: string,
-  sample: ParamPrimitive | undefined,
-): ParamPrimitive | undefined {
+function deserializeRepeatedParamValue(raw: string, sample: ParamPrimitive | undefined): ParamPrimitive | undefined {
   if (sample === undefined) {
     return deserializePrimitiveCandidate(raw);
   }
@@ -310,17 +269,13 @@ function deserializeRepeatedParamValue(
 
   try {
     const parsed = JSON.parse(raw) as unknown;
-    return typeof parsed === typeof sample
-      ? (parsed as ParamPrimitive)
-      : undefined;
+    return typeof parsed === typeof sample ? (parsed as ParamPrimitive) : undefined;
   } catch {
     return undefined;
   }
 }
 
-function deserializePrimitiveCandidate(
-  raw: string,
-): ParamPrimitive | undefined {
+function deserializePrimitiveCandidate(raw: string): ParamPrimitive | undefined {
   try {
     const parsed = JSON.parse(raw) as unknown;
     return isParamPrimitive(parsed) ? parsed : undefined;
@@ -329,16 +284,12 @@ function deserializePrimitiveCandidate(
   }
 }
 
-function isMatchingParamValue(
-  value: unknown,
-  fallback: ParamValue,
-): value is ParamValue {
+function isMatchingParamValue(value: unknown, fallback: ParamValue): value is ParamValue {
   if (Array.isArray(fallback)) {
     return (
       Array.isArray(value) &&
       value.every(isParamPrimitive) &&
-      (fallback.length === 0 ||
-        value.every((item) => typeof item === typeof fallback[0]))
+      (fallback.length === 0 || value.every((item) => typeof item === typeof fallback[0]))
     );
   }
 
@@ -346,22 +297,14 @@ function isMatchingParamValue(
 }
 
 function isParamPrimitive(value: unknown): value is ParamPrimitive {
-  return (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  );
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
 }
 
 function isParamRecord(value: unknown): value is ParamRecord {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function writeToUrl(
-  params: ParamRecord,
-  defaults: ParamRecord,
-  push: boolean,
-): void {
+function writeToUrl(params: ParamRecord, defaults: ParamRecord, push: boolean): void {
   const searchParams = new URLSearchParams(window.location.search);
 
   for (const key of Object.keys(defaults)) {
@@ -369,11 +312,7 @@ function writeToUrl(
   }
 
   for (const [key, value] of Object.entries(params)) {
-    if (
-      value == null ||
-      paramValuesEqual(value, defaults[key]) ||
-      (!Array.isArray(value) && value === '')
-    ) {
+    if (value == null || paramValuesEqual(value, defaults[key]) || (!Array.isArray(value) && value === '')) {
       continue;
     }
 
@@ -389,10 +328,7 @@ function writeToUrl(
   }
 
   const query = searchParams.toString();
-  const url =
-    window.location.pathname +
-    (query ? `?${query}` : '') +
-    window.location.hash;
+  const url = window.location.pathname + (query ? `?${query}` : '') + window.location.hash;
 
   if (push) {
     window.history.pushState(window.history.state, '', url);

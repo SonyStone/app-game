@@ -1,6 +1,6 @@
-import Drawer from '@corvu/drawer';
-import { A, useLocation } from '@solidjs/router';
-import { createSignal, For, type JSX } from 'solid-js';
+import { useLocation } from '@solidjs/router';
+import type { JSX } from '@solidjs/web';
+import { createSignal, For, Show } from 'solid-js';
 import { navSections } from '../nav';
 
 // ============================================================================
@@ -60,7 +60,7 @@ function NavLink(props: { href: string; label: string; badge?: string; onNavigat
   };
 
   return (
-    <A
+    <a
       href={props.href}
       onClick={() => props.onNavigate?.()}
       class={`flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors ${
@@ -78,7 +78,7 @@ function NavLink(props: { href: string; label: string; badge?: string; onNavigat
           {props.badge}
         </span>
       )}
-    </A>
+    </a>
   );
 }
 
@@ -99,28 +99,26 @@ function MobileDrawer(): JSX.Element {
         <HamburgerIcon />
       </button>
 
-      <Drawer side="left" open={open()} onOpenChange={setOpen}>
-        {(drawerProps) => (
-          <Drawer.Portal>
-            <Drawer.Overlay
-              class="fixed inset-0 z-100 transition-colors duration-300"
-              style={{ 'background-color': `rgb(0 0 0 / ${0.6 * drawerProps.openPercentage})` }}
-            />
-            <Drawer.Content class="fixed inset-y-0 left-0 z-101 flex w-60 flex-col border-r border-stone-300 bg-stone-50 data-transitioning:transition-transform data-transitioning:duration-300 data-transitioning:ease-[cubic-bezier(0.32,0.72,0,1)] dark:border-slate-800 dark:bg-slate-950">
-              <div class="flex items-center justify-between border-b border-stone-300 px-4 py-3 dark:border-slate-800">
-                <div class="flex items-baseline gap-2">
-                  <Drawer.Label class="text-sm font-bold text-stone-950 dark:text-white">SolidJS</Drawer.Label>
-                  <span class="text-xs text-violet-700 dark:text-violet-400">Patterns</span>
-                </div>
-                <Drawer.Close class="flex h-6 w-6 items-center justify-center rounded text-stone-500 hover:bg-stone-900/10 hover:text-stone-950 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white">
-                  <CloseIcon />
-                </Drawer.Close>
-              </div>
-              <SidebarContent onNavigate={() => setOpen(false)} />
-            </Drawer.Content>
-          </Drawer.Portal>
-        )}
-      </Drawer>
+      <Show when={open()}>
+        <div class="fixed inset-0 z-100 bg-black/60 md:hidden" onClick={() => setOpen(false)} />
+        <aside class="fixed inset-y-0 left-0 z-101 flex w-60 flex-col border-r border-stone-300 bg-stone-50 md:hidden dark:border-slate-800 dark:bg-slate-950">
+          <div class="flex items-center justify-between border-b border-stone-300 px-4 py-3 dark:border-slate-800">
+            <div class="flex items-baseline gap-2">
+              <div class="text-sm font-bold text-stone-950 dark:text-white">SolidJS</div>
+              <span class="text-xs text-violet-700 dark:text-violet-400">Patterns</span>
+            </div>
+            <button
+              type="button"
+              aria-label="Close navigation"
+              class="flex h-6 w-6 items-center justify-center rounded text-stone-500 hover:bg-stone-900/10 hover:text-stone-950 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-white"
+              onClick={() => setOpen(false)}
+            >
+              <CloseIcon />
+            </button>
+          </div>
+          <SidebarContent onNavigate={() => setOpen(false)} />
+        </aside>
+      </Show>
     </>
   );
 }

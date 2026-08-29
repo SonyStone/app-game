@@ -1,7 +1,7 @@
-import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@app-game/ogl';
 import { Vec2 } from '@app-game/math';
+import { Camera, Flowmap, Mesh, Orbit, Program, Renderer, Texture, Triangle } from '@app-game/ogl';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createEffect } from 'solid-js';
+import { createTrackedEffect } from 'solid-js';
 
 import fragment from './mouse-flowmap.frag?raw';
 import vertex from './mouse-flowmap.vert?raw';
@@ -31,7 +31,7 @@ export default function MouseFlowmap() {
 
   const resize = createWindowSize();
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(resize.width, resize.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
   });

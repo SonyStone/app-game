@@ -26,15 +26,21 @@ export function useTick2<T>(context?: T, priority?: number) {
 
 export function createElapsedMS() {
   const ticker = useTick2();
-  return createMemo((v: number) => {
-    return v + ticker().elapsedMS;
-  }, untrack(ticker).elapsedMS);
+  return createMemo(
+    (v: number) => {
+      return v + ticker().elapsedMS;
+    },
+    { loadingValue: untrack(ticker).elapsedMS }
+  );
 }
 
 export function createDeltaMS() {
   const ticker = useTick2();
 
-  return createMemo((v: number) => {
-    return v + ticker().deltaMS;
-  }, untrack(ticker).deltaMS);
+  return createMemo(
+    (v: number) => {
+      return v + ticker().deltaMS;
+    },
+    { loadingValue: untrack(ticker).deltaMS }
+  );
 }

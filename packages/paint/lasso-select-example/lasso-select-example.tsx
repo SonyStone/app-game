@@ -13,7 +13,7 @@ import {
 import createRAF from '@solid-primitives/raf';
 import { createWindowSize } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
-import { createEffect, createSignal } from 'solid-js';
+import { createSignal, createTrackedEffect } from 'solid-js';
 
 import { Attribute } from '@app-game/ogl/core/geometry';
 import { Square } from '@app-game/ogl/extras/square';
@@ -53,7 +53,7 @@ export default function LassoSelectExample() {
   const scene = new Transform();
 
   const resize = createWindowSize();
-  createEffect(() => {
+  createTrackedEffect(() => {
     renderer.setSize(resize.width, resize.height);
     camera.perspective({ aspect: gl.canvas.width / gl.canvas.height });
   });
@@ -171,7 +171,7 @@ export default function LassoSelectExample() {
     const u_texture = { value: renderTarget.texture };
     const u_textureSize = { value: [renderTarget.width, renderTarget.height] };
 
-    createEffect(() => {
+    createTrackedEffect(() => {
       const width = gl.canvas.width;
       const height = gl.canvas.height;
       renderTarget.setSize(width, height);
@@ -232,7 +232,7 @@ export default function LassoSelectExample() {
   return (
     <>
       {canvas}
-      <div class="absolute bottom-0 end-0 flex flex-col border bg-white p-2">
+      <div class="absolute end-0 bottom-0 flex flex-col border bg-white p-2">
         <div>
           <label for="blend-mode-select">Mesh Mode:</label>
           <select

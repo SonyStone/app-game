@@ -1,5 +1,6 @@
 import { access, MaybeAccessor } from '@solid-primitives/utils';
-import { createComponent, createContext, DEV, JSX, JSXElement, useContext } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createComponent, createContext, DEV, type Element as JSXElement, useContext } from 'solid-js';
 
 type Consumer<T> = (props: { children: (value: T) => JSX.Element | void }) => JSX.Element;
 
@@ -95,7 +96,7 @@ export function createContextProvider<TContext, TProps>(
   };
 
   const Provider = (props: TProps & { value: TContext } & { children?: JSXElement }): JSX.Element => {
-    return createComponent(ctx.Provider, {
+    return createComponent(ctx, {
       value: factoryFn ? factoryFn(props) : props.value,
       get children() {
         return props.children;
@@ -169,14 +170,14 @@ export function createContextProvider2<TProps, TContext>({
 
   const Provider = factoryFn
     ? (props: TProps & { children?: JSXElement }): JSX.Element =>
-        createComponent(ctx.Provider, {
+        createComponent(ctx, {
           value: factoryFn(props),
           get children() {
             return props.children;
           }
         })
     : (props: { value: TContext } & { children?: JSXElement }): JSX.Element =>
-        createComponent(ctx.Provider, {
+        createComponent(ctx, {
           value: props.value,
           get children() {
             return props.children;

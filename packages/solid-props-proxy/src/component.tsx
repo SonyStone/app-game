@@ -1,6 +1,6 @@
 import type { MaybeAccessor } from '@solid-primitives/utils';
-import type { JSX } from 'solid-js';
-import { createEffect, splitProps } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createTrackedEffect, omit } from 'solid-js';
 import { createSpread } from './spread';
 import type { Props } from './types';
 
@@ -15,12 +15,9 @@ export function PropsProxy<T extends object>(
     target?: T | null | undefined;
   } & Props<T>
 ): JSX.Element {
-  const [local, restProps] = splitProps(props, ['target']);
+  const restProps = omit(props, 'target');
 
-  createPropsProxy(
-    () => local.target,
-    restProps as unknown as Props<T>
-  );
+  createPropsProxy(() => props.target, restProps as unknown as Props<T>);
 
   return null;
 }
@@ -31,13 +28,10 @@ export function PropsProxy<T extends object>(
  * The proxy tracks the current target and props inside Solid effects. Applied props are
  * cleaned up when the owner disposes, when the target changes, or when a prop disappears.
  */
-export function createPropsProxy<T extends object>(
-  target: MaybeAccessor<T | null | undefined>,
-  props: Props<T>
-): void {
+export function createPropsProxy<T extends object>(target: MaybeAccessor<T | null | undefined>, props: Props<T>): void {
   const spread = createSpread(target);
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     spread(props);
   });
 }

@@ -1,5 +1,4 @@
-import { For, onCleanup } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, For, onCleanup, storePath } from 'solid-js';
 import CanIUseWorker from './can-i-use.worker?worker';
 
 export default function CanIUse() {
@@ -49,13 +48,13 @@ export default function CanIUse() {
     return !!device;
   })();
   webgpu.then((supports) => {
-    setFeatures('webgpu', supports);
+    setFeatures(storePath('webgpu', supports));
   });
 
   worker.onmessage = (ev) => {
     const { type, supports } = ev.data;
-    setFeatures(`${type} OffscreenCanvas worker` as any, supports);
-    setFeatures(`${type} OffscreenCanvas` as any, supports);
+    setFeatures(storePath(`${type} OffscreenCanvas worker` as any, supports));
+    setFeatures(storePath(`${type} OffscreenCanvas` as any, supports));
   };
 
   onCleanup(() => {

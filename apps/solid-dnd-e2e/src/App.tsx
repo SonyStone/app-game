@@ -1,4 +1,5 @@
-import { createSignal, Match, Switch, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, Match, Switch } from 'solid-js';
 import DragFixture from './fixtures/DragFixture';
 import FlipFixture from './fixtures/FlipFixture';
 import OverlayFixture from './fixtures/OverlayFixture';

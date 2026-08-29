@@ -1,5 +1,5 @@
 import { access, GapKey, type FlipAnimateEntry, type MaybeAccessor } from 'solid-dnd';
-import { createEffect, createSignal, on, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { getCenter, type Point } from './gapTrail';
 
 // ============================================================================
@@ -59,74 +59,72 @@ export function useElementTrails(opts: {
   const [allCycleTrails, setAllCycleTrails] = createSignal<CycleTrails[]>([]);
 
   createEffect(
-    on(
-      () => access(opts.entries),
-      (entries) => {
-        if (!access(opts.enabled) || entries.length === 0) return;
+    () => access(opts.entries),
+    (entries) => {
+      if (!access(opts.enabled) || entries.length === 0) return;
 
-        const currentCycle = opts.addCycleMarker();
+      const currentCycle = opts.addCycleMarker();
 
-        // Build per-element trails for this cycle
-        const newTrails: ElementTrail[] = entries.map((e, i) => ({
-          key: e.key,
-          from: { ...e.from },
-          to: { ...e.to },
-          trail: [],
-          color: TRAIL_COLORS[i % TRAIL_COLORS.length]
-        }));
+      // Build per-element trails for this cycle
+      const newTrails: ElementTrail[] = entries.map((e, i) => ({
+        key: e.key,
+        from: { ...e.from },
+        to: { ...e.to },
+        trail: [],
+        color: TRAIL_COLORS[i % TRAIL_COLORS.length]
+      }));
 
-        setAllCycleTrails((prev) => [...prev, { cycle: currentCycle, trails: newTrails }]);
+      setAllCycleTrails((prev) => [...prev, { cycle: currentCycle, trails: newTrails }]);
 
-        // Start RAF sampling for element positions during this FLIP animation
-        let elemRafId: number | null = null;
-        let elemRunning = true;
+      // Start RAF sampling for element positions during this FLIP animation
+      let elemRafId: number | null = null;
+      let elemRunning = true;
 
-        function sampleElements() {
-          if (!elemRunning) return;
+      function sampleElements() {
+        if (!elemRunning) return;
 
+        setAllCycleTrails((prev) => {
+          const last = prev[prev.length - 1];
+          if (!last || last.cycle !== currentCycle) return prev;
+
+          const updatedTrails = last.trails.map((t) => {
+            const el = opts.getElement(t.key);
+            if (!el?.isConnected) return t;
+            const center = getCenter(el);
+            const lastPt = t.trail[t.trail.length - 1];
+            if (lastPt && Math.abs(lastPt.x - center.x) < 0.5 && Math.abs(lastPt.y - center.y) < 0.5) return t;
+            return { ...t, trail: [...t.trail, center] };
+          });
+          return [...prev.slice(0, -1), { ...last, trails: updatedTrails }];
+        });
+
+        if (access(opts.isAnimating)) {
+          elemRafId = requestAnimationFrame(sampleElements);
+        } else {
+          // Final sample
           setAllCycleTrails((prev) => {
             const last = prev[prev.length - 1];
             if (!last || last.cycle !== currentCycle) return prev;
-
             const updatedTrails = last.trails.map((t) => {
               const el = opts.getElement(t.key);
               if (!el?.isConnected) return t;
               const center = getCenter(el);
-              const lastPt = t.trail[t.trail.length - 1];
-              if (lastPt && Math.abs(lastPt.x - center.x) < 0.5 && Math.abs(lastPt.y - center.y) < 0.5) return t;
               return { ...t, trail: [...t.trail, center] };
             });
             return [...prev.slice(0, -1), { ...last, trails: updatedTrails }];
           });
-
-          if (access(opts.isAnimating)) {
-            elemRafId = requestAnimationFrame(sampleElements);
-          } else {
-            // Final sample
-            setAllCycleTrails((prev) => {
-              const last = prev[prev.length - 1];
-              if (!last || last.cycle !== currentCycle) return prev;
-              const updatedTrails = last.trails.map((t) => {
-                const el = opts.getElement(t.key);
-                if (!el?.isConnected) return t;
-                const center = getCenter(el);
-                return { ...t, trail: [...t.trail, center] };
-              });
-              return [...prev.slice(0, -1), { ...last, trails: updatedTrails }];
-            });
-            elemRunning = false;
-          }
-        }
-
-        elemRafId = requestAnimationFrame(sampleElements);
-
-        onCleanup(() => {
           elemRunning = false;
-          if (elemRafId !== null) cancelAnimationFrame(elemRafId);
-        });
-      },
-      { defer: true }
-    )
+        }
+      }
+
+      elemRafId = requestAnimationFrame(sampleElements);
+
+      onCleanup(() => {
+        elemRunning = false;
+        if (elemRafId !== null) cancelAnimationFrame(elemRafId);
+      });
+    },
+    { defer: true }
   );
 
   /** Clear all accumulated trails (call on drag session start). */

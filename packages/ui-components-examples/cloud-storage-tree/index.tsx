@@ -1,5 +1,6 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { createSignal, JSX, onMount, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, onSettled, Show } from 'solid-js';
 
 import { Breadcrumbs } from './Breadcrumbs';
 import { CloudStorageProvider, useCloudStorage } from './CloudStorageContext';
@@ -30,7 +31,7 @@ function CloudStorageApp(): JSX.Element {
   const [isSidebarOpen, setSidebarOpen] = createSignal(false);
 
   // Global keyboard shortcuts
-  onMount(() => {
+  onSettled(() => {
     makeEventListener(document, 'keydown', (e: KeyboardEvent) => {
       // Don't handle shortcuts when dialog is open or typing in input
       if (state.dialog.type !== null) return;
@@ -120,7 +121,7 @@ function CloudStorageApp(): JSX.Element {
 
         {/* Mobile Sidebar Overlay */}
         <Show when={isSidebarOpen()}>
-          <div class="z-100 fixed inset-0 flex md:hidden">
+          <div class="fixed inset-0 z-100 flex md:hidden">
             {/* Backdrop */}
             <div class="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
 

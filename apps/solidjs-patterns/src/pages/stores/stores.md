@@ -3,8 +3,8 @@
 # Stores <Badge>State</Badge>
 
 <Description>
-createStore provides fine-grained reactivity for nested objects and arrays. Only the specific paths that change
-trigger updates.
+  createStore provides fine-grained reactivity for nested objects and arrays. Solid 2 uses storePath for targeted
+  updates and draft callbacks for grouped mutations.
 </Description>
 
 </Header>
@@ -13,10 +13,10 @@ trigger updates.
 
 ## createStore basics
 
-createStore returns a reactive proxy getter and a setter. Nested property access is tracked.
+`createStore` returns a reactive proxy and a setter. Import it from `solid-js` in Solid 2.
 
 ```ts
-import { createStore } from 'solid-js/store';
+import { createStore, storePath } from 'solid-js';
 
 const [state, setState] = createStore({
   user: { name: 'Alice', age: 30 },
@@ -26,13 +26,9 @@ const [state, setState] = createStore({
   ]
 });
 
-// Read nested values (tracked reactively)
-console.log(state.user.name); // 'Alice'
-console.log(state.items[0].done); // false
-
-// Update specific path - only that path's subscribers re-run
-setState('user', 'name', 'Bob');
-setState('items', 0, 'done', true);
+console.log(state.user.name);
+setState(storePath('user', 'name', 'Bob'));
+setState(storePath('items', 0, 'done', true));
 ```
 
 </Section>
@@ -47,81 +43,61 @@ setState('items', 0, 'done', true);
 
 <Section>
 
-## Path syntax
+## storePath
 
-setState accepts a path of keys, an updater function, or a combination.
+`storePath` describes a focused update. Its final argument can be a value or an updater function.
 
 ```ts
-const [state, setState] = createStore({ count: 0, list: ['a', 'b'] });
-
-// Direct value
-setState('count', 5);
-
-// Functional update (receives current value)
-setState('count', (c) => c + 1);
-
-// Deep nested path
-setState('user', 'address', 'city', 'London');
-
-// Array item by index
-setState('list', 1, 'London');
-
-// All array items matching a predicate
-setState('items', (item) => item.done, 'archived', true);
+setState(storePath('count', 5));
+setState(storePath('count', (count) => count + 1));
+setState(storePath('user', 'address', 'city', 'London'));
+setState(storePath('list', 1, 'London'));
+setState(storePath('items', (item) => item.done, 'archived', true));
 ```
 
 </Section>
 
 <Section>
 
-## produce() - immer-style mutations
+## Draft callbacks
 
-produce() lets you write imperative mutation code. It uses a draft that gets applied immutably.
+Pass a callback directly to the store setter when several mutations belong to one update. This replaces the Solid 1
+mutation wrapper.
 
 ```ts
-import { createStore, produce } from 'solid-js/store';
-
 const [todos, setTodos] = createStore([
-  { id: 1, text: 'Learn SolidJS', done: false },
+  { id: 1, text: 'Learn Solid 2', done: false },
   { id: 2, text: 'Build something', done: false }
 ]);
 
-// Mutate multiple things at once
-setTodos(
-  produce((draft) => {
-    draft[0].done = true;
-    draft.push({ id: 3, text: 'Ship it!', done: false });
-    draft.splice(1, 1); // remove index 1
-  })
-);
+setTodos((draft) => {
+  draft[0].done = true;
+  draft.push({ id: 3, text: 'Ship it!', done: false });
+  draft.splice(1, 1);
+});
 ```
 
 </Section>
 
 <Section>
 
-## reconcile() - replace from external data
+## reconcile external data
 
-reconcile diffs incoming data against the existing store, updating only changed parts.
+`reconcile` diffs incoming data against the existing store and preserves unchanged reactive nodes.
 
 ```ts
-import { createStore, reconcile } from 'solid-js/store';
+import { createStore, reconcile } from 'solid-js';
 
 const [data, setData] = createStore({ items: [] });
 
-async function refresh() {
+async function reload() {
   const fresh = await fetchItems();
-
-  // Diff against existing - minimal updates
-  setData('items', reconcile(fresh));
+  setData(reconcile({ items: fresh }));
 }
-// vs setData('items', fresh) - replaces everything, loses reactivity
 ```
 
 </Section>
 
 <Callout type="warning" title="Don't destructure store values">
-Destructuring a store loses reactivity. Always access nested values through the store proxy:
-- `const {'{'} name {'}'} = state.user` - breaks
-- `state.user.name` - works
+  Destructuring a store loses reactivity. Read nested values through the store proxy: `state.user.name`.
 </Callout>

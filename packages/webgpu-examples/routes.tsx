@@ -1,6 +1,6 @@
 import { Navigation, Thumbnail, type Routes } from '@app-game/app-router';
 import { Ripple } from '@app-game/ui-components/ripple';
-import { A } from '@solidjs/router';
+
 import { lazy } from 'solid-js';
 
 const routes: Routes[] = [
@@ -34,8 +34,8 @@ export const webgpuRoutes: Routes = {
   path: '/webgpu-examples',
   name: 'WebGPU',
   Preview: (props) => (
-    <A
-      class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 p-2 px-4"
+    <a
+      class="rounded-2 relative flex aspect-square w-full flex-col place-content-center place-items-center gap-1.5 overflow-hidden bg-slate-200 p-2 px-4"
       href={props.path}
     >
       <h2 class="text-4xl">
@@ -48,7 +48,7 @@ export const webgpuRoutes: Routes = {
         <span class="text-4rem leading-6">😐</span>
       </div>
       <Ripple class="text-slate/20" />
-    </A>
+    </a>
   ),
   children: [
     {

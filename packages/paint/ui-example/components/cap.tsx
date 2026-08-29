@@ -1,5 +1,6 @@
 import { createPointerListeners } from '@solid-primitives/pointer';
-import { ComponentProps, createMemo, createSignal, Show } from 'solid-js';
+import type { ComponentProps } from '@solidjs/web';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { toFixed } from '../utils';
 
 /**
@@ -54,7 +55,7 @@ export const Cap = (
     });
 
   const classList = createMemo(() => ({
-    'pointer-events-auto': props.isActive,
+    'pointer-events-auto': Boolean(props.isActive),
     'pointer-events-none': !props.isActive,
     hover: hovering(),
     active: active()
@@ -69,7 +70,7 @@ export const Cap = (
             pointerHover(ref);
             pointerActive(ref);
           }}
-          classList={classList()}
+          class={classList()}
           d={`M ${x1()},${y1()}
             A ${props.radius} ${props.radius} 0 ${props.up ? 1 : 0} ${props.up ? 1 : 0} ${x2()},${y2()}
             z`}
@@ -82,7 +83,7 @@ export const Cap = (
             pointerHover(ref);
             pointerActive(ref);
           }}
-          classList={classList()}
+          class={classList()}
           cx={props.x}
           cy={props.y}
           r={props.radius}

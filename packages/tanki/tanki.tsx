@@ -1,6 +1,6 @@
 import { createEventSignal } from '@solid-primitives/event-listener';
 import { Application, Container, Point, Transform } from 'pixi.js';
-import { createEffect, createMemo, onCleanup } from 'solid-js';
+import { createMemo, createTrackedEffect, onCleanup } from 'solid-js';
 import { Key } from 'ts-keycode-enum';
 import { createSkipper } from './create-skipper';
 import { World, hasSymbol, single, withSymbol } from './ecs';
@@ -59,11 +59,11 @@ export default function Tanki() {
 
   const lastEvent = createEventSignal(canvasElement, 'wheel');
 
-  const deltaY = createMemo(() => lastEvent()?.deltaY ?? 0, 0, {
+  const deltaY = createMemo(() => lastEvent()?.deltaY ?? 0, {
     equals: false
   });
 
-  createEffect(() => {
+  createTrackedEffect(() => {
     const zoom = 1.0 - deltaY() / 1000;
     cam.scale.x *= zoom;
     cam.scale.y *= zoom;

@@ -1,6 +1,6 @@
 import { Navigation, SectionTitle, Thumbnail, type Routes } from '@app-game/app-router';
 import { Ripple } from '@app-game/ui-components/ripple';
-import { A } from '@solidjs/router';
+
 import { lazy } from 'solid-js';
 
 const routes: Routes[] = [
@@ -40,10 +40,10 @@ export const escyRoutes: Routes = {
   path: '/ecsy-examples',
   name: 'ECSY Examples',
   Preview: (props) => (
-    <A href={props.path} class="rounded-2 relative">
+    <a href={props.path} class="rounded-2 relative">
       <SectionTitle name={props.name} />
       <Ripple class="text-slate/20" />
-    </A>
+    </a>
   ),
   children: [
     {

@@ -119,27 +119,6 @@ const drag = createDragSensorBinding({
 
 Best as a convenience API, but it hides more decisions behind one function.
 
-## 6. Directive Style
-
-File: `solid.ts`
-
-Uses Solid's `use:` directive pattern. The directive can be created with a shared
-scope.
-
-```tsx
-const scope = createDragSensorScope({ threshold: 6 });
-const dragSensor = createDragSensorDirective(scope);
-
-return (
-  <button use:dragSensor={{ data: { index }, onDragStart: onStart }}>
-    Tab
-  </button>
-);
-```
-
-Best when you want markup to stay flat and declarative. The tradeoff is that
-directive typing can be more awkward in app code.
-
 ## Current Lean
 
 The JSX scope is the nicest consumer API for normal Solid components. The Solid

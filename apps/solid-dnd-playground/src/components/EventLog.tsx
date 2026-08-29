@@ -1,4 +1,5 @@
-import { createSignal, For, Show, type Accessor, type JSX } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, For, Show, type Accessor } from 'solid-js';
 
 // ============================================================================
 // MARK: Types

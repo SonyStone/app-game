@@ -1,5 +1,5 @@
-import type { JSX } from 'solid-js';
-import { For, onCleanup, onMount } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { For, onCleanup, onSettled } from 'solid-js';
 
 /** Displays Browser Atlas workflows and shortcuts without leaving the current tree. */
 export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
@@ -8,8 +8,8 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
       <section class="space-y-2">
         <h3 class="text-sm font-semibold text-neutral-100">Start here</h3>
         <p>
-          Each pane can independently show open and retained tabs, bookmarks, history, or an opened tree file.
-          Use the selector above a pane to choose a browser, then drag complete hierarchies between panes.
+          Each pane can independently show open and retained tabs, bookmarks, history, or an opened tree file. Use the
+          selector above a pane to choose a browser, then drag complete hierarchies between panes.
         </p>
         <ul class="list-disc space-y-1 pl-5">
           <li>Green actions save and close live tabs or windows; saved items restore in place.</li>
@@ -27,8 +27,8 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
         </p>
         <p>
           At localhost, Chrome (mock) and Firefox (mock) are independent durable browser simulations. A normal drag
-          between them moves only after the destination acknowledges the import, while a modifier drag keeps a copy
-          in both browsers.
+          between them moves only after the destination acknowledges the import, while a modifier drag keeps a copy in
+          both browsers.
         </p>
       </HelpDetails>
 
@@ -39,13 +39,13 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
             collapsed row it also saves and closes every hidden live tab and window below it.
           </li>
           <li>
-            Closing a Chromium window normally also keeps the complete window hierarchy as a saved window. Live
-            titles, URLs, active state, and opener nesting update continuously without rebuilding unchanged rows.
+            Closing a Chromium window normally also keeps the complete window hierarchy as a saved window. Live titles,
+            URLs, active state, and opener nesting update continuously without rebuilding unchanged rows.
           </li>
           <li>Alt-restore on a saved window opens only the tabs from its latest saved session.</li>
           <li>
-            Light-green saved windows were just retained by Save All or recovered after a crash. The emphasis lasts
-            only for the current browser session.
+            Light-green saved windows were just retained by Save All or recovered after a crash. The emphasis lasts only
+            for the current browser session.
           </li>
           <li>
             Backup creates a local tree snapshot. Backups can open a detached recovery tree for selective branch
@@ -53,12 +53,15 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
           </li>
           <li>
             Cloud connects the selected browser identity, labels manual or daily copies, and can open, restore, or
-            delete any of its latest 30 remote backups. Open loads a detached tree, so selected branches can be
-            dragged into a live browser pane without replacing everything. Localhost keeps Chrome and Firefox mock
-            clouds separate. The strip beside Cloud and the status row show no attempt, success, or failure for the
-            current browser session.
+            delete any of its latest 30 remote backups. Open loads a detached tree, so selected branches can be dragged
+            into a live browser pane without replacing everything. Localhost keeps Chrome and Firefox mock clouds
+            separate. The strip beside Cloud and the status row show no attempt, success, or failure for the current
+            browser session.
           </li>
-          <li>Tree edits are immediate: session Undo/Redo covers moves, organizer edits, and deletions; Deleted survives reloads.</li>
+          <li>
+            Tree edits are immediate: session Undo/Redo covers moves, organizer edits, and deletions; Deleted survives
+            reloads.
+          </li>
           <li>After an unclean Chromium shutdown, missing checkpoint tabs appear under Recovered windows.</li>
         </ul>
       </HelpDetails>
@@ -76,7 +79,7 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
               <For each={HELP_SHORTCUTS}>
                 {(shortcut) => (
                   <tr class="border-b border-neutral-800 last:border-0">
-                    <td class="whitespace-nowrap py-1 pr-4 align-top">
+                    <td class="py-1 pr-4 align-top whitespace-nowrap">
                       <kbd class="rounded border border-neutral-600 bg-neutral-950 px-1.5 py-0.5 font-mono text-neutral-200">
                         {shortcut.keys}
                       </kbd>
@@ -92,7 +95,10 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
 
       <HelpDetails title="Useful interaction details">
         <ul class="list-disc space-y-1 pl-5">
-          <li>The extension button opens or focuses a standalone Browser Atlas window and reveals the browser window you invoked it from.</li>
+          <li>
+            The extension button opens or focuses a standalone Browser Atlas window and reveals the browser window you
+            invoked it from.
+          </li>
           <li>Pop out opens another standalone view; localhost views share the same durable mock browser data.</li>
           <li>Collapsing a branch changes Delete from “promote children” to “remove the complete hidden subtree”.</li>
           <li>
@@ -102,7 +108,10 @@ export function BrowserAtlasHelpDialog(props: { onClose: () => void }) {
           <li>Shift-click opens a saved link in a new window without consuming it.</li>
           <li>Ctrl/Cmd-click or middle-click opens a saved link in the last focused window.</li>
           <li>Tree Style Tabs nests a newly opened tab beneath the live tab that opened it.</li>
-          <li>Search and structural HTML export include every visible row, including rows outside the virtualized viewport.</li>
+          <li>
+            Search and structural HTML export include every visible row, including rows outside the virtualized
+            viewport.
+          </li>
         </ul>
       </HelpDetails>
     </InfoDialogFrame>
@@ -119,8 +128,8 @@ export function BrowserAtlasAboutDialog(props: { onClose: () => void }) {
           <p class="text-neutral-400">{readBrowserAtlasVersion()}</p>
         </div>
         <p>
-          A SolidJS rewrite and continuation of Tabs Outliner, built around a persistent, portable tree and
-          side-by-side browser workspaces.
+          A SolidJS rewrite and continuation of Tabs Outliner, built around a persistent, portable tree and side-by-side
+          browser workspaces.
         </p>
         <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-2">
           <dt class="font-medium text-neutral-300">Original project</dt>
@@ -143,12 +152,7 @@ export function BrowserAtlasAboutDialog(props: { onClose: () => void }) {
   );
 }
 
-function InfoDialogFrame(props: {
-  title: string;
-  labelId: string;
-  onClose: () => void;
-  children: JSX.Element;
-}) {
+function InfoDialogFrame(props: { title: string; labelId: string; onClose: () => void; children: JSX.Element }) {
   let closeButton: HTMLButtonElement | undefined;
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === 'Escape') {
@@ -158,7 +162,7 @@ function InfoDialogFrame(props: {
   };
   document.addEventListener('keydown', handleKeyDown);
   onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
-  onMount(() => closeButton?.focus());
+  onSettled(() => closeButton?.focus());
 
   return (
     <div

@@ -1,7 +1,7 @@
 import { OGLRenderingContext, RenderTarget } from '@app-game/ogl';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { createSignal } from 'solid-js';
-import { effect } from 'solid-js/web';
+import { createSignal, createTrackedEffect } from 'solid-js';
+
 import { DEFAULTS_RENDER_TARGET_OPTIONS } from '../defaults';
 import { BrushMesh } from './brush-mesh';
 
@@ -18,7 +18,7 @@ export const createBrushRenderTarget = ({
 
   const [layerS, setLayerS] = createSignal(access(target));
 
-  effect(() => {
+  createTrackedEffect(() => {
     mesh.setColor(access(color));
     // gl.clearColor(0, 0, 0, 1);
     gl.renderer.render({

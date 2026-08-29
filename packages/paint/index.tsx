@@ -1,20 +1,21 @@
 import { Navigation } from '@app-game/app-router';
-import { A } from '@solidjs/router';
-import { createResource, JSX, Suspense } from 'solid-js';
+
+import type { JSX } from '@solidjs/web';
+import { createMemo, Loading } from 'solid-js';
 
 export default function PaintPage(props: Partial<{ children: JSX.Element }>) {
-  const [module] = createResource(async () => import('./routes'));
+  const module = createMemo(() => import('./routes'));
 
   return (
     <div class="mx-auto flex h-full max-w-screen-2xl flex-col gap-4 bg-gray-100 p-2">
       <div class="flex w-full place-content-center place-items-center gap-1 bg-blue-100">Paint App</div>
 
-      <A href="/" class="place-self-start rounded bg-blue-100 px-1 text-2xl font-thin hover:bg-blue-300">
+      <a href="/" class="place-self-start rounded bg-blue-100 px-1 text-2xl font-thin hover:bg-blue-300">
         Back
-      </A>
+      </a>
 
       <p>To implement such app we need:</p>
-      <Suspense>
+      <Loading>
         <ol class="list-decimal ps-6">
           <li>
             <div class="flex flex-col gap-2">
@@ -41,7 +42,7 @@ export default function PaintPage(props: Partial<{ children: JSX.Element }>) {
             </div>
           </li>
         </ol>
-      </Suspense>
+      </Loading>
 
       <p>When implementing everything, we can combine them all together:</p>
 

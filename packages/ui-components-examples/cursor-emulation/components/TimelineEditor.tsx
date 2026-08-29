@@ -1,4 +1,5 @@
-import { createMemo, createSignal, Index, onCleanup, Show, type ComponentProps, type JSX } from 'solid-js';
+import type { ComponentProps, JSX } from '@solidjs/web';
+import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { TimelineAction, TimelineDefinition, TimelinePointerDefinition, TimelineTrackSegment } from '../timeline';
 import ChevronDownIcon from './icons/chevron-down.svg';
 import EyeIcon from './icons/eye.svg';
@@ -369,7 +370,7 @@ export function TimelineEditor(props: {
             fallback={<div class="px-4 py-5 text-sm text-zinc-500">No timeline loaded</div>}
             when={groups().length > 0}
           >
-            <Index each={groups()}>
+            <For keyed={false} each={groups()}>
               {(group) => (
                 <div>
                   <div
@@ -387,7 +388,7 @@ export function TimelineEditor(props: {
                   <TimelineLabelRow label="Actions" />
                 </div>
               )}
-            </Index>
+            </For>
           </Show>
         </div>
 
@@ -456,7 +457,7 @@ export function TimelineEditor(props: {
             data-timeline-scrollbar
             onScroll={handleTimelineScrollbarScroll}
             style={{ height: `${scrollbarHeight()}px` }}
-            tabIndex={0}
+            tabindex={0}
           >
             <div class="h-px" style={{ width: `${timelineWidth()}px` }} />
           </div>
@@ -494,16 +495,16 @@ function TimelineSvgSurface(props: {
       <line stroke="#c6ccd0" x1="0" x2={props.width} y1={RULER_HEIGHT - 0.5} y2={RULER_HEIGHT - 0.5} />
 
       <g transform={`translate(0 ${RULER_HEIGHT})`}>
-        <Index each={props.groups}>
+        <For keyed={false} each={props.groups}>
           {(_, groupIndex) => <TimelineSvgGroupLanes groupIndex={groupIndex} width={props.width} />}
-        </Index>
+        </For>
       </g>
 
-      <Index each={props.rulerTicks}>
+      <For keyed={false} each={props.rulerTicks}>
         {(tick) => <line opacity="0.7" stroke="#cbd4d7" x1={tick().x} x2={tick().x} y1="0" y2={props.height} />}
-      </Index>
+      </For>
 
-      <Index each={props.rulerMinorTicks}>
+      <For keyed={false} each={props.rulerMinorTicks}>
         {(tick) => (
           <line
             stroke={tick().isMajor ? '#c9d0d5' : '#aeb8bf'}
@@ -513,18 +514,18 @@ function TimelineSvgSurface(props: {
             y2={tick().isMajor ? RULER_HEIGHT : 6}
           />
         )}
-      </Index>
+      </For>
 
-      <Index each={props.rulerTicks}>
+      <For keyed={false} each={props.rulerTicks}>
         {(tick) => (
           <text fill="#65717a" font-family={MONO_FONT_FAMILY} font-size="10" x={tick().x + 4} y="17">
             {tick().label}
           </text>
         )}
-      </Index>
+      </For>
 
       <g transform={`translate(0 ${RULER_HEIGHT})`}>
-        <Index each={props.groups}>
+        <For keyed={false} each={props.groups}>
           {(group, groupIndex) => (
             <TimelineSvgGroupMarks
               group={group()}
@@ -534,7 +535,7 @@ function TimelineSvgSurface(props: {
               width={props.width}
             />
           )}
-        </Index>
+        </For>
       </g>
 
       <Show when={props.hasTimeline}>
@@ -594,7 +595,7 @@ function TimelineSvgGroupMarks(props: {
         />
       </Show>
 
-      <Index each={props.group.segments}>
+      <For keyed={false} each={props.group.segments}>
         {(segment) => {
           const startX = () => props.onXForTime(segment().startMs);
           const endX = () => props.onXForTime(segment().startMs + segment().durationMs);
@@ -612,9 +613,9 @@ function TimelineSvgGroupMarks(props: {
             </g>
           );
         }}
-      </Index>
+      </For>
 
-      <Index each={props.group.actions}>
+      <For keyed={false} each={props.group.actions}>
         {(action) => (
           <TimelineSvgDiamond
             color={KEYFRAME_COLOR}
@@ -624,7 +625,7 @@ function TimelineSvgGroupMarks(props: {
             y={actionTop() + 12}
           />
         )}
-      </Index>
+      </For>
     </>
   );
 }

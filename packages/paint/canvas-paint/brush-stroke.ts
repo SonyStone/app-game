@@ -1,11 +1,11 @@
+import type { NumberArray } from '@app-game/math/utils/typed-array';
 import { Vec2 } from '@app-game/math/v2';
 import { angleTo, distance, isEqual } from '@app-game/math/v2-functions';
 import { OGLRenderingContext, RenderTarget, Renderer, Transform } from '@app-game/ogl';
 import { SwapBuffering } from '@app-game/ogl/extras/swap-buffering';
 import { createTexture4colors } from '@app-game/webgl-examples/ogl-model-viewer/texture-4-colors';
-import type { NumberArray } from '@app-game/math/utils/typed-array';
 import { MaybeAccessor, access } from '@solid-primitives/utils';
-import { createEffect, createSignal } from 'solid-js';
+import { createSignal, createTrackedEffect } from 'solid-js';
 import { BlendMesh } from '../brush-example/blend/blend-mesh';
 import { BrushStrokeMesh } from '../brush-example/brush-instancing/brush-stroke-mesh';
 import { BrushMesh } from '../brush-example/brush/brush-mesh';
@@ -44,7 +44,7 @@ export const createBrushStroke = ({
 
   const brushStrokeTexture = new RenderTarget(gl, { ...DEFAULTS_RENDER_TARGET_OPTIONS, id: '🖼️brush-stroke' });
   const brushStrokeMesh = new BrushStrokeMesh(gl);
-  createEffect(() => {
+  createTrackedEffect(() => {
     brushStrokeMesh.setBrushTexture(brushTexture.texture);
     brushStrokeMesh.setBrushColor(rgbToNormalized(access(brushColor)));
   });
@@ -133,7 +133,7 @@ const createSpotMesh = ({
   brushColor: MaybeAccessor<[number, number, number]>;
 }) => {
   const spotMesh = new BrushMesh(gl);
-  createEffect(() => {
+  createTrackedEffect(() => {
     spotMesh.setColor(rgbToNormalized(access(brushColor)));
     spotMesh.render(brushTexture);
   });
