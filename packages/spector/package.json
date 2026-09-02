@@ -2,5 +2,23 @@
   "name": "@app-game/spector",
   "version": "0.0.0",
   "private": true,
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "exports": {
+    ".": "./index.tsx",
+    "./context-hook": "./spector-context-hook.ts",
+    "./iframe": "./spector-iframe.tsx",
+    "./spector": "./spector.ts",
+    "./three-examples": "./three-examples-spector.tsx"
+  },
+  "peerDependencies": {
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
   "type": "module"
 }

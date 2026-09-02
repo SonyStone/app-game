@@ -43,10 +43,6 @@ export abstract class BaseWebGlObject {
   }
 
   tagWebGlObject(webGlObject: any): WebGlObjectTag | undefined {
-    if (!this.type) {
-      return undefined;
-    }
-
     let tag: WebGlObjectTag | undefined = undefined;
     if (!webGlObject) {
       return tag;
@@ -57,7 +53,14 @@ export abstract class BaseWebGlObject {
       return tag;
     }
 
-    if (webGlObject instanceof this.type) {
+    const localType = this.type;
+    const objectBrand = Object.prototype.toString.call(webGlObject);
+    const constructorName = webGlObject.constructor?.name;
+    if (
+      (localType && webGlObject instanceof localType) ||
+      objectBrand === `[object ${this.typeName}]` ||
+      constructorName === this.typeName
+    ) {
       const id = this.getNextId();
       tag = {
         typeName: this.typeName,

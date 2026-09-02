@@ -164,6 +164,16 @@ export class CaptureMenu {
     this.updateMenuStateVisibility(false);
   }
 
+  /** Removes the menu DOM and releases every menu callback. */
+  dispose(): void {
+    this.mvx.removeState(this.rootStateId, true);
+    this.onCanvasSelected.clear();
+    this.onCaptureRequested.clear();
+    this.onPauseRequested.clear();
+    this.onPlayRequested.clear();
+    this.onPlayNextFrameRequested.clear();
+  }
+
   captureComplete(errorText?: string): void {
     if (errorText) {
       this.updateMenuStateLog(LogLevel.error, errorText);

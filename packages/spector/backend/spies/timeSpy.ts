@@ -1,6 +1,5 @@
 import { Observable } from '../../shared/utils/observable';
 import { Time } from '../../shared/utils/time';
-import { OriginFunctionHelper } from '../utils/originFunctionHelper';
 
 // tslint:disable:ban-types
 // tslint:disable:only-arrow-functions
@@ -26,6 +25,7 @@ export class TimeSpy {
 
   private readonly spiedWindow: { [name: string]: any };
   private readonly lastSixtyFramesDuration: number[];
+  private readonly restoreFunctions: Array<() => void> = [];
 
   private lastSixtyFramesCurrentIndex: number;
   private lastSixtyFramesPreviousStart: number;
@@ -73,6 +73,17 @@ export class TimeSpy {
     return (1000 * 60) / accumulator;
   }
 
+  /** Restores every timer and animation-frame function patched by this spy. */
+  dispose(): void {
+    for (let index = this.restoreFunctions.length - 1; index >= 0; index--) {
+      this.restoreFunctions[index]?.();
+    }
+    this.restoreFunctions.length = 0;
+    this.onFrameStart.clear();
+    this.onFrameEnd.clear();
+    this.onError.clear();
+  }
+
   private init(): void {
     for (const Spy of TimeSpy.requestAnimationFrameFunctions) {
       this.spyRequestAnimationFrame(Spy, this.spiedWindow);
@@ -83,26 +94,35 @@ export class TimeSpy {
     }
 
     if (this.spiedWindow['VRDisplay']) {
-      this.spiedWindow.addEventListener('vrdisplaypresentchange', (event: any) => {
+      const onPresentChange = (event: any) => {
         this.spyRequestAnimationFrame('requestAnimationFrame', event.display);
+      };
+      this.spiedWindow.addEventListener('vrdisplaypresentchange', onPresentChange);
+      this.restoreFunctions.push(() => {
+        this.spiedWindow.removeEventListener('vrdisplaypresentchange', onPresentChange);
       });
     }
   }
 
   private spyRequestAnimationFrame(functionName: string, owner: any): void {
+    const originalFunction = owner[functionName];
+    if (typeof originalFunction !== 'function') return;
+
     // Needs both this.
     // tslint:disable-next-line
     const self = this;
-    OriginFunctionHelper.storeOriginFunction(owner, functionName);
-    owner[functionName] = function () {
+    const patchedFunction = function () {
       const callback = arguments[0];
       const onCallback = self.getCallback(self, callback, () => {
         self.spiedWindow[functionName](callback);
       });
 
-      const result = OriginFunctionHelper.executeOriginFunction(owner, functionName, [onCallback] as any);
-      return result;
+      return Reflect.apply(originalFunction, owner, [onCallback]);
     };
+    owner[functionName] = patchedFunction;
+    this.restoreFunctions.push(() => {
+      if (owner[functionName] === patchedFunction) owner[functionName] = originalFunction;
+    });
   }
 
   private spySetTimer(functionName: string): void {
@@ -111,11 +131,11 @@ export class TimeSpy {
     const self = this;
     const owner = this.spiedWindow;
     const needsReplay = functionName === 'setTimeout';
-
-    OriginFunctionHelper.storeOriginFunction(owner, functionName);
+    const originalFunction = owner[functionName];
+    if (typeof originalFunction !== 'function') return;
 
     // tslint:disable-next-line:only-arrow-functions
-    owner[functionName] = function () {
+    const patchedFunction = function () {
       const callback = arguments[0];
       const time = arguments[1];
       const args = Array.prototype.slice.call(arguments);
@@ -132,9 +152,12 @@ export class TimeSpy {
         );
       }
 
-      const result = OriginFunctionHelper.executeOriginFunction(owner, functionName, args as unknown as IArguments);
-      return result;
+      return Reflect.apply(originalFunction, owner, args);
     };
+    owner[functionName] = patchedFunction;
+    this.restoreFunctions.push(() => {
+      if (owner[functionName] === patchedFunction) owner[functionName] = originalFunction;
+    });
   }
 
   private getCallback(self: TimeSpy, callback: any, skippedCalback?: () => void): Function {

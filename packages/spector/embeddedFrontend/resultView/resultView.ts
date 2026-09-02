@@ -79,6 +79,28 @@ export class ResultView {
   private currentCommandId: number;
   private visible: boolean;
   private commandCount: number;
+  private readonly onKeyDown = (event: Event): void => {
+    if (this.mvx.getGenericState<IResultViewMenuState>(this.menuStateId).status !== MenuStatus.Commands) return;
+
+    const keyboardEvent = event as KeyboardEvent;
+    if (keyboardEvent.key === 'ArrowUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.selectPreviousCommand();
+    } else if (keyboardEvent.key === 'ArrowDown') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.selectNextCommand();
+    } else if (keyboardEvent.key === 'PageUp') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.selectPreviousVisualState();
+    } else if (keyboardEvent.key === 'PageDown') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.selectNextVisualState();
+    }
+  };
 
   constructor(private readonly rootPlaceHolder?: Element) {
     this.onSourceCodeChanged = new Observable();
@@ -233,6 +255,13 @@ export class ResultView {
     this.updateViewState();
   }
 
+  /** Removes the result DOM and its root keyboard listener. */
+  dispose(): void {
+    this.rootPlaceHolder?.removeEventListener('keydown', this.onKeyDown);
+    this.mvx.removeState(this.rootStateId, true);
+    this.onSourceCodeChanged.clear();
+  }
+
   addCapture(capture: ICapture): number {
     const captureSateId = this.mvx.insertChildState(
       this.captureListStateId,
@@ -252,29 +281,7 @@ export class ResultView {
   }
 
   private initKeyboardEvents(): void {
-    this.rootPlaceHolder?.addEventListener('keydown', (event) => {
-      if (this.mvx.getGenericState<IResultViewMenuState>(this.menuStateId).status !== MenuStatus.Commands) {
-        return;
-      }
-
-      if ((event as any).keyCode === 38) {
-        event.preventDefault();
-        event.stopPropagation();
-        this.selectPreviousCommand();
-      } else if ((event as any).keyCode === 40) {
-        event.preventDefault();
-        event.stopPropagation();
-        this.selectNextCommand();
-      } else if ((event as any).keyCode === 33) {
-        event.preventDefault();
-        event.stopPropagation();
-        this.selectPreviousVisualState();
-      } else if ((event as any).keyCode === 34) {
-        event.preventDefault();
-        event.stopPropagation();
-        this.selectNextVisualState();
-      }
-    });
+    this.rootPlaceHolder?.addEventListener('keydown', this.onKeyDown);
   }
 
   private openShader(fragment: boolean): void {

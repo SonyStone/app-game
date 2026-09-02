@@ -922,6 +922,9 @@ importers:
       '@app-game/solidjs-patterns':
         specifier: workspace:*
         version: link:../solidjs-patterns
+      '@app-game/spector':
+        specifier: workspace:*
+        version: link:../../packages/spector
       '@app-game/svg-editor':
         specifier: workspace:*
         version: link:../../packages/svg-editor
@@ -1448,7 +1451,18 @@ importers:
         specifier: 'catalog:'
         version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4))
 
-  packages/spector: {}
+  packages/spector:
+    dependencies:
+      solid-js:
+        specifier: 'catalog:'
+        version: 2.0.0-rc.4
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4))
 
   packages/svg-editor:
     dependencies:

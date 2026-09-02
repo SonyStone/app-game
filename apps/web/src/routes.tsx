@@ -172,6 +172,12 @@ export const routes: Routes[] = [
     component: lazy(() => import('@app-game/webgl-state-diagram/webgl-state-diagram'))
   },
   {
+    path: '/spector',
+    name: 'Spector Frame Inspector',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('@app-game/spector'))
+  },
+  {
     path: '/gsap-page-scroll-animation',
     name: 'Page Scroll Animation',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,

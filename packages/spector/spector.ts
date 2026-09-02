@@ -22,6 +22,16 @@ export interface IAvailableContext {
   readonly contextSpy: ContextSpy;
 }
 
+/** Browser realm and DOM hosts used by a Spector instance. */
+export interface ISpectorOptions {
+  /** Realm whose animation callbacks Spector observes. Defaults to the current window. */
+  readonly target?: Window;
+  /** Parent document element used by the legacy capture menu. Defaults to `document.body`. */
+  readonly captureMenuRoot?: Element;
+  /** Parent document element used by the capture result viewer. Defaults to `document.body`. */
+  readonly resultRoot?: Element;
+}
+
 export const EmbeddedFrontend = {
   CaptureMenu,
   ResultView
@@ -47,7 +57,7 @@ export class Spector {
     canvas: HTMLCanvasElement | OffscreenCanvas
   ): WebGLRenderingContexts | undefined {
     const type =
-      canvas instanceof HTMLCanvasElement
+      'getAttribute' in canvas
         ? canvas.getAttribute('__spector_context_type')
         : (canvas as IAnnotatedOffscreenCanvas).__spector_context_type;
 
@@ -91,9 +101,10 @@ export class Spector {
   private resultView?: ResultView;
   private retry: number;
   private noFrameTimeout = DEFOULT_TIMEOUT;
+  private fpsInterval?: ReturnType<typeof setInterval>;
   private marker?: string;
 
-  constructor() {
+  constructor(private readonly options: ISpectorOptions = {}) {
     this.captureNextFrames = 0;
     this.captureNextCommands = 0;
     this.quickCapture = false;
@@ -101,7 +112,7 @@ export class Spector {
     this.retry = 0;
     this.contexts = [];
 
-    this.timeSpy = new TimeSpy();
+    this.timeSpy = new TimeSpy((this.options.target ?? window) as unknown as { [name: string]: any });
     this.onCaptureStarted = new Observable<ICapture>();
     this.onCapture = new Observable<ICapture>();
     this.onError = new Observable<string>();
@@ -126,7 +137,7 @@ export class Spector {
         }
       }, this);
 
-      setInterval(() => {
+      this.fpsInterval = setInterval(() => {
         captureMenu.setFPS(this.getFps());
       }, 1000);
 
@@ -151,7 +162,7 @@ export class Spector {
 
   getResultUI(): ResultView {
     if (!this.resultView) {
-      this.resultView = new ResultView();
+      this.resultView = new ResultView(this.options.resultRoot);
       this.resultView.onSourceCodeChanged.add((sourceCodeEvent) => {
         this.rebuildProgramFromProgramId(
           sourceCodeEvent.programId,
@@ -172,7 +183,7 @@ export class Spector {
 
   getCaptureUI(): CaptureMenu {
     if (!this.captureMenu) {
-      this.captureMenu = new CaptureMenu();
+      this.captureMenu = new CaptureMenu({ rootPlaceHolder: this.options.captureMenuRoot });
     }
     return this.captureMenu;
   }
@@ -230,7 +241,7 @@ export class Spector {
     }
 
     this.canvasSpy = new CanvasSpy();
-    this.canvasSpy.onContextRequested.add(this.spyContext, this);
+    this.canvasSpy.onContextRequested.add(this.onContextRequested, this);
   }
 
   spyCanvas(canvas: HTMLCanvasElement | OffscreenCanvas): void {
@@ -240,11 +251,34 @@ export class Spector {
     }
 
     this.canvasSpy = new CanvasSpy(canvas);
-    this.canvasSpy.onContextRequested.add(this.spyContext, this);
+    this.canvasSpy.onContextRequested.add(this.onContextRequested, this);
   }
 
-  getAvailableContexts(): IAvailableContext[] {
-    return this.getAvailableContexts();
+  /** Registers and continuously spies an already-created WebGL context. */
+  spyContext(context: WebGLRenderingContexts): IAvailableContext {
+    return this.registerSpiedContext({
+      context,
+      contextVersion: 'getIndexedParameter' in context ? 2 : 1
+    });
+  }
+
+  /** Returns the WebGL contexts currently known to this Spector instance. */
+  getAvailableContexts(): readonly IAvailableContext[] {
+    return [...this.contexts];
+  }
+
+  /** Restores realm patches, stops capture work, and removes legacy Spector UI nodes. */
+  dispose(): void {
+    if (this.noFrameTimeout > DEFOULT_TIMEOUT) clearTimeout(this.noFrameTimeout);
+    if (this.fpsInterval !== undefined) clearInterval(this.fpsInterval);
+    for (const availableContext of this.contexts) availableContext.contextSpy.unSpy();
+    this.contexts.length = 0;
+    this.captureMenu?.dispose();
+    this.resultView?.dispose();
+    this.timeSpy.dispose();
+    this.onCaptureStarted.clear();
+    this.onCapture.clear();
+    this.onError.clear();
   }
 
   captureCanvas(
@@ -344,7 +378,7 @@ export class Spector {
     quickCapture: boolean = false,
     fullCapture: boolean = false
   ): void {
-    if (obj instanceof HTMLCanvasElement || (self.OffscreenCanvas && obj instanceof OffscreenCanvas)) {
+    if (isCanvas(obj)) {
       this.captureCanvas(obj, 0, quickCapture, fullCapture);
     } else {
       this.captureContext(obj as WebGLRenderingContexts, 0, quickCapture, fullCapture);
@@ -357,7 +391,7 @@ export class Spector {
     quickCapture: boolean = false,
     fullCapture: boolean = false
   ): void {
-    if (obj instanceof HTMLCanvasElement || (self.OffscreenCanvas && obj instanceof OffscreenCanvas)) {
+    if (isCanvas(obj)) {
       this.captureCanvas(obj, commandCount, quickCapture, fullCapture);
     } else {
       this.captureContext(obj as WebGLRenderingContexts, commandCount, quickCapture, fullCapture);
@@ -427,26 +461,30 @@ export class Spector {
     }
   }
 
-  private spyContext(contextInformation: IContextInformation) {
-    let contextSpy = this.getAvailableContextSpyByCanvas(
-      contextInformation.context.canvas as HTMLCanvasElement | OffscreenCanvas
-    );
-    if (!contextSpy) {
-      contextSpy = new ContextSpy({
-        context: contextInformation.context,
-        version: contextInformation.contextVersion,
-        recordAlways: true
-      });
+  private onContextRequested(contextInformation: IContextInformation): void {
+    this.registerSpiedContext(contextInformation);
+  }
 
-      contextSpy.onMaxCommand.add(this.stopCapture, this);
+  private registerSpiedContext(contextInformation: IContextInformation): IAvailableContext {
+    const canvas = contextInformation.context.canvas as HTMLCanvasElement | OffscreenCanvas;
+    let contextSpy = this.getAvailableContextSpyByCanvas(canvas);
+    if (contextSpy) return { canvas, contextSpy };
 
-      this.contexts.push({
-        canvas: contextSpy.context.canvas as HTMLCanvasElement | OffscreenCanvas,
-        contextSpy
-      });
-    }
+    contextSpy = new ContextSpy({
+      context: contextInformation.context,
+      version: contextInformation.contextVersion,
+      recordAlways: true
+    });
+
+    contextSpy.onMaxCommand.add(this.stopCapture, this);
+
+    this.contexts.push({ canvas, contextSpy });
 
     contextSpy.spy();
+    return {
+      canvas: contextSpy.context.canvas as HTMLCanvasElement | OffscreenCanvas,
+      contextSpy
+    };
   }
 
   private getAvailableContextSpyByCanvas(canvas: HTMLCanvasElement | OffscreenCanvas): ContextSpy | undefined {
@@ -507,4 +545,10 @@ export class Spector {
       throw error;
     }
   }
+}
+
+function isCanvas(
+  value: HTMLCanvasElement | OffscreenCanvas | WebGLRenderingContexts
+): value is HTMLCanvasElement | OffscreenCanvas {
+  return typeof (value as HTMLCanvasElement).getContext === 'function';
 }
