@@ -13,6 +13,7 @@ createRoot((dispose) => {
   let canvas: OffscreenCanvas;
   let storageName = 'paint-studio';
   let camera = defaultCamera();
+  let debug = false;
   let size = { width: 1, height: 1 },
     dpr = 1;
   let sampler: ReturnType<typeof createStrokeSampler> | undefined;
@@ -26,6 +27,7 @@ createRoot((dispose) => {
   const status = () =>
     post({
       type: 'state',
+      ...(debug ? { debugTiles: renderer?.debugTiles(document.layers) ?? [] } : {}),
       document: document.state(),
       camera,
       saved,
@@ -131,6 +133,10 @@ createRoot((dispose) => {
           post({ type: 'ready' });
           break;
         }
+        case 'debug':
+          debug = command.enabled;
+          status();
+          break;
         case 'view': {
           const moved = JSON.stringify(camera) !== JSON.stringify(command.camera);
           camera = command.camera;

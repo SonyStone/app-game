@@ -1,15 +1,15 @@
 import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-import type { ViewportMode } from '../../shared/viewportMode';
-import { createNavigationPuck } from './createNavigationPuck';
+import { createNavigationPuck } from '../src/controller';
+type ViewportMode = '2d' | '3d';
 
 describe('navigation puck', () => {
   it('clamps its full hit area inside a small, offset viewport', () => {
     const { puck } = setup();
     puck.open({ x: -50, y: 900 });
-    expect(puck.center()).toEqual({ x: 144, y: 546 });
+    expect(puck.center()).toEqual({ x: 158, y: 532 });
     puck.open({ x: 999, y: -5 });
-    expect(puck.center()).toEqual({ x: 216, y: 154 });
+    expect(puck.center()).toEqual({ x: 202, y: 168 });
   });
 
   it('pans by the drag displacement and ignores a second pointer', () => {
@@ -146,24 +146,30 @@ describe('navigation puck', () => {
     expect(puck.center()).toBeUndefined();
   });
 
-  it('protects the invocation point with a 12px dead zone', () => {
-    const { puck } = setup();
+  it('starts a direct pan at the exact center without a dead zone', () => {
+    const { puck, renderer } = setup();
     puck.open();
-    expect(puck.begin('pan', pointer(1, 185, 354))).toBe(false);
-    expect(puck.activeAction()).toBeUndefined();
+    expect(puck.begin('pan', pointer(1, 180, 350))).toBe(true);
+    puck.move(pointer(1, 190, 370));
+    expect(renderer.transformTouch).toHaveBeenCalledWith({
+      from: expect.objectContaining({ x: 180, y: 350 }),
+      to: expect.objectContaining({ x: 190, y: 370 }),
+      scale: 1,
+      rotation: 0
+    });
   });
 
-  it('selects quadrants only after 30px of travel and excludes 3D orbit in paper mode', () => {
+  it('selects the shared pictured 2D zones and enables the 3D orbit quadrant', () => {
     const { puck, setMode } = setup();
     const origin = { x: 180, y: 350 };
     puck.open(origin);
     expect(puck.actionAt({ x: 160, y: 340 }, origin)).toBeUndefined();
-    expect(puck.actionAt({ x: 140, y: 310 }, origin)).toBe('zoom');
-    expect(puck.actionAt({ x: 220, y: 310 }, origin)).toBe('rotate');
-    expect(puck.actionAt({ x: 140, y: 390 }, origin)).toBe('pan');
-    expect(puck.actionAt({ x: 220, y: 390 }, origin)).toBeUndefined();
+    expect(puck.actionAt({ x: 140, y: 310 }, origin)).toBe('pan');
+    expect(puck.actionAt({ x: 180, y: 400 }, origin)).toBe('zoom');
+    expect(puck.actionAt({ x: 80, y: 350 }, origin)).toBe('rotate');
     setMode('3d');
     expect(puck.actionAt({ x: 220, y: 390 }, origin)).toBe('orbit');
+    expect(puck.actionAt({ x: 220, y: 310 }, origin)).toBe('rotate');
     expect(puck.actionAt({ x: 500, y: 900 }, origin)).toBeUndefined();
   });
 
@@ -202,9 +208,10 @@ function setup(mode: ViewportMode = '2d') {
   const renderer = { orbit: vi.fn(), transformTouch: vi.fn<(gesture: { rotation: number }) => void>() };
   const puck = createNavigationPuck({
     viewport: () => ({ left: 20, top: 30, width: 320, height: 640 }),
-    renderer: () => renderer,
+    transform: renderer.transformTouch,
+    orbit: renderer.orbit,
     mode: getMode,
-    roll: () => 0.1
+    rotation: () => -0.1
   });
   return { puck, renderer, setMode };
 }

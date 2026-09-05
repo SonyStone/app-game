@@ -50,6 +50,8 @@
       "@app-game/litegraph/*": ["./packages/litegraph/*"],
       "@app-game/ogl-examples": ["./packages/ogl-examples"],
       "@app-game/ogl-examples/*": ["./packages/ogl-examples/*"],
+      "@app-game/navigation-puck": ["./packages/navigation-puck/src/index.ts"],
+      "@app-game/navigation-puck/*": ["./packages/navigation-puck/src/*"],
       "@app-game/paint": ["./packages/paint"],
       "@app-game/paint/*": ["./packages/paint/*"],
       "@app-game/penner-easing-equations": ["./packages/penner-easing-equations"],

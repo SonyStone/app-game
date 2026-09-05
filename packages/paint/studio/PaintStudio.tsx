@@ -1,9 +1,10 @@
+import { NavigationPuck } from '@app-game/navigation-puck';
 import { createSignal, onSettled, Show } from 'solid-js';
 import { BrushPanel, ColorPanel } from './BrushPanel';
+import { CanvasDebug } from './CanvasDebug';
 import { defaultCamera, transformAt } from './camera';
 import { createPaintSession } from './createPaintSession';
 import { LayersPanel } from './LayersPanel';
-import { NavigationPuck } from './NavigationPuck';
 import { SketchIcon } from './SketchIcon';
 import './studio.css';
 
@@ -72,8 +73,12 @@ export default function PaintStudio() {
       <main ref={stage} class="paint-stage" aria-label="Drawing workspace">
         <canvas
           ref={canvas}
-          aria-label="Drawing canvas. Draw with a pen or mouse; use touch or Space-drag to navigate."
+          tabindex={0}
+          aria-label="Drawing canvas. Draw with a pen or mouse; use touch or hold Space for navigation."
         />
+        <Show when={session.debug()}>
+          <CanvasDebug session={session} />
+        </Show>
         <Show when={ready() && state().tileCount === 0}>
           <div class="paint-welcome">
             <p>Pen to draw. Touch to move.</p>
@@ -91,13 +96,7 @@ export default function PaintStudio() {
           />
         </Show>
         <Show when={puck()}>
-          <NavigationPuck
-            position={puck()!}
-            camera={camera}
-            size={session.size}
-            navigate={navigate}
-            close={() => setPuck(undefined)}
-          />
+          <NavigationPuck navigation={session.navigation} focusTarget={() => canvas} />
         </Show>
       </main>
       <div class="paint-ui">
@@ -227,7 +226,7 @@ export default function PaintStudio() {
         <button
           class="paint-nav-trigger paint-floating"
           aria-label="Navigation puck"
-          title="Navigation · V / Right click"
+          title="Navigation · hold Space / V / Right click"
           onClick={() => {
             setPanel(undefined);
             openPuck();
@@ -292,12 +291,22 @@ export default function PaintStudio() {
                 >
                   Reset view
                 </button>
+                <button
+                  disabled={!ready()}
+                  aria-pressed={session.debug() ? 'true' : 'false'}
+                  onClick={() => {
+                    session.toggleDebug();
+                    closePanel();
+                  }}
+                >
+                  Canvas wireframe<span>{session.debug() ? 'On' : 'Off'}</span>
+                </button>
                 <a href={location.pathname.startsWith('/paint/') ? '/paint' : './'}>Paint experiments</a>
               </div>
               <p class="paint-panel-note">
                 B · Brush &nbsp; E · Eraser
                 <br />
-                Space + drag · Pan &nbsp; V · Navigation
+                Space · Navigation &nbsp; V · Navigation
               </p>
               <p class="paint-panel-note" title="CPU preparation/submission time, not pen latency">
                 {state().tileCount} tiles · {(metrics().gpu / 1024 / 1024).toFixed(1)} MB · {metrics().ms.toFixed(1)} ms

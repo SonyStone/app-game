@@ -1,0 +1,31 @@
+{
+  "name": "@app-game/navigation-puck",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Solid 2 navigation puck for 2D and 3D editors",
+  "exports": {
+    ".": "./src/index.ts",
+    "./style.css": "./src/style.css",
+    "./controller": "./src/controller.ts",
+    "./input": "./src/input.ts"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "solid-js": "2.0.0-rc.4",
+    "@solidjs/web": "2.0.0-rc.4"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:",
+    "jsdom": "catalog:"
+  }
+}

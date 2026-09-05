@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="560" viewBox="0 0 560 560" fill="none">
+  <defs>
+    <linearGradient id="face" x1="280" y1="132" x2="280" y2="429" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fafafa"/>
+      <stop offset=".12" stop-color="#f2f2f2"/>
+      <stop offset="1" stop-color="#efefef"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="180" y1="150" x2="380" y2="410" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff"/>
+      <stop offset="1" stop-color="#d8d8d8"/>
+    </linearGradient>
+    <filter id="outer-shadow" x="0" y="0" width="560" height="560" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="5" stdDeviation="3" flood-opacity=".28"/>
+    </filter>
+    <filter id="face-shadow" x="118" y="122" width="324" height="324" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="1" dy="4" stdDeviation="3" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <!-- Rotation ring: the upper-right corner houses the close button. -->
+  <path d="M280 25H480C510 25 533 49 533 80V280C533 420 420 533 280 533S25 420 25 280 139 25 280 25Z"
+    fill="#147bd6" stroke="#fff" stroke-width="6" filter="url(#outer-shadow)"/>
+  <!-- Tangential arrows identify the rotation ring. -->
+  <g stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M188 91A210 210 0 0 1 365 89m-16-25 16 25-30 5"/>
+    <path d="M372 469A210 210 0 0 1 195 471m16 25-16-25 30-5"/>
+  </g>
+  <!-- Pan face with four directional arrows and a separate lower zoom zone. -->
+  <circle cx="280" cy="280" r="149" fill="url(#face)" stroke="url(#rim)" stroke-width="3" filter="url(#face-shadow)"/>
+  <g stroke="#5b5b5a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M280 203V299M232 251H328m-62-34 14-14 14 14m-28 68 14 14 14-14m-48-48-14 14 14 14m68-28 14 14-14 14"/>
+    <path d="M136 318H424" stroke-width="4" stroke-linecap="butt"/>
+    <circle cx="274" cy="366" r="16" stroke-width="4"/>
+    <path d="m286 379 15 15" stroke-width="6"/>
+  </g>
+  <!-- Close control. -->
+  <circle cx="480" cy="80" r="39" fill="url(#face)" stroke="#fff" stroke-width="6"/>
+  <path d="m463 64 33 33m0-33-33 33" stroke="#5b5b5a" stroke-width="8" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,123 @@
+.shared-puck-overlay {
+  --puck-accent: #237aab;
+}
+.shared-puck-overlay,
+.shared-puck-overlay * {
+  box-sizing: border-box;
+}
+.shared-puck-overlay button {
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: #606060;
+  background: transparent;
+  touch-action: none;
+}
+.shared-puck-overlay button:focus-visible {
+  outline: 2px solid var(--puck-accent);
+  outline-offset: -4px;
+}
+.shared-puck {
+  position: absolute;
+  z-index: 70;
+  transform: translate(-50%, -50%);
+  touch-action: none;
+}
+.shared-puck img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  user-select: none;
+}
+.shared-puck button {
+  position: absolute;
+  cursor: grab;
+  touch-action: none;
+  background: transparent !important;
+}
+.shared-puck button:active {
+  cursor: grabbing;
+}
+.shared-puck button:focus-visible {
+  outline-offset: -4px;
+  outline-color: #f5ad29;
+}
+.shared-puck-rotate {
+  inset: 4%;
+  border-radius: 50% 12% 50% 50%;
+}
+.shared-puck-pan {
+  left: 23.2%;
+  top: 23.2%;
+  width: 53.6%;
+  height: 53.6%;
+  border-radius: 50%;
+}
+.shared-puck-zoom {
+  left: 23.2%;
+  top: 23.2%;
+  width: 53.6%;
+  height: 53.6%;
+  border-radius: 50%;
+  clip-path: inset(62.7% 0 0);
+}
+.shared-puck-close {
+  left: 78.2%;
+  top: 7.1%;
+  width: 15%;
+  height: 15%;
+  border-radius: 50%;
+  cursor: pointer !important;
+}
+
+.shared-puck-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  touch-action: none;
+}
+.shared-puck-dismiss {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
+}
+.shared-puck-overlay[data-navigating='true'],
+.shared-puck-overlay[data-navigating='true'] * {
+  cursor: grabbing;
+}
+.shared-puck-overlay[data-navigating='true'] .shared-puck {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.shared-puck-zones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+  overflow: hidden;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: #ccc;
+  gap: 1px;
+}
+.shared-puck[data-mode='3d'] .shared-puck-zone {
+  position: static;
+  display: grid;
+  place-items: center;
+  background: #f4f4f4 !important;
+}
+.shared-puck[data-mode='3d'] .shared-puck-close {
+  left: auto;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 3px solid white;
+  background: #e8e8e8 !important;
+  font: 32px Arial;
+}

@@ -1,3 +1,5 @@
+import type { createNavigationPuck } from '@app-game/navigation-puck/controller';
+import { attachNavigationPuck } from '@app-game/navigation-puck/input';
 import type { Brush, Sample } from './brush';
 import { panCamera, screenToWorld, transformAt, type Camera, type Point, type ViewSize } from './camera';
 import type { PaintCommand } from './protocol';
@@ -13,7 +15,7 @@ export function attachInput(
     navigate: (camera: Camera) => void;
     send: (command: PaintCommand) => void;
     cursor: (point: Point | undefined) => void;
-    puck: (point: Point) => void;
+    puck: ReturnType<typeof createNavigationPuck>;
   }
 ) {
   const abort = new AbortController(),
@@ -25,8 +27,12 @@ export function attachInput(
     | undefined;
   let touchStart: { camera: Camera; center: Point; distance: number; angle: number } | undefined;
   let pending: Sample[] = [],
-    frame = 0,
-    space = false;
+    frame = 0;
+  const detachPuck = attachNavigationPuck(canvas, options.puck, {
+    busy: () => !!gesture || touches.size > 0,
+    ready: options.ready,
+    onOpen: () => options.cursor(undefined)
+  });
   const local = (event: { clientX: number; clientY: number }): Point => {
     const rect = canvas.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -76,6 +82,7 @@ export function attachInput(
     (event) => {
       if (!options.ready()) return;
       const point = local(event);
+      canvas.focus({ preventScroll: true });
       if (event.pointerType === 'touch') {
         if (gesture?.kind === 'draw') return;
         canvas.setPointerCapture(event.pointerId);
@@ -85,7 +92,7 @@ export function attachInput(
       }
       if (gesture || event.button === 2) return;
       canvas.setPointerCapture(event.pointerId);
-      if (event.button === 1 || space) {
+      if (event.button === 1) {
         gesture = { kind: 'pan', id: event.pointerId, previous: point };
         return;
       }
@@ -180,14 +187,6 @@ export function attachInput(
   canvas.addEventListener('lostpointercapture', cancel, { signal });
   canvas.addEventListener('pointerleave', () => options.cursor(undefined), { signal });
   canvas.addEventListener(
-    'contextmenu',
-    (event) => {
-      event.preventDefault();
-      options.puck(local(event));
-    },
-    { signal }
-  );
-  canvas.addEventListener(
     'wheel',
     (event) => {
       event.preventDefault();
@@ -204,30 +203,8 @@ export function attachInput(
     { signal, passive: false }
   );
   window.addEventListener(
-    'keydown',
-    (event) => {
-      if (!editable(event.target) && event.code === 'Space') {
-        space = true;
-        event.preventDefault();
-        canvas.style.cursor = 'grab';
-      }
-    },
-    { signal }
-  );
-  window.addEventListener(
-    'keyup',
-    (event) => {
-      if (event.code === 'Space') {
-        space = false;
-        canvas.style.cursor = '';
-      }
-    },
-    { signal }
-  );
-  window.addEventListener(
     'blur',
     () => {
-      space = false;
       finish(false);
       touches.clear();
       resetTouch();
@@ -236,6 +213,7 @@ export function attachInput(
     { signal }
   );
   return () => {
+    detachPuck();
     finish(false);
     abort.abort();
     cancelAnimationFrame(frame);

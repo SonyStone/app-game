@@ -12,7 +12,8 @@
     "@app-game/solid-view-cube": "workspace:*",
     "@app-game/utils": "workspace:*",
     "solid-js": "catalog:",
-    "typegpu": "^0.11.4"
+    "typegpu": "^0.11.4",
+    "@app-game/navigation-puck": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "25.8.0",

@@ -90,6 +90,16 @@ export async function createPaintRenderer(
           [...cache.values()].reduce((n, tile) => n + TILE_SIZE * TILE_SIZE * 4 * (4 / 3 + (tile.base ? 2 : 0)), 0)
       };
     },
+    /** Occupied visible-layer tiles, including the active stroke, for the optional wireframe overlay. */
+    debugTiles(layers: Layer[]) {
+      const keys = new Set<string>();
+      for (const layer of layers) {
+        if (!layer.visible || layer.opacity <= 0) continue;
+        for (const key of layer.tiles.keys()) keys.add(key);
+        if (stroke?.layer.id === layer.id) for (const id of strokeTiles.keys()) keys.add(id.slice(layer.id.length + 1));
+      }
+      return [...keys];
+    },
     /** Captures brush settings and the target layer until commit/cancel. */
     begin(layer: Layer, brush: Brush) {
       if (stroke) throw new Error('Finish the current stroke before beginning another.');

@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultBrush } from './brush';
 import { defaultCamera } from './camera';
+import { createPaintNavigation as createNavigationPuck } from './paintNavigation';
 import { attachInput } from './input';
 import type { PaintCommand } from './protocol';
 
@@ -64,6 +65,39 @@ describe('input to worker contract', () => {
     expect(navigate).not.toHaveBeenCalled();
     expect(commands).toHaveLength(1);
   });
+  it('holds Space to open navigation at the pointer and releases it without drawing', () => {
+    const { pointer, puck, commands } = setup();
+    pointer('pointermove', 220, 180);
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    expect(puck.center()).toEqual({ x: 220, y: 180 });
+    pointer('pointerdown', 200, 200);
+    expect(commands).toHaveLength(0);
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }));
+    expect(puck.center()).toBeUndefined();
+  });
+  it('selects a right-drag action without sending paint commands or reopening on contextmenu', () => {
+    const { pointer, puck, commands, navigate, canvas } = setup();
+    pointer('pointerdown', 400, 300, { button: 2 });
+    pointer('pointermove', 300, 300);
+    expect(puck.activeAction()).toBe('rotate');
+    pointer('pointermove', 280, 310);
+    pointer('pointerup', 270, 320, { button: 2 });
+    canvas.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true }));
+    expect(navigate).toHaveBeenCalled();
+    expect(commands).toHaveLength(0);
+    expect(puck.center()).toBeUndefined();
+  });
+  it('does not interrupt a stroke with Space or leave navigation alive after blur', () => {
+    const { pointer, puck } = setup();
+    pointer('pointerdown', 20, 20);
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    expect(puck.center()).toBeUndefined();
+    pointer('pointerup', 20, 20);
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    expect(puck.center()).toBeDefined();
+    window.dispatchEvent(new Event('blur'));
+    expect(puck.center()).toBeUndefined();
+  });
   it('keeps CSS coordinates independent of canvas backing resolution', () => {
     const { canvas, commands, pointer } = setup();
     canvas.width = 1600;
@@ -83,6 +117,7 @@ function setup() {
   canvas.setPointerCapture = vi.fn();
   const commands: PaintCommand[] = [],
     navigate = vi.fn();
+  const puck = createNavigationPuck({ size: () => ({ width: 800, height: 600 }), camera: defaultCamera, navigate });
   disposals.push(
     attachInput(canvas, {
       camera: defaultCamera,
@@ -92,7 +127,7 @@ function setup() {
       navigate,
       send: (c) => commands.push(c),
       cursor: vi.fn(),
-      puck: vi.fn()
+      puck
     })
   );
   const pointer = (type: string, x: number, y: number, extra: Record<string, unknown> = {}) => {
@@ -101,5 +136,5 @@ function setup() {
       Object.defineProperty(event, key, { value });
     canvas.dispatchEvent(event);
   };
-  return { canvas, commands, navigate, pointer };
+  return { canvas, commands, navigate, pointer, puck };
 }

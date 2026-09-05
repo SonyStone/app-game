@@ -509,58 +509,6 @@
   border-radius: 4px;
   margin-right: 8px;
 }
-.paint-puck {
-  position: absolute;
-  z-index: 70;
-  transform: translate(-50%, -50%);
-  touch-action: none;
-}
-.paint-puck img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  user-select: none;
-}
-.paint-puck button {
-  position: absolute;
-  cursor: grab;
-  touch-action: none;
-  background: transparent !important;
-}
-.paint-puck button:active {
-  cursor: grabbing;
-}
-.paint-puck button:focus-visible {
-  outline-offset: -4px;
-  outline-color: #f5ad29;
-}
-.paint-puck-pan {
-  inset: 4%;
-  border-radius: 50% 12% 50% 50%;
-}
-.paint-puck-zoom {
-  left: 23.2%;
-  top: 23.2%;
-  width: 53.6%;
-  height: 53.6%;
-  border-radius: 50%;
-}
-.paint-puck-rotate {
-  left: 26.8%;
-  top: 62.1%;
-  width: 46.4%;
-  height: 14.6%;
-  border-radius: 0 0 50% 50%;
-}
-.paint-puck-close {
-  left: 78.2%;
-  top: 7.1%;
-  width: 15%;
-  height: 15%;
-  border-radius: 50%;
-  cursor: pointer !important;
-}
 @media (max-width: 600px) {
   .paint-save-state {
     display: none;
@@ -620,9 +568,57 @@
     right: 14px;
   }
 }
-.paint-range input { appearance: none; background: transparent; }
-.paint-range input::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: #d4d4d4; }
-.paint-range input::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5.5px; border: 2px solid #419bcf; border-radius: 50%; background: #fff; }
-.paint-range input::-moz-range-track { height: 3px; background: #d4d4d4; }
-.paint-range input::-moz-range-thumb { width: 11px; height: 11px; border: 2px solid #419bcf; border-radius: 50%; background: #fff; }
-.paint-blend-note { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0 0 12px; }
+.paint-range input {
+  appearance: none;
+  background: transparent;
+}
+.paint-range input::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: #d4d4d4;
+}
+.paint-range input::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5.5px;
+  border: 2px solid #419bcf;
+  border-radius: 50%;
+  background: #fff;
+}
+.paint-range input::-moz-range-track {
+  height: 3px;
+  background: #d4d4d4;
+}
+.paint-range input::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 2px solid #419bcf;
+  border-radius: 50%;
+  background: #fff;
+}
+.paint-blend-note {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.paint-debug {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.paint-debug-stats {
+  position: absolute;
+  left: 64px;
+  bottom: 78px;
+  max-width: calc(100% - 80px);
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 90%);
+  color: #166683;
+  font: 12px/1.6 monospace;
+  overflow-wrap: anywhere;
+}

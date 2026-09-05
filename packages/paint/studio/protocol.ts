@@ -5,6 +5,7 @@ import type { LayerAction, createDocument } from './document';
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */
 export type PaintCommand =
   | { type: 'init'; canvas: OffscreenCanvas; size: ViewSize; dpr: number; storageName?: string }
+  | { type: 'debug'; enabled: boolean }
   | { type: 'view'; camera: Camera; size: ViewSize; dpr: number }
   | { type: 'begin'; brush: Brush; samples: Sample[] }
   | { type: 'samples'; samples: Sample[] }
@@ -22,6 +23,7 @@ export type PaintEvent =
       gpuBytes: number;
       residentTiles: number;
       renderMs: number;
+      debugTiles?: string[];
     }
   | { type: 'ready' }
   | { type: 'disposed' }

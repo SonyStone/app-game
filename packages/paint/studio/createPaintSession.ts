@@ -4,6 +4,7 @@ import { defaultCamera, transformAt, type Camera, type Point } from './camera';
 import { createDocument, type LayerAction } from './document';
 import { attachInput, editable } from './input';
 import Worker from './paint.worker?worker';
+import { createPaintNavigation } from './paintNavigation';
 import type { PaintCommand, PaintEvent } from './protocol';
 
 /** Scopes the worker, input listeners, persistence status, and UI state to one editor mount. */
@@ -11,13 +12,14 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   const [brush, setBrush] = createSignal(defaultBrush(), { ownedWrite: true });
   const [camera, setCamera] = createSignal(defaultCamera(), { ownedWrite: true });
   const [state, setState] = createSignal(createDocument().state(), { ownedWrite: true });
+  const [debug, setDebug] = createSignal(false, { ownedWrite: true });
+  const [debugTiles, setDebugTiles] = createSignal<string[]>([], { ownedWrite: true });
   const [ready, setReady] = createSignal(false, { ownedWrite: true });
   const [saved, setSaved] = createSignal(true, { ownedWrite: true });
   const [error, setError] = createSignal<{ message: string; recoverable: boolean } | undefined>(undefined, {
     ownedWrite: true
   });
   const [cursor, setCursor] = createSignal<Point | undefined>(undefined, { ownedWrite: true });
-  const [puck, setPuck] = createSignal<Point | undefined>(undefined, { ownedWrite: true });
   const [metrics, setMetrics] = createSignal({ tiles: 0, gpu: 0, ms: 0 }, { ownedWrite: true });
   let worker: globalThis.Worker | undefined;
   let size = { width: 1, height: 1 };
@@ -32,11 +34,15 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   };
   const updateBrush = (patch: Partial<Brush>) => setBrush((value) => ({ ...value, ...patch }));
   const layer = (action: LayerAction) => send({ type: 'layer', action });
-  const openPuck = (point = { x: size.width / 2, y: size.height / 2 }) =>
-    setPuck({
-      x: Math.max(85, Math.min(size.width - 85, point.x)),
-      y: Math.max(90, Math.min(size.height - 100, point.y))
-    });
+  const navigation = createPaintNavigation({
+    size: viewSize,
+    camera: () => currentCamera,
+    navigate,
+    viewport: () => elements.canvas().getBoundingClientRect()
+  });
+  const puck = navigation.center;
+  const setPuck = (point: Point | undefined) => (point ? navigation.open(point) : navigation.close());
+  const openPuck = (point?: Point) => navigation.open(point);
   const zoom = (factor: number) =>
     navigate(transformAt(currentCamera, size, { x: size.width / 2, y: size.height / 2 }, currentCamera.zoom * factor));
 
@@ -74,6 +80,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         setCamera(value.camera);
       }
       if (value.type === 'state') {
+        if (value.debugTiles) setDebugTiles(value.debugTiles);
         if (initialState || value.document.revision !== untrack(state).revision) setState(value.document);
         setSaved(value.saved);
         setMetrics({ tiles: value.residentTiles, gpu: value.gpuBytes, ms: value.renderMs });
@@ -113,7 +120,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       navigate,
       send,
       cursor: setCursor,
-      puck: openPuck
+      puck: navigation
     });
     const keys = (event: KeyboardEvent) => {
       if (editable(event.target)) return;
@@ -126,7 +133,6 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         send({ type: 'download' });
       } else if (event.key.toLowerCase() === 'b') updateBrush({ tool: 'brush' });
       else if (event.key.toLowerCase() === 'e') updateBrush({ tool: 'eraser' });
-      else if (event.key.toLowerCase() === 'v') openPuck();
       else if (event.key === 'Escape') {
         setPuck(undefined);
         send({ type: 'cancel' });
@@ -146,6 +152,14 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   onCleanup(() => cleanup?.());
 
   return {
+    debug,
+    debugTiles,
+    toggleDebug() {
+      const enabled = !debug();
+      setDebug(enabled);
+      if (!enabled) setDebugTiles([]);
+      send({ type: 'debug', enabled });
+    },
     brush,
     camera,
     state,
@@ -154,6 +168,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     error,
     cursor,
     puck,
+    navigation,
     metrics,
     send,
     navigate,
