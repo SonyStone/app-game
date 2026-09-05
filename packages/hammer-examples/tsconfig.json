@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true
+  },
+  "include": [
+    "multitouch.tsx",
+    "demo-recording.ts",
+    "demo-recording.test.ts",
+    "pointer-recording.ts",
+    "pointer-scene.ts",
+    "stylus-scene.ts",
+    "pointer-recording.test.ts"
+  ]
+}

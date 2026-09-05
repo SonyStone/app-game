@@ -1,287 +1,441 @@
-import { DEFAULT_ALTITUDE_ANGLE, HammerInput, createPointerEventsHandler } from '@app-game/hammer/pointerevent';
-import { clamp, radToDeg } from '@app-game/pixijs-research/math/MathUtils';
-import { createEventListener } from '@solid-primitives/event-listener';
 import { Title } from '@solidjs/meta';
-import type { ComponentProps } from '@solidjs/web';
-import { Show, createMemo, createSignal } from 'solid-js';
-import { MathUtils } from 'three';
-import { useOffscreenCanvas } from './offscreen-canvas';
-import type { WorkerMessage } from './offscreen-canvas.worker';
+import { Show, createSignal, onSettled } from 'solid-js';
+import { createDemoRecording, demoCaption } from './demo-recording';
+import './multitouch.css';
+import {
+  MAX_RECORDING_MS,
+  createPlayback,
+  createRecording,
+  readPointerSample,
+  type PointerRecording,
+  type PointerSample
+} from './pointer-recording';
+import { createPointerScene } from './pointer-scene';
 
-const { degToRad } = MathUtils;
-
-const toPlainPointerEvent = (event: PointerEvent): WorkerMessage => ({
-  type: event.type as 'pointerdown' | 'pointermove' | 'pointerup',
-  clientX: event.clientX,
-  clientY: event.clientY,
-  pointerId: event.pointerId,
-  pointerType: event.pointerType,
-  pressure: event.pressure,
-  tiltX: event.tiltX,
-  tiltY: event.tiltY,
-  twist: event.twist,
-  timeStamp: event.timeStamp
-});
-
+/** A full-screen pointer studio. One in-memory take lasts at most sixty seconds. */
 export default function Multitouch() {
-  const { canvas, worker } = useOffscreenCanvas();
+  let surface!: HTMLDivElement;
+  let canvas!: HTMLCanvasElement;
+  let stylusCanvas!: HTMLCanvasElement;
+  let scene: ReturnType<typeof createPointerScene> | undefined;
+  let take: PointerRecording | undefined;
+  let playback: ReturnType<typeof createPlayback> | undefined;
+  let liveOrigin = performance.now();
+  let playbackOrigin = 0;
+  let frame = 0;
+  let limitTimer: ReturnType<typeof setTimeout> | undefined;
+  const [mode, setMode] = createSignal<'live' | 'recording' | 'playing' | 'paused'>('live');
+  const [position, setPosition] = createSignal(0);
+  const [duration, setDuration] = createSignal(0);
+  const [count, setCount] = createSignal(0);
+  const [hasInk, setHasInk] = createSignal(false);
+  const [details, setDetails] = createSignal(true);
+  const [has3D, setHas3D] = createSignal(true);
+  const [isDemo, setIsDemo] = createSignal(true);
+  const [hasLiveMouse, setHasLiveMouse] = createSignal(false);
+  const [telemetry, setTelemetry] = createSignal<PointerSample>();
+  const [contacts, setContacts] = createSignal(0);
+  const isReplay = () => mode() === 'playing' || mode() === 'paused';
+  const status = () => ({ live: 'Вживую', recording: 'Запись', playing: 'Воспроизведение', paused: 'Пауза' })[mode()];
 
-  const [inputS, setInputS] = createSignal<HammerInput | undefined>(undefined);
-  const altitudeAngle = createMemo(() => radToDeg(inputS()?.altitudeAngle ?? DEFAULT_ALTITUDE_ANGLE));
-  const azimuthAngle = createMemo(() => radToDeg(inputS()?.azimuthAngle ?? 0));
-
-  const angle = createMemo(() => {
-    const _azimuthAngle = azimuthAngle();
-    const side = 90 > _azimuthAngle || 270 < _azimuthAngle ? -1 : 1;
-
-    return (altitudeAngle() - 90) * side;
-  });
-
-  const pressure = createMemo(() => {
-    const input = inputS();
-    const pressure = input?.pressure ?? 0;
-
-    return pressure;
-  });
-
-  const pointerEventsHandler = createPointerEventsHandler();
-
-  createEventListener(window, 'pointerdown', (event: PointerEvent) => {
-    event.preventDefault();
-    worker.postMessage(toPlainPointerEvent(event));
-    setInputS(pointerEventsHandler(event));
-  });
-
-  createEventListener(window, 'pointermove', (event: PointerEvent) => {
-    // ! Very important to use event.getCoalescedEvents() to get all the events between the frames
-    event.preventDefault();
-    if (event.getCoalescedEvents) {
-      for (const e of event.getCoalescedEvents()) {
-        worker.postMessage(toPlainPointerEvent(e));
-      }
-    } else {
-      worker.postMessage(toPlainPointerEvent(event));
+  function toggleRecording() {
+    if (!scene) return;
+    if (mode() === 'recording') {
+      stopRecording();
+      return;
     }
-    setInputS(pointerEventsHandler(event));
-  });
+    clearTimeout(limitTimer);
+    const bounds = surface.getBoundingClientRect();
+    liveOrigin = performance.now();
+    take = createRecording(bounds.width, bounds.height, liveOrigin);
+    setIsDemo(false);
+    setHasLiveMouse(false);
+    playback = undefined;
+    scene.reset(bounds.width, bounds.height);
+    setPosition(0);
+    setDuration(0);
+    setCount(0);
+    setHasInk(false);
+    setMode('recording');
+    limitTimer = setTimeout(stopRecording, MAX_RECORDING_MS);
+  }
 
-  createEventListener(window, ['pointerup', 'pointerleave', 'pointercancel'], (event: PointerEvent) => {
-    event.preventDefault();
-    worker.postMessage(toPlainPointerEvent(event));
-    setInputS(pointerEventsHandler(event));
-  });
+  function stopRecording() {
+    if (mode() !== 'recording' || !take || !scene) return;
+    clearTimeout(limitTimer);
+    take.finish(performance.now());
+    setDuration(take.duration);
+    setCount(take.samples.length);
+    playback = createPlayback(take, scene);
+    setPosition(playback.seek(take.duration));
+    setMode('paused');
+  }
 
-  createEventListener(window, 'contextmenu', (event) => event.preventDefault());
+  function togglePlayback() {
+    if (mode() === 'recording' || !take?.samples.length || !scene) return;
+    if (mode() === 'playing') {
+      setPosition(playback?.seek(performance.now() - playbackOrigin) ?? position());
+      setMode('paused');
+      return;
+    }
+    const nextPosition = !isReplay() || position() >= take.duration ? 0 : position();
+    if (!isReplay()) {
+      scene.reset(take.width, take.height);
+      playback = createPlayback(take, scene);
+    }
+    if (position() >= take.duration) {
+      playback = createPlayback(take, scene);
+    }
+    playback?.seek(nextPosition);
+    setPosition(nextPosition);
+    playbackOrigin = performance.now() - nextPosition;
+    setHasInk(true);
+    setMode('playing');
+  }
 
-  const stroke = createMemo(() => {
-    const y = inputS()?.delta.x ?? 0;
-    const x = inputS()?.delta.y ?? 0;
+  function seek(time: number) {
+    if (!scene || !take?.samples.length || mode() === 'recording') return;
+    if (!isReplay()) {
+      scene.reset(take.width, take.height);
+      playback = createPlayback(take, scene);
+    }
+    setPosition(playback?.seek(time) ?? 0);
+    setHasInk(true);
+    setMode('paused');
+  }
 
-    return clamp((y + x) / 2, -30, 30);
+  function returnToLive() {
+    if (mode() === 'recording') return;
+    const bounds = surface.getBoundingClientRect();
+    scene?.reset(bounds.width, bounds.height);
+    setHasLiveMouse(false);
+    liveOrigin = performance.now();
+    setHasInk(false);
+    setPosition(0);
+    setMode('live');
+  }
+
+  /** Only the drawing surface owns input; toolbar interactions never enter the take. */
+  function handlePointer(event: PointerEvent) {
+    if (!scene || isReplay()) return;
+    if (mode() === 'recording' && performance.now() - liveOrigin >= MAX_RECORDING_MS) {
+      stopRecording();
+      return;
+    }
+    if (event.type === 'lostpointercapture' && !scene.pointers.get(event.pointerId)?.down) return;
+    if (event.type === 'pointerdown') {
+      try {
+        surface.setPointerCapture(event.pointerId);
+      } catch {
+        /* Synthetic input has no native capture. */
+      }
+      setHasInk(true);
+    }
+    const bounds = surface.getBoundingClientRect();
+    const coalesced = event.type === 'pointermove' ? (event.getCoalescedEvents?.() ?? []) : [];
+    for (const point of [...coalesced, event]) {
+      if (mode() === 'recording' && point.timeStamp < liveOrigin) continue;
+      const sample = {
+        ...readPointerSample(point, bounds, Math.max(0, point.timeStamp - liveOrigin)),
+        type: point === event ? event.type : 'pointermove'
+      };
+      Object.assign(sample, scene.toStage(sample.x, sample.y));
+      // Coalesced samples precede their parent; retain both reported measurements.
+      scene.apply(sample);
+      if (mode() === 'recording') take?.append(sample);
+    }
+  }
+
+  onSettled(() => {
+    scene = createPointerScene(canvas, stylusCanvas);
+    setHas3D(scene.has3D);
+    const resize = () => {
+      const bounds = surface.getBoundingClientRect();
+      scene?.resize(bounds.width, bounds.height);
+    };
+    resize();
+    take = createDemoRecording();
+    scene.reset(take.width, take.height);
+    playback = createPlayback(take, scene);
+    playback.seek(0);
+    playbackOrigin = performance.now();
+    setDuration(take.duration);
+    setCount(take.samples.length);
+    setHasInk(true);
+    setMode('playing');
+    const observer = new ResizeObserver(resize);
+    observer.observe(surface);
+    const events = [
+      'pointerdown',
+      'pointermove',
+      'pointerup',
+      'pointercancel',
+      'pointerenter',
+      'pointerleave',
+      'lostpointercapture'
+    ] as const;
+    for (const type of events) surface.addEventListener(type, handlePointer);
+    const contextMenu = (event: Event) => event.preventDefault();
+    surface.addEventListener('contextmenu', contextMenu);
+    const blur = () => {
+      if (mode() === 'recording') stopRecording();
+      else if (mode() === 'playing') togglePlayback();
+      else if (mode() === 'live') scene?.pointers.clear();
+    };
+    const visibility = () => {
+      if (document.hidden) blur();
+    };
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.target instanceof HTMLElement && event.target.closest('input, textarea, [contenteditable]')) return;
+      if (event.code === 'KeyR') {
+        event.preventDefault();
+        toggleRecording();
+      }
+      if (event.code === 'Space') {
+        // Preserve native keyboard activation for a focused toolbar button.
+        if (event.target instanceof HTMLElement && event.target.closest('button')) return;
+        event.preventDefault();
+        togglePlayback();
+      }
+      if (event.code === 'Escape') {
+        mode() === 'recording' ? stopRecording() : returnToLive();
+      }
+    };
+    window.addEventListener('blur', blur);
+    window.addEventListener('keydown', keyboard);
+    document.addEventListener('visibilitychange', visibility);
+    let lastTelemetry = 0;
+    const render = (now: number) => {
+      let sceneTime = isReplay() ? position() : now - liveOrigin;
+      if (mode() === 'recording') {
+        setPosition(Math.min(MAX_RECORDING_MS, now - liveOrigin));
+        if (now - liveOrigin >= MAX_RECORDING_MS) stopRecording();
+      } else if (mode() === 'playing' && playback) {
+        const nextPosition = playback.seek(now - playbackOrigin);
+        sceneTime = nextPosition;
+        setPosition(nextPosition);
+        if (nextPosition >= duration()) setMode('paused');
+      }
+      scene?.render(sceneTime, details());
+      setHasLiveMouse(
+        !isReplay() &&
+          Array.from(scene?.pointers.values() ?? []).some(
+            (pointer) => pointer.sample.pointerType === 'mouse' && pointer.inside
+          )
+      );
+      if (now - lastTelemetry > 80) {
+        setTelemetry(scene?.latest);
+        setContacts(Array.from(scene?.pointers.values() ?? []).filter((pointer) => pointer.down).length);
+        if (mode() === 'recording') setCount(take?.samples.length ?? 0);
+        lastTelemetry = now;
+      }
+      frame = requestAnimationFrame(render);
+    };
+    frame = requestAnimationFrame(render);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(limitTimer);
+      observer.disconnect();
+      for (const type of events) surface.removeEventListener(type, handlePointer);
+      surface.removeEventListener('contextmenu', contextMenu);
+      window.removeEventListener('blur', blur);
+      window.removeEventListener('keydown', keyboard);
+      document.removeEventListener('visibilitychange', visibility);
+      scene?.dispose();
+    };
   });
 
   return (
-    <>
-      <Title>Multitouch</Title>
-      <div class="pointer-events-none fixed text-[8px] md:text-base">
-        <pre>{JSON.stringify(inputS(), null, 2)}</pre>
+    <main class="pointer-studio" data-mode={mode()} data-live-mouse={hasLiveMouse() ? 'true' : 'false'}>
+      <Title>Pointer Studio · Multitouch</Title>
+      <div
+        ref={surface}
+        class="pointer-studio__surface"
+        aria-label="Рабочая поверхность для мыши, стилуса и мультитача"
+      >
+        <canvas ref={canvas} aria-hidden="true" />
+        <canvas ref={stylusCanvas} aria-hidden="true" />
       </div>
-      <svg
-        viewBox="0 0 100 100"
-        xmlns="http://www.w3.org/2000/svg"
-        class="pointer-events-none absolute end-2 top-2 h-60 w-60 md:h-120 md:w-120"
-      >
-        <g transform="scale(0.9)" transform-origin="50 50">
-          <line x1="0" y1="100" x2="100" y2="100" stroke="black" stroke-width="1" />
-
-          <g transform="translate(12 50)">
-            <circle cx="0" cy="0" r="10" fill="none" stroke="black" stroke-width="1" />
-            <text x="-10" y="-12.5" class="text-2">
-              tild
-            </text>
-            <line
-              stroke-linecap="round"
-              x1="0"
-              y1="0"
-              x2={(inputS()?.tilt.x ?? 0) / 9}
-              y2={(inputS()?.tilt.y ?? 0) / 9}
-              stroke="black"
-              stroke-width="1"
+      <header class="pointer-studio__header">
+        <div class="pointer-studio__brand">
+          <span class="pointer-studio__mark">
+            <Icon name="pen" />
+          </span>
+          <div>
+            <h1>Pointer Studio</h1>
+            <p>Мышь · Стилус · Мультитач</p>
+          </div>
+        </div>
+        <div class="pointer-studio__header-actions">
+          <span class="pointer-studio__status" role="status">
+            <i />
+            {status()}
+          </span>
+          <button
+            class={`pointer-studio__icon-button ${details() ? 'is-active' : ''}`}
+            onClick={() => setDetails(!details())}
+            aria-label="Показывать данные PointerEvents"
+            aria-pressed={details() ? 'true' : 'false'}
+            title="Данные PointerEvents"
+          >
+            <Icon name="info" />
+          </button>
+        </div>
+      </header>
+      <Show when={!hasInk() && !isReplay()}>
+        <div class="pointer-studio__welcome">
+          <div class="pointer-studio__welcome-art">
+            <span />
+            <span />
+            <span />
+            <Icon name="pen" />
+          </div>
+          <h2>Каждое касание видно.</h2>
+          <p>
+            Рисуйте мышью, пером или несколькими пальцами.
+            <br />
+            Запишите движение и рассмотрите его снова.
+          </p>
+          <span class="pointer-studio__hint">Одна запись · до 60 секунд</span>
+        </div>
+      </Show>
+      <Show when={isReplay()}>
+        <div class="pointer-studio__replay-note">
+          <Icon name="play" /> {isDemo() ? demoCaption(position()) : 'Записанные действия'}{' '}
+          <span>{isDemo() ? 'Демо' : '1×'}</span>
+        </div>
+      </Show>
+      <footer class="pointer-studio__footer">
+        <Show when={details()}>
+          <div class="pointer-studio__telemetry">
+            <span class="pointer-studio__event">{telemetry()?.type ?? 'PointerEvents'}</span>
+            <span>
+              {telemetry()?.pointerType ?? 'нет ввода'}
+              {telemetry() ? ` #${telemetry()?.pointerId}` : ''}
+            </span>
+            <span>
+              контакты <b>{contacts()}</b>
+            </span>
+            <span>
+              нажим <b>{(telemetry()?.pressure ?? 0).toFixed(2)}</b>
+            </span>
+            <span class="pointer-studio__extra">
+              наклон{' '}
+              <b>
+                {telemetry()?.tiltX ?? 0}° / {telemetry()?.tiltY ?? 0}°
+              </b>
+            </span>
+            <span class="pointer-studio__extra">
+              кнопки <b>{telemetry()?.buttons ?? 0}</b>
+            </span>
+            <Show when={telemetry()?.pointerType === 'pen'}>
+              <span class="pointer-studio__extra">
+                поворот <b>{telemetry()?.twist ?? 0}°</b>
+              </span>
+            </Show>
+            <Show when={!has3D()}>
+              <span>стилус 2D</span>
+            </Show>
+          </div>
+        </Show>
+        <div class="pointer-studio__dock" role="toolbar" aria-label="Запись и воспроизведение">
+          <button
+            class={`pointer-studio__record ${mode() === 'recording' ? 'is-recording' : ''}`}
+            onClick={toggleRecording}
+            title="Запись / стоп · R"
+            aria-label={mode() === 'recording' ? 'Остановить запись' : 'Начать новую запись'}
+          >
+            <span class="pointer-studio__record-dot" />
+            <span>{mode() === 'recording' ? 'Стоп' : 'Запись'}</span>
+          </button>
+          <span class="pointer-studio__divider" />
+          <button
+            class="pointer-studio__icon-button"
+            onClick={togglePlayback}
+            disabled={!count() || mode() === 'recording'}
+            aria-label={mode() === 'playing' ? 'Пауза' : 'Воспроизвести запись'}
+            title="Воспроизведение / пауза · Пробел"
+          >
+            <Icon name={mode() === 'playing' ? 'pause' : 'play'} />
+          </button>
+          <div class="pointer-studio__timeline">
+            <div class="pointer-studio__time">
+              <span>{formatTime(position())}</span>
+              <span>{formatTime(mode() === 'recording' ? MAX_RECORDING_MS : duration())}</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max={mode() === 'recording' ? MAX_RECORDING_MS : duration() || 1}
+              step="1"
+              value={position()}
+              disabled={!count() || mode() === 'recording'}
+              onInput={(event) => seek(event.currentTarget.valueAsNumber)}
+              aria-label="Позиция воспроизведения"
+              aria-valuetext={`${formatTime(position())} из ${formatTime(duration())}`}
             />
-          </g>
-
-          <g transform="translate(12 80)">
-            <circle cx="0" cy="0" r="10" fill="none" stroke="black" stroke-width="1" />
-            <text x="-10" y="-12.5" class="text-2">
-              angle
-            </text>
-            <line
-              stroke-linecap="round"
-              transform={`rotate(${azimuthAngle()})`}
-              x1="0"
-              y1="0"
-              x2={(Math.floor(Math.cos(degToRad(altitudeAngle())) * 1000) / 1000) * 10}
-              y2="0"
-              stroke="black"
-              stroke-width="1"
-            />
-          </g>
-
-          <ConeCut azimuth={azimuthAngle()} altitude={altitudeAngle()} pressure={pressure()} />
-
-          <ConeCut2 azimuth={azimuthAngle()} altitude={altitudeAngle()} pressure={pressure()} />
-
-          <ConeCut3 azimuth={azimuthAngle()} altitude={altitudeAngle()} pressure={pressure()} />
-
-          <StylusPen transform={`translate(${stroke() + 50} ${pressure() * 8 - 22}) rotate(${angle()})`} />
-        </g>
-      </svg>
-      {canvas}
-    </>
+          </div>
+          <span class="pointer-studio__divider" />
+          <button
+            class="pointer-studio__icon-button"
+            onClick={returnToLive}
+            disabled={mode() === 'recording'}
+            aria-label={isReplay() ? 'Вернуться к живому вводу' : 'Очистить поверхность'}
+            title={isReplay() ? 'Вернуться к живому вводу · Esc' : 'Очистить поверхность'}
+          >
+            <Icon name={isReplay() ? 'pen' : 'clear'} />
+          </button>
+        </div>
+        <p class="pointer-studio__footnote">
+          {mode() === 'recording'
+            ? 'Записываем движения и касания'
+            : isReplay()
+              ? isDemo()
+                ? 'Демонстрация · Запись — создать свою · Esc — рисовать'
+                : `Событий: ${count().toLocaleString('ru-RU')} · новая запись заменит предыдущую`
+              : count()
+                ? isDemo()
+                  ? 'Нажмите ▶, чтобы снова посмотреть демонстрацию'
+                  : 'Последняя запись доступна для воспроизведения'
+                : 'R — запись · Пробел — воспроизведение'}
+        </p>
+      </footer>
+    </main>
   );
 }
 
-/**
- *
- * radius of circle is radius from focus point to ry of the ellips
- *
- * [link](https://byjus.com/maths/ellipse/)
- *
- */
-function ConeCut(props: { azimuth: number; altitude: number; pressure: number }) {
-  const rotate = createMemo(() => props.azimuth);
-  const moved = createMemo(() => (Math.floor(Math.cos(degToRad(props.altitude)) * 1000) / 1000) * 10);
-
-  const r = createMemo(() => props.pressure * 8);
-
-  const c = createMemo(() => moved() / 2);
-  const a = createMemo(() => r() + c());
-  const b = createMemo(() => Math.sqrt(a() * a() - c() * c()) ?? 0);
-
-  return (
-    <>
-      <g transform={`translate(88 80) rotate(${rotate()})`}>
-        <Show when={true}>
-          <ellipse cx="0" cy="0" rx="0.1" ry="0.1" fill="none" stroke="black" stroke-width="0.5" />
-          <ellipse cx={moved()} cy={0} rx="0.1" ry="0.1" fill="none" stroke="black" stroke-width="0.5" />
-          <line stroke-linecap="round" x1="0" y1="0" x2={moved()} y2={0} stroke="black" stroke-width="0.5"></line>
-
-          <circle cx="0" cy="0" r={r()} fill="none" stroke="black" stroke-width="0.5" />
-          <circle cx={moved()} cy="0" r={r()} fill="none" stroke="black" stroke-width="0.5" />
-        </Show>
-
-        <ellipse cx={c()} cy="0" rx={a()} ry={b()} fill="none" stroke="black" stroke-width="1" />
-      </g>
-    </>
-  );
+function formatTime(milliseconds: number) {
+  const tenths = Math.floor(milliseconds / 100);
+  return `${Math.floor(tenths / 600)
+    .toString()
+    .padStart(2, '0')}:${Math.floor((tenths / 10) % 60)
+    .toString()
+    .padStart(2, '0')}.${tenths % 10}`;
 }
 
-function ConeCut2(props: { azimuth: number; altitude: number; pressure: number }) {
-  const rotate = createMemo(() => props.azimuth);
-  const moved = createMemo(() => (Math.floor(Math.cos(degToRad(props.altitude)) * 1000) / 1000) * 10);
-
-  const r = createMemo(() => props.pressure * 8);
-
-  const c = createMemo(() => moved() / 2);
-  const a = createMemo(() => r() + c());
-
+/** Small inline icons share the toolbar's stroke weight and need no asset requests. */
+function Icon(props: { name: 'pen' | 'play' | 'pause' | 'clear' | 'info' }) {
+  const paths = {
+    pen: 'm15 3 6 6M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15l-1 6 5-2',
+    play: 'm8 5 11 7-11 7Z',
+    pause: 'M8 5v14M16 5v14',
+    clear: 'm4 14 8-10a2 2 0 0 1 3 0l5 5a2 2 0 0 1 0 3l-7 8H8l-4-4a2 2 0 0 1 0-2Zm4-5 9 8M13 20h8',
+    info: 'm8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16'
+  };
   return (
-    <>
-      <g
-        transform={`translate(88 40) rotate(${rotate()}) translate(${
-          -props.pressure * 8 * Math.cos(degToRad(props.altitude))
-        } 0)`}
-      >
-        <Show when={true}>
-          <line stroke-linecap="round" x1="0" y1="0" x2={moved()} y2={0} stroke="black" stroke-width="0.5"></line>
-          <line
-            stroke-linecap="round"
-            x1={moved()}
-            y1={-r()}
-            x2={moved()}
-            y2={r()}
-            stroke="black"
-            stroke-width="0.5"
-          ></line>
-        </Show>
-
-        <line stroke-linecap="round" x1={0} y1={0} x2={moved()} y2={r()} stroke="black" stroke-width="1"></line>
-        <line stroke-linecap="round" x1={0} y1={0} x2={moved()} y2={-r()} stroke="black" stroke-width="1"></line>
-        <ellipse
-          cx={moved()}
-          cy="0"
-          rx={r() * Math.sin(degToRad(props.altitude))}
-          ry={r()}
-          fill="none"
-          stroke="black"
-          stroke-width="1"
-        />
-      </g>
-    </>
-  );
-}
-
-/**
- * b - y or hight/2 of from center to y
- * a - x or width/2 or from center to x
- * c - center to one of focus points
- * r - radius from focus point of from focus point to x or (a - c)
- *
- * radius of circle is radius y of the ellips
- */
-function ConeCut3(props: { azimuth: number; altitude: number; pressure: number }) {
-  const rotate = createMemo(() => props.azimuth);
-  const moved = createMemo(() => (Math.floor(Math.cos(degToRad(props.altitude)) * 1000) / 1000) * 10);
-
-  const b = createMemo(() => props.pressure * 8);
-  const c = createMemo(() => moved() / 2);
-
-  const a = createMemo(() => Math.sqrt(b() * b() + c() * c()) ?? 0);
-  const r = createMemo(() => a() - c());
-
-  return (
-    <>
-      <g transform={`translate(88 60) rotate(${rotate()})`}>
-        <Show when={true}>
-          <ellipse cx="0" cy="0" rx="0.1" ry="0.1" fill="none" stroke="black" stroke-width="0.5" />
-          <ellipse cx={moved()} cy={0} rx="0.1" ry="0.1" fill="none" stroke="black" stroke-width="0.5" />
-          <line stroke-linecap="round" x1="0" y1="0" x2={moved()} y2={0} stroke="black" stroke-width="0.5"></line>
-
-          <circle cx="0" cy="0" r={r()} fill="none" stroke="black" stroke-width="0.5" />
-          <circle cx={moved()} cy="0" r={r()} fill="none" stroke="black" stroke-width="0.5" />
-        </Show>
-
-        <ellipse cx={c()} cy="0" rx={a()} ry={b()} fill="none" stroke="black" stroke-width="1" />
-      </g>
-    </>
-  );
-}
-
-function StylusPen(props: ComponentProps<'g'>) {
-  return (
-    <g transform-origin="0 119.5" {...props}>
-      <path
-        d="M 0.95,118 6.6,106 A 1.5,1.5 80 0 0 6.3,104.3 l -1.6,-1.7 h -9.4 l -1.6,1.7 a 1.5,1.5 100 0 0 -0.3,1.6 l 5.6,12.1 z"
-        fill="white"
-        stroke="black"
-        stroke-width="1"
-      />
-      <path d="M 0,120 V 118" fill="none" stroke="black" stroke-width="1" />
-      <path
-        d="m -4.7,49.2 h 9.4 l 0.789,52.6 a 0.7415,0.7415 134.6 0 1 -0.742,0.8 l -9.494,0 a 0.75,0.75 45.43 0 1 -0.75,-0.8 z"
-        fill="gray"
-        stroke="black"
-        stroke-width="1"
-      />
-      <path d="m -3.5,7 h 7 L 4,49.2 h -8 z" fill="white" stroke="black" stroke-width="1" />
-      <path
-        d="M -2.8,7 -2.9,3.3 c 0,-1.6 1.3,-2.9 2.9,-2.9 1.6,0 2.9,1.3 2.9,2.9 L 2.8,7"
-        fill="white"
-        stroke="black"
-        stroke-width="1"
-      />
-      <rect width="3" height="9" x="-1.5" y="85" ry="0.7" fill="white" stroke="black" stroke-width="1" />
-      <rect width="3" height="9" x="-1.5" y="75" ry="0.7" fill="white" stroke="black" stroke-width="1" />
-    </g>
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d={paths[props.name]} />
+    </svg>
   );
 }
