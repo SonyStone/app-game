@@ -103,6 +103,7 @@ function applyDraft(message: PendingDraftMessage) {
 }
 
 function applyGizmoHighlight(message: PendingGizmoHighlightMessage) {
+  engine?.setWorkplaneGizmoMode(message.mode)
   engine?.setWorkplaneGizmoHighlight(message.highlight)
 }
 

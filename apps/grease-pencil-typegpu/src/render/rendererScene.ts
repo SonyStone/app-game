@@ -1,3 +1,4 @@
+import type { ScreenSpaceGuides } from './screenSpaceGuides'
 import type {
   DrawingWorkplane,
   RenderLayer,
@@ -11,7 +12,7 @@ import {
   type StrokePointOverlay,
 } from './meshBuilder'
 import type { Vec3 } from './vector'
-import type { WorkplaneGizmoHighlight } from './workplaneGizmoTypes'
+import type { WorkplaneGizmoHighlight, WorkplaneGizmoMode } from './workplaneGizmoTypes'
 
 export type { StrokePointOverlay } from './meshBuilder'
 
@@ -22,6 +23,7 @@ const DEFAULT_WORKPLANE: DrawingWorkplane = {
 }
 
 export type RendererScene = {
+  workplaneGizmoMode: WorkplaneGizmoMode
   layers: RenderLayer[]
   workplane: DrawingWorkplane
   draftStroke?: Stroke
@@ -32,6 +34,7 @@ export type RendererScene = {
 
 export function createRendererScene(): RendererScene {
   return {
+    workplaneGizmoMode: 'translate',
     layers: [],
     workplane: DEFAULT_WORKPLANE,
     selectedStrokeIds: new Set<StrokeId>(),
@@ -75,6 +78,7 @@ export function updateRendererWorkplaneGizmoHighlight(
   }
 }
 
+/** Builds committed strokes independently of camera-dependent guides. */
 export function buildRendererSceneCommittedGeometry(scene: RendererScene) {
   return buildCommittedDrawingGeometry({
     layers: scene.layers,
@@ -83,13 +87,18 @@ export function buildRendererSceneCommittedGeometry(scene: RendererScene) {
   })
 }
 
+/** Builds the draft and selection handles; spatial gizmos follow the guide visibility. */
 export function buildRendererSceneDynamicGeometry(
   scene: RendererScene,
   billboardNormal: Vec3,
   cameraTarget: Vec3,
   cameraDistance: number,
+  showGuides = true,
+  screenSpace: ScreenSpaceGuides,
 ) {
   return buildDynamicDrawingGeometry({
+    screenSpace,
+    showGuides,
     layers: scene.layers,
     workplane: scene.workplane,
     billboardNormal,
@@ -98,6 +107,7 @@ export function buildRendererSceneDynamicGeometry(
     draftStroke: scene.draftStroke,
     pointOverlays: scene.pointOverlays,
     workplaneGizmoHighlight: scene.workplaneGizmoHighlight,
+    workplaneGizmoMode: scene.workplaneGizmoMode,
   })
 }
 
@@ -106,8 +116,10 @@ export function buildRendererSceneGeometry(
   billboardNormal: Vec3,
   cameraTarget: Vec3,
   cameraDistance: number,
+  screenSpace: ScreenSpaceGuides,
 ) {
   return buildDrawingGeometry({
+    screenSpace,
     layers: scene.layers,
     workplane: scene.workplane,
     billboardNormal,
@@ -117,5 +129,6 @@ export function buildRendererSceneGeometry(
     selectedStrokeIds: scene.selectedStrokeIds,
     pointOverlays: scene.pointOverlays,
     workplaneGizmoHighlight: scene.workplaneGizmoHighlight,
+    workplaneGizmoMode: scene.workplaneGizmoMode,
   })
 }

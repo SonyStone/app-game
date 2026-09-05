@@ -1,4 +1,5 @@
-import { createSignal, createTrackedEffect, onSettled, type Accessor } from 'solid-js';
+import type { WorkplaneGizmoMode } from '../render/workplaneGizmoTypes';
+import { createEffect, createSignal, onSettled, type Accessor } from 'solid-js';
 import type { DrawingWorkplane, RenderLayer, Stroke, StrokeId, WorkplaneId } from '../document';
 import { GreaseRenderer, type StrokePointOverlay } from '../render/greaseRenderer';
 import type { CameraState } from '../render/math';
@@ -13,9 +14,11 @@ type UseGreaseRendererParams = {
   activeWorkplaneId: Accessor<WorkplaneId>;
   selectedStrokeIds: Accessor<ReadonlySet<StrokeId>>;
   viewportMode: Accessor<ViewportMode>;
+  gizmoMode: Accessor<WorkplaneGizmoMode>;
   workplane: Accessor<DrawingWorkplane>;
 };
 
+/** Keeps renderer side effects separate from reactive reads, and follows the actual canvas size. */
 export function useGreaseRenderer(params: UseGreaseRendererParams) {
   const [cameraState, setCameraState] = createSignal<CameraState>(createDefaultCamera());
   const [renderer, setRenderer] = createSignal<GreaseRenderer>();
@@ -25,6 +28,9 @@ export function useGreaseRenderer(params: UseGreaseRendererParams) {
     let mounted = true;
     const handleResize = () => renderer()?.resize();
     window.addEventListener('resize', handleResize);
+    const resizeObserver = new ResizeObserver(handleResize);
+    const observedCanvas = params.canvas();
+    if (observedCanvas) resizeObserver.observe(observedCanvas);
 
     void (async () => {
       const canvas = params.canvas();
@@ -42,36 +48,49 @@ export function useGreaseRenderer(params: UseGreaseRendererParams) {
 
     return () => {
       mounted = false;
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       renderer()?.destroy();
     };
   });
 
-  createTrackedEffect(() => {
-    renderer()?.setScene(
-      [...params.renderLayers()],
-      params.workplane(),
-      params.selectedStrokeIds(),
-      params.pointOverlays()
-    );
-  });
+  createEffect(
+    () => ({
+      renderer: renderer(),
+      layers: [...params.renderLayers()],
+      workplane: params.workplane(),
+      selection: params.selectedStrokeIds(),
+      points: params.pointOverlays()
+    }),
+    (value) => value.renderer?.setScene(value.layers, value.workplane, value.selection, value.points)
+  );
 
-  createTrackedEffect(() => {
-    renderer()?.setDraftStroke(params.draftStroke());
-  });
+  createEffect(
+    () => ({ renderer: renderer(), stroke: params.draftStroke() }),
+    (value) => value.renderer?.setDraftStroke(value.stroke)
+  );
 
-  let previousViewportMode: ViewportMode | undefined;
+  createEffect(
+    () => ({ renderer: renderer(), mode: params.gizmoMode() }),
+    (value) => value.renderer?.setWorkplaneGizmoMode(value.mode)
+  );
+
   let previousWorkplaneId: WorkplaneId | undefined;
-  createTrackedEffect(() => {
-    const viewportMode = params.viewportMode();
-    const workplaneId = params.activeWorkplaneId();
-    const snapTarget =
-      viewportMode === '2d' && (previousViewportMode !== viewportMode || previousWorkplaneId !== workplaneId);
-
-    renderer()?.setViewportMode(viewportMode, params.workplane(), snapTarget);
-    previousViewportMode = viewportMode;
-    previousWorkplaneId = workplaneId;
-  });
+  createEffect(
+    () => ({
+      renderer: renderer(),
+      mode: params.viewportMode(),
+      workplaneId: params.activeWorkplaneId(),
+      workplane: params.workplane()
+    }),
+    (value) => {
+      if (!value.renderer) return;
+      const snapTarget =
+        value.mode === '2d' && previousWorkplaneId !== undefined && previousWorkplaneId !== value.workplaneId;
+      value.renderer.setViewportMode(value.mode, value.workplane, snapTarget);
+      previousWorkplaneId = value.workplaneId;
+    }
+  );
 
   const zoom = (delta: number) => {
     renderer()?.zoom(delta);

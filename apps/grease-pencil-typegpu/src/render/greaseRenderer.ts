@@ -1,3 +1,7 @@
+import { createScreenSpaceGuides, worldUnitsPerPixel } from './screenSpaceGuides'
+import { transformTouchCamera } from './touchCamera'
+import { createViewportCameraMemory } from './viewportCameraMemory'
+import type { TouchViewTransform } from '../features/interaction/touchGesture'
 import type {
   DrawingWorkplane,
   RenderLayer,
@@ -5,6 +9,8 @@ import type {
   StrokeId,
 } from '../document'
 import type { ViewportMode } from '../shared/viewportMode'
+import type { ViewNavigation } from '@app-game/solid-view-cube'
+import { applyViewOrientation, interpolateViewOrientation } from './viewCubeCamera'
 import type { Vec3 } from '../shared/vector'
 import GreaseRendererWorker from './greaseRenderer.worker?worker'
 import type {
@@ -17,7 +23,7 @@ import {
   clamp,
   type CameraState,
 } from './math'
-import type { WorkplaneGizmoHighlight } from './workplaneGizmoTypes'
+import type { WorkplaneGizmoHighlight, WorkplaneGizmoMode } from './workplaneGizmoTypes'
 import {
   createRendererScene,
   updateRendererDraftStroke,
@@ -28,15 +34,11 @@ import {
 } from './rendererScene'
 import {
   createDefaultCamera,
-  lockCameraToWorkplane,
   offsetFromWorkplane as offsetPointFromWorkplane,
   orbitCamera,
   panCamera,
   resetCameraView,
-  rotateCameraViewByAngle,
   screenToWorkplane,
-  setCameraViewDirection,
-  unlockCameraFromWorkplane,
   worldToScreen,
   zoomCamera,
 } from './viewportCamera'
@@ -49,6 +51,7 @@ const CAMERA_TWEEN_DURATION_MS = 280
 export class GreaseRenderer {
   readonly canvas: HTMLCanvasElement
   readonly camera: CameraState = createDefaultCamera()
+  private readonly cameraMemory = createViewportCameraMemory(this.camera)
 
   private cameraTweenFrame: number | undefined
   private height = 1
@@ -156,11 +159,18 @@ export class GreaseRenderer {
     this.postDraft()
   }
 
+  /** Switches the visible manipulator handles and clears the previous hover. */
+  setWorkplaneGizmoMode(mode: WorkplaneGizmoMode) {
+    this.scene = { ...this.scene, workplaneGizmoMode: mode, workplaneGizmoHighlight: undefined }
+    this.postWorkplaneGizmoHighlight()
+  }
+
   setWorkplaneGizmoHighlight(highlight?: WorkplaneGizmoHighlight) {
     this.scene = updateRendererWorkplaneGizmoHighlight(this.scene, highlight)
     this.postWorkplaneGizmoHighlight()
   }
 
+  /** Switching restores each mode's last camera; snapTarget explicitly resets the paper alignment. */
   setViewportMode(
     mode: ViewportMode,
     workplane: DrawingWorkplane,
@@ -170,13 +180,8 @@ export class GreaseRenderer {
     if (!changed && !snapTarget) return
 
     this.cancelCameraTween()
+    this.cameraMemory.switchMode(mode, workplane, snapTarget)
     this.viewportMode = mode
-    if (mode === '2d') {
-      lockCameraToWorkplane(this.camera, workplane, changed || snapTarget)
-    }
-    else {
-      unlockCameraFromWorkplane(this.camera)
-    }
     this.postCamera()
   }
 
@@ -203,24 +208,28 @@ export class GreaseRenderer {
     this.postCamera()
   }
 
+  /** Applies tablet navigation about the gesture centroid, including roll in 2D and 3D. */
+  transformTouch(gesture: TouchViewTransform) {
+    this.cancelCameraTween()
+    transformTouchCamera(this.camera, this.canvas.getBoundingClientRect(), gesture)
+    this.postCamera()
+  }
+
   resetView(animate = false) {
-    this.viewportMode = '3d'
+    this.setViewportMode('3d', this.scene.workplane)
     const nextCamera = cloneCameraState(this.camera)
     resetCameraView(nextCamera)
     this.applyCameraChange(nextCamera, animate)
   }
 
-  rollView(angle: number, animate = false) {
+  /** Applies a resolved ViewCube request without changing zoom or orbit pivot. Roll preserves 2D locking. */
+  navigateView(request: ViewNavigation) {
+    if ('phase' in request && (request.phase === 'end' || request.phase === 'cancel')) return
+    const keepPlane = (request.source === 'roll' || request.source === 'roll-drag') && this.camera.mode === '2d'
+    if (!keepPlane) this.setViewportMode('3d', this.scene.workplane)
     const nextCamera = cloneCameraState(this.camera)
-    rotateCameraViewByAngle(nextCamera, angle)
-    this.applyCameraChange(nextCamera, animate)
-  }
-
-  setViewDirection(direction: Vec3, animate = false) {
-    this.viewportMode = '3d'
-    const nextCamera = cloneCameraState(this.camera)
-    setCameraViewDirection(nextCamera, direction)
-    this.applyCameraChange(nextCamera, animate)
+    applyViewOrientation(nextCamera, request.orientation, keepPlane)
+    this.applyCameraChange(nextCamera, request.transition === 'animated')
   }
 
   screenToWorld(clientX: number, clientY: number): Vec3 | undefined {
@@ -237,6 +246,13 @@ export class GreaseRenderer {
 
   offsetFromWorkplane(position: Vec3, distance: number): Vec3 {
     return offsetPointFromWorkplane(this.scene.workplane, position, distance)
+  }
+
+  /** CSS-pixel scale at a world position, shared with the worker's guide geometry. */
+  worldUnitsPerPixel(position: Vec3) {
+    const rect = this.canvas.getBoundingClientRect()
+    const view = createScreenSpaceGuides(this.camera, rect.width, rect.height)
+    return worldUnitsPerPixel(view.matrices, view.height, position)
   }
 
   projectToScreen(position: Vec3) {
@@ -369,6 +385,7 @@ export class GreaseRenderer {
     if (!this.initialized) return
     this.pendingGizmoHighlight = {
       type: 'gizmo-highlight',
+      mode: this.scene.workplaneGizmoMode,
       ...(this.scene.workplaneGizmoHighlight
         ? { highlight: this.scene.workplaneGizmoHighlight }
         : {}),
@@ -487,12 +504,7 @@ function interpolateCameraState(
   to: CameraState,
   amount: number,
 ) {
-  target.mode = to.mode
-  target.lockedNormal = to.lockedNormal ? [...to.lockedNormal] : undefined
-  target.lockedUp = to.lockedUp ? [...to.lockedUp] : undefined
-  target.roll = interpolateAngle(from.roll, to.roll, amount)
-  target.yaw = interpolateAngle(from.yaw, to.yaw, amount)
-  target.pitch = interpolateAngle(from.pitch, to.pitch, amount)
+  interpolateViewOrientation(target, from, to, amount)
   target.distance = interpolateNumber(from.distance, to.distance, amount)
   target.target = [
     interpolateNumber(from.target[0], to.target[0], amount),
@@ -503,15 +515,6 @@ function interpolateCameraState(
 
 function interpolateNumber(from: number, to: number, amount: number) {
   return from + (to - from) * amount
-}
-
-function interpolateAngle(from: number, to: number, amount: number) {
-  return from + shortestAngleDelta(from, to) * amount
-}
-
-function shortestAngleDelta(from: number, to: number) {
-  return ((to - from + Math.PI) % (Math.PI * 2) + Math.PI * 2) %
-    (Math.PI * 2) - Math.PI
 }
 
 function easeOutCubic(progress: number) {

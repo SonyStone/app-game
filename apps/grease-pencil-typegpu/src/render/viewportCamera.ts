@@ -1,4 +1,7 @@
+import { orbitOrientation } from '@app-game/solid-view-cube'
 import type { DrawingWorkplane } from '../document'
+import { createDefaultCamera } from './cameraDefaults'
+export { createDefaultCamera } from './cameraDefaults'
 import {
   add3,
   clamp,
@@ -12,6 +15,7 @@ import {
   type Vec3,
 } from './math'
 import { transformMat4 } from './matrixTransform'
+import { applyViewOrientation, cameraOrientation } from './viewCubeCamera'
 import { getWorkplaneBasis } from './workplane'
 
 const TAU = Math.PI * 2
@@ -23,17 +27,7 @@ export type ScreenPoint = {
   depth: number
 }
 
-export function createDefaultCamera(): CameraState {
-  return {
-    mode: '3d',
-    roll: 0,
-    target: [0, 0, 0],
-    yaw: 0.68,
-    pitch: 0.74,
-    distance: 7.5,
-  }
-}
-
+/** Uses ViewCube's roll-aware screen directions and pole limits; 2D remains a canvas rotation. */
 export function orbitCamera(
   camera: CameraState,
   deltaX: number,
@@ -44,38 +38,14 @@ export function orbitCamera(
     return
   }
 
-  camera.yaw = wrapAngle(camera.yaw - deltaX * 0.006)
-  camera.pitch = wrapAngle(camera.pitch + deltaY * 0.005)
+  applyViewOrientation(
+    camera,
+    orbitOrientation(cameraOrientation(camera), deltaX * 0.006, deltaY * 0.005),
+  )
 }
 
 export function rotateCameraView(camera: CameraState, delta: number) {
   camera.roll = wrapAngle(camera.roll - delta * VIEW_ROTATE_SPEED)
-}
-
-export function rotateCameraViewByAngle(camera: CameraState, angle: number) {
-  camera.roll = wrapAngle(camera.roll + angle)
-}
-
-export function setCameraViewDirection(camera: CameraState, direction: Vec3) {
-  const viewDirection = normalize3(direction)
-  const directionLength =
-    Math.abs(viewDirection[0]) +
-    Math.abs(viewDirection[1]) +
-    Math.abs(viewDirection[2])
-  if (directionLength < 1e-6) {
-    return
-  }
-
-  const horizontalLength = Math.hypot(viewDirection[0], viewDirection[1])
-  camera.mode = '3d'
-  camera.lockedNormal = undefined
-  camera.lockedUp = undefined
-  camera.roll = 0
-  camera.pitch = Math.asin(clamp(viewDirection[2], -1, 1))
-  camera.yaw =
-    horizontalLength < 1e-6
-      ? 0
-      : Math.atan2(viewDirection[0], -viewDirection[1])
 }
 
 export function resetCameraView(camera: CameraState) {

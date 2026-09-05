@@ -1,28 +1,32 @@
-import { createSignal } from 'solid-js'
-import { AppSidebar } from './app/AppSidebar'
-import { AppToolbar } from './app/AppToolbar'
-import { BodyClass } from './app/BodyClass'
-import { useGreaseRenderer } from './app/useGreaseRenderer'
-import { useDocumentSession } from './app/useDocumentSession'
-import { useSelectionShortcuts } from './app/useSelectionShortcuts'
-import { useCanvasInteraction } from './features/interaction/useCanvasInteraction'
-import type { ToolMode } from './shared/toolMode'
-import { CanvasViewport } from './features/viewport/CanvasViewport'
-import type {
-  ViewCubeActionOptions,
-  ViewCubeTarget,
-} from '@app-game/solid-view-cube'
-import './index.css'
-import type { ViewportMode } from './shared/viewportMode'
+import type { WorkplaneGizmoMode } from './render/workplaneGizmoTypes';
+import type { ViewNavigation } from '@app-game/solid-view-cube';
+import { createSignal, onSettled } from 'solid-js';
+import { AppSidebar } from './app/AppSidebar';
+import { AppToolbar } from './app/AppToolbar';
+import { BodyClass } from './app/BodyClass';
+import { useDocumentSession } from './app/useDocumentSession';
+import { useGreaseRenderer } from './app/useGreaseRenderer';
+import { useSelectionShortcuts } from './app/useSelectionShortcuts';
+import { useCanvasInteraction } from './features/interaction/useCanvasInteraction';
+import { CanvasViewport } from './features/viewport/CanvasViewport';
+import './index.css';
+import type { SketchPanel } from './shared/sketchPanel';
+import type { ToolMode } from './shared/toolMode';
+import type { ViewportMode } from './shared/viewportMode';
 
-function App() {
-  let canvasRef!: HTMLCanvasElement
+/** Sketchbook workspace with a shared canvas across desktop and touch layouts. */
+export default function App() {
+  let canvasRef!: HTMLCanvasElement;
 
-  const [mode, setMode] = createSignal<ToolMode>('draw')
-  const [viewportMode, setViewportMode] = createSignal<ViewportMode>('3d')
-  const [eraserRadius, setEraserRadius] = createSignal(0.18)
-  const [brushStrength, setBrushStrength] = createSignal(1)
-  const [pointerLabel, setPointerLabel] = createSignal('Ready')
+  const [mode, setMode] = createSignal<ToolMode>('draw');
+  const [gizmoMode, setGizmoMode] = createSignal<WorkplaneGizmoMode>('translate');
+  const [viewportMode, setViewportMode] = createSignal<ViewportMode>('2d');
+  const [touchDrawingByView, setTouchDrawingByView] = createSignal({ '2d': true, '3d': false });
+  const touchDrawing = () => touchDrawingByView()[viewportMode()];
+  const [panel, setPanel] = createSignal<SketchPanel>();
+  const [eraserRadius, setEraserRadius] = createSignal(0.18);
+  const [brushStrength, setBrushStrength] = createSignal(1);
+  const [, setPointerLabel] = createSignal('Ready');
   const {
     activeDrawing,
     activeLayer,
@@ -36,7 +40,6 @@ function App() {
     layersTopFirst,
     materials,
     onionSkin,
-    pointCount,
     pointOverlays,
     renderLayers,
     selectedPointCount,
@@ -47,11 +50,10 @@ function App() {
     setDraftStroke,
     setSelectedPointKeys,
     setSelectedStrokeIds,
-    strokeCount,
     updateDocument,
     workplane,
-    workplanes,
-  } = useDocumentSession(mode)
+    workplanes
+  } = useDocumentSession(mode);
   const { cameraState, renderer, status, zoom } = useGreaseRenderer({
     canvas: () => canvasRef,
     activeWorkplaneId,
@@ -60,14 +62,19 @@ function App() {
     renderLayers,
     selectedStrokeIds,
     viewportMode,
-    workplane,
-  })
+    gizmoMode,
+    workplane
+  });
 
   const canvasInteraction = useCanvasInteraction({
+    camera: cameraState,
+    touchDrawing,
+    documentState,
     canvas: () => canvasRef,
     renderer,
     mode,
     viewportMode,
+    gizmoMode,
     activeLayer,
     activeDrawing,
     activeMaterial,
@@ -84,54 +91,53 @@ function App() {
     selectedStrokeCount,
     selectedPointCount,
     setDocumentState,
-    setPointerLabel,
-  })
+    setPointerLabel
+  });
 
   useSelectionShortcuts({
     deleteSelectedPoints: canvasInteraction.deleteSelectedPoints,
     deleteSelectedStrokes: canvasInteraction.deleteSelectedStrokes,
     selectedPointKeys,
-    selectedStrokeIds,
-  })
+    selectedStrokeIds
+  });
 
-  const setViewCubeTarget = (
-    target: ViewCubeTarget,
-    options?: ViewCubeActionOptions,
-  ) => {
-    setViewportMode('3d')
-    renderer()?.setViewDirection(target.direction, options?.animate)
-  }
+  const closePanel = () => {
+    const launcher = document.querySelector<HTMLButtonElement>('.marking-trigger');
+    setPanel(undefined);
+    launcher?.focus();
+  };
 
-  const resetViewCubeHome = (options?: ViewCubeActionOptions) => {
-    setViewportMode('3d')
-    renderer()?.resetView(options?.animate)
-  }
+  onSettled(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && panel()) closePanel();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
 
-  const orbitViewCube = (deltaX: number, deltaY: number) => {
-    setViewportMode('3d')
-    const activeRenderer = renderer()
-    if (!activeRenderer) return
-    if (activeRenderer.camera.mode !== '3d') {
-      activeRenderer.setViewportMode('3d', workplane())
-    }
-    activeRenderer.orbit(deltaX, deltaY)
-  }
+  const navigateViewCube = (request: ViewNavigation) => {
+    if ('phase' in request && (request.phase === 'end' || request.phase === 'cancel')) return;
+    if (request.source !== 'roll' && request.source !== 'roll-drag') setViewportMode('3d');
+    renderer()?.navigateView(request);
+  };
 
-  const rollViewCube = (
-    angle: number,
-    options?: ViewCubeActionOptions,
-  ) => {
-    renderer()?.rollView(angle, options?.animate)
-  }
+  const resetViewCubeHome = () => {
+    setViewportMode('3d');
+    renderer()?.resetView(!window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  };
 
   return (
-    <main class="grease-pencil-root flex h-dvh w-full flex-col bg-stone-100 text-stone-950">
+    <main class="grease-pencil-root" data-panel-open={Boolean(panel())} data-tool={mode()}>
       <BodyClass class="m-0 overflow-hidden" />
       <AppToolbar
+        touchDrawing={touchDrawing()}
+        onSetTouchDrawing={(enabled) => setTouchDrawingByView((current) => ({ ...current, [viewportMode()]: enabled }))}
+        panel={panel()}
+        onSetPanel={setPanel}
+        canUndo={Boolean(activeDrawing()?.strokes.length) && !activeLayer()?.locked}
         activeMaterial={activeMaterial()}
         brushStrength={brushStrength()}
         canDeleteSelection={selectedStrokeCount() > 0 || selectedPointCount() > 0}
-        currentFrame={documentState().currentFrame}
         eraserRadius={eraserRadius()}
         mode={mode()}
         viewportMode={viewportMode()}
@@ -140,36 +146,41 @@ function App() {
         onSetEraserRadius={setEraserRadius}
         onSetMode={setMode}
         onSetViewportMode={setViewportMode}
+        onResetView={() =>
+          viewportMode() === '2d' ? renderer()?.setViewportMode('2d', workplane(), true) : resetViewCubeHome()
+        }
         updateDocument={updateDocument}
       />
 
       <section class="workspace">
         <CanvasViewport
+          workplane={workplane()}
+          gizmoMode={gizmoMode()}
+          onSetGizmoMode={setGizmoMode}
           animateViewCube
+          renderer={renderer()}
           camera={cameraState()}
           canvasRef={(canvas) => {
-            canvasRef = canvas
+            canvasRef = canvas;
           }}
-          details={`Frame ${documentState().currentFrame} · ${
-            activeLayer()?.name ?? 'No layer'
-          } · ${strokeCount()} strokes · ${pointCount()} points · ${selectedStrokeCount()} strokes selected · ${selectedPointCount()} points selected · ${pointerLabel()}`}
+          viewportMode={viewportMode()}
           status={status()}
-          viewCubeFocalLength="34rem"
           onHomeView={resetViewCubeHome}
-          onOrbitView={orbitViewCube}
           onPointerDown={canvasInteraction.onPointerDown}
           onPointerMove={canvasInteraction.onPointerMove}
           onPointerUp={canvasInteraction.onPointerUp}
-          onPointerCancel={canvasInteraction.onPointerUp}
-          onRollView={rollViewCube}
-          onSetViewCubeTarget={setViewCubeTarget}
+          onPointerCancel={canvasInteraction.onPointerCancel}
+          onNavigateView={navigateViewCube}
           onWheel={(event) => {
-            event.preventDefault()
-            zoom(event.deltaY)
+            event.preventDefault();
+            zoom(event.deltaY);
           }}
         />
 
         <AppSidebar
+          panel={panel()}
+          onClose={closePanel}
+          currentFrame={documentState().currentFrame}
           activeLayerId={documentState().activeLayerId}
           activeMaterial={activeMaterial()}
           activeMaterialId={documentState().activeMaterialId}
@@ -186,7 +197,5 @@ function App() {
         />
       </section>
     </main>
-  )
+  );
 }
-
-export default App

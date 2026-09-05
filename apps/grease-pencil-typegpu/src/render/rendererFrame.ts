@@ -1,3 +1,4 @@
+import { createScreenSpaceGuides } from './screenSpaceGuides'
 import type { CameraState } from './math'
 import { createCameraFrameUniforms } from './cameraUniforms'
 import {
@@ -76,6 +77,7 @@ export function renderDrawingFrame(params: RenderDrawingFrameParams) {
     cameraUniforms.billboardNormal,
     params.camera.target,
     params.camera.distance,
+    createScreenSpaceGuides(params.camera, params.width, params.height),
   )
 
   const buffers = writeDrawingGeometryBuffers(

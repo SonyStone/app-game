@@ -108,6 +108,15 @@ export function createStrokeDrawingInteraction(params: StrokeDrawingParams) {
     appendDraftPoints(points, event.pointerType)
   }
 
+  /** Discard an interrupted stroke so a pinch or pointer cancellation leaves no mark. */
+  const cancelDraftStroke = () => {
+    drawingPointerId = undefined
+    drawingTarget = undefined
+    resetSmoothing()
+    params.setDraftStroke(undefined)
+    params.setPointerLabel('Ready')
+  }
+
   const commitDraftStroke = (event: PointerEvent) => {
     if (drawingPointerId !== event.pointerId) return
     flushSmoothedSamples(event.pointerType)
@@ -258,6 +267,7 @@ export function createStrokeDrawingInteraction(params: StrokeDrawingParams) {
 
   return {
     appendDraftPoint,
+    cancelDraftStroke,
     commitDraftStroke,
     startStroke,
   } as const

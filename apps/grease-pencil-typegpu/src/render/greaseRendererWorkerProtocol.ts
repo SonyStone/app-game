@@ -6,7 +6,7 @@ import type {
 } from '../document'
 import type { CameraState } from './math'
 import type { StrokePointOverlay } from './rendererScene'
-import type { WorkplaneGizmoHighlight } from './workplaneGizmoTypes'
+import type { WorkplaneGizmoHighlight, WorkplaneGizmoMode } from './workplaneGizmoTypes'
 
 export type RendererStatus = {
   ok: boolean
@@ -47,6 +47,7 @@ export type GreaseRendererWorkerMessage =
     }
   | {
       type: 'gizmo-highlight'
+      mode: WorkplaneGizmoMode
       highlight?: WorkplaneGizmoHighlight
     }
   | { type: 'render' }

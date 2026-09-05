@@ -1,3 +1,8 @@
+import { createGizmoPlaneDrag } from './gizmoPlaneDrag'
+import { gizmoPlanes, frontGizmoRing } from '../../render/gizmoGeometry'
+import { createCameraMatrices } from '../../render/cameraMatrices'
+import { createGizmoRotationDrag } from './gizmoRotation'
+import type { CameraState } from '../../render/cameraMatrices'
 import type {
   Accessor,
   Setter,
@@ -5,7 +10,6 @@ import type {
 import {
   setWorkplaneRotationVector as setDocumentWorkplaneRotationVector,
   setWorkplaneOriginVector,
-  type Axis,
   type DrawingWorkplane,
   type GreaseDocument,
 } from '../../document'
@@ -13,7 +17,6 @@ import {
   add3,
   length3,
   scale3,
-  sub3,
   type Vec3,
 } from '../../render/math'
 import {
@@ -22,12 +25,16 @@ import {
 } from '../../render/meshOverlays'
 import type {
   WorkplaneGizmoAxisName,
+  WorkplaneGizmoMode,
   WorkplaneGizmoHighlight,
 } from '../../render/workplaneGizmoTypes'
 import { getWorkplaneBasis } from '../../render/workplane'
 import type { InteractionViewport } from './viewportPort'
 
 type WorkplaneGizmoParams = {
+  camera: Accessor<CameraState>
+  canvas: Accessor<HTMLCanvasElement>
+  mode: Accessor<WorkplaneGizmoMode>
   renderer: Accessor<InteractionViewport | undefined>
   setDocumentState: Setter<GreaseDocument>
   setPointerLabel: Setter<string>
@@ -53,24 +60,20 @@ type AxisDrag = {
 type PlaneDrag = {
   pointerId: number
   kind: 'plane'
-  offset: Vec3
+  move: NonNullable<ReturnType<typeof createGizmoPlaneDrag>>
 }
 
 type RotationDrag = {
   pointerId: number
   kind: 'rotation'
-  axis: Axis
-  axisName: 'X' | 'Y' | 'Z'
-  screenOrigin: ScreenPoint
-  startPointerAngle: number
-  startRotation: Vec3
+  rotate: ReturnType<typeof createGizmoRotationDrag>
 }
 
 type GizmoDrag = AxisDrag | PlaneDrag | RotationDrag
 
-const CENTER_HIT_RADIUS = 28
-const AXIS_HIT_RADIUS = 18
-const ROTATION_HIT_RADIUS = 14
+const CENTER_HIT_RADIUS = 12
+const AXIS_HIT_RADIUS = 10
+const ROTATION_HIT_RADIUS = 8
 
 export function createWorkplaneGizmoInteraction(params: WorkplaneGizmoParams) {
   let drag: GizmoDrag | undefined
@@ -87,6 +90,8 @@ export function createWorkplaneGizmoInteraction(params: WorkplaneGizmoParams) {
       params.workplane(),
       event.clientX,
       event.clientY,
+      params.mode(),
+      createCameraMatrices(params.camera(), 1).position,
     )
     if (!hit) {
       setGizmoHighlight(undefined)
@@ -96,15 +101,13 @@ export function createWorkplaneGizmoInteraction(params: WorkplaneGizmoParams) {
     setGizmoHighlight(highlightFromHit(hit))
 
     if (hit.kind === 'plane') {
-      const pointerWorld = renderer.screenToWorld(event.clientX, event.clientY)
-      if (!pointerWorld) return false
-
-      drag = {
-        pointerId: event.pointerId,
-        kind: 'plane',
-        offset: sub3(params.workplane().origin, pointerWorld),
-      }
-      params.setPointerLabel('Move grid')
+      const move = createGizmoPlaneDrag(
+        params.camera(), params.canvas().getBoundingClientRect(), params.workplane().origin,
+        hit.normal, { x: event.clientX, y: event.clientY },
+      )
+      if (!move) return false
+      drag = { pointerId: event.pointerId, kind: 'plane', move }
+      params.setPointerLabel(`Move grid ${hit.plane}`)
       return true
     }
 
@@ -112,14 +115,10 @@ export function createWorkplaneGizmoInteraction(params: WorkplaneGizmoParams) {
       drag = {
         pointerId: event.pointerId,
         kind: 'rotation',
-        axis: axisNameToAxis(hit.axisName),
-        axisName: hit.axisName,
-        screenOrigin: hit.screenOrigin,
-        startPointerAngle: screenAngle(
-          { x: event.clientX, y: event.clientY },
-          hit.screenOrigin,
+        rotate: createGizmoRotationDrag(
+          params.camera(), params.canvas().getBoundingClientRect(), params.workplane(),
+          hit.axisName, { x: event.clientX, y: event.clientY }, hit.ringAngle,
         ),
-        startRotation: [...params.workplane().rotation],
       }
       params.setPointerLabel(`Rotate grid ${hit.axisName}`)
       return true
@@ -143,29 +142,13 @@ export function createWorkplaneGizmoInteraction(params: WorkplaneGizmoParams) {
     if (!drag || drag.pointerId !== event.pointerId) return false
 
     if (drag.kind === 'plane') {
-      const pointerWorld = params.renderer()?.screenToWorld(
-        event.clientX,
-        event.clientY,
-      )
-      if (!pointerWorld) return true
-
-      setGridOrigin(add3(pointerWorld, drag.offset))
+      const origin = drag.move({ x: event.clientX, y: event.clientY })
+      if (origin) setGridOrigin(origin)
       return true
     }
 
     if (drag.kind === 'rotation') {
-      const pointerAngle = screenAngle(
-        { x: event.clientX, y: event.clientY },
-        drag.screenOrigin,
-      )
-      const angleDelta = shortestAngle(pointerAngle - drag.startPointerAngle)
-      setGridRotation(
-        replaceAxisValue(
-          drag.startRotation,
-          drag.axis,
-          axisValue(drag.startRotation, drag.axis) + angleDelta,
-        ),
-      )
+      setGridRotation(drag.rotate({ x: event.clientX, y: event.clientY }))
       return true
     }
 
@@ -196,6 +179,8 @@ export function createWorkplaneGizmoInteraction(params: WorkplaneGizmoParams) {
       params.workplane(),
       event.clientX,
       event.clientY,
+      params.mode(),
+      createCameraMatrices(params.camera(), 1).position,
     )
     setGizmoHighlight(hit ? highlightFromHit(hit) : undefined)
   }
@@ -232,26 +217,37 @@ export function createWorkplaneGizmoInteraction(params: WorkplaneGizmoParams) {
   } as const
 }
 
-function hitTestWorkplaneGizmo(
+/** Hit testing uses only the handles displayed by the selected manipulator mode. */
+export function hitTestWorkplaneGizmo(
   renderer: InteractionViewport,
   workplane: DrawingWorkplane,
   clientX: number,
   clientY: number,
+  mode: WorkplaneGizmoMode,
+  cameraPosition: Vec3,
 ) {
   const basis = getWorkplaneBasis(workplane)
   const origin = renderer.projectToScreen(basis.origin)
   if (!origin) return
 
   const pointer = { x: clientX, y: clientY }
-  if (screenDistance(pointer, origin) <= CENTER_HIT_RADIUS) {
-    return { kind: 'plane' as const }
-  }
+  if (screenDistance(pointer, origin) <= CENTER_HIT_RADIUS) return
 
-  const length = workplaneGizmoLength()
-  const hits = [
+  const units = renderer.worldUnitsPerPixel(basis.origin)
+  if (units <= 0) return
+  const length = workplaneGizmoLength(units)
+  if (mode === 'translate') {
+    for (const plane of gizmoPlanes(basis, units)) {
+      const points = plane.corners.map(point => renderer.projectToScreen(point))
+      if (points.some(point => !point)) continue
+      if (hitsPlaneSquare(pointer, points as ScreenPoint[])) return { kind: 'plane' as const, plane: plane.name, normal: plane.normal }
+    }
+  }
+  const hits = (mode === 'translate' ? [
     hitTestAxis(renderer, pointer, basis.origin, basis.right, length, 'X'),
     hitTestAxis(renderer, pointer, basis.origin, basis.up, length, 'Y'),
     hitTestAxis(renderer, pointer, basis.origin, basis.normal, length, 'Z'),
+  ] : [
     hitTestRotationRing(
       renderer,
       pointer,
@@ -259,6 +255,7 @@ function hitTestWorkplaneGizmo(
       basis.up,
       basis.normal,
       'X',
+      cameraPosition,
     ),
     hitTestRotationRing(
       renderer,
@@ -267,6 +264,7 @@ function hitTestWorkplaneGizmo(
       basis.normal,
       basis.right,
       'Y',
+      cameraPosition,
     ),
     hitTestRotationRing(
       renderer,
@@ -275,8 +273,9 @@ function hitTestWorkplaneGizmo(
       basis.right,
       basis.up,
       'Z',
+      cameraPosition,
     ),
-  ].filter((hit): hit is NonNullable<typeof hit> => !!hit)
+  ]).filter((hit): hit is NonNullable<typeof hit> => !!hit)
 
   hits.sort((a, b) => a.distance - b.distance)
   return hits[0]
@@ -301,7 +300,9 @@ function hitTestAxis(
   const screenLength = Math.hypot(screenAxis.x, screenAxis.y)
   if (screenLength < 1e-3) return
 
-  const distance = distanceToScreenSegment(pointer, start, end)
+  const inner = renderer.projectToScreen(add3(origin, scale3(axis, axisLength * 20 / 90)))
+  if (!inner) return
+  const distance = distanceToScreenSegment(pointer, inner, end)
   if (distance > AXIS_HIT_RADIUS) return
 
   return {
@@ -324,27 +325,23 @@ function hitTestRotationRing(
   axisA: Vec3,
   axisB: Vec3,
   axisName: WorkplaneGizmoAxisName,
+  cameraPosition: Vec3,
 ) {
   const screenOrigin = renderer.projectToScreen(origin)
   if (!screenOrigin) return
 
-  const radius = workplaneRotationGizmoRadius()
-  const segmentCount = 48
+  const radius = workplaneRotationGizmoRadius(renderer.worldUnitsPerPixel(origin))
   let minDistance = Number.POSITIVE_INFINITY
-  for (let index = 0; index < segmentCount; index += 1) {
-    const startAngle = (index / segmentCount) * Math.PI * 2
-    const endAngle = ((index + 1) / segmentCount) * Math.PI * 2
-    const start = renderer.projectToScreen(
-      ringPoint(origin, axisA, axisB, radius, startAngle),
-    )
-    const end = renderer.projectToScreen(
-      ringPoint(origin, axisA, axisB, radius, endAngle),
-    )
+  let ringAngle = 0
+  for (const segment of frontGizmoRing(origin, axisA, axisB, radius, cameraPosition)) {
+    const start = renderer.projectToScreen(segment.start)
+    const end = renderer.projectToScreen(segment.end)
     if (!start || !end) continue
-    minDistance = Math.min(
-      minDistance,
-      distanceToScreenSegment(pointer, start, end),
-    )
+    const distance = distanceToScreenSegment(pointer, start, end)
+    if (distance < minDistance) {
+      minDistance = distance
+      ringAngle = segment.angle
+    }
   }
 
   if (minDistance > ROTATION_HIT_RADIUS) return
@@ -353,7 +350,7 @@ function hitTestRotationRing(
     kind: 'rotation' as const,
     axisName,
     distance: minDistance,
-    screenOrigin,
+    ringAngle,
   }
 }
 
@@ -387,47 +384,12 @@ function screenDistance(a: ScreenPoint, b: ScreenPoint) {
   return length3([a.x - b.x, a.y - b.y, 0])
 }
 
-function ringPoint(
-  origin: Vec3,
-  axisA: Vec3,
-  axisB: Vec3,
-  radius: number,
-  angle: number,
-) {
-  return add3(
-    origin,
-    add3(
-      scale3(axisA, Math.cos(angle) * radius),
-      scale3(axisB, Math.sin(angle) * radius),
-    ),
-  )
-}
-
-function screenAngle(point: ScreenPoint, origin: ScreenPoint) {
-  return Math.atan2(point.y - origin.y, point.x - origin.x)
-}
-
-function shortestAngle(angle: number) {
-  return Math.atan2(Math.sin(angle), Math.cos(angle))
-}
-
-function axisNameToAxis(axisName: WorkplaneGizmoAxisName): Axis {
-  switch (axisName) {
-    case 'X':
-      return 'x'
-    case 'Y':
-      return 'y'
-    case 'Z':
-      return 'z'
-  }
-}
-
 function highlightFromHit(
   hit: NonNullable<ReturnType<typeof hitTestWorkplaneGizmo>>,
 ): WorkplaneGizmoHighlight {
   switch (hit.kind) {
     case 'plane':
-      return { kind: 'plane' }
+      return { kind: 'plane', plane: hit.plane }
     case 'axis':
       return { kind: 'axis', axisName: hit.axisName }
     case 'rotation':
@@ -441,28 +403,22 @@ function sameHighlight(
 ) {
   if (!a || !b) return a === b
   if (a.kind !== b.kind) return false
-  if (a.kind === 'plane' || b.kind === 'plane') return true
+  if (a.kind === 'plane' && b.kind === 'plane') return a.plane === b.plane
+  if (a.kind === 'plane' || b.kind === 'plane') return false
   return a.axisName === b.axisName
 }
 
-function axisValue(value: Vec3, axis: Axis) {
-  switch (axis) {
-    case 'x':
-      return value[0]
-    case 'y':
-      return value[1]
-    case 'z':
-      return value[2]
+/** Ignore collapsed edge-on squares and allow a small border tolerance without expanding into the center. */
+function hitsPlaneSquare(pointer: ScreenPoint, points: ScreenPoint[]) {
+  let area = 0
+  const sides: number[] = []
+  let edgeDistance = Infinity
+  for (let i = 0; i < 4; i++) {
+    const a = points[i], b = points[(i + 1) % 4]
+    area += a.x * b.y - b.x * a.y
+    sides.push((b.x - a.x) * (pointer.y - a.y) - (b.y - a.y) * (pointer.x - a.x))
+    edgeDistance = Math.min(edgeDistance, distanceToScreenSegment(pointer, a, b))
   }
-}
-
-function replaceAxisValue(value: Vec3, axis: Axis, nextValue: number): Vec3 {
-  switch (axis) {
-    case 'x':
-      return [nextValue, value[1], value[2]]
-    case 'y':
-      return [value[0], nextValue, value[2]]
-    case 'z':
-      return [value[0], value[1], nextValue]
-  }
+  if (Math.abs(area) < 40) return false
+  return sides.every(side => side >= 0) || sides.every(side => side <= 0) || edgeDistance <= 3
 }

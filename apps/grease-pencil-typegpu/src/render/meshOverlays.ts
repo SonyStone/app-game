@@ -1,3 +1,6 @@
+import { gizmoPlanes, frontGizmoRing } from './gizmoGeometry'
+import { pushVertex } from './meshVertex'
+import { discBasis } from './workplane'
 import {
   add3,
   scale3,
@@ -5,10 +8,11 @@ import {
   type Vec4,
 } from './math'
 import { appendDisc } from './meshDiscPrimitive'
-import { appendSegment } from './meshSegmentPrimitive'
+import { appendGuideLine, appendGuideDisc, worldUnitsPerPixel, type ScreenSpaceGuides } from './screenSpaceGuides'
 import type { StrokePointOverlay } from './meshTypes'
 import type {
   WorkplaneGizmoAxisName,
+  WorkplaneGizmoMode,
   WorkplaneGizmoHighlight,
 } from './workplaneGizmoTypes'
 import type { WorkplaneBasis } from './workplane'
@@ -20,11 +24,9 @@ const ORBIT_TARGET_CENTER_COLOR: Vec4 = [1, 1, 1, 0.95]
 const GIZMO_X_COLOR: Vec4 = [0.92, 0.18, 0.16, 0.92]
 const GIZMO_Y_COLOR: Vec4 = [0.12, 0.58, 0.24, 0.92]
 const GIZMO_Z_COLOR: Vec4 = [0.16, 0.34, 0.95, 0.92]
-const GIZMO_CENTER_COLOR: Vec4 = [0.08, 0.07, 0.06, 0.82]
 const GIZMO_ROTATION_X_COLOR: Vec4 = [0.92, 0.18, 0.16, 0.58]
 const GIZMO_ROTATION_Y_COLOR: Vec4 = [0.12, 0.58, 0.24, 0.58]
 const GIZMO_ROTATION_Z_COLOR: Vec4 = [0.16, 0.34, 0.95, 0.58]
-const ROTATION_RING_SEGMENTS = 48
 
 export function appendPointHandle(
   vertices: number[],
@@ -54,205 +56,74 @@ export function appendPointHandle(
   )
 }
 
-export function appendOrbitTarget(
-  vertices: number[],
-  position: Vec3,
-  offsetNormal: Vec3,
-  cameraDistance: number,
-) {
-  const radius = Math.max(0.035, Math.min(0.14, cameraDistance * 0.012))
-  appendDisc(
-    vertices,
-    position,
-    radius,
-    ORBIT_TARGET_COLOR,
-    1,
-    0.066,
-    offsetNormal,
-  )
-  appendDisc(
-    vertices,
-    position,
-    radius * 0.38,
-    ORBIT_TARGET_CENTER_COLOR,
-    1,
-    0.069,
-    offsetNormal,
-  )
+/** Small orbit pivot marker that does not grow into the manipulator when zooming. */
+export function appendOrbitTarget(vertices: number[], position: Vec3, view: ScreenSpaceGuides) {
+  appendGuideDisc(vertices, position, 4, ORBIT_TARGET_COLOR, view)
+  appendGuideDisc(vertices, position, 1.5, ORBIT_TARGET_CENTER_COLOR, view)
 }
 
+/** A 90px workplane manipulator; line widths and handles stay constant while zooming. */
 export function appendWorkplaneGizmo(
   vertices: number[],
   basis: WorkplaneBasis,
-  offsetNormal: Vec3,
+  view: ScreenSpaceGuides,
   highlight?: WorkplaneGizmoHighlight,
+  mode: WorkplaneGizmoMode = 'translate',
 ) {
-  const length = workplaneGizmoLength()
-  const shaftRadius = 0.018
-  const centerRadius = highlight?.kind === 'plane' ? 0.072 : 0.055
+  const units = worldUnitsPerPixel(view.matrices, view.height, basis.origin)
+  if (units <= 0) return
+  const length = workplaneGizmoLength(units)
+  if (mode === 'translate') {
+    axis(basis.right, GIZMO_X_COLOR, 'X')
+    axis(basis.up, GIZMO_Y_COLOR, 'Y')
+    axis(basis.normal, GIZMO_Z_COLOR, 'Z')
+    for (const plane of gizmoPlanes(basis, units)) {
+      const color = plane.colorAxis === 'X' ? GIZMO_X_COLOR : plane.colorAxis === 'Y' ? GIZMO_Y_COLOR : GIZMO_Z_COLOR
+      const active = highlight?.kind === 'plane' && highlight.plane === plane.name
+      const tint = active ? highlightColor(color) : color
+      const fill: Vec4 = [tint[0], tint[1], tint[2], active ? 0.42 : 0.16]
+      const [a, b, c, d] = plane.corners
+      for (const point of [a, b, c, a, c, d]) pushVertex(vertices, point, fill)
+      for (let i = 0; i < 4; i++) appendGuideLine(vertices, plane.corners[i], plane.corners[(i + 1) % 4], active ? 2 : 1.25, tint, view)
+    }
+  } else {
+    ring(basis.up, basis.normal, GIZMO_ROTATION_X_COLOR, 'X')
+    ring(basis.normal, basis.right, GIZMO_ROTATION_Y_COLOR, 'Y')
+    ring(basis.right, basis.up, GIZMO_ROTATION_Z_COLOR, 'Z')
+  }
 
-  appendDisc(
-    vertices,
-    basis.origin,
-    centerRadius,
-    GIZMO_CENTER_COLOR,
-    1,
-    0.074,
-    offsetNormal,
-  )
-  appendGizmoAxis(
-    vertices,
-    basis.origin,
-    basis.right,
-    length,
-    GIZMO_X_COLOR,
-    offsetNormal,
-    highlight,
-    'X',
-  )
-  appendGizmoAxis(
-    vertices,
-    basis.origin,
-    basis.up,
-    length,
-    GIZMO_Y_COLOR,
-    offsetNormal,
-    highlight,
-    'Y',
-  )
-  appendGizmoAxis(
-    vertices,
-    basis.origin,
-    basis.normal,
-    length,
-    GIZMO_Z_COLOR,
-    offsetNormal,
-    highlight,
-    'Z',
-  )
-  appendRotationRing(
-    vertices,
-    basis.origin,
-    basis.up,
-    basis.normal,
-    GIZMO_ROTATION_X_COLOR,
-    offsetNormal,
-    highlight,
-    'X',
-  )
-  appendRotationRing(
-    vertices,
-    basis.origin,
-    basis.normal,
-    basis.right,
-    GIZMO_ROTATION_Y_COLOR,
-    offsetNormal,
-    highlight,
-    'Y',
-  )
-  appendRotationRing(
-    vertices,
-    basis.origin,
-    basis.right,
-    basis.up,
-    GIZMO_ROTATION_Z_COLOR,
-    offsetNormal,
-    highlight,
-    'Z',
-  )
+  function axis(direction: Vec3, color: Vec4, name: WorkplaneGizmoAxisName) {
+    const active = highlight?.kind === 'axis' && highlight.axisName === name
+    const tint = active ? highlightColor(color) : color
+    const end = add3(basis.origin, scale3(direction, length))
+    const base = add3(basis.origin, scale3(direction, length - 14 * units))
+    appendGuideLine(vertices, add3(basis.origin, scale3(direction, 20 * units)), base, active ? 2 : 1.25, tint, view)
+    const { right, up } = discBasis(direction)
+    const radius = (active ? 5.5 : 4.5) * units
+    const point = (angle: number) => add3(base, add3(scale3(right, Math.cos(angle) * radius), scale3(up, Math.sin(angle) * radius)))
+    for (let i = 0; i < 12; i++) {
+      const a = point(i / 12 * Math.PI * 2), b = point((i + 1) / 12 * Math.PI * 2)
+      for (const p of [end, a, b, base, b, a]) pushVertex(vertices, p, tint)
+    }
+  }
 
-  function appendGizmoAxis(
-    target: number[],
-    origin: Vec3,
-    axis: Vec3,
-    axisLength: number,
-    color: Vec4,
-    normal: Vec3,
-    activeHighlight: WorkplaneGizmoHighlight | undefined,
-    axisName: WorkplaneGizmoAxisName,
-  ) {
-    const highlighted =
-      activeHighlight?.kind === 'axis' && activeHighlight.axisName === axisName
-    const activeRadius = highlighted ? shaftRadius * 1.7 : shaftRadius
-    const activeColor = highlighted ? highlightColor(color) : color
-    const end = add3(origin, scale3(axis, axisLength))
-    appendSegment(
-      target,
-      origin,
-      end,
-      activeRadius,
-      activeColor,
-      activeRadius,
-      1,
-      0.072,
-      normal,
-    )
-    appendDisc(
-      target,
-      end,
-      centerRadius * (highlighted ? 1.12 : 0.82),
-      activeColor,
-      1,
-      0.076,
-      normal,
-    )
+  function ring(axisA: Vec3, axisB: Vec3, color: Vec4, name: WorkplaneGizmoAxisName) {
+    const active = highlight?.kind === 'rotation' && highlight.axisName === name
+    const radius = workplaneRotationGizmoRadius(units)
+    for (const segment of frontGizmoRing(basis.origin, axisA, axisB, radius, view.matrices.position)) {
+      appendGuideLine(vertices, segment.start, segment.end, active ? 2 : 1, active ? highlightColor(color) : color, view)
+    }
   }
 }
 
-export function workplaneGizmoLength() {
-  return 0.72
+/** Shared by rendering and picking; input is measured at the gizmo origin in CSS pixels. */
+export function workplaneGizmoLength(unitsPerPixel: number) {
+  return 90 * unitsPerPixel
 }
 
-export function workplaneRotationGizmoRadius() {
-  return workplaneGizmoLength() * 0.78
-}
-
-function appendRotationRing(
-  vertices: number[],
-  origin: Vec3,
-  axisA: Vec3,
-  axisB: Vec3,
-  color: Vec4,
-  offsetNormal: Vec3,
-  highlight: WorkplaneGizmoHighlight | undefined,
-  axisName: WorkplaneGizmoAxisName,
-) {
-  const radius = workplaneRotationGizmoRadius()
-  const highlighted =
-    highlight?.kind === 'rotation' && highlight.axisName === axisName
-  const ringRadius = highlighted ? 0.014 : 0.008
-  const ringColor = highlighted ? highlightColor(color) : color
-  for (let index = 0; index < ROTATION_RING_SEGMENTS; index += 1) {
-    const startAngle = (index / ROTATION_RING_SEGMENTS) * Math.PI * 2
-    const endAngle = ((index + 1) / ROTATION_RING_SEGMENTS) * Math.PI * 2
-    appendSegment(
-      vertices,
-      ringPoint(origin, axisA, axisB, radius, startAngle),
-      ringPoint(origin, axisA, axisB, radius, endAngle),
-      ringRadius,
-      ringColor,
-      ringRadius,
-      1,
-      0.078,
-      offsetNormal,
-    )
-  }
-}
-
-function ringPoint(
-  origin: Vec3,
-  axisA: Vec3,
-  axisB: Vec3,
-  radius: number,
-  angle: number,
-) {
-  return add3(
-    origin,
-    add3(
-      scale3(axisA, Math.cos(angle) * radius),
-      scale3(axisB, Math.sin(angle) * radius),
-    ),
-  )
+/** Rotation rings occupy 78% of the translation axes' length. */
+export function workplaneRotationGizmoRadius(unitsPerPixel: number) {
+  return workplaneGizmoLength(unitsPerPixel) * 0.78
 }
 
 function highlightColor(color: Vec4): Vec4 {

@@ -1,21 +1,43 @@
 {
   "name": "@app-game/solid-view-cube",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/solid-view-cube.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "solid": "./src/index.ts",
+      "browser": "./dist/solid-view-cube.js",
+      "default": "./dist/index.js"
+    },
+    "./style.css": "./dist/solid-view-cube.css"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "build": "vite build && vite build --ssr src/index.ts && tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build"
   },
   "peerDependencies": {
-    "solid-js": "catalog:"
+    "solid-js": "2.0.0-rc.4",
+    "@solidjs/web": "2.0.0-rc.4"
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vite": "catalog:"
-  }
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:",
+    "jsdom": "catalog:",
+    "@testing-library/jest-dom": "catalog:"
+  },
+  "description": "Controlled ViewCube navigation for SolidJS 2",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ]
 }

@@ -1,3 +1,4 @@
+import { createScreenSpaceGuides } from './screenSpaceGuides'
 import type {
   DrawingWorkplane,
   RenderLayer,
@@ -35,8 +36,8 @@ import {
   type RendererScene,
   type StrokePointOverlay,
 } from './rendererScene'
-import type { WorkplaneGizmoHighlight } from './workplaneGizmoTypes'
-import { createDefaultCamera } from './viewportCamera'
+import type { WorkplaneGizmoHighlight, WorkplaneGizmoMode } from './workplaneGizmoTypes'
+import { createDefaultCamera } from './cameraDefaults'
 import type {
   RendererStatus,
   RendererViewportSize,
@@ -126,6 +127,13 @@ export class GreaseRenderEngine {
     this.requestRender()
   }
 
+  /** Changing gizmo mode only rebuilds dynamic guides. */
+  setWorkplaneGizmoMode(mode: WorkplaneGizmoMode) {
+    this.scene = { ...this.scene, workplaneGizmoMode: mode, workplaneGizmoHighlight: undefined }
+    this.dynamicDirty = true
+    this.requestRender()
+  }
+
   setWorkplaneGizmoHighlight(highlight?: WorkplaneGizmoHighlight) {
     this.scene = updateRendererWorkplaneGizmoHighlight(this.scene, highlight)
     this.dynamicDirty = true
@@ -133,6 +141,7 @@ export class GreaseRenderEngine {
   }
 
   resize(viewport: RendererViewportSize) {
+    this.dynamicDirty = true
     this.viewport = viewport
     const nextWidth = Math.max(1, Math.floor(viewport.width * viewport.dpr))
     const nextHeight = Math.max(1, Math.floor(viewport.height * viewport.dpr))
@@ -193,6 +202,8 @@ export class GreaseRenderEngine {
           cameraUniforms.billboardNormal,
           this.camera.target,
           this.camera.distance,
+          this.camera.mode !== '2d',
+          createScreenSpaceGuides(this.camera, this.viewport.width, this.viewport.height),
         ),
       )
       this.dynamicDirty = false

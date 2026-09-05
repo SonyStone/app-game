@@ -44,7 +44,7 @@ export function createCameraMatrices(
   const { position, up } = getCameraOrbitFrame(camera)
 
   const view = lookAt(position, camera.target, up)
-  const projection = perspectiveZO((48 * Math.PI) / 180, aspect, 0.02, 200)
+  const projection = perspectiveZO(CAMERA_VERTICAL_FOV, aspect, 0.02, 200)
   const viewProjection = multiplyMat4(projection, view)
   const inverseViewProjection = invertMat4(viewProjection)
 
@@ -68,7 +68,7 @@ export function getCameraBasis(camera: CameraState) {
 function getCameraOrbitFrame(camera: CameraState) {
   if (camera.mode === '2d' && camera.lockedNormal && camera.lockedUp) {
     const normal = normalize3(camera.lockedNormal)
-    const up = normalize3(rotateAroundAxis(camera.lockedUp, normal, camera.roll))
+    const up = normalize3(rotateAroundAxis(camera.lockedUp, scale3(normal, -1), camera.roll))
     return {
       position: add3(camera.target, scale3(normal, camera.distance)),
       up,
@@ -104,3 +104,6 @@ function rotateAroundAxis(vector: Vec3, axis: Vec3, angle: number): Vec3 {
     scale3(axis, dot3(axis, vector) * (1 - cos)),
   )
 }
+
+/** Vertical field of view shared by projection and screen-anchored navigation. */
+export const CAMERA_VERTICAL_FOV = 48 * Math.PI / 180

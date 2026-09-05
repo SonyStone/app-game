@@ -1,0 +1,105 @@
+{
+  "zonesChecked": 54,
+  "mismatches": [
+    {
+      "key": "top",
+      "row": -1,
+      "col": -1,
+      "physical": [
+        -1,
+        -1,
+        1
+      ],
+      "target": [
+        -1,
+        1,
+        1
+      ]
+    },
+    {
+      "key": "top",
+      "row": -1,
+      "col": 0,
+      "physical": [
+        0,
+        -1,
+        1
+      ],
+      "target": [
+        0,
+        1,
+        1
+      ]
+    },
+    {
+      "key": "top",
+      "row": -1,
+      "col": 1,
+      "physical": [
+        1,
+        -1,
+        1
+      ],
+      "target": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "key": "top",
+      "row": 1,
+      "col": -1,
+      "physical": [
+        -1,
+        1,
+        1
+      ],
+      "target": [
+        -1,
+        -1,
+        1
+      ]
+    },
+    {
+      "key": "top",
+      "row": 1,
+      "col": 0,
+      "physical": [
+        0,
+        1,
+        1
+      ],
+      "target": [
+        0,
+        -1,
+        1
+      ]
+    },
+    {
+      "key": "top",
+      "row": 1,
+      "col": 1,
+      "physical": [
+        1,
+        1,
+        1
+      ],
+      "target": [
+        1,
+        -1,
+        1
+      ]
+    }
+  ],
+  "positiveQuarterTurnScreenX": {
+    "mode3d": [
+      0,
+      -1
+    ],
+    "mode2d": [
+      0,
+      1
+    ]
+  }
+}

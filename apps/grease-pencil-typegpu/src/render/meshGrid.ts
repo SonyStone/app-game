@@ -1,5 +1,6 @@
 import type { Vec4 } from './math'
-import { appendSegment } from './meshSegmentPrimitive'
+import { appendGuideLine, type ScreenSpaceGuides } from './screenSpaceGuides'
+import { add3, scale3 } from './vector'
 import { workplanePoint, type WorkplaneBasis } from './workplane'
 
 type GridRenderOptions = {
@@ -12,6 +13,7 @@ export function appendGrid(
   vertices: number[],
   basis: WorkplaneBasis,
   gridScale: number,
+  view: ScreenSpaceGuides,
   options: GridRenderOptions = {},
 ) {
   const extent = 10
@@ -22,7 +24,7 @@ export function appendGrid(
     const position = i * spacing
     const isAxis = i === 0
     const alpha = (isAxis ? 0.46 : i % 5 === 0 ? 0.2 : 0.115) * alphaScale
-    const width = (isAxis ? 0.012 : 0.006) * spacing
+    const width = isAxis ? 1.25 : 0.75
     const lineColor: Vec4 = [0.16, 0.18, 0.2, alpha]
     const xColor: Vec4 = options.neutral
       ? lineColor
@@ -35,27 +37,9 @@ export function appendGrid(
         ? [0.16, 0.4, 0.88, alpha]
         : lineColor
     const zOffset = options.zOffset ?? -0.014 * spacing
-    appendSegment(
-      vertices,
-      workplanePoint(basis, position, -size),
-      workplanePoint(basis, position, size),
-      width,
-      xColor,
-      width,
-      1,
-      zOffset,
-      basis.normal,
-    )
-    appendSegment(
-      vertices,
-      workplanePoint(basis, -size, position),
-      workplanePoint(basis, size, position),
-      width,
-      yColor,
-      width,
-      1,
-      zOffset,
-      basis.normal,
-    )
+    const point = (x: number, y: number) =>
+      add3(workplanePoint(basis, x, y), scale3(basis.normal, zOffset))
+    appendGuideLine(vertices, point(position, -size), point(position, size), width, xColor, view)
+    appendGuideLine(vertices, point(-size, position), point(size, position), width, yColor, view)
   }
 }

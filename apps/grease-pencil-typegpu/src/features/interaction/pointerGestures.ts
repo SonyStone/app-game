@@ -12,7 +12,6 @@ export function getViewAction(
   mode: ToolMode,
   event: PointerEvent,
 ): ViewAction | undefined {
-  if (event.pointerType === 'touch') return 'pan'
   if (mode === 'pan' || event.button === 2) return 'pan'
   if (
     mode === 'orbit' ||

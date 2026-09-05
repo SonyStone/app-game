@@ -8,7 +8,7 @@ import {
   STROKE_SQUARE_VERTEX_COUNT,
 } from './strokeGpuPrimitives'
 
-const CLEAR_COLOR = { r: 0.952, g: 0.955, b: 0.942, a: 1 } as const
+const CLEAR_COLOR = { r: 1, g: 1, b: 1, a: 1 } as const
 
 export type MeshDrawBuffer = {
   buffer: GPUBuffer

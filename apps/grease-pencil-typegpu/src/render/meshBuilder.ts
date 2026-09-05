@@ -1,3 +1,5 @@
+import { transformMat4 } from './matrixTransform'
+import type { ScreenSpaceGuides } from './screenSpaceGuides'
 import type {
   DrawingWorkplane,
   RenderLayer,
@@ -24,7 +26,7 @@ import type {
   StrokePointOverlay,
   StrokeRenderStyle,
 } from './meshTypes'
-import type { WorkplaneGizmoHighlight } from './workplaneGizmoTypes'
+import type { WorkplaneGizmoHighlight, WorkplaneGizmoMode } from './workplaneGizmoTypes'
 import {
   appendStrokeGpuPrimitives,
   createStrokeGpuPrimitives,
@@ -50,6 +52,7 @@ const BASE_GRID_WORKPLANE: DrawingWorkplane = {
 }
 
 export type BuildDrawingVerticesParams = {
+  screenSpace: ScreenSpaceGuides
   layers: readonly RenderLayer[]
   workplane: DrawingWorkplane
   cameraDistance: number
@@ -57,6 +60,7 @@ export type BuildDrawingVerticesParams = {
   draftStroke?: Stroke | undefined
   selectedStrokeIds?: ReadonlySet<StrokeId> | undefined
   pointOverlays?: readonly StrokePointOverlay[] | undefined
+  workplaneGizmoMode?: WorkplaneGizmoMode
   workplaneGizmoHighlight?: WorkplaneGizmoHighlight | undefined
 }
 
@@ -72,6 +76,9 @@ export type BuildCommittedDrawingGeometryParams = {
 }
 
 export type BuildDynamicDrawingGeometryParams = {
+  screenSpace: ScreenSpaceGuides
+  /** Show spatial guides in 3D; disable for a clean paper view. Defaults to true. */
+  showGuides?: boolean
   billboardNormal: Vec3
   cameraDistance: number
   cameraTarget: Vec3
@@ -79,6 +86,7 @@ export type BuildDynamicDrawingGeometryParams = {
   layers: readonly RenderLayer[]
   pointOverlays?: readonly StrokePointOverlay[] | undefined
   workplane: DrawingWorkplane
+  workplaneGizmoMode?: WorkplaneGizmoMode
   workplaneGizmoHighlight?: WorkplaneGizmoHighlight | undefined
 }
 
@@ -92,8 +100,6 @@ export function buildCommittedDrawingGeometry({
   const basis = getWorkplaneBasis(workplane)
   const vertices: number[] = []
   const strokePrimitives = createStrokeGpuPrimitives()
-  appendBaseGrid(vertices, workplane)
-  appendGrid(vertices, basis, workplane.gridScale)
   const selectedStrokes: SelectedStrokeRender[] = []
   let strokeDepthOrder = 0
   const nextStrokeDepth = () =>
@@ -159,25 +165,26 @@ export function buildCommittedDrawingGeometry({
 }
 
 export function buildDynamicDrawingGeometry({
+  screenSpace,
   layers,
   workplane,
   billboardNormal,
-  cameraDistance,
   cameraTarget,
   draftStroke,
   pointOverlays = [],
   workplaneGizmoHighlight,
+  workplaneGizmoMode = 'translate',
+  showGuides = true,
 }: BuildDynamicDrawingGeometryParams): DrawingGeometry {
   const basis = getWorkplaneBasis(workplane)
   const vertices: number[] = []
   const strokePrimitives = createStrokeGpuPrimitives()
 
-  appendWorkplaneGizmo(
-    vertices,
-    basis,
-    billboardNormal,
-    workplaneGizmoHighlight,
-  )
+  if (showGuides) {
+    appendBaseGrid(vertices, workplane, screenSpace)
+    appendGrid(vertices, basis, workplane.gridScale, screenSpace)
+    appendWorkplaneGizmo(vertices, basis, screenSpace, workplaneGizmoHighlight, workplaneGizmoMode)
+  }
   if (draftStroke) {
     const material = getStrokeMaterialFromLayers(draftStroke, layers)
     const style = {
@@ -193,7 +200,15 @@ export function buildDynamicDrawingGeometry({
   for (const pointOverlay of pointOverlays) {
     appendPointHandle(vertices, pointOverlay, billboardNormal)
   }
-  appendOrbitTarget(vertices, cameraTarget, billboardNormal, cameraDistance)
+  if (showGuides) {
+    const pivot = transformMat4(screenSpace.matrices.viewProjection, [...basis.origin, 1])
+    const target = transformMat4(screenSpace.matrices.viewProjection, [...cameraTarget, 1])
+    const separation = Math.hypot(
+      (pivot[0] / pivot[3] - target[0] / target[3]) * screenSpace.width / 2,
+      (pivot[1] / pivot[3] - target[1] / target[3]) * screenSpace.height / 2,
+    )
+    if (separation > 18) appendOrbitTarget(vertices, cameraTarget, screenSpace)
+  }
 
   return {
     strokePrimitives,
@@ -202,6 +217,7 @@ export function buildDynamicDrawingGeometry({
 }
 
 export function buildDrawingGeometry({
+  screenSpace,
   layers,
   workplane,
   billboardNormal,
@@ -211,6 +227,7 @@ export function buildDrawingGeometry({
   selectedStrokeIds = new Set<StrokeId>(),
   pointOverlays = [],
   workplaneGizmoHighlight,
+  workplaneGizmoMode = 'translate',
 }: BuildDrawingVerticesParams & { billboardNormal: Vec3 }): DrawingGeometry {
   return mergeDrawingGeometry(
     buildCommittedDrawingGeometry({
@@ -219,6 +236,7 @@ export function buildDrawingGeometry({
       selectedStrokeIds,
     }),
     buildDynamicDrawingGeometry({
+      screenSpace,
       layers,
       workplane,
       billboardNormal,
@@ -227,6 +245,7 @@ export function buildDrawingGeometry({
       draftStroke,
       pointOverlays,
       workplaneGizmoHighlight,
+      workplaneGizmoMode,
     }),
   )
 }
@@ -292,12 +311,13 @@ function appendStrokeFill(
   }
 }
 
-function appendBaseGrid(vertices: number[], activeWorkplane: DrawingWorkplane) {
+function appendBaseGrid(vertices: number[], activeWorkplane: DrawingWorkplane, screenSpace: ScreenSpaceGuides) {
   if (sameWorkplane(activeWorkplane, BASE_GRID_WORKPLANE)) return
   appendGrid(
     vertices,
     getWorkplaneBasis(BASE_GRID_WORKPLANE),
     BASE_GRID_WORKPLANE.gridScale,
+    screenSpace,
     {
       alphaScale: 0.45,
       neutral: true,
