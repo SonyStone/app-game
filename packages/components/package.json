@@ -3,11 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
-    "@app-game/utils": "workspace:*"
+    "@app-game/utils": "workspace:*",
+    "@floating-ui/dom": "catalog:"
   },
   "exports": {
+    "./ui/button": "./ui/button.tsx",
     "./ui/dropdown-menu": "./ui/dropdown-menu.tsx",
     "./ui/menubar": "./ui/menubar.tsx",
+    "./ui/popover": "./ui/popover.tsx",
     "./ui/range-2d": "./ui/range-2d.tsx",
     "./ui/resizable": "./ui/resizable.tsx"
   },
