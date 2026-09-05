@@ -2,6 +2,7 @@ import { d, tgpu, type TgpuRoot } from 'typegpu';
 import { TILE_SIZE, dabTiles, type Brush, type Dab } from '../brush';
 import { screenToWorld, type Camera, type ViewSize } from '../camera';
 import type { Layer, TileChange } from '../document';
+import { packTile, unpackTile } from '../tilePixels';
 import { dirtyRegion } from './dirtyRegion';
 import { createDisplayCache } from './displayCache';
 import * as shader from './shaders';
@@ -59,7 +60,9 @@ export async function createPaintRenderer(
       const [oldId, old] = [...cache].reduce((a, b) => (a[1].used < b[1].used ? a : b));
       const active = strokeTiles.get(oldId);
       if (active && old.mask) {
-        [active.mask, active.output] = await readTextures(device, [root.unwrap(old.mask), root.unwrap(old.texture)]);
+        [active.mask, active.output] = (
+          await readTextures(device, [root.unwrap(old.mask), root.unwrap(old.texture)])
+        ).map(packTile);
       }
       destroyTile(old);
       cache.delete(oldId);
@@ -174,7 +177,7 @@ export async function createPaintRenderer(
             layerId: stroke.layer.id,
             key,
             before: data.before,
-            after: hasAlpha(after) ? after : undefined
+            after: hasAlpha(unpackTile(after)) ? packTile(after) : undefined
           });
       }
       strokeTiles.clear();
@@ -493,10 +496,7 @@ async function readTextures(device: GPUDevice, textures: GPUTexture[]): Promise<
 }
 function writePixels(device: GPUDevice, texture: GPUTexture, pixels?: Uint8Array) {
   if (pixels)
-    device.queue.writeTexture({ texture }, pixels as Uint8Array<ArrayBuffer>, { bytesPerRow: TILE_SIZE * 4 }, [
-      TILE_SIZE,
-      TILE_SIZE
-    ]);
+    device.queue.writeTexture({ texture }, unpackTile(pixels), { bytesPerRow: TILE_SIZE * 4 }, [TILE_SIZE, TILE_SIZE]);
 }
 function coordinates(key: string): [number, number] {
   const [x, y] = key.split(',').map(Number);

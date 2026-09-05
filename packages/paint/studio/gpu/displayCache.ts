@@ -1,5 +1,6 @@
 import { type TgpuRoot } from 'typegpu';
 import { TILE_SIZE } from '../brush';
+import { unpackTile } from '../tilePixels';
 import { viewLayout } from './shaders';
 
 /** Keeps committed display pixels independent of brush scratch residency, bounded to 96 MiB.
@@ -38,7 +39,7 @@ export function createDisplayCache(root: TgpuRoot, sampler: ReturnType<TgpuRoot[
       const upload = level === 0 ? entry.texture : (scratch ??= texture(root, 0));
       root.device.queue.writeTexture(
         { texture: root.unwrap(upload) },
-        pixels as Uint8Array<ArrayBuffer>,
+        unpackTile(pixels),
         { bytesPerRow: TILE_SIZE * 4 },
         [TILE_SIZE, TILE_SIZE]
       );

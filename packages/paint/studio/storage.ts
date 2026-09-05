@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { TILE_SIZE } from './brush';
 import type { Camera } from './camera';
-import { MAX_DOCUMENT_TILES, TILE_BYTES, type Layer } from './document';
+import { MAX_DOCUMENT_BYTES, MAX_DOCUMENT_TILES, TILE_BYTES, type Layer } from './document';
+import { packTile, unpackTile } from './tilePixels';
 
 /** Versioned on-disk format. Tile pixels remain premultiplied; no lossy image conversion occurs. */
 export type SavedDocument = ReturnType<typeof snapshotDocument>;
@@ -9,7 +10,7 @@ export type SavedDocument = ReturnType<typeof snapshotDocument>;
 /** Copies metadata while sharing immutable committed tile snapshots. */
 export function snapshotDocument(layers: Layer[], activeId: string, camera: Camera) {
   return {
-    version: 1 as const,
+    version: 2 as const,
     tileSize: TILE_SIZE,
     activeId,
     camera: { ...camera },
@@ -28,16 +29,19 @@ export function restoreDocument(value: unknown): { layers: Layer[]; activeId: st
     !parsed.layers.some((l) => l.id === parsed.activeId)
   )
     throw new Error('Invalid layer identifiers.');
-  let bytes = 0;
+  let bytes = 0,
+    count = 0;
   const layers = parsed.layers.map((layer) => {
     if (new Set(layer.tiles.map((t) => t.key)).size !== layer.tiles.length)
       throw new Error('Duplicate tile coordinates.');
     const tiles = new Map(
       layer.tiles.map((tile) => {
-        if (tile.pixels.byteLength !== TILE_BYTES) throw new Error('Invalid tile length.');
-        bytes += tile.pixels.byteLength;
+        if (parsed.version === 1 && tile.pixels.byteLength !== TILE_BYTES) throw new Error('Invalid tile length.');
+        const pixels = packTile(unpackTile(tile.pixels));
+        bytes += pixels.byteLength;
+        if (++count > MAX_DOCUMENT_TILES) throw new Error('Too many tiles in this document.');
         if (bytes > MAX_DOCUMENT_BYTES) throw new Error('This document exceeds the 256 MiB import limit.');
-        return [tile.key, tile.pixels] as const;
+        return [tile.key, pixels] as const;
       })
     );
     return { ...layer, tiles };
@@ -61,7 +65,7 @@ export function decodeDocument(text: string): ReturnType<typeof restoreDocument>
   if (text.length > MAX_DOCUMENT_BYTES * 1.5) throw new Error('The selected file is too large.');
   const value: unknown = JSON.parse(text, (key, value: unknown) => {
     if (key !== 'pixels' || typeof value !== 'string') return value;
-    if (value.length !== Math.ceil(TILE_BYTES / 3) * 4) throw new Error('Invalid tile encoding.');
+    if (!value.length || value.length > Math.ceil(TILE_BYTES / 3) * 4) throw new Error('Invalid tile encoding.');
     const raw = atob(value);
     return Uint8Array.from(raw, (character) => character.charCodeAt(0));
   });
@@ -116,7 +120,7 @@ function toBase64(pixels: Uint8Array): string {
 const finite = z.number().finite();
 const unit = finite.min(0).max(1);
 const savedSchema = z.object({
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
   tileSize: z.literal(TILE_SIZE),
   activeId: z.string(),
   camera: z.object({ x: finite, y: finite, zoom: finite.min(0.05).max(32), angle: finite, mirrored: z.boolean() }),
@@ -130,10 +134,9 @@ const savedSchema = z.object({
         blend: z.enum(['normal', 'multiply', 'screen', 'overlay', 'linear']),
         tiles: z
           .array(z.object({ key: z.string().regex(/^-?\d{1,9},-?\d{1,9}$/), pixels: z.instanceof(Uint8Array) }))
-          .max(4096)
+          .max(MAX_DOCUMENT_TILES)
       })
     )
     .min(1)
     .max(128)
 });
-const MAX_DOCUMENT_BYTES = MAX_DOCUMENT_TILES * TILE_BYTES;

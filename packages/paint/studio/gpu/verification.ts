@@ -1,3 +1,5 @@
+import { verifySparseStroke } from './sparseStrokeVerification';
+import { unpackTile } from '../tilePixels';
 import { defaultBrush, type Dab } from '../brush';
 import { defaultCamera } from '../camera';
 import { createDocument, type BlendMode, type Layer, type TileChange } from '../document';
@@ -106,6 +108,7 @@ export async function verifyGpu(report: (message: string) => void) {
     await verifyDirtyView(report);
     await verifyColorMixing(report);
     await verifyDisplayCache(report);
+    await verifySparseStroke(report);
     report('ALL GPU CHECKS PASSED');
   } finally {
     renderer.destroy();
@@ -282,7 +285,7 @@ function pixel(changes: TileChange[], x: number, y: number): number[] {
     ty = Math.floor(y / 256);
   const pixels = changes.find((c) => c.key === `${tx},${ty}`)?.after;
   const offset = ((y - ty * 256) * 256 + x - tx * 256) * 4;
-  return pixels ? [...pixels.slice(offset, offset + 4)] : [0, 0, 0, 0];
+  return pixels ? [...unpackTile(pixels).slice(offset, offset + 4)] : [0, 0, 0, 0];
 }
 function equalTiles(a: TileChange[], b: TileChange[]) {
   return (

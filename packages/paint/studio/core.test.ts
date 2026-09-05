@@ -1,3 +1,4 @@
+import { unpackTile } from './tilePixels';
 import { describe, expect, it } from 'vitest';
 import { createStrokeSampler, dabTiles, defaultBrush, TILE_SIZE, type Sample } from './brush';
 import { defaultCamera, panCamera, screenToWorld, transformAt, worldToScreen } from './camera';
@@ -114,12 +115,12 @@ describe('portable document', () => {
     doc.commit([{ layerId: doc.active.id, key: '-2,1', before: undefined, after: pixels }]);
     const restored = decodeDocument(encodeDocument(snapshotDocument(doc.layers, doc.active.id, camera)));
     expect(restored.camera).toEqual(camera);
-    expect(restored.layers[0]!.tiles.get('-2,1')).toEqual(pixels);
+    expect(unpackTile(restored.layers[0]!.tiles.get('-2,1')!)).toEqual(pixels);
   });
   it('rejects malformed and unsupported documents before replacement', () => {
     const doc = createDocument(),
       saved = snapshotDocument(doc.layers, doc.active.id, defaultCamera());
-    expect(() => restoreDocument({ ...saved, version: 2 })).toThrow();
+    expect(() => restoreDocument({ ...saved, version: 3 })).toThrow();
     expect(() => restoreDocument({ ...saved, activeId: 'missing' })).toThrow();
     expect(() =>
       restoreDocument({

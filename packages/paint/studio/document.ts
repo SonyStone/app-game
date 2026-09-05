@@ -1,6 +1,7 @@
-import { TILE_SIZE } from './brush';
+import { packTile } from './tilePixels';
+export { TILE_BYTES } from './tilePixels';
 
-/** A raster layer. Tiles contain premultiplied RGBA8 in the document's sRGB working space. */
+/** A raster layer. Immutable tiles store raw or losslessly packed premultiplied sRGB RGBA8. */
 export type Layer = {
   id: string;
   name: string;
@@ -75,18 +76,30 @@ export function createDocument() {
         activeId: active,
         canUndo: undo.length > 0,
         canRedo: redo.length > 0,
+        pixelBytes: layers.reduce((n, l) => n + [...l.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0), 0),
         tileCount: layers.reduce((n, l) => n + l.tiles.size, 0)
       };
     },
     /** Commits one complete stroke as an atomic history entry. */
     commit(tiles: TileChange[]) {
       if (!tiles.length) return;
-      const tileCount =
-        layers.reduce((count, layer) => count + layer.tiles.size, 0) +
-        tiles.reduce((count, tile) => count + Number(Boolean(tile.after)) - Number(Boolean(tile.before)), 0);
-      if (tileCount > MAX_DOCUMENT_TILES)
+      tiles = tiles.map((tile) => ({ ...tile, after: tile.after && packTile(tile.after) }));
+      const current = {
+        pixelBytes: layers.reduce(
+          (n, layer) => n + [...layer.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0),
+          0
+        ),
+        tileCount: layers.reduce((n, layer) => n + layer.tiles.size, 0)
+      };
+      const bytes =
+        current.pixelBytes +
+        tiles.reduce((n, tile) => n + (tile.after?.byteLength ?? 0) - (tile.before?.byteLength ?? 0), 0);
+      const count =
+        current.tileCount +
+        tiles.reduce((n, tile) => n + Number(Boolean(tile.after)) - Number(Boolean(tile.before)), 0);
+      if (bytes > MAX_DOCUMENT_BYTES || count > MAX_DOCUMENT_TILES)
         throw new Error(
-          'This drawing reached the 256 MiB document limit. Save it to a file before continuing in a new document.'
+          'The drawing reached its storage budget. The last stroke was not added. Save your drawing before freeing space.'
         );
       const entry: HistoryEntry = {
         before: info(),
@@ -188,7 +201,7 @@ function tileBytes(changes: TileChange[]): number {
   return changes.reduce((n, c) => n + (c.before?.byteLength ?? 0) + (c.after?.byteLength ?? 0), 0);
 }
 const HISTORY_BYTES = 64 * 1024 * 1024;
-/** Byte length of one tightly packed persisted tile. */
-export const TILE_BYTES = TILE_SIZE * TILE_SIZE * 4;
-/** Conservative CPU pixel limit shared with import validation. Spatial coordinates remain unrestricted. */
-export const MAX_DOCUMENT_TILES = 1024;
+/** Budget counts stored tile bytes, not the empty area covered by a sparse stroke. */
+export const MAX_DOCUMENT_BYTES = 256 * 1024 * 1024;
+/** Separate metadata bound; spatial coordinates remain unrestricted. */
+export const MAX_DOCUMENT_TILES = 65_536;

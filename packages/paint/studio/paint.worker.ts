@@ -79,7 +79,7 @@ createRoot((dispose) => {
       document.commit(changes);
     } catch (error) {
       renderer.reset();
-      scheduleDraw();
+      changed();
       throw error;
     }
     changed();
