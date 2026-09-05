@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "WebGL Spector DevTools",
+  "description": "Inspect and capture WebGL canvases from a dedicated Chrome DevTools panel.",
+  "version": "0.0.34",
+  "devtools_page": "devtools.html",
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "scripting",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "minimum_chrome_version": "110"
+}

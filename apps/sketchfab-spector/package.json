@@ -1,0 +1,27 @@
+{
+  "name": "@app-game/webgl-spector-devtools",
+  "version": "0.0.34",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --project tsconfig.json --noEmit && vite build && vite build --config vite.agent.config.ts && vite build --config vite.agent.config.ts --mode bridge && vite build --config vite.agent.config.ts --mode background",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run --config vitest.config.ts",
+    "test:browser": "pnpm build && node scripts/test-browser.mjs"
+  },
+  "dependencies": {
+    "@app-game/spector": "workspace:*",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.32",
+    "@unocss/reset": "catalog:",
+    "@unocss/vite": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "@playwright/test": "catalog:"
+  }
+}
