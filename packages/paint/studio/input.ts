@@ -63,17 +63,10 @@ export function attachInput(
     const metrics = touchMetrics();
     touchStart = metrics ? { camera: options.camera(), ...metrics } : undefined;
   };
-  const finish = (cancel: boolean) => {
+  const finish = () => {
     if (gesture?.kind === 'draw') {
-      if (cancel) {
-        pending = [];
-        cancelAnimationFrame(frame);
-        frame = 0;
-        options.send({ type: 'cancel' });
-      } else {
-        flush();
-        options.send({ type: 'end' });
-      }
+      flush();
+      options.send({ type: 'end' });
     }
     gesture = undefined;
   };
@@ -105,6 +98,7 @@ export function attachInput(
       options.send({
         type: 'begin',
         brush: options.brush(),
+        zoom: camera.zoom,
         samples: [{ ...screenToWorld(point, camera, options.size()), pressure, time: event.timeStamp }]
       });
     },
@@ -175,16 +169,23 @@ export function attachInput(
           pressure: gesture.pressure,
           time: event.timeStamp
         });
-      finish(false);
+      finish();
     },
     { signal }
   );
-  const cancel = (event: PointerEvent) => {
+  const interrupted = (event: PointerEvent) => {
     if (touches.delete(event.pointerId)) resetTouch();
-    if (gesture?.id === event.pointerId) finish(true);
+    if (gesture?.id === event.pointerId) finish();
   };
-  canvas.addEventListener('pointercancel', cancel, { signal });
-  canvas.addEventListener('lostpointercapture', cancel, { signal });
+  canvas.addEventListener('pointercancel', interrupted, { signal });
+  canvas.addEventListener(
+    'lostpointercapture',
+    (event) => {
+      // A delayed loss from the previous stroke must not finish a newly captured pointer.
+      if (!canvas.hasPointerCapture(event.pointerId)) interrupted(event);
+    },
+    { signal }
+  );
   canvas.addEventListener('pointerleave', () => options.cursor(undefined), { signal });
   canvas.addEventListener(
     'wheel',
@@ -205,7 +206,7 @@ export function attachInput(
   window.addEventListener(
     'blur',
     () => {
-      finish(false);
+      finish();
       touches.clear();
       resetTouch();
       canvas.style.cursor = '';
@@ -214,7 +215,7 @@ export function attachInput(
   );
   return () => {
     detachPuck();
-    finish(false);
+    finish();
     abort.abort();
     cancelAnimationFrame(frame);
   };

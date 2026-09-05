@@ -1,5 +1,5 @@
 import { createRoot, onCleanup } from 'solid-js';
-import { createStrokeSampler } from './brush';
+import { createSmoothStroke } from './smoothStroke';
 import { defaultCamera } from './camera';
 import { createDocument } from './document';
 import { createPaintRenderer } from './gpu/renderer';
@@ -16,7 +16,7 @@ createRoot((dispose) => {
   let debug = false;
   let size = { width: 1, height: 1 },
     dpr = 1;
-  let sampler: ReturnType<typeof createStrokeSampler> | undefined;
+  let sampler: ReturnType<typeof createSmoothStroke> | undefined;
   let saved = true,
     lost = false,
     renderMs = 0;
@@ -75,6 +75,7 @@ createRoot((dispose) => {
   };
   const end = async () => {
     if (!sampler || !renderer) return;
+    await renderer.paint(sampler.finish());
     const changes = await renderer.finish();
     sampler = undefined;
     try {
@@ -151,7 +152,7 @@ createRoot((dispose) => {
           await end();
           saved = false;
           renderer.begin(document.active, command.brush);
-          sampler = createStrokeSampler(command.brush);
+          sampler = createSmoothStroke(command.brush, command.zoom ?? camera.zoom);
           await renderer.paint(sampler.add(command.samples));
           scheduleDraw();
           break;

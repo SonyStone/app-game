@@ -43,13 +43,13 @@ describe('input to worker contract', () => {
     const batch = commands.find((c) => c.type === 'samples');
     expect(batch?.samples.map((s) => s.pressure)).toEqual([0.4, 0.9, 0.9]);
   });
-  it('discards pending input on pointercancel and can start another stroke', () => {
+  it('preserves pending ink on pointercancel and can start another stroke', () => {
     const { commands, pointer } = setup();
     pointer('pointerdown', 0, 0);
     pointer('pointermove', 5, 5);
     pointer('pointercancel', 5, 5);
     pointer('pointerdown', 10, 10);
-    expect(commands.map((c) => c.type)).toEqual(['begin', 'cancel', 'begin']);
+    expect(commands.map((c) => c.type)).toEqual(['begin', 'samples', 'end', 'begin']);
   });
   it('uses touch only for navigation and suppresses palm input during pen drawing', () => {
     const { commands, pointer, navigate } = setup();
@@ -64,6 +64,24 @@ describe('input to worker contract', () => {
     pointer('pointermove', 40, 40, { pointerType: 'touch', pointerId: 2 });
     expect(navigate).not.toHaveBeenCalled();
     expect(commands).toHaveLength(1);
+  });
+  it('commits real samples on capture loss instead of deleting the stroke', () => {
+    const { commands, pointer } = setup();
+    pointer('pointerdown', 0, 0);
+    pointer('pointermove', 20, 20);
+    pointer('lostpointercapture', 20, 20);
+    expect(commands.map((c) => c.type)).toEqual(['begin', 'samples', 'end']);
+  });
+  it('ignores delayed capture loss when a new stroke owns the pointer', () => {
+    const { canvas, commands, pointer } = setup();
+    pointer('pointerdown', 0, 0);
+    pointer('pointerup', 10, 10);
+    pointer('pointerdown', 20, 20);
+    vi.mocked(canvas.hasPointerCapture).mockReturnValue(true);
+    pointer('lostpointercapture', 10, 10);
+    pointer('pointermove', 30, 30);
+    pointer('pointerup', 40, 40);
+    expect(commands.map((c) => c.type)).toEqual(['begin', 'samples', 'end', 'begin', 'samples', 'end']);
   });
   it('holds Space to open navigation at the pointer and releases it without drawing', () => {
     const { pointer, puck, commands } = setup();
@@ -115,6 +133,7 @@ function setup() {
   vi.stubGlobal('cancelAnimationFrame', vi.fn());
   const canvas = document.createElement('canvas');
   canvas.setPointerCapture = vi.fn();
+  canvas.hasPointerCapture = vi.fn(() => false);
   const commands: PaintCommand[] = [],
     navigate = vi.fn();
   const puck = createNavigationPuck({ size: () => ({ width: 800, height: 600 }), camera: defaultCamera, navigate });

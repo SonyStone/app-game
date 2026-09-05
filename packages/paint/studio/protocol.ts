@@ -7,7 +7,7 @@ export type PaintCommand =
   | { type: 'init'; canvas: OffscreenCanvas; size: ViewSize; dpr: number; storageName?: string }
   | { type: 'debug'; enabled: boolean }
   | { type: 'view'; camera: Camera; size: ViewSize; dpr: number }
-  | { type: 'begin'; brush: Brush; samples: Sample[] }
+  | { type: 'begin'; brush: Brush; samples: Sample[]; zoom?: number }
   | { type: 'samples'; samples: Sample[] }
   | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'download' | 'png' | 'recover' | 'dispose' }
   | { type: 'layer'; action: LayerAction }
