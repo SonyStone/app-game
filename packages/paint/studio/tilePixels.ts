@@ -31,7 +31,8 @@ export function packTile(pixels: Uint8Array): Uint8Array {
 }
 
 /** Expands a tile to exact RGBA8 bytes. Rejects malformed packets before any out-of-bounds write. */
-export function unpackTile(pixels: Uint8Array): Uint8Array<ArrayBuffer> {
+export function unpackTile(pixels: TileData): Uint8Array<ArrayBuffer> {
+  if (!(pixels instanceof Uint8Array)) throw new Error('Load this tile from storage before decoding it.');
   if (pixels.byteLength === TILE_BYTES) return pixels as Uint8Array<ArrayBuffer>;
   if (pixels.byteLength < 8 || pixels.byteLength > TILE_BYTES || pixels.byteLength % 4)
     throw new Error('Invalid packed tile length.');
@@ -59,3 +60,8 @@ export function unpackTile(pixels: Uint8Array): Uint8Array<ArrayBuffer> {
 /** Uncompressed bytes per 256×256 premultiplied RGBA8 tile. */
 export const TILE_BYTES = TILE_SIZE * TILE_SIZE * 4;
 const MAGIC = 0x31544c50;
+
+/** Immutable packed pixels or an immutable version stored on disk. */
+export type TileData = Uint8Array | TileReference;
+/** Disk references never own a full pixel allocation; byteLength counts packed storage. */
+export type TileReference = { storageId: string; byteLength: number };

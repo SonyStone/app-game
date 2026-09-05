@@ -61,11 +61,7 @@ export default function PaintStudio() {
           const input = event.currentTarget;
           const picked = input.files?.[0];
           if (!picked) return;
-          if (picked.size > 384 * 1024 * 1024) {
-            setError({ message: 'This file is too large to open.', recoverable: false });
-            return;
-          }
-          send({ type: 'import', text: await picked.text() });
+          send({ type: 'import', file: picked });
           input.value = '';
           closePanel();
         }}
@@ -105,7 +101,7 @@ export default function PaintStudio() {
           role="status"
           title={saved() ? 'Saved on this device' : 'Saving completed strokes'}
         >
-          {ready() ? (saved() ? 'Saved' : 'Saving…') : 'Starting…'}
+          {ready() ? (saved() ? 'Saved' : 'Saving…') : 'Preparing drawing…'}
         </span>
         <div class="paint-view-controls" aria-label="Canvas view">
           <button aria-label="Zoom out" onClick={() => zoom(0.8)}>

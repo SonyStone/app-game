@@ -1,4 +1,4 @@
-import { packTile } from './tilePixels';
+import { packTile, type TileData } from './tilePixels';
 export { TILE_BYTES } from './tilePixels';
 
 /** A raster layer. Immutable tiles store raw or losslessly packed premultiplied sRGB RGBA8. */
@@ -8,7 +8,7 @@ export type Layer = {
   visible: boolean;
   opacity: number;
   blend: BlendMode;
-  tiles: Map<string, Uint8Array>;
+  tiles: Map<string, TileData>;
 };
 /** Separable color blend modes; alpha always follows source-over. */
 export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'linear';
@@ -18,8 +18,8 @@ export type LayerInfo = Omit<Layer, 'tiles'>;
 export type TileChange = {
   layerId: string;
   key: string;
-  before: Uint8Array | undefined;
-  after: Uint8Array | undefined;
+  before: TileData | undefined;
+  after: TileData | undefined;
 };
 type HistoryEntry = {
   before: LayerInfo[];
@@ -31,7 +31,7 @@ type HistoryEntry = {
 };
 
 /** Owns layer order and bounded tile-snapshot history. GPU resources are disposable caches of these pixels. */
-export function createDocument() {
+export function createDocument(options: { paged?: boolean } = {}) {
   let layers: Layer[] = [newLayer('layer-1', 'Layer 1')];
   let active = 'layer-1';
   let revision = 0;
@@ -55,10 +55,29 @@ export function createDocument() {
     redo.length = 0;
     undo.push(entry);
     historyBytes += entry.bytes;
-    while (undo.length && (historyBytes > HISTORY_BYTES || undo.length > 100)) historyBytes -= undo.shift()!.bytes;
+    while (undo.length > 1 && (historyBytes > (options.paged ? 1024 * 1048576 : HISTORY_BYTES) || undo.length > 100))
+      historyBytes -= undo.shift()!.bytes;
     revision++;
   };
   return {
+    /** Replaces resident snapshots with immutable disk references, including history. */
+    persist(capture: (pixels: TileData) => TileData) {
+      for (const layer of layers) for (const [key, pixels] of layer.tiles) layer.tiles.set(key, capture(pixels));
+      for (const entry of [...undo, ...redo])
+        for (const tile of entry.tiles) {
+          if (tile.before) tile.before = capture(tile.before);
+          if (tile.after) tile.after = capture(tile.after);
+        }
+    },
+    /** Current and undoable versions that must survive storage garbage collection. */
+    *snapshots(): Generator<TileData> {
+      for (const layer of layers) yield* layer.tiles.values();
+      for (const entry of [...undo, ...redo])
+        for (const tile of entry.tiles) {
+          if (tile.before) yield tile.before;
+          if (tile.after) yield tile.after;
+        }
+    },
     get layers() {
       return layers;
     },
@@ -83,7 +102,10 @@ export function createDocument() {
     /** Commits one complete stroke as an atomic history entry. */
     commit(tiles: TileChange[]) {
       if (!tiles.length) return;
-      tiles = tiles.map((tile) => ({ ...tile, after: tile.after && packTile(tile.after) }));
+      tiles = tiles.map((tile) => ({
+        ...tile,
+        after: tile.after instanceof Uint8Array ? packTile(tile.after) : tile.after
+      }));
       const current = {
         pixelBytes: layers.reduce(
           (n, layer) => n + [...layer.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0),
@@ -97,7 +119,7 @@ export function createDocument() {
       const count =
         current.tileCount +
         tiles.reduce((n, tile) => n + Number(Boolean(tile.after)) - Number(Boolean(tile.before)), 0);
-      if (bytes > MAX_DOCUMENT_BYTES || count > MAX_DOCUMENT_TILES)
+      if ((!options.paged && bytes > MAX_DOCUMENT_BYTES) || count > MAX_DOCUMENT_TILES)
         throw new Error(
           'The drawing reached its storage budget. The last stroke was not added. Save your drawing before freeing space.'
         );

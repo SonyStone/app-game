@@ -14,6 +14,9 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   const [state, setState] = createSignal(createDocument().state(), { ownedWrite: true });
   const [debug, setDebug] = createSignal(false, { ownedWrite: true });
   const [debugTiles, setDebugTiles] = createSignal<string[]>([], { ownedWrite: true });
+  const [paging, setPaging] = createSignal<
+    Pick<Extract<PaintEvent, { type: 'state' }>, 'storage' | 'virtual' | 'debugPages'>
+  >({}, { ownedWrite: true });
   const [ready, setReady] = createSignal(false, { ownedWrite: true });
   const [saved, setSaved] = createSignal(true, { ownedWrite: true });
   const [error, setError] = createSignal<{ message: string; recoverable: boolean } | undefined>(undefined, {
@@ -80,6 +83,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         setCamera(value.camera);
       }
       if (value.type === 'state') {
+        setPaging({ storage: value.storage, virtual: value.virtual, debugPages: value.debugPages });
         if (value.debugTiles) setDebugTiles(value.debugTiles);
         if (initialState || value.document.revision !== untrack(state).revision) setState(value.document);
         setSaved(value.saved);
@@ -146,7 +150,14 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       window.removeEventListener('keydown', keys);
       send({ type: 'dispose' });
       const old = worker;
-      setTimeout(() => old?.terminate(), 3000);
+      const timeout = setTimeout(() => old?.terminate(), 30_000);
+      if (old)
+        old.onmessage = (event: MessageEvent<PaintEvent>) => {
+          if (event.data.type === 'disposed' || event.data.type === 'error') {
+            clearTimeout(timeout);
+            old.terminate();
+          }
+        };
     };
   });
   onCleanup(() => cleanup?.());
@@ -154,6 +165,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   return {
     debug,
     debugTiles,
+    paging,
     toggleDebug() {
       const enabled = !debug();
       setDebug(enabled);

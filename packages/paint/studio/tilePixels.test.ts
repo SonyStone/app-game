@@ -8,7 +8,7 @@ describe('lossless sparse tiles', () => {
   it('preserves every byte of a soft diagonal and stores only its occupied runs', () => {
     const pixels = diagonal();
     const packed = packTile(pixels);
-    expect(packed.length).toBeLessThan(TILE_BYTES / 10);
+    expect(packed.byteLength).toBeLessThan(TILE_BYTES / 10);
     expect(unpackTile(packed)).toEqual(pixels);
     expect(packTile(packed)).toBe(packed);
     expect(unpackTile(packTile(new Uint8Array(TILE_BYTES)))).toEqual(new Uint8Array(TILE_BYTES));
@@ -80,7 +80,7 @@ describe('lossless sparse tiles', () => {
       ]
     });
     const packed = restored.layers[0]!.tiles.get('-1,0')!;
-    expect(packed.length).toBeLessThan(TILE_BYTES / 10);
+    expect(packed.byteLength).toBeLessThan(TILE_BYTES / 10);
     expect(unpackTile(packed)).toEqual(diagonal());
   });
 });

@@ -2,16 +2,28 @@ import { d, tgpu, type TgpuRoot } from 'typegpu';
 import { TILE_SIZE, dabTiles, type Brush, type Dab } from '../brush';
 import { screenToWorld, type Camera, type ViewSize } from '../camera';
 import type { Layer, TileChange } from '../document';
-import { packTile, unpackTile } from '../tilePixels';
+import { packTile, unpackTile, type TileData } from '../tilePixels';
 import { dirtyRegion } from './dirtyRegion';
 import { createDisplayCache } from './displayCache';
+import { createVirtualTexture } from './virtualTexture';
+import { createViewFallback } from './viewFallback';
+import type { OverviewStorage } from '../virtualPages';
 import * as shader from './shaders';
 
 /** Creates a worker-owned renderer. Committed CPU tiles remain valid after cache eviction or device loss. */
 export async function createPaintRenderer(
   canvas: OffscreenCanvas,
   onLost: (message: string) => void,
-  options: { device?: GPUDevice; cacheTiles?: number; displayCache?: boolean } = {}
+  options: {
+    device?: GPUDevice;
+    cacheTiles?: number;
+    displayCache?: boolean;
+    overviewStorage?: OverviewStorage;
+    readTile?: (pixels: TileData) => Promise<Uint8Array>;
+    virtualTexture?: boolean;
+    onRefine?: () => void;
+    onError?: (error: unknown) => void;
+  } = {}
 ) {
   if (!navigator.gpu) throw new Error('WebGPU is unavailable. Open this page in a browser with WebGPU support.');
   const adapter = options.device ? undefined : await navigator.gpu.requestAdapter();
@@ -38,14 +50,38 @@ export async function createPaintRenderer(
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'nearest', mipmapFilter: 'linear' });
   const displayCache = createDisplayCache(root, sampler);
   const cache = new Map<string, ReturnType<typeof createTile>>();
-  const strokeTiles = new Map<string, { before: Uint8Array | undefined; mask?: Uint8Array; output?: Uint8Array }>();
+  const strokeTiles = new Map<string, { before: TileData | undefined; mask?: Uint8Array; output?: Uint8Array }>();
   let stroke: { layer: Layer; brush: Brush } | undefined;
   let view: ReturnType<typeof createView> | undefined;
   let viewSignature = '';
+  let presentedCamera = '';
+  let holdPresentation = '';
+  const virtual = options.virtualTexture
+    ? createVirtualTexture(
+        root,
+        async (pixels) => (pixels instanceof Uint8Array ? pixels : options.readTile!(pixels)),
+        () => {
+          viewSignature = '';
+          options.onRefine?.();
+        },
+        (error) => options.onError?.(error),
+        options.overviewStorage
+      )
+    : undefined;
+  const viewFallback = virtual ? createViewFallback(root) : undefined;
+  let completeView: { camera: Camera; size: ViewSize } | undefined;
   const dirtyTiles = new Set<string>();
   let frame = 0;
   const brushBuffer = root.createBuffer(shader.brushLayout.entries.settings.uniform).$usage('uniform');
   const brushGroup = root.createBindGroup(shader.brushLayout, { settings: brushBuffer });
+  const readTile = async (pixels: TileData | undefined) =>
+    pixels === undefined
+      ? undefined
+      : pixels instanceof Uint8Array
+        ? pixels
+        : options.readTile
+          ? options.readTile(pixels)
+          : Promise.reject(new Error('Missing tile storage reader.'));
   const keyFor = (layer: Layer, key: string) => `${layer.id}/${key}`;
 
   /** Evicts least-recently-used tiles. Active mask readback occurs only when the cache is full. */
@@ -68,11 +104,11 @@ export async function createPaintRenderer(
       cache.delete(oldId);
     }
     const active = strokeTiles.get(id);
-    tile = createTile(root, active?.output ?? layer.tiles.get(key), sampler);
+    tile = createTile(root, await readTile(active?.output ?? layer.tiles.get(key)), sampler);
     tile.used = ++frame;
     if (active) {
       prepareStroke(root, tile);
-      writePixels(device, root.unwrap(tile.base!), active.before);
+      writePixels(device, root.unwrap(tile.base!), await readTile(active.before));
       writePixels(device, root.unwrap(tile.mask!), active.mask);
     }
     cache.set(id, tile);
@@ -80,16 +116,24 @@ export async function createPaintRenderer(
   };
 
   return {
+    /** Makes the current low-resolution image resident, rebuilding only edited branches. */
+    prepareOverview: async (layers: Layer[]) => {
+      await virtual?.prepare(layers);
+    },
     /** Resident texture budget is bounded; the count also includes active-stroke resources. */
     stats() {
       return {
         residentTiles: cache.size,
+        virtual: virtual?.stats(),
         displayTiles: displayCache.stats().tiles,
         gpuBytes:
+          (virtual?.stats().gpuBytes ?? 0) +
+          (viewFallback?.bytes() ?? 0) +
           displayCache.stats().bytes +
           [...cache.values()].reduce((n, tile) => n + TILE_SIZE * TILE_SIZE * 4 * (4 / 3 + (tile.base ? 2 : 0)), 0)
       };
     },
+    debugPages: () => virtual?.debug() ?? [],
     /** Occupied visible-layer tiles, including the active stroke, for the optional wireframe overlay. */
     debugTiles(layers: Layer[]) {
       const keys = new Set<string>();
@@ -103,6 +147,9 @@ export async function createPaintRenderer(
     /** Captures brush settings and the target layer until commit/cancel. */
     begin(layer: Layer, brush: Brush) {
       if (stroke) throw new Error('Finish the current stroke before beginning another.');
+      if (virtual && !completeView) viewSignature = '';
+      completeView = undefined;
+      viewFallback?.clear();
       stroke = { layer, brush: { ...brush } };
       const rgb = hexColor(brush.color);
       brushBuffer.write({
@@ -192,10 +239,18 @@ export async function createPaintRenderer(
       }
       strokeTiles.clear();
       stroke = undefined;
+      virtual?.invalidate();
+      holdPresentation = presentedCamera;
+      viewSignature = '';
       return changes;
     },
     /** Discards preview pixels and restores the committed document on the next render. */
     cancel() {
+      if (strokeTiles.size) {
+        completeView = undefined;
+        viewFallback?.clear();
+      }
+      holdPresentation = '';
       if (strokeTiles.size) viewSignature = '';
       for (const id of strokeTiles.keys()) {
         const tile = cache.get(id);
@@ -207,6 +262,10 @@ export async function createPaintRenderer(
     },
     /** Invalidates cached pixels after undo, redo, import, or layer deletion. */
     reset() {
+      completeView = undefined;
+      viewFallback?.clear();
+      holdPresentation = '';
+      virtual?.invalidate();
       displayCache.clear();
       viewSignature = '';
       dirtyTiles.clear();
@@ -220,7 +279,7 @@ export async function createPaintRenderer(
       viewSignature = '';
     },
     /** Rebuilds changed screen regions; camera/layer changes rebuild the full view. Cached output survives tile eviction. */
-    async render(layers: Layer[], camera: Camera, size: ViewSize, dpr: number) {
+    async render(layers: Layer[], camera: Camera, size: ViewSize, dpr: number, exact = false) {
       const scale = Math.min(
         dpr,
         2,
@@ -230,13 +289,21 @@ export async function createPaintRenderer(
       const width = Math.max(1, Math.round(size.width * scale)),
         height = Math.max(1, Math.round(size.height * scale));
       if (!view || view.width !== width || view.height !== height) {
+        if (view && completeView)
+          viewFallback?.capture(root.unwrap(view.composed), completeView.camera, completeView.size);
+        completeView = undefined;
         view?.destroy();
         canvas.width = width;
         canvas.height = height;
         view = createView(root, width, height);
+        presentedCamera = '';
+        holdPresentation = '';
         viewSignature = '';
       }
+      const cameraSignature = JSON.stringify([camera, size, width, height]);
       const signature = JSON.stringify([
+        exact,
+        virtual?.stats().uploadedBytes,
         camera,
         size,
         width,
@@ -268,52 +335,69 @@ export async function createPaintRenderer(
       const clear = device.createCommandEncoder();
       clearAttachment(clear, view.aRender);
       device.queue.submit([clear.finish()]);
+      const stream = virtual && layers.filter((layer) => layer.visible && layer.opacity > 0).length <= 24;
+      virtual?.begin(layers);
       let read = view.a,
         write = view.b;
       for (const layer of layers) {
         if (!layer.visible || layer.opacity <= 0) continue;
-        const keys = new Set(layer.tiles.keys());
-        if (stroke?.layer.id === layer.id) for (const id of strokeTiles.keys()) keys.add(id.slice(layer.id.length + 1));
-        const visible = [...keys].filter((key) => {
-          const [x, y] = coordinates(key);
-          return (
-            (x + 1) * TILE_SIZE >= minX && x * TILE_SIZE <= maxX && (y + 1) * TILE_SIZE >= minY && y * TILE_SIZE <= maxY
-          );
-        });
-        if (!visible.length) continue;
-        const batchSize = Math.min(64, Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES));
-        for (let offset = 0; offset < visible.length; offset += batchSize) {
-          const batch = [];
-          for (const key of visible.slice(offset, offset + batchSize)) {
-            const [x, y] = coordinates(key);
-            const id = keyFor(layer, key);
-            const tile =
-              cache.has(id) || strokeTiles.has(id) || options.displayCache === false
-                ? await ensure(layer, key)
-                : displayCache.get(id, layer.tiles.get(key)!, camera.zoom * scale);
-            // Magnified tiles sample level zero. Build the mip chain only when a view needs it.
-            if (tile.mipmapsDirty && camera.zoom * scale < 1) {
-              tile.texture.generateMipmaps();
-              tile.mipmapsDirty = false;
-            }
-            tile.camera.write({
-              size: d.vec2f(size.width, size.height),
-              zoom: camera.zoom,
-              angle: camera.angle,
-              mirror: camera.mirrored ? -1 : 1,
-              padding: 0,
-              offset: d.vec2f(x * TILE_SIZE - camera.x, y * TILE_SIZE - camera.y)
-            });
-            batch.push(tile);
-          }
+        if (stream && !exact && stroke?.layer.id !== layer.id) {
           const encoder = device.createCommandEncoder();
           const pass = encoder.beginRenderPass({
-            colorAttachments: [{ view: view.layerRender, loadOp: offset === 0 ? 'clear' : 'load', storeOp: 'store' }]
+            colorAttachments: [{ view: view.layerRender, loadOp: 'clear', storeOp: 'store' }]
           });
           pass.setScissorRect(region.x, region.y, region.width, region.height);
-          for (const tile of batch) pipelines.tile.with(pass).with(tile.viewGroup).draw(6);
+          virtual.draw(layer, pass, camera, size, scale);
           pass.end();
           device.queue.submit([encoder.finish()]);
+        } else {
+          const keys = new Set(layer.tiles.keys());
+          if (stroke?.layer.id === layer.id)
+            for (const id of strokeTiles.keys()) keys.add(id.slice(layer.id.length + 1));
+          const visible = [...keys].filter((key) => {
+            const [x, y] = coordinates(key);
+            return (
+              (x + 1) * TILE_SIZE >= minX &&
+              x * TILE_SIZE <= maxX &&
+              (y + 1) * TILE_SIZE >= minY &&
+              y * TILE_SIZE <= maxY
+            );
+          });
+          if (!visible.length) continue;
+          const batchSize = Math.min(64, Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES));
+          for (let offset = 0; offset < visible.length; offset += batchSize) {
+            const batch = [];
+            for (const key of visible.slice(offset, offset + batchSize)) {
+              const [x, y] = coordinates(key);
+              const id = keyFor(layer, key);
+              const tile =
+                cache.has(id) || strokeTiles.has(id) || options.displayCache === false
+                  ? await ensure(layer, key)
+                  : displayCache.get(id, (await readTile(layer.tiles.get(key)))!, camera.zoom * scale);
+              // Magnified tiles sample level zero. Build the mip chain only when a view needs it.
+              if (tile.mipmapsDirty && camera.zoom * scale < 1) {
+                tile.texture.generateMipmaps();
+                tile.mipmapsDirty = false;
+              }
+              tile.camera.write({
+                size: d.vec2f(size.width, size.height),
+                zoom: camera.zoom,
+                angle: camera.angle,
+                mirror: camera.mirrored ? -1 : 1,
+                padding: 0,
+                offset: d.vec2f(x * TILE_SIZE - camera.x, y * TILE_SIZE - camera.y)
+              });
+              batch.push(tile);
+            }
+            const encoder = device.createCommandEncoder();
+            const pass = encoder.beginRenderPass({
+              colorAttachments: [{ view: view.layerRender, loadOp: offset === 0 ? 'clear' : 'load', storeOp: 'store' }]
+            });
+            pass.setScissorRect(region.x, region.y, region.width, region.height);
+            for (const tile of batch) pipelines.tile.with(pass).with(tile.viewGroup).draw(6);
+            pass.end();
+            device.queue.submit([encoder.finish()]);
+          }
         }
         view.settings.write(
           d.vec4f(layer.opacity, ['normal', 'multiply', 'screen', 'overlay', 'linear'].indexOf(layer.blend), 0, 0)
@@ -333,6 +417,22 @@ export async function createPaintRenderer(
         device.queue.submit([encoder.finish()]);
         [read, write] = [write, read];
       }
+      virtual?.end();
+      // Keep the last brush preview until its updated overview is resident; navigation remains immediate.
+      if (
+        !exact &&
+        !stroke &&
+        holdPresentation === cameraSignature &&
+        virtual?.debug().some((page) => !page.resident || page.fallback)
+      )
+        return;
+      const refining = !exact && virtual?.debug().some((page) => !page.resident || page.fallback);
+      if (refining && !stroke && completeView) {
+        viewFallback?.capture(root.unwrap(view.composed), completeView.camera, completeView.size);
+        completeView = undefined;
+      }
+      holdPresentation = '';
+      presentedCamera = cameraSignature;
       const copy = device.createCommandEncoder();
       const origin = { x: region.x, y: region.y };
       copy.copyTextureToTexture(
@@ -341,6 +441,11 @@ export async function createPaintRenderer(
         [region.width, region.height]
       );
       device.queue.submit([copy.finish()]);
+      if (refining && !stroke) viewFallback?.draw(root.unwrap(view.composed), camera, size);
+      if (!refining) {
+        completeView = { camera: { ...camera }, size: { ...size } };
+        viewFallback?.clear();
+      }
       pipelines.present.with(view.present).withColorAttachment({ view: context, loadOp: 'clear' }).draw(3);
       viewSignature = signature;
       dirtyTiles.clear();
@@ -353,6 +458,8 @@ export async function createPaintRenderer(
     destroy() {
       disposed = true;
       view?.destroy();
+      virtual?.destroy();
+      viewFallback?.destroy();
       displayCache.destroy();
       for (const tile of cache.values()) destroyTile(tile);
       cache.clear();

@@ -37,10 +37,13 @@ export function restoreDocument(value: unknown): { layers: Layer[]; activeId: st
     const tiles = new Map(
       layer.tiles.map((tile) => {
         if (parsed.version === 1 && tile.pixels.byteLength !== TILE_BYTES) throw new Error('Invalid tile length.');
-        const pixels = packTile(unpackTile(tile.pixels));
+        if (parsed.version !== 3 && !(tile.pixels instanceof Uint8Array))
+          throw new Error('Unexpected external tile reference.');
+        const pixels = tile.pixels instanceof Uint8Array ? packTile(unpackTile(tile.pixels)) : tile.pixels;
         bytes += pixels.byteLength;
         if (++count > MAX_DOCUMENT_TILES) throw new Error('Too many tiles in this document.');
-        if (bytes > MAX_DOCUMENT_BYTES) throw new Error('This document exceeds the 256 MiB import limit.');
+        if (parsed.version !== 3 && bytes > MAX_DOCUMENT_BYTES)
+          throw new Error('This document exceeds the 256 MiB import limit.');
         return [tile.key, pixels] as const;
       })
     );
@@ -55,7 +58,10 @@ export function encodeDocument(document: SavedDocument): string {
     ...document,
     layers: document.layers.map((layer) => ({
       ...layer,
-      tiles: layer.tiles.map((tile) => ({ key: tile.key, pixels: toBase64(tile.pixels) }))
+      tiles: layer.tiles.map((tile) => {
+        if (!(tile.pixels instanceof Uint8Array)) throw new Error('Materialize tile references before exporting.');
+        return { key: tile.key, pixels: toBase64(tile.pixels) };
+      })
     }))
   });
 }
@@ -69,6 +75,8 @@ export function decodeDocument(text: string): ReturnType<typeof restoreDocument>
     const raw = atob(value);
     return Uint8Array.from(raw, (character) => character.charCodeAt(0));
   });
+  if (typeof value === 'object' && value && 'version' in value && value.version === 3)
+    throw new Error('Internal checkpoint format is not a portable drawing.');
   return restoreDocument(value);
 }
 
@@ -106,8 +114,13 @@ export async function loadCheckpoint(
 
 function openDatabase(databaseName: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('documents');
+    const request = indexedDB.open(databaseName, 3);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains('documents')) request.result.createObjectStore('documents');
+      if (!request.result.objectStoreNames.contains('tiles')) request.result.createObjectStore('tiles');
+      if (!request.result.objectStoreNames.contains('overviews')) request.result.createObjectStore('overviews');
+      if (!request.result.objectStoreNames.contains('overviewIndex')) request.result.createObjectStore('overviewIndex');
+    };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
@@ -120,7 +133,7 @@ function toBase64(pixels: Uint8Array): string {
 const finite = z.number().finite();
 const unit = finite.min(0).max(1);
 const savedSchema = z.object({
-  version: z.union([z.literal(1), z.literal(2)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   tileSize: z.literal(TILE_SIZE),
   activeId: z.string(),
   camera: z.object({ x: finite, y: finite, zoom: finite.min(0.05).max(32), angle: finite, mirrored: z.boolean() }),
@@ -133,7 +146,15 @@ const savedSchema = z.object({
         opacity: unit,
         blend: z.enum(['normal', 'multiply', 'screen', 'overlay', 'linear']),
         tiles: z
-          .array(z.object({ key: z.string().regex(/^-?\d{1,9},-?\d{1,9}$/), pixels: z.instanceof(Uint8Array) }))
+          .array(
+            z.object({
+              key: z.string().regex(/^-?\d{1,9},-?\d{1,9}$/),
+              pixels: z.union([
+                z.instanceof(Uint8Array),
+                z.object({ storageId: z.string().uuid(), byteLength: z.number().int().min(8).max(TILE_BYTES) })
+              ])
+            })
+          )
           .max(MAX_DOCUMENT_TILES)
       })
     )

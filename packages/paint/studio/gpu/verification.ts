@@ -292,7 +292,9 @@ function equalTiles(a: TileChange[], b: TileChange[]) {
     a.length === b.length &&
     a.every((tile) => {
       const other = b.find((b) => b.key === tile.key)?.after;
-      return other?.length === tile.after?.length && tile.after?.every((byte, i) => byte === other?.[i]);
+      const left = tile.after && unpackTile(tile.after),
+        right = other && unpackTile(other);
+      return left?.length === right?.length && left?.every((byte, i) => byte === right?.[i]);
     })
   );
 }

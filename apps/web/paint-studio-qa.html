@@ -23,6 +23,9 @@
   <body>
     <h1>Paint Studio GPU verification</h1>
     <p>Real GPU pixel checks. Uses isolated documents; leaves the studio autosave untouched.</p>
+    <button id="persistent-overview">Check saved low-res</button>
+    <button id="cold-navigation">Check cold zoom</button>
+    <button id="streaming">Run streaming checks</button>
     <button id="run">Run GPU checks</button>
     <button id="worker">Run worker checks</button>
     <button id="performance">Measure 60 strokes</button>
@@ -30,11 +33,39 @@
     <button id="navigation">Measure navigation</button>
     <pre id="output">Ready</pre>
     <script type="module">
+      import { verifyPersistentOverview } from '@app-game/paint/studio/persistentOverviewVerification';
+      import { verifyColdNavigation } from '@app-game/paint/studio/navigationStreamingVerification';
+      import { verifyStreaming } from '@app-game/paint/studio/streamingVerification';
       import { verifyGpu } from '@app-game/paint/studio/gpu/verification';
       import { verifyWorker } from '@app-game/paint/studio/workerVerification';
       import { measurePainting, measureDensePainting, measureNavigation } from '@app-game/paint/studio/gpu/performance';
       const button = document.querySelector('#run'),
         output = document.querySelector('#output');
+      document.querySelector('#persistent-overview').onclick = async () => {
+        output.textContent = 'Testing saved low-resolution pages…\n';
+        try {
+          await verifyPersistentOverview((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#cold-navigation').onclick = async () => {
+        output.textContent = 'Testing cold zoom transitions…\n';
+        try {
+          await verifyColdNavigation((message) => (output.textContent += message + '\n'));
+          output.textContent += 'ALL COLD ZOOM CHECKS PASSED';
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#streaming').onclick = async () => {
+        output.textContent = 'Running streaming checks…\n';
+        try {
+          await verifyStreaming((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
       button.onclick = async () => {
         button.disabled = true;
         output.textContent = 'Running…\n';

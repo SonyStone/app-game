@@ -11,7 +11,8 @@ export type PaintCommand =
   | { type: 'samples'; samples: Sample[] }
   | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'download' | 'png' | 'recover' | 'dispose' }
   | { type: 'layer'; action: LayerAction }
-  | { type: 'import'; text: string };
+  | { type: 'import'; text: string }
+  | { type: 'import'; file: Blob };
 
 /** Lightweight worker status; document pixels are sent only for explicit file downloads. */
 export type PaintEvent =
@@ -21,9 +22,34 @@ export type PaintEvent =
       camera: Camera;
       saved: boolean;
       gpuBytes: number;
+      storage?: {
+        ramBytes: number;
+        dirtyBytes: number;
+        reads: number;
+        writes: number;
+        pendingLoads: number;
+        overviewReads: number;
+        overviewWrites: number;
+        overviewDirty: number;
+        overviewDirtyBytes: number;
+      };
       residentTiles: number;
       renderMs: number;
       debugTiles?: string[];
+      debugPages?: (import('./virtualPages').VirtualPage & { resident: boolean; fallback: boolean })[];
+      virtual?: {
+        coveragePages: number;
+        coveragePending: number;
+        overviewBytes: number;
+        builtPages: number;
+        restoredPages: number;
+        pages: number;
+        pending: number;
+        uploadedBytes: number;
+        drawCalls: number;
+        fallbackPages: number;
+        gpuBytes: number;
+      };
     }
   | { type: 'ready' }
   | { type: 'disposed' }
