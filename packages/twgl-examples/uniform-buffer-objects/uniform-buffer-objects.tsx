@@ -1,16 +1,15 @@
 import { rgbToGL } from '@app-game/chroma/io/gl';
 import { hsv2rgb } from '@app-game/chroma/io/hsv/hsv2rgb';
-import CaptureMenu from '@app-game/spector/embedded-frontend-2/capture-menu';
-import { Spector } from '@app-game/spector/spector';
+import { mountSpectorUI } from '@app-game/spector/solid/spector-overlay';
 import * as twgl from '@app-game/twgl';
 import { Title } from '@solidjs/meta';
-import { Portal } from '@solidjs/web';
 import { onCleanup, onSettled } from 'solid-js';
 import fs from './shader.frag?raw';
 import vs from './shader.vert?raw';
 
 export default function UniformBufferObjects() {
   const canvas = (<canvas class="h-full w-full" />) as HTMLCanvasElement;
+  let disposeSpectorUI: (() => void) | undefined;
 
   const m4 = twgl.m4;
   twgl.setDefaults({ attribPrefix: 'a_' });
@@ -148,20 +147,17 @@ export default function UniformBufferObjects() {
 
   onSettled(() => {
     id = requestAnimationFrame(render);
-    const spector = new Spector();
-    spector.displayUI();
+    disposeSpectorUI = mountSpectorUI({ canvas });
   });
 
   onCleanup(() => {
     cancelAnimationFrame(id);
+    disposeSpectorUI?.();
   });
 
   return (
     <>
       <Title>Uniform Buffer Objects</Title>
-      <Portal>
-        <CaptureMenu />
-      </Portal>
       {canvas}
     </>
   );

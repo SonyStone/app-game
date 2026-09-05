@@ -7,7 +7,7 @@ import cloudCityMap from './cloud-city-map.json?url';
 // grid-engine still reads Phaser from the browser global at runtime.
 globalThis.Phaser = Phaser;
 
-import { Spector } from '@app-game/spector/spector';
+import { mountSpectorUI } from '@app-game/spector/solid/spector-overlay';
 import { Title } from '@solidjs/meta';
 import cloudCityTileset from './cloud_tileset/cloud_tileset.png?url';
 import { CLOUD_CITY, CLOUD_CITY_TILED_JSON, CLOUD_CITY_TILESET_IMAGE } from './constants';
@@ -20,7 +20,7 @@ const LAYER = 'layer1';
 
 export default function () {
   const canvas = (<canvas> </canvas>) as HTMLCanvasElement;
-  let spector: Spector | undefined;
+  let disposeSpectorUI: (() => void) | undefined;
   document.body.style.overflow = 'hidden';
 
   const sceneConfig: Phaser.Types.Scenes.SettingsConfig = {
@@ -178,14 +178,13 @@ export default function () {
   const game = new Game(gameConfig);
 
   onSettled(() => {
-    spector = new Spector();
-    spector.displayUI();
+    disposeSpectorUI = mountSpectorUI({ canvas });
   });
 
   onCleanup(() => {
     (game.scene.keys.Game as GameScene).destroy();
     game.destroy(true);
-    spector?.dispose();
+    disposeSpectorUI?.();
     document.body.style.overflow = '';
   });
 

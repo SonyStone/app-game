@@ -61,9 +61,12 @@ export function ThreeExamplesSpector(): JSX.Element {
       iframeTitle={`Three.js · ${exampleTitle()}`}
       pageControls={
         <>
-          <label class="spector-example-picker">
-            <span>{loading() ? 'loading example...' : 'official example'}</span>
+          <label class="flex min-w-0 items-center gap-1.5 font-['Consolas',monospace] text-[10px] leading-none font-bold text-[#ddd] uppercase">
+            <span class="font-['Consolas',monospace] text-[9px] leading-none font-bold tracking-[0.12em] text-[#f0640d] uppercase">
+              {loading() ? 'loading example...' : 'official example'}
+            </span>
             <select
+              class="min-h-[30px] w-[min(220px,24vw)] rounded-[2px] border border-[#f0640d] bg-[#222] px-[9px] font-['Arial','Helvetica',sans-serif] text-[11px] leading-none font-bold text-white normal-case outline-none max-[850px]:w-full"
               aria-label="Three.js example"
               value={selectedExample()}
               disabled={loading()}
@@ -73,18 +76,26 @@ export function ThreeExamplesSpector(): JSX.Element {
                 {(group) => (
                   <optgroup label={group.label}>
                     <For each={group.examples}>
-                      {(example) => <option value={example}>{formatExampleName(example)}</option>}
+                      {(example) => (
+                        <option value={example} selected={example === selectedExample()}>
+                          {formatExampleName(example)}
+                        </option>
+                      )}
                     </For>
                   </optgroup>
                 )}
               </For>
               <For each={groups().length === 0 ? [DEFAULT_EXAMPLE] : []}>
-                {(example) => <option value={example}>{formatExampleName(example)}</option>}
+                {(example) => (
+                  <option value={example} selected={example === selectedExample()}>
+                    {formatExampleName(example)}
+                  </option>
+                )}
               </For>
             </select>
           </label>
           <a
-            class="spector-example-picker__link"
+            class="shrink-0 font-['Consolas',monospace] text-[18px] leading-none font-bold text-[#ffb37e] underline"
             href={`${THREE_EXAMPLES_URL}#${selectedExample()}`}
             target="_blank"
             rel="noreferrer"

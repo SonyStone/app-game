@@ -1,3 +1,4 @@
+import { createMethodInterceptor, type InterceptedMethod } from '@app-game/webgl-debug';
 import { ICommandCapture } from '../../shared/capture/commandCapture';
 import { Time } from '../../shared/utils/time';
 import { MultiDrawArraysInstancedBaseInstanceWEBGL } from '../commands/MultiDrawArraysInstancedBaseInstanceWEBGL';
@@ -97,33 +98,26 @@ export class CommandSpy {
   }
 
   private getSpy(): any {
-    // Needs both this.
-    // tslint:disable-next-line
-    const self = this;
-
-    // Needs arguments access.
-    // tslint:disable-next-line:only-arrow-functions
-    return function () {
-      const before = Time.now;
-      const result = OriginFunctionHelper.executeOriginFunction(
-        self.spiedCommandRunningContext,
-        self.spiedCommandName,
-        arguments
+    const invokeOriginal: InterceptedMethod = (...arguments_: unknown[]) =>
+      OriginFunctionHelper.executeOriginFunction(
+        this.spiedCommandRunningContext,
+        this.spiedCommandName,
+        arguments_ as unknown as IArguments
       );
-      const after = Time.now;
 
-      const functionInformation = {
-        name: self.spiedCommandName,
-        arguments,
-        result,
-        startTime: before,
-        endTime: after
-      };
-
-      self.callback(self, functionInformation);
-
-      return result;
-    };
+    return createMethodInterceptor(this.spiedCommandRunningContext, this.spiedCommandName, invokeOriginal, {
+      now: () => Time.now,
+      onCall: (call) => {
+        if (call.status === 'threw') return;
+        this.callback(this, {
+          name: this.spiedCommandName,
+          arguments: call.arguments as unknown as IArguments,
+          result: call.result,
+          startTime: call.startTime,
+          endTime: call.endTime
+        });
+      }
+    });
   }
 
   private initCustomCommands(): void {

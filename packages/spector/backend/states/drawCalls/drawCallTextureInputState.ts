@@ -52,6 +52,7 @@ export class DrawCallTextureInputState {
     }
 
     this.fullCapture = fullCapture;
+    state.compressed = customData.isCompressed;
 
     if (customData.type) {
       state.textureType = this.getWebGlConstant(customData.type);

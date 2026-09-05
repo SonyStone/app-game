@@ -263,8 +263,11 @@ export abstract class BaseState {
       return undefined;
     }
 
+    // The object may carry a tag from an older injected Spector agent. Calling
+    // the current agent's tagger also registers that live object for readback.
+    const tag = this.options.tagWebGlObject?.(object) ?? WebGlObjects.getWebGlObjectTag(object);
     return {
-      __SPECTOR_Object_TAG: WebGlObjects.getWebGlObjectTag(object) || this.options.tagWebGlObject?.(object),
+      __SPECTOR_Object_TAG: tag,
       __SPECTOR_Object_CustomData: object.__SPECTOR_Object_CustomData,
       __SPECTOR_Metadata: object.__SPECTOR_Metadata
     };

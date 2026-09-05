@@ -25,6 +25,7 @@ export class ProgramRecompilerHelper {
         onError: (message: string) => void): void {
 
         if (!this.isBuildableProgram(program)) {
+            onError("This program does not support live shader recompilation.");
             return;
         }
 

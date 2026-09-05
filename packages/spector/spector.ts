@@ -5,10 +5,15 @@ import { ICapture } from './shared/capture/capture';
 import { CanvasSpy } from './backend/spies/canvasSpy';
 import { ContextSpy } from './backend/spies/contextSpy';
 import { TimeSpy } from './backend/spies/timeSpy';
+import { captureMesh as captureMeshData } from './backend/utils/meshCapture';
 import { ProgramRecompilerHelper } from './backend/utils/programRecompilerHelper';
+import { captureScene as captureSceneData } from './backend/utils/sceneCapture';
+import { captureTexture as captureTextureData } from './backend/utils/textureCapture';
 import { Program } from './backend/webGlObjects/webGlObjects';
-import { CaptureMenu } from './embeddedFrontend/captureMenu/captureMenu';
-import { ResultView } from './embeddedFrontend/resultView/resultView';
+import type { ICommandCapture } from './shared/capture/commandCapture';
+import type { IMeshCapture } from './shared/capture/meshCapture';
+import type { ISceneCapture } from './shared/capture/sceneCapture';
+import type { ITextureCapture } from './shared/capture/textureCapture';
 import { Logger } from './shared/utils/logger';
 import { Observable } from './shared/utils/observable';
 
@@ -26,16 +31,7 @@ export interface IAvailableContext {
 export interface ISpectorOptions {
   /** Realm whose animation callbacks Spector observes. Defaults to the current window. */
   readonly target?: Window;
-  /** Parent document element used by the legacy capture menu. Defaults to `document.body`. */
-  readonly captureMenuRoot?: Element;
-  /** Parent document element used by the capture result viewer. Defaults to `document.body`. */
-  readonly resultRoot?: Element;
 }
-
-export const EmbeddedFrontend = {
-  CaptureMenu,
-  ResultView
-};
 
 interface IAnnotatedOffscreenCanvas extends OffscreenCanvas {
   __spector_context_type?: string;
@@ -84,7 +80,9 @@ export class Spector {
     return undefined;
   }
 
-  readonly onCaptureStarted: Observable<any>;
+  readonly onCaptureStarted: Observable<void>;
+  /** Reports the number of WebGL commands recorded by the active capture. */
+  readonly onCaptureProgress: Observable<number>;
   readonly onCapture: Observable<ICapture>;
   readonly onError: Observable<string>;
 
@@ -97,11 +95,8 @@ export class Spector {
   private quickCapture: boolean;
   private fullCapture: boolean;
   private capturingContext?: ContextSpy;
-  private captureMenu?: CaptureMenu;
-  private resultView?: ResultView;
   private retry: number;
   private noFrameTimeout = DEFOULT_TIMEOUT;
-  private fpsInterval?: ReturnType<typeof setInterval>;
   private marker?: string;
 
   constructor(private readonly options: ISpectorOptions = {}) {
@@ -113,79 +108,14 @@ export class Spector {
     this.contexts = [];
 
     this.timeSpy = new TimeSpy((this.options.target ?? window) as unknown as { [name: string]: any });
-    this.onCaptureStarted = new Observable<ICapture>();
+    this.onCaptureStarted = new Observable<void>();
+    this.onCaptureProgress = new Observable<number>();
     this.onCapture = new Observable<ICapture>();
     this.onError = new Observable<string>();
 
     this.timeSpy.onFrameStart.add(this.onFrameStart, this);
     this.timeSpy.onFrameEnd.add(this.onFrameEnd, this);
     this.timeSpy.onError.add(this.onErrorInternal, this);
-  }
-
-  displayUI(disableTracking: boolean = false) {
-    if (!this.captureMenu) {
-      this.getCaptureUI();
-
-      const captureMenu = this.captureMenu!;
-
-      captureMenu.onPauseRequested.add(this.pause, this);
-      captureMenu.onPlayRequested.add(this.play, this);
-      captureMenu.onPlayNextFrameRequested.add(this.playNextFrame, this);
-      captureMenu.onCaptureRequested.add((info) => {
-        if (info) {
-          this.captureCanvas(info.ref);
-        }
-      }, this);
-
-      this.fpsInterval = setInterval(() => {
-        captureMenu.setFPS(this.getFps());
-      }, 1000);
-
-      if (!disableTracking) {
-        captureMenu.trackPageCanvases();
-      }
-
-      captureMenu.display();
-    }
-
-    if (!this.resultView) {
-      this.getResultUI();
-
-      const resultView = this.resultView!;
-
-      this.onCapture.add((capture) => {
-        resultView.display();
-        resultView.addCapture(capture);
-      });
-    }
-  }
-
-  getResultUI(): ResultView {
-    if (!this.resultView) {
-      this.resultView = new ResultView(this.options.resultRoot);
-      this.resultView.onSourceCodeChanged.add((sourceCodeEvent) => {
-        this.rebuildProgramFromProgramId(
-          sourceCodeEvent.programId,
-          sourceCodeEvent.sourceVertex,
-          sourceCodeEvent.sourceFragment,
-          (program) => {
-            this.referenceNewProgram(sourceCodeEvent.programId, program);
-            this.resultView!.showSourceCodeError();
-          },
-          (error) => {
-            this.resultView!.showSourceCodeError(error);
-          }
-        );
-      });
-    }
-    return this.resultView;
-  }
-
-  getCaptureUI(): CaptureMenu {
-    if (!this.captureMenu) {
-      this.captureMenu = new CaptureMenu({ rootPlaceHolder: this.options.captureMenuRoot });
-    }
-    return this.captureMenu;
   }
 
   rebuildProgramFromProgramId(
@@ -267,16 +197,62 @@ export class Spector {
     return [...this.contexts];
   }
 
-  /** Restores realm patches, stops capture work, and removes legacy Spector UI nodes. */
+  /** Reconstructs bounded geometry for one captured WebGL 2 draw call. */
+  captureMesh(context: WebGLRenderingContexts, command: ICommandCapture, attributeName?: string): IMeshCapture {
+    const contextSpy = this.getAvailableContextSpyByCanvas(context.canvas as HTMLCanvasElement | OffscreenCanvas);
+    if (!contextSpy)
+      return { status: 'unavailable', commandId: command.id, reason: 'The WebGL context is unavailable.' };
+    return captureMeshData(context, command, (typeName, id) => contextSpy.getTaggedObject(typeName, id), {
+      selectedAttributeName: attributeName
+    });
+  }
+
+  /** Reconstructs deduplicated geometry and simple texture materials for a captured frame. */
+  captureScene(
+    context: WebGLRenderingContexts,
+    commands: readonly ICommandCapture[]
+  ): ISceneCapture {
+    const contextSpy = this.getAvailableContextSpyByCanvas(context.canvas as HTMLCanvasElement | OffscreenCanvas);
+    if (!contextSpy) return { status: 'unavailable', reason: 'The WebGL context is unavailable.' };
+    return captureSceneData(
+      context,
+      commands,
+      (typeName, id) => contextSpy.getTaggedObject(typeName, id)
+    );
+  }
+
+  /** Samples a live texture binding into a portable RGBA image. */
+  captureTexture(
+    context: WebGLRenderingContexts,
+    command: ICommandCapture,
+    uniformIndex: number,
+    textureIndex: number
+  ): ITextureCapture {
+    const contextSpy = this.getAvailableContextSpyByCanvas(context.canvas as HTMLCanvasElement | OffscreenCanvas);
+    if (!contextSpy) {
+      return {
+        status: 'unavailable',
+        commandId: command.id,
+        uniformIndex,
+        textureIndex,
+        reason: 'The WebGL context is unavailable.'
+      };
+    }
+    return captureTextureData(context, command, uniformIndex, textureIndex, (typeName, id) =>
+      contextSpy.getTaggedObject(typeName, id)
+    );
+  }
+
+  /** Restores realm patches and stops capture work. */
   dispose(): void {
+    this.canvasSpy?.dispose();
+    this.canvasSpy = undefined;
     if (this.noFrameTimeout > DEFOULT_TIMEOUT) clearTimeout(this.noFrameTimeout);
-    if (this.fpsInterval !== undefined) clearInterval(this.fpsInterval);
     for (const availableContext of this.contexts) availableContext.contextSpy.unSpy();
     this.contexts.length = 0;
-    this.captureMenu?.dispose();
-    this.resultView?.dispose();
     this.timeSpy.dispose();
     this.onCaptureStarted.clear();
+    this.onCaptureProgress.clear();
     this.onCapture.clear();
     this.onError.clear();
   }
@@ -324,6 +300,7 @@ export class Spector {
       }
 
       contextSpy.onMaxCommand.add(this.stopCapture, this);
+      contextSpy.onCommandCaptured.add((count) => this.onCaptureProgress.trigger(count));
 
       this.contexts.push({
         canvas: contextSpy.context.canvas as HTMLCanvasElement | OffscreenCanvas,
@@ -407,16 +384,21 @@ export class Spector {
         }
         this.triggerCapture(capture);
 
-        this.capturingContext = undefined;
-        this.captureNextFrames = 0;
-        this.captureNextCommands = 0;
+        this.resetCaptureState();
         return capture;
       } else if (this.captureNextCommands === 0) {
         this.retry++;
         this.captureFrames(1);
+      } else {
+        this.resetCaptureState();
       }
     }
     return undefined;
+  }
+
+  /** Ends command recording without performing the more expensive capture finalization. */
+  suspendCapture(): number {
+    return this.capturingContext?.suspendCapture() ?? 0;
   }
 
   setMarker(marker: string): void {
@@ -477,6 +459,7 @@ export class Spector {
     });
 
     contextSpy.onMaxCommand.add(this.stopCapture, this);
+    contextSpy.onCommandCaptured.add((count) => this.onCaptureProgress.trigger(count));
 
     this.contexts.push({ canvas, contextSpy });
 
@@ -519,9 +502,6 @@ export class Spector {
   }
 
   private triggerCapture(capture: ICapture) {
-    if (this.captureMenu) {
-      this.captureMenu.captureComplete();
-    }
     this.onCapture.trigger(capture);
   }
 
@@ -532,18 +512,19 @@ export class Spector {
     }
 
     if (this.capturingContext) {
-      this.capturingContext = undefined;
-      this.captureNextFrames = 0;
-      this.captureNextCommands = 0;
-      this.retry = 0;
+      this.resetCaptureState();
 
-      if (this.captureMenu) {
-        this.captureMenu.captureComplete(error);
-      }
       this.onError.trigger(error);
     } else {
       throw error;
     }
+  }
+
+  private resetCaptureState(): void {
+    this.capturingContext = undefined;
+    this.captureNextFrames = 0;
+    this.captureNextCommands = 0;
+    this.retry = 0;
   }
 }
 

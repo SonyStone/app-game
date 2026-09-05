@@ -527,6 +527,8 @@ export class DrawCallState extends BaseState {
 
     const storage = this.getTextureStorage(target);
     if (storage) {
+      textureState.target = target.name;
+      textureState.texture = this.getSpectorData(storage);
       // Null will prevent the visual target to be captured.
       const textureStateTarget = this.quickCapture ? null : target;
       this.drawCallTextureInputState.appendTextureState(textureState, storage, textureStateTarget, this.fullCapture);

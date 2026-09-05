@@ -10,14 +10,24 @@
     ".": "./index.tsx",
     "./context-hook": "./spector-context-hook.ts",
     "./iframe": "./spector-iframe.tsx",
+    "./solid": "./solid.tsx",
+    "./solid/spector-overlay": "./solid/spector-overlay.tsx",
+    "./solid/result-view": "./solid/spector-result-view.tsx",
+    "./solid/session": "./solid/spector-session.ts",
     "./spector": "./spector.ts",
     "./three-examples": "./three-examples-spector.tsx"
   },
   "peerDependencies": {
     "solid-js": "catalog:"
   },
+  "dependencies": {
+    "@app-game/webgl-debug": "workspace:*",
+    "ace-builds": "1.44.0"
+  },
   "devDependencies": {
+    "@testing-library/jest-dom": "catalog:",
     "typescript": "catalog:",
+    "vite-plugin-solid": "catalog:",
     "vitest": "catalog:"
   },
   "type": "module"

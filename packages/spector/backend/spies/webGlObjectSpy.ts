@@ -20,6 +20,7 @@ import {
 // tslint:disable:only-arrow-functions
 export class WebGlObjectSpy {
   private readonly webGlObjects: BaseWebGlObject[];
+  private readonly taggedObjects = new Map<string, Map<number, object>>();
 
   constructor(readonly contextInformation: IContextInformation) {
     this.webGlObjects = [];
@@ -30,11 +31,15 @@ export class WebGlObjectSpy {
     for (const webGlObject of this.webGlObjects) {
       for (let i = 0; i < functionInformation.arguments.length; i++) {
         const arg = functionInformation.arguments[i];
-        if (webGlObject.tagWebGlObject(arg)) {
+        const tag = webGlObject.tagWebGlObject(arg);
+        if (tag) {
+          this.rememberTaggedObject(arg, tag);
           break;
         }
       }
-      if (webGlObject.tagWebGlObject(functionInformation.result)) {
+      const resultTag = webGlObject.tagWebGlObject(functionInformation.result);
+      if (resultTag) {
+        this.rememberTaggedObject(functionInformation.result, resultTag);
         break;
       }
     }
@@ -44,10 +49,26 @@ export class WebGlObjectSpy {
     for (const webGlObject of this.webGlObjects) {
       const tag = webGlObject.tagWebGlObject(object);
       if (tag) {
+        this.rememberTaggedObject(object, tag);
         return tag;
       }
     }
     return undefined;
+  }
+
+  /** Returns a live WebGL object previously assigned the given capture tag. */
+  getTaggedObject(typeName: string, id: number): object | undefined {
+    return this.taggedObjects.get(typeName)?.get(id);
+  }
+
+  private rememberTaggedObject(object: unknown, tag: WebGlObjectTag): void {
+    if (typeof object !== 'object' || object === null) return;
+    let objects = this.taggedObjects.get(tag.typeName);
+    if (!objects) {
+      objects = new Map<number, object>();
+      this.taggedObjects.set(tag.typeName, objects);
+    }
+    objects.set(tag.id, object);
   }
 
   private initWebglObjects(): void {

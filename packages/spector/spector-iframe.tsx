@@ -1,8 +1,9 @@
 import type { JSX } from '@solidjs/web';
-import { For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
-import { Spector, type IAvailableContext } from './spector';
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
+import { SpectorResultView } from './solid/spector-result-view';
+import { createSpectorSession, type SpectorCaptureOptions, type SpectorSession } from './solid/spector-session';
+import { Spector } from './spector';
 import { installSpectorContextHook, type SpectorContextHook } from './spector-context-hook';
-import './spector-iframe.css';
 
 /** Same-origin document source loaded after Spector patches the iframe realm. */
 export type SpectorIframeSource =
@@ -44,67 +45,67 @@ export type SpectorIframeProps = SpectorIframeSource & {
  */
 export function SpectorIframe(props: SpectorIframeProps): JSX.Element {
   const [loadState, setLoadState] = createSignal<FrameState>({ status: 'loading' });
-  const [captureState, setCaptureState] = createSignal<CaptureState>({ status: 'idle' });
-  const [contexts, setContexts] = createSignal<readonly IAvailableContext[]>([]);
+  const [session, setSession] = createSignal<SpectorSession>();
   const [selectedContext, setSelectedContext] = createSignal(0);
+  const [resultsVisible, setResultsVisible] = createSignal(true);
+  const contexts = () => session()?.contexts() ?? [];
   const activeContext = createMemo(() => contexts()[selectedContext()] ?? contexts()[0]);
   let iframe!: HTMLIFrameElement;
-  let resultRoot!: HTMLDivElement;
   let hook: SpectorContextHook | undefined;
-  let spector: Spector | undefined;
   let applicationCleanup: (() => void) | undefined;
   let loadGeneration = 0;
   let autoCaptureStarted = false;
+  let activeCaptureOptions: SpectorCaptureOptions = {};
 
-  createEffect(currentSource, (source) => {
-    void loadFrame(source);
+  createEffect(currentLoadRequest, (request) => {
+    untrack(() => void loadFrame(request));
   });
   onCleanup(disposeFrame);
 
-  function currentSource(): SpectorIframeSource {
-    return props.srcdoc !== undefined ? { srcdoc: props.srcdoc } : { src: props.src };
+  function currentLoadRequest(): FrameLoadRequest {
+    return {
+      source: props.srcdoc !== undefined ? { srcdoc: props.srcdoc } : { src: props.src },
+      initialize: props.initialize,
+      autoCapture: props.autoCapture ?? true,
+      captureOptions: {
+        commandCount: props.commandCount,
+        quickCapture: props.quickCapture,
+        fullCapture: props.fullCapture
+      }
+    };
   }
 
-  async function loadFrame(source: SpectorIframeSource): Promise<void> {
+  async function loadFrame(request: FrameLoadRequest): Promise<void> {
     disposeFrame();
     const generation = ++loadGeneration;
     autoCaptureStarted = false;
-    setContexts([]);
+    activeCaptureOptions = request.captureOptions;
     setSelectedContext(0);
     setLoadState({ status: 'loading' });
-    setCaptureState({ status: 'idle' });
 
     try {
-      const resolvedSource = await resolveFrameSource(source);
+      const resolvedSource = await resolveFrameSource(request.source);
       if (generation !== loadGeneration) return;
       const frameWindow = iframe.contentWindow;
       const frameDocument = iframe.contentDocument;
       if (!frameWindow || !frameDocument) throw new Error('The iframe did not expose a same-origin document.');
 
-      const currentSpector = new Spector({ target: frameWindow, resultRoot });
-      spector = currentSpector;
-      const resultView = currentSpector.getResultUI();
-      currentSpector.onCaptureStarted.add(() => setCaptureState({ status: 'capturing' }));
-      currentSpector.onCapture.add((capture) => {
-        resultView.display();
-        resultView.addCapture(capture);
-        setCaptureState({ status: 'captured', commandCount: capture.commands.length });
-      });
-      currentSpector.onError.add((message) => setCaptureState({ status: 'error', message }));
+      const currentSession = createSpectorSession(new Spector({ target: frameWindow }));
+      setSession(currentSession);
 
       const canvas = frameDocument.createElement('canvas');
       hook = installSpectorContextHook({
         target: { HTMLCanvasElement: canvas.constructor as typeof HTMLCanvasElement },
         onContext(context) {
           if (generation !== loadGeneration) return;
-          const availableContext = currentSpector.spyContext(context);
-          const availableContexts = currentSpector.getAvailableContexts();
-          setContexts(availableContexts);
+          const availableContext = currentSession.registerContext(context);
           setLoadState({ status: 'ready' });
-          if ((props.autoCapture ?? true) && !autoCaptureStarted) {
+          if (request.autoCapture && !autoCaptureStarted) {
             autoCaptureStarted = true;
             queueMicrotask(() => {
-              if (generation === loadGeneration && spector === currentSpector) capture(availableContext);
+              if (generation === loadGeneration && session() === currentSession) {
+                capture(availableContext, request.captureOptions);
+              }
             });
           }
         }
@@ -115,7 +116,7 @@ export function SpectorIframe(props: SpectorIframeProps): JSX.Element {
       frameDocument.close();
       setLoadState(hook.contexts.size > 0 ? { status: 'ready' } : { status: 'waiting' });
 
-      const cleanup = await props.initialize?.({ document: frameDocument, window: frameWindow });
+      const cleanup = await request.initialize?.({ document: frameDocument, window: frameWindow });
       if (generation !== loadGeneration) {
         if (typeof cleanup === 'function') cleanup();
         return;
@@ -127,15 +128,9 @@ export function SpectorIframe(props: SpectorIframeProps): JSX.Element {
     }
   }
 
-  function capture(context = activeContext()): void {
-    if (!context || !spector || captureState().status === 'capturing') return;
-    setCaptureState({ status: 'capturing' });
-    spector.captureContextSpy(
-      context.contextSpy,
-      props.commandCount ?? 0,
-      props.quickCapture ?? false,
-      props.fullCapture ?? false
-    );
+  function capture(context = activeContext(), options = activeCaptureOptions): void {
+    setResultsVisible(true);
+    session()?.captureContext(context, options);
   }
 
   function disposeFrame(): void {
@@ -144,49 +139,61 @@ export function SpectorIframe(props: SpectorIframeProps): JSX.Element {
     applicationCleanup = undefined;
     hook?.restore();
     hook = undefined;
-    spector?.dispose();
-    spector = undefined;
-    resultRoot?.replaceChildren();
+    session()?.dispose();
+    setSession(undefined);
   }
 
   const iframeTitle = () => props.iframeTitle ?? 'Inspected WebGL page';
   const captureLabel = () => {
-    const state = captureState();
-    if (state.status === 'capturing') return 'Capturing next frame...';
-    if (state.status === 'captured') return `${state.commandCount} commands captured`;
-    if (state.status === 'error') return state.message;
+    const state = session()?.status();
+    if (state?.type === 'capturing') return 'Capturing next frame...';
+    if (state?.type === 'captured') return `${state.commandCount} commands captured`;
+    if (state?.type === 'error') return state.message;
     return 'Ready to capture the next rendered frame.';
   };
 
   return (
-    <main class="spector-split-view">
-      <section class="spector-split-view__page" aria-label={iframeTitle()}>
-        <header class="spector-split-view__bar">
-          <div>
-            <span>inspected page</span>
-            <strong>{iframeTitle()}</strong>
+    <main class="grid h-screen w-full grid-cols-2 overflow-hidden bg-[#222] text-white max-[850px]:h-auto max-[850px]:min-h-screen max-[850px]:grid-cols-1 max-[850px]:grid-rows-[minmax(360px,50vh)_minmax(420px,50vh)] max-[850px]:overflow-visible">
+      <section
+        class="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] border-r-2 border-[#090909] bg-white max-[850px]:border-r-0 max-[850px]:border-b-2"
+        aria-label={iframeTitle()}
+      >
+        <header class={toolbarClass()}>
+          <div class="grid min-w-0 gap-0.5">
+            <span class="font-['Consolas',monospace] text-[9px] leading-none font-bold tracking-[0.12em] text-[#f0640d] uppercase">
+              inspected page
+            </span>
+            <strong class="truncate text-[13px]">{iframeTitle()}</strong>
           </div>
-          <div class="spector-split-view__actions">
+          <div class="flex min-w-0 items-center gap-2 max-[850px]:flex-wrap">
             {props.pageControls}
-            <button type="button" onClick={() => void loadFrame(currentSource())}>
+            <button class={toolbarButtonClass()} type="button" onClick={() => void loadFrame(currentLoadRequest())}>
               Reload page
             </button>
           </div>
         </header>
-        <iframe ref={iframe} title={iframeTitle()} sandbox="allow-same-origin allow-scripts" />
+        <iframe
+          class="h-full w-full border-0 bg-white"
+          ref={iframe}
+          title={iframeTitle()}
+          sandbox="allow-same-origin allow-scripts"
+        />
       </section>
 
-      <section class="spector-split-view__inspector" aria-label="Spector frame inspector">
-        <header class="spector-split-view__bar">
-          <div>
-            <span>Spector</span>
-            <strong>{captureLabel()}</strong>
+      <section class="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)]" aria-label="Spector frame inspector">
+        <header class={toolbarClass()}>
+          <div class="grid min-w-0 gap-0.5">
+            <span class="font-['Consolas',monospace] text-[9px] leading-none font-bold tracking-[0.12em] text-[#f0640d] uppercase">
+              Spector
+            </span>
+            <strong class="truncate text-[13px]">{captureLabel()}</strong>
           </div>
-          <div class="spector-split-view__actions">
+          <div class="flex min-w-0 items-center gap-2 max-[850px]:flex-wrap">
             <Show when={contexts().length > 1}>
-              <label>
-                Context
+              <label class="flex items-center gap-1.5 font-['Consolas',monospace] text-[10px] leading-none font-bold text-[#ddd] uppercase">
+                <span>Context</span>
                 <select
+                  class={toolbarControlClass()}
                   value={selectedContext()}
                   onChange={(event) => setSelectedContext(event.currentTarget.selectedIndex)}
                 >
@@ -201,17 +208,27 @@ export function SpectorIframe(props: SpectorIframeProps): JSX.Element {
               </label>
             </Show>
             <button
+              class={toolbarButtonClass()}
               type="button"
-              disabled={!activeContext() || captureState().status === 'capturing'}
+              disabled={!activeContext() || session()?.status().type === 'capturing'}
               onClick={() => capture()}
             >
               Capture next frame
             </button>
           </div>
         </header>
-        <div class="spector-split-view__result">
-          <FrameStatus state={loadState()} autoCapture={props.autoCapture ?? true} />
-          <div ref={resultRoot} class="spector-split-view__result-root" tabindex="0" />
+        <div class="relative min-h-0 min-w-0 overflow-hidden bg-[#222]">
+          <Show
+            when={session() && (session()?.captures().length ?? 0) > 0 && resultsVisible()}
+            fallback={<FrameStatus state={loadState()} autoCapture={props.autoCapture ?? true} />}
+          >
+            <SpectorResultView
+              captures={session()?.captures() ?? []}
+              onAddCapture={(capture) => session()?.addCapture(capture)}
+              onCompileProgram={(source) => session()?.rebuildProgram(source) ?? Promise.resolve()}
+              onClose={() => setResultsVisible(false)}
+            />
+          </Show>
         </div>
       </section>
     </main>
@@ -224,15 +241,20 @@ type FrameState =
   | { readonly status: 'ready' }
   | { readonly status: 'error'; readonly message: string };
 
-type CaptureState =
-  | { readonly status: 'idle' }
-  | { readonly status: 'capturing' }
-  | { readonly status: 'captured'; readonly commandCount: number }
-  | { readonly status: 'error'; readonly message: string };
+interface FrameLoadRequest {
+  readonly source: SpectorIframeSource;
+  readonly initialize: SpectorIframeInitializer | undefined;
+  readonly autoCapture: boolean;
+  readonly captureOptions: SpectorCaptureOptions;
+}
 
 function FrameStatus(props: { readonly state: FrameState; readonly autoCapture: boolean }): JSX.Element {
   return (
-    <div class={`spector-frame-status is-${props.state.status}`}>
+    <div
+      class={`grid h-full min-h-40 place-items-center p-8 text-center font-['Arial','Helvetica',sans-serif] text-[14px] leading-[1.5] font-bold ${
+        props.state.status === 'error' ? 'bg-[#451d22] text-[#ffd7d7]' : 'text-[#ddd]'
+      }`}
+    >
       <Show when={props.state.status === 'loading'}>Loading the inspected page...</Show>
       <Show when={props.state.status === 'waiting'}>Waiting for the page to create a WebGL context.</Show>
       <Show when={props.state.status === 'ready'}>
@@ -243,6 +265,18 @@ function FrameStatus(props: { readonly state: FrameState; readonly autoCapture: 
       <Show when={props.state.status === 'error'}>{props.state.status === 'error' ? props.state.message : ''}</Show>
     </div>
   );
+}
+
+function toolbarClass(): string {
+  return "relative z-[100000] flex min-h-[52px] items-center justify-between gap-4 border-b border-[#111] bg-[#2c2c2c] py-[7px] pr-[10px] pl-[13px] font-['Arial','Helvetica',sans-serif] shadow-[0_2px_7px_#0008] max-[850px]:flex-wrap";
+}
+
+function toolbarControlClass(): string {
+  return "min-h-[30px] min-w-0 rounded-[2px] border border-[#f0640d] bg-[#222] px-[9px] font-['Arial','Helvetica',sans-serif] text-[11px] leading-none font-bold normal-case text-white outline-none";
+}
+
+function toolbarButtonClass(): string {
+  return `${toolbarControlClass()} cursor-pointer hover:bg-[#4a2714] disabled:cursor-not-allowed disabled:opacity-50`;
 }
 
 interface ResolvedFrameSource {

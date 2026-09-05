@@ -38,6 +38,8 @@ export class ContextSpy {
   readonly version: number;
 
   readonly onMaxCommand: Observable<ContextSpy>;
+  /** Reports the number of commands recorded by the active capture. */
+  readonly onCommandCaptured: Observable<number>;
 
   private readonly contextInformation: IContextInformation;
   private readonly commandSpies: { [key: string]: CommandSpy };
@@ -61,6 +63,7 @@ export class ContextSpy {
     this.version = options.version;
 
     this.onMaxCommand = new Observable<ContextSpy>();
+    this.onCommandCaptured = new Observable<number>();
 
     this.capturing = false;
     this.globalCapturing = true;
@@ -144,21 +147,24 @@ export class ContextSpy {
   }
 
   stopCapture(): ICapture {
-    const listenCommandsEndTime = Time.now;
-    if (!this.options.recordAlways) {
-      this.unSpy();
-    }
-
-    this.capturing = false;
+    this.suspendCapture();
     this.stateSpy.stopCapture(this.currentCapture);
     this.recorderSpy.stopCapture();
 
-    this.currentCapture.listenCommandsEndTime = listenCommandsEndTime;
     this.currentCapture.endTime = Time.now;
 
     this.recorderSpy.appendRecordedInformation(this.currentCapture);
     this.analyser.appendAnalyses(this.currentCapture);
     return this.currentCapture;
+  }
+
+  /** Stops recording commands while preserving the pending capture for later finalization. */
+  suspendCapture(): number {
+    if (!this.capturing) return this.currentCapture?.commands.length ?? 0;
+    if (!this.options.recordAlways) this.unSpy();
+    this.capturing = false;
+    this.currentCapture.listenCommandsEndTime = Time.now;
+    return this.currentCapture.commands.length;
   }
 
   isCapturing(): boolean {
@@ -193,6 +199,11 @@ export class ContextSpy {
     return this.commandId++;
   }
 
+  /** Resolves a live WebGL object from the tag stored in serialized capture state. */
+  getTaggedObject(typeName: string, id: number): object | undefined {
+    return this.webGlObjectSpy.getTaggedObject(typeName, id);
+  }
+
   onCommand(commandSpy: CommandSpy, functionInformation: IFunctionInformation): void {
     if (!this.globalCapturing) {
       return;
@@ -205,6 +216,7 @@ export class ContextSpy {
       const commandCapture = commandSpy.createCapture(functionInformation, this.getNextCommandCaptureId(), this.marker);
       this.stateSpy.captureState(commandCapture);
       this.currentCapture.commands.push(commandCapture);
+      this.onCommandCaptured.trigger(this.currentCapture.commands.length);
 
       commandCapture.endTime = Time.now;
 
