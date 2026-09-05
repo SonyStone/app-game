@@ -21,7 +21,7 @@ export default function App() {
   const [mode, setMode] = createSignal<ToolMode>('draw');
   const [gizmoMode, setGizmoMode] = createSignal<WorkplaneGizmoMode>('translate');
   const [viewportMode, setViewportMode] = createSignal<ViewportMode>('2d');
-  const [touchDrawingByView, setTouchDrawingByView] = createSignal({ '2d': true, '3d': false });
+  const [touchDrawingByView, setTouchDrawingByView] = createSignal({ '2d': false, '3d': false });
   const touchDrawing = () => touchDrawingByView()[viewportMode()];
   const [panel, setPanel] = createSignal<SketchPanel>();
   const [eraserRadius, setEraserRadius] = createSignal(0.18);

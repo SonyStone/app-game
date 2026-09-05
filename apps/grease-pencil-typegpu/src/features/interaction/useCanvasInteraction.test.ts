@@ -1,3 +1,4 @@
+import type { ViewportMode } from '../../shared/viewportMode';
 import { createDefaultCamera } from '../../render/cameraDefaults';
 import { createSignal } from 'solid-js';
 import { expect, it, vi } from 'vitest';
@@ -48,7 +49,31 @@ it('ignores palm cancellation while a pen stroke is in progress', () => {
   expect(state.document().drawings[0].strokes).toHaveLength(1);
 });
 
-function setup() {
+it('pans with one finger in 2D in every tool, while pen and mouse still draw', () => {
+  const state = setup('2d');
+  const before = state.document();
+  for (const tool of ['draw', 'fill', 'select', 'edit', 'erase', 'orbit', 'pan'] as const) {
+    state.setMode(tool);
+    state.interaction.onPointerDown(pointer(1, 10, 10));
+    state.interaction.onPointerMove(pointer(1, 40, 55));
+    state.interaction.onPointerUp(pointer(1, 40, 55));
+    expect(state.draft()).toBeUndefined();
+    expect(state.document()).toEqual(before);
+    expect(state.renderer.transformTouch).toHaveBeenLastCalledWith({
+      from: { x: 10, y: 10 }, to: { x: 40, y: 55 }, scale: 1, rotation: 0
+    });
+  }
+  expect(state.renderer.orbit).not.toHaveBeenCalled();
+  state.setMode('draw');
+  for (const type of ['pen', 'mouse']) {
+    state.interaction.onPointerDown(pointer(2, 10, 10, type));
+    state.interaction.onPointerMove(pointer(2, 40, 55, type));
+    state.interaction.onPointerUp(pointer(2, 40, 55, type));
+  }
+  expect(state.document().drawings[0].strokes).toHaveLength(2);
+});
+
+function setup(viewport: ViewportMode = '3d') {
   const [document, setDocument] = createSignal(createInitialDocument());
   const [draft, setDraft] = createSignal<Stroke>();
   const [mode, setMode] = createSignal<ToolMode>('draw');
@@ -71,7 +96,7 @@ function setup() {
     canvas: () => ({ setPointerCapture: vi.fn() }) as unknown as HTMLCanvasElement,
     renderer: () => renderer,
     mode,
-    viewportMode: () => '2d',
+    viewportMode: () => viewport,
     gizmoMode: () => 'translate',
     touchDrawing: () => true,
     documentState: document,
@@ -93,7 +118,7 @@ function setup() {
     setDocumentState: setDocument,
     setPointerLabel: setLabel
   });
-  return { interaction, document, draft, setMode };
+  return { interaction, document, draft, setMode, renderer };
 }
 
 function pointer(pointerId: number, clientX: number, clientY: number, pointerType = 'touch') {

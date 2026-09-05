@@ -42,9 +42,9 @@ describe('tablet navigation', () => {
     expect(renderer.orbit).toHaveBeenCalledWith(20, 35);
   });
 
-  it('leaves one finger to draw in paper view, then takes over for pinch and twist', () => {
+  it('uses one finger to pan in paper view, then takes over for pinch and twist', () => {
     const { navigation, renderer } = setup();
-    expect(navigation.startPointer(pointer(1, 10, 10))).toBe(false);
+    expect(navigation.startPointer(pointer(1, 10, 10))).toBe(true);
     expect(navigation.startPointer(pointer(2, 110, 10))).toBe(true);
     navigation.movePointer(pointer(2, 10, 210));
     expect(renderer.transformTouch).toHaveBeenCalledWith({
@@ -64,7 +64,7 @@ describe('tablet navigation', () => {
     expect(navigation.movePointer(pointer(1, 50, 70)).status).toBe('handled');
     expect(renderer.transformTouch).not.toHaveBeenCalled();
     navigation.releasePointer(pointer(1, 50, 70));
-    expect(navigation.startPointer(pointer(3, 10, 10))).toBe(false);
+    expect(navigation.startPointer(pointer(3, 10, 10))).toBe(true);
   });
 
   it('ignores palm touches until they lift, even after the pen lifts', () => {

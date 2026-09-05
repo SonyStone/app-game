@@ -215,6 +215,7 @@ export function AppToolbar(props: AppToolbarProps) {
               <SketchIcon name="close" size={17} />
             </button>
           </div>
+          <Show when={props.viewportMode === '3d'}>
           <label class="touch-drawing-toggle toggle-control">
             <input
               type="checkbox"
@@ -223,6 +224,7 @@ export function AppToolbar(props: AppToolbarProps) {
             />
             Draw with finger
           </label>
+          </Show>
           <button
             type="button"
             onClick={() => {

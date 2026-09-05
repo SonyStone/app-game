@@ -41,12 +41,10 @@ export function createViewportNavigation(params: ViewportNavigationParams) {
     }
 
     const action =
-      getViewAction(params.mode(), event) ??
-      (event.pointerType === 'touch' && !params.touchDrawing()
-        ? params.viewportMode() === '3d'
-          ? 'orbit'
-          : 'pan'
-        : undefined);
+      event.pointerType === 'touch' && params.viewportMode() === '2d'
+        ? 'pan'
+        : getViewAction(params.mode(), event) ??
+          (event.pointerType === 'touch' && !params.touchDrawing() ? 'orbit' : undefined);
     if (!action) return false;
     singlePointer = { id: event.pointerId, action, x: event.clientX, y: event.clientY };
     params.setPointerLabel(action === 'pan' ? 'Pan' : params.viewportMode() === '2d' ? 'Rotate canvas' : 'Orbit');
@@ -104,7 +102,7 @@ type ViewportNavigationParams = {
   renderer: Accessor<InteractionViewport | undefined>;
   setPointerLabel: Setter<string>;
   viewportMode: Accessor<ViewportMode>;
-  /** Single-finger editing; false reserves touch for navigation and drawing for the pen. */
+  /** Enables single-finger editing in 3D. In 2D, a finger always pans. */
   touchDrawing: Accessor<boolean>;
 };
 
