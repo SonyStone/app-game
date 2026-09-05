@@ -1,2617 +1,1270 @@
-import { GL_SHADER_TYPE, GL_STATIC_VARIABLES } from '@app-game/webgl/static-variables';
 import {
-  GL_TEXTURE_MAG_FILTER,
-  GL_TEXTURE_MIN_FILTER,
-  GL_TEXTURE_WRAP_MODE
-} from '@app-game/webgl/static-variables/textures';
+  createMethodProxy,
+  installWebGLContextHook as installCanvasWebGLContextHook,
+  type MethodCall,
+  type WebGLContext as SharedWebGLContext,
+  type WebGLContextTarget
+} from '@app-game/webgl-debug';
 
-/**
- * A vertex shader's sole responsibility is to set `gl_Position` to a clip space position. To create one use:
- *
- * ```typescript
- * const shader = gl.createShader(gl.VERTEX_SHADER);
- * gl.shaderSource(shader, glslString);
- * gl.compileShader(shader);
- * if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) === 0) {
- *   console.error(gl.getShaderInfoLog(shader));
- * }
- * ```
- */
-interface WebGLShaderState {
-  source: string | undefined;
-  state: { COMPILE_STATUSE: boolean };
+/** A WebGL 1 or WebGL 2 rendering context. */
+export type WebGLContext = SharedWebGLContext;
+
+/** The kinds of WebGL objects shown by the inspector. */
+export type WebGLResourceKind =
+  | 'buffer'
+  | 'framebuffer'
+  | 'program'
+  | 'renderbuffer'
+  | 'sampler'
+  | 'shader'
+  | 'texture'
+  | 'transform-feedback'
+  | 'vertex-array'
+  | 'query'
+  | 'sync'
+  | 'unknown';
+
+/** One formatted state value, optionally linked to a WebGL resource. */
+export interface WebGLStateRow {
+  readonly key: string;
+  readonly value: string;
+  readonly resourceId?: string;
 }
 
-/**
- * A program is a combination of a vertex shader and a fragment shader _linked_ together.
- *
- * ```typescript
- * const program = gl.createProgram();
- * gl.attachShader(program, someVertexShader);
- * gl.attachShader(program, someFragmentShader);
- * gl.linkProgram(program);
- * if (gl.getProgramParameter(program, gl.LINK_STATUS) === 0) {
- *   console.error(gl.getProgramInfoLog(program));
- * }
- * ```
- */
-class WebGLProgramState {
-  attached_shaders: Map<WebGLShader, WebGLShaderState> = new Map();
-  attribute_info: WebGLAttributeState[] = [];
-  uniforms: WebGLUniformState[] = [];
-  uniforms_by_name: { [key: string]: WebGLUniformState } = {};
-  uniforms_by_location: Map<WebGLUniformLocation, WebGLUniformState> = new Map();
-  state: {
-    LINK_STATUS: boolean;
-  } = { LINK_STATUS: false };
+/** A related group of global WebGL state. */
+export interface WebGLStateGroup {
+  readonly id: string;
+  readonly title: string;
+  readonly rows: readonly WebGLStateRow[];
+}
 
-  toString() {
-    return 'prg';
+/** The bindings for one texture unit. */
+export interface WebGLTextureUnitSnapshot {
+  readonly index: number;
+  readonly active: boolean;
+  readonly bindings: readonly WebGLStateRow[];
+}
+
+/** The current vertex-array state for one attribute index. */
+export interface WebGLVertexAttributeSnapshot {
+  readonly index: number;
+  readonly enabled: boolean;
+  readonly size: string;
+  readonly type: string;
+  readonly normalized: string;
+  readonly stride: string;
+  readonly offset: string;
+  readonly divisor: string;
+  readonly buffer: string;
+  readonly bufferId?: string;
+}
+
+/** One WebGL2 indexed uniform or transform-feedback buffer binding. */
+export interface WebGLIndexedBufferBindingSnapshot {
+  readonly target: 'uniform' | 'transform-feedback';
+  readonly index: number;
+  readonly buffer: string;
+  readonly bufferId?: string;
+  readonly offset: string;
+  readonly size: string;
+}
+
+/** A resource created through the instrumented context. */
+export interface WebGLResourceSnapshot {
+  readonly id: string;
+  readonly kind: WebGLResourceKind;
+  readonly deleted: boolean;
+  readonly details: readonly WebGLStateRow[];
+  /** Named outgoing references to other resources or diagram nodes. */
+  readonly relations: readonly WebGLResourceRelationSnapshot[];
+  readonly links: readonly string[];
+}
+
+/** A direct binding or an indirect draw-time relationship between diagram nodes. */
+export interface WebGLResourceRelationSnapshot {
+  readonly label: string;
+  readonly targetId: string;
+  readonly direct: boolean;
+}
+
+/** One application call captured by the inspector. */
+export type WebGLCallSnapshot =
+  | { readonly status: 'ok'; readonly name: string; readonly arguments: string; readonly sequence: number }
+  | {
+      readonly status: 'error';
+      readonly name: string;
+      readonly arguments: string;
+      readonly message: string;
+      readonly sequence: number;
+    };
+
+/** A complete, immutable view consumed by the Solid diagram. */
+export interface WebGLStateSnapshot {
+  readonly version: 1 | 2;
+  readonly revision: number;
+  readonly drawCalls: number;
+  readonly groups: readonly WebGLStateGroup[];
+  readonly textureUnits: readonly WebGLTextureUnitSnapshot[];
+  readonly vertexAttributes: readonly WebGLVertexAttributeSnapshot[];
+  readonly indexedBufferBindings: readonly WebGLIndexedBufferBindingSnapshot[];
+  readonly resources: readonly WebGLResourceSnapshot[];
+  readonly recentCalls: readonly WebGLCallSnapshot[];
+}
+
+/** Controls the amount of potentially large indexed state read by each snapshot. */
+export interface WebGLInspectorOptions {
+  /** Maximum texture units shown. Defaults to 8. */
+  readonly maxTextureUnits?: number;
+  /** Maximum vertex attributes shown. Defaults to 8. */
+  readonly maxVertexAttributes?: number;
+  /** Maximum calls retained in the activity log. Defaults to 40. */
+  readonly maxRecentCalls?: number;
+  /** Maximum bindings shown for each indexed buffer target. Defaults to 8. */
+  readonly maxIndexedBindings?: number;
+}
+
+/** A proxied context and its state inspector. */
+export interface InstrumentedWebGLContext<TContext extends WebGLContext> {
+  /** Drop-in replacement for the original context. */
+  readonly context: TContext;
+  /** State reader and subscription source used by the diagram. */
+  readonly inspector: WebGLInspector;
+}
+
+/** A temporary patch of `HTMLCanvasElement.getContext`. */
+export interface WebGLContextHook {
+  /** Every context first requested while the hook is installed. */
+  readonly inspectors: ReadonlySet<WebGLInspector>;
+  /** Restores the original `getContext` implementation. */
+  restore(): void;
+}
+
+/** Options for patching context creation in the current page or a same-origin iframe. */
+export interface WebGLContextHookOptions extends WebGLInspectorOptions {
+  /** Window whose canvas prototype will be patched. Defaults to the current window. */
+  readonly target?: WebGLContextTarget;
+  /** Called once for every context first requested while the hook is installed. */
+  readonly onContext?: (inspector: WebGLInspector) => void;
+}
+
+type SnapshotListener = (snapshot: WebGLStateSnapshot) => void;
+type GLObject = object;
+type ValueFormat = 'enum' | 'hex' | 'plain';
+
+interface StateDefinition {
+  readonly key: string;
+  readonly format?: ValueFormat;
+}
+
+interface StateGroupDefinition {
+  readonly id: string;
+  readonly title: string;
+  readonly states: readonly StateDefinition[];
+}
+
+interface ResourceRecord {
+  readonly object: GLObject;
+  readonly id: string;
+  readonly kind: WebGLResourceKind;
+  readonly details: Map<string, string>;
+  readonly relations: Map<string, WebGLResourceRelationSnapshot>;
+  deleted: boolean;
+}
+
+interface MutableCall {
+  readonly name: string;
+  readonly arguments: readonly unknown[];
+  readonly result?: unknown;
+  readonly error?: unknown;
+}
+
+const inspectorsByContext = new WeakMap<object, WebGLInspector>();
+const rawContexts = new WeakMap<object, WebGLContext>();
+const instrumentedContexts = new WeakMap<object, WebGLContext>();
+
+/**
+ * Observes a context without changing the WebGL API seen by its caller.
+ *
+ * All methods run with the native context as `this`, which keeps browser brand checks and existing
+ * WebGL libraries working. Calls made before instrumentation can be read as global state, but their
+ * resource metadata cannot be reconstructed.
+ */
+export function instrumentWebGLContext<TContext extends WebGLContext>(
+  context: TContext,
+  options: WebGLInspectorOptions = {}
+): InstrumentedWebGLContext<TContext> {
+  const existing = inspectorsByContext.get(context);
+  if (existing) {
+    return { context: (instrumentedContexts.get(context) ?? context) as TContext, inspector: existing };
   }
+
+  const inspector = new WebGLInspector(context, options);
+  const extensionCache = new WeakMap<object, object>();
+  const proxy = createMethodProxy(context, {
+    transformResult: (result, invocation) =>
+      invocation.name === 'getExtension' ? wrapExtension(result, inspector, extensionCache) : result,
+    onCall: (call) => recordInterceptedCall(inspector, call)
+  });
+
+  // TypeScript cannot express a Proxy that preserves overloaded DOM method signatures.
+  const instrumented = proxy as TContext;
+  inspectorsByContext.set(context, inspector);
+  inspectorsByContext.set(instrumented, inspector);
+  rawContexts.set(instrumented, context);
+  instrumentedContexts.set(context, instrumented);
+  instrumentedContexts.set(instrumented, instrumented);
+  return { context: instrumented, inspector };
 }
 
-interface WebGLUniformState {
-  name: string;
-  value: any;
-  type: number;
-  size: number;
-  location: WebGLUniformLocation | null;
+/** Returns the inspector associated with a native or instrumented context. */
+export function getWebGLInspector(context: WebGLContext): WebGLInspector | undefined {
+  return inspectorsByContext.get(context);
 }
 
-interface WebGLAttributeState {
-  name: string;
-  type: any;
-  location: number;
-}
-
-interface WebGLFramebufferState {}
-
-interface WebGLRenderbufferState {}
-
-/**
- * Textures provide random access data to shaders. Most often they
- * contain image data but not always.
- *
- * Textures are created with
- *
- * ```typescritp
- * const tex = gl.createTexture();
- * ```
- *
- * and bound to a texture unit bind point (target) with
- *
- * ```typescript
- * gl.activeTexture(gl.TEXTURE0 + texUnitIndex);
- * const bindPoint = gl.TEXTURE_2D;
- * gl.bindTexture(bindPoint, tex);
- * ```
- *
- * All texture functions reference textures through the bind points
- * on the active texture unit. ie.
- *
- * ```typescript
- * texture = textureUnits[activeTexture][bindPoint]
- * ```
- *
- * For more details see [the article on textures](https://webglfundamentals.org/webgl/lessons/webgl-3d-textures.html).
- */
-interface WebGLTextureState {
-  mips: {};
-  texturestate: {
-    TEXTURE_MIN_FILTER: GL_TEXTURE_MIN_FILTER;
-    TEXTURE_MAG_FILTER: GL_TEXTURE_MAG_FILTER;
-    TEXTURE_WRAP_S: GL_TEXTURE_WRAP_MODE;
-    TEXTURE_WRAP_T: GL_TEXTURE_WRAP_MODE;
-  };
+/** Returns the native context behind an instrumented context. */
+export function getRawWebGLContext<TContext extends WebGLContext>(context: TContext): TContext {
+  return (rawContexts.get(context) ?? context) as TContext;
 }
 
 /**
- * Buffers contain data provided to attributes.
- *
- * Buffers are created with
- *
- * ```typescript
- * const buffer = gl.createBuffer();
- * ```
+ * Makes future `canvas.getContext('webgl' | 'webgl2')` calls return instrumented contexts.
+ * Install before the target application creates its contexts and call `restore` on teardown.
  */
-interface WebGLBufferState {
-  data: any;
-}
-
-/**
- * Vertex Arrays contain all attribute state. Attributes define
- * how to pull data out of buffers to supply to a vertex shader.
- *
- * Normally there is only the 1 default vertex array in WebGL 1.0.
- *
- * You can create more vertex arrays with the `OES_vertex_array_object` extension.
- *
- * ```typescript
- * const ext = gl.getExtension('OES_vertex_array_object')
- * const vertexArray = ext.createVertexArrayOES();
- * ```
- *
- * and bind one (make it the current vertex array) with
- *
- * ```typescript
- * ext.bindVertexArrayOES(someVertexArray);
- * ```
- *
- * Passing `null` to ext.bindVertexArrayOES binds the default vertex array.
- */
-interface WebGLVertexArrayObjectState {
-  attributes: any[];
-  state: {
-    ELEMENT_ARRAY_BUFFER_BINDING: WebGLBufferState | null;
-  };
-}
-
-/**
- * State
- *
- * Binded WebGL data
- */
-interface CommonState {
-  /** `0, 0, 300, 150` */
-  VIEWPORT: number[];
-  ARRAY_BUFFER_BINDING: WebGLBufferState | null;
-  CURRENT_PROGRAM: WebGLProgramState | null;
-  /** `null` (default VAO) */
-  VERTEX_ARRAY_BINDING: WebGLVertexArrayObjectState | null;
-  RENDERBUFFER_BINDING: WebGLRenderbufferState | null;
-  /** `null` (canvas) */
-  FRAMEBUFFER_BINDING: WebGLFramebufferState | null;
-  /** `TEXTURE0` */
-  ACTIVE_TEXTURE: string;
-}
-
-/**
- * Each texture unit has multiple bind points. You can bind a texture to each point
- * but it is an error for a program to try to access 2 or more different bind points
- * from the same texture unit.
- *
- * For example you have a shader with both a 2D sampler and a cube sampler.
- *
- * ```typescript
- * uniform sampler2D foo;
- * uniform samplerCube bar;
- * ```
- *
- * Even though there are are both `TEXTURE_2D` and `TEXTURE_CUBE_MAP` bind points in
- * a single texture unit if you set both bar and foo to the same unit you'll get an
- * error
- *
- * ```typescript
- * const unit = 3;
- * gl.uniform1i(fooLocation, unit);
- * gl.uniform1i(barLocation, unit);
- * ```
- *
- * The code above will generate an error at draw time because `foo` and `bar`
- * require different sampler types. If they are the same type it is okay to point
- * both to the same texture unit.
- *
- * > Note: Only 8 texture units are shown here for space reasons but
- * > the actual number of bind points you can look up with
- * > `gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS)` which will be
- * > a minimum of 8.
- */
-interface TextureUnits {}
-
-interface WebGLState {
-  globalState: {
-    commonState: CommonState;
-    textureUtils: TextureUnits;
-  };
-
-  /**
-   * Shaders in use
-   * ```typescript
-   * gl.createShader(type)
-   * gl.compileShader()
-   * gl.attachShader()
-   * gl.deleteShader()
-   * ```
-   */
-  shaders: Map<WebGLShader, WebGLShaderState>;
-
-  /**
-   * Programs in use
-   *
-   * ```typescript
-   * gl.createProgram(): WebGLProgram | null
-   * gl.linkProgram(program: WebGLProgram): void
-   * gl.useProgram(program: WebGLProgram | null): void
-   * ```
-   */
-  programs: Map<WebGLProgram, WebGLProgramState>;
-
-  /**
-   * Buffers in use
-   *
-   * ```typescript
-   * gl.createBuffer(): WebGLBuffer | null
-   * gl.bindBuffer(target: number, buffer: WebGLBuffer | null): void
-   * ```
-   */
-  buffers: Map<WebGLBuffer, WebGLBufferState>;
-
-  /**
-   * VertexArrayObjects in use
-   *
-   * ```typescript
-   * gl.createVertexArray(): WebGLVertexArrayObject | null
-   * gl.bindVertexArray(array: WebGLVertexArrayObject | null): void
-   * ```
-   */
-  vertexArrayObjects: Map<WebGLVertexArrayObject, WebGLVertexArrayObjectState>;
-
-  /**
-   * RenderBuffers in use
-   *
-   * ```typescript
-   * gl.createRenderbuffer(): WebGLRenderbuffer | null
-   * gl.bindRenderbuffer(target: GLenum, renderbuffer: WebGLRenderbuffer | null): void
-   * ```
-   */
-  renderBuffers: Map<WebGLRenderbuffer, WebGLRenderbufferState>;
-
-  /**
-   * Framebuffer in use
-   *
-   * ```typescript
-   * gl.createFramebuffer(): WebGLFramebuffer | null
-   * gl.bindFramebuffer(target: GLenum, framebuffer: WebGLFramebuffer | null): void
-   * ```
-   */
-  framebuffer: Map<WebGLFramebuffer, WebGLFramebufferState>;
-
-  /**
-   * Textures in use
-   *
-   * ```typescript
-   * gl.createTexture(): WebGLTexture | null
-   * gl.bindTexture(target: GLenum, texture: WebGLTexture | null): void
-   * ```
-   */
-  textures: Map<WebGLTexture, WebGLTextureState>;
-}
-
-export class WebGL2DebugWrapper {
-  private defaultVertexArrayObject: WebGLVertexArrayObjectState = {
-    attributes: [],
-    state: {
-      ELEMENT_ARRAY_BUFFER_BINDING: null
+export function installWebGLContextHook(options: WebGLContextHookOptions = {}): WebGLContextHook {
+  const inspectors = new Set<WebGLInspector>();
+  const inspectorOptions = {
+    maxIndexedBindings: options.maxIndexedBindings,
+    maxRecentCalls: options.maxRecentCalls,
+    maxTextureUnits: options.maxTextureUnits,
+    maxVertexAttributes: options.maxVertexAttributes
+  } satisfies WebGLInspectorOptions;
+  const hook = installCanvasWebGLContextHook({
+    target: options.target,
+    wrapContext: (context) => instrumentWebGLContext(context, inspectorOptions).context,
+    onContext: (context) => {
+      const inspector = getWebGLInspector(context);
+      if (!inspector) throw new Error('The WebGL context hook did not create an inspector.');
+      inspectors.add(inspector);
+      options.onContext?.(inspector);
     }
+  });
+
+  return {
+    inspectors,
+    restore: () => hook.restore()
   };
+}
 
-  state: WebGLState = {
-    globalState: {
-      commonState: {
-        VIEWPORT: [0, 0, 300, 150],
-        ARRAY_BUFFER_BINDING: null,
-        CURRENT_PROGRAM: null,
-        VERTEX_ARRAY_BINDING: this.defaultVertexArrayObject,
-        RENDERBUFFER_BINDING: null,
-        FRAMEBUFFER_BINDING: null,
-        ACTIVE_TEXTURE: 'TEXTURE0'
-      },
-      textureUtils: {}
-    },
-    shaders: new Map<WebGLShader, WebGLShaderState>(),
-    programs: new Map<WebGLProgram, WebGLProgramState>(),
-    buffers: new Map<WebGLBuffer, WebGLBufferState>(),
-    vertexArrayObjects: new Map<WebGLVertexArrayObject, WebGLVertexArrayObjectState>(),
-    renderBuffers: new Map<WebGLRenderbuffer, WebGLRenderbufferState>(),
-    framebuffer: new Map<WebGLFramebuffer, WebGLFramebufferState>(),
-    textures: new Map<WebGLTexture, WebGLTextureState>()
-  };
+/** Reads WebGL state and notifies subscribers after application mutations. */
+export class WebGLInspector {
+  readonly context: WebGLContext;
 
-  constructor(private readonly gl: WebGL2RenderingContext) {}
-  HALF_FLOAT_OES = this.gl.HALF_FLOAT_OES;
-  RGBA16F = this.gl.RGBA16F;
-  RGBA32F = this.gl.RGBA32F;
-  DEPTH24_STENCIL8 = this.gl.DEPTH24_STENCIL8;
-  COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR = this.gl.COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR;
-  COMPRESSED_SRGB_S3TC_DXT1_EXT = this.gl.COMPRESSED_SRGB_S3TC_DXT1_EXT;
-  COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT = this.gl.COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
-  COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT = this.gl.COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT;
-  COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT = this.gl.COMPRESSED_SRGB_ALPHA_BPTC_UNORM_EXT;
-  COMPRESSED_SRGB8_ETC2 = this.gl.COMPRESSED_SRGB8_ETC2;
-  COMPRESSED_SRGB8_ALPHA8_ETC2_EAC = this.gl.COMPRESSED_SRGB8_ALPHA8_ETC2_EAC;
-  DRAW_FRAMEBUFFER = this.gl.DRAW_FRAMEBUFFER;
-  UNSIGNED_INT_24_8 = this.gl.UNSIGNED_INT_24_8;
-  MAX = this.gl.MAX;
-  MIN = this.gl.MIN;
-  SRGB = this.gl.SRGB;
-  SRGB8 = this.gl.SRGB8;
-  SRGB8_ALPHA8 = this.gl.SRGB8_ALPHA8;
-  beginQuery(target: number, query: WebGLQuery): void {
-    this.gl.beginQuery(target, query);
-  }
-  beginTransformFeedback(primitiveMode: number): void {
-    throw new Error('Method not implemented.');
-  }
-  bindBufferBase(target: number, index: number, buffer: WebGLBuffer | null): void {
-    throw new Error('Method not implemented.');
-  }
-  bindBufferRange(target: number, index: number, buffer: WebGLBuffer | null, offset: number, size: number): void {
-    throw new Error('Method not implemented.');
-  }
-  bindSampler(unit: number, sampler: WebGLSampler | null): void {
-    throw new Error('Method not implemented.');
-  }
-  bindTransformFeedback(target: number, tf: WebGLTransformFeedback | null): void {
-    throw new Error('Method not implemented.');
-  }
-  clearBufferfi(buffer: number, drawbuffer: number, depth: number, stencil: number): void {
-    throw new Error('Method not implemented.');
-  }
-  clearBufferiv(buffer: number, drawbuffer: number, values: Int32List, srcOffset?: number | undefined): void;
-  clearBufferiv(buffer: number, drawbuffer: number, values: Iterable<number>, srcOffset?: number | undefined): void;
-  clearBufferiv(buffer: unknown, drawbuffer: unknown, values: unknown, srcOffset?: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  clearBufferuiv(buffer: number, drawbuffer: number, values: Uint32List, srcOffset?: number | undefined): void;
-  clearBufferuiv(buffer: number, drawbuffer: number, values: Iterable<number>, srcOffset?: number | undefined): void;
-  clearBufferuiv(buffer: unknown, drawbuffer: unknown, values: unknown, srcOffset?: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  clientWaitSync(sync: WebGLSync, flags: number, timeout: number): number {
-    throw new Error('Method not implemented.');
-  }
-  compressedTexImage3D(
-    target: number,
-    level: number,
-    internalformat: number,
-    width: number,
-    height: number,
-    depth: number,
-    border: number,
-    imageSize: number,
-    offset: number
-  ): void;
-  compressedTexImage3D(
-    target: number,
-    level: number,
-    internalformat: number,
-    width: number,
-    height: number,
-    depth: number,
-    border: number,
-    srcData: ArrayBufferView,
-    srcOffset?: number | undefined,
-    srcLengthOverride?: number | undefined
-  ): void;
-  compressedTexImage3D(
-    target: unknown,
-    level: unknown,
-    internalformat: unknown,
-    width: unknown,
-    height: unknown,
-    depth: unknown,
-    border: unknown,
-    srcData: unknown,
-    srcOffset?: unknown,
-    srcLengthOverride?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  compressedTexSubImage3D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    zoffset: number,
-    width: number,
-    height: number,
-    depth: number,
-    format: number,
-    imageSize: number,
-    offset: number
-  ): void;
-  compressedTexSubImage3D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    zoffset: number,
-    width: number,
-    height: number,
-    depth: number,
-    format: number,
-    srcData: ArrayBufferView,
-    srcOffset?: number | undefined,
-    srcLengthOverride?: number | undefined
-  ): void;
-  compressedTexSubImage3D(
-    target: unknown,
-    level: unknown,
-    xoffset: unknown,
-    yoffset: unknown,
-    zoffset: unknown,
-    width: unknown,
-    height: unknown,
-    depth: unknown,
-    format: unknown,
-    srcData: unknown,
-    srcOffset?: unknown,
-    srcLengthOverride?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  copyBufferSubData(
-    readTarget: number,
-    writeTarget: number,
-    readOffset: number,
-    writeOffset: number,
-    size: number
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  copyTexSubImage3D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    zoffset: number,
-    x: number,
-    y: number,
-    width: number,
-    height: number
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  createQuery(): WebGLQuery {
-    throw new Error('Method not implemented.');
-  }
-  createSampler(): WebGLSampler {
-    throw new Error('Method not implemented.');
-  }
-  createTransformFeedback(): WebGLTransformFeedback {
-    throw new Error('Method not implemented.');
-  }
-  deleteQuery(query: WebGLQuery | null): void {
-    throw new Error('Method not implemented.');
-  }
-  deleteSampler(sampler: WebGLSampler | null): void {
-    throw new Error('Method not implemented.');
-  }
-  deleteSync(sync: WebGLSync | null): void {
-    throw new Error('Method not implemented.');
-  }
-  deleteTransformFeedback(tf: WebGLTransformFeedback | null): void {
-    throw new Error('Method not implemented.');
-  }
-  deleteVertexArray(vertexArray: WebGLVertexArrayObject | null): void {
-    throw new Error('Method not implemented.');
-  }
-  drawArraysInstanced(mode: number, first: number, count: number, instanceCount: number): void {
-    throw new Error('Method not implemented.');
-  }
-  drawElementsInstanced(mode: number, count: number, type: number, offset: number, instanceCount: number): void {
-    throw new Error('Method not implemented.');
-  }
-  drawRangeElements(mode: number, start: number, end: number, count: number, type: number, offset: number): void {
-    throw new Error('Method not implemented.');
-  }
-  endQuery(target: number): void {
-    throw new Error('Method not implemented.');
-  }
-  endTransformFeedback(): void {
-    throw new Error('Method not implemented.');
-  }
-  fenceSync(condition: number, flags: number): WebGLSync | null {
-    throw new Error('Method not implemented.');
-  }
-  framebufferTextureLayer(
-    target: number,
-    attachment: number,
-    texture: WebGLTexture | null,
-    level: number,
-    layer: number
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  getActiveUniformBlockName(program: WebGLProgram, uniformBlockIndex: number): string | null {
-    throw new Error('Method not implemented.');
-  }
-  getActiveUniformBlockParameter(program: WebGLProgram, uniformBlockIndex: number, pname: number) {
-    throw new Error('Method not implemented.');
+  private readonly listeners = new Set<SnapshotListener>();
+  private readonly resourceByObject = new WeakMap<GLObject, ResourceRecord>();
+  private readonly resources: ResourceRecord[] = [];
+  private readonly resourceCounters = new Map<WebGLResourceKind, number>();
+  private readonly enumNames = new Map<number, string>();
+  private readonly locationNames = new WeakMap<object, string>();
+  private readonly options: Required<WebGLInspectorOptions>;
+  private readonly calls: WebGLCallSnapshot[] = [];
+  private revision = 0;
+  private sequence = 0;
+  private drawCalls = 0;
+  private notificationQueued = false;
+  private disposed = false;
+
+  constructor(context: WebGLContext, options: WebGLInspectorOptions = {}) {
+    this.context = context;
+    this.options = {
+      maxTextureUnits: options.maxTextureUnits ?? 8,
+      maxVertexAttributes: options.maxVertexAttributes ?? 8,
+      maxRecentCalls: options.maxRecentCalls ?? 40,
+      maxIndexedBindings: options.maxIndexedBindings ?? 8
+    };
+    this.scanEnumNames();
   }
 
-  getActiveUniforms(program: WebGLProgram, uniformIndices: number[] | Iterable<number>, pname: number): any {
-    this.gl.getActiveUniforms(program, uniformIndices, pname);
+  /** Reads the current native state immediately. */
+  capture(): WebGLStateSnapshot {
+    return {
+      version: isWebGL2(this.context) ? 2 : 1,
+      revision: this.revision,
+      drawCalls: this.drawCalls,
+      groups: STATE_GROUPS.map((definition) => this.captureGroup(definition)),
+      textureUnits: this.captureTextureUnits(),
+      vertexAttributes: this.captureVertexAttributes(),
+      indexedBufferBindings: this.captureIndexedBufferBindings(),
+      resources: this.resources.map((resource) => this.snapshotResource(resource)),
+      recentCalls: [...this.calls]
+    };
   }
 
-  getBufferSubData(
-    target: number,
-    srcByteOffset: number,
-    dstBuffer: ArrayBufferView,
-    dstOffset?: number | undefined,
-    length?: number | undefined
-  ): void {
-    this.gl.getBufferSubData(target, srcByteOffset, dstBuffer, dstOffset, length);
-  }
-  getFragDataLocation(program: WebGLProgram, name: string): number {
-    throw new Error('Method not implemented.');
-  }
-  getIndexedParameter(target: number, index: number) {
-    throw new Error('Method not implemented.');
-  }
-  getInternalformatParameter(target: number, internalformat: number, pname: number) {
-    throw new Error('Method not implemented.');
-  }
-  getQuery(target: number, pname: number): WebGLQuery | null {
-    throw new Error('Method not implemented.');
-  }
-  getQueryParameter(query: WebGLQuery, pname: number) {
-    throw new Error('Method not implemented.');
-  }
-  getSamplerParameter(sampler: WebGLSampler, pname: number) {
-    throw new Error('Method not implemented.');
-  }
-  getSyncParameter(sync: WebGLSync, pname: number) {
-    throw new Error('Method not implemented.');
-  }
-  getTransformFeedbackVarying(program: WebGLProgram, index: number): WebGLActiveInfo | null {
-    throw new Error('Method not implemented.');
-  }
-  getUniformBlockIndex(program: WebGLProgram, uniformBlockName: string): number {
-    throw new Error('Method not implemented.');
-  }
-  getUniformIndices(program: WebGLProgram, uniformNames: string[]): number[] | null;
-  getUniformIndices(program: WebGLProgram, uniformNames: Iterable<string>): Iterable<number> | null;
-  getUniformIndices(program: unknown, uniformNames: unknown): Iterable<number> | number[] | null {
-    throw new Error('Method not implemented.');
-  }
-  invalidateFramebuffer(target: number, attachments: number[]): void;
-  invalidateFramebuffer(target: number, attachments: Iterable<number>): void;
-  invalidateFramebuffer(target: unknown, attachments: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  invalidateSubFramebuffer(
-    target: number,
-    attachments: number[],
-    x: number,
-    y: number,
-    width: number,
-    height: number
-  ): void;
-  invalidateSubFramebuffer(
-    target: number,
-    attachments: Iterable<number>,
-    x: number,
-    y: number,
-    width: number,
-    height: number
-  ): void;
-  invalidateSubFramebuffer(
-    target: unknown,
-    attachments: unknown,
-    x: unknown,
-    y: unknown,
-    width: unknown,
-    height: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  isQuery(query: WebGLQuery | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isSampler(sampler: WebGLSampler | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isSync(sync: WebGLSync | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isTransformFeedback(tf: WebGLTransformFeedback | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isVertexArray(vertexArray: WebGLVertexArrayObject | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  pauseTransformFeedback(): void {
-    throw new Error('Method not implemented.');
-  }
-  readBuffer(src: number): void {
-    throw new Error('Method not implemented.');
-  }
-  resumeTransformFeedback(): void {
-    throw new Error('Method not implemented.');
-  }
-  samplerParameterf(sampler: WebGLSampler, pname: number, param: number): void {
-    throw new Error('Method not implemented.');
-  }
-  samplerParameteri(sampler: WebGLSampler, pname: number, param: number): void {
-    throw new Error('Method not implemented.');
-  }
-  texImage3D(
-    target: number,
-    level: number,
-    internalformat: number,
-    width: number,
-    height: number,
-    depth: number,
-    border: number,
-    format: number,
-    type: number,
-    pboOffset: number
-  ): void;
-  texImage3D(
-    target: number,
-    level: number,
-    internalformat: number,
-    width: number,
-    height: number,
-    depth: number,
-    border: number,
-    format: number,
-    type: number,
-    source: TexImageSource
-  ): void;
-  texImage3D(
-    target: number,
-    level: number,
-    internalformat: number,
-    width: number,
-    height: number,
-    depth: number,
-    border: number,
-    format: number,
-    type: number,
-    srcData: ArrayBufferView | null
-  ): void;
-  texImage3D(
-    target: number,
-    level: number,
-    internalformat: number,
-    width: number,
-    height: number,
-    depth: number,
-    border: number,
-    format: number,
-    type: number,
-    srcData: ArrayBufferView,
-    srcOffset: number
-  ): void;
-  texImage3D(
-    target: unknown,
-    level: unknown,
-    internalformat: unknown,
-    width: unknown,
-    height: unknown,
-    depth: unknown,
-    border: unknown,
-    format: unknown,
-    type: unknown,
-    srcData: unknown,
-    srcOffset?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  texStorage3D(
-    target: number,
-    levels: number,
-    internalformat: number,
-    width: number,
-    height: number,
-    depth: number
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  texSubImage3D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    zoffset: number,
-    width: number,
-    height: number,
-    depth: number,
-    format: number,
-    type: number,
-    pboOffset: number
-  ): void;
-  texSubImage3D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    zoffset: number,
-    width: number,
-    height: number,
-    depth: number,
-    format: number,
-    type: number,
-    source: TexImageSource
-  ): void;
-  texSubImage3D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    zoffset: number,
-    width: number,
-    height: number,
-    depth: number,
-    format: number,
-    type: number,
-    srcData: ArrayBufferView | null,
-    srcOffset?: number | undefined
-  ): void;
-  texSubImage3D(
-    target: unknown,
-    level: unknown,
-    xoffset: unknown,
-    yoffset: unknown,
-    zoffset: unknown,
-    width: unknown,
-    height: unknown,
-    depth: unknown,
-    format: unknown,
-    type: unknown,
-    srcData: unknown,
-    srcOffset?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform1ui(location: WebGLUniformLocation | null, v0: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform1uiv(
-    location: WebGLUniformLocation | null,
-    data: Uint32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform1uiv(
-    location: WebGLUniformLocation | null,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform1uiv(location: unknown, data: unknown, srcOffset?: unknown, srcLength?: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform2ui(location: WebGLUniformLocation | null, v0: number, v1: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform2uiv(
-    location: WebGLUniformLocation | null,
-    data: Uint32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform2uiv(
-    location: WebGLUniformLocation | null,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform2uiv(location: unknown, data: unknown, srcOffset?: unknown, srcLength?: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform3ui(location: WebGLUniformLocation | null, v0: number, v1: number, v2: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform3uiv(
-    location: WebGLUniformLocation | null,
-    data: Uint32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform3uiv(
-    location: WebGLUniformLocation | null,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform3uiv(location: unknown, data: unknown, srcOffset?: unknown, srcLength?: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform4ui(location: WebGLUniformLocation | null, v0: number, v1: number, v2: number, v3: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform4uiv(
-    location: WebGLUniformLocation | null,
-    data: Uint32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform4uiv(
-    location: WebGLUniformLocation | null,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform4uiv(location: unknown, data: unknown, srcOffset?: unknown, srcLength?: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  uniformBlockBinding(program: WebGLProgram, uniformBlockIndex: number, uniformBlockBinding: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniformMatrix2x3fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Float32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix2x3fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix2x3fv(
-    location: unknown,
-    transpose: unknown,
-    data: unknown,
-    srcOffset?: unknown,
-    srcLength?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  uniformMatrix2x4fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Float32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix2x4fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix2x4fv(
-    location: unknown,
-    transpose: unknown,
-    data: unknown,
-    srcOffset?: unknown,
-    srcLength?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  uniformMatrix3x2fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Float32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix3x2fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix3x2fv(
-    location: unknown,
-    transpose: unknown,
-    data: unknown,
-    srcOffset?: unknown,
-    srcLength?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  uniformMatrix3x4fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Float32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix3x4fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix3x4fv(
-    location: unknown,
-    transpose: unknown,
-    data: unknown,
-    srcOffset?: unknown,
-    srcLength?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  uniformMatrix4x2fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Float32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix4x2fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix4x2fv(
-    location: unknown,
-    transpose: unknown,
-    data: unknown,
-    srcOffset?: unknown,
-    srcLength?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  uniformMatrix4x3fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Float32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix4x3fv(
-    location: WebGLUniformLocation | null,
-    transpose: boolean,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniformMatrix4x3fv(
-    location: unknown,
-    transpose: unknown,
-    data: unknown,
-    srcOffset?: unknown,
-    srcLength?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttribI4i(index: number, x: number, y: number, z: number, w: number): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttribI4iv(index: number, values: Int32List): void;
-  vertexAttribI4iv(index: number, values: Iterable<number>): void;
-  vertexAttribI4iv(index: unknown, values: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttribI4ui(index: number, x: number, y: number, z: number, w: number): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttribI4uiv(index: number, values: Uint32List): void;
-  vertexAttribI4uiv(index: number, values: Iterable<number>): void;
-  vertexAttribI4uiv(index: unknown, values: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttribIPointer(index: number, size: number, type: number, stride: number, offset: number): void {
-    throw new Error('Method not implemented.');
-  }
-  waitSync(sync: WebGLSync, flags: number, timeout: number): void {
-    throw new Error('Method not implemented.');
-  }
-  READ_BUFFER = this.gl.READ_BUFFER;
-  UNPACK_ROW_LENGTH = this.gl.UNPACK_ROW_LENGTH;
-  UNPACK_SKIP_ROWS = this.gl.UNPACK_SKIP_ROWS;
-  UNPACK_SKIP_PIXELS = this.gl.UNPACK_SKIP_PIXELS;
-  PACK_ROW_LENGTH = this.gl.PACK_ROW_LENGTH;
-  PACK_SKIP_ROWS = this.gl.PACK_SKIP_ROWS;
-  PACK_SKIP_PIXELS = this.gl.PACK_SKIP_PIXELS;
-  COLOR = this.gl.COLOR;
-  DEPTH = this.gl.DEPTH;
-  STENCIL = this.gl.STENCIL;
-  RED = this.gl.RED;
-  RGB8 = this.gl.RGB8;
-  RGBA8 = this.gl.RGBA8;
-  RGB10_A2 = this.gl.RGB10_A2;
-  TEXTURE_BINDING_3D = this.gl.TEXTURE_BINDING_3D;
-  UNPACK_SKIP_IMAGES = this.gl.UNPACK_SKIP_IMAGES;
-  UNPACK_IMAGE_HEIGHT = this.gl.UNPACK_IMAGE_HEIGHT;
-  TEXTURE_3D = this.gl.TEXTURE_3D;
-  TEXTURE_WRAP_R = this.gl.TEXTURE_WRAP_R;
-  MAX_3D_TEXTURE_SIZE = this.gl.MAX_3D_TEXTURE_SIZE;
-  UNSIGNED_INT_2_10_10_10_REV = this.gl.UNSIGNED_INT_2_10_10_10_REV;
-  MAX_ELEMENTS_VERTICES = this.gl.MAX_ELEMENTS_VERTICES;
-  MAX_ELEMENTS_INDICES = this.gl.MAX_ELEMENTS_INDICES;
-  TEXTURE_MIN_LOD = this.gl.TEXTURE_MIN_LOD;
-  TEXTURE_MAX_LOD = this.gl.TEXTURE_MAX_LOD;
-  TEXTURE_BASE_LEVEL = this.gl.TEXTURE_BASE_LEVEL;
-  TEXTURE_MAX_LEVEL = this.gl.TEXTURE_MAX_LEVEL;
-  DEPTH_COMPONENT24 = this.gl.DEPTH_COMPONENT24;
-  MAX_TEXTURE_LOD_BIAS = this.gl.MAX_TEXTURE_LOD_BIAS;
-  TEXTURE_COMPARE_MODE = this.gl.TEXTURE_COMPARE_MODE;
-  TEXTURE_COMPARE_FUNC = this.gl.TEXTURE_COMPARE_FUNC;
-  CURRENT_QUERY = this.gl.CURRENT_QUERY;
-  QUERY_RESULT = this.gl.QUERY_RESULT;
-  QUERY_RESULT_AVAILABLE = this.gl.QUERY_RESULT_AVAILABLE;
-  STREAM_READ = this.gl.STREAM_READ;
-  STREAM_COPY = this.gl.STREAM_COPY;
-  STATIC_READ = this.gl.STATIC_READ;
-  STATIC_COPY = this.gl.STATIC_COPY;
-  DYNAMIC_READ = this.gl.DYNAMIC_READ;
-  DYNAMIC_COPY = this.gl.DYNAMIC_COPY;
-  MAX_DRAW_BUFFERS = this.gl.MAX_DRAW_BUFFERS;
-  DRAW_BUFFER0 = this.gl.DRAW_BUFFER0;
-  DRAW_BUFFER1 = this.gl.DRAW_BUFFER1;
-  DRAW_BUFFER2 = this.gl.DRAW_BUFFER2;
-  DRAW_BUFFER3 = this.gl.DRAW_BUFFER3;
-  DRAW_BUFFER4 = this.gl.DRAW_BUFFER4;
-  DRAW_BUFFER5 = this.gl.DRAW_BUFFER5;
-  DRAW_BUFFER6 = this.gl.DRAW_BUFFER6;
-  DRAW_BUFFER7 = this.gl.DRAW_BUFFER7;
-  DRAW_BUFFER8 = this.gl.DRAW_BUFFER8;
-  DRAW_BUFFER9 = this.gl.DRAW_BUFFER9;
-  DRAW_BUFFER10 = this.gl.DRAW_BUFFER10;
-  DRAW_BUFFER11 = this.gl.DRAW_BUFFER11;
-  DRAW_BUFFER12 = this.gl.DRAW_BUFFER12;
-  DRAW_BUFFER13 = this.gl.DRAW_BUFFER13;
-  DRAW_BUFFER14 = this.gl.DRAW_BUFFER14;
-  DRAW_BUFFER15 = this.gl.DRAW_BUFFER15;
-  MAX_FRAGMENT_UNIFORM_COMPONENTS = this.gl.MAX_FRAGMENT_UNIFORM_COMPONENTS;
-  MAX_VERTEX_UNIFORM_COMPONENTS = this.gl.MAX_VERTEX_UNIFORM_COMPONENTS;
-  SAMPLER_3D = this.gl.SAMPLER_3D;
-  SAMPLER_2D_SHADOW = this.gl.SAMPLER_2D_SHADOW;
-  FRAGMENT_SHADER_DERIVATIVE_HINT = this.gl.FRAGMENT_SHADER_DERIVATIVE_HINT;
-  PIXEL_PACK_BUFFER = this.gl.PIXEL_PACK_BUFFER;
-  PIXEL_UNPACK_BUFFER = this.gl.PIXEL_UNPACK_BUFFER;
-  PIXEL_PACK_BUFFER_BINDING = this.gl.PIXEL_PACK_BUFFER_BINDING;
-  PIXEL_UNPACK_BUFFER_BINDING = this.gl.PIXEL_UNPACK_BUFFER_BINDING;
-  FLOAT_MAT2x3 = this.gl.FLOAT_MAT2x3;
-  FLOAT_MAT2x4 = this.gl.FLOAT_MAT2x4;
-  FLOAT_MAT3x2 = this.gl.FLOAT_MAT3x2;
-  FLOAT_MAT3x4 = this.gl.FLOAT_MAT3x4;
-  FLOAT_MAT4x2 = this.gl.FLOAT_MAT4x2;
-  FLOAT_MAT4x3 = this.gl.FLOAT_MAT4x3;
-  COMPARE_REF_TO_TEXTURE = this.gl.COMPARE_REF_TO_TEXTURE;
-  RGB32F = this.gl.RGB32F;
-  RGB16F = this.gl.RGB16F;
-  VERTEX_ATTRIB_ARRAY_INTEGER = this.gl.VERTEX_ATTRIB_ARRAY_INTEGER;
-  MAX_ARRAY_TEXTURE_LAYERS = this.gl.MAX_ARRAY_TEXTURE_LAYERS;
-  MIN_PROGRAM_TEXEL_OFFSET = this.gl.MIN_PROGRAM_TEXEL_OFFSET;
-  MAX_PROGRAM_TEXEL_OFFSET = this.gl.MAX_PROGRAM_TEXEL_OFFSET;
-  MAX_VARYING_COMPONENTS = this.gl.MAX_VARYING_COMPONENTS;
-  TEXTURE_2D_ARRAY = this.gl.TEXTURE_2D_ARRAY;
-  TEXTURE_BINDING_2D_ARRAY = this.gl.TEXTURE_BINDING_2D_ARRAY;
-  R11F_G11F_B10F = this.gl.R11F_G11F_B10F;
-  UNSIGNED_INT_10F_11F_11F_REV = this.gl.UNSIGNED_INT_10F_11F_11F_REV;
-  RGB9_E5 = this.gl.RGB9_E5;
-  UNSIGNED_INT_5_9_9_9_REV = this.gl.UNSIGNED_INT_5_9_9_9_REV;
-  TRANSFORM_FEEDBACK_BUFFER_MODE = this.gl.TRANSFORM_FEEDBACK_BUFFER_MODE;
-  MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS = this.gl.MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS;
-  TRANSFORM_FEEDBACK_VARYINGS = this.gl.TRANSFORM_FEEDBACK_VARYINGS;
-  TRANSFORM_FEEDBACK_BUFFER_START = this.gl.TRANSFORM_FEEDBACK_BUFFER_START;
-  TRANSFORM_FEEDBACK_BUFFER_SIZE = this.gl.TRANSFORM_FEEDBACK_BUFFER_SIZE;
-  TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN = this.gl.TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN;
-  RASTERIZER_DISCARD = this.gl.RASTERIZER_DISCARD;
-  MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS = this.gl.MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS;
-  MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS = this.gl.MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS;
-  INTERLEAVED_ATTRIBS = this.gl.INTERLEAVED_ATTRIBS;
-  SEPARATE_ATTRIBS = this.gl.SEPARATE_ATTRIBS;
-  TRANSFORM_FEEDBACK_BUFFER = this.gl.TRANSFORM_FEEDBACK_BUFFER;
-  TRANSFORM_FEEDBACK_BUFFER_BINDING = this.gl.TRANSFORM_FEEDBACK_BUFFER_BINDING;
-  RGBA32UI = this.gl.RGBA32UI;
-  RGB32UI = this.gl.RGB32UI;
-  RGBA16UI = this.gl.RGBA16UI;
-  RGB16UI = this.gl.RGB16UI;
-  RGBA8UI = this.gl.RGBA8UI;
-  RGB8UI = this.gl.RGB8UI;
-  RGBA32I = this.gl.RGBA32I;
-  RGB32I = this.gl.RGB32I;
-  RGBA16I = this.gl.RGBA16I;
-  RGB16I = this.gl.RGB16I;
-  RGBA8I = this.gl.RGBA8I;
-  RGB8I = this.gl.RGB8I;
-  RED_INTEGER = this.gl.RED_INTEGER;
-  RGB_INTEGER = this.gl.RGB_INTEGER;
-  RGBA_INTEGER = this.gl.RGBA_INTEGER;
-  SAMPLER_2D_ARRAY = this.gl.SAMPLER_2D_ARRAY;
-  SAMPLER_2D_ARRAY_SHADOW = this.gl.SAMPLER_2D_ARRAY_SHADOW;
-  SAMPLER_CUBE_SHADOW = this.gl.SAMPLER_CUBE_SHADOW;
-  UNSIGNED_INT_VEC2 = this.gl.UNSIGNED_INT_VEC2;
-  UNSIGNED_INT_VEC3 = this.gl.UNSIGNED_INT_VEC3;
-  UNSIGNED_INT_VEC4 = this.gl.UNSIGNED_INT_VEC4;
-  INT_SAMPLER_2D = this.gl.INT_SAMPLER_2D;
-  INT_SAMPLER_3D = this.gl.INT_SAMPLER_3D;
-  INT_SAMPLER_CUBE = this.gl.INT_SAMPLER_CUBE;
-  INT_SAMPLER_2D_ARRAY = this.gl.INT_SAMPLER_2D_ARRAY;
-  UNSIGNED_INT_SAMPLER_2D = this.gl.UNSIGNED_INT_SAMPLER_2D;
-  UNSIGNED_INT_SAMPLER_3D = this.gl.UNSIGNED_INT_SAMPLER_3D;
-  UNSIGNED_INT_SAMPLER_CUBE = this.gl.UNSIGNED_INT_SAMPLER_CUBE;
-  UNSIGNED_INT_SAMPLER_2D_ARRAY = this.gl.UNSIGNED_INT_SAMPLER_2D_ARRAY;
-  DEPTH_COMPONENT32F = this.gl.DEPTH_COMPONENT32F;
-  DEPTH32F_STENCIL8 = this.gl.DEPTH32F_STENCIL8;
-  FLOAT_32_UNSIGNED_INT_24_8_REV = this.gl.FLOAT_32_UNSIGNED_INT_24_8_REV;
-  FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING = this.gl.FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING;
-  FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE = this.gl.FRAMEBUFFER_ATTACHMENT_COMPONENT_TYPE;
-  FRAMEBUFFER_ATTACHMENT_RED_SIZE = this.gl.FRAMEBUFFER_ATTACHMENT_RED_SIZE;
-  FRAMEBUFFER_ATTACHMENT_GREEN_SIZE = this.gl.FRAMEBUFFER_ATTACHMENT_GREEN_SIZE;
-  FRAMEBUFFER_ATTACHMENT_BLUE_SIZE = this.gl.FRAMEBUFFER_ATTACHMENT_BLUE_SIZE;
-  FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE = this.gl.FRAMEBUFFER_ATTACHMENT_ALPHA_SIZE;
-  FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE = this.gl.FRAMEBUFFER_ATTACHMENT_DEPTH_SIZE;
-  FRAMEBUFFER_ATTACHMENT_STENCIL_SIZE = this.gl.FRAMEBUFFER_ATTACHMENT_STENCIL_SIZE;
-  FRAMEBUFFER_DEFAULT = this.gl.FRAMEBUFFER_DEFAULT;
-  UNSIGNED_NORMALIZED = this.gl.UNSIGNED_NORMALIZED;
-  DRAW_FRAMEBUFFER_BINDING = this.gl.DRAW_FRAMEBUFFER_BINDING;
-  READ_FRAMEBUFFER = this.gl.READ_FRAMEBUFFER;
-  READ_FRAMEBUFFER_BINDING = this.gl.READ_FRAMEBUFFER_BINDING;
-  RENDERBUFFER_SAMPLES = this.gl.RENDERBUFFER_SAMPLES;
-  FRAMEBUFFER_ATTACHMENT_TEXTURE_LAYER = this.gl.FRAMEBUFFER_ATTACHMENT_TEXTURE_LAYER;
-  MAX_COLOR_ATTACHMENTS = this.gl.MAX_COLOR_ATTACHMENTS;
-  COLOR_ATTACHMENT1 = this.gl.COLOR_ATTACHMENT1;
-  COLOR_ATTACHMENT2 = this.gl.COLOR_ATTACHMENT2;
-  COLOR_ATTACHMENT3 = this.gl.COLOR_ATTACHMENT3;
-  COLOR_ATTACHMENT4 = this.gl.COLOR_ATTACHMENT4;
-  COLOR_ATTACHMENT5 = this.gl.COLOR_ATTACHMENT5;
-  COLOR_ATTACHMENT6 = this.gl.COLOR_ATTACHMENT6;
-  COLOR_ATTACHMENT7 = this.gl.COLOR_ATTACHMENT7;
-  COLOR_ATTACHMENT8 = this.gl.COLOR_ATTACHMENT8;
-  COLOR_ATTACHMENT9 = this.gl.COLOR_ATTACHMENT9;
-  COLOR_ATTACHMENT10 = this.gl.COLOR_ATTACHMENT10;
-  COLOR_ATTACHMENT11 = this.gl.COLOR_ATTACHMENT11;
-  COLOR_ATTACHMENT12 = this.gl.COLOR_ATTACHMENT12;
-  COLOR_ATTACHMENT13 = this.gl.COLOR_ATTACHMENT13;
-  COLOR_ATTACHMENT14 = this.gl.COLOR_ATTACHMENT14;
-  COLOR_ATTACHMENT15 = this.gl.COLOR_ATTACHMENT15;
-  FRAMEBUFFER_INCOMPLETE_MULTISAMPLE = this.gl.FRAMEBUFFER_INCOMPLETE_MULTISAMPLE;
-  MAX_SAMPLES = this.gl.MAX_SAMPLES;
-  HALF_FLOAT = this.gl.HALF_FLOAT;
-  RG = this.gl.RG;
-  RG_INTEGER = this.gl.RG_INTEGER;
-  R8 = this.gl.R8;
-  RG8 = this.gl.RG8;
-  R16F = this.gl.R16F;
-  R32F = this.gl.R32F;
-  RG16F = this.gl.RG16F;
-  RG32F = this.gl.RG32F;
-  R8I = this.gl.R8I;
-  R8UI = this.gl.R8UI;
-  R16I = this.gl.R16I;
-  R16UI = this.gl.R16UI;
-  R32I = this.gl.R32I;
-  R32UI = this.gl.R32UI;
-  RG8I = this.gl.RG8I;
-  RG8UI = this.gl.RG8UI;
-  RG16I = this.gl.RG16I;
-  RG16UI = this.gl.RG16UI;
-  RG32I = this.gl.RG32I;
-  RG32UI = this.gl.RG32UI;
-  VERTEX_ARRAY_BINDING = this.gl.VERTEX_ARRAY_BINDING;
-  R8_SNORM = this.gl.R8_SNORM;
-  RG8_SNORM = this.gl.RG8_SNORM;
-  RGB8_SNORM = this.gl.RGB8_SNORM;
-  RGBA8_SNORM = this.gl.RGBA8_SNORM;
-  SIGNED_NORMALIZED = this.gl.SIGNED_NORMALIZED;
-  COPY_READ_BUFFER = this.gl.COPY_READ_BUFFER;
-  COPY_WRITE_BUFFER = this.gl.COPY_WRITE_BUFFER;
-  COPY_READ_BUFFER_BINDING = this.gl.COPY_READ_BUFFER_BINDING;
-  COPY_WRITE_BUFFER_BINDING = this.gl.COPY_WRITE_BUFFER_BINDING;
-  UNIFORM_BUFFER = this.gl.UNIFORM_BUFFER;
-  UNIFORM_BUFFER_BINDING = this.gl.UNIFORM_BUFFER_BINDING;
-  UNIFORM_BUFFER_START = this.gl.UNIFORM_BUFFER_START;
-  UNIFORM_BUFFER_SIZE = this.gl.UNIFORM_BUFFER_SIZE;
-  MAX_VERTEX_UNIFORM_BLOCKS = this.gl.MAX_VERTEX_UNIFORM_BLOCKS;
-  MAX_FRAGMENT_UNIFORM_BLOCKS = this.gl.MAX_FRAGMENT_UNIFORM_BLOCKS;
-  MAX_COMBINED_UNIFORM_BLOCKS = this.gl.MAX_COMBINED_UNIFORM_BLOCKS;
-  MAX_UNIFORM_BUFFER_BINDINGS = this.gl.MAX_UNIFORM_BUFFER_BINDINGS;
-  MAX_UNIFORM_BLOCK_SIZE = this.gl.MAX_UNIFORM_BLOCK_SIZE;
-  MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS = this.gl.MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS;
-  MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS = this.gl.MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS;
-  UNIFORM_BUFFER_OFFSET_ALIGNMENT = this.gl.UNIFORM_BUFFER_OFFSET_ALIGNMENT;
-  ACTIVE_UNIFORM_BLOCKS = this.gl.ACTIVE_UNIFORM_BLOCKS;
-  UNIFORM_TYPE = this.gl.UNIFORM_TYPE;
-  UNIFORM_SIZE = this.gl.UNIFORM_SIZE;
-  UNIFORM_BLOCK_INDEX = this.gl.UNIFORM_BLOCK_INDEX;
-  UNIFORM_OFFSET = this.gl.UNIFORM_OFFSET;
-  UNIFORM_ARRAY_STRIDE = this.gl.UNIFORM_ARRAY_STRIDE;
-  UNIFORM_MATRIX_STRIDE = this.gl.UNIFORM_MATRIX_STRIDE;
-  UNIFORM_IS_ROW_MAJOR = this.gl.UNIFORM_IS_ROW_MAJOR;
-  UNIFORM_BLOCK_BINDING = this.gl.UNIFORM_BLOCK_BINDING;
-  UNIFORM_BLOCK_DATA_SIZE = this.gl.UNIFORM_BLOCK_DATA_SIZE;
-  UNIFORM_BLOCK_ACTIVE_UNIFORMS = this.gl.UNIFORM_BLOCK_ACTIVE_UNIFORMS;
-  UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES = this.gl.UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES;
-  UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER = this.gl.UNIFORM_BLOCK_REFERENCED_BY_VERTEX_SHADER;
-  UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER = this.gl.UNIFORM_BLOCK_REFERENCED_BY_FRAGMENT_SHADER;
-  INVALID_INDEX = this.gl.INVALID_INDEX;
-  MAX_VERTEX_OUTPUT_COMPONENTS = this.gl.MAX_VERTEX_OUTPUT_COMPONENTS;
-  MAX_FRAGMENT_INPUT_COMPONENTS = this.gl.MAX_FRAGMENT_INPUT_COMPONENTS;
-  MAX_SERVER_WAIT_TIMEOUT = this.gl.MAX_SERVER_WAIT_TIMEOUT;
-  OBJECT_TYPE = this.gl.OBJECT_TYPE;
-  SYNC_CONDITION = this.gl.SYNC_CONDITION;
-  SYNC_STATUS = this.gl.SYNC_STATUS;
-  SYNC_FLAGS = this.gl.SYNC_FLAGS;
-  SYNC_FENCE = this.gl.SYNC_FENCE;
-  SYNC_GPU_COMMANDS_COMPLETE = this.gl.SYNC_GPU_COMMANDS_COMPLETE;
-  UNSIGNALED = this.gl.UNSIGNALED;
-  SIGNALED = this.gl.SIGNALED;
-  ALREADY_SIGNALED = this.gl.ALREADY_SIGNALED;
-  TIMEOUT_EXPIRED = this.gl.TIMEOUT_EXPIRED;
-  CONDITION_SATISFIED = this.gl.CONDITION_SATISFIED;
-  WAIT_FAILED = this.gl.WAIT_FAILED;
-  SYNC_FLUSH_COMMANDS_BIT = this.gl.SYNC_FLUSH_COMMANDS_BIT;
-  VERTEX_ATTRIB_ARRAY_DIVISOR = this.gl.VERTEX_ATTRIB_ARRAY_DIVISOR;
-  ANY_SAMPLES_PASSED = this.gl.ANY_SAMPLES_PASSED;
-  ANY_SAMPLES_PASSED_CONSERVATIVE = this.gl.ANY_SAMPLES_PASSED_CONSERVATIVE;
-  SAMPLER_BINDING = this.gl.SAMPLER_BINDING;
-  RGB10_A2UI = this.gl.RGB10_A2UI;
-  INT_2_10_10_10_REV = this.gl.INT_2_10_10_10_REV;
-  TRANSFORM_FEEDBACK = this.gl.TRANSFORM_FEEDBACK;
-  TRANSFORM_FEEDBACK_PAUSED = this.gl.TRANSFORM_FEEDBACK_PAUSED;
-  TRANSFORM_FEEDBACK_ACTIVE = this.gl.TRANSFORM_FEEDBACK_ACTIVE;
-  TRANSFORM_FEEDBACK_BINDING = this.gl.TRANSFORM_FEEDBACK_BINDING;
-  TEXTURE_IMMUTABLE_FORMAT = this.gl.TEXTURE_IMMUTABLE_FORMAT;
-  MAX_ELEMENT_INDEX = this.gl.MAX_ELEMENT_INDEX;
-  TEXTURE_IMMUTABLE_LEVELS = this.gl.TEXTURE_IMMUTABLE_LEVELS;
-  TIMEOUT_IGNORED = this.gl.TIMEOUT_IGNORED;
-  MAX_CLIENT_WAIT_TIMEOUT_WEBGL = this.gl.MAX_CLIENT_WAIT_TIMEOUT_WEBGL;
-  bufferSubData(target: number, dstByteOffset: number, srcData: BufferSource): void;
-  bufferSubData(
-    target: number,
-    dstByteOffset: number,
-    srcData: ArrayBufferView,
-    srcOffset: number,
-    length?: number | undefined
-  ): void;
-  bufferSubData(
-    target: unknown,
-    dstByteOffset: unknown,
-    srcData: unknown,
-    srcOffset?: unknown,
-    length?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  compressedTexImage2D(
-    target: number,
-    level: number,
-    internalformat: number,
-    width: number,
-    height: number,
-    border: number,
-    imageSize: number,
-    offset: number
-  ): void;
-  compressedTexImage2D(
-    target: number,
-    level: number,
-    internalformat: number,
-    width: number,
-    height: number,
-    border: number,
-    srcData: ArrayBufferView,
-    srcOffset?: number | undefined,
-    srcLengthOverride?: number | undefined
-  ): void;
-  compressedTexImage2D(
-    target: unknown,
-    level: unknown,
-    internalformat: unknown,
-    width: unknown,
-    height: unknown,
-    border: unknown,
-    srcData: unknown,
-    srcOffset?: unknown,
-    srcLengthOverride?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  compressedTexSubImage2D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    width: number,
-    height: number,
-    format: number,
-    imageSize: number,
-    offset: number
-  ): void;
-  compressedTexSubImage2D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    width: number,
-    height: number,
-    format: number,
-    srcData: ArrayBufferView,
-    srcOffset?: number | undefined,
-    srcLengthOverride?: number | undefined
-  ): void;
-  compressedTexSubImage2D(
-    target: unknown,
-    level: unknown,
-    xoffset: unknown,
-    yoffset: unknown,
-    width: unknown,
-    height: unknown,
-    format: unknown,
-    srcData: unknown,
-    srcOffset?: unknown,
-    srcLengthOverride?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  readPixels(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    format: number,
-    type: number,
-    dstData: ArrayBufferView | null
-  ): void;
-  readPixels(x: number, y: number, width: number, height: number, format: number, type: number, offset: number): void;
-  readPixels(
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    format: number,
-    type: number,
-    dstData: ArrayBufferView,
-    dstOffset: number
-  ): void;
-  readPixels(
-    x: unknown,
-    y: unknown,
-    width: unknown,
-    height: unknown,
-    format: unknown,
-    type: unknown,
-    dstData: unknown,
-    dstOffset?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  texSubImage2D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    width: number,
-    height: number,
-    format: number,
-    type: number,
-    pixels: ArrayBufferView | null
-  ): void;
-  texSubImage2D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    format: number,
-    type: number,
-    source: TexImageSource
-  ): void;
-  texSubImage2D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    width: number,
-    height: number,
-    format: number,
-    type: number,
-    pboOffset: number
-  ): void;
-  texSubImage2D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    width: number,
-    height: number,
-    format: number,
-    type: number,
-    source: TexImageSource
-  ): void;
-  texSubImage2D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    width: number,
-    height: number,
-    format: number,
-    type: number,
-    srcData: ArrayBufferView,
-    srcOffset: number
-  ): void;
-  texSubImage2D(
-    target: unknown,
-    level: unknown,
-    xoffset: unknown,
-    yoffset: unknown,
-    width: unknown,
-    height: unknown,
-    format: unknown,
-    type?: unknown,
-    srcData?: unknown,
-    srcOffset?: unknown
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform1fv(
-    location: WebGLUniformLocation | null,
-    data: Float32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform1fv(
-    location: WebGLUniformLocation | null,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform1fv(location: unknown, data: unknown, srcOffset?: unknown, srcLength?: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform1iv(
-    location: WebGLUniformLocation | null,
-    data: Int32List,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform1iv(
-    location: WebGLUniformLocation | null,
-    data: Iterable<number>,
-    srcOffset?: number | undefined,
-    srcLength?: number | undefined
-  ): void;
-  uniform1iv(location: unknown, data: unknown, srcOffset?: unknown, srcLength?: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  canvas: HTMLCanvasElement | OffscreenCanvas = this.gl.canvas;
-  drawingBufferColorSpace: PredefinedColorSpace = this.gl.drawingBufferColorSpace;
-  drawingBufferHeight: number = this.gl.drawingBufferHeight;
-  drawingBufferWidth: number = this.gl.drawingBufferWidth;
-  bindAttribLocation(program: WebGLProgram, index: number, name: string): void {
-    throw new Error('Method not implemented.');
-  }
-  blendColor(red: number, green: number, blue: number, alpha: number): void {
-    throw new Error('Method not implemented.');
-  }
-  blendEquation(mode: number): void {
-    throw new Error('Method not implemented.');
-  }
-  blendEquationSeparate(modeRGB: number, modeAlpha: number): void {
-    throw new Error('Method not implemented.');
-  }
-  blendFuncSeparate(srcRGB: number, dstRGB: number, srcAlpha: number, dstAlpha: number): void {
-    throw new Error('Method not implemented.');
-  }
-  clearDepth(depth: number): void {
-    throw new Error('Method not implemented.');
-  }
-  clearStencil(s: number): void {
-    throw new Error('Method not implemented.');
-  }
-  colorMask(red: boolean, green: boolean, blue: boolean, alpha: boolean): void {
-    throw new Error('Method not implemented.');
-  }
-  copyTexImage2D(
-    target: number,
-    level: number,
-    internalformat: number,
-    x: number,
-    y: number,
-    width: number,
-    height: number,
-    border: number
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  copyTexSubImage2D(
-    target: number,
-    level: number,
-    xoffset: number,
-    yoffset: number,
-    x: number,
-    y: number,
-    width: number,
-    height: number
-  ): void {
-    throw new Error('Method not implemented.');
-  }
-  cullFace(mode: number): void {
-    throw new Error('Method not implemented.');
-  }
-  deleteBuffer(buffer: WebGLBuffer | null): void {
-    throw new Error('Method not implemented.');
-  }
-  deleteFramebuffer(framebuffer: WebGLFramebuffer | null): void {
-    throw new Error('Method not implemented.');
-  }
-  deleteRenderbuffer(renderbuffer: WebGLRenderbuffer | null): void {
-    throw new Error('Method not implemented.');
-  }
-  deleteTexture(texture: WebGLTexture | null): void {
-    throw new Error('Method not implemented.');
-  }
-  depthFunc(func: number): void {
-    throw new Error('Method not implemented.');
-  }
-  depthMask(flag: boolean): void {
-    throw new Error('Method not implemented.');
-  }
-  depthRange(zNear: number, zFar: number): void {
-    throw new Error('Method not implemented.');
-  }
-  disable(cap: number): void {
-    throw new Error('Method not implemented.');
-  }
-  disableVertexAttribArray(index: number): void {
-    throw new Error('Method not implemented.');
-  }
-  drawArrays(mode: number, first: number, count: number): void {
-    this.gl.drawArrays(mode, first, count);
-  }
-  finish(): void {
-    throw new Error('Method not implemented.');
-  }
-  flush(): void {
-    throw new Error('Method not implemented.');
-  }
-  frontFace(mode: number): void {
-    throw new Error('Method not implemented.');
-  }
-  generateMipmap(target: number): void {
-    throw new Error('Method not implemented.');
-  }
-  getActiveAttrib(program: WebGLProgram, index: number): WebGLActiveInfo | null {
-    throw new Error('Method not implemented.');
-  }
-  getActiveUniform(program: WebGLProgram, index: number): WebGLActiveInfo | null {
-    throw new Error('Method not implemented.');
-  }
-  getAttachedShaders(program: WebGLProgram): WebGLShader[] | null {
-    throw new Error('Method not implemented.');
-  }
-  getBufferParameter(target: number, pname: number) {
-    throw new Error('Method not implemented.');
-  }
-  getContextAttributes(): WebGLContextAttributes | null {
-    throw new Error('Method not implemented.');
-  }
-  getError(): number {
-    throw new Error('Method not implemented.');
-  }
-  getFramebufferAttachmentParameter(target: number, attachment: number, pname: number) {
-    throw new Error('Method not implemented.');
-  }
-  getParameter(pname: number) {
-    throw new Error('Method not implemented.');
-  }
-  getRenderbufferParameter(target: number, pname: number) {
-    throw new Error('Method not implemented.');
-  }
-  getShaderPrecisionFormat(shadertype: number, precisiontype: number): WebGLShaderPrecisionFormat | null {
-    throw new Error('Method not implemented.');
-  }
-  getShaderSource(shader: WebGLShader): string | null {
-    throw new Error('Method not implemented.');
-  }
-  getSupportedExtensions(): string[] | null {
-    throw new Error('Method not implemented.');
-  }
-  getTexParameter(target: number, pname: number) {
-    throw new Error('Method not implemented.');
-  }
-  getUniform(program: WebGLProgram, location: WebGLUniformLocation) {
-    throw new Error('Method not implemented.');
-  }
-  getVertexAttrib(index: number, pname: number) {
-    throw new Error('Method not implemented.');
-  }
-  getVertexAttribOffset(index: number, pname: number): number {
-    throw new Error('Method not implemented.');
-  }
-  hint(target: number, mode: number): void {
-    throw new Error('Method not implemented.');
-  }
-  isBuffer(buffer: WebGLBuffer | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isContextLost(): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isEnabled(cap: number): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isFramebuffer(framebuffer: WebGLFramebuffer | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isProgram(program: WebGLProgram | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isRenderbuffer(renderbuffer: WebGLRenderbuffer | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isShader(shader: WebGLShader | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  isTexture(texture: WebGLTexture | null): boolean {
-    throw new Error('Method not implemented.');
-  }
-  lineWidth(width: number): void {
-    throw new Error('Method not implemented.');
-  }
-  pixelStorei(pname: number, param: number | boolean): void {
-    throw new Error('Method not implemented.');
-  }
-  polygonOffset(factor: number, units: number): void {
-    throw new Error('Method not implemented.');
-  }
-  sampleCoverage(value: number, invert: boolean): void {
-    throw new Error('Method not implemented.');
-  }
-  scissor(x: number, y: number, width: number, height: number): void {
-    throw new Error('Method not implemented.');
-  }
-  stencilFunc(func: number, ref: number, mask: number): void {
-    throw new Error('Method not implemented.');
-  }
-  stencilFuncSeparate(face: number, func: number, ref: number, mask: number): void {
-    throw new Error('Method not implemented.');
-  }
-  stencilMask(mask: number): void {
-    throw new Error('Method not implemented.');
-  }
-  stencilMaskSeparate(face: number, mask: number): void {
-    throw new Error('Method not implemented.');
-  }
-  stencilOp(fail: number, zfail: number, zpass: number): void {
-    throw new Error('Method not implemented.');
-  }
-  stencilOpSeparate(face: number, fail: number, zfail: number, zpass: number): void {
-    throw new Error('Method not implemented.');
-  }
-  texParameterf(target: number, pname: number, param: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform2f(location: WebGLUniformLocation | null, x: number, y: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform2i(location: WebGLUniformLocation | null, x: number, y: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform3f(location: WebGLUniformLocation | null, x: number, y: number, z: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform3i(location: WebGLUniformLocation | null, x: number, y: number, z: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform4f(location: WebGLUniformLocation | null, x: number, y: number, z: number, w: number): void {
-    throw new Error('Method not implemented.');
-  }
-  uniform4i(location: WebGLUniformLocation | null, x: number, y: number, z: number, w: number): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttrib1f(index: number, x: number): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttrib1fv(index: number, values: Float32List): void;
-  vertexAttrib1fv(index: number, values: Iterable<number>): void;
-  vertexAttrib1fv(index: unknown, values: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttrib2f(index: number, x: number, y: number): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttrib2fv(index: number, values: Float32List): void;
-  vertexAttrib2fv(index: number, values: Iterable<number>): void;
-  vertexAttrib2fv(index: unknown, values: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttrib3f(index: number, x: number, y: number, z: number): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttrib3fv(index: number, values: Float32List): void;
-  vertexAttrib3fv(index: number, values: Iterable<number>): void;
-  vertexAttrib3fv(index: unknown, values: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttrib4f(index: number, x: number, y: number, z: number, w: number): void {
-    throw new Error('Method not implemented.');
-  }
-  vertexAttrib4fv(index: number, values: Float32List): void;
-  vertexAttrib4fv(index: number, values: Iterable<number>): void;
-  vertexAttrib4fv(index: unknown, values: unknown): void {
-    throw new Error('Method not implemented.');
-  }
-  DEPTH_BUFFER_BIT = this.gl.DEPTH_BUFFER_BIT;
-  STENCIL_BUFFER_BIT = this.gl.STENCIL_BUFFER_BIT;
-  COLOR_BUFFER_BIT = this.gl.COLOR_BUFFER_BIT;
-  POINTS = this.gl.POINTS;
-  LINES = this.gl.LINES;
-  LINE_LOOP = this.gl.LINE_LOOP;
-  LINE_STRIP = this.gl.LINE_STRIP;
-  TRIANGLES = this.gl.TRIANGLES;
-  TRIANGLE_STRIP = this.gl.TRIANGLE_STRIP;
-  TRIANGLE_FAN = this.gl.TRIANGLE_FAN;
-  ZERO = this.gl.ZERO;
-  ONE = this.gl.ONE;
-  SRC_COLOR = this.gl.SRC_COLOR;
-  ONE_MINUS_SRC_COLOR = this.gl.ONE_MINUS_SRC_COLOR;
-  SRC_ALPHA = this.gl.SRC_ALPHA;
-  ONE_MINUS_SRC_ALPHA = this.gl.ONE_MINUS_SRC_ALPHA;
-  DST_ALPHA = this.gl.DST_ALPHA;
-  ONE_MINUS_DST_ALPHA = this.gl.ONE_MINUS_DST_ALPHA;
-  DST_COLOR = this.gl.DST_COLOR;
-  ONE_MINUS_DST_COLOR = this.gl.ONE_MINUS_DST_COLOR;
-  SRC_ALPHA_SATURATE = this.gl.SRC_ALPHA_SATURATE;
-  FUNC_ADD = this.gl.FUNC_ADD;
-  BLEND_EQUATION = this.gl.BLEND_EQUATION;
-  BLEND_EQUATION_RGB = this.gl.BLEND_EQUATION_RGB;
-  BLEND_EQUATION_ALPHA = this.gl.BLEND_EQUATION_ALPHA;
-  FUNC_SUBTRACT = this.gl.FUNC_SUBTRACT;
-  FUNC_REVERSE_SUBTRACT = this.gl.FUNC_REVERSE_SUBTRACT;
-  BLEND_DST_RGB = this.gl.BLEND_DST_RGB;
-  BLEND_SRC_RGB = this.gl.BLEND_SRC_RGB;
-  BLEND_DST_ALPHA = this.gl.BLEND_DST_ALPHA;
-  BLEND_SRC_ALPHA = this.gl.BLEND_SRC_ALPHA;
-  CONSTANT_COLOR = this.gl.CONSTANT_COLOR;
-  ONE_MINUS_CONSTANT_COLOR = this.gl.ONE_MINUS_CONSTANT_COLOR;
-  CONSTANT_ALPHA = this.gl.CONSTANT_ALPHA;
-  ONE_MINUS_CONSTANT_ALPHA = this.gl.ONE_MINUS_CONSTANT_ALPHA;
-  BLEND_COLOR = this.gl.BLEND_COLOR;
-  ARRAY_BUFFER = this.gl.ARRAY_BUFFER;
-  ELEMENT_ARRAY_BUFFER = this.gl.ELEMENT_ARRAY_BUFFER;
-  ARRAY_BUFFER_BINDING = this.gl.ARRAY_BUFFER_BINDING;
-  ELEMENT_ARRAY_BUFFER_BINDING = this.gl.ELEMENT_ARRAY_BUFFER_BINDING;
-  STREAM_DRAW = this.gl.STREAM_DRAW;
-  STATIC_DRAW = this.gl.STATIC_DRAW;
-  DYNAMIC_DRAW = this.gl.DYNAMIC_DRAW;
-  BUFFER_SIZE = this.gl.BUFFER_SIZE;
-  BUFFER_USAGE = this.gl.BUFFER_USAGE;
-  CURRENT_VERTEX_ATTRIB = this.gl.CURRENT_VERTEX_ATTRIB;
-  FRONT = this.gl.FRONT;
-  BACK = this.gl.BACK;
-  FRONT_AND_BACK = this.gl.FRONT_AND_BACK;
-  CULL_FACE = this.gl.CULL_FACE;
-  BLEND = this.gl.BLEND;
-  DITHER = this.gl.DITHER;
-  STENCIL_TEST = this.gl.STENCIL_TEST;
-  DEPTH_TEST = this.gl.DEPTH_TEST;
-  SCISSOR_TEST = this.gl.SCISSOR_TEST;
-  POLYGON_OFFSET_FILL = this.gl.POLYGON_OFFSET_FILL;
-  SAMPLE_ALPHA_TO_COVERAGE = this.gl.SAMPLE_ALPHA_TO_COVERAGE;
-  SAMPLE_COVERAGE = this.gl.SAMPLE_COVERAGE;
-  NO_ERROR = this.gl.NO_ERROR;
-  INVALID_ENUM = this.gl.INVALID_ENUM;
-  INVALID_VALUE = this.gl.INVALID_VALUE;
-  INVALID_OPERATION = this.gl.INVALID_OPERATION;
-  OUT_OF_MEMORY = this.gl.OUT_OF_MEMORY;
-  CW = this.gl.CW;
-  CCW = this.gl.CCW;
-  LINE_WIDTH = this.gl.LINE_WIDTH;
-  ALIASED_POINT_SIZE_RANGE = this.gl.ALIASED_POINT_SIZE_RANGE;
-  ALIASED_LINE_WIDTH_RANGE = this.gl.ALIASED_LINE_WIDTH_RANGE;
-  CULL_FACE_MODE = this.gl.CULL_FACE_MODE;
-  FRONT_FACE = this.gl.FRONT_FACE;
-  DEPTH_RANGE = this.gl.DEPTH_RANGE;
-  DEPTH_WRITEMASK = this.gl.DEPTH_WRITEMASK;
-  DEPTH_CLEAR_VALUE = this.gl.DEPTH_CLEAR_VALUE;
-  DEPTH_FUNC = this.gl.DEPTH_FUNC;
-  STENCIL_CLEAR_VALUE = this.gl.STENCIL_CLEAR_VALUE;
-  STENCIL_FUNC = this.gl.STENCIL_FUNC;
-  STENCIL_FAIL = this.gl.STENCIL_FAIL;
-  STENCIL_PASS_DEPTH_FAIL = this.gl.STENCIL_PASS_DEPTH_FAIL;
-  STENCIL_PASS_DEPTH_PASS = this.gl.STENCIL_PASS_DEPTH_PASS;
-  STENCIL_REF = this.gl.STENCIL_REF;
-  STENCIL_VALUE_MASK = this.gl.STENCIL_VALUE_MASK;
-  STENCIL_WRITEMASK = this.gl.STENCIL_WRITEMASK;
-  STENCIL_BACK_FUNC = this.gl.STENCIL_BACK_FUNC;
-  STENCIL_BACK_FAIL = this.gl.STENCIL_BACK_FAIL;
-  STENCIL_BACK_PASS_DEPTH_FAIL = this.gl.STENCIL_BACK_PASS_DEPTH_FAIL;
-  STENCIL_BACK_PASS_DEPTH_PASS = this.gl.STENCIL_BACK_PASS_DEPTH_PASS;
-  STENCIL_BACK_REF = this.gl.STENCIL_BACK_REF;
-  STENCIL_BACK_VALUE_MASK = this.gl.STENCIL_BACK_VALUE_MASK;
-  STENCIL_BACK_WRITEMASK = this.gl.STENCIL_BACK_WRITEMASK;
-  VIEWPORT = this.gl.VIEWPORT;
-  SCISSOR_BOX = this.gl.SCISSOR_BOX;
-  COLOR_CLEAR_VALUE = this.gl.COLOR_CLEAR_VALUE;
-  COLOR_WRITEMASK = this.gl.COLOR_WRITEMASK;
-  UNPACK_ALIGNMENT = this.gl.UNPACK_ALIGNMENT;
-  PACK_ALIGNMENT = this.gl.PACK_ALIGNMENT;
-  MAX_TEXTURE_SIZE = this.gl.MAX_TEXTURE_SIZE;
-  MAX_VIEWPORT_DIMS = this.gl.MAX_VIEWPORT_DIMS;
-  SUBPIXEL_BITS = this.gl.SUBPIXEL_BITS;
-  RED_BITS = this.gl.RED_BITS;
-  GREEN_BITS = this.gl.GREEN_BITS;
-  BLUE_BITS = this.gl.BLUE_BITS;
-  ALPHA_BITS = this.gl.ALPHA_BITS;
-  DEPTH_BITS = this.gl.DEPTH_BITS;
-  STENCIL_BITS = this.gl.STENCIL_BITS;
-  POLYGON_OFFSET_UNITS = this.gl.POLYGON_OFFSET_UNITS;
-  POLYGON_OFFSET_FACTOR = this.gl.POLYGON_OFFSET_FACTOR;
-  TEXTURE_BINDING_2D = this.gl.TEXTURE_BINDING_2D;
-  SAMPLE_BUFFERS = this.gl.SAMPLE_BUFFERS;
-  SAMPLES = this.gl.SAMPLES;
-  SAMPLE_COVERAGE_VALUE = this.gl.SAMPLE_COVERAGE_VALUE;
-  SAMPLE_COVERAGE_INVERT = this.gl.SAMPLE_COVERAGE_INVERT;
-  COMPRESSED_TEXTURE_FORMATS = this.gl.COMPRESSED_TEXTURE_FORMATS;
-  DONT_CARE = this.gl.DONT_CARE;
-  FASTEST = this.gl.FASTEST;
-  NICEST = this.gl.NICEST;
-  GENERATE_MIPMAP_HINT = this.gl.GENERATE_MIPMAP_HINT;
-  BYTE = this.gl.BYTE;
-  UNSIGNED_BYTE = this.gl.UNSIGNED_BYTE;
-  SHORT = this.gl.SHORT;
-  UNSIGNED_SHORT = this.gl.UNSIGNED_SHORT;
-  INT = this.gl.INT;
-  UNSIGNED_INT = this.gl.UNSIGNED_INT;
-  FLOAT = this.gl.FLOAT;
-  DEPTH_COMPONENT = this.gl.DEPTH_COMPONENT;
-  ALPHA = this.gl.ALPHA;
-  RGB = this.gl.RGB;
-  RGBA = this.gl.RGBA;
-  LUMINANCE = this.gl.LUMINANCE;
-  LUMINANCE_ALPHA = this.gl.LUMINANCE_ALPHA;
-  UNSIGNED_SHORT_4_4_4_4 = this.gl.UNSIGNED_SHORT_4_4_4_4;
-  UNSIGNED_SHORT_5_5_5_1 = this.gl.UNSIGNED_SHORT_5_5_5_1;
-  UNSIGNED_SHORT_5_6_5 = this.gl.UNSIGNED_SHORT_5_6_5;
-  FRAGMENT_SHADER = this.gl.FRAGMENT_SHADER;
-  VERTEX_SHADER = this.gl.VERTEX_SHADER;
-  MAX_VERTEX_ATTRIBS = this.gl.MAX_VERTEX_ATTRIBS;
-  MAX_VERTEX_UNIFORM_VECTORS = this.gl.MAX_VERTEX_UNIFORM_VECTORS;
-  MAX_VARYING_VECTORS = this.gl.MAX_VARYING_VECTORS;
-  MAX_COMBINED_TEXTURE_IMAGE_UNITS = this.gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS;
-  MAX_VERTEX_TEXTURE_IMAGE_UNITS = this.gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS;
-  MAX_TEXTURE_IMAGE_UNITS = this.gl.MAX_TEXTURE_IMAGE_UNITS;
-  MAX_FRAGMENT_UNIFORM_VECTORS = this.gl.MAX_FRAGMENT_UNIFORM_VECTORS;
-  SHADER_TYPE = this.gl.SHADER_TYPE;
-  DELETE_STATUS = this.gl.DELETE_STATUS;
-  LINK_STATUS = this.gl.LINK_STATUS;
-  VALIDATE_STATUS = this.gl.VALIDATE_STATUS;
-  ATTACHED_SHADERS = this.gl.ATTACHED_SHADERS;
-  ACTIVE_UNIFORMS = this.gl.ACTIVE_UNIFORMS;
-  ACTIVE_ATTRIBUTES = this.gl.ACTIVE_ATTRIBUTES;
-  SHADING_LANGUAGE_VERSION = this.gl.SHADING_LANGUAGE_VERSION;
-  CURRENT_PROGRAM = this.gl.CURRENT_PROGRAM;
-  NEVER = this.gl.NEVER;
-  LESS = this.gl.LESS;
-  EQUAL = this.gl.EQUAL;
-  LEQUAL = this.gl.LEQUAL;
-  GREATER = this.gl.GREATER;
-  NOTEQUAL = this.gl.NOTEQUAL;
-  GEQUAL = this.gl.GEQUAL;
-  ALWAYS = this.gl.ALWAYS;
-  KEEP = this.gl.KEEP;
-  REPLACE = this.gl.REPLACE;
-  INCR = this.gl.INCR;
-  DECR = this.gl.DECR;
-  INVERT = this.gl.INVERT;
-  INCR_WRAP = this.gl.INCR_WRAP;
-  DECR_WRAP = this.gl.DECR_WRAP;
-  VENDOR = this.gl.VENDOR;
-  RENDERER = this.gl.RENDERER;
-  VERSION = this.gl.VERSION;
-  NEAREST = this.gl.NEAREST;
-  LINEAR = this.gl.LINEAR;
-  NEAREST_MIPMAP_NEAREST = this.gl.NEAREST_MIPMAP_NEAREST;
-  LINEAR_MIPMAP_NEAREST = this.gl.LINEAR_MIPMAP_NEAREST;
-  NEAREST_MIPMAP_LINEAR = this.gl.NEAREST_MIPMAP_LINEAR;
-  LINEAR_MIPMAP_LINEAR = this.gl.LINEAR_MIPMAP_LINEAR;
-  TEXTURE_MAG_FILTER = this.gl.TEXTURE_MAG_FILTER;
-  TEXTURE_MIN_FILTER = this.gl.TEXTURE_MIN_FILTER;
-  TEXTURE_WRAP_S = this.gl.TEXTURE_WRAP_S;
-  TEXTURE_WRAP_T = this.gl.TEXTURE_WRAP_T;
-  TEXTURE_2D = this.gl.TEXTURE_2D;
-  TEXTURE = this.gl.TEXTURE;
-  TEXTURE_CUBE_MAP = this.gl.TEXTURE_CUBE_MAP;
-  TEXTURE_BINDING_CUBE_MAP = this.gl.TEXTURE_BINDING_CUBE_MAP;
-  TEXTURE_CUBE_MAP_POSITIVE_X = this.gl.TEXTURE_CUBE_MAP_POSITIVE_X;
-  TEXTURE_CUBE_MAP_NEGATIVE_X = this.gl.TEXTURE_CUBE_MAP_NEGATIVE_X;
-  TEXTURE_CUBE_MAP_POSITIVE_Y = this.gl.TEXTURE_CUBE_MAP_POSITIVE_Y;
-  TEXTURE_CUBE_MAP_NEGATIVE_Y = this.gl.TEXTURE_CUBE_MAP_NEGATIVE_Y;
-  TEXTURE_CUBE_MAP_POSITIVE_Z = this.gl.TEXTURE_CUBE_MAP_POSITIVE_Z;
-  TEXTURE_CUBE_MAP_NEGATIVE_Z = this.gl.TEXTURE_CUBE_MAP_NEGATIVE_Z;
-  MAX_CUBE_MAP_TEXTURE_SIZE = this.gl.MAX_CUBE_MAP_TEXTURE_SIZE;
-  TEXTURE0 = this.gl.TEXTURE0;
-  TEXTURE1 = this.gl.TEXTURE1;
-  TEXTURE2 = this.gl.TEXTURE2;
-  TEXTURE3 = this.gl.TEXTURE3;
-  TEXTURE4 = this.gl.TEXTURE4;
-  TEXTURE5 = this.gl.TEXTURE5;
-  TEXTURE6 = this.gl.TEXTURE6;
-  TEXTURE7 = this.gl.TEXTURE7;
-  TEXTURE8 = this.gl.TEXTURE8;
-  TEXTURE9 = this.gl.TEXTURE9;
-  TEXTURE10 = this.gl.TEXTURE10;
-  TEXTURE11 = this.gl.TEXTURE11;
-  TEXTURE12 = this.gl.TEXTURE12;
-  TEXTURE13 = this.gl.TEXTURE13;
-  TEXTURE14 = this.gl.TEXTURE14;
-  TEXTURE15 = this.gl.TEXTURE15;
-  TEXTURE16 = this.gl.TEXTURE16;
-  TEXTURE17 = this.gl.TEXTURE17;
-  TEXTURE18 = this.gl.TEXTURE18;
-  TEXTURE19 = this.gl.TEXTURE19;
-  TEXTURE20 = this.gl.TEXTURE20;
-  TEXTURE21 = this.gl.TEXTURE21;
-  TEXTURE22 = this.gl.TEXTURE22;
-  TEXTURE23 = this.gl.TEXTURE23;
-  TEXTURE24 = this.gl.TEXTURE24;
-  TEXTURE25 = this.gl.TEXTURE25;
-  TEXTURE26 = this.gl.TEXTURE26;
-  TEXTURE27 = this.gl.TEXTURE27;
-  TEXTURE28 = this.gl.TEXTURE28;
-  TEXTURE29 = this.gl.TEXTURE29;
-  TEXTURE30 = this.gl.TEXTURE30;
-  TEXTURE31 = this.gl.TEXTURE31;
-  ACTIVE_TEXTURE = this.gl.ACTIVE_TEXTURE;
-  REPEAT = this.gl.REPEAT;
-  CLAMP_TO_EDGE = this.gl.CLAMP_TO_EDGE;
-  MIRRORED_REPEAT = this.gl.MIRRORED_REPEAT;
-  FLOAT_VEC2 = this.gl.FLOAT_VEC2;
-  FLOAT_VEC3 = this.gl.FLOAT_VEC3;
-  FLOAT_VEC4 = this.gl.FLOAT_VEC4;
-  INT_VEC2 = this.gl.INT_VEC2;
-  INT_VEC3 = this.gl.INT_VEC3;
-  INT_VEC4 = this.gl.INT_VEC4;
-  BOOL = this.gl.BOOL;
-  BOOL_VEC2 = this.gl.BOOL_VEC2;
-  BOOL_VEC3 = this.gl.BOOL_VEC3;
-  BOOL_VEC4 = this.gl.BOOL_VEC4;
-  FLOAT_MAT2 = this.gl.FLOAT_MAT2;
-  FLOAT_MAT3 = this.gl.FLOAT_MAT3;
-  FLOAT_MAT4 = this.gl.FLOAT_MAT4;
-  SAMPLER_2D = this.gl.SAMPLER_2D;
-  SAMPLER_CUBE = this.gl.SAMPLER_CUBE;
-  VERTEX_ATTRIB_ARRAY_ENABLED = this.gl.VERTEX_ATTRIB_ARRAY_ENABLED;
-  VERTEX_ATTRIB_ARRAY_SIZE = this.gl.VERTEX_ATTRIB_ARRAY_SIZE;
-  VERTEX_ATTRIB_ARRAY_STRIDE = this.gl.VERTEX_ATTRIB_ARRAY_STRIDE;
-  VERTEX_ATTRIB_ARRAY_TYPE = this.gl.VERTEX_ATTRIB_ARRAY_TYPE;
-  VERTEX_ATTRIB_ARRAY_NORMALIZED = this.gl.VERTEX_ATTRIB_ARRAY_NORMALIZED;
-  VERTEX_ATTRIB_ARRAY_POINTER = this.gl.VERTEX_ATTRIB_ARRAY_POINTER;
-  VERTEX_ATTRIB_ARRAY_BUFFER_BINDING = this.gl.VERTEX_ATTRIB_ARRAY_BUFFER_BINDING;
-  IMPLEMENTATION_COLOR_READ_TYPE = this.gl.IMPLEMENTATION_COLOR_READ_TYPE;
-  IMPLEMENTATION_COLOR_READ_FORMAT = this.gl.IMPLEMENTATION_COLOR_READ_FORMAT;
-  COMPILE_STATUS = this.gl.COMPILE_STATUS;
-  LOW_FLOAT = this.gl.LOW_FLOAT;
-  MEDIUM_FLOAT = this.gl.MEDIUM_FLOAT;
-  HIGH_FLOAT = this.gl.HIGH_FLOAT;
-  LOW_INT = this.gl.LOW_INT;
-  MEDIUM_INT = this.gl.MEDIUM_INT;
-  HIGH_INT = this.gl.HIGH_INT;
-  FRAMEBUFFER = this.gl.FRAMEBUFFER;
-  RENDERBUFFER = this.gl.RENDERBUFFER;
-  RGBA4 = this.gl.RGBA4;
-  RGB5_A1 = this.gl.RGB5_A1;
-  RGB565 = this.gl.RGB565;
-  DEPTH_COMPONENT16 = this.gl.DEPTH_COMPONENT16;
-  STENCIL_INDEX8 = this.gl.STENCIL_INDEX8;
-  DEPTH_STENCIL = this.gl.DEPTH_STENCIL;
-  RENDERBUFFER_WIDTH = this.gl.RENDERBUFFER_WIDTH;
-  RENDERBUFFER_HEIGHT = this.gl.RENDERBUFFER_HEIGHT;
-  RENDERBUFFER_INTERNAL_FORMAT = this.gl.RENDERBUFFER_INTERNAL_FORMAT;
-  RENDERBUFFER_RED_SIZE = this.gl.RENDERBUFFER_RED_SIZE;
-  RENDERBUFFER_GREEN_SIZE = this.gl.RENDERBUFFER_GREEN_SIZE;
-  RENDERBUFFER_BLUE_SIZE = this.gl.RENDERBUFFER_BLUE_SIZE;
-  RENDERBUFFER_ALPHA_SIZE = this.gl.RENDERBUFFER_ALPHA_SIZE;
-  RENDERBUFFER_DEPTH_SIZE = this.gl.RENDERBUFFER_DEPTH_SIZE;
-  RENDERBUFFER_STENCIL_SIZE = this.gl.RENDERBUFFER_STENCIL_SIZE;
-  FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE = this.gl.FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE;
-  FRAMEBUFFER_ATTACHMENT_OBJECT_NAME = this.gl.FRAMEBUFFER_ATTACHMENT_OBJECT_NAME;
-  FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL = this.gl.FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL;
-  FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE = this.gl.FRAMEBUFFER_ATTACHMENT_TEXTURE_CUBE_MAP_FACE;
-  COLOR_ATTACHMENT0 = this.gl.COLOR_ATTACHMENT0;
-  DEPTH_ATTACHMENT = this.gl.DEPTH_ATTACHMENT;
-  STENCIL_ATTACHMENT = this.gl.STENCIL_ATTACHMENT;
-  DEPTH_STENCIL_ATTACHMENT = this.gl.DEPTH_STENCIL_ATTACHMENT;
-  NONE = this.gl.NONE;
-  FRAMEBUFFER_COMPLETE = this.gl.FRAMEBUFFER_COMPLETE;
-  FRAMEBUFFER_INCOMPLETE_ATTACHMENT = this.gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT;
-  FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT = this.gl.FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT;
-  FRAMEBUFFER_INCOMPLETE_DIMENSIONS = this.gl.FRAMEBUFFER_INCOMPLETE_DIMENSIONS;
-  FRAMEBUFFER_UNSUPPORTED = this.gl.FRAMEBUFFER_UNSUPPORTED;
-  FRAMEBUFFER_BINDING = this.gl.FRAMEBUFFER_BINDING;
-  RENDERBUFFER_BINDING = this.gl.RENDERBUFFER_BINDING;
-  MAX_RENDERBUFFER_SIZE = this.gl.MAX_RENDERBUFFER_SIZE;
-  INVALID_FRAMEBUFFER_OPERATION = this.gl.INVALID_FRAMEBUFFER_OPERATION;
-  UNPACK_FLIP_Y_WEBGL = this.gl.UNPACK_FLIP_Y_WEBGL;
-  UNPACK_PREMULTIPLY_ALPHA_WEBGL = this.gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL;
-  CONTEXT_LOST_WEBGL = this.gl.CONTEXT_LOST_WEBGL;
-  UNPACK_COLORSPACE_CONVERSION_WEBGL = this.gl.UNPACK_COLORSPACE_CONVERSION_WEBGL;
-  BROWSER_DEFAULT_WEBGL = this.gl.BROWSER_DEFAULT_WEBGL;
-  makeXRCompatible(): Promise<void>;
-  makeXRCompatible(): Promise<void>;
-  makeXRCompatible(): Promise<void> {
-    throw new Error('Method not implemented.');
+  /** Subscribes to coalesced snapshots. The listener receives an initial snapshot synchronously. */
+  subscribe(listener: SnapshotListener): () => void {
+    if (this.disposed) throw new Error('Cannot subscribe to a disposed WebGLInspector.');
+    this.listeners.add(listener);
+    listener(this.capture());
+    return () => this.listeners.delete(listener);
   }
 
-  createShader(type: GL_SHADER_TYPE): WebGLShader | null {
-    const shader = this.gl.createShader(type);
+  /** Stops notifications and releases all listeners. The WebGL context remains usable. */
+  dispose(): void {
+    this.disposed = true;
+    this.listeners.clear();
+  }
 
-    if (shader) {
-      this.state.shaders.set(shader, {
-        source: undefined,
-        state: { COMPILE_STATUSE: false }
+  /** @internal Records a proxied context or extension call. */
+  record(call: MutableCall): void {
+    this.sequence += 1;
+    const formattedArguments = call.arguments.map((value) => this.formatCallArgument(value)).join(', ');
+    if (call.error !== undefined) {
+      this.calls.push({
+        status: 'error',
+        name: call.name,
+        arguments: formattedArguments,
+        message: call.error instanceof Error ? call.error.message : String(call.error),
+        sequence: this.sequence
+      });
+    } else {
+      this.calls.push({ status: 'ok', name: call.name, arguments: formattedArguments, sequence: this.sequence });
+      this.recordResourceChanges(call);
+    }
+    this.calls.splice(0, Math.max(0, this.calls.length - this.options.maxRecentCalls));
+    if (DRAW_METHOD_PATTERN.test(call.name)) this.drawCalls += 1;
+    if (call.error !== undefined || isMutation(call.name)) this.queueNotification();
+  }
+
+  private queueNotification(): void {
+    if (this.notificationQueued || this.disposed) return;
+    this.notificationQueued = true;
+    queueMicrotask(() => {
+      this.notificationQueued = false;
+      if (this.disposed) return;
+      this.revision += 1;
+      const snapshot = this.capture();
+      for (const listener of this.listeners) listener(snapshot);
+    });
+  }
+
+  private captureGroup(definition: StateGroupDefinition): WebGLStateGroup {
+    return {
+      id: definition.id,
+      title: definition.title,
+      rows: definition.states.flatMap((state) => {
+        const value = this.readParameter(state.key);
+        return value.found ? [this.formatRow(state.key, value.value, state.format)] : [];
+      })
+    };
+  }
+
+  private captureTextureUnits(): readonly WebGLTextureUnitSnapshot[] {
+    const gl = this.context;
+    const activeTexture = this.readNumberParameter('ACTIVE_TEXTURE');
+    const texture0 = this.enumValue('TEXTURE0');
+    const maximum = this.readNumberParameter('MAX_COMBINED_TEXTURE_IMAGE_UNITS');
+    if (activeTexture === undefined || texture0 === undefined || maximum === undefined) return [];
+    const count = Math.min(maximum, this.options.maxTextureUnits);
+    const bindingNames = isWebGL2(gl)
+      ? [
+          'TEXTURE_BINDING_2D',
+          'TEXTURE_BINDING_CUBE_MAP',
+          'TEXTURE_BINDING_3D',
+          'TEXTURE_BINDING_2D_ARRAY',
+          'SAMPLER_BINDING'
+        ]
+      : ['TEXTURE_BINDING_2D', 'TEXTURE_BINDING_CUBE_MAP'];
+    const units: WebGLTextureUnitSnapshot[] = [];
+    try {
+      for (let index = 0; index < count; index += 1) {
+        gl.activeTexture(texture0 + index);
+        units.push({
+          index,
+          active: activeTexture === texture0 + index,
+          bindings: bindingNames.flatMap((name) => {
+            const value = this.readParameter(name);
+            return value.found
+              ? [this.formatRow(name.replace('TEXTURE_BINDING_', '').replace('_BINDING', ''), value.value)]
+              : [];
+          })
+        });
+      }
+    } finally {
+      gl.activeTexture(activeTexture);
+    }
+    return units;
+  }
+
+  private captureVertexAttributes(): readonly WebGLVertexAttributeSnapshot[] {
+    const gl = this.context;
+    const maximum = this.readNumberParameter('MAX_VERTEX_ATTRIBS');
+    if (maximum === undefined) return [];
+    const attributes: WebGLVertexAttributeSnapshot[] = [];
+    const count = Math.min(maximum, this.options.maxVertexAttributes);
+    for (let index = 0; index < count; index += 1) {
+      const enabled = this.readVertexAttribute(index, 'VERTEX_ATTRIB_ARRAY_ENABLED');
+      const buffer = this.readVertexAttribute(index, 'VERTEX_ATTRIB_ARRAY_BUFFER_BINDING');
+      const bufferRecord = isObject(buffer) ? this.ensureResource(buffer, 'buffer') : undefined;
+      attributes.push({
+        index,
+        enabled: Boolean(enabled),
+        size: this.formatValue(this.readVertexAttribute(index, 'VERTEX_ATTRIB_ARRAY_SIZE')),
+        type: this.formatValue(this.readVertexAttribute(index, 'VERTEX_ATTRIB_ARRAY_TYPE'), 'enum'),
+        normalized: this.formatValue(this.readVertexAttribute(index, 'VERTEX_ATTRIB_ARRAY_NORMALIZED')),
+        stride: this.formatValue(this.readVertexAttribute(index, 'VERTEX_ATTRIB_ARRAY_STRIDE')),
+        offset: this.readVertexAttributeOffset(index),
+        divisor: isWebGL2(gl) ? this.formatValue(this.readVertexAttribute(index, 'VERTEX_ATTRIB_ARRAY_DIVISOR')) : '0',
+        buffer: bufferRecord?.id ?? 'null',
+        ...(bufferRecord ? { bufferId: bufferRecord.id } : {})
       });
     }
-
-    return shader;
+    return attributes;
   }
 
-  shaderSource(shader: WebGLShader, source: string): void {
-    const shaderState = this.state.shaders.get(shader);
-    if (shaderState) {
-      shaderState.source = source;
+  private captureIndexedBufferBindings(): readonly WebGLIndexedBufferBindingSnapshot[] {
+    if (!isWebGL2(this.context)) return [];
+    const gl = this.context;
+    const bindings: WebGLIndexedBufferBindingSnapshot[] = [];
+    const targets = [
+      {
+        target: 'uniform',
+        binding: gl.UNIFORM_BUFFER_BINDING,
+        start: gl.UNIFORM_BUFFER_START,
+        size: gl.UNIFORM_BUFFER_SIZE,
+        maximum: this.readNumberParameter('MAX_UNIFORM_BUFFER_BINDINGS')
+      },
+      {
+        target: 'transform-feedback',
+        binding: gl.TRANSFORM_FEEDBACK_BUFFER_BINDING,
+        start: gl.TRANSFORM_FEEDBACK_BUFFER_START,
+        size: gl.TRANSFORM_FEEDBACK_BUFFER_SIZE,
+        maximum: this.readNumberParameter('MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS')
+      }
+    ] as const;
+
+    for (const target of targets) {
+      const count = Math.min(target.maximum ?? 0, this.options.maxIndexedBindings);
+      for (let index = 0; index < count; index += 1) {
+        const buffer = this.safeCall(() => gl.getIndexedParameter(target.binding, index));
+        const resource = isObject(buffer) ? this.ensureResource(buffer, 'buffer') : undefined;
+        bindings.push({
+          target: target.target,
+          index,
+          buffer: resource?.id ?? 'null',
+          ...(resource ? { bufferId: resource.id } : {}),
+          offset: this.formatValue(this.safeCall(() => gl.getIndexedParameter(target.start, index))),
+          size: this.formatValue(this.safeCall(() => gl.getIndexedParameter(target.size, index)))
+        });
+      }
     }
-
-    return this.gl.shaderSource(shader, source);
+    return bindings;
   }
 
-  compileShader(shader: WebGLShader): void {
-    this.gl.compileShader(shader);
-
-    if (!this.getShaderParameter(shader, GL_STATIC_VARIABLES.COMPILE_STATUS)) {
-      throw new Error(this.getShaderInfoLog(shader) as any);
+  private readVertexAttribute(index: number, name: string): unknown {
+    const value = this.enumValue(name);
+    if (value === undefined) return undefined;
+    try {
+      return this.context.getVertexAttrib(index, value);
+    } catch {
+      return undefined;
     }
+  }
 
-    const shaderState = this.state.shaders.get(shader);
-
-    if (shaderState) {
-      shaderState.state.COMPILE_STATUSE = true;
+  private readVertexAttributeOffset(index: number): string {
+    const pointer = this.enumValue('VERTEX_ATTRIB_ARRAY_POINTER');
+    if (pointer === undefined) return '0';
+    try {
+      return String(this.context.getVertexAttribOffset(index, pointer));
+    } catch {
+      return '0';
     }
-
-    return;
   }
 
-  deleteShader(shader: WebGLShader | null): void {
-    if (!(shader && this.state.shaders.has(shader))) {
-      throw new Error('No such shader was found');
+  private readParameter(name: string): { readonly found: true; readonly value: unknown } | { readonly found: false } {
+    const pname = this.enumValue(name);
+    if (pname === undefined) return { found: false };
+    try {
+      return { found: true, value: this.context.getParameter(pname) };
+    } catch {
+      return { found: false };
     }
-
-    this.state.shaders.delete(shader);
-
-    return this.gl.deleteShader(shader);
   }
 
-  getShaderInfoLog(shader: WebGLShader): string | null {
-    return this.gl.getShaderInfoLog(shader);
+  private readNumberParameter(name: string): number | undefined {
+    const result = this.readParameter(name);
+    return result.found && typeof result.value === 'number' ? result.value : undefined;
   }
 
-  getShaderParameter(shader: WebGLShader, pname: GLenum) {
-    return this.gl.getShaderParameter;
-  }
-
-  createProgram(): WebGLProgram {
-    const program = this.gl.createProgram()!;
-
-    this.state.programs.set(program, new WebGLProgramState());
-
-    return program;
-  }
-
-  attachShader(program: WebGLProgram, shader: WebGLShader): void {
-    const programState = this.state.programs.get(program);
-    if (!programState) {
-      throw new Error('No such program was found');
+  private formatRow(key: string, value: unknown, format: ValueFormat = 'plain'): WebGLStateRow {
+    const resource = this.findOrCreateResource(value);
+    if (value === null && key.includes('FRAMEBUFFER_BINDING')) {
+      return { key, value: 'null (canvas)', resourceId: 'canvas' };
     }
-
-    const shaderState = this.state.shaders.get(shader);
-    if (!shaderState) {
-      throw new Error('No such shader was found');
+    if (value === null && key === 'VERTEX_ARRAY_BINDING') {
+      return { key, value: 'null (default VAO)', resourceId: 'vertex-array-default' };
     }
-
-    this.gl.attachShader(program, shader);
-
-    programState.attached_shaders.set(shader, shaderState);
-
-    return;
-  }
-
-  linkProgram(program: WebGLProgram): void {
-    const programState = this.state.programs.get(program);
-
-    if (!programState) {
-      throw new Error('No such program was found');
-    }
-
-    this.gl.linkProgram(program);
-
-    const numAttribs = this.gl.getProgramParameter(program, GL_STATIC_VARIABLES.ACTIVE_ATTRIBUTES);
-
-    for (let i = 0; i < numAttribs; i++) {
-      const attrib = this.gl.getActiveAttrib(program, i)!;
-      const attributeState: WebGLAttributeState = {
-        name: attrib?.name,
-        type: attrib?.type,
-        location: this.gl.getAttribLocation(program, attrib.name)
+    if (key === 'ACTIVE_TEXTURE' && typeof value === 'number') {
+      const texture0 = this.enumValue('TEXTURE0');
+      const index = texture0 === undefined ? undefined : value - texture0;
+      return {
+        key,
+        value: this.formatValue(value, 'enum'),
+        ...(index === undefined ? {} : { resourceId: `texture-unit-${index}` })
       };
-
-      programState.attribute_info.push(attributeState);
     }
+    return {
+      key,
+      value: resource?.id ?? this.formatValue(value, format),
+      ...(resource ? { resourceId: resource.id } : {})
+    };
+  }
 
-    const numUniforms = this.gl.getProgramParameter(program, GL_STATIC_VARIABLES.ACTIVE_UNIFORMS);
-
-    for (let i = 0; i < numUniforms; i++) {
-      const uniform = this.gl.getActiveUniform(program, i)!;
-      const location = this.gl.getUniformLocation(program, uniform.name)!;
-      const name = uniform.name;
-      const uniformState: WebGLUniformState = {
-        name,
-        type: uniform.type,
-        value: uniform.type,
-        size: uniform.size,
-        location
-      };
-
-      programState.uniforms.push(uniformState);
-      programState.uniforms_by_location.set(location, uniformState);
-      programState.uniforms_by_name[name] = uniformState;
+  private formatValue(value: unknown, format: ValueFormat = 'plain'): string {
+    if (value === undefined) return 'n/a';
+    if (value === null) return 'null';
+    if (typeof value === 'boolean') return String(value);
+    if (typeof value === 'number') {
+      if (format === 'hex') return `0x${value.toString(16).toUpperCase()}`;
+      if (format === 'enum') return this.enumNames.get(value) ?? String(value);
+      return Number.isInteger(value) ? String(value) : formatFloat(value);
     }
-
-    programState.state.LINK_STATUS = true;
-
-    return;
-  }
-
-  // prettier-ignore
-  transformFeedbackVaryings(program: WebGLProgram, varyings: Iterable<string>, bufferMode: GLenum): void {
-    this.gl.transformFeedbackVaryings(program, varyings, bufferMode);
-  }
-
-  getProgramParameter(program: WebGLProgram, pname: GLenum): any {
-    return this.gl.getProgramParameter(program, pname);
-  }
-
-  getProgramInfoLog(program: WebGLProgram): string | null {
-    return this.gl.getProgramInfoLog(program);
-  }
-
-  deleteProgram(program: WebGLProgram | null): void {
-    if (!(program && this.state.programs.has(program))) {
-      throw new Error('No such program was found');
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value) || ArrayBuffer.isView(value)) {
+      const values = Array.from(value as ArrayLike<unknown>);
+      return (
+        values
+          .slice(0, 16)
+          .map((item) => this.formatValue(item))
+          .join(', ') + (values.length > 16 ? ', …' : '')
+      );
     }
-
-    return this.gl.deleteProgram(program);
-  }
-
-  detachShader(program: WebGLProgram, shader: WebGLShader): void {
-    const programState = this.state.programs.get(program);
-    if (!programState) {
-      throw new Error(`No such program was found`);
+    if (isObject(value)) {
+      const resource = this.findOrCreateResource(value);
+      return resource?.id ?? Object.prototype.toString.call(value).slice(8, -1);
     }
+    return String(value);
+  }
 
-    if (!programState.attached_shaders.has(shader)) {
-      throw new Error(`No such shader was found`);
+  private formatCallArgument(value: unknown): string {
+    if (isObject(value) && !ArrayBuffer.isView(value)) {
+      const existing = this.resourceByObject.get(value);
+      if (existing) return existing.id;
     }
-
-    programState.attached_shaders.delete(shader);
-
-    return this.gl.detachShader(program, shader);
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'string') return value.length > 42 ? `${value.slice(0, 39)}…` : JSON.stringify(value);
+    if (ArrayBuffer.isView(value)) return `${value.constructor.name}[${value.byteLength}b]`;
+    return this.formatValue(value);
   }
 
-  validateProgram(program: WebGLProgram): void {
-    return this.gl.validateProgram(program);
+  private findOrCreateResource(value: unknown): ResourceRecord | undefined {
+    if (!isObject(value) || Array.isArray(value) || ArrayBuffer.isView(value)) return undefined;
+    const existing = this.resourceByObject.get(value);
+    if (existing) return existing;
+    const kind = inferResourceKind(value);
+    return kind === 'unknown' ? undefined : this.ensureResource(value, kind);
   }
 
-  getAttribLocation(program: WebGLProgram, name: string): GLint {
-    const programState = this.state.programs.get(program);
-    if (!programState) {
-      throw new Error('No such program was found');
+  private recordResourceChanges(call: MutableCall): void {
+    const creationKind = CREATION_METHODS[call.name];
+    if (creationKind && isObject(call.result)) {
+      const created = this.ensureResource(call.result, creationKind);
+      if (call.name === 'createShader' && typeof call.arguments[0] === 'number') {
+        created.details.set('type', this.enumNames.get(call.arguments[0]) ?? String(call.arguments[0]));
+      }
     }
-
-    const attribute = programState.attribute_info.find((attribute) => attribute.name === name);
-    if (!attribute) {
-      throw new Error('No such attribute was found');
+    const deletionKind = DELETION_METHODS[call.name];
+    const firstArgument = call.arguments[0];
+    if (deletionKind && isObject(firstArgument)) {
+      const deleted = this.ensureResource(firstArgument, deletionKind);
+      deleted.deleted = true;
+      deleted.details.set('status', 'delete requested');
     }
-
-    return this.gl.getAttribLocation(program, name);
-  }
-
-  // prettier-ignore
-  getUniformLocation(program: WebGLProgram, name: string): WebGLUniformLocation | null {
-    const programState = this.state.programs.get(program);
-    if (!programState) {
-      throw new Error("No such program was found");
+    if (call.name === 'getUniformLocation' && isObject(call.result) && typeof call.arguments[1] === 'string') {
+      this.locationNames.set(call.result, call.arguments[1]);
     }
+    this.recordShaderChanges(call);
+    this.recordProgramChanges(call);
+    this.recordBufferChanges(call);
+    this.recordTextureChanges(call);
+    this.recordFramebufferChanges(call);
+    this.recordRenderbufferChanges(call);
+    this.recordVertexArrayChanges(call);
+    this.recordSamplerChanges(call);
+    this.recordIndexedBufferChanges(call);
+    this.recordDrawRelationships(call);
+  }
 
-    const uniform = programState.uniforms_by_name[name];
-    if (!uniform) {
-      console.log(programState);
-      debugger;
-      throw new Error("No such uniform was found");
+  private recordShaderChanges(call: MutableCall): void {
+    const shader = call.arguments[0];
+    if (!isObject(shader)) return;
+    const record = this.resourceByObject.get(shader);
+    if (record?.kind !== 'shader') return;
+    if (call.name === 'shaderSource' && typeof call.arguments[1] === 'string') {
+      const source = call.arguments[1];
+      record.details.set('source', `${source.split('\n').length} lines, ${source.length} chars`);
     }
-
-    return this.gl.getUniformLocation(program, name);
+    if (call.name === 'compileShader') {
+      const status = this.safeCall(() =>
+        this.context.getShaderParameter(shader as WebGLShader, this.context.COMPILE_STATUS)
+      );
+      record.details.set('compiled', String(Boolean(status)));
+      const log = this.safeCall(() => this.context.getShaderInfoLog(shader as WebGLShader));
+      if (log) record.details.set('log', String(log));
+    }
   }
 
-  uniform1f(location: WebGLUniformLocation | null, x: GLfloat): void {
-    return this.gl.uniform1f(location, x);
-  }
-
-  uniform2fv(location: WebGLUniformLocation | null, v: Float32List): void {
-    return this.gl.uniform2fv(location, v);
-  }
-
-  // prettier-ignore
-  uniform3fv(location: WebGLUniformLocation | null, data: Float32List, srcOffset?: GLuint, srcLength?: GLuint): void {
-    return this.gl.uniform3fv(location, data, srcOffset, srcLength);
-  }
-
-  uniform4fv(location: WebGLUniformLocation | null, v: Float32List): void {
-    return this.gl.uniform4fv(location, v);
-  }
-
-  uniform1i(location: WebGLUniformLocation | null, x: GLint): void {
-    return this.gl.uniform1i(location, x);
-  }
-
-  // prettier-ignore
-  uniform2iv(location: WebGLUniformLocation | null, data: Iterable<GLint>, srcOffset?: GLuint, srcLength?: GLuint): void {
-    return this.gl.uniform2iv(location, data, srcOffset, srcLength);
-  }
-
-  // prettier-ignore
-  uniform3iv(location: WebGLUniformLocation | null, data: Iterable<GLint>, srcOffset?: GLuint, srcLength?: GLuint): void {
-    return this.gl.uniform3iv(location, data, srcOffset, srcLength);
-  }
-
-  // prettier-ignore
-  uniform4iv(location: WebGLUniformLocation | null, data: Iterable<GLint>, srcOffset?: GLuint, srcLength?: GLuint): void {
-    return this.gl.uniform4iv(location, data, srcOffset, srcLength);
-  }
-
-  // prettier-ignore
-  uniformMatrix2fv(location: WebGLUniformLocation | null, transpose: GLboolean, data: Iterable<GLfloat>, srcOffset?: GLuint, srcLength?: GLuint): void {
-    return this.gl.uniformMatrix2fv(
-      location,
-      transpose,
-      data,
-      srcOffset,
-      srcLength
-    );
-  }
-
-  // prettier-ignore
-  uniformMatrix3fv(location: WebGLUniformLocation | null, transpose: GLboolean, data: Iterable<GLfloat>, srcOffset?: GLuint, srcLength?: GLuint): void {
-    return this.gl.uniformMatrix3fv(
-      location,
-      transpose,
-      data,
-      srcOffset,
-      srcLength
-    );
-  }
-
-  // prettier-ignore
-  uniformMatrix4fv(location: WebGLUniformLocation | null, transpose: GLboolean, data: Iterable<GLfloat>, srcOffset?: GLuint, srcLength?: GLuint): void {
-    return this.gl.uniformMatrix4fv(
-      location,
-      transpose,
-      data,
-      srcOffset,
-      srcLength
-    );
-  }
-
-  useProgram(program: WebGLProgram | null): void {
-    if (program) {
-      const programState = this.state.programs.get(program);
-      if (programState) {
-        this.state.globalState.commonState.CURRENT_PROGRAM = programState;
+  private recordProgramChanges(call: MutableCall): void {
+    const currentProgram = UNIFORM_METHOD_PATTERN.test(call.name) ? this.readParameter('CURRENT_PROGRAM') : undefined;
+    const program = currentProgram?.found ? currentProgram.value : call.arguments[0];
+    if (!isObject(program)) return;
+    const record = this.resourceByObject.get(program);
+    if (record?.kind !== 'program') return;
+    if ((call.name === 'attachShader' || call.name === 'detachShader') && isObject(call.arguments[1])) {
+      const shader = this.ensureResource(call.arguments[1], 'shader');
+      const relationKey = `shader:${shader.id}`;
+      if (call.name === 'attachShader') {
+        const shaderType = shader.details.get('type')?.replace('_SHADER', '').toLowerCase() ?? 'shader';
+        this.setRelation(record, relationKey, `${shaderType} shader`, shader.id, true);
       } else {
-        throw new Error('No such program was found');
+        record.relations.delete(relationKey);
       }
+      record.details.set(
+        'shaders',
+        [...record.relations.values()]
+          .filter((relation) => relation.label.endsWith('shader'))
+          .map((relation) => relation.targetId)
+          .join(', ') || 'none'
+      );
+    }
+    if (call.name === 'linkProgram') {
+      const linked = this.safeCall(() =>
+        this.context.getProgramParameter(program as WebGLProgram, this.context.LINK_STATUS)
+      );
+      record.details.set('linked', String(Boolean(linked)));
+      const attributes = this.safeCall(() =>
+        this.context.getProgramParameter(program as WebGLProgram, this.context.ACTIVE_ATTRIBUTES)
+      );
+      const uniforms = this.safeCall(() =>
+        this.context.getProgramParameter(program as WebGLProgram, this.context.ACTIVE_UNIFORMS)
+      );
+      record.details.set('attributes', String(attributes ?? 0));
+      record.details.set('uniforms', String(uniforms ?? 0));
+      this.recordProgramInterface(record, program as WebGLProgram, Number(attributes ?? 0), Number(uniforms ?? 0));
+      const log = this.safeCall(() => this.context.getProgramInfoLog(program as WebGLProgram));
+      if (log) record.details.set('log', String(log));
+    }
+    if (UNIFORM_METHOD_PATTERN.test(call.name)) {
+      const location = call.arguments[0];
+      const name = isObject(location) ? this.locationNames.get(location) : undefined;
+      record.details.set('last uniform', name ?? 'location');
+      if (name) {
+        record.details.set(
+          `uniform ${name}`,
+          call.arguments
+            .slice(1)
+            .map((value) => this.formatCallArgument(value))
+            .join(', ')
+        );
+      }
+    }
+  }
+
+  private recordProgramInterface(
+    record: ResourceRecord,
+    program: WebGLProgram,
+    attributeCount: number,
+    uniformCount: number
+  ): void {
+    for (let index = 0; index < Math.min(attributeCount, 24); index += 1) {
+      const info = this.safeCall(() => this.context.getActiveAttrib(program, index));
+      if (!info) continue;
+      const location = this.safeCall(() => this.context.getAttribLocation(program, info.name));
+      const type = this.enumNames.get(info.type) ?? String(info.type);
+      record.details.set(
+        `attribute ${location ?? index}`,
+        `${info.name}: ${type}${info.size > 1 ? `[${info.size}]` : ''}`
+      );
+    }
+    for (let index = 0; index < Math.min(uniformCount, 32); index += 1) {
+      const info = this.safeCall(() => this.context.getActiveUniform(program, index));
+      if (!info) continue;
+      const type = this.enumNames.get(info.type) ?? String(info.type);
+      record.details.set(`uniform ${index}`, `${info.name}: ${type}${info.size > 1 ? `[${info.size}]` : ''}`);
+    }
+  }
+
+  private recordVertexArrayChanges(call: MutableCall): void {
+    const relevant =
+      call.name === 'vertexAttribPointer' ||
+      call.name === 'vertexAttribIPointer' ||
+      (call.name === 'bindBuffer' && this.enumNames.get(Number(call.arguments[0])) === 'ELEMENT_ARRAY_BUFFER');
+    if (!relevant) return;
+    const binding = this.readParameter('VERTEX_ARRAY_BINDING');
+    if (!binding.found || !isObject(binding.value)) return;
+    const vertexArray = this.ensureResource(binding.value, 'vertex-array');
+
+    const relationKey = call.name === 'bindBuffer' ? 'element-array' : `attribute:${String(call.arguments[0])}`;
+    const label = call.name === 'bindBuffer' ? 'element array' : `attribute ${String(call.arguments[0])}`;
+    const arrayBufferBinding = this.readParameter('ARRAY_BUFFER_BINDING');
+    const buffer =
+      call.name === 'bindBuffer' ? call.arguments[1] : arrayBufferBinding.found ? arrayBufferBinding.value : undefined;
+    if (isObject(buffer)) {
+      const bufferResource = this.ensureResource(buffer, 'buffer');
+      this.setRelation(vertexArray, relationKey, label, bufferResource.id, true);
+      vertexArray.details.set(label, bufferResource.id);
     } else {
-      this.state.globalState.commonState.CURRENT_PROGRAM = null;
+      vertexArray.relations.delete(relationKey);
+      vertexArray.details.set(label, 'null');
     }
-
-    return this.gl.useProgram(program);
   }
 
-  createVertexArray(): WebGLVertexArrayObject {
-    const vertexArrayObject = this.gl.createVertexArray()!;
-
-    this.state.vertexArrayObjects.set(vertexArrayObject, {
-      attributes: [],
-      state: { ELEMENT_ARRAY_BUFFER_BINDING: null }
-    });
-
-    return vertexArrayObject;
+  private recordSamplerChanges(call: MutableCall): void {
+    if (call.name !== 'samplerParameteri' && call.name !== 'samplerParameterf') return;
+    const sampler = call.arguments[0];
+    const parameterName = call.arguments[1];
+    if (!isObject(sampler) || typeof parameterName !== 'number') return;
+    const record = this.ensureResource(sampler, 'sampler');
+    const key = this.enumNames.get(parameterName) ?? String(parameterName);
+    const value = call.arguments[2];
+    record.details.set(key, this.formatValue(value, typeof value === 'number' ? 'enum' : 'plain'));
   }
 
-  bindVertexArray(array: WebGLVertexArrayObject | null): void {
-    if (array) {
-      const vertexArrayObjectState = this.state.vertexArrayObjects.get(array);
-      if (vertexArrayObjectState) {
-        this.state.globalState.commonState.VERTEX_ARRAY_BINDING = vertexArrayObjectState;
-      } else {
-        throw new Error('No such Vertex Array Object was found');
-      }
+  private recordIndexedBufferChanges(call: MutableCall): void {
+    if (call.name !== 'bindBufferBase' && call.name !== 'bindBufferRange') return;
+    const buffer = call.arguments[2];
+    if (!isObject(buffer)) return;
+    const resource = this.ensureResource(buffer, 'buffer');
+    const target = typeof call.arguments[0] === 'number' ? this.enumNames.get(call.arguments[0]) : undefined;
+    const index = call.arguments[1];
+    resource.details.set('last indexed binding', `${target ?? 'buffer'} ${String(index)}`);
+  }
+
+  private recordDrawRelationships(call: MutableCall): void {
+    if (!/^draw/.test(call.name)) return;
+    const programBinding = this.readParameter('CURRENT_PROGRAM');
+    if (!programBinding.found || !isObject(programBinding.value)) return;
+    const program = this.ensureResource(programBinding.value, 'program');
+
+    const vertexArrayBinding = this.readParameter('VERTEX_ARRAY_BINDING');
+    if (vertexArrayBinding.found && isObject(vertexArrayBinding.value)) {
+      const vertexArray = this.ensureResource(vertexArrayBinding.value, 'vertex-array');
+      this.setRelation(program, 'draw:vertex-array', 'draw vertex input', vertexArray.id, false);
     } else {
-      this.state.globalState.commonState.VERTEX_ARRAY_BINDING = this.defaultVertexArrayObject;
+      this.setRelation(program, 'draw:vertex-array', 'draw vertex input', 'vertex-array-default', false);
     }
 
-    return this.gl.bindVertexArray(array);
-  }
-
-  bindBuffer(target: number, buffer: WebGLBuffer | null): void {
-    if (buffer) {
-      const bufferState = this.state.buffers.get(buffer);
-      if (bufferState) {
-        this.state.globalState.commonState.ARRAY_BUFFER_BINDING = bufferState;
-      } else {
-        throw new Error('No such buffer was found');
-      }
+    const framebufferBinding = this.readParameter('DRAW_FRAMEBUFFER_BINDING');
+    const fallbackBinding = this.readParameter('FRAMEBUFFER_BINDING');
+    const framebuffer = framebufferBinding.found
+      ? framebufferBinding.value
+      : fallbackBinding.found
+        ? fallbackBinding.value
+        : null;
+    if (isObject(framebuffer)) {
+      const resource = this.ensureResource(framebuffer, 'framebuffer');
+      this.setRelation(program, 'draw:framebuffer', 'draw output', resource.id, false);
     } else {
-      this.state.globalState.commonState.ARRAY_BUFFER_BINDING = null;
+      this.setRelation(program, 'draw:framebuffer', 'draw output', 'canvas', false);
     }
-
-    return this.gl.bindBuffer(target, buffer);
+    this.recordProgramSamplerRelationships(program, programBinding.value as WebGLProgram);
   }
 
-  bufferData(target: GLenum, size: GLsizeiptr, usage: GLenum): void;
-  bufferData(target: GLenum, srcData: BufferSource | null, usage: GLenum): void;
-  // prettier-ignore
-  bufferData(target: GLenum, srcData: ArrayBufferView, usage: GLenum, srcOffset: GLuint, length?: GLuint): void;
-  // prettier-ignore
-  bufferData(target: GLenum, srcData: any, usage: any, srcOffset?: any, length?: any) {
-    const bufferState =
-      this.state.globalState.commonState.ARRAY_BUFFER_BINDING;
-    if (!bufferState) {
-      throw new Error("No buffer binded");
-    }
+  private recordProgramSamplerRelationships(record: ResourceRecord, program: WebGLProgram): void {
+    const uniformCount = this.safeCall(() => this.context.getProgramParameter(program, this.context.ACTIVE_UNIFORMS));
+    if (typeof uniformCount !== 'number') return;
+    const activeTexture = this.readNumberParameter('ACTIVE_TEXTURE');
+    const texture0 = this.enumValue('TEXTURE0');
+    if (activeTexture === undefined || texture0 === undefined) return;
 
-    bufferState.data = srcData;
+    try {
+      for (let index = 0; index < Math.min(uniformCount, 32); index += 1) {
+        const info = this.safeCall(() => this.context.getActiveUniform(program, index));
+        if (!info) continue;
+        const typeName = this.enumNames.get(info.type) ?? '';
+        if (!typeName.includes('SAMPLER')) continue;
+        const location = this.safeCall(() => this.context.getUniformLocation(program, info.name));
+        if (!location) continue;
+        const value = this.safeCall(() => this.context.getUniform(program, location));
+        const units = typeof value === 'number' ? [value] : isNumericArrayView(value) ? Array.from(value) : [];
+        const bindingName = samplerBindingName(typeName);
+        const bindingEnum = this.enumValue(bindingName);
+        if (bindingEnum === undefined) continue;
 
-    return this.gl.bufferData(target, srcData, usage, srcOffset, length);
-  }
-
-  enableVertexAttribArray(index: GLuint): void {
-    return this.gl.enableVertexAttribArray(index);
-  }
-
-  // prettier-ignore
-  vertexAttribPointer(index: GLuint, size: GLint, type: GLenum, normalized: GLboolean, stride: GLsizei, offset: GLintptr): void {
-    return this.gl.vertexAttribPointer(
-      index,
-      size,
-      type,
-      normalized,
-      stride,
-      offset
-    );
-  }
-
-  vertexAttribDivisor(index: GLuint, divisor: GLuint): void {
-    return this.gl.vertexAttribDivisor(index, divisor);
-  }
-
-  createBuffer(): WebGLBuffer {
-    const buffer = this.gl.createBuffer()!;
-
-    this.state.buffers.set(buffer, {
-      data: []
-    });
-
-    return buffer;
-  }
-
-  enable(cap: GLenum): void {
-    return this.gl.enable(cap);
-  }
-
-  blendFunc(sfactor: GLenum, dfactor: GLenum): void {
-    return this.gl.blendFunc(sfactor, dfactor);
-  }
-
-  activeTexture(texture: GLenum): void {
-    return this.gl.activeTexture(texture);
-  }
-
-  bindTexture(target: GLenum, texture: WebGLTexture | null): void {
-    return this.gl.bindTexture(target, texture);
-  }
-
-  // getExtension(extensionName: 'ANGLE_instanced_arrays'): ANGLE_instanced_arrays | null;
-  // getExtension(extensionName: 'EXT_blend_minmax'): EXT_blend_minmax | null;
-  // getExtension(extensionName: 'EXT_color_buffer_float'): EXT_color_buffer_float | null;
-  // getExtension(extensionName: 'EXT_color_buffer_half_float'): EXT_color_buffer_half_float | null;
-  // getExtension(extensionName: 'EXT_float_blend'): EXT_float_blend | null;
-  // getExtension(extensionName: 'EXT_frag_depth'): EXT_frag_depth | null;
-  // getExtension(extensionName: 'EXT_sRGB'): EXT_sRGB | null;
-  // getExtension(extensionName: 'EXT_shader_texture_lod'): EXT_shader_texture_lod | null;
-  // getExtension(extensionName: 'EXT_texture_compression_bptc'): EXT_texture_compression_bptc | null;
-  // getExtension(extensionName: 'EXT_texture_compression_rgtc'): EXT_texture_compression_rgtc | null;
-  // getExtension(extensionName: 'EXT_texture_filter_anisotropic'): EXT_texture_filter_anisotropic | null;
-  // getExtension(extensionName: 'KHR_parallel_shader_compile'): KHR_parallel_shader_compile | null;
-  // getExtension(extensionName: 'OES_element_index_uint'): OES_element_index_uint | null;
-  // getExtension(extensionName: 'OES_fbo_render_mipmap'): OES_fbo_render_mipmap | null;
-  // getExtension(extensionName: 'OES_standard_derivatives'): OES_standard_derivatives | null;
-  // getExtension(extensionName: 'OES_texture_float'): OES_texture_float | null;
-  // getExtension(extensionName: 'OES_texture_float_linear'): OES_texture_float_linear | null;
-  // getExtension(extensionName: 'OES_texture_half_float'): OES_texture_half_float | null;
-  // getExtension(extensionName: 'OES_texture_half_float_linear'): OES_texture_half_float_linear | null;
-  // getExtension(extensionName: 'OES_vertex_array_object'): OES_vertex_array_object | null;
-  // getExtension(extensionName: 'OVR_multiview2'): OVR_multiview2 | null;
-  // getExtension(extensionName: 'WEBGL_color_buffer_float'): WEBGL_color_buffer_float | null;
-  // getExtension(extensionName: 'WEBGL_compressed_texture_astc'): WEBGL_compressed_texture_astc | null;
-  // getExtension(extensionName: 'WEBGL_compressed_texture_etc'): WEBGL_compressed_texture_etc | null;
-  // getExtension(extensionName: 'WEBGL_compressed_texture_etc1'): WEBGL_compressed_texture_etc1 | null;
-  // getExtension(extensionName: 'WEBGL_compressed_texture_s3tc'): WEBGL_compressed_texture_s3tc | null;
-  // getExtension(extensionName: 'WEBGL_compressed_texture_s3tc_srgb'): WEBGL_compressed_texture_s3tc_srgb | null;
-  // getExtension(extensionName: 'WEBGL_debug_renderer_info'): WEBGL_debug_renderer_info | null;
-  // getExtension(extensionName: 'WEBGL_debug_shaders'): WEBGL_debug_shaders | null;
-  // getExtension(extensionName: 'WEBGL_depth_texture'): WEBGL_depth_texture | null;
-  // getExtension(extensionName: 'WEBGL_draw_buffers'): WEBGL_draw_buffers | null;
-  // getExtension(extensionName: 'WEBGL_lose_context'): WEBGL_lose_context | null;
-  // getExtension(extensionName: 'WEBGL_multi_draw'): WEBGL_multi_draw | null;
-  // getExtension(extensionName: 'OCULUS_multiview'): OCULUS_multiview | null;
-  getExtension(name: string): any {
-    return this.gl.getExtension(name);
-  }
-
-  createFramebuffer(): WebGLFramebuffer {
-    const framebuffer = this.gl.createFramebuffer()!;
-
-    this.state.framebuffer.set(framebuffer, {});
-
-    return framebuffer;
-  }
-
-  // prettier-ignore
-  bindFramebuffer(target: GLenum, framebuffer: WebGLFramebuffer | null): void {
-    if (framebuffer) {
-      const framebufferState = this.state.framebuffer.get(framebuffer!);
-      if (framebufferState) {
-        this.state.globalState.commonState.FRAMEBUFFER_BINDING =
-          framebufferState;
-      } else {
-        throw new Error("No such framebuffer was found");
+        for (let element = 0; element < units.length; element += 1) {
+          const unit = units[element];
+          if (typeof unit !== 'number') continue;
+          this.context.activeTexture(texture0 + unit);
+          const texture = this.safeCall(() => this.context.getParameter(bindingEnum));
+          const relationKey = `sampler:${info.name}:${element}`;
+          if (isObject(texture)) {
+            const textureResource = this.ensureResource(texture, 'texture');
+            const name = info.size > 1 ? `${info.name}[${element}]` : info.name.replace(/\[0\]$/, '');
+            this.setRelation(record, relationKey, `${name} · unit ${unit}`, textureResource.id, false);
+          } else {
+            record.relations.delete(relationKey);
+          }
+        }
       }
+    } finally {
+      this.context.activeTexture(activeTexture);
+    }
+  }
+
+  private recordBufferChanges(call: MutableCall): void {
+    if (call.name !== 'bufferData' && call.name !== 'bufferSubData') return;
+    const target = call.arguments[0];
+    if (typeof target !== 'number') return;
+    const buffer = this.boundBuffer(target);
+    if (!buffer) return;
+    const record = this.ensureResource(buffer, 'buffer');
+    const data = call.arguments[call.name === 'bufferData' ? 1 : 2];
+    const byteLength = typeof data === 'number' ? data : isArrayBufferLike(data) ? data.byteLength : undefined;
+    if (byteLength !== undefined)
+      record.details.set(call.name === 'bufferData' ? 'size' : 'last update', `${byteLength} bytes`);
+    if (call.name === 'bufferData' && typeof call.arguments[2] === 'number') {
+      record.details.set('usage', this.enumNames.get(call.arguments[2]) ?? String(call.arguments[2]));
+    }
+  }
+
+  private recordTextureChanges(call: MutableCall): void {
+    if (!/^tex(?:Image|SubImage|Storage|Parameter)|^compressedTex|^generateMipmap$/.test(call.name)) return;
+    const target = call.arguments[0];
+    if (typeof target !== 'number') return;
+    const texture = this.boundTexture(target);
+    if (!texture) return;
+    const record = this.ensureResource(texture, 'texture');
+    record.details.set('target', this.enumNames.get(target) ?? String(target));
+    if ((call.name === 'texParameteri' || call.name === 'texParameterf') && typeof call.arguments[1] === 'number') {
+      const key = this.enumNames.get(call.arguments[1]) ?? String(call.arguments[1]);
+      const parameter = call.arguments[2];
+      record.details.set(
+        key,
+        typeof parameter === 'number'
+          ? (this.enumNames.get(parameter) ?? String(parameter))
+          : this.formatCallArgument(parameter)
+      );
+    }
+    if (/Image|Storage/.test(call.name)) {
+      const dimensions = textureDimensions(call);
+      if (dimensions) record.details.set(dimensions.key, dimensions.value);
+    }
+    if (call.name === 'generateMipmap') record.details.set('mipmaps', 'generated');
+  }
+
+  private recordFramebufferChanges(call: MutableCall): void {
+    if (!/^framebuffer(?:Texture|Renderbuffer)/.test(call.name)) return;
+    const target = call.arguments[0];
+    const attachment = call.arguments[1];
+    if (typeof target !== 'number' || typeof attachment !== 'number') return;
+    const framebuffer = this.boundFramebuffer(target);
+    if (!framebuffer) return;
+    const record = this.ensureResource(framebuffer, 'framebuffer');
+    const attached = call.arguments[3];
+    const key = this.enumNames.get(attachment) ?? String(attachment);
+    if (isObject(attached)) {
+      const linked = this.ensureResource(
+        attached,
+        call.name === 'framebufferRenderbuffer' ? 'renderbuffer' : 'texture'
+      );
+      record.details.set(key, linked.id);
+      this.setRelation(record, `attachment:${key}`, key, linked.id, true);
     } else {
-      this.state.globalState.commonState.FRAMEBUFFER_BINDING = null;
+      record.details.set(key, 'null');
+      record.relations.delete(`attachment:${key}`);
     }
-
-    return this.gl.bindFramebuffer(target, framebuffer);
   }
 
-  createRenderbuffer(): WebGLRenderbuffer {
-    const renderbuffer = this.gl.createRenderbuffer()!;
-
-    this.state.renderBuffers.set(renderbuffer, {});
-
-    return renderbuffer;
+  private recordRenderbufferChanges(call: MutableCall): void {
+    if (!/^renderbufferStorage/.test(call.name)) return;
+    const result = this.readParameter('RENDERBUFFER_BINDING');
+    if (!result.found || !isObject(result.value)) return;
+    const record = this.ensureResource(result.value, 'renderbuffer');
+    const multisampled = call.name === 'renderbufferStorageMultisample';
+    const format = call.arguments[multisampled ? 2 : 1];
+    const width = call.arguments[multisampled ? 3 : 2];
+    const height = call.arguments[multisampled ? 4 : 3];
+    if (typeof format === 'number') {
+      record.details.set('format', this.enumNames.get(format) ?? String(format));
+    }
+    if (typeof width === 'number' && typeof height === 'number') {
+      record.details.set('size', `${width} × ${height}`);
+    }
+    if (multisampled && typeof call.arguments[1] === 'number') record.details.set('samples', String(call.arguments[1]));
   }
 
-  // prettier-ignore
-  bindRenderbuffer(target: GLenum, renderbuffer: WebGLRenderbuffer | null): void {
-    return this.gl.bindRenderbuffer(target, renderbuffer);
+  private boundBuffer(target: number): object | undefined {
+    const bindingName = BUFFER_BINDINGS.get(this.enumNames.get(target) ?? '');
+    if (!bindingName) return undefined;
+    const result = this.readParameter(bindingName);
+    return result.found && isObject(result.value) ? result.value : undefined;
   }
 
-  // prettier-ignore
-  renderbufferStorageMultisample(target: GLenum, samples: GLsizei, internalformat: GLenum, width: GLsizei, height: GLsizei): void {
-    return this.gl.renderbufferStorageMultisample(
-      target,
-      samples,
-      internalformat,
-      width,
-      height
-    );
+  private boundTexture(target: number): object | undefined {
+    const targetName = this.enumNames.get(target) ?? '';
+    const bindingName = targetName.includes('CUBE_MAP')
+      ? 'TEXTURE_BINDING_CUBE_MAP'
+      : targetName === 'TEXTURE_3D'
+        ? 'TEXTURE_BINDING_3D'
+        : targetName === 'TEXTURE_2D_ARRAY'
+          ? 'TEXTURE_BINDING_2D_ARRAY'
+          : 'TEXTURE_BINDING_2D';
+    const result = this.readParameter(bindingName);
+    return result.found && isObject(result.value) ? result.value : undefined;
   }
 
-  // prettier-ignore
-  framebufferRenderbuffer(target: GLenum, attachment: GLenum, renderbuffertarget: GLenum, renderbuffer: WebGLRenderbuffer | null): void {
-    return this.gl.framebufferRenderbuffer(
-      target,
-      attachment,
-      renderbuffertarget,
-      renderbuffer
-    );
+  private boundFramebuffer(target: number): object | undefined {
+    const bindingName =
+      this.enumNames.get(target) === 'READ_FRAMEBUFFER' ? 'READ_FRAMEBUFFER_BINDING' : 'DRAW_FRAMEBUFFER_BINDING';
+    const preferred = this.readParameter(bindingName);
+    const fallback = this.readParameter('FRAMEBUFFER_BINDING');
+    const value = preferred.found ? preferred.value : fallback.found ? fallback.value : undefined;
+    return isObject(value) ? value : undefined;
   }
 
-  // prettier-ignore
-  clearColor(red: GLclampf, green: GLclampf, blue: GLclampf, alpha: GLclampf): void {
-    return this.gl.clearColor(red, green, blue, alpha);
+  private ensureResource(object: GLObject, kind: WebGLResourceKind): ResourceRecord {
+    const existing = this.resourceByObject.get(object);
+    if (existing) return existing;
+    const index = (this.resourceCounters.get(kind) ?? 0) + 1;
+    this.resourceCounters.set(kind, index);
+    const record: ResourceRecord = {
+      object,
+      id: `${RESOURCE_PREFIXES[kind]}${index}`,
+      kind,
+      deleted: false,
+      details: new Map(),
+      relations: new Map()
+    };
+    this.resourceByObject.set(object, record);
+    this.resources.push(record);
+    return record;
   }
 
-  clear(mask: GLbitfield): void {
-    return this.gl.clear(mask);
+  private snapshotResource(resource: ResourceRecord): WebGLResourceSnapshot {
+    return {
+      id: resource.id,
+      kind: resource.kind,
+      deleted: resource.deleted,
+      details: [...resource.details].map(([key, value]) => ({ key, value })),
+      relations: [...resource.relations.values()],
+      links: [...new Set([...resource.relations.values()].map((relation) => relation.targetId))]
+    };
   }
 
-  // prettier-ignore
-  renderbufferStorage(target: GLenum, internalformat: GLenum, width: GLsizei, height: GLsizei): void {
-    return this.gl.renderbufferStorage(target, internalformat, width, height);
+  private setRelation(resource: ResourceRecord, key: string, label: string, targetId: string, direct: boolean): void {
+    resource.relations.set(key, { label, targetId, direct });
   }
 
-  createTexture(): WebGLTexture {
-    const texture = this.gl.createTexture()!;
+  private enumValue(name: string): number | undefined {
+    const value: unknown = Reflect.get(this.context, name);
+    return typeof value === 'number' ? value : undefined;
+  }
 
-    this.state.textures.set(texture, {
-      mips: {},
-      texturestate: {
-        TEXTURE_MIN_FILTER: GL_TEXTURE_MIN_FILTER.NEAREST_MIPMAP_LINEAR,
-          TEXTURE_MAG_FILTER: GL_TEXTURE_MAG_FILTER.LINEAR,
-          TEXTURE_WRAP_S: GL_TEXTURE_WRAP_MODE.REPEAT,
-          TEXTURE_WRAP_T: GL_TEXTURE_WRAP_MODE.REPEAT
+  private scanEnumNames(): void {
+    let current: object | null = this.context;
+    while (current) {
+      for (const key of Reflect.ownKeys(current)) {
+        if (typeof key !== 'string' || !/^[A-Z][A-Z0-9_]+$/.test(key)) continue;
+        const value = this.safeCall(() => Reflect.get(this.context, key));
+        if (typeof value === 'number' && !this.enumNames.has(value)) this.enumNames.set(value, key);
       }
-    });
-
-    return texture;
-  }
-
-  // prettier-ignore
-  texImage2D(target: GLenum, level: GLint, internalformat: GLint, width: GLsizei, height: GLsizei, border: GLint, format: GLenum, type: GLenum, pixels: ArrayBufferView | null): void;
-  // prettier-ignore
-  texImage2D(target: GLenum, level: GLint, internalformat: GLint, format: GLenum, type: GLenum, source: TexImageSource): void;
-  // prettier-ignore
-  texImage2D(target: GLenum, level: GLint, internalformat: GLint, width: GLsizei, height: GLsizei, border: GLint, format: GLenum, type: GLenum, pboOffset: GLintptr): void;
-  // prettier-ignore
-  texImage2D(target: GLenum, level: GLint, internalformat: GLint, width: GLsizei, height: GLsizei, border: GLint, format: GLenum, type: GLenum, source: TexImageSource): void;
-  // prettier-ignore
-  texImage2D(target: GLenum, level: GLint, internalformat: GLint, width: GLsizei, height: GLsizei, border: GLint, format: GLenum, type: GLenum, srcData: ArrayBufferView, srcOffset: GLuint): void;
-  // prettier-ignore
-  texImage2D(target: GLenum, level: GLint, internalformat: GLint, width: GLsizei, height: GLsizei, border: GLint, format: GLenum, type: GLenum, pixels: ArrayBufferView | null): void;
-  // prettier-ignore
-  texImage2D(target: GLenum, level: GLint, internalformat: GLint, format: GLenum, type: GLenum, source: TexImageSource): void;
-  // prettier-ignore
-  texImage2D(target: any, level: any, internalformat: any, width: any, height: any, border: any = null, format: any = null, type: any = null, srcData: any = null, srcOffset: any = null): void {
-    if (srcOffset) {
-      // prettier-ignore
-      return this.gl.texImage2D(target, level, internalformat, width, height, border, format, type, srcData, srcOffset);
+      current = Object.getPrototypeOf(current);
     }
-
-    // prettier-ignore
-    return this.gl.texImage2D(target, level, internalformat, width, height, border, format, type, srcData);
   }
 
-  // prettier-ignore
-  blitFramebuffer(srcX0: GLint, srcY0: GLint, srcX1: GLint, srcY1: GLint, dstX0: GLint, dstY0: GLint, dstX1: GLint, dstY1: GLint, mask: GLbitfield, filter: GLenum): void {
-    // prettier-ignore
-    return this.gl.blitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
-  }
-
-  // prettier-ignore
-  clearBufferfv(buffer: GLenum, drawbuffer: GLint, values: Iterable<GLfloat>, srcOffset?: GLuint): void {
-    return this.gl.clearBufferfv(buffer, drawbuffer, values, srcOffset);
-  }
-
-  // prettier-ignore
-  framebufferTexture2D(target: GLenum, attachment: GLenum, textarget: GLenum, texture: WebGLTexture | null, level: GLint): void {
-    return this.gl.framebufferTexture2D(
-      target,
-      attachment,
-      textarget,
-      texture,
-      level
-    );
-  }
-
-  drawBuffers(buffers: Iterable<GLenum>): void {
-    return this.gl.drawBuffers(buffers);
-  }
-
-  // prettier-ignore
-  texStorage2D(target: GLenum, levels: GLsizei, internalformat: GLenum, width: GLsizei, height: GLsizei): void {
-    return this.gl.texStorage2D(target, levels, internalformat, width, height);
-  }
-
-  // prettier-ignore
-  texParameteri(target: GLenum, pname: GLenum, param: GLint): void {
-    return this.gl.texParameteri(target, pname, param);
-  }
-
-  checkFramebufferStatus(target: GLenum): GLenum {
-    return this.gl.checkFramebufferStatus(target);
-  }
-
-  // prettier-ignore
-  drawElements(mode: GLenum, count: GLsizei, type: GLenum, offset: GLintptr): void {
-    return this.gl.drawElements(mode, count, type, offset);
-  }
-
-  // prettier-ignore
-  viewport(x: GLint, y: GLint, width: GLsizei, height: GLsizei): void {
-    this.state.globalState.commonState.VIEWPORT[0] = x;
-    this.state.globalState.commonState.VIEWPORT[1] = y;
-    this.state.globalState.commonState.VIEWPORT[2] = width;
-    this.state.globalState.commonState.VIEWPORT[3] = height;
-    return this.gl.viewport(x, y, width, height);
+  private safeCall<T>(callback: () => T): T | undefined {
+    try {
+      return callback();
+    } catch {
+      return undefined;
+    }
   }
 }
+
+function wrapExtension(result: unknown, inspector: WebGLInspector, cache: WeakMap<object, object>): unknown {
+  if (!isObject(result)) return result;
+  const existing = cache.get(result);
+  if (existing) return existing;
+  const proxy = createMethodProxy(result, {
+    onCall: (call) => recordInterceptedCall(inspector, call, normalizeExtensionMethod(String(call.name)))
+  });
+  cache.set(result, proxy);
+  return proxy;
+}
+
+function recordInterceptedCall(inspector: WebGLInspector, call: MethodCall, name = String(call.name)): void {
+  if (call.status === 'returned') {
+    inspector.record({ name, arguments: call.arguments, result: call.result });
+    return;
+  }
+  inspector.record({ name, arguments: call.arguments, error: call.error });
+}
+
+function normalizeExtensionMethod(name: string): string {
+  return name.replace(/OES$|ANGLE$|WEBGL$/, '');
+}
+
+function textureDimensions(call: MutableCall): { readonly key: string; readonly value: string } | undefined {
+  const isStorage = call.name === 'texStorage2D' || call.name === 'texStorage3D';
+  const isSubImage = call.name === 'texSubImage2D' || call.name === 'texSubImage3D';
+  if (call.name === 'texImage2D' && call.arguments.length < 9) return undefined;
+  if (call.name === 'texSubImage2D' && call.arguments.length < 9) return undefined;
+
+  const widthIndex = isSubImage || call.name.startsWith('compressedTexSubImage') ? 4 : 3;
+  const width = call.arguments[widthIndex];
+  const height = call.arguments[widthIndex + 1];
+  if (typeof width !== 'number' || typeof height !== 'number') return undefined;
+
+  const is3D = call.name.endsWith('3D');
+  const depth = is3D ? call.arguments[widthIndex + 2] : undefined;
+  if (is3D && typeof depth !== 'number') return undefined;
+  const level = call.arguments[1];
+  const key = isStorage ? 'storage' : `level ${typeof level === 'number' ? level : 0}`;
+  return { key, value: `${width} × ${height}${typeof depth === 'number' ? ` × ${depth}` : ''}` };
+}
+
+function samplerBindingName(typeName: string): string {
+  if (typeName.includes('2D_ARRAY')) return 'TEXTURE_BINDING_2D_ARRAY';
+  if (typeName.includes('CUBE')) return 'TEXTURE_BINDING_CUBE_MAP';
+  if (typeName.includes('3D')) return 'TEXTURE_BINDING_3D';
+  return 'TEXTURE_BINDING_2D';
+}
+
+function isWebGL2(context: WebGLContext): context is WebGL2RenderingContext {
+  return typeof Reflect.get(context, 'texImage3D') === 'function';
+}
+function isObject(value: unknown): value is object {
+  return (typeof value === 'object' && value !== null) || typeof value === 'function';
+}
+function isArrayBufferLike(value: unknown): value is ArrayBuffer | ArrayBufferView {
+  return value instanceof ArrayBuffer || ArrayBuffer.isView(value);
+}
+function isNumericArrayView(value: unknown): value is ArrayBufferView & ArrayLike<number> {
+  return ArrayBuffer.isView(value) && 'length' in value;
+}
+function formatFloat(value: number): string {
+  return Number(value.toFixed(5)).toString();
+}
+
+function inferResourceKind(value: object): WebGLResourceKind {
+  const tag = Object.prototype.toString
+    .call(value)
+    .slice(8, -1)
+    .replace(/^WebGL/, '')
+    .toLowerCase();
+  switch (tag) {
+    case 'buffer':
+      return 'buffer';
+    case 'framebuffer':
+      return 'framebuffer';
+    case 'program':
+      return 'program';
+    case 'renderbuffer':
+      return 'renderbuffer';
+    case 'sampler':
+      return 'sampler';
+    case 'shader':
+      return 'shader';
+    case 'texture':
+      return 'texture';
+    case 'transformfeedback':
+      return 'transform-feedback';
+    case 'vertexarrayobject':
+      return 'vertex-array';
+    case 'query':
+      return 'query';
+    case 'sync':
+      return 'sync';
+    default:
+      return 'unknown';
+  }
+}
+
+function isMutation(name: string): boolean {
+  return !/^(get|is|check)/.test(name);
+}
+
+const DRAW_METHOD_PATTERN = /^draw/;
+const UNIFORM_METHOD_PATTERN = /^uniform(?:\d|Matrix)/;
+const CREATION_METHODS: Readonly<Record<string, WebGLResourceKind>> = {
+  createBuffer: 'buffer',
+  createFramebuffer: 'framebuffer',
+  createProgram: 'program',
+  createQuery: 'query',
+  createRenderbuffer: 'renderbuffer',
+  createSampler: 'sampler',
+  createShader: 'shader',
+  createTexture: 'texture',
+  createTransformFeedback: 'transform-feedback',
+  createVertexArray: 'vertex-array'
+};
+const DELETION_METHODS: Readonly<Record<string, WebGLResourceKind>> = {
+  deleteBuffer: 'buffer',
+  deleteFramebuffer: 'framebuffer',
+  deleteProgram: 'program',
+  deleteQuery: 'query',
+  deleteRenderbuffer: 'renderbuffer',
+  deleteSampler: 'sampler',
+  deleteShader: 'shader',
+  deleteTexture: 'texture',
+  deleteTransformFeedback: 'transform-feedback',
+  deleteVertexArray: 'vertex-array'
+};
+const RESOURCE_PREFIXES: Readonly<Record<WebGLResourceKind, string>> = {
+  buffer: 'buffer ',
+  framebuffer: 'framebuffer ',
+  program: 'program ',
+  query: 'query ',
+  renderbuffer: 'renderbuffer ',
+  sampler: 'sampler ',
+  shader: 'shader ',
+  sync: 'sync ',
+  texture: 'texture ',
+  'transform-feedback': 'transform feedback ',
+  'vertex-array': 'vertex array ',
+  unknown: 'object '
+};
+const BUFFER_BINDINGS = new Map<string, string>([
+  ['ARRAY_BUFFER', 'ARRAY_BUFFER_BINDING'],
+  ['ELEMENT_ARRAY_BUFFER', 'ELEMENT_ARRAY_BUFFER_BINDING'],
+  ['COPY_READ_BUFFER', 'COPY_READ_BUFFER_BINDING'],
+  ['COPY_WRITE_BUFFER', 'COPY_WRITE_BUFFER_BINDING'],
+  ['PIXEL_PACK_BUFFER', 'PIXEL_PACK_BUFFER_BINDING'],
+  ['PIXEL_UNPACK_BUFFER', 'PIXEL_UNPACK_BUFFER_BINDING'],
+  ['TRANSFORM_FEEDBACK_BUFFER', 'TRANSFORM_FEEDBACK_BUFFER_BINDING'],
+  ['UNIFORM_BUFFER', 'UNIFORM_BUFFER_BINDING']
+]);
+
+const STATE_GROUPS = [
+  {
+    id: 'common',
+    title: 'common state',
+    states: [
+      { key: 'VIEWPORT' },
+      { key: 'SCISSOR_BOX' },
+      { key: 'ARRAY_BUFFER_BINDING' },
+      { key: 'CURRENT_PROGRAM' },
+      { key: 'VERTEX_ARRAY_BINDING' },
+      { key: 'RENDERBUFFER_BINDING' },
+      { key: 'DRAW_FRAMEBUFFER_BINDING' },
+      { key: 'READ_FRAMEBUFFER_BINDING' },
+      { key: 'FRAMEBUFFER_BINDING' },
+      { key: 'ACTIVE_TEXTURE', format: 'enum' }
+    ]
+  },
+  {
+    id: 'clear',
+    title: 'clear state',
+    states: [
+      { key: 'COLOR_CLEAR_VALUE' },
+      { key: 'DEPTH_CLEAR_VALUE' },
+      { key: 'STENCIL_CLEAR_VALUE', format: 'hex' },
+      { key: 'COLOR_WRITEMASK' }
+    ]
+  },
+  {
+    id: 'depth',
+    title: 'depth state',
+    states: [
+      { key: 'DEPTH_TEST' },
+      { key: 'DEPTH_FUNC', format: 'enum' },
+      { key: 'DEPTH_RANGE' },
+      { key: 'DEPTH_WRITEMASK' }
+    ]
+  },
+  {
+    id: 'blend',
+    title: 'blend state',
+    states: [
+      { key: 'BLEND' },
+      { key: 'BLEND_COLOR' },
+      { key: 'BLEND_EQUATION_RGB', format: 'enum' },
+      { key: 'BLEND_EQUATION_ALPHA', format: 'enum' },
+      { key: 'BLEND_SRC_RGB', format: 'enum' },
+      { key: 'BLEND_DST_RGB', format: 'enum' },
+      { key: 'BLEND_SRC_ALPHA', format: 'enum' },
+      { key: 'BLEND_DST_ALPHA', format: 'enum' }
+    ]
+  },
+  {
+    id: 'stencil',
+    title: 'stencil state',
+    states: [
+      { key: 'STENCIL_TEST' },
+      { key: 'STENCIL_FUNC', format: 'enum' },
+      { key: 'STENCIL_REF', format: 'hex' },
+      { key: 'STENCIL_VALUE_MASK', format: 'hex' },
+      { key: 'STENCIL_WRITEMASK', format: 'hex' },
+      { key: 'STENCIL_FAIL', format: 'enum' },
+      { key: 'STENCIL_PASS_DEPTH_FAIL', format: 'enum' },
+      { key: 'STENCIL_PASS_DEPTH_PASS', format: 'enum' },
+      { key: 'STENCIL_BACK_FUNC', format: 'enum' },
+      { key: 'STENCIL_BACK_REF', format: 'hex' },
+      { key: 'STENCIL_BACK_VALUE_MASK', format: 'hex' },
+      { key: 'STENCIL_BACK_WRITEMASK', format: 'hex' }
+    ]
+  },
+  {
+    id: 'raster',
+    title: 'raster state',
+    states: [
+      { key: 'CULL_FACE' },
+      { key: 'CULL_FACE_MODE', format: 'enum' },
+      { key: 'FRONT_FACE', format: 'enum' },
+      { key: 'SCISSOR_TEST' },
+      { key: 'DITHER' },
+      { key: 'LINE_WIDTH' },
+      { key: 'POLYGON_OFFSET_FILL' },
+      { key: 'POLYGON_OFFSET_FACTOR' },
+      { key: 'POLYGON_OFFSET_UNITS' },
+      { key: 'RASTERIZER_DISCARD' }
+    ]
+  },
+  {
+    id: 'multisample',
+    title: 'multisample state',
+    states: [
+      { key: 'SAMPLE_ALPHA_TO_COVERAGE' },
+      { key: 'SAMPLE_COVERAGE' },
+      { key: 'SAMPLE_COVERAGE_VALUE' },
+      { key: 'SAMPLE_COVERAGE_INVERT' },
+      { key: 'SAMPLES' },
+      { key: 'SAMPLE_BUFFERS' }
+    ]
+  },
+  {
+    id: 'transform-feedback',
+    title: 'transform feedback',
+    states: [
+      { key: 'TRANSFORM_FEEDBACK_BINDING' },
+      { key: 'TRANSFORM_FEEDBACK_ACTIVE' },
+      { key: 'TRANSFORM_FEEDBACK_PAUSED' },
+      { key: 'RASTERIZER_DISCARD' }
+    ]
+  },
+  {
+    id: 'read-draw-buffers',
+    title: 'read / draw buffers',
+    states: [
+      { key: 'READ_BUFFER', format: 'enum' },
+      { key: 'DRAW_BUFFER0', format: 'enum' },
+      { key: 'DRAW_BUFFER1', format: 'enum' },
+      { key: 'DRAW_BUFFER2', format: 'enum' },
+      { key: 'DRAW_BUFFER3', format: 'enum' }
+    ]
+  },
+  {
+    id: 'pixel-store',
+    title: 'pixel storage',
+    states: [
+      { key: 'PACK_ALIGNMENT' },
+      { key: 'UNPACK_ALIGNMENT' },
+      { key: 'UNPACK_FLIP_Y_WEBGL' },
+      { key: 'UNPACK_PREMULTIPLY_ALPHA_WEBGL' },
+      { key: 'UNPACK_COLORSPACE_CONVERSION_WEBGL', format: 'enum' },
+      { key: 'UNPACK_ROW_LENGTH' },
+      { key: 'UNPACK_IMAGE_HEIGHT' },
+      { key: 'UNPACK_SKIP_PIXELS' },
+      { key: 'UNPACK_SKIP_ROWS' },
+      { key: 'UNPACK_SKIP_IMAGES' }
+    ]
+  }
+] as const satisfies readonly StateGroupDefinition[];

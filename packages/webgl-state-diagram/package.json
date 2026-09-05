@@ -2,11 +2,29 @@
   "name": "@app-game/webgl-state-diagram",
   "version": "0.0.0",
   "private": true,
-  "dependencies": {
-    "@app-game/webgl": "workspace:*"
+  "scripts": {
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "exports": {
+    ".": "./webgl-state-diagram.tsx",
+    "./help": "./help-content.ts",
+    "./iframe-state-diagram": "./iframe-state-diagram.tsx",
+    "./instrumentation": "./gl-debug-wrapper.ts",
+    "./state-diagram": "./state-diagram.tsx",
+    "./three-examples": "./three-examples-state-diagram.tsx",
     "./webgl-state-diagram": "./webgl-state-diagram.tsx"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@app-game/components": "workspace:*",
+    "@app-game/webgl-debug": "workspace:*"
+  },
+  "peerDependencies": {
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
 }

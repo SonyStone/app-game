@@ -167,7 +167,7 @@ export const routes: Routes[] = [
   },
   {
     path: '/webgl-state-diagram',
-    name: '[WIP] WebGL State Diagram',
+    name: 'WebGL State Diagram',
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     component: lazy(() => import('@app-game/webgl-state-diagram/webgl-state-diagram'))
   },
