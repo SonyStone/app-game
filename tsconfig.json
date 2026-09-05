@@ -80,6 +80,8 @@
       "@app-game/ui-components-examples/*": ["./packages/ui-components-examples/*"],
       "@app-game/webgl-examples": ["./packages/webgl-examples"],
       "@app-game/webgl-examples/*": ["./packages/webgl-examples/*"],
+      "@app-game/webgl-debug": ["./packages/webgl-debug/index.ts"],
+      "@app-game/webgl-debug/*": ["./packages/webgl-debug/*"],
       "@solid-aria/collection": ["./node_modules/@solid-aria/collection/dist/types/index.d.ts"],
       "@solid-aria/focus": ["./node_modules/@solid-aria/focus/dist/types/index.d.ts"],
       "@solid-aria/overlays": ["./node_modules/@solid-aria/overlays/dist/types/index.d.ts"],
