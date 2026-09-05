@@ -2,7 +2,16 @@
   "name": "@app-game/paint",
   "version": "0.0.0",
   "private": true,
+  "scripts": {
+    "build:studio": "vite build --config vite.studio.config.ts",
+    "test:studio": "pnpm --dir ../.. exec vitest run --config packages/paint/vitest.config.ts",
+    "typecheck:studio": "tsc -p tsconfig.studio.json"
+  },
   "dependencies": {
+    "solid-js": "catalog:",
+    "@solidjs/web": "2.0.0-rc.4",
+    "typegpu": "^0.11.4",
+    "zod": "^4.4.3",
     "@app-game/app-router": "workspace:*",
     "@app-game/hammer-examples": "workspace:*",
     "@app-game/math": "workspace:*",

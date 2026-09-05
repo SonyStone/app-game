@@ -30,6 +30,12 @@ export const pointerEventsRoutes: Routes[] = [
 
 export const brushEngineRoutes: Routes[] = [
   {
+    path: '/studio',
+    name: 'Paint Studio · TypeGPU',
+    Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
+    component: lazy(() => import('./studio/PaintStudio'))
+  },
+  {
     path: '/brush-example',
     name: 'Brush Example',
     Preview: (props) => <Thumbnail href={props.path} thumbnail={texturesViewThumbnail} name={props.name} />,

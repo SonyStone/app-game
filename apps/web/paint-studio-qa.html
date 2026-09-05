@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Paint Studio GPU verification</title>
+    <style>
+      body {
+        font: 14px/1.7 system-ui;
+        margin: 40px;
+        max-width: 1000px;
+        color: #20353d;
+      }
+      button {
+        padding: 10px 20px;
+      }
+      pre {
+        white-space: pre-wrap;
+        background: #f2f5f4;
+        padding: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Paint Studio GPU verification</h1>
+    <p>Real GPU pixel checks. Uses isolated documents; leaves the studio autosave untouched.</p>
+    <button id="run">Run GPU checks</button>
+    <button id="worker">Run worker checks</button>
+    <button id="performance">Measure 60 strokes</button>
+    <button id="dense">Measure large document</button>
+    <button id="navigation">Measure navigation</button>
+    <pre id="output">Ready</pre>
+    <script type="module">
+      import { verifyGpu } from '@app-game/paint/studio/gpu/verification';
+      import { verifyWorker } from '@app-game/paint/studio/workerVerification';
+      import { measurePainting, measureDensePainting, measureNavigation } from '@app-game/paint/studio/gpu/performance';
+      const button = document.querySelector('#run'),
+        output = document.querySelector('#output');
+      button.onclick = async () => {
+        button.disabled = true;
+        output.textContent = 'Running…\n';
+        try {
+          await verifyGpu((message) => {
+            output.textContent += message + '\n';
+          });
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error) + '\n';
+        } finally {
+          button.disabled = false;
+        }
+      };
+      document.querySelector('#navigation').onclick = async () => {
+        output.textContent = 'Measuring camera movement…\n';
+        try {
+          await measureNavigation((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      const workerButton = document.querySelector('#worker');
+      const denseButton = document.querySelector('#dense');
+      denseButton.onclick = async () => {
+        denseButton.disabled = true;
+        output.textContent = 'Measuring isolated large document…\n';
+        try {
+          await measureDensePainting((message) => {
+            output.textContent += message + '\n';
+          });
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error) + '\n';
+        } finally {
+          denseButton.disabled = false;
+        }
+      };
+      const performanceButton = document.querySelector('#performance');
+      performanceButton.onclick = async () => {
+        performanceButton.disabled = true;
+        output.textContent = 'Measuring isolated large-viewport drawing…\n';
+        try {
+          await measurePainting((message) => {
+            output.textContent += message + '\n';
+          });
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error) + '\n';
+        } finally {
+          performanceButton.disabled = false;
+        }
+      };
+      workerButton.onclick = async () => {
+        workerButton.disabled = true;
+        output.textContent = 'Running worker checks…\n';
+        try {
+          await verifyWorker((message) => {
+            output.textContent += message + '\n';
+          });
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error) + '\n';
+        } finally {
+          workerButton.disabled = false;
+        }
+      };
+    </script>
+  </body>
+</html>
