@@ -1,4 +1,5 @@
 import type { Point } from './camera';
+import { defaultStrokeSettings, type StrokeSettings } from './strokeSettings';
 
 /** Brush settings are captured at stroke start; opacity applies once to the entire stroke. */
 export type Brush = {
@@ -13,6 +14,8 @@ export type Brush = {
   tool: 'brush' | 'eraser';
   /** Linear light avoids the dark midpoint of mixing encoded RGB. Classic preserves legacy stroke behavior. */
   mixing: 'linear' | 'classic';
+  /** Input filtering, interpolation, and pressure calibration for this stroke. */
+  stroke: StrokeSettings;
 };
 /** Actual, non-predicted input in document space. Mouse pressure is normalized by the input adapter. */
 export type Sample = Point & { pressure: number; time: number };
@@ -31,7 +34,8 @@ export function defaultBrush(): Brush {
     pressureSize: true,
     pressureFlow: false,
     tool: 'brush',
-    mixing: 'linear'
+    mixing: 'linear',
+    stroke: defaultStrokeSettings()
   };
 }
 

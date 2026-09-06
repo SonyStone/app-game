@@ -13,6 +13,18 @@ afterEach(() => {
 });
 
 describe('input to worker contract', () => {
+  it('does not feed a duplicate release into the filter for a stationary pen tap', () => {
+    const { commands, pointer } = setup();
+    pointer('pointerdown', 10, 20, { pointerType: 'pen', pressure: 0.3 });
+    pointer('pointerup', 10, 20, { pointerType: 'pen', pressure: 0 });
+    expect(commands.map((command) => command.type)).toEqual(['begin', 'end']);
+  });
+  it('uses the last contact pressure when the release adds a new endpoint', () => {
+    const { commands, pointer } = setup();
+    pointer('pointerdown', 10, 20, { pointerType: 'pen', pressure: 0.3 });
+    pointer('pointerup', 20, 20, { pointerType: 'pen', pressure: 0 });
+    expect(commands[1]).toMatchObject({ type: 'samples', samples: [{ x: -380, y: -280, pressure: 0.3 }] });
+  });
   it('routes lasso samples in world coordinates and cancels interrupted selections without painting', () => {
     const selection = { enabled: () => true, begin: vi.fn(), move: vi.fn(), end: vi.fn(), cancel: vi.fn() };
     const { commands, pointer } = setup(selection);
@@ -56,7 +68,8 @@ describe('input to worker contract', () => {
     });
     pointer('pointerup', 30, 40, { pointerType: 'pen', pressure: 0 });
     const batch = commands.find((c) => c.type === 'samples');
-    expect(batch?.samples.map((s) => s.pressure)).toEqual([0.4, 0.9, 0.9]);
+    expect(batch?.samples.map((s) => s.pressure)).toEqual([0.4, 0.9]);
+    expect(batch?.samples.map((s) => s.time)).toEqual([10, 20]);
   });
   it('preserves pending ink on pointercancel and can start another stroke', () => {
     const { commands, pointer } = setup();

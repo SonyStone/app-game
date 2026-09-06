@@ -1,11 +1,13 @@
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { PaintSession } from './createPaintSession';
+import { normalizeStrokeSettings, type StrokeSettings } from './strokeSettings';
 
 /** Controls the captured settings of the next stroke, including independent flow and opacity. */
 export function BrushPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
   const { brush, updateBrush } = props;
   return (
     <>
+      <StrokeControls brush={brush} updateBrush={updateBrush} />
       <section>
         <div class="paint-section-heading">
           <span>Soft round</span>
@@ -123,6 +125,87 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
         </div>
       </section>
     </>
+  );
+}
+
+/** Lets the next stroke compare Studio smoothing with the two recovered Leonardo filter settings. */
+function StrokeControls(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
+  const settings = () => props.brush().stroke;
+  const update = (patch: Partial<StrokeSettings>) =>
+    props.updateBrush({ stroke: normalizeStrokeSettings({ ...settings(), ...patch }) });
+  return (
+    <section>
+      <label class="paint-mixing">
+        Stroke smoothing
+        <select
+          aria-label="Stroke smoothing"
+          value={settings().mode}
+          onChange={(event) => {
+            const mode = event.currentTarget.value;
+            update({ mode: mode === 'normal' || mode === 'smooth' ? mode : 'studio' });
+          }}
+        >
+          <option value="studio">Studio</option>
+          <option value="normal">Leonardo normal</option>
+          <option value="smooth">Leonardo smooth</option>
+        </select>
+      </label>
+      <Show when={settings().mode !== 'studio'}>
+        <Range
+          label="Stabilization"
+          min={0}
+          max={49}
+          suffix=""
+          value={settings().mode === 'smooth' ? settings().smooth : settings().normal}
+          change={(value) => update(settings().mode === 'smooth' ? { smooth: value } : { normal: value })}
+        />
+        <p class="paint-panel-note">
+          Higher values smooth more and follow the pen more slowly. Zero keeps curve smoothing only.
+        </p>
+        <Show when={settings().mode === 'smooth'}>
+          <label class="paint-check">
+            <input
+              type="checkbox"
+              checked={settings().catchUp}
+              onChange={(event) => update({ catchUp: event.currentTarget.checked })}
+            />
+            Catch up on pen lift
+          </label>
+        </Show>
+        <details class="paint-pressure-controls">
+          <summary>Pen pressure</summary>
+          <Range
+            label="Pressure minimum"
+            min={0}
+            max={Math.round(settings().maximum * 100) - 1}
+            suffix="%"
+            value={settings().minimum * 100}
+            change={(value) => update({ minimum: value / 100 })}
+          />
+          <Range
+            label="Pressure maximum"
+            min={Math.round(settings().minimum * 100) + 1}
+            max={100}
+            suffix="%"
+            value={settings().maximum * 100}
+            change={(value) => update({ maximum: value / 100 })}
+          />
+          <Range
+            label="Pressure firmness"
+            min={10}
+            max={500}
+            step={5}
+            suffix="%"
+            value={settings().firmness * 100}
+            change={(value) => update({ firmness: value / 100 })}
+          />
+          <p class="paint-panel-note">
+            Minimum and maximum set the pen's pressure range. Firmness at 100% is linear; higher values need a firmer
+            press.
+          </p>
+        </details>
+      </Show>
+    </section>
   );
 }
 

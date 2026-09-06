@@ -29,7 +29,7 @@ export function attachInput(
     signal = abort.signal;
   const touches = new Map<number, Point>();
   let gesture:
-    | { kind: 'draw'; id: number; camera: Camera; size: ViewSize; pressure: number }
+    | { kind: 'draw'; id: number; camera: Camera; size: ViewSize; latest: Sample }
     | { kind: 'select'; id: number; camera: Camera; size: ViewSize }
     | { kind: 'pan'; id: number; previous: Point }
     | undefined;
@@ -108,12 +108,13 @@ export function attachInput(
         return;
       }
       const pressure = event.pointerType === 'pen' ? event.pressure : 1;
-      gesture = { kind: 'draw', id: event.pointerId, camera, size: { ...options.size() }, pressure };
+      const latest = { ...screenToWorld(point, camera, options.size()), pressure, time: event.timeStamp };
+      gesture = { kind: 'draw', id: event.pointerId, camera, size: { ...options.size() }, latest };
       options.send({
         type: 'begin',
         brush: options.brush(),
         zoom: camera.zoom,
-        samples: [{ ...screenToWorld(point, camera, options.size()), pressure, time: event.timeStamp }]
+        samples: [latest]
       });
     },
     { signal }
@@ -163,12 +164,12 @@ export function attachInput(
         return;
       }
       for (const sample of coalesced.length ? coalesced : [event]) {
-        gesture.pressure = event.pointerType === 'pen' ? sample.pressure : 1;
-        pending.push({
+        gesture.latest = {
           ...screenToWorld(local(sample), gesture.camera, gesture.size),
-          pressure: gesture.pressure,
+          pressure: event.pointerType === 'pen' ? sample.pressure : 1,
           time: sample.timeStamp
-        });
+        };
+        pending.push(gesture.latest);
       }
       schedule();
     },
@@ -183,12 +184,13 @@ export function attachInput(
       }
       if (gesture?.id !== event.pointerId) return;
       if (gesture.kind === 'select') options.selection?.move(screenToWorld(local(event), gesture.camera, gesture.size));
-      if (gesture.kind === 'draw')
-        pending.push({
-          ...screenToWorld(local(event), gesture.camera, gesture.size),
-          pressure: gesture.pressure,
-          time: event.timeStamp
-        });
+      if (gesture.kind === 'draw') {
+        const endpoint = screenToWorld(local(event), gesture.camera, gesture.size);
+        // Release pressure is usually zero. Keep the last contact pressure, and do not
+        // advance a sample-count filter just because a stationary pen was lifted.
+        if (endpoint.x !== gesture.latest.x || endpoint.y !== gesture.latest.y)
+          pending.push({ ...endpoint, pressure: gesture.latest.pressure, time: event.timeStamp });
+      }
       finish();
     },
     { signal }

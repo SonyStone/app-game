@@ -519,6 +519,13 @@
   align-items: center;
   margin-top: 12px;
 }
+.paint-pressure-controls summary {
+  padding: 12px 0;
+  cursor: pointer;
+}
+.paint-pressure-controls .paint-panel-note {
+  padding: 0;
+}
 .paint-error {
   position: absolute;
   z-index: 80;

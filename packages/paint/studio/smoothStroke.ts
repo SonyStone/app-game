@@ -1,10 +1,12 @@
 import { createStrokeSampler, type Brush, type Dab, type Sample } from './brush';
+import { createLeonardoStroke } from './leonardoStroke';
 
-/** Smooths real input with midpoint quadratic curves, then places stamps by arc length.
- * A two-CSS-pixel input threshold suppresses coordinate quantization at every zoom.
+/** Selects Studio's midpoint quadratic smoothing or the researched Leonardo filter and cubic curve.
+ * Studio's two-CSS-pixel input threshold suppresses coordinate quantization at every zoom.
  * The last segment is deferred until another point or finish(); no predicted ink is committed.
  */
 export function createSmoothStroke(brush: Brush, zoom = 1) {
+  if (brush.stroke.mode !== 'studio') return createLeonardoStroke(brush, zoom);
   const sampler = createStrokeSampler(brush);
   const scale = Math.max(0.0001, zoom);
   const threshold = 2 / scale;
