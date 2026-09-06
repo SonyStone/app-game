@@ -1,3 +1,4 @@
+import { abrViewerRoutes } from '@app-game/abr-viewer/routes';
 import { Thumbnail, type Routes } from '@app-game/app-router';
 import { browserAtlasRoutes } from '@app-game/browser-atlas/routes';
 import { escyRoutes } from '@app-game/ecsy-pages/routes';
@@ -60,6 +61,7 @@ export const routes: Routes[] = [
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     children: [solidSvgEditorRoutes]
   },
+  abrViewerRoutes,
   nightDefenseRoutes,
   {
     path: '/dnd-playground',
