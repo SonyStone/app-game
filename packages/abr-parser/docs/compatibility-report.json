@@ -1,0 +1,596 @@
+{
+  "scope": "Container framing, typed brush descriptors, decoded tips and retained resource payloads; not Photoshop rendering equivalence.",
+  "reports": [
+    {
+      "file": "0 MH 8B Brushes.abr",
+      "sha256": "1ed7b36abe0cbbd431ae0683b1a514812df51f99de4f1b6d245847e7fd6e43de",
+      "bytes": 2599798,
+      "version": "6.2",
+      "brushes": 26,
+      "sampledBrushes": 23,
+      "descriptorTypes": {
+        "TEXT": 106,
+        "Objc": 302,
+        "UntF": 668,
+        "bool": 536,
+        "long": 438,
+        "enum": 17,
+        "doub": 10
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 645836,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 645852,
+          "headerBytes": 12,
+          "payloadBytes": 1899924,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 2545788,
+          "headerBytes": 12,
+          "payloadBytes": 53998,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 2599798,
+      "paddingOrUnparsedBytes": 0,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 2599798,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": true,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    },
+    {
+      "file": "AI_Brush_collection.abr",
+      "sha256": "d079f9a878149b6da0719b9ca91279abb040af9b23aa66ae4f0974fadeb41c09",
+      "bytes": 2680789,
+      "version": "6.2",
+      "brushes": 7,
+      "sampledBrushes": 5,
+      "descriptorTypes": {
+        "TEXT": 27,
+        "Objc": 77,
+        "UntF": 169,
+        "bool": 144,
+        "long": 110,
+        "enum": 5,
+        "doub": 1
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 2193028,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 2193044,
+          "headerBytes": 12,
+          "payloadBytes": 473932,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 2666988,
+          "headerBytes": 12,
+          "payloadBytes": 13789,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 2680789,
+      "paddingOrUnparsedBytes": 0,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 2680789,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": true,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    },
+    {
+      "file": "Basic_3.abr",
+      "sha256": "b234d2b544b843b238af178f48bb2a30fe9f3ac20f0434e5491f383e50b01ad4",
+      "bytes": 4585,
+      "version": "6.2",
+      "brushes": 3,
+      "sampledBrushes": 0,
+      "descriptorTypes": {
+        "TEXT": 3,
+        "Objc": 30,
+        "UntF": 66,
+        "bool": 48,
+        "long": 42
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 0,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 16,
+          "headerBytes": 12,
+          "payloadBytes": 0,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 28,
+          "headerBytes": 12,
+          "payloadBytes": 4545,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 4585,
+      "paddingOrUnparsedBytes": 0,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 4585,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": true,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    },
+    {
+      "file": "Brushes To Implement Roundtrip.abr",
+      "sha256": "052c4a0babf85d7b18ce740c6f530edb7b7901fb3261c7e4fe42c45fc8c4e9ba",
+      "bytes": 2411206,
+      "version": "6.2",
+      "brushes": 14,
+      "sampledBrushes": 3,
+      "descriptorTypes": {
+        "TEXT": 42,
+        "Objc": 133,
+        "UntF": 240,
+        "bool": 412,
+        "long": 199,
+        "enum": 17,
+        "doub": 12
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 35292,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 35308,
+          "headerBytes": 12,
+          "payloadBytes": 2349292,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 2384612,
+          "headerBytes": 12,
+          "payloadBytes": 26582,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 2411206,
+      "paddingOrUnparsedBytes": 0,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 2411206,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": true,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    },
+    {
+      "file": "Brushes To Implement.abr",
+      "sha256": "3f25318f881807c3692662f5ae481759f2b08365b10da1adf1e53b0a6f741c64",
+      "bytes": 2411619,
+      "version": "6.2",
+      "brushes": 14,
+      "sampledBrushes": 3,
+      "descriptorTypes": {
+        "TEXT": 28,
+        "Objc": 133,
+        "UntF": 241,
+        "bool": 412,
+        "long": 173,
+        "enum": 17,
+        "doub": 38
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 35292,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 35308,
+          "headerBytes": 12,
+          "payloadBytes": 2349292,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 2384612,
+          "headerBytes": 12,
+          "payloadBytes": 26030,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        },
+        {
+          "key": "phry",
+          "offset": 2410656,
+          "headerBytes": 12,
+          "payloadBytes": 951,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 2411617,
+      "paddingOrUnparsedBytes": 2,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 2411617,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": false,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    },
+    {
+      "file": "CGCookie_BasicBrushes.abr",
+      "sha256": "3f66c5cb15a473e1761e5baa193e30648d4f8c1af10107f87cb5f4fc75541819",
+      "bytes": 272853,
+      "version": "10.2",
+      "brushes": 9,
+      "sampledBrushes": 5,
+      "descriptorTypes": {
+        "TEXT": 21,
+        "Objc": 77,
+        "UntF": 158,
+        "bool": 156,
+        "long": 98,
+        "enum": 1,
+        "doub": 1
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 259956,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 259972,
+          "headerBytes": 12,
+          "payloadBytes": 0,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 259984,
+          "headerBytes": 12,
+          "payloadBytes": 12857,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 272853,
+      "paddingOrUnparsedBytes": 0,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 272853,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": true,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    },
+    {
+      "file": "Chunky_Chalk_Brush_by_MarkWinters.abr",
+      "sha256": "2b13f4018f8f00d0acfce25dcc78cbfb42e481b2cca7ad2dd32485eeb81c9678",
+      "bytes": 37554,
+      "version": "6.2",
+      "brushes": 1,
+      "sampledBrushes": 1,
+      "descriptorTypes": {
+        "TEXT": 5,
+        "Objc": 13,
+        "UntF": 30,
+        "bool": 22,
+        "long": 18,
+        "enum": 1,
+        "doub": 1
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 35160,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 35176,
+          "headerBytes": 12,
+          "payloadBytes": 0,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 35188,
+          "headerBytes": 12,
+          "payloadBytes": 2354,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 37554,
+      "paddingOrUnparsedBytes": 0,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 37554,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": true,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    },
+    {
+      "file": "CtrlPaint - Digital Sketching.abr",
+      "sha256": "ee64afe994cc86a080156de9e018ac304a7bee6cdf0102de5176eb164ed8d5fb",
+      "bytes": 4811368,
+      "version": "6.2",
+      "brushes": 4,
+      "sampledBrushes": 4,
+      "descriptorTypes": {
+        "TEXT": 20,
+        "Objc": 51,
+        "UntF": 100,
+        "bool": 130,
+        "doub": 8,
+        "long": 82,
+        "enum": 8
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 568,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 584,
+          "headerBytes": 12,
+          "payloadBytes": 4799864,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 4800460,
+          "headerBytes": 12,
+          "payloadBytes": 10494,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        },
+        {
+          "key": "phry",
+          "offset": 4810968,
+          "headerBytes": 12,
+          "payloadBytes": 385,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 4811363,
+      "paddingOrUnparsedBytes": 5,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 4811363,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": false,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    },
+    {
+      "file": "Driver_drow.abr",
+      "sha256": "60777f5e12c576664af3c38b4125df6f58b04b083b9fe3e4724a8e27d1bb3bb0",
+      "bytes": 2516476,
+      "version": "9.2",
+      "brushes": 11,
+      "sampledBrushes": 2,
+      "descriptorTypes": {
+        "TEXT": 17,
+        "Objc": 77,
+        "UntF": 169,
+        "bool": 189,
+        "long": 91,
+        "enum": 1
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 52412,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 52428,
+          "headerBytes": 12,
+          "payloadBytes": 2450572,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 2503012,
+          "headerBytes": 12,
+          "payloadBytes": 13452,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 2516476,
+      "paddingOrUnparsedBytes": 0,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 2516476,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": true,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    },
+    {
+      "file": "MainBrushes.abr",
+      "sha256": "ce53e389bd86a22cfec4a2ade2271a53ddd0925f5d4e52b99852bc238176cd02",
+      "bytes": 2213421,
+      "version": "6.2",
+      "brushes": 14,
+      "sampledBrushes": 11,
+      "descriptorTypes": {
+        "TEXT": 54,
+        "Objc": 165,
+        "UntF": 371,
+        "bool": 292,
+        "enum": 9,
+        "doub": 6,
+        "long": 238
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 685456,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 685472,
+          "headerBytes": 12,
+          "payloadBytes": 1498656,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 2184140,
+          "headerBytes": 12,
+          "payloadBytes": 29269,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 2213421,
+      "paddingOrUnparsedBytes": 0,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 2213421,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": true,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    },
+    {
+      "file": "Paint_markers_brush_set_by_LDN755.abr",
+      "sha256": "cc956582330c14b6ba4e1aa8e39028234275a29ec4c1335c4b1b93396fff0891",
+      "bytes": 4047912,
+      "version": "6.2",
+      "brushes": 20,
+      "sampledBrushes": 20,
+      "descriptorTypes": {
+        "TEXT": 60,
+        "Objc": 60,
+        "UntF": 80,
+        "bool": 260
+      },
+      "blocks": [
+        {
+          "key": "samp",
+          "offset": 4,
+          "headerBytes": 12,
+          "payloadBytes": 4034712,
+          "interpretation": "decoded pixels; opaque metadata retained per sample"
+        },
+        {
+          "key": "patt",
+          "offset": 4034728,
+          "headerBytes": 12,
+          "payloadBytes": 0,
+          "interpretation": "opaque patterns; preserved"
+        },
+        {
+          "key": "desc",
+          "offset": 4034740,
+          "headerBytes": 12,
+          "payloadBytes": 13160,
+          "interpretation": "descriptor structure decoded; not all setting semantics verified"
+        }
+      ],
+      "framingAndPayloadBytes": 4047912,
+      "paddingOrUnparsedBytes": 0,
+      "errors": [],
+      "roundTrip": {
+        "outputBytes": 4047912,
+        "brushCountUnchanged": true,
+        "byteIdenticalFile": true,
+        "errors": [],
+        "changedDescriptors": 0,
+        "samplePayloadIdentical": true,
+        "patternPayloadIdentical": true,
+        "hierarchyPayloadIdentical": true
+      }
+    }
+  ]
+}

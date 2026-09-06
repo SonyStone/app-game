@@ -36,21 +36,24 @@ export class BinaryReader {
   }
 
   seek(offset: number): void {
-    if (offset < 0 || offset > this.bytes.length) {
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > this.bytes.length) {
       throw new Error(`Invalid seek offset: ${offset}, buffer length: ${this.bytes.length}`);
     }
     this.offset = offset;
   }
 
   skip(bytes: number): void {
+    this.requireBytes(bytes);
     this.offset += bytes;
   }
 
   peek(bytes: number): Uint8Array {
+    this.requireBytes(bytes);
     return this.bytes.subarray(this.offset, this.offset + bytes);
   }
 
   readBytes(length: number): Uint8Array {
+    this.requireBytes(length);
     const result = this.bytes.subarray(this.offset, this.offset + length);
     this.offset += length;
     return result;
@@ -113,7 +116,11 @@ export class BinaryReader {
     let end = bytes.indexOf(0);
     if (end === -1) end = length;
     // Convert to string without Buffer.toString()
-    return String.fromCharCode(...bytes.subarray(0, end));
+    let result = '';
+    for (let i = 0; i < end; i += 8192) {
+      result += String.fromCharCode(...bytes.subarray(i, Math.min(end, i + 8192)));
+    }
+    return result;
   }
 
   /**
@@ -131,11 +138,12 @@ export class BinaryReader {
   readUnicodeString(): string {
     const length = this.readUInt32BE();
     if (length === 0) return '';
+    this.requireBytes(length * 2);
 
     const chars: string[] = [];
     for (let i = 0; i < length; i++) {
       const charCode = this.readUInt16BE();
-      if (charCode !== 0) {
+      if (charCode !== 0 || i < length - 1) {
         chars.push(String.fromCharCode(charCode));
       }
     }
@@ -165,6 +173,7 @@ export class BinaryReader {
    * Get a slice of the buffer from current position
    */
   slice(length: number): Uint8Array {
+    this.requireBytes(length);
     return this.bytes.subarray(this.offset, this.offset + length);
   }
 
@@ -174,5 +183,12 @@ export class BinaryReader {
   subReader(length: number): BinaryReader {
     const subBuffer = this.readBytes(length);
     return new BinaryReader(subBuffer);
+  }
+
+  /** Reject truncated or invalid ranges before advancing the cursor. */
+  private requireBytes(length: number): void {
+    if (!Number.isSafeInteger(length) || length < 0 || length > this.remaining) {
+      throw new RangeError(`Invalid byte length ${length} at offset ${this.offset}; ${this.remaining} bytes remain`);
+    }
   }
 }

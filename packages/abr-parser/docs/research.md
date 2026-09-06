@@ -1,6 +1,6 @@
 # Adobe Photoshop Brush File (.abr) Format Documentation
 
-This document describes the binary format of Adobe Photoshop brush files (.abr) based on reverse engineering work done while building this parser. This covers ABR versions 6.1, 6.2, 9.x, and 10.x.
+This document describes the binary format of Adobe Photoshop brush files (.abr) based on reverse engineering work done while building this parser. This is historical reverse-engineering material, not a complete specification. See [the current compatibility audit](compatibility.md) for verified scope and corrections.
 
 ## Table of Contents
 
@@ -63,8 +63,8 @@ The format uses big-endian byte order throughout.
 | 2 | 2 | uint16 | Minor version (subversion: 1 or 2) |
 
 The subversion affects the sample block header size:
-- **Subversion 1**: 48-byte header (38 UUID + 10 padding)
-- **Subversion 2**: 301-byte header (38 UUID + 263 padding)
+- **Subversion 1**: 48-byte prefix before bounds (38 identifier bytes + 10 legacy header bytes)
+- **Subversion 2**: VM-array-list record; the common 56-channel layout puts channel bounds at offset 301
 
 ---
 
@@ -92,44 +92,14 @@ Each resource block follows the standard Photoshop resource format:
 
 ## Sample Block (samp)
 
-Contains bitmap data for sampled brush tips. Structure:
+The previous description of the 263 bytes as "padding" was incorrect. The subversion-2
+record contains a Virtual Memory Array List with a channel table and nested lengths.
+Zero-filling that region produced files rejected by Photoshop 26.0.0. The leading `0x24`
+is a length byte for the 36-character identifier, not a dollar-sign prefix. All 36 UUID
+characters participate in matching; dropping the final character can alias different tips.
 
-```
-┌─────────────────────────────────────┐
-│ Brush 1                             │
-│ ├─ Length (4 bytes)                 │
-│ ├─ UUID (38 bytes)                  │
-│ ├─ Header padding (10 or 263 bytes) │
-│ ├─ Bounds (16 bytes)                │
-│ ├─ Depth (2 bytes)                  │
-│ ├─ Compression (1 byte)             │
-│ └─ Image data (variable)            │
-├─────────────────────────────────────┤
-│ Brush 2 ...                         │
-└─────────────────────────────────────┘
-```
-
-### Sample Entry Format
-
-| Field | Size | Type | Description |
-|-------|------|------|-------------|
-| Length | 4 | uint32 | Total brush entry length |
-| UUID | 37 | char[37] | `$` + 36-char UUID (e.g., `$3479c62f-65c9-11de-bdeb-a55e96b1a876`) |
-| Null | 1 | byte | Null terminator |
-| Padding | 10/263 | bytes | Version-dependent header padding |
-| Top | 4 | int32 | Bounding box top |
-| Left | 4 | int32 | Bounding box left |
-| Bottom | 4 | int32 | Bounding box bottom |
-| Right | 4 | int32 | Bounding box right |
-| Depth | 2 | uint16 | Bit depth: 8 or 16 |
-| Compression | 1 | uint8 | 0 = raw, 1 = RLE |
-| Data | variable | bytes | Image data |
-
-### Image Dimensions
-
-Calculated from bounds:
-- `width = right - left`
-- `height = bottom - top`
+See the corrected [sample byte map](compatibility.md#sample-byte-map) and `src/sample-reader.ts`.
+Subversion 1 still uses the older offset-based path; it has no real fixture in this corpus.
 
 ---
 
@@ -327,7 +297,9 @@ PackBits-style run-length encoding:
 
 ```
 for each byte n:
-  if n >= 128:
+  if n == 128:
+    continue  # PackBits no-op
+  elif n > 128:
     # Run of identical bytes
     count = 257 - n
     read next byte, repeat it 'count' times
@@ -343,20 +315,12 @@ for each byte n:
 
 Sampled brushes link descriptor settings to bitmap data via UUIDs.
 
-### Sample UUID Format
-- Stored with `$` prefix: `$3479c62f-65c9-11de-bdeb-a55e96b1a87`
-- 37 characters total ($ + 36-char UUID, sometimes truncated)
+### Identifier format and matching
 
-### Descriptor UUID Format
-- Stored without prefix in `sampledData` field
-- Full 36-character UUID: `3479c62f-65c9-11de-bdeb-a55e96b1a876`
-
-### Matching Strategy
-
-1. Strip `$` prefix from sample UUID
-2. Normalize to lowercase
-3. Compare first 35 characters (handles truncation)
-4. Fall back to index-based matching if UUID mismatch
+The sample begins with byte `0x24` (length 36), followed by the complete 36-character
+identifier and a zero terminator. Match the complete identifier, case-insensitively,
+to descriptor `sampledData`. An explicit reference that cannot be resolved is an error;
+it must never fall back to an unrelated sample based on position.
 
 ---
 

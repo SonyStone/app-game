@@ -13,173 +13,114 @@ export class DescriptorParser {
     this.reader = reader;
   }
 
-  /**
-   * Parse a descriptor from the current position
-   */
+  /** Parse descriptor entries, retaining nested class names and wire types. */
   parseDescriptor(): Record<string, DescriptorValue> {
-    // Read Unicode class name string first (length + UTF-16 chars)
-    const nameLength = this.reader.readUInt32BE();
-    if (nameLength > 0) {
-      // Skip the Unicode name
-      this.reader.skip(nameLength * 2);
-    }
-
-    // Read class ID (length-prefixed or 4-byte key)
-    const classIdLength = this.reader.readUInt32BE();
-    let classId: string;
-    if (classIdLength === 0) {
-      classId = this.reader.readString(4);
-    } else {
-      classId = this.reader.readString(classIdLength);
-    }
-
-    const itemCount = this.reader.readUInt32BE();
-    const result: Record<string, DescriptorValue> = {};
-
-    for (let i = 0; i < itemCount; i++) {
-      const key = this.reader.readId();
-      const value = this.parseValue();
-      if (value) {
-        result[key] = value;
-      }
-    }
-
-    return result;
+    return this.parseDescriptorObject().value;
   }
 
-  /**
-   * Parse a single value
-   */
-  parseValue(): DescriptorValue | null {
-    const type = this.reader.readString(4);
+  /** Read one typed value. Unknown types abort because their length is unknown. */
+  parseValue(): DescriptorValue {
+    if (++this.depth > 128) throw new Error('Descriptor nesting exceeds 128 levels');
+    try {
+      return this.readValue();
+    } finally {
+      this.depth--;
+    }
+  }
 
+  private depth = 0;
+
+  private readValue(): DescriptorValue {
+    const offset = this.reader.position;
+    const type = this.reader.readString(4);
     switch (type) {
       case 'long':
-        return { type: 'long', value: this.reader.readInt32BE() };
-
+        return { type, value: this.reader.readInt32BE() };
       case 'doub':
-        return { type: 'doub', value: this.reader.readDoubleBE() };
-
+        return { type, value: this.reader.readDoubleBE() };
       case 'bool':
-        return { type: 'bool', value: this.reader.readUInt8() !== 0 };
-
+        return { type, value: this.reader.readUInt8() !== 0 };
       case 'TEXT':
-        return { type: 'TEXT', value: this.reader.readUnicodeString() };
-
-      case 'enum': {
-        const typeId = this.reader.readId();
-        const value = this.reader.readId();
-        return { type: 'enum', typeId, value };
-      }
-
-      case 'UntF': {
-        const unit = this.reader.readString(4);
-        const value = this.reader.readDoubleBE();
-        return { type: 'UntF', unit, value };
-      }
-
-      case 'Objc': {
-        // Read Unicode class name string first
-        const nameLength = this.reader.readUInt32BE();
-        if (nameLength > 0) {
-          this.reader.skip(nameLength * 2);
-        }
-
-        const classIdLength = this.reader.readUInt32BE();
-        let classId: string;
-        if (classIdLength === 0) {
-          classId = this.reader.readString(4);
-        } else {
-          classId = this.reader.readString(classIdLength);
-        }
-        const itemCount = this.reader.readUInt32BE();
-        const items: Record<string, DescriptorValue> = {};
-
-        for (let i = 0; i < itemCount; i++) {
-          const key = this.reader.readId();
-          const value = this.parseValue();
-          if (value) {
-            items[key] = value;
-          }
-        }
-
-        return { type: 'Objc', classId, value: items };
-      }
-
+        return { type, value: this.reader.readUnicodeString() };
+      case 'enum':
+        return { type, typeId: this.reader.readId(), value: this.reader.readId() };
+      case 'UntF':
+        return { type, unit: this.reader.readString(4), value: this.reader.readDoubleBE() };
+      case 'Objc':
+      case 'GlbO':
+        return { type, ...this.parseDescriptorObject() };
+      case 'type':
+      case 'GlbC':
+        return { type, className: this.reader.readUnicodeString(), classId: this.reader.readId() };
+      case 'comp':
+        return { type, value: new Uint8Array(this.reader.readBytes(8)) };
       case 'VlLs': {
         const count = this.reader.readUInt32BE();
-        const values: DescriptorValue[] = [];
-        for (let i = 0; i < count; i++) {
-          const value = this.parseValue();
-          if (value) {
-            values.push(value);
-          }
-        }
-        return { type: 'VlLs', value: values };
+        if (count > this.reader.remaining / 4) throw new Error('List count exceeds remaining data');
+        const value: DescriptorValue[] = [];
+        for (let i = 0; i < count; i++) value.push(this.parseValue());
+        return { type, value };
       }
-
-      case 'tdta': {
-        const length = this.reader.readUInt32BE();
-        const data = this.reader.readBytes(length);
-        return { type: 'tdta', value: new Uint8Array(data) };
-      }
-
+      case 'alis':
+      case 'tdta':
+        return { type, value: new Uint8Array(this.reader.readBytes(this.reader.readUInt32BE())) };
       case 'obj ': {
-        // Object reference - complex type, skip for now
-        const refCount = this.reader.readUInt32BE();
-        for (let i = 0; i < refCount; i++) {
-          const refType = this.reader.readString(4);
-          switch (refType) {
-            case 'Clss': {
-              this.reader.readId(); // name
-              this.reader.readId(); // classId
-              break;
-            }
-            case 'Enmr': {
-              this.reader.readId(); // name
-              this.reader.readId(); // classId
-              this.reader.readId(); // typeId
-              this.reader.readId(); // enum
-              break;
-            }
-            case 'Idnt': {
-              this.reader.readUInt32BE();
-              break;
-            }
-            case 'indx': {
-              this.reader.readUInt32BE();
-              break;
-            }
-            case 'name': {
-              this.reader.readId(); // name
-              this.reader.readId(); // classId
-              this.reader.readUnicodeString();
-              break;
-            }
-            case 'prop': {
-              this.reader.readId(); // name
-              this.reader.readId(); // classId
-              this.reader.readId(); // keyId
-              break;
-            }
-            case 'rele': {
-              this.reader.readId(); // name
-              this.reader.readId(); // classId
-              this.reader.readUInt32BE();
-              break;
-            }
-            default:
-              // Unknown reference type
-              break;
-          }
-        }
-        return { type: 'obj ', value: null };
+        const start = this.reader.position;
+        this.readReference();
+        const end = this.reader.position;
+        this.reader.seek(start);
+        return { type, value: new Uint8Array(this.reader.readBytes(end - start)) };
       }
-
       default:
-        // Unknown type - try to continue
-        console.warn(`Unknown descriptor type: ${type}`);
-        return null;
+        throw new Error(`Unsupported descriptor type "${type}" at offset ${offset}`);
+    }
+  }
+
+  /** Read a descriptor envelope as well as its entries for faithful reconstruction. */
+  parseDescriptorObject(): { className: string; classId: string; value: Record<string, DescriptorValue> } {
+    const className = this.reader.readUnicodeString();
+    const classId = this.reader.readId();
+    const count = this.reader.readUInt32BE();
+    if (count > this.reader.remaining / 8) throw new Error('Descriptor count exceeds remaining data');
+    const value: Record<string, DescriptorValue> = Object.create(null);
+    for (let i = 0; i < count; i++) {
+      const key = this.reader.readId();
+      if (Object.hasOwn(value, key)) throw new Error(`Duplicate descriptor key "${key}"`);
+      value[key] = this.parseValue();
+    }
+    return { className, classId, value };
+  }
+
+  /** Consume documented reference structures; retain their exact encoded payload. */
+  private readReference(): void {
+    const count = this.reader.readUInt32BE();
+    if (count > this.reader.remaining / 4) throw new Error('Reference count exceeds remaining data');
+    for (let i = 0; i < count; i++) {
+      const type = this.reader.readString(4);
+      if (type === 'Idnt' || type === 'indx') {
+        this.reader.readUInt32BE();
+        continue;
+      }
+      if (!['prop', 'Clss', 'Enmr', 'rele', 'name'].includes(type)) {
+        throw new Error(`Unsupported reference type "${type}"`);
+      }
+      this.reader.readUnicodeString();
+      this.reader.readId();
+      switch (type) {
+        case 'prop':
+          this.reader.readId();
+          break;
+        case 'Enmr':
+          this.reader.readId();
+          this.reader.readId();
+          break;
+        case 'rele':
+          this.reader.readInt32BE();
+          break;
+        case 'name':
+          this.reader.readUnicodeString();
+          break;
+      }
     }
   }
 }

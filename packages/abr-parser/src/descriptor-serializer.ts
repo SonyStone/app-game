@@ -68,6 +68,7 @@ export class DescriptorSerializer {
         this.writer.writeDoubleBE(value.value);
         break;
 
+      case 'GlbO':
       case 'Objc':
         // Nested object - write class name and class ID, then items
         // For empty class names, Photoshop uses length=1 with a null char
@@ -92,21 +93,31 @@ export class DescriptorSerializer {
         }
         break;
 
+      case 'alis':
       case 'tdta':
         const data = value.value;
         this.writer.writeUInt32BE(data.length);
         this.writer.writeBytes(data instanceof Uint8Array ? data : new Uint8Array(data));
         break;
 
+      case 'type':
+      case 'GlbC':
+        this.writer.writeClassName(value.className);
+        this.writer.writeId(value.classId);
+        break;
+
+      case 'comp':
+        if (value.value.length !== 8) throw new Error('Large integer must contain 8 bytes');
+        this.writer.writeBytes(value.value);
+        break;
+
       case 'obj ':
-        // Object reference - write empty reference for now
-        this.writer.writeUInt32BE(0);
+        if (!(value.value instanceof Uint8Array)) throw new Error('Reference requires its encoded payload');
+        this.writer.writeBytes(value.value);
         break;
 
       default:
-        // Unknown type - should not happen
-        console.warn(`Unknown descriptor type: ${(value as any).type}`);
-        break;
+        throw new Error('Unsupported descriptor value');
     }
   }
 }

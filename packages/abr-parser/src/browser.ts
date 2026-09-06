@@ -13,3 +13,7 @@ export { BinaryWriter } from './binary-writer';
 export { DescriptorParser } from './descriptor-parser';
 export { DescriptorSerializer, makeDescriptor } from './descriptor-serializer';
 export * from './types';
+
+export { decodePattern, readPatternIndex } from './pattern-reader';
+export type { PatternResource } from './pattern-reader';
+export { readSample } from './sample-reader';

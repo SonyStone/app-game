@@ -232,10 +232,15 @@ export const ZBrushDynamics = z.object({
   flowJitter: ZDynamicControl.optional()
 });
 
+/** Encoded sample payload retained without interpreting every metadata byte. */
+export const ZSourceSample = z.object({ data: z.instanceof(Uint8Array), subVersion: z.number() });
+
 /** Zod schema for brush tip image */
 export const ZBrushTipImage = z.object({
-  width: ZPixels.min(1).max(8192),
-  height: ZPixels.min(1).max(8192),
+  /** Original sample record, including opaque metadata and full precision pixels. */
+  sourceSample: ZSourceSample.optional(),
+  width: ZPixels.min(1).max(10000),
+  height: ZPixels.min(1).max(10000),
   depth: z.union([z.literal(8), z.literal(16)]), // 8-bit or 16-bit grayscale
   data: z.custom<Uint8Array>((val) => val instanceof Uint8Array),
   compressedData: z.custom<Uint8Array>((val) => val instanceof Uint8Array).optional()
@@ -248,16 +253,22 @@ export type BrushType = z.infer<typeof BrushType>;
 /** Zod schema for a brush */
 export const ZBrush = z.object({
   id: z.string(),
-  name: z.string().min(1),
+  name: z.string(),
   type: BrushType,
-  spacing: ZPercent,
-  diameter: ZPixels.optional(),
+  spacing: z.number().finite().min(0).max(1000),
+  diameter: z.number().finite().nonnegative().optional(),
   hardness: ZPercent.optional(),
   angle: ZDegrees.optional(),
   roundness: ZPercent.optional(),
   dynamics: ZBrushDynamics.optional(),
   brushTip: ZBrushTipImage.optional(),
   sampledDataUuid: z.string().optional(),
+  /** Additional samples referenced by settings, such as a dual brush tip. */
+  sampleDependencies: z.array(z.object({ uuid: z.string(), source: ZSourceSample })).optional(),
+  /** Original typed entries used to retain wire types when settings are edited. */
+  descriptor: z.custom<Record<string, DescriptorValue>>().optional(),
+  presetClassName: z.string().optional(),
+  presetClassId: z.string().optional(),
   settings: z.record(z.string(), z.unknown())
 });
 
@@ -307,9 +318,23 @@ export const ZAbrFile = z.object({
   patterns: z.array(ZPattern).optional(),
   /** Parsed hierarchy (folder/group structure) from the phry block */
   hierarchy: z.array(ZHierarchyItem).optional(),
+  /** All framed resources in source order, including opaque extension blocks. */
+  resourceBlocks: z
+    .array(
+      z.object({
+        signature: z.string(),
+        key: z.string(),
+        length: z.number(),
+        offset: z.number(),
+        data: z.instanceof(Uint8Array)
+      })
+    )
+    .optional(),
   rawPatternData: z.instanceof(Uint8Array).optional(),
   rawSampleData: z.instanceof(Uint8Array).optional(),
   rawDescriptorData: z.instanceof(Uint8Array).optional(),
+  /** Root descriptor metadata and entries outside the editable brush list. */
+  descriptorRoot: z.custom<DescriptorObject>().optional(),
   /** Raw hierarchy block data for round-trip preservation */
   rawHierarchyData: z.instanceof(Uint8Array).optional(),
   errors: z.array(z.string())
@@ -366,12 +391,7 @@ export type ExportResult = z.infer<typeof ZExportResult>;
 /**
  * Resource block in ABR file (8BIM format)
  */
-export type ResourceBlock = {
-  signature: string;
-  key: string;
-  length: number;
-  data: Uint8Array;
-};
+export type ResourceBlock = NonNullable<AbrFile['resourceBlocks']>[number];
 
 /**
  * Photoshop Descriptor value types
@@ -383,7 +403,11 @@ export type DescriptorValue =
   | { type: 'TEXT'; value: string }
   | { type: 'enum'; typeId: string; value: string }
   | { type: 'UntF'; unit: string; value: number }
-  | { type: 'Objc'; classId: string; value: Record<string, DescriptorValue>; className?: string }
+  | { type: 'Objc' | 'GlbO'; classId: string; value: Record<string, DescriptorValue>; className?: string }
   | { type: 'VlLs'; value: DescriptorValue[] }
-  | { type: 'tdta'; value: Uint8Array }
+  | { type: 'tdta' | 'alis' | 'comp'; value: Uint8Array }
+  | { type: 'type' | 'GlbC'; classId: string; className: string }
   | { type: 'obj '; value: unknown };
+
+/** Descriptor envelope, separate from its entries. */
+export type DescriptorObject = { className: string; classId: string; value: Record<string, DescriptorValue> };
