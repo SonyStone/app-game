@@ -99,5 +99,15 @@ export type BrushExample = (typeof brushExamples)[number];
 export async function fetchBrushExample(example: BrushExample): Promise<File> {
   const response = await fetch(example.url);
   if (!response.ok) throw new Error(`Could not load ${example.name} (${response.status})`);
-  return new File([await response.blob()], example.filename, { type: 'application/octet-stream' });
+  const blob = await response.blob();
+  const header = await blob.slice(0, 256).text();
+  if (header.startsWith('version https://git-lfs.github.com/spec/v1')) {
+    throw new Error(
+      `${example.name} is unavailable: this deployment contains a Git LFS pointer instead of the brush file. Enable Git LFS in Vercel and redeploy. You can still import a local .abr file.`
+    );
+  }
+  if (/^\s*(?:<!doctype html|<html)/i.test(header)) {
+    throw new Error(`${example.name} is unavailable: the server returned a web page instead of the brush file.`);
+  }
+  return new File([blob], example.filename, { type: 'application/octet-stream' });
 }
