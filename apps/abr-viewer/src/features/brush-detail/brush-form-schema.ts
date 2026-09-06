@@ -1,246 +1,215 @@
 import { z } from 'zod/v3';
 import type { BrushWithPreview } from '../../lib/abr';
-import { extractPercent } from './helper-functions/extractPercent';
+import { featureFields, fieldsSchema, settingGroups, type SettingField } from './settings-fields';
 
-// Control type enum values (matches ControlSelect options)
-export const controlTypeSchema = z.number().min(0).max(5);
-
-// Main brush form schema
+/** Editable preset values; original descriptors remain the source of unknown and unchanged data. */
 export const brushFormSchema = z.object({
-  // Core properties
+  tipKind: z.enum(['computedBrush', 'sampledBrush', 'dBrush', 'dTips']),
+  tipVariant: z.number(),
+  bristle: fieldsSchema(settingGroups.bristle),
+  erodible: fieldsSchema(settingGroups.erodible),
   name: z.string().min(1, 'Name is required'),
-  spacing: z.number().min(1).max(1000),
-  diameter: z.number().min(1).max(5000),
-  angle: z.number().min(-180).max(180),
-  roundness: z.number().min(0).max(100),
-  hardness: z.number().min(0).max(100),
+  diameter: z.number().finite().min(1).max(5000),
+  spacing: z.number().finite().min(1).max(1000),
+  spacingEnabled: z.boolean(),
+  angle: z.number().finite().min(-180).max(180),
+  roundness: z.number().finite().min(0).max(100),
+  hardness: z.number().finite().min(0).max(100),
   flipX: z.boolean(),
   flipY: z.boolean(),
-
-  // Feature toggles
-  useShapeDynamics: z.boolean(),
-  useScattering: z.boolean(),
-  useTexture: z.boolean(),
-  useDualBrush: z.boolean(),
-  useColorDynamics: z.boolean(),
-  useTransfer: z.boolean(),
-  useBrushPose: z.boolean(),
-  useNoise: z.boolean(),
-  useWetEdges: z.boolean(),
-  useBuildUp: z.boolean(),
-  useSmoothing: z.boolean(),
-  useProtectTexture: z.boolean(),
-
-  // Shape Dynamics
-  shapeDynamics: z.object({
-    sizeJitter: z.number().min(0).max(100),
-    sizeControl: controlTypeSchema,
-    sizeMinimum: z.number().min(0).max(100),
-    minimumDiameter: z.number().min(0).max(100),
-    tiltScale: z.number().min(0).max(200),
-    angleJitter: z.number().min(0).max(360),
-    angleControl: controlTypeSchema,
-    roundnessJitter: z.number().min(0).max(100),
-    roundnessControl: controlTypeSchema,
-    roundnessMinimum: z.number().min(0).max(100),
-    flipXJitter: z.boolean(),
-    flipYJitter: z.boolean(),
-    brushProjection: z.boolean()
-  }),
-
-  // Scattering
-  scattering: z.object({
-    scatter: z.number().min(0).max(1000),
-    bothAxes: z.boolean(),
-    control: controlTypeSchema,
-    count: z.number().min(1).max(16),
-    countJitter: z.number().min(0).max(100),
-    countControl: controlTypeSchema
-  }),
-
-  // Transfer
-  transfer: z.object({
-    opacityJitter: z.number().min(0).max(100),
-    opacityControl: controlTypeSchema,
-    opacityMinimum: z.number().min(0).max(100),
-    flowJitter: z.number().min(0).max(100),
-    flowControl: controlTypeSchema,
-    flowMinimum: z.number().min(0).max(100)
-  })
+  ...fieldsSchema(featureFields).shape,
+  shapeDynamics: fieldsSchema(settingGroups.shapeDynamics),
+  scattering: fieldsSchema(settingGroups.scattering),
+  texture: fieldsSchema(settingGroups.texture),
+  dualBrush: fieldsSchema(settingGroups.dualBrush),
+  colorDynamics: fieldsSchema(settingGroups.colorDynamics),
+  transfer: fieldsSchema(settingGroups.transfer),
+  brushPose: fieldsSchema(settingGroups.brushPose),
+  smoothing: fieldsSchema(settingGroups.smoothing)
 });
 
+/** Validated settings snapshot, also sent to the preview worker. */
 export type BrushFormValues = z.infer<typeof brushFormSchema>;
 
-/**
- * Converts a BrushWithPreview to form values
- */
+/** Reads Photoshop descriptor fields without treating valid zero values as missing. */
 export function brushToFormValues(brush: BrushWithPreview): BrushFormValues {
-  const settings = brush.settings || {};
-  const brushDef = (settings.Brsh as Record<string, unknown>) || {};
-
-  // Extract shape dynamics
-  const szVr = settings.szVr as Record<string, unknown> | undefined;
-  const angleDynamics = settings.angleDynamics as Record<string, unknown> | undefined;
-  const roundnessDynamics = settings.roundnessDynamics as Record<string, unknown> | undefined;
-
-  // Extract scattering
-  const scatterSettings = settings.scatter as Record<string, unknown> | undefined;
-  const countDynamics = settings.countDynamics as Record<string, unknown> | undefined;
-
-  // Extract transfer
-  const opacityDynamics = settings.opacityDynamics as Record<string, unknown> | undefined;
-  const flowDynamics = settings.flowDynamics as Record<string, unknown> | undefined;
-
+  const s = brush.settings ?? {};
+  const brsh = record(s.Brsh);
   return {
-    // Core properties
+    tipKind: ['dBrush', 'dTips', 'sampledBrush'].includes(String(brsh.__classId))
+      ? (brsh.__classId as BrushFormValues['tipKind'])
+      : 'computedBrush',
+    tipVariant: Number(brsh.dtipsType ?? 0),
+    bristle: readFields(settingGroups.bristle, s),
+    erodible: readFields(settingGroups.erodible, s),
     name: brush.name,
-    spacing: brush.spacing ?? 25,
     diameter: brush.diameter ?? 30,
+    spacing: brush.spacing ?? 25,
+    spacingEnabled: brsh.Intr !== false,
     angle: brush.angle ?? 0,
     roundness: brush.roundness ?? 100,
     hardness: brush.hardness ?? 100,
-    flipX: brushDef.flipX === true,
-    flipY: brushDef.flipY === true,
-
-    // Feature toggles
-    useShapeDynamics: settings.useTipDynamics === true,
-    useScattering: settings.useScatter === true,
-    useTexture: settings.useTexture === true,
-    useDualBrush: false,
-    useColorDynamics: settings.useColorDynamics === true,
-    useTransfer: settings.usePaintDynamics === true,
-    useBrushPose: settings.useBrushPose === true,
-    useNoise: settings.useNoise === true,
-    useWetEdges: settings.Wtdg === true,
-    useBuildUp: settings.useBuildUp === true,
-    useSmoothing: settings.useSmoothing === true,
-    useProtectTexture: settings.useProtectTexture === true,
-
-    // Shape Dynamics
-    shapeDynamics: {
-      sizeJitter: extractPercent(szVr?.jitter),
-      sizeControl: (szVr?.bVTy as number) || 0,
-      sizeMinimum: extractPercent(szVr?.['Mnm '] || szVr?.Mnm),
-      minimumDiameter: extractPercent(settings.minimalDiameter),
-      tiltScale: extractPercent(settings.tiltScale) || 100,
-      angleJitter: extractPercent(angleDynamics?.jitter),
-      angleControl: (angleDynamics?.bVTy as number) || 0,
-      roundnessJitter: extractPercent(roundnessDynamics?.jitter),
-      roundnessControl: (roundnessDynamics?.bVTy as number) || 0,
-      roundnessMinimum: extractPercent(roundnessDynamics?.['Mnm '] || roundnessDynamics?.Mnm) || 25,
-      flipXJitter: settings.flipX === true,
-      flipYJitter: settings.flipY === true,
-      brushProjection: settings.brushProjection === true
-    },
-
-    // Scattering
-    scattering: {
-      scatter: extractPercent(scatterSettings?.Sctr),
-      bothAxes: scatterSettings?.bothAxes === true,
-      control: (scatterSettings?.bVTy as number) || 0,
-      count: (scatterSettings?.['Cnt '] as number) || 1,
-      countJitter: extractPercent(countDynamics?.jitter),
-      countControl: (countDynamics?.bVTy as number) || 0
-    },
-
-    // Transfer
-    transfer: {
-      opacityJitter: extractPercent(opacityDynamics?.jitter),
-      opacityControl: (opacityDynamics?.bVTy as number) || 0,
-      opacityMinimum: extractPercent(opacityDynamics?.['Mnm '] || opacityDynamics?.Mnm),
-      flowJitter: extractPercent(flowDynamics?.jitter),
-      flowControl: (flowDynamics?.bVTy as number) || 0,
-      flowMinimum: extractPercent(flowDynamics?.['Mnm '] || flowDynamics?.Mnm)
-    }
+    flipX: brsh.flipX === true,
+    flipY: brsh.flipY === true,
+    ...readFields(featureFields, s),
+    shapeDynamics: readFields(settingGroups.shapeDynamics, s),
+    scattering: readFields(settingGroups.scattering, s),
+    texture: readFields(settingGroups.texture, s),
+    dualBrush: readFields(settingGroups.dualBrush, s),
+    colorDynamics: readFields(settingGroups.colorDynamics, s),
+    transfer: readFields(settingGroups.transfer, s),
+    brushPose: readFields(settingGroups.brushPose, s),
+    smoothing: readFields(settingGroups.smoothing, s)
   };
 }
 
-/**
- * Converts form values back to BrushWithPreview for saving
- */
+/** Writes only edited fields, preserving disabled settings, unknown values and typed descriptor templates. */
 export function formValuesToBrush(brush: BrushWithPreview, values: BrushFormValues): BrushWithPreview {
-  // Start with original settings to preserve all fields
-  const updatedSettings = { ...brush.settings };
-
-  // Update feature toggles
-  updatedSettings.useTipDynamics = values.useShapeDynamics;
-  updatedSettings.useScatter = values.useScattering;
-  updatedSettings.useTexture = values.useTexture;
-  updatedSettings.useColorDynamics = values.useColorDynamics;
-  updatedSettings.usePaintDynamics = values.useTransfer;
-  updatedSettings.useBrushPose = values.useBrushPose;
-  updatedSettings.useNoise = values.useNoise;
-  updatedSettings.Wtdg = values.useWetEdges;
-  updatedSettings.useBuildUp = values.useBuildUp;
-  updatedSettings.useSmoothing = values.useSmoothing;
-  updatedSettings.useProtectTexture = values.useProtectTexture;
-  updatedSettings.flipX = values.shapeDynamics.flipXJitter;
-  updatedSettings.flipY = values.shapeDynamics.flipYJitter;
-  updatedSettings.brushProjection = values.shapeDynamics.brushProjection;
-
-  // Shape dynamics
-  if (values.useShapeDynamics) {
-    updatedSettings.szVr = {
-      ...((updatedSettings.szVr as Record<string, unknown>) || {}),
-      jitter: { unit: '#Prc', value: values.shapeDynamics.sizeJitter },
-      bVTy: values.shapeDynamics.sizeControl,
-      'Mnm ': { unit: '#Prc', value: values.shapeDynamics.sizeMinimum }
-    };
-    updatedSettings.angleDynamics = {
-      ...((updatedSettings.angleDynamics as Record<string, unknown>) || {}),
-      jitter: { unit: '#Ang', value: values.shapeDynamics.angleJitter },
-      bVTy: values.shapeDynamics.angleControl
-    };
-    updatedSettings.roundnessDynamics = {
-      ...((updatedSettings.roundnessDynamics as Record<string, unknown>) || {}),
-      jitter: { unit: '#Prc', value: values.shapeDynamics.roundnessJitter },
-      bVTy: values.shapeDynamics.roundnessControl,
-      'Mnm ': { unit: '#Prc', value: values.shapeDynamics.roundnessMinimum }
-    };
+  const before = brushToFormValues(brush);
+  if (JSON.stringify(before) === JSON.stringify(values)) return brush;
+  let settings = { ...brush.settings };
+  const write = (path: string, value: unknown) => {
+    settings = writePath(settings, path.split('.'), value);
+  };
+  const core = {
+    diameter: ['Dmtr', '#Pxl'],
+    spacing: ['Spcn', '#Prc'],
+    angle: ['Angl', '#Ang'],
+    roundness: ['Rndn', '#Prc'],
+    hardness: ['Hrdn', '#Prc']
+  } as const;
+  for (const key of Object.keys(core) as (keyof typeof core)[]) {
+    if (values[key] !== before[key] && (key !== 'hardness' || brush.type === 'computed')) {
+      const [field, unit] = core[key];
+      write(`Brsh.${field}`, { unit, value: values[key] });
+    }
   }
-  updatedSettings.minimumDiameter = { unit: '#Prc', value: values.shapeDynamics.minimumDiameter };
-  updatedSettings.tiltScale = { unit: '#Prc', value: values.shapeDynamics.tiltScale };
-
-  // Scattering
-  if (values.useScattering) {
-    updatedSettings.scatter = {
-      ...((updatedSettings.scatter as Record<string, unknown>) || {}),
-      Sctr: { unit: '#Prc', value: values.scattering.scatter },
-      bothAxes: values.scattering.bothAxes,
-      bVTy: values.scattering.control,
-      'Cnt ': values.scattering.count
-    };
-    updatedSettings.countDynamics = {
-      ...((updatedSettings.countDynamics as Record<string, unknown>) || {}),
-      jitter: { unit: '#Prc', value: values.scattering.countJitter },
-      bVTy: values.scattering.countControl
-    };
+  if (values.name !== before.name) write('Nm  ', values.name);
+  if (values.flipX !== before.flipX) write('Brsh.flipX', values.flipX);
+  if (values.flipY !== before.flipY) write('Brsh.flipY', values.flipY);
+  if (values.spacingEnabled !== before.spacingEnabled) write('Brsh.Intr', values.spacingEnabled);
+  writeFields(featureFields, before, values, write);
+  for (const key of Object.keys(settingGroups) as (keyof typeof settingGroups)[]) {
+    writeFields(settingGroups[key], before[key], values[key], write);
   }
-
-  // Transfer
-  if (values.useTransfer) {
-    updatedSettings.opacityDynamics = {
-      ...((updatedSettings.opacityDynamics as Record<string, unknown>) || {}),
-      jitter: { unit: '#Prc', value: values.transfer.opacityJitter },
-      bVTy: values.transfer.opacityControl,
-      'Mnm ': { unit: '#Prc', value: values.transfer.opacityMinimum }
-    };
-    updatedSettings.flowDynamics = {
-      ...((updatedSettings.flowDynamics as Record<string, unknown>) || {}),
-      jitter: { unit: '#Prc', value: values.transfer.flowJitter },
-      bVTy: values.transfer.flowControl,
-      'Mnm ': { unit: '#Prc', value: values.transfer.flowMinimum }
-    };
+  // Newly enabled features need complete native objects even if their defaults weren't touched.
+  const enabledGroups = {
+    useShapeDynamics: 'shapeDynamics',
+    useScattering: 'scattering',
+    useTexture: 'texture',
+    useDualBrush: 'dualBrush',
+    useColorDynamics: 'colorDynamics',
+    useTransfer: 'transfer',
+    useBrushPose: 'brushPose'
+  } as const;
+  for (const [toggle, group] of Object.entries(enabledGroups) as [
+    keyof typeof enabledGroups,
+    (typeof enabledGroups)[keyof typeof enabledGroups]
+  ][]) {
+    if (values[toggle] && !before[toggle]) writeFields(settingGroups[group], {}, values[group], write);
   }
-
+  if (values.useDualBrush && !record(record(settings.dualBrush).Brsh).__classId) {
+    write('dualBrush.Brsh', {
+      __classId: 'computedBrush',
+      Dmtr: { unit: '#Pxl', value: values.dualBrush.diameter },
+      Spcn: { unit: '#Prc', value: values.dualBrush.spacing },
+      Angl: { unit: '#Ang', value: 0 },
+      Rndn: { unit: '#Prc', value: 100 },
+      Hrdn: { unit: '#Prc', value: 100 },
+      Intr: true,
+      flipX: false,
+      flipY: false
+    });
+  }
+  if (
+    values.useDualBrush &&
+    (!before.useDualBrush ||
+      values.dualBrush.scatter !== before.dualBrush.scatter ||
+      values.dualBrush.count !== before.dualBrush.count ||
+      values.dualBrush.bothAxes !== before.dualBrush.bothAxes)
+  )
+    write('dualBrush.useScatter', true);
   return {
     ...brush,
     name: values.name,
-    spacing: values.spacing,
     diameter: values.diameter,
+    spacing: values.spacing,
     angle: values.angle,
     roundness: values.roundness,
     hardness: brush.type === 'computed' ? values.hardness : brush.hardness,
-    settings: updatedSettings
+    settings
   };
+}
+
+/** Reads a descriptor object safely; scalar values and binary data are not objects here. */
+export function record(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Uint8Array)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function readFields<T extends Record<string, SettingField>>(
+  fields: T,
+  settings: Record<string, unknown>
+): z.infer<ReturnType<typeof fieldsSchema<T>>> {
+  return Object.fromEntries(
+    Object.entries(fields).map(([key, field]) => {
+      let value: unknown = settings;
+      for (const part of field.path.split('.')) value = record(value)[part];
+      if (field.unit || field.kind === 'choice') value = record(value).value;
+      if (field.factor && typeof value === 'number') value *= field.factor;
+      return [key, typeof value === typeof field.initial ? value : field.initial];
+    })
+  ) as z.infer<ReturnType<typeof fieldsSchema<T>>>;
+}
+
+function writeFields(
+  fields: Record<string, SettingField>,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  write: (path: string, value: unknown) => void
+) {
+  for (const [key, field] of Object.entries(fields)) {
+    let value = after[key];
+    if (value === before[key]) continue;
+    // Empty references must not become invalid sample/pattern identifiers.
+    if (field.kind === 'text' && value === '') continue;
+    if (field.factor && typeof value === 'number') value /= field.factor;
+    write(
+      field.path,
+      field.unit ? { unit: field.unit, value } : field.kind === 'choice' ? { type: 'BlnM', value } : value
+    );
+  }
+}
+
+/** Copies only the edited descriptor branch and supplies required class IDs on new objects. */
+function writePath(source: Record<string, unknown>, [key, ...rest]: string[], value: unknown): Record<string, unknown> {
+  if (!rest.length) return { ...source, [key!]: value };
+  const existing = record(source[key!]);
+  const classId =
+    key === 'dualBrush'
+      ? 'dualBrush'
+      : key === 'Txtr'
+        ? 'Ptrn'
+        : key === 'toolOptions'
+          ? 'PbTl'
+          : key === 'Brsh'
+            ? 'computedBrush'
+            : 'brVr';
+  const defaults =
+    classId === 'computedBrush'
+      ? {
+          Dmtr: { unit: '#Pxl', value: 30 },
+          Spcn: { unit: '#Prc', value: 25 },
+          Hrdn: { unit: '#Prc', value: 100 },
+          Angl: { unit: '#Ang', value: 0 },
+          Rndn: { unit: '#Prc', value: 100 },
+          Intr: true,
+          flipX: false,
+          flipY: false
+        }
+      : classId === 'brVr'
+        ? { bVTy: 0, fStp: 25, jitter: { unit: '#Prc', value: 0 }, 'Mnm ': { unit: '#Prc', value: 0 } }
+        : {};
+  return { ...source, [key!]: writePath({ __classId: classId, ...defaults, ...existing }, rest, value) };
 }

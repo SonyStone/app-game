@@ -1,6 +1,8 @@
 import type { StoreSetter } from 'solid-js';
-import { Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import type { BrushWithPreview } from '../../../../lib/abr';
+import { brushTipToDataUrl } from '../../../../lib/abr';
+import { generateComputedBrushTip } from '../../../brush-preview/stroke';
 import type { BrushFormValues } from '../../brush-form-schema';
 import { AngleRoundnessControl } from '../editable-input-components/AngleRoundnessControl';
 import { CheckboxInput } from '../editable-input-components/CheckboxInput';
@@ -14,27 +16,34 @@ export function BrushTipPanel(props: {
   onDownload: () => void;
   downloading: boolean;
 }) {
+  const tip = createMemo(
+    () =>
+      props.brush.imageDataUrl ??
+      (props.values.tipKind === 'computedBrush'
+        ? brushTipToDataUrl(generateComputedBrushTip(96, props.values.hardness))
+        : undefined)
+  );
   return (
-    <div class="grid gap-6 md:grid-cols-2">
+    <div class="abr-tip-panel">
       {/* Preview */}
-      <div class="space-y-4">
+      <div class="abr-tip-image">
         <div class="checkered-bg relative mx-auto aspect-square max-w-64 overflow-hidden rounded-lg">
           <Show
-            when={props.brush.imageDataUrl}
+            when={tip()}
             fallback={
               <div class="absolute inset-0 flex items-center justify-center">
                 <p class="text-ps-text-muted text-sm">
-                  {props.brush.type === 'computed' ? 'Computed brush' : 'No preview'}
+                  {props.values.tipKind === 'computedBrush' ? 'Computed brush' : 'No preview'}
                 </p>
               </div>
             }
           >
             <img
-              src={props.brush.imageDataUrl}
+              src={tip()}
               alt={props.brush.name}
               class="absolute inset-0 h-full w-full object-contain p-2"
               style={{
-                transform: `rotate(${props.values.angle}deg) scaleX(${props.values.flipX ? -1 : 1}) scaleY(${props.values.flipY ? -1 : 1})`
+                transform: `rotate(${props.values.angle}deg) scaleX(${props.values.flipX ? -1 : 1}) scaleY(${((props.values.flipY ? -1 : 1) * props.values.roundness) / 100})`
               }}
             />
           </Show>
@@ -87,8 +96,8 @@ export function BrushTipPanel(props: {
           />
         </div>
 
-        <div class="flex items-start gap-4">
-          <div class="flex-1">
+        <div class="flex flex-wrap items-start gap-4">
+          <div class="min-w-40 flex-1">
             <SliderInput
               label="Angle"
               value={() => props.values.angle}
@@ -131,12 +140,12 @@ export function BrushTipPanel(props: {
                   draft.roundness = v;
                 })
               }
-              size={144}
+              size={96}
             />
           </div>
         </div>
 
-        <Show when={props.brush.type === 'computed'}>
+        <Show when={props.values.tipKind === 'computedBrush'}>
           <SliderInput
             label="Hardness"
             value={() => props.values.hardness}
@@ -152,6 +161,15 @@ export function BrushTipPanel(props: {
         </Show>
 
         <div class="border-ps-border mt-4 border-t pt-4">
+          <CheckboxInput
+            label="Use Spacing"
+            checked={() => props.values.spacingEnabled}
+            setChecked={(value) =>
+              props.setValues((draft) => {
+                draft.spacingEnabled = value;
+              })
+            }
+          />
           <NonLinearSliderInput
             label="Spacing"
             value={() => props.values.spacing}

@@ -53,7 +53,8 @@ export function BrushTreeGroup(props: BrushTreeGroupProps): JSX.Element {
   return (
     <div
       data-drag-handle
-      class={`cursor-grab touch-none rounded border transition-colors duration-100 ${
+      data-group-id={props.block.id}
+      class={`abr-tree-group cursor-grab touch-none ${
         props.selected
           ? 'border-ps-accent bg-ps-accent/10'
           : isTopLevel()
@@ -69,6 +70,8 @@ export function BrushTreeGroup(props: BrushTreeGroupProps): JSX.Element {
       >
         {/* Expand chevron — stopPropagation prevents selection/drag */}
         <button
+          aria-label={`${props.block.expanded ? 'Collapse' : 'Expand'} ${props.block.name}`}
+          aria-expanded={props.block.expanded ? 'true' : 'false'}
           class="flex h-4 w-4 shrink-0 items-center justify-center text-neutral-400 hover:text-neutral-200"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => props.onToggleExpand(props.block.id)}
@@ -98,10 +101,12 @@ export function BrushTreeGroup(props: BrushTreeGroupProps): JSX.Element {
           fallback={
             <input
               type="text"
+              aria-label="Group name"
               class="bg-ps-bg-dark border-ps-accent text-ps-text-bright flex-1 rounded border px-1.5 py-0.5 text-sm outline-none"
               value={editName()}
               onInput={(e) => setEditName(e.currentTarget.value)}
               onKeyDown={(e) => {
+                e.stopPropagation();
                 if (e.key === 'Enter') commitRename();
                 if (e.key === 'Escape') setIsEditing(false);
               }}
@@ -123,7 +128,9 @@ export function BrushTreeGroup(props: BrushTreeGroupProps): JSX.Element {
         {/* Actions button */}
         <div class="relative shrink-0">
           <button
-            class="text-ps-text-muted hover:text-ps-text-bright rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+            aria-label={`Actions for ${props.block.name}`}
+            aria-expanded={showActions() ? 'true' : 'false'}
+            class="abr-group-menu text-ps-text-muted hover:text-ps-text-bright p-0.5"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
@@ -143,7 +150,9 @@ export function BrushTreeGroup(props: BrushTreeGroupProps): JSX.Element {
               class="bg-ps-bg-light border-ps-border shadow-ps-lg absolute top-full right-0 z-50 mt-1 w-44 rounded-lg border py-1"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              onPointerLeave={() => setShowActions(false)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setShowActions(false);
+              }}
             >
               <button
                 class="text-ps-text hover:bg-ps-bg-lighter flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm"
@@ -213,7 +222,7 @@ export function BrushTreeGroup(props: BrushTreeGroupProps): JSX.Element {
 
       {/* Children (expanded) — rendered by solid-nest */}
       <Show when={props.block.expanded}>
-        <div class="pr-1 pb-1 pl-3">{props.childrenSlot}</div>
+        <div class="abr-group-children">{props.childrenSlot}</div>
       </Show>
     </div>
   );

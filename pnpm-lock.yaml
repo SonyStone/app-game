@@ -524,6 +524,9 @@ importers:
       solid-nest:
         specifier: workspace:*
         version: link:../../packages/solid-nest
+      typegpu:
+        specifier: ^0.11.4
+        version: 0.11.4
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -534,9 +537,15 @@ importers:
       '@unocss/vite':
         specifier: 'catalog:'
         version: 66.6.8(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4))
+      '@webgpu/types':
+        specifier: ^0.1.70
+        version: 0.1.70
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+      unplugin-typegpu:
+        specifier: ^0.11.3
+        version: 0.11.3(typegpu@0.11.4)
       vite:
         specifier: 'catalog:'
         version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4)
@@ -546,6 +555,9 @@ importers:
       vite-tsconfig-paths:
         specifier: 'catalog:'
         version: 6.1.1(typescript@6.0.3)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4))
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4))
 
   apps/browser-atlas:
     dependencies:

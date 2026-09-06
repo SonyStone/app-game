@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Brush preview verification</title>
+  <style>
+    body {
+      font: 14px system-ui;
+      background: #292929;
+      color: #eee;
+      padding: 24px;
+    }
+    canvas {
+      display: block;
+      margin: 12px 0;
+      max-width: 100%;
+    }
+    pre {
+      white-space: pre-wrap;
+    }
+  </style>
+  <h1>Brush preview verification</h1>
+  <button id="run">Run GPU comparisons</button>
+  <pre id="report">Ready</pre>
+  <div id="previews"></div>
+  <script type="module" src="./src/features/brush-preview/verification.ts"></script>
+</html>

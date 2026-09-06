@@ -3,12 +3,15 @@
  * These functions use browser APIs (Canvas, Blob) and won't work in Node.js
  */
 
+import type { PatternResource } from '@app-game/abr-parser/browser';
 import type { BrushTipImage, AbrFile as CoreAbrFile, Brush as CoreBrush } from '@app-game/abr-parser';
 
 /**
  * Extended Brush type with browser-specific display properties
  */
 export type BrushWithPreview = CoreBrush & {
+  /** Shared compressed patterns; decoded on demand in the preview worker. */
+  patternResources?: PatternResource[];
   /** Data URL for browser display of main brush tip */
   imageDataUrl?: string;
   /** Dual brush tip (if dual brush is enabled) */
@@ -173,5 +176,5 @@ export function downloadAbrFile(data: Uint8Array, filename: string): void {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

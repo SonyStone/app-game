@@ -11,7 +11,8 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview --port 4020",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test": "vitest run"
   },
   "dependencies": {
     "@app-game/abr-parser": "workspace:*",
@@ -21,7 +22,8 @@
     "@solidjs/web": "2.0.0-rc.4",
     "solid-js": "catalog:",
     "solid-nest": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "typegpu": "^0.11.4"
   },
   "devDependencies": {
     "@unocss/reset": "catalog:",
@@ -29,6 +31,9 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:",
-    "vite-tsconfig-paths": "catalog:"
+    "vite-tsconfig-paths": "catalog:",
+    "vitest": "catalog:",
+    "unplugin-typegpu": "^0.11.3",
+    "@webgpu/types": "^0.1.70"
   }
 }
