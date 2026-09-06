@@ -1,5 +1,5 @@
 import type { BrushTipImage } from '../../lib/abr';
-import { blendCoverage, blendModeId, textureTone } from './effects';
+import { blendModeId, dualCoverage, textureCoverage, textureTone } from './effects';
 import { renderResourcePixels } from './resource-pixels';
 import type { PreviewResources } from './resources';
 import {
@@ -86,8 +86,8 @@ function renderLayers(input: PreviewInput, tip: BrushTipImage, stroke: PreviewSt
         let coverage = sampleTip(tip, u, w);
         const i = py * width + px;
         if (v.useTexture && v.texture.eachTip && resources.pattern)
-          coverage = textured(coverage, resources.pattern, u * rx * 2, w * ry * 2, s[offset + 10]!, input);
-        if (dual) coverage = Math.min(coverage, blendCoverage(coverage, dual[i]!, blendModeId(v.dualBrush.mode)));
+          coverage = textured(coverage, resources.pattern, px + 0.5, py + 0.5, s[offset + 10]!, input);
+        if (dual) coverage = dualCoverage(coverage, dual[i]!, blendModeId(v.dualBrush.mode));
         if (v.useNoise) {
           const n = Math.sin(Math.floor(px) * 12.9898 + Math.floor(py) * 78.233 + s[offset + 11]!) * 43758.5453;
           coverage *= 0.35 + 0.65 * (n - Math.floor(n));
@@ -107,7 +107,7 @@ function textured(coverage: number, pattern: BrushTipImage, x: number, y: number
     w = y / (pattern.height * scale);
   const sample = sampleTip(pattern, u - Math.floor(u), w - Math.floor(w), true);
   const tone = textureTone(sample, v.invert ? 1 : 0, v.brightness, v.contrast);
-  return coverage * (1 - depth) + blendCoverage(coverage, tone, blendModeId(v.mode)) * depth;
+  return textureCoverage(coverage, tone, blendModeId(v.mode), depth);
 }
 /** Matches normalized GPU linear sampling; patterns repeat at tile boundaries. */
 function sampleTip(tip: BrushTipImage, u: number, v: number, repeat = false) {

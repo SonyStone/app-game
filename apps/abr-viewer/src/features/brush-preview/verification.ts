@@ -46,6 +46,9 @@ export async function verifyPreviewGpu() {
       'scatter',
       'texture',
       'texture-stroke',
+      'texture-height',
+      'texture-linear-height',
+      'texture-height-dual',
       'dual',
       'color',
       'pose',
@@ -75,7 +78,7 @@ export async function verifyPreviewGpu() {
       const resources: PreviewResources = {};
       if (mode.startsWith('texture')) {
         input.values.useTexture = true;
-        input.values.texture.eachTip = mode === 'texture';
+        input.values.texture.eachTip = mode !== 'texture-stroke';
         input.values.texture.scale = 57;
         input.values.texture.depth = 67;
         input.values.texture.brightness = 17;
@@ -88,9 +91,15 @@ export async function verifyPreviewGpu() {
           data: Uint8Array.from({ length: 35 }, (_, i) => (i * 41) % 256)
         };
       }
-      if (mode === 'dual') {
+      if (mode.includes('height')) {
+        input.values.texture.mode = mode === 'texture-linear-height' ? 'linearHeight' : 'Hght';
+        input.values.texture.depth = 9;
+        input.values.texture.depthControl = 2;
+        input.values.spacing = 1;
+      }
+      if (mode === 'dual' || mode === 'texture-height-dual') {
         input.values.useDualBrush = true;
-        input.values.dualBrush.mode = 'Mltp';
+        input.values.dualBrush.mode = mode === 'dual' ? 'Mltp' : 'hardMix';
         input.values.dualBrush.diameter = 30;
         resources.dualTip = generateComputedBrushTip(32, 50);
       }

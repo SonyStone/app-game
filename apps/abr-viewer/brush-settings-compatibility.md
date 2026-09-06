@@ -43,6 +43,14 @@ Descriptor bindings are in `src/features/brush-detail/settings-fields.ts`. For e
 - Eleven real WebGPU cases compare with the CPU implementation. These comparisons do not establish Photoshop pixel parity.
 - With the 139-brush watercolor file, changing texture brightness updated only the selected card and inspector canvas. Undo restored 9; redo restored 27. Visible previews used the GPU without resource errors.
 
+## Halftone preview correction on 2026-09-06
+
+All 76 embedded patterns in `halftones_and_screentones.abr` decode successfully. The missing halftones came from preview compositing: per-tip textures restarted in tip-local coordinates, Height depth was mixed as opacity, and Dual Brush Hard Mix was limited to the original soft coverage. Patterns now remain anchored to canvas pixels, Height depth controls paint height, and Hard Mix can produce opaque edges within the primary tip.
+
+Circle Range Tiny was inspected in Photoshop 2025 at its original 9% depth and at 50%, then restored to 9%. Higher depth fills more of the pattern. Height and Linear Height use the [Krita Photoshop-height approximation](https://docs.krita.org/en/reference_manual/brushes/brush_settings/texture.html), with depth scaling described in its [compositing implementation](https://github.com/KDE/krita/blob/master/libs/ui/tool/strokes/KisMaskingBrushCompositeOp.h). This is a behavioral correction, not a claim of Photoshop pixel parity. Exported brush settings and embedded resources are unchanged.
+
+Regression tests cover the actual Circle Range Tiny preset, dark/light relief, depth changes, dense overlap, and Hard Mix coverage. Fourteen browser GPU cases pass CPU comparisons, including Height, Linear Height, and Height with Dual Brush Hard Mix; device-loss handling also passes. The full test command has a separate existing failure because `example-assets.test.ts` imports the missing `scripts/check-example-assets.mjs`.
+
 ## References
 
 Adobe describes [brush dynamics and fade](https://helpx.adobe.com/photoshop/using/adding-dynamic-elements-brushes.html) and [textured brush behavior](https://helpx.adobe.com/photoshop/using/creating-textured-brushes.html). The [Photoshop file format reference](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/) documents descriptor and pattern structures. Actual imported descriptors informed the field bindings; these sources do not specify the full Photoshop brush renderer.

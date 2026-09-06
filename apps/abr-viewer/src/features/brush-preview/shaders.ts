@@ -1,5 +1,5 @@
 import { common, d, std, tgpu } from 'typegpu';
-import { blendCoverage, grain, textureTone } from './effects';
+import { dualCoverage, grain, textureCoverage, textureTone } from './effects';
 
 /** One instanced quad per stamp. Colors and texture depth vary independently per tip. */
 export const stamps = tgpu.vertexLayout(
@@ -60,14 +60,15 @@ export const stampFragment = tgpu.fragmentFn({
   const p = brushLayout.$.params;
   let coverage = std.textureSampleLevel(brushLayout.$.tip, brushLayout.$.sampler, input.uv, 0).r;
   if (p.flags.x > 0 && p.flags.y > 0) {
-    const uv = std.div(input.local, std.mul(p.texture.xy, p.texture.z));
+    // Each tip changes depth, while the pattern stays anchored to the canvas.
+    const uv = std.div(input.position.xy, std.mul(p.texture.xy, p.texture.z));
     const sample = std.textureSampleLevel(brushLayout.$.pattern, brushLayout.$.repeat, uv, 0).r;
     const tone = textureTone(sample, p.tone.x, p.tone.y, p.tone.z);
-    coverage = std.mix(coverage, blendCoverage(coverage, tone, p.texture.w), input.dynamics.z);
+    coverage = textureCoverage(coverage, tone, p.texture.w, input.dynamics.z);
   }
   if (p.flags.z > 0) {
     const second = std.textureLoad(brushLayout.$.dual, d.vec2i(input.position.xy), 0).r;
-    coverage = std.min(coverage, blendCoverage(coverage, second, p.extra.y));
+    coverage = dualCoverage(coverage, second, p.extra.y);
   }
   if (p.flags.w > 0) coverage *= 0.35 + 0.65 * grain(input.position.x, input.position.y, input.dynamics.w);
   const flow = coverage * input.dynamics.x;
@@ -97,7 +98,7 @@ export const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.pos
     const uv = std.div(d.vec2f(xy), std.mul(p.texture.xy, p.texture.z));
     const sample = std.textureSampleLevel(compositeLayout.$.pattern, compositeLayout.$.repeat, uv, 0).r;
     const tone = textureTone(sample, p.tone.x, p.tone.y, p.tone.z);
-    coverage = std.mix(coverage, blendCoverage(coverage, tone, p.texture.w), p.extra.x);
+    coverage = textureCoverage(coverage, tone, p.texture.w, p.extra.x);
   }
   if (p.extra.z > 0) {
     const limit = std.sub(d.vec2i(p.viewport.xy), d.vec2i(1));

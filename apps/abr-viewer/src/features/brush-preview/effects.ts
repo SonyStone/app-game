@@ -38,6 +38,31 @@ export function blendCoverage(a: number, b: number, mode: number): number {
   return std.clamp(result, 0, 1);
 }
 
+/**
+ * Height modes use depth as paint height, not as opacity of a blend result.
+ * The 10× depth response follows Krita's documented Photoshop-height approximation.
+ * Pattern luminance is relief: dark recesses receive paint first as depth increases.
+ */
+export function textureCoverage(coverage: number, tone: number, mode: number, depth: number): number {
+  'use gpu';
+  if (mode === 8 || mode === 9) {
+    const height = coverage * depth * 10;
+    let result = height - tone;
+    if (mode === 8) result = std.max(result, height * (1 - tone));
+    return std.clamp(result, 0, coverage);
+  }
+  return coverage * (1 - depth) + blendCoverage(coverage, tone, mode) * depth;
+}
+
+/** Hard Mix creates binary coverage inside the primary tip; clamping it back to the soft tip erases its contrast. */
+export function dualCoverage(primary: number, secondary: number, mode: number): number {
+  'use gpu';
+  if (primary <= 0) return 0;
+  const mixed = blendCoverage(primary, secondary, mode);
+  if (mode === 7) return mixed;
+  return std.min(primary, mixed);
+}
+
 /** Texture tone controls are applied before coverage blending. */
 export function textureTone(sample: number, invert: number, brightness: number, contrast: number): number {
   'use gpu';
