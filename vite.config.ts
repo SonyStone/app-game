@@ -66,6 +66,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@app-game/abr-viewer': resolve(apps, 'abr-viewer/src'),
       '@app-game/solid-dnd-playground': resolve(apps, 'solid-dnd-playground/src'),
       '@app-game/dnd-playground': resolve(apps, 'dnd-playground/src'),
       '@app-game/grease-pencil-typegpu': resolve(apps, 'grease-pencil-typegpu/src'),

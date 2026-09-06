@@ -1,0 +1,122 @@
+.abr-viewer {
+  /* Photoshop-like dark theme colors */
+  --color-ps-bg-dark: #1e1e1e;
+  --color-ps-bg: #2b2b2b;
+  --color-ps-bg-light: #3c3c3c;
+  --color-ps-bg-lighter: #4a4a4a;
+
+  --color-ps-border-dark: #1a1a1a;
+  --color-ps-border: #3d3d3d;
+  --color-ps-border-light: #5a5a5a;
+
+  --color-ps-text-muted: #8c8c8c;
+  --color-ps-text: #cccccc;
+  --color-ps-text-bright: #ffffff;
+
+  --color-ps-accent: #2d9cdb;
+  --color-ps-accent-hover: #3daee9;
+  --color-ps-accent-active: #1d8cc9;
+
+  --color-ps-success: #27ae60;
+  --color-ps-warning: #f39c12;
+  --color-ps-error: #e74c3c;
+
+  --font-sans: 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+  --font-mono: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace;
+
+  --shadow-ps: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-ps-lg: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+
+/* Custom scrollbar for Photoshop-like feel */
+.abr-viewer ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.abr-viewer ::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.abr-viewer ::-webkit-scrollbar-thumb {
+  background: #4a4a4a;
+  border-radius: 5px;
+}
+
+.abr-viewer ::-webkit-scrollbar-thumb:hover {
+  background: #5a5a5a;
+}
+
+/* Selection color */
+.abr-viewer ::selection {
+  background-color: rgba(45, 156, 219, 0.4);
+}
+
+/* Checkered background pattern for transparent images */
+.abr-viewer .checkered-bg {
+  background-color: #3c3c3c;
+  background-image:
+    linear-gradient(45deg, #4a4a4a 25%, transparent 25%), linear-gradient(-45deg, #4a4a4a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #4a4a4a 75%), linear-gradient(-45deg, transparent 75%, #4a4a4a 75%);
+  background-size: 16px 16px;
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0px;
+}
+
+/* Drop zone animation */
+@keyframes pulse-border {
+  0%,
+  100% {
+    border-color: rgba(45, 156, 219, 0.5);
+  }
+  50% {
+    border-color: rgba(45, 156, 219, 1);
+  }
+}
+
+.abr-viewer .drop-zone-active {
+  animation: pulse-border 1.5s ease-in-out infinite;
+}
+
+/* Brush card hover effect */
+.abr-viewer .brush-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.abr-viewer .brush-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, #0003, transparent);
+  opacity: 0;
+  transition: opacity 200ms;
+}
+
+.abr-viewer .brush-card:hover::before {
+  opacity: 1;
+}
+
+/* JSON syntax highlighting */
+.abr-viewer .json-key {
+  color: #9cdcfe;
+}
+
+.abr-viewer .json-string {
+  color: #ce9178;
+}
+
+.abr-viewer .json-number {
+  color: #b5cea8;
+}
+
+.abr-viewer .json-boolean {
+  color: #569cd6;
+}
+
+.abr-viewer .json-null {
+  color: #808080;
+}

@@ -1,0 +1,34 @@
+{
+  "name": "@app-game/abr-viewer",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./routes": "./src/routes.tsx"
+  },
+  "scripts": {
+    "dev": "vite --port 3020",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --port 4020",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@app-game/abr-parser": "workspace:*",
+    "@app-game/app-router": "workspace:*",
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
+    "@solidjs/web": "2.0.0-rc.4",
+    "solid-js": "catalog:",
+    "solid-nest": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@unocss/reset": "catalog:",
+    "@unocss/vite": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vite-tsconfig-paths": "catalog:"
+  }
+}

@@ -1,0 +1,994 @@
+[
+  {
+    "path": "editor-history/prompt/Tools/_Common/Smoothing-Options.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Smoothing-Options.md",
+    "timestamp": 1770621967423,
+    "sha256": "75b09610ecd0d57e2e54b6f0d728ea12f89cd31833d8f44d728844bd7040459c",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/components/DropZone.tsx",
+    "original_path": "/workspace/web/src/components/DropZone.tsx",
+    "timestamp": 1770468017506,
+    "sha256": "3687c71d12ec3dfedd488b60d8725caefd7d067dd14034f73170a1d25aeb157f",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/tsconfig.json",
+    "original_path": "/workspace/tsconfig.json",
+    "timestamp": 1770470463148,
+    "sha256": "b2458d9913ad3445b6b1526d8afc63d3aeb3cd2a58169a789197960dc0f17ec2",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/debug4.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/debug4.spec.ts",
+    "timestamp": 1771906960895,
+    "sha256": "e08c036677dae05ca2114f95ba706f386c9bb8a82981b36f7e8296ef6956523e",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/descriptor-parser.ts",
+    "original_path": "/workspace/src/descriptor-parser.ts",
+    "timestamp": 1770428373849,
+    "sha256": "a2e07e54b51d77f41151f6ad5c4a82f5d0896795a283f61f363129914d1c7bca",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Shape-Dynamics.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Shape-Dynamics.md",
+    "timestamp": 1770626820197,
+    "sha256": "f61a7883f920e8f3cc00cffd5568767423fdfc5eb9ea3bcf7b826fea00cd84e0",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/jest.config.js",
+    "original_path": "/workspace/jest.config.js",
+    "timestamp": 1770458752114,
+    "sha256": "9b11473df7e18011fee183ad215564adc3e4b6d7630b9bf8d8e5bd70838e3ceb",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/package.json",
+    "original_path": "/workspace/web/package.json",
+    "timestamp": 1770465860769,
+    "sha256": "d068abbf23caeab54132bd30c68f90208589a5b8c28520f5aaed2897b9584652",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/progress.md",
+    "original_path": "/workspace/progress.md",
+    "timestamp": 1770429591931,
+    "sha256": "7263038c611caa06b134d103c6697af8e43081715ec64db245309ebe3ebb52e2",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/components/form-panels/index.ts",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/components/form-panels/index.ts",
+    "timestamp": 1770538814343,
+    "sha256": "822212fa153395b920f5478edf2ba30211c399adf38e6028c88831e2546cefc3",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/debug3.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/debug3.spec.ts",
+    "timestamp": 1771906814145,
+    "sha256": "859ff2172a52202dc0c9824847b3523b43ab532813c41a13c01c13c68b5aaf1f",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/sanity.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/sanity.spec.ts",
+    "timestamp": 1771908092066,
+    "sha256": "dd843bc1ae166209e5940ac3358babde7587d327b324e3bf172959317ac73455",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/babel.config.js",
+    "original_path": "/workspace/babel.config.js",
+    "timestamp": 1770458769554,
+    "sha256": "fcb40a858fa329817bb101ff6513a43b2a17a352665a1f877217909a8377cce2",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/dnd-playground/e2e/stability-check.spec.ts",
+    "original_path": "/workspace/apps/dnd-playground/e2e/stability-check.spec.ts",
+    "timestamp": 1771634862405,
+    "sha256": "8ec664c09c8307e0093d5f9fd01a5af76bd02fc7579cf487479db21156e5ab6b",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/check-console.mjs",
+    "original_path": "/workspace/apps/solid-dnd-e2e/check-console.mjs",
+    "timestamp": 1771926364239,
+    "sha256": "eef85098347de0c02796dd0799144cce6bc775f030a04f0afe30c33ad3414840",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/vercel.json",
+    "original_path": "/workspace/vercel.json",
+    "timestamp": 1770436550909,
+    "sha256": "1b78d6ea446da53673f2ee953120c4f105534def151857ab40d7f3ae14b02c0f",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/image-exporter.ts",
+    "original_path": "/workspace/src/image-exporter.ts",
+    "timestamp": 1770428193935,
+    "sha256": "232e948946e1846af84a6596fad371a3c2a68e5a6ba03b2f615b374ea6538b1b",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/lib/abr/types.ts",
+    "original_path": "/workspace/web/src/lib/abr/types.ts",
+    "timestamp": 1770463776876,
+    "sha256": "8cdf664ee8285041b6bf2e8b7ad1a854a47dd192aca1a3c2a07fcd3645f423a2",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/lib/abr/abr-parser.ts",
+    "original_path": "/workspace/web/src/lib/abr/abr-parser.ts",
+    "timestamp": 1770464068966,
+    "sha256": "72d9f71917279824c9f26c5a7db98df28b528e7e66409d778f1d89c97d602477",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-playground/package.json",
+    "original_path": "/workspace/apps/solid-dnd-playground/package.json",
+    "timestamp": 1771765995610,
+    "sha256": "df4ea771c1ff03cf56b28bf075478ef82a2d8dfb5f3275e0341ba9904e1f7723",
+    "reason": "different historical version"
+  },
+  {
+    "path": "editor-history/apps/web/postcss.config.js",
+    "original_path": "/workspace/apps/web/postcss.config.js",
+    "timestamp": 1770503992214,
+    "sha256": "20790f36ca17cfc115f137e2921765140a0c5337b82905e01f360865a7352e61",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/debug.ts",
+    "original_path": "/workspace/src/debug.ts",
+    "timestamp": 1770428341597,
+    "sha256": "37057ad168640ea9db1a4767b39a1956103b3384383540611ba85ebcf39bee94",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/playwright.tmp.config.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/playwright.tmp.config.ts",
+    "timestamp": 1772935894888,
+    "sha256": "c5d870f792fc59b6b49880275a3ff7cad4d02520c286057c3bf0c902ab64f49d",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/components/BrushCard.tsx",
+    "original_path": "/workspace/apps/web/src/components/BrushCard.tsx",
+    "timestamp": 1770503969142,
+    "sha256": "6adc9e1a5338ceb6354be27cfaf6dc285231e59d1dca1c9d7925574387d8bb1f",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-playground/src/demos/GridDemo.tsx",
+    "original_path": "/workspace/apps/solid-dnd-playground/src/demos/GridDemo.tsx",
+    "timestamp": 1772927512439,
+    "sha256": "27a6c5785c768f37c6924d92fa7f3c756379eb30bab5b90b55591efc2195c585",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/binary-reader.ts",
+    "original_path": "/workspace/src/binary-reader.ts",
+    "timestamp": 1770465667541,
+    "sha256": "09f7271d2cb675912ed3515b7f46ff0e94b5232ece0d9dcca1449f6a6e82558f",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/package.json",
+    "original_path": "/workspace/package.json",
+    "timestamp": 1770469663263,
+    "sha256": "5c53a643b2752ce8684cc0ea7762a9cbf66b8d13cd7997988deae1f45f8be148",
+    "reason": "different historical version"
+  },
+  {
+    "path": "editor-history/apps/web/src/components/BrushDetail.tsx",
+    "original_path": "/workspace/apps/web/src/components/BrushDetail.tsx",
+    "timestamp": 1770469962493,
+    "sha256": "c10c360ee2020396008431fbf5835982db6722d8cb2ac3f0b40bd910b58da746",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Transfer.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Transfer.md",
+    "timestamp": 1770626848055,
+    "sha256": "de7c05251d2c1de9fc1ac426bb5559c61d8be1caf0933a26fe77bd54cde5247b",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/lib/abr/descriptor-parser.ts",
+    "original_path": "/workspace/web/src/lib/abr/descriptor-parser.ts",
+    "timestamp": 1770431629670,
+    "sha256": "e387855ca76c7639fb7e3c8e28d03852a4f0aa0c90646e733a39077798a7a803",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/mouse-debug.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/mouse-debug.spec.ts",
+    "timestamp": 1771908140557,
+    "sha256": "6efae5b74cdfd33ac5d75efa168ac143f4f3a37a7b9742d36d4aee63886fa31a",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-playground/src/demos/useOverlayDemo.ts",
+    "original_path": "/workspace/apps/solid-dnd-playground/src/demos/useOverlayDemo.ts",
+    "timestamp": 1772927800111,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/entry-client.tsx",
+    "original_path": "/workspace/web/src/entry-client.tsx",
+    "timestamp": 1770431722553,
+    "sha256": "22c6e8cd0323205f50e290ac6cc712ffd1c215f895910d53fc5461f8a887b79d",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-playground/src/demos/ListOverlayDemo.tsx",
+    "original_path": "/workspace/apps/solid-dnd-playground/src/demos/ListOverlayDemo.tsx",
+    "timestamp": 1772928112998,
+    "sha256": "aa5a7fbbee23e80119d54e7241c61f5db3c0ea32eb19a9302ed057028a84fe27",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Scattering.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Scattering.md",
+    "timestamp": 1770626778082,
+    "sha256": "6a0068af53362897d05303f0cc65b579636b5620b4c32e89ae124bc6d271bf0c",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/components/BrushCard.tsx",
+    "original_path": "/workspace/web/src/components/BrushCard.tsx",
+    "timestamp": 1770468017522,
+    "sha256": "c8073e1af15fa5a9dd2205c845160ef5c94c2e23f2d44f9baff6f5cdbc230607",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/lib/abr/browser-utils.ts",
+    "original_path": "/workspace/web/src/lib/abr/browser-utils.ts",
+    "timestamp": 1770467800910,
+    "sha256": "cb4b5e258b40b9c93b80e174d01e2764a1cec1d1a0dae8f8fd83272527725caa",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/debug8.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/debug8.spec.ts",
+    "timestamp": 1771907598774,
+    "sha256": "cdfc85f46647d2ebcb14a0e17cb801815f75b404857a4d18fe5dcacd65ba8678",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/components/panel-components/RawSettingsPanel.tsx",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/components/panel-components/RawSettingsPanel.tsx",
+    "timestamp": 1770537529972,
+    "sha256": "0e9ab9cd50b48602f31d877bdb1dbf845621557b0cfa76cb665bbb151d6f75ef",
+    "reason": "different historical version"
+  },
+  {
+    "path": "editor-history/src/descriptor-serializer.ts",
+    "original_path": "/workspace/src/descriptor-serializer.ts",
+    "timestamp": 1770460460276,
+    "sha256": "5ee52a547a12d28721baecd77c5955de026b742bdcd017b8fce9f623e2db71e2",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/app.config.ts",
+    "original_path": "/workspace/web/app.config.ts",
+    "timestamp": 1770470463188,
+    "sha256": "a6840f8f37c6748831fe8fcc4671a6304b3321493e3d9450d415c91c5ecdf00c",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/tmp-sortable-overlay-debug.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/tmp-sortable-overlay-debug.spec.ts",
+    "timestamp": 1772936068837,
+    "sha256": "cfdc85282622d7349ee54c79cd360495b0b2ebb925cfe8922b47b55405bd7fbd",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/components/form-panels/BrushTipPanelForm.tsx",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/components/form-panels/BrushTipPanelForm.tsx",
+    "timestamp": 1770538814759,
+    "sha256": "758c50b9ccb2fd8955d04eed687d97ead1eff39f4d97ef346fa6d3709430f32c",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/components/BrushEditor.tsx",
+    "original_path": "/workspace/apps/web/src/components/BrushEditor.tsx",
+    "timestamp": 1770502425140,
+    "sha256": "d3836c2a38f47f981f990d1f88d14caf94cfef8593ad6adf458c5f810087dc82",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/binary-writer.ts",
+    "original_path": "/workspace/src/binary-writer.ts",
+    "timestamp": 1770460447475,
+    "sha256": "b80ff9117e870c68298c9d7184adebfb16abbc09701694c98f1ebd63f6e82cbb",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/components/form-panels/ScatteringPanelForm.tsx",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/components/form-panels/ScatteringPanelForm.tsx",
+    "timestamp": 1770538814679,
+    "sha256": "68f6ab3132882e62ddb090b71fb7092c3332ae4d8acfd1da79579e5d2983c95c",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Non-Linear-Sliders.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Non-Linear-Sliders.md",
+    "timestamp": 1770627076111,
+    "sha256": "efa842004f8b6154130619cbf1ca061567a7875312cb61545a7abdfff3930656",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/check-console2.mjs",
+    "original_path": "/workspace/apps/solid-dnd-e2e/check-console2.mjs",
+    "timestamp": 1771926505119,
+    "sha256": "afe3f2fa2662db12055f7fa38caffd786c8226d06bb38f435e7976a340a5f76c",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/components/FileList.tsx",
+    "original_path": "/workspace/apps/web/src/components/FileList.tsx",
+    "timestamp": 1770503962942,
+    "sha256": "3b64b546f75b377c10c91b7e8bea8c534ab454f2ec9d3275c6f55685987c7c22",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Symmetry-Options.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Symmetry-Options.md",
+    "timestamp": 1770621967423,
+    "sha256": "101724d825eb8a5ddb6d6fbac8ed81124b24311bb3bf76b80caee198557e1091",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Pencil Tool /Pencil-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Pencil Tool /Pencil-Tool.md",
+    "timestamp": 1770627891836,
+    "sha256": "052715521c5ee81cfbd93dc9b2ff60e334b4c6f8eb25c077ad71faf7c5fbbdd5",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/components/BrushTreeItem.tsx",
+    "original_path": "/workspace/apps/web/src/components/BrushTreeItem.tsx",
+    "timestamp": 1771551111918,
+    "sha256": "60a1b8c7554bbabd98788070d33b4762d009ecab3cff7420f978cf1fdaf266f2",
+    "reason": "different historical version"
+  },
+  {
+    "path": "editor-history/prompt.md",
+    "original_path": "/workspace/prompt.md",
+    "timestamp": 1770426883858,
+    "sha256": "10b9acc7cb605b6bb9452211673d22244df2df5ebd294663733a2bdd93173ffa",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/app.css",
+    "original_path": "/workspace/web/src/app.css",
+    "timestamp": 1770431723809,
+    "sha256": "20942a4f6999930c8a1d74f1af33fa8e3876d4826df6f48f80820d9d3479f8e6",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/debug-samples2.ts",
+    "original_path": "/workspace/src/debug-samples2.ts",
+    "timestamp": 1770428653557,
+    "sha256": "5f5b267fabb3ec77455002a12ed28dab4cdd6321d072c04cada24cd2d0ab94e7",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/cli.ts",
+    "original_path": "/workspace/src/cli.ts",
+    "timestamp": 1770465709574,
+    "sha256": "9970d5a80496aa2442e350069a353148778b71713eb65e8bdd2b5294359313a1",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/abr-writer.ts",
+    "original_path": "/workspace/src/abr-writer.ts",
+    "timestamp": 1770470463188,
+    "sha256": "9eef34398f1d12a6aec79bd85d378b2335d36cb790bbf52b5533bcf0ba8c3b7b",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/lib/abr/descriptor-serializer.ts",
+    "original_path": "/workspace/web/src/lib/abr/descriptor-serializer.ts",
+    "timestamp": 1770460499721,
+    "sha256": "b6f9a6c228b3b32eee270324f576514ebeeb96713be45341620e432f86b1dd65",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/app.tsx",
+    "original_path": "/workspace/web/src/app.tsx",
+    "timestamp": 1770431723477,
+    "sha256": "fdb4678fd867bf1c5bdebd5c716e921052ac9eecaa1c97ef64ba54f1e5adb190",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/History Brush Tool /History-Brush-Tool.md",
+    "original_path": "/workspace/prompt/Tools/History Brush Tool /History-Brush-Tool.md",
+    "timestamp": 1770629213140,
+    "sha256": "811675204c2965228164f90b9f114548051909282771bb70403e9b374f40dbb0",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/entry-server.tsx",
+    "original_path": "/workspace/web/src/entry-server.tsx",
+    "timestamp": 1770431723485,
+    "sha256": "9ce0d56d0c24e7acf9bee56ac35e99b35abbb7d6b140b3a5aafc2075e57be3ed",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/components/FileList.tsx",
+    "original_path": "/workspace/web/src/components/FileList.tsx",
+    "timestamp": 1770468017506,
+    "sha256": "357b09312d19102808fd636c538f913283d3427e2bb3dd82f1790b2a269bbdc2",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/mouse-test.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/mouse-test.spec.ts",
+    "timestamp": 1771901488205,
+    "sha256": "88d4d524082de89c9f23f662217d73c945ba37b802c35494460a7adcb82f3dad",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/debug5.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/debug5.spec.ts",
+    "timestamp": 1771907190933,
+    "sha256": "273204d1177f5b0d04e785b000fe934e62c314050d0fae761b18118cd44d6d7b",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Texture.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Texture.md",
+    "timestamp": 1770627076111,
+    "sha256": "d3ad6e7f5f1b302d4de63b9e823dca4dce4a346ea5092ee6a315172c33088062",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Art History Brush Tool/Art-History-Brush-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Art History Brush Tool/Art-History-Brush-Tool.md",
+    "timestamp": 1770629213144,
+    "sha256": "908dd71134ac9f23b0722d28ef3ba5e51c0fd3ab5c6caf3da22d0ca81617ec32",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Eraser Tool /Eraser-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Eraser Tool /Eraser-Tool.md",
+    "timestamp": 1770630119468,
+    "sha256": "0490a50fc881eb212ddd1e8c8c7df0313605e2d936b979d228d6a9489ab0a50c",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/components/BrushDetail.tsx",
+    "original_path": "/workspace/web/src/components/BrushDetail.tsx",
+    "timestamp": 1770468017522,
+    "sha256": "7c5356407f0565a4092b74a4580ccadbeb769d1ee24807ef62b45daf5185b0aa",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Clone Stamp Tool /Clone-Stamp-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Clone Stamp Tool /Clone-Stamp-Tool.md",
+    "timestamp": 1770628453958,
+    "sha256": "2051e06e34b3a972041bb810bc3925d82c2c5fb7ef9bfc4bc7c8071ed2615882",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/packages/abr-parser/debug-verify.ts",
+    "original_path": "/workspace/packages/abr-parser/debug-verify.ts",
+    "timestamp": 1771547583667,
+    "sha256": "ce142514164cc1b52c6b8a05f0ca5e313bf7fbb9dfe916eb3e9a73c8fdc1ed29",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/delay-test.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/delay-test.spec.ts",
+    "timestamp": 1771908788192,
+    "sha256": "383e1ae786b41782bd45bbe017c13dbd3c338cec6793a618c0c37aaa73a75c0e",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Smudge Tool /Smudge-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Smudge Tool /Smudge-Tool.md",
+    "timestamp": 1770630779527,
+    "sha256": "9095a83bd3f3a29587278e40fedcc696929b3d76951e4027f9c439904baabaf5",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/debug2.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/debug2.spec.ts",
+    "timestamp": 1771906627605,
+    "sha256": "126a2f4c7dc56953e61a4adf097b8dcbf8bd56f8cb01a08e258a62f4129b19b9",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/debug.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/debug.spec.ts",
+    "timestamp": 1771906531739,
+    "sha256": "9d26d79eb4d449637de0c24d4c0db8f1a7f78ff9d0620a7548a5260c7f718d8e",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-playground/src/demos/ListDemo.tsx",
+    "original_path": "/workspace/apps/solid-dnd-playground/src/demos/ListDemo.tsx",
+    "timestamp": 1772927513404,
+    "sha256": "cf2164dddd816b45e0d38c58430f53dafa232eff1bd0923cb9ba2560b3d129de",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/components/form-fields/SliderField.tsx",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/components/form-fields/SliderField.tsx",
+    "timestamp": 1770538967006,
+    "sha256": "a1920c472b374fa053c094ab8af896b19a805b11e54d1776f3ac153a55b54c2b",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/packages/abr-parser/tests/abr-parser.test.ts",
+    "original_path": "/workspace/packages/abr-parser/tests/abr-parser.test.ts",
+    "timestamp": 1771547762903,
+    "sha256": "144ebdc7843d9de977ebe54e2d9b997ce8ea52b47d3f82fb5552ac268080b446",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/dnd-playground/e2e/diag.spec.ts",
+    "original_path": "/workspace/apps/dnd-playground/e2e/diag.spec.ts",
+    "timestamp": 1771636648319,
+    "sha256": "53e705a3802104abba3c6ec152ab9f5a639ff3600bc0841d8fe1728e9d472e62",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-playground/src/demos/GridOverlayDemo.tsx",
+    "original_path": "/workspace/apps/solid-dnd-playground/src/demos/GridOverlayDemo.tsx",
+    "timestamp": 1772928112998,
+    "sha256": "1f0cabefdacfbc699cf7d3ef0524bd23b64fb6153cccfe326b36a1967739ca9e",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Dodge Tool /Dodge-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Dodge Tool /Dodge-Tool.md",
+    "timestamp": 1770631243155,
+    "sha256": "5d245ff7689ecaa18485fb9e4a321f813eace3ba3b73dc6760e5ac59ab560726",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/lib/abr/binary-reader.ts",
+    "original_path": "/workspace/web/src/lib/abr/binary-reader.ts",
+    "timestamp": 1770431629338,
+    "sha256": "79791b686476644578b8e860dff36ce272bae3e6c493126b2365850ea29def2d",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Blend-Modes.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Blend-Modes.md",
+    "timestamp": 1770621967267,
+    "sha256": "920d8f7bfc78baa5745111f463de28d17977488425d37e9fa4d67ea49012192b",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/lib/abr/abr-writer.ts",
+    "original_path": "/workspace/web/src/lib/abr/abr-writer.ts",
+    "timestamp": 1770464120208,
+    "sha256": "bbd5a6de0242a00134e05cb4bd08fffac4cae15bd24c84887e5f5b7af074983d",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/packages/solid-dnd/src/primitives/createOverlayDrag.ts",
+    "original_path": "/workspace/packages/solid-dnd/src/primitives/createOverlayDrag.ts",
+    "timestamp": 1771928521421,
+    "sha256": "9adcfb897b0e7494be9cb35e5f4adc7723fc1ac69463d58175b83a372e5c3441",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/abr-parser.ts",
+    "original_path": "/workspace/src/abr-parser.ts",
+    "timestamp": 1770465829659,
+    "sha256": "4a426367fb3aaf218c1517f0368f60e434992065c05cb4044aa6b631850aee56",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/packages/solid-dnd/src/primitives/createFlipTypes.ts",
+    "original_path": "/workspace/packages/solid-dnd/src/primitives/createFlipTypes.ts",
+    "timestamp": 1772910559507,
+    "sha256": "e3c3b7d7b68efaf7343c854b016ed3ac1a96613cbb2e46534adf73ed42431c3d",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/packages/abr-parser/debug-phry.ts",
+    "original_path": "/workspace/packages/abr-parser/debug-phry.ts",
+    "timestamp": 1771546635648,
+    "sha256": "cab33a07384b815ef5338d30e04e7339cee6baed33a180fb5bcee2a95927f16f",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/packages/abr-parser/debug-groups.ts",
+    "original_path": "/workspace/packages/abr-parser/debug-groups.ts",
+    "timestamp": 1771546370193,
+    "sha256": "4d89bf3d21d78ce41119d46136b5e622592872c9c2a4ab19656e6823661fe716",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/postcss.config.js",
+    "original_path": "/workspace/web/postcss.config.js",
+    "timestamp": 1770431571830,
+    "sha256": "e32657baf631d7c5f4dc67b4b2ee0ec8e7d5b3c41860e09cddce7c0377cd80bc",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/components/BrushDetailEditable.tsx",
+    "original_path": "/workspace/web/src/components/BrushDetailEditable.tsx",
+    "timestamp": 1770468017506,
+    "sha256": "846c60a66abb50777e81de75c1f8117e9d9ccd8158f08ba8e1fdc933880f5c36",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/browser-compare.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/browser-compare.spec.ts",
+    "timestamp": 1771908991584,
+    "sha256": "3c9060fcc64a6326c03ab92356d7c1471df41a88881b68a0e21c43afff9ea857",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Dual-Brush.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Dual-Brush.md",
+    "timestamp": 1770621967267,
+    "sha256": "3233381997c9f070d6473bd563d280aee26e3765b1cd675bd2176fe39ae54e2e",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/components/form-panels/TransferPanelForm.tsx",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/components/form-panels/TransferPanelForm.tsx",
+    "timestamp": 1770538814807,
+    "sha256": "ec41dc4f59420192d2eb229b5957a5192c134facd332fdf624bd622c7073403c",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/tsconfig.json",
+    "original_path": "/workspace/web/tsconfig.json",
+    "timestamp": 1770432346759,
+    "sha256": "8460c7b782c8383607385522ba15180f332bbc09381ca85a567d5c1ced2edae8",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Sponge Tool /Sponge-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Sponge Tool /Sponge-Tool.md",
+    "timestamp": 1770631243155,
+    "sha256": "61546fe9d9786281c19531b742c6f4fc663bbb89e96c7a0b5315289d388cad43",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/debug7.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/debug7.spec.ts",
+    "timestamp": 1771907458940,
+    "sha256": "7d4bddaadfe0d6cdbb9cb85e823ed2e99caf490b2ac5dd3e18d7800f6247d0b5",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/components/DropZone.tsx",
+    "original_path": "/workspace/apps/web/src/components/DropZone.tsx",
+    "timestamp": 1770503960570,
+    "sha256": "9cc09776f288c2f34573565a1cdb1d597fca3bb5f7bd43a6296ac88da678bcd0",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/components/form-fields/CheckboxField.tsx",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/components/form-fields/CheckboxField.tsx",
+    "timestamp": 1770538967010,
+    "sha256": "f708d5b6a027ac94d8aa0702c8ff7d55be673c153f3a6da015ad545fbbe78992",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/cdp-test.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/cdp-test.spec.ts",
+    "timestamp": 1771908403143,
+    "sha256": "37888f9bcff7077acfb93b3f16af9c05d29d3a1123cfe28f5960c5c280265280",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/components/SearchBar.tsx",
+    "original_path": "/workspace/web/src/components/SearchBar.tsx",
+    "timestamp": 1770468017506,
+    "sha256": "92e89d29778028ba2e477c60caf43b6f34c7f5418b20285db932dd37d9695f61",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/packages/solid-dnd/test/primitives/createDropzone.test.ts",
+    "original_path": "/workspace/packages/solid-dnd/test/primitives/createDropzone.test.ts",
+    "timestamp": 1771798252513,
+    "sha256": "6e1e9bf3d593e55cb9151c487da07da939bac8c4810765bc09691acacdb0be0f",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Control-Options.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Control-Options.md",
+    "timestamp": 1770633200702,
+    "sha256": "dc43922811249279b03682178b0b505a760871ec6bc9870f9bc1a3d6eb56a57c",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-playground/src/utils/createDetectLayout.ts",
+    "original_path": "/workspace/apps/solid-dnd-playground/src/utils/createDetectLayout.ts",
+    "timestamp": 1772928589372,
+    "sha256": "2b5163761a12db9f30584b7f06344889295bf2a676cb4e2fbf118d352015434b",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/packages/abr-parser/scan-blocks.ts",
+    "original_path": "/workspace/packages/abr-parser/scan-blocks.ts",
+    "timestamp": 1771548088377,
+    "sha256": "0a178a0c9b7de3bdfba753a965f1bdd1f7a7f557a3b43258aeecc7b6b7d4485e",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Brush Tool /Brush-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Brush Tool /Brush-Tool.md",
+    "timestamp": 1770627931837,
+    "sha256": "b7f39a8a78cc6f549c2e0750ee3bcf03c1d62242760578a9f9d7f65e835d068a",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/index.ts",
+    "original_path": "/workspace/src/index.ts",
+    "timestamp": 1770466069112,
+    "sha256": "c4d656cb91aaf5b3e16b89900e89a96461932ce971b0918a83dd46ee2e849ed2",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/disassembleAbr.ts",
+    "original_path": "/workspace/disassembleAbr.ts",
+    "timestamp": 1770426722333,
+    "sha256": "471a8bec356c19bc67389e25c45440aef46727d79c006f18a5ab82b4dbc5eca1",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/components/form-fields/index.ts",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/components/form-fields/index.ts",
+    "timestamp": 1770538777611,
+    "sha256": "82daa5721e04da623790117f227d92fa9a8774122060f7d5bb552221d7150a90",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/packages/solid-dnd/package.json",
+    "original_path": "/workspace/packages/solid-dnd/package.json",
+    "timestamp": 1771927422434,
+    "sha256": "e2b26317624087c1721d71e14e102eb9f9a0eee9a4a0e09eb6219409f3a69976",
+    "reason": "different historical version"
+  },
+  {
+    "path": "editor-history/web/src/components/BrushEditor.tsx",
+    "original_path": "/workspace/web/src/components/BrushEditor.tsx",
+    "timestamp": 1770468017506,
+    "sha256": "4de401c91387536c298ff504dbe475ae2a14bab467b98c528ca5eac77c9060f6",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/components/form-panels/ShapeDynamicsPanelForm.tsx",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/components/form-panels/ShapeDynamicsPanelForm.tsx",
+    "timestamp": 1770538814939,
+    "sha256": "4638c2a9a62834200d541376fc4b9d95660815c5700bee7b898b1507ce3a4920",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/BrushDetailEditableNew.tsx",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/BrushDetailEditableNew.tsx",
+    "timestamp": 1770539637973,
+    "sha256": "f56c490dff8a6b175f810448d135d969e14fb20bcca3aeaa7c4ae28f87aae364",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Mixer Brush Tool /Mixer-Brush-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Mixer Brush Tool /Mixer-Brush-Tool.md",
+    "timestamp": 1770627929353,
+    "sha256": "1cc2c873f06d49ccdafb6f0b776a4901472d4a49eb401921fdbe3a5df7a1a281",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/package.json",
+    "original_path": "/workspace/apps/web/package.json",
+    "timestamp": 1770540854056,
+    "sha256": "1c7923af94ada359d4b65bbef188ac218fe266b867170f8ef9272388eea10c4b",
+    "reason": "different historical version"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/debug9.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/debug9.spec.ts",
+    "timestamp": 1771907718386,
+    "sha256": "c1da5042686580adb3e4bc344e8959142e9433aa98194611e635cc7e105b5673",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/debug-samples.ts",
+    "original_path": "/workspace/src/debug-samples.ts",
+    "timestamp": 1770428494726,
+    "sha256": "ed7fd2e0cdcb4425668c500ba04efae38899f6563f415567658b73bae4924a9a",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Burn Tool /Burn-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Burn Tool /Burn-Tool.md",
+    "timestamp": 1770631243103,
+    "sha256": "02e51bc545ff207decad60bb4adc746ae4aec7bba071ba0c95a90f374359ee76",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/vercel.json",
+    "original_path": "/workspace/web/vercel.json",
+    "timestamp": 1770437121095,
+    "sha256": "c643cece31115dec9abaaae6c285da172e2292213f0f30e6582333d4c14a0d6c",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/components/BrushTreeGroup.tsx",
+    "original_path": "/workspace/apps/web/src/components/BrushTreeGroup.tsx",
+    "timestamp": 1771551111918,
+    "sha256": "8121487423dc12f7a74eecf52b2a1b6efda7b7c02f6f514f0b7ddeb300318e63",
+    "reason": "different historical version"
+  },
+  {
+    "path": "editor-history/web/src/routes/index.tsx",
+    "original_path": "/workspace/web/src/routes/index.tsx",
+    "timestamp": 1770468017506,
+    "sha256": "c5b39d64b35a45b5923bb89d2c50a91c854f35601eeadb8b51212c3f143b90bc",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/debug-sample-format.ts",
+    "original_path": "/workspace/src/debug-sample-format.ts",
+    "timestamp": 1770429473988,
+    "sha256": "7fa4cadf541c5c9aa25ab1ca3b0cb8f503b7886f0b3e94489ed0e99a434c04c0",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/packages/solid-dnd/src/primitives/createDropzone.ts",
+    "original_path": "/workspace/packages/solid-dnd/src/primitives/createDropzone.ts",
+    "timestamp": 1772274211759,
+    "sha256": "dc90a24c9a3dd1c8b6ecd462bda742c05017819574ce361c3c7131a56ff6f517",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/tailwind.config.js",
+    "original_path": "/workspace/web/tailwind.config.js",
+    "timestamp": 1770431572758,
+    "sha256": "180c60a159b04e24362d447515210b6271ab35334d9dc3d8bd25a91d84d8bb32",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/lib/abr/binary-writer.ts",
+    "original_path": "/workspace/web/src/lib/abr/binary-writer.ts",
+    "timestamp": 1770460491287,
+    "sha256": "ef742e07f1303c112420d5e096f42179e3dbbe9fb6c066452712839897d9e6c7",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Brush-Tip-Shape.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Brush-Tip-Shape.md",
+    "timestamp": 1770627076111,
+    "sha256": "ae6687c17a17e67fa2a0a803ce5f21949483f8457396cb346631dbb7f4a418e0",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/components/BrushPanel.tsx",
+    "original_path": "/workspace/apps/web/src/components/BrushPanel.tsx",
+    "timestamp": 1771551154751,
+    "sha256": "47bc5c9221ae7ea122ba57ccd7bec245a6f6b023504fba3bb822f7ed00e59b4d",
+    "reason": "different historical version"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/debug10.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/debug10.spec.ts",
+    "timestamp": 1771907875229,
+    "sha256": "44d860ac0fdb35be5279162f806f4f86c6c6dadf42ff1ab338c0ed0fb809c9bf",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Color-Dynamics.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Color-Dynamics.md",
+    "timestamp": 1770626862417,
+    "sha256": "ed22c3e446b63788a5ed61a21e99b2bc800d604f565143eba2a51b9381d13e00",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/src/types.ts",
+    "original_path": "/workspace/src/types.ts",
+    "timestamp": 1770470463188,
+    "sha256": "6db37554b6ce661ef7e25f999dc8a9292f39461c7326f615c27fd897e2258588",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Blur Tool/Blur-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Blur Tool/Blur-Tool.md",
+    "timestamp": 1770630779395,
+    "sha256": "7f1f114b41a0d721b595b031c7a8c61fdbc39b97716e346a7a6948f9f71f945b",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/tests/abr-parser.test.ts",
+    "original_path": "/workspace/tests/abr-parser.test.ts",
+    "timestamp": 1770462883132,
+    "sha256": "d3074b22f2d0fee74408a6f76ff3d55bab495208bbe4de9834b2ad6f9b1db21f",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/_Common/Brush-Pose.md",
+    "original_path": "/workspace/prompt/Tools/_Common/Brush-Pose.md",
+    "timestamp": 1770621967423,
+    "sha256": "4c7fce381e603b5a687786f50c78e8f2dd91477cc05c90e5f13f4fe715599f21",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/prompt/Tools/Sharpen Tool /Sharpen-Tool.md",
+    "original_path": "/workspace/prompt/Tools/Sharpen Tool /Sharpen-Tool.md",
+    "timestamp": 1770630779523,
+    "sha256": "3c5fbf62429c250bbfde2c17538c623d8819365f27ed020e6ca288b2b4b92148",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/web/src/lib/abr/index.ts",
+    "original_path": "/workspace/web/src/lib/abr/index.ts",
+    "timestamp": 1770466387699,
+    "sha256": "45f8363283175384e3d8a71e6baed498770632f3efe5564a8f5afc6bcc7d285a",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/solid-dnd-e2e/e2e/debug6.spec.ts",
+    "original_path": "/workspace/apps/solid-dnd-e2e/e2e/debug6.spec.ts",
+    "timestamp": 1771907383031,
+    "sha256": "ec92654e52defa21865dc9a872dd72f2c7e1bf764a09046e621e83259fb478df",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "editor-history/apps/web/src/features/brush-detail/components/form-fields/ControlSelectField.tsx",
+    "original_path": "/workspace/apps/web/src/features/brush-detail/components/form-fields/ControlSelectField.tsx",
+    "timestamp": 1770538967010,
+    "sha256": "d4644905e4d91cbb32264c966ec22f031e960e7faa812af1d9d4953d8f1a7a90",
+    "reason": "missing from current project"
+  },
+  {
+    "path": "experiments/bt.js",
+    "original_path": "/tmp/bt.js",
+    "sha256": "556eccf3ad24e4e4c373c4995aeb247a31ce1e97ecaa790c2cfdc0ff7a87667a"
+  },
+  {
+    "path": "experiments/chromium-dnd-debug.mjs",
+    "original_path": "/tmp/chromium-dnd-debug.mjs",
+    "sha256": "4eed3540f60757115823200ff26f6af17a1acd0f1dc3dbf32b711fc25a5a086c"
+  },
+  {
+    "path": "experiments/diag.spec.ts",
+    "original_path": "/tmp/diag.spec.ts",
+    "sha256": "b5cfbac0e9bcfa5e8d6effec061eb602dc3942f1bd479c1d600efa88f67b0713"
+  },
+  {
+    "path": "experiments/flip-debug-check.spec.js",
+    "original_path": "/tmp/flip-debug-check.spec.js",
+    "sha256": "9b4789b3406601ce351f800ea1839992d0e1564babb7e1e4578d350a54c5095b"
+  },
+  {
+    "path": "experiments/sortable-overlay-debug.spec.js",
+    "original_path": "/tmp/sortable-overlay-debug.spec.js",
+    "sha256": "829d16d98e88261d4b32d8c3bb061357088bf8abff0e6c2d8b1ac2a39a366109"
+  },
+  {
+    "path": "experiments/stability-check.mjs",
+    "original_path": "/tmp/stability-check.mjs",
+    "sha256": "f811338a024017462c6655a413b9a0ba334b2f349cc44ca720cbff2c59a6717e"
+  },
+  {
+    "path": "experiments/stability-test.spec.ts",
+    "original_path": "/tmp/stability-test.spec.ts",
+    "sha256": "3981a90303c93dea384266aa79e1eed3f82e04291ecce9bf57cbc749f5d7bc76"
+  },
+  {
+    "path": "experiments/test-abr.mjs",
+    "original_path": "/tmp/test-abr.mjs",
+    "sha256": "10d34e5e03a983986e5a6724ad1a69512a82284aa21f38b88a0aff78257b9a4a"
+  }
+]

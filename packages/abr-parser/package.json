@@ -1,0 +1,28 @@
+{
+  "name": "@app-game/abr-parser",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Parse and write Adobe Photoshop brush files (.abr).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./browser": "./src/browser.ts"
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pngjs": "^7.0.0",
+    "uuid": "^11.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "25.8.0",
+    "@types/pngjs": "^6.0.5",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "abr-tools",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
