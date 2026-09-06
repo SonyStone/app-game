@@ -14,6 +14,7 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
   let visible = false;
   let refresh = () => {};
   let path: PreviewPoint[] | undefined;
+  let strokeId = 0;
   let pointer: number | undefined;
   let hold: ReturnType<typeof setInterval> | undefined;
   const stop = () => {
@@ -56,6 +57,7 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
           color: props.brushColor ?? '#ffffff',
           secondaryColor: props.secondaryColor,
           path,
+          strokeId: path ? strokeId : undefined,
           flow: 1,
           opacity: 1
         },
@@ -115,6 +117,7 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
           canvas.setPointerCapture(event.pointerId);
           pointer = event.pointerId;
           path = [];
+          strokeId++;
           append(event);
           hold = setInterval(() => {
             if (pointer !== undefined && props.values.useBuildUp && path?.length) {

@@ -26,11 +26,15 @@ function createPreviewService() {
   type Request = PreviewJob & {
     target: number;
     priority: number;
+    streamKey?: string;
     sourceTip?: BrushTipImage;
     resourceSource?: PreviewResourceSource;
   };
   const queue = createPreviewQueue<Request>();
-  const targets = new Map<number, { canvas: HTMLCanvasElement; revision: number; signature: string }>();
+  const targets = new Map<
+    number,
+    { canvas: HTMLCanvasElement; revision: number; signature: string; streamKey?: string }
+  >();
   let worker: Worker | undefined, active: Request | undefined;
   let fallback = false,
     reason = '';
@@ -79,7 +83,7 @@ function createPreviewService() {
     }
     if (reply.type === 'need-tip') {
       const target = targets.get(active.target);
-      if (!target || target.revision !== active.id) {
+      if (!canPresent(active, target)) {
         finish();
         return;
       }
@@ -129,7 +133,7 @@ function createPreviewService() {
       return;
     }
     const target = targets.get(active.target);
-    if (target?.revision === active.id) {
+    if (target && canPresent(active, target)) {
       const canvas = target.canvas;
       canvas.width = active.input.width;
       canvas.height = active.input.height;
@@ -140,10 +144,16 @@ function createPreviewService() {
         reply.bitmap.close();
       }
       canvas.dataset.previewBackend = reply.backend;
-      canvas.dataset.previewState = 'ready';
+      canvas.dataset.previewState = target.revision === active.id ? 'ready' : 'pending';
       canvas.dataset.previewReason = reply.reason ?? '';
     } else reply.bitmap.close();
     finish();
+  }
+  /** Keep drawing responsive without presenting frames from another gesture, brush, or settings revision. */
+  function canPresent(job: Request, target: ReturnType<typeof targets.get>) {
+    return (
+      !!target && (target.revision === job.id || (job.streamKey !== undefined && target.streamKey === job.streamKey))
+    );
   }
   function finish() {
     clearTimeout(timeout);
@@ -163,7 +173,7 @@ function createPreviewService() {
     try {
       const { renderPreviewPixels } = await import('./cpu');
       const target = targets.get(job.target);
-      if (target?.revision !== job.id) return;
+      if (!canPresent(job, target)) return;
       const tip = job.sourceTip ?? generatePreviewTip(job.input.values);
       const pixels = new ImageData(
         renderPreviewPixels(job.input, tip, undefined, decodePreviewResources(job.resourceSource ?? {})),
@@ -196,7 +206,7 @@ function createPreviewService() {
     attach(canvas: HTMLCanvasElement) {
       clearTimeout(shutdown);
       const id = ++nextTarget;
-      const state = { canvas, revision: 0, signature: '' };
+      const state = { canvas, revision: 0, signature: '', streamKey: undefined as string | undefined };
       targets.set(id, state);
       return {
         /** Replace queued settings; at most one render can be in flight across the entire workspace. */
@@ -219,6 +229,10 @@ function createPreviewService() {
           const signature = JSON.stringify([tipKey, auxKey, { ...input, values: { ...input.values, name: '' } }]);
           if (signature === state.signature) return;
           state.signature = signature;
+          state.streamKey =
+            input.path?.length && input.strokeId !== undefined
+              ? JSON.stringify([tipKey, auxKey, { ...input, values: { ...input.values, name: '' }, path: undefined }])
+              : undefined;
           state.revision = ++nextJob;
           canvas.dataset.previewState = 'pending';
           canvas.dataset.previewRevision = String(state.revision);
@@ -226,7 +240,8 @@ function createPreviewService() {
             id: state.revision,
             target: id,
             priority,
-            input,
+            streamKey: state.streamKey,
+            input: { ...input, path: input.path?.map((point) => ({ ...point })) },
             tipKey,
             auxKey,
             sourceTip: tip,
@@ -239,6 +254,7 @@ function createPreviewService() {
           queue.remove(id);
           state.revision = ++nextJob;
           state.signature = '';
+          state.streamKey = undefined;
         },
         dispose() {
           targets.delete(id);

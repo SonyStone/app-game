@@ -3,20 +3,30 @@ import closeIcon from '../assets/icons/x.svg?url';
 import { brushExamples, type BrushExample } from '../lib/brush-examples';
 
 /** Modal gallery of bundled collections; native dialog handles focus trapping and Escape. */
-export function BrushExamplesMenu(props: { busy: boolean; onSelect: (example: BrushExample) => void }) {
+export function BrushExamplesMenu(props: {
+  busy: boolean;
+  loadingMessage: string;
+  /** Resolves after downloading and importing the collection into the workspace. */
+  onSelect: (example: BrushExample) => Promise<void>;
+}) {
   let dialog!: HTMLDialogElement;
   const [opened, setOpened] = createSignal(false);
+  const [loading, setLoading] = createSignal<BrushExample>();
   return (
     <>
       <button
         disabled={props.busy}
+        class={loading() ? 'abr-is-loading' : undefined}
         aria-haspopup="dialog"
         onClick={() => {
           setOpened(true);
           dialog.showModal();
         }}
       >
-        Examples…
+        <Show when={loading()} fallback="Examples…">
+          <span class="abr-loading-spinner" aria-hidden="true" />
+          Loading brushes…
+        </Show>
       </button>
       <dialog
         ref={dialog}
@@ -66,6 +76,11 @@ export function BrushExamplesMenu(props: { busy: boolean; onSelect: (example: Br
                   <div class="abr-example-body">
                     <h3>{example.name}</h3>
                     <p>{example.description}</p>
+                    <Show when={loading() === example}>
+                      <p class="abr-example-loading" role="status">
+                        {props.loadingMessage}
+                      </p>
+                    </Show>
                     <footer>
                       <span>
                         {example.count} brushes · {example.size}
@@ -73,13 +88,23 @@ export function BrushExamplesMenu(props: { busy: boolean; onSelect: (example: Br
                       <button
                         type="button"
                         disabled={props.busy}
+                        class={loading() === example ? 'abr-is-loading' : undefined}
                         aria-label={`Add ${example.name}`}
-                        onClick={() => {
-                          dialog.close();
-                          props.onSelect(example);
+                        onClick={async () => {
+                          if (props.busy || loading()) return;
+                          setLoading(example);
+                          try {
+                            await props.onSelect(example);
+                            dialog.close();
+                          } finally {
+                            setLoading(undefined);
+                          }
                         }}
                       >
-                        Add brushes
+                        <Show when={loading() === example} fallback="Add brushes">
+                          <span class="abr-loading-spinner" aria-hidden="true" />
+                          Loading…
+                        </Show>
                       </button>
                     </footer>
                   </div>

@@ -99,6 +99,71 @@ test('tip upload transfers a copy and preserves ABR source data', async () => {
   await vi.advanceTimersByTimeAsync(1001);
 });
 
+test('continuous drawing presents completed frames while newer points are queued', async () => {
+  const { attachPreview } = await import('../src/features/brush-preview/client');
+  const target = canvas();
+  const connection = attachPreview(target as unknown as HTMLCanvasElement);
+  const drawing = {
+    ...input(),
+    strokeId: 1,
+    path: [{ x: 0, y: 0.5, pressure: 1, tiltX: 0, tiltY: 0, rotation: 0, time: 0 }]
+  };
+  connection.update(drawing, undefined, 10);
+  // The caller can continue recording without changing an already queued frame.
+  drawing.path.push({ ...drawing.path[0]!, x: 0.2, time: 10 });
+  await vi.advanceTimersByTimeAsync(1);
+  const worker = TestWorker.instances[0]!;
+  let job = worker.postMessage.mock.calls.at(-1)![0];
+  expect(job.input.path).toHaveLength(1);
+  connection.update(drawing, undefined, 10);
+  worker.onmessage!({ data: { type: 'need-tip', id: job.id } });
+  expect(worker.postMessage.mock.calls.at(-1)![0].tip).toBeDefined();
+  for (let i = 0; i < 3; i++) {
+    const image = bitmap();
+    worker.onmessage!({ data: { type: 'image', id: job.id, bitmap: image, backend: 'gpu' } });
+    expect(target.present).toHaveBeenLastCalledWith(image);
+    expect(target.dataset).toMatchObject({ previewState: 'pending' });
+    await vi.advanceTimersByTimeAsync(1);
+    job = worker.postMessage.mock.calls.at(-1)![0];
+    if (i < 2) {
+      drawing.path.push({ ...drawing.path.at(-1)!, x: 0.4 + i * 0.2, time: 20 + i * 10 });
+      connection.update(drawing, undefined, 10);
+    }
+  }
+  worker.onmessage!({ data: { type: 'image', id: job.id, bitmap: bitmap(), backend: 'gpu' } });
+  expect(target.dataset).toMatchObject({ previewState: 'ready' });
+  connection.dispose();
+  await vi.advanceTimersByTimeAsync(1001);
+});
+
+test.each(['new stroke', 'settings', 'pause', 'reset'] as const)('drawing rejects frames after %s', async (change) => {
+  const { attachPreview } = await import('../src/features/brush-preview/client');
+  const target = canvas();
+  const connection = attachPreview(target as unknown as HTMLCanvasElement);
+  const drawing: PreviewInput = {
+    ...input(),
+    strokeId: 1,
+    path: [{ x: 0, y: 0.5, pressure: 1, tiltX: 0, tiltY: 0, rotation: 0, time: 0 }]
+  };
+  connection.update(drawing, undefined, 10);
+  await vi.advanceTimersByTimeAsync(1);
+  const worker = TestWorker.instances[0]!;
+  const job = worker.postMessage.mock.calls[0]![0];
+  if (change === 'pause') connection.pause();
+  else {
+    if (change === 'new stroke') drawing.strokeId = 2;
+    if (change === 'settings') drawing.values = { ...drawing.values, diameter: 20 };
+    if (change === 'reset') drawing.path = undefined;
+    connection.update(drawing, undefined, 10);
+  }
+  const stale = bitmap();
+  worker.onmessage!({ data: { type: 'image', id: job.id, bitmap: stale, backend: 'gpu' } });
+  expect(stale.close).toHaveBeenCalledOnce();
+  expect(target.present).not.toHaveBeenCalled();
+  connection.dispose();
+  await vi.advanceTimersByTimeAsync(1001);
+});
+
 test('worker failure renders the current request through the CPU fallback', async () => {
   vi.stubGlobal(
     'ImageData',

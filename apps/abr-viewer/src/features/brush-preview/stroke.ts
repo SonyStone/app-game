@@ -13,6 +13,8 @@ export type PreviewInput = {
   opacity: number;
   flow: number;
   path?: PreviewPoint[];
+  /** Unique per gesture on a canvas; allows completed frames to display while the same stroke continues. */
+  strokeId?: number;
   tipScale?: number;
   /** Renders a resource swatch instead of a stroke, through the same worker queue. */
   resourcePreview?: 'tip' | 'dual' | 'pattern';
@@ -158,26 +160,30 @@ export function createPreviewStroke(input: PreviewInput, tip: Pick<BrushTipImage
     step++;
     return Math.max(0.25 * input.dpr, stampSize * (v.spacingEnabled ? v.spacing / 100 : 0.01));
   }
+  nextDistance = stamp(points[0]!, initialDirection);
+  let nextTime = points[0]!.time + 30;
+  let direction = initialDirection;
   for (let i = 1; i < points.length && data.length / stampStride < 16384; i++) {
     const a = points[i - 1]!,
       b = points[i]!;
     const dx = (b.x - a.x) * input.width,
       dy = (b.y - a.y) * input.height,
-      length = Math.hypot(dx, dy),
-      direction = Math.atan2(dy, dx);
-    if (length > 0) {
-      while (nextDistance <= traveled + length && data.length / stampStride < 16384) {
-        const t = Math.max(0, (nextDistance - traveled) / length);
-        nextDistance += stamp(interpolate(a, b, t), direction);
+      length = Math.hypot(dx, dy);
+    if (length > 0) direction = Math.atan2(dy, dx);
+    // Merge distance and time stamps in stroke order. Carry time across pointer events:
+    // rounding each event's duration loses all build-up when events arrive faster than 30 ms.
+    while (data.length / stampStride < 16384) {
+      const distanceT = length > 0 ? Math.max(0, (nextDistance - traveled) / length) : Infinity;
+      const timeT = v.useBuildUp && b.time > a.time ? Math.max(0, (nextTime - a.time) / (b.time - a.time)) : Infinity;
+      if (Math.min(distanceT, timeT) > 1) break;
+      if (distanceT <= timeT) nextDistance += stamp(interpolate(a, b, distanceT), direction);
+      else {
+        stamp(interpolate(a, b, timeT), direction);
+        nextTime += 30;
       }
-    }
-    if (v.useBuildUp && b.time > a.time) {
-      const repeats = Math.min(60, Math.floor((b.time - a.time) / 30));
-      for (let j = 0; j < repeats; j++) stamp(interpolate(a, b, j / Math.max(1, repeats)), direction);
     }
     traveled += length;
   }
-  if (!data.length && points[0]) stamp(points[0], 0);
   return { data: new Float32Array(data), count: data.length / stampStride };
 }
 

@@ -5,6 +5,54 @@ import { fileURLToPath } from 'node:url';
 
 const samples = new URL('../../../packages/abr-parser/files/', import.meta.url);
 
+test('stroke frames remain visible during continuous input and build-up stops on release', async ({ page }) => {
+  // Make rendering slower than pointer events so the test catches discarded in-flight frames.
+  await page.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      set onmessage(handler: ((event: MessageEvent) => void) | null) {
+        super.onmessage = handler ? (event) => setTimeout(() => handler(event), 40) : null;
+      }
+    };
+    const present = ImageBitmapRenderingContext.prototype.transferFromImageBitmap;
+    ImageBitmapRenderingContext.prototype.transferFromImageBitmap = function (bitmap) {
+      const canvas = this.canvas as HTMLCanvasElement;
+      canvas.dataset.presentedFrames = String(Number(canvas.dataset.presentedFrames ?? 0) + 1);
+      present.call(this, bitmap);
+    };
+  });
+  await page.goto('/abr-viewer');
+  await page.locator('input[type=file]').setInputFiles(fileURLToPath(new URL('Basic_3.abr', samples)));
+  await page.locator('[data-brush-id]').first().click();
+  const detail = page.locator('[data-abr-brush-detail]');
+  const buildUp = detail.getByRole('checkbox', { name: 'Enable Build-up', exact: true });
+  await buildUp.check();
+  const canvas = detail.locator('canvas').last();
+  await expect(canvas).toHaveAttribute('data-preview-state', 'ready');
+  const bounds = (await canvas.boundingBox())!;
+  await page.mouse.move(bounds.x + 20, bounds.y + bounds.height / 2);
+  const before = Number(await canvas.getAttribute('data-presented-frames'));
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + bounds.width - 20, bounds.y + bounds.height / 2, { steps: 40 });
+  expect(Number(await canvas.getAttribute('data-presented-frames'))).toBeGreaterThan(before + 1);
+  const movingRevision = await canvas.getAttribute('data-preview-revision');
+  await expect.poll(() => canvas.getAttribute('data-preview-revision')).not.toBe(movingRevision);
+  await page.mouse.up();
+  await expect(canvas).toHaveAttribute('data-preview-state', 'ready');
+  const releasedRevision = await canvas.getAttribute('data-preview-revision');
+  await page.waitForTimeout(180);
+  await expect(canvas).toHaveAttribute('data-preview-revision', releasedRevision!);
+
+  await buildUp.uncheck();
+  await expect(canvas).toHaveAttribute('data-preview-state', 'ready');
+  await page.mouse.down();
+  await expect(canvas).toHaveAttribute('data-preview-state', 'ready');
+  const heldRevision = await canvas.getAttribute('data-preview-revision');
+  await page.waitForTimeout(180);
+  await expect(canvas).toHaveAttribute('data-preview-revision', heldRevision!);
+  await page.mouse.up();
+});
+
 test('opens from app-game navigation, inspects brushes, and exports them', async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

@@ -30,6 +30,7 @@
     <button id="overview-quality">Check overview quality</button>
     <button id="large-brush">Check 512px brush</button>
     <button id="pressure">Check stylus pressure</button>
+    <button id="stroke-filtering">Check stroke filtering</button>
     <button id="persistent-overview">Check saved low-res</button>
     <button id="cold-navigation">Check cold zoom</button>
     <button id="streaming">Run streaming checks</button>
@@ -43,6 +44,7 @@
     <script type="module">
       import { verifySelection } from '@app-game/paint/studio/selectionVerification';
       import { verifyPressureSpacing } from '@app-game/paint/studio/gpu/pressureVerification';
+      import { verifyStrokeFiltering } from '@app-game/paint/studio/gpu/strokeFilteringVerification';
       import { verifyReadbackQueue } from '@app-game/paint/studio/gpu/readbackVerification';
       import { verifyBrushBatches } from '@app-game/paint/studio/gpu/brushBatchVerification';
       import { verifyActivePreview } from '@app-game/paint/studio/gpu/activePreviewVerification';
@@ -61,6 +63,14 @@
         output.textContent = 'Testing lasso shaders and large selections…\n';
         try {
           await verifySelection((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#stroke-filtering').onclick = async () => {
+        output.textContent = 'Testing stroke filtering…\n';
+        try {
+          await verifyStrokeFiltering((message) => (output.textContent += message + '\n'));
         } catch (error) {
           output.textContent += 'FAIL: ' + (error.stack ?? error);
         }

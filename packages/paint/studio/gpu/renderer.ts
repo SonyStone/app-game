@@ -53,7 +53,8 @@ export async function createPaintRenderer(
   const pipelines = createPipelines(root, format);
   const lasso = createLassoOverlay(root, format);
   let animateSelection = true;
-  const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'nearest', mipmapFilter: 'linear' });
+  // Match virtual pages so touching a magnified tile does not change existing artwork's filtering.
+  const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
   const displayCache = createDisplayCache(root, sampler);
   const cache = new Map<string, ReturnType<typeof createTile>>();
   const spareTiles: ReturnType<typeof createTile>[] = [];

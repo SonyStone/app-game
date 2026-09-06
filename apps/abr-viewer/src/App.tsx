@@ -22,7 +22,7 @@ export function App() {
   async function importFiles(source: File[] | BrushExample) {
     if (busy()) return;
     setBusy(true);
-    setStatus(Array.isArray(source) ? 'Importing brushes…' : `Loading ${source.name}…`);
+    setStatus(Array.isArray(source) ? 'Importing brushes…' : `Downloading ${source.name}…`);
     try {
       const files = Array.isArray(source) ? source : [await fetchBrushExample(source)];
       const abrFiles = files.filter((file) => file.name.toLowerCase().endsWith('.abr'));
@@ -35,10 +35,17 @@ export function App() {
       const errors: string[] = [];
       for (const file of abrFiles) {
         try {
-          const parsed: AbrFileWithMeta = new AbrParser().parse(await file.arrayBuffer());
+          setStatus(`Importing ${file.name.replace(/\.abr$/i, '')}…`);
+          const bytes = await file.arrayBuffer();
+          await paintImportStatus();
+          const parsed: AbrFileWithMeta = new AbrParser().parse(bytes);
           if (!parsed.brushes.length) throw new Error(parsed.errors.join('; ') || 'No brushes found');
           parsed.fileName = file.name.replace(/\.abr$/i, '');
-          for (const brush of parsed.brushes) {
+          for (const [index, brush] of parsed.brushes.entries()) {
+            if (index % 8 === 0) {
+              setStatus(`Preparing brushes ${index + 1} of ${parsed.brushes.length}…`);
+              await paintImportStatus();
+            }
             brush.id = crypto.randomUUID();
             if (brush.brushTip) Object.assign(brush, { imageDataUrl: brushTipToDataUrl(brush.brushTip) });
           }
@@ -120,7 +127,7 @@ export function App() {
             Redo
           </button>
         </div>
-        <BrushExamplesMenu busy={busy()} onSelect={(example) => void importFiles(example)} />
+        <BrushExamplesMenu busy={busy()} loadingMessage={status()} onSelect={importFiles} />
         <button disabled={busy()} onClick={() => input.click()}>
           Import…
         </button>
@@ -195,7 +202,12 @@ export function App() {
         </section>
       </main>
       <footer class="abr-status" role="status">
-        <span>{status()}</span>
+        <span>
+          <Show when={busy()}>
+            <span class="abr-loading-spinner" aria-hidden="true" />
+          </Show>
+          {status()}
+        </span>
         <span>
           {workspace.selection().length ? `${workspace.selection().length} selected · ` : ''}
           {allBrushNodes(workspace.root().children).length} brushes
@@ -206,4 +218,9 @@ export function App() {
       </Show>
     </div>
   );
+}
+
+/** Lets the browser paint import feedback before parsing and between thumbnail batches. */
+function paintImportStatus(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
 }

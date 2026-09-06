@@ -49,6 +49,8 @@ export function createVirtualTexture(
     fallback = 0,
     maxPages = 128;
   let selected: (VirtualPage & { resident: boolean; fallback: boolean })[] = [];
+  // Actual source pages from the last frame, including cropped fallback sources.
+  const displayed = new Map<string, VirtualPage>();
   const id = (page: VirtualPage) => `${page.layerId}/${page.level}/${page.x},${page.y}`;
   const upload = (page: VirtualPage, token: string, pixels: Uint8Array) => {
     const key = id(page);
@@ -136,7 +138,7 @@ export function createVirtualTexture(
         });
     }
   };
-  const begin = (layers: Layer[]) => {
+  const begin = (layers: Layer[], resetDisplayed = true) => {
     pages.sync(layers);
     if (coverageLayers !== layers) {
       coverageLayers = layers;
@@ -160,16 +162,24 @@ export function createVirtualTexture(
     draws = 0;
     fallback = 0;
     selected = [];
+    if (resetDisplayed) displayed.clear();
   };
   return {
     begin,
-    /** Updates and uploads the coarse levels before a completed edit becomes navigable. */
+    /** Refreshes the last frame's detail and coarse coverage before another stroke can expose the edit.
+     * Unchanged page tokens skip all work; refreshed resident pages reuse their existing atlas slots.
+     */
     async prepare(layers: Layer[]) {
-      begin(layers);
+      begin(layers, false);
       await pages.retain(coverage);
-      for (let offset = 0; offset < coverage.length; offset += 2) {
+      const refresh = new Map(
+        [...displayed].filter(([key, page]) => entries.has(key) && layers.some((layer) => layer.id === page.layerId))
+      );
+      for (const page of coverage) refresh.set(id(page), page);
+      const targets = [...refresh.values()];
+      for (let offset = 0; offset < targets.length; offset += 2) {
         await Promise.all(
-          coverage.slice(offset, offset + 2).map(async (page) => {
+          targets.slice(offset, offset + 2).map(async (page) => {
             const key = id(page),
               token = pages.token(page);
             if (entries.get(key)?.token === token) return;
@@ -216,6 +226,7 @@ export function createVirtualTexture(
         selected.push({ ...page, resident: matches.length > 0, fallback: !exact && matches.length > 0 });
         for (const match of matches) {
           match.source.used = frame;
+          displayed.set(id(match.source.page), match.source.page);
           batch.push(match);
         }
       }

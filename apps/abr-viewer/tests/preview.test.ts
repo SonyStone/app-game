@@ -48,6 +48,30 @@ test('resource previews use pattern luminance and the secondary tip independentl
 });
 
 describe('preview stroke', () => {
+  test.each([false, true])('build-up is independent of pointer event frequency (moving: %s)', (moving) => {
+    const job = input();
+    job.values.useSmoothing = false;
+    job.values.useBuildUp = true;
+    job.values.spacing = 100;
+    const path = (interval: number) =>
+      Array.from({ length: 300 / interval + 1 }, (_, i) => ({
+        x: moving ? (i * interval) / 300 : 0.5,
+        y: 0.5,
+        pressure: 1,
+        tiltX: 0,
+        tiltY: 0,
+        rotation: 0,
+        time: i * interval
+      }));
+    const coarse = createPreviewStroke({ ...job, path: path(300) }, tip);
+    const frequent = createPreviewStroke({ ...job, path: path(5) }, tip);
+    expect(coarse.count).toBe(moving ? 17 : 11);
+    expect(frequent.count).toBe(coarse.count);
+    frequent.data.forEach((value, index) => expect(value).toBeCloseTo(coarse.data[index]!, 4));
+    job.values.useBuildUp = false;
+    expect(createPreviewStroke({ ...job, path: path(5) }, tip).count).toBe(moving ? 7 : 1);
+  });
+
   test('pressure tapers size and applies the configured minimum diameter', () => {
     const job = input();
     job.values.useShapeDynamics = true;
