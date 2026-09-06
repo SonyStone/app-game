@@ -1,12 +1,13 @@
 import { d, tgpu, type TgpuRoot } from 'typegpu';
 import { attempt, unwrapResult, type Result } from '../asyncResult';
 import { TILE_SIZE, dabTiles, type Brush, type Dab } from '../brush';
-import { screenToWorld, type Camera, type ViewSize } from '../camera';
+import { screenToWorld, type Camera, type Point, type ViewSize } from '../camera';
 import type { Layer, TileChange } from '../document';
 import { packTile, unpackTile, type TileData } from '../tilePixels';
 import type { OverviewStorage } from '../virtualPages';
 import { dirtyRegion } from './dirtyRegion';
 import { createDisplayCache } from './displayCache';
+import { createLassoOverlay } from './lassoOverlay';
 import { createReadbackQueue } from './readbackQueue';
 import * as shader from './shaders';
 import { stampBounds } from './stampBounds';
@@ -50,6 +51,8 @@ export async function createPaintRenderer(
   };
   device.addEventListener('uncapturederror', uncapturedError);
   const pipelines = createPipelines(root, format);
+  const lasso = createLassoOverlay(root, format);
+  let animateSelection = true;
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'nearest', mipmapFilter: 'linear' });
   const displayCache = createDisplayCache(root, sampler);
   const cache = new Map<string, ReturnType<typeof createTile>>();
@@ -170,6 +173,11 @@ export async function createPaintRenderer(
   };
 
   return {
+    /** Keeps transient selection geometry on this device, outside committed artwork and exports. */
+    setSelection(points: readonly Point[], animate = true) {
+      lasso.set(points);
+      animateSelection = animate;
+    },
     /** Makes the current low-resolution image resident, rebuilding only edited branches. */
     prepareOverview: async (layers: Layer[]) => {
       await virtual?.prepare(layers);
@@ -184,6 +192,7 @@ export async function createPaintRenderer(
         virtual: virtual?.stats(),
         displayTiles: displayCache.stats().tiles,
         gpuBytes:
+          lasso.bytes() +
           readbacks.stats().bytes +
           (virtual?.stats().gpuBytes ?? 0) +
           (viewFallback?.bytes() ?? 0) +
@@ -396,8 +405,15 @@ export async function createPaintRenderer(
         signature !== viewSignature
           ? { x: 0, y: 0, width, height }
           : dirtyRegion(dirtyTiles, camera, size, { width, height });
+      const present = () => {
+        // Both passes target the same swapchain texture. The cached artwork never contains the outline.
+        const target = context.getCurrentTexture().createView();
+        pipelines.present.with(view!.present).withColorAttachment({ view: target, loadOp: 'clear' }).draw(3);
+        if (!exact) lasso.render(target, camera, size, width, height, animateSelection ? performance.now() / 1000 : 0);
+      };
       if (!region) {
         dirtyTiles.clear();
+        present();
         return;
       }
       previewTileDraws = 0;
@@ -551,7 +567,7 @@ export async function createPaintRenderer(
         completeView = { camera: { ...camera }, size: { ...size } };
         viewFallback?.clear();
       }
-      pipelines.present.with(view.present).withColorAttachment({ view: context, loadOp: 'clear' }).draw(3);
+      present();
       viewSignature = signature;
       dirtyTiles.clear();
     },
@@ -563,6 +579,7 @@ export async function createPaintRenderer(
     destroy() {
       disposed = true;
       readbacks.destroy();
+      lasso.destroy();
       view?.destroy();
       virtual?.destroy();
       viewFallback?.destroy();

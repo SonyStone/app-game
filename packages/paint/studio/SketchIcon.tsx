@@ -18,6 +18,7 @@ export function SketchIcon(props: { name: keyof typeof paths; size?: number }) {
 }
 
 const paths = {
+  lasso: 'M7 17C2 15 2 9 6 5c4-3 13-2 15 3s-2 9-8 10M8 15c-4 0-5 4-2 5s6-2 4-4c-1-1-2-1-2-1Zm-2 5c-1 2-3 2-4 1',
   fullscreen: 'M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5',
   fullscreenExit: 'M3 8h5V3M16 3v5h5M21 16h-5v5M8 21v-5H3',
   move: 'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',

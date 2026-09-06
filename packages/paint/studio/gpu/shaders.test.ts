@@ -1,10 +1,15 @@
 import { tgpu } from 'typegpu';
 import { describe, expect, it } from 'vitest';
-import { vertex, fragment } from './virtualTexture';
-import { fallbackFragment } from './viewFallback';
+import { lassoEdge, lassoFill, lassoVertex } from './lassoOverlay';
 import * as shaders from './shaders';
+import { fallbackFragment } from './viewFallback';
+import { fragment, vertex } from './virtualTexture';
 
 describe('GPU shader compilation', () => {
+  it('resolves the lasso mask and animated edge shaders', () => {
+    for (const shader of [lassoVertex, lassoFill, lassoEdge])
+      expect(tgpu.resolve([shader])).toMatch(/@(vertex|fragment)/);
+  });
   it('resolves the virtual page array shaders', () => {
     expect(tgpu.resolve([vertex, fragment])).toContain('texture_2d_array');
   });

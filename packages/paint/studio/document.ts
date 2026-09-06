@@ -103,9 +103,11 @@ export function createDocument(options: { paged?: boolean } = {}) {
         tileCount: layers.reduce((n, l) => n + l.tiles.size, 0)
       };
     },
-    /** Commits one complete stroke as an atomic history entry. */
-    commit(tiles: TileChange[]) {
+    /** Commits pixels and an optional new layer above the active layer as one atomic history entry. */
+    commit(tiles: TileChange[], addedLayer?: LayerInfo) {
       if (!tiles.length) return;
+      if (addedLayer && (layers.length >= 128 || layers.some((layer) => layer.id === addedLayer.id)))
+        throw new Error('Cannot add this layer. A drawing can contain at most 128 unique layers.');
       tiles = tiles.map((tile) => ({
         ...tile,
         after: tile.after instanceof Uint8Array ? packTile(tile.after) : tile.after
@@ -135,6 +137,10 @@ export function createDocument(options: { paged?: boolean } = {}) {
         tiles,
         bytes: tileBytes(tiles)
       };
+      if (addedLayer) {
+        entry.after.splice(layers.findIndex((layer) => layer.id === active) + 1, 0, addedLayer);
+        entry.activeAfter = addedLayer.id;
+      }
       apply(entry, 'after');
       record(entry);
     },

@@ -7,6 +7,7 @@ import { CanvasDebug } from './CanvasDebug';
 import { createPaintSession } from './createPaintSession';
 import { FullscreenButton } from './FullscreenButton';
 import { LayersPanel } from './LayersPanel';
+import { SelectionActions } from './SelectionActions';
 import { SketchIcon } from './SketchIcon';
 import './studio.css';
 
@@ -71,6 +72,7 @@ export default function PaintStudio() {
       <main ref={stage} class="paint-stage" aria-label="Drawing workspace">
         <canvas
           ref={canvas}
+          style={{ cursor: session.tool() === 'lasso' ? 'crosshair' : 'none' }}
           tabindex={0}
           aria-label="Drawing canvas. Draw with a pen or mouse; use touch or hold Space for navigation."
         />
@@ -82,7 +84,7 @@ export default function PaintStudio() {
             <p>Pen to draw. Touch to move.</p>
           </div>
         </Show>
-        <Show when={cursor() && ready()}>
+        <Show when={cursor() && ready() && session.tool() !== 'lasso'}>
           <div
             class="paint-brush-cursor"
             style={{
@@ -150,7 +152,7 @@ export default function PaintStudio() {
           <button
             aria-label="Brush"
             title="Brush · B"
-            aria-pressed={brush().tool === 'brush' ? 'true' : 'false'}
+            aria-pressed={session.tool() === 'brush' ? 'true' : 'false'}
             onClick={() => updateBrush({ tool: 'brush' })}
           >
             <SketchIcon name="draw" />
@@ -158,10 +160,18 @@ export default function PaintStudio() {
           <button
             aria-label="Eraser"
             title="Eraser · E"
-            aria-pressed={brush().tool === 'eraser' ? 'true' : 'false'}
+            aria-pressed={session.tool() === 'eraser' ? 'true' : 'false'}
             onClick={() => updateBrush({ tool: 'eraser' })}
           >
             <SketchIcon name="erase" />
+          </button>
+          <button
+            aria-label="Lasso"
+            title="Lasso · L"
+            aria-pressed={session.tool() === 'lasso' ? 'true' : 'false'}
+            onClick={() => session.chooseTool('lasso')}
+          >
+            <SketchIcon name="lasso" />
           </button>
           <span class="paint-tool-separator" />
           <button
@@ -182,6 +192,9 @@ export default function PaintStudio() {
             <SketchIcon name="layers" />
           </button>
         </nav>
+        <Show when={session.tool() === 'lasso'}>
+          <SelectionActions session={session} />
+        </Show>
         <div class="paint-double-puck" aria-label="Brush and color">
           <button
             aria-label="Brush settings"
@@ -208,6 +221,7 @@ export default function PaintStudio() {
           <button
             class="paint-floating"
             aria-label="Undo"
+            aria-keyshortcuts="Control+Z Meta+Z"
             title="Undo · ⌘/Ctrl Z"
             disabled={!state().canUndo || !ready()}
             onClick={() => send({ type: 'undo' })}
@@ -217,6 +231,7 @@ export default function PaintStudio() {
           <button
             class="paint-floating paint-redo"
             aria-label="Redo"
+            aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z"
             title="Redo · ⌘/Ctrl Shift Z"
             disabled={!state().canRedo || !ready()}
             onClick={() => send({ type: 'redo' })}

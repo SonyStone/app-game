@@ -1,10 +1,11 @@
 import { createRoot, onCleanup } from 'solid-js';
 import { attempt, createTaskQueue, unwrapResult } from './asyncResult';
-import { defaultCamera } from './camera';
+import { defaultCamera, type Point } from './camera';
 import { createDocument } from './document';
 import { createPaintRenderer } from './gpu/renderer';
 import { readPaintFile, writePaintFile } from './paintFile';
 import type { PaintCommand, PaintEvent } from './protocol';
+import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
 import { createSmoothStroke } from './smoothStroke';
 import { decodeDocument, snapshotDocument } from './storage';
 import { createTileStore } from './tileStore';
@@ -17,6 +18,11 @@ createRoot((dispose) => {
   let storageName = 'paint-studio';
   let tileStore: Awaited<ReturnType<typeof createTileStore>>;
   let importing = false;
+  let clipboard: SelectionPixels | undefined;
+  let editingSelection = false;
+  let selectionPoints: Point[] = [];
+  let selectionAnimate = true;
+  let selectionTimer: ReturnType<typeof setTimeout> | undefined;
   let saveVersion = 0;
   let savedVersion = 0;
   let pendingSaves = 0;
@@ -77,6 +83,10 @@ createRoot((dispose) => {
     renderMs = performance.now() - start;
     status();
     await renderer.submitted();
+    if (!exact) {
+      clearTimeout(selectionTimer);
+      if (selectionPoints.length >= 3 && selectionAnimate && !lost) selectionTimer = setTimeout(scheduleDraw, 33);
+    }
   };
   const scheduleDraw = () => {
     redraw = true;
@@ -105,7 +115,8 @@ createRoot((dispose) => {
       saved = savedVersion === saveVersion && !sampler;
       clearTimeout(collectTimer);
       collectTimer = setTimeout(() => {
-        if (!sampler && !importing) background(() => tileStore.collect(document.snapshots()));
+        if (!sampler && !importing && !editingSelection)
+          background(() => tileStore.collect([...document.snapshots(), ...(clipboard?.tiles.values() ?? [])]));
       }, 5000);
     } finally {
       pendingSaves--;
@@ -176,16 +187,26 @@ createRoot((dispose) => {
       }
     );
     lost = false;
+    renderer.setSelection(selectionPoints, selectionAnimate);
     await renderer.prepareOverview(document.layers);
     await tileStore.save(snapshotDocument(document.layers, document.active.id, camera));
   };
   onCleanup(() => {
+    clearTimeout(selectionTimer);
     clearTimeout(collectTimer);
     clearTimeout(renderTimer);
     clearTimeout(saveTimer);
     renderer?.destroy();
   });
   self.onmessage = (event: MessageEvent<PaintCommand>) => {
+    if (event.data.type === 'selection-view') {
+      selectionPoints = event.data.points;
+      selectionAnimate = event.data.animate;
+      renderer?.setSelection(selectionPoints, selectionAnimate);
+      clearTimeout(selectionTimer);
+      scheduleDraw();
+      return;
+    }
     if (event.data.type === 'view' && renderer) {
       camera = event.data.camera;
       size = event.data.size;
@@ -279,6 +300,72 @@ createRoot((dispose) => {
           await renderer?.prepareOverview(document.layers);
           changed();
           break;
+        case 'selection': {
+          let points = command.points;
+          editingSelection = true;
+          clearTimeout(collectTimer);
+          try {
+            await end();
+            if (lost || !renderer) throw new Error('Restore the renderer before editing a selection.');
+            if (document.active.id !== command.layerId || document.revision !== command.revision)
+              throw new Error('The layer changed. Select the pixels again.');
+            if (!document.active.visible) throw new Error('Show the active layer before editing its pixels.');
+            const storage = {
+              read: tileStore.read,
+              write: async (pixels: Uint8Array) => {
+                const ref = tileStore.capture(pixels);
+                if (tileStore.stats().dirtyBytes >= 8 * 1048576) await tileStore.flush();
+                return ref;
+              }
+            };
+            const selected =
+              command.action === 'paste' ? clipboard : await captureSelection(document.active, points, storage);
+            if (!selected) throw new Error('Copy or cut a selection before pasting.');
+            if (command.action === 'copy') {
+              await tileStore.flush();
+              clipboard = selected;
+              break;
+            }
+            const { tiles: _tiles, ...properties } = document.active;
+            const added =
+              command.action === 'new-layer'
+                ? { ...properties, id: crypto.randomUUID(), name: `${properties.name} selection`, tiles: new Map() }
+                : undefined;
+            const removing = command.action !== 'paste';
+            const destination =
+              command.action === 'cut' || command.action === 'delete' ? undefined : (added ?? document.active);
+            const changes = await editSelection({
+              selection: selected,
+              source: removing ? document.active : undefined,
+              destination,
+              offset: command.action === 'move' ? command.offset : undefined,
+              storage
+            });
+            await tileStore.flush();
+            const addedInfo = added ? { ...properties, id: added.id, name: added.name } : undefined;
+            document.commit(changes, addedInfo);
+            if (command.action === 'cut') clipboard = selected;
+            points =
+              command.action === 'cut' || command.action === 'delete'
+                ? []
+                : command.action === 'move'
+                  ? translateSelection(selected.points, command.offset ?? { x: 0, y: 0 })
+                  : selected.points;
+            renderer.reset();
+            // Mark the committed edit dirty even if preparing derived GPU pages fails.
+            changed();
+            await renderer.prepareOverview(document.layers);
+          } finally {
+            editingSelection = false;
+            clearTimeout(collectTimer);
+            collectTimer = setTimeout(() => {
+              if (!sampler && !importing && !editingSelection)
+                background(() => tileStore.collect([...document.snapshots(), ...(clipboard?.tiles.values() ?? [])]));
+            }, 5000);
+            post({ type: 'selection', points, hasClipboard: !!clipboard });
+          }
+          break;
+        }
         case 'save':
           await end();
           clearTimeout(saveTimer);

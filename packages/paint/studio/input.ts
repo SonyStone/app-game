@@ -16,6 +16,13 @@ export function attachInput(
     send: (command: PaintCommand) => void;
     cursor: (point: Point | undefined) => void;
     puck: ReturnType<typeof createNavigationPuck>;
+    selection?: {
+      enabled: () => boolean;
+      begin: (point: Point) => void;
+      move: (point: Point) => void;
+      end: () => void;
+      cancel: () => void;
+    };
   }
 ) {
   const abort = new AbortController(),
@@ -23,6 +30,7 @@ export function attachInput(
   const touches = new Map<number, Point>();
   let gesture:
     | { kind: 'draw'; id: number; camera: Camera; size: ViewSize; pressure: number }
+    | { kind: 'select'; id: number; camera: Camera; size: ViewSize }
     | { kind: 'pan'; id: number; previous: Point }
     | undefined;
   let touchStart: { camera: Camera; center: Point; distance: number; angle: number } | undefined;
@@ -68,6 +76,7 @@ export function attachInput(
       flush();
       options.send({ type: 'end' });
     }
+    if (gesture?.kind === 'select') options.selection?.end();
     gesture = undefined;
   };
   canvas.addEventListener(
@@ -77,7 +86,7 @@ export function attachInput(
       const point = local(event);
       canvas.focus({ preventScroll: true });
       if (event.pointerType === 'touch') {
-        if (gesture?.kind === 'draw') return;
+        if (gesture?.kind === 'draw' || gesture?.kind === 'select') return;
         canvas.setPointerCapture(event.pointerId);
         touches.set(event.pointerId, point);
         resetTouch();
@@ -93,6 +102,11 @@ export function attachInput(
       touches.clear();
       touchStart = undefined;
       const camera = options.camera();
+      if (options.selection?.enabled()) {
+        gesture = { kind: 'select', id: event.pointerId, camera, size: { ...options.size() } };
+        options.selection.begin(screenToWorld(point, camera, gesture.size));
+        return;
+      }
       const pressure = event.pointerType === 'pen' ? event.pressure : 1;
       gesture = { kind: 'draw', id: event.pointerId, camera, size: { ...options.size() }, pressure };
       options.send({
@@ -143,6 +157,11 @@ export function attachInput(
         return;
       }
       const coalesced = event.getCoalescedEvents?.() ?? [];
+      if (gesture.kind === 'select') {
+        for (const sample of coalesced.length ? coalesced : [event])
+          options.selection?.move(screenToWorld(local(sample), gesture.camera, gesture.size));
+        return;
+      }
       for (const sample of coalesced.length ? coalesced : [event]) {
         gesture.pressure = event.pointerType === 'pen' ? sample.pressure : 1;
         pending.push({
@@ -163,6 +182,7 @@ export function attachInput(
         return;
       }
       if (gesture?.id !== event.pointerId) return;
+      if (gesture.kind === 'select') options.selection?.move(screenToWorld(local(event), gesture.camera, gesture.size));
       if (gesture.kind === 'draw')
         pending.push({
           ...screenToWorld(local(event), gesture.camera, gesture.size),
@@ -175,7 +195,12 @@ export function attachInput(
   );
   const interrupted = (event: PointerEvent) => {
     if (touches.delete(event.pointerId)) resetTouch();
-    if (gesture?.id === event.pointerId) finish();
+    if (gesture?.id === event.pointerId) {
+      if (gesture.kind === 'select') {
+        options.selection?.cancel();
+        gesture = undefined;
+      } else finish();
+    }
   };
   canvas.addEventListener('pointercancel', interrupted, { signal });
   canvas.addEventListener(
@@ -191,7 +216,7 @@ export function attachInput(
     'wheel',
     (event) => {
       event.preventDefault();
-      if (gesture?.kind === 'draw') return;
+      if (gesture?.kind === 'draw' || gesture?.kind === 'select') return;
       options.navigate(
         transformAt(
           options.camera(),
@@ -206,6 +231,7 @@ export function attachInput(
   window.addEventListener(
     'blur',
     () => {
+      if (gesture?.kind === 'select') options.selection?.cancel();
       finish();
       touches.clear();
       resetTouch();
@@ -215,6 +241,7 @@ export function attachInput(
   );
   return () => {
     detachPuck();
+    if (gesture?.kind === 'select') options.selection?.cancel();
     finish();
     abort.abort();
     cancelAnimationFrame(frame);

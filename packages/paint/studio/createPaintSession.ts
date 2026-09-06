@@ -1,6 +1,7 @@
-import { createSignal, onSettled, untrack } from 'solid-js';
+import { createSignal, createTrackedEffect, onSettled, untrack } from 'solid-js';
 import { defaultBrush, type Brush } from './brush';
 import { defaultCamera, transformAt, type Camera, type Point } from './camera';
+import { createSelection } from './createSelection';
 import { createDocument, type LayerAction } from './document';
 import { attachInput, editable } from './input';
 import Worker from './paint.worker?worker';
@@ -10,6 +11,7 @@ import type { PaintCommand, PaintEvent } from './protocol';
 /** Scopes the worker, input listeners, persistence status, and UI state to one editor mount. */
 export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; stage: () => HTMLDivElement }) {
   const [brush, setBrush] = createSignal(defaultBrush(), { ownedWrite: true });
+  const [tool, setTool] = createSignal<Brush['tool'] | 'lasso'>('brush', { ownedWrite: true });
   const [camera, setCamera] = createSignal(defaultCamera(), { ownedWrite: true });
   const [state, setState] = createSignal(createDocument().state(), { ownedWrite: true });
   const [debug, setDebug] = createSignal(false, { ownedWrite: true });
@@ -31,13 +33,30 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   let size = { width: 1, height: 1 };
   const [viewSize, setViewSize] = createSignal(size, { ownedWrite: true });
   let currentCamera = defaultCamera();
-  const send = (command: PaintCommand) => worker?.postMessage(command);
+  let animateSelection = true;
+  const send = (command: PaintCommand) => {
+    if (selection.isBusy() && !['selection', 'selection-view', 'view', 'debug', 'dispose'].includes(command.type))
+      return;
+    if (['begin', 'undo', 'redo', 'layer', 'import', 'recover'].includes(command.type)) selection.clear();
+    worker?.postMessage(command);
+  };
+  const selection = createSelection({ send, document: () => untrack(state), ready: () => untrack(ready) });
+  createTrackedEffect(() => send({ type: 'selection-view', points: selection.points(), animate: animateSelection }));
   const navigate = (next: Camera) => {
     currentCamera = next;
     setCamera(next);
     send({ type: 'view', camera: next, size, dpr: devicePixelRatio });
   };
-  const updateBrush = (patch: Partial<Brush>) => setBrush((value) => ({ ...value, ...patch }));
+  const chooseTool = (next: ReturnType<typeof tool>) => {
+    if (selection.isBusy()) return;
+    selection.clear();
+    setTool(next);
+    if (next !== 'lasso') setBrush((value) => ({ ...value, tool: next }));
+  };
+  const updateBrush = (patch: Partial<Brush>) => {
+    if (patch.tool) chooseTool(patch.tool);
+    setBrush((value) => ({ ...value, ...patch }));
+  };
   const layer = (action: LayerAction) => send({ type: 'layer', action });
   const navigation = createPaintNavigation({
     size: viewSize,
@@ -71,9 +90,18 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     const offscreen = canvas.transferControlToOffscreen();
     const init: PaintCommand = { type: 'init', canvas: offscreen, size, dpr: devicePixelRatio };
     worker.postMessage(init, [offscreen]);
+    const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+    const syncSelection = () => {
+      animateSelection = !reducedMotion.matches && !document.hidden;
+      send({ type: 'selection-view', points: untrack(selection.points), animate: animateSelection });
+    };
+    reducedMotion.addEventListener('change', syncSelection);
+    document.addEventListener('visibilitychange', syncSelection);
+    syncSelection();
     let initialState = true;
     worker.onmessage = (event: MessageEvent<PaintEvent>) => {
       const value = event.data;
+      if (value.type === 'selection') selection.receive(value);
       if (value.type === 'ready') {
         setReady(true);
         measure();
@@ -117,6 +145,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       }
     };
     worker.onerror = (event) => {
+      selection.receive({ type: 'selection', points: [], hasClipboard: false });
       setReady(false);
       setError({ message: event.message || 'The drawing worker stopped.', recoverable: false });
     };
@@ -129,31 +158,46 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       camera: () => currentCamera,
       size: () => size,
       brush: () => untrack(brush),
-      ready: () => untrack(ready),
+      ready: () => untrack(ready) && !selection.isBusy(),
       navigate,
       send,
       cursor: setCursor,
-      puck: navigation
+      puck: navigation,
+      selection: { ...selection, enabled: () => untrack(tool) === 'lasso' }
     });
     const keys = (event: KeyboardEvent) => {
       if (editable(event.target)) return;
       const modifier = event.ctrlKey || event.metaKey;
-      if (modifier && event.key.toLowerCase() === 'z') {
+      const key = event.key.toLowerCase();
+      if (modifier && ['c', 'x', 'v'].includes(key) && untrack(tool) === 'lasso') {
+        event.preventDefault();
+        selection.action(key === 'c' ? 'copy' : key === 'x' ? 'cut' : 'paste');
+      } else if (modifier && key === 'd') {
+        event.preventDefault();
+        selection.clear();
+      } else if ((key === 'delete' || key === 'backspace') && untrack(tool) === 'lasso') {
+        event.preventDefault();
+        selection.action('delete');
+      } else if (modifier && !event.altKey && !event.isComposing && (key === 'z' || event.code === 'KeyZ')) {
         event.preventDefault();
         send({ type: event.shiftKey ? 'redo' : 'undo' });
       } else if (modifier && event.key.toLowerCase() === 's') {
         event.preventDefault();
         send({ type: 'download' });
-      } else if (event.key.toLowerCase() === 'b') updateBrush({ tool: 'brush' });
-      else if (event.key.toLowerCase() === 'e') updateBrush({ tool: 'eraser' });
+      } else if (!modifier && key === 'b') chooseTool('brush');
+      else if (!modifier && key === 'e') chooseTool('eraser');
+      else if (!modifier && key === 'l') chooseTool('lasso');
       else if (event.key === 'Escape') {
         setPuck(undefined);
+        selection.clear();
         send({ type: 'cancel' });
       } else if (event.key === '[' || event.key === ']')
         updateBrush({ size: Math.max(1, Math.min(512, untrack(brush).size * (event.key === '[' ? 0.8 : 1.25))) });
     };
     window.addEventListener('keydown', keys);
     return () => {
+      reducedMotion.removeEventListener('change', syncSelection);
+      document.removeEventListener('visibilitychange', syncSelection);
       detach();
       resize.disconnect();
       window.removeEventListener('keydown', keys);
@@ -171,6 +215,9 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   });
 
   return {
+    tool,
+    chooseTool,
+    selection,
     debug,
     debugTiles,
     paging,

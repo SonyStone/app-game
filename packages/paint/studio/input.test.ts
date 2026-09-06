@@ -2,8 +2,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultBrush } from './brush';
 import { defaultCamera } from './camera';
-import { createPaintNavigation as createNavigationPuck } from './paintNavigation';
 import { attachInput } from './input';
+import { createPaintNavigation as createNavigationPuck } from './paintNavigation';
 import type { PaintCommand } from './protocol';
 
 const disposals: (() => void)[] = [];
@@ -13,6 +13,21 @@ afterEach(() => {
 });
 
 describe('input to worker contract', () => {
+  it('routes lasso samples in world coordinates and cancels interrupted selections without painting', () => {
+    const selection = { enabled: () => true, begin: vi.fn(), move: vi.fn(), end: vi.fn(), cancel: vi.fn() };
+    const { commands, pointer } = setup(selection);
+    pointer('pointerdown', 400, 300);
+    pointer('pointermove', 420, 330);
+    pointer('pointerup', 440, 350);
+    expect(selection.begin).toHaveBeenCalledWith({ x: 0, y: 0 });
+    expect(selection.move).toHaveBeenLastCalledWith({ x: 40, y: 50 });
+    expect(selection.end).toHaveBeenCalledOnce();
+    pointer('pointerdown', 400, 300);
+    pointer('pointercancel', 450, 350);
+    expect(selection.cancel).toHaveBeenCalledOnce();
+    expect(selection.end).toHaveBeenCalledOnce();
+    expect(commands).toEqual([]);
+  });
   it('sends a tap as begin/end and flushes samples before pointerup', () => {
     const { canvas, commands, pointer } = setup();
     pointer('pointerdown', 10, 20);
@@ -125,7 +140,7 @@ describe('input to worker contract', () => {
   });
 });
 
-function setup() {
+function setup(selection?: Parameters<typeof attachInput>[1]['selection']) {
   vi.stubGlobal(
     'requestAnimationFrame',
     vi.fn(() => 1)
@@ -146,6 +161,7 @@ function setup() {
       navigate,
       send: (c) => commands.push(c),
       cursor: vi.fn(),
+      selection,
       puck
     })
   );

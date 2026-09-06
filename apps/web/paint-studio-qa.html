@@ -35,11 +35,13 @@
     <button id="streaming">Run streaming checks</button>
     <button id="run">Run GPU checks</button>
     <button id="worker">Run worker checks</button>
+    <button id="lasso">Check lasso selections</button>
     <button id="performance">Measure 60 strokes</button>
     <button id="dense">Measure large document</button>
     <button id="navigation">Measure navigation</button>
     <pre id="output">Ready</pre>
     <script type="module">
+      import { verifySelection } from '@app-game/paint/studio/selectionVerification';
       import { verifyPressureSpacing } from '@app-game/paint/studio/gpu/pressureVerification';
       import { verifyReadbackQueue } from '@app-game/paint/studio/gpu/readbackVerification';
       import { verifyBrushBatches } from '@app-game/paint/studio/gpu/brushBatchVerification';
@@ -55,6 +57,14 @@
       import { measurePainting, measureDensePainting, measureNavigation } from '@app-game/paint/studio/gpu/performance';
       const button = document.querySelector('#run'),
         output = document.querySelector('#output');
+      document.querySelector('#lasso').onclick = async () => {
+        output.textContent = 'Testing lasso shaders and large selections…\n';
+        try {
+          await verifySelection((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
       document.querySelector('#pressure').onclick = async () => {
         output.textContent = 'Testing stylus pressure…\n';
         try {

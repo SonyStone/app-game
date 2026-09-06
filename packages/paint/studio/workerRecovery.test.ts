@@ -26,6 +26,7 @@ it.each(['paint', 'finish'] as const)(
     let changes: TileChange[] = [];
     let checkpoint: SavedDocument | undefined;
     const renderer = {
+      setSelection: vi.fn(),
       begin: vi.fn(),
       paint: vi.fn(async () => {
         if (failureAt === 'paint' && failure) throw failure;

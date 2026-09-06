@@ -1,8 +1,8 @@
 import { defaultBrush } from './brush';
 import { defaultCamera } from './camera';
 import Worker from './paint.worker?worker';
-import type { PaintCommand, PaintEvent } from './protocol';
 import { readPaintFile } from './paintFile';
+import type { PaintCommand, PaintEvent } from './protocol';
 import { unpackTile } from './tilePixels';
 
 /** Exercises the production worker protocol and IndexedDB using a unique disposable database. */
@@ -82,6 +82,60 @@ export async function verifyWorker(report: (message: string) => void) {
     await redone;
     assert(await equalFiles(await download(), original), 'Worker undo/redo changed serialized pixels');
     report('PASS: worker undo/redo restores an identical exported file');
+    const points = [
+      { x: -100, y: -100 },
+      { x: 100, y: -100 },
+      { x: 100, y: 100 },
+      { x: -100, y: 100 }
+    ];
+    const selection = async (
+      action: Extract<PaintCommand, { type: 'selection' }>['action'],
+      offset?: { x: number; y: number }
+    ) => {
+      const done = wait((e) => e.type === 'selection');
+      send({
+        type: 'selection',
+        action,
+        points,
+        offset,
+        layerId: latest!.document.activeId,
+        revision: latest!.document.revision
+      });
+      await done;
+    };
+    await selection('copy');
+    await selection('move', { x: 256, y: -256 });
+    const moved = await readPaintFile(await download());
+    for (const [key, data] of decoded.layers[0]!.tiles) {
+      const [x, y] = key.split(',').map(Number);
+      const shifted = moved.layers[0]!.tiles.get(`${x! + 1},${y! - 1}`);
+      const shiftedPixels = shifted ? unpackTile(shifted) : undefined;
+      assert(
+        !!shiftedPixels && unpackTile(data).every((v, i) => v === shiftedPixels[i]),
+        'Selection move changed pixels'
+      );
+    }
+    send({ type: 'undo' });
+    // Downloads run after prior edits in the worker queue.
+    assert(await equalDocuments(await download(), original), 'Selection move undo did not restore the source');
+    await selection('cut');
+    assert(latest!.document.tileCount === 0, 'Cut left selected pixels behind');
+    await selection('paste');
+    assert(await equalDocuments(await download(), original), 'Clipboard paste did not restore exact pixels');
+    await selection('new-layer');
+    const separated = await readPaintFile(await download());
+    assert(
+      separated.layers.length === 2 && separated.layers[0]!.tiles.size === 0 && separated.layers[1]!.tiles.size > 0,
+      'Move to new layer did not transfer the selected pixels'
+    );
+    send({ type: 'undo' });
+    assert(await equalDocuments(await download(), original), 'New layer transfer was not one undoable edit');
+    send({ type: 'redo' });
+    await download();
+    assert(latest!.document.layers.length === 2, 'New layer transfer redo did not restore the layer');
+    report(
+      'PASS: lasso copy, cut, paste, tile-crossing move, and transfer to a new layer preserve exact pixels and undo atomically'
+    );
     const camera = { ...defaultCamera(), x: -128, y: 200, zoom: 0.05, angle: 0.3 };
     send({ type: 'view', camera, size: { width: 400, height: 300 }, dpr: 1 });
     const saved = wait((e) => e.type === 'state' && e.saved);
@@ -213,4 +267,26 @@ async function equalFiles(a: Blob, b: Blob) {
   const left = new Uint8Array(await a.arrayBuffer());
   const right = new Uint8Array(await b.arrayBuffer());
   return left.length === right.length && left.every((byte, index) => byte === right[index]);
+}
+
+/** Tile insertion order can change after a move; compare metadata and decoded pixels by key. */
+async function equalDocuments(a: Blob, b: Blob) {
+  const left = await readPaintFile(a),
+    right = await readPaintFile(b);
+  if (
+    left.activeId !== right.activeId ||
+    JSON.stringify(left.camera) !== JSON.stringify(right.camera) ||
+    left.layers.length !== right.layers.length
+  )
+    return false;
+  return left.layers.every(({ tiles, ...info }, index) => {
+    const { tiles: other, ...otherInfo } = right.layers[index]!;
+    if (JSON.stringify(info) !== JSON.stringify(otherInfo) || tiles.size !== other.size) return false;
+    return [...tiles].every(([key, data]) => {
+      const match = other.get(key);
+      if (!match) return false;
+      const pixels = unpackTile(match);
+      return unpackTile(data).every((value, at) => value === pixels[at]);
+    });
+  });
 }
