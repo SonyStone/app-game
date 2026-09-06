@@ -1,4 +1,4 @@
-import { createTrackedEffect, onSettled } from 'solid-js';
+import { createTrackedEffect, onCleanup, onSettled } from 'solid-js';
 
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { createWindowSize } from '@solid-primitives/resize-observer';
@@ -8,6 +8,7 @@ import Worker from './offscreen-canvas-paint.worker?worker';
 export default function OffscreenCanvasPaint() {
   const canvas = (<canvas class="touch-none" />) as HTMLCanvasElement;
   const worker = new Worker();
+  onCleanup(() => worker.terminate());
 
   const pointerEvents = createPointerEvents();
   const pointerTarget = canvas as unknown as HTMLElement;
