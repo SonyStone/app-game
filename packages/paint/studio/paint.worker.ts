@@ -264,7 +264,9 @@ createRoot((dispose) => {
           renderer.begin(document.active, command.brush);
           sampler = createSmoothStroke(command.brush, command.zoom ?? camera.zoom);
           await renderer.paint(sampler.add(command.samples));
-          scheduleDraw();
+          // Present contact before a queued release can start readback/overview preparation.
+          // Subsequent movement remains frame-batched; only pen-down gets an immediate frame.
+          await draw();
           break;
         }
         case 'samples':
