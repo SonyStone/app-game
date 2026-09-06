@@ -41,6 +41,14 @@ describe('stroke sampling', () => {
     expect(dabTiles({ x: 0, y: 0, radius: 3, flow: 1 })).toEqual(['-1,-1', '0,-1', '-1,0', '0,0']);
     expect(dabTiles({ x: TILE_SIZE - 1, y: 10, radius: 2, flow: 1 })).toEqual(['0,0', '1,0']);
   });
+  it('excludes empty bounding-box corners of a 512px round stamp while retaining its fringe', () => {
+    const tiles = dabTiles({ x: 0, y: 0, radius: 256, flow: 1 });
+    expect(tiles).toHaveLength(12);
+    expect(tiles).not.toContain('-2,-2');
+    expect(tiles).not.toContain('1,1');
+    expect(tiles).toContain('-2,0');
+    expect(tiles).toContain('1,0');
+  });
 });
 
 describe('camera', () => {

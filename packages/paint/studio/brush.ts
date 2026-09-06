@@ -35,11 +35,18 @@ export function defaultBrush(): Brush {
   };
 }
 
-/** Resamples a polyline by arc length, preserving spacing across event and frame boundaries. */
+/** Resamples by distance measured in pressure-scaled brush diameters.
+ * Carries fractional stamp spacing across input batches; linearly interpolated pressure ramps
+ * produce the same stamps even when the browser subdivides their pointer samples.
+ */
 export function createStrokeSampler(brush: Brush) {
   let previous: Sample | undefined;
-  const spacing = Math.max(0.5, brush.size * brush.spacing);
-  let remaining = spacing;
+  const baseSpacing = brush.size * brush.spacing;
+  // Match the radius floor below; a half-pixel minimum step would visibly dot thin tips.
+  const minimumSpacing = Math.max(0.05, 0.5 * brush.spacing, baseSpacing * 0.04);
+  const step = (pressure: number) =>
+    brush.pressureSize ? Math.max(minimumSpacing, baseSpacing * pressure) : Math.max(0.05, baseSpacing);
+  let remaining = 1;
   const dab = (sample: Sample): Dab => ({
     x: sample.x,
     y: sample.y,
@@ -50,8 +57,9 @@ export function createStrokeSampler(brush: Brush) {
     /** Appends real input samples. No repeated endpoint stamp is added on pointerup. */
     add(samples: readonly Sample[]): Dab[] {
       const result: Dab[] = [];
-      for (const sample of samples) {
-        if (![sample.x, sample.y, sample.pressure, sample.time].every(Number.isFinite)) continue;
+      for (const input of samples) {
+        if (![input.x, input.y, input.pressure, input.time].every(Number.isFinite)) continue;
+        const sample = { ...input, pressure: Math.max(0, Math.min(1, input.pressure)) };
         if (!previous) {
           result.push(dab(sample));
           previous = sample;
@@ -60,20 +68,38 @@ export function createStrokeSampler(brush: Brush) {
         const dx = sample.x - previous.x,
           dy = sample.y - previous.y;
         const distance = Math.hypot(dx, dy);
-        let offset = remaining;
-        while (offset <= distance) {
-          const t = offset / distance;
-          result.push(
-            dab({
-              x: previous.x + dx * t,
-              y: previous.y + dy * t,
-              pressure: previous.pressure + (sample.pressure - previous.pressure) * t,
-              time: sample.time
-            })
-          );
-          offset += spacing;
+        if (distance > 0) {
+          const delta = sample.pressure - previous.pressure;
+          // step(p) is linear except where the pressure/minimum-radius floor takes over.
+          const crossing = (minimumSpacing / baseSpacing - previous.pressure) / delta;
+          const cuts = brush.pressureSize && crossing > 0 && crossing < 1 ? [0, crossing, 1] : [0, 1];
+          for (let i = 1; i < cuts.length; i++) {
+            const from = cuts[i - 1]!,
+              to = cuts[i]!;
+            const length = distance * (to - from);
+            const startStep = step(previous.pressure + delta * from);
+            const endStep = step(previous.pressure + delta * to);
+            const slope = (endStep - startStep) / length;
+            // Integrate 1 / step(s), then invert it for each whole stamp interval.
+            // log1p/expm1 retain precision for nearly constant pressure.
+            const intervals = slope === 0 ? length / startStep : Math.log1p((endStep - startStep) / startStep) / slope;
+            let interval = remaining;
+            while (interval <= intervals + 1e-10) {
+              const offset = slope === 0 ? interval * startStep : (startStep * Math.expm1(slope * interval)) / slope;
+              const t = from + Math.min(length, offset) / distance;
+              result.push(
+                dab({
+                  x: previous.x + dx * t,
+                  y: previous.y + dy * t,
+                  pressure: previous.pressure + delta * t,
+                  time: sample.time
+                })
+              );
+              interval++;
+            }
+            remaining = interval - intervals;
+          }
         }
-        remaining = offset - distance;
         previous = sample;
       }
       return result;
@@ -86,8 +112,11 @@ export function dabTiles(dab: Dab, size = TILE_SIZE): string[] {
   const keys: string[] = [];
   const radius = dab.radius + 1;
   for (let y = Math.floor((dab.y - radius) / size); y <= Math.floor((dab.y + radius) / size); y++) {
-    for (let x = Math.floor((dab.x - radius) / size); x <= Math.floor((dab.x + radius) / size); x++)
-      keys.push(`${x},${y}`);
+    for (let x = Math.floor((dab.x - radius) / size); x <= Math.floor((dab.x + radius) / size); x++) {
+      const dx = Math.max(x * size - dab.x, 0, dab.x - (x + 1) * size);
+      const dy = Math.max(y * size - dab.y, 0, dab.y - (y + 1) * size);
+      if (dx * dx + dy * dy <= radius * radius) keys.push(`${x},${y}`);
+    }
   }
   return keys;
 }
