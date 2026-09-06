@@ -15,6 +15,9 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   const [camera, setCamera] = createSignal(defaultCamera(), { ownedWrite: true });
   const [state, setState] = createSignal(createDocument().state(), { ownedWrite: true });
   const [debug, setDebug] = createSignal(false, { ownedWrite: true });
+  const [liveTail, setLiveTail] = createSignal(true, { ownedWrite: true });
+  const [showPenCursor, setShowPenCursor] = createSignal(false, { ownedWrite: true });
+  const [rawReceived, setRawReceived] = createSignal(false, { ownedWrite: true });
   const [debugTiles, setDebugTiles] = createSignal<string[]>([], { ownedWrite: true });
   const [paging, setPaging] = createSignal<
     Pick<Extract<PaintEvent, { type: 'state' }>, 'storage' | 'virtual' | 'debugPages' | 'rasterDraws' | 'readback'>
@@ -35,7 +38,10 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   let currentCamera = defaultCamera();
   let animateSelection = true;
   const send = (command: PaintCommand) => {
-    if (selection.isBusy() && !['selection', 'selection-view', 'view', 'debug', 'dispose'].includes(command.type))
+    if (
+      selection.isBusy() &&
+      !['selection', 'selection-view', 'view', 'debug', 'live-tail', 'dispose'].includes(command.type)
+    )
       return;
     if (['begin', 'undo', 'redo', 'layer', 'import', 'recover'].includes(command.type)) selection.clear();
     worker?.postMessage(command);
@@ -162,10 +168,13 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       navigate,
       send,
       cursor: setCursor,
+      showPenCursor: () => untrack(showPenCursor),
+      rawUpdate: () => setRawReceived(true),
       puck: navigation,
       selection: { ...selection, enabled: () => untrack(tool) === 'lasso' }
     });
     const keys = (event: KeyboardEvent) => {
+      if (event.target instanceof Element && event.target.closest('dialog[open]')) return;
       if (editable(event.target)) return;
       const modifier = event.ctrlKey || event.metaKey;
       const key = event.key.toLowerCase();
@@ -216,6 +225,14 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
 
   return {
     tool,
+    liveTail,
+    setLiveTail(enabled: boolean) {
+      setLiveTail(enabled);
+      send({ type: 'live-tail', enabled });
+    },
+    showPenCursor,
+    setShowPenCursor,
+    rawReceived,
     chooseTool,
     selection,
     debug,

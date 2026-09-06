@@ -8,11 +8,24 @@ export function createLeonardoStroke(brush: Brush, zoom = 1) {
   const curve = createCubicStroke(brush.size, zoom);
   const sampler = createStrokeSampler(brush);
   let finished = false;
+  let latest: Sample | undefined;
+  const settings = normalizeStrokeSettings(brush.stroke);
   const draw = (samples: readonly Sample[]) => sampler.add(curve.add(samples));
   return {
     /** Every real sample participates, independent of animation-frame or event batching. */
     add(samples: readonly Sample[]): Dab[] {
-      return finished ? [] : draw(filter.add(samples));
+      if (finished) return [];
+      for (const sample of samples)
+        if ([sample.x, sample.y, sample.pressure, sample.time].every(Number.isFinite)) latest = sample;
+      return draw(filter.add(samples));
+    },
+    /** Extends the filtered curve to real input only in the disposable display tail. */
+    preview(): Dab[] {
+      if (finished || !latest) return [];
+      const pressure =
+        Math.max(0, Math.min(1, (latest.pressure - settings.minimum) / (settings.maximum - settings.minimum))) **
+        settings.firmness;
+      return sampler.preview([...curve.preview(), { ...latest, pressure }]);
     },
     /** Catches up when enabled, then flushes the curve once without adding an endpoint stamp. */
     finish(): Dab[] {

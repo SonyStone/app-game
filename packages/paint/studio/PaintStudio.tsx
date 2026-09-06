@@ -5,6 +5,7 @@ import { BrushPanel, ColorPanel } from './BrushPanel';
 import { defaultCamera, transformAt } from './camera';
 import { CanvasDebug } from './CanvasDebug';
 import { createPaintSession } from './createPaintSession';
+import { DeveloperDialog } from './DeveloperDialog';
 import { FullscreenButton } from './FullscreenButton';
 import { LayersPanel } from './LayersPanel';
 import { SelectionActions } from './SelectionActions';
@@ -24,7 +25,6 @@ export default function PaintStudio() {
     error,
     cursor,
     puck,
-    metrics,
     send,
     navigate,
     updateBrush,
@@ -37,6 +37,7 @@ export default function PaintStudio() {
     ownedWrite: true
   });
   let launcher: HTMLElement | undefined;
+  const [developer, setDeveloper] = createSignal(false, { ownedWrite: true });
   const closePanel = () => {
     setPanel(undefined);
     launcher?.focus({ preventScroll: true });
@@ -318,14 +319,12 @@ export default function PaintStudio() {
                   Reset view
                 </button>
                 <button
-                  disabled={!ready()}
-                  aria-pressed={session.debug() ? 'true' : 'false'}
                   onClick={() => {
-                    session.toggleDebug();
                     closePanel();
+                    setDeveloper(true);
                   }}
                 >
-                  Canvas wireframe<span>{session.debug() ? 'On' : 'Off'}</span>
+                  Developer
                 </button>
                 <a href={location.pathname.startsWith('/paint/') ? '/paint' : './'}>Paint experiments</a>
               </div>
@@ -334,14 +333,19 @@ export default function PaintStudio() {
                 <br />
                 Space · Navigation &nbsp; V · Navigation
               </p>
-              <p class="paint-panel-note" title="CPU preparation/submission time, not pen latency">
-                {state().tileCount} tiles · {(metrics().gpu / 1024 / 1024).toFixed(1)} MB · {metrics().ms.toFixed(1)} ms
-                submit
-              </p>
             </Show>
           </aside>
         </Show>
       </div>
+      <Show when={developer()}>
+        <DeveloperDialog
+          session={session}
+          close={() => {
+            setDeveloper(false);
+            launcher?.focus({ preventScroll: true });
+          }}
+        />
+      </Show>
       <Show when={error()}>
         <div class="paint-error" role="alert">
           <strong>{error()!.recoverable ? 'Canvas paused' : 'Could not complete that action'}</strong>

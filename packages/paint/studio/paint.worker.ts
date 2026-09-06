@@ -28,6 +28,7 @@ createRoot((dispose) => {
   let pendingSaves = 0;
   let camera = defaultCamera();
   let debug = false;
+  let liveTail = true;
   let size = { width: 1, height: 1 },
     dpr = 1;
   let sampler: ReturnType<typeof createSmoothStroke> | undefined;
@@ -247,6 +248,11 @@ createRoot((dispose) => {
           debugAt = 0;
           status();
           break;
+        case 'live-tail':
+          liveTail = command.enabled;
+          renderer?.preview(liveTail && sampler ? sampler.preview() : []);
+          scheduleDraw();
+          break;
         case 'view': {
           const moved = JSON.stringify(camera) !== JSON.stringify(command.camera);
           camera = command.camera;
@@ -264,6 +270,7 @@ createRoot((dispose) => {
           renderer.begin(document.active, command.brush);
           sampler = createSmoothStroke(command.brush, command.zoom ?? camera.zoom);
           await renderer.paint(sampler.add(command.samples));
+          renderer.preview(liveTail ? sampler.preview() : []);
           // Present contact before a queued release can start readback/overview preparation.
           // Subsequent movement remains frame-batched; only pen-down gets an immediate frame.
           await draw();
@@ -272,6 +279,7 @@ createRoot((dispose) => {
         case 'samples':
           if (sampler && renderer && !lost) {
             await renderer.paint(sampler.add(command.samples));
+            renderer.preview(liveTail ? sampler.preview() : []);
             scheduleDraw();
           }
           break;

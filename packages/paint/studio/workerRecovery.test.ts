@@ -26,6 +26,7 @@ it.each(['paint', 'finish'] as const)(
     let changes: TileChange[] = [];
     let checkpoint: SavedDocument | undefined;
     const renderer = {
+      preview: vi.fn(),
       setSelection: vi.fn(),
       begin: vi.fn(),
       paint: vi.fn(async () => {

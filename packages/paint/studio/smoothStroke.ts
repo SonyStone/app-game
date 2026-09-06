@@ -40,6 +40,13 @@ export function createSmoothStroke(brush: Brush, zoom = 1) {
       }
       return result;
     },
+    /** Renders the withheld curve to the latest real point without committing its provisional shape. */
+    preview(): Dab[] {
+      if (finished || !endpoint || !start || !control) return [];
+      const points: Sample[] = [];
+      flatten(start, control, endpoint, tolerance, points);
+      return sampler.preview(points);
+    },
     /** Flushes the curve tail to the last real position, without duplicating a stationary tap. */
     finish(): Dab[] {
       if (finished || !endpoint) return [];

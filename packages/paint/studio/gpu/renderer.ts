@@ -58,6 +58,9 @@ export async function createPaintRenderer(
   const displayCache = createDisplayCache(root, sampler);
   const cache = new Map<string, ReturnType<typeof createTile>>();
   const spareTiles: ReturnType<typeof createTile>[] = [];
+  const tailTiles = new Map<string, Dab[]>();
+  // A small reusable pool, independent of committed scratch and its eviction/readback lifecycle.
+  const tailPool: ReturnType<typeof createTile>[] = [];
   const strokeTiles = new Map<
     string,
     {
@@ -89,6 +92,17 @@ export async function createPaintRenderer(
   const viewFallback = virtual ? createViewFallback(root) : undefined;
   let completeView: { camera: Camera; size: ViewSize } | undefined;
   const dirtyTiles = new Set<string>();
+  const setTail = (dabs: readonly Dab[]) => {
+    for (const key of tailTiles.keys()) dirtyTiles.add(key);
+    tailTiles.clear();
+    for (const dab of dabs)
+      for (const key of dabTiles(dab)) {
+        const list = tailTiles.get(key) ?? [];
+        list.push(dab);
+        tailTiles.set(key, list);
+        dirtyTiles.add(key);
+      }
+  };
   let frame = 0;
   let previewTileDraws = 0,
     sourceTileDraws = 0;
@@ -173,7 +187,61 @@ export async function createPaintRenderer(
     }
   };
 
+  /** Builds display-only output with the same accumulated mask and opacity as the real stroke. */
+  const prepareTail = (
+    original: ReturnType<typeof createTile>,
+    active: boolean,
+    tail: readonly Dab[],
+    slot: number,
+    x: number,
+    y: number
+  ) => {
+    const temporary: ReturnType<typeof createTile> =
+      tailPool[slot] ?? (tailPool[slot] = createTile(root, undefined, sampler));
+    prepareStroke(root, temporary);
+    const commands = commandBatch(device);
+    commands
+      .encoder()
+      .copyTextureToTexture(
+        { texture: root.unwrap(active ? original.base! : original.texture) },
+        { texture: root.unwrap(temporary.base!) },
+        [TILE_SIZE, TILE_SIZE]
+      );
+    if (active)
+      commands
+        .encoder()
+        .copyTextureToTexture({ texture: root.unwrap(original.mask!) }, { texture: root.unwrap(temporary.mask!) }, [
+          TILE_SIZE,
+          TILE_SIZE
+        ]);
+    else clearAttachment(commands.encoder(), temporary.maskRender!);
+    for (let offset = 0; offset < tail.length; offset += STAMP_CAPACITY) {
+      if (offset) commands.flush();
+      const stamps = tail.slice(offset, offset + STAMP_CAPACITY);
+      const data = new Float32Array(stamps.length * 4);
+      stamps.forEach((dab, i) => data.set([dab.x - x * TILE_SIZE, dab.y - y * TILE_SIZE, dab.radius, dab.flow], i * 4));
+      device.queue.writeBuffer(root.unwrap(temporary.stamps), 0, data);
+      const pass = commands
+        .encoder()
+        .beginRenderPass({ colorAttachments: [{ view: temporary.maskRender!, loadOp: 'load', storeOp: 'store' }] });
+      pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, temporary.stamps).draw(6, stamps.length);
+      pass.end();
+    }
+    const pass = commands
+      .encoder()
+      .beginRenderPass({ colorAttachments: [{ view: temporary.render, loadOp: 'clear', storeOp: 'store' }] });
+    pipelines.stroke.with(pass).with(brushGroup).with(temporary.strokeGroup!).draw(3);
+    pass.end();
+    commands.flush();
+    temporary.mipmapsDirty = true;
+    return temporary;
+  };
+
   return {
+    /** Replaces display-only stamps; these never enter readback, history or saved tiles. */
+    preview(dabs: readonly Dab[]) {
+      setTail(stroke ? dabs : []);
+    },
     /** Keeps transient selection geometry on this device, outside committed artwork and exports. */
     setSelection(points: readonly Point[], animate = true) {
       lasso.set(points);
@@ -198,7 +266,7 @@ export async function createPaintRenderer(
           (virtual?.stats().gpuBytes ?? 0) +
           (viewFallback?.bytes() ?? 0) +
           displayCache.stats().bytes +
-          [...cache.values(), ...spareTiles].reduce(
+          [...cache.values(), ...spareTiles, ...tailPool].reduce(
             (n, tile) => n + TILE_SIZE * TILE_SIZE * 4 * (4 / 3 + (tile.base ? 2 : 0)),
             0
           )
@@ -218,6 +286,7 @@ export async function createPaintRenderer(
     /** Captures brush settings and the target layer until commit/cancel. */
     begin(layer: Layer, brush: Brush) {
       if (stroke) throw new Error('Finish the current stroke before beginning another.');
+      setTail([]);
       if (virtual && !completeView) viewSignature = '';
       completeView = undefined;
       viewFallback?.clear();
@@ -306,6 +375,7 @@ export async function createPaintRenderer(
     /** Copies resident touched tiles in one submission/map; retains scratch textures for subsequent strokes. */
     async finish(): Promise<TileChange[]> {
       if (!stroke) return [];
+      setTail([]);
       for (const result of await Promise.all([...strokeTiles.values()].map((snapshot) => snapshot.pending)))
         if (result) unwrapResult(result);
       const changes: TileChange[] = [];
@@ -335,6 +405,7 @@ export async function createPaintRenderer(
     },
     /** Discards preview pixels and restores the committed document on the next render. */
     cancel() {
+      setTail([]);
       if (strokeTiles.size) {
         completeView = undefined;
         viewFallback?.clear();
@@ -352,6 +423,7 @@ export async function createPaintRenderer(
     },
     /** Invalidates cached pixels after undo, redo, import, or layer deletion. */
     reset() {
+      setTail([]);
       completeView = undefined;
       viewFallback?.clear();
       holdPresentation = '';
@@ -461,6 +533,7 @@ export async function createPaintRenderer(
           // replaces those pixels; scanning/loading every document tile here defeats virtual texturing.
           const keys = streamed ? new Set<string>() : new Set(layer.tiles.keys());
           if (active) for (const id of strokeTiles.keys()) keys.add(id.slice(layer.id.length + 1));
+          if (active && !exact) for (const key of tailTiles.keys()) keys.add(key);
           const visible = [...keys].filter((key) => {
             const [x, y] = coordinates(key);
             return (
@@ -471,9 +544,13 @@ export async function createPaintRenderer(
             );
           });
           if (!visible.length && !streamed) continue;
-          const batchSize = Math.min(64, Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES));
+          const batchSize = Math.min(
+            tailTiles.size && !exact ? 8 : 64,
+            Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES)
+          );
           for (let offset = 0; offset < visible.length; offset += batchSize) {
             const batch = [];
+            let tailSlot = 0;
             for (const key of visible.slice(offset, offset + batchSize)) {
               const [x, y] = coordinates(key);
               const id = keyFor(layer, key);
@@ -483,11 +560,13 @@ export async function createPaintRenderer(
               // An evicted tile owns a pending snapshot, not an empty/committed replacement.
               if (!cache.has(id) && snapshot?.pending) unwrapResult(await snapshot.pending);
               const source = snapshot?.output ?? layer.tiles.get(key)!;
-              const tile =
-                cache.has(id) || options.displayCache === false
+              const tail = active && !exact ? tailTiles.get(key) : undefined;
+              let tile =
+                tail || cache.has(id) || options.displayCache === false
                   ? await ensure(layer, key)
                   : (displayCache.find(id, source, camera.zoom * scale) ??
                     displayCache.get(id, (await readTile(source))!, camera.zoom * scale, source));
+              if (tail) tile = prepareTail(cache.get(id)!, !!snapshot, tail, tailSlot++, x, y);
               // Magnified tiles sample level zero. Build the mip chain only when a view needs it.
               if (tile.mipmapsDirty && camera.zoom * scale < 1) {
                 tile.texture.generateMipmaps();
@@ -585,6 +664,9 @@ export async function createPaintRenderer(
       virtual?.destroy();
       viewFallback?.destroy();
       displayCache.destroy();
+      for (const tile of tailPool) destroyTile(tile);
+      tailPool.length = 0;
+      tailTiles.clear();
       for (const tile of [...cache.values(), ...spareTiles]) destroyTile(tile);
       cache.clear();
       spareTiles.length = 0;

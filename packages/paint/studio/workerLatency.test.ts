@@ -21,6 +21,7 @@ it('presents the first pen contact before a queued release can wait on readback'
     release = resolve;
   });
   const renderer = {
+    preview: vi.fn(),
     setSelection: vi.fn(),
     begin: vi.fn(() => order.push('begin')),
     paint: vi.fn(async (_dabs: readonly Dab[]) => {

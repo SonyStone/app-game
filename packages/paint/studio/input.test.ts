@@ -13,6 +13,43 @@ afterEach(() => {
 });
 
 describe('input to worker contract', () => {
+  it('uses raw pen samples once, excluding the corresponding pointermove batch', () => {
+    vi.stubGlobal('isSecureContext', true);
+    vi.stubGlobal('onpointerrawupdate', null);
+    vi.stubGlobal('PointerEvent', MouseEvent);
+    const { commands, pointer, rawUpdate } = setup();
+    pointer('pointerdown', 0, 0, { pointerType: 'pen', pressure: 0.2 });
+    const data = {
+      pointerType: 'pen',
+      getCoalescedEvents: () => [
+        { clientX: 10, clientY: 10, pressure: 0.4, timeStamp: 1 },
+        { clientX: 20, clientY: 20, pressure: 0.7, timeStamp: 2 }
+      ]
+    };
+    pointer('pointerrawupdate', 20, 20, data);
+    pointer('pointermove', 20, 20, data);
+    pointer('pointerup', 20, 20, { pointerType: 'pen' });
+    expect(
+      commands
+        .filter((command) => command.type === 'samples')
+        .flatMap((command) => command.samples)
+        .map((sample) => sample.pressure)
+    ).toEqual([0.4, 0.7]);
+    expect(rawUpdate).toHaveBeenCalledOnce();
+  });
+  it('hides the pen ring only during drawing and keeps mouse and hover feedback', () => {
+    const { pointer, cursor } = setup();
+    pointer('pointermove', 10, 20, { pointerType: 'pen', buttons: 0 });
+    expect(cursor).toHaveBeenLastCalledWith({ x: 10, y: 20 });
+    pointer('pointerdown', 10, 20, { pointerType: 'pen' });
+    expect(cursor).toHaveBeenLastCalledWith(undefined);
+    pointer('pointermove', 20, 20, { pointerType: 'pen' });
+    expect(cursor).toHaveBeenLastCalledWith(undefined);
+    pointer('pointerup', 20, 20, { pointerType: 'pen' });
+    expect(cursor).toHaveBeenLastCalledWith({ x: 20, y: 20 });
+    pointer('pointerdown', 30, 20);
+    expect(cursor).toHaveBeenLastCalledWith({ x: 30, y: 20 });
+  });
   it('does not feed a duplicate release into the filter for a stationary pen tap', () => {
     const { commands, pointer } = setup();
     pointer('pointerdown', 10, 20, { pointerType: 'pen', pressure: 0.3 });
@@ -164,6 +201,8 @@ function setup(selection?: Parameters<typeof attachInput>[1]['selection']) {
   canvas.hasPointerCapture = vi.fn(() => false);
   const commands: PaintCommand[] = [],
     navigate = vi.fn();
+  const cursor = vi.fn(),
+    rawUpdate = vi.fn();
   const puck = createNavigationPuck({ size: () => ({ width: 800, height: 600 }), camera: defaultCamera, navigate });
   disposals.push(
     attachInput(canvas, {
@@ -173,7 +212,8 @@ function setup(selection?: Parameters<typeof attachInput>[1]['selection']) {
       ready: () => true,
       navigate,
       send: (c) => commands.push(c),
-      cursor: vi.fn(),
+      cursor,
+      rawUpdate,
       selection,
       puck
     })
@@ -184,5 +224,5 @@ function setup(selection?: Parameters<typeof attachInput>[1]['selection']) {
       Object.defineProperty(event, key, { value });
     canvas.dispatchEvent(event);
   };
-  return { canvas, commands, navigate, pointer, puck };
+  return { canvas, commands, navigate, pointer, puck, cursor, rawUpdate };
 }

@@ -15,6 +15,10 @@ export function attachInput(
     navigate: (camera: Camera) => void;
     send: (command: PaintCommand) => void;
     cursor: (point: Point | undefined) => void;
+    /** Defaults to hiding the pen ring during contact, while preserving hover and mouse cursors. */
+    showPenCursor?: () => boolean;
+    /** Called when real raw pen updates are received, rather than merely supported by the browser. */
+    rawUpdate?: () => void;
     puck: ReturnType<typeof createNavigationPuck>;
     selection?: {
       enabled: () => boolean;
@@ -29,7 +33,7 @@ export function attachInput(
     signal = abort.signal;
   const touches = new Map<number, Point>();
   let gesture:
-    | { kind: 'draw'; id: number; camera: Camera; size: ViewSize; latest: Sample }
+    | { kind: 'draw'; id: number; camera: Camera; size: ViewSize; latest: Sample; raw: boolean }
     | { kind: 'select'; id: number; camera: Camera; size: ViewSize }
     | { kind: 'pan'; id: number; previous: Point }
     | undefined;
@@ -56,6 +60,39 @@ export function attachInput(
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(flush);
   };
+  const collect = (event: PointerEvent) => {
+    if (gesture?.kind !== 'draw' || gesture.id !== event.pointerId) return;
+    const coalesced = event.getCoalescedEvents?.() ?? [];
+    for (const sample of coalesced.length ? coalesced : [event]) {
+      gesture.latest = {
+        ...screenToWorld(local(sample), gesture.camera, gesture.size),
+        pressure: event.pointerType === 'pen' ? sample.pressure : 1,
+        time: sample.timeStamp
+      };
+      pending.push(gesture.latest);
+    }
+    schedule();
+  };
+  const cursorAt = (event: PointerEvent) =>
+    options.cursor(
+      event.pointerType === 'touch' ||
+        (event.pointerType === 'pen' && gesture?.kind === 'draw' && !options.showPenCursor?.())
+        ? undefined
+        : local(event)
+    );
+  if (supportsRawPointerUpdates())
+    canvas.addEventListener(
+      'pointerrawupdate',
+      (event) => {
+        if (!(event instanceof PointerEvent)) return;
+        if (event.pointerType !== 'pen' || gesture?.kind !== 'draw' || gesture.id !== event.pointerId) return;
+        gesture.raw = true;
+        options.rawUpdate?.();
+        cursorAt(event);
+        collect(event);
+      },
+      { signal }
+    );
   const touchMetrics = () => {
     const [a, b] = [...touches.values()];
     if (!a) return undefined;
@@ -109,7 +146,8 @@ export function attachInput(
       }
       const pressure = event.pointerType === 'pen' ? event.pressure : 1;
       const latest = { ...screenToWorld(point, camera, options.size()), pressure, time: event.timeStamp };
-      gesture = { kind: 'draw', id: event.pointerId, camera, size: { ...options.size() }, latest };
+      gesture = { kind: 'draw', id: event.pointerId, camera, size: { ...options.size() }, latest, raw: false };
+      cursorAt(event);
       options.send({
         type: 'begin',
         brush: options.brush(),
@@ -123,7 +161,7 @@ export function attachInput(
     'pointermove',
     (event) => {
       const point = local(event);
-      options.cursor(event.pointerType === 'touch' ? undefined : point);
+      cursorAt(event);
       if (touches.has(event.pointerId)) {
         touches.set(event.pointerId, point);
         const metrics = touchMetrics();
@@ -163,15 +201,8 @@ export function attachInput(
           options.selection?.move(screenToWorld(local(sample), gesture.camera, gesture.size));
         return;
       }
-      for (const sample of coalesced.length ? coalesced : [event]) {
-        gesture.latest = {
-          ...screenToWorld(local(sample), gesture.camera, gesture.size),
-          pressure: event.pointerType === 'pen' ? sample.pressure : 1,
-          time: sample.timeStamp
-        };
-        pending.push(gesture.latest);
-      }
-      schedule();
+      // Raw updates and pointermove contain the same physical samples. Never feed both to the filter.
+      if (!gesture.raw) collect(event);
     },
     { signal }
   );
@@ -192,6 +223,7 @@ export function attachInput(
           pending.push({ ...endpoint, pressure: gesture.latest.pressure, time: event.timeStamp });
       }
       finish();
+      cursorAt(event);
     },
     { signal }
   );
@@ -248,6 +280,11 @@ export function attachInput(
     abort.abort();
     cancelAnimationFrame(frame);
   };
+}
+
+/** Feature detection only; receiving raw events is reported separately by the input adapter. */
+export function supportsRawPointerUpdates(): boolean {
+  return typeof window !== 'undefined' && window.isSecureContext && 'onpointerrawupdate' in window;
 }
 
 /** Keyboard shortcuts must not intercept text entry or native controls. */

@@ -57,7 +57,7 @@ export function createStrokeSampler(brush: Brush) {
     radius: Math.max(0.25, brush.size * 0.5 * (brush.pressureSize ? Math.max(0.04, sample.pressure) : 1)),
     flow: brush.flow * (brush.pressureFlow ? sample.pressure : 1)
   });
-  return {
+  const sampler = {
     /** Appends real input samples. No repeated endpoint stamp is added on pointerup. */
     add(samples: readonly Sample[]): Dab[] {
       const result: Dab[] = [];
@@ -107,8 +107,20 @@ export function createStrokeSampler(brush: Brush) {
         previous = sample;
       }
       return result;
+    },
+    /** Samples a disposable tail without advancing committed spacing or pressure history. */
+    preview(samples: readonly Sample[]): Dab[] {
+      const savedPrevious = previous,
+        savedRemaining = remaining;
+      try {
+        return sampler.add(samples);
+      } finally {
+        previous = savedPrevious;
+        remaining = savedRemaining;
+      }
     }
   };
+  return sampler;
 }
 
 /** Enumerates signed tile coordinates intersecting a stamp, including its antialiasing fringe. */

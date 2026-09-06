@@ -27,6 +27,12 @@ export function createCubicStroke(size: number, zoom = 1) {
       }
       return output;
     },
+    /** Evaluates the withheld segment without consuming its lookahead state. */
+    preview(): Sample[] {
+      const output: Sample[] = [];
+      if (!finished && before && start && end) segment(before, start, end, extrapolate(start, end), tolerance, output);
+      return output;
+    },
     /** Uses an extrapolated neighbor only for tangent support and flushes to the final filtered sample. */
     finish(): Sample[] {
       if (finished) return [];

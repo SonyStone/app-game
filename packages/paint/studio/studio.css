@@ -80,6 +80,58 @@
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
+.paint-developer {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #faf9f6;
+  color: #38444c;
+  box-shadow: 0 12px 48px #0003;
+}
+.paint-developer::backdrop {
+  background: #17232d55;
+}
+.paint-developer-controls {
+  display: grid;
+  gap: 16px;
+  padding: 18px 0;
+}
+.paint-developer-controls label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.paint-developer input {
+  accent-color: #0086bf;
+}
+.paint-developer dl {
+  margin: 0;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.paint-developer dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+}
+.paint-developer dt,
+.paint-developer dd {
+  overflow-wrap: anywhere;
+}
+.paint-developer dd {
+  margin: 0;
+  text-align: right;
+}
 .paint-selection-actions {
   position: absolute;
   top: max(66px, calc(env(safe-area-inset-top) + 54px));

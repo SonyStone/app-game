@@ -6,6 +6,7 @@ import type { LayerAction, createDocument } from './document';
 export type PaintCommand =
   | { type: 'init'; canvas: OffscreenCanvas; size: ViewSize; dpr: number; storageName?: string }
   | { type: 'debug'; enabled: boolean }
+  | { type: 'live-tail'; enabled: boolean }
   | { type: 'selection-view'; points: Point[]; animate: boolean }
   | { type: 'view'; camera: Camera; size: ViewSize; dpr: number }
   | { type: 'begin'; brush: Brush; samples: Sample[]; zoom?: number }
