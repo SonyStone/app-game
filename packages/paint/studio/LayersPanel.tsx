@@ -54,24 +54,24 @@ export function LayersPanel(props: Pick<PaintSession, 'state' | 'ready' | 'layer
             : 'Standard layer blend mode.'}
       </p>
       <div class="paint-layer-list">
-        <For each={[...state().layers].reverse()}>
+        <For each={[...state().layers].reverse()} keyed={(item) => item.id}>
           {(item) => (
-            <div class={['paint-layer', { selected: item.id === state().activeId }]}>
+            <div class={['paint-layer', { selected: item().id === state().activeId }]}>
               <button
                 class="paint-layer-eye"
-                aria-label={`${item.visible ? 'Hide' : 'Show'} ${item.name}`}
-                onClick={() => layer({ type: 'update', id: item.id, patch: { visible: !item.visible } })}
+                aria-label={`${item().visible ? 'Hide' : 'Show'} ${item().name}`}
+                onClick={() => layer({ type: 'update', id: item().id, patch: { visible: !item().visible } })}
               >
-                <SketchIcon name={item.visible ? 'eye' : 'hidden'} size={18} />
+                <SketchIcon name={item().visible ? 'eye' : 'hidden'} size={18} />
               </button>
               <button
                 class="paint-layer-select"
-                aria-label={`Select ${item.name}`}
-                onClick={() => layer({ type: 'select', id: item.id })}
+                aria-label={`Select ${item().name}`}
+                onClick={() => layer({ type: 'select', id: item().id })}
               >
                 <SketchIcon name="paper" size={26} />
                 <span>
-                  {item.name}
+                  {item().name}
                   <small>Raster layer</small>
                 </span>
               </button>

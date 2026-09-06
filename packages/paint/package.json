@@ -5,9 +5,11 @@
   "scripts": {
     "build:studio": "vite build --config vite.studio.config.ts",
     "test:studio": "pnpm --dir ../.. exec vitest run --config packages/paint/vitest.config.ts",
+    "test:studio-ui": "pnpm --dir ../.. exec vitest run --config packages/paint/vitest.ui.config.ts",
     "typecheck:studio": "tsc -p tsconfig.studio.json"
   },
   "dependencies": {
+    "@solid-primitives/event-listener": "catalog:",
     "solid-js": "catalog:",
     "@solidjs/web": "2.0.0-rc.4",
     "typegpu": "^0.11.4",
@@ -23,6 +25,9 @@
     "@app-game/webgl": "workspace:*",
     "@app-game/webgl-examples": "workspace:*",
     "@app-game/navigation-puck": "workspace:*"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "catalog:"
   },
   "exports": {
     "./routes": "./routes.tsx"

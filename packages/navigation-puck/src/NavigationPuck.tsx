@@ -28,8 +28,7 @@ export function NavigationPuck(props: {
   };
   const move = (event: PointerEvent) => props.navigation.move(pointer(event));
   const end = (event: PointerEvent) => {
-    props.navigation.end(event.pointerId);
-    if (!props.navigation.center()) close();
+    if (props.navigation.end(event.pointerId)) props.focusTarget().focus({ preventScroll: true });
   };
   const nudge = (event: KeyboardEvent, mode: PuckAction) => {
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;

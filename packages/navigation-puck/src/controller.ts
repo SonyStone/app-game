@@ -148,13 +148,18 @@ export function createNavigationPuck(params: {
         rotation
       });
     },
-    end(pointerId: number) {
-      if (drag?.pointerId !== pointerId) return;
+    /** Ends the matching drag; returns whether it closed the puck, before reactive state settles. */
+    end(pointerId: number): boolean {
+      if (drag?.pointerId !== pointerId) return false;
       const point = drag.previous;
       drag = undefined;
       setActiveAction(undefined);
-      if (invocation === 'held') setPosition(point);
-      else close();
+      if (invocation === 'held') {
+        setPosition(point);
+        return false;
+      }
+      close();
+      return true;
     },
     cancel(pointerId: number) {
       if (drag?.pointerId === pointerId) close();

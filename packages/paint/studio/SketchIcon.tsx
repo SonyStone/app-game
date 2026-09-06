@@ -18,6 +18,8 @@ export function SketchIcon(props: { name: keyof typeof paths; size?: number }) {
 }
 
 const paths = {
+  fullscreen: 'M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5',
+  fullscreenExit: 'M3 8h5V3M16 3v5h5M21 16h-5v5M8 21v-5H3',
   move: 'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',
   zoom: 'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm5 12 6 6M7 10h6M10 7v6',
   rotate: 'M20 9a8 8 0 0 0-14-3L3 9m0-6v6h6M4 15a8 8 0 0 0 14 3l3-3m0 6v-6h-6',
