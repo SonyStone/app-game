@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, onSettled, untrack } from 'solid-js';
+import { createSignal, onSettled, untrack } from 'solid-js';
 import { defaultBrush, type Brush } from './brush';
 import { defaultCamera, transformAt, type Camera, type Point } from './camera';
 import { createDocument, type LayerAction } from './document';
@@ -15,10 +15,13 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   const [debug, setDebug] = createSignal(false, { ownedWrite: true });
   const [debugTiles, setDebugTiles] = createSignal<string[]>([], { ownedWrite: true });
   const [paging, setPaging] = createSignal<
-    Pick<Extract<PaintEvent, { type: 'state' }>, 'storage' | 'virtual' | 'debugPages'>
+    Pick<Extract<PaintEvent, { type: 'state' }>, 'storage' | 'virtual' | 'debugPages' | 'rasterDraws' | 'readback'>
   >({}, { ownedWrite: true });
   const [ready, setReady] = createSignal(false, { ownedWrite: true });
   const [saved, setSaved] = createSignal(true, { ownedWrite: true });
+  const [saveState, setSaveState] = createSignal<Extract<PaintEvent, { type: 'state' }>['saveState']>('saved', {
+    ownedWrite: true
+  });
   const [error, setError] = createSignal<{ message: string; recoverable: boolean } | undefined>(undefined, {
     ownedWrite: true
   });
@@ -28,7 +31,6 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   let size = { width: 1, height: 1 };
   const [viewSize, setViewSize] = createSignal(size, { ownedWrite: true });
   let currentCamera = defaultCamera();
-  let cleanup: (() => void) | undefined;
   const send = (command: PaintCommand) => worker?.postMessage(command);
   const navigate = (next: Camera) => {
     currentCamera = next;
@@ -83,10 +85,17 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         setCamera(value.camera);
       }
       if (value.type === 'state') {
-        setPaging({ storage: value.storage, virtual: value.virtual, debugPages: value.debugPages });
+        setPaging((previous) => ({
+          storage: value.storage,
+          virtual: value.virtual,
+          rasterDraws: value.rasterDraws,
+          readback: value.readback,
+          debugPages: value.debugPages ?? previous.debugPages
+        }));
         if (value.debugTiles) setDebugTiles(value.debugTiles);
         if (initialState || value.document.revision !== untrack(state).revision) setState(value.document);
         setSaved(value.saved);
+        setSaveState(value.saveState);
         setMetrics({ tiles: value.residentTiles, gpu: value.gpuBytes, ms: value.renderMs });
         if (initialState) {
           currentCamera = value.camera;
@@ -144,7 +153,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         updateBrush({ size: Math.max(1, Math.min(512, untrack(brush).size * (event.key === '[' ? 0.8 : 1.25))) });
     };
     window.addEventListener('keydown', keys);
-    cleanup = () => {
+    return () => {
       detach();
       resize.disconnect();
       window.removeEventListener('keydown', keys);
@@ -160,7 +169,6 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         };
     };
   });
-  onCleanup(() => cleanup?.());
 
   return {
     debug,
@@ -177,6 +185,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     state,
     ready,
     saved,
+    saveState,
     error,
     cursor,
     puck,

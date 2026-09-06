@@ -81,6 +81,10 @@ export function createDocument(options: { paged?: boolean } = {}) {
     get layers() {
       return layers;
     },
+    /** Changes only when committed document metadata or pixels change; excludes active preview stamps. */
+    get revision() {
+      return revision;
+    },
     get active() {
       return layers.find((layer) => layer.id === active)!;
     },

@@ -21,6 +21,8 @@ export type PaintEvent =
       document: ReturnType<ReturnType<typeof createDocument>['state']>;
       camera: Camera;
       saved: boolean;
+      /** Active strokes are unsaved; saving means a completed checkpoint is being written. */
+      saveState: 'saved' | 'unsaved' | 'saving';
       gpuBytes: number;
       storage?: {
         ramBytes: number;
@@ -33,11 +35,20 @@ export type PaintEvent =
         overviewDirty: number;
         overviewDirtyBytes: number;
       };
+      /** Last submitted frame's individual tile draws; virtual page draws are reported separately. */
+      rasterDraws?: { preview: number; committed: number };
+      /** Bounded staging memory for asynchronous eviction snapshots, included in gpuBytes. */
+      readback?: { buffers: number; pending: number; bytes: number; batches: number; capacityWaits: number };
       residentTiles: number;
       renderMs: number;
       debugTiles?: string[];
       debugPages?: (import('./virtualPages').VirtualPage & { resident: boolean; fallback: boolean })[];
       virtual?: {
+        workYields: number;
+        peakWorkCpuMs: number;
+        peakWorkOperations: number;
+        peakUploadBytes: number;
+        activePageJobs: number;
         coveragePages: number;
         coveragePending: number;
         overviewBytes: number;

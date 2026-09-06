@@ -1,6 +1,6 @@
 import { type TgpuRoot } from 'typegpu';
 import { TILE_SIZE } from '../brush';
-import { unpackTile } from '../tilePixels';
+import { unpackTile, type TileData } from '../tilePixels';
 import { viewLayout } from './shaders';
 
 /** Keeps committed display pixels independent of brush scratch residency, bounded to 96 MiB.
@@ -18,24 +18,30 @@ export function createDisplayCache(root: TgpuRoot, sampler: ReturnType<TgpuRoot[
     entry.camera.destroy();
     entries.delete(id);
   };
+  const find = (id: string, version: TileData, scale: number) => {
+    const entry = entries.get(id);
+    const level = Math.max(0, Math.min(8, Math.floor(-Math.log2(scale))));
+    if (!entry) return undefined;
+    if (entry.version !== version || entry.level > level) {
+      remove(id);
+      return undefined;
+    }
+    entries.delete(id);
+    entries.set(id, entry);
+    return entry;
+  };
   return {
+    /** Tests immutable source identity before loading pixels from IndexedDB. */
+    find,
     /** Reuses immutable snapshots; zooming in replaces a coarse entry before drawing it. */
-    get(id: string, pixels: Uint8Array, scale: number) {
+    get(id: string, pixels: Uint8Array, scale: number, version: TileData = pixels) {
       const level = Math.max(0, Math.min(8, Math.floor(-Math.log2(scale))));
-      let entry = entries.get(id);
-      if (entry && (entry.pixels !== pixels || entry.level > level)) {
-        remove(id);
-        entry = undefined;
-      }
-      if (entry) {
-        entries.delete(id);
-        entries.set(id, entry);
-        return entry;
-      }
+      let entry = find(id, version, scale);
+      if (entry) return entry;
       const side = TILE_SIZE >> level;
       const required = ((side * side * 4 - 1) / 3) * 4;
       while (bytes + required > DISPLAY_BYTES && entries.size) remove(entries.keys().next().value!);
-      entry = createEntry(root, sampler, pixels, level);
+      entry = createEntry(root, sampler, version, level);
       const upload = level === 0 ? entry.texture : (scratch ??= texture(root, 0));
       root.device.queue.writeTexture(
         { texture: root.unwrap(upload) },
@@ -72,12 +78,7 @@ export function createDisplayCache(root: TgpuRoot, sampler: ReturnType<TgpuRoot[
   };
 }
 
-function createEntry(
-  root: TgpuRoot,
-  sampler: ReturnType<TgpuRoot['createSampler']>,
-  pixels: Uint8Array,
-  level: number
-) {
+function createEntry(root: TgpuRoot, sampler: ReturnType<TgpuRoot['createSampler']>, version: TileData, level: number) {
   const image = texture(root, level);
   const camera = root.createBuffer(viewLayout.entries.view.uniform).$usage('uniform');
   const side = TILE_SIZE >> level;
@@ -85,7 +86,7 @@ function createEntry(
     texture: image,
     camera,
     viewGroup: root.createBindGroup(viewLayout, { view: camera, image, sampler }),
-    pixels,
+    version,
     level,
     bytes: ((side * side * 4 - 1) / 3) * 4,
     mipmapsDirty: false

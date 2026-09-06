@@ -48,8 +48,21 @@ export function CanvasDebug(props: { session: PaintSession }) {
           .join(', ') || '—'}{' '}
         · uploads {((props.session.paging().virtual?.uploadedBytes ?? 0) / 1048576).toFixed(1)} MiB
         <br />
+        Tile draws: {props.session.paging().rasterDraws?.preview ?? 0} active ·{' '}
+        {props.session.paging().rasterDraws?.committed ?? 0} committed
+        <br />
         Pinned overview {props.session.paging().virtual?.coveragePages ?? 0} pages ·{' '}
         {props.session.paging().virtual?.coveragePending ?? 0} preparing
+        <br />
+        Readback staging {((props.session.paging().readback?.bytes ?? 0) / 1048576).toFixed(1)} MiB ·{' '}
+        {props.session.paging().readback?.pending ?? 0}/2 pending ·{' '}
+        {props.session.paging().readback?.capacityWaits ?? 0} capacity waits
+        <br />
+        Page jobs {props.session.paging().virtual?.activePageJobs ?? 0}/2 · budget yields{' '}
+        {props.session.paging().virtual?.workYields ?? 0}
+        <br />
+        Peak / 16ms window: CPU {(props.session.paging().virtual?.peakWorkCpuMs ?? 0).toFixed(1)} ms · upload{' '}
+        {((props.session.paging().virtual?.peakUploadBytes ?? 0) / 1048576).toFixed(2)} MiB
         <br />
         Disk reads {props.session.paging().storage?.reads ?? 0} · writes {props.session.paging().storage?.writes ?? 0}
         <br />

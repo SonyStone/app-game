@@ -1,23 +1,25 @@
 import { NavigationPuck } from '@app-game/navigation-puck';
-import { createSignal, onSettled, Show } from 'solid-js';
+import { createEventListener } from '@solid-primitives/event-listener';
+import { createSignal, Show } from 'solid-js';
 import { BrushPanel, ColorPanel } from './BrushPanel';
-import { CanvasDebug } from './CanvasDebug';
 import { defaultCamera, transformAt } from './camera';
+import { CanvasDebug } from './CanvasDebug';
 import { createPaintSession } from './createPaintSession';
+import { FullscreenButton } from './FullscreenButton';
 import { LayersPanel } from './LayersPanel';
 import { SketchIcon } from './SketchIcon';
 import './studio.css';
 
 /** Full-canvas workspace with on-demand controls; opening panels never resizes the drawing surface. */
 export default function PaintStudio() {
-  let canvas!: HTMLCanvasElement, stage!: HTMLDivElement, file!: HTMLInputElement;
+  let canvas!: HTMLCanvasElement, stage!: HTMLDivElement, file!: HTMLInputElement, editor!: HTMLDivElement;
   const session = createPaintSession({ canvas: () => canvas, stage: () => stage });
   const {
     brush,
     camera,
     state,
     ready,
-    saved,
+    saveState,
     error,
     cursor,
     puck,
@@ -43,15 +45,15 @@ export default function PaintStudio() {
     setPuck(undefined);
     setPanel(panel() === next ? undefined : next);
   };
-  onSettled(() => {
-    const escape = (event: KeyboardEvent) => {
+  createEventListener(
+    () => window,
+    'keydown',
+    (event) => {
       if (event.key === 'Escape' && panel()) closePanel();
-    };
-    window.addEventListener('keydown', escape);
-    return () => window.removeEventListener('keydown', escape);
-  });
+    }
+  );
   return (
-    <div class="paint-studio">
+    <div ref={editor} class="paint-studio">
       <input
         ref={file}
         type="file"
@@ -99,11 +101,24 @@ export default function PaintStudio() {
         <span
           class="paint-save-state"
           role="status"
-          title={saved() ? 'Saved on this device' : 'Saving completed strokes'}
+          title={
+            saveState() === 'saved'
+              ? 'Saved on this device'
+              : saveState() === 'saving'
+                ? 'Writing completed changes to this device'
+                : 'Changes are saved automatically after the stroke finishes'
+          }
         >
-          {ready() ? (saved() ? 'Saved' : 'Saving…') : 'Preparing drawing…'}
+          {ready()
+            ? saveState() === 'saved'
+              ? 'Saved'
+              : saveState() === 'saving'
+                ? 'Saving…'
+                : 'Unsaved changes'
+            : 'Preparing drawing…'}
         </span>
         <div class="paint-view-controls" aria-label="Canvas view">
+          <FullscreenButton target={() => editor} onError={(message) => setError({ message, recoverable: false })} />
           <button aria-label="Zoom out" onClick={() => zoom(0.8)}>
             <SketchIcon name="minus" size={16} />
           </button>

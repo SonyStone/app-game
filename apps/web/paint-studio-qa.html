@@ -23,6 +23,13 @@
   <body>
     <h1>Paint Studio GPU verification</h1>
     <p>Real GPU pixel checks. Uses isolated documents; leaves the studio autosave untouched.</p>
+    <button id="readback">Check readback queue</button>
+    <button id="brush-batches">Check brush batching</button>
+    <button id="active-preview">Check active preview</button>
+    <button id="refinement">Check partial refinement</button>
+    <button id="overview-quality">Check overview quality</button>
+    <button id="large-brush">Check 512px brush</button>
+    <button id="pressure">Check stylus pressure</button>
     <button id="persistent-overview">Check saved low-res</button>
     <button id="cold-navigation">Check cold zoom</button>
     <button id="streaming">Run streaming checks</button>
@@ -33,6 +40,13 @@
     <button id="navigation">Measure navigation</button>
     <pre id="output">Ready</pre>
     <script type="module">
+      import { verifyPressureSpacing } from '@app-game/paint/studio/gpu/pressureVerification';
+      import { verifyReadbackQueue } from '@app-game/paint/studio/gpu/readbackVerification';
+      import { verifyBrushBatches } from '@app-game/paint/studio/gpu/brushBatchVerification';
+      import { verifyActivePreview } from '@app-game/paint/studio/gpu/activePreviewVerification';
+      import { verifyRefinement } from '@app-game/paint/studio/gpu/refinementVerification';
+      import { verifyOverviewQuality } from '@app-game/paint/studio/gpu/overviewQualityVerification';
+      import { verifyLargeBrush } from '@app-game/paint/studio/gpu/largeBrushVerification';
       import { verifyPersistentOverview } from '@app-game/paint/studio/persistentOverviewVerification';
       import { verifyColdNavigation } from '@app-game/paint/studio/navigationStreamingVerification';
       import { verifyStreaming } from '@app-game/paint/studio/streamingVerification';
@@ -41,6 +55,62 @@
       import { measurePainting, measureDensePainting, measureNavigation } from '@app-game/paint/studio/gpu/performance';
       const button = document.querySelector('#run'),
         output = document.querySelector('#output');
+      document.querySelector('#pressure').onclick = async () => {
+        output.textContent = 'Testing stylus pressure…\n';
+        try {
+          await verifyPressureSpacing((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#readback').onclick = async () => {
+        output.textContent = 'Testing readback queue…\n';
+        try {
+          await verifyReadbackQueue((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#brush-batches').onclick = async () => {
+        output.textContent = 'Testing brush batches…\n';
+        try {
+          await verifyBrushBatches((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#active-preview').onclick = async () => {
+        output.textContent = 'Testing active preview…\n';
+        try {
+          await verifyActivePreview((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#refinement').onclick = async () => {
+        output.textContent = 'Testing partial refinement…\n';
+        try {
+          await verifyRefinement((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#overview-quality').onclick = async () => {
+        output.textContent = 'Testing thin-line overview quality…\n';
+        try {
+          await verifyOverviewQuality((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#large-brush').onclick = async () => {
+        output.textContent = 'Testing large active brush…\n';
+        try {
+          await verifyLargeBrush((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
       document.querySelector('#persistent-overview').onclick = async () => {
         output.textContent = 'Testing saved low-resolution pages…\n';
         try {

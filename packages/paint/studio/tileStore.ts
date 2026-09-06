@@ -1,3 +1,4 @@
+import { createTaskQueue, unwrapResult } from './asyncResult';
 import { restoreDocument, type SavedDocument } from './storage';
 import { type TileData, type TileReference } from './tilePixels';
 
@@ -37,7 +38,7 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
   let bytes = 0,
     reads = 0,
     writes = 0;
-  let queue = Promise.resolve();
+  const queue = createTaskQueue();
   const trim = () => {
     for (const [id, entry] of cache) {
       if (bytes <= budget) break;
@@ -91,38 +92,35 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     return ref;
   };
   const flush = (checkpoint?: unknown) => {
-    const task = queue
-      .catch(() => {})
-      .then(async () => {
-        const dirty = [...cache].filter(([, entry]) => entry.dirty);
-        const derived = [...overviewWrites];
-        await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(['tiles', 'documents', 'overviews', 'overviewIndex'], 'readwrite');
-          for (const [id, entry] of dirty) tx.objectStore('tiles').put(entry.pixels, id);
-          for (const [key, pixels] of derived) {
-            tx.objectStore('overviews').put(pixels, key);
-            tx.objectStore('overviewIndex').put({ bytes: pixels.byteLength, touched: Date.now() }, key);
-          }
-          if (checkpoint) tx.objectStore('documents').put(checkpoint, 'current');
-          tx.oncomplete = () => resolve();
-          tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Tile checkpoint failed.'));
-        });
-        for (const [id] of dirty) {
-          const entry = cache.get(id);
-          if (entry) entry.dirty = false;
+    const task = queue.run(async () => {
+      const dirty = [...cache].filter(([, entry]) => entry.dirty);
+      const derived = [...overviewWrites];
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(['tiles', 'documents', 'overviews', 'overviewIndex'], 'readwrite');
+        for (const [id, entry] of dirty) tx.objectStore('tiles').put(entry.pixels, id);
+        for (const [key, pixels] of derived) {
+          tx.objectStore('overviews').put(pixels, key);
+          tx.objectStore('overviewIndex').put({ bytes: pixels.byteLength, touched: Date.now() }, key);
         }
-        for (const [key, pixels] of derived)
-          if (overviewWrites.get(key) === pixels) {
-            overviewKeys.add(key);
-            overviewWrites.delete(key);
-            overviewPendingBytes -= pixels.byteLength;
-          }
-        overviewSaved += derived.length;
-        writes += dirty.length;
-        trim();
+        if (checkpoint) tx.objectStore('documents').put(checkpoint, 'current');
+        tx.oncomplete = () => resolve();
+        tx.onabort = tx.onerror = () => reject(tx.error ?? new Error('Tile checkpoint failed.'));
       });
-    queue = task;
-    return task;
+      for (const [id] of dirty) {
+        const entry = cache.get(id);
+        if (entry) entry.dirty = false;
+      }
+      for (const [key, pixels] of derived)
+        if (overviewWrites.get(key) === pixels) {
+          overviewKeys.add(key);
+          overviewWrites.delete(key);
+          overviewPendingBytes -= pixels.byteLength;
+        }
+      overviewSaved += derived.length;
+      writes += dirty.length;
+      trim();
+    });
+    return task.then(unwrapResult);
   };
   return {
     read,
@@ -155,7 +153,9 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
         if (overviewPendingBytes >= 8 * 1048576) return flush();
       }
     },
-    /** Serial storage queue is independent from the drawing worker's command queue. */
+    /** Serial storage queue is independent from the drawing worker's command queue.
+     * Rejects failed transactions; dirty pixels stay pinned for a later retry.
+     */
     save(snapshot: SavedDocument) {
       const checkpoint = {
         ...snapshot,
@@ -168,7 +168,7 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
       };
       return flush(checkpoint);
     },
-    /** Persists staged imports without replacing the current drawing checkpoint. */
+    /** Persists staged imports without replacing the current drawing checkpoint. Rejects failed transactions. */
     flush: () => flush(),
 
     async load() {
@@ -184,56 +184,53 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
     /** Removes unreachable historical versions after a checkpoint; callers include live undo/redo references. */
     collect(live: Iterable<TileData>) {
       const keep = new Set([...live].flatMap((p) => (p instanceof Uint8Array ? [] : [p.storageId])));
-      const task = queue
-        .catch(() => {})
-        .then(
-          () =>
-            new Promise<void>((resolve, reject) => {
-              const tx = db.transaction(['tiles', 'documents', 'overviews', 'overviewIndex'], 'readwrite');
-              const metadata = tx.objectStore('overviewIndex').getAll();
-              const keys = tx.objectStore('overviewIndex').getAllKeys();
-              const current = tx.objectStore('documents').get('current');
-              current.onsuccess = () => {
-                const saved = current.result as (SavedDocument & { overviewKeys?: string[] }) | undefined;
-                const records = metadata.result as { bytes: number; touched: number }[];
-                let total = records.reduce((sum, record) => sum + record.bytes, 0);
-                const sorted = records
-                  .map((record, i) => ({ ...record, key: keys.result[i]! }))
-                  .sort((a, b) => a.touched - b.touched);
-                for (const record of sorted) {
-                  if (total <= 256 * 1048576) break;
-                  if (protectedOverviews.has(String(record.key)) || saved?.overviewKeys?.includes(String(record.key)))
-                    continue;
-                  tx.objectStore('overviews').delete(record.key);
-                  tx.objectStore('overviewIndex').delete(record.key);
-                  overviewKeys.delete(record.key);
-                  total -= record.bytes;
-                }
+      const task = queue.run(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(['tiles', 'documents', 'overviews', 'overviewIndex'], 'readwrite');
+            const metadata = tx.objectStore('overviewIndex').getAll();
+            const keys = tx.objectStore('overviewIndex').getAllKeys();
+            const current = tx.objectStore('documents').get('current');
+            current.onsuccess = () => {
+              const saved = current.result as (SavedDocument & { overviewKeys?: string[] }) | undefined;
+              const records = metadata.result as { bytes: number; touched: number }[];
+              let total = records.reduce((sum, record) => sum + record.bytes, 0);
+              const sorted = records
+                .map((record, i) => ({ ...record, key: keys.result[i]! }))
+                .sort((a, b) => a.touched - b.touched);
+              for (const record of sorted) {
+                if (total <= 256 * 1048576) break;
+                if (protectedOverviews.has(String(record.key)) || saved?.overviewKeys?.includes(String(record.key)))
+                  continue;
+                tx.objectStore('overviews').delete(record.key);
+                tx.objectStore('overviewIndex').delete(record.key);
+                overviewKeys.delete(record.key);
+                total -= record.bytes;
+              }
 
-                for (const layer of saved?.layers ?? [])
-                  for (const tile of layer.tiles)
-                    if (!(tile.pixels instanceof Uint8Array)) keep.add(tile.pixels.storageId);
-                const request = tx.objectStore('tiles').openKeyCursor();
-                request.onsuccess = () => {
-                  const cursor = request.result;
-                  if (!cursor) return;
-                  if (!keep.has(String(cursor.key)) && !cache.get(String(cursor.key))?.dirty) {
-                    tx.objectStore('tiles').delete(cursor.primaryKey);
-                    const entry = cache.get(String(cursor.key));
-                    if (entry) {
-                      bytes -= entry.pixels.byteLength;
-                      cache.delete(String(cursor.key));
-                    }
+              for (const layer of saved?.layers ?? [])
+                for (const tile of layer.tiles)
+                  if (!(tile.pixels instanceof Uint8Array)) keep.add(tile.pixels.storageId);
+              const request = tx.objectStore('tiles').openKeyCursor();
+              request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor) return;
+                if (!keep.has(String(cursor.key)) && !cache.get(String(cursor.key))?.dirty) {
+                  tx.objectStore('tiles').delete(cursor.primaryKey);
+                  const entry = cache.get(String(cursor.key));
+                  if (entry) {
+                    bytes -= entry.pixels.byteLength;
+                    cache.delete(String(cursor.key));
                   }
-                  cursor.continue();
-                };
+                }
+                cursor.continue();
               };
-              tx.oncomplete = () => resolve();
-              tx.onerror = tx.onabort = () => reject(tx.error);
-            })
-        );
-      queue = task;
-      return task;
+            };
+            tx.oncomplete = () => resolve();
+            tx.onerror = tx.onabort = () => reject(tx.error);
+          })
+      );
+      return task.then(unwrapResult);
     },
     stats: () => ({
       ramBytes: bytes,
@@ -246,9 +243,11 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
       overviewDirty: overviewWrites.size,
       overviewDirtyBytes: overviewPendingBytes
     }),
+    /** Closes after queued work. Returns its final outcome so shutdown can report write failures. */
     async close() {
-      await queue.catch(() => {});
+      const result = await queue.drain();
       db.close();
+      return result;
     }
   };
 }

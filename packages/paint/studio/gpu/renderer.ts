@@ -1,14 +1,17 @@
 import { d, tgpu, type TgpuRoot } from 'typegpu';
+import { attempt, unwrapResult, type Result } from '../asyncResult';
 import { TILE_SIZE, dabTiles, type Brush, type Dab } from '../brush';
 import { screenToWorld, type Camera, type ViewSize } from '../camera';
 import type { Layer, TileChange } from '../document';
 import { packTile, unpackTile, type TileData } from '../tilePixels';
+import type { OverviewStorage } from '../virtualPages';
 import { dirtyRegion } from './dirtyRegion';
 import { createDisplayCache } from './displayCache';
-import { createVirtualTexture } from './virtualTexture';
-import { createViewFallback } from './viewFallback';
-import type { OverviewStorage } from '../virtualPages';
+import { createReadbackQueue } from './readbackQueue';
 import * as shader from './shaders';
+import { stampBounds } from './stampBounds';
+import { createViewFallback } from './viewFallback';
+import { createVirtualTexture } from './virtualTexture';
 
 /** Creates a worker-owned renderer. Committed CPU tiles remain valid after cache eviction or device loss. */
 export async function createPaintRenderer(
@@ -50,7 +53,18 @@ export async function createPaintRenderer(
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'nearest', mipmapFilter: 'linear' });
   const displayCache = createDisplayCache(root, sampler);
   const cache = new Map<string, ReturnType<typeof createTile>>();
-  const strokeTiles = new Map<string, { before: TileData | undefined; mask?: Uint8Array; output?: Uint8Array }>();
+  const spareTiles: ReturnType<typeof createTile>[] = [];
+  const strokeTiles = new Map<
+    string,
+    {
+      before: TileData | undefined;
+      mask?: Uint8Array;
+      output?: Uint8Array;
+      pending?: Promise<Result<void>>;
+    }
+  >();
+  const evictionSize = Math.min(16, Math.max(1, Math.floor((options.cacheTiles ?? MAX_RESIDENT_TILES) / 8)));
+  const readbacks = createReadbackQueue(device, evictionSize * 2);
   let stroke: { layer: Layer; brush: Brush } | undefined;
   let view: ReturnType<typeof createView> | undefined;
   let viewSignature = '';
@@ -72,6 +86,8 @@ export async function createPaintRenderer(
   let completeView: { camera: Camera; size: ViewSize } | undefined;
   const dirtyTiles = new Set<string>();
   let frame = 0;
+  let previewTileDraws = 0,
+    sourceTileDraws = 0;
   const brushBuffer = root.createBuffer(shader.brushLayout.entries.settings.uniform).$usage('uniform');
   const brushGroup = root.createBindGroup(shader.brushLayout, { settings: brushBuffer });
   const readTile = async (pixels: TileData | undefined) =>
@@ -85,7 +101,7 @@ export async function createPaintRenderer(
   const keyFor = (layer: Layer, key: string) => `${layer.id}/${key}`;
 
   /** Evicts least-recently-used tiles. Active mask readback occurs only when the cache is full. */
-  const ensure = async (layer: Layer, key: string) => {
+  const ensure = async (layer: Layer, key: string, batch?: ReturnType<typeof commandBatch>) => {
     const id = keyFor(layer, key);
     let tile = cache.get(id);
     if (tile) {
@@ -93,26 +109,64 @@ export async function createPaintRenderer(
       return tile;
     }
     if (cache.size >= Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES)) {
-      const [oldId, old] = [...cache].reduce((a, b) => (a[1].used < b[1].used ? a : b));
-      const active = strokeTiles.get(oldId);
-      if (active && old.mask) {
-        [active.mask, active.output] = (
-          await readTextures(device, [root.unwrap(old.mask), root.unwrap(old.texture)])
-        ).map(packTile);
+      // Submit every command referencing victims before readback or recycling their resources.
+      batch?.flush();
+      // Amortize readback synchronization over a small LRU batch as the stroke grows.
+      const count = evictionSize;
+      const victims = [...cache].sort((a, b) => a[1].used - b[1].used).slice(0, count);
+      const active = victims.filter(([id, tile]) => strokeTiles.has(id) && tile.mask);
+      if (active.length) {
+        const snapshots = active.map(([id]) => ({ id, snapshot: strokeTiles.get(id)! }));
+        const job = await readbacks.capture(
+          active.flatMap(([, tile]) => [root.unwrap(tile.mask!), root.unwrap(tile.texture)])
+        );
+        const pending = attempt(async () => {
+          const result = await job.ready;
+          // Cancellation removes the snapshot; late outcomes belong to that discarded stroke.
+          if (disposed || !snapshots.some(({ id, snapshot }) => strokeTiles.get(id) === snapshot)) return;
+          if (!result.ok) {
+            options.onError?.(result.error);
+            throw result.error;
+          }
+          const pixels = result.value;
+          snapshots.forEach(({ id, snapshot }, index) => {
+            if (strokeTiles.get(id) !== snapshot || snapshot.pending !== pending) return;
+            snapshot.mask = pixels[index * 2]!;
+            snapshot.output = pixels[index * 2 + 1]!;
+            snapshot.pending = undefined;
+          });
+        });
+        // Failed results stay attached until finish/revisit explicitly observes them.
+        for (const { snapshot } of snapshots) snapshot.pending = pending;
       }
-      destroyTile(old);
-      cache.delete(oldId);
+      for (const [id, tile] of victims) {
+        spareTiles.push(tile);
+        cache.delete(id);
+      }
     }
     const active = strokeTiles.get(id);
-    tile = createTile(root, await readTile(active?.output ?? layer.tiles.get(key)), sampler);
-    tile.used = ++frame;
-    if (active) {
-      prepareStroke(root, tile);
-      writePixels(device, root.unwrap(tile.base!), await readTile(active.before));
-      writePixels(device, root.unwrap(tile.mask!), active.mask);
+    if (active?.pending) unwrapResult(await active.pending);
+    const pixels = await readTile(active?.output ?? layer.tiles.get(key));
+    tile = spareTiles.pop();
+    if (tile) {
+      replacePixels(device, root.unwrap(tile.texture), pixels, batch);
+      tile.mipmapsDirty = true;
+    } else tile = createTile(root, pixels, sampler);
+    try {
+      tile.used = ++frame;
+      if (active) {
+        prepareStroke(root, tile);
+        replacePixels(device, root.unwrap(tile.base!), await readTile(active.before), batch);
+        replacePixels(device, root.unwrap(tile.mask!), active.mask, batch);
+      }
+      cache.set(id, tile);
+      return tile;
+    } catch (error) {
+      // A failed source read must not orphan an allocated slot outside the bounded pool.
+      // Paint's finally block still submits any queued clears before the next command can reuse it.
+      spareTiles.push(tile);
+      throw error;
     }
-    cache.set(id, tile);
-    return tile;
   };
 
   return {
@@ -123,14 +177,21 @@ export async function createPaintRenderer(
     /** Resident texture budget is bounded; the count also includes active-stroke resources. */
     stats() {
       return {
-        residentTiles: cache.size,
+        residentTiles: cache.size + spareTiles.length,
+        readback: readbacks.stats(),
+        previewTileDraws,
+        sourceTileDraws,
         virtual: virtual?.stats(),
         displayTiles: displayCache.stats().tiles,
         gpuBytes:
+          readbacks.stats().bytes +
           (virtual?.stats().gpuBytes ?? 0) +
           (viewFallback?.bytes() ?? 0) +
           displayCache.stats().bytes +
-          [...cache.values()].reduce((n, tile) => n + TILE_SIZE * TILE_SIZE * 4 * (4 / 3 + (tile.base ? 2 : 0)), 0)
+          [...cache.values(), ...spareTiles].reduce(
+            (n, tile) => n + TILE_SIZE * TILE_SIZE * 4 * (4 / 3 + (tile.base ? 2 : 0)),
+            0
+          )
       };
     },
     debugPages: () => virtual?.debug() ?? [],
@@ -175,50 +236,68 @@ export async function createPaintRenderer(
           }
           group.push(dab);
         }
-      for (const [key, dabs] of groups) {
-        const id = keyFor(stroke.layer, key);
-        const tile = await ensure(stroke.layer, key);
-        if (!strokeTiles.has(id)) {
-          strokeTiles.set(id, { before: stroke.layer.tiles.get(key) });
-          prepareStroke(root, tile);
-          const encoder = device.createCommandEncoder();
-          encoder.copyTextureToTexture({ texture: root.unwrap(tile.texture) }, { texture: root.unwrap(tile.base!) }, [
-            TILE_SIZE,
-            TILE_SIZE
-          ]);
-          clearAttachment(encoder, tile.maskRender!);
-          device.queue.submit([encoder.finish()]);
+      const commands = commandBatch(device);
+      let pendingTiles = 0;
+      try {
+        for (const [key, dabs] of groups) {
+          const id = keyFor(stroke.layer, key);
+          const tile = await ensure(stroke.layer, key, commands);
+          if (!strokeTiles.has(id)) {
+            strokeTiles.set(id, { before: stroke.layer.tiles.get(key) });
+            prepareStroke(root, tile);
+            commands
+              .encoder()
+              .copyTextureToTexture({ texture: root.unwrap(tile.texture) }, { texture: root.unwrap(tile.base!) }, [
+                TILE_SIZE,
+                TILE_SIZE
+              ]);
+            clearAttachment(commands.encoder(), tile.maskRender!);
+          }
+          const [tx, ty] = coordinates(key);
+          for (let offset = 0; offset < dabs.length; offset += STAMP_CAPACITY) {
+            // The same instance buffer must not be overwritten before its previous draw is submitted.
+            if (offset) commands.flush();
+            const stamps = dabs.slice(offset, offset + STAMP_CAPACITY);
+            const data = new Float32Array(stamps.length * 4);
+            stamps.forEach((dab, index) =>
+              data.set([dab.x - tx * TILE_SIZE, dab.y - ty * TILE_SIZE, dab.radius, dab.flow], index * 4)
+            );
+            device.queue.writeBuffer(root.unwrap(tile.stamps), 0, data);
+            const pass = commands.encoder().beginRenderPass({
+              colorAttachments: [{ view: tile.maskRender!, loadOp: 'load', storeOp: 'store' }]
+            });
+            pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, tile.stamps).draw(6, stamps.length);
+            pass.end();
+          }
+          // Output depends on the final accumulated mask, so composite once per touched region.
+          // Keep previous output outside this region, including ink from earlier input batches.
+          const bounds = stampBounds(dabs, tx, ty);
+          if (bounds) {
+            const pass = commands.encoder().beginRenderPass({
+              colorAttachments: [{ view: tile.render, loadOp: 'load', storeOp: 'store' }]
+            });
+            pass.setScissorRect(bounds.x, bounds.y, bounds.width, bounds.height);
+            pipelines.stroke.with(pass).with(brushGroup).with(tile.strokeGroup!).draw(3);
+            pass.end();
+          }
+          tile.mipmapsDirty = true;
+          displayCache.remove(id);
+          dirtyTiles.add(key);
+          if (++pendingTiles === 32) {
+            commands.flush();
+            pendingTiles = 0;
+          }
         }
-        const [tx, ty] = coordinates(key);
-        for (let offset = 0; offset < dabs.length; offset += STAMP_CAPACITY) {
-          const batch = dabs.slice(offset, offset + STAMP_CAPACITY);
-          const data = new Float32Array(batch.length * 4);
-          batch.forEach((dab, index) =>
-            data.set([dab.x - tx * TILE_SIZE, dab.y - ty * TILE_SIZE, dab.radius, dab.flow], index * 4)
-          );
-          device.queue.writeBuffer(root.unwrap(tile.stamps), 0, data);
-          const encoder = device.createCommandEncoder();
-          const pass = encoder.beginRenderPass({
-            colorAttachments: [{ view: tile.maskRender!, loadOp: 'load', storeOp: 'store' }]
-          });
-          pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, tile.stamps).draw(6, batch.length);
-          pass.end();
-          pipelines.stroke
-            .with(encoder)
-            .with(brushGroup)
-            .with(tile.strokeGroup!)
-            .withColorAttachment({ view: tile.render, loadOp: 'clear' })
-            .draw(3);
-          device.queue.submit([encoder.finish()]);
-        }
-        tile.mipmapsDirty = true;
-        displayCache.remove(id);
-        dirtyTiles.add(key);
+      } finally {
+        // An I/O failure must not discard commands for previously processed tiles in this batch.
+        commands.flush();
       }
     },
     /** Copies resident touched tiles in one submission/map; retains scratch textures for subsequent strokes. */
     async finish(): Promise<TileChange[]> {
       if (!stroke) return [];
+      for (const result of await Promise.all([...strokeTiles.values()].map((snapshot) => snapshot.pending)))
+        if (result) unwrapResult(result);
       const changes: TileChange[] = [];
       const resident = [...strokeTiles.keys()].filter((id) => cache.has(id));
       const pixels = await readTextures(
@@ -258,6 +337,7 @@ export async function createPaintRenderer(
         cache.delete(id);
       }
       strokeTiles.clear();
+      readbacks.clear();
       stroke = undefined;
     },
     /** Invalidates cached pixels after undo, redo, import, or layer deletion. */
@@ -269,9 +349,11 @@ export async function createPaintRenderer(
       displayCache.clear();
       viewSignature = '';
       dirtyTiles.clear();
-      for (const tile of cache.values()) destroyTile(tile);
+      for (const tile of [...cache.values(), ...spareTiles]) destroyTile(tile);
       cache.clear();
+      spareTiles.length = 0;
       strokeTiles.clear();
+      readbacks.clear();
       stroke = undefined;
     },
     /** Rebuilds the viewport without evicting tile resources. Also permits comparison with a full redraw. */
@@ -318,6 +400,8 @@ export async function createPaintRenderer(
         dirtyTiles.clear();
         return;
       }
+      previewTileDraws = 0;
+      sourceTileDraws = 0;
       const left = (region.x * size.width) / width,
         top = (region.y * size.height) / height;
       const right = ((region.x + region.width) * size.width) / width,
@@ -341,19 +425,25 @@ export async function createPaintRenderer(
         write = view.b;
       for (const layer of layers) {
         if (!layer.visible || layer.opacity <= 0) continue;
-        if (stream && !exact && stroke?.layer.id !== layer.id) {
+        const active = stroke?.layer.id === layer.id;
+        let streamed = false;
+        if (stream && !exact) {
           const encoder = device.createCommandEncoder();
           const pass = encoder.beginRenderPass({
             colorAttachments: [{ view: view.layerRender, loadOp: 'clear', storeOp: 'store' }]
           });
           pass.setScissorRect(region.x, region.y, region.width, region.height);
-          virtual.draw(layer, pass, camera, size, scale);
+          const covered = virtual.draw(layer, pass, camera, size, scale);
+          // A cold layer keeps the original complete-tile path until background coverage is ready.
+          streamed = !active || covered;
           pass.end();
           device.queue.submit([encoder.finish()]);
-        } else {
-          const keys = new Set(layer.tiles.keys());
-          if (stroke?.layer.id === layer.id)
-            for (const id of strokeTiles.keys()) keys.add(id.slice(layer.id.length + 1));
+        }
+        if (!streamed || active) {
+          // Committed pixels already come from the pyramid. Only the active stroke's output
+          // replaces those pixels; scanning/loading every document tile here defeats virtual texturing.
+          const keys = streamed ? new Set<string>() : new Set(layer.tiles.keys());
+          if (active) for (const id of strokeTiles.keys()) keys.add(id.slice(layer.id.length + 1));
           const visible = [...keys].filter((key) => {
             const [x, y] = coordinates(key);
             return (
@@ -363,17 +453,24 @@ export async function createPaintRenderer(
               y * TILE_SIZE <= maxY
             );
           });
-          if (!visible.length) continue;
+          if (!visible.length && !streamed) continue;
           const batchSize = Math.min(64, Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES));
           for (let offset = 0; offset < visible.length; offset += batchSize) {
             const batch = [];
             for (const key of visible.slice(offset, offset + batchSize)) {
               const [x, y] = coordinates(key);
               const id = keyFor(layer, key);
+              // Display evicted active output without restoring its full-size brush mask/base.
+              // Only actual painting may bring that scratch state back into the working set.
+              const snapshot = strokeTiles.get(id);
+              // An evicted tile owns a pending snapshot, not an empty/committed replacement.
+              if (!cache.has(id) && snapshot?.pending) unwrapResult(await snapshot.pending);
+              const source = snapshot?.output ?? layer.tiles.get(key)!;
               const tile =
-                cache.has(id) || strokeTiles.has(id) || options.displayCache === false
+                cache.has(id) || options.displayCache === false
                   ? await ensure(layer, key)
-                  : displayCache.get(id, (await readTile(layer.tiles.get(key)))!, camera.zoom * scale);
+                  : (displayCache.find(id, source, camera.zoom * scale) ??
+                    displayCache.get(id, (await readTile(source))!, camera.zoom * scale, source));
               // Magnified tiles sample level zero. Build the mip chain only when a view needs it.
               if (tile.mipmapsDirty && camera.zoom * scale < 1) {
                 tile.texture.generateMipmaps();
@@ -391,10 +488,18 @@ export async function createPaintRenderer(
             }
             const encoder = device.createCommandEncoder();
             const pass = encoder.beginRenderPass({
-              colorAttachments: [{ view: view.layerRender, loadOp: offset === 0 ? 'clear' : 'load', storeOp: 'store' }]
+              colorAttachments: [
+                { view: view.layerRender, loadOp: offset === 0 && !streamed ? 'clear' : 'load', storeOp: 'store' }
+              ]
             });
             pass.setScissorRect(region.x, region.y, region.width, region.height);
+            // No blending: output includes the pre-stroke base and may be completely transparent
+            // after erasing. Replace the layer pixels before applying its opacity/blend exactly once.
             for (const tile of batch) pipelines.tile.with(pass).with(tile.viewGroup).draw(6);
+            for (const key of visible.slice(offset, offset + batchSize)) {
+              if (active && strokeTiles.has(keyFor(layer, key))) previewTileDraws++;
+              else sourceTileDraws++;
+            }
             pass.end();
             device.queue.submit([encoder.finish()]);
           }
@@ -457,12 +562,14 @@ export async function createPaintRenderer(
     /** Releases this device and all resources. Does not modify committed document snapshots. */
     destroy() {
       disposed = true;
+      readbacks.destroy();
       view?.destroy();
       virtual?.destroy();
       viewFallback?.destroy();
       displayCache.destroy();
-      for (const tile of cache.values()) destroyTile(tile);
+      for (const tile of [...cache.values(), ...spareTiles]) destroyTile(tile);
       cache.clear();
+      spareTiles.length = 0;
       strokeTiles.clear();
       brushBuffer.destroy();
       device.removeEventListener('uncapturederror', uncapturedError);
@@ -611,6 +718,35 @@ async function readTextures(device: GPUDevice, textures: GPUTexture[]): Promise<
     buffer.destroy();
   }
 }
+/** Lazily groups independent tile passes. Flush before readback, slot reuse, or instance-buffer reuse. */
+function commandBatch(device: GPUDevice) {
+  let encoder: GPUCommandEncoder | undefined;
+  return {
+    encoder: () => (encoder ??= device.createCommandEncoder()),
+    flush() {
+      if (!encoder) return;
+      device.queue.submit([encoder.finish()]);
+      encoder = undefined;
+    }
+  };
+}
+
+/** Assigns every level-zero pixel when recycling a slot, including transparent source/base/mask. */
+function replacePixels(
+  device: GPUDevice,
+  texture: GPUTexture,
+  pixels?: Uint8Array,
+  batch?: ReturnType<typeof commandBatch>
+) {
+  if (pixels) {
+    writePixels(device, texture, pixels);
+    return;
+  }
+  const commands = batch ?? commandBatch(device);
+  clearAttachment(commands.encoder(), texture.createView({ baseMipLevel: 0, mipLevelCount: 1 }));
+  if (!batch) commands.flush();
+}
+
 function writePixels(device: GPUDevice, texture: GPUTexture, pixels?: Uint8Array) {
   if (pixels)
     device.queue.writeTexture({ texture }, unpackTile(pixels), { bytesPerRow: TILE_SIZE * 4 }, [TILE_SIZE, TILE_SIZE]);

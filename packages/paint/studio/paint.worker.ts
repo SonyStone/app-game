@@ -1,12 +1,13 @@
 import { createRoot, onCleanup } from 'solid-js';
-import { createSmoothStroke } from './smoothStroke';
+import { attempt, createTaskQueue, unwrapResult } from './asyncResult';
 import { defaultCamera } from './camera';
 import { createDocument } from './document';
 import { createPaintRenderer } from './gpu/renderer';
-import type { PaintCommand, PaintEvent } from './protocol';
-import { createTileStore } from './tileStore';
 import { readPaintFile, writePaintFile } from './paintFile';
+import type { PaintCommand, PaintEvent } from './protocol';
+import { createSmoothStroke } from './smoothStroke';
 import { decodeDocument, snapshotDocument } from './storage';
+import { createTileStore } from './tileStore';
 
 /** Worker owns the document and GPU device. Solid's root scopes resource teardown. */
 createRoot((dispose) => {
@@ -18,6 +19,7 @@ createRoot((dispose) => {
   let importing = false;
   let saveVersion = 0;
   let savedVersion = 0;
+  let pendingSaves = 0;
   let camera = defaultCamera();
   let debug = false;
   let size = { width: 1, height: 1 },
@@ -30,27 +32,43 @@ createRoot((dispose) => {
   let renderTimer: ReturnType<typeof setTimeout> | undefined;
   let collectTimer: ReturnType<typeof setTimeout> | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  let queue = Promise.resolve();
+  const queue = createTaskQueue();
   const post = (event: PaintEvent) => self.postMessage(event);
-  const status = () =>
+  let documentState = document.state();
+  let debugAt = 0;
+  const status = () => {
+    if (documentState.revision !== document.revision) documentState = document.state();
+    const sendDebug = debug && performance.now() >= debugAt;
+    if (sendDebug) debugAt = performance.now() + 100;
+    const stats = renderer?.stats();
     post({
       type: 'state',
-      ...(debug
+      ...(sendDebug
         ? { debugTiles: renderer?.debugTiles(document.layers) ?? [], debugPages: renderer?.debugPages() ?? [] }
         : {}),
-      virtual: renderer?.stats().virtual,
-      document: document.state(),
+      virtual: stats?.virtual,
+      readback: stats?.readback,
+      rasterDraws: { preview: stats?.previewTileDraws ?? 0, committed: stats?.sourceTileDraws ?? 0 },
+      document: documentState,
       camera,
       saved,
+      saveState: sampler ? 'unsaved' : pendingSaves > 0 ? 'saving' : saved ? 'saved' : 'unsaved',
       renderMs,
-      gpuBytes: renderer?.stats().gpuBytes ?? 0,
+      gpuBytes: stats?.gpuBytes ?? 0,
       storage: tileStore?.stats(),
-      residentTiles: renderer?.stats().residentTiles ?? 0
+      residentTiles: stats?.residentTiles ?? 0
     });
+  };
   const failure = (error: unknown, recoverable = false) =>
     post({ type: 'error', message: error instanceof Error ? error.message : String(error), recoverable });
+  const reportResult = (result: Awaited<ReturnType<typeof attempt>>) => {
+    if (!result.ok) failure(result.error);
+  };
   const enqueue = (action: () => Promise<void>) => {
-    queue = queue.then(action).catch((error) => failure(error));
+    void queue.run(action).then(reportResult);
+  };
+  const background = (action: () => Promise<unknown>) => {
+    void attempt(action).then(reportResult);
   };
   const draw = async (exact = false) => {
     if (!renderer || lost) return;
@@ -79,14 +97,20 @@ createRoot((dispose) => {
     if (sampler || importing) return;
     const version = saveVersion;
     document.persist(tileStore.capture);
-    await tileStore.save(snapshotDocument(document.layers, document.active.id, camera));
-    savedVersion = Math.max(savedVersion, version);
-    saved = savedVersion === saveVersion && !sampler;
-    clearTimeout(collectTimer);
-    collectTimer = setTimeout(() => {
-      if (!sampler && !importing) void tileStore.collect(document.snapshots()).catch(failure);
-    }, 5000);
+    pendingSaves++;
     status();
+    try {
+      await tileStore.save(snapshotDocument(document.layers, document.active.id, camera));
+      savedVersion = Math.max(savedVersion, version);
+      saved = savedVersion === saveVersion && !sampler;
+      clearTimeout(collectTimer);
+      collectTimer = setTimeout(() => {
+        if (!sampler && !importing) background(() => tileStore.collect(document.snapshots()));
+      }, 5000);
+    } finally {
+      pendingSaves--;
+      status();
+    }
   };
   const changed = () => {
     saved = false;
@@ -96,16 +120,18 @@ createRoot((dispose) => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       enqueue(async () => {
-        void save().catch(failure);
+        background(save);
       });
     }, 300);
     scheduleDraw();
   };
   const end = async () => {
     if (!sampler || !renderer) return;
-    await renderer.paint(sampler.finish());
-    const changes = await renderer.finish();
     try {
+      // Readback can fail before commit. Discard that preview and release the sampler too,
+      // otherwise every later begin/save retries the same rejected stroke.
+      await renderer.paint(sampler.finish());
+      const changes = await renderer.finish();
       document.commit(changes);
       document.persist(tileStore.capture);
       await renderer.prepareOverview(document.layers);
@@ -125,7 +151,7 @@ createRoot((dispose) => {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
         enqueue(async () => {
-          void save().catch(failure);
+          background(save);
         });
       }, 300);
     }
@@ -169,7 +195,7 @@ createRoot((dispose) => {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => {
         enqueue(async () => {
-          void save().catch(failure);
+          background(save);
         });
       }, 300);
       scheduleDraw();
@@ -197,6 +223,7 @@ createRoot((dispose) => {
         }
         case 'debug':
           debug = command.enabled;
+          debugAt = 0;
           status();
           break;
         case 'view': {
@@ -297,7 +324,7 @@ createRoot((dispose) => {
               clearTimeout(saveTimer);
               saveTimer = setTimeout(() => {
                 enqueue(async () => {
-                  void save().catch(failure);
+                  background(save);
                 });
               }, 300);
             }
@@ -314,7 +341,7 @@ createRoot((dispose) => {
           await end();
           await save();
           dispose();
-          await tileStore.close();
+          unwrapResult(await tileStore.close());
           post({ type: 'disposed' });
           self.close();
           break;

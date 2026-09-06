@@ -1,6 +1,7 @@
 import { TILE_SIZE } from './brush';
 import { screenToWorld, type Camera, type ViewSize } from './camera';
 import type { Layer } from './document';
+import { createPageWork, ObsoletePageError } from './pageWork';
 import { packTile, unpackTile, type TileData } from './tilePixels';
 
 /** Sparse overview pyramid. Level n covers 2^n source tiles along each axis.
@@ -9,7 +10,8 @@ import { packTile, unpackTile, type TileData } from './tilePixels';
 export function createVirtualPages(
   read: (data: TileData) => Promise<Uint8Array>,
   budget = 16 * 1048576,
-  storage?: OverviewStorage
+  storage?: OverviewStorage,
+  work = createPageWork()
 ) {
   const layers = new Map<
     string,
@@ -23,7 +25,6 @@ export function createVirtualPages(
   let sourceLayers: Layer[] | undefined;
   let bytes = 0,
     built = 0,
-    yieldAt = 0,
     generation = 0;
   const version = (page: VirtualPage) => {
     const versions = layers.get(page.layerId)?.versions;
@@ -50,21 +51,31 @@ export function createVirtualPages(
     const revision = index.versions.get(address(page))!;
     const cached = hashes.get(node);
     if (cached?.revision === revision) return cached.value;
-    const children = [0, 1, 2, 3].map((i) =>
-      contentKey({ ...page, level: page.level - 1, x: page.x * 2 + (i % 2), y: page.y * 2 + Math.floor(i / 2) })
-    );
-    const value = Promise.all(children).then(async (ids) => {
+    const value = (async () => {
+      // Break cold metadata walks into budgeted nodes before descending the sparse tree.
+      await work.run(() => {});
+      const ids: string[] = [];
+      // Limit cold hash traversal to one child per root; do not queue the entire tree at once.
+      for (let i = 0; i < 4; i++)
+        ids.push(
+          await contentKey({
+            ...page,
+            level: page.level - 1,
+            x: page.x * 2 + (i % 2),
+            y: page.y * 2 + Math.floor(i / 2)
+          })
+        );
       const digest = await crypto.subtle.digest(
         'SHA-256',
         new TextEncoder().encode(JSON.stringify(['paint-overview-box-v1', page.level, ...ids]))
       );
       return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
-    });
+    })();
     hashes.set(node, { revision, value });
     return value;
   };
   const pagePixels = async (page: VirtualPage, valid = () => true): Promise<Uint8Array> => {
-    if (!valid()) throw new Error('Obsolete virtual page');
+    if (!valid()) throw new ObsoletePageError();
     const layer = layers.get(page.layerId);
     if (!layer?.counts.has(address(page))) return EMPTY;
     // Interior pixels depend only on this node. Neighbor revisions invalidate gutters, not these pixels.
@@ -81,26 +92,22 @@ export function createVirtualPages(
       try {
         return await inflight;
       } catch (error) {
-        if (valid() && error instanceof Error && error.message === 'Obsolete virtual page')
-          return pagePixels(page, valid);
+        if (valid() && error instanceof ObsoletePageError) return pagePixels(page, valid);
         throw error;
       }
     }
     const task = (async () => {
-      if (performance.now() >= yieldAt) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        yieldAt = performance.now() + 4;
-      }
-      if (!valid()) throw new Error('Obsolete virtual page');
+      if (!valid()) throw new ObsoletePageError();
       const key = storage && page.level > 0 ? await contentKey(page) : undefined;
       const stored = key ? await storage!.read(key) : undefined;
       let pixels: Uint8Array;
       if (stored) {
-        pixels = unpackTile(stored);
+        pixels = await work.run(() => unpackTile(stored), valid);
         restoredPages++;
       } else if (page.level === 0) {
         const source = layer.source.get(`${page.x},${page.y}`);
-        pixels = source ? unpackTile(await read(source)) : EMPTY;
+        const data = source ? await read(source) : undefined;
+        pixels = data ? await work.run(() => unpackTile(data), valid) : EMPTY;
       } else {
         pixels = new Uint8Array(TILE_SIZE * TILE_SIZE * 4);
         for (let dy = 0; dy < 2; dy++)
@@ -109,11 +116,11 @@ export function createVirtualPages(
               { ...page, level: page.level - 1, x: page.x * 2 + dx, y: page.y * 2 + dy },
               valid
             );
-            downsampleInto(child, pixels, dx, dy);
+            if (child !== EMPTY) await work.run(() => downsampleInto(child, pixels, dx, dy), valid);
           }
       }
-      if (!valid() || id !== pixelToken()) throw new Error('Obsolete virtual page');
-      if (key && !stored) await storage!.write(key, packTile(pixels));
+      if (!valid() || id !== pixelToken()) throw new ObsoletePageError();
+      if (key && !stored) await storage!.write(key, await work.run(() => packTile(pixels), valid));
       if (pixels !== EMPTY) {
         cache.set(id, pixels);
         bytes += pixels.byteLength;
@@ -201,18 +208,47 @@ export function createVirtualPages(
           y1: Math.floor(Math.max(...corners.map((p) => p.y)) / span)
         };
       };
-      let box = bounds(level);
-      while ((box.x1 - box.x0 + 1) * (box.y1 - box.y0 + 1) > maxPages && level < MAX_LEVEL) box = bounds(++level);
-      const result: VirtualPage[] = [];
       const index = layers.get(layerId);
-      for (let y = box.y0; y <= box.y1; y++)
-        for (let x = box.x0; x <= box.x1; x++)
-          if (index?.counts.has(`${level}/${x},${y}`)) result.push({ layerId, level, x, y });
-      const span = TILE_SIZE * 2 ** level;
+      if (!index) return [];
+      const roots = bounds(MAX_LEVEL);
+      let result: VirtualPage[] = [];
+      // Walk occupied branches instead of budgeting the empty rectangle around the drawing.
+      // Stop at budget + 1; a dense view can immediately retry a coarser level.
+      for (; level <= MAX_LEVEL; level++) {
+        result = [];
+        const box = bounds(level);
+        const visit = (nodeLevel: number, x: number, y: number) => {
+          if (result.length > maxPages || !index.counts.has(`${nodeLevel}/${x},${y}`)) return;
+          const factor = 2 ** (nodeLevel - level);
+          if (x * factor > box.x1 || (x + 1) * factor <= box.x0 || y * factor > box.y1 || (y + 1) * factor <= box.y0)
+            return;
+          if (nodeLevel === level) {
+            result.push({ layerId, level, x, y });
+            return;
+          }
+          for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) visit(nodeLevel - 1, x * 2 + dx, y * 2 + dy);
+        };
+        for (let y = roots.y0; y <= roots.y1 && result.length <= maxPages; y++)
+          for (let x = roots.x0; x <= roots.x1 && result.length <= maxPages; x++) visit(MAX_LEVEL, x, y);
+        if (result.length <= maxPages) break;
+      }
+      result = result.slice(0, maxPages);
+      const span = TILE_SIZE * 2 ** Math.min(level, MAX_LEVEL);
       return result.sort(
         (a, b) =>
           Math.hypot((a.x + 0.5) * span - camera.x, (a.y + 0.5) * span - camera.y) -
           Math.hypot((b.x + 0.5) * span - camera.x, (b.y + 0.5) * span - camera.y)
+      );
+    },
+    /** Tests coverage of occupied leaves, treating absent branches as known transparency.
+     * Regions must be disjoint descendants of the target in the same layer, as emitted by pageFallback.
+     * Counts avoid walking source pixels or requiring textures for empty portions of a coarse target.
+     */
+    isCovered(target: VirtualPage, regions: readonly VirtualPage[]) {
+      const counts = layers.get(target.layerId)?.counts;
+      return (
+        (counts?.get(address(target)) ?? 0) ===
+        regions.reduce((count, region) => count + (counts?.get(address(region)) ?? 0), 0)
       );
     },
     token,
@@ -234,13 +270,15 @@ export function createVirtualPages(
             sy = dy < 0 ? TILE_SIZE - 1 : 0;
           const tx = dx < 0 ? 0 : dx === 0 ? 1 : PAGE_SIDE - 1;
           const ty = dy < 0 ? 0 : dy === 0 ? 1 : PAGE_SIDE - 1;
-          for (let row = 0; row < height; row++)
-            result.set(
-              pixels.subarray(((sy + row) * TILE_SIZE + sx) * 4, ((sy + row) * TILE_SIZE + sx + width) * 4),
-              ((ty + row) * PAGE_SIDE + tx) * 4
-            );
+          await work.run(() => {
+            for (let row = 0; row < height; row++)
+              result.set(
+                pixels.subarray(((sy + row) * TILE_SIZE + sx) * 4, ((sy + row) * TILE_SIZE + sx + width) * 4),
+                ((ty + row) * PAGE_SIDE + tx) * 4
+              );
+          }, valid);
         }
-      if (!valid() || id !== token(page)) throw new Error('Obsolete virtual page');
+      if (!valid() || id !== token(page)) throw new ObsoletePageError();
       return result;
     },
     invalidate() {

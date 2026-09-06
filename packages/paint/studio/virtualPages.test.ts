@@ -84,6 +84,24 @@ it('coarsens a large viewport to fit the shared GPU page budget', () => {
   ).toBeLessThanOrEqual(4);
 });
 
+it('keeps screen-appropriate detail in a large sparse viewport instead of budgeting empty cells', () => {
+  const doc = createDocument();
+  const raw = new Uint8Array(262144);
+  for (let x = -32; x <= 32; x += 4) doc.active.tiles.set(`${x},0`, raw);
+  const pages = createVirtualPages(async (data) => unpackTile(data));
+  pages.sync(doc.layers);
+  const selected = pages.visible(
+    doc.active.id,
+    { ...defaultCamera(), zoom: 0.05 },
+    { width: 2537, height: 2050 },
+    1.27,
+    64
+  );
+  expect(selected.length).toBeGreaterThan(0);
+  expect(selected.every((page) => page.level === 3)).toBe(true);
+  expect(selected).toHaveLength(9);
+});
+
 it('reloads stored low resolution without reading high resolution, then rebuilds only edited ancestors', async () => {
   const doc = createDocument({ paged: true });
   const raw = new Uint8Array(262144).fill(40);
@@ -138,4 +156,26 @@ it('reloads stored low resolution without reading high resolution, then rebuilds
   expect(await reopened.pagePixels(page)).toEqual(original);
   expect(reads).toBe(0);
   expect(writes).toBe(0);
+});
+
+it('distinguishes missing occupied coverage from known transparent portions of a parent', () => {
+  const doc = createDocument();
+  const tile = new Uint8Array(262144).fill(128);
+  doc.commit([{ layerId: doc.active.id, key: '-3,-3', before: undefined, after: tile }]);
+  const pages = createVirtualPages(async (data) => unpackTile(data));
+  pages.sync(doc.layers);
+  const target = { layerId: doc.active.id, level: 4, x: -1, y: -1 };
+  const child = { ...target, level: 0, x: -3, y: -3 };
+  expect(pages.isCovered(target, [child])).toBe(true);
+  expect(pages.isCovered(target, [])).toBe(false);
+  doc.commit([{ layerId: doc.active.id, key: '-1,-1', before: undefined, after: tile }]);
+  pages.sync(doc.layers);
+  expect(pages.isCovered(target, [child])).toBe(false);
+  expect(pages.isCovered(target, [child, { ...child, x: -1, y: -1 }])).toBe(true);
+  doc.undo();
+  pages.sync(doc.layers);
+  expect(pages.isCovered(target, [child])).toBe(true);
+  doc.undo();
+  pages.sync(doc.layers);
+  expect(pages.isCovered(target, [])).toBe(true);
 });

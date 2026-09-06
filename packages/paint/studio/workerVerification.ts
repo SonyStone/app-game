@@ -63,8 +63,11 @@ export async function verifyWorker(report: (message: string) => void) {
   try {
     await init();
     const committed = wait((e) => e.type === 'state' && e.document.canUndo);
+    const drawing = wait((e) => e.type === 'state' && !e.saved);
     send({ type: 'begin', brush: defaultBrush(), samples: [{ x: -30, y: 0, pressure: 1, time: 0 }] });
     send({ type: 'samples', samples: [{ x: 30, y: 0, pressure: 0.5, time: 20 }] });
+    const active = await drawing;
+    assert(active.type === 'state' && active.saveState === 'unsaved', 'An active stroke is mislabeled as saving');
     send({ type: 'end' });
     await committed;
     const original = await download();
@@ -117,17 +120,20 @@ export async function verifyWorker(report: (message: string) => void) {
     let allStrokes: Blob;
     try {
       // Trigger the actual debounce timer, then draw while its transaction is blocked.
+      const writing = wait((e) => e.type === 'state' && e.saveState === 'saving');
       send({ type: 'view', camera: defaultCamera(), size: { width: 400, height: 300 }, dpr: 1 });
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      await writing;
       for (let i = 0; i < 8; i++) {
         const revision = latest!.document.revision;
         const committed = wait((e) => e.type === 'state' && e.document.revision > revision);
+        const drawing = wait((e) => e.type === 'state' && e.saveState === 'unsaved');
         send({
           type: 'begin',
           brush: { ...defaultBrush(), size: 8, opacity: 1, flow: 1, pressureSize: false },
           samples: [{ x: -80, y: 30 + i * 12, pressure: 1, time: 0 }]
         });
         send({ type: 'samples', samples: [{ x: 80, y: 30 + i * 12, pressure: 1, time: 20 }] });
+        await drawing;
         send({ type: 'end' });
         await committed;
       }
@@ -152,7 +158,9 @@ export async function verifyWorker(report: (message: string) => void) {
     worker = new Worker();
     await init();
     assert(await equalFiles(await download(), allStrokes), 'Overlapping autosave lost strokes on restart');
-    report('PASS: eight strokes survive a blocked autosave, transaction completion and a fresh worker restart');
+    report(
+      'PASS: eight strokes survive blocked autosave and restart; active strokes report unsaved, checkpoint writes report saving'
+    );
     const done = wait((e) => e.type === 'disposed');
     send({ type: 'dispose' });
     await done;
