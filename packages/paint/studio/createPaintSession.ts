@@ -4,11 +4,12 @@ import { defaultCamera, transformAt, type Camera, type Point } from './camera';
 import { createSelection } from './createSelection';
 import { createDocument, type LayerAction } from './document';
 import { attachInput, editable } from './input';
+import { createMainThreadEndpoint, type PaintEndpoint } from './mainThreadEndpoint';
 import Worker from './paint.worker?worker';
 import { createPaintNavigation } from './paintNavigation';
 import type { PaintCommand, PaintEvent } from './protocol';
 
-/** Scopes the worker, input listeners, persistence status, and UI state to one editor mount. */
+/** Scopes the selected engine transport, input and UI state to one editor mount. */
 export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; stage: () => HTMLDivElement }) {
   const [brush, setBrush] = createSignal(defaultBrush(), { ownedWrite: true });
   const [tool, setTool] = createSignal<Brush['tool'] | 'lasso'>('brush', { ownedWrite: true });
@@ -32,12 +33,16 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   });
   const [cursor, setCursor] = createSignal<Point | undefined>(undefined, { ownedWrite: true });
   const [metrics, setMetrics] = createSignal({ tiles: 0, gpu: 0, ms: 0 }, { ownedWrite: true });
-  let worker: globalThis.Worker | undefined;
+  const workerEnabled = new URL(location.href).searchParams.get('paintThread') !== 'main';
+  const [switchingRenderer, setSwitchingRenderer] = createSignal(false, { ownedWrite: true });
+  let nextWorkerEnabled: boolean | undefined;
+  let worker: PaintEndpoint | undefined;
   let size = { width: 1, height: 1 };
   const [viewSize, setViewSize] = createSignal(size, { ownedWrite: true });
   let currentCamera = defaultCamera();
   let animateSelection = true;
   const send = (command: PaintCommand) => {
+    if (untrack(switchingRenderer) && command.type !== 'dispose') return;
     if (
       selection.isBusy() &&
       !['selection', 'selection-view', 'view', 'debug', 'live-tail', 'dispose'].includes(command.type)
@@ -79,23 +84,21 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   onSettled(() => {
     const canvas = elements.canvas();
     const stage = elements.stage();
-    if (!canvas.transferControlToOffscreen || !navigator.gpu) {
+    if (!navigator.gpu || (workerEnabled && !canvas.transferControlToOffscreen)) {
       setError({
-        message:
-          'This editor needs WebGPU and OffscreenCanvas. Try a current browser with hardware acceleration enabled.',
+        message: workerEnabled
+          ? 'Worker mode needs WebGPU and OffscreenCanvas. Try a current browser with hardware acceleration enabled.'
+          : 'This editor needs WebGPU. Try a browser with hardware acceleration enabled.',
         recoverable: false
       });
       return;
     }
-    worker = new Worker();
+    worker = workerEnabled ? new Worker() : createMainThreadEndpoint();
     const measure = () => {
       size = { width: stage.clientWidth, height: stage.clientHeight };
       setViewSize(size);
     };
     measure();
-    const offscreen = canvas.transferControlToOffscreen();
-    const init: PaintCommand = { type: 'init', canvas: offscreen, size, dpr: devicePixelRatio };
-    worker.postMessage(init, [offscreen]);
     const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
     const syncSelection = () => {
       animateSelection = !reducedMotion.matches && !document.hidden;
@@ -107,6 +110,13 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     let initialState = true;
     worker.onmessage = (event: MessageEvent<PaintEvent>) => {
       const value = event.data;
+      if (value.type === 'checkpointed' && nextWorkerEnabled !== undefined) {
+        const url = new URL(location.href);
+        if (nextWorkerEnabled) url.searchParams.delete('paintThread');
+        else url.searchParams.set('paintThread', 'main');
+        location.assign(url.href);
+        return;
+      }
       if (value.type === 'selection') selection.receive(value);
       if (value.type === 'ready') {
         setReady(true);
@@ -138,6 +148,8 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         }
       }
       if (value.type === 'error') {
+        nextWorkerEnabled = undefined;
+        setSwitchingRenderer(false);
         setError(value);
         if (value.recoverable) setReady(false);
       }
@@ -152,9 +164,17 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     };
     worker.onerror = (event) => {
       selection.receive({ type: 'selection', points: [], hasClipboard: false });
+      nextWorkerEnabled = undefined;
+      setSwitchingRenderer(false);
       setReady(false);
-      setError({ message: event.message || 'The drawing worker stopped.', recoverable: false });
+      setError({ message: event.message || 'The drawing engine stopped.', recoverable: false });
     };
+    if (workerEnabled) {
+      const offscreen = canvas.transferControlToOffscreen();
+      worker.postMessage({ type: 'init', canvas: offscreen, size, dpr: devicePixelRatio }, [offscreen]);
+    } else {
+      worker.postMessage({ type: 'init', canvas, size, dpr: devicePixelRatio });
+    }
     const resize = new ResizeObserver(() => {
       measure();
       if (untrack(ready)) navigate(currentCamera);
@@ -164,7 +184,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       camera: () => currentCamera,
       size: () => size,
       brush: () => untrack(brush),
-      ready: () => untrack(ready) && !selection.isBusy(),
+      ready: () => untrack(ready) && !untrack(switchingRenderer) && !selection.isBusy(),
       navigate,
       send,
       cursor: setCursor,
@@ -224,6 +244,15 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   });
 
   return {
+    workerEnabled: () => workerEnabled,
+    switchingRenderer,
+    /** Saves completed input before reloading with a fresh canvas. Failure keeps this session open. */
+    setWorkerEnabled(enabled: boolean) {
+      if (enabled === workerEnabled || untrack(switchingRenderer) || selection.isBusy() || !untrack(ready)) return;
+      nextWorkerEnabled = enabled;
+      setSwitchingRenderer(true);
+      worker?.postMessage({ type: 'checkpoint' });
+    },
     tool,
     liveTail,
     setLiveTail(enabled: boolean) {

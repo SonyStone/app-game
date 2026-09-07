@@ -14,9 +14,9 @@ import { stampBounds } from './stampBounds';
 import { createViewFallback } from './viewFallback';
 import { createVirtualTexture } from './virtualTexture';
 
-/** Creates a worker-owned renderer. Committed CPU tiles remain valid after cache eviction or device loss. */
+/** Creates a WebGPU renderer for the selected canvas. Committed CPU tiles remain valid after cache eviction or device loss. */
 export async function createPaintRenderer(
-  canvas: OffscreenCanvas,
+  canvas: OffscreenCanvas | HTMLCanvasElement,
   onLost: (message: string) => void,
   options: {
     device?: GPUDevice;

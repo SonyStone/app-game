@@ -16,6 +16,9 @@ export function DeveloperDialog(props: {
     | 'setShowPenCursor'
     | 'rawReceived'
     | 'metrics'
+    | 'workerEnabled'
+    | 'setWorkerEnabled'
+    | 'switchingRenderer'
   >;
   close: () => void;
 }) {
@@ -68,8 +71,30 @@ export function DeveloperDialog(props: {
           />
           Show cursor while drawing with a pen
         </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={props.session.workerEnabled()}
+            disabled={!props.session.ready() || props.session.switchingRenderer()}
+            onChange={(event) => {
+              const enabled = event.currentTarget.checked;
+              event.currentTarget.checked = props.session.workerEnabled();
+              props.session.setWorkerEnabled(enabled);
+            }}
+          />
+          Web Worker + OffscreenCanvas
+        </label>
       </div>
+      <p class="paint-panel-note" role="status">
+        {props.session.switchingRenderer()
+          ? 'Saving before reload…'
+          : 'Changing execution mode saves and reloads the drawing. Undo history resets.'}
+      </p>
       <dl>
+        <div>
+          <dt>Drawing engine</dt>
+          <dd>{props.session.workerEnabled() ? 'Worker · OffscreenCanvas' : 'Main thread · HTML canvas'}</dd>
+        </div>
         <div>
           <dt>pointerrawupdate</dt>
           <dd>
@@ -90,7 +115,8 @@ export function DeveloperDialog(props: {
         </div>
       </dl>
       <p class="paint-panel-note">
-        Submission measures CPU preparation, not pen latency. These switches apply to this session.
+        Submission measures CPU preparation, not pen latency. Execution mode stays in the URL; other switches apply to
+        this session.
       </p>
     </dialog>
   );

@@ -48,14 +48,15 @@ it.each(['paint', 'finish'] as const)(
       debugPages: () => []
     };
     dependencies.renderer.mockResolvedValue(renderer);
-    dependencies.store.mockResolvedValue({
+    const storage = {
       load: async () => undefined,
       capture: (pixels: unknown) => pixels,
       save: vi.fn(async (snapshot: SavedDocument) => {
         checkpoint = snapshot;
       }),
       stats: () => undefined
-    });
+    };
+    dependencies.store.mockResolvedValue(storage);
 
     const events: PaintEvent[] = [];
     const worker = {
@@ -114,5 +115,20 @@ it.each(['paint', 'finish'] as const)(
     expect(tiles.map((tile) => tile.key)).toEqual(['0,0', '2,0']);
     expect(tiles.map((tile) => unpackTile(tile.pixels)[0])).toEqual([100, 200]);
     expect(events.filter((event) => event.type === 'error')).toEqual([]);
+
+    // Switching execution mode must wait for a durable checkpoint, and must not reload after failure.
+    let rejectCheckpoint!: (error: Error) => void;
+    const blockedCheckpoint = new Promise<void>((_resolve, reject) => {
+      rejectCheckpoint = reject;
+    });
+    storage.save.mockImplementationOnce(() => blockedCheckpoint);
+    send({ type: 'checkpoint' });
+    await wait((event) => event.type === 'state' && event.saveState === 'saving');
+    expect(events.some((event) => event.type === 'checkpointed')).toBe(false);
+    rejectCheckpoint(new Error('Checkpoint write failed'));
+    await wait((event) => event.type === 'error' && event.message === 'Checkpoint write failed');
+    expect(events.some((event) => event.type === 'checkpointed')).toBe(false);
+    send({ type: 'checkpoint' });
+    await wait((event) => event.type === 'checkpointed');
   }
 );

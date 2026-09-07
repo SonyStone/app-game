@@ -40,6 +40,7 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   const [showPenCursor, setShowPenCursor] = createSignal(false);
   const [rawReceived, setRawReceived] = createSignal(false);
   const [ready] = createSignal(true);
+  const [switchingRenderer] = createSignal(false);
   const [metrics] = createSignal({ gpu: 1048576, tiles: 1, ms: 1.2 });
   const close = vi.fn();
   const session = {
@@ -51,7 +52,10 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
     rawReceived,
     ready,
     toggleDebug: () => setDebug(!debug()),
-    metrics
+    metrics,
+    workerEnabled: () => true,
+    switchingRenderer,
+    setWorkerEnabled: vi.fn()
   };
   dispose = render(() => <DeveloperDialog session={session} close={close} />, document.body);
   flush();
@@ -61,10 +65,13 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   setRawReceived(true);
   flush();
   expect(dialog.textContent).toContain(supported ? 'Receiving pen events' : 'Unavailable · using pointermove');
-  const [wireframe, tail, cursor] = [...dialog.querySelectorAll('input')];
+  const [wireframe, tail, cursor, worker] = [...dialog.querySelectorAll('input')];
   wireframe!.click();
   tail!.click();
   cursor!.click();
+  worker!.click();
+  expect(session.setWorkerEnabled).toHaveBeenCalledWith(false);
+  expect(dialog.textContent).toContain('Undo history resets');
   flush();
   expect(debug()).toBe(true);
   expect(liveTail()).toBe(false);

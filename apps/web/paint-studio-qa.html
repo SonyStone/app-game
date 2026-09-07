@@ -36,6 +36,7 @@
     <button id="cold-navigation">Check cold zoom</button>
     <button id="streaming">Run streaming checks</button>
     <button id="run">Run GPU checks</button>
+    <button id="execution-modes">Check execution modes</button>
     <button id="worker">Run worker checks</button>
     <button id="lasso">Check lasso selections</button>
     <button id="performance">Measure 60 strokes</button>
@@ -57,10 +58,19 @@
       import { verifyColdNavigation } from '@app-game/paint/studio/navigationStreamingVerification';
       import { verifyStreaming } from '@app-game/paint/studio/streamingVerification';
       import { verifyGpu } from '@app-game/paint/studio/gpu/verification';
+      import { verifyMainThread } from '@app-game/paint/studio/mainThreadVerification';
       import { verifyWorker } from '@app-game/paint/studio/workerVerification';
       import { measurePainting, measureDensePainting, measureNavigation } from '@app-game/paint/studio/gpu/performance';
       const button = document.querySelector('#run'),
         output = document.querySelector('#output');
+      document.querySelector('#execution-modes').onclick = async () => {
+        output.textContent = 'Checking main-thread canvas and worker checkpoints…\n';
+        try {
+          await verifyMainThread((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
       document.querySelector('#lasso').onclick = async () => {
         output.textContent = 'Testing lasso shaders and large selections…\n';
         try {

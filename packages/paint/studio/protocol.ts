@@ -11,11 +11,16 @@ export type PaintCommand =
   | { type: 'view'; camera: Camera; size: ViewSize; dpr: number }
   | { type: 'begin'; brush: Brush; samples: Sample[]; zoom?: number }
   | { type: 'samples'; samples: Sample[] }
-  | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'download' | 'png' | 'recover' | 'dispose' }
+  | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'checkpoint' | 'download' | 'png' | 'recover' | 'dispose' }
   | { type: 'layer'; action: LayerAction }
   | { type: 'selection'; action: SelectionAction; points: Point[]; offset?: Point; layerId: string; revision: number }
   | { type: 'import'; text: string }
   | { type: 'import'; file: Blob };
+
+/** Local execution accepts a DOM canvas; the worker protocol only permits a transferable canvas. */
+export type PaintRuntimeCommand =
+  | Exclude<PaintCommand, { type: 'init' }>
+  | (Omit<Extract<PaintCommand, { type: 'init' }>, 'canvas'> & { canvas: OffscreenCanvas | HTMLCanvasElement });
 
 /** Lightweight worker status; document pixels are sent only for explicit file downloads. */
 export type PaintEvent =
@@ -66,6 +71,7 @@ export type PaintEvent =
       };
     }
   | { type: 'ready' }
+  | { type: 'checkpointed' }
   | { type: 'selection'; points: Point[]; hasClipboard: boolean }
   | { type: 'disposed' }
   | { type: 'restored'; camera: Camera }
