@@ -128,7 +128,7 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
   );
 }
 
-/** Lets the next stroke compare Studio smoothing with the two recovered Leonardo filter settings. */
+/** Selects raw input or curve smoothing for the next stroke; Leonardo retains independent filter settings. */
 function StrokeControls(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
   const settings = () => props.brush().stroke;
   const update = (patch: Partial<StrokeSettings>) =>
@@ -142,15 +142,19 @@ function StrokeControls(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
           value={settings().mode}
           onChange={(event) => {
             const mode = event.currentTarget.value;
-            update({ mode: mode === 'normal' || mode === 'smooth' ? mode : 'studio' });
+            update({ mode: mode === 'none' || mode === 'normal' || mode === 'smooth' ? mode : 'studio' });
           }}
         >
+          <option value="none">None (raw input)</option>
           <option value="studio">Studio</option>
           <option value="normal">Leonardo normal</option>
           <option value="smooth">Leonardo smooth</option>
         </select>
       </label>
-      <Show when={settings().mode !== 'studio'}>
+      <Show when={settings().mode === 'none'}>
+        <p class="paint-panel-note">No path smoothing or stabilization. Brush stamps connect input points directly.</p>
+      </Show>
+      <Show when={settings().mode === 'normal' || settings().mode === 'smooth'}>
         <Range
           label="Stabilization"
           min={0}

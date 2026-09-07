@@ -1,6 +1,6 @@
 /** Stroke processing is captured at pen-down; Studio preserves the original quadratic smoothing. */
 export type StrokeSettings = {
-  mode: 'studio' | 'normal' | 'smooth';
+  mode: 'none' | 'studio' | 'normal' | 'smooth';
   /** Leonardo's window is this setting plus one, capped at 50 samples. */
   normal: number;
   /** Independent window setting for smooth mode. */
@@ -24,7 +24,8 @@ export function defaultStrokeSettings(): StrokeSettings {
 export function normalizeStrokeSettings(settings: StrokeSettings): StrokeSettings {
   const minimum = bounded(settings.minimum, 0, 0.99, 0.05);
   return {
-    mode: settings.mode === 'normal' || settings.mode === 'smooth' ? settings.mode : 'studio',
+    mode:
+      settings.mode === 'none' || settings.mode === 'normal' || settings.mode === 'smooth' ? settings.mode : 'studio',
     normal: Math.round(bounded(settings.normal, 0, 49, 1)),
     smooth: Math.round(bounded(settings.smooth, 0, 49, 10)),
     catchUp: settings.catchUp !== false,

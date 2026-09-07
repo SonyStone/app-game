@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { defaultBrush, type Sample } from './brush';
 import { createSmoothStroke } from './smoothStroke';
 
-it.each(['studio', 'normal', 'smooth'] as const)(
+it.each(['none', 'studio', 'normal', 'smooth'] as const)(
   '%s previews do not change committed pressure, spacing or curve state',
   (mode) => {
     const brush = defaultBrush();
@@ -19,7 +19,7 @@ it.each(['studio', 'normal', 'smooth'] as const)(
       expect(live.add([sample])).toEqual(reference.add([sample]));
       const preview = live.preview();
       expect(live.preview()).toEqual(preview);
-      if (sample.x > 0) expect(preview.length).toBeGreaterThan(0);
+      if (sample.x > 0 && mode !== 'none') expect(preview.length).toBeGreaterThan(0);
     }
     expect(live.finish()).toEqual(reference.finish());
     expect(live.preview()).toEqual([]);

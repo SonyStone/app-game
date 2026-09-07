@@ -1,11 +1,12 @@
 import { createStrokeSampler, type Brush, type Dab, type Sample } from './brush';
 import { createLeonardoStroke } from './leonardoStroke';
 
-/** Selects Studio's midpoint quadratic smoothing or the researched Leonardo filter and cubic curve.
+/** Selects unfiltered input, Studio's midpoint quadratic smoothing, or Leonardo's filter and cubic curve.
  * Studio's two-CSS-pixel input threshold suppresses coordinate quantization at every zoom.
- * The last segment is deferred until another point or finish(); no predicted ink is committed.
+ * Smoothed modes defer the last segment; None processes real points immediately without a provisional tail.
  */
 export function createSmoothStroke(brush: Brush, zoom = 1) {
+  if (brush.stroke.mode === 'none') return createUnsmoothedStroke(brush);
   if (brush.stroke.mode !== 'studio') return createLeonardoStroke(brush, zoom);
   const sampler = createStrokeSampler(brush);
   const scale = Math.max(0.0001, zoom);
@@ -54,6 +55,25 @@ export function createSmoothStroke(brush: Brush, zoom = 1) {
       for (const dab of sampler.add([endpoint])) result.push(dab);
       finished = true;
       return result;
+    }
+  };
+}
+
+/** Keeps the received polyline and raw pressure. Only brush stamp spacing interpolates between points. */
+function createUnsmoothedStroke(brush: Brush) {
+  const sampler = createStrokeSampler(brush);
+  let finished = false;
+  return {
+    add(samples: readonly Sample[]): Dab[] {
+      return finished ? [] : sampler.add(samples);
+    },
+    // All received segments are already committed; a display tail would double-paint them.
+    preview(): Dab[] {
+      return [];
+    },
+    finish(): Dab[] {
+      finished = true;
+      return [];
     }
   };
 }
