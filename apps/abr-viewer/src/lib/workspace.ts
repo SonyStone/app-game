@@ -207,7 +207,7 @@ export function workspaceToAbrFile(
     subVersion: subVersions.values().next().value ?? 2,
     rawSampleData: undefined,
     rawPatternData,
-    descriptorRoot: sourceFiles.length === 1 ? sourceFiles[0].descriptorRoot : undefined,
+    descriptorRoot: sourceFiles.length === 1 ? sourceFiles[0]!.descriptorRoot : undefined,
     resourceBlocks: sourceFiles
       .flatMap((source) => source.resourceBlocks ?? [])
       .filter((block) => !['samp', 'patt', 'desc', 'phry'].includes(block.key)),

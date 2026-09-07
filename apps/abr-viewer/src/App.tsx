@@ -2,14 +2,21 @@ import { createSignal, Show } from 'solid-js';
 import { BrushExamplesMenu } from './components/BrushExamplesMenu';
 import { BrushPanel } from './components/BrushPanel';
 import { BrushDetailEditable } from './features/brush-detail/BrushDetailEditable';
-import { AbrParser, AbrWriter, brushTipToDataUrl, downloadAbrFile, type AbrFileWithMeta } from './lib/abr';
+import { AbrParser, AbrWriter, brushTipToDataUrl, downloadAbrFile, type AbrFileWithMeta, type Brush } from './lib/abr';
 import { fetchBrushExample, type BrushExample } from './lib/brush-examples';
 import { allBrushNodes, type GroupNode } from './lib/brush-tree';
 import { createWorkspace } from './lib/workspace';
 import './styles.css';
 
 /** Single brush workspace with live settings, undoable organization, and ABR export. */
-export function App() {
+export function App(
+  props: {
+    /** Optional embedding action. Reject to report an error while retaining the workspace. */
+    onUseBrush?: (brush: Brush) => Promise<void>;
+    /** Explains which settings the embedding application can apply. */
+    useBrushNote?: string;
+  } = {}
+) {
   const workspace = createWorkspace();
   const [status, setStatus] = createSignal('Ready');
   const [busy, setBusy] = createSignal(false);
@@ -18,6 +25,23 @@ export function App() {
   let input!: HTMLInputElement;
   let shell!: HTMLDivElement;
   let dragDepth = 0;
+  let applying = false;
+  const [usingBrush, setUsingBrush] = createSignal(false, { ownedWrite: true });
+  async function useBrush() {
+    const brush = workspace.active()?.brush;
+    if (!brush || !props.onUseBrush || applying) return;
+    applying = true;
+    setUsingBrush(true);
+    try {
+      await props.onUseBrush(brush);
+      setStatus(`Selected ${brush.name}`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    } finally {
+      applying = false;
+      setUsingBrush(false);
+    }
+  }
 
   async function importFiles(source: File[] | BrushExample) {
     if (busy()) return;
@@ -149,6 +173,17 @@ export function App() {
           }}
         />
       </header>
+      <Show when={props.onUseBrush}>
+        <div class="abr-use-brush">
+          <span>{props.useBrushNote}</span>
+          <button
+            disabled={busy() || usingBrush() || !workspace.active()}
+            onClick={() => void useBrush()}
+          >
+            {usingBrush() ? 'Preparing brush…' : 'Use in Paint'}
+          </button>
+        </div>
+      </Show>
       <main class="abr-panels" style={{ '--collection-width': `${split()}%` }}>
         <BrushPanel workspace={workspace} onImport={() => input.click()} onExport={exportBrushes} />
         <div

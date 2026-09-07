@@ -81,7 +81,7 @@ export function BrushDetailEditable(props: {
         .map((pattern) => [pattern.id, pattern])
     ).values()
   ]);
-  const selected = createMemo(() => categories.find((item) => item.id === category()) ?? categories[0]);
+  const selected = createMemo(() => categories.find((item) => item.id === category()) ?? categories[0]!);
 
   async function downloadTip() {
     if (!props.brush.brushTip) return;

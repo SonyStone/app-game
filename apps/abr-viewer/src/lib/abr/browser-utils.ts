@@ -50,7 +50,7 @@ export function brushTipToPngBlob(brushTip: BrushTipImage): Promise<Blob> {
         const srcIdx = y * width + x;
         const dstIdx = (y * width + x) * 4;
 
-        const gray = data[srcIdx];
+        const gray = data[srcIdx]!;
 
         // White brush with grayscale as alpha
         imageData.data[dstIdx] = 255;
@@ -84,10 +84,10 @@ export function createBrushTipFromCanvas(canvas: HTMLCanvasElement): BrushTipIma
 
   // Convert RGBA to grayscale (using luminosity method weighted by alpha)
   for (let i = 0; i < grayscale.length; i++) {
-    const r = imageData.data[i * 4];
-    const g = imageData.data[i * 4 + 1];
-    const b = imageData.data[i * 4 + 2];
-    const a = imageData.data[i * 4 + 3];
+    const r = imageData.data[i * 4]!;
+    const g = imageData.data[i * 4 + 1]!;
+    const b = imageData.data[i * 4 + 2]!;
+    const a = imageData.data[i * 4 + 3]!;
 
     // For brush tips, darker = more opaque paint
     // We invert and use alpha to determine brush opacity
@@ -148,7 +148,7 @@ export function brushTipToDataUrl(brushTip: BrushTipImage): string {
       const srcIdx = y * width + x;
       const dstIdx = (y * width + x) * 4;
 
-      const gray = data[srcIdx];
+      const gray = data[srcIdx]!;
 
       // White brush with grayscale as alpha
       imageData.data[dstIdx] = 255;

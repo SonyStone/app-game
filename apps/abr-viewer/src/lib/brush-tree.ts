@@ -93,7 +93,7 @@ export function buildTreeFromFile(file: AbrFileWithMeta): GroupNode {
   const stack: GroupNode[] = [];
 
   const currentContainer = (): TreeNode[] => {
-    return stack.length > 0 ? stack[stack.length - 1].children : rootChildren;
+    return stack.length > 0 ? stack[stack.length - 1]!.children : rootChildren;
   };
 
   for (const item of hierarchy) {
@@ -117,7 +117,7 @@ export function buildTreeFromFile(file: AbrFileWithMeta): GroupNode {
       }
       case 'preset': {
         if (brushIndex < brushes.length) {
-          currentContainer().push(brushToNode(brushes[brushIndex]));
+          currentContainer().push(brushToNode(brushes[brushIndex]!));
           brushIndex++;
         }
         break;
@@ -127,7 +127,7 @@ export function buildTreeFromFile(file: AbrFileWithMeta): GroupNode {
 
   // Any remaining brushes not referenced by hierarchy
   while (brushIndex < brushes.length) {
-    rootChildren.push(brushToNode(brushes[brushIndex]));
+    rootChildren.push(brushToNode(brushes[brushIndex]!));
     brushIndex++;
   }
 
@@ -264,12 +264,12 @@ export function findNode(
   roots: TreeNode[],
   id: string
 ): { node: TreeNode; parent: GroupNode | null; index: number } | null {
-  for (let i = 0; i < roots.length; i++) {
-    if (roots[i].id === id) {
-      return { node: roots[i], parent: null, index: i };
+  for (const [i, node] of roots.entries()) {
+    if (node.id === id) {
+      return { node, parent: null, index: i };
     }
-    if (roots[i].kind === 'group') {
-      const found = findNodeInGroup(roots[i] as GroupNode, id);
+    if (node.kind === 'group') {
+      const found = findNodeInGroup(node, id);
       if (found) return found;
     }
   }
@@ -277,12 +277,12 @@ export function findNode(
 }
 
 function findNodeInGroup(group: GroupNode, id: string): { node: TreeNode; parent: GroupNode; index: number } | null {
-  for (let i = 0; i < group.children.length; i++) {
-    if (group.children[i].id === id) {
-      return { node: group.children[i], parent: group, index: i };
+  for (const [i, node] of group.children.entries()) {
+    if (node.id === id) {
+      return { node, parent: group, index: i };
     }
-    if (group.children[i].kind === 'group') {
-      const found = findNodeInGroup(group.children[i] as GroupNode, id);
+    if (node.kind === 'group') {
+      const found = findNodeInGroup(node, id);
       if (found) return found;
     }
   }
@@ -293,12 +293,12 @@ function findNodeInGroup(group: GroupNode, id: string): { node: TreeNode; parent
  * Remove a node by ID from the tree. Returns the removed node or null.
  */
 export function removeNode(roots: TreeNode[], id: string): TreeNode | null {
-  for (let i = 0; i < roots.length; i++) {
-    if (roots[i].id === id) {
-      return roots.splice(i, 1)[0];
+  for (const [i, node] of roots.entries()) {
+    if (node.id === id) {
+      return roots.splice(i, 1)[0]!;
     }
-    if (roots[i].kind === 'group') {
-      const removed = removeNode((roots[i] as GroupNode).children, id);
+    if (node.kind === 'group') {
+      const removed = removeNode((node).children, id);
       if (removed) return removed;
     }
   }
@@ -320,21 +320,21 @@ export function insertNode(
     // Find target group and append inside
     const found = findNode(roots, targetId);
     if (found && found.node.kind === 'group') {
-      (found.node as GroupNode).children.push(node);
+      (found.node).children.push(node);
       return true;
     }
     return false;
   }
 
   // Before / after
-  for (let i = 0; i < roots.length; i++) {
-    if (roots[i].id === targetId) {
+  for (const [i, candidate] of roots.entries()) {
+    if (candidate.id === targetId) {
       const idx = position === 'before' ? i : i + 1;
       roots.splice(idx, 0, node);
       return true;
     }
-    if (roots[i].kind === 'group') {
-      if (insertNode((roots[i] as GroupNode).children, node, targetId, position)) {
+    if (candidate.kind === 'group') {
+      if (insertNode(candidate.children, node, targetId, position)) {
         return true;
       }
     }

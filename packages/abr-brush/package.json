@@ -1,0 +1,20 @@
+{
+  "name": "@app-game/abr-brush",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./form": "./src/form.ts",
+    "./settings-fields": "./src/settings-fields.ts",
+    "./stroke": "./src/stroke.ts",
+    "./effects": "./src/effects.ts",
+    "./resources": "./src/resources.ts",
+    "./physical-tip": "./src/physical-tip.ts",
+    "./paintBlend": "./src/paintBlend.ts"
+  },
+  "dependencies": {
+    "@app-game/abr-parser": "workspace:*",
+    "zod": "^4.4.3",
+    "typegpu": "^0.11.4"
+  }
+}

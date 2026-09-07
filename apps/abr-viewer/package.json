@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./routes": "./src/routes.tsx"
+    "./routes": "./src/routes.tsx",
+    "./editor": "./src/editor.ts"
   },
   "scripts": {
     "dev": "vite --port 3020",
@@ -23,7 +24,8 @@
     "solid-js": "catalog:",
     "solid-nest": "workspace:*",
     "zod": "^4.4.3",
-    "typegpu": "^0.11.4"
+    "typegpu": "^0.11.4",
+    "@app-game/abr-brush": "workspace:*"
   },
   "devDependencies": {
     "@unocss/reset": "catalog:",

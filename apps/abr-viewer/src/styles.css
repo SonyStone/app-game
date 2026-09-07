@@ -1066,3 +1066,24 @@
   background: #252525cc;
   padding: 3px;
 }
+
+.abr-use-brush {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #242424;
+  border-bottom: 1px solid #444;
+}
+.abr-use-brush span {
+  font-size: 11px;
+  color: #bbb;
+}
+.abr-use-brush button {
+  background: #287cae;
+  color: white;
+  border-radius: 4px;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
