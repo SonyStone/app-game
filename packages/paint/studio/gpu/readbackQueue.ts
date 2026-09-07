@@ -4,11 +4,11 @@ import { packTile, TILE_BYTES } from '../tilePixels';
 
 /** Two reusable staging buffers overlap eviction readback with painting. Each capture submits its
  * texture copies before returning; callers may then recycle source textures, but must check the ready
- * Result before reading pixels. Returned arrays own their memory and survive unmap/reuse.
+ * Result before reading pixels. Buffers grow to fit requested batches, up to texturesPerBatch tiles.
+ * Returned arrays own their memory and survive unmap/reuse.
  */
 export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number) {
   const slots: { buffer: GPUBuffer; generation: number; busy: boolean; settled: Promise<Result<unknown>> }[] = [];
-  const bytesPerBuffer = texturesPerBatch * TILE_BYTES;
   let epoch = 0,
     disposed = false,
     batches = 0,
@@ -19,6 +19,7 @@ export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number)
      */
     async capture(textures: readonly GPUTexture[]) {
       if (!textures.length || textures.length > texturesPerBatch) throw new Error('Invalid eviction readback size.');
+      const bytes = textures.length * TILE_BYTES;
       const owner = epoch;
       let slot: (typeof slots)[number] | undefined;
       for (;;) {
@@ -29,7 +30,7 @@ export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number)
           slot = {
             buffer: device.createBuffer({
               label: 'paint-eviction-readback',
-              size: bytesPerBuffer,
+              size: bytes,
               usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
             }),
             generation: 0,
@@ -44,6 +45,14 @@ export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number)
       }
       const current = slot;
       const generation = ++current.generation;
+      if (current.buffer.size < bytes) {
+        current.buffer.destroy();
+        current.buffer = device.createBuffer({
+          label: 'paint-eviction-readback',
+          size: bytes,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+        });
+      }
       current.busy = true;
       batches++;
       const ready = attempt(async () => {
@@ -90,7 +99,7 @@ export function createReadbackQueue(device: GPUDevice, texturesPerBatch: number)
     stats: () => ({
       buffers: slots.length,
       pending: slots.filter((slot) => slot.busy).length,
-      bytes: slots.length * bytesPerBuffer,
+      bytes: slots.reduce((bytes, slot) => bytes + slot.buffer.size, 0),
       batches,
       capacityWaits
     }),

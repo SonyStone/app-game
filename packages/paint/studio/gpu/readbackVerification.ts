@@ -1,8 +1,9 @@
 import { attempt } from '../asyncResult';
-import { defaultBrush } from '../brush';
+import { defaultBrush, TILE_SIZE } from '../brush';
 import { defaultCamera } from '../camera';
 import { createDocument, type TileChange } from '../document';
-import { unpackTile } from '../tilePixels';
+import { TILE_BYTES, unpackTile } from '../tilePixels';
+import { createReadbackQueue } from './readbackQueue';
 import { createPaintRenderer } from './renderer';
 
 /** Delays real GPU map completions to expose capacity, pixel ownership and cancellation races. */
@@ -64,6 +65,8 @@ export async function verifyReadbackQueue(report: (message: string) => void) {
     document = createDocument();
   };
   try {
+    await verifyReadbackGrowth(device);
+    report('PASS: staging grows from two to four channels on demand and preserves every channel');
     const blocked = hold();
     renderer.begin(document.active, brush);
     const painting = track(renderer.paint([dab(0), dab(1), dab(2), dab(3)]));
@@ -183,6 +186,40 @@ export async function verifyReadbackQueue(report: (message: string) => void) {
     // destroy is called explicitly in the last check; the renderer owns no document mutations here.
     if (!destroyed) renderer.destroy();
     device.destroy();
+  }
+}
+
+/** Exercises the staging capacity change when an ABR brush follows a round brush. */
+async function verifyReadbackGrowth(device: GPUDevice) {
+  const queue = createReadbackQueue(device, 4);
+  const textures = [32, 64, 96, 128].map((value) => {
+    const texture = device.createTexture({
+      size: [TILE_SIZE, TILE_SIZE],
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST
+    });
+    device.queue.writeTexture({ texture }, new Uint8Array(TILE_BYTES).fill(value), { bytesPerRow: TILE_SIZE * 4 }, [
+      TILE_SIZE,
+      TILE_SIZE
+    ]);
+    return texture;
+  });
+  try {
+    for (const [count, capacity] of [
+      [2, 2],
+      [4, 4],
+      [2, 4]
+    ] as const) {
+      const result = await (await queue.capture(textures.slice(0, count))).ready;
+      if (!result.ok) throw result.error;
+      if (result.value.some((tile, index) => unpackTile(tile).some((byte) => byte !== (index + 1) * 32)))
+        throw new Error('Growing the staging buffer lost channel pixels');
+      if (queue.stats().buffers !== 1 || queue.stats().bytes !== capacity * TILE_BYTES)
+        throw new Error('Staging did not grow on demand or reuse its larger allocation');
+    }
+  } finally {
+    queue.destroy();
+    for (const texture of textures) texture.destroy();
   }
 }
 
