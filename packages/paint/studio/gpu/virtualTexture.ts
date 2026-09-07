@@ -62,7 +62,8 @@ export function createVirtualTexture(
       if (!free.length) {
         let oldest = [...entries]
           .filter(([key, value]) => !pinned.has(key) && value.used < frame)
-          .sort((a, b) => a[1].used - b[1].used)[0];
+          .sort((a, b) => a[1].used - b[1].used)
+          .at(0);
         // A newly built parent can replace one of its visible children atomically.
         // Otherwise a zoom-out covering a full pool could pin every old slot forever.
         oldest ??= [...entries].find(

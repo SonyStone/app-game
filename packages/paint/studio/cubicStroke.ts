@@ -1,4 +1,5 @@
 import type { Sample } from './brush';
+import { interpolateTabletAxes } from './tabletAxes';
 
 /** Streams uniform Catmull–Rom curves with one sample of lookahead and bounded flattening error. */
 export function createCubicStroke(size: number, zoom = 1) {
@@ -52,6 +53,7 @@ function segment(p0: Sample, p1: Sample, p2: Sample, p3: Sample, tolerance: numb
     return;
   }
   const control = (origin: Sample, from: Sample, to: Sample): Sample => ({
+    ...origin,
     x: origin.x + (to.x - from.x) / 6,
     y: origin.y + (to.y - from.y) / 6,
     pressure: origin.pressure + (to.pressure - from.pressure) / 6,
@@ -84,6 +86,7 @@ function flatten(a: Sample, b: Sample, c: Sample, d: Sample, tolerance: number, 
 
 function mix(a: Sample, b: Sample, t = 0.5): Sample {
   return {
+    ...interpolateTabletAxes(a, b, t),
     x: a.x + (b.x - a.x) * t,
     y: a.y + (b.y - a.y) * t,
     pressure: a.pressure + (b.pressure - a.pressure) * t,

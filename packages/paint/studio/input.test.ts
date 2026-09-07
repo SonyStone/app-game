@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { flush } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultBrush } from './brush';
 import { defaultCamera } from './camera';
@@ -10,6 +11,7 @@ const disposals: (() => void)[] = [];
 afterEach(() => {
   disposals.splice(0).forEach((dispose) => dispose());
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('input to worker contract', () => {
@@ -37,6 +39,47 @@ describe('input to worker contract', () => {
         .map((sample) => sample.pressure)
     ).toEqual([0.4, 0.7]);
     expect(rawUpdate).toHaveBeenCalledOnce();
+  });
+  it('preserves tilt, wheel and barrel rotation on the first and coalesced samples', () => {
+    const { commands, pointer } = setup();
+    pointer('pointerdown', 10, 10, { pointerType: 'pen', tiltX: 30, tiltY: -10, twist: 350, tangentialPressure: 0.4 });
+    expect(commands[0]).toMatchObject({ samples: [{ tiltX: 30, tiltY: -10, rotation: 350, tangentialPressure: 0.4 }] });
+    pointer('pointermove', 20, 20, {
+      pointerType: 'pen',
+      getCoalescedEvents: () => [
+        {
+          pointerType: 'pen',
+          clientX: 20,
+          clientY: 20,
+          pressure: 0.6,
+          tiltX: 40,
+          tiltY: -20,
+          twist: 5,
+          tangentialPressure: 0.2,
+          timeStamp: 2
+        }
+      ]
+    });
+    expect(commands[1]).toMatchObject({ samples: [{ tiltX: 40, tiltY: -20, rotation: 5, tangentialPressure: 0.2 }] });
+  });
+  it('builds up a stationary ABR stroke and stops the timer on pen-up and disposal', () => {
+    vi.useFakeTimers();
+    const { commands, pointer } = setup(undefined, () => ({
+      ...defaultBrush(),
+      engine: { id: 'abr', settings: { values: { useBuildUp: true } } }
+    }));
+    pointer('pointerdown', 10, 10);
+    vi.advanceTimersByTime(120);
+    expect(commands.filter((command) => command.type === 'samples').length).toBeGreaterThan(0);
+    pointer('pointerup', 10, 10);
+    const count = commands.length;
+    vi.advanceTimersByTime(120);
+    expect(commands.length).toBe(count);
+    pointer('pointerdown', 10, 10);
+    disposals.splice(0).forEach((dispose) => dispose());
+    const disposed = commands.length;
+    vi.advanceTimersByTime(120);
+    expect(commands.length).toBe(disposed);
   });
   it('hides the pen ring only during drawing and keeps mouse and hover feedback', () => {
     const { pointer, cursor } = setup();
@@ -151,33 +194,41 @@ describe('input to worker contract', () => {
     const { pointer, puck, commands } = setup();
     pointer('pointermove', 220, 180);
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    flush();
     expect(puck.center()).toEqual({ x: 220, y: 180 });
     pointer('pointerdown', 200, 200);
     expect(commands).toHaveLength(0);
     window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Space' }));
+    flush();
     expect(puck.center()).toBeUndefined();
   });
   it('selects a right-drag action without sending paint commands or reopening on contextmenu', () => {
     const { pointer, puck, commands, navigate, canvas } = setup();
     pointer('pointerdown', 400, 300, { button: 2 });
+    flush();
     pointer('pointermove', 300, 300);
+    flush();
     expect(puck.activeAction()).toBe('rotate');
     pointer('pointermove', 280, 310);
     pointer('pointerup', 270, 320, { button: 2 });
     canvas.dispatchEvent(new MouseEvent('contextmenu', { cancelable: true }));
     expect(navigate).toHaveBeenCalled();
     expect(commands).toHaveLength(0);
+    flush();
     expect(puck.center()).toBeUndefined();
   });
   it('does not interrupt a stroke with Space or leave navigation alive after blur', () => {
     const { pointer, puck } = setup();
     pointer('pointerdown', 20, 20);
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    flush();
     expect(puck.center()).toBeUndefined();
     pointer('pointerup', 20, 20);
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space' }));
+    flush();
     expect(puck.center()).toBeDefined();
     window.dispatchEvent(new Event('blur'));
+    flush();
     expect(puck.center()).toBeUndefined();
   });
   it('keeps CSS coordinates independent of canvas backing resolution', () => {
@@ -189,7 +240,7 @@ describe('input to worker contract', () => {
   });
 });
 
-function setup(selection?: Parameters<typeof attachInput>[1]['selection']) {
+function setup(selection?: Parameters<typeof attachInput>[1]['selection'], brush = defaultBrush) {
   vi.stubGlobal(
     'requestAnimationFrame',
     vi.fn(() => 1)
@@ -207,7 +258,7 @@ function setup(selection?: Parameters<typeof attachInput>[1]['selection']) {
     attachInput(canvas, {
       camera: defaultCamera,
       size: () => ({ width: 800, height: 600 }),
-      brush: defaultBrush,
+      brush,
       ready: () => true,
       navigate,
       send: (c) => commands.push(c),

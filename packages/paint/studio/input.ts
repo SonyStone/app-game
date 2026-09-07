@@ -1,5 +1,6 @@
 import type { createNavigationPuck } from '@app-game/navigation-puck/controller';
 import { attachNavigationPuck } from '@app-game/navigation-puck/input';
+import { makeTimer } from '@solid-primitives/timer';
 import type { Brush, Sample } from './brush';
 import { panCamera, screenToWorld, transformAt, type Camera, type Point, type ViewSize } from './camera';
 import type { PaintCommand } from './protocol';
@@ -47,6 +48,7 @@ export function attachInput(
     const rect = canvas.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
+  let stopBuildUp: (() => void) | undefined;
   const collect = (event: PointerEvent) => {
     if (gesture?.kind !== 'draw' || gesture.id !== event.pointerId) return;
     const coalesced = event.getCoalescedEvents?.() ?? [];
@@ -55,6 +57,7 @@ export function attachInput(
     for (const sample of coalesced.length ? coalesced : [event]) {
       gesture.latest = {
         ...screenToWorld({ x: sample.clientX - rect.left, y: sample.clientY - rect.top }, gesture.camera, gesture.size),
+        ...tabletAxes(sample),
         pressure: event.pointerType === 'pen' ? sample.pressure : 1,
         time: sample.timeStamp
       };
@@ -99,6 +102,8 @@ export function attachInput(
     touchStart = metrics ? { camera: options.camera(), ...metrics } : undefined;
   };
   const finish = () => {
+    stopBuildUp?.();
+    stopBuildUp = undefined;
     if (gesture?.kind === 'draw') {
       options.send({ type: 'end' });
     }
@@ -134,7 +139,12 @@ export function attachInput(
         return;
       }
       const pressure = event.pointerType === 'pen' ? event.pressure : 1;
-      const latest = { ...screenToWorld(point, camera, options.size()), pressure, time: event.timeStamp };
+      const latest = {
+        ...tabletAxes(event),
+        ...screenToWorld(point, camera, options.size()),
+        pressure,
+        time: event.timeStamp
+      };
       gesture = { kind: 'draw', id: event.pointerId, camera, size: { ...options.size() }, latest, raw: false };
       cursorAt(event);
       options.send({
@@ -143,6 +153,22 @@ export function attachInput(
         zoom: camera.zoom,
         samples: [latest]
       });
+      if (usesBuildUp(options.brush())) {
+        stopBuildUp?.();
+        const startedAt = performance.now(),
+          eventStart = latest.time;
+        stopBuildUp = makeTimer(
+          () => {
+            if (gesture?.kind !== 'draw') return;
+            const time = eventStart + performance.now() - startedAt;
+            if (time - gesture.latest.time < 30) return;
+            gesture.latest = { ...gesture.latest, time };
+            options.send({ type: 'samples', samples: [gesture.latest] });
+          },
+          30,
+          setInterval
+        );
+      }
     },
     { signal }
   );
@@ -211,7 +237,7 @@ export function attachInput(
         if (endpoint.x !== gesture.latest.x || endpoint.y !== gesture.latest.y)
           options.send({
             type: 'samples',
-            samples: [{ ...endpoint, pressure: gesture.latest.pressure, time: event.timeStamp }]
+            samples: [{ ...gesture.latest, ...endpoint, pressure: gesture.latest.pressure, time: event.timeStamp }]
           });
       }
       finish();
@@ -284,4 +310,19 @@ export function editable(target: EventTarget | null): boolean {
     target instanceof HTMLElement &&
     (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
   );
+}
+
+/** Raw/coalesced events retain stylus axes without routing high-frequency samples through signals. */
+function tabletAxes(event: PointerEvent) {
+  return event.pointerType === 'pen'
+    ? { tiltX: event.tiltX, tiltY: event.tiltY, rotation: event.twist, tangentialPressure: event.tangentialPressure }
+    : {};
+}
+
+/** Build-up is an opt-in preset behavior, independent of redraw/RAF frequency. */
+function usesBuildUp(brush: Brush) {
+  const settings = brush.engine?.settings;
+  if (brush.engine?.id !== 'abr' || !settings || typeof settings !== 'object' || !('values' in settings)) return false;
+  const values = settings.values;
+  return !!values && typeof values === 'object' && 'useBuildUp' in values && values.useBuildUp === true;
 }

@@ -1,25 +1,27 @@
 import { createRoot, onCleanup } from 'solid-js';
 import { attempt, createTaskQueue, unwrapResult } from './asyncResult';
 import { defaultCamera, type Point } from './camera';
-import { createDocument } from './document';
-import { createPaintRenderer } from './gpu/renderer';
+import type { CanvasTargetValue } from './composition/CanvasTarget';
+import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
+import { createResourceSession } from './composition/resourceSession';
 import { readPaintFile, writePaintFile } from './paintFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
-import { createSmoothStroke } from './smoothStroke';
 import { decodeDocument, snapshotDocument } from './storage';
-import { createTileStore } from './tileStore';
 
 /** Owns document, persistence and GPU resources in either execution mode. Commands stay ordered.
  * The caller supplies event delivery and closes its transport after a graceful dispose.
  */
-export function createPaintRuntime(post: (event: PaintEvent) => void, close: () => void) {
+export function createPaintRuntime(post: (event: PaintEvent) => void, close: () => void, modules: PaintModules) {
   return createRoot((dispose) => {
-    const document = createDocument({ paged: true });
-    let renderer: Awaited<ReturnType<typeof createPaintRenderer>> | undefined;
+    const document = modules.document();
+    const resources = modules.resources();
+    let renderer: PaintRenderer | undefined;
     let canvas: OffscreenCanvas | HTMLCanvasElement;
+    const targets = new Map<string, CanvasTargetValue>();
+    let primaryAttached = true;
     let storageName = 'paint-studio';
-    let tileStore: Awaited<ReturnType<typeof createTileStore>>;
+    let tileStore: PaintStorage;
     let importing = false;
     let clipboard: SelectionPixels | undefined;
     let editingSelection = false;
@@ -34,7 +36,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let liveTail = true;
     let size = { width: 1, height: 1 },
       dpr = 1;
-    let sampler: ReturnType<typeof createSmoothStroke> | undefined;
+    let strokeSession: BrushSession | undefined;
     let saved = true,
       lost = false,
       renderMs = 0;
@@ -63,7 +65,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         document: documentState,
         camera,
         saved,
-        saveState: sampler ? 'unsaved' : pendingSaves > 0 ? 'saving' : saved ? 'saved' : 'unsaved',
+        saveState: strokeSession ? 'unsaved' : pendingSaves > 0 ? 'saving' : saved ? 'saved' : 'unsaved',
         renderMs,
         gpuBytes: stats?.gpuBytes ?? 0,
         storage: tileStore?.stats(),
@@ -84,7 +86,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     const draw = async (exact = false) => {
       if (!renderer || lost) return;
       const start = performance.now();
-      await renderer.render(document.layers, camera, size, dpr, exact);
+      // Primary comes last so export and runtime diagnostics describe the editing view.
+      if (!exact)
+        for (const target of targets.values())
+          await renderer.render(document.layers, target.camera, target.size, target.dpr, false, target.canvas);
+      if (primaryAttached) await renderer.render(document.layers, camera, size, dpr, exact, canvas);
       renderMs = performance.now() - start;
       status();
       await renderer.submitted();
@@ -109,7 +115,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       }, 0);
     };
     const save = async () => {
-      if (sampler || importing) return;
+      if (strokeSession || importing) return;
       const version = saveVersion;
       document.persist(tileStore.capture);
       pendingSaves++;
@@ -117,10 +123,10 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       try {
         await tileStore.save(snapshotDocument(document.layers, document.active.id, camera));
         savedVersion = Math.max(savedVersion, version);
-        saved = savedVersion === saveVersion && !sampler;
+        saved = savedVersion === saveVersion && !strokeSession;
         clearTimeout(collectTimer);
         collectTimer = setTimeout(() => {
-          if (!sampler && !importing && !editingSelection)
+          if (!strokeSession && !importing && !editingSelection)
             background(() => tileStore.collect([...document.snapshots(), ...(clipboard?.tiles.values() ?? [])]));
         }, 5000);
       } finally {
@@ -141,28 +147,54 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       }, 300);
       scheduleDraw();
     };
-    const end = async () => {
-      if (!sampler || !renderer) return;
+    const updatePreview = () => {
       try {
-        // Readback can fail before commit. Discard that preview and release the sampler too,
+        strokeSession?.preview(liveTail);
+      } catch (error) {
+        strokeSession = undefined;
+        renderer?.reset();
+        changed();
+        throw error;
+      }
+    };
+    const addSamples = async (samples: Parameters<BrushSession['add']>[0]) => {
+      try {
+        await strokeSession?.add(samples);
+        strokeSession?.preview(liveTail);
+      } catch (error) {
+        // The resource session already cancelled the engine and released its pins.
+        strokeSession = undefined;
+        renderer?.reset();
+        changed();
+        throw error;
+      }
+    };
+    const end = async () => {
+      if (!strokeSession || !renderer) return;
+      try {
+        // Readback can fail before commit. Discard that preview and release the strokeSession too,
         // otherwise every later begin/save retries the same rejected stroke.
-        await renderer.paint(sampler.finish());
-        const changes = await renderer.finish();
+        const changes = await strokeSession.finish();
         document.commit(changes);
         document.persist(tileStore.capture);
         await renderer.prepareOverview(document.layers);
       } catch (error) {
+        const cancellation = await attempt(() => strokeSession?.cancel());
+        if (!cancellation.ok) failure(cancellation.error);
         renderer.reset();
         changed();
         throw error;
       } finally {
-        sampler = undefined;
+        strokeSession = undefined;
       }
       changed();
     };
     const cancel = () => {
-      sampler = undefined;
-      renderer?.cancel();
+      try {
+        strokeSession?.cancel();
+      } finally {
+        strokeSession = undefined;
+      }
       if (!saved) {
         clearTimeout(saveTimer);
         saveTimer = setTimeout(() => {
@@ -175,12 +207,14 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     const startRenderer = async () => {
       renderer?.destroy();
-      renderer = await createPaintRenderer(
+      renderer = await modules.renderer(
         canvas,
         (message) => {
           if (lost) return;
           lost = true;
-          sampler = undefined;
+          const abandoned = strokeSession;
+          strokeSession = undefined;
+          if (abandoned) background(async () => abandoned.cancel());
           failure(
             new Error(`${message} Your completed strokes are preserved. Restore the renderer to continue.`),
             true
@@ -205,7 +239,16 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       clearTimeout(collectTimer);
       clearTimeout(renderTimer);
       clearTimeout(saveTimer);
-      renderer?.destroy();
+      try {
+        strokeSession?.cancel();
+      } finally {
+        strokeSession = undefined;
+        try {
+          renderer?.destroy();
+        } finally {
+          resources.dispose();
+        }
+      }
     });
     const send = (command: PaintRuntimeCommand) => {
       if (!active) return;
@@ -248,7 +291,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             storageName = command.storageName ?? 'paint-studio';
             size = command.size;
             dpr = command.dpr;
-            tileStore = await createTileStore(storageName);
+            tileStore = await modules.storage(storageName);
             const previous = await tileStore.load();
             if (previous) {
               document.replace(previous.layers, previous.activeId);
@@ -260,6 +303,19 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             post({ type: 'ready' });
             break;
           }
+          case 'brush-resources': {
+            const result = await attempt(() => {
+              const evicted = command.action === 'put' ? resources.put(command.resource) : [];
+              if (command.action === 'delete') resources.delete(command.id);
+              return { evicted, stats: resources.stats() };
+            });
+            post({
+              type: 'brush-resources',
+              requestId: command.requestId,
+              result: result.ok ? result : { ok: false, error: result.error.message }
+            });
+            break;
+          }
           case 'debug':
             debug = command.enabled;
             debugAt = 0;
@@ -267,7 +323,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             break;
           case 'live-tail':
             liveTail = command.enabled;
-            renderer?.preview(liveTail && sampler ? sampler.preview() : []);
+            updatePreview();
             scheduleDraw();
             break;
           case 'view': {
@@ -282,21 +338,36 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'begin': {
             if (!renderer || lost || !document.active.visible) return;
             await end();
+            const engineId = command.brush.engine?.id ?? modules.selectEngine(command.brush);
+            const processorId = modules.selectProcessor(command.brush);
+            const engine = Object.hasOwn(modules.engines, engineId) ? modules.engines[engineId] : undefined;
+            const processor = Object.hasOwn(modules.processors, processorId)
+              ? modules.processors[processorId]
+              : undefined;
+            if (!engine) throw new Error(`Brush engine "${engineId}" is not registered.`);
+            if (!processor) throw new Error(`Stroke processor "${processorId}" is not registered.`);
+            const strokeRenderer = renderer;
+            strokeSession = createResourceSession(resources, (resources) =>
+              engine({
+                resources,
+                settings: command.brush.engine?.settings,
+                brush: command.brush,
+                layer: document.active,
+                renderer: strokeRenderer,
+                processor: processor(command.brush, command.zoom ?? camera.zoom)
+              })
+            );
             saved = false;
             saveVersion++;
-            renderer.begin(document.active, command.brush);
-            sampler = createSmoothStroke(command.brush, command.zoom ?? camera.zoom);
-            await renderer.paint(sampler.add(command.samples));
-            renderer.preview(liveTail ? sampler.preview() : []);
+            await addSamples(command.samples);
             // Present contact before a queued release can start readback/overview preparation.
             // Movement also presents directly, with pending packets batched behind GPU completion.
             await draw();
             break;
           }
           case 'samples':
-            if (sampler && renderer && !lost) {
-              await renderer.paint(sampler.add(command.samples));
-              renderer.preview(liveTail ? sampler.preview() : []);
+            if (strokeSession && renderer && !lost) {
+              await addSamples(command.samples);
               await draw();
             }
             break;
@@ -386,7 +457,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               editingSelection = false;
               clearTimeout(collectTimer);
               collectTimer = setTimeout(() => {
-                if (!sampler && !importing && !editingSelection)
+                if (!strokeSession && !importing && !editingSelection)
                   background(() => tileStore.collect([...document.snapshots(), ...(clipboard?.tiles.values() ?? [])]));
               }, 5000);
               post({ type: 'selection', points, hasClipboard: !!clipboard });
@@ -413,6 +484,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             });
             break;
           case 'png':
+            if (!primaryAttached) throw new Error('Attach a primary canvas before exporting the view.');
             await end();
             await draw(true);
             post({ type: 'download', blob: await canvasPng(canvas), name: 'drawing-view.png' });
@@ -470,11 +542,44 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     return {
       send,
+      /** Serializes reactive attachment with input/GPU work. Removing a target releases only its view resources. */
+      setTarget(id: string, value: CanvasTargetValue | undefined) {
+        const target = value ? { ...value, camera: { ...value.camera }, size: { ...value.size } } : undefined;
+        enqueue(async () => {
+          if (
+            target &&
+            ((id !== 'main' && primaryAttached && target.canvas === canvas) ||
+              [...targets].some(([otherId, other]) => otherId !== id && other.canvas === target.canvas))
+          )
+            throw new Error('A canvas cannot be attached to two targets.');
+          if (id === 'main') {
+            if (canvas && canvas !== target?.canvas) renderer?.releaseTarget(canvas);
+            primaryAttached = !!target;
+            if (target) {
+              const moved = JSON.stringify(camera) !== JSON.stringify(target.camera);
+              canvas = target.canvas;
+              camera = target.camera;
+              size = target.size;
+              dpr = target.dpr;
+              if (moved && tileStore) changed();
+            }
+          } else {
+            const previous = targets.get(id);
+            if (previous && previous.canvas !== target?.canvas) renderer?.releaseTarget(previous.canvas);
+            if (target) targets.set(id, target);
+            else targets.delete(id);
+          }
+          scheduleDraw();
+        });
+      },
       /** Releases local resources after in-flight commands finish, including failed initialization. */
       terminate() {
         enqueue(async () => {
-          dispose();
-          if (tileStore) unwrapResult(await tileStore.close());
+          try {
+            dispose();
+          } finally {
+            if (tileStore) unwrapResult(await tileStore.close());
+          }
         });
       }
     };

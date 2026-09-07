@@ -10,7 +10,7 @@ export function BrushPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
       <StrokeControls brush={brush} updateBrush={updateBrush} />
       <section>
         <div class="paint-section-heading">
-          <span>Soft round</span>
+          <span>{brush().engine?.id === 'textured' ? 'Textured tip' : 'Soft round'}</span>
         </div>
         <Range
           label="Size"
@@ -37,14 +37,26 @@ export function BrushPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
           suffix="%"
           change={(flow) => updateBrush({ flow: flow / 100 })}
         />
-        <Range
-          label="Hardness"
-          value={brush().hardness * 100}
-          min={0}
-          max={100}
-          suffix="%"
-          change={(hardness) => updateBrush({ hardness: hardness / 100 })}
-        />
+        <Show when={brush().engine?.id !== 'textured'}>
+          <Range
+            label="Hardness"
+            value={brush().hardness * 100}
+            min={0}
+            max={100}
+            suffix="%"
+            change={(hardness) => updateBrush({ hardness: hardness / 100 })}
+          />
+        </Show>
+        <Show when={brush().engine?.id === 'textured'}>
+          <Range
+            label="Tip spacing"
+            value={brush().spacing * 100}
+            min={1}
+            max={100}
+            suffix="%"
+            change={(spacing) => updateBrush({ spacing: spacing / 100 })}
+          />
+        </Show>
         <label class="paint-check">
           <input
             type="checkbox"

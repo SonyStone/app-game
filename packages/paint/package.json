@@ -24,13 +24,19 @@
     "@app-game/utils": "workspace:*",
     "@app-game/webgl": "workspace:*",
     "@app-game/webgl-examples": "workspace:*",
-    "@app-game/navigation-puck": "workspace:*"
+    "@app-game/navigation-puck": "workspace:*",
+    "@app-game/abr-parser": "workspace:*",
+    "@app-game/abr-viewer": "workspace:*",
+    "@app-game/abr-brush": "workspace:*",
+    "@solid-primitives/timer": "catalog:"
   },
   "devDependencies": {
-    "@testing-library/jest-dom": "catalog:"
+    "@testing-library/jest-dom": "catalog:",
+    "@unocss/vite": "catalog:"
   },
   "exports": {
-    "./routes": "./routes.tsx"
+    "./routes": "./routes.tsx",
+    "./studio/composition": "./studio/composition/index.ts"
   },
   "type": "module"
 }

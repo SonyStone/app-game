@@ -1,4 +1,6 @@
 import { defaultBrush } from './brush';
+import { verifyBrushResourceTransport } from './composition/resourceVerification';
+import { texturedBrush } from './composition/texturedBrushEngine';
 import { createMainThreadEndpoint, type PaintEndpoint } from './mainThreadEndpoint';
 import Worker from './paint.worker?worker';
 import { readPaintFile } from './paintFile';
@@ -50,6 +52,7 @@ export async function verifyMainThread(report: (message: string) => void) {
       endpoint.postMessage({ type: 'init', canvas, size, dpr: 1, storageName }, [canvas]);
     }
     await ready;
+    await verifyBrushResourceTransport((message) => command(message, 'brush-resources'), report);
   };
   const bytes = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
   const equal = async (a: Blob, b: Blob) => {
@@ -59,9 +62,25 @@ export async function verifyMainThread(report: (message: string) => void) {
   };
   try {
     await init(true);
+    const uploaded = await command(
+      {
+        type: 'brush-resources',
+        requestId: 'textured-tip',
+        action: 'put',
+        resource: {
+          id: 'qa-textured-tip',
+          width: 2,
+          height: 2,
+          format: 'r8unorm',
+          pixels: new Uint8Array([255, 255, 255, 255])
+        }
+      },
+      'brush-resources'
+    );
+    if (!uploaded.result.ok) throw new Error(uploaded.result.error);
     endpoint.postMessage({
       type: 'begin',
-      brush: defaultBrush(),
+      brush: { ...defaultBrush(), engine: texturedBrush.select({ tipId: 'qa-textured-tip', spacing: 0.04 }) },
       samples: [{ x: -40, y: -40, pressure: 0.4, time: 1 }]
     });
     endpoint.postMessage({ type: 'samples', samples: [{ x: 40, y: 40, pressure: 0.8, time: 2 }] });
@@ -83,7 +102,7 @@ export async function verifyMainThread(report: (message: string) => void) {
       throw new Error('DOM canvas PNG lost the paper background');
     if (pixels[center]! >= 200 || pixels[center + 3] !== 255)
       throw new Error('DOM canvas PNG contains no visible ink at the stroke center');
-    report('PASS: main-thread engine draws on HTMLCanvasElement and exports visible ink to PNG');
+    report('PASS: textured main-thread engine draws on HTMLCanvasElement and exports visible ink to PNG');
     await command({ type: 'checkpoint' }, 'checkpointed');
     await command({ type: 'dispose' }, 'disposed');
     endpoint = new Worker();

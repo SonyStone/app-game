@@ -1,102 +1,13 @@
-import { createStrokeSampler, type Brush, type Dab, type Sample } from './brush';
-import { createLeonardoStroke } from './leonardoStroke';
+import { createStrokeSampler, type Brush } from './brush';
+import { studioProcessors } from './strokeProcessors';
 
-/** Selects unfiltered input, Studio's midpoint quadratic smoothing, or Leonardo's filter and cubic curve.
- * Studio's two-CSS-pixel input threshold suppresses coordinate quantization at every zoom.
- * Smoothed modes defer the last segment; None processes real points immediately without a provisional tail.
- */
+/** Compatibility helper for round-brush previews/tests. Runtime composition selects these parts independently. */
 export function createSmoothStroke(brush: Brush, zoom = 1) {
-  if (brush.stroke.mode === 'none') return createUnsmoothedStroke(brush);
-  if (brush.stroke.mode !== 'studio') return createLeonardoStroke(brush, zoom);
+  const processor = studioProcessors[brush.stroke.mode](brush, zoom);
   const sampler = createStrokeSampler(brush);
-  const scale = Math.max(0.0001, zoom);
-  const threshold = 2 / scale;
-  const tolerance = Math.min(0.15 / scale, Math.max(0.05, brush.size * 0.025));
-  let control: Sample | undefined;
-  let start: Sample | undefined;
-  let endpoint: Sample | undefined;
-  let finished = false;
-  const append = (sample: Sample): Dab[] => {
-    if (!control || !start) {
-      start = control = sample;
-      return sampler.add([sample]);
-    }
-    const end = midpoint(control, sample);
-    const points: Sample[] = [];
-    flatten(start, control, end, tolerance, points);
-    start = end;
-    control = sample;
-    return sampler.add(points);
-  };
   return {
-    /** Preserves order and pressure regardless of pointer-event/frame batching. */
-    add(samples: readonly Sample[]): Dab[] {
-      if (finished) return [];
-      const result: Dab[] = [];
-      for (const sample of samples) {
-        if (![sample.x, sample.y, sample.pressure, sample.time].every(Number.isFinite)) continue;
-        endpoint = sample;
-        if (!control || Math.hypot(sample.x - control.x, sample.y - control.y) >= threshold)
-          for (const dab of append(sample)) result.push(dab);
-      }
-      return result;
-    },
-    /** Renders the withheld curve to the latest real point without committing its provisional shape. */
-    preview(): Dab[] {
-      if (finished || !endpoint || !start || !control) return [];
-      const points: Sample[] = [];
-      flatten(start, control, endpoint, tolerance, points);
-      return sampler.preview(points);
-    },
-    /** Flushes the curve tail to the last real position, without duplicating a stationary tap. */
-    finish(): Dab[] {
-      if (finished || !endpoint) return [];
-      const result = control !== endpoint ? append(endpoint) : [];
-      for (const dab of sampler.add([endpoint])) result.push(dab);
-      finished = true;
-      return result;
-    }
+    add: (samples: Parameters<typeof processor.add>[0]) => sampler.add(processor.add(samples)),
+    preview: () => sampler.preview(processor.preview()),
+    finish: () => sampler.add(processor.finish())
   };
-}
-
-/** Keeps the received polyline and raw pressure. Only brush stamp spacing interpolates between points. */
-function createUnsmoothedStroke(brush: Brush) {
-  const sampler = createStrokeSampler(brush);
-  let finished = false;
-  return {
-    add(samples: readonly Sample[]): Dab[] {
-      return finished ? [] : sampler.add(samples);
-    },
-    // All received segments are already committed; a display tail would double-paint them.
-    preview(): Dab[] {
-      return [];
-    },
-    finish(): Dab[] {
-      finished = true;
-      return [];
-    }
-  };
-}
-
-function midpoint(a: Sample, b: Sample): Sample {
-  return {
-    x: (a.x + b.x) / 2,
-    y: (a.y + b.y) / 2,
-    pressure: (a.pressure + b.pressure) / 2,
-    time: (a.time + b.time) / 2
-  };
-}
-
-/** Subdivision bounds geometric error in document space; the convex hull prevents overshoot. */
-function flatten(a: Sample, b: Sample, c: Sample, tolerance: number, output: Sample[], depth = 0) {
-  const chord = midpoint(a, c);
-  if (depth >= 16 || Math.hypot(b.x - chord.x, b.y - chord.y) <= tolerance * 2) {
-    output.push(c);
-    return;
-  }
-  const ab = midpoint(a, b),
-    bc = midpoint(b, c),
-    center = midpoint(ab, bc);
-  flatten(a, ab, center, tolerance, output, depth + 1);
-  flatten(center, bc, c, tolerance, output, depth + 1);
 }

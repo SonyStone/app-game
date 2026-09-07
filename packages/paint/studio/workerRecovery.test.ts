@@ -29,6 +29,7 @@ it.each(['paint', 'finish'] as const)(
       preview: vi.fn(),
       setSelection: vi.fn(),
       begin: vi.fn(),
+      cancel: vi.fn(),
       paint: vi.fn(async () => {
         if (failureAt === 'paint' && failure) throw failure;
       }),

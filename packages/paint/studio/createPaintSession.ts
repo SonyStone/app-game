@@ -1,5 +1,8 @@
+import type { Brush as AbrBrush } from '@app-game/abr-parser/reader';
 import { createSignal, createTrackedEffect, untrack } from 'solid-js';
+import { attempt } from './asyncResult';
 import { defaultBrush, type Brush } from './brush';
+import { createBrushLibrary } from './brushLibrary/createBrushLibrary';
 import { defaultCamera, transformAt, type Camera, type Point } from './camera';
 import { createSelection } from './createSelection';
 import { createDocument, type LayerAction } from './document';
@@ -12,7 +15,7 @@ import type { PaintCommand, PaintEvent } from './protocol';
 /** Scopes the selected engine transport, input and UI state to one editor mount. */
 export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; stage: () => HTMLDivElement }) {
   const [brush, setBrush] = createSignal(defaultBrush(), { ownedWrite: true });
-  const [tool, setTool] = createSignal<Brush['tool'] | 'lasso'>('brush', { ownedWrite: true });
+  const [tool, setTool] = createSignal<Brush['tool'] | 'abr-brush' | 'lasso'>('brush', { ownedWrite: true });
   const [camera, setCamera] = createSignal(defaultCamera(), { ownedWrite: true });
   const [state, setState] = createSignal(createDocument().state(), { ownedWrite: true });
   const [debug, setDebug] = createSignal(false, { ownedWrite: true });
@@ -45,6 +48,19 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   const [viewSize, setViewSize] = createSignal(size, { ownedWrite: true });
   let currentCamera = defaultCamera();
   let animateSelection = true;
+  let drawingActive = false;
+  let roundProfile = defaultBrush(),
+    abrProfile = defaultBrush();
+  const brushLibrary = createBrushLibrary({
+    select: (engine) => {
+      if (untrack(tool) === 'brush') roundProfile = untrack(brush);
+      if (untrack(tool) === 'abr-brush') abrProfile = untrack(brush);
+      abrProfile = { ...abrProfile, engine };
+      setTool('abr-brush');
+      setBrush(abrProfile);
+    },
+    canChange: () => untrack(ready) && !untrack(switchingRenderer) && !selection.isBusy() && !drawingActive
+  });
   const send = (command: PaintCommand) => {
     if (untrack(switchingRenderer) && command.type !== 'dispose') return;
     if (
@@ -53,6 +69,8 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     )
       return;
     if (['begin', 'undo', 'redo', 'layer', 'import', 'recover'].includes(command.type)) selection.clear();
+    if (command.type === 'begin') drawingActive = true;
+    if (command.type === 'end' || command.type === 'cancel') drawingActive = false;
     worker?.postMessage(command);
   };
   const selection = createSelection({ send, document: () => untrack(state), ready: () => untrack(ready) });
@@ -65,8 +83,13 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   const chooseTool = (next: ReturnType<typeof tool>) => {
     if (selection.isBusy()) return;
     selection.clear();
+    const previous = untrack(tool);
+    if (previous === 'abr-brush') abrProfile = untrack(brush);
+    if (previous === 'brush') roundProfile = untrack(brush);
     setTool(next);
-    if (next !== 'lasso') setBrush((value) => ({ ...value, tool: next }));
+    if (next === 'abr-brush') setBrush({ ...abrProfile, tool: 'brush' });
+    else if (next === 'brush') setBrush({ ...roundProfile, tool: 'brush' });
+    else if (next === 'eraser') setBrush((value) => ({ ...value, tool: 'eraser', engine: undefined }));
   };
   const updateBrush = (patch: Partial<Brush>) => {
     if (patch.tool) chooseTool(patch.tool);
@@ -102,6 +125,8 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     }
     const endpoint: PaintEndpoint = useWorker ? new Worker() : createMainThreadEndpoint();
     worker = endpoint;
+    brushLibrary.connect(endpoint);
+    drawingActive = false;
     setError(undefined);
     const measure = () => {
       size = { width: stage.clientWidth, height: stage.clientHeight };
@@ -120,6 +145,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     endpoint.onmessage = (event: MessageEvent<PaintEvent>) => {
       if (worker !== endpoint) return;
       const value = event.data;
+      brushLibrary.receive(value);
       if (value.type === 'checkpointed' && nextWorkerEnabled !== undefined && !retiring) {
         retiring = true;
         endpoint.postMessage({ type: 'dispose' });
@@ -141,17 +167,31 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       }
       if (value.type === 'selection') selection.receive(value);
       if (value.type === 'ready') {
-        setReady(true);
-        setSwitchingRenderer(false);
-        endpoint.postMessage({ type: 'live-tail', enabled: untrack(liveTail) });
-        endpoint.postMessage({ type: 'debug', enabled: untrack(debug) });
-        syncSelection();
-        const url = new URL(location.href);
-        if (useWorker) url.searchParams.delete('paintThread');
-        else url.searchParams.set('paintThread', 'main');
-        history.replaceState(history.state, '', url.href);
-        measure();
-        navigate(currentCamera);
+        const finishReady = () => {
+          setReady(true);
+          setSwitchingRenderer(false);
+          endpoint.postMessage({ type: 'live-tail', enabled: untrack(liveTail) });
+          endpoint.postMessage({ type: 'debug', enabled: untrack(debug) });
+          syncSelection();
+          const url = new URL(location.href);
+          if (useWorker) url.searchParams.delete('paintThread');
+          else url.searchParams.set('paintThread', 'main');
+          history.replaceState(history.state, '', url.href);
+          measure();
+          navigate(currentCamera);
+        };
+        if (!brushLibrary.hasSelection()) finishReady();
+        else {
+          setReady(false);
+          void attempt(() => brushLibrary.restore()).then((result) => {
+            if (worker !== endpoint) return;
+            if (result.ok) finishReady();
+            else {
+              setSwitchingRenderer(false);
+              setError({ message: result.error.message, recoverable: true });
+            }
+          });
+        }
         return;
       }
       if (value.type === 'restored') {
@@ -178,6 +218,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         }
       }
       if (value.type === 'error') {
+        drawingActive = false;
         nextWorkerEnabled = undefined;
         setSwitchingRenderer(false);
         setError(value);
@@ -215,7 +256,12 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       camera: () => currentCamera,
       size: () => size,
       brush: () => untrack(brush),
-      ready: () => untrack(ready) && !untrack(switchingRenderer) && !selection.isBusy(),
+      ready: () =>
+        untrack(ready) &&
+        !untrack(switchingRenderer) &&
+        !selection.isBusy() &&
+        !brushLibrary.isBusy() &&
+        (untrack(tool) !== 'abr-brush' || !!untrack(brush).engine),
       navigate,
       send: (command) => {
         if (worker === endpoint) send(command);
@@ -254,7 +300,15 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         selection.clear();
         send({ type: 'cancel' });
       } else if (event.key === '[' || event.key === ']')
-        updateBrush({ size: Math.max(1, Math.min(512, untrack(brush).size * (event.key === '[' ? 0.8 : 1.25))) });
+        updateBrush({
+          size: Math.max(
+            1,
+            Math.min(
+              untrack(brush).engine?.id === 'abr' ? 5000 : 512,
+              untrack(brush).size * (event.key === '[' ? 0.8 : 1.25)
+            )
+          )
+        });
     };
     window.addEventListener('keydown', keys);
     return () => {
@@ -263,7 +317,10 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       detach();
       resize.disconnect();
       window.removeEventListener('keydown', keys);
-      if (worker === endpoint) worker = undefined;
+      if (worker === endpoint) {
+        worker = undefined;
+        brushLibrary.connect(undefined);
+      }
       if (engineDisposed) return;
       const timeout = setTimeout(() => endpoint.terminate(), 30_000);
       endpoint.onmessage = ({ data }) => {
@@ -277,13 +334,33 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   };
 
   return {
+    brushLibrary,
+    /** Applies a detached preset and its resources only after upload succeeds; the Viewer owns the editable preset. */
+    async useAbrBrush(brush: AbrBrush) {
+      const { viewerBrush } = await import('./brushLibrary/viewerBrush');
+      const selected = viewerBrush(brush);
+      const applied = await brushLibrary.usePreset(selected);
+      if (!applied) throw new Error(untrack(brushLibrary.error) ?? 'Wait for Paint to finish the current operation.');
+      updateBrush({
+        size: selected.size,
+        spacing: selected.spacing,
+        ...(selected.flow === undefined ? {} : { flow: selected.flow }),
+        ...(selected.opacity === undefined ? {} : { opacity: selected.opacity })
+      });
+    },
     attachCanvas,
     canvasVersion,
     workerEnabled,
     switchingRenderer,
     /** Checkpoints and retires the old engine before Solid replaces only the canvas. UI settings stay alive. */
     setWorkerEnabled(enabled: boolean) {
-      if (enabled === untrack(workerEnabled) || untrack(switchingRenderer) || selection.isBusy() || !untrack(ready))
+      if (
+        enabled === untrack(workerEnabled) ||
+        untrack(switchingRenderer) ||
+        selection.isBusy() ||
+        brushLibrary.isBusy() ||
+        !untrack(ready)
+      )
         return;
       nextWorkerEnabled = enabled;
       setSwitchingRenderer(true);

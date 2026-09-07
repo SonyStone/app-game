@@ -1,3 +1,4 @@
+import 'uno.css';
 import { render } from '@solidjs/web';
 import PaintStudio from './PaintStudio';
 

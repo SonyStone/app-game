@@ -1,6 +1,7 @@
 import { NavigationPuck } from '@app-game/navigation-puck';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, For, onSettled, Show } from 'solid-js';
+import { AbrViewerDialog } from './brushLibrary/AbrViewerDialog';
 import { BrushPanel, ColorPanel } from './BrushPanel';
 import { defaultCamera, transformAt } from './camera';
 import { CanvasDebug } from './CanvasDebug';
@@ -36,6 +37,8 @@ export default function PaintStudio() {
   const [panel, setPanel] = createSignal<'brush' | 'color' | 'layers' | 'file' | undefined>(undefined, {
     ownedWrite: true
   });
+  const [abrOpen, setAbrOpen] = createSignal(false, { ownedWrite: true });
+  const [abrMounted, setAbrMounted] = createSignal(false, { ownedWrite: true });
   let launcher: HTMLElement | undefined;
   const [developer, setDeveloper] = createSignal(false, { ownedWrite: true });
   const closePanel = () => {
@@ -46,6 +49,17 @@ export default function PaintStudio() {
     launcher = target;
     setPuck(undefined);
     setPanel(panel() === next ? undefined : next);
+  };
+  const openBrushSettings = (target: HTMLElement) => {
+    if (session.tool() !== 'abr-brush') {
+      toggle('brush', target);
+      return;
+    }
+    launcher = target;
+    setPanel(undefined);
+    setPuck(undefined);
+    setAbrMounted(true);
+    setAbrOpen(true);
   };
   createEventListener(
     () => window,
@@ -84,9 +98,13 @@ export default function PaintStudio() {
         <Show when={session.debug()}>
           <CanvasDebug session={session} />
         </Show>
-        <Show when={ready() && state().tileCount === 0}>
+        <Show when={ready() && (state().tileCount === 0 || (session.tool() === 'abr-brush' && !brush().engine))}>
           <div class="paint-welcome">
-            <p>Pen to draw. Touch to move.</p>
+            <p>
+              {session.tool() === 'abr-brush' && !brush().engine
+                ? 'Choose an ABR brush in Brush settings.'
+                : 'Pen to draw. Touch to move.'}
+            </p>
           </div>
         </Show>
         <Show when={cursor() && ready() && session.tool() !== 'lasso'}>
@@ -104,6 +122,16 @@ export default function PaintStudio() {
           <NavigationPuck navigation={session.navigation} focusTarget={() => canvas} />
         </Show>
       </main>
+      <Show when={abrMounted()}>
+        <AbrViewerDialog
+          open={abrOpen()}
+          session={session}
+          close={() => {
+            setAbrOpen(false);
+            launcher?.focus();
+          }}
+        />
+      </Show>
       <div class="paint-ui">
         <span
           class="paint-save-state"
@@ -163,6 +191,14 @@ export default function PaintStudio() {
             <SketchIcon name="draw" />
           </button>
           <button
+            aria-label="ABR Brush"
+            title="ABR Brush · experimental"
+            aria-pressed={session.tool() === 'abr-brush' ? 'true' : 'false'}
+            onClick={() => session.chooseTool('abr-brush')}
+          >
+            <SketchIcon name="brush" />
+          </button>
+          <button
             aria-label="Eraser"
             title="Eraser · E"
             aria-pressed={session.tool() === 'eraser' ? 'true' : 'false'}
@@ -204,11 +240,14 @@ export default function PaintStudio() {
           <button
             aria-label="Brush settings"
             title="Brush settings"
-            aria-expanded={panel() === 'brush' ? 'true' : 'false'}
+            aria-expanded={panel() === 'brush' || abrOpen() ? 'true' : 'false'}
             aria-controls="paint-panel"
-            onClick={(e) => toggle('brush', e.currentTarget)}
+            onClick={(e) => openBrushSettings(e.currentTarget)}
           >
-            <SketchIcon name={brush().tool === 'eraser' ? 'erase' : 'draw'} size={22} />
+            <SketchIcon
+              name={session.tool() === 'abr-brush' ? 'brush' : brush().tool === 'eraser' ? 'erase' : 'draw'}
+              size={22}
+            />
             <small>{Math.round(brush().size)}</small>
           </button>
           <button

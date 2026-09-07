@@ -1,5 +1,5 @@
 import { attempt } from './asyncResult';
-import type { createPaintRuntime } from './paintRuntime';
+import type { createStudioRuntime } from './composition/StudioApplication';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 
 /** Transport surface shared with Worker; a DOM canvas is accepted only by the local endpoint. */
@@ -15,7 +15,7 @@ export type PaintEndpoint = {
  * Snapshot messages like a worker boundary so mutable UI and document state never alias.
  */
 export function createMainThreadEndpoint(): PaintEndpoint {
-  let runtime: ReturnType<typeof createPaintRuntime> | undefined;
+  let runtime: ReturnType<typeof createStudioRuntime> | undefined;
   let closed = false;
   const pending: PaintRuntimeCommand[] = [];
   const endpoint: PaintEndpoint = {
@@ -37,9 +37,9 @@ export function createMainThreadEndpoint(): PaintEndpoint {
     }
   };
   void attempt(async () => {
-    const { createPaintRuntime } = await import('./paintRuntime');
+    const { createStudioRuntime } = await import('./composition/StudioApplication');
     if (closed) return;
-    runtime = createPaintRuntime(
+    runtime = createStudioRuntime(
       (event) => {
         if (!closed) endpoint.onmessage?.(new MessageEvent('message', { data: structuredClone(event) }));
       },

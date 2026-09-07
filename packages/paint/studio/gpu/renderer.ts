@@ -2,19 +2,24 @@ import { d, tgpu, type TgpuRoot } from 'typegpu';
 import { attempt, unwrapResult, type Result } from '../asyncResult';
 import { TILE_SIZE, dabTiles, type Brush, type Dab } from '../brush';
 import { screenToWorld, type Camera, type Point, type ViewSize } from '../camera';
+import type { BrushResource } from '../composition/brushResources';
 import type { Layer, TileChange } from '../document';
 import { packTile, unpackTile, type TileData } from '../tilePixels';
 import type { OverviewStorage } from '../virtualPages';
-import { dirtyRegion } from './dirtyRegion';
+import { createAbrStamps, type AbrRasterSettings, type AbrTile } from './abrStamps';
 import { createDisplayCache } from './displayCache';
 import { createLassoOverlay } from './lassoOverlay';
 import { createReadbackQueue } from './readbackQueue';
 import * as shader from './shaders';
 import { stampBounds } from './stampBounds';
+import { createTexturedStamps } from './texturedStamps';
+import { createViewDamage } from './viewDamage';
 import { createViewFallback } from './viewFallback';
 import { createVirtualTexture } from './virtualTexture';
 
-/** Creates a WebGPU renderer for the selected canvas. Committed CPU tiles remain valid after cache eviction or device loss. */
+/** Creates one WebGPU device/cache owner with a default canvas. Additional targets share its raster resources.
+ * Committed CPU tiles remain valid after cache eviction or device loss. Render/paint/detach calls must be serialized.
+ */
 export async function createPaintRenderer(
   canvas: OffscreenCanvas | HTMLCanvasElement,
   onLost: (message: string) => void,
@@ -35,7 +40,7 @@ export async function createPaintRenderer(
     throw new Error('A WebGPU device could not be opened. Check hardware acceleration in your browser.');
   const device = options.device ?? (await adapter!.requestDevice());
   const root = tgpu.initFromDevice({ device });
-  const context = canvas.getContext('webgpu');
+  let context = canvas.getContext('webgpu');
   if (!context) {
     root.destroy();
     throw new Error('The canvas could not start WebGPU.');
@@ -52,6 +57,10 @@ export async function createPaintRenderer(
   device.addEventListener('uncapturederror', uncapturedError);
   const pipelines = createPipelines(root, format);
   const lasso = createLassoOverlay(root, format);
+  let texturedStamps: ReturnType<typeof createTexturedStamps> | undefined;
+  let texturedPipeline: ReturnType<ReturnType<typeof createTexturedStamps>['prepare']> | undefined;
+  let abrStamps: ReturnType<typeof createAbrStamps> | undefined;
+  let abrActive = false;
   let animateSelection = true;
   // Match virtual pages so touching a magnified tile does not change existing artwork's filtering.
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
@@ -66,15 +75,16 @@ export async function createPaintRenderer(
     {
       before: TileData | undefined;
       mask?: Uint8Array;
+      abrPaint?: Uint8Array;
+      abrDual?: Uint8Array;
       output?: Uint8Array;
       pending?: Promise<Result<void>>;
     }
   >();
   const evictionSize = Math.min(16, Math.max(1, Math.floor((options.cacheTiles ?? MAX_RESIDENT_TILES) / 8)));
-  const readbacks = createReadbackQueue(device, evictionSize * 2);
+  const readbacks = createReadbackQueue(device, evictionSize * 4);
   let stroke: { layer: Layer; brush: Brush } | undefined;
   let view: ReturnType<typeof createView> | undefined;
-  let viewSignature = '';
   let presentedCamera = '';
   let holdPresentation = '';
   const virtual = options.virtualTexture
@@ -82,28 +92,102 @@ export async function createPaintRenderer(
         root,
         async (pixels) => (pixels instanceof Uint8Array ? pixels : options.readTile!(pixels)),
         () => {
-          viewSignature = '';
+          invalidateViews();
           options.onRefine?.();
         },
         (error) => options.onError?.(error),
         options.overviewStorage
       )
     : undefined;
-  const viewFallback = virtual ? createViewFallback(root) : undefined;
+  let viewFallback = virtual ? createViewFallback(root) : undefined;
   let completeView: { camera: Camera; size: ViewSize } | undefined;
-  const dirtyTiles = new Set<string>();
+  const primaryCanvas = canvas;
+  type TargetState = {
+    context: GPUCanvasContext;
+    view: typeof view;
+    fallback: typeof viewFallback;
+    complete: typeof completeView;
+    presented: string;
+    hold: string;
+    damage: ReturnType<typeof createViewDamage>;
+    pages: ReturnType<ReturnType<typeof createVirtualTexture>['debug']>;
+  };
+  const targets = new Map<typeof canvas, TargetState>();
+  targets.set(canvas, {
+    context,
+    view,
+    fallback: viewFallback,
+    complete: undefined,
+    presented: '',
+    hold: '',
+    damage: createViewDamage(),
+    pages: []
+  });
+  // Drawing is serialized by the document runtime. Targets share tile caches, pipelines and device;
+  // only their composed viewport/fallback survives between presentations.
+  const selectTarget = (next: typeof canvas) => {
+    if (next === canvas && targets.has(next)) return;
+    let target = targets.get(next);
+    if (!target) {
+      const nextContext = next.getContext('webgpu');
+      if (!nextContext) throw new Error('The canvas target could not start WebGPU.');
+      nextContext.configure({ device, format, alphaMode: 'opaque' });
+      target = {
+        context: nextContext,
+        view: undefined,
+        fallback: virtual ? createViewFallback(root) : undefined,
+        complete: undefined,
+        presented: '',
+        hold: '',
+        damage: createViewDamage(),
+        pages: []
+      };
+      targets.set(next, target);
+    }
+    const current = targets.get(canvas);
+    if (current)
+      Object.assign(current, {
+        view,
+        fallback: viewFallback,
+        complete: completeView,
+        presented: presentedCamera,
+        hold: holdPresentation
+      });
+    canvas = next;
+    context = target.context;
+    view = target.view;
+    viewFallback = target.fallback;
+    completeView = target.complete;
+    presentedCamera = target.presented;
+    holdPresentation = target.hold;
+  };
+  const invalidateOtherTargets = () => {
+    for (const [targetCanvas, target] of targets)
+      if (targetCanvas !== canvas) {
+        target.complete = undefined;
+        target.hold = '';
+        target.fallback?.clear();
+      }
+  };
+  const markTile = (key: string) => {
+    for (const target of targets.values()) target.damage.mark(key);
+  };
+  function invalidateViews() {
+    for (const target of targets.values()) target.damage.invalidate();
+  }
   const setTail = (dabs: readonly Dab[]) => {
-    for (const key of tailTiles.keys()) dirtyTiles.add(key);
+    for (const key of tailTiles.keys()) markTile(key);
     tailTiles.clear();
     for (const dab of dabs)
       for (const key of dabTiles(dab)) {
         const list = tailTiles.get(key) ?? [];
         list.push(dab);
         tailTiles.set(key, list);
-        dirtyTiles.add(key);
+        markTile(key);
       }
   };
   let frame = 0;
+  let viewportUpdate = { full: false, pixels: 0 };
   let previewTileDraws = 0,
     sourceTileDraws = 0;
   const brushBuffer = root.createBuffer(shader.brushLayout.entries.settings.uniform).$usage('uniform');
@@ -134,9 +218,14 @@ export async function createPaintRenderer(
       const victims = [...cache].sort((a, b) => a[1].used - b[1].used).slice(0, count);
       const active = victims.filter(([id, tile]) => strokeTiles.has(id) && tile.mask);
       if (active.length) {
+        const channels = abrActive ? 4 : 2;
         const snapshots = active.map(([id]) => ({ id, snapshot: strokeTiles.get(id)! }));
         const job = await readbacks.capture(
-          active.flatMap(([, tile]) => [root.unwrap(tile.mask!), root.unwrap(tile.texture)])
+          active.flatMap(([, tile]) => [
+            root.unwrap(tile.mask!),
+            root.unwrap(tile.texture),
+            ...(abrActive ? [root.unwrap(tile.abr!.paint), root.unwrap(tile.abr!.dualMask)] : [])
+          ])
         );
         const pending = attempt(async () => {
           const result = await job.ready;
@@ -149,8 +238,12 @@ export async function createPaintRenderer(
           const pixels = result.value;
           snapshots.forEach(({ id, snapshot }, index) => {
             if (strokeTiles.get(id) !== snapshot || snapshot.pending !== pending) return;
-            snapshot.mask = pixels[index * 2]!;
-            snapshot.output = pixels[index * 2 + 1]!;
+            snapshot.mask = pixels[index * channels]!;
+            snapshot.output = pixels[index * channels + 1]!;
+            if (channels === 4) {
+              snapshot.abrPaint = pixels[index * channels + 2]!;
+              snapshot.abrDual = pixels[index * channels + 3]!;
+            }
             snapshot.pending = undefined;
           });
         });
@@ -176,6 +269,11 @@ export async function createPaintRenderer(
         prepareStroke(root, tile);
         replacePixels(device, root.unwrap(tile.base!), await readTile(active.before), batch);
         replacePixels(device, root.unwrap(tile.mask!), active.mask, batch);
+        if (abrActive) {
+          tile.abr ??= abrStamps!.createTile(tile.base!, tile.mask!, STAMP_CAPACITY);
+          replacePixels(device, root.unwrap(tile.abr.paint), active.abrPaint, batch);
+          replacePixels(device, root.unwrap(tile.abr.dualMask), active.abrDual, batch);
+        }
       }
       cache.set(id, tile);
       return tile;
@@ -215,22 +313,44 @@ export async function createPaintRenderer(
           TILE_SIZE
         ]);
     else clearAttachment(commands.encoder(), temporary.maskRender!);
+    if (abrActive) {
+      temporary.abr ??= abrStamps!.createTile(temporary.base!, temporary.mask!, STAMP_CAPACITY);
+      for (const field of ['paint', 'dualMask'] as const) {
+        if (active)
+          commands
+            .encoder()
+            .copyTextureToTexture(
+              { texture: root.unwrap(original.abr![field]) },
+              { texture: root.unwrap(temporary.abr[field]) },
+              [TILE_SIZE, TILE_SIZE]
+            );
+        else clearAttachment(commands.encoder(), root.unwrap(temporary.abr[field]).createView());
+      }
+    }
     for (let offset = 0; offset < tail.length; offset += STAMP_CAPACITY) {
       if (offset) commands.flush();
       const stamps = tail.slice(offset, offset + STAMP_CAPACITY);
+      if (abrActive) {
+        abrStamps!.draw(temporary.abr!, commands.encoder(), stamps, x, y);
+        continue;
+      }
       const data = new Float32Array(stamps.length * 4);
       stamps.forEach((dab, i) => data.set([dab.x - x * TILE_SIZE, dab.y - y * TILE_SIZE, dab.radius, dab.flow], i * 4));
       device.queue.writeBuffer(root.unwrap(temporary.stamps), 0, data);
       const pass = commands
         .encoder()
         .beginRenderPass({ colorAttachments: [{ view: temporary.maskRender!, loadOp: 'load', storeOp: 'store' }] });
-      pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, temporary.stamps).draw(6, stamps.length);
+      if (texturedPipeline)
+        texturedPipeline.with(pass).with(shader.stampLayout, temporary.stamps).draw(6, stamps.length);
+      else
+        pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, temporary.stamps).draw(6, stamps.length);
       pass.end();
     }
     const pass = commands
       .encoder()
       .beginRenderPass({ colorAttachments: [{ view: temporary.render, loadOp: 'clear', storeOp: 'store' }] });
-    pipelines.stroke.with(pass).with(brushGroup).with(temporary.strokeGroup!).draw(3);
+    if (abrActive) abrStamps!.composite(temporary.abr!, pass);
+    else pipelines.stroke.with(pass).with(brushGroup).with(temporary.strokeGroup!).draw(3);
     pass.end();
     commands.flush();
     temporary.mipmapsDirty = true;
@@ -238,6 +358,25 @@ export async function createPaintRenderer(
   };
 
   return {
+    /** Detaches a target after any in-flight render. The caller owns its canvas element. */
+    releaseTarget(targetCanvas: OffscreenCanvas | HTMLCanvasElement) {
+      const target = targets.get(targetCanvas);
+      if (!target) return;
+      if (targetCanvas === canvas) {
+        view?.destroy();
+        viewFallback?.destroy();
+        view = undefined;
+        viewFallback = undefined;
+        completeView = undefined;
+        holdPresentation = '';
+        presentedCamera = '';
+      } else {
+        target.view?.destroy();
+        target.fallback?.destroy();
+      }
+      target.context.unconfigure();
+      targets.delete(targetCanvas);
+    },
     /** Replaces display-only stamps; these never enter readback, history or saved tiles. */
     preview(dabs: readonly Dab[]) {
       setTail(stroke ? dabs : []);
@@ -257,22 +396,35 @@ export async function createPaintRenderer(
         residentTiles: cache.size + spareTiles.length,
         readback: readbacks.stats(),
         previewTileDraws,
+        viewportUpdate,
         sourceTileDraws,
         virtual: virtual?.stats(),
         displayTiles: displayCache.stats().tiles,
+        brushTextures: abrActive ? abrStamps?.stats() : texturedStamps?.stats(),
         gpuBytes:
+          (texturedStamps?.stats().bytes ?? 0) +
+          (abrStamps?.stats().bytes ?? 0) +
           lasso.bytes() +
           readbacks.stats().bytes +
           (virtual?.stats().gpuBytes ?? 0) +
           (viewFallback?.bytes() ?? 0) +
+          (view ? view.width * view.height * 16 : 0) +
+          [...targets].reduce(
+            (sum, [targetCanvas, target]) =>
+              sum +
+              (targetCanvas === canvas
+                ? 0
+                : (target.fallback?.bytes() ?? 0) + (target.view ? target.view.width * target.view.height * 16 : 0)),
+            0
+          ) +
           displayCache.stats().bytes +
           [...cache.values(), ...spareTiles, ...tailPool].reduce(
-            (n, tile) => n + TILE_SIZE * TILE_SIZE * 4 * (4 / 3 + (tile.base ? 2 : 0)),
+            (n, tile) => n + TILE_SIZE * TILE_SIZE * 4 * (4 / 3 + (tile.base ? 2 : 0) + (tile.abr ? 2 : 0)),
             0
           )
       };
     },
-    debugPages: () => virtual?.debug() ?? [],
+    debugPages: () => targets.get(canvas)?.pages ?? [],
     /** Occupied visible-layer tiles, including the active stroke, for the optional wireframe overlay. */
     debugTiles(layers: Layer[]) {
       const keys = new Set<string>();
@@ -283,11 +435,21 @@ export async function createPaintRenderer(
       }
       return [...keys];
     },
-    /** Captures brush settings and the target layer until commit/cancel. */
-    begin(layer: Layer, brush: Brush) {
+    /** Captures brush settings and the target layer until commit/cancel. Optional native coverage replaces hardness.
+     * Textured dabs must carry the tip's circumscribed radius; use texturedBrush to map brush size correctly.
+     */
+    begin(layer: Layer, brush: Brush, tip?: { resource: BrushResource; angle: number }, abr?: AbrRasterSettings) {
       if (stroke) throw new Error('Finish the current stroke before beginning another.');
+      if (abr) (abrStamps ??= createAbrStamps(root)).prepare(abr);
+      abrActive = !!abr;
+      texturedPipeline = tip
+        ? (texturedStamps ??= createTexturedStamps(root)).prepare(tip.resource, tip.angle)
+        : undefined;
       setTail([]);
-      if (virtual && !completeView) viewSignature = '';
+      if (virtual)
+        for (const [targetCanvas, target] of targets)
+          if (!(targetCanvas === canvas ? completeView : target.complete)) target.damage.invalidate();
+      invalidateOtherTargets();
       completeView = undefined;
       viewFallback?.clear();
       stroke = { layer, brush: { ...brush } };
@@ -331,12 +493,21 @@ export async function createPaintRenderer(
                 TILE_SIZE
               ]);
             clearAttachment(commands.encoder(), tile.maskRender!);
+            if (abrActive) {
+              tile.abr ??= abrStamps!.createTile(tile.base!, tile.mask!, STAMP_CAPACITY);
+              clearAttachment(commands.encoder(), tile.abr.paintView);
+              clearAttachment(commands.encoder(), tile.abr.dualView);
+            }
           }
           const [tx, ty] = coordinates(key);
           for (let offset = 0; offset < dabs.length; offset += STAMP_CAPACITY) {
             // The same instance buffer must not be overwritten before its previous draw is submitted.
             if (offset) commands.flush();
             const stamps = dabs.slice(offset, offset + STAMP_CAPACITY);
+            if (abrActive) {
+              abrStamps!.draw(tile.abr!, commands.encoder(), stamps, tx, ty);
+              continue;
+            }
             const data = new Float32Array(stamps.length * 4);
             stamps.forEach((dab, index) =>
               data.set([dab.x - tx * TILE_SIZE, dab.y - ty * TILE_SIZE, dab.radius, dab.flow], index * 4)
@@ -345,7 +516,10 @@ export async function createPaintRenderer(
             const pass = commands.encoder().beginRenderPass({
               colorAttachments: [{ view: tile.maskRender!, loadOp: 'load', storeOp: 'store' }]
             });
-            pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, tile.stamps).draw(6, stamps.length);
+            if (texturedPipeline)
+              texturedPipeline.with(pass).with(shader.stampLayout, tile.stamps).draw(6, stamps.length);
+            else
+              pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, tile.stamps).draw(6, stamps.length);
             pass.end();
           }
           // Output depends on the final accumulated mask, so composite once per touched region.
@@ -356,12 +530,13 @@ export async function createPaintRenderer(
               colorAttachments: [{ view: tile.render, loadOp: 'load', storeOp: 'store' }]
             });
             pass.setScissorRect(bounds.x, bounds.y, bounds.width, bounds.height);
-            pipelines.stroke.with(pass).with(brushGroup).with(tile.strokeGroup!).draw(3);
+            if (abrActive) abrStamps!.composite(tile.abr!, pass);
+            else pipelines.stroke.with(pass).with(brushGroup).with(tile.strokeGroup!).draw(3);
             pass.end();
           }
           tile.mipmapsDirty = true;
           displayCache.remove(id);
-          dirtyTiles.add(key);
+          markTile(key);
           if (++pendingTiles === 32) {
             commands.flush();
             pendingTiles = 0;
@@ -400,18 +575,24 @@ export async function createPaintRenderer(
       stroke = undefined;
       virtual?.invalidate();
       holdPresentation = presentedCamera;
-      viewSignature = '';
+      for (const [targetCanvas, target] of targets) {
+        if (targetCanvas !== canvas) target.hold = target.presented;
+        // VT can change representation at commit. Other targets must retain their preview until ready too.
+        if (virtual) target.damage.invalidate();
+      }
+      for (const change of changes) markTile(change.key);
       return changes;
     },
     /** Discards preview pixels and restores the committed document on the next render. */
     cancel() {
+      invalidateOtherTargets();
       setTail([]);
       if (strokeTiles.size) {
         completeView = undefined;
         viewFallback?.clear();
       }
       holdPresentation = '';
-      if (strokeTiles.size) viewSignature = '';
+      for (const id of strokeTiles.keys()) markTile(id.slice(stroke!.layer.id.length + 1));
       for (const id of strokeTiles.keys()) {
         const tile = cache.get(id);
         if (tile) destroyTile(tile);
@@ -423,14 +604,14 @@ export async function createPaintRenderer(
     },
     /** Invalidates cached pixels after undo, redo, import, or layer deletion. */
     reset() {
+      invalidateOtherTargets();
       setTail([]);
       completeView = undefined;
       viewFallback?.clear();
       holdPresentation = '';
       virtual?.invalidate();
       displayCache.clear();
-      viewSignature = '';
-      dirtyTiles.clear();
+      invalidateViews();
       for (const tile of [...cache.values(), ...spareTiles]) destroyTile(tile);
       cache.clear();
       spareTiles.length = 0;
@@ -440,10 +621,12 @@ export async function createPaintRenderer(
     },
     /** Rebuilds the viewport without evicting tile resources. Also permits comparison with a full redraw. */
     invalidateView() {
-      viewSignature = '';
+      invalidateViews();
     },
     /** Rebuilds changed screen regions; camera/layer changes rebuild the full view. Cached output survives tile eviction. */
-    async render(layers: Layer[], camera: Camera, size: ViewSize, dpr: number, exact = false) {
+    async render(layers: Layer[], camera: Camera, size: ViewSize, dpr: number, exact = false, target = primaryCanvas) {
+      if (disposed) throw new Error('The renderer is disposed.');
+      selectTarget(target);
       const scale = Math.min(
         dpr,
         2,
@@ -462,7 +645,6 @@ export async function createPaintRenderer(
         view = createView(root, width, height);
         presentedCamera = '';
         holdPresentation = '';
-        viewSignature = '';
       }
       const cameraSignature = JSON.stringify([camera, size, width, height]);
       const signature = JSON.stringify([
@@ -474,23 +656,23 @@ export async function createPaintRenderer(
         height,
         layers.map(({ id, visible, opacity, blend }) => [id, visible, opacity, blend])
       ]);
-      const region =
-        signature !== viewSignature
-          ? { x: 0, y: 0, width, height }
-          : dirtyRegion(dirtyTiles, camera, size, { width, height });
+      const damage = targets.get(canvas)!.damage;
+      const plan = damage.plan(signature, camera, size, { width, height });
+      const region = plan.region;
+      previewTileDraws = 0;
+      sourceTileDraws = 0;
+      viewportUpdate = { full: plan.full, pixels: region ? region.width * region.height : 0 };
       const present = () => {
         // Both passes target the same swapchain texture. The cached artwork never contains the outline.
-        const target = context.getCurrentTexture().createView();
+        const target = context!.getCurrentTexture().createView();
         pipelines.present.with(view!.present).withColorAttachment({ view: target, loadOp: 'clear' }).draw(3);
         if (!exact) lasso.render(target, camera, size, width, height, animateSelection ? performance.now() / 1000 : 0);
       };
       if (!region) {
-        dirtyTiles.clear();
         present();
+        damage.presented(plan);
         return;
       }
-      previewTileDraws = 0;
-      sourceTileDraws = 0;
       const left = (region.x * size.width) / width,
         top = (region.y * size.height) / height;
       const right = ((region.x + region.width) * size.width) / width,
@@ -619,6 +801,7 @@ export async function createPaintRenderer(
         [read, write] = [write, read];
       }
       virtual?.end();
+      targets.get(canvas)!.pages = virtual?.debug() ?? [];
       // Keep the last brush preview until its updated overview is resident; navigation remains immediate.
       if (
         !exact &&
@@ -648,8 +831,7 @@ export async function createPaintRenderer(
         viewFallback?.clear();
       }
       present();
-      viewSignature = signature;
-      dirtyTiles.clear();
+      damage.presented(plan);
     },
     /** Applies GPU backpressure to the worker frame scheduler, without blocking incoming messages. */
     async submitted() {
@@ -660,6 +842,9 @@ export async function createPaintRenderer(
       disposed = true;
       readbacks.destroy();
       lasso.destroy();
+      abrStamps?.destroy();
+      texturedStamps?.destroy();
+      texturedPipeline = undefined;
       view?.destroy();
       virtual?.destroy();
       viewFallback?.destroy();
@@ -673,7 +858,14 @@ export async function createPaintRenderer(
       strokeTiles.clear();
       brushBuffer.destroy();
       device.removeEventListener('uncapturederror', uncapturedError);
-      context.unconfigure();
+      for (const [targetCanvas, target] of targets) {
+        if (targetCanvas !== canvas) {
+          target.view?.destroy();
+          target.fallback?.destroy();
+        }
+        target.context.unconfigure();
+      }
+      targets.clear();
       root.destroy();
       if (!options.device) device.destroy();
     }
@@ -738,6 +930,7 @@ function createTile(root: TgpuRoot, pixels: Uint8Array | undefined, sampler: Ret
     mask: undefined as TileTexture | undefined,
     maskRender: undefined as GPUTextureView | undefined,
     strokeGroup: undefined as ReturnType<typeof root.createBindGroup<typeof shader.strokeLayout.entries>> | undefined,
+    abr: undefined as AbrTile | undefined,
     used: 0
   };
 }
@@ -751,6 +944,7 @@ function prepareStroke(root: TgpuRoot, tile: ReturnType<typeof createTile>) {
   tile.strokeGroup = root.createBindGroup(shader.strokeLayout, { base: tile.base, mask: tile.mask });
 }
 function destroyTile(tile: ReturnType<typeof createTile>) {
+  tile.abr?.destroy();
   tile.texture.destroy();
   tile.mask?.destroy();
   tile.base?.destroy();

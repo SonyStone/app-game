@@ -2,10 +2,14 @@ import { tgpu } from 'typegpu';
 import { describe, expect, it } from 'vitest';
 import { lassoEdge, lassoFill, lassoVertex } from './lassoOverlay';
 import * as shaders from './shaders';
+import { texturedStampFragment } from './texturedStamps';
 import { fallbackFragment } from './viewFallback';
 import { fragment, vertex } from './virtualTexture';
 
 describe('GPU shader compilation', () => {
+  it('resolves textured coverage with mip-filtered sampling', () => {
+    expect(tgpu.resolve([texturedStampFragment])).toContain('textureSample');
+  });
   it('resolves the lasso mask and animated edge shaders', () => {
     for (const shader of [lassoVertex, lassoFill, lassoEdge])
       expect(tgpu.resolve([shader])).toMatch(/@(vertex|fragment)/);

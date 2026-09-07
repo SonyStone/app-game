@@ -1,10 +1,17 @@
+import type { Result } from './asyncResult';
 import type { Brush, Sample } from './brush';
 import type { Camera, Point, ViewSize } from './camera';
+import type { BrushResource, createBrushResources } from './composition/brushResources';
 import type { LayerAction, createDocument } from './document';
 
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */
 export type PaintCommand =
   | { type: 'init'; canvas: OffscreenCanvas; size: ViewSize; dpr: number; storageName?: string }
+  | ({ type: 'brush-resources'; requestId: string } & (
+      | { action: 'put'; resource: BrushResource }
+      | { action: 'delete'; id: string }
+      | { action: 'stats' }
+    ))
   | { type: 'debug'; enabled: boolean }
   | { type: 'live-tail'; enabled: boolean }
   | { type: 'selection-view'; points: Point[]; animate: boolean }
@@ -69,6 +76,15 @@ export type PaintEvent =
         fallbackPages: number;
         gpuBytes: number;
       };
+    }
+  | {
+      type: 'brush-resources';
+      requestId: string;
+      /** Acknowledges uploads/removals independently of document saving. Failure leaves the cache unchanged. */
+      result: Result<
+        { evicted: string[]; stats: ReturnType<ReturnType<typeof createBrushResources>['stats']> },
+        string
+      >;
     }
   | { type: 'ready' }
   | { type: 'checkpointed' }

@@ -503,6 +503,9 @@ importers:
 
   apps/abr-viewer:
     dependencies:
+      '@app-game/abr-brush':
+        specifier: workspace:*
+        version: link:../../packages/abr-brush
       '@app-game/abr-parser':
         specifier: workspace:*
         version: link:../../packages/abr-parser
@@ -1067,6 +1070,18 @@ importers:
         specifier: workspace:*
         version: link:../../packages/webgpu-examples
 
+  packages/abr-brush:
+    dependencies:
+      '@app-game/abr-parser':
+        specifier: workspace:*
+        version: link:../abr-parser
+      typegpu:
+        specifier: ^0.11.4
+        version: 0.11.4
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+
   packages/abr-parser:
     dependencies:
       pngjs:
@@ -1305,6 +1320,15 @@ importers:
 
   packages/paint:
     dependencies:
+      '@app-game/abr-brush':
+        specifier: workspace:*
+        version: link:../abr-brush
+      '@app-game/abr-parser':
+        specifier: workspace:*
+        version: link:../abr-parser
+      '@app-game/abr-viewer':
+        specifier: workspace:*
+        version: link:../../apps/abr-viewer
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../app-router
@@ -1341,6 +1365,9 @@ importers:
       '@solid-primitives/event-listener':
         specifier: 'catalog:'
         version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/timer':
+        specifier: 'catalog:'
+        version: 1.4.5-next.1(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solidjs/web':
         specifier: 2.0.0-rc.4
         version: 2.0.0-rc.4(solid-js@2.0.0-rc.4)
@@ -1357,6 +1384,9 @@ importers:
       '@testing-library/jest-dom':
         specifier: 'catalog:'
         version: 6.9.1
+      '@unocss/vite':
+        specifier: 'catalog:'
+        version: 66.6.8(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(tsx@4.22.4))
 
   packages/penner-easing-equations: {}
 

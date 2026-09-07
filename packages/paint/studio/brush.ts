@@ -1,8 +1,11 @@
 import type { Point } from './camera';
+import type { BrushEngineSelection } from './composition/defineBrushEngine';
 import { defaultStrokeSettings, type StrokeSettings } from './strokeSettings';
 
 /** Brush settings are captured at stroke start; opacity applies once to the entire stroke. */
 export type Brush = {
+  /** Optional engine/preset selection. Missing selection preserves the application's tool routing. */
+  engine?: BrushEngineSelection;
   color: string;
   size: number;
   hardness: number;
@@ -18,9 +21,22 @@ export type Brush = {
   stroke: StrokeSettings;
 };
 /** Actual, non-predicted input in document space. Mouse pressure is normalized by the input adapter. */
-export type Sample = Point & { pressure: number; time: number };
+export type Sample = Point & {
+  pressure: number;
+  time: number;
+  /** Tablet tilt in degrees and clockwise barrel rotation, when available. */
+  tiltX?: number;
+  tiltY?: number;
+  rotation?: number;
+  tangentialPressure?: number;
+};
 /** A GPU-ready round brush stamp, in document pixels. */
-export type Dab = Point & { radius: number; flow: number };
+export type Dab = Point & {
+  radius: number;
+  flow: number;
+  /** Packed ABR bounds/transform/dynamics/color. Radius is the conservative tile-culling extent. */
+  abr?: { data: Float32Array; secondary: boolean };
+};
 
 /** A soft round brush with explicit, independent flow and stroke opacity. */
 export function defaultBrush(): Brush {

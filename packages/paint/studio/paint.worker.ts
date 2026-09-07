@@ -1,8 +1,8 @@
-import { createPaintRuntime } from './paintRuntime';
+import { createStudioRuntime } from './composition/StudioApplication';
 import type { PaintCommand } from './protocol';
 
 // Vite's worker entry owns only the transport; both modes execute the same drawing engine.
-const runtime = createPaintRuntime(
+const runtime = createStudioRuntime(
   (event) => self.postMessage(event),
   () => self.close()
 );

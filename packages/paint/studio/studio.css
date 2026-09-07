@@ -710,3 +710,98 @@
   font: 12px/1.6 monospace;
   overflow-wrap: anywhere;
 }
+
+/* Imported tips stay inside the existing scrollable brush panel at every viewport size. */
+.paint-brush-library .paint-section-heading button {
+  width: auto;
+  height: auto;
+  padding: 6px 10px;
+  min-height: 32px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.paint-brush-library .paint-panel-note {
+  padding: 0;
+  margin: 8px 0;
+  line-height: 1.5;
+}
+.paint-tip-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 8px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 6px;
+}
+.paint-tip-choice[aria-pressed='true'] {
+  border-color: var(--paint-accent, #1684bd);
+  background: #e8f4fa;
+}
+.paint-tip-choice span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.paint-tip-choice canvas {
+  flex: 0 0 48px;
+}
+.paint-tip-list {
+  max-height: 200px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.paint-tip-search {
+  width: 100%;
+  min-height: 36px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px solid #d5dfe2;
+  border-radius: 6px;
+}
+.paint-library-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.paint-library-error {
+  color: #9d352e;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.paint-abr-viewer {
+  margin: auto;
+  width: min(1200px, calc(100vw - 24px));
+  height: calc(100dvh - 40px);
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid #555;
+  border-radius: 10px;
+  background: #282828;
+  color: #ddd;
+  overflow: hidden;
+}
+.paint-abr-viewer::backdrop {
+  background: #0008;
+}
+.paint-abr-title {
+  height: 44px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.paint-abr-title button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+}
+.paint-abr-viewer .abr-workspace {
+  height: calc(100% - 44px);
+}

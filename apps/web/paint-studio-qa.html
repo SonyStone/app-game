@@ -36,6 +36,9 @@
     <button id="cold-navigation">Check cold zoom</button>
     <button id="streaming">Run streaming checks</button>
     <button id="run">Run GPU checks</button>
+    <button id="abr-brush">Check ABR presets</button>
+    <button id="textured-brush">Check textured brushes</button>
+    <button id="canvas-targets">Check canvas targets</button>
     <button id="execution-modes">Check execution modes</button>
     <button id="worker">Run worker checks</button>
     <button id="lasso">Check lasso selections</button>
@@ -44,6 +47,10 @@
     <button id="navigation">Measure navigation</button>
     <pre id="output">Ready</pre>
     <script type="module">
+      import { verifyAbrBrush } from '../../packages/paint/studio/gpu/abrBrushVerification';
+      import { AbrParser } from '../../packages/abr-parser/src/abr-parser';
+      import abrExampleUrl from '../abr-viewer/src/assets/examples/spatter_brushes.abr?url';
+      import { verifyTexturedBrush } from '@app-game/paint/studio/gpu/texturedBrushVerification';
       import { verifySelection } from '@app-game/paint/studio/selectionVerification';
       import { verifyPressureSpacing } from '@app-game/paint/studio/gpu/pressureVerification';
       import { verifyStrokeFiltering } from '@app-game/paint/studio/gpu/strokeFilteringVerification';
@@ -58,11 +65,38 @@
       import { verifyColdNavigation } from '@app-game/paint/studio/navigationStreamingVerification';
       import { verifyStreaming } from '@app-game/paint/studio/streamingVerification';
       import { verifyGpu } from '@app-game/paint/studio/gpu/verification';
+      import { verifyCanvasTargets } from '@app-game/paint/studio/composition/targetVerification';
       import { verifyMainThread } from '@app-game/paint/studio/mainThreadVerification';
       import { verifyWorker } from '@app-game/paint/studio/workerVerification';
       import { measurePainting, measureDensePainting, measureNavigation } from '@app-game/paint/studio/gpu/performance';
       const button = document.querySelector('#run'),
         output = document.querySelector('#output');
+      document.querySelector('#textured-brush').onclick = async () => {
+        output.textContent = 'Checking textured brushes…\n';
+        try {
+          await verifyTexturedBrush(
+            (message) => (output.textContent += message + '\n'),
+            async () => {
+              const response = await fetch(abrExampleUrl);
+              if (!response.ok) throw new Error('Could not load the repository ABR fixture.');
+              const abr = new AbrParser({ extractImages: true }).parse(await response.arrayBuffer());
+              const tip = abr.brushes.find((brush) => brush.brushTip?.data.some((value) => value > 0))?.brushTip;
+              if (!tip) throw new Error(`No decoded ABR tip: ${abr.errors.join('; ')}`);
+              return { id: 'abr-fixture', width: tip.width, height: tip.height, format: 'r8unorm', pixels: tip.data };
+            }
+          );
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#canvas-targets').onclick = async () => {
+        output.textContent = 'Checking shared renderer targets…\n';
+        try {
+          await verifyCanvasTargets((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
       document.querySelector('#execution-modes').onclick = async () => {
         output.textContent = 'Checking main-thread canvas and worker checkpoints…\n';
         try {
@@ -155,6 +189,14 @@
         output.textContent = 'Testing saved low-resolution pages…\n';
         try {
           await verifyPersistentOverview((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#abr-brush').onclick = async () => {
+        output.textContent = 'Checking ABR accumulators…\n';
+        try {
+          await verifyAbrBrush((message) => (output.textContent += message + '\n'));
         } catch (error) {
           output.textContent += 'FAIL: ' + (error.stack ?? error);
         }

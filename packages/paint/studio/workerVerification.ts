@@ -1,5 +1,7 @@
 import { defaultBrush } from './brush';
 import { defaultCamera } from './camera';
+import { verifyBrushResourceTransport } from './composition/resourceVerification';
+import { texturedBrush } from './composition/texturedBrushEngine';
 import Worker from './paint.worker?worker';
 import { readPaintFile } from './paintFile';
 import type { PaintCommand, PaintEvent } from './protocol';
@@ -49,6 +51,13 @@ export async function verifyWorker(report: (message: string) => void) {
     const command: PaintCommand = { type: 'init', canvas, size: { width: 400, height: 300 }, dpr: 1, storageName };
     worker.postMessage(command, [canvas]);
     await ready;
+    await verifyBrushResourceTransport(async (command) => {
+      const reply = wait((e) => e.type === 'brush-resources' && e.requestId === command.requestId);
+      send(command);
+      const event = await reply;
+      if (event.type !== 'brush-resources') throw new Error('Missing resource reply.');
+      return event;
+    }, report);
   };
   const download = async () => {
     const result = wait((e) => e.type === 'download');
@@ -62,9 +71,28 @@ export async function verifyWorker(report: (message: string) => void) {
   };
   try {
     await init();
+    const uploaded = wait((e) => e.type === 'brush-resources' && e.requestId === 'textured-tip');
+    send({
+      type: 'brush-resources',
+      requestId: 'textured-tip',
+      action: 'put',
+      resource: {
+        id: 'qa-textured-tip',
+        width: 2,
+        height: 2,
+        format: 'r8unorm',
+        pixels: new Uint8Array([255, 255, 255, 255])
+      }
+    });
+    const upload = await uploaded;
+    if (upload.type !== 'brush-resources' || !upload.result.ok) throw new Error('Textured tip upload failed.');
     const committed = wait((e) => e.type === 'state' && e.document.canUndo);
     const drawing = wait((e) => e.type === 'state' && !e.saved);
-    send({ type: 'begin', brush: defaultBrush(), samples: [{ x: -30, y: 0, pressure: 1, time: 0 }] });
+    send({
+      type: 'begin',
+      brush: { ...defaultBrush(), engine: texturedBrush.select({ tipId: 'qa-textured-tip', spacing: 0.04 }) },
+      samples: [{ x: -30, y: 0, pressure: 1, time: 0 }]
+    });
     send({ type: 'samples', samples: [{ x: 30, y: 0, pressure: 0.5, time: 20 }] });
     const active = await drawing;
     assert(active.type === 'state' && active.saveState === 'unsaved', 'An active stroke is mislabeled as saving');
@@ -73,7 +101,7 @@ export async function verifyWorker(report: (message: string) => void) {
     const original = await download();
     const decoded = await readPaintFile(original);
     assert(decoded.layers[0]!.tiles.size > 0, 'Worker did not commit stroke pixels');
-    report('PASS: production worker commits batched pressure input and exports a valid .paint document');
+    report('PASS: production worker commits textured batched pressure input and exports a valid .paint document');
     const undone = wait((e) => e.type === 'state' && e.document.tileCount === 0);
     send({ type: 'undo' });
     await undone;
