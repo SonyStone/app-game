@@ -40,6 +40,7 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   const [showPenCursor, setShowPenCursor] = createSignal(false);
   const [rawReceived, setRawReceived] = createSignal(false);
   const [ready] = createSignal(true);
+  const [workerEnabled] = createSignal(true);
   const [switchingRenderer] = createSignal(false);
   const [metrics] = createSignal({ gpu: 1048576, tiles: 1, ms: 1.2 });
   const close = vi.fn();
@@ -53,7 +54,7 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
     ready,
     toggleDebug: () => setDebug(!debug()),
     metrics,
-    workerEnabled: () => true,
+    workerEnabled,
     switchingRenderer,
     setWorkerEnabled: vi.fn()
   };
@@ -71,7 +72,7 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   cursor!.click();
   worker!.click();
   expect(session.setWorkerEnabled).toHaveBeenCalledWith(false);
-  expect(dialog.textContent).toContain('Undo history resets');
+  expect(dialog.textContent).toContain('Undo history and the selection clipboard reset');
   flush();
   expect(debug()).toBe(true);
   expect(liveTail()).toBe(false);

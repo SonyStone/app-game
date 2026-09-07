@@ -87,8 +87,8 @@ export function DeveloperDialog(props: {
       </div>
       <p class="paint-panel-note" role="status">
         {props.session.switchingRenderer()
-          ? 'Saving before reload…'
-          : 'Changing execution mode saves and reloads the drawing. Undo history resets.'}
+          ? 'Switching drawing engine…'
+          : 'Switching keeps the drawing and settings. Undo history and the selection clipboard reset.'}
       </p>
       <dl>
         <div>

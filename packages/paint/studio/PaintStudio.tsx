@@ -1,10 +1,10 @@
 import { NavigationPuck } from '@app-game/navigation-puck';
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, For, onSettled, Show } from 'solid-js';
 import { BrushPanel, ColorPanel } from './BrushPanel';
 import { defaultCamera, transformAt } from './camera';
 import { CanvasDebug } from './CanvasDebug';
-import { createPaintSession } from './createPaintSession';
+import { createPaintSession, type PaintSession } from './createPaintSession';
 import { DeveloperDialog } from './DeveloperDialog';
 import { FullscreenButton } from './FullscreenButton';
 import { LayersPanel } from './LayersPanel';
@@ -71,12 +71,16 @@ export default function PaintStudio() {
         }}
       />
       <main ref={stage} class="paint-stage" aria-label="Drawing workspace">
-        <canvas
-          ref={canvas}
-          style={{ cursor: session.tool() === 'lasso' ? 'crosshair' : 'none' }}
-          tabindex={0}
-          aria-label="Drawing canvas. Draw with a pen or mouse; use touch or hold Space for navigation."
-        />
+        <For each={[session.canvasVersion()]} keyed={(version) => version}>
+          {() => (
+            <PaintCanvas
+              session={session}
+              ref={(element) => {
+                canvas = element;
+              }}
+            />
+          )}
+        </For>
         <Show when={session.debug()}>
           <CanvasDebug session={session} />
         </Show>
@@ -364,5 +368,22 @@ export default function PaintStudio() {
         </div>
       </Show>
     </div>
+  );
+}
+
+/** Each execution mode owns a fresh canvas and input scope; the editor and modal remain mounted. */
+function PaintCanvas(props: { session: PaintSession; ref: (canvas: HTMLCanvasElement) => void }) {
+  let canvas!: HTMLCanvasElement;
+  onSettled(() => props.session.attachCanvas(canvas));
+  return (
+    <canvas
+      ref={(element) => {
+        canvas = element;
+        props.ref(element);
+      }}
+      style={{ cursor: props.session.tool() === 'lasso' ? 'crosshair' : 'none' }}
+      tabindex={0}
+      aria-label="Drawing canvas. Draw with a pen or mouse; use touch or hold Space for navigation."
+    />
   );
 }
