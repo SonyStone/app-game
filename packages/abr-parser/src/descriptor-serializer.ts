@@ -31,7 +31,7 @@ export class DescriptorSerializer {
     // Write each key/value pair
     for (const key of keys) {
       this.writer.writeId(key);
-      this.serializeValue(desc[key]);
+      this.serializeValue(desc[key]!);
     }
   }
 
@@ -82,7 +82,7 @@ export class DescriptorSerializer {
 
         for (const key of objKeys) {
           this.writer.writeId(key);
-          this.serializeValue(items[key]);
+          this.serializeValue(items[key]!);
         }
         break;
 

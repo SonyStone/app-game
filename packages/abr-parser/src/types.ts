@@ -342,6 +342,8 @@ export const ZAbrFile = z.object({
 
 /** Zod schema for parse options */
 export const ZParseOptions = z.object({
+  /** Total decoded sample coverage bytes; checked before allocating each image. */
+  maxDecodedBytes: z.number().int().nonnegative().optional().default(Number.MAX_SAFE_INTEGER),
   extractImages: z.boolean().optional().default(true),
   includeRawSettings: z.boolean().optional().default(true),
   continueOnError: z.boolean().optional().default(true)

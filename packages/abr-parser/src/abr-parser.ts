@@ -19,9 +19,16 @@ const HIERARCHY_KEY = 'phry';
 
 export class AbrParser {
   private options: Required<ParseOptions>;
+  private decodedBytes = 0;
 
   constructor(options: ParseOptions = {}) {
+    if (
+      options.maxDecodedBytes !== undefined &&
+      (!Number.isSafeInteger(options.maxDecodedBytes) || options.maxDecodedBytes < 0)
+    )
+      throw new Error('Invalid decoded sample byte budget');
     this.options = {
+      maxDecodedBytes: options.maxDecodedBytes ?? Number.MAX_SAFE_INTEGER,
       extractImages: options.extractImages ?? true,
       includeRawSettings: options.includeRawSettings ?? true,
       continueOnError: options.continueOnError ?? true
@@ -33,6 +40,7 @@ export class AbrParser {
    * Works in both Node.js (Buffer) and browser (ArrayBuffer) environments.
    */
   parse(buffer: ArrayBuffer | Uint8Array | ArrayBufferView): AbrFile {
+    this.decodedBytes = 0;
     const reader = new BinaryReader(buffer);
     const result: AbrFile = {
       version: 0,
@@ -245,7 +253,8 @@ export class AbrParser {
       const record = reader.readBytes(length);
       reader.skip((4 - (length % 4)) % 4);
       try {
-        const { uuid, tip } = readSample(record, subVersion);
+        const { uuid, tip } = readSample(record, subVersion, this.options.maxDecodedBytes - this.decodedBytes);
+        this.decodedBytes += tip.data.byteLength;
         if (images.has(uuid)) throw new Error(`Duplicate sample identifier ${uuid}`);
         images.set(uuid, tip);
         images.set(`sample_${index}`, tip);
@@ -341,7 +350,7 @@ export class AbrParser {
     let sampleIndex = 0;
 
     for (let i = 0; i < brushList.length; i++) {
-      const brushDesc = brushList[i];
+      const brushDesc = brushList[i]!;
       // Check if this is a sampled brush
       const brushDefValue = brushDesc['Brsh'];
       let isSampledBrush = false;

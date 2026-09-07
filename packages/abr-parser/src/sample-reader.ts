@@ -1,8 +1,14 @@
 import { BinaryReader } from './binary-reader';
 import type { BrushTipImage } from './types';
 
-/** Decode one bounded sample record. PackBits operates on bytes, including at 16-bit depth. */
-export function readSample(data: Uint8Array, subVersion: number): { uuid: string; tip: BrushTipImage } {
+/** Decode one bounded sample record. PackBits operates on bytes, including at 16-bit depth.
+ * maxDecodedBytes limits the normalized coverage allocation; source record copies are not included.
+ */
+export function readSample(
+  data: Uint8Array,
+  subVersion: number,
+  maxDecodedBytes = Number.MAX_SAFE_INTEGER
+): { uuid: string; tip: BrushTipImage } {
   const reader = new BinaryReader(data);
   const idLength = reader.readUInt8();
   if (idLength !== 36) throw new Error(`Unsupported sample identifier length ${idLength}`);
@@ -11,7 +17,7 @@ export function readSample(data: Uint8Array, subVersion: number): { uuid: string
   let tip: BrushTipImage;
   if (subVersion === 1) {
     reader.skip(10);
-    tip = readChannelPixels(reader);
+    tip = readChannelPixels(reader, maxDecodedBytes);
   } else if (subVersion === 2) {
     reader.skip(3); // Sample prefix: observed 01 00 00; semantics not fully established.
     const version = reader.readUInt32BE();
@@ -31,7 +37,7 @@ export function readSample(data: Uint8Array, subVersion: number): { uuid: string
       if (i >= count) continue; // Preserve mask payloads in the original record.
       if (decoded) throw new Error('Multiple written sample image channels are not supported');
       const depth = channel.readUInt32BE();
-      decoded = readChannelPixels(channel);
+      decoded = readChannelPixels(channel, maxDecodedBytes);
       if (depth !== decoded.depth) throw new Error('Sample channel depth fields disagree');
       if (!channel.isEof()) throw new Error('Unexpected bytes after sample channel pixels');
     }
@@ -45,7 +51,7 @@ export function readSample(data: Uint8Array, subVersion: number): { uuid: string
 }
 
 /** Decode one channel within its own byte boundary, normalizing preview data to 8 bits. */
-export function readChannelPixels(reader: BinaryReader): BrushTipImage {
+export function readChannelPixels(reader: BinaryReader, maxDecodedBytes = Number.MAX_SAFE_INTEGER): BrushTipImage {
   const top = reader.readInt32BE();
   const left = reader.readInt32BE();
   const bottom = reader.readInt32BE();
@@ -55,6 +61,7 @@ export function readChannelPixels(reader: BinaryReader): BrushTipImage {
   if (width <= 0 || height <= 0 || width > 10000 || height > 10000) {
     throw new Error(`Unsupported sample bounds ${left},${top},${right},${bottom}`);
   }
+  if (width * height > maxDecodedBytes) throw new Error('Decoded brush samples exceed the byte budget');
   const depth = reader.readUInt16BE();
   const compression = reader.readUInt8();
   if (depth !== 8 && depth !== 16) throw new Error(`Unsupported sample depth ${depth}`);
@@ -71,8 +78,8 @@ export function readChannelPixels(reader: BinaryReader): BrushTipImage {
   }
   const pixels = new Uint8Array(width * height);
   for (let y = 0; y < height; y++) {
-    const row = compression === 0 ? reader.readBytes(rowSize) : unpackRow(reader.subReader(rowCounts[y]), rowSize);
-    for (let x = 0; x < width; x++) pixels[y * width + x] = row[x * (depth / 8)];
+    const row = compression === 0 ? reader.readBytes(rowSize) : unpackRow(reader.subReader(rowCounts[y]!), rowSize);
+    for (let x = 0; x < width; x++) pixels[y * width + x] = row[x * (depth / 8)]!;
   }
   return { width, height, depth, data: pixels };
 }

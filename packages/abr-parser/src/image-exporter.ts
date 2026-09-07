@@ -86,7 +86,7 @@ export class ImageExporter {
         const dstIdx = (y * width + x) * 4;
 
         // Grayscale value (0 = black/full paint, 255 = white/no paint)
-        const gray = data[srcIdx];
+        const gray = data[srcIdx]!;
 
         // Convert to RGBA where:
         // - RGB is black (the brush color will be applied later)
@@ -127,7 +127,7 @@ export class ImageExporter {
         const srcIdx = y * width + x;
         const dstIdx = (y * width + x) * 4;
 
-        const gray = data[srcIdx];
+        const gray = data[srcIdx]!;
 
         png.data[dstIdx] = 0;
         png.data[dstIdx + 1] = 0;

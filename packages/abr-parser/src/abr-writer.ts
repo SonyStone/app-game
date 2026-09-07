@@ -305,7 +305,7 @@ export class AbrWriter {
       if (runLength > 2) {
         // Encode as a run: -(runLength - 1), value
         result.push(256 - runLength + 1); // Same as -(runLength - 1) as signed byte
-        result.push(data[i]);
+        result.push(data[i]!);
         i += runLength;
       } else {
         // Look for literal sequence
@@ -325,7 +325,7 @@ export class AbrWriter {
         // Encode as literal: length - 1, values...
         result.push(literalLength - 1);
         for (let j = 0; j < literalLength; j++) {
-          result.push(data[i + j]);
+          result.push(data[i + j]!);
         }
         i += literalLength;
       }

@@ -6,7 +6,8 @@
   "description": "Parse and write Adobe Photoshop brush files (.abr).",
   "exports": {
     ".": "./src/index.ts",
-    "./browser": "./src/browser.ts"
+    "./browser": "./src/browser.ts",
+    "./reader": "./src/reader.ts"
   },
   "scripts": {
     "build": "tsc --emitDeclarationOnly",
