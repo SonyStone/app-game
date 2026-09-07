@@ -79,3 +79,78 @@ it('presents the first pen contact before a queued release can wait on readback'
     await until(() => events.some((event) => event.type === 'state' && event.debugTiles !== undefined));
   }
 });
+
+it('batches input behind a busy GPU and presents movement before release without a frame timer', async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const { createSmoothStroke } = await import('./smoothStroke');
+  const brush = defaultBrush();
+  const contact = { x: 0, y: 0, pressure: 0.2, time: 1 };
+  const samples = Array.from({ length: 100 }, (_, i) => ({ x: i + 1, y: i / 2, pressure: 0.2 + i / 200, time: i + 2 }));
+  let release!: () => void;
+  const busy = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const renderer = {
+    preview: vi.fn(),
+    setSelection: vi.fn(),
+    begin: vi.fn(),
+    paint: vi.fn(async (_dabs: readonly Dab[]) => {}),
+    render: vi.fn(async () => {}),
+    submitted: vi.fn(async () => {}),
+    finish: vi.fn(async () => []),
+    prepareOverview: vi.fn(async () => {}),
+    stats: () => ({ gpuBytes: 0, residentTiles: 0 })
+  };
+  dependencies.renderer.mockResolvedValue(renderer);
+  dependencies.store.mockResolvedValue({
+    load: async () => undefined,
+    capture: (pixels: unknown) => pixels,
+    save: async () => {},
+    stats: () => undefined
+  });
+  const events: PaintEvent[] = [];
+  const worker = {
+    onmessage: undefined as ((event: MessageEvent<PaintCommand>) => void) | undefined,
+    postMessage: (event: PaintEvent) => events.push(event)
+  };
+  vi.stubGlobal('self', worker);
+  await import('./paint.worker');
+  const send = (command: PaintCommand) => worker.onmessage!({ data: command } as MessageEvent<PaintCommand>);
+  const until = async (condition: () => boolean) => {
+    for (let i = 0; i < 500; i++) {
+      if (condition()) return;
+      await Promise.resolve();
+    }
+    throw new Error('Worker did not complete the queued input');
+  };
+  try {
+    send({ type: 'init', canvas: {} as OffscreenCanvas, size: { width: 256, height: 256 }, dpr: 1 });
+    await until(() => events.some((event) => event.type === 'ready'));
+    renderer.render.mockClear();
+    renderer.submitted.mockClear();
+    renderer.submitted.mockImplementationOnce(() => busy);
+    send({ type: 'begin', brush, zoom: 1, samples: [contact] });
+    await until(() => renderer.submitted.mock.calls.length === 1);
+    for (const sample of samples) send({ type: 'samples', samples: [sample] });
+    send({ type: 'end' });
+    // A later stroke must not merge into the batch sealed by end().
+    send({ type: 'begin', brush, zoom: 1, samples: [{ ...contact, x: 300 }] });
+    send({ type: 'samples', samples: [{ ...contact, x: 320 }] });
+    for (let i = 0; i < 50; i++) await Promise.resolve();
+    expect(renderer.paint).toHaveBeenCalledTimes(1);
+    expect(renderer.render).toHaveBeenCalledTimes(1);
+    release();
+    await until(() => renderer.submitted.mock.calls.length === 4);
+    expect(renderer.render).toHaveBeenCalledTimes(4); // Contact + one movement frame per stroke.
+    expect(renderer.finish).toHaveBeenCalledOnce();
+    expect(renderer.paint).toHaveBeenCalledTimes(5); // First contact/batch/finish, next contact/batch.
+    const reference = createSmoothStroke(brush, 1);
+    reference.add([contact]);
+    expect(renderer.paint.mock.calls[1]?.[0]).toEqual(reference.add(samples));
+    expect(renderer.paint.mock.calls[2]?.[0]).toEqual(reference.finish());
+    expect(renderer.paint.mock.calls[3]?.[0][0]).toMatchObject({ x: 300 });
+  } finally {
+    release();
+  }
+});

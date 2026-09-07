@@ -38,8 +38,6 @@ export function attachInput(
     | { kind: 'pan'; id: number; previous: Point }
     | undefined;
   let touchStart: { camera: Camera; center: Point; distance: number; angle: number } | undefined;
-  let pending: Sample[] = [],
-    frame = 0;
   const detachPuck = attachNavigationPuck(canvas, options.puck, {
     busy: () => !!gesture || touches.size > 0,
     ready: options.ready,
@@ -49,29 +47,21 @@ export function attachInput(
     const rect = canvas.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   };
-  const flush = () => {
-    cancelAnimationFrame(frame);
-    frame = 0;
-    if (pending.length) {
-      options.send({ type: 'samples', samples: pending });
-      pending = [];
-    }
-  };
-  const schedule = () => {
-    if (!frame) frame = requestAnimationFrame(flush);
-  };
   const collect = (event: PointerEvent) => {
     if (gesture?.kind !== 'draw' || gesture.id !== event.pointerId) return;
     const coalesced = event.getCoalescedEvents?.() ?? [];
+    const samples: Sample[] = [];
+    const rect = canvas.getBoundingClientRect();
     for (const sample of coalesced.length ? coalesced : [event]) {
       gesture.latest = {
-        ...screenToWorld(local(sample), gesture.camera, gesture.size),
+        ...screenToWorld({ x: sample.clientX - rect.left, y: sample.clientY - rect.top }, gesture.camera, gesture.size),
         pressure: event.pointerType === 'pen' ? sample.pressure : 1,
         time: sample.timeStamp
       };
-      pending.push(gesture.latest);
+      samples.push(gesture.latest);
     }
-    schedule();
+    // Forward immediately, including raw updates. The worker batches while its GPU frame is in flight.
+    options.send({ type: 'samples', samples });
   };
   const cursorAt = (event: PointerEvent) =>
     options.cursor(
@@ -110,7 +100,6 @@ export function attachInput(
   };
   const finish = () => {
     if (gesture?.kind === 'draw') {
-      flush();
       options.send({ type: 'end' });
     }
     if (gesture?.kind === 'select') options.selection?.end();
@@ -220,7 +209,10 @@ export function attachInput(
         // Release pressure is usually zero. Keep the last contact pressure, and do not
         // advance a sample-count filter just because a stationary pen was lifted.
         if (endpoint.x !== gesture.latest.x || endpoint.y !== gesture.latest.y)
-          pending.push({ ...endpoint, pressure: gesture.latest.pressure, time: event.timeStamp });
+          options.send({
+            type: 'samples',
+            samples: [{ ...endpoint, pressure: gesture.latest.pressure, time: event.timeStamp }]
+          });
       }
       finish();
       cursorAt(event);
@@ -278,7 +270,6 @@ export function attachInput(
     if (gesture?.kind === 'select') options.selection?.cancel();
     finish();
     abort.abort();
-    cancelAnimationFrame(frame);
   };
 }
 

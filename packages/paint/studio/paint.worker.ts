@@ -40,6 +40,7 @@ createRoot((dispose) => {
   let collectTimer: ReturnType<typeof setTimeout> | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   const queue = createTaskQueue();
+  let pendingSamples: Extract<PaintCommand, { type: 'samples' }> | undefined;
   const post = (event: PaintEvent) => self.postMessage(event);
   let documentState = document.state();
   let debugAt = 0;
@@ -223,8 +224,17 @@ createRoot((dispose) => {
       scheduleDraw();
       return;
     }
+    const command = event.data;
+    // Merge only consecutive, not-yet-started input packets. Keep every point and pressure,
+    // but render their latest state once after GPU backpressure clears. Commands such as
+    // end/cancel/begin seal the batch so points never cross a stroke boundary.
+    if (command.type === 'samples' && pendingSamples) {
+      for (const sample of command.samples) pendingSamples.samples.push(sample);
+      return;
+    }
+    pendingSamples = command.type === 'samples' ? command : undefined;
     enqueue(async () => {
-      const command = event.data;
+      if (pendingSamples === command) pendingSamples = undefined;
       switch (command.type) {
         case 'init': {
           canvas = command.canvas;
@@ -272,7 +282,7 @@ createRoot((dispose) => {
           await renderer.paint(sampler.add(command.samples));
           renderer.preview(liveTail ? sampler.preview() : []);
           // Present contact before a queued release can start readback/overview preparation.
-          // Subsequent movement remains frame-batched; only pen-down gets an immediate frame.
+          // Movement also presents directly, with pending packets batched behind GPU completion.
           await draw();
           break;
         }
@@ -280,7 +290,7 @@ createRoot((dispose) => {
           if (sampler && renderer && !lost) {
             await renderer.paint(sampler.add(command.samples));
             renderer.preview(liveTail ? sampler.preview() : []);
-            scheduleDraw();
+            await draw();
           }
           break;
         case 'end':

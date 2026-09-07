@@ -27,6 +27,7 @@ describe('input to worker contract', () => {
       ]
     };
     pointer('pointerrawupdate', 20, 20, data);
+    expect(commands.at(-1)).toMatchObject({ type: 'samples', samples: [{ pressure: 0.4 }, { pressure: 0.7 }] });
     pointer('pointermove', 20, 20, data);
     pointer('pointerup', 20, 20, { pointerType: 'pen' });
     expect(
@@ -77,19 +78,17 @@ describe('input to worker contract', () => {
     expect(selection.end).toHaveBeenCalledOnce();
     expect(commands).toEqual([]);
   });
-  it('sends a tap as begin/end and flushes samples before pointerup', () => {
+  it('forwards movement without waiting for a frame and sends the release endpoint before end', () => {
     const { canvas, commands, pointer } = setup();
     pointer('pointerdown', 10, 20);
     pointer('pointermove', 30, 40);
+    expect(commands.map((c) => c.type)).toEqual(['begin', 'samples']);
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
     pointer('pointerup', 40, 50);
-    expect(commands.map((c) => c.type)).toEqual(['begin', 'samples', 'end']);
+    expect(commands.map((c) => c.type)).toEqual(['begin', 'samples', 'samples', 'end']);
     expect(commands[0]).toMatchObject({ samples: [{ x: -390, y: -280, pressure: 1 }] });
-    expect(commands[1]).toMatchObject({
-      samples: [
-        { x: -370, y: -260 },
-        { x: -360, y: -250 }
-      ]
-    });
+    expect(commands[1]).toMatchObject({ samples: [{ x: -370, y: -260 }] });
+    expect(commands[2]).toMatchObject({ samples: [{ x: -360, y: -250 }] });
     expect(canvas.setPointerCapture).toHaveBeenCalledWith(1);
   });
   it('preserves each coalesced pressure sample in one message', () => {
@@ -146,7 +145,7 @@ describe('input to worker contract', () => {
     pointer('lostpointercapture', 10, 10);
     pointer('pointermove', 30, 30);
     pointer('pointerup', 40, 40);
-    expect(commands.map((c) => c.type)).toEqual(['begin', 'samples', 'end', 'begin', 'samples', 'end']);
+    expect(commands.map((c) => c.type)).toEqual(['begin', 'samples', 'end', 'begin', 'samples', 'samples', 'end']);
   });
   it('holds Space to open navigation at the pointer and releases it without drawing', () => {
     const { pointer, puck, commands } = setup();
