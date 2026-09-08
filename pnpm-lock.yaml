@@ -9,6 +9,9 @@ catalogs:
     '@floating-ui/dom':
       specifier: ^1.7.6
       version: 1.7.6
+    '@kittl/little-cms':
+      specifier: 1.0.3
+      version: 1.0.3
     '@mdx-js/mdx':
       specifier: ^3.1.1
       version: 3.1.1
@@ -149,6 +152,9 @@ catalogs:
       version: 4.1.6
 
 patchedDependencies:
+  '@kittl/little-cms@1.0.3':
+    hash: 131dfc699eff4275fd9787837f930b8292192e0cbc7b6ac39c5a371547e2ceed
+    path: patches/@kittl__little-cms@1.0.3.patch
   vite-plugin-solid-svg@0.8.1:
     hash: 7c6645f6fbe6c96fc2a79f09a40f44ef6eb15cb0e19933b6b602c7bbcac0f839
     path: patches/vite-plugin-solid-svg@0.8.1.patch
@@ -512,6 +518,9 @@ importers:
       '@app-game/app-router':
         specifier: workspace:*
         version: link:../../packages/app-router
+      '@app-game/chroma':
+        specifier: workspace:*
+        version: link:../../packages/chroma
       '@solid-primitives/event-listener':
         specifier: 'catalog:'
         version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -1075,6 +1084,9 @@ importers:
       '@app-game/abr-parser':
         specifier: workspace:*
         version: link:../abr-parser
+      '@app-game/chroma':
+        specifier: workspace:*
+        version: link:../chroma
       typegpu:
         specifier: ^0.11.4
         version: 0.11.4
@@ -1124,7 +1136,11 @@ importers:
 
   packages/bitecs: {}
 
-  packages/chroma: {}
+  packages/chroma:
+    dependencies:
+      '@kittl/little-cms':
+        specifier: 'catalog:'
+        version: 1.0.3(patch_hash=131dfc699eff4275fd9787837f930b8292192e0cbc7b6ac39c5a371547e2ceed)
 
   packages/components:
     dependencies:
@@ -2439,6 +2455,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@kittl/little-cms@1.0.3':
+    resolution: {integrity: sha512-5W+aECpsiMhp22EvxcSxue6DkXxFyJXS1FXrFJsH0TziyUhBA0N4Xw4z3q9fuIzq0OQSytdM+IE1Re4a4MpaZA==}
 
   '@mdx-js/mdx@3.1.1':
     resolution: {integrity: sha512-f6ZO2ifpwAQIpzGWaBQT2TXxPv6z3RBzQKpVftEWN78Vl/YweF1uwussDx8ECAXVtr3Rs89fKyG9YlzUs9DyGQ==}
@@ -6299,6 +6318,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@kittl/little-cms@1.0.3(patch_hash=131dfc699eff4275fd9787837f930b8292192e0cbc7b6ac39c5a371547e2ceed)': {}
 
   '@mdx-js/mdx@3.1.1':
     dependencies:

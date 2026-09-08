@@ -2,6 +2,41 @@ import { z } from 'zod/v3';
 
 /** Descriptor bindings also supply labels, ranges and options to the settings panels. */
 export const settingGroups = {
+  tool: {
+    type: plainChoice('Tool', 'toolOptions.__classId', 'PbTl', [
+      ['PbTl', 'Brush'],
+      ['PcTl', 'Pencil'],
+      ['ErTl', 'Eraser'],
+      ['SmTl', 'Smudge'],
+      ['MixB', 'Mixer Brush'],
+      ['ShTl', 'Sharpen'],
+      ['BlTl', 'Blur']
+    ]),
+    mode: choice('Mode', 'toolOptions.Md  ', 'Nrml', paintToolModes),
+    opacity: number('Opacity (%)', 'toolOptions.Opct', 0, 100, 100),
+    flow: number('Flow (%)', 'toolOptions.flow', 0, 100, 100),
+    foreground: color('Saved foreground', 'toolOptions.FrgC'),
+    background: color('Saved background', 'toolOptions.BckC'),
+    pressureOverridesOpacity: checkbox('Always use pressure for opacity', 'toolOptions.usePressureOverridesOpacity'),
+    pressureOverridesSize: checkbox('Always use pressure for size', 'toolOptions.usePressureOverridesSize'),
+    pressureSmoothing: checkbox('Smooth pressure (stored only)', 'toolOptions.pressureSmoothing'),
+    legacy: checkbox('Legacy mode (stored only)', 'toolOptions.useLegacy'),
+    strength: number('Strength (%)', 'toolOptions.Prs ', 0, 100, 50),
+    fingerPainting: checkbox('Finger Painting', 'toolOptions.SmdF'),
+    smudgeAllLayers: checkbox('Sample All Layers', 'toolOptions.SmdS'),
+    wetness: number('Wet (%)', 'toolOptions.wetness', 0, 100, 0),
+    load: number('Load (%)', 'toolOptions.dryness', 0, 100, 100),
+    mix: number('Mix (%)', 'toolOptions.mix', 0, 100, 0),
+    autoFill: checkbox('Load brush after each stroke', 'toolOptions.autoFill', true),
+    autoClean: checkbox('Clean brush after each stroke', 'toolOptions.autoClean'),
+    loadSolidColorOnly: checkbox('Load solid colors only', 'toolOptions.loadSolidColorOnly', true),
+    sampleAllLayers: checkbox('Sample All Layers', 'toolOptions.sampleAllLayers'),
+    autoErase: checkbox('Auto Erase', 'toolOptions.PncA'),
+    eraseToHistory: checkbox('Erase to History', 'toolOptions.MgcE'),
+    eraserMode: numericChoice('Eraser Mode', 'toolOptions.ErsB', ['Brush', 'Pencil', 'Block'], 1),
+    sharpenAllLayers: checkbox('Sample All Layers', 'toolOptions.BlrS'),
+    protectDetail: checkbox('Protect Detail', 'toolOptions.detailBoost', true)
+  },
   bristle: {
     shape: numericChoice('Shape', 'Brsh.Shp ', [
       'Round Point',
@@ -101,14 +136,16 @@ export const settingGroups = {
     purity: number('Purity', 'purity', -100, 100, 0, '#Prc')
   },
   transfer: {
-    opacityJitter: percent('Opacity Jitter', 'prVr.jitter'),
-    opacityControl: control('Opacity Control', 'prVr.bVTy', 'size'),
-    opacityFade: steps('Opacity Fade', 'prVr.fStp'),
-    opacityMinimum: percent('Minimum Opacity', 'prVr.Mnm '),
-    flowJitter: percent('Flow Jitter', 'opVr.jitter'),
-    flowControl: control('Flow Control', 'opVr.bVTy', 'size'),
-    flowFade: steps('Flow Fade', 'opVr.fStp'),
-    flowMinimum: percent('Minimum Flow', 'opVr.Mnm '),
+    // Photoshop's prVr is flow; opVr is opacity. Keep both read and write paths
+    // aligned with the wire format, not inferred from a preset's appearance.
+    opacityJitter: percent('Opacity Jitter', 'opVr.jitter'),
+    opacityControl: control('Opacity Control', 'opVr.bVTy', 'size'),
+    opacityFade: steps('Opacity Fade', 'opVr.fStp'),
+    opacityMinimum: percent('Minimum Opacity', 'opVr.Mnm '),
+    flowJitter: percent('Flow Jitter', 'prVr.jitter'),
+    flowControl: control('Flow Control', 'prVr.bVTy', 'size'),
+    flowFade: steps('Flow Fade', 'prVr.fStp'),
+    flowMinimum: percent('Minimum Flow', 'prVr.Mnm '),
     wetnessJitter: percent('Wetness Jitter', 'wtVr.jitter'),
     wetnessControl: control('Wetness Control', 'wtVr.bVTy', 'size'),
     wetnessFade: steps('Wetness Fade', 'wtVr.fStp'),
@@ -159,12 +196,14 @@ export type SettingField<S extends z.ZodType = z.ZodType> = {
   label: string;
   path: string;
   initial: z.input<S>;
-  kind: 'number' | 'boolean' | 'control' | 'choice' | 'text';
+  kind: 'number' | 'boolean' | 'control' | 'choice' | 'text' | 'color';
   factor?: number;
   min?: number;
   max?: number;
   unit?: string;
   options?: readonly { value: number | string; label: string }[];
+  /** Choices such as tool class IDs are plain descriptor strings, not enumerated values. */
+  plain?: boolean;
 };
 
 /** Derives a strict form schema from the same bindings used for import and export. */
@@ -250,6 +289,45 @@ function textureModes(): readonly [string, string][] {
     ['Hght', 'Height']
   ];
 }
+
+function plainChoice(label: string, path: string, initial: string, options: [string, string][]) {
+  return { ...choice(label, path, initial, () => options), plain: true };
+}
+
+/** Paint-tool blend modes; independent of texture and secondary-tip modes. */
+function paintToolModes(): readonly [string, string][] {
+  return [
+    ['Nrml', 'Normal'],
+    ['Dslv', 'Dissolve'],
+    ['Bhnd', 'Behind'],
+    ['Cler', 'Clear'],
+    ['Drkn', 'Darken'],
+    ['Mltp', 'Multiply'],
+    ['CBrn', 'Color Burn'],
+    ['linearBurn', 'Linear Burn'],
+    ['darkerColor', 'Darker Color'],
+    ['Lghn', 'Lighten'],
+    ['Scrn', 'Screen'],
+    ['CDdg', 'Color Dodge'],
+    ['linearDodge', 'Linear Dodge (Add)'],
+    ['lighterColor', 'Lighter Color'],
+    ['Ovrl', 'Overlay'],
+    ['SftL', 'Soft Light'],
+    ['HrdL', 'Hard Light'],
+    ['vividLight', 'Vivid Light'],
+    ['linearLight', 'Linear Light'],
+    ['pinLight', 'Pin Light'],
+    ['hardMix', 'Hard Mix'],
+    ['Dfrn', 'Difference'],
+    ['Xclu', 'Exclusion'],
+    ['Sbtr', 'Subtract'],
+    ['divide', 'Divide'],
+    ['H   ', 'Hue'],
+    ['Strt', 'Saturation'],
+    ['Clr ', 'Color'],
+    ['Lmns', 'Luminosity']
+  ];
+}
 function dualModes(): readonly [string, string][] {
   return [...textureModes(), ['linearDodge', 'Linear Dodge (Add)'], ['Dfrn', 'Difference']];
 }
@@ -257,10 +335,18 @@ function dualModes(): readonly [string, string][] {
 function fraction(label: string, path: string, initial: number): SettingField<z.ZodNumber> {
   return { ...percent(label, path, initial), factor: 100 };
 }
-function numericChoice(label: string, path: string, labels: string[]): SettingField<z.ZodNumber> {
+function numericChoice(label: string, path: string, labels: string[], first = 0): SettingField<z.ZodNumber> {
   return {
-    ...number(label, path, 0, labels.length - 1, 0),
+    ...number(label, path, first, first + labels.length - 1, first),
     kind: 'control',
-    options: labels.map((label, value) => ({ label, value }))
+    options: labels.map((label, index) => ({ label, value: first + index }))
   };
 }
+
+/** An empty color inherits the host color rather than saving a default into the preset. */
+function color(label: string, path: string): SettingField<z.ZodString> {
+  return { label, path, initial: '', kind: 'color', schema: z.string().regex(/^(?:#[0-9a-fA-F]{6})?$/) };
+}
+
+/** Smudge exposes color replacement modes, rather than the full paint-tool mode list. */
+export const smudgeModes = ['Nrml', 'Drkn', 'Lghn', 'H   ', 'Strt', 'Clr ', 'Lmns'] as const;

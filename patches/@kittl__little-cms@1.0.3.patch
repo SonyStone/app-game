@@ -1,0 +1,110 @@
+diff --git a/dist/littleCms.browser.js b/dist/littleCms.browser.js
+index f1196201dac7333e9d67c24a51bb4d8474bdd4fc..54be07aef37ec41ebba3f2371a3241545e4e3fe8 100644
+--- a/dist/littleCms.browser.js
++++ b/dist/littleCms.browser.js
+@@ -2,6 +2,7 @@ import { getChannels, getExtraSample } from "./formatter";
+ import createCMS from "./lcms.browser.js";
+ import { Err, Ok } from "./result";
+ let Module = null;
++const profileBuffers = new Map();
+ const textEncoder = new TextEncoder();
+ /**
+  * Enumerates ICC profile text fields available via `cmsGetProfileInfoASCII`.
+@@ -133,6 +134,11 @@ export function cmsCloseProfile(profile) {
+         return Err(new WasmNotInitialized());
+     }
+     Module._cmsCloseProfile(profile);
++    const ptr = profileBuffers.get(profile);
++    if (ptr !== undefined) {
++        Module._free(ptr);
++        profileBuffers.delete(profile);
++    }
+     return Ok(true);
+ }
+ /**
+@@ -148,8 +154,10 @@ export function cmsOpenProfileFromMem(profile) {
+     Module.HEAPU8.set(profile, ptr);
+     const handle = Module._cmsOpenProfileFromMem(ptr, profile.length);
+     if (handle === 0) {
++        Module._free(ptr);
+         return Err(new FailedOpenProfile());
+     }
++    profileBuffers.set(handle, ptr);
+     return Ok(handle);
+ }
+ /**
+@@ -186,10 +194,13 @@ export function cmsGetProfileInfoASCII(profile, cmsInfoType, languageCode, count
+     const cntryCode = threeChars(Module, countryCode);
+     const size = Module._cmsGetProfileInfoASCII(profile, cmsInfoType, langCode, cntryCode, 0, 0);
+     if (!size) {
++        Module.stackRestore(stack);
+         return Err(new FailedToGetProfileInfo());
+     }
+     const bufPtr = Module._malloc(size);
+     if (!Module._cmsGetProfileInfoASCII(profile, cmsInfoType, langCode, cntryCode, bufPtr, size)) {
++        Module.stackRestore(stack);
++        Module._free(bufPtr);
+         return Err(new FailedToGetProfileInfo());
+     }
+     const text = cStringToJS(Module, bufPtr, size);
+diff --git a/dist/littleCms.node.js b/dist/littleCms.node.js
+index 8ecc1255417adb692aa6b8eb72e1f4225a50afb5..962e696d8ebb2f1b73f1c2b7df7c6c4cc2669789 100644
+--- a/dist/littleCms.node.js
++++ b/dist/littleCms.node.js
+@@ -2,6 +2,7 @@ import { getChannels, getExtraSample } from "./formatter";
+ import createCMS from "./lcms.node.js";
+ import { Err, Ok } from "./result";
+ let Module = null;
++const profileBuffers = new Map();
+ const textEncoder = new TextEncoder();
+ /**
+  * Enumerates ICC profile text fields available via `cmsGetProfileInfoASCII`.
+@@ -133,6 +134,11 @@ export function cmsCloseProfile(profile) {
+         return Err(new WasmNotInitialized());
+     }
+     Module._cmsCloseProfile(profile);
++    const ptr = profileBuffers.get(profile);
++    if (ptr !== undefined) {
++        Module._free(ptr);
++        profileBuffers.delete(profile);
++    }
+     return Ok(true);
+ }
+ /**
+@@ -148,8 +154,10 @@ export function cmsOpenProfileFromMem(profile) {
+     Module.HEAPU8.set(profile, ptr);
+     const handle = Module._cmsOpenProfileFromMem(ptr, profile.length);
+     if (handle === 0) {
++        Module._free(ptr);
+         return Err(new FailedOpenProfile());
+     }
++    profileBuffers.set(handle, ptr);
+     return Ok(handle);
+ }
+ /**
+@@ -186,10 +194,13 @@ export function cmsGetProfileInfoASCII(profile, cmsInfoType, languageCode, count
+     const cntryCode = threeChars(Module, countryCode);
+     const size = Module._cmsGetProfileInfoASCII(profile, cmsInfoType, langCode, cntryCode, 0, 0);
+     if (!size) {
++        Module.stackRestore(stack);
+         return Err(new FailedToGetProfileInfo());
+     }
+     const bufPtr = Module._malloc(size);
+     if (!Module._cmsGetProfileInfoASCII(profile, cmsInfoType, langCode, cntryCode, bufPtr, size)) {
++        Module.stackRestore(stack);
++        Module._free(bufPtr);
+         return Err(new FailedToGetProfileInfo());
+     }
+     const text = cStringToJS(Module, bufPtr, size);
+diff --git a/package.json b/package.json
+index f26f1c22e861ae3c25dc88d1db5f6543d71270a9..94f1f090dbcf952cd630a5e11918f70ec7e1e822 100644
+--- a/package.json
++++ b/package.json
+@@ -16,6 +16,7 @@
+       "import": "./dist/littleCms.browser.js",
+       "default": "./dist/littleCms.browser.js"
+     },
++    "./wasm": "./dist/lcms.wasm",
+     "./formatter": "./dist/formatter.js",
+     "./flags": "./dist/flags.js",
+     "./formats": "./dist/formats.js"

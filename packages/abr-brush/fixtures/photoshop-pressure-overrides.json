@@ -1,0 +1,823 @@
+{
+  "photoshop": "Photoshop 26.0.0",
+  "source": "Photoshop convertJSONdescriptor readback after setting requested dynamics and toolbar overrides. All cases request Flow control=2, jitter=40%, minimum=20%. RGB/8 sRGB temporary documents; scripted Brush path with simulated pressure, not tablet recordings.",
+  "restoredExactly": true,
+  "cases": [
+    {
+      "name": "min0-jitter0-override0-enabled0",
+      "requested": {
+        "minimum": 0,
+        "jitter": 0,
+        "control": 2,
+        "enabled": false,
+        "sizeOverride": false,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": false,
+        "useTransfer": false,
+        "sizeMinimum": 0,
+        "sizeJitter": 0,
+        "sizeControl": 0,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 0,
+          "80": 0,
+          "120": 0,
+          "256": 0,
+          "420": 0,
+          "440": 0
+        }
+      }
+    },
+    {
+      "name": "min0-jitter0-override0-enabled1",
+      "requested": {
+        "minimum": 0,
+        "jitter": 0,
+        "control": 2,
+        "enabled": true,
+        "sizeOverride": false,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 0.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 255,
+          "80": 246,
+          "120": 213,
+          "256": 50,
+          "420": 239,
+          "440": 254
+        }
+      }
+    },
+    {
+      "name": "min0-jitter0-override1-enabled0",
+      "requested": {
+        "minimum": 0,
+        "jitter": 0,
+        "control": 2,
+        "enabled": false,
+        "sizeOverride": true,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": false,
+        "sizeMinimum": 0.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 173,
+          "80": 0,
+          "120": 0,
+          "256": 0,
+          "420": 0,
+          "440": 64
+        }
+      }
+    },
+    {
+      "name": "min0-jitter0-override1-enabled1",
+      "requested": {
+        "minimum": 0,
+        "jitter": 0,
+        "control": 2,
+        "enabled": true,
+        "sizeOverride": true,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 0.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 255,
+          "80": 247,
+          "120": 214,
+          "256": 50,
+          "420": 239,
+          "440": 253
+        }
+      }
+    },
+    {
+      "name": "min0-jitter0-override2-enabled0",
+      "requested": {
+        "minimum": 0,
+        "jitter": 0,
+        "control": 2,
+        "enabled": false,
+        "sizeOverride": false,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": false,
+        "useTransfer": true,
+        "sizeMinimum": 0,
+        "sizeJitter": 0,
+        "sizeControl": 0,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 235,
+          "80": 227,
+          "120": 198,
+          "256": 46,
+          "420": 218,
+          "440": 231
+        }
+      }
+    },
+    {
+      "name": "min0-jitter0-override2-enabled1",
+      "requested": {
+        "minimum": 0,
+        "jitter": 0,
+        "control": 2,
+        "enabled": true,
+        "sizeOverride": false,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 0.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 255,
+          "80": 246,
+          "120": 213,
+          "256": 46,
+          "420": 239,
+          "440": 253
+        }
+      }
+    },
+    {
+      "name": "min0-jitter0-override3-enabled0",
+      "requested": {
+        "minimum": 0,
+        "jitter": 0,
+        "control": 2,
+        "enabled": false,
+        "sizeOverride": true,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 0.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 253,
+          "80": 244,
+          "120": 211,
+          "256": 46,
+          "420": 236,
+          "440": 251
+        }
+      }
+    },
+    {
+      "name": "min0-jitter0-override3-enabled1",
+      "requested": {
+        "minimum": 0,
+        "jitter": 0,
+        "control": 2,
+        "enabled": true,
+        "sizeOverride": true,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 0.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 255,
+          "80": 246,
+          "120": 214,
+          "256": 46,
+          "420": 240,
+          "440": 253
+        }
+      }
+    },
+    {
+      "name": "min80-jitter0-override0-enabled0",
+      "requested": {
+        "minimum": 80,
+        "jitter": 0,
+        "control": 2,
+        "enabled": false,
+        "sizeOverride": false,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": false,
+        "useTransfer": false,
+        "sizeMinimum": 0,
+        "sizeJitter": 0,
+        "sizeControl": 0,
+        "opacityMinimum": 80.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 0,
+          "80": 0,
+          "120": 0,
+          "256": 0,
+          "420": 0,
+          "440": 0
+        }
+      }
+    },
+    {
+      "name": "min80-jitter0-override0-enabled1",
+      "requested": {
+        "minimum": 80,
+        "jitter": 0,
+        "control": 2,
+        "enabled": true,
+        "sizeOverride": false,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 80.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 80.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 151,
+          "80": 126,
+          "120": 96,
+          "256": 13,
+          "420": 124,
+          "440": 148
+        }
+      }
+    },
+    {
+      "name": "min80-jitter0-override1-enabled0",
+      "requested": {
+        "minimum": 80,
+        "jitter": 0,
+        "control": 2,
+        "enabled": false,
+        "sizeOverride": true,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": false,
+        "sizeMinimum": 0.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 80.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 174,
+          "80": 0,
+          "120": 0,
+          "256": 0,
+          "420": 0,
+          "440": 61
+        }
+      }
+    },
+    {
+      "name": "min80-jitter0-override1-enabled1",
+      "requested": {
+        "minimum": 80,
+        "jitter": 0,
+        "control": 2,
+        "enabled": true,
+        "sizeOverride": true,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 80.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 80.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 148,
+          "80": 128,
+          "120": 95,
+          "256": 13,
+          "420": 122,
+          "440": 149
+        }
+      }
+    },
+    {
+      "name": "min80-jitter0-override2-enabled0",
+      "requested": {
+        "minimum": 80,
+        "jitter": 0,
+        "control": 2,
+        "enabled": false,
+        "sizeOverride": false,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": false,
+        "useTransfer": true,
+        "sizeMinimum": 0,
+        "sizeJitter": 0,
+        "sizeControl": 0,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 235,
+          "80": 227,
+          "120": 198,
+          "256": 46,
+          "420": 218,
+          "440": 231
+        }
+      }
+    },
+    {
+      "name": "min80-jitter0-override2-enabled1",
+      "requested": {
+        "minimum": 80,
+        "jitter": 0,
+        "control": 2,
+        "enabled": true,
+        "sizeOverride": false,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 80.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 246,
+          "80": 239,
+          "120": 200,
+          "256": 46,
+          "420": 230,
+          "440": 244
+        }
+      }
+    },
+    {
+      "name": "min80-jitter0-override3-enabled0",
+      "requested": {
+        "minimum": 80,
+        "jitter": 0,
+        "control": 2,
+        "enabled": false,
+        "sizeOverride": true,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 0.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 253,
+          "80": 243,
+          "120": 212,
+          "256": 46,
+          "420": 236,
+          "440": 251
+        }
+      }
+    },
+    {
+      "name": "min80-jitter0-override3-enabled1",
+      "requested": {
+        "minimum": 80,
+        "jitter": 0,
+        "control": 2,
+        "enabled": true,
+        "sizeOverride": true,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 80.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 246,
+          "80": 235,
+          "120": 199,
+          "256": 46,
+          "420": 228,
+          "440": 244
+        }
+      }
+    },
+    {
+      "name": "min80-jitter80-override0-enabled0",
+      "requested": {
+        "minimum": 80,
+        "jitter": 80,
+        "control": 3,
+        "enabled": false,
+        "sizeOverride": false,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": false,
+        "useTransfer": false,
+        "sizeMinimum": 0,
+        "sizeJitter": 0,
+        "sizeControl": 0,
+        "opacityMinimum": 80.0,
+        "opacityJitter": 80.0,
+        "opacityControl": 3,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 0,
+          "80": 0,
+          "120": 0,
+          "256": 0,
+          "420": 0,
+          "440": 0
+        }
+      }
+    },
+    {
+      "name": "min80-jitter80-override0-enabled1",
+      "requested": {
+        "minimum": 80,
+        "jitter": 80,
+        "control": 3,
+        "enabled": true,
+        "sizeOverride": false,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 80.0,
+        "sizeJitter": 80.0,
+        "sizeControl": 3,
+        "opacityMinimum": 80.0,
+        "opacityJitter": 80.0,
+        "opacityControl": 3,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 187,
+          "80": 166,
+          "120": 83,
+          "256": 92,
+          "420": 144,
+          "440": 182
+        }
+      }
+    },
+    {
+      "name": "min80-jitter80-override1-enabled0",
+      "requested": {
+        "minimum": 80,
+        "jitter": 80,
+        "control": 3,
+        "enabled": false,
+        "sizeOverride": true,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": false,
+        "sizeMinimum": 0.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 80.0,
+        "opacityJitter": 80.0,
+        "opacityControl": 3,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 173,
+          "80": 0,
+          "120": 0,
+          "256": 0,
+          "420": 0,
+          "440": 61
+        }
+      }
+    },
+    {
+      "name": "min80-jitter80-override1-enabled1",
+      "requested": {
+        "minimum": 80,
+        "jitter": 80,
+        "control": 3,
+        "enabled": true,
+        "sizeOverride": true,
+        "opacityOverride": false
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 80.0,
+        "sizeJitter": 80.0,
+        "sizeControl": 2,
+        "opacityMinimum": 80.0,
+        "opacityJitter": 80.0,
+        "opacityControl": 3,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 202,
+          "80": 196,
+          "120": 169,
+          "256": 56,
+          "420": 144,
+          "440": 191
+        }
+      }
+    },
+    {
+      "name": "min80-jitter80-override2-enabled0",
+      "requested": {
+        "minimum": 80,
+        "jitter": 80,
+        "control": 3,
+        "enabled": false,
+        "sizeOverride": false,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": false,
+        "useTransfer": true,
+        "sizeMinimum": 0,
+        "sizeJitter": 0,
+        "sizeControl": 0,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 235,
+          "80": 227,
+          "120": 198,
+          "256": 46,
+          "420": 218,
+          "440": 231
+        }
+      }
+    },
+    {
+      "name": "min80-jitter80-override2-enabled1",
+      "requested": {
+        "minimum": 80,
+        "jitter": 80,
+        "control": 3,
+        "enabled": true,
+        "sizeOverride": false,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 80.0,
+        "sizeJitter": 80.0,
+        "sizeControl": 3,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 245,
+          "80": 235,
+          "120": 201,
+          "256": 46,
+          "420": 234,
+          "440": 245
+        }
+      }
+    },
+    {
+      "name": "min80-jitter80-override3-enabled0",
+      "requested": {
+        "minimum": 80,
+        "jitter": 80,
+        "control": 3,
+        "enabled": false,
+        "sizeOverride": true,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 0.0,
+        "sizeJitter": 0.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 0.0,
+        "flowJitter": 0.0,
+        "flowControl": 0
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 254,
+          "80": 243,
+          "120": 211,
+          "256": 46,
+          "420": 236,
+          "440": 251
+        }
+      }
+    },
+    {
+      "name": "min80-jitter80-override3-enabled1",
+      "requested": {
+        "minimum": 80,
+        "jitter": 80,
+        "control": 3,
+        "enabled": true,
+        "sizeOverride": true,
+        "opacityOverride": true
+      },
+      "effective": {
+        "useShapeDynamics": true,
+        "useTransfer": true,
+        "sizeMinimum": 80.0,
+        "sizeJitter": 80.0,
+        "sizeControl": 2,
+        "opacityMinimum": 0.0,
+        "opacityJitter": 0.0,
+        "opacityControl": 2,
+        "flowMinimum": 20.0,
+        "flowJitter": 40.0,
+        "flowControl": 2
+      },
+      "pixels": {
+        "centerRow": {
+          "68": 242,
+          "80": 235,
+          "120": 202,
+          "256": 46,
+          "420": 228,
+          "440": 244
+        }
+      }
+    }
+  ]
+}

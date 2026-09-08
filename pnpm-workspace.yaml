@@ -4,6 +4,7 @@ packages:
 
 catalog:
   '@floating-ui/dom': ^1.7.6
+  '@kittl/little-cms': 1.0.3
   '@mdx-js/mdx': ^3.1.1
   '@mdx-js/rollup': ^3.1.1
   '@playwright/test': ^1.60.0
@@ -19,8 +20,8 @@ catalog:
   '@solid-primitives/intersection-observer': 3.0.0-next.3
   '@solid-primitives/keyboard': 2.0.0-next.5
   '@solid-primitives/keyed': 3.0.0-next.2
-  '@solid-primitives/memo': 2.0.0-next.2
   '@solid-primitives/media': 4.0.0-next.2
+  '@solid-primitives/memo': 2.0.0-next.2
   '@solid-primitives/mouse': 4.0.0-next.3
   '@solid-primitives/pointer': 1.0.0-next.2
   '@solid-primitives/props': 4.0.0-next.3
@@ -28,8 +29,8 @@ catalog:
   '@solid-primitives/refs': 3.0.0-next.2
   '@solid-primitives/resize-observer': 4.0.0-next.3
   '@solid-primitives/scheduled': 2.0.0-next.2
-  '@solid-primitives/set': 1.0.0-next.2
   '@solid-primitives/scroll': 3.0.0-next.4
+  '@solid-primitives/set': 1.0.0-next.2
   '@solid-primitives/storage': 5.0.0-next.4
   '@solid-primitives/timer': 1.4.5-next.1
   '@solid-primitives/trigger': 3.0.0-next.2
@@ -54,6 +55,7 @@ catalog:
 
 catalogMode: strict
 patchedDependencies:
+  '@kittl/little-cms@1.0.3': patches/@kittl__little-cms@1.0.3.patch
   vite-plugin-solid-svg@0.8.1: patches/vite-plugin-solid-svg@0.8.1.patch
 
 peerDependencyRules:

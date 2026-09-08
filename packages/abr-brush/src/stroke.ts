@@ -1,5 +1,7 @@
 import type { BrushTipImage } from '@app-game/abr-parser/reader';
+import type { ColorMixing } from './colorMixing';
 import type { BrushFormValues } from './form';
+import { pencilUsesBackground, usesPencilCoverage } from './pencil';
 
 /** Preview settings and synthetic or recorded tablet samples, independent of saved preset data. */
 export type PreviewInput = {
@@ -10,6 +12,8 @@ export type PreviewInput = {
   background: string;
   color: string;
   secondaryColor?: string;
+  /** Normal-mode source-over working space. Omitted means Classic for Photoshop comparison. */
+  colorMixing?: ColorMixing;
   opacity: number;
   flow: number;
   path?: PreviewPoint[];
@@ -34,12 +38,29 @@ export type PreviewPoint = {
   time: number;
 };
 /** Four vec4 attributes per stamp: bounds, transform, dynamics (flow, opacity, depth, seed), RGB. */
-export type PreviewStroke = { data: Float32Array; count: number };
+export type PreviewStroke = {
+  data: Float32Array;
+  count: number;
+  /** Mixer-only wetness/mix pairs, aligned with stamps; ordinary brush layout stays unchanged. */
+  mixing?: Float32Array;
+};
 export const stampStride = 16;
+
+/** Tools whose Flow can accumulate with elapsed contact time. Dormant flags survive tool changes. */
+export function supportsAirbrush(tool: BrushFormValues['tool']): boolean {
+  return tool.type === 'PbTl' || tool.type === 'MixB' || (tool.type === 'ErTl' && tool.eraserMode === 1);
+}
 
 /** Deterministic stamp placement shared by the worker's GPU and CPU renderers. */
 export function createPreviewStroke(input: PreviewInput, tip: Pick<BrushTipImage, 'width' | 'height'>): PreviewStroke {
   const v = input.values;
+  if (
+    v.tool.type === 'PcTl' &&
+    v.tool.autoErase &&
+    pencilUsesBackground([...previewColor(input.background).map((value) => Math.round(value * 255)), 255], input.color)
+  ) {
+    input = { ...input, color: input.secondaryColor ?? '#ffffff', secondaryColor: input.color };
+  }
   const points = smoothPoints(input.path?.length ? input.path : syntheticPath(), input);
   const diameter = Math.max(1, Math.min(v.diameter * input.dpr, input.height * 0.58, input.width * 0.16));
   const size =
@@ -64,12 +85,27 @@ export function createAbrStrokeSampler(
   tip: Pick<BrushTipImage, 'width' | 'height'>
 ) {
   const v = input.values,
-    shape = v.shapeDynamics,
+    shape = v.tool.pressureOverridesSize
+      ? {
+          ...v.shapeDynamics,
+          sizeControl: 2,
+          sizeJitter: v.useShapeDynamics ? v.shapeDynamics.sizeJitter : 0,
+          minimumDiameter: v.useShapeDynamics ? v.shapeDynamics.minimumDiameter : 0
+        }
+      : v.shapeDynamics,
     scatter = v.scattering;
+  // Photoshop's opacity override resets jitter/minimum; size preserves them only in an enabled section.
+  // Keep the saved transfer values intact so switching the override off restores the preset.
+  const transfer = v.tool.pressureOverridesOpacity
+    ? { ...v.transfer, opacityControl: 2, opacityJitter: 0, opacityMinimum: 0 }
+    : v.transfer;
+  const buildUp = v.useBuildUp && supportsAirbrush(v.tool);
   const random = rng(input.seed ?? 0x6d2b79f5),
-    colorRandom = rng((input.seed ?? 0x152dc2e1) ^ 0x124f);
+    colorRandom = rng((input.seed ?? 0x152dc2e1) ^ 0x124f),
+    mixingRandom = rng((input.seed ?? 0x152dc2e1) ^ 0x46b9);
   const size = input.size;
   let data: number[] = [];
+  let mixing: number[] = [];
   let nextDistance = 0,
     traveled = 0,
     step = 0,
@@ -80,6 +116,7 @@ export function createAbrStrokeSampler(
   let strokeColor: [number, number, number] | undefined;
   function add(points: readonly PreviewPoint[]): PreviewStroke {
     data = [];
+    mixing = [];
     for (const b of points) {
       if (data.length / stampStride >= (input.maxStamps ?? Infinity)) break;
       if (!previous) {
@@ -98,7 +135,7 @@ export function createAbrStrokeSampler(
       }
       for (; data.length / stampStride < (input.maxStamps ?? Infinity); ) {
         const distanceT = length > 0 ? Math.max(0, (nextDistance - traveled) / length) : Infinity;
-        const timeT = v.useBuildUp && b.time > a.time ? Math.max(0, (nextTime - a.time) / (b.time - a.time)) : Infinity;
+        const timeT = buildUp && b.time > a.time ? Math.max(0, (nextTime - a.time) / (b.time - a.time)) : Infinity;
         if (Math.min(distanceT, timeT) > 1) break;
         if (distanceT <= timeT) nextDistance += stamp(interpolate(a, b, distanceT), direction);
         else {
@@ -109,7 +146,11 @@ export function createAbrStrokeSampler(
       traveled += length;
       previous = { ...b };
     }
-    return { data: new Float32Array(data), count: data.length / stampStride };
+    return {
+      data: new Float32Array(data),
+      count: data.length / stampStride,
+      ...(v.tool.type === 'MixB' ? { mixing: new Float32Array(mixing) } : {})
+    };
   }
   return {
     add,
@@ -124,7 +165,8 @@ export function createAbrStrokeSampler(
         previous,
         strokeColor,
         random: random.state(),
-        color: colorRandom.state()
+        color: colorRandom.state(),
+        mixing: mixingRandom.state()
       };
       try {
         return add(points);
@@ -132,6 +174,8 @@ export function createAbrStrokeSampler(
         ({ nextDistance, traveled, step, initialDirection, nextTime, direction, previous, strokeColor } = saved);
         random.restore(saved.random);
         colorRandom.restore(saved.color);
+        mixingRandom.restore(saved.mixing);
+        mixing = [];
         data = [];
       }
     }
@@ -152,13 +196,14 @@ export function createAbrStrokeSampler(
       else if (control === 7) value = rotation / 360;
       return minimum / 100 + (1 - minimum / 100) * value;
     };
-    let sizeFactor = v.useShapeDynamics
-      ? Math.max(
-          shape.minimumDiameter / 100,
-          inputValue(shape.sizeControl, shape.sizeFade, shape.minimumDiameter) *
-            (1 - (random() * shape.sizeJitter) / 100)
-        )
-      : 1;
+    let sizeFactor =
+      v.useShapeDynamics || v.tool.pressureOverridesSize
+        ? Math.max(
+            shape.minimumDiameter / 100,
+            inputValue(shape.sizeControl, shape.sizeFade, shape.minimumDiameter) *
+              (1 - (random() * shape.sizeJitter) / 100)
+          )
+        : 1;
     if (v.tipKind === 'dBrush' && v.bristle.physics) sizeFactor *= 0.3 + 0.7 * pressure;
     if (v.tipKind === 'dTips' && v.erodible.physics)
       sizeFactor *= 1 + Math.min(0.5, ((step * v.erodible.softness) / 100) * 0.002);
@@ -197,18 +242,20 @@ export function createAbrStrokeSampler(
       }
       const along = v.useScattering && scatter.bothAxes ? (random() * 2 - 1) * scatterAmount : 0;
       const across = (random() * 2 - 1) * scatterAmount;
-      const flow =
-        input.flow *
-        (v.useTransfer
-          ? (1 - (random() * v.transfer.flowJitter) / 100) *
-            inputValue(v.transfer.flowControl, v.transfer.flowFade, v.transfer.flowMinimum)
-          : 1);
-      const opacity =
-        input.opacity *
-        (v.useTransfer
-          ? (1 - (random() * v.transfer.opacityJitter) / 100) *
-            inputValue(v.transfer.opacityControl, v.transfer.opacityFade, v.transfer.opacityMinimum)
-          : 1);
+      const flow = usesPencilCoverage(v.tool)
+        ? 1
+        : input.flow *
+          (v.useTransfer
+            ? (1 - (random() * v.transfer.flowJitter) / 100) *
+              inputValue(v.transfer.flowControl, v.transfer.flowFade, v.transfer.flowMinimum)
+            : 1);
+      const opacity = ['MixB', 'ShTl', 'BlTl'].includes(v.tool.type)
+        ? 1
+        : input.opacity *
+          (v.useTransfer || v.tool.pressureOverridesOpacity
+            ? (1 - (random() * transfer.opacityJitter) / 100) *
+              inputValue(transfer.opacityControl, transfer.opacityFade, transfer.opacityMinimum)
+            : 1);
       const depth =
         (v.texture.depth / 100) *
         (1 - (random() * v.texture.depthJitter) / 100) *
@@ -220,9 +267,26 @@ export function createAbrStrokeSampler(
           : strokeColor;
       const aspect = tip.width / Math.max(tip.width, tip.height),
         aspectY = tip.height / Math.max(tip.width, tip.height);
+      if (v.tool.type === 'MixB') {
+        const transfer = v.transfer;
+        mixing.push(
+          (v.tool.wetness / 100) *
+            (v.useTransfer
+              ? (1 - (mixingRandom() * transfer.wetnessJitter) / 100) *
+                inputValue(transfer.wetnessControl, transfer.wetnessFade, transfer.wetnessMinimum)
+              : 1),
+          (v.tool.mix / 100) *
+            (v.useTransfer
+              ? (1 - (mixingRandom() * transfer.mixJitter) / 100) *
+                inputValue(transfer.mixControl, transfer.mixFade, transfer.mixMinimum)
+              : 1)
+        );
+      }
+      const x = p.x + Math.cos(direction) * along - Math.sin(direction) * across;
+      const y = p.y + Math.sin(direction) * along + Math.cos(direction) * across;
       data.push(
-        p.x + Math.cos(direction) * along - Math.sin(direction) * across,
-        p.y + Math.sin(direction) * along + Math.cos(direction) * across,
+        usesPencilCoverage(v.tool) ? Math.floor(x) + 0.5 : x,
+        usesPencilCoverage(v.tool) ? Math.floor(y) + 0.5 : y,
         stampSize * aspect * 0.5,
         stampSize * aspectY * Math.max(0.001, roundness) * 0.5,
         Math.cos(angle),
@@ -254,6 +318,7 @@ export function dualPreviewInput(input: PreviewInput): PreviewInput {
     opacity: 1,
     values: {
       ...v,
+      tool: { ...v.tool, type: 'PbTl', pressureOverridesSize: false, pressureOverridesOpacity: false },
       spacing: d.spacing,
       spacingEnabled: true,
       flipX: d.flip !== d.flipX,
@@ -374,7 +439,25 @@ function smoothPoints(points: PreviewPoint[], input: PreviewInput) {
   if (!input.path?.length) return points;
   const smoother = createAbrSmoothing(input.values, input.dpr);
   const pixels = points.map((point) => ({ ...point, x: point.x * input.width, y: point.y * input.height }));
-  return [...smoother.add(pixels), ...smoother.finish()].map((point) => ({
+  const processed: PreviewPoint[] = [];
+  const buildup = input.values.useBuildUp && supportsAirbrush(input.values.tool);
+  let previous: PreviewPoint | undefined;
+  for (const point of pixels) {
+    const stationary = previous && point.x === previous.x && point.y === previous.y;
+    // Replay held time before accepting its terminal sample, so elapsed time is not counted twice.
+    const paused =
+      stationary && point.time > previous!.time ? (smoother.idle?.(point.time - previous!.time) ?? []) : [];
+    const emitted = smoother.add([point]);
+    if (stationary && !emitted.length && point.time > previous!.time) {
+      emitted.push(...paused);
+      const last = processed.at(-1);
+      if (!emitted.length && buildup && last && !input.values.smoothing.pulledString)
+        emitted.push({ ...point, x: last.x, y: last.y });
+    }
+    processed.push(...emitted);
+    previous = point;
+  }
+  return [...processed, ...smoother.finish()].map((point) => ({
     ...point,
     x: point.x / input.width,
     y: point.y / input.height
@@ -385,30 +468,75 @@ function smoothPoints(points: PreviewPoint[], input: PreviewInput) {
  * scale converts a CSS-pixel leash to document pixels; preview does not advance committed state.
  */
 export function createAbrSmoothing(values: BrushFormValues, scale = 1) {
+  if (!Number.isFinite(scale) || scale <= 0) throw new Error('Smoothing scale must be positive and finite.');
+  const s = { ...values.smoothing };
+  const amount = values.useSmoothing ? s.amount / 100 : 0;
+  const radius = amount * 30 * (s.adjustForZoom ? scale : 1);
   let previous: PreviewPoint | undefined, latest: PreviewPoint | undefined;
+  let started = false;
   let finished = false;
-  const s = values.smoothing,
-    amount = values.useSmoothing ? s.amount / 100 : 0;
+  const canCatchUp = amount > 0 && s.catchUp && !s.pulledString;
   return {
-    add(points: readonly PreviewPoint[]) {
+    add(points: readonly PreviewPoint[]): PreviewPoint[] {
       if (finished) return [];
-      return points.map((point) => {
-        latest = point;
-        if (!previous || !amount) return (previous = { ...point });
+      const output: PreviewPoint[] = [];
+      for (const point of points) {
+        if (![point.x, point.y, point.pressure, point.time].every(Number.isFinite)) continue;
+        latest = { ...point };
+        if (!amount) {
+          previous = latest;
+          output.push(latest);
+          continue;
+        }
+        if (!previous) {
+          previous = latest;
+          if (!s.pulledString) {
+            started = true;
+            output.push(previous);
+          }
+          continue;
+        }
         const distance = Math.hypot(point.x - previous.x, point.y - previous.y);
-        const radius = amount * 30 * (s.adjustForZoom ? scale : 1);
-        const t = s.pulledString ? Math.max(0, (distance - radius) / Math.max(1, distance)) : 1 - amount * 0.9;
-        let next = { ...point, x: previous.x + (point.x - previous.x) * t, y: previous.y + (point.y - previous.y) * t };
-        if (s.catchUp && distance < radius) next = interpolate(next, point, 0.2);
-        return (previous = next);
-      });
+        // A slack string never paints, even if dormant catch-up options remain enabled.
+        if (distance <= radius) continue;
+        const t = (distance - radius) / distance;
+        if (!started) {
+          output.push(previous);
+          started = true;
+        }
+        previous = { ...point, x: previous.x + (point.x - previous.x) * t, y: previous.y + (point.y - previous.y) * t };
+        output.push(previous);
+      }
+      return output;
     },
+    /** Advances a paused stroke by elapsed milliseconds. No pointer samples or state-mutating preview are invented. */
+    idle: canCatchUp
+      ? (elapsedMs: number): PreviewPoint[] => {
+          if (finished || !latest || !previous || !Number.isFinite(elapsedMs) || elapsedMs <= 0) return [];
+          const distance = Math.hypot(latest.x - previous.x, latest.y - previous.y);
+          if (!distance) return [];
+          const t = 1 - Math.exp(-elapsedMs / (20 + amount * 120));
+          const done = distance * (1 - t) <= 0.01 * scale;
+          previous = {
+            ...latest,
+            x: done ? latest.x : previous.x + (latest.x - previous.x) * t,
+            y: done ? latest.y : previous.y + (latest.y - previous.y) * t,
+            time: Math.max(latest.time, previous.time) + elapsedMs
+          };
+          return [previous];
+        }
+      : undefined,
     preview: (): PreviewPoint[] => [],
-    finish() {
+    finish(): PreviewPoint[] {
       if (finished) return [];
       finished = true;
-      return s.catchUpAtEnd && latest && previous && (previous.x !== latest.x || previous.y !== latest.y)
-        ? [latest]
+      return amount &&
+        !s.pulledString &&
+        s.catchUpAtEnd &&
+        latest &&
+        previous &&
+        (previous.x !== latest.x || previous.y !== latest.y)
+        ? [{ ...latest, time: Math.max(latest.time, previous.time) }]
         : [];
     }
   };

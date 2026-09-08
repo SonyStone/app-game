@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./blockEraser": "./src/blockEraser.ts",
+    "./pencil": "./src/pencil.ts",
     "./form": "./src/form.ts",
     "./settings-fields": "./src/settings-fields.ts",
     "./stroke": "./src/stroke.ts",
@@ -14,7 +16,8 @@
   },
   "dependencies": {
     "@app-game/abr-parser": "workspace:*",
-    "zod": "^4.4.3",
-    "typegpu": "^0.11.4"
+    "@app-game/chroma": "workspace:*",
+    "typegpu": "^0.11.4",
+    "zod": "^4.4.3"
   }
 }

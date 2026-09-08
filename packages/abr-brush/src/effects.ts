@@ -1,4 +1,30 @@
+export {
+  decodePremultiplied,
+  encodePremultiplied,
+  linearSourceOver,
+  mixPremultiplied,
+  sampleMixing,
+  type ColorMixing
+} from './colorMixing';
 import { std } from 'typegpu';
+
+export { planCanvasPickup } from './canvasPickup';
+export {
+  mixerComposite,
+  mixerDose,
+  mixerPaint,
+  mixerPickup,
+  mixerPickupChannel,
+  mixerReservoir,
+  mixerReservoirChannel
+} from './mixer';
+export {
+  fingerPaintComposite,
+  fingerPaintCompositeInSpace,
+  retouchColor,
+  retouchComposite,
+  retouchCompositeInSpace
+} from './retouch';
 
 /** Stable shader IDs for the descriptor's texture and dual-tip blend modes. */
 export function blendModeId(mode: string) {

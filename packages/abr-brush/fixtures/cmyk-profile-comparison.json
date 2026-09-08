@@ -1,0 +1,291 @@
+{
+  "sourceSha256": "35f401731df11a4eba3502af632e51d68bc394bcb7d34632a331c1ba3f4a0bf6",
+  "profile": "U.S. Web Coated (SWOP) v2",
+  "rows": [
+    {
+      "channels": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "actual": [
+        255,
+        255,
+        255
+      ],
+      "expected": [
+        255,
+        255,
+        255
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        100,
+        0,
+        0,
+        0
+      ],
+      "actual": [
+        0,
+        174,
+        239
+      ],
+      "expected": [
+        0,
+        174,
+        239
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        0,
+        100,
+        0,
+        0
+      ],
+      "actual": [
+        236,
+        0,
+        140
+      ],
+      "expected": [
+        236,
+        0,
+        140
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        0,
+        0,
+        100,
+        0
+      ],
+      "actual": [
+        255,
+        242,
+        0
+      ],
+      "expected": [
+        255,
+        242,
+        0
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        0,
+        0,
+        0,
+        100
+      ],
+      "actual": [
+        35,
+        31,
+        32
+      ],
+      "expected": [
+        35,
+        31,
+        32
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        100,
+        100,
+        100,
+        100
+      ],
+      "actual": [
+        0,
+        0,
+        0
+      ],
+      "expected": [
+        3,
+        0,
+        0
+      ],
+      "maximumError": 3
+    },
+    {
+      "channels": [
+        50,
+        0,
+        0,
+        0
+      ],
+      "actual": [
+        109,
+        207,
+        246
+      ],
+      "expected": [
+        109,
+        207,
+        246
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        0,
+        50,
+        0,
+        0
+      ],
+      "actual": [
+        244,
+        154,
+        193
+      ],
+      "expected": [
+        244,
+        154,
+        193
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        0,
+        0,
+        50,
+        0
+      ],
+      "actual": [
+        255,
+        247,
+        153
+      ],
+      "expected": [
+        255,
+        247,
+        153
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        0,
+        0,
+        0,
+        50
+      ],
+      "actual": [
+        147,
+        149,
+        152
+      ],
+      "expected": [
+        147,
+        149,
+        152
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        20,
+        30,
+        40,
+        10
+      ],
+      "actual": [
+        187,
+        160,
+        138
+      ],
+      "expected": [
+        187,
+        160,
+        138
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        0,
+        100,
+        100,
+        0
+      ],
+      "actual": [
+        237,
+        28,
+        36
+      ],
+      "expected": [
+        237,
+        28,
+        36
+      ],
+      "maximumError": 0
+    },
+    {
+      "channels": [
+        100,
+        0,
+        100,
+        0
+      ],
+      "actual": [
+        0,
+        166,
+        80
+      ],
+      "expected": [
+        0,
+        166,
+        81
+      ],
+      "maximumError": 1
+    },
+    {
+      "channels": [
+        100,
+        100,
+        0,
+        0
+      ],
+      "actual": [
+        46,
+        48,
+        146
+      ],
+      "expected": [
+        46,
+        49,
+        146
+      ],
+      "maximumError": 1
+    },
+    {
+      "channels": [
+        10,
+        10,
+        10,
+        10
+      ],
+      "actual": [
+        206,
+        202,
+        201
+      ],
+      "expected": [
+        206,
+        202,
+        200
+      ],
+      "maximumError": 1
+    }
+  ]
+}
