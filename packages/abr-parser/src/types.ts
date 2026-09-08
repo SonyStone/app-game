@@ -246,7 +246,7 @@ export const ZBrushTipImage = z.object({
   compressedData: z.custom<Uint8Array>((val) => val instanceof Uint8Array).optional()
 });
 
-/** Brush type discriminator */
+/** Legacy two-way classification; bristle/erodible families also report computed. Inspect Brsh.classId in descriptor for the original family. */
 export const BrushType = z.enum(['computed', 'sampled']);
 export type BrushType = z.infer<typeof BrushType>;
 
@@ -260,6 +260,7 @@ export const ZBrush = z.object({
   hardness: ZPercent.optional(),
   angle: ZDegrees.optional(),
   roundness: ZPercent.optional(),
+  /** Legacy convenience schema; AbrParser does not populate this. Read settings/descriptor dynamics objects. */
   dynamics: ZBrushDynamics.optional(),
   brushTip: ZBrushTipImage.optional(),
   sampledDataUuid: z.string().optional(),
@@ -269,6 +270,7 @@ export const ZBrush = z.object({
   descriptor: z.custom<Record<string, DescriptorValue>>().optional(),
   presetClassName: z.string().optional(),
   presetClassId: z.string().optional(),
+  /** Editable plain view, not lossless: tdta becomes a size label and other opaque types become null. Keep descriptor for full data and wire types. */
   settings: z.record(z.string(), z.unknown())
 });
 

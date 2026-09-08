@@ -13,7 +13,7 @@ The source repository remains at `/home/driver/projects/disassembly-lab`, includ
 
 ## Compatibility
 
-Read [the compatibility audit](docs/compatibility.md) before treating this as a complete ABR implementation.
+Read [the compatibility audit](docs/compatibility.md) and [Photoshop settings verification](docs/settings-audit.md) before treating this as a complete ABR implementation.
 The parser supports modern containers 6, 9 and 10 with sample layouts 1 and 2; legacy ABR 1/2 is unsupported.
 Parsing and resource preservation do not establish identical Photoshop brush rendering.
 
@@ -39,3 +39,9 @@ preserved automatically. Changed 16-bit pixels cannot be exported from the 8-bit
 The writer defaults to the source container version and subversion. Explicit subversion conversion
 of preserved metadata is rejected. `preserveRawDescriptor` ignores descriptor edits, and
 `rawHierarchyData` takes precedence over `hierarchy`; clear the latter raw field to rebuild groups.
+
+`Brush.descriptor` retains typed settings; `Brush.settings` is an editable, lossy view. In particular,
+binary `tdta` becomes a size label, and alias/reference/class/64-bit integer payloads become `null`
+in `settings`. Keep the typed descriptor when exporting or inspecting those values.
+`Brush.dynamics` is not populated by the parser. The legacy `Brush.type` only distinguishes sampled
+from computed; read `descriptor.Brsh.classId` (or `settings.Brsh.__classId`) for bristle/erodible families.

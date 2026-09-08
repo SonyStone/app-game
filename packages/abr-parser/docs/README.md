@@ -100,19 +100,20 @@ import {
 
 ## Descriptor Keys
 
-Photoshop uses 4-character keys for brush properties. See [`src/descriptor-keys.ts`](../src/descriptor-keys.ts) for mappings:
+Photoshop uses both four-character and longer string keys for brush properties. The [native settings audit](settings-audit.md) supersedes the historical key examples in the imported settings guides. See [`src/descriptor-keys.ts`](../src/descriptor-keys.ts) for mappings:
 
 ```typescript
 import {
   BrushDefinitionKeys, // Dmtr, Hrdn, Angl, Rndn, Spcn, etc.
-  ShapeDynamicsKeys, // szJt, anglJitter, rndnJitter, etc.
-  ScatteringKeys, // Sctr, Cnt, bothAxes, etc.
-  TextureKeys, // Txtr, Scl, textureDepth, etc.
-  DualBrushKeys, // dualBrush, useDualBrush, etc.
-  ColorDynamicsKeys, // clrN, Hue, Strt (saturation), Brgh, Prty, etc.
-  TransferKeys, // Opct, opacityJitter, FlwJ, wetJitter, etc.
+  ShapeDynamicsKeys, // szVr, angleDynamics, roundnessDynamics, etc.
+  DynamicsKeys, // bVTy, fStp, jitter, "Mnm " inside each dynamics object
+  ScatteringKeys, // scatterDynamics, "Cnt ", bothAxes, etc.
+  TextureKeys, // Txtr, TxtC, textureScale, textureDepth, etc.
+  DualBrushKeys, // Brsh, BlnM, useDualBrush inside dualBrush
+  ColorDynamicsKeys, // clVr, "H   ", Strt, Brgh, purity, etc.
+  TransferKeys, // opVr, prVr, wtVr, mxVr dynamics objects
   BrushPoseKeys, // overridePoseAngle, overridePosePressure, etc.
-  ControlTypeValues, // strokeDynamicsOff → 'off', etc.
+  ControlTypeValues, // numeric bVTy: 0 → 'off', 2 → 'penPressure', etc.
   BlendModeValues // Nrml → 'normal', Mltp → 'multiply', etc.
 } from '@anthropic/abr-parser';
 ```

@@ -1,0 +1,147 @@
+{
+  "photoshop": "26.0.0",
+  "date": "2026-09-07",
+  "method": "Native ActionDescriptor.fromStream plus typed getters; floats encoded as sign/exponent/53-bit significand split into two integers, raw data as hex; object keys sorted; descriptor class names excluded (not exposed by native getters). Hashes originate from Photoshop output, not AbrParser.",
+  "records": [
+    {
+      "file": "0 MH 8B Brushes.abr",
+      "repository": true,
+      "brushes": 26,
+      "sourceSha256": "1ed7b36abe0cbbd431ae0683b1a514812df51f99de4f1b6d245847e7fd6e43de",
+      "nativeDescriptorSha256": "4a5e7af769b82bb14d139fc1b243e975034dfb5cb67d0672d08e17557452c477"
+    },
+    {
+      "file": "AI_Brush_collection.abr",
+      "repository": true,
+      "brushes": 7,
+      "sourceSha256": "d079f9a878149b6da0719b9ca91279abb040af9b23aa66ae4f0974fadeb41c09",
+      "nativeDescriptorSha256": "b2a96a31d2e3747bc6d654f229b5216cdc5366bb4894cc471b36a55e57e8f949"
+    },
+    {
+      "file": "Basic_3.abr",
+      "repository": true,
+      "brushes": 3,
+      "sourceSha256": "b234d2b544b843b238af178f48bb2a30fe9f3ac20f0434e5491f383e50b01ad4",
+      "nativeDescriptorSha256": "aaee14d9f17f686bde667726f688196b05458f947e54e3eae787334ecf701891"
+    },
+    {
+      "file": "Brushes To Implement Roundtrip.abr",
+      "repository": true,
+      "brushes": 14,
+      "sourceSha256": "052c4a0babf85d7b18ce740c6f530edb7b7901fb3261c7e4fe42c45fc8c4e9ba",
+      "nativeDescriptorSha256": "89e2eccf5edc47c61f51947089aee35fc3826166415640998e6867a0232112e3"
+    },
+    {
+      "file": "Brushes To Implement.abr",
+      "repository": true,
+      "brushes": 14,
+      "sourceSha256": "3f25318f881807c3692662f5ae481759f2b08365b10da1adf1e53b0a6f741c64",
+      "nativeDescriptorSha256": "83a39ab766c03f39c3b3e32cf3300f45c35cb9c6b88b601d6f4d7259b06fd703"
+    },
+    {
+      "file": "CGCookie_BasicBrushes.abr",
+      "repository": true,
+      "brushes": 9,
+      "sourceSha256": "3f66c5cb15a473e1761e5baa193e30648d4f8c1af10107f87cb5f4fc75541819",
+      "nativeDescriptorSha256": "1de2864af6ca9e0c9f3b7b855a55e74770e087a2dfa561a0e4154a1a84388188"
+    },
+    {
+      "file": "Chunky_Chalk_Brush_by_MarkWinters.abr",
+      "repository": true,
+      "brushes": 1,
+      "sourceSha256": "2b13f4018f8f00d0acfce25dcc78cbfb42e481b2cca7ad2dd32485eeb81c9678",
+      "nativeDescriptorSha256": "a04f5934a7ec3ef371f5e788de4254ff3fdb98d4f1f1b1649cce0867bbf79d70"
+    },
+    {
+      "file": "CtrlPaint - Digital Sketching.abr",
+      "repository": true,
+      "brushes": 4,
+      "sourceSha256": "ee64afe994cc86a080156de9e018ac304a7bee6cdf0102de5176eb164ed8d5fb",
+      "nativeDescriptorSha256": "ae21af3546123418af6642bb3cb367122d8f59d37da11b93437973d0908049eb"
+    },
+    {
+      "file": "Driver_drow.abr",
+      "repository": true,
+      "brushes": 11,
+      "sourceSha256": "60777f5e12c576664af3c38b4125df6f58b04b083b9fe3e4724a8e27d1bb3bb0",
+      "nativeDescriptorSha256": "4fa013b1fbec83c07101a59372c6ee2fd5d830359f324772d53c9f4e276ebd59"
+    },
+    {
+      "file": "MainBrushes.abr",
+      "repository": true,
+      "brushes": 14,
+      "sourceSha256": "ce53e389bd86a22cfec4a2ade2271a53ddd0925f5d4e52b99852bc238176cd02",
+      "nativeDescriptorSha256": "c419944830ebd3c58f6ec0bb15499a78a66790625d7e32ec25734a529e1805f7"
+    },
+    {
+      "file": "Paint_markers_brush_set_by_LDN755.abr",
+      "repository": true,
+      "brushes": 20,
+      "sourceSha256": "cc956582330c14b6ba4e1aa8e39028234275a29ec4c1335c4b1b93396fff0891",
+      "nativeDescriptorSha256": "8a53b986d5a7b06bdc61a67a43c0209b40c578f3b97fd29b382bed387c8cae88"
+    },
+    {
+      "file": "2.1 Набор кистей. Set of brushes.abr",
+      "repository": false,
+      "brushes": 9,
+      "sourceSha256": "6203a750daa02e60c64df80c17934ba3daea51c219d5033d8593a095ec0c0007",
+      "nativeDescriptorSha256": "c5a017dc9bb5b4fd77884e8140e44283b3dc8970d980ed38bd1d1c0f69601d1a"
+    },
+    {
+      "file": "Spring-Brushes-2024.abr",
+      "repository": false,
+      "brushes": 30,
+      "sourceSha256": "997b59bfd9b03479ef01dacf063efd5ea90342cf7d0607bd4e3e4e564a1da9f9",
+      "nativeDescriptorSha256": "2ab8e31e8d810b50b086e0df636939fc8732fb3eed730669286d92d0865a1582"
+    },
+    {
+      "file": "dry_media.abr",
+      "repository": false,
+      "brushes": 35,
+      "sourceSha256": "f11e10f8b6e99321d4c65d0bbce6b31ecf902319058028b9a50f77d379c0e716",
+      "nativeDescriptorSha256": "8a16c3d4e2bc15af2e31fd082cee709737be1375a222d0f3696a2924f243e1ae"
+    },
+    {
+      "file": "gouache.abr",
+      "repository": false,
+      "brushes": 41,
+      "sourceSha256": "4377c27c79c4421947e4bba24674c155c113b89829c7fe7eddd16dabc6d3a766",
+      "nativeDescriptorSha256": "368d36fed8b1d3027fc558b281d855d54e692ed118a9c8a2e2433e5092e04001"
+    },
+    {
+      "file": "halftones_and_screentones.abr",
+      "repository": false,
+      "brushes": 135,
+      "sourceSha256": "687f58b55e4ec0438e9d913071260b5e03ed91933258a44dfd73562cce37682d",
+      "nativeDescriptorSha256": "0579c8aec9f43a229ddb775238a47409a0ce8d6bfb255ec62d898e27d9270b92"
+    },
+    {
+      "file": "manga.abr",
+      "repository": false,
+      "brushes": 41,
+      "sourceSha256": "d36e0542b74e0ecd6127a0212f0f0e14063483925701cc637d0ecb0d37a4a431",
+      "nativeDescriptorSha256": "02ddc8142602416ae27b7123401b5b5fd643cfac743039a29bb4375c368e322d"
+    },
+    {
+      "file": "megapack.abr",
+      "repository": false,
+      "brushes": 465,
+      "sourceSha256": "f14a7ada4f3d042d0012cc1c55a1e1a7c9d97daafdac099e134f0239662d3704",
+      "nativeDescriptorSha256": "56ec0561648bd0feb1c08541e133f7bf44ef4f9bc910df16a432917eb83bdf15"
+    },
+    {
+      "file": "spatter_brushes.abr",
+      "repository": false,
+      "brushes": 53,
+      "sourceSha256": "3f70d12a96f2ce1af7626ac47b55f6005f03d1a2575e301c55c4f1da6aef58ab",
+      "nativeDescriptorSha256": "b38d21281928debded13e0706c4c97c4012364cacbe2341c73cfd49e544a64ef"
+    },
+    {
+      "file": "watercolor.abr",
+      "repository": false,
+      "brushes": 139,
+      "sourceSha256": "1c8cf39bd5126f6cc778c28331631315cb27f17d8391bce35729ec6bfc95ff1c",
+      "nativeDescriptorSha256": "703e964a85cf13eeba67f6e1d6a0ff8b7b8fb645567dce6473e509307935481e"
+    }
+  ]
+}

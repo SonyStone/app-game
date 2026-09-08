@@ -233,7 +233,7 @@ Determined by presence of `sampledData`:
 
 ### Dynamics Settings
 
-Shape dynamics are stored under `shapeDynamics` or `prVr` key:
+Shape dynamics use the top-level keys below, enabled by `useTipDynamics`. Transfer dynamics are separate: `prVr` is Flow, `opVr` is Opacity, enabled by `usePaintDynamics`. See [ag-psd's ABR reader](https://github.com/Agamnentzar/ag-psd/blob/master/src/abr.ts).
 
 | Key | Type | Description |
 |-----|------|-------------|

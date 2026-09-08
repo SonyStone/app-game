@@ -1,390 +1,169 @@
 /**
- * ABR Descriptor Keys Mapping
- *
- * This file documents the Photoshop descriptor keys used in ABR files
- * and their corresponding human-readable names.
- *
- * ABR files use a binary descriptor format where settings are stored
- * with 4-character keys (often with trailing spaces).
+ * Documented ABR wire keys, grouped by their containing descriptor object.
+ * Keys are exact (including trailing spaces); values are readable labels.
+ * This is a partial vocabulary, not a parser allowlist. Unknown setting keys
+ * are retained in Brush.descriptor and Brush.settings by the generic reader.
+ * Dynamics are nested brVr objects; controls are integers, not enum strings.
  */
 
-// ============================================================================
-// MARK: Brush Definition Keys (inside 'Brsh' object)
-// ============================================================================
-
+/** Keys inside Brsh. Its descriptor class identifies the tip family. */
 export const BrushDefinitionKeys = {
-  /** Brush type enum: 'brtC' = computed, 'brtS' = sampled */
-  brTp: 'brushType',
-
-  /** Diameter in pixels (UntF #Pxl) */
   Dmtr: 'diameter',
-
-  /** Hardness percentage (UntF #Prc) - only for computed brushes */
   Hrdn: 'hardness',
-
-  /** Brush tip angle in degrees (UntF #Ang) - Range: -179 to 180 */
   Angl: 'angle',
-
-  /** Roundness percentage (UntF #Prc) */
   Rndn: 'roundness',
-
-  /** Spacing percentage (UntF #Prc) */
   Spcn: 'spacing',
-
-  /** Interpolation enabled (bool) */
-  Intr: 'interpolation',
-
-  /** Flip X (bool) */
+  /** Whether distance-based spacing is enabled; not a smoothing switch. */
+  Intr: 'spacingEnabled',
   flipX: 'flipX',
-
-  /** Flip Y (bool) */
   flipY: 'flipY',
-
-  /** UUID reference to sampled brush tip data (TEXT) */
-  sampledData: 'sampledDataUuid'
+  sampledData: 'sampledDataUuid',
+  'Nm  ': 'name'
 } as const;
+export type BrushDefinitionKey = keyof typeof BrushDefinitionKeys;
 
-// ============================================================================
-// MARK: Top-Level Brush Preset Keys
-// ============================================================================
-
+/** Keys at the preset root; child objects have their own dictionaries below. */
 export const BrushPresetKeys = {
-  /** Brush name (TEXT) */
   'Nm  ': 'name',
-
-  /** Brush definition object (Objc: computedBrush | sampledBrush) */
   Brsh: 'brushDefinition',
-
-  /** Brush identifier/UUID (TEXT) */
   Idnt: 'identifier',
-
-  /** Use brush size from preset (bool) */
   useBrushSize: 'useBrushSize',
-
-  /** Use brush group (bool) */
-  useBrushGroup: 'useBrushGroup'
+  brushGroup: 'brushGroup',
+  dualBrush: 'dualBrush',
+  toolOptions: 'toolOptions'
 } as const;
+export type BrushPresetKey = keyof typeof BrushPresetKeys;
 
-// ============================================================================
-// MARK: Shape Dynamics Keys
-// ============================================================================
-
+/** Root shape settings. Brsh.flipX/Y flip the tip; these flipX/Y randomize it. */
 export const ShapeDynamicsKeys = {
-  /** Shape dynamics enabled (bool) */
   useTipDynamics: 'shapeDynamicsEnabled',
-
-  /** Size jitter percentage (UntF #Prc) */
-  szJt: 'sizeJitter',
-
-  /** Size jitter control type (enum: strokeDynamicsType) */
-  sizeJitterControl: 'sizeJitterControl',
-
-  /** Minimum diameter percentage (UntF #Prc) */
-  minDiameter: 'minimumDiameter',
-
-  /** Tilt scale percentage (UntF #Prc) */
+  szVr: 'sizeDynamics',
+  minimumDiameter: 'minimumDiameter',
   tiltScale: 'tiltScale',
-
-  /** Angle jitter percentage (UntF #Prc) */
-  anglJitter: 'angleJitter',
-
-  /** Angle jitter control (enum) */
-  anglJitterControl: 'angleJitterControl',
-
-  /** Roundness jitter percentage (UntF #Prc) */
-  rndnJitter: 'roundnessJitter',
-
-  /** Roundness jitter control (enum) */
-  rndnJitterControl: 'roundnessJitterControl',
-
-  /** Minimum roundness percentage (UntF #Prc) */
-  minRoundness: 'minimumRoundness',
-
-  /** Flip X jitter (bool) */
-  flipXJitter: 'flipXJitter',
-
-  /** Flip Y jitter (bool) */
-  flipYJitter: 'flipYJitter',
-
-  /** Brush projection enabled (bool) */
+  angleDynamics: 'angleDynamics',
+  roundnessDynamics: 'roundnessDynamics',
+  minimumRoundness: 'minimumRoundness',
+  flipX: 'flipXJitter',
+  flipY: 'flipYJitter',
   brushProjection: 'brushProjection'
 } as const;
+export type ShapeDynamicsKey = keyof typeof ShapeDynamicsKeys;
 
-// ============================================================================
-// MARK: Scattering Keys
-// ============================================================================
+/** Keys inside each brVr dynamics object (szVr, opVr, scatterDynamics, etc.). */
+export const DynamicsKeys = {
+  /** Integer selector; see ControlTypeValues. */
+  bVTy: 'control',
+  fStp: 'fadeSteps',
+  jitter: 'jitter',
+  /** Control minimum; distinct from root minimumDiameter/minimumRoundness. */
+  'Mnm ': 'minimum'
+} as const;
+export type DynamicsKey = keyof typeof DynamicsKeys;
 
+/** Scattering keys at the preset root, also used inside dualBrush. */
 export const ScatteringKeys = {
-  /** Scattering enabled (bool) */
   useScatter: 'scatteringEnabled',
-
-  /** Scatter amount percentage (UntF #Prc) */
-  scatter: 'scatter',
-
-  /** Scatter control (enum) */
-  scatterControl: 'scatterControl',
-
-  /** Both axes enabled (bool) */
+  scatterDynamics: 'scatterDynamics',
   bothAxes: 'bothAxes',
-
-  /** Brush count (long) */
-  count: 'count',
-
-  /** Count jitter percentage (UntF #Prc) */
-  countJitter: 'countJitter',
-
-  /** Count jitter control (enum) */
-  countJitterControl: 'countJitterControl'
+  'Cnt ': 'count',
+  countDynamics: 'countDynamics'
 } as const;
+export type ScatteringKey = keyof typeof ScatteringKeys;
 
-// ============================================================================
-// MARK: Texture Keys
-// ============================================================================
-
+/** Root texture settings. Txtr contains the pattern name and identifier. */
 export const TextureKeys = {
-  /** Texture enabled (bool) */
   useTexture: 'textureEnabled',
-
-  /** Pattern reference (Objc: pattern) */
-  Ptrn: 'pattern',
-
-  /** Texture scale percentage (UntF #Prc) */
+  Txtr: 'pattern',
   textureScale: 'scale',
-
-  /** Texture brightness (long: -150 to 150) */
   textureBrightness: 'brightness',
-
-  /** Texture contrast (long: -50 to 100) */
   textureContrast: 'contrast',
-
-  /** Texture depth percentage (UntF #Prc) */
   textureDepth: 'depth',
-
-  /** Texture each tip (bool) */
-  textureEachTip: 'textureEachTip',
-
-  /** Texture blend mode (enum: blendMode) */
+  /** Photoshop's string-ID alias is textClickPoint, despite its brush meaning. */
+  TxtC: 'textureEachTip',
   textureBlendMode: 'blendMode',
-
-  /** Minimum depth percentage (UntF #Prc) */
-  minimumTextureDepth: 'minimumDepth',
-
-  /** Depth jitter percentage (UntF #Prc) */
-  textureDepthJitter: 'depthJitter',
-
-  /** Depth jitter control (enum) */
-  textureDepthJitterControl: 'depthJitterControl',
-
-  /** Invert texture (bool) */
-  invertTexture: 'invert'
+  minimumDepth: 'minimumDepth',
+  textureDepthDynamics: 'depthDynamics',
+  InvT: 'invert'
 } as const;
+export type TextureKey = keyof typeof TextureKeys;
 
-// ============================================================================
-// MARK: Dual Brush Keys
-// ============================================================================
-
+/** Keys inside the root dualBrush object; tip geometry is inside its Brsh. */
 export const DualBrushKeys = {
-  /** Dual brush enabled (bool) */
   useDualBrush: 'dualBrushEnabled',
-
-  /** Dual brush definition (Objc: brush) */
-  dualBrush: 'dualBrush',
-
-  /** Dual brush blend mode (enum: blendMode) */
-  dualBrushBlendMode: 'blendMode',
-
-  /** Dual brush flip (bool) */
-  dualBrushFlip: 'flip',
-
-  /** Dual brush size (UntF #Pxl) */
-  dualBrushSize: 'size',
-
-  /** Dual brush spacing percentage (UntF #Prc) */
-  dualBrushSpacing: 'spacing',
-
-  /** Dual brush scatter percentage (UntF #Prc) */
-  dualBrushScatter: 'scatter',
-
-  /** Dual brush both axes (bool) */
-  dualBrushBothAxes: 'bothAxes',
-
-  /** Dual brush count (long) */
-  dualBrushCount: 'count'
+  Brsh: 'brushDefinition',
+  BlnM: 'blendMode',
+  Flip: 'flip',
+  useScatter: 'scatteringEnabled',
+  scatterDynamics: 'scatterDynamics',
+  bothAxes: 'bothAxes',
+  'Cnt ': 'count',
+  countDynamics: 'countDynamics'
 } as const;
+export type DualBrushKey = keyof typeof DualBrushKeys;
 
-// ============================================================================
-// MARK: Color Dynamics Keys
-// ============================================================================
-
+/** Root color dynamics; hue, saturation, brightness and purity carry percent units. */
 export const ColorDynamicsKeys = {
-  /** Color dynamics enabled (bool) */
   useColorDynamics: 'colorDynamicsEnabled',
-
-  /** Apply per tip (bool) */
-  applyPerTip: 'applyPerTip',
-
-  /** Foreground/background jitter percentage (UntF #Prc) */
-  fgBgJitter: 'foregroundBackgroundJitter',
-
-  /** Foreground/background jitter control (enum) */
-  fgBgJitterControl: 'foregroundBackgroundJitterControl',
-
-  /** Hue jitter percentage (UntF #Prc) */
-  hueJitter: 'hueJitter',
-
-  /** Saturation jitter percentage (UntF #Prc) */
-  satJitter: 'saturationJitter',
-
-  /** Brightness jitter percentage (UntF #Prc) */
-  briJitter: 'brightnessJitter',
-
-  /** Purity (long: -100 to 100) */
+  colorDynamicsPerTip: 'applyPerTip',
+  clVr: 'foregroundBackgroundDynamics',
+  'H   ': 'hueJitter',
+  Strt: 'saturationJitter',
+  Brgh: 'brightnessJitter',
   purity: 'purity'
 } as const;
+export type ColorDynamicsKey = keyof typeof ColorDynamicsKeys;
 
-// ============================================================================
-// MARK: Transfer Keys (Opacity/Flow Dynamics)
-// ============================================================================
-
+/** Root transfer settings, each dynamics value is a nested brVr object. */
 export const TransferKeys = {
-  /** Transfer enabled (bool) */
   usePaintDynamics: 'transferEnabled',
-
-  /** Opacity jitter percentage (UntF #Prc) */
-  opacityJitter: 'opacityJitter',
-
-  /** Opacity jitter control (enum) */
-  opacityJitterControl: 'opacityJitterControl',
-
-  /** Minimum opacity percentage (UntF #Prc) */
-  minimumOpacity: 'minimumOpacity',
-
-  /** Flow jitter percentage (UntF #Prc) */
-  flowJitter: 'flowJitter',
-
-  /** Flow jitter control (enum) */
-  flowJitterControl: 'flowJitterControl',
-
-  /** Minimum flow percentage (UntF #Prc) */
-  minimumFlow: 'minimumFlow',
-
-  /** Wetness jitter percentage (UntF #Prc) - Mixer Brush only */
-  wetnessJitter: 'wetnessJitter',
-
-  /** Wetness jitter control (enum) - Mixer Brush only */
-  wetnessJitterControl: 'wetnessJitterControl',
-
-  /** Minimum wetness percentage (UntF #Prc) - Mixer Brush only */
-  minimumWetness: 'minimumWetness',
-
-  /** Mix jitter percentage (UntF #Prc) - Mixer Brush only */
-  mixJitter: 'mixJitter',
-
-  /** Mix jitter control (enum) - Mixer Brush only */
-  mixJitterControl: 'mixJitterControl',
-
-  /** Minimum mix percentage (UntF #Prc) - Mixer Brush only */
-  minimumMix: 'minimumMix'
+  opVr: 'opacityDynamics',
+  prVr: 'flowDynamics',
+  wtVr: 'wetnessDynamics',
+  mxVr: 'mixDynamics'
 } as const;
+export type TransferKey = keyof typeof TransferKeys;
 
-// ============================================================================
-// MARK: Brush Pose Keys
-// ============================================================================
-
+/** Root brush pose settings; rotation uses brushPoseAngle rather than Brsh.Angl. */
 export const BrushPoseKeys = {
-  /** Brush pose enabled (bool) */
   useBrushPose: 'brushPoseEnabled',
-
-  /** Override tilt X (bool) */
-  overrideTiltX: 'overrideTiltX',
-
-  /** Tilt X value (-100 to 100) */
-  tiltX: 'tiltX',
-
-  /** Override tilt Y (bool) */
-  overrideTiltY: 'overrideTiltY',
-
-  /** Tilt Y value (-100 to 100) */
-  tiltY: 'tiltY',
-
-  /** Override rotation (bool) */
-  overrideRotation: 'overrideRotation',
-
-  /** Rotation value in degrees (0 to 360) - NOT same as brush angle (-179 to 180) */
-  rotation: 'rotation',
-
-  /** Override pressure (bool) */
-  overridePressure: 'overridePressure',
-
-  /** Pressure value (0 to 100) */
-  pressure: 'pressure'
+  overridePoseTiltX: 'overrideTiltX',
+  brushPoseTiltX: 'tiltX',
+  overridePoseTiltY: 'overrideTiltY',
+  brushPoseTiltY: 'tiltY',
+  overridePoseAngle: 'overrideRotation',
+  brushPoseAngle: 'rotation',
+  overridePosePressure: 'overridePressure',
+  brushPosePressure: 'pressure'
 } as const;
+export type BrushPoseKey = keyof typeof BrushPoseKeys;
 
-// ============================================================================
-// MARK: Quick Toggle Keys (Simple On/Off Settings)
-// ============================================================================
-
+/** Root toggles. Modern smoothing is stored separately in toolOptions.smoothing. */
 export const QuickToggleKeys = {
-  /** Noise enabled (bool) */
-  useNoise: 'noiseEnabled',
-
-  /** Wet edges enabled (bool) */
-  wetEdges: 'wetEdgesEnabled',
-
-  /** Build-up / Airbrush mode enabled (bool) */
-  Arbrsh: 'buildUpEnabled',
-
-  /** Smoothing enabled (bool) */
-  useSmoothing: 'smoothingEnabled',
-
-  /** Protect texture enabled (bool) */
+  Nose: 'noiseEnabled',
+  Wtdg: 'wetEdgesEnabled',
+  'Rpt ': 'buildUpEnabled',
   protectTexture: 'protectTextureEnabled'
 } as const;
+export type QuickToggleKey = keyof typeof QuickToggleKeys;
 
-// ============================================================================
-// MARK: Control Type Value Mappings
-// ============================================================================
-
-/**
- * Maps Photoshop enum values to human-readable control types
- */
+/** Integer bVTy control selectors; individual settings support different subsets. */
 export const ControlTypeValues = {
-  /** No dynamic control */
-  strokeDynamicsOff: 'off',
-
-  /** Fade over steps */
-  strokeDynamicsFade: 'fade',
-
-  /** Dial input (Microsoft Surface Dial, etc.) */
-  strokeDynamicsDial: 'dial',
-
-  /** Pen pressure */
-  strokeDynamicsPenPressure: 'penPressure',
-
-  /** Pen tilt */
-  strokeDynamicsPenTilt: 'penTilt',
-
-  /** Stylus wheel (airbrush) */
-  strokeDynamicsStylusWheel: 'stylusWheel',
-
-  /** Stylus barrel rotation */
-  strokeDynamicsRotation: 'rotation',
-
-  /** Initial stroke direction */
-  strokeDynamicsInitialDirection: 'initialDirection',
-
-  /** Continuous stroke direction */
-  strokeDynamicsDirection: 'direction'
+  0: 'off',
+  1: 'fade',
+  2: 'penPressure',
+  3: 'penTilt',
+  4: 'stylusWheel',
+  5: 'initialDirection',
+  6: 'direction',
+  7: 'initialRotation',
+  8: 'rotation'
 } as const;
+export type ControlTypeValue = keyof typeof ControlTypeValues;
 
-// ============================================================================
-// MARK: Blend Mode Value Mappings
-// ============================================================================
-
-/**
- * Maps Photoshop enum values to human-readable blend modes
- */
+/** Photoshop blend-mode enum values, including texture Height mode. */
 export const BlendModeValues = {
+  /** Texture Height mode. */
+  Hght: 'height',
   Nrml: 'normal',
   Dslv: 'dissolve',
   Bhnd: 'behind',
@@ -415,6 +194,7 @@ export const BlendModeValues = {
   'Clr ': 'color',
   Lmns: 'luminosity'
 } as const;
+export type BlendModeValue = keyof typeof BlendModeValues;
 
 // ============================================================================
 // MARK: Unit Type Mappings
@@ -434,20 +214,4 @@ export const UnitTypes = {
   '#Nne': 'none'
 } as const;
 
-// ============================================================================
-// MARK: Type Exports
-// ============================================================================
-
-export type BrushDefinitionKey = keyof typeof BrushDefinitionKeys;
-export type BrushPresetKey = keyof typeof BrushPresetKeys;
-export type ShapeDynamicsKey = keyof typeof ShapeDynamicsKeys;
-export type ScatteringKey = keyof typeof ScatteringKeys;
-export type TextureKey = keyof typeof TextureKeys;
-export type DualBrushKey = keyof typeof DualBrushKeys;
-export type ColorDynamicsKey = keyof typeof ColorDynamicsKeys;
-export type TransferKey = keyof typeof TransferKeys;
-export type BrushPoseKey = keyof typeof BrushPoseKeys;
-export type QuickToggleKey = keyof typeof QuickToggleKeys;
-export type ControlTypeValue = keyof typeof ControlTypeValues;
-export type BlendModeValue = keyof typeof BlendModeValues;
 export type UnitType = keyof typeof UnitTypes;

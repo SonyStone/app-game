@@ -476,7 +476,7 @@ export class AbrWriter {
         brushDef['Hrdn'] = makeDescriptor.unit('#Prc', brush.hardness);
       }
 
-      // Add Intr (interpolation) flag
+      // Enable distance-based spacing for a newly created tip.
       brushDef['Intr'] = makeDescriptor.bool(true);
       brushDef['flipX'] = makeDescriptor.bool(false);
       brushDef['flipY'] = makeDescriptor.bool(false);
