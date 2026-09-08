@@ -14,6 +14,70 @@ import {
 const source = new AbrParser().parse(readFileSync('../../packages/abr-parser/files/Brushes To Implement.abr'));
 const brush = source.brushes[0]!;
 
+test('Eraser Mode uses Photoshop native IDs and defaults to Brush', () => {
+  expect(settingGroups.tool.eraserMode.options).toEqual([
+    { label: 'Brush', value: 1 },
+    { label: 'Pencil', value: 2 },
+    { label: 'Block', value: 3 }
+  ]);
+  expect(brushToFormValues({ ...brush, settings: {} }).tool.eraserMode).toBe(1);
+  for (const mode of [1, 2, 3]) {
+    const original = { ...brush, settings: { toolOptions: { __classId: 'ErTl', ErsB: mode } } };
+    const values = brushToFormValues(original);
+    expect(values.tool.eraserMode).toBe(mode);
+  }
+});
+
+test('tool options edit and export without changing unknown or dormant settings', () => {
+  const original = {
+    ...brush,
+    settings: {
+      ...brush.settings,
+      toolOptions: {
+        __classId: 'MixB',
+        flow: 73,
+        Opct: 42,
+        wetness: 12,
+        dryness: 54,
+        mix: 67,
+        'Md  ': { type: 'BlnM', value: 'Mltp' },
+        autoClean: true,
+        futureOption: 123
+      }
+    }
+  };
+  const values = brushToFormValues(original);
+  expect(values.tool).toMatchObject({
+    type: 'MixB',
+    flow: 73,
+    opacity: 42,
+    wetness: 12,
+    load: 54,
+    mix: 67,
+    mode: 'Mltp',
+    autoClean: true
+  });
+  expect(formValuesToBrush(original, values)).toBe(original);
+  Object.assign(values.tool, { type: 'ErTl', flow: 25, opacity: 80, mode: 'Scrn', pressureOverridesSize: true });
+  const edited = formValuesToBrush(original, values);
+  const parsed = new AbrParser().parse(
+    new AbrWriter().write({ ...createAbrFile([edited]), rawPatternData: source.rawPatternData })
+  );
+  expect(parsed.errors).toEqual([]);
+  expect(parsed.brushes[0]!.settings.toolOptions).toMatchObject({
+    __classId: 'ErTl',
+    flow: 25,
+    Opct: 80,
+    'Md  ': { type: 'BlnM', value: 'Scrn' },
+    usePressureOverridesSize: true,
+    wetness: 12,
+    dryness: 54,
+    mix: 67,
+    futureOption: 123
+  });
+  expect(brushToFormValues(parsed.brushes[0]!).tool).toEqual(values.tool);
+});
+
 /** Assert actual wire keys, independently of the editor's binding table. */
 test('Photoshop mappings survive writing and parsing the edited preset', () => {
   const v = brushToFormValues(brush);
@@ -33,8 +97,8 @@ test('Photoshop mappings survive writing and parsing the edited preset', () => {
   expect(parsed.brushes[0]!.settings).toMatchObject({
     'Cnt ': 4,
     scatterDynamics: { __classId: 'brVr', jitter: { unit: '#Prc', value: 137 }, bVTy: 1, fStp: 47 },
-    prVr: { jitter: { value: 13 }, 'Mnm ': { value: 17 } },
-    opVr: { jitter: { value: 19 }, 'Mnm ': { value: 23 } },
+    opVr: { jitter: { value: 13 }, 'Mnm ': { value: 17 } },
+    prVr: { jitter: { value: 19 }, 'Mnm ': { value: 23 } },
     'H   ': { value: 17 },
     Strt: { value: 23 },
     Brgh: { value: 11 },
@@ -86,13 +150,15 @@ describe('all scalar controls round-trip while disabled', () => {
           values = v[group as keyof typeof settingGroups] as Record<string, unknown>;
         const old = values[key];
         const next =
-          field.kind === 'boolean'
-            ? !old
-            : field.kind === 'choice'
-              ? field.options!.find((option) => option.value !== old)!.value
-              : old === field.min
-                ? field.max
-                : field.min;
+          field.kind === 'color'
+            ? '#123456'
+            : field.kind === 'boolean'
+              ? !old
+              : field.kind === 'choice'
+                ? field.options!.find((option) => option.value !== old)!.value
+                : old === field.min
+                  ? field.max
+                  : field.min;
         values[key] = next;
         const file = new AbrParser().parse(
           new AbrWriter().write({
@@ -184,4 +250,57 @@ test('build-up stamps while stationary; smoothing changes a jagged input path', 
   const rough = createPreviewStroke(input, tip).data;
   input.values.smoothing.amount = 90;
   expect(createPreviewStroke(input, tip).data).not.toEqual(rough);
+});
+
+test('saved RGB colors preserve fractional source values until edited and can be removed on export', () => {
+  const original = {
+    ...brush,
+    settings: {
+      ...brush.settings,
+      toolOptions: {
+        __classId: 'PbTl',
+        FrgC: { __classId: 'RGBC', 'Rd  ': 18.4, 'Grn ': 52, 'Bl  ': 86, futureChannel: 9 },
+        BckC: { __classId: 'RGBC', 'Rd  ': 255, 'Grn ': 255, 'Bl  ': 255 }
+      }
+    }
+  };
+  const values = brushToFormValues(original);
+  expect(values.tool.foreground).toBe('#123456');
+  expect(formValuesToBrush(original, values)).toBe(original);
+  values.name = 'Only renamed';
+  expect(formValuesToBrush(original, values).settings.toolOptions).toEqual(original.settings.toolOptions);
+  values.tool.foreground = '#fa8040';
+  values.tool.background = '';
+  const edited = formValuesToBrush(original, values);
+  const parsed = new AbrParser().parse(
+    new AbrWriter().write({
+      ...createAbrFile([edited]),
+      rawPatternData: source.rawPatternData
+    })
+  );
+  expect(parsed.errors).toEqual([]);
+  expect(parsed.brushes[0]!.settings.toolOptions).toMatchObject({
+    FrgC: { __classId: 'RGBC', 'Rd  ': 250, 'Grn ': 128, 'Bl  ': 64, futureChannel: 9 }
+  });
+  expect(parsed.brushes[0]!.settings.toolOptions).not.toHaveProperty('BckC');
+  expect(brushToFormValues(parsed.brushes[0]!).tool.background).toBe('');
+});
+
+test('unrecognized saved color descriptors survive unrelated edits', () => {
+  const original = {
+    ...brush,
+    settings: {
+      ...brush.settings,
+      toolOptions: {
+        __classId: 'PbTl',
+        FrgC: { __classId: 'futureColorSpace', channel: 42 }
+      }
+    }
+  };
+  const values = brushToFormValues(original);
+  expect(values.tool.foreground).toBe('');
+  values.tool.flow = 31;
+  expect(formValuesToBrush(original, values).settings.toolOptions).toMatchObject({
+    FrgC: original.settings.toolOptions.FrgC
+  });
 });

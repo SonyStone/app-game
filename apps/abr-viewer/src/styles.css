@@ -687,12 +687,27 @@
   background: #3d3d3d;
 }
 .abr-category button {
+  background: transparent;
   flex: 1;
   padding: 5px 0;
   text-align: left;
   white-space: nowrap;
   font-size: 12px;
   color: #dedede;
+}
+.abr-category button:hover:not(:disabled) {
+  background: transparent;
+}
+.abr-preview-tool-note {
+  position: absolute;
+  pointer-events: none;
+  bottom: 6px;
+  left: 6px;
+  right: 6px;
+  padding: 5px;
+  color: #dedede;
+  background: #252525e6;
+  font-size: 11px;
 }
 .abr-category:not(:has(input)) button {
   padding-left: 19px;
@@ -1086,4 +1101,263 @@
   border-radius: 4px;
   padding: 8px 12px;
   flex-shrink: 0;
+}
+.abr-preset-tool {
+  display: block;
+  padding: 0 7px 4px;
+  color: #b9b9b9;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.abr-color-profile {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #555;
+}
+.abr-color-profile label {
+  display: grid;
+  gap: 6px;
+}
+.abr-color-profile input {
+  max-width: 100%;
+  min-width: 0;
+}
+.abr-color-profile p {
+  overflow-wrap: anywhere;
+}
+
+/* Tool options follow Photoshop's compact dark controls; groups wrap when the inspector is narrow. */
+.abr-tool-options {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #222;
+  background: #343434;
+  color: #ccc;
+  font-size: 12px;
+}
+.abr-tool-field,
+.abr-tool-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.abr-tool-field > select {
+  width: 114px;
+  max-width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 2px 5px;
+  border: 1px solid #535353;
+  border-radius: 2px;
+  background: #262626;
+  color: #eee;
+  font: inherit;
+}
+.abr-tool-number-box {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  border: 1px solid #535353;
+  border-radius: 2px;
+  background: #262626;
+  padding-right: 5px;
+}
+.abr-tool-number-box input {
+  width: 46px;
+  min-width: 0;
+  height: 26px;
+  border: 0;
+  border-radius: 0;
+  padding: 2px 3px;
+  background: transparent;
+  color: #eee;
+  font: inherit;
+  text-align: right;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.abr-tool-number-box input::-webkit-inner-spin-button,
+.abr-tool-number-box input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.abr-tool-number:has(input:disabled) {
+  opacity: 0.5;
+}
+.abr-tool-options .abr-tool-icon {
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 5px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+}
+.abr-tool-icon img {
+  width: 20px;
+  height: 20px;
+  filter: invert(0.8);
+  pointer-events: none;
+}
+.abr-tool-options .abr-tool-icon:hover {
+  background: #474747;
+}
+.abr-tool-options .abr-tool-icon[aria-pressed='true'] {
+  background: #202020;
+  border-color: #737373;
+}
+.abr-tool-options :is(input, select, button):focus-visible {
+  outline: 2px solid #6fb9ee;
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .abr-tool-options .abr-tool-icon {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+  .abr-tool-field > select,
+  .abr-tool-number-box {
+    height: 36px;
+  }
+  .abr-tool-number-box input {
+    height: 34px;
+  }
+}
+@media (max-width: 700px) {
+  /* Reserve usable settings space below the wrapped options bar and above the stroke preview. */
+  .abr-settings {
+    min-height: 820px;
+    flex-basis: 820px;
+  }
+  .abr-settings-body {
+    min-height: 220px;
+  }
+  .abr-setting-select {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .abr-setting-select > span {
+    min-width: 0;
+  }
+  .abr-setting-select select {
+    flex-basis: 100%;
+  }
+}
+
+/* The same native tool identity is shown beside the picker label and on each preset. */
+.abr-preset {
+  position: relative;
+}
+.abr-preset-tool {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  padding: 0;
+  pointer-events: none;
+}
+.abr-brush-tool-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  filter: invert(0.8);
+}
+.abr-option-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 114px;
+  max-width: 220px;
+  height: 28px;
+  padding: 2px 5px;
+  border: 1px solid #535353;
+  border-radius: 2px;
+  background: #262626;
+  color: #eee;
+  font: inherit;
+}
+.abr-option-trigger > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.abr-option-trigger img,
+.abr-option-menu img {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  filter: invert(0.8);
+}
+.abr-option-trigger .abr-option-chevron {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+}
+.abr-option-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: max-content;
+  min-width: 180px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid #787878;
+  border-radius: 5px;
+  background: #424242;
+  color: #eee;
+  box-shadow: 0 3px 12px #0008;
+  font:
+    12px Arial,
+    sans-serif;
+}
+.abr-option-menu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 23px;
+  padding: 3px 12px 3px 3px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+}
+.abr-option-menu button:focus,
+.abr-option-menu button:hover {
+  outline: none;
+  color: #fff;
+  background: #0878d3;
+}
+.abr-option-menu hr {
+  margin: 5px 8px 5px 24px;
+  border: 0;
+  border-top: 1px solid #676767;
+}
+.abr-option-menu .abr-option-check {
+  width: 15px;
+  height: 15px;
+}
+@media (pointer: coarse) {
+  .abr-option-trigger {
+    height: 36px;
+  }
+  .abr-option-menu button {
+    min-height: 36px;
+  }
 }

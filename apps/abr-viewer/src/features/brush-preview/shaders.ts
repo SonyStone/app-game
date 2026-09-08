@@ -1,13 +1,24 @@
+import { linearSourceOver } from '@app-game/abr-brush/effects';
+import { paintBlend } from '@app-game/abr-brush/paintBlend';
+import { pencilCoverage } from '@app-game/abr-brush/pencil';
 import { common, d, std, tgpu } from 'typegpu';
 import { dualCoverage, grain, textureCoverage, textureTone } from './effects';
+import { eraserPreviewColor } from './eraser';
 
 /** One instanced quad per stamp. Colors and texture depth vary independently per tip. */
 export const stamps = tgpu.vertexLayout(
   d.arrayOf(d.struct({ bounds: d.vec4f, transform: d.vec4f, dynamics: d.vec4f, color: d.vec4f })),
   'instance'
 );
-/** Shared effect uniforms: viewport, texture size/scale/mode, tone, enabled flags and depth. */
-export const Params = d.struct({ viewport: d.vec4f, texture: d.vec4f, tone: d.vec4f, flags: d.vec4f, extra: d.vec4f });
+/** Viewport stores width/height/DPR/eraser operation (0 paint, 1 erase, 2 restore); remaining fields hold effects. */
+export const Params = d.struct({
+  viewport: d.vec4f,
+  texture: d.vec4f,
+  tone: d.vec4f,
+  flags: d.vec4f,
+  extra: d.vec4f,
+  colorMixing: d.vec4f
+});
 export const brushLayout = tgpu.bindGroupLayout({
   params: { uniform: Params },
   tip: { texture: d.texture2d() },
@@ -66,20 +77,22 @@ export const stampFragment = tgpu.fragmentFn({
     const tone = textureTone(sample, p.tone.x, p.tone.y, p.tone.z);
     coverage = textureCoverage(coverage, tone, p.texture.w, input.dynamics.z);
   }
-  if (p.flags.z > 0) {
+  if (p.flags.z > 0 && p.extra.y !== 7) {
     const second = std.textureLoad(brushLayout.$.dual, d.vec2i(input.position.xy), 0).r;
     coverage = dualCoverage(coverage, second, p.extra.y);
   }
   if (p.flags.w > 0) coverage *= 0.35 + 0.65 * grain(input.position.x, input.position.y, input.dynamics.w);
+  if (p.tone.w > 0) coverage = pencilCoverage(coverage);
   const flow = coverage * input.dynamics.x;
   return {
     paint: d.vec4f(std.mul(input.color.rgb, flow), flow),
-    mask: d.vec4f(flow, flow, flow, coverage * input.dynamics.y)
+    mask: d.vec4f(coverage, std.select(0, input.dynamics.y, coverage > 0), 0, coverage * input.dynamics.y)
   };
 });
 
 /** Stroke-wide texture and edge treatment run after stamp accumulation. */
 export const compositeLayout = tgpu.bindGroupLayout({
+  dual: { texture: d.texture2d() },
   mask: { texture: d.texture2d() },
   paint: { texture: d.texture2d() },
   pattern: { texture: d.texture2d() },
@@ -87,13 +100,17 @@ export const compositeLayout = tgpu.bindGroupLayout({
   params: { uniform: Params },
   background: { uniform: d.vec4f }
 });
-export const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
+/** Final brush mask shared by painting and each retouch step. */
+export function previewCoverage(position: d.v4f) {
   'use gpu';
   const p = compositeLayout.$.params;
-  const xy = d.vec2i(input.position.xy);
+  const xy = d.vec2i(position.xy);
   const mask = std.textureLoad(compositeLayout.$.mask, xy, 0);
   const paint = std.textureLoad(compositeLayout.$.paint, xy, 0);
-  let coverage = std.min(mask.r, mask.a);
+  let coverage = std.min(paint.a, mask.a);
+  if (p.tone.w > 0) coverage = paint.a;
+  if (p.flags.z > 0 && p.extra.y === 7)
+    coverage = dualCoverage(paint.a, std.textureLoad(compositeLayout.$.dual, xy, 0).r, 7);
   if (p.flags.x > 0 && p.flags.y === 0) {
     const uv = std.div(d.vec2f(xy), std.mul(p.texture.xy, p.texture.z));
     const sample = std.textureSampleLevel(compositeLayout.$.pattern, compositeLayout.$.repeat, uv, 0).r;
@@ -102,21 +119,45 @@ export const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.pos
   }
   if (p.extra.z > 0) {
     const limit = std.sub(d.vec2i(p.viewport.xy), d.vec2i(1));
-    const up = std.textureLoad(compositeLayout.$.mask, std.clamp(std.add(xy, d.vec2i(0, -1)), d.vec2i(0), limit), 0).r;
-    const down = std.textureLoad(compositeLayout.$.mask, std.clamp(std.add(xy, d.vec2i(0, 1)), d.vec2i(0), limit), 0).r;
+    const up = std.textureLoad(compositeLayout.$.paint, std.clamp(std.add(xy, d.vec2i(0, -1)), d.vec2i(0), limit), 0).a;
+    const down = std.textureLoad(
+      compositeLayout.$.paint,
+      std.clamp(std.add(xy, d.vec2i(0, 1)), d.vec2i(0), limit),
+      0
+    ).a;
     const left = std.textureLoad(
-      compositeLayout.$.mask,
+      compositeLayout.$.paint,
       std.clamp(std.add(xy, d.vec2i(-1, 0)), d.vec2i(0), limit),
       0
-    ).r;
+    ).a;
     const right = std.textureLoad(
-      compositeLayout.$.mask,
+      compositeLayout.$.paint,
       std.clamp(std.add(xy, d.vec2i(1, 0)), d.vec2i(0), limit),
       0
-    ).r;
-    coverage = std.min(1, coverage * 0.65 + std.max(0, mask.r - std.min(std.min(up, down), std.min(left, right))) * 2);
+    ).a;
+    coverage = std.min(1, coverage * 0.65 + std.max(0, paint.a - std.min(std.min(up, down), std.min(left, right))) * 2);
   }
+  if (p.tone.w > 0) coverage = std.min(pencilCoverage(coverage), mask.a);
+  if (p.flags.z > 0 && p.extra.y === 7) coverage = std.min(coverage, mask.g);
+  return coverage;
+}
+export const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
+  'use gpu';
+  const p = compositeLayout.$.params;
+  const xy = d.vec2i(input.position.xy);
+  const paint = std.textureLoad(compositeLayout.$.paint, xy, 0);
+  let coverage = previewCoverage(input.position);
+  if (p.viewport.w > 0)
+    return d.vec4f(
+      eraserPreviewColor(compositeLayout.$.background.rgb, coverage, d.vec2f(xy), p.viewport.z, p.viewport.w === 2),
+      1
+    );
   const color = std.div(paint.rgb, std.max(0.00001, paint.a));
-  return d.vec4f(std.mix(compositeLayout.$.background.rgb, color, coverage), 1);
+  if (p.extra.w === 1) coverage = std.select(0, 1, grain(input.position.x, input.position.y, 13.75) < coverage);
+  if (p.extra.w < 2 && p.colorMixing.x > 0)
+    return linearSourceOver(d.vec4f(compositeLayout.$.background.rgb, 1), d.vec4f(std.mul(color, coverage), coverage));
+  const mixed = paintBlend(compositeLayout.$.background.rgb, color, p.extra.w);
+  if (p.extra.w === 27 || p.extra.w === 28) return d.vec4f(compositeLayout.$.background.rgb, 1);
+  return d.vec4f(std.mix(compositeLayout.$.background.rgb, mixed, coverage), 1);
 });
 export const compositeVertex = common.fullScreenTriangle;

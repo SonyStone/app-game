@@ -71,3 +71,38 @@ test('Hard Mix makes the halftone edges crisp without painting outside the prima
   expect(dualCoverage(0.3, 0.6, mode)).toBe(0);
   expect(dualCoverage(0, 1, mode)).toBe(0);
 });
+
+test('Hard Mix thresholds accumulated flow, while opacity still controls the darkness of surviving grain', () => {
+  const values = brushToFormValues({
+    id: 'grain',
+    name: 'Grain',
+    type: 'computed',
+    settings: {},
+    diameter: 16,
+    spacing: 10
+  });
+  values.useDualBrush = true;
+  values.dualBrush.mode = 'hardMix';
+  values.dualBrush.diameter = 16;
+  values.dualBrush.spacing = 10;
+  values.dualBrush.scatter = 0;
+  values.dualBrush.count = 1;
+  const tip = { width: 1, height: 1, depth: 8 as const, data: new Uint8Array([128]) };
+  const input: PreviewInput = {
+    values,
+    width: 32,
+    height: 32,
+    dpr: 1,
+    color: '#000000',
+    background: '#ffffff',
+    flow: 1,
+    opacity: 1,
+    path: [{ x: 0.5, y: 0.5, pressure: 1, tiltX: 0, tiltY: 0, rotation: 0, time: 0 }]
+  };
+  const center = (16 * 32 + 16) * 4;
+  const pixel = (flow: number, opacity: number) =>
+    renderPreviewPixels({ ...input, flow, opacity }, tip, undefined, { dualTip: tip })[center];
+  expect(pixel(1, 1)).toBe(0);
+  expect(pixel(0.1, 1)).toBe(255);
+  expect(pixel(1, 0.25)).toBe(191);
+});

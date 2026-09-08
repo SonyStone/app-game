@@ -1,3 +1,5 @@
+import { descriptorColorClipped, record } from '@app-game/abr-brush/form';
+import { supportsAirbrush } from '@app-game/abr-brush/stroke';
 import {
   createEffect,
   createMemo,
@@ -13,27 +15,27 @@ import {
 } from 'solid-js';
 import type { BrushWithPreview } from '../../lib/abr';
 import { brushTipToPngBlob } from '../../lib/abr';
-import {
-  brushFormSchema,
-  brushToFormValues,
-  formValuesToBrush,
-  record,
-  type BrushFormValues
-} from './brush-form-schema';
+import { brushFormSchema, brushToFormValues, formValuesToBrush, type BrushFormValues } from './brush-form-schema';
 import { chooseDualTip, choosePattern } from './brush-resources';
+import type { ColorMixingPreference } from './color-mixing';
+import { ColorProfileControl, useColorProfile } from './ColorProfile';
 import { BrushPreviewCanvas } from './components/panel-components/BrushPreviewCanvas';
 import { BrushTipPanel } from './components/panel-components/BrushTipPanel';
 import { RawSettingsPanel } from './components/panel-components/RawSettingsPanel';
 import { DualBrushPicker, TexturePicker } from './components/panel-components/ResourcePickers';
 import { SettingsPanel } from './components/panel-components/SettingsPanel';
+import { ToolOptionsBar } from './components/panel-components/ToolOptionsBar';
 import { sanitizeFilename } from './helper-functions/sanitizeFilename';
 
 /** Docked settings editor. Valid changes immediately update the workspace; selection and undo resync the form. */
 export function BrushDetailEditable(props: {
   brush: BrushWithPreview;
+  /** Shared across brush selection; changing it does not dirty the preset. */
+  colorMixing?: ColorMixingPreference;
   brushes?: BrushWithPreview[];
   onChange: (brush: BrushWithPreview) => void;
 }) {
+  const colors = useColorProfile();
   let inspector!: HTMLDivElement;
   const [requestedHeight, setRequestedHeight] = createSignal(260);
   const [maximumHeight, setMaximumHeight] = createSignal(600);
@@ -53,17 +55,19 @@ export function BrushDetailEditable(props: {
   const [category, setCategory] = createSignal('brush-tip');
   const [error, setError] = createSignal('');
   const [downloading, setDownloading] = createSignal(false);
-  const [values, setValues] = createStore<BrushFormValues>(untrack(() => brushToFormValues(props.brush)));
+  const [values, setValues] = createStore<BrushFormValues>(
+    untrack(() => brushToFormValues(props.brush, colors?.converter()))
+  );
   createEffect(
-    () => props.brush,
-    (brush) => {
-      setValues((draft) => Object.assign(draft, brushToFormValues(brush)));
+    () => brushToFormValues(props.brush, colors?.converter()),
+    (next) => {
+      setValues((draft) => Object.assign(draft, next));
       setError('');
     }
   );
   const update: StoreSetter<BrushFormValues> = (edit) => {
     // Solid publishes store writes after the event. Validate the new draft directly.
-    const draft = untrack(() => brushToFormValues(props.brush));
+    const draft = untrack(() => brushToFormValues(props.brush, colors?.converter()));
     const next = edit(draft) ?? draft;
     setValues((current) => Object.assign(current, next));
     const result = brushFormSchema.safeParse(next);
@@ -72,7 +76,7 @@ export function BrushDetailEditable(props: {
       return;
     }
     setError('');
-    props.onChange(untrack(() => formValuesToBrush(props.brush, result.data)));
+    props.onChange(untrack(() => formValuesToBrush(props.brush, result.data, colors?.converter())));
   };
   const patterns = createMemo(() => [
     ...new Map(
@@ -82,6 +86,14 @@ export function BrushDetailEditable(props: {
     ).values()
   ]);
   const selected = createMemo(() => categories.find((item) => item.id === category()) ?? categories[0]!);
+  const hasCmyk = () => {
+    const tool = record(props.brush.settings.toolOptions);
+    return [tool.FrgC, tool.BckC].some((value) => record(value).__classId === 'CMYC');
+  };
+  const clippedColor = () => {
+    const tool = record(props.brush.settings.toolOptions);
+    return descriptorColorClipped(tool.FrgC) || descriptorColorClipped(tool.BckC);
+  };
 
   async function downloadTip() {
     if (!props.brush.brushTip) return;
@@ -122,6 +134,7 @@ export function BrushDetailEditable(props: {
                 : 'Round tip'}
         </span>
       </div>
+      <ToolOptionsBar colorMixing={props.colorMixing} values={values} setValues={update} onSettings={setCategory} />
       <Show when={error()}>
         <p class="abr-validation" role="alert">
           {error()}
@@ -138,7 +151,10 @@ export function BrushDetailEditable(props: {
                       type="checkbox"
                       aria-label={`Enable ${item.label}`}
                       checked={values[field()]}
-                      disabled={field() === 'useTexture' && !values.useTexture && !patterns().length}
+                      disabled={
+                        (field() === 'useTexture' && !values.useTexture && !patterns().length) ||
+                        (field() === 'useBuildUp' && !supportsAirbrush(values.tool))
+                      }
                       title={
                         field() === 'useTexture' && !patterns().length
                           ? 'Import an ABR containing texture patterns to enable Texture.'
@@ -153,7 +169,11 @@ export function BrushDetailEditable(props: {
                         ) {
                           props.onChange(
                             choosePattern(
-                              formValuesToBrush(props.brush, { ...brushToFormValues(props.brush), useTexture: true }),
+                              formValuesToBrush(
+                                props.brush,
+                                { ...brushToFormValues(props.brush, colors?.converter()), useTexture: true },
+                                colors?.converter()
+                              ),
                               patterns()[0]!
                             )
                           );
@@ -176,6 +196,21 @@ export function BrushDetailEditable(props: {
         <div class="abr-settings-controls">
           <h3>{selected().label}</h3>
           <Switch>
+            <Match when={category() === 'tool'}>
+              <Show when={hasCmyk() || colors?.profile()}>
+                <ColorProfileControl />
+              </Show>
+              <SettingsPanel group="tool" values={values} setValues={update} mixer={values.tool.type === 'MixB'} />
+              <Show when={clippedColor()}>
+                <p class="abr-feature-note">
+                  A saved Lab color is outside sRGB. Its displayed color may differ from Photoshop; the original Lab
+                  value is preserved on export.
+                </p>
+              </Show>
+              <p class="abr-feature-note">
+                Saved with the preset. Tool algorithms and compatibility vary between hosts.
+              </p>
+            </Match>
             <Match when={category() === 'brush-tip'}>
               <BrushTipPanel
                 brush={props.brush}
@@ -213,7 +248,7 @@ export function BrushDetailEditable(props: {
                   group="transfer"
                   values={values}
                   setValues={update}
-                  mixer={record(props.brush.settings.toolOptions).__classId === 'mixerBrushTool'}
+                  mixer={['MixB', 'mixerBrushTool'].includes(values.tool.type)}
                 />
               </fieldset>
             </Match>
@@ -265,7 +300,9 @@ export function BrushDetailEditable(props: {
                     : category() === 'wet-edges'
                       ? 'Concentrates paint near the edge of the stroke.'
                       : category() === 'build-up'
-                        ? 'Paint accumulates while the pen stays in one place. Hold the pointer in the preview to test.'
+                        ? supportsAirbrush(values.tool)
+                          ? 'Paint accumulates while the pen stays in one place. Also available as Airbrush in Tool Options.'
+                          : 'Build-up is inactive for this tool. Its saved setting is retained when switching tools.'
                         : 'Keeps the texture consistent when switching painting tools in Photoshop. Saved with the preset.'}
                 </p>
               </div>
@@ -314,7 +351,9 @@ export function BrushDetailEditable(props: {
             <input
               aria-label="Preview foreground"
               type="color"
-              value={foreground()}
+              value={values.tool.foreground || foreground()}
+              disabled={Boolean(values.tool.foreground)}
+              title={values.tool.foreground ? 'Edit the saved foreground in Tool Options' : 'Local preview color'}
               onInput={(event) => setForeground(event.currentTarget.value)}
             />
           </label>
@@ -323,13 +362,16 @@ export function BrushDetailEditable(props: {
             <input
               aria-label="Preview background paint"
               type="color"
-              value={background()}
+              value={values.tool.background || background()}
+              disabled={Boolean(values.tool.background)}
+              title={values.tool.background ? 'Edit the saved background in Tool Options' : 'Local preview color'}
               onInput={(event) => setBackground(event.currentTarget.value)}
             />
           </label>
           <span>Drag to test · tablet pressure and tilt supported</span>
         </div>
         <BrushPreviewCanvas
+          colorMixing={props.colorMixing?.value}
           brush={props.brush}
           values={values}
           height={previewHeight()}
@@ -350,6 +392,7 @@ type FeatureField = {
   [K in keyof BrushFormValues]: BrushFormValues[K] extends boolean ? K : never;
 }[keyof BrushFormValues];
 const categories: { id: string; label: string; field?: FeatureField }[] = [
+  { id: 'tool', label: 'Tool Options' },
   { id: 'brush-tip', label: 'Brush Tip Shape' },
   { id: 'shape-dynamics', label: 'Shape Dynamics', field: 'useShapeDynamics' },
   { id: 'scattering', label: 'Scattering', field: 'useScattering' },

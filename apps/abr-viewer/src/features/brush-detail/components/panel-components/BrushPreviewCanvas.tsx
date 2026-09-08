@@ -1,9 +1,12 @@
+import type { ColorMixing } from '@app-game/abr-brush/effects';
+import { supportsAirbrush } from '@app-game/abr-brush/stroke';
 import { createEffect, createSignal, onSettled, Show } from 'solid-js';
 import type { BrushWithPreview } from '../../../../lib/abr';
 import { attachPreview } from '../../../brush-preview/client';
 import { brushPreviewResources } from '../../../brush-preview/resources';
 import type { PreviewPoint } from '../../../brush-preview/stroke';
 import type { BrushFormValues } from '../../brush-form-schema';
+import { previewAppearance } from '../../preview-appearance';
 
 /** Canvas and optional pointer input; rendering runs through the shared preview service. */
 export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
@@ -31,7 +34,9 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
       props.height,
       props.backgroundColor,
       props.brushColor,
-      props.priority
+      props.priority,
+      props.thumbnail,
+      props.colorMixing
     ],
     () => refresh()
   );
@@ -49,17 +54,16 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
       const values: BrushFormValues = JSON.parse(JSON.stringify(props.values));
       connection!.update(
         {
-          values,
+          ...previewAppearance(values, props),
+          colorMixing: props.thumbnail ? 'classic' : props.colorMixing,
           width: Math.max(1, Math.round(width * dpr)),
           height: Math.max(1, Math.round(height * dpr)),
           dpr,
           background: props.backgroundColor ?? '#333333',
-          color: props.brushColor ?? '#ffffff',
-          secondaryColor: props.secondaryColor,
           path,
           strokeId: path ? strokeId : undefined,
-          flow: 1,
-          opacity: 1
+          flow: values.tool.flow / 100,
+          opacity: values.tool.opacity / 100
         },
         props.brush.brushTip,
         props.priority ?? 0,
@@ -120,7 +124,12 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
           strokeId++;
           append(event);
           hold = setInterval(() => {
-            if (pointer !== undefined && props.values.useBuildUp && path?.length) {
+            if (
+              pointer !== undefined &&
+              props.values.useBuildUp &&
+              supportsAirbrush(props.values.tool) &&
+              path?.length
+            ) {
               if (path.length >= 2048) path.splice(1, 1);
               path.push({ ...path.at(-1)!, time: performance.now() });
               refresh();
@@ -157,6 +166,26 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
           {warning()}
         </span>
       </Show>
+      <Show when={props.interactive && props.values.tool.type === 'MixB'}>
+        <span class="abr-preview-tool-note">Mixes a sample image. Each stroke starts with fresh foreground paint.</span>
+      </Show>
+      <Show when={props.interactive && props.values.tool.type === 'SmTl'}>
+        <span class="abr-preview-tool-note">
+          Smudges a sample image. The tinted band has two layers. Each stroke starts fresh.
+        </span>
+      </Show>
+      <Show when={props.interactive && ['ShTl', 'BlTl'].includes(props.values.tool.type)}>
+        <span class="abr-preview-tool-note">
+          Filters a sample image. The tinted band has two layers. Each stroke starts fresh.
+        </span>
+      </Show>
+      <Show when={props.interactive && props.values.tool.type === 'ErTl'}>
+        <span class="abr-preview-tool-note">
+          {props.values.tool.eraseToHistory
+            ? 'Restores the sample layer from transparency. Each stroke starts fresh.'
+            : 'Erases the sample layer to transparency. Each stroke starts fresh.'}
+        </span>
+      </Show>
     </div>
   );
 }
@@ -168,6 +197,10 @@ export type BrushPreviewCanvasProps = {
   height?: number;
   backgroundColor?: string;
   brushColor?: string;
+  /** Runtime Normal-mode blending; thumbnails stay neutral and Classic. */
+  colorMixing?: ColorMixing;
+  /** Neutral library swatch; does not change saved colors, mode, or the interactive preview. */
+  thumbnail?: boolean;
   priority?: number;
   secondaryColor?: string;
   interactive?: boolean;

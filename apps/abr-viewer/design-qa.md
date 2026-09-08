@@ -101,3 +101,47 @@ The requested chrome removal is complete: no visible title bar, description bar,
 Browser checks confirmed staggered card animations from 0 to 315ms, closing by the round button and Escape, focus return to Examples, and reopening. Reduced-motion CSS disables reveal animations and close-button motion. Typecheck and production build pass. No additional P0/P1/P2 findings were found in the post-refinement desktop comparison.
 
 final result: passed
+
+
+## Tool options bar, 2026-09-08
+
+Final result: passed for the edited toolbar and its responsive integration.
+
+Reference: the user's Photoshop toolbar screenshot at `/Users/ilyaverpovsky/.codex/attachments/466f0bd6-4d26-4a05-b450-7600be9db708/image-2.png`, 2190 × 418 pixels. Source display density is unknown. Scope is the compact dark tool-options controls and their order, adapted to the existing docked inspector rather than Photoshop's full-width document toolbar. Ordinary Brush selected, Normal, Opacity 100%, Flow 75%, Smoothing 0%, Angle 0°. Brush content differs from the reference; rendering parity is outside this UI check.
+
+Implementation: `http://localhost:3121/abr-viewer`. Final captures:
+- Desktop, 1250 × 900: `/Users/ilyaverpovsky/.codex/visualizations/2026/09/08/abr-tool-options/desktop.png`.
+- Mobile, 390 × 844: `/Users/ilyaverpovsky/.codex/visualizations/2026/09/08/abr-tool-options/mobile.png`.
+
+The reference and desktop capture were opened together. Compact sans-serif labels, flat charcoal controls, subtle rectangular borders and tool ordering match the reference's visual structure. Existing typography and color tokens are retained. Icons use Tabler outline SVG assets with their MIT license, not Adobe artwork. Labels and accessible pressed states distinguish pressure overrides. The bar wraps into rows in a narrower inspector; Transfer and the other existing settings remain separately editable. Symmetry is a document feature and is not added as a brush preset option.
+
+P2 resolved: the wrapped bar initially left zero height for the settings panel on mobile. Increased the mobile inspector's minimum height, reserved settings space and wrapped labels/selects. Final 390 × 844 readback shows 294 px for the scrollable settings body and no document horizontal overflow. Final mobile capture confirms controls are readable and the preview remains reachable.
+
+Browser checks: edit Opacity/Flow, toggle pressure override, Undo, retain values across Brush/Eraser/Mixer changes, hide unavailable Block Eraser controls, expose Wet/Load/Mix, reject empty numeric edits, navigate smoothing options, enable/edit Transfer. Embedded Paint editor applied Flow 62% and retained it after Use in Paint and reopening. No browser error logs in the checked Viewer tab. Viewer: 200 tests pass, typecheck and production build pass. Paint integration typecheck passes. No new brush-rendering parity claim.
+
+
+## Grouped Mode menu, tool icons and neutral thumbnails, 2026-09-08
+
+Final result: passed for the requested menu, badge and thumbnail changes.
+
+Reference: user screenshots `codex-clipboard-c5d6444c-f495-4153-a11c-abd476af9922.png` for the Mode list and `codex-clipboard-6b0bfb3c-6d43-4f68-b4d9-e15cbe24ad9b.png` for corner tool badges, attached in this task. The final desktop Mode capture and source were opened together. The source is a crop with unknown display density, so this compares ordering, group breaks, selected styling and compact dark controls rather than pixel equality across full app viewports.
+
+Evidence: `/Users/ilyaverpovsky/.codex/visualizations/2026/09/08/abr-tool-options/modes-final.png` and `menus-mobile.png`. Desktop capture is 1250 × 900. Narrow-menu DOM measurement was 355 × 767 CSS pixels during the browser viewport transition: the menu measured 180 × 731 pixels at x=48, y=28, inside the viewport. All 29 native paint modes and five separators are present. Shorter mode lists remain tool-specific. Native integer Eraser Mode still selects Block correctly.
+
+Visual changes: a selected check mark, grouped choices, compact charcoal popup and blue focus state; matching filled tool icons in the picker and top-right preset corners. Licensed Pictogrammers icons approximate tool silhouettes, without copying Adobe assets. Thumbnail text no longer repeats the tool type beneath every brush. The library shows neutral white marks with Normal compositing for Brush/Pencil, so Multiply does not hide the thumbnail. Interactive previews retain actual saved colors and blend mode. Eraser and retouch retain their specialized preview behavior.
+
+Interaction checks: ArrowDown/Enter selects Pencil and changes the matching card badge; Undo restores Brush. End/Enter reaches Luminosity in the long Mode list. Escape closes the menu and returns focus. Inside Paint, Escape leaves the containing brush editor open. Eraser/Block hides irrelevant opacity controls and displays an Eraser badge. Outside-click dismissal, viewport bounds, selected state and updated icon sources were inspected. Final loaded page has no console errors. A Solid 2 cleanup-scope error encountered during development was fixed by creating managed listeners in component scope rather than onSettled.
+
+Validation: 202 Viewer tests, Viewer and Paint typechecks, and Viewer production build pass. Two added appearance tests guard preserved preset colors/mode and retouch settings. No rendering-parity claim for Photoshop brushes is made.
+
+### ABR color mixing, 2026-09-08
+
+Added the existing Smooth color / Classic choice to the ABR toolbar and checked its compact dropdown in the standalone editor. The choice survives switching Spatter presets. A Solid UI regression checks embedded updates in both directions and closing/reopening without remounting. Viewer unit checks assert the independent red/green expectations of 188 versus 128, preserve preset data and keep non-Normal modes and erasing unchanged.
+
+Real GPU verification passed in both hosts: Viewer CPU/GPU comparisons including linear, classic, Pencil and Multiply; Paint Brush/Pencil tile pixels, tile boundaries, cancellation and undo/redo. Viewer build and both Viewer/Paint typechecks passed. Run `Check ABR color mixing` in `/paint-studio-qa.html` to repeat the Paint checks without touching studio autosave.
+
+### Smooth retouch follow-up, 2026-09-08
+
+Smudge now decodes colors before capture/transfer interpolation and uses linear-light replacement at the selected Strength. Blur/Sharpen decode neighbours before the Gaussian kernel and encode the result back to existing sRGB storage. Alpha is interpolated independently, including transparent pickup. Finger Painting uses the same linear source-over as ordinary paint. Mixer Brush remains on its separate model.
+
+Validation: Viewer CPU/GPU comparisons passed for Smooth Smudge, Finger Painting, Blur, Sharpen and all-layer sampling. Paint's isolated color-mixing verifier passed red/green Smudge and Blur across tiles with matching alpha and undo/redo. The full ABR GPU suite passed, including Classic retouch, tile eviction, cancellation, erasing, Mixer and Pencil. The legacy filter pixel expectations explicitly select Classic. Viewer build and both typechecks passed.

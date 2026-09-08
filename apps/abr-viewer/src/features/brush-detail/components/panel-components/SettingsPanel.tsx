@@ -1,6 +1,7 @@
 import { For, Match, Show, Switch, type StoreSetter } from 'solid-js';
 import type { BrushFormValues } from '../../brush-form-schema';
 import { settingGroups } from '../../settings-fields';
+import { toolbarToolFields, toolOptionVisible } from '../../tool-options';
 import { CheckboxInput } from '../editable-input-components/CheckboxInput';
 import { SliderInput } from '../editable-input-components/SliderInput';
 
@@ -18,6 +19,11 @@ export function SettingsPanel(props: {
       (draft[props.group] as Record<string, unknown>)[key] = next;
     });
   const visible = (key: string) => {
+    if (
+      props.group === 'tool' &&
+      (toolbarToolFields.some((field) => field === key) || !toolOptionVisible(props.values.tool, key))
+    )
+      return false;
     // The dual-tip picker carries its source transform; Photoshop has no separate controls here.
     if (props.group === 'dualBrush' && ['angle', 'roundness', 'flipX', 'flipY'].includes(key)) return false;
     if (
@@ -43,6 +49,11 @@ export function SettingsPanel(props: {
               <Match when={field.kind === 'boolean'}>
                 <CheckboxInput
                   label={field.label}
+                  disabled={
+                    props.group === 'smoothing' &&
+                    props.values.smoothing.pulledString &&
+                    (key === 'catchUp' || key === 'catchUpAtEnd')
+                  }
                   checked={() => value(key) === true}
                   setChecked={(next) => update(key, next)}
                 />
@@ -66,6 +77,22 @@ export function SettingsPanel(props: {
                     <For each={field.options}>{(option) => <option value={option.value}>{option.label}</option>}</For>
                   </select>
                 </label>
+              </Match>
+              <Match when={field.kind === 'color'}>
+                <div class="abr-setting-select">
+                  <CheckboxInput
+                    label={field.label}
+                    checked={() => Boolean(value(key))}
+                    setChecked={(enabled) => update(key, enabled ? (key === 'background' ? '#ffffff' : '#000000') : '')}
+                  />
+                  <input
+                    type="color"
+                    aria-label={`${field.label} color`}
+                    disabled={!value(key)}
+                    value={String(value(key) || '#000000')}
+                    onInput={(event) => update(key, event.currentTarget.value)}
+                  />
+                </div>
               </Match>
               <Match when={field.kind === 'number'}>
                 <SliderInput

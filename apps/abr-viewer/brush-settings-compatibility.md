@@ -21,7 +21,7 @@ The editor now has detailed settings panels and shared CPU/GPU previews for ordi
 
 Disabled groups retain their values. Opening a preset does not rewrite it. Editing clones the affected descriptor branches; unknown fields and original binary resources remain available to the writer. Resource selection retains the secondary sample or pattern needed by exports.
 
-Descriptor bindings are in `src/features/brush-detail/settings-fields.ts`. For example, Scatter uses the top-level `scatterDynamics`, Count uses `Cnt `, opacity uses `prVr`, flow uses `opVr`, and secondary settings live in `dualBrush`. Angle jitter is a percentage, not an angle unit. Bristle density/length/thickness/stiffness/clumping use Photoshop's stored fractional values.
+Descriptor bindings are shared in `packages/abr-brush/src/settings-fields.ts`. For example, Scatter uses the top-level `scatterDynamics`, Count uses `Cnt `, opacity uses `opVr`, flow uses `prVr`, and secondary settings live in `dualBrush`. These transfer bindings agree with [ag-psd's ABR reader](https://github.com/Agamnentzar/ag-psd/blob/master/src/abr.ts). Angle jitter is a percentage, not an angle unit. Bristle density/length/thickness/stiffness/clumping use Photoshop's stored fractional values.
 
 ## Remaining compatibility work
 
@@ -54,3 +54,17 @@ Regression tests cover the actual Circle Range Tiny preset, dark/light relief, d
 ## References
 
 Adobe describes [brush dynamics and fade](https://helpx.adobe.com/photoshop/using/adding-dynamic-elements-brushes.html) and [textured brush behavior](https://helpx.adobe.com/photoshop/using/creating-textured-brushes.html). The [Photoshop file format reference](https://www.adobe.com/devnet-apps/photoshop/fileformatashtml/) documents descriptor and pattern structures. Actual imported descriptors informed the field bindings; these sources do not specify the full Photoshop brush renderer.
+
+
+### Photoshop-style tool options bar
+
+The inspector keeps Tool, Mode, Opacity, Flow, pressure overrides, Airbrush, Smoothing and tip Angle visible above Brush Settings. Native tool-specific controls replace unavailable fields, including Eraser Mode, retouch Strength and Mixer Wet/Load/Mix. Extended options and saved colors remain in Tool Options. The bar and panels edit the same validated preset, so preview, workspace Undo, ABR export and Use in Paint share the changes. Empty or out-of-range toolbar numbers do not mutate the preset. Layout wraps for a narrow inspector, including the embedded Paint editor.
+
+
+The Mode menu uses Photoshop's 29 paint-mode labels and five group separators, with tool-specific subsets for retouch tools. The tool picker and preset corners share one icon map. Library swatches intentionally use neutral white paint and Normal compositing for Brush/Pencil; interactive previews and exported presets retain their actual colors/mode. Native popovers supply clipping-free menus in the Paint dialog; older browsers fall back to a native text select.
+
+### Runtime color mixing
+
+The toolbar's Color mixing preference is separate from Photoshop's Mode descriptor. Smooth color uses the same linear-light source-over function as Studio for Normal-mode ABR Brush/Pencil painting. Classic retains encoded-sRGB compositing for Photoshop comparisons. Dissolve retains binary coverage; other paint modes and erasing keep their existing semantics. Smudge sampling and pixel transfer, plus Blur/Sharpen filtering and Strength interpolation, honor the selected working space. Mixer Brush retains its separate reservoir model. This is brightness-preserving RGB compositing, not a pigment or wet-paint simulation.
+
+Standalone Viewer defaults to Classic and retains the choice across preset selection during the editor session. Embedded Paint supplies its reactive brush preference, so editing it affects subsequent Paint strokes and the interactive preview. Thumbnail appearance and exported ABR descriptors are unaffected. Existing rasterized strokes are not recomputed. The shared function lives in `packages/abr-brush/src/colorMixing.ts`, exported through `effects`; Studio's former module remains a compatibility re-export.

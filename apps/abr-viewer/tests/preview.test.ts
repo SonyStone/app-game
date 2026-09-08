@@ -1,3 +1,4 @@
+import { createAbrStrokeSampler } from '@app-game/abr-brush/stroke';
 import { describe, expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
@@ -30,6 +31,52 @@ function input(): PreviewInput {
   };
 }
 const tip = generateComputedBrushTip(32, 100);
+
+test('Pencil has binary edges, ignores Flow, retains opacity and selects Auto Erase color at contact', () => {
+  const job = input();
+  job.values.tool.type = 'PcTl';
+  job.flow = 0.01;
+  job.opacity = 0.25;
+  const faint = renderPreviewPixels(job, tip);
+  const colors = new Set(Array.from(faint).filter((_, i) => i % 4 === 0));
+  expect(colors).toEqual(new Set([0, 64]));
+  job.opacity = 1;
+  const opaque = renderPreviewPixels(job, tip);
+  expect(new Set(Array.from(opaque).filter((_, i) => i % 4 === 0))).toEqual(new Set([0, 255]));
+  job.values.tool.autoErase = true;
+  job.color = '#000000';
+  job.secondaryColor = '#ff0000';
+  const erased = renderPreviewPixels(job, tip);
+  expect(erased.some((value, i) => i % 4 === 0 && value === 255)).toBe(true);
+  expect(erased.every((value, i) => i % 4 !== 1 || value === 0)).toBe(true);
+});
+
+test('Mixer pressure changes wetness and mix independently, with reversible preview state', () => {
+  const job = { ...input(), size: 40 };
+  Object.assign(job.values.tool, { type: 'MixB', wetness: 80, mix: 60 });
+  job.values.useTransfer = true;
+  Object.assign(job.values.transfer, { wetnessControl: 2, wetnessMinimum: 25, mixControl: 2, mixMinimum: 0 });
+  const point = { x: 0, y: 0, pressure: 0.5, tiltX: 0, tiltY: 0, rotation: 0, time: 0 };
+  const sampler = createAbrStrokeSampler({ ...job, seed: 1 }, tip);
+  const first = sampler.add([point]);
+  expect(first.mixing?.[0]).toBeCloseTo(0.8 * 0.625);
+  expect(first.mixing?.[1]).toBeCloseTo(0.6 * 0.5);
+  // Mixer does not expose ordinary stroke opacity, even if a previous tool left this setting behind.
+  expect(first.data[9]).toBe(1);
+  Object.assign(job.values.transfer, { wetnessJitter: 30, mixJitter: 40, opacityControl: 2 });
+  const a = createAbrStrokeSampler({ ...job, seed: 4, opacity: 0.1 }, tip);
+  const b = createAbrStrokeSampler({ ...job, seed: 4, opacity: 0.1 }, tip);
+  a.add([point]);
+  b.add([point]);
+  const next = { ...point, x: 80, time: 20, pressure: 0.8 };
+  a.preview([{ ...next, x: 160 }]);
+  expect(a.add([next])).toEqual(b.add([next]));
+  const ordinary = createAbrStrokeSampler(
+    { ...job, values: { ...job.values, tool: { ...job.values.tool, type: 'PbTl' } } },
+    tip
+  ).add([point]);
+  expect(ordinary.mixing).toBeUndefined();
+});
 
 test('resource previews use pattern luminance and the secondary tip independently of stroke settings', () => {
   const job = { ...input(), width: 32, height: 32 };

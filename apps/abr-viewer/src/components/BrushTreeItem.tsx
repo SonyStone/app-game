@@ -1,7 +1,10 @@
 import { createMemo } from 'solid-js';
 import { brushToFormValues } from '../features/brush-detail/brush-form-schema';
+import { useColorProfile } from '../features/brush-detail/ColorProfile';
 import { BrushPreviewCanvas } from '../features/brush-detail/components/panel-components/BrushPreviewCanvas';
+import { settingGroups } from '../features/brush-detail/settings-fields';
 import type { BrushNode } from '../lib/brush-tree';
+import { BrushToolIcon } from './BrushToolIcon';
 
 /** A compact, draggable preset with a rendered stroke and a persistent selection outline. */
 export function BrushTreeItem(props: {
@@ -12,7 +15,10 @@ export function BrushTreeItem(props: {
   /** Keyboard activation also selects the preset; pointer selection is handled by the tree. */
   onActivate: (select?: boolean) => void;
 }) {
-  const values = createMemo(() => brushToFormValues(props.block.brush));
+  const colors = useColorProfile();
+  const values = createMemo(() => brushToFormValues(props.block.brush, colors?.converter()));
+  const toolLabel = () =>
+    settingGroups.tool.type.options?.find((option) => option.value === values().tool.type)?.label ?? values().tool.type;
   return (
     <div
       data-drag-handle
@@ -31,8 +37,17 @@ export function BrushTreeItem(props: {
         }
       }}
     >
-      <BrushPreviewCanvas brush={props.block.brush} values={values()} height={props.height} backgroundColor="#333333" />
+      <BrushPreviewCanvas
+        brush={props.block.brush}
+        values={values()}
+        height={props.height}
+        backgroundColor="#333333"
+        thumbnail
+      />
       <span class="abr-preset-name">{props.block.name}</span>
+      <span class="abr-preset-tool" title={`Tool: ${toolLabel()}`}>
+        <BrushToolIcon type={values().tool.type} label={`Tool: ${toolLabel()}`} />
+      </span>
     </div>
   );
 }

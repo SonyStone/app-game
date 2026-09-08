@@ -1,7 +1,12 @@
-import { createSignal, Show } from 'solid-js';
+import type { ColorMixing } from '@app-game/abr-brush/effects';
+import { brushWithResolvedColors } from '@app-game/abr-brush/form';
+import { createEffect, createSignal, Show } from 'solid-js';
 import { BrushExamplesMenu } from './components/BrushExamplesMenu';
 import { BrushPanel } from './components/BrushPanel';
 import { BrushDetailEditable } from './features/brush-detail/BrushDetailEditable';
+import type { ColorMixingPreference } from './features/brush-detail/color-mixing';
+import { ColorProfileContext } from './features/brush-detail/ColorProfile';
+import { createColorProfile } from './features/brush-detail/createColorProfile';
 import { AbrParser, AbrWriter, brushTipToDataUrl, downloadAbrFile, type AbrFileWithMeta, type Brush } from './lib/abr';
 import { fetchBrushExample, type BrushExample } from './lib/brush-examples';
 import { allBrushNodes, type GroupNode } from './lib/brush-tree';
@@ -15,10 +20,26 @@ export function App(
     onUseBrush?: (brush: Brush) => Promise<void>;
     /** Explains which settings the embedding application can apply. */
     useBrushNote?: string;
+    /** Host working space; standalone Viewer defaults to Classic for Photoshop comparison. */
+    colorMixing?: ColorMixingPreference;
   } = {}
 ) {
+  const [mixing, setMixing] = createSignal<ColorMixing>('classic');
+  const standaloneMixing: ColorMixingPreference = {
+    get value() {
+      return mixing();
+    },
+    onChange: setMixing
+  };
   const workspace = createWorkspace();
+  const colors = createColorProfile();
   const [status, setStatus] = createSignal('Ready');
+  createEffect(
+    () => colors.profile(),
+    (profile) => {
+      setStatus(profile ? `CMYK profile: ${profile.name}` : 'Ready');
+    }
+  );
   const [busy, setBusy] = createSignal(false);
   const [draggingFiles, setDraggingFiles] = createSignal(false);
   const [split, setSplit] = createSignal(45);
@@ -33,7 +54,7 @@ export function App(
     applying = true;
     setUsingBrush(true);
     try {
-      await props.onUseBrush(brush);
+      await props.onUseBrush(brushWithResolvedColors(brush, colors.converter()));
       setStatus(`Selected ${brush.name}`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
@@ -109,149 +130,149 @@ export function App(
   }
 
   return (
-    <div
-      ref={shell}
-      class="abr-viewer abr-workspace"
-      onDragEnter={(event) => {
-        if (event.dataTransfer?.types.includes('Files')) {
+    <ColorProfileContext value={colors}>
+      <div
+        ref={shell}
+        class="abr-viewer abr-workspace"
+        onDragEnter={(event) => {
+          if (event.dataTransfer?.types.includes('Files')) {
+            event.preventDefault();
+            dragDepth++;
+            setDraggingFiles(true);
+          }
+        }}
+        onDragLeave={(event) => {
+          if (event.dataTransfer?.types.includes('Files') && --dragDepth <= 0) setDraggingFiles(false);
+        }}
+        onDragOver={(event) => {
+          if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
+        }}
+        onDrop={(event) => {
+          if (!event.dataTransfer?.files.length) return;
           event.preventDefault();
-          dragDepth++;
-          setDraggingFiles(true);
-        }
-      }}
-      onDragLeave={(event) => {
-        if (event.dataTransfer?.types.includes('Files') && --dragDepth <= 0) setDraggingFiles(false);
-      }}
-      onDragOver={(event) => {
-        if (event.dataTransfer?.types.includes('Files')) event.preventDefault();
-      }}
-      onDrop={(event) => {
-        if (!event.dataTransfer?.files.length) return;
-        event.preventDefault();
-        dragDepth = 0;
-        setDraggingFiles(false);
-        void importFiles(Array.from(event.dataTransfer.files));
-      }}
-      onKeyDown={(event) => {
-        const editing = (event.target as HTMLElement).closest('input, textarea, select, [contenteditable=true]');
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z' && !editing) {
-          event.preventDefault();
-          event.shiftKey ? workspace.redo() : workspace.undo();
-        }
-      }}
-    >
-      <header class="abr-toolbar">
-        <h1>Brush Editor</h1>
-        <span class="abr-document-state">{workspace.dirty() ? 'Modified' : 'Workspace'}</span>
-        <div class="abr-toolbar-history">
-          <button disabled={!workspace.canUndo()} onClick={workspace.undo} title="Undo (⌘Z / Ctrl+Z)">
-            Undo
+          dragDepth = 0;
+          setDraggingFiles(false);
+          void importFiles(Array.from(event.dataTransfer.files));
+        }}
+        onKeyDown={(event) => {
+          const editing = (event.target as HTMLElement).closest('input, textarea, select, [contenteditable=true]');
+          if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z' && !editing) {
+            event.preventDefault();
+            event.shiftKey ? workspace.redo() : workspace.undo();
+          }
+        }}
+      >
+        <header class="abr-toolbar">
+          <h1>Brush Editor</h1>
+          <span class="abr-document-state">{workspace.dirty() ? 'Modified' : 'Workspace'}</span>
+          <div class="abr-toolbar-history">
+            <button disabled={!workspace.canUndo()} onClick={workspace.undo} title="Undo (⌘Z / Ctrl+Z)">
+              Undo
+            </button>
+            <button disabled={!workspace.canRedo()} onClick={workspace.redo} title="Redo (⇧⌘Z / Ctrl+Shift+Z)">
+              Redo
+            </button>
+          </div>
+          <BrushExamplesMenu busy={busy()} loadingMessage={status()} onSelect={importFiles} />
+          <button disabled={busy()} onClick={() => input.click()}>
+            Import…
           </button>
-          <button disabled={!workspace.canRedo()} onClick={workspace.redo} title="Redo (⇧⌘Z / Ctrl+Shift+Z)">
-            Redo
+          <button disabled={!workspace.selection().length} onClick={() => exportBrushes('selection')}>
+            Export selected…
           </button>
-        </div>
-        <BrushExamplesMenu busy={busy()} loadingMessage={status()} onSelect={importFiles} />
-        <button disabled={busy()} onClick={() => input.click()}>
-          Import…
-        </button>
-        <button disabled={!workspace.selection().length} onClick={() => exportBrushes('selection')}>
-          Export selected…
-        </button>
-        <button disabled={!workspace.root().children.length} onClick={() => exportBrushes('all')}>
-          Export all…
-        </button>
-        <input
-          ref={input}
-          type="file"
-          accept=".abr"
-          multiple
-          hidden
-          onChange={(event) => {
-            void importFiles(Array.from(event.currentTarget.files ?? []));
-            event.currentTarget.value = '';
-          }}
-        />
-      </header>
-      <Show when={props.onUseBrush}>
-        <div class="abr-use-brush">
-          <span>{props.useBrushNote}</span>
-          <button
-            disabled={busy() || usingBrush() || !workspace.active()}
-            onClick={() => void useBrush()}
-          >
-            {usingBrush() ? 'Preparing brush…' : 'Use in Paint'}
+          <button disabled={!workspace.root().children.length} onClick={() => exportBrushes('all')}>
+            Export all…
           </button>
-        </div>
-      </Show>
-      <main class="abr-panels" style={{ '--collection-width': `${split()}%` }}>
-        <BrushPanel workspace={workspace} onImport={() => input.click()} onExport={exportBrushes} />
-        <div
-          role="separator"
-          aria-label="Panel width"
-          aria-orientation="vertical"
-          aria-valuemin={30}
-          aria-valuemax={60}
-          aria-valuenow={split()}
-          tabindex="0"
-          class="abr-divider"
-          onKeyDown={(event) => {
-            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-              event.preventDefault();
-              setSplit((value) => Math.max(30, Math.min(60, value + (event.key === 'ArrowLeft' ? -2 : 2))));
-            }
-          }}
-          onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={(event) => {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              const rect = shell.getBoundingClientRect();
-              setSplit(Math.max(30, Math.min(60, ((event.clientX - rect.left) / rect.width) * 100)));
-            }
-          }}
-          onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
-        />
-        <section class="abr-settings" aria-label="Brush Settings">
-          <header class="abr-panel-heading">
-            <h2>Brush Settings</h2>
-            <span>{workspace.active() ? 'Live preview' : ''}</span>
-          </header>
-          <Show
-            when={workspace.active()}
-            fallback={
-              <div class="abr-empty-settings">
-                <p>Select a brush to edit its settings</p>
-                <span>Your collection stays open while you edit.</span>
-              </div>
-            }
-          >
-            {(node) => (
-              <BrushDetailEditable
-                brushes={allBrushNodes(workspace.root().children).map((node) => node.brush)}
-                brush={node().brush}
-                onChange={(brush) => workspace.updateBrush(node().id, brush)}
-              />
-            )}
-          </Show>
-        </section>
-      </main>
-      <footer class="abr-status" role="status">
-        <span>
-          <Show when={busy()}>
-            <span class="abr-loading-spinner" aria-hidden="true" />
-          </Show>
-          {status()}
-        </span>
-        <span>
-          {workspace.selection().length ? `${workspace.selection().length} selected · ` : ''}
-          {allBrushNodes(workspace.root().children).length} brushes
-        </span>
-      </footer>
-      <Show when={draggingFiles()}>
-        <div class="abr-drop-indicator">Drop to add brushes</div>
-      </Show>
-    </div>
+          <input
+            ref={input}
+            type="file"
+            accept=".abr"
+            multiple
+            hidden
+            onChange={(event) => {
+              void importFiles(Array.from(event.currentTarget.files ?? []));
+              event.currentTarget.value = '';
+            }}
+          />
+        </header>
+        <Show when={props.onUseBrush}>
+          <div class="abr-use-brush">
+            <span>{props.useBrushNote}</span>
+            <button disabled={busy() || usingBrush() || !workspace.active()} onClick={() => void useBrush()}>
+              {usingBrush() ? 'Preparing brush…' : 'Use in Paint'}
+            </button>
+          </div>
+        </Show>
+        <main class="abr-panels" style={{ '--collection-width': `${split()}%` }}>
+          <BrushPanel workspace={workspace} onImport={() => input.click()} onExport={exportBrushes} />
+          <div
+            role="separator"
+            aria-label="Panel width"
+            aria-orientation="vertical"
+            aria-valuemin={30}
+            aria-valuemax={60}
+            aria-valuenow={split()}
+            tabindex="0"
+            class="abr-divider"
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                event.preventDefault();
+                setSplit((value) => Math.max(30, Math.min(60, value + (event.key === 'ArrowLeft' ? -2 : 2))));
+              }
+            }}
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                const rect = shell.getBoundingClientRect();
+                setSplit(Math.max(30, Math.min(60, ((event.clientX - rect.left) / rect.width) * 100)));
+              }
+            }}
+            onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+          />
+          <section class="abr-settings" aria-label="Brush Settings">
+            <header class="abr-panel-heading">
+              <h2>Brush Settings</h2>
+              <span>{workspace.active() ? 'Live preview' : ''}</span>
+            </header>
+            <Show
+              when={workspace.active()}
+              fallback={
+                <div class="abr-empty-settings">
+                  <p>Select a brush to edit its settings</p>
+                  <span>Your collection stays open while you edit.</span>
+                </div>
+              }
+            >
+              {(node) => (
+                <BrushDetailEditable
+                  colorMixing={props.colorMixing ?? standaloneMixing}
+                  brushes={allBrushNodes(workspace.root().children).map((node) => node.brush)}
+                  brush={node().brush}
+                  onChange={(brush) => workspace.updateBrush(node().id, brush)}
+                />
+              )}
+            </Show>
+          </section>
+        </main>
+        <footer class="abr-status" role="status">
+          <span>
+            <Show when={busy()}>
+              <span class="abr-loading-spinner" aria-hidden="true" />
+            </Show>
+            {status()}
+          </span>
+          <span>
+            {workspace.selection().length ? `${workspace.selection().length} selected · ` : ''}
+            {allBrushNodes(workspace.root().children).length} brushes
+          </span>
+        </footer>
+        <Show when={draggingFiles()}>
+          <div class="abr-drop-indicator">Drop to add brushes</div>
+        </Show>
+      </div>
+    </ColorProfileContext>
   );
 }
 
