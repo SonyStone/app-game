@@ -75,13 +75,14 @@ it('releases resources when engine creation fails partway through resolving depe
   expect(cache.stats().pinnedBytes).toBe(0);
 });
 
-it.each(['finish', 'cancel', 'add', 'preview'] as const)(
+it.each(['finish', 'cancel', 'add', 'preview', 'idle'] as const)(
   'releases resources after %s, including failed operations',
   async (operation) => {
     const cache = createBrushResources();
     cache.put(tip('a'));
     const engine = session();
     if (operation === 'add') engine.add.mockRejectedValue(new Error('add failed'));
+    if (operation === 'idle') engine.idle.mockRejectedValue(new Error('idle failed'));
     if (operation === 'preview')
       engine.preview.mockImplementation(() => {
         throw new Error('preview failed');
@@ -91,6 +92,7 @@ it.each(['finish', 'cancel', 'add', 'preview'] as const)(
       return engine;
     });
     if (operation === 'add') await expect(stroke.add([])).rejects.toThrow('add failed');
+    if (operation === 'idle') await expect(stroke.idle!(16)).rejects.toThrow('idle failed');
     if (operation === 'preview') expect(() => stroke.preview(true)).toThrow('preview failed');
     if (operation === 'finish') await stroke.finish();
     if (operation === 'cancel') stroke.cancel();
@@ -148,6 +150,7 @@ function tip(id: string) {
 }
 function session() {
   return {
+    idle: vi.fn<NonNullable<BrushSession['idle']>>(async () => false),
     add: vi.fn<BrushSession['add']>(async () => {}),
     preview: vi.fn<BrushSession['preview']>(),
     finish: vi.fn<BrushSession['finish']>(async () => []),

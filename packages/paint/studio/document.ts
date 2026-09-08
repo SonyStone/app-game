@@ -22,6 +22,7 @@ export type TileChange = {
   after: TileData | undefined;
 };
 type HistoryEntry = {
+  id: number;
   before: LayerInfo[];
   after: LayerInfo[];
   activeBefore: string;
@@ -35,6 +36,9 @@ export function createDocument(options: { paged?: boolean } = {}) {
   let layers: Layer[] = [newLayer('layer-1', 'Layer 1')];
   let active = 'layer-1';
   let revision = 0;
+  let nextHistoryId = 0,
+    baseHistoryId = 0;
+  let historySource: HistorySource = { id: 0, label: 'Opened document', layers: cloneLayers(layers) };
   const undo: HistoryEntry[] = [],
     redo: HistoryEntry[] = [];
   let historyBytes = 0;
@@ -50,28 +54,64 @@ export function createDocument(options: { paged?: boolean } = {}) {
     }
     active = direction === 'before' ? entry.activeBefore : entry.activeAfter;
   };
-  const record = (entry: HistoryEntry) => {
+  const record = (value: Omit<HistoryEntry, 'id'>) => {
+    const entry = { ...value, id: ++nextHistoryId };
     for (const entry of redo) historyBytes -= entry.bytes;
     redo.length = 0;
     undo.push(entry);
     historyBytes += entry.bytes;
-    while (undo.length > 1 && (historyBytes > (options.paged ? 1024 * 1048576 : HISTORY_BYTES) || undo.length > 100))
-      historyBytes -= undo.shift()!.bytes;
+    while (undo.length > 1 && (historyBytes > (options.paged ? 1024 * 1048576 : HISTORY_BYTES) || undo.length > 100)) {
+      const removed = undo.shift()!;
+      historyBytes -= removed.bytes;
+      baseHistoryId = removed.id;
+    }
     revision++;
   };
   return {
+    /** Selects a retained history state without changing current pixels or undo/redo position.
+     * Selected immutable versions stay pinned even if their undo entry is pruned or branched away.
+     */
+    selectHistorySource(id: number) {
+      if (id === historySource.id) return;
+      const states = [baseHistoryId, ...undo.map((entry) => entry.id), ...[...redo].reverse().map((entry) => entry.id)];
+      const target = states.indexOf(id);
+      if (target < 0) throw new Error('This history state is no longer available.');
+      let snapshot = cloneLayers(layers);
+      for (let index = undo.length; index > target; index--)
+        snapshot = projectHistory(snapshot, undo[index - 1]!, 'before');
+      for (let index = undo.length; index < target; index++)
+        snapshot = projectHistory(snapshot, redo[redo.length - 1 - (index - undo.length)]!, 'after');
+      historySource = { id, label: id === 0 ? 'Opened document' : `State ${id}`, layers: snapshot };
+      revision++;
+    },
+    /** Borrowed read-only source for the active tool; an absent layer cannot be restored from that state. */
+    historySourceLayer(id: string) {
+      return historySource.layers.find((layer) => layer.id === id);
+    },
+    /** Structured-cloneable session handoff; tile versions also participate in persist/GC. */
+    historySourceSnapshot(): HistorySource {
+      return { ...historySource, layers: cloneLayers(historySource.layers) };
+    },
+    /** Restores a process-owned handoff after document loading, not data from an imported paint file. */
+    restoreHistorySource(source: HistorySource) {
+      historySource = { ...source, layers: cloneLayers(source.layers) };
+      nextHistoryId = Math.max(nextHistoryId, source.id) + 1;
+      baseHistoryId = nextHistoryId;
+      revision++;
+    },
     /** Replaces resident snapshots with immutable disk references, including history. */
     persist(capture: (pixels: TileData) => TileData) {
-      for (const layer of layers) for (const [key, pixels] of layer.tiles) layer.tiles.set(key, capture(pixels));
+      for (const layer of [...layers, ...historySource.layers])
+        for (const [key, pixels] of layer.tiles) layer.tiles.set(key, capture(pixels));
       for (const entry of [...undo, ...redo])
         for (const tile of entry.tiles) {
           if (tile.before) tile.before = capture(tile.before);
           if (tile.after) tile.after = capture(tile.after);
         }
     },
-    /** Current and undoable versions that must survive storage garbage collection. */
+    /** Current, undoable and selected-source versions that must survive storage garbage collection. */
     *snapshots(): Generator<TileData> {
-      for (const layer of layers) yield* layer.tiles.values();
+      for (const layer of [...layers, ...historySource.layers]) yield* layer.tiles.values();
       for (const entry of [...undo, ...redo])
         for (const tile of entry.tiles) {
           if (tile.before) yield tile.before;
@@ -95,6 +135,12 @@ export function createDocument(options: { paged?: boolean } = {}) {
     state() {
       return {
         revision,
+        historySource: { id: historySource.id, label: historySource.label },
+        historyCurrentId: undo.at(-1)?.id ?? baseHistoryId,
+        historyStates: [
+          { id: baseHistoryId, label: baseHistoryId === 0 ? 'Opened document' : `State ${baseHistoryId}` },
+          ...[...undo, ...[...redo].reverse()].map((entry) => ({ id: entry.id, label: `State ${entry.id}` }))
+        ],
         layers: info(),
         activeId: active,
         canUndo: undo.length > 0,
@@ -129,7 +175,7 @@ export function createDocument(options: { paged?: boolean } = {}) {
         throw new Error(
           'The drawing reached its storage budget. The last stroke was not added. Save your drawing before freeing space.'
         );
-      const entry: HistoryEntry = {
+      const entry: Omit<HistoryEntry, 'id'> = {
         before: info(),
         after: info(),
         activeBefore: active,
@@ -141,7 +187,7 @@ export function createDocument(options: { paged?: boolean } = {}) {
         entry.after.splice(layers.findIndex((layer) => layer.id === active) + 1, 0, addedLayer);
         entry.activeAfter = addedLayer.id;
       }
-      apply(entry, 'after');
+      apply({ ...entry, id: nextHistoryId + 1 }, 'after');
       record(entry);
     },
     /** Changes layer properties/order in a single undoable action. Selection itself is not history. */
@@ -214,6 +260,8 @@ export function createDocument(options: { paged?: boolean } = {}) {
       active = selected;
       undo.length = redo.length = 0;
       historyBytes = 0;
+      nextHistoryId = baseHistoryId = 0;
+      historySource = { id: 0, label: 'Opened document', layers: cloneLayers(layers) };
       revision++;
     }
   };
@@ -237,3 +285,26 @@ const HISTORY_BYTES = 64 * 1024 * 1024;
 export const MAX_DOCUMENT_BYTES = 256 * 1024 * 1024;
 /** Separate metadata bound; spatial coordinates remain unrestricted. */
 export const MAX_DOCUMENT_TILES = 65_536;
+
+/** Session-only history source. Maps share immutable tile versions; they never alias live layer maps. */
+export type HistorySource = { id: number; label: string; layers: Layer[] };
+
+function cloneLayers(layers: readonly Layer[]): Layer[] {
+  return layers.map((layer) => ({ ...layer, tiles: new Map(layer.tiles) }));
+}
+
+/** Applies one retained history delta to private snapshot maps, including deleted/recreated layers. */
+function projectHistory(layers: Layer[], entry: HistoryEntry, direction: 'before' | 'after'): Layer[] {
+  const old = new Map(layers.map((layer) => [layer.id, layer]));
+  const next = entry[direction].map((info) => ({
+    ...info,
+    tiles: old.get(info.id)?.tiles ?? new Map<string, TileData>()
+  }));
+  for (const change of entry.tiles) {
+    const layer = next.find((layer) => layer.id === change.layerId);
+    const pixels = change[direction];
+    if (pixels) layer?.tiles.set(change.key, pixels);
+    else layer?.tiles.delete(change.key);
+  }
+  return next;
+}

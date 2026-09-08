@@ -20,6 +20,11 @@ export function attachInput(
     showPenCursor?: () => boolean;
     /** Called when real raw pen updates are received, rather than merely supported by the browser. */
     rawUpdate?: () => void;
+    /** Optional one-contact action, e.g. sampling canvas paint. Consumes contact without a stroke or touch pan. */
+    canvasAction?: {
+      enabled: (event: Pick<PointerEvent, 'altKey' | 'pointerType'>) => boolean;
+      run: (point: Point) => void;
+    };
     puck: ReturnType<typeof createNavigationPuck>;
     selection?: {
       enabled: () => boolean;
@@ -37,6 +42,7 @@ export function attachInput(
     | { kind: 'draw'; id: number; camera: Camera; size: ViewSize; latest: Sample; raw: boolean }
     | { kind: 'select'; id: number; camera: Camera; size: ViewSize }
     | { kind: 'pan'; id: number; previous: Point }
+    | { kind: 'action'; id: number }
     | undefined;
   let touchStart: { camera: Camera; center: Point; distance: number; angle: number } | undefined;
   const detachPuck = attachNavigationPuck(canvas, options.puck, {
@@ -116,8 +122,15 @@ export function attachInput(
       if (!options.ready()) return;
       const point = local(event);
       canvas.focus({ preventScroll: true });
+      if (!gesture && !touches.size && event.button === 0 && options.canvasAction?.enabled(event)) {
+        canvas.setPointerCapture(event.pointerId);
+        gesture = { kind: 'action', id: event.pointerId };
+        options.canvasAction.run(screenToWorld(point, options.camera(), options.size()));
+        event.preventDefault();
+        return;
+      }
       if (event.pointerType === 'touch') {
-        if (gesture?.kind === 'draw' || gesture?.kind === 'select') return;
+        if (gesture?.kind === 'draw' || gesture?.kind === 'select' || gesture?.kind === 'action') return;
         canvas.setPointerCapture(event.pointerId);
         touches.set(event.pointerId, point);
         resetTouch();
@@ -150,6 +163,7 @@ export function attachInput(
       options.send({
         type: 'begin',
         brush: options.brush(),
+        modifiers: { altKey: event.altKey },
         zoom: camera.zoom,
         samples: [latest]
       });
@@ -200,6 +214,7 @@ export function attachInput(
         return;
       }
       if (!gesture || gesture.id !== event.pointerId) return;
+      if (gesture.kind === 'action') return;
       if (gesture.kind === 'pan') {
         options.navigate(
           panCamera(options.camera(), options.size(), {

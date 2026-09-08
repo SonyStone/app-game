@@ -2,18 +2,20 @@ import { z } from 'zod';
 import { TILE_SIZE } from './brush';
 import type { Camera } from './camera';
 import { MAX_DOCUMENT_BYTES, MAX_DOCUMENT_TILES, TILE_BYTES, type Layer } from './document';
+import { defaultPaintSymmetry, paintSymmetrySchema, type PaintSymmetry } from './symmetry';
 import { packTile, unpackTile } from './tilePixels';
 
 /** Versioned on-disk format. Tile pixels remain premultiplied; no lossy image conversion occurs. */
 export type SavedDocument = ReturnType<typeof snapshotDocument>;
 
 /** Copies metadata while sharing immutable committed tile snapshots. */
-export function snapshotDocument(layers: Layer[], activeId: string, camera: Camera) {
+export function snapshotDocument(layers: Layer[], activeId: string, camera: Camera, symmetry = defaultPaintSymmetry()) {
   return {
     version: 2 as const,
     tileSize: TILE_SIZE,
     activeId,
     camera: { ...camera },
+    symmetry: { ...symmetry },
     layers: layers.map(({ tiles, ...layer }) => ({
       ...layer,
       tiles: [...tiles].map(([key, pixels]) => ({ key, pixels }))
@@ -22,7 +24,12 @@ export function snapshotDocument(layers: Layer[], activeId: string, camera: Came
 }
 
 /** Validates imported/local data before replacing the current document. */
-export function restoreDocument(value: unknown): { layers: Layer[]; activeId: string; camera: Camera } {
+export function restoreDocument(value: unknown): {
+  layers: Layer[];
+  activeId: string;
+  camera: Camera;
+  symmetry: PaintSymmetry;
+} {
   const parsed = savedSchema.parse(value);
   if (
     new Set(parsed.layers.map((l) => l.id)).size !== parsed.layers.length ||
@@ -49,7 +56,7 @@ export function restoreDocument(value: unknown): { layers: Layer[]; activeId: st
     );
     return { ...layer, tiles };
   });
-  return { layers, activeId: parsed.activeId, camera: parsed.camera };
+  return { layers, activeId: parsed.activeId, camera: parsed.camera, symmetry: parsed.symmetry };
 }
 
 /** Encodes a portable JSON document. Large tile arrays are stored as base64, not JSON numbers. */
@@ -136,6 +143,7 @@ const savedSchema = z.object({
   version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   tileSize: z.literal(TILE_SIZE),
   activeId: z.string(),
+  symmetry: paintSymmetrySchema.default(defaultPaintSymmetry),
   camera: z.object({ x: finite, y: finite, zoom: finite.min(0.05).max(32), angle: finite, mirrored: z.boolean() }),
   layers: z
     .array(

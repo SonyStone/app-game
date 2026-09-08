@@ -2,23 +2,45 @@ import type { Result } from './asyncResult';
 import type { Brush, Sample } from './brush';
 import type { Camera, Point, ViewSize } from './camera';
 import type { BrushResource, createBrushResources } from './composition/brushResources';
-import type { LayerAction, createDocument } from './document';
+import type { BrushEngine } from './composition/contracts';
+import type { HistorySource, LayerAction, createDocument } from './document';
+import type { RendererToolState } from './gpu/toolState';
+import type { PaintSymmetry } from './symmetry';
 
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */
 export type PaintCommand =
-  | { type: 'init'; canvas: OffscreenCanvas; size: ViewSize; dpr: number; storageName?: string }
+  | {
+      type: 'init';
+      canvas: OffscreenCanvas;
+      size: ViewSize;
+      dpr: number;
+      storageName?: string;
+      tools?: RendererToolState;
+      historySource?: HistorySource;
+    }
   | ({ type: 'brush-resources'; requestId: string } & (
       | { action: 'put'; resource: BrushResource }
       | { action: 'delete'; id: string }
       | { action: 'stats' }
     ))
   | { type: 'debug'; enabled: boolean }
+  | { type: 'symmetry'; settings: PaintSymmetry }
+  | { type: 'history-source'; id: number }
+  | { type: 'brush-command'; requestId: string; brush: Brush; command: unknown }
   | { type: 'live-tail'; enabled: boolean }
   | { type: 'selection-view'; points: Point[]; animate: boolean }
   | { type: 'view'; camera: Camera; size: ViewSize; dpr: number }
-  | { type: 'begin'; brush: Brush; samples: Sample[]; zoom?: number }
+  | {
+      type: 'begin';
+      brush: Brush;
+      samples: Sample[];
+      zoom?: number;
+      /** Captured at contact and fixed for this stroke; never persisted with the preset. */
+      modifiers?: Parameters<BrushEngine>[0]['modifiers'];
+    }
   | { type: 'samples'; samples: Sample[] }
-  | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'checkpoint' | 'download' | 'png' | 'recover' | 'dispose' }
+  | { type: 'checkpoint'; includeTools?: boolean }
+  | { type: 'end' | 'cancel' | 'undo' | 'redo' | 'save' | 'download' | 'png' | 'recover' | 'dispose' }
   | { type: 'layer'; action: LayerAction }
   | { type: 'selection'; action: SelectionAction; points: Point[]; offset?: Point; layerId: string; revision: number }
   | { type: 'import'; text: string }
@@ -29,10 +51,12 @@ export type PaintRuntimeCommand =
   | Exclude<PaintCommand, { type: 'init' }>
   | (Omit<Extract<PaintCommand, { type: 'init' }>, 'canvas'> & { canvas: OffscreenCanvas | HTMLCanvasElement });
 
-/** Lightweight worker status; document pixels are sent only for explicit file downloads. */
+/** Lightweight status; pixel payloads are limited to explicit downloads and requested tool handoffs. */
 export type PaintEvent =
   | {
       type: 'state';
+      /** Document-owned guides and painting transforms. Absent from older/custom endpoints. */
+      symmetry?: PaintSymmetry;
       document: ReturnType<ReturnType<typeof createDocument>['state']>;
       camera: Camera;
       saved: boolean;
@@ -87,10 +111,11 @@ export type PaintEvent =
       >;
     }
   | { type: 'ready' }
-  | { type: 'checkpointed' }
+  | { type: 'brush-command'; requestId: string; result: Result<void, string> }
+  | { type: 'checkpointed'; tools?: RendererToolState; historySource?: HistorySource }
   | { type: 'selection'; points: Point[]; hasClipboard: boolean }
   | { type: 'disposed' }
-  | { type: 'restored'; camera: Camera }
+  | { type: 'restored'; camera: Camera; symmetry?: PaintSymmetry }
   | { type: 'error'; message: string; recoverable: boolean }
   | { type: 'download'; blob: Blob; name: string };
 

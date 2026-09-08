@@ -58,6 +58,44 @@ it('uses the JSX recipe and captures the selected processor/engine until stroke 
   expect(setup.events.filter((e) => e.type === 'error')).toEqual([]);
 });
 
+it('runs held-stroke catch-up serially, suspends at rest and stops on release, cancellation or failure', async () => {
+  const idle = vi.fn(async (_elapsed: number) => false).mockResolvedValueOnce(true);
+  const cancel = vi.fn();
+  const create = vi.fn<BrushEngine>(() => ({
+    add: async () => {},
+    preview() {},
+    finish: async () => [],
+    cancel,
+    idle
+  }));
+  const setup = mount({ engines: { idle: create }, selectEngine: () => 'idle' });
+  await setup.ready();
+  const begin = () => setup.runtime.send({ type: 'begin', brush: defaultBrush(), samples: [] });
+  begin();
+  await vi.waitFor(() => expect(idle).toHaveBeenCalledTimes(2));
+  expect(idle.mock.calls[0]![0]).toBeGreaterThan(0);
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  expect(idle).toHaveBeenCalledTimes(2);
+  setup.runtime.send({ type: 'samples', samples: [] });
+  await vi.waitFor(() => expect(idle).toHaveBeenCalledTimes(3));
+  setup.runtime.send({ type: 'cancel' });
+  await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce());
+  begin();
+  setup.runtime.send({ type: 'end' });
+  await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  expect(idle).toHaveBeenCalledTimes(3);
+  idle.mockRejectedValueOnce(new Error('Idle paint failed'));
+  begin();
+  await vi.waitFor(() =>
+    expect(setup.events).toContainEqual(expect.objectContaining({ type: 'error', message: 'Idle paint failed' }))
+  );
+  expect(cancel).toHaveBeenCalledTimes(2);
+  const calls = idle.mock.calls.length;
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  expect(idle).toHaveBeenCalledTimes(calls);
+});
+
 it('routes explicit presets through the JSX registry and rejects invalid settings without dirtying the document', async () => {
   const create = engine();
   const custom = defineBrushEngine({
@@ -150,7 +188,7 @@ it('releases a failed input session immediately and accepts the next stroke', as
   });
   await setup.ready();
   setup.resources.put({ id: 'tip', format: 'r8unorm', width: 1, height: 1, pixels: new Uint8Array([255]) });
-  setup.runtime.send({ type: 'begin', brush: defaultBrush(), samples: [] });
+  setup.runtime.send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 0, y: 0, pressure: 0.5, time: 1 }] });
   await vi.waitFor(() =>
     expect(setup.events).toContainEqual(expect.objectContaining({ type: 'error', message: 'input failed' }))
   );
@@ -316,6 +354,43 @@ it('reports an unregistered engine before touching the renderer', async () => {
   expect(setup.renderer.begin).not.toHaveBeenCalled();
 });
 
+it('captures tool paint only for an explicit handoff after finishing the active stroke', async () => {
+  const draw = engine();
+  const setup = mount({ engines: { draw }, selectEngine: () => 'draw' });
+  await setup.ready();
+  const snapshot = vi.mocked(setup.renderer.snapshotTools);
+  setup.runtime.send({ type: 'save' });
+  setup.runtime.send({ type: 'checkpoint' });
+  await vi.waitFor(() => expect(setup.events).toContainEqual({ type: 'checkpointed' }));
+  expect(snapshot).not.toHaveBeenCalled();
+  setup.runtime.send({ type: 'begin', brush: defaultBrush(), samples: [] });
+  snapshot.mockImplementation(async () => {
+    expect(draw.mock.results[0]!.value.finish).toHaveBeenCalledOnce();
+    return { version: 1 };
+  });
+  setup.runtime.send({ type: 'checkpoint', includeTools: true });
+  await vi.waitFor(() =>
+    expect(setup.events).toContainEqual({
+      type: 'checkpointed',
+      tools: { version: 1 },
+      historySource: expect.objectContaining({ id: 0, label: 'Opened document', layers: expect.any(Array) })
+    })
+  );
+  expect(snapshot).toHaveBeenCalledOnce();
+});
+
+it('reports handoff readback failure without disposing the usable renderer', async () => {
+  const setup = mount();
+  await setup.ready();
+  vi.mocked(setup.renderer.snapshotTools).mockRejectedValueOnce(new Error('Handoff readback failed'));
+  setup.runtime.send({ type: 'checkpoint', includeTools: true });
+  await vi.waitFor(() =>
+    expect(setup.events).toContainEqual(expect.objectContaining({ type: 'error', message: 'Handoff readback failed' }))
+  );
+  expect(setup.events.some((event) => event.type === 'checkpointed')).toBe(false);
+  expect(setup.renderer.destroy).not.toHaveBeenCalled();
+});
+
 function engine() {
   return vi.fn<BrushEngine>(({ processor }) => ({
     add: vi.fn(async (samples) => {
@@ -342,7 +417,9 @@ function mount(
     destroy: vi.fn(),
     reset: vi.fn(),
     setSelection: vi.fn(),
-    prepareOverview: async () => {}
+    prepareOverview: async () => {},
+    snapshotTools: vi.fn(async () => ({ version: 1 as const })),
+    restoreTools: vi.fn()
   } as unknown as PaintRenderer;
   const createRenderer = vi.fn(async () => renderer);
   const storage = createMemoryStorage();

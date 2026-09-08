@@ -1,21 +1,53 @@
-import { blendModeId, dualCoverage, grain, textureCoverage, textureTone } from '@app-game/abr-brush/effects';
+import type { ColorMixing } from '@app-game/abr-brush/effects';
+import {
+  blendModeId,
+  dualCoverage,
+  fingerPaintCompositeInSpace,
+  grain,
+  mixerComposite,
+  retouchCompositeInSpace,
+  sampleMixing,
+  textureCoverage,
+  textureTone
+} from '@app-game/abr-brush/effects';
 import type { BrushFormValues } from '@app-game/abr-brush/form';
 import { paintBlend, paintModes } from '@app-game/abr-brush/paintBlend';
+import { pencilCoverage, usesPencilCoverage } from '@app-game/abr-brush/pencil';
 import { common, d, std, tgpu, type TgpuRoot } from 'typegpu';
 import type { Dab } from '../brush';
 import type { BrushResource } from '../composition/brushResources';
+import type { Layer } from '../document';
+import type { createCanvasPickup } from './canvasPickup';
 import { linearSourceOver } from './colorMixing';
+import type { createMixerWells } from './mixerWells';
 
 /** Immutable preset resources pinned by the brush session. */
 export type AbrRasterSettings = {
+  /** Selected immutable document state; restoration interpolates premultiplied pixels by accumulated coverage. */
+  historySource?: Layer;
   values: BrushFormValues;
   tip: BrushResource;
   pattern?: BrushResource;
   dual?: BrushResource;
   /** Scales the secondary tip relative to the edited primary diameter. */
   size: number;
-  mixing: 'linear' | 'classic';
+  mixing: ColorMixing;
   blendMode?: string;
+  /** Canvas-dependent tools receive the current document layers without owning them. */
+  smudge?: { strength: number; fingerPainting: boolean; allLayers: boolean; layers: readonly Layer[] };
+  /** Blur/Sharpen modify captured pixels at document resolution; percentages are normalized. */
+  filter?: { sharpen: boolean; protectDetail: boolean; strength: number; allLayers: boolean; layers: readonly Layer[] };
+  /** A preset's reservoir persists across gestures; all percentages here are normalized to 0..1. */
+  mixer?: {
+    key: string;
+    wet: number;
+    load: number;
+    mix: number;
+    autoFill: boolean;
+    autoClean: boolean;
+    allLayers: boolean;
+    layers: readonly Layer[];
+  };
 };
 
 /** Device-owned ABR rasterizer. Tile scratch is allocated lazily and participates in Paint's eviction.
@@ -45,7 +77,7 @@ export function createAbrStamps(root: TgpuRoot) {
       mask: {
         format: 'rgba8unorm',
         blend: {
-          color: { srcFactor: 'one', dstFactor: 'one-minus-src' },
+          color: { operation: 'max', srcFactor: 'one', dstFactor: 'one' },
           alpha: { operation: 'max', srcFactor: 'one', dstFactor: 'one' }
         }
       }
@@ -122,7 +154,8 @@ export function createAbrStamps(root: TgpuRoot) {
         old.destroy();
         textures.splice(textures.indexOf(old), 1);
       }
-      settings = value;
+      // The renderer borrows history only while painting; GPU resource caches must not pin old document maps.
+      settings = { ...value, historySource: undefined };
       try {
         tip = upload(value.tip);
         pattern = value.pattern ? upload(value.pattern) : tip;
@@ -153,7 +186,12 @@ export function createAbrStamps(root: TgpuRoot) {
           v.texture.scale / 100,
           blendModeId(v.texture.mode)
         ),
-        tone: d.vec4f(v.texture.invert ? 1 : 0, v.texture.brightness, v.texture.contrast, 0),
+        tone: d.vec4f(
+          v.texture.invert ? 1 : 0,
+          v.texture.brightness,
+          v.texture.contrast,
+          usesPencilCoverage(v.tool) ? 1 : 0
+        ),
         flags: d.vec4f(
           v.useTexture && s.pattern ? 1 : 0,
           v.texture.eachTip ? 1 : 0,
@@ -205,7 +243,32 @@ export function createAbrStamps(root: TgpuRoot) {
         pass.end();
       }
     },
-    composite(tile: AbrTile, pass: GPURenderPassEncoder) {
+    composite(
+      tile: AbrTile,
+      pass: GPURenderPassEncoder,
+      pickup?: {
+        patch:
+          | Awaited<ReturnType<ReturnType<typeof createCanvasPickup>['capture']>>
+          | ReturnType<ReturnType<typeof createMixerWells>['step']>;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        strength: number;
+        fingerPainting: boolean;
+        mixer?: boolean;
+        history?: boolean;
+      }
+    ) {
+      tile.pickupParams.write({
+        placement: pickup ? d.vec4f(pickup.x, pickup.y, pickup.width, pickup.height) : d.vec4f(0, 0, 1, 1),
+        flags: d.vec4f(
+          pickup ? 1 : 0,
+          pickup?.strength ?? 0,
+          pickup?.fingerPainting ? 1 : 0,
+          pickup?.history ? 2 : pickup?.mixer ? 1 : 0
+        )
+      });
       composite
         .with(pass)
         .with(
@@ -216,7 +279,10 @@ export function createAbrStamps(root: TgpuRoot) {
             dual: tile.dualMask,
             pattern,
             repeat,
-            params: tile.params
+            params: tile.params,
+            pickup: pickup?.patch.texture ?? tile.base,
+            pickupSampler: sampler,
+            pickupParams: tile.pickupParams
           })
         )
         .draw(3);
@@ -239,11 +305,13 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
   const paint = texture(root),
     dualMask = texture(root);
   const params = root.createBuffer(Params).$usage('uniform');
+  const pickupParams = root.createBuffer(PickupParams).$usage('uniform');
   const stamps = root.createBuffer(d.arrayOf(Stamp, capacity)).$usage('vertex');
   return {
     paint,
     dualMask,
     params,
+    pickupParams,
     stamps,
     paintView: root.unwrap(paint).createView(),
     dualView: root.unwrap(dualMask).createView(),
@@ -253,6 +321,7 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
       paint.destroy();
       dualMask.destroy();
       params.destroy();
+      pickupParams.destroy();
       stamps.destroy();
     }
   };
@@ -324,10 +393,14 @@ const fragment = tgpu.fragmentFn({
     );
   if (p.flags.w > 0)
     coverage *= 0.35 + 0.65 * grain(input.position.x + p.origin.x, input.position.y + p.origin.y, input.dynamics.w);
+  if (p.tone.w > 0) coverage = pencilCoverage(coverage);
   const flow = coverage * input.dynamics.x;
   return {
     paint: d.vec4f(std.mul(input.color.rgb, flow), flow),
-    mask: d.vec4f(flow, flow, flow, coverage * input.dynamics.y)
+    // Keep raw opacity separate from soft-tip opacity. Hard Mix replaces gray
+    // coverage with binary coverage, so its ceiling must not include that gray again.
+    // Flow accumulation already lives in paint.a; mask channels all use MAX.
+    mask: d.vec4f(coverage, std.select(0, input.dynamics.y, coverage > 0), 0, coverage * input.dynamics.y)
   };
 });
 const secondaryFragment = tgpu.fragmentFn({ in: { uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f }, out: d.vec4f })((
@@ -336,7 +409,11 @@ const secondaryFragment = tgpu.fragmentFn({ in: { uv: d.vec2f, dynamics: d.vec4f
   'use gpu';
   return d.vec4f(std.textureSample(layout.$.tip, layout.$.sampler, input.uv).r * input.dynamics.x);
 });
+const PickupParams = d.struct({ placement: d.vec4f, flags: d.vec4f });
 const compositeLayout = tgpu.bindGroupLayout({
+  pickup: { texture: d.texture2d() },
+  pickupSampler: { sampler: 'filtering' },
+  pickupParams: { uniform: PickupParams },
   base: { texture: d.texture2d() },
   mask: { texture: d.texture2d() },
   paint: { texture: d.texture2d() },
@@ -352,7 +429,7 @@ const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }
   const base = std.textureLoad(compositeLayout.$.base, xy, 0);
   const mask = std.textureLoad(compositeLayout.$.mask, xy, 0);
   const paint = std.textureLoad(compositeLayout.$.paint, xy, 0);
-  let alpha = std.min(mask.r, mask.a);
+  let alpha = d.f32(paint.a);
   if (p.flags.z > 0) alpha = dualCoverage(alpha, std.textureLoad(compositeLayout.$.dual, xy, 0).r, p.extra.y);
   const uv = std.div(std.add(input.position.xy, p.phase.xy), std.mul(p.texture.xy, p.texture.z));
   const sample = std.textureSample(compositeLayout.$.pattern, compositeLayout.$.repeat, uv).r;
@@ -361,31 +438,56 @@ const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }
   // Local edge approximation; exact wet-edge diffusion requires a halo exchange between tiles.
   if (p.extra.z > 0) {
     const up = std.textureLoad(
-      compositeLayout.$.mask,
+      compositeLayout.$.paint,
       std.clamp(std.add(xy, d.vec2i(0, -1)), d.vec2i(0), d.vec2i(255)),
       0
-    ).r;
+    ).a;
     const down = std.textureLoad(
-      compositeLayout.$.mask,
+      compositeLayout.$.paint,
       std.clamp(std.add(xy, d.vec2i(0, 1)), d.vec2i(0), d.vec2i(255)),
       0
-    ).r;
+    ).a;
     const left = std.textureLoad(
-      compositeLayout.$.mask,
+      compositeLayout.$.paint,
       std.clamp(std.add(xy, d.vec2i(-1, 0)), d.vec2i(0), d.vec2i(255)),
       0
-    ).r;
+    ).a;
     const right = std.textureLoad(
-      compositeLayout.$.mask,
+      compositeLayout.$.paint,
       std.clamp(std.add(xy, d.vec2i(1, 0)), d.vec2i(0), d.vec2i(255)),
       0
-    ).r;
-    alpha = std.min(1, alpha * 0.65 + std.max(0, mask.r - std.min(std.min(up, down), std.min(left, right))) * 2);
+    ).a;
+    alpha = std.min(1, alpha * 0.65 + std.max(0, paint.a - std.min(std.min(up, down), std.min(left, right))) * 2);
   }
+  // Coverage effects (especially binary Hard Mix) must run before the pressure/tool
+  // opacity ceiling. Otherwise a faint lift-off stamp becomes fully opaque again.
+  if (p.tone.w > 0) alpha = pencilCoverage(alpha);
+  const opacity = std.select(mask.a, mask.g, p.flags.z > 0 && p.extra.y === 7);
+  alpha = std.min(alpha, opacity);
   if (p.extra.w === 1)
     alpha = std.select(0, 1, grain(input.position.x + p.origin.x, input.position.y + p.origin.y, 13.75) < alpha);
   const color = std.div(paint.rgb, std.max(0.00001, paint.a));
   const source = d.vec4f(std.mul(color, alpha), alpha);
+  if (compositeLayout.$.pickupParams.flags.x > 0) {
+    const tool = compositeLayout.$.pickupParams;
+    const pickupUv = std.div(std.add(input.position.xy, tool.placement.xy), tool.placement.zw);
+    const picked = sampleMixing(
+      compositeLayout.$.pickup,
+      compositeLayout.$.pickupSampler,
+      pickupUv,
+      p.origin.w > 0 && tool.flags.w === 0
+    );
+    if (tool.flags.w === 2) return std.mix(base, picked, alpha);
+    if (tool.flags.w > 0) {
+      // The wells emit premultiplied paint. Flow/coverage modulates deposition;
+      // transparent pickup must not erase existing canvas pixels.
+      return mixerComposite(base, picked, alpha);
+    }
+    if (tool.flags.z > 0) {
+      return fingerPaintCompositeInSpace(base, color, alpha * tool.flags.y, p.extra.w, p.origin.w > 0);
+    }
+    return retouchCompositeInSpace(base, picked, alpha * tool.flags.y, p.extra.w, p.origin.w > 0);
+  }
   if (p.extra.w === 28) return std.mul(base, 1 - alpha);
   if (p.extra.w === 27) return std.add(base, std.mul(source, 1 - base.a));
   if (p.extra.w < 2 && p.origin.w > 0) return linearSourceOver(base, source);

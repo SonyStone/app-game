@@ -7,6 +7,8 @@ export type StrokeProcessor = {
   add(samples: readonly Sample[]): Sample[];
   preview(): Sample[];
   finish(): Sample[];
+  /** Optional catch-up while contact is held still. Empty output suspends the idle clock until new input. */
+  idle?(elapsedMs: number): Sample[];
 };
 
 /** Creates independent filter/curve state at pen-down. Zoom is document-to-CSS scale. */

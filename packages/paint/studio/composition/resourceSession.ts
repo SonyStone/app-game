@@ -41,6 +41,18 @@ export function createResourceSession(
     if (closed) throw new Error('Brush session is closed.');
   };
   return {
+    idle: session.idle
+      ? async (elapsedMs) => {
+          ensureOpen();
+          try {
+            const painted = await session.idle!(elapsedMs);
+            ensureOpen();
+            return painted;
+          } catch (error) {
+            return fail(error);
+          }
+        }
+      : undefined,
     async add(samples) {
       ensureOpen();
       try {

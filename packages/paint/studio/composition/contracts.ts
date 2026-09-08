@@ -1,4 +1,5 @@
 import type { Brush, Sample } from '../brush';
+import type { Camera } from '../camera';
 import type { createDocument, Layer, TileChange } from '../document';
 import type { createPaintRenderer } from '../gpu/renderer';
 import type { StrokeProcessor, StrokeProcessorFactory } from '../strokeProcessors';
@@ -28,23 +29,39 @@ export type BrushSession = {
   preview(enabled: boolean): void;
   finish(): Promise<TileChange[]>;
   cancel(): void;
+  /** Ordered with input, while contact is held. True presents and continues ticking; false suspends until new input. */
+  idle?(elapsedMs: number): Promise<boolean>;
 };
 
 /** Engine-specific GPU resources can be shared in the factory closure. Output need not be round dabs.
  * A custom engine must present its transient output through the paired renderer and return immutable tiles.
  */
-export type BrushEngine = (context: {
+export type BrushEngine = ((context: {
   /** Untrusted transport data; defineBrushEngine narrows it with the engine's decoder. */
   settings?: unknown;
   /** Decoded textures pinned for this stroke. Resolve required IDs before creating GPU state. */
   resources: BrushResourceReader;
   brush: Brush;
   layer: Layer;
+  /** Ordered current layers for engines that sample beyond the active layer. */
+  layers?: readonly Layer[];
+  /** Immutable selected history state for this layer. Missing means the layer did not exist there. */
+  historySource?: Layer;
+  /** Contact-time modifiers, separate from saved preset settings. Absent means no modifiers held. */
+  modifiers?: Readonly<{ altKey: boolean }>;
+  /** Camera captured at contact for tools with a fixed screen footprint. Defaults to unrotated 100%. */
+  view?: Readonly<Pick<Camera, 'zoom' | 'angle' | 'mirrored'>>;
   processor: StrokeProcessor;
   renderer: PaintRenderer;
-}) => BrushSession;
+}) => BrushSession) & {
+  /** Optional idle tool action. Ordered with strokes; must not modify document pixels or history. */
+  command?: (context: BrushCommandContext) => void | Promise<void>;
+};
 
-/** Explicit dependencies of the ordered document runtime. Registries are resolved only at pen-down. */
+/** Commands borrow resources until completion and validate their own transport payload. */
+export type BrushCommandContext = Omit<Parameters<BrushEngine>[0], 'processor'> & { command: unknown };
+
+/** Explicit dependencies of the ordered runtime. Engines resolve at pen-down or for an idle command. */
 export type PaintModules = {
   document: () => PaintDocument;
   /** Creates the runtime-owned decoded brush cache, independent of document storage. */

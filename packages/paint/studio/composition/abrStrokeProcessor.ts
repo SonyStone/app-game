@@ -19,6 +19,7 @@ export const createAbrProcessor: StrokeProcessorFactory = (brush, zoom) => {
         }))
       ),
     preview: smoother.preview,
+    idle: smoother.idle,
     finish: smoother.finish
   };
 };

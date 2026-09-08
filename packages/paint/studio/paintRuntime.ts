@@ -1,13 +1,16 @@
+import { makeTimer } from '@solid-primitives/timer';
 import { createRoot, onCleanup } from 'solid-js';
 import { attempt, createTaskQueue, unwrapResult } from './asyncResult';
 import { defaultCamera, type Point } from './camera';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
 import { createResourceSession } from './composition/resourceSession';
+import { symmetryRenderer } from './composition/symmetryRenderer';
 import { readPaintFile, writePaintFile } from './paintFile';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { captureSelection, editSelection, translateSelection, type SelectionPixels } from './selection';
 import { decodeDocument, snapshotDocument } from './storage';
+import { defaultPaintSymmetry, paintSymmetrySchema, supportsPaintSymmetry } from './symmetry';
 
 /** Owns document, persistence and GPU resources in either execution mode. Commands stay ordered.
  * The caller supplies event delivery and closes its transport after a graceful dispose.
@@ -32,6 +35,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let savedVersion = 0;
     let pendingSaves = 0;
     let camera = defaultCamera();
+    let symmetry = defaultPaintSymmetry();
     let debug = false;
     let liveTail = true;
     let size = { width: 1, height: 1 },
@@ -47,6 +51,13 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     const queue = createTaskQueue();
     let active = true;
     let pendingSamples: Extract<PaintRuntimeCommand, { type: 'samples' }> | undefined;
+    let clearIdle: (() => void) | undefined;
+    let idleGeneration = 0;
+    const stopIdle = () => {
+      idleGeneration++;
+      clearIdle?.();
+      clearIdle = undefined;
+    };
     let documentState = document.state();
     let debugAt = 0;
     const status = () => {
@@ -64,6 +75,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         rasterDraws: { preview: stats?.previewTileDraws ?? 0, committed: stats?.sourceTileDraws ?? 0 },
         document: documentState,
         camera,
+        symmetry,
         saved,
         saveState: strokeSession ? 'unsaved' : pendingSaves > 0 ? 'saving' : saved ? 'saved' : 'unsaved',
         renderMs,
@@ -121,7 +133,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       pendingSaves++;
       status();
       try {
-        await tileStore.save(snapshotDocument(document.layers, document.active.id, camera));
+        await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, symmetry));
         savedVersion = Math.max(savedVersion, version);
         saved = savedVersion === saveVersion && !strokeSession;
         clearTimeout(collectTimer);
@@ -158,9 +170,21 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       }
     };
     const addSamples = async (samples: Parameters<BrushSession['add']>[0]) => {
+      stopIdle();
       try {
-        await strokeSession?.add(samples);
+        // Backpressure can merge many pointer packets. Present progress between
+        // bounded chunks instead of hiding the whole stroke until that backlog ends.
+        let presentedAt = performance.now();
+        for (let offset = 0; offset < samples.length; offset += 16) {
+          await strokeSession?.add(samples.slice(offset, offset + 16));
+          if (offset + 16 < samples.length && performance.now() - presentedAt >= 8) {
+            strokeSession?.preview(liveTail);
+            await draw();
+            presentedAt = performance.now();
+          }
+        }
         strokeSession?.preview(liveTail);
+        scheduleIdle();
       } catch (error) {
         // The resource session already cancelled the engine and released its pins.
         strokeSession = undefined;
@@ -169,7 +193,38 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         throw error;
       }
     };
+    /** At most one idle operation is queued. Input/end invalidates even a timer already waiting in the GPU queue. */
+    const scheduleIdle = (previousTime = performance.now()) => {
+      const session = strokeSession;
+      if (!session?.idle || !active || lost) return;
+      const generation = idleGeneration;
+      clearIdle = makeTimer(
+        () => {
+          clearIdle = undefined;
+          enqueue(async () => {
+            if (generation !== idleGeneration || strokeSession !== session || lost) return;
+            const now = performance.now();
+            try {
+              if (!(await session.idle!(now - previousTime))) return;
+              if (generation !== idleGeneration || strokeSession !== session || lost) return;
+              session.preview(liveTail);
+              await draw();
+              scheduleIdle(now);
+            } catch (error) {
+              stopIdle();
+              strokeSession = undefined;
+              renderer?.reset();
+              changed();
+              throw error;
+            }
+          });
+        },
+        16,
+        setTimeout
+      );
+    };
     const end = async () => {
+      stopIdle();
       if (!strokeSession || !renderer) return;
       try {
         // Readback can fail before commit. Discard that preview and release the strokeSession too,
@@ -190,6 +245,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       changed();
     };
     const cancel = () => {
+      stopIdle();
       try {
         strokeSession?.cancel();
       } finally {
@@ -212,6 +268,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         (message) => {
           if (lost) return;
           lost = true;
+          stopIdle();
           const abandoned = strokeSession;
           strokeSession = undefined;
           if (abandoned) background(async () => abandoned.cancel());
@@ -231,10 +288,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       lost = false;
       renderer.setSelection(selectionPoints, selectionAnimate);
       await renderer.prepareOverview(document.layers);
-      await tileStore.save(snapshotDocument(document.layers, document.active.id, camera));
+      await tileStore.save(snapshotDocument(document.layers, document.active.id, camera, symmetry));
     };
     onCleanup(() => {
       active = false;
+      stopIdle();
       clearTimeout(selectionTimer);
       clearTimeout(collectTimer);
       clearTimeout(renderTimer);
@@ -296,9 +354,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             if (previous) {
               document.replace(previous.layers, previous.activeId);
               camera = previous.camera;
+              symmetry = previous.symmetry ?? defaultPaintSymmetry();
               document.persist(tileStore.capture);
             }
             await startRenderer();
+            if (command.historySource) document.restoreHistorySource(command.historySource);
+            if (command.tools !== undefined) renderer!.restoreTools(command.tools);
             await draw();
             post({ type: 'ready' });
             break;
@@ -316,6 +377,47 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             });
             break;
           }
+          case 'brush-command': {
+            const result = await attempt(async () => {
+              if (!renderer || lost) throw new Error('The drawing engine is not ready.');
+              if (strokeSession) throw new Error('Lift the pen before changing the brush load.');
+              const id = command.brush.engine?.id ?? modules.selectEngine(command.brush);
+              const engine = Object.hasOwn(modules.engines, id) ? modules.engines[id] : undefined;
+              if (!engine?.command) throw new Error(`Brush engine "${id}" does not support commands.`);
+              const scope = resources.open();
+              try {
+                await engine.command({
+                  resources: scope,
+                  renderer,
+                  brush: command.brush,
+                  settings: command.brush.engine?.settings,
+                  layer: document.active,
+                  layers: document.layers,
+                  command: command.command
+                });
+              } finally {
+                scope.release();
+              }
+            });
+            post({
+              type: 'brush-command',
+              requestId: command.requestId,
+              result: result.ok ? result : { ok: false, error: result.error.message }
+            });
+            break;
+          }
+          case 'symmetry': {
+            const next = paintSymmetrySchema.parse(command.settings);
+            await end();
+            symmetry = next;
+            changed();
+            break;
+          }
+          case 'history-source':
+            await end();
+            document.selectHistorySource(command.id);
+            status();
+            break;
           case 'debug':
             debug = command.enabled;
             debugAt = 0;
@@ -346,13 +448,19 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               : undefined;
             if (!engine) throw new Error(`Brush engine "${engineId}" is not registered.`);
             if (!processor) throw new Error(`Stroke processor "${processorId}" is not registered.`);
-            const strokeRenderer = renderer;
+            const strokeRenderer = supportsPaintSymmetry(command.brush)
+              ? symmetryRenderer(renderer, symmetry)
+              : renderer;
             strokeSession = createResourceSession(resources, (resources) =>
               engine({
                 resources,
                 settings: command.brush.engine?.settings,
                 brush: command.brush,
                 layer: document.active,
+                layers: document.layers,
+                historySource: document.historySourceLayer(document.active.id),
+                modifiers: command.modifiers,
+                view: { zoom: command.zoom ?? camera.zoom, angle: camera.angle, mirrored: camera.mirrored },
                 renderer: strokeRenderer,
                 processor: processor(command.brush, command.zoom ?? camera.zoom)
               })
@@ -468,7 +576,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             await end();
             clearTimeout(saveTimer);
             await save();
-            post({ type: 'checkpointed' });
+            post({
+              type: 'checkpointed',
+              ...(command.includeTools
+                ? { tools: await renderer!.snapshotTools(), historySource: document.historySourceSnapshot() }
+                : {})
+            });
             break;
           case 'save':
             await end();
@@ -479,7 +592,10 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             await end();
             post({
               type: 'download',
-              blob: await writePaintFile(snapshotDocument(document.layers, document.active.id, camera), tileStore.read),
+              blob: await writePaintFile(
+                snapshotDocument(document.layers, document.active.id, camera, symmetry),
+                tileStore.read
+              ),
               name: 'drawing.paint'
             });
             break;
@@ -505,10 +621,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               cancel();
               document.replace(next.layers, next.activeId);
               camera = next.camera;
+              symmetry = next.symmetry;
               document.persist(tileStore.capture);
               renderer?.reset();
               await renderer?.prepareOverview(document.layers);
-              post({ type: 'restored', camera });
+              post({ type: 'restored', camera, symmetry });
               changed();
             } finally {
               importing = false;

@@ -1,3 +1,4 @@
+import type { ColorMixing } from '@app-game/abr-brush/effects';
 import type { Point } from './camera';
 import type { BrushEngineSelection } from './composition/defineBrushEngine';
 import { defaultStrokeSettings, type StrokeSettings } from './strokeSettings';
@@ -7,6 +8,8 @@ export type Brush = {
   /** Optional engine/preset selection. Missing selection preserves the application's tool routing. */
   engine?: BrushEngineSelection;
   color: string;
+  /** Host background color for Color Dynamics and Pencil Auto Erase. Omission uses the engine's preset default. */
+  backgroundColor?: string;
   size: number;
   hardness: number;
   flow: number;
@@ -16,7 +19,7 @@ export type Brush = {
   pressureFlow: boolean;
   tool: 'brush' | 'eraser';
   /** Linear light avoids the dark midpoint of mixing encoded RGB. Classic preserves legacy stroke behavior. */
-  mixing: 'linear' | 'classic';
+  mixing: ColorMixing;
   /** Input filtering, interpolation, and pressure calibration for this stroke. */
   stroke: StrokeSettings;
 };
@@ -35,7 +38,12 @@ export type Dab = Point & {
   radius: number;
   flow: number;
   /** Packed ABR bounds/transform/dynamics/color. Radius is the conservative tile-culling extent. */
-  abr?: { data: Float32Array; secondary: boolean };
+  abr?: {
+    data: Float32Array;
+    secondary: boolean;
+    /** Per-stamp Mixer Brush dynamics, independent of flow and opacity. */
+    mixing?: { wet: number; mix: number };
+  };
 };
 
 /** A soft round brush with explicit, independent flow and stroke opacity. */
@@ -145,12 +153,17 @@ export function dabTiles(dab: Dab, size = TILE_SIZE): string[] {
   const radius = dab.radius + 1;
   for (let y = Math.floor((dab.y - radius) / size); y <= Math.floor((dab.y + radius) / size); y++) {
     for (let x = Math.floor((dab.x - radius) / size); x <= Math.floor((dab.x + radius) / size); x++) {
-      const dx = Math.max(x * size - dab.x, 0, dab.x - (x + 1) * size);
-      const dy = Math.max(y * size - dab.y, 0, dab.y - (y + 1) * size);
-      if (dx * dx + dy * dy <= radius * radius) keys.push(`${x},${y}`);
+      if (dabIntersectsTile(dab, x, y, size)) keys.push(`${x},${y}`);
     }
   }
   return keys;
+}
+
+/** Tests one tile without allocating or enumerating a large stamp's entire footprint. Includes the AA fringe. */
+export function dabIntersectsTile(dab: Dab, x: number, y: number, size = TILE_SIZE): boolean {
+  const dx = Math.max(x * size - dab.x, 0, dab.x - (x + 1) * size);
+  const dy = Math.max(y * size - dab.y, 0, dab.y - (y + 1) * size);
+  return dx * dx + dy * dy <= (dab.radius + 1) ** 2;
 }
 
 /** Tile edge in document pixels; persisted files record this value for format compatibility. */

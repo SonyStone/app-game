@@ -96,6 +96,7 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
     <>
       <section>
         <div class="paint-section-heading">
+          <span>Foreground</span>
           <code>{brush().color.toUpperCase()}</code>
         </div>
         <label class="paint-color-field" style={{ background: brush().color }}>
@@ -105,7 +106,7 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
             value={brush().color}
             onInput={(e) => updateBrush({ color: e.currentTarget.value })}
           />
-          <span>Choose color</span>
+          <span>Choose foreground</span>
         </label>
         <div class="paint-swatches">
           <For
@@ -135,6 +136,36 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
             )}
           </For>
         </div>
+        <div class="paint-section-heading">
+          <span>Background</span>
+          <code>{(brush().backgroundColor ?? '#ffffff').toUpperCase()}</code>
+        </div>
+        <label class="paint-color-field" style={{ background: brush().backgroundColor ?? '#ffffff' }}>
+          <input
+            aria-label="Background color"
+            type="color"
+            value={brush().backgroundColor ?? '#ffffff'}
+            onInput={(event) => updateBrush({ backgroundColor: event.currentTarget.value })}
+          />
+          <span>Choose background</span>
+        </label>
+        <div class="paint-mixer-actions" role="group" aria-label="Foreground and background colors">
+          <button
+            title="Swap colors (X)"
+            onClick={() => updateBrush({ color: brush().backgroundColor ?? '#ffffff', backgroundColor: brush().color })}
+          >
+            Swap colors
+          </button>
+          <button
+            title="Reset colors (D)"
+            onClick={() => updateBrush({ color: '#000000', backgroundColor: '#ffffff' })}
+          >
+            Reset colors
+          </button>
+        </div>
+        <p class="paint-panel-note">
+          Background is used by Color Dynamics and Pencil Auto Erase. It does not fill the canvas.
+        </p>
       </section>
     </>
   );

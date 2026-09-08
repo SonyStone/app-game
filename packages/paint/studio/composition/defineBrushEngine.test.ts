@@ -75,3 +75,28 @@ function context(settings: unknown): Parameters<BrushEngine>[0] {
     renderer: {} as PaintRenderer
   };
 }
+
+it('validates idle commands and settings before dispatch without creating a stroke', async () => {
+  const run = vi.fn();
+  const create = vi.fn(() => ({ add: async () => {}, preview() {}, finish: async () => [], cancel() {} }));
+  const definition = defineBrushEngine({
+    id: 'commands',
+    parse: (input) => z.object({ load: z.number().min(0).max(1) }).parse(input),
+    create,
+    commands: {
+      parse: (input) => z.enum(['load', 'clean']).parse(input),
+      run(ctx) {
+        expectTypeOf(ctx.command).toEqualTypeOf<'load' | 'clean'>();
+        run(ctx);
+      }
+    }
+  });
+  const ctx = { ...context({ load: 0.5 }), command: 'clean' };
+  await definition.engine.command!(ctx);
+  expect(run).toHaveBeenCalledOnce();
+  expect(() => definition.engine.command!({ ...ctx, command: 'unknown' })).toThrow();
+  expect(() => definition.engine.command!({ ...ctx, settings: { load: -1 } })).toThrow();
+  expect(run).toHaveBeenCalledOnce();
+  expect(create).not.toHaveBeenCalled();
+  expect(roundBrush.engine.command).toBeUndefined();
+});

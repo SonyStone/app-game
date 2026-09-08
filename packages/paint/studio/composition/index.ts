@@ -9,6 +9,7 @@ export { createTileStore } from '../tileStore';
 export { CanvasTarget } from './CanvasTarget';
 export type { CanvasTargetValue } from './CanvasTarget';
 export type {
+  BrushCommandContext,
   BrushEngine,
   BrushSession,
   PaintDocument,

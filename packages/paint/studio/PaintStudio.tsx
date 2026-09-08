@@ -1,3 +1,5 @@
+import { blockEraserSize, isBlockEraser } from '@app-game/abr-brush/blockEraser';
+import { record } from '@app-game/abr-brush/form';
 import { NavigationPuck } from '@app-game/navigation-puck';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, For, onSettled, Show } from 'solid-js';
@@ -8,10 +10,13 @@ import { CanvasDebug } from './CanvasDebug';
 import { createPaintSession, type PaintSession } from './createPaintSession';
 import { DeveloperDialog } from './DeveloperDialog';
 import { FullscreenButton } from './FullscreenButton';
+import { HistorySourceControl } from './HistorySourceControl';
 import { LayersPanel } from './LayersPanel';
 import { SelectionActions } from './SelectionActions';
 import { SketchIcon } from './SketchIcon';
 import './studio.css';
+import { SymmetryGuide } from './SymmetryGuide';
+import { SymmetryPanel } from './SymmetryPanel';
 
 /** Full-canvas workspace with on-demand controls; opening panels never resizes the drawing surface. */
 export default function PaintStudio() {
@@ -34,13 +39,16 @@ export default function PaintStudio() {
     setPuck,
     setError
   } = session;
-  const [panel, setPanel] = createSignal<'brush' | 'color' | 'layers' | 'file' | undefined>(undefined, {
+  const [panel, setPanel] = createSignal<'brush' | 'color' | 'layers' | 'file' | 'symmetry' | undefined>(undefined, {
     ownedWrite: true
   });
   const [abrOpen, setAbrOpen] = createSignal(false, { ownedWrite: true });
   const [abrMounted, setAbrMounted] = createSignal(false, { ownedWrite: true });
   let launcher: HTMLElement | undefined;
   const [developer, setDeveloper] = createSignal(false, { ownedWrite: true });
+  const blockCursor = () =>
+    brush().engine?.id === 'abr' && isBlockEraser(record(record(brush().engine?.settings).values).tool);
+  const cursorSize = () => (blockCursor() ? blockEraserSize : Math.max(2, brush().size * camera().zoom));
   const closePanel = () => {
     setPanel(undefined);
     launcher?.focus({ preventScroll: true });
@@ -84,7 +92,7 @@ export default function PaintStudio() {
           closePanel();
         }}
       />
-      <main ref={stage} class="paint-stage" aria-label="Drawing workspace">
+      <main ref={stage} class="paint-stage" aria-label="Drawing workspace" data-picking={session.mixerPicking()}>
         <For each={[session.canvasVersion()]} keyed={(version) => version}>
           {() => (
             <PaintCanvas
@@ -95,6 +103,7 @@ export default function PaintStudio() {
             />
           )}
         </For>
+        <SymmetryGuide session={session} />
         <Show when={session.debug()}>
           <CanvasDebug session={session} />
         </Show>
@@ -113,13 +122,19 @@ export default function PaintStudio() {
             style={{
               left: `${cursor()!.x}px`,
               top: `${cursor()!.y}px`,
-              width: `${Math.max(2, brush().size * camera().zoom)}px`,
-              height: `${Math.max(2, brush().size * camera().zoom)}px`
+              width: `${cursorSize()}px`,
+              height: `${cursorSize()}px`,
+              'border-radius': blockCursor() ? '0' : undefined
             }}
           />
         </Show>
         <Show when={puck()}>
           <NavigationPuck navigation={session.navigation} focusTarget={() => canvas} />
+        </Show>
+        <Show when={session.mixerPicking()}>
+          <div class="paint-welcome" role="status">
+            <p>Tap the canvas to load paint. Escape to cancel.</p>
+          </div>
         </Show>
       </main>
       <Show when={abrMounted()}>
@@ -224,6 +239,15 @@ export default function PaintStudio() {
             <SketchIcon name="mirror" />
           </button>
           <button
+            aria-label="Paint symmetry"
+            title="Paint symmetry"
+            aria-pressed={session.symmetry().mode !== 'off' ? 'true' : 'false'}
+            aria-expanded={panel() === 'symmetry' ? 'true' : 'false'}
+            onClick={(event) => toggle('symmetry', event.currentTarget)}
+          >
+            <SketchIcon name="symmetry" />
+          </button>
+          <button
             aria-label="Layers"
             title="Layers"
             aria-expanded={panel() === 'layers' ? 'true' : 'false'}
@@ -248,7 +272,7 @@ export default function PaintStudio() {
               name={session.tool() === 'abr-brush' ? 'brush' : brush().tool === 'eraser' ? 'erase' : 'draw'}
               size={22}
             />
-            <small>{Math.round(brush().size)}</small>
+            <small>{blockCursor() ? 'Block' : Math.round(brush().size)}</small>
           </button>
           <button
             class="paint-color-launcher"
@@ -309,26 +333,62 @@ export default function PaintStudio() {
           <aside id="paint-panel" class="paint-panel" data-panel={panel()} aria-label={`${panel()} panel`}>
             <div class="paint-panel-title">
               <strong>
-                {panel() === 'file'
-                  ? 'Drawing'
-                  : panel() === 'brush'
-                    ? 'Brush'
-                    : panel() === 'color'
-                      ? 'Color'
-                      : 'Layers'}
+                {panel() === 'symmetry'
+                  ? 'Paint symmetry'
+                  : panel() === 'file'
+                    ? 'Drawing'
+                    : panel() === 'brush'
+                      ? 'Brush'
+                      : panel() === 'color'
+                        ? 'Color'
+                        : 'Layers'}
               </strong>
               <button aria-label="Close controls" onClick={closePanel}>
                 <SketchIcon name="close" size={18} />
               </button>
             </div>
+            <Show when={panel() === 'symmetry'}>
+              <SymmetryPanel session={session} />
+            </Show>
             <Show when={panel() === 'brush'}>
               <BrushPanel brush={brush} updateBrush={updateBrush} />
             </Show>
             <Show when={panel() === 'color'}>
               <ColorPanel brush={brush} updateBrush={updateBrush} />
+              <Show when={session.isMixerBrush()}>
+                <div class="paint-mixer-actions" role="group" aria-label="Mixer Brush load">
+                  <button
+                    disabled={!ready() || session.brushCommandBusy()}
+                    onClick={() => session.mixerCommand('load')}
+                  >
+                    Load Brush
+                  </button>
+                  <button
+                    disabled={!ready() || session.brushCommandBusy()}
+                    onClick={() => session.mixerCommand('clean')}
+                  >
+                    Clean Brush
+                  </button>
+                  <button
+                    class="paint-mixer-pick"
+                    disabled={!ready() || session.brushCommandBusy()}
+                    onClick={() => {
+                      session.pickMixerPaint();
+                      closePanel();
+                    }}
+                  >
+                    Load from canvas
+                  </button>
+                  <p class="paint-panel-note">
+                    Alt/Option-click also loads canvas paint. Choose solid or multiple colors in the preset’s Tool
+                    Options.
+                  </p>
+                </div>
+              </Show>
             </Show>
             <Show when={panel() === 'layers'}>
               <LayersPanel state={state} ready={ready} layer={session.layer} />
+              <HistorySourceControl state={state} ready={ready} send={send} />
             </Show>
             <Show when={panel() === 'file'}>
               <div class="paint-file-actions">

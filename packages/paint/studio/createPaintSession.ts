@@ -1,9 +1,12 @@
+import { record } from '@app-game/abr-brush/form';
 import type { Brush as AbrBrush } from '@app-game/abr-parser/reader';
 import { createSignal, createTrackedEffect, untrack } from 'solid-js';
 import { attempt } from './asyncResult';
 import { defaultBrush, type Brush } from './brush';
 import { createBrushLibrary } from './brushLibrary/createBrushLibrary';
 import { defaultCamera, transformAt, type Camera, type Point } from './camera';
+import type { AbrBrushCommand } from './composition/abrBrushCommands';
+import { createBrushCommands } from './composition/createBrushCommands';
 import { createSelection } from './createSelection';
 import { createDocument, type LayerAction } from './document';
 import { attachInput, editable } from './input';
@@ -11,16 +14,22 @@ import { createMainThreadEndpoint, type PaintEndpoint } from './mainThreadEndpoi
 import Worker from './paint.worker?worker';
 import { createPaintNavigation } from './paintNavigation';
 import type { PaintCommand, PaintEvent } from './protocol';
+import { defaultPaintSymmetry, paintSymmetrySchema, type PaintSymmetry } from './symmetry';
 
 /** Scopes the selected engine transport, input and UI state to one editor mount. */
 export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; stage: () => HTMLDivElement }) {
-  const [brush, setBrush] = createSignal(defaultBrush(), { ownedWrite: true });
+  const [brush, setBrush] = createSignal<Brush>(
+    { ...defaultBrush(), backgroundColor: '#ffffff' },
+    { ownedWrite: true }
+  );
   const [tool, setTool] = createSignal<Brush['tool'] | 'abr-brush' | 'lasso'>('brush', { ownedWrite: true });
+  const [symmetry, setSymmetry] = createSignal(defaultPaintSymmetry(), { ownedWrite: true });
   const [camera, setCamera] = createSignal(defaultCamera(), { ownedWrite: true });
   const [state, setState] = createSignal(createDocument().state(), { ownedWrite: true });
   const [debug, setDebug] = createSignal(false, { ownedWrite: true });
   const [liveTail, setLiveTail] = createSignal(true, { ownedWrite: true });
   const [showPenCursor, setShowPenCursor] = createSignal(false, { ownedWrite: true });
+  const [mixerPicking, setMixerPicking] = createSignal(false, { ownedWrite: true });
   const [rawReceived, setRawReceived] = createSignal(false, { ownedWrite: true });
   const [debugTiles, setDebugTiles] = createSignal<string[]>([], { ownedWrite: true });
   const [paging, setPaging] = createSignal<
@@ -43,6 +52,8 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   const [canvasVersion, setCanvasVersion] = createSignal(0, { ownedWrite: true });
   const [switchingRenderer, setSwitchingRenderer] = createSignal(false, { ownedWrite: true });
   let nextWorkerEnabled: boolean | undefined;
+  let rendererTools: Extract<PaintEvent, { type: 'checkpointed' }>['tools'];
+  let historySource: Extract<PaintEvent, { type: 'checkpointed' }>['historySource'];
   let worker: PaintEndpoint | undefined;
   let size = { width: 1, height: 1 };
   const [viewSize, setViewSize] = createSignal(size, { ownedWrite: true });
@@ -51,15 +62,21 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   let drawingActive = false;
   let roundProfile = defaultBrush(),
     abrProfile = defaultBrush();
+  const brushCommands = createBrushCommands(
+    () =>
+      untrack(ready) && !untrack(switchingRenderer) && !selection.isBusy() && !drawingActive && !brushLibrary.isBusy()
+  );
   const brushLibrary = createBrushLibrary({
     select: (engine) => {
       if (untrack(tool) === 'brush') roundProfile = untrack(brush);
       if (untrack(tool) === 'abr-brush') abrProfile = untrack(brush);
-      abrProfile = { ...abrProfile, engine };
+      const current = untrack(brush);
+      abrProfile = { ...abrProfile, engine, color: current.color, backgroundColor: current.backgroundColor };
       setTool('abr-brush');
       setBrush(abrProfile);
     },
-    canChange: () => untrack(ready) && !untrack(switchingRenderer) && !selection.isBusy() && !drawingActive
+    canChange: () =>
+      untrack(ready) && !untrack(switchingRenderer) && !selection.isBusy() && !drawingActive && !brushCommands.isBusy()
   });
   const send = (command: PaintCommand) => {
     if (untrack(switchingRenderer) && command.type !== 'dispose') return;
@@ -74,6 +91,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     worker?.postMessage(command);
   };
   const selection = createSelection({ send, document: () => untrack(state), ready: () => untrack(ready) });
+  const canUpdateSymmetry = () => ready() && !switchingRenderer() && !selection.isBusy();
   createTrackedEffect(() => send({ type: 'selection-view', points: selection.points(), animate: animateSelection }));
   const navigate = (next: Camera) => {
     currentCamera = next;
@@ -82,13 +100,16 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   };
   const chooseTool = (next: ReturnType<typeof tool>) => {
     if (selection.isBusy()) return;
+    setMixerPicking(false);
     selection.clear();
     const previous = untrack(tool);
+    const current = untrack(brush);
+    const colors = { color: current.color, backgroundColor: current.backgroundColor };
     if (previous === 'abr-brush') abrProfile = untrack(brush);
     if (previous === 'brush') roundProfile = untrack(brush);
     setTool(next);
-    if (next === 'abr-brush') setBrush({ ...abrProfile, tool: 'brush' });
-    else if (next === 'brush') setBrush({ ...roundProfile, tool: 'brush' });
+    if (next === 'abr-brush') setBrush({ ...abrProfile, ...colors, tool: 'brush' });
+    else if (next === 'brush') setBrush({ ...roundProfile, ...colors, tool: 'brush' });
     else if (next === 'eraser') setBrush((value) => ({ ...value, tool: 'eraser', engine: undefined }));
   };
   const updateBrush = (patch: Partial<Brush>) => {
@@ -96,6 +117,14 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     setBrush((value) => ({ ...value, ...patch }));
   };
   const layer = (action: LayerAction) => send({ type: 'layer', action });
+  const isMixerBrush = () =>
+    tool() === 'abr-brush' &&
+    brush().engine?.id === 'abr' &&
+    record(record(record(brush().engine?.settings).values).tool).type === 'MixB';
+  const mixerCommand = async (command: AbrBrushCommand) => {
+    const result = await brushCommands.run(untrack(brush), command);
+    if (!result.ok) setError({ message: result.error, recoverable: false });
+  };
   const navigation = createPaintNavigation({
     size: viewSize,
     camera: () => currentCamera,
@@ -126,6 +155,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     const endpoint: PaintEndpoint = useWorker ? new Worker() : createMainThreadEndpoint();
     worker = endpoint;
     brushLibrary.connect(endpoint);
+    brushCommands.connect(endpoint);
     drawingActive = false;
     setError(undefined);
     const measure = () => {
@@ -146,7 +176,10 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       if (worker !== endpoint) return;
       const value = event.data;
       brushLibrary.receive(value);
+      brushCommands.receive(value);
       if (value.type === 'checkpointed' && nextWorkerEnabled !== undefined && !retiring) {
+        rendererTools = value.tools;
+        historySource = value.historySource;
         retiring = true;
         endpoint.postMessage({ type: 'dispose' });
         return;
@@ -168,6 +201,8 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       if (value.type === 'selection') selection.receive(value);
       if (value.type === 'ready') {
         const finishReady = () => {
+          rendererTools = undefined;
+          historySource = undefined;
           setReady(true);
           setSwitchingRenderer(false);
           endpoint.postMessage({ type: 'live-tail', enabled: untrack(liveTail) });
@@ -195,10 +230,12 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         return;
       }
       if (value.type === 'restored') {
+        setSymmetry(value.symmetry ?? defaultPaintSymmetry());
         currentCamera = value.camera;
         setCamera(value.camera);
       }
       if (value.type === 'state') {
+        if (initialState && value.symmetry) setSymmetry(value.symmetry);
         setPaging((previous) => ({
           storage: value.storage,
           virtual: value.virtual,
@@ -235,6 +272,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     };
     endpoint.onerror = (event) => {
       if (worker !== endpoint) return;
+      brushCommands.connect(undefined);
       selection.receive({ type: 'selection', points: [], hasClipboard: false });
       nextWorkerEnabled = undefined;
       setSwitchingRenderer(false);
@@ -243,9 +281,12 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     };
     if (useWorker) {
       const offscreen = canvas.transferControlToOffscreen();
-      endpoint.postMessage({ type: 'init', canvas: offscreen, size, dpr: devicePixelRatio }, [offscreen]);
+      endpoint.postMessage(
+        { type: 'init', canvas: offscreen, size, dpr: devicePixelRatio, tools: rendererTools, historySource },
+        [offscreen]
+      );
     } else {
-      endpoint.postMessage({ type: 'init', canvas, size, dpr: devicePixelRatio });
+      endpoint.postMessage({ type: 'init', canvas, size, dpr: devicePixelRatio, tools: rendererTools, historySource });
     }
     const resize = new ResizeObserver(() => {
       measure();
@@ -269,6 +310,13 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       cursor: setCursor,
       showPenCursor: () => untrack(showPenCursor),
       rawUpdate: () => setRawReceived(true),
+      canvasAction: {
+        enabled: (event) => untrack(isMixerBrush) && (untrack(mixerPicking) || event.altKey),
+        run: (point) => {
+          setMixerPicking(false);
+          void mixerCommand({ type: 'load-canvas', point });
+        }
+      },
       puck: navigation,
       selection: { ...selection, enabled: () => untrack(tool) === 'lasso' }
     });
@@ -295,7 +343,13 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       } else if (!modifier && key === 'b') chooseTool('brush');
       else if (!modifier && key === 'e') chooseTool('eraser');
       else if (!modifier && key === 'l') chooseTool('lasso');
+      else if (!modifier && !event.altKey && !event.repeat && !event.isComposing && key === 'x') {
+        const current = untrack(brush);
+        updateBrush({ color: current.backgroundColor ?? '#ffffff', backgroundColor: current.color });
+      } else if (!modifier && !event.altKey && !event.isComposing && key === 'd')
+        updateBrush({ color: '#000000', backgroundColor: '#ffffff' });
       else if (event.key === 'Escape') {
+        setMixerPicking(false);
         setPuck(undefined);
         selection.clear();
         send({ type: 'cancel' });
@@ -320,6 +374,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       if (worker === endpoint) {
         worker = undefined;
         brushLibrary.connect(undefined);
+        brushCommands.connect(undefined);
       }
       if (engineDisposed) return;
       const timeout = setTimeout(() => endpoint.terminate(), 30_000);
@@ -335,8 +390,18 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
 
   return {
     brushLibrary,
+    brushCommandBusy: brushCommands.busy,
+    /** Available only for the currently selected native Mixer Brush preset. */
+    isMixerBrush,
+    mixerCommand,
+    mixerPicking,
+    /** Arms a single canvas contact, for tablets without an Alt/Option key. Escape cancels it. */
+    pickMixerPaint() {
+      if (untrack(isMixerBrush) && untrack(ready) && !brushCommands.isBusy()) setMixerPicking(true);
+    },
     /** Applies a detached preset and its resources only after upload succeeds; the Viewer owns the editable preset. */
     async useAbrBrush(brush: AbrBrush) {
+      setMixerPicking(false);
       const { viewerBrush } = await import('./brushLibrary/viewerBrush');
       const selected = viewerBrush(brush);
       const applied = await brushLibrary.usePreset(selected);
@@ -344,12 +409,24 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       updateBrush({
         size: selected.size,
         spacing: selected.spacing,
+        ...(selected.color === undefined ? {} : { color: selected.color }),
+        ...(selected.backgroundColor === undefined ? {} : { backgroundColor: selected.backgroundColor }),
         ...(selected.flow === undefined ? {} : { flow: selected.flow }),
         ...(selected.opacity === undefined ? {} : { opacity: selected.opacity })
       });
     },
     attachCanvas,
     canvasVersion,
+    symmetry,
+    canUpdateSymmetry,
+    /** Returns false while document commands are suspended, without changing the displayed guide. */
+    updateSymmetry(settings: PaintSymmetry) {
+      if (!untrack(canUpdateSymmetry)) return false;
+      const next = paintSymmetrySchema.parse(settings);
+      setSymmetry(next);
+      send({ type: 'symmetry', settings: next });
+      return true;
+    },
     workerEnabled,
     switchingRenderer,
     /** Checkpoints and retires the old engine before Solid replaces only the canvas. UI settings stay alive. */
@@ -359,14 +436,16 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
         untrack(switchingRenderer) ||
         selection.isBusy() ||
         brushLibrary.isBusy() ||
+        brushCommands.isBusy() ||
         !untrack(ready)
       )
         return;
       nextWorkerEnabled = enabled;
+      setMixerPicking(false);
       setSwitchingRenderer(true);
       setCursor(undefined);
       navigation.close();
-      worker?.postMessage({ type: 'checkpoint' });
+      worker?.postMessage({ type: 'checkpoint', includeTools: true });
     },
     tool,
     liveTail,

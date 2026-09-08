@@ -2,8 +2,10 @@ import { render } from '@solidjs/web';
 import { flush, For, onSettled } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createPaintSession, type PaintSession } from './createPaintSession';
+import type { RendererToolState } from './gpu/toolState';
 import type { PaintEndpoint } from './mainThreadEndpoint';
 import type { PaintCommand, PaintEvent } from './protocol';
+import { defaultPaintSymmetry } from './symmetry';
 
 const transports = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock('./paint.worker?worker', () => ({
@@ -90,7 +92,12 @@ it.each([false, true])(
       flush();
     };
     const first = endpoints[0]!;
+    const symmetry = { ...defaultPaintSymmetry(), mode: 'mandala' as const, x: -51, segments: 7 };
+    expect(session.updateSymmetry(symmetry)).toBe(false);
+    expect(session.symmetry()).toEqual(defaultPaintSymmetry());
     reply(first, { type: 'ready' });
+    expect(session.updateSymmetry(symmetry)).toBe(true);
+    expect(first.postMessage).toHaveBeenLastCalledWith({ type: 'symmetry', settings: symmetry });
     const uploaded = (endpoint: PaintEndpoint) =>
       vi
         .mocked(endpoint.postMessage)
@@ -113,24 +120,55 @@ it.each([false, true])(
       flush();
       expect(session.brush().engine).toEqual({ id: 'textured', settings: { tipId: 'ink-tip' } });
     }
-    session.updateBrush({ size: 123 });
+    session.updateBrush({ size: 123, color: '#123456', backgroundColor: '#abcdef' });
+    flush();
+    session.chooseTool('brush');
+    flush();
+    session.chooseTool(withTip ? 'abr-brush' : 'brush');
+    flush();
+    expect(session.brush()).toMatchObject({ color: '#123456', backgroundColor: '#abcdef' });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }));
+    flush();
+    expect(session.brush()).toMatchObject({ color: '#abcdef', backgroundColor: '#123456' });
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', repeat: true }));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', altKey: true }));
+    flush();
+    expect(session.brush()).toMatchObject({ color: '#abcdef', backgroundColor: '#123456' });
     session.setLiveTail(false);
     session.setShowPenCursor(true);
     session.toggleDebug();
     flush();
     session.setWorkerEnabled(false);
     flush();
-    expect(first.postMessage).toHaveBeenLastCalledWith({ type: 'checkpoint' });
+    expect(first.postMessage).toHaveBeenLastCalledWith({ type: 'checkpoint', includeTools: true });
     expect(session.switchingRenderer()).toBe(true);
+    expect(session.canUpdateSymmetry()).toBe(false);
+    expect(session.updateSymmetry(defaultPaintSymmetry())).toBe(false);
+    expect(session.symmetry()).toEqual(symmetry);
     reply(first, { type: 'error', recoverable: false, message: 'Storage is full' });
     expect(session.switchingRenderer()).toBe(false);
+    expect(session.symmetry()).toEqual(symmetry);
+    expect(session.brush()).toMatchObject({ color: '#abcdef', backgroundColor: '#123456' });
     expect(document.querySelector('canvas')).toBe(originalCanvas);
     expect(endpoints).toHaveLength(1);
     expect(first.terminate).not.toHaveBeenCalled();
 
     session.setWorkerEnabled(false);
     flush();
-    reply(first, { type: 'checkpointed' });
+    const tools: RendererToolState = {
+      version: 1,
+      mixer: withTip
+        ? {
+            key: 'previous-mixer',
+            color: '#123456',
+            remaining: 0.125,
+            settings: { load: 0.75, autoFill: false, autoClean: false },
+            pixels: new Uint8Array(3 * 256 * 256 * 8)
+          }
+        : undefined
+    };
+    const historySource = { id: 7, label: 'State 7', layers: [] };
+    reply(first, { type: 'checkpointed', tools, historySource });
     expect(first.postMessage).toHaveBeenLastCalledWith({ type: 'dispose' });
     expect(document.querySelector('canvas')).toBe(originalCanvas);
     const lateMessage = first.onmessage!;
@@ -142,7 +180,7 @@ it.each([false, true])(
     expect(session.switchingRenderer()).toBe(true);
     const second = endpoints[1]!;
     expect(second.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'init', canvas: document.querySelector('canvas') })
+      expect.objectContaining({ type: 'init', canvas: document.querySelector('canvas'), tools, historySource })
     );
     reply(second, { type: 'ready' });
     if (withTip) {
@@ -158,7 +196,10 @@ it.each([false, true])(
     }
     expect(session.switchingRenderer()).toBe(false);
     expect(session.workerEnabled()).toBe(false);
+    expect(session.canUpdateSymmetry()).toBe(true);
+    expect(session.symmetry()).toEqual(symmetry);
     expect(session.brush().size).toBe(123);
+    expect(session.brush()).toMatchObject({ color: '#abcdef', backgroundColor: '#123456' });
     if (withTip) {
       session.chooseTool('brush');
       flush();

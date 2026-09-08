@@ -2,7 +2,7 @@
 import { flush } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultBrush } from './brush';
-import { defaultCamera } from './camera';
+import { defaultCamera, screenToWorld } from './camera';
 import { attachInput } from './input';
 import { createPaintNavigation as createNavigationPuck } from './paintNavigation';
 import type { PaintCommand } from './protocol';
@@ -15,6 +15,57 @@ afterEach(() => {
 });
 
 describe('input to worker contract', () => {
+  it.each(['mouse', 'pen'])(
+    'captures Alt at %s contact without changing the preset or leaking to later strokes',
+    (pointerType) => {
+      const brush = defaultBrush();
+      const saved = structuredClone(brush);
+      const { pointer, commands } = setup(undefined, () => brush);
+      pointer('pointerdown', 400, 300, { pointerType, altKey: true });
+      pointer('pointermove', 410, 310, { pointerType, altKey: false });
+      pointer('pointercancel', 410, 310, { pointerType });
+      pointer('pointerdown', 400, 300, { pointerType, altKey: false });
+      pointer('pointerup', 410, 310, { pointerType });
+      const starts = commands.filter((command) => command.type === 'begin');
+      expect(starts.map((command) => command.modifiers)).toEqual([{ altKey: true }, { altKey: false }]);
+      expect(starts.every((command) => command.brush === brush)).toBe(true);
+      expect(brush).toEqual(saved);
+    }
+  );
+  it('consumes Alt canvas actions without drawing, and freezes the picked world point across movement', () => {
+    const run = vi.fn();
+    const camera = () => ({ ...defaultCamera(), zoom: 0.2, angle: Math.PI / 3, mirrored: true });
+    const { pointer, commands } = setup(undefined, defaultBrush, { enabled: (event) => event.altKey, run }, camera);
+    pointer('pointerdown', 420, 330, { altKey: true, pointerType: 'pen' });
+    expect(run).toHaveBeenCalledExactlyOnceWith(
+      screenToWorld({ x: 420, y: 330 }, camera(), { width: 800, height: 600 })
+    );
+    pointer('pointermove', 470, 350, { pointerType: 'pen' });
+    pointer('pointerup', 480, 350, { pointerType: 'pen' });
+    expect(commands).toEqual([]);
+    pointer('pointerdown', 400, 300);
+    pointer('pointermove', 410, 310, { altKey: true });
+    pointer('pointerup', 410, 310);
+    expect(commands.map((command) => command.type)).toEqual(['begin', 'samples', 'end']);
+    expect(run).toHaveBeenCalledOnce();
+  });
+  it('lets an armed touch pick paint without panning and releases the action on cancellation', () => {
+    let armed = true;
+    const run = vi.fn(() => {
+      armed = false;
+    });
+    const { pointer, commands, navigate } = setup(undefined, defaultBrush, { enabled: () => armed, run });
+    pointer('pointerdown', 400, 300, { pointerType: 'touch' });
+    pointer('pointerdown', 420, 320, { pointerType: 'touch', pointerId: 2 });
+    pointer('pointermove', 430, 340, { pointerType: 'touch', pointerId: 2 });
+    pointer('pointermove', 420, 320, { pointerType: 'touch' });
+    pointer('pointercancel', 420, 320, { pointerType: 'touch' });
+    expect(navigate).not.toHaveBeenCalled();
+    expect(commands).toEqual([]);
+    pointer('pointerdown', 400, 300);
+    pointer('pointerup', 400, 300);
+    expect(commands.map((command) => command.type)).toEqual(['begin', 'end']);
+  });
   it('uses raw pen samples once, excluding the corresponding pointermove batch', () => {
     vi.stubGlobal('isSecureContext', true);
     vi.stubGlobal('onpointerrawupdate', null);
@@ -240,7 +291,12 @@ describe('input to worker contract', () => {
   });
 });
 
-function setup(selection?: Parameters<typeof attachInput>[1]['selection'], brush = defaultBrush) {
+function setup(
+  selection?: Parameters<typeof attachInput>[1]['selection'],
+  brush = defaultBrush,
+  canvasAction?: Parameters<typeof attachInput>[1]['canvasAction'],
+  camera = defaultCamera
+) {
   vi.stubGlobal(
     'requestAnimationFrame',
     vi.fn(() => 1)
@@ -256,7 +312,7 @@ function setup(selection?: Parameters<typeof attachInput>[1]['selection'], brush
   const puck = createNavigationPuck({ size: () => ({ width: 800, height: 600 }), camera: defaultCamera, navigate });
   disposals.push(
     attachInput(canvas, {
-      camera: defaultCamera,
+      camera,
       size: () => ({ width: 800, height: 600 }),
       brush,
       ready: () => true,
@@ -264,6 +320,7 @@ function setup(selection?: Parameters<typeof attachInput>[1]['selection'], brush
       send: (c) => commands.push(c),
       cursor,
       rawUpdate,
+      canvasAction,
       selection,
       puck
     })

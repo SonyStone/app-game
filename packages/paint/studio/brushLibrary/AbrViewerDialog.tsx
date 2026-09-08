@@ -8,7 +8,7 @@ const Viewer = lazy(() => import('@app-game/abr-viewer/editor').then((module) =>
 export function AbrViewerDialog(props: {
   open: boolean;
   close: () => void;
-  session: Pick<PaintSession, 'useAbrBrush'>;
+  session: Pick<PaintSession, 'useAbrBrush' | 'brush' | 'updateBrush'>;
 }) {
   let dialog!: HTMLDialogElement;
   createEffect(
@@ -39,7 +39,13 @@ export function AbrViewerDialog(props: {
         </button>
       </header>
       <Viewer
-        useBrushNote="Paint uses this preset’s tip, dynamics, texture and dual brush. Physical tips, wet edges and height modes are approximations; Photoshop parity is not yet verified."
+        colorMixing={{
+          get value() {
+            return props.session.brush().mixing;
+          },
+          onChange: (mixing) => props.session.updateBrush({ mixing })
+        }}
+        useBrushNote="Paint uses this preset’s tip, dynamics, texture and dual brush. Physical tips, wet edges, height modes and Mixer Brush mixing are approximations; Photoshop parity is not yet verified."
         onUseBrush={async (brush) => {
           await props.session.useAbrBrush(brush);
           props.close();

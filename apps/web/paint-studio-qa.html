@@ -36,6 +36,10 @@
     <button id="cold-navigation">Check cold zoom</button>
     <button id="streaming">Run streaming checks</button>
     <button id="run">Run GPU checks</button>
+    <button id="smudge-performance">Measure dense smudge</button>
+    <button id="long-smudge-performance">Measure long smudge</button>
+    <button id="huge-smudge-performance">Measure huge smudge</button>
+    <button id="abr-mixing">Check ABR color mixing</button>
     <button id="abr-brush">Check ABR presets</button>
     <button id="textured-brush">Check textured brushes</button>
     <button id="canvas-targets">Check canvas targets</button>
@@ -47,6 +51,8 @@
     <button id="navigation">Measure navigation</button>
     <pre id="output">Ready</pre>
     <script type="module">
+      import { verifySmudgePerformance } from '../../packages/paint/studio/gpu/smudgePerformanceVerification';
+      import { verifyAbrColorMixing } from '../../packages/paint/studio/gpu/abrColorMixingVerification';
       import { verifyAbrBrush } from '../../packages/paint/studio/gpu/abrBrushVerification';
       import { AbrParser } from '../../packages/abr-parser/src/abr-parser';
       import abrExampleUrl from '../abr-viewer/src/assets/examples/spatter_brushes.abr?url';
@@ -189,6 +195,46 @@
         output.textContent = 'Testing saved low-resolution pages…\n';
         try {
           await verifyPersistentOverview((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#smudge-performance').onclick = async () => {
+        output.textContent = 'Measuring dense smudge…\n';
+        try {
+          await verifySmudgePerformance((message) => (output.textContent += message + '\n'));
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#long-smudge-performance').onclick = async () => {
+        output.textContent = 'Measuring long smudge with presentation and eviction…\n';
+        try {
+          for (const size of [50, 512]) {
+            output.textContent += `Brush ${size}px, distance 4096px, cache 16 tiles\n`;
+            await verifySmudgePerformance((message) => (output.textContent += message + '\n'),
+              { size, distance: 4096, runs: 2, cacheTiles: 16, present: true });
+          }
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#huge-smudge-performance').onclick = async () => {
+        output.textContent = 'Measuring large footprints with the production tile-cache budget…\n';
+        try {
+          for (const size of [512, 2048]) {
+            output.textContent += `Brush ${size}px, distance 8192px, cache 128 tiles\n`;
+            await verifySmudgePerformance((message) => (output.textContent += message + '\n'),
+              { size, distance: 8192, runs: 2, cacheTiles: 128, present: true });
+          }
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#abr-mixing').onclick = async () => {
+        output.textContent = 'Checking ABR color mixing…\n';
+        try {
+          await verifyAbrColorMixing((message) => (output.textContent += message + '\n'));
         } catch (error) {
           output.textContent += 'FAIL: ' + (error.stack ?? error);
         }
