@@ -1,0 +1,31 @@
+{
+  "name": "@app-game/folder-tabs",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3170",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "preview": "vite preview --port 4170"
+  },
+  "dependencies": {
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/media": "catalog:",
+    "@solid-primitives/pointer": "catalog:",
+    "@solid-primitives/raf": "catalog:",
+    "@solid-primitives/scheduled": "catalog:",
+    "@solidjs/web": "2.0.0-rc.4",
+    "solid-js": "catalog:"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "catalog:",
+    "jsdom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vite-plugin-solid-svg": "0.8.1",
+    "vitest": "catalog:"
+  }
+}

@@ -1,0 +1,1 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="currentColor"/><circle cx="50" cy="50" r="11" fill="var(--record-hole, var(--paper))"/><path d="M9 50h6m70 0h6" stroke="var(--record-hole, var(--paper))" stroke-width="2.5" stroke-linecap="round"/></svg>
