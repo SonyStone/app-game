@@ -6,6 +6,7 @@ import { FolderContent } from './FolderContent';
 import { folders } from './folders';
 import { FolderStack } from './FolderStack';
 import ArrowUpRightIcon from './icons/arrow-up-right.svg';
+import ArrowUpRightBoldIcon from './icons/arrow-up-right-bold.svg';
 import BatteryIcon from './icons/battery.svg';
 import SignalIcon from './icons/signal.svg';
 import WifiIcon from './icons/wifi.svg';
@@ -45,13 +46,17 @@ export function App() {
         folder in one gesture. Selecting a tab moves the cards in front of it to the back. You can also use arrow keys.
         In full screen, use the tabs for vertical deck gestures; drag or scroll the content vertically.
       </p>
-      <AuthorCredit />
       <Show when={!route.fullscreen()}>
-        <a class="screen-route-control" href="/fullscreen" onClick={(event) => route.navigate(event, '/fullscreen')}>
-          <span>Open full screen</span>
-          <ArrowUpRightIcon class="icon" aria-hidden="true" />
-        </a>
+        <div class="preview-actions">
+          <a class="screen-route-control" href="/fullscreen" onClick={(event) => route.navigate(event, '/fullscreen')}>
+            <span class="screen-route-label">Open full screen</span>
+            <span class="screen-route-symbol" aria-hidden="true">
+              <ArrowUpRightBoldIcon class="icon" />
+            </span>
+          </a>
+        </div>
       </Show>
+      <AuthorCredit />
       <div class="device-frame">
         <div class="workspace" ref={setScreen} aria-describedby="gesture-help">
           <div class="workspace-topline">
