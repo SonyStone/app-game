@@ -11,7 +11,10 @@ afterEach(() => {
 describe('tab catch-up motion', () => {
   it('uses the same cruising speed but lets a farther tab arrive later', () => {
     const f = fixture();
-    f.setTargets([{ id: 'near', x: 50 }, { id: 'far', x: 150 }]);
+    f.setTargets([
+      { id: 'near', x: 50 },
+      { id: 'far', x: 150 }
+    ]);
     flush();
     f.advance(20);
     const before = f.positions();
@@ -28,11 +31,17 @@ describe('tab catch-up motion', () => {
 
   it('retargets without teleporting and keeps direct swipes attached to the painted tabs', () => {
     const f = fixture();
-    f.setTargets([{ id: 'near', x: 50 }, { id: 'far', x: 150 }]);
+    f.setTargets([
+      { id: 'near', x: 50 },
+      { id: 'far', x: 150 }
+    ]);
     flush();
     f.advance(20);
     const before = f.positions().get('far')!;
-    f.setTargets([{ id: 'near', x: 0 }, { id: 'far', x: 0 }]);
+    f.setTargets([
+      { id: 'near', x: 0 },
+      { id: 'far', x: 0 }
+    ]);
     flush();
     expect(f.positions().get('far')).toBe(before);
     f.setDrag(0);
@@ -48,9 +57,63 @@ describe('tab catch-up motion', () => {
     expect(f.positions().get('far')).toBe(0);
   });
 
+  it('keeps the grabbed item direct while other items move at their own speed and reverse smoothly', () => {
+    const f = fixture();
+    f.setDirect('near');
+    f.setTargets([
+      { id: 'near', x: 200 },
+      { id: 'far', x: 200 }
+    ]);
+    flush();
+    expect(f.positions().get('near')).toBe(200);
+    expect(f.positions().get('far')).toBe(0);
+    f.advance(20);
+    const before = f.positions().get('far')!;
+    f.setTargets([
+      { id: 'near', x: 400 },
+      { id: 'far', x: 400 }
+    ]);
+    flush();
+    expect(f.positions().get('near')).toBe(400);
+    expect(f.positions().get('far')).toBe(before);
+    f.advance(1);
+    expect(f.positions().get('far')! - before).toBeCloseTo(100 / 60);
+    const turning = f.positions().get('far')!;
+    f.setDirect(undefined);
+    f.setTargets([
+      { id: 'near', x: 0 },
+      { id: 'far', x: 0 }
+    ]);
+    flush();
+    expect(f.positions().get('far')).toBe(turning);
+    f.advance(360);
+    expect(f.positions().get('near')).toBe(0);
+    expect(f.positions().get('far')).toBe(0);
+    expect(f.pending()).toBe(0);
+  });
+
+  it('matches a screen-length click exit in about 600 ms across viewport heights', () => {
+    for (const distance of [100, 240]) {
+      const f = fixture();
+      f.setSpeed(distance / (0.6 - 1 / 6));
+      f.setTargets([
+        { id: 'near', x: distance },
+        { id: 'far', x: distance * 2 }
+      ]);
+      flush();
+      f.advance(36);
+      expect(f.positions().get('near')!).toBeGreaterThan(distance * 0.98);
+      expect(f.positions().get('far')!).toBeLessThan(distance * 2);
+      f.dispose();
+    }
+  });
+
   it('settles immediately for reduced motion and cancels its frame on disposal', () => {
     const f = fixture();
-    f.setTargets([{ id: 'near', x: 50 }, { id: 'far', x: 150 }]);
+    f.setTargets([
+      { id: 'near', x: 50 },
+      { id: 'far', x: 150 }
+    ]);
     flush();
     f.advance(3);
     f.setReduced(true);
@@ -58,7 +121,10 @@ describe('tab catch-up motion', () => {
     expect(f.positions().get('far')).toBe(150);
     expect(f.pending()).toBe(0);
     f.setReduced(false);
-    f.setTargets([{ id: 'near', x: 0 }, { id: 'far', x: 0 }]);
+    f.setTargets([
+      { id: 'near', x: 0 },
+      { id: 'far', x: 0 }
+    ]);
     flush();
     expect(f.pending()).toBe(1);
     f.dispose();
@@ -77,11 +143,16 @@ function fixture() {
   vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
   const state = createRoot((dispose) => {
     disposers.push(dispose);
-    const [targets, setTargets] = createSignal([{ id: 'near', x: 0 }, { id: 'far', x: 0 }]);
+    const [targets, setTargets] = createSignal([
+      { id: 'near', x: 0 },
+      { id: 'far', x: 0 }
+    ]);
     const [drag, setDrag] = createSignal<number>();
     const [reduced, setReduced] = createSignal(false);
-    const positions = createTabMotion(targets, drag, reduced);
-    return { setTargets, setDrag, setReduced, positions, dispose };
+    const [direct, setDirect] = createSignal<string>();
+    const [speed, setSpeed] = createSignal(100);
+    const positions = createTabMotion(targets, drag, reduced, speed, direct);
+    return { setSpeed, setDirect, setTargets, setDrag, setReduced, positions, dispose };
   });
   flush();
   return {

@@ -119,3 +119,51 @@ Native 80px mouse drags in both directions retained capture until pointerup afte
 Committed vertical pointer gestures now resolve the tab at pointerdown, even after capture retargets subsequent events to the stack. Pulling a rear tab downward opens its folder and expands the deck using the existing concurrent departure/return transition. Pulling content or the current tab retains the existing deck gestures. Horizontal rail movement and cancelled pulls do not select a folder.
 
 Component regressions cover the rear tab in both compact and stacked layouts, nested label origins, capture retargeting, concurrent departures, cancellation, and horizontal scrolling without selection. All 33 tests, the production build, and ESLint pass. A native browser drag from the Style tab in the Music rail triggered the Style selection and expanded the deck.
+
+
+## Fullscreen route and responsive composition
+
+The preview and `/fullscreen` share the same mounted workspace, card deck, and folder state. Route links and browser history animate that workspace between its old and new bounds. Native View Transitions have an 800 ms shared-element duration, confirmed in the in-app browser by recording the folder-screen pseudo-element animations throughout the transition. The workspace DOM identity stays unchanged. A Web Animations fallback uses the same duration and easing; its geometry is covered by a unit test. Reduced-motion navigation is immediate. Internal card geometry settles before the route snapshot so panel height does not run a second transition inside the shared-screen animation.
+
+Fullscreen removes the device outline, hinge, fake status bar, and corner ornament. The fifteen grid columns fill the viewport, while row sizes, typography, dials, and controls have bounds. Phone tabs use a wider responsive size, unchanged during gestures. Vertical content scrolling is native; vertical deck gestures remain on the tabs. Collections remain opaque and may pass behind the footer.
+
+Browser viewport checks cover 320 × 740, 390 × 844, 768 × 1024, 844 × 390, and 1280 × 800 through a same-origin iframe harness. Portrait and desktop views have no horizontal document overflow and their settled footer ends at the viewport bottom. Short landscape content exceeds viewport height intentionally and remains vertically scrollable. Route regressions cover local-state and DOM preservation, history, direct links, modifier keys, stale callbacks after disposal, and fallback geometry. Horizontal-rail tests cover responsive width and bounds changes.
+
+All 38 tests, the production build, ESLint, and diff whitespace checks pass. Landscape scrolling was checked by moving to the document bottom and verifying the dark footer remained reachable. Browser QA also covered the light Music and amber Style layouts on phone widths.
+
+
+## Square-grid reflow and touch capture correction
+
+The first fullscreen adaptation independently bounded row height and column width, distorted tab proportions, and clipped extra content without providing a card scrollport. Those rules are replaced. Fullscreen tabs are 270 × 54 pixels, uniformly reduced to 180 × 36 on phones. The same scale determines their vertical stack offsets. The graph paper and CSS Grid use one cell length on both axes: fifteen columns on larger screens and six on phones. Phone layouts have 13–17 rows, with the controls and collection tiles placed further down rather than squeezed into the desktop layout.
+
+Every card now owns a native vertical scrollport. Its footer remains below the scrollport, and content is occluded normally at that edge. Mouse/pen dragging changes scrollTop through a small owned pointer helper; touch and wheel use native scrolling. Fullscreen horizontal rail gestures start on tabs, so they cannot intercept a content scroll. The animated screen-y property drives both the wrapper position and available scrollport height, keeping the footer anchored during stack movement.
+
+Touch pointers implicitly capture the hit-tested child before our explicit stack capture. The resulting descendant lostpointercapture event previously cancelled both gesture recognizers. They now react only when capture is lost by their actual capture owner. Regression sequences include this transfer for horizontal and vertical touch gestures. Scroll regressions cover bounds, tap/click behavior, native touch/wheel pass-through, cancellation, disabling, replacement, and disposal. These are event-sequence tests, not a claim of physical touchscreen verification.
+
+Browser measurements at 1280 × 800 show 270 × 54 tabs and matching 85.33-pixel columns/rows. At 390 × 844, tabs measure 180 × 36 and cells measure 65 × 65. Native mouse drags scrolled the Music content from 0 to its 231-pixel lower bound while its footer stayed at the viewport bottom. Expanded desktop stack gestures retained the same tab dimensions and footer position. All 43 tests pass.
+
+
+## System motion preference override
+
+The demo now intentionally keeps animations enabled regardless of the OS Reduce Motion setting. App callers no longer subscribe to that preference, and the CSS overrides that disabled transitions or shortened animations have been removed. This supersedes the reduced-motion behavior described in earlier QA entries.
+
+All 44 tests, the production build, and lint for the changed TypeScript files pass. With a browser QA page reporting reduced motion through matchMedia, the native shared-screen animation still ran for 800 ms and card transitions retained their 600 ms duration. Selecting Style completed in the idle state with all eight panels mounted. The physical OS setting was not changed; CSS has no remaining reduced-motion media rules.
+
+
+## Continuous pulls and reversible rear selection
+
+A compact downward drag now consumes the expansion distance, then applies the remaining displacement to the current card. Passing the release threshold after expansion advances the deck in the same gesture. Dragging a rear tab previews selection without changing order: every covering card moves together, the target stays attached to the pointer, and returning to the origin restores the original layout. Release uses the existing simultaneous exit/return sequence and captures the painted departure positions.
+
+All 48 tests, build, and lint for the modified motion files passed. Browser frame recordings confirmed one uninterrupted 845 px pull from the compact rail through the expanded pose, followed by a completed selection of Menu. A held Style pull moved every covering card by the same additional displacement and completed with all panels mounted. Regression tests cover returning to the origin in both layouts and cancelling an oversized pull.
+
+
+## Vertical speed correction
+
+The first continuous-pull implementation mapped gesture distance directly to covering-card displacement, which made those cards leave too quickly. Vertical targets now use the same RAF follower as the horizontal rail, at 150 deck units per second after the requested 50% speed increase. Only the grabbed item follows its target immediately. Every other item accelerates, cruises and brakes independently; returning the pointer or cancelling retargets the existing motion without teleporting. CSS no longer adds a second transition to the RAF-driven vertical positions. Extra downward displacement remains outside the panel's layout height to preserve its content and footer.
+
+All 49 tests, build and lint passed. Deterministic frame tests cover the speed limit, direct grabbed item, retargeting and cancellation in both deck layouts. Browser frame capture confirmed a rear pull kept Style under the pointer while Music and Menu followed more slowly, then completed selection in the idle state with valid panel heights.
+
+
+## Match drag catch-up to click timing
+
+Vertical catch-up now derives its cruising speed from the current deck height and the click exit's 600 ms duration, accounting for the follower's acceleration/braking time. This replaces the fixed 150-unit limit, which was slower than clicks on tall screens. The horizontal rail speed is unchanged. A frame-driven regression checks that a screen-length move covers at least 98% of its path in 600 ms at two viewport scales, while a farther card is still moving. All 50 tests and the production build pass.

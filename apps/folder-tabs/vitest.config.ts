@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: { conditions: ['development', 'browser'] },
   test: {
     environment: 'jsdom',
+    setupFiles: ['./test/setup.ts'],
     environmentOptions: { jsdom: { pretendToBeVisual: true } },
     include: ['test/**/*.test.{ts,tsx}'],
     server: { deps: { inline: [/solid-js/, /@solidjs/, /@solid-primitives/] } }

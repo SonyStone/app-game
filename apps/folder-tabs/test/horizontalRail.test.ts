@@ -11,6 +11,39 @@ afterEach(() => {
 });
 
 describe('horizontal folder rail', () => {
+  it.each([
+    ['horizontal', 8, 1, 8, 70],
+    ['horizontal', 12, 11, 40, 70],
+    ['vertical', 5, 7, 90, 8],
+    ['vertical', 8, 8, 90, 9]
+  ] as const)('locks %s intent at (%s, %s) and keeps it through a curved drag', (axis, dx, dy, nextX, nextY) => {
+    const f = fixture();
+    f.pointer('pointerdown', 200, 100);
+    f.pointer('pointermove', 200 + dx, 100 + dy);
+    expect(f.captured.has(1)).toBe(true);
+    expect(f.vertical.dragging()).toBe(axis === 'vertical');
+    expect(f.rail.direct()).toBe(axis === 'horizontal');
+    f.pointer('pointermove', 200 + nextX, 100 + nextY);
+    expect(f.captured.has(1)).toBe(true);
+    expect(f.vertical.dragging()).toBe(axis === 'vertical');
+    expect(f.rail.direct()).toBe(axis === 'horizontal');
+    f.pointer('pointercancel', 200 + nextX, 100 + nextY);
+    expect(f.captured.size).toBe(0);
+    expect(f.commit).not.toHaveBeenCalled();
+  });
+
+  it('keeps tracking when the pointer leaves the stack before the axis is locked', () => {
+    const f = fixture();
+    f.pointer('pointerdown', 200, 100);
+    f.pointer('pointermove', 201, 90, document.body);
+    expect(f.vertical.dragging()).toBe(true);
+    expect(f.captured.has(1)).toBe(true);
+    f.pointer('pointermove', 202, 0, document.body);
+    expect(f.vertical.offset()).toBe(-100);
+    f.pointer('pointerup', 202, 0, document.body);
+    expect(f.commit).toHaveBeenCalledExactlyOnceWith({ direction: 'up', offset: -100 });
+  });
+
   it('follows horizontal dragging, bounds the rail, and suppresses the resulting click', () => {
     const f = fixture();
     const click = vi.fn();
@@ -31,26 +64,46 @@ describe('horizontal folder rail', () => {
     expect(click).toHaveBeenCalledOnce();
   });
 
-  it.each(['mouse', 'touch'])('keeps a slow %s drag captured when it crosses the two axis thresholds', (pointerType) => {
-    const f = fixture();
-    f.pointer('pointerdown', 500, 50, f.button, pointerType);
-    f.pointer('pointermove', 492, 51, f.button, pointerType);
-    expect(f.captured.has(1)).toBe(true);
-    expect(f.rail.offset()).toBe(1);
-    // The rail has captured at 7px; the vertical recognizer rejects sideways intent at 10px.
-    f.pointer('pointermove', 486, 52, f.button, pointerType);
-    expect(f.captured.has(1)).toBe(true);
-    for (const x of [470, 430, 390, 410, 450]) {
-      f.pointer('pointermove', x, 52, f.button, pointerType);
+  it.each(['mouse', 'touch'])(
+    'keeps a slow %s drag captured when it crosses the two axis thresholds',
+    (pointerType) => {
+      const f = fixture();
+      f.pointer('pointerdown', 500, 50, f.button, pointerType);
+      f.pointer('pointermove', 492, 51, f.button, pointerType);
       expect(f.captured.has(1)).toBe(true);
-      expect(f.rail.direct()).toBe(true);
-      expect(f.rail.offset()).toBeCloseTo((500 - x) / 8);
+      expect(f.rail.offset()).toBe(1);
+      // The rail has captured at 7px; the vertical recognizer rejects sideways intent at 10px.
+      f.pointer('pointermove', 486, 52, f.button, pointerType);
+      expect(f.captured.has(1)).toBe(true);
+      for (const x of [470, 430, 390, 410, 450]) {
+        f.pointer('pointermove', x, 52, f.button, pointerType);
+        expect(f.captured.has(1)).toBe(true);
+        expect(f.rail.direct()).toBe(true);
+        expect(f.rail.offset()).toBeCloseTo((500 - x) / 8);
+      }
+      f.pointer('pointerup', 450, 52, f.button, pointerType);
+      expect(f.captured.size).toBe(0);
+      expect(f.rail.direct()).toBe(false);
+      expect(f.commit).not.toHaveBeenCalled();
     }
-    f.pointer('pointerup', 450, 52, f.button, pointerType);
-    expect(f.captured.size).toBe(0);
-    expect(f.rail.direct()).toBe(false);
-    expect(f.commit).not.toHaveBeenCalled();
-  });
+  );
+
+  it.each(['horizontal', 'vertical'])(
+    'continues a touch %s drag after implicit capture transfers from the child',
+    (axis) => {
+      const f = fixture();
+      f.pointer('pointerdown', 500, 50, f.button, 'touch');
+      f.pointer('pointermove', axis === 'horizontal' ? 480 : 500, axis === 'vertical' ? 70 : 50, f.button, 'touch');
+      // Touch implicitly captures the hit-tested child. Capturing the stack releases that child first.
+      f.pointer('lostpointercapture', 480, 70, f.button, 'touch');
+      f.pointer('pointermove', axis === 'horizontal' ? 300 : 500, axis === 'vertical' ? 220 : 50, f.element, 'touch');
+      if (axis === 'horizontal') expect(f.rail.offset()).toBe(25);
+      else expect(f.vertical.offset()).toBe(170);
+      f.pointer('pointerup', 300, 220, f.element, 'touch');
+      if (axis === 'vertical') expect(f.commit).toHaveBeenCalledWith({ direction: 'down', offset: 170 });
+      expect(f.captured.size).toBe(0);
+    }
+  );
 
   it('accepts touch swipes on card content while leaving vertical card wheel input alone', () => {
     const f = fixture(true);
@@ -110,6 +163,19 @@ describe('horizontal folder rail', () => {
     expect(f.rail.offset()).toBe(0);
   });
 
+  it('reveals the full responsive tab and clamps the offset when the rail becomes shorter', () => {
+    const f = fixture();
+    f.setWidth(56);
+    f.setMax(340);
+    flush();
+    f.rail.reveal(200);
+    flush();
+    expect(f.rail.offset()).toBe(159);
+    f.setMax(132);
+    flush();
+    expect(f.rail.offset()).toBe(132);
+  });
+
   it('releases capture and owned wheel timers when the target is removed', () => {
     vi.useFakeTimers();
     const f = fixture();
@@ -151,6 +217,8 @@ function fixture(wholeCard = false) {
   const state = createRoot((dispose) => {
     disposers.push(dispose);
     const [target, setTarget] = createSignal<HTMLElement | undefined>(element);
+    const [max, setMax] = createSignal(132);
+    const [width, setWidth] = createSignal(30);
     const vertical = createVerticalGesture(
       target,
       commit,
@@ -160,12 +228,13 @@ function fixture(wholeCard = false) {
     const rail = createHorizontalRail({
       target,
       enabled: () => true,
-      max: () => 132,
+      max,
+      tabWidth: width,
       accepts: (node) => wholeCard || node === button,
       acceptsWheel: (node) => node === button,
       readPainted: () => painted ?? rail.offset()
     });
-    return { rail, vertical, setTarget, dispose };
+    return { rail, vertical, setTarget, setMax, setWidth, dispose };
   });
   flush();
   return {

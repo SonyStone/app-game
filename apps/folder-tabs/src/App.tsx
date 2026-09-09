@@ -1,4 +1,6 @@
-import { createSignal } from 'solid-js';
+import { createMediaQuery } from '@solid-primitives/media';
+import { createSignal, Show } from 'solid-js';
+import { createScreenRoute } from './createScreenRoute';
 import type { VerticalGesture } from './createVerticalGesture';
 import { FolderContent } from './FolderContent';
 import { folders } from './folders';
@@ -10,6 +12,10 @@ import WifiIcon from './icons/wifi.svg';
 
 /** The reference's device-screen composition, with reversible folder gestures. */
 export function App() {
+  const narrow = typeof window.matchMedia === 'function' ? createMediaQuery('(max-width: 600px)') : () => false;
+  const [screen, setScreen] = createSignal<HTMLDivElement>();
+  // This motion demo keeps its choreography independent of OS motion preferences.
+  const route = createScreenRoute(() => false, screen);
   const [order, setOrder] = createSignal<string[]>(folders.map((folder) => folder.id));
 
   function select(id: string) {
@@ -29,16 +35,25 @@ export function App() {
   }
 
   return (
-    <main class="app" data-playing="true">
+    <main class={`app ${route.fullscreen() ? 'is-fullscreen' : 'is-preview'}`} data-playing="true">
       <h1 class="sr-only">Creative folders</h1>
       <p class="sr-only" id="gesture-help">
-        Drag up to gather the current deck into a scrolling row of full-size tabs. Swipe the tabs or card sideways, scroll over
-        the tabs, or use the scroll arrows. Pull a rear tab down to open its folder. Drag down to expand it, then down again to open the next folder. Selecting a tab
-        moves the cards in front of it to the back. You can also use arrow keys.
+        Drag any tab up to gather the current deck into a scrolling row without changing the open folder. Swipe tabs
+        sideways to scroll the compact row, or drag sideways in the expanded stack to sort tabs. Diagonal gestures combine sorting and expansion. Scroll over the compact tabs, or use the preview scroll arrows. Pull a
+        rear tab down to open its folder while holding it; keep pulling to the bottom to open the folder behind it.
+        Return to the starting position to cancel. Drag down to expand the stack and keep pulling to open the next
+        folder in one gesture. Selecting a tab moves the cards in front of it to the back. You can also use arrow keys.
+        In full screen, use the tabs for vertical deck gestures; drag or scroll the content vertically.
       </p>
       <AuthorCredit />
+      <Show when={!route.fullscreen()}>
+        <a class="screen-route-control" href="/fullscreen" onClick={(event) => route.navigate(event, '/fullscreen')}>
+          <span>Open full screen</span>
+          <ArrowUpRightIcon class="icon" aria-hidden="true" />
+        </a>
+      </Show>
       <div class="device-frame">
-        <div class="workspace" aria-describedby="gesture-help">
+        <div class="workspace" ref={setScreen} aria-describedby="gesture-help">
           <div class="workspace-topline">
             <span>
               <strong>9:41</strong> Mon Apr 26
@@ -49,8 +64,23 @@ export function App() {
               <BatteryIcon />
             </span>
           </div>
-          <FolderStack items={folders} order={order()} onSelect={select} onGesture={cycle}>
-            {(folder, _active, next) => <FolderContent folder={folder} onNext={next} />}
+          <FolderStack
+            items={folders}
+            order={order()}
+            onSelect={select}
+            onGesture={cycle}
+            geometryUnit={route.fullscreen() ? (narrow() ? 6 : 9) : undefined}
+            initiallyCollapsed={route.fullscreen()}
+            scrollableContent={route.fullscreen()}
+          >
+            {(folder, active, next) => (
+              <FolderContent
+                folder={folder}
+                onNext={next}
+                scrollable={route.fullscreen()}
+                onPreview={route.fullscreen() && active() ? (event) => route.navigate(event, '/') : undefined}
+              />
+            )}
           </FolderStack>
           <span class="screen-corner" aria-hidden="true" />
         </div>

@@ -2,6 +2,7 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createPointerListeners } from '@solid-primitives/pointer';
 import { debounce } from '@solid-primitives/scheduled';
 import { createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
+import { dragAxis } from './dragAxis';
 
 /** A completed gesture, including displacement for a continuous release animation. */
 export type VerticalGesture = { direction: 'up' | 'down'; offset: number };
@@ -9,8 +10,10 @@ export type VerticalGesture = { direction: 'up' | 'down'; offset: number };
 /**
  * Captured vertical dragging and one-step wheel gestures on a reactive target.
  * Short/horizontal drags snap back; cancellation never commits. Inputs retain native behavior.
- * `acceptsWheel` lets an embedded horizontal rail handle its own wheel input.
+ * `acceptsWheel` and `acceptsPointer` let the caller reserve content for native scrolling.
  * `enabled` gates new gestures while a consumer finishes its current transition.
+ * `onStart` runs once when a pointer locks vertically, before publishing displacement.
+ * It lets the consumer hand an unfinished animation over to the captured gesture.
  * `startTarget()` reads the original pointer target during `onCommit`, before capture retargeting.
  * It is a synchronous gesture snapshot, cleared on release/cancel; wheel commits have no target.
  * Owned listeners, capture, and wheel timers are released on replacement or disposal.
@@ -20,7 +23,11 @@ export function createVerticalGesture(
   target: Accessor<HTMLElement | undefined>,
   onCommit: (gesture: VerticalGesture) => void,
   enabled: Accessor<boolean> = () => true,
-  acceptsWheel: (event: WheelEvent) => boolean = () => true
+  acceptsWheel: (event: WheelEvent) => boolean = () => true,
+  acceptsPointer: (target: EventTarget | null) => boolean = () => true,
+  onStart: (target: EventTarget | null) => void = () => {},
+  /** Override the release distance for small drag handles; undefined uses the surface height. */
+  commitDistance: (target: EventTarget | null) => number | undefined = () => undefined
 ) {
   const [offset, setOffset] = createSignal(0);
   const [dragging, setDragging] = createSignal(false);
@@ -59,15 +66,27 @@ export function createVerticalGesture(
   }
 
   createPointerListeners({
-    target,
+    // Follow a pending gesture even if its moving tab leaves the pointer before capture.
+    target: () => (target() && typeof document !== 'undefined' ? document : undefined),
     passive: false,
     onDown(event) {
-      if (!enabled() || !event.isPrimary || event.button !== 0 || ignoreTarget(event.target)) return;
+      const element = target();
+      if (
+        !element ||
+        !(event.target instanceof Node) ||
+        !element.contains(event.target) ||
+        !enabled() ||
+        !event.isPrimary ||
+        event.button !== 0 ||
+        ignoreTarget(event.target) ||
+        !acceptsPointer(event.target)
+      )
+        return;
       reset();
       finishWheel.clear();
       wheelLocked = false;
       suppressClick = false;
-      const element = target();
+      event.preventDefault();
       if (element)
         pointer = {
           id: event.pointerId,
@@ -84,13 +103,15 @@ export function createVerticalGesture(
       const dy = event.clientY - pointer.y;
       const dx = event.clientX - pointer.x;
       if (!pointer.captured) {
-        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+        const axis = dragAxis(dx, dy);
+        if (!axis) return;
+        if (axis === 'horizontal') {
           reset();
           return;
         }
-        if (Math.abs(dy) < 7 || Math.abs(dy) < Math.abs(dx) * 1.2) return;
         pointer.captured = true;
         pointer.element.setPointerCapture(event.pointerId);
+        onStart(pointer.startTarget);
         setDragging(true);
         suppressClick = true;
       }
@@ -99,9 +120,10 @@ export function createVerticalGesture(
     },
     onUp(event) {
       if (!pointer || pointer.id !== event.pointerId) return;
-      const value = offset();
+      const value = event.clientY - pointer.y;
       const velocity = Math.abs(value) / Math.max(1, event.timeStamp - pointer.time);
-      const threshold = Math.max(36, Math.min(90, pointer.element.clientHeight * 0.09));
+      const threshold =
+        commitDistance(pointer.startTarget) ?? Math.max(36, Math.min(90, pointer.element.clientHeight * 0.09));
       if (pointer.captured && (Math.abs(value) >= threshold || (Math.abs(value) > 18 && velocity > 0.5))) commit(value);
       else reset();
     },
@@ -109,7 +131,7 @@ export function createVerticalGesture(
       if (pointer?.id === event.pointerId) reset();
     },
     onLostCapture(event) {
-      if (pointer?.id === event.pointerId) reset();
+      if (pointer?.id === event.pointerId && event.target === pointer.element) reset();
     }
   });
 
