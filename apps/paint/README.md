@@ -63,3 +63,19 @@ Validation: production build generated a manifest and a 36-entry precache;
 Chrome showed the install prompt was available, reloaded with the preview
 server stopped, and rendered/undid a stroke without that server. UI tests cover
 waiting updates, existing-worker readiness, one-shot installation and disposal.
+
+## Vercel and Git LFS
+
+ABR example files are stored in Git LFS. Enable **Project Settings → Git →
+Git Large File Storage (LFS)** for the Paint project before deploying. After
+changing this setting, redeploy; existing deployments still contain the old
+assets. See [Vercel Git settings](https://vercel.com/docs/project-configuration/git-settings).
+
+For a local checkout, run `git lfs install` and `git lfs pull`. Both Paint and
+ABR Viewer validate example headers at the start of a Vite production build,
+including when Vercel invokes `vite build` directly. A remaining pointer makes
+the build fail with instructions instead of publishing a broken gallery.
+
+After redeploying a PWA, save your drawing and close all Paint windows before
+reopening to use the new version. Local `.abr` import remains available while
+a deployment's example files are unavailable.
