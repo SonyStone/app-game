@@ -239,7 +239,9 @@ button {
   position: relative;
   grid-area: 1 / 1;
   z-index: 1;
-  margin-left: var(--painted-left, var(--left));
+  /* Move the handle without laying out the full sheet beneath it. */
+  transform: translateX(var(--painted-left, 0px));
+  will-change: transform;
   width: var(--tab-width, 30cqw);
   height: calc(var(--tab-height) + 0.2cqw);
   display: flex;
@@ -250,6 +252,7 @@ button {
   text-align: left;
   white-space: nowrap;
   pointer-events: auto;
+  touch-action: none;
 }
 .folder-stack[data-layout='compact'] {
   /* Both axes belong to the app's captured gestures; retain native pinch zoom. */
@@ -1193,6 +1196,7 @@ button {
 }
 .creative-viewport {
   display: block;
+  contain: layout paint;
   height: max(0px, calc(var(--sheet-height) - 2.2cqw - 17cqw));
   overflow: hidden;
 }

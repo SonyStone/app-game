@@ -26,26 +26,33 @@ export function createTabMotion(
   const [, start, stop] = createRAF((time) => {
     const maximumSpeed = typeof speed === 'function' ? speed() : speed;
     const acceleration = maximumSpeed * 6;
-    const dt = Math.min(0.032, lastTime === undefined ? 1 / 60 : (time - lastTime) / 1000);
+    // Integrate missed frames in small steps: slower displays keep the same speed,
+    // without one large acceleration jump after the main thread is busy.
+    let elapsed = Math.min(0.1, lastTime === undefined ? 1 / 60 : (time - lastTime) / 1000);
     lastTime = time;
     let pending = false;
-    for (const { id, x: target } of destination) {
-      const value = current.get(id)!;
-      const distance = target - value.x;
-      if (Math.abs(distance) < 0.002) {
-        value.x = target;
-        value.velocity = 0;
-        continue;
-      }
-      const desired = Math.sign(distance) * Math.min(maximumSpeed, Math.sqrt(2 * acceleration * Math.abs(distance)));
-      value.velocity += Math.max(-acceleration * dt, Math.min(acceleration * dt, desired - value.velocity));
-      const step = value.velocity * dt;
-      if (Math.sign(step) === Math.sign(distance) && Math.abs(step) >= Math.abs(distance)) {
-        value.x = target;
-        value.velocity = 0;
-      } else {
-        value.x += step;
-        pending = true;
+    while (elapsed > 0.000001) {
+      const dt = Math.min(1 / 60, elapsed);
+      elapsed -= dt;
+      pending = false;
+      for (const { id, x: target } of destination) {
+        const value = current.get(id)!;
+        const distance = target - value.x;
+        if (Math.abs(distance) < 0.002) {
+          value.x = target;
+          value.velocity = 0;
+          continue;
+        }
+        const desired = Math.sign(distance) * Math.min(maximumSpeed, Math.sqrt(2 * acceleration * Math.abs(distance)));
+        value.velocity += Math.max(-acceleration * dt, Math.min(acceleration * dt, desired - value.velocity));
+        const step = value.velocity * dt;
+        if (Math.sign(step) === Math.sign(distance) && Math.abs(step) >= Math.abs(distance)) {
+          value.x = target;
+          value.velocity = 0;
+        } else {
+          value.x += step;
+          pending = true;
+        }
       }
     }
     publish();
@@ -53,6 +60,9 @@ export function createTabMotion(
   });
 
   function publish() {
+    const previous = untrack(positions);
+    if (previous.size === current.size && [...current].every(([id, value]) => previous.get(id) === value.x))
+      return;
     setPositions(new Map([...current].map(([id, value]) => [id, value.x])));
   }
 

@@ -17,7 +17,7 @@ describe('folder transition sequence', () => {
     f.drag(450, 300);
     f.advance(240);
     const order = f.tabs();
-    const left = (id: string) => parseFloat(f.card(id).style.getPropertyValue('--painted-left'));
+    const left = (id: string) => parseFloat(f.tab(id).style.getPropertyValue('--painted-left'));
     const start = left('music');
     f.pointer('pointerdown', 100, document.querySelector('#tab-music')!, 400);
     f.pointer('pointermove', 100, f.stack, 400 + dx);
@@ -35,7 +35,7 @@ describe('folder transition sequence', () => {
   it.each([-800, 800])('returns an expanded tab dragged beyond the screen (%s) without losing its sort order', (dx) => {
     const f = fixture('touch');
     f.advance(240);
-    const left = (id: string) => parseFloat(f.card(id).style.getPropertyValue('--painted-left'));
+    const left = (id: string) => parseFloat(f.tab(id).style.getPropertyValue('--painted-left'));
     const before = left('play');
     f.pointer('pointerdown', 200, document.querySelector('#tab-play')!, 400);
     f.pointer('pointermove', 200, f.stack, 400 + dx);
@@ -66,7 +66,7 @@ describe('folder transition sequence', () => {
     f.pointer('pointerup', 300, f.stack, 100);
     f.advance(480);
     ids.forEach((id) => {
-      const left = parseFloat(f.card(id).style.getPropertyValue('--painted-left'));
+      const left = parseFloat(f.tab(id).style.getPropertyValue('--painted-left'));
       expect(left).toBeGreaterThanOrEqual(3 - 0.001);
       expect(left).toBeLessThanOrEqual(67 + 0.001);
     });
@@ -96,14 +96,14 @@ describe('folder transition sequence', () => {
       f.drag(450, 300);
       f.advance(3); // The deck is still gathering, not at its final rows or rail positions.
       const y = f.painted('play');
-      const x = parseFloat(f.card('play').style.getPropertyValue('--painted-left'));
+      const x = parseFloat(f.tab('play').style.getPropertyValue('--painted-left'));
       f.pointer('pointerdown', 200, document.querySelector('#tab-play')!);
       f.pointer('pointermove', 216);
       expect(f.painted('play')).toBeCloseTo(y + 2);
-      expect(parseFloat(f.card('play').style.getPropertyValue('--painted-left'))).toBeCloseTo(x);
+      expect(parseFloat(f.tab('play').style.getPropertyValue('--painted-left'))).toBeCloseTo(x);
       f.advance(10);
       expect(f.painted('play')).toBeCloseTo(y + 2);
-      expect(parseFloat(f.card('play').style.getPropertyValue('--painted-left'))).toBeCloseTo(x);
+      expect(parseFloat(f.tab('play').style.getPropertyValue('--painted-left'))).toBeCloseTo(x);
       f.pointer('pointermove', 264);
       expect(f.painted('play')).toBeCloseTo(y + 8);
       f.pointer('pointermove', 200);
@@ -118,7 +118,7 @@ describe('folder transition sequence', () => {
   it.each(['mouse', 'touch'] as const)('sorts expanded tabs with %s without changing card depth', (pointerType) => {
     const f = fixture(pointerType);
     f.advance(240);
-    const left = (id: string) => parseFloat(f.card(id).style.getPropertyValue('--painted-left'));
+    const left = (id: string) => parseFloat(f.tab(id).style.getPropertyValue('--painted-left'));
     const original = new Map(ids.map((id) => [id, left(id)]));
     const depth = f.order();
     const width = f.stack.style.getPropertyValue('--tab-width');
@@ -160,7 +160,7 @@ describe('folder transition sequence', () => {
   ] as const)('anchors %s on gathering without leaving an edge gap (horizontal delta: %s)', (id, dx) => {
     const f = fixture('touch');
     f.advance(240);
-    const left = () => parseFloat(f.card(id).style.getPropertyValue('--painted-left'));
+    const left = () => parseFloat(f.tab(id).style.getPropertyValue('--painted-left'));
     const initial = left();
     f.pointer('pointerdown', 400, document.querySelector(`#tab-${id}`)!, 400);
     f.pointer('pointermove', 100, f.stack, 400 + dx);
@@ -189,7 +189,7 @@ describe('folder transition sequence', () => {
     const f = fixture('touch');
     f.drag(450, 300);
     f.advance(240);
-    const left = (id: string) => parseFloat(f.card(id).style.getPropertyValue('--painted-left'));
+    const left = (id: string) => parseFloat(f.tab(id).style.getPropertyValue('--painted-left'));
     const initial = ids.map(left);
     f.pointer('pointerdown', 100, document.querySelector('#tab-play')!, 400);
     f.pointer('pointermove', 100, f.stack, 280);
@@ -360,10 +360,10 @@ describe('folder transition sequence', () => {
     document.querySelector<HTMLButtonElement>('#tab-play')!.click();
     flush();
     const button = document.querySelector('#tab-play')!;
-    const x = parseFloat(f.card('play').style.getPropertyValue('--painted-left'));
+    const x = parseFloat(f.tab('play').style.getPropertyValue('--painted-left'));
     f.pointer('pointerdown', 80, button, 300);
     f.pointer('pointermove', 80, f.stack, 400);
-    expect(parseFloat(f.card('play').style.getPropertyValue('--painted-left'))).toBeCloseTo(x + 12.5);
+    expect(parseFloat(f.tab('play').style.getPropertyValue('--painted-left'))).toBeCloseTo(x + 12.5);
     expect(f.stack.dataset.motion).toBe('idle');
     f.pointer('pointerup', 80, f.stack, 400);
     for (const id of ['menu', 'music']) f.end(id, 'folder-exit');
@@ -523,7 +523,7 @@ describe('folder transition sequence', () => {
       const f = fixture(pointerType);
       f.drag(450, 300);
       f.advance(240);
-      const x = parseFloat(f.card('play').style.getPropertyValue('--painted-left'));
+      const x = parseFloat(f.tab('play').style.getPropertyValue('--painted-left'));
       const y = f.painted('play');
       f.pointer('pointerdown', 100, document.querySelector('#tab-play')!, 400);
       for (const [dx, dy] of [
@@ -535,7 +535,7 @@ describe('folder transition sequence', () => {
       ]) {
         f.pointer('pointermove', 100 + dy!, f.stack, 400 + dx!);
         f.advance(5);
-        expect(parseFloat(f.card('play').style.getPropertyValue('--painted-left'))).toBeCloseTo(x + dx! / 8);
+        expect(parseFloat(f.tab('play').style.getPropertyValue('--painted-left'))).toBeCloseTo(x + dx! / 8);
         expect(f.painted('play')).toBeCloseTo(y + dy! / 8);
         expect(f.stack.hasPointerCapture(1)).toBe(true);
         expect(f.stack.classList.contains('is-dragging')).toBe(true);
@@ -846,6 +846,7 @@ function fixture(pointerType: 'mouse' | 'touch' = 'mouse') {
     advance,
     panel,
     card,
+    tab: (id: string) => host.querySelector<HTMLButtonElement>(`#tab-${id}`)!,
     order: () =>
       [...ids].sort(
         (a, b) => Number(card(a).style.getPropertyValue('--rank')) - Number(card(b).style.getPropertyValue('--rank'))

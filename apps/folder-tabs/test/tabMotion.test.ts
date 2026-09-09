@@ -9,6 +9,38 @@ afterEach(() => {
 });
 
 describe('tab catch-up motion', () => {
+  it('does not invalidate subscribers when a frame or a repeated target changes no coordinates', () => {
+    const f = fixture();
+    const initial = f.positions();
+    f.advance(1);
+    expect(f.positions()).toBe(initial);
+    f.setDirect('near');
+    f.setTargets([{ id: 'near', x: 0 }, { id: 'far', x: 0 }]);
+    flush();
+    f.advance(1);
+    expect(f.positions()).toBe(initial);
+    f.setTargets([{ id: 'near', x: 1 }, { id: 'far', x: 0 }]);
+    flush();
+    expect(f.positions()).not.toBe(initial);
+    expect(f.positions().get('near')).toBe(1);
+  });
+
+  it('preserves motion speed when the browser delivers frames at 20 or 30 Hz', () => {
+    const distanceAt = (fps: number) => {
+      const f = fixture();
+      f.setTargets([{ id: 'near', x: 250 }, { id: 'far', x: 400 }]);
+      flush();
+      f.advance(1);
+      f.advance(fps, 1000 / fps);
+      const distance = f.positions().get('far')!;
+      f.dispose();
+      return distance;
+    };
+    const reference = distanceAt(60);
+    expect(distanceAt(30)).toBeCloseTo(reference, 3);
+    expect(distanceAt(20)).toBeCloseTo(reference, 3);
+  });
+
   it('uses the same cruising speed but lets a farther tab arrive later', () => {
     const f = fixture();
     f.setTargets([
@@ -158,9 +190,9 @@ function fixture() {
   return {
     ...state,
     pending: () => frames.size,
-    advance(count: number) {
+    advance(count: number, interval = 1000 / 60) {
       for (let i = 0; i < count; i++) {
-        time += 1000 / 60;
+        time += interval;
         const callbacks = [...frames.values()];
         frames.clear();
         callbacks.forEach((callback) => callback(time));

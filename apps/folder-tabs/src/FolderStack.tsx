@@ -179,7 +179,7 @@ export function FolderStack<T extends Folder>(props: {
   const shiftProgress = () =>
     transition()?.phase === 'departing'
       ? 1
-      : Math.min(1, dragOffset() / Math.max(1, (tablist()?.clientWidth ?? 0) * 0.22));
+      : Math.min(1, dragOffset() / Math.max(1, widthUnit() * 22));
   const compactItems = createMemo(() =>
     tabOrder().flatMap((id) => {
       const item = props.items.find((candidate) => candidate.id === id);
@@ -434,7 +434,7 @@ export function FolderStack<T extends Folder>(props: {
   }
 
   function pixelUnit() {
-    return props.geometryUnit ?? Math.max(1, (tablist()?.clientWidth ?? 0) / 100);
+    return props.geometryUnit ?? widthUnit();
   }
 
   function directTab() {
@@ -584,7 +584,7 @@ export function FolderStack<T extends Folder>(props: {
     const target = pulledRearTab();
     if (!target) return id === activeId() ? dragOffset() : 0;
     if (id === target) {
-      const unit = props.geometryUnit ?? (tablist()?.clientWidth ?? 0) / 100;
+      const unit = pixelUnit();
       const row = rowPosition(id) * unit;
       const initial = collapsed() ? 0 : row;
       return Math.max(0, initial + gesture.offset()) - row * (1 - collapseProgress());
@@ -710,7 +710,6 @@ export function FolderStack<T extends Folder>(props: {
                 '--card-drag-offset': `${paintedDrag(item.id)}px`,
                 '--stack-delay': `${Math.max(0, props.items.length - 1 - rank()) * 33.333}ms`,
                 '--left': `${tabTarget(item)}%`,
-                '--painted-left': `${(tabMotion().get(item.id) ?? item.left) + horizontalShift(item.id)}cqw`,
                 '--folder-color': item.color,
                 'z-index': rank() + 1
               }}
@@ -718,6 +717,7 @@ export function FolderStack<T extends Folder>(props: {
               <button
                 id={`tab-${item.id}`}
                 class="folder-tab"
+                style={{ '--painted-left': `${(tabMotion().get(item.id) ?? item.left) + horizontalShift(item.id)}cqw` }}
                 role="tab"
                 aria-label={`${item.number} ${item.name} ${item.detail}`}
                 title={`${item.name} ${item.detail}`}
@@ -763,11 +763,13 @@ export function FolderStack<T extends Folder>(props: {
               '--folder-color': item.color,
               '--offset': length(rearOffset(item.id) * (1 - collapseProgress())),
               '--left': `${tabTarget(item)}%`,
-              '--painted-left': `${(tabMotion().get(item.id) ?? item.left) + horizontalShift(item.id)}cqw`,
               'z-index': echoRank(item.id)
             }}
           >
-            <div class="folder-tab">
+            <div
+              class="folder-tab"
+              style={{ '--painted-left': `${(tabMotion().get(item.id) ?? item.left) + horizontalShift(item.id)}cqw` }}
+            >
               <FolderTabShape class="tab-shape" />
               <span class="tab-number">{item.number}</span>
               <span class="tab-label">
