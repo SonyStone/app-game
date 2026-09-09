@@ -1,0 +1,104 @@
+{
+  "photoshop": "2025 26.0.0",
+  "size": [
+    768,
+    1024
+  ],
+  "path": [
+    [
+      384,
+      128
+    ],
+    [
+      384,
+      896
+    ]
+  ],
+  "simulatePressure": false,
+  "threshold": "max absolute RGB difference > 4",
+  "cases": {
+    "tip": {
+      "bounds": [
+        358,
+        106,
+        409,
+        920
+      ],
+      "width": 51
+    },
+    "scatter100": {
+      "bounds": [
+        336,
+        88,
+        433,
+        926
+      ],
+      "width": 97
+    },
+    "scatter208": {
+      "bounds": [
+        307,
+        63,
+        460,
+        953
+      ],
+      "width": 153
+    },
+    "smudge": {
+      "bounds": [
+        308,
+        76,
+        458,
+        944
+      ],
+      "width": 150
+    }
+  },
+  "countProbes": {
+    "size": [
+      16384,
+      256
+    ],
+    "path": [
+      [
+        128,
+        128
+      ],
+      [
+        16128,
+        128
+      ]
+    ],
+    "note": "Connected components undercount stamps when circles overlap.",
+    "cases": {
+      "count-jitter1": {
+        "visibleComponents": {
+          "1": 4,
+          "2": 66,
+          "3": 91
+        },
+        "meanBlackPixelArea": 163.74534161490683
+      },
+      "count-jitter50": {
+        "visibleComponents": {
+          "1": 14,
+          "2": 80,
+          "3": 58,
+          "4": 9
+        },
+        "meanBlackPixelArea": 158.33540372670808
+      },
+      "count-jitter100": {
+        "visibleComponents": {
+          "0": 14,
+          "1": 36,
+          "2": 45,
+          "3": 33,
+          "4": 25,
+          "5": 8
+        },
+        "meanBlackPixelArea": 160.40372670807454
+      }
+    }
+  }
+}

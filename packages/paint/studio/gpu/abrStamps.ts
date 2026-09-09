@@ -13,7 +13,7 @@ import {
 import type { BrushFormValues } from '@app-game/abr-brush/form';
 import { paintBlend, paintModes } from '@app-game/abr-brush/paintBlend';
 import { pencilCoverage, usesPencilCoverage } from '@app-game/abr-brush/pencil';
-import { common, d, std, tgpu, type TgpuRoot } from 'typegpu';
+import { common, d, std, tgpu, type TgpuRoot, type TgpuTexture } from 'typegpu';
 import type { Dab } from '../brush';
 import type { BrushResource } from '../composition/brushResources';
 import type { Layer } from '../document';
@@ -100,6 +100,12 @@ export function createAbrStamps(root: TgpuRoot) {
     fragment: compositeFragment,
     targets: { format: 'rgba8unorm' }
   });
+  const direct = root.createRenderPipeline({
+    attribs: abrStampLayout.attrib,
+    vertex,
+    fragment: directFragment,
+    targets: { format: 'rgba8unorm' }
+  });
   type Uploaded = ReturnType<typeof coverageTexture>;
   let textures: Uploaded[] = [];
   const lookup = new WeakMap<BrushResource, Uploaded>();
@@ -108,6 +114,7 @@ export function createAbrStamps(root: TgpuRoot) {
   let uploads = 0;
   let settings: AbrRasterSettings | undefined;
   let tip: Uploaded, pattern: Uploaded, dual: Uploaded;
+  let bindings = new WeakMap<AbrTile, ReturnType<typeof createBindings>>();
   function upload(resource: BrushResource) {
     if (
       resource.width > root.device.limits.maxTextureDimension2D ||
@@ -160,6 +167,7 @@ export function createAbrStamps(root: TgpuRoot) {
         tip = upload(value.tip);
         pattern = value.pattern ? upload(value.pattern) : tip;
         dual = value.dual ? upload(value.dual) : tip;
+        bindings = new WeakMap();
       } catch (error) {
         for (const texture of textures) texture.destroy();
         textures = [];
@@ -168,46 +176,64 @@ export function createAbrStamps(root: TgpuRoot) {
     },
     /** Creates device scratch without owning the base or mask supplied by the tile cache. */
     createTile: (base: Texture, mask: Texture, capacity: number) => createAbrTile(root, base, mask, capacity),
-    /** All writes are tile-local; uniforms carry world origin for a continuous pattern across seams. */
-    draw(tile: AbrTile, encoder: GPUCommandEncoder, dabs: readonly Dab[], tx: number, ty: number) {
+    /** One primary Smudge stamp can composite directly unless coverage needs neighboring or secondary pixels. */
+    canDrawDirect: () =>
+      !!settings?.smudge && !settings.values.useWetEdges && !(settings.values.useDualBrush && settings.dual),
+    /** All writes are tile-local; uniforms carry world origin for a continuous pattern across seams.
+     * A destination bypasses coverage scratch: requires canDrawDirect(), one primary dab,
+     * a refreshed base inside the pass scissor, and caller-owned pass.end().
+     */
+    draw(
+      tile: AbrTile,
+      encoder: GPUCommandEncoder,
+      dabs: readonly Dab[],
+      tx: number,
+      ty: number,
+      destination?: { pass: GPURenderPassEncoder; pickup: AbrPickup }
+    ) {
       const s = settings!;
       const v = s.values;
-      tile.params.write({
-        origin: d.vec4f((tx * 256) % 65536, (ty * 256) % 65536, 256, s.mixing === 'linear' ? 1 : 0),
-        phase: d.vec4f(
-          (tx * 256) % (((s.pattern?.width ?? 1) * v.texture.scale) / 100),
-          (ty * 256) % (((s.pattern?.height ?? 1) * v.texture.scale) / 100),
-          0,
-          0
-        ),
-        texture: d.vec4f(
-          s.pattern?.width ?? 1,
-          s.pattern?.height ?? 1,
-          v.texture.scale / 100,
-          blendModeId(v.texture.mode)
-        ),
-        tone: d.vec4f(
-          v.texture.invert ? 1 : 0,
-          v.texture.brightness,
-          v.texture.contrast,
-          usesPencilCoverage(v.tool) ? 1 : 0
-        ),
-        flags: d.vec4f(
-          v.useTexture && s.pattern ? 1 : 0,
-          v.texture.eachTip ? 1 : 0,
-          v.useDualBrush && s.dual ? 1 : 0,
-          v.useNoise ? 1 : 0
-        ),
-        extra: d.vec4f(
-          v.texture.depth / 100,
-          blendModeId(v.dualBrush.mode),
-          v.useWetEdges ? 1 : 0,
-          Math.max(
+      const binding = bindingsFor(tile);
+      if (binding.originX !== tx || binding.originY !== ty) {
+        tile.params.write({
+          origin: d.vec4f((tx * 256) % 65536, (ty * 256) % 65536, 256, s.mixing === 'linear' ? 1 : 0),
+          phase: d.vec4f(
+            (tx * 256) % (((s.pattern?.width ?? 1) * v.texture.scale) / 100),
+            (ty * 256) % (((s.pattern?.height ?? 1) * v.texture.scale) / 100),
             0,
-            paintModes.findIndex((mode) => mode === (s.blendMode ?? 'Nrml'))
+            0
+          ),
+          texture: d.vec4f(
+            s.pattern?.width ?? 1,
+            s.pattern?.height ?? 1,
+            v.texture.scale / 100,
+            blendModeId(v.texture.mode)
+          ),
+          tone: d.vec4f(
+            v.texture.invert ? 1 : 0,
+            v.texture.brightness,
+            v.texture.contrast,
+            usesPencilCoverage(v.tool) ? 1 : 0
+          ),
+          flags: d.vec4f(
+            v.useTexture && s.pattern ? 1 : 0,
+            v.texture.eachTip ? 1 : 0,
+            v.useDualBrush && s.dual ? 1 : 0,
+            v.useNoise ? 1 : 0
+          ),
+          extra: d.vec4f(
+            v.texture.depth / 100,
+            blendModeId(v.dualBrush.mode),
+            v.useWetEdges ? 1 : 0,
+            Math.max(
+              0,
+              paintModes.findIndex((mode) => mode === (s.blendMode ?? 'Nrml'))
+            )
           )
-        )
-      });
+        });
+        binding.originX = tx;
+        binding.originY = ty;
+      }
       // One upload, separate vertex ranges: never overwrite a buffer before its draws are submitted.
       const ordered = [...dabs.filter((dab) => dab.abr?.secondary), ...dabs.filter((dab) => !dab.abr?.secondary)];
       const data = new Float32Array(ordered.length * 16);
@@ -218,74 +244,40 @@ export function createAbrStamps(root: TgpuRoot) {
         data[i * 16 + 1] = dab.y - ty * 256;
       });
       root.device.queue.writeBuffer(root.unwrap(tile.stamps), 0, data);
+      if (destination) {
+        direct
+          .with(destination.pass)
+          .with(binding.primary)
+          .with(pickupBinding(tile, destination.pickup))
+          .with(abrStampLayout, tile.stamps)
+          .draw(6, ordered.length);
+        return;
+      }
       const secondCount = ordered.filter((dab) => dab.abr?.secondary).length;
-      const group = (image: Uploaded) =>
-        root.createBindGroup(layout, { params: tile.params, tip: image, pattern, sampler, repeat });
       if (secondCount) {
         const pass = encoder.beginRenderPass({
           colorAttachments: [{ view: tile.dualView, loadOp: 'load', storeOp: 'store' }]
         });
-        secondary.with(pass).with(group(dual)).with(abrStampLayout, tile.stamps).draw(6, secondCount);
+        secondary.with(pass).with(binding.secondary).with(abrStampLayout, tile.stamps).draw(6, secondCount);
         pass.end();
       }
       if (ordered.length > secondCount) {
         const pass = encoder.beginRenderPass({
           colorAttachments: [
             { view: tile.paintView, loadOp: 'load', storeOp: 'store' },
-            { view: root.unwrap(tile.mask).createView(), loadOp: 'load', storeOp: 'store' }
+            { view: tile.maskView, loadOp: 'load', storeOp: 'store' }
           ]
         });
         primary
           .with(pass)
-          .with(group(tip))
+          .with(binding.primary)
           .with(abrStampLayout, tile.stamps)
           .draw(6, ordered.length - secondCount, 0, secondCount);
         pass.end();
       }
     },
-    composite(
-      tile: AbrTile,
-      pass: GPURenderPassEncoder,
-      pickup?: {
-        patch:
-          | Awaited<ReturnType<ReturnType<typeof createCanvasPickup>['capture']>>
-          | ReturnType<ReturnType<typeof createMixerWells>['step']>;
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        strength: number;
-        fingerPainting: boolean;
-        mixer?: boolean;
-        history?: boolean;
-      }
-    ) {
-      tile.pickupParams.write({
-        placement: pickup ? d.vec4f(pickup.x, pickup.y, pickup.width, pickup.height) : d.vec4f(0, 0, 1, 1),
-        flags: d.vec4f(
-          pickup ? 1 : 0,
-          pickup?.strength ?? 0,
-          pickup?.fingerPainting ? 1 : 0,
-          pickup?.history ? 2 : pickup?.mixer ? 1 : 0
-        )
-      });
-      composite
-        .with(pass)
-        .with(
-          root.createBindGroup(compositeLayout, {
-            base: tile.base,
-            mask: tile.mask,
-            paint: tile.paint,
-            dual: tile.dualMask,
-            pattern,
-            repeat,
-            params: tile.params,
-            pickup: pickup?.patch.texture ?? tile.base,
-            pickupSampler: sampler,
-            pickupParams: tile.pickupParams
-          })
-        )
-        .draw(3);
+    composite(tile: AbrTile, pass: GPURenderPassEncoder, pickup?: AbrPickup) {
+      composite.with(pass).with(pickupBinding(tile, pickup)).draw(3);
     },
     stats: () => ({
       uploads,
@@ -297,7 +289,79 @@ export function createAbrStamps(root: TgpuRoot) {
       textures = [];
     }
   };
+
+  function pickupBinding(tile: AbrTile, pickup: AbrPickup | undefined) {
+    tile.pickupParams.write({
+      placement: pickup ? d.vec4f(pickup.x, pickup.y, pickup.width, pickup.height) : d.vec4f(0, 0, 1, 1),
+      flags: d.vec4f(
+        pickup ? 1 : 0,
+        pickup?.strength ?? 0,
+        pickup?.fingerPainting ? 1 : 0,
+        pickup?.history ? 2 : pickup?.mixer ? 1 : 0
+      ),
+      clip: pickup?.clip ? d.vec4f(...pickup.clip) : d.vec4f(0, 0, 1, 1),
+      sampleSize: pickup ? d.vec2f(pickup.patch.width, pickup.patch.height) : d.vec2f(256)
+    });
+    const image = pickup?.patch.texture ?? tile.base;
+    const cache = bindingsFor(tile).composites;
+    let group = cache.get(image);
+    if (!group) {
+      group = root.createBindGroup(compositeLayout, {
+        base: tile.base,
+        mask: tile.mask,
+        paint: tile.paint,
+        dual: tile.dualMask,
+        pattern,
+        repeat,
+        params: tile.params,
+        pickup: image,
+        pickupSampler: sampler,
+        pickupParams: tile.pickupParams
+      });
+      cache.set(image, group);
+    }
+    return group;
+  }
+
+  /** Bindings follow the scratch tile, not its world coordinate. Weak keys let
+   * resized pickup textures and retired tiles be reclaimed; prepare resets preset resources.
+   */
+  function bindingsFor(tile: AbrTile) {
+    let value = bindings.get(tile);
+    if (!value) {
+      value = createBindings(tile);
+      bindings.set(tile, value);
+    }
+    return value;
+  }
+
+  function createBindings(tile: AbrTile) {
+    return {
+      primary: root.createBindGroup(layout, { params: tile.params, tip, pattern, sampler, repeat }),
+      secondary: root.createBindGroup(layout, { params: tile.params, tip: dual, pattern, sampler, repeat }),
+      composites: new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof compositeLayout.entries>>>(),
+      originX: Number.NaN,
+      originY: Number.NaN
+    };
+  }
 }
+
+/** Tile-local mapping of a captured canvas patch; uniforms are consumed before the next write. */
+type AbrPickup = {
+  /** Valid carried image overlap in patch UV coordinates. Newly grown pickup pixels load before they paint. */
+  clip?: readonly [number, number, number, number];
+  patch:
+    | Awaited<ReturnType<ReturnType<typeof createCanvasPickup>['capture']>>
+    | ReturnType<ReturnType<typeof createMixerWells>['step']>;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  strength: number;
+  fingerPainting: boolean;
+  mixer?: boolean;
+  history?: boolean;
+};
 
 /** Extra ABR scratch survives eviction and disposable preview copies along with the ordinary mask. */
 export type AbrTile = ReturnType<typeof createAbrTile>;
@@ -315,6 +379,7 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
     stamps,
     paintView: root.unwrap(paint).createView(),
     dualView: root.unwrap(dualMask).createView(),
+    maskView: root.unwrap(mask).createView(),
     base,
     mask,
     destroy() {
@@ -380,36 +445,36 @@ const fragment = tgpu.fragmentFn({
   out: { paint: d.vec4f, mask: d.vec4f }
 })((input) => {
   'use gpu';
+  const coverage = shadeStamp(input.position, input.uv, input.dynamics, input.color);
+  return { paint: coverage.paint, mask: coverage.mask };
+});
+const Coverage = d.struct({ paint: d.vec4f, mask: d.vec4f });
+function shadeStamp(position: d.v4f, tipUv: d.v2f, dynamics: d.v4f, color: d.v4f) {
+  'use gpu';
   const p = layout.$.params;
-  let coverage = std.textureSample(layout.$.tip, layout.$.sampler, input.uv).r;
-  const uv = std.div(std.add(input.position.xy, p.phase.xy), std.mul(p.texture.xy, p.texture.z));
+  let coverage = std.textureSample(layout.$.tip, layout.$.sampler, tipUv).r;
+  const uv = std.div(std.add(position.xy, p.phase.xy), std.mul(p.texture.xy, p.texture.z));
   const sample = std.textureSample(layout.$.pattern, layout.$.repeat, uv).r;
   if (p.flags.x > 0 && p.flags.y > 0)
-    coverage = textureCoverage(
-      coverage,
-      textureTone(sample, p.tone.x, p.tone.y, p.tone.z),
-      p.texture.w,
-      input.dynamics.z
-    );
-  if (p.flags.w > 0)
-    coverage *= 0.35 + 0.65 * grain(input.position.x + p.origin.x, input.position.y + p.origin.y, input.dynamics.w);
+    coverage = textureCoverage(coverage, textureTone(sample, p.tone.x, p.tone.y, p.tone.z), p.texture.w, dynamics.z);
+  if (p.flags.w > 0) coverage *= 0.35 + 0.65 * grain(position.x + p.origin.x, position.y + p.origin.y, dynamics.w);
   if (p.tone.w > 0) coverage = pencilCoverage(coverage);
-  const flow = coverage * input.dynamics.x;
-  return {
-    paint: d.vec4f(std.mul(input.color.rgb, flow), flow),
+  const flow = coverage * dynamics.x;
+  return Coverage({
+    paint: d.vec4f(std.mul(color.rgb, flow), flow),
     // Keep raw opacity separate from soft-tip opacity. Hard Mix replaces gray
     // coverage with binary coverage, so its ceiling must not include that gray again.
     // Flow accumulation already lives in paint.a; mask channels all use MAX.
-    mask: d.vec4f(coverage, std.select(0, input.dynamics.y, coverage > 0), 0, coverage * input.dynamics.y)
-  };
-});
+    mask: d.vec4f(coverage, std.select(0, dynamics.y, coverage > 0), 0, coverage * dynamics.y)
+  });
+}
 const secondaryFragment = tgpu.fragmentFn({ in: { uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f }, out: d.vec4f })((
   input
 ) => {
   'use gpu';
   return d.vec4f(std.textureSample(layout.$.tip, layout.$.sampler, input.uv).r * input.dynamics.x);
 });
-const PickupParams = d.struct({ placement: d.vec4f, flags: d.vec4f });
+const PickupParams = d.struct({ placement: d.vec4f, flags: d.vec4f, clip: d.vec4f, sampleSize: d.vec2f });
 const compositeLayout = tgpu.bindGroupLayout({
   pickup: { texture: d.texture2d() },
   pickupSampler: { sampler: 'filtering' },
@@ -424,14 +489,33 @@ const compositeLayout = tgpu.bindGroupLayout({
 });
 const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
   'use gpu';
-  const p = compositeLayout.$.params;
   const xy = d.vec2i(input.position.xy);
+  return compositePixel(
+    input.position,
+    std.textureLoad(compositeLayout.$.paint, xy, 0),
+    std.textureLoad(compositeLayout.$.mask, xy, 0)
+  );
+});
+/** Preserve the intermediate rgba8unorm rounding even when coverage never leaves the shader. */
+const directFragment = tgpu.fragmentFn({
+  in: { position: d.builtin.position, uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f },
+  out: d.vec4f
+})((input) => {
+  'use gpu';
+  const stamp = shadeStamp(input.position, input.uv, input.dynamics, input.color);
+  const paint = std.unpack4x8unorm(std.pack4x8unorm(stamp.paint));
+  const mask = std.unpack4x8unorm(std.pack4x8unorm(stamp.mask));
+  return compositePixel(input.position, paint, mask);
+});
+
+function compositePixel(position: d.v4f, paint: d.v4f, mask: d.v4f): d.v4f {
+  'use gpu';
+  const p = compositeLayout.$.params;
+  const xy = d.vec2i(position.xy);
   const base = std.textureLoad(compositeLayout.$.base, xy, 0);
-  const mask = std.textureLoad(compositeLayout.$.mask, xy, 0);
-  const paint = std.textureLoad(compositeLayout.$.paint, xy, 0);
   let alpha = d.f32(paint.a);
   if (p.flags.z > 0) alpha = dualCoverage(alpha, std.textureLoad(compositeLayout.$.dual, xy, 0).r, p.extra.y);
-  const uv = std.div(std.add(input.position.xy, p.phase.xy), std.mul(p.texture.xy, p.texture.z));
+  const uv = std.div(std.add(position.xy, p.phase.xy), std.mul(p.texture.xy, p.texture.z));
   const sample = std.textureSample(compositeLayout.$.pattern, compositeLayout.$.repeat, uv).r;
   if (p.flags.x > 0 && p.flags.y === 0)
     alpha = textureCoverage(alpha, textureTone(sample, p.tone.x, p.tone.y, p.tone.z), p.texture.w, p.extra.x);
@@ -464,17 +548,21 @@ const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }
   if (p.tone.w > 0) alpha = pencilCoverage(alpha);
   const opacity = std.select(mask.a, mask.g, p.flags.z > 0 && p.extra.y === 7);
   alpha = std.min(alpha, opacity);
-  if (p.extra.w === 1)
-    alpha = std.select(0, 1, grain(input.position.x + p.origin.x, input.position.y + p.origin.y, 13.75) < alpha);
+  if (p.extra.w === 1) alpha = std.select(0, 1, grain(position.x + p.origin.x, position.y + p.origin.y, 13.75) < alpha);
   const color = std.div(paint.rgb, std.max(0.00001, paint.a));
   const source = d.vec4f(std.mul(color, alpha), alpha);
   if (compositeLayout.$.pickupParams.flags.x > 0) {
     const tool = compositeLayout.$.pickupParams;
-    const pickupUv = std.div(std.add(input.position.xy, tool.placement.xy), tool.placement.zw);
+    const pickupUv = std.div(std.add(position.xy, tool.placement.xy), tool.placement.zw);
+    if (pickupUv.x < tool.clip.x || pickupUv.y < tool.clip.y || pickupUv.x > tool.clip.z || pickupUv.y > tool.clip.w)
+      return base;
     const picked = sampleMixing(
       compositeLayout.$.pickup,
       compositeLayout.$.pickupSampler,
-      pickupUv,
+      std.div(
+        std.clamp(std.mul(pickupUv, tool.sampleSize), d.vec2f(0.5), std.sub(tool.sampleSize, d.vec2f(0.5))),
+        d.vec2f(std.textureDimensions(compositeLayout.$.pickup))
+      ),
       p.origin.w > 0 && tool.flags.w === 0
     );
     if (tool.flags.w === 2) return std.mix(base, picked, alpha);
@@ -498,4 +586,4 @@ const compositeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }
     std.mul(std.add(std.mul(color, 1 - base.a), std.mul(mixed, base.a)), alpha)
   );
   return d.vec4f(rgb, alpha + base.a * (1 - alpha));
-});
+}

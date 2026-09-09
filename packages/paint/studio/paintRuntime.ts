@@ -95,6 +95,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     const background = (action: () => Promise<unknown>) => {
       void attempt(action).then(reportResult);
     };
+    let presentedAt = performance.now();
     const draw = async (exact = false) => {
       if (!renderer || lost) return;
       const start = performance.now();
@@ -106,6 +107,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       renderMs = performance.now() - start;
       status();
       await renderer.submitted();
+      presentedAt = performance.now();
       if (!exact) {
         clearTimeout(selectionTimer);
         if (selectionPoints.length >= 3 && selectionAnimate && !lost) selectionTimer = setTimeout(scheduleDraw, 33);
@@ -174,7 +176,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       try {
         // Backpressure can merge many pointer packets. Present progress between
         // bounded chunks instead of hiding the whole stroke until that backlog ends.
-        let presentedAt = performance.now();
+        presentedAt = performance.now();
         for (let offset = 0; offset < samples.length; offset += 16) {
           await strokeSession?.add(samples.slice(offset, offset + 16));
           if (offset + 16 < samples.length && performance.now() - presentedAt >= 8) {
@@ -282,6 +284,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           overviewStorage: tileStore.overviews,
           virtualTexture: true,
           onRefine: scheduleDraw,
+          onPaintProgress: async () => {
+            // One pointer segment can contain hundreds of dependent sampling dabs.
+            // Present only after a whole dab, without enqueueing behind the stroke itself.
+            if (strokeSession && active && !lost && performance.now() - presentedAt >= 8) await draw();
+          },
           onError: failure
         }
       );

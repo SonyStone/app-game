@@ -1,22 +1,26 @@
-import { d, tgpu, type TgpuRoot } from 'typegpu';
+import { d, tgpu, type RenderFlag, type TgpuRoot, type TgpuTexture } from 'typegpu';
 import { attempt, unwrapResult, type Result } from '../asyncResult';
 import { TILE_SIZE, dabIntersectsTile, dabTiles, type Brush, type Dab } from '../brush';
 import { screenToWorld, type Camera, type Point, type ViewSize } from '../camera';
 import type { BrushResource } from '../composition/brushResources';
 import type { Layer, TileChange } from '../document';
-import { packTile, unpackTile, type TileData } from '../tilePixels';
+import { isEmptyPackedTile, packTile, unpackTile, type TileData } from '../tilePixels';
 import type { OverviewStorage } from '../virtualPages';
 import { createAbrStamps, type AbrRasterSettings, type AbrTile } from './abrStamps';
 import { createCanvasFilter } from './canvasFilter';
 import { createCanvasPickup, type PickupRegion } from './canvasPickup';
+import { commandBatch } from './commandBatch';
+import { commandSlots } from './commandSlots';
 import { createDisplayCache } from './displayCache';
 import { filterTiles } from './filterTiles';
 import { createLassoOverlay } from './lassoOverlay';
 import { createMixerWells } from './mixerWells';
 import { createReadbackQueue } from './readbackQueue';
 import * as shader from './shaders';
+import { createSmudgePickup } from './smudgePickup';
 import { stampBounds } from './stampBounds';
 import { createTexturedStamps } from './texturedStamps';
+import { createTileMipmaps } from './tileMipmaps';
 import { rendererToolState, type RendererToolState } from './toolState';
 import { createViewDamage } from './viewDamage';
 import { createViewFallback } from './viewFallback';
@@ -30,12 +34,33 @@ export async function createPaintRenderer(
   onLost: (message: string) => void,
   options: {
     device?: GPUDevice;
+    /** Hard pixel-tile limit for constrained devices and eviction verification. */
     cacheTiles?: number;
+    /** Reuse transient sampling scratch; false retains per-tile scratch for GPU comparisons. */
+    sharedScratch?: boolean;
+    /** Batch pickup uploads until a pending source is invalidated; false retains eager flushes for GPU verification. */
+    batchPickupUploads?: boolean;
+    /** Build only view-required mip levels by default; false retains full chains for GPU comparisons. */
+    adaptiveMipmaps?: boolean;
     displayCache?: boolean;
+    /** Use fused Smudge coverage by default; false retains the multipass reference for GPU verification. */
+    directSmudge?: boolean;
+    /** Cache and batch mipmap passes; false retains TypeGPU's per-level helper for GPU comparisons. */
+    batchedMipmaps?: boolean;
+    /** Generate only mip levels used by Classic pickup; false builds all eight source levels for verification. */
+    adaptivePickupMipmaps?: boolean;
+    /** Submit pickup, carry and deposit together for each Smudge dab; false keeps separate submissions for verification. */
+    batchSmudgePasses?: boolean;
+    /** Share one submission across up to eight small-footprint Smudge dabs; false submits every dab for verification. */
+    batchSmudgeDabs?: boolean;
     overviewStorage?: OverviewStorage;
     readTile?: (pixels: TileData) => Promise<Uint8Array>;
     virtualTexture?: boolean;
     onRefine?: () => void;
+    /** Awaited between complete sampling dabs, after their GPU writes are submitted.
+     * May render/present progress. Must not paint, finish, cancel, reset or replace this renderer.
+     */
+    onPaintProgress?: () => Promise<void>;
     onError?: (error: unknown) => void;
   } = {}
 ) {
@@ -76,14 +101,29 @@ export async function createPaintRenderer(
   let historySource: Layer | undefined;
   let historyTexture: ReturnType<typeof historyTarget> | undefined;
   let mixerWells: ReturnType<typeof createMixerWells> | undefined;
+  let smudgePickup: ReturnType<typeof createSmudgePickup> | undefined;
   let previousSmudge: Point | undefined;
   let smudgeSecondary: Dab[] = [];
   let pickup: ReturnType<typeof createCanvasPickup> | undefined;
   let animateSelection = true;
   // Match virtual pages so touching a magnified tile does not change existing artwork's filtering.
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
-  const displayCache = createDisplayCache(root, sampler);
+  const mipmaps = createTileMipmaps(root);
+  const generateMipmaps = options.batchedMipmaps === false ? undefined : mipmaps;
+  const ensureMipmaps = (tile: { texture: TgpuTexture & RenderFlag; mipLevelReady: number }, requested: number) => {
+    const last = Math.max(0, Math.min((tile.texture.props.mipLevelCount ?? 1) - 1, requested));
+    if (last <= tile.mipLevelReady) return;
+    if (generateMipmaps) generateMipmaps(tile.texture, tile.mipLevelReady, last);
+    else tile.texture.generateMipmaps(tile.mipLevelReady, last - tile.mipLevelReady + 1);
+    tile.mipLevelReady = last;
+  };
+  const displayCache = createDisplayCache(root, sampler, generateMipmaps);
   const cache = new Map<string, ReturnType<typeof createTile>>();
+  const samplingScratch: ReturnType<typeof createStrokeScratch>[] = [];
+  let sharedScratch = false;
+  let residentLimit = Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES);
+  const scratchLimit = Math.min(32, residentLimit);
+  const reserveSamplingScratch = commandSlots(scratchLimit);
   const spareTiles: ReturnType<typeof createTile>[] = [];
   const tailTiles = new Map<string, Dab[]>();
   // A small reusable pool, independent of committed scratch and its eviction/readback lifecycle.
@@ -228,7 +268,7 @@ export async function createPaintRenderer(
       tile.used = ++frame;
       return tile;
     }
-    if (cache.size >= Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES)) {
+    if (cache.size >= residentLimit) {
       // Submit every command referencing victims before readback or recycling their resources.
       batch?.flush();
       // Amortize readback synchronization over a small LRU batch as the stroke grows.
@@ -236,7 +276,7 @@ export async function createPaintRenderer(
       const victims = [...cache].sort((a, b) => a[1].used - b[1].used).slice(0, count);
       // A tile loaded only for pickup still matches its saved snapshot. Reading it
       // back again makes large smudge footprints thrash the CPU/GPU boundary.
-      const active = victims.filter(([id, tile]) => strokeTiles.has(id) && tile.mask && tile.strokeDirty);
+      const active = victims.filter(([id, tile]) => strokeTiles.has(id) && tile.strokeDirty);
       if (active.length) {
         const channels = transientCoverage ? 1 : abrActive ? 4 : 2;
         const snapshots = active.map(([id]) => ({ id, snapshot: strokeTiles.get(id)! }));
@@ -245,9 +285,11 @@ export async function createPaintRenderer(
             channels === 1
               ? [root.unwrap(tile.texture)]
               : [
-                  root.unwrap(tile.mask!),
+                  root.unwrap(tile.scratch!.mask),
                   root.unwrap(tile.texture),
-                  ...(abrActive ? [root.unwrap(tile.abr!.paint), root.unwrap(tile.abr!.dualMask)] : [])
+                  ...(abrActive
+                    ? [root.unwrap(tile.scratch!.abr!.paint), root.unwrap(tile.scratch!.abr!.dualMask)]
+                    : [])
                 ]
           )
         );
@@ -285,22 +327,22 @@ export async function createPaintRenderer(
     tile = spareTiles.pop();
     if (tile) {
       replacePixels(device, root.unwrap(tile.texture), pixels, batch);
-      tile.mipmapsDirty = true;
+      tile.mipLevelReady = 0;
     } else tile = createTile(root, pixels, sampler);
     tile.strokeDirty = false;
     try {
       tile.used = ++frame;
-      if (active) {
-        prepareStroke(root, tile);
+      if (active && !sharedScratch) {
+        const scratch = prepareStroke(root, tile);
         if (!transientCoverage) {
-          replacePixels(device, root.unwrap(tile.base!), await readTile(active.before), batch);
-          replacePixels(device, root.unwrap(tile.mask!), active.mask, batch);
+          replacePixels(device, root.unwrap(scratch.base), await readTile(active.before), batch);
+          replacePixels(device, root.unwrap(scratch.mask), active.mask, batch);
         }
         if (abrActive) {
-          tile.abr ??= abrStamps!.createTile(tile.base!, tile.mask!, STAMP_CAPACITY);
+          scratch.abr ??= abrStamps!.createTile(scratch.base, scratch.mask, STAMP_CAPACITY);
           if (!transientCoverage) {
-            replacePixels(device, root.unwrap(tile.abr.paint), active.abrPaint, batch);
-            replacePixels(device, root.unwrap(tile.abr.dualMask), active.abrDual, batch);
+            replacePixels(device, root.unwrap(scratch.abr.paint), active.abrPaint, batch);
+            replacePixels(device, root.unwrap(scratch.abr.dualMask), active.abrDual, batch);
           }
         }
       }
@@ -325,64 +367,63 @@ export async function createPaintRenderer(
   ) => {
     const temporary: ReturnType<typeof createTile> =
       tailPool[slot] ?? (tailPool[slot] = createTile(root, undefined, sampler));
-    prepareStroke(root, temporary);
+    const scratch = prepareStroke(root, temporary);
     const commands = commandBatch(device);
     commands
       .encoder()
       .copyTextureToTexture(
-        { texture: root.unwrap(active ? original.base! : original.texture) },
-        { texture: root.unwrap(temporary.base!) },
+        { texture: root.unwrap(active ? original.scratch!.base : original.texture) },
+        { texture: root.unwrap(scratch.base) },
         [TILE_SIZE, TILE_SIZE]
       );
     if (active)
       commands
         .encoder()
-        .copyTextureToTexture({ texture: root.unwrap(original.mask!) }, { texture: root.unwrap(temporary.mask!) }, [
-          TILE_SIZE,
-          TILE_SIZE
-        ]);
-    else clearAttachment(commands.encoder(), temporary.maskRender!);
+        .copyTextureToTexture(
+          { texture: root.unwrap(original.scratch!.mask) },
+          { texture: root.unwrap(scratch.mask) },
+          [TILE_SIZE, TILE_SIZE]
+        );
+    else clearAttachment(commands.encoder(), scratch.maskRender);
     if (abrActive) {
-      temporary.abr ??= abrStamps!.createTile(temporary.base!, temporary.mask!, STAMP_CAPACITY);
+      scratch.abr ??= abrStamps!.createTile(scratch.base, scratch.mask, STAMP_CAPACITY);
       for (const field of ['paint', 'dualMask'] as const) {
         if (active)
           commands
             .encoder()
             .copyTextureToTexture(
-              { texture: root.unwrap(original.abr![field]) },
-              { texture: root.unwrap(temporary.abr[field]) },
+              { texture: root.unwrap(original.scratch!.abr![field]) },
+              { texture: root.unwrap(scratch.abr[field]) },
               [TILE_SIZE, TILE_SIZE]
             );
-        else clearAttachment(commands.encoder(), root.unwrap(temporary.abr[field]).createView());
+        else clearAttachment(commands.encoder(), root.unwrap(scratch.abr[field]).createView());
       }
     }
     for (let offset = 0; offset < tail.length; offset += STAMP_CAPACITY) {
       if (offset) commands.flush();
       const stamps = tail.slice(offset, offset + STAMP_CAPACITY);
       if (abrActive) {
-        abrStamps!.draw(temporary.abr!, commands.encoder(), stamps, x, y);
+        abrStamps!.draw(scratch.abr!, commands.encoder(), stamps, x, y);
         continue;
       }
       const data = new Float32Array(stamps.length * 4);
       stamps.forEach((dab, i) => data.set([dab.x - x * TILE_SIZE, dab.y - y * TILE_SIZE, dab.radius, dab.flow], i * 4));
-      device.queue.writeBuffer(root.unwrap(temporary.stamps), 0, data);
-      const pass = commands
-        .encoder()
-        .beginRenderPass({ colorAttachments: [{ view: temporary.maskRender!, loadOp: 'load', storeOp: 'store' }] });
-      if (texturedPipeline)
-        texturedPipeline.with(pass).with(shader.stampLayout, temporary.stamps).draw(6, stamps.length);
-      else
-        pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, temporary.stamps).draw(6, stamps.length);
+      device.queue.writeBuffer(root.unwrap(scratch.stamps), 0, data);
+      const pass = commands.encoder().beginRenderPass({
+        colorAttachments: [{ view: scratch.maskRender, loadOp: 'load', storeOp: 'store' }]
+      });
+      if (texturedPipeline) texturedPipeline.with(pass).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
+      else pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
       pass.end();
     }
     const pass = commands
       .encoder()
       .beginRenderPass({ colorAttachments: [{ view: temporary.render, loadOp: 'clear', storeOp: 'store' }] });
-    if (abrActive) abrStamps!.composite(temporary.abr!, pass);
-    else pipelines.stroke.with(pass).with(brushGroup).with(temporary.strokeGroup!).draw(3);
+    if (abrActive) abrStamps!.composite(scratch.abr!, pass);
+    else pipelines.stroke.with(pass).with(brushGroup).with(scratch.strokeGroup).draw(3);
     pass.end();
     commands.flush();
-    temporary.mipmapsDirty = true;
+    temporary.mipLevelReady = 0;
     return temporary;
   };
 
@@ -390,7 +431,8 @@ export async function createPaintRenderer(
   async function paintStamps(
     dabs: readonly Dab[],
     sampled?: NonNullable<Parameters<ReturnType<typeof createAbrStamps>['composite']>[2]>,
-    onlyTile?: string
+    onlyTile?: string,
+    batch?: ReturnType<typeof commandBatch>
   ) {
     if (!stroke || !dabs.length) return;
     const groups = new Map<string, Dab[]>();
@@ -408,7 +450,7 @@ export async function createPaintRenderer(
           }
           group.push(dab);
         }
-    const commands = commandBatch(device);
+    const commands = batch ?? commandBatch(device);
     let pendingTiles = 0;
     try {
       for (const [key, dabs] of groups) {
@@ -439,24 +481,38 @@ export async function createPaintRenderer(
         const tile = await ensure(stroke.layer, key, commands);
         const [tx, ty] = coordinates(key);
         const bounds = stampBounds(dabs, tx, ty);
+        const direct =
+          !!sampled &&
+          !!smudge &&
+          options.directSmudge !== false &&
+          abrStamps!.canDrawDirect() &&
+          dabs.length === 1 &&
+          !dabs[0]!.abr?.secondary;
+        const scratch = sharedScratch
+          ? (samplingScratch[reserveSamplingScratch(commands)] ??= createStrokeScratch(root))
+          : prepareStroke(root, tile);
+        if (abrActive) scratch.abr ??= abrStamps!.createTile(scratch.base, scratch.mask, STAMP_CAPACITY);
         const firstTouch = !strokeTiles.has(id);
-        if (firstTouch) {
-          strokeTiles.set(id, { before: stroke.layer.tiles.get(key) });
-          prepareStroke(root, tile);
+        if (firstTouch || sharedScratch) {
+          if (firstTouch) strokeTiles.set(id, { before: stroke.layer.tiles.get(key) });
+          const region = sharedScratch && bounds ? bounds : { x: 0, y: 0, width: TILE_SIZE, height: TILE_SIZE };
+          const origin = { x: region.x, y: region.y };
           commands
             .encoder()
-            .copyTextureToTexture({ texture: root.unwrap(tile.texture) }, { texture: root.unwrap(tile.base!) }, [
-              TILE_SIZE,
-              TILE_SIZE
-            ]);
-          clearAttachment(commands.encoder(), tile.maskRender!);
+            .copyTextureToTexture(
+              { texture: root.unwrap(tile.texture), origin },
+              { texture: root.unwrap(scratch.base), origin },
+              [region.width, region.height]
+            );
+          if (!direct) clearAttachment(commands.encoder(), scratch.maskRender);
           if (abrActive) {
-            tile.abr ??= abrStamps!.createTile(tile.base!, tile.mask!, STAMP_CAPACITY);
-            clearAttachment(commands.encoder(), tile.abr.paintView);
-            clearAttachment(commands.encoder(), tile.abr.dualView);
+            if (!direct) {
+              clearAttachment(commands.encoder(), scratch.abr!.paintView);
+              clearAttachment(commands.encoder(), scratch.abr!.dualView);
+            }
           }
         }
-        if (sampled && !firstTouch && bounds) {
+        if (sampled && !firstTouch && !sharedScratch && bounds) {
           // Smudge composites each step over the previous step. Immutable history remains in strokeTiles.before.
           // The composite reads base only inside its scissor; refresh that rectangle instead of the whole tile.
           // Sampling tools do not use disposable tails, which would need a complete pre-stroke base.
@@ -465,31 +521,34 @@ export async function createPaintRenderer(
             .encoder()
             .copyTextureToTexture(
               { texture: root.unwrap(tile.texture), origin },
-              { texture: root.unwrap(tile.base!), origin },
+              { texture: root.unwrap(scratch.base), origin },
               [bounds.width, bounds.height]
             );
-          clearAttachment(commands.encoder(), tile.maskRender!);
-          clearAttachment(commands.encoder(), tile.abr!.paintView);
+          if (!direct) {
+            clearAttachment(commands.encoder(), scratch.maskRender);
+            clearAttachment(commands.encoder(), scratch.abr!.paintView);
+          }
         }
-        for (let offset = 0; offset < dabs.length; offset += STAMP_CAPACITY) {
+        for (let offset = 0; !direct && offset < dabs.length; offset += STAMP_CAPACITY) {
           // The same instance buffer must not be overwritten before its previous draw is submitted.
           if (offset) commands.flush();
           const stamps = dabs.slice(offset, offset + STAMP_CAPACITY);
           if (abrActive) {
-            abrStamps!.draw(tile.abr!, commands.encoder(), stamps, tx, ty);
+            abrStamps!.draw(scratch.abr!, commands.encoder(), stamps, tx, ty);
             continue;
           }
           const data = new Float32Array(stamps.length * 4);
           stamps.forEach((dab, index) =>
             data.set([dab.x - tx * TILE_SIZE, dab.y - ty * TILE_SIZE, dab.radius, dab.flow], index * 4)
           );
-          device.queue.writeBuffer(root.unwrap(tile.stamps), 0, data);
+          device.queue.writeBuffer(root.unwrap(scratch.stamps), 0, data);
           const pass = commands.encoder().beginRenderPass({
-            colorAttachments: [{ view: tile.maskRender!, loadOp: 'load', storeOp: 'store' }]
+            colorAttachments: [{ view: scratch.maskRender, loadOp: 'load', storeOp: 'store' }]
           });
           if (texturedPipeline)
-            texturedPipeline.with(pass).with(shader.stampLayout, tile.stamps).draw(6, stamps.length);
-          else pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, tile.stamps).draw(6, stamps.length);
+            texturedPipeline.with(pass).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
+          else
+            pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
           pass.end();
         }
         // Output depends on the final accumulated mask, so composite once per touched region.
@@ -499,33 +558,32 @@ export async function createPaintRenderer(
             colorAttachments: [{ view: tile.render, loadOp: 'load', storeOp: 'store' }]
           });
           pass.setScissorRect(bounds.x, bounds.y, bounds.width, bounds.height);
-          if (abrActive)
-            abrStamps!.composite(
-              tile.abr!,
-              pass,
-              (historyPickup ?? sampled)
-                ? {
-                    ...(historyPickup ?? sampled)!,
-                    x: tx * TILE_SIZE - (historyPickup ?? sampled)!.x,
-                    y: ty * TILE_SIZE - (historyPickup ?? sampled)!.y
-                  }
-                : undefined
-            );
-          else pipelines.stroke.with(pass).with(brushGroup).with(tile.strokeGroup!).draw(3);
+          if (abrActive) {
+            const captured = historyPickup ?? sampled;
+            const pickup = captured
+              ? {
+                  ...captured,
+                  x: tx * TILE_SIZE - captured.x,
+                  y: ty * TILE_SIZE - captured.y
+                }
+              : undefined;
+            if (direct) abrStamps!.draw(scratch.abr!, commands.encoder(), dabs, tx, ty, { pass, pickup: pickup! });
+            else abrStamps!.composite(scratch.abr!, pass, pickup);
+          } else pipelines.stroke.with(pass).with(brushGroup).with(scratch.strokeGroup).draw(3);
           pass.end();
         }
-        tile.mipmapsDirty = true;
+        tile.mipLevelReady = 0;
         tile.strokeDirty = true;
-        displayCache.remove(id);
+        displayCache.remove(id, batch?.flush);
         markTile(key);
-        if (++pendingTiles === 32) {
+        if (++pendingTiles === (sharedScratch ? scratchLimit : 32)) {
           commands.flush();
           pendingTiles = 0;
         }
       }
     } finally {
       // An I/O failure must not discard commands for previously processed tiles in this batch.
-      commands.flush();
+      if (!batch) commands.flush();
     }
   }
 
@@ -534,30 +592,48 @@ export async function createPaintRenderer(
     layers: readonly Layer[],
     allLayers = false,
     exact = false,
-    linear = false
+    linear = false,
+    commands?: ReturnType<typeof commandBatch>
   ) {
-    pickup ??= createCanvasPickup(root, async (layer, key, minify) => {
+    pickup ??= createCanvasPickup(root, async (layer, key, minify, flush, requiredMip) => {
       const id = keyFor(layer, key);
       const snapshot = strokeTiles.get(id);
       if (!layer.tiles.has(key) && !snapshot) return undefined;
       let tile;
-      if (cache.has(id) || options.displayCache === false) tile = await ensure(layer, key);
-      else {
+      if (cache.has(id)) tile = await ensure(layer, key);
+      else if (options.displayCache === false) {
+        flush();
+        tile = await ensure(layer, key);
+      } else {
         // Pickup is read-only. Restoring brush scratch here evicts destination
         // tiles for every large footprint, causing repeated GPU readback/reupload.
         // Reuse the bounded immutable cache, always at full document resolution.
         if (snapshot?.pending) unwrapResult(await snapshot.pending);
         const source = snapshot?.output ?? layer.tiles.get(key);
-        if (!source) return undefined;
-        tile = displayCache.find(id, source, 1) ?? displayCache.get(id, (await readTile(source))!, 1, source);
+        // Only immutable nonresident snapshots may prove emptiness. Resident GPU
+        // ink can already be newer than the last packed snapshot.
+        if (!source || isEmptyPackedTile(source)) return undefined;
+        const beforeInvalidate = options.batchPickupUploads === false ? () => flush() : flush;
+        tile = displayCache.find(id, source, 1, beforeInvalidate);
+        if (!tile) {
+          // Only destruction of an encoded source requires submission; fresh uploads can stay in the batch.
+          if (options.batchPickupUploads === false) flush();
+          const pixels = (await readTile(source))!;
+          if (isEmptyPackedTile(pixels)) return undefined;
+          tile = displayCache.get(id, pixels, 1, source, beforeInvalidate);
+        }
       }
-      if (minify && tile.mipmapsDirty) {
-        tile.texture.generateMipmaps();
-        tile.mipmapsDirty = false;
+      if (minify) {
+        const last = options.adaptivePickupMipmaps === false ? 8 : requiredMip;
+        if (last > tile.mipLevelReady) {
+          // Earlier dabs may still be encoded. Mipmap generation submits independently.
+          flush();
+          ensureMipmaps(tile, last);
+        }
       }
       return tile.texture;
     });
-    return pickup.capture(region, layers, { allLayers, exact, linear });
+    return pickup.capture(region, layers, { allLayers, exact, linear, commands });
   }
 
   /** Keep each source halo unchanged until every dependent tile has read it. Outputs stay GPU-owned. */
@@ -674,6 +750,7 @@ export async function createPaintRenderer(
     stats() {
       return {
         residentTiles: cache.size + spareTiles.length,
+        samplingScratchTiles: samplingScratch.length,
         readback: readbacks.stats(),
         previewTileDraws,
         viewportUpdate,
@@ -702,8 +779,10 @@ export async function createPaintRenderer(
           (canvasFilter?.bytes() ?? 0) +
           (historyTexture ? TILE_SIZE * TILE_SIZE * 4 : 0) +
           (mixerWells?.bytes ?? 0) +
+          (smudgePickup?.bytes() ?? 0) +
+          samplingScratch.reduce((sum, scratch) => sum + scratchBytes(scratch), 0) +
           [...cache.values(), ...spareTiles, ...tailPool].reduce(
-            (n, tile) => n + TILE_SIZE * TILE_SIZE * 4 * (4 / 3 + (tile.base ? 2 : 0) + (tile.abr ? 2 : 0)),
+            (sum, tile) => sum + (TILE_SIZE * TILE_SIZE * 4 * 4) / 3 + (tile.scratch ? scratchBytes(tile.scratch) : 0),
             0
           )
       };
@@ -731,8 +810,34 @@ export async function createPaintRenderer(
       filter = abr?.filter;
       mixer = abr?.mixer;
       transientCoverage = !!(smudge || filter || mixer) && !(abr?.values.useDualBrush && abr.dual);
+      const nextShared = transientCoverage && options.sharedScratch !== false;
+      if (nextShared !== sharedScratch) {
+        // Keep the previous texture budget: each freed four-texture scratch set buys three mipmapped tiles.
+        residentLimit = Math.max(
+          1,
+          options.cacheTiles ?? (nextShared ? MAX_RESIDENT_TILES * 4 - scratchLimit * 3 : MAX_RESIDENT_TILES)
+        );
+        for (const tile of spareTiles) destroyTile(tile);
+        spareTiles.length = 0;
+        if (nextShared) {
+          for (const tile of cache.values()) {
+            if (tile.scratch) destroyStrokeScratch(tile.scratch);
+            tile.scratch = undefined;
+          }
+        } else {
+          for (const scratch of samplingScratch) destroyStrokeScratch(scratch);
+          samplingScratch.length = 0;
+          const victims = [...cache].sort((a, b) => a[1].used - b[1].used);
+          for (const [id, tile] of victims.slice(0, Math.max(0, cache.size - residentLimit))) {
+            destroyTile(tile);
+            cache.delete(id);
+          }
+        }
+        sharedScratch = nextShared;
+      }
       historySource = abr?.historySource;
       previousSmudge = undefined;
+      smudgePickup?.reset();
       smudgeSecondary = [];
       texturedPipeline = tip
         ? (texturedStamps ??= createTexturedStamps(root)).prepare(tip.resource, tip.angle)
@@ -779,45 +884,101 @@ export async function createPaintRenderer(
       if (!smudge && !mixer && !filter) return paintStamps(dabs);
       if (smudge?.strength === 0 || filter?.strength === 0) return;
       smudgeSecondary.push(...dabs.filter((dab) => dab.abr?.secondary));
-      for (const dab of dabs) {
-        if (dab.abr?.secondary) continue;
-        if (filter) {
-          await paintFiltered(dab, smudgeSecondary);
+      const batchDabs =
+        !!smudge && sharedScratch && options.batchSmudgePasses !== false && options.batchSmudgeDabs !== false;
+      const shared = batchDabs ? commandBatch(device) : undefined;
+      let pendingDabs = 0;
+      let presentedAt = performance.now();
+      try {
+        for (const dab of dabs) {
+          if (dab.abr?.secondary) continue;
+          if (filter) {
+            await paintFiltered(dab, smudgeSecondary);
+            smudgeSecondary = [];
+            if (options.onPaintProgress) await options.onPaintProgress();
+            continue;
+          }
+          const first = !previousSmudge;
+          const previous = previousSmudge ?? dab;
+          previousSmudge = { x: dab.x, y: dab.y };
+          const radius = Math.max(1, dab.radius);
+          const center = dab;
+          const region = { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 };
+          const tool = mixer ?? smudge!;
+          const commands = shared ?? (smudge && options.batchSmudgePasses !== false ? commandBatch(device) : undefined);
+          // Cross-dab batching helps submission-bound small footprints. Large dabs
+          // already batch many tile passes and gain little from retaining extra scratch.
+          const largeFootprint = radius > TILE_SIZE / 4;
+          if (largeFootprint) shared?.flush();
+          try {
+            const canvas = await captureRegion(
+              region,
+              tool.layers,
+              tool.allLayers,
+              false,
+              !!smudge && retouchLinear,
+              commands
+            );
+            const carried = smudge
+              ? (smudgePickup ??= createSmudgePickup(root)).step(
+                  canvas,
+                  smudge.strength,
+                  retouchLinear,
+                  first && smudge.fingerPainting
+                    ? dab.abr
+                      ? [dab.abr.data[12]!, dab.abr.data[13]!, dab.abr.data[14]!]
+                      : hexColor(stroke!.brush.color)
+                    : undefined,
+                  commands
+                )
+              : undefined;
+            if (first && smudge && !smudge.fingerPainting) {
+              smudgeSecondary = [];
+              continue;
+            }
+            const patch = mixer
+              ? mixerWells!.step(
+                  canvas,
+                  dab.abr?.mixing?.wet ?? mixer.wet,
+                  dab.abr?.mixing?.mix ?? mixer.mix,
+                  dab.flow,
+                  first ? 0 : Math.hypot(dab.x - previous.x, dab.y - previous.y) / (radius * 2)
+                )
+              : carried!;
+            await paintStamps(
+              [...smudgeSecondary, dab],
+              {
+                patch,
+                x: dab.x - radius,
+                y: dab.y - radius,
+                width: radius * 2,
+                height: radius * 2,
+                strength: first && smudge?.fingerPainting ? smudge.strength : 1,
+                clip: carried?.clip,
+                fingerPainting: first && (smudge?.fingerPainting ?? false),
+                mixer: !!mixer
+              },
+              undefined,
+              commands
+            );
+          } finally {
+            // A single-dab owner submits here, including pickup-only initialization.
+            if (!shared) commands?.flush();
+          }
           smudgeSecondary = [];
-          continue;
+          if (!shared || largeFootprint || ++pendingDabs >= 8 || performance.now() - presentedAt >= 8) {
+            shared?.flush();
+            pendingDabs = 0;
+            if (options.onPaintProgress) await options.onPaintProgress();
+            presentedAt = performance.now();
+          }
         }
-        const first = !previousSmudge;
-        const previous = previousSmudge ?? dab;
-        previousSmudge = { x: dab.x, y: dab.y };
-        if (first && smudge && !smudge.fingerPainting) continue;
-        const radius = Math.max(1, dab.radius);
-        const center = mixer ? dab : previous;
-        const region = { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 };
-        const tool = mixer ?? smudge!;
-        const canvas = await captureRegion(region, tool.layers, tool.allLayers, false, !!smudge && retouchLinear);
-        const patch = mixer
-          ? mixerWells!.step(
-              canvas,
-              dab.abr?.mixing?.wet ?? mixer.wet,
-              dab.abr?.mixing?.mix ?? mixer.mix,
-              dab.flow,
-              first ? 0 : Math.hypot(dab.x - previous.x, dab.y - previous.y) / (radius * 2)
-            )
-          : canvas;
-        await paintStamps([...smudgeSecondary, dab], {
-          patch,
-          x: dab.x - radius,
-          y: dab.y - radius,
-          width: radius * 2,
-          height: radius * 2,
-          strength: smudge?.strength ?? 1,
-          fingerPainting: first && (smudge?.fingerPainting ?? false),
-          mixer: !!mixer
-        });
-        smudgeSecondary = [];
+      } finally {
+        shared?.flush();
       }
+      if (shared && options.onPaintProgress) await options.onPaintProgress();
     },
-    /** Copies resident touched tiles in one submission/map; retains scratch textures for subsequent strokes. */
+    /** Commits touched pixels in bounded readback chunks; retains reusable GPU resources for subsequent strokes. */
     async finish(): Promise<TileChange[]> {
       if (!stroke) return [];
       setTail([]);
@@ -825,11 +986,16 @@ export async function createPaintRenderer(
         if (result) unwrapResult(result);
       const changes: TileChange[] = [];
       const resident = [...strokeTiles.keys()].filter((id) => cache.has(id));
-      const pixels = await readTextures(
-        device,
-        resident.map((id) => root.unwrap(cache.get(id)!.texture))
-      );
-      const outputs = new Map(resident.map((id, index) => [id, pixels[index]!]));
+      // Expanding pixel residency must not expand the temporary commit buffer beyond its previous 32 MiB.
+      const outputs = new Map<string, Uint8Array>();
+      for (let offset = 0; offset < resident.length; offset += MAX_RESIDENT_TILES) {
+        const ids = resident.slice(offset, offset + MAX_RESIDENT_TILES);
+        const pixels = await readTextures(
+          device,
+          ids.map((id) => root.unwrap(cache.get(id)!.texture))
+        );
+        ids.forEach((id, index) => outputs.set(id, packTile(pixels[index]!)));
+      }
       for (const [id, data] of strokeTiles) {
         const after = outputs.get(id) ?? data.output;
         const key = id.slice(stroke.layer.id.length + 1);
@@ -843,6 +1009,7 @@ export async function createPaintRenderer(
       }
       strokeTiles.clear();
       if (mixer) mixerWells!.finish();
+      smudgePickup?.reset();
       stroke = undefined;
       historySource = undefined;
       virtual?.invalidate();
@@ -858,6 +1025,7 @@ export async function createPaintRenderer(
     /** Discards preview pixels and restores the committed document on the next render. */
     cancel() {
       mixerWells?.cancel();
+      smudgePickup?.reset();
       invalidateOtherTargets();
       setTail([]);
       if (strokeTiles.size) {
@@ -879,6 +1047,7 @@ export async function createPaintRenderer(
     /** Invalidates cached pixels after undo, redo, import, or layer deletion. */
     reset() {
       mixerWells?.cancel();
+      smudgePickup?.reset();
       invalidateOtherTargets();
       setTail([]);
       completeView = undefined;
@@ -890,6 +1059,8 @@ export async function createPaintRenderer(
       for (const tile of [...cache.values(), ...spareTiles]) destroyTile(tile);
       cache.clear();
       spareTiles.length = 0;
+      for (const scratch of samplingScratch) destroyStrokeScratch(scratch);
+      samplingScratch.length = 0;
       strokeTiles.clear();
       readbacks.clear();
       stroke = undefined;
@@ -1026,9 +1197,15 @@ export async function createPaintRenderer(
                     displayCache.get(id, (await readTile(source))!, camera.zoom * scale, source));
               if (tail) tile = prepareTail(cache.get(id)!, !!snapshot, tail, tailSlot++, x, y);
               // Magnified tiles sample level zero. Build the mip chain only when a view needs it.
-              if (tile.mipmapsDirty && camera.zoom * scale < 1) {
-                tile.texture.generateMipmaps();
-                tile.mipmapsDirty = false;
+              const mipScale = camera.zoom * Math.min(width / size.width, height / size.height);
+              if (mipScale < 1) {
+                // Keep one level beyond the ideal LOD for trilinear filtering and viewport rounding.
+                // Coarse cache entries already represent fewer texels across the same document tile.
+                const required =
+                  options.adaptiveMipmaps === false
+                    ? 8
+                    : Math.ceil(Math.log2(tile.texture.props.size[0] / (TILE_SIZE * mipScale))) + 1;
+                ensureMipmaps(tile, required);
               }
               tile.camera.write({
                 size: d.vec2f(size.width, size.height),
@@ -1122,6 +1299,7 @@ export async function createPaintRenderer(
       historyTexture?.destroy();
       pickup?.destroy();
       mixerWells?.destroy();
+      smudgePickup?.destroy();
       canvasFilter?.destroy();
       texturedStamps?.destroy();
       texturedPipeline = undefined;
@@ -1135,6 +1313,8 @@ export async function createPaintRenderer(
       for (const tile of [...cache.values(), ...spareTiles]) destroyTile(tile);
       cache.clear();
       spareTiles.length = 0;
+      for (const scratch of samplingScratch) destroyStrokeScratch(scratch);
+      samplingScratch.length = 0;
       strokeTiles.clear();
       brushBuffer.destroy();
       device.removeEventListener('uncapturederror', uncapturedError);
@@ -1194,7 +1374,6 @@ function makeTexture(root: TgpuRoot, mipmaps = false) {
     .createTexture({ size: [TILE_SIZE, TILE_SIZE], format: 'rgba8unorm', mipLevelCount: mipmaps ? 9 : 1 })
     .$usage('sampled', 'render');
 }
-type TileTexture = ReturnType<typeof makeTexture>;
 function createTile(root: TgpuRoot, pixels: Uint8Array | undefined, sampler: ReturnType<TgpuRoot['createSampler']>) {
   const texture = makeTexture(root, true);
   writePixels(root.device, root.unwrap(texture), pixels);
@@ -1202,35 +1381,49 @@ function createTile(root: TgpuRoot, pixels: Uint8Array | undefined, sampler: Ret
   return {
     texture,
     render: root.unwrap(texture).createView({ baseMipLevel: 0, mipLevelCount: 1 }),
-    mipmapsDirty: true,
+    mipLevelReady: 0,
     camera,
     viewGroup: root.createBindGroup(shader.viewLayout, { view: camera, image: texture, sampler }),
-    stamps: root.createBuffer(d.arrayOf(d.vec4f, STAMP_CAPACITY)).$usage('vertex'),
     strokeDirty: false,
-    base: undefined as TileTexture | undefined,
-    mask: undefined as TileTexture | undefined,
-    maskRender: undefined as GPUTextureView | undefined,
-    strokeGroup: undefined as ReturnType<typeof root.createBindGroup<typeof shader.strokeLayout.entries>> | undefined,
-    abr: undefined as AbrTile | undefined,
+    scratch: undefined as ReturnType<typeof createStrokeScratch> | undefined,
     used: 0
   };
 }
 
-/** Reuses per-tile scratch allocations; a new stroke copies the base and clears its mask on the GPU. */
+/** Persistent coverage belongs to a pixel tile; sampling tools borrow a separate submitted batch slot. */
 function prepareStroke(root: TgpuRoot, tile: ReturnType<typeof createTile>) {
-  if (tile.base) return;
-  tile.base = makeTexture(root);
-  tile.mask = makeTexture(root);
-  tile.maskRender = root.unwrap(tile.mask).createView();
-  tile.strokeGroup = root.createBindGroup(shader.strokeLayout, { base: tile.base, mask: tile.mask });
+  return (tile.scratch ??= createStrokeScratch(root));
 }
+
+function createStrokeScratch(root: TgpuRoot) {
+  const base = makeTexture(root);
+  const mask = makeTexture(root);
+  return {
+    base,
+    mask,
+    maskRender: root.unwrap(mask).createView(),
+    strokeGroup: root.createBindGroup(shader.strokeLayout, { base, mask }),
+    stamps: root.createBuffer(d.arrayOf(d.vec4f, STAMP_CAPACITY)).$usage('vertex'),
+    abr: undefined as AbrTile | undefined
+  };
+}
+
+/** Texture and instance-buffer footprint; small uniforms/bindings are excluded from this estimate. */
+function scratchBytes(scratch: ReturnType<typeof createStrokeScratch>) {
+  return TILE_SIZE * TILE_SIZE * 4 * (2 + (scratch.abr ? 2 : 0)) + STAMP_CAPACITY * (16 + (scratch.abr ? 64 : 0));
+}
+
+function destroyStrokeScratch(scratch: ReturnType<typeof createStrokeScratch>) {
+  scratch.abr?.destroy();
+  scratch.mask.destroy();
+  scratch.base.destroy();
+  scratch.stamps.destroy();
+}
+
 function destroyTile(tile: ReturnType<typeof createTile>) {
-  tile.abr?.destroy();
+  if (tile.scratch) destroyStrokeScratch(tile.scratch);
   tile.texture.destroy();
-  tile.mask?.destroy();
-  tile.base?.destroy();
   tile.camera.destroy();
-  tile.stamps.destroy();
 }
 
 function createView(root: TgpuRoot, width: number, height: number) {
@@ -1293,19 +1486,6 @@ async function readTextures(device: GPUDevice, textures: GPUTexture[]): Promise<
     buffer.destroy();
   }
 }
-/** Lazily groups independent tile passes. Flush before readback, slot reuse, or instance-buffer reuse. */
-function commandBatch(device: GPUDevice) {
-  let encoder: GPUCommandEncoder | undefined;
-  return {
-    encoder: () => (encoder ??= device.createCommandEncoder()),
-    flush() {
-      if (!encoder) return;
-      device.queue.submit([encoder.finish()]);
-      encoder = undefined;
-    }
-  };
-}
-
 /** Assigns every level-zero pixel when recycling a slot, including transparent source/base/mask. */
 function replacePixels(
   device: GPUDevice,

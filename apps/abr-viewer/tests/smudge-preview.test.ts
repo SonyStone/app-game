@@ -1,6 +1,8 @@
+import { d } from 'typegpu';
 import { expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
+import { createSmudgePickup, smudgeStep } from '../src/features/brush-preview/smudge';
 import { createPreviewStroke, stampStride, type PreviewInput } from '../src/features/brush-preview/stroke';
 
 test('Smudge first contact picks up ink; Finger Painting deposits foreground instead', () => {
@@ -104,3 +106,60 @@ function pixel(pixels: Uint8ClampedArray, x: number, y: number) {
   return Array.from(pixels.slice((y * 64 + x) * 4, (y * 64 + x) * 4 + 4));
 }
 const tip = { width: 1, height: 1, depth: 8 as const, data: new Uint8Array([255]) };
+
+test('Smudge retains mixed ink across successive dabs, rather than recapturing only the last canvas patch', () => {
+  const input = fixture();
+  input.values.tool.strength = 50;
+  const pickup = createSmudgePickup();
+  const step = smudgeStep(twoStamps(input), 0);
+  const blank = () => d.vec4f(0);
+  pickup(input, step, () => d.vec4f(1, 0, 0, 1), blank);
+  pickup(input, step, () => d.vec4f(0, 0, 1, 1), blank);
+  const carried = pickup(input, step, () => d.vec4f(0, 1, 0, 1), blank)(step.x - 0.5, step.y - 0.5);
+  expect(carried.x).toBeCloseTo(64 / 255, 5);
+  expect(carried.y).toBeCloseTo(128 / 255, 5);
+  expect(carried.z).toBeCloseTo(64 / 255, 5);
+});
+
+test('growing Smudge pickup captures the new ring without stretching carried edge pixels into it', () => {
+  const input = fixture();
+  const pickup = createSmudgePickup();
+  const first = smudgeStep(twoStamps(input), 0);
+  const blank = () => d.vec4f(0);
+  pickup(input, first, () => d.vec4f(1, 0, 0, 1), blank);
+  const larger = {
+    ...first,
+    radius: first.radius * 2,
+    region: {
+      x: first.x - first.radius * 2,
+      y: first.y - first.radius * 2,
+      width: first.radius * 4,
+      height: first.radius * 4
+    }
+  };
+  const carried = pickup(input, larger, () => d.vec4f(0, 0, 1, 1), blank);
+  expect(carried(first.x - 0.5, first.y - 0.5)).toEqual(d.vec4f(1, 0, 0, 1));
+  expect(carried(first.x + first.radius * 1.6, first.y - 0.5)).toEqual(d.vec4f(0, 0, 1, 1));
+});
+
+test('Finger Painting foreground remains in the Smudge bank after leaving the first contact', () => {
+  const input = fixture();
+  input.values.tool.fingerPainting = true;
+  const output = renderPreviewPixels(input, tip, twoStamps(input));
+  expect(pixel(output, 46, 12)).toEqual([255, 0, 0, 255]);
+});
+
+test('a newly grown Smudge ring samples all layers without depositing them before it has carried ink', () => {
+  const input = fixture();
+  input.path![0]!.y = 0.5;
+  input.values.tool.smudgeAllLayers = true;
+  const stroke = twoStamps(input);
+  stroke.data[2] = 2;
+  stroke.data[3] = 2;
+  input.values.tool.strength = 0;
+  const baseline = renderPreviewPixels(input, tip, stroke);
+  input.values.tool.strength = 100;
+  const result = renderPreviewPixels(input, tip, stroke);
+  expect(pixel(result, 52, 24)).toEqual(pixel(baseline, 52, 24));
+  expect(pixel(result, 46, 24)).not.toEqual(pixel(baseline, 46, 24));
+});

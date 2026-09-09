@@ -9,7 +9,7 @@ import { paintModes } from '@app-game/abr-brush/paintBlend';
 import { d, std } from 'typegpu';
 import { renderMixerPixels } from './mixer';
 import { retouchBounds, retouchFixture } from './retouch-image';
-import { smudgePickup, smudgeSourceBounds, smudgeStep } from './smudge';
+import { createSmudgePickup, smudgeSourceBounds, smudgeStep } from './smudge';
 import { stampStride, type PreviewInput, type PreviewStroke } from './stroke';
 
 /** Resource swatches bypass image retouching even when the owning preset is a retouch tool. */
@@ -31,17 +31,19 @@ export function renderRetouchPixels(
     0,
     paintModes.findIndex((mode) => mode === input.values.tool.mode)
   );
+  const carry = createSmudgePickup();
   for (let stamp = 0; stamp < stroke.count; stamp++) {
     const bounds = retouchBounds(input, stroke, stamp);
-    if (!bounds || input.values.tool.strength === 0) continue;
     const smudge = input.values.tool.type === 'SmTl';
-    if (smudge && stamp === 0 && !input.values.tool.fingerPainting) continue;
+    if ((!bounds && !smudge) || input.values.tool.strength === 0) continue;
     const coverage = mask({ count: 1, data: stroke.data.subarray(stamp * stampStride, (stamp + 1) * stampStride) });
-    const left = Math.max(0, bounds.x - 1),
-      right = Math.min(input.width, bounds.x + bounds.width + 1);
-    for (let y = Math.max(0, bounds.y - 1); y < Math.min(input.height, bounds.y + bounds.height + 1); y++) {
-      const start = (y * input.width + left) * 4;
-      snapshot.set(layer.subarray(start, (y * input.width + right) * 4), start);
+    if (bounds) {
+      const left = Math.max(0, bounds.x - 1),
+        right = Math.min(input.width, bounds.x + bounds.width + 1);
+      for (let y = Math.max(0, bounds.y - 1); y < Math.min(input.height, bounds.y + bounds.height + 1); y++) {
+        const start = (y * input.width + left) * 4;
+        snapshot.set(layer.subarray(start, (y * input.width + right) * 4), start);
+      }
     }
     const step = smudge ? smudgeStep(stroke, stamp) : undefined;
     const sourceBounds = step && smudgeSourceBounds(input, step);
@@ -54,7 +56,14 @@ export function renderRetouchPixels(
       x < 0 || y < 0 || x >= input.width || y >= input.height
         ? d.vec4f(0)
         : readPixel(pixels, (y * input.width + x) * 4);
-    const pickup = step && smudgePickup(input, step, source(snapshot), source(below));
+    const colorOffset = stamp * stampStride + 12;
+    const foreground =
+      smudge && stamp === 0 && input.values.tool.fingerPainting
+        ? d.vec3f(stroke.data[colorOffset]!, stroke.data[colorOffset + 1]!, stroke.data[colorOffset + 2]!)
+        : undefined;
+    const pickup = step && carry(input, step, source(snapshot), source(below), foreground);
+    const previous = smudge && stamp > 0 ? smudgeStep(stroke, stamp - 1) : undefined;
+    if (!bounds || (smudge && stamp === 0 && !input.values.tool.fingerPainting)) continue;
     const read = (x: number, y: number) => {
       const i =
         (Math.max(0, Math.min(input.height - 1, y)) * input.width + Math.max(0, Math.min(input.width - 1, x))) * 4;
@@ -66,9 +75,17 @@ export function renderRetouchPixels(
     for (let y = bounds.y; y < bounds.y + bounds.height; y++) {
       for (let x = bounds.x; x < bounds.x + bounds.width; x++) {
         const i = y * input.width + x;
-        const amount = (coverage(i) * input.values.tool.strength) / 100;
+        const amount = coverage(i) * (smudge && stamp > 0 ? 1 : input.values.tool.strength / 100);
         if (amount === 0) continue;
-        if (pickup) {
+        if (pickup && step) {
+          if (
+            previous &&
+            (x + 0.5 - step.x < -previous.radius ||
+              x + 0.5 - step.x >= previous.radius ||
+              y + 0.5 - step.y < -previous.radius ||
+              y + 0.5 - step.y >= previous.radius)
+          )
+            continue;
           const base = readPixel(snapshot, i * 4);
           const colorOffset = stamp * stampStride + 12;
           const result =

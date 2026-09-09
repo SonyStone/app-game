@@ -1,6 +1,8 @@
 import { planCanvasPickup, sampleMixing } from '@app-game/abr-brush/effects';
 import { common, d, std, tgpu, type SampledFlag, type TgpuRoot, type TgpuTexture } from 'typegpu';
 import type { Layer } from '../document';
+import { commandBatch } from './commandBatch';
+import { commandSlots } from './commandSlots';
 import { compositeFragment, compositeLayout } from './shaders';
 export { planCanvasPickup } from '@app-game/abr-brush/effects';
 
@@ -8,17 +10,31 @@ export { planCanvasPickup } from '@app-game/abr-brush/effects';
 export type PickupRegion = { x: number; y: number; width: number; height: number };
 
 /** Captures committed/current-stroke pixels into a reusable GPU patch for tools that sample the canvas.
- * The host supplies current level-zero tiles and submits their pending writes before resolving getTile.
- * Each returned texture is borrowed until the next capture or destroy; submit consumers before recapturing.
+ * The host supplies current level-zero tiles; pending writes must precede reads in the borrowed batch or be submitted.
+ * getTile receives the highest mip needed by capture and must call flush(texture) before destroying/recycling a source; flush() submits unconditionally.
+ * Each returned texture is borrowed; submit consumers or encode them in the same batch before recapturing.
  * Capture calls must be serialized. No GPU-to-CPU readback is performed by this module.
  */
 export function createCanvasPickup(
   root: TgpuRoot,
-  getTile: (layer: Layer, key: string, minify: boolean) => Promise<(TgpuTexture & SampledFlag) | undefined>
+  getTile: (
+    layer: Layer,
+    key: string,
+    minify: boolean,
+    flush: (source?: TgpuTexture) => void,
+    requiredMip: number
+  ) => Promise<(TgpuTexture & SampledFlag) | undefined>
 ) {
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
   const mixing = root.createBuffer(d.u32).$usage('uniform');
-  const tileParams = root.createBuffer(d.vec4f).$usage('uniform');
+  // One placement per encoded draw. Reusing a shared uniform would move earlier
+  // tiles when the queue receives the final write before a batched submission.
+  const slots = Array.from({ length: 32 }, () => ({
+    placement: root.createBuffer(d.vec4f).$usage('uniform'),
+    groups: new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof tileLayout.entries>>>()
+  }));
+  const reserve = commandSlots(slots.length);
+  let uploadedMixing: boolean | undefined;
   const layerParams = root.createBuffer(d.vec4f).$usage('uniform');
   const tilePipeline = root.createRenderPipeline({
     vertex: tileVertex,
@@ -41,15 +57,31 @@ export function createCanvasPickup(
     async capture(
       region: PickupRegion,
       layers: readonly Layer[],
-      options: { allLayers?: boolean; maxDimension?: number; exact?: boolean; linear?: boolean } = {}
+      options: {
+        allLayers?: boolean;
+        maxDimension?: number;
+        exact?: boolean;
+        linear?: boolean;
+        /** Borrow a batch for single-layer capture; consumers must use this batch or submit it before texture reuse. */
+        commands?: ReturnType<typeof commandBatch>;
+      } = {}
     ) {
       if (disposed) throw new Error('Canvas pickup has been disposed.');
       if (busy) throw new Error('Canvas pickup calls must be serialized.');
       const plan = planCanvasPickup(region, options.maxDimension ?? 1024, options.exact);
+      // Trilinear filtering needs at most the next level above its largest derivative.
+      const ratio = Math.max(region.width / plan.width, region.height / plan.height);
+      const minify = !options.linear && ratio > 1;
+      const requiredMip = minify ? Math.min(8, Math.ceil(Math.log2(ratio)) + 1) : 0;
       busy = true;
-      mixing.write(options.linear ? 1 : 0);
+      if (uploadedMixing !== !!options.linear) {
+        options.commands?.flush();
+        mixing.write(options.linear ? 1 : 0);
+        uploadedMixing = !!options.linear;
+      }
       try {
         if (!scratch || scratch.width !== plan.width || scratch.height !== plan.height) {
+          options.commands?.flush();
           scratch?.destroy();
           scratch = createScratch(root, plan.width, plan.height);
         }
@@ -59,45 +91,76 @@ export function createCanvasPickup(
         // Current-layer pickup is already the final premultiplied image. It needs
         // neither a transparent base nor a full-screen identity composite per dab.
         const direct = layers.length === 1 && !options.allLayers;
-        if (!direct) clear(root, result);
+        const commands = direct ? (options.commands ?? commandBatch(root.device)) : commandBatch(root.device);
+        if (!direct) {
+          // Layer compositing submits independently and must see earlier encoded dabs.
+          options.commands?.flush();
+          clear(root, result);
+        }
         for (const layer of layers) {
           if (options.allLayers && (!layer.visible || layer.opacity <= 0)) continue;
           const target = direct ? result : patch.layer;
+          const targetView = root.unwrap(target).createView();
           let populated = false;
-          for (let y = plan.minY; y <= plan.maxY; y++)
-            for (let x = plan.minX; x <= plan.maxX; x++) {
-              // Smooth sampling explicitly reads level zero before decoding color.
-              // Its unused mip chain must not be rebuilt for every changed source tile.
-              const minify = !options.linear && (plan.width < region.width || plan.height < region.height);
-              const tile = await getTile(layer, `${x},${y}`, minify);
-              if (disposed) throw new Error('Canvas pickup was disposed during capture.');
-              if (!tile) continue;
-              // Subtract the world origin on the CPU so large coordinates retain local pixel precision.
-              tileParams.write(
-                d.vec4f(
-                  (x * 256 - region.x) / region.width,
-                  (y * 256 - region.y) / region.height,
-                  256 / region.width,
-                  256 / region.height
-                )
-              );
-              const encoder = root.device.createCommandEncoder();
-              const pass = encoder.beginRenderPass({
-                colorAttachments: [
-                  { view: root.unwrap(target).createView(), loadOp: populated ? 'load' : 'clear', storeOp: 'store' }
-                ]
-              });
-              tilePipeline
-                .with(pass)
-                .with(root.createBindGroup(tileLayout, { image: tile, sampler, placement: tileParams, mixing }))
-                .draw(6);
-              pass.end();
-              // Submit before the next lookup may recycle this tile's cache slot or rewrite the shared uniform.
-              root.device.queue.submit([encoder.finish()]);
-              populated = true;
-            }
+          let pass: GPURenderPassEncoder | undefined;
+          const pendingSources = new Set<TgpuTexture>();
+          const flush = (source?: TgpuTexture) => {
+            if (source && !options.commands && !pendingSources.has(source)) return;
+            pass?.end();
+            pass = undefined;
+            pendingSources.clear();
+            commands.flush();
+          };
+          try {
+            for (let y = plan.minY; y <= plan.maxY; y++)
+              for (let x = plan.minX; x <= plan.maxX; x++) {
+                // Smooth sampling explicitly reads level zero before decoding color.
+                // Its unused mip chain must not be rebuilt for every changed source tile.
+                const tile = await getTile(layer, `${x},${y}`, minify, flush, requiredMip);
+                if (disposed) throw new Error('Canvas pickup was disposed during capture.');
+                if (!tile) continue;
+                // Subtract the world origin on the CPU so large coordinates retain local pixel precision.
+                const slot = slots[reserve(commands, flush)]!;
+                slot.placement.write(
+                  d.vec4f(
+                    (x * 256 - region.x) / region.width,
+                    (y * 256 - region.y) / region.height,
+                    256 / region.width,
+                    256 / region.height
+                  )
+                );
+                pass ??= commands.encoder().beginRenderPass({
+                  colorAttachments: [{ view: targetView, loadOp: populated ? 'load' : 'clear', storeOp: 'store' }]
+                });
+                let group = slot.groups.get(tile);
+                if (!group) {
+                  group = root.createBindGroup(tileLayout, { image: tile, sampler, placement: slot.placement, mixing });
+                  slot.groups.set(tile, group);
+                }
+                tilePipeline.with(pass).with(group).draw(6);
+                pendingSources.add(tile);
+                populated = true;
+              }
+            if (direct && options.commands) {
+              pass?.end();
+              pass = undefined;
+            } else flush();
+          } catch (error) {
+            // Close the pass on failure. Owned commands are discarded; a borrowed
+            // batch may submit scratch-only writes during owner cleanup. No patch escapes.
+            pass?.end();
+            throw error;
+          }
           // An empty capture must not expose pixels left by the preceding dab.
-          if (!populated) clear(root, target);
+          if (!populated) {
+            commands
+              .encoder()
+              .beginRenderPass({
+                colorAttachments: [{ view: targetView, loadOp: 'clear', storeOp: 'store' }]
+              })
+              .end();
+            if (!direct || !options.commands) commands.flush();
+          }
           if (direct) continue;
           layerParams.write(
             d.vec4f(
@@ -107,16 +170,16 @@ export function createCanvasPickup(
               0
             )
           );
-          const encoder = root.device.createCommandEncoder();
-          const pass = encoder.beginRenderPass({
+          const compositeEncoder = root.device.createCommandEncoder();
+          const compositePass = compositeEncoder.beginRenderPass({
             colorAttachments: [{ view: root.unwrap(output).createView(), loadOp: 'clear', storeOp: 'store' }]
           });
           composite
-            .with(pass)
+            .with(compositePass)
             .with(root.createBindGroup(compositeLayout, { base: result, layer: patch.layer, settings: layerParams }))
             .draw(3);
-          pass.end();
-          root.device.queue.submit([encoder.finish()]);
+          compositePass.end();
+          root.device.queue.submit([compositeEncoder.finish()]);
           [result, output] = [output, result];
         }
         return { texture: result, region: { ...region }, width: plan.width, height: plan.height };
@@ -132,7 +195,7 @@ export function createCanvasPickup(
       scratch?.destroy();
       scratch = undefined;
       mixing.destroy();
-      tileParams.destroy();
+      for (const slot of slots) slot.placement.destroy();
       layerParams.destroy();
     }
   };

@@ -2,6 +2,14 @@ import { d, std } from 'typegpu';
 import { linearSourceOver, mixPremultiplied } from './colorMixing';
 import { paintBlend } from './paintBlend';
 
+/** Refreshes a stroke-local Smudge pickup. Strength retains old paint, independently of tip coverage.
+ * The recurrence follows the sampled Photoshop Smudge path; native 8-bit dithering is not reproduced.
+ */
+export function smudgeCarry(canvas: d.v4f, previous: d.v4f, strength: number, linear: boolean) {
+  'use gpu';
+  return mixPremultiplied(canvas, previous, strength, linear);
+}
+
 /** Finishes a premultiplied 3×3 Gaussian filter. Protect Detail limits unsharp ringing
  * to the neighbourhood's straight RGB range. Native Photoshop calibration remains pending.
  */

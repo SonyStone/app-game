@@ -13,6 +13,7 @@ import { verifyAbrPencil } from './abrPencilVerification';
 import { verifyAbrSmudge } from './abrSmudgeVerification';
 import { verifyCanvasPickup } from './canvasPickupVerification';
 import { createPaintRenderer } from './renderer';
+import { verifySamplingScratch } from './samplingScratchVerification';
 
 /** Runs against the real GPU in an isolated document. Eviction must preserve every ABR accumulator. */
 export async function verifyAbrBrush(report: (message: string) => void) {
@@ -131,6 +132,7 @@ export async function verifyAbrBrush(report: (message: string) => void) {
   await verifyAbrEraser(report);
   await verifyCanvasPickup(report);
   await verifyAbrSmudge(report);
+  await verifySamplingScratch(report);
   await verifyAbrMixer(report);
   await verifyAbrFilter(report);
   await verifyAbrPencil(report);

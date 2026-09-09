@@ -119,13 +119,17 @@ Count = 3:  •   •   •   •
 ### Scatter Calculation
 
 1. For each spacing interval, place `Count` brush marks
-2. Each mark is offset from the path by a random value up to `Scatter %` of brush diameter
+2. For the primary brush, `Scatter %` of the brush diameter is the full distribution width; each side extends half that distance
 3. If `Both Axes` is checked, offset in both X and Y; otherwise only perpendicular
 4. Apply Control modulation to scatter distance
 
 ### Count Minimum
 
-Count minimum is always 1 - you cannot have 0 brush marks.
+The Count control has a minimum value of 1. Count Jitter can still produce a spacing interval with no marks. The sampler varies count on both sides of the selected value, rounds to an integer, and clamps the result to zero. For example, Count 3 with 100% jitter can emit 0–6 marks; 1% jitter still emits 3 marks at full pressure. Native Photoshop probes support this model; the exact random sequence is not reproduced.
+
+### Sampled Smudge specialization
+
+Primary sampled `SmTl` uses the separately recovered native path: Both Axes chooses radius and angle instead of independent square X/Y offsets. Its count starts at `trunc(1 + (Count - 1) × control)`; signed jitter is rounded and bounded by the truncated jitter amplitude before clamping count to zero. First-group handling also differs. Other tools and dual tips keep the model above. See [Wet Blender measurements](../../../abr-brush/fixtures/photoshop-wet-blender/README.md) for scope and remaining parity limits.
 
 ### Performance Consideration
 

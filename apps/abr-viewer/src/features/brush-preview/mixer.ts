@@ -8,7 +8,7 @@ import { previewColor, stampStride, type PreviewInput, type PreviewStroke } from
 export function mixerSteps(input: PreviewInput, stroke: PreviewStroke) {
   let remaining = input.values.tool.load / 100;
   return Array.from({ length: stroke.count }, (_, index) => {
-    const step = smudgeStep(stroke, index);
+    const step = smudgeStep(stroke, index, 'previous');
     const dose = mixerDose(
       remaining,
       stroke.data[index * stampStride + 8]!,

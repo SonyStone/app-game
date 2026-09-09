@@ -171,3 +171,80 @@ it.each([false, true])(
     }
   }
 );
+
+it('presents progress inside one expensive pointer segment without letting release overtake its dabs', async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  let elapsed = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
+  let progress: (() => Promise<void>) | undefined;
+  const order: string[] = [];
+  const renderer = {
+    preview: vi.fn(),
+    setSelection: vi.fn(),
+    begin: vi.fn(),
+    paint: vi.fn(async (dabs: readonly Dab[]) => {
+      if (!dabs.length) return;
+      // Model one sparse pointer segment expanding into six expensive GPU dabs.
+      for (let i = 0; i < 6; i++) {
+        order.push(`dab-${i}`);
+        elapsed += 5;
+        await progress?.();
+      }
+    }),
+    render: vi.fn(async () => {
+      order.push('render');
+    }),
+    submitted: vi.fn(async () => {}),
+    finish: vi.fn(async () => {
+      order.push('finish');
+      return [];
+    }),
+    prepareOverview: vi.fn(async () => {}),
+    stats: () => ({ gpuBytes: 0, residentTiles: 0 })
+  };
+  dependencies.renderer.mockImplementation(async (_canvas, _lost, options) => {
+    progress = options.onPaintProgress;
+    return renderer;
+  });
+  dependencies.store.mockResolvedValue({
+    load: async () => undefined,
+    capture: (pixels: unknown) => pixels,
+    save: async () => {},
+    stats: () => undefined
+  });
+  const events: PaintEvent[] = [];
+  const worker = {
+    onmessage: undefined as ((event: MessageEvent<PaintCommand>) => void) | undefined,
+    postMessage: (event: PaintEvent) => events.push(event)
+  };
+  vi.stubGlobal('self', worker);
+  await import('./paint.worker');
+  const send = (command: PaintCommand) => worker.onmessage!({ data: command } as MessageEvent<PaintCommand>);
+  const until = async (condition: () => boolean) => {
+    for (let i = 0; i < 500; i++) {
+      if (condition()) return;
+      await Promise.resolve();
+    }
+    throw new Error(`Expected worker progress: ${order.join(', ')}`);
+  };
+  send({ type: 'init', canvas: {} as OffscreenCanvas, size: { width: 256, height: 256 }, dpr: 1 });
+  await until(() => events.some((event) => event.type === 'ready'));
+  order.length = 0;
+  send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 128, y: 128, pressure: 1, time: 1 }] });
+  send({ type: 'end' });
+  await until(() => order.includes('finish'));
+  expect(progress).toBeTypeOf('function');
+  expect(order.slice(0, 9)).toEqual([
+    'dab-0',
+    'dab-1',
+    'render',
+    'dab-2',
+    'dab-3',
+    'render',
+    'dab-4',
+    'dab-5',
+    'render'
+  ]);
+  expect(order.indexOf('finish')).toBeGreaterThan(order.lastIndexOf('dab-5'));
+});

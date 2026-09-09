@@ -9,7 +9,8 @@ import {
   mixPremultiplied,
   retouchColor,
   retouchCompositeInSpace,
-  sampleMixing
+  sampleMixing,
+  smudgeCarry
 } from '@app-game/abr-brush/effects';
 import { common, d, std, tgpu, type TgpuBindGroup, type TgpuRoot } from 'typegpu';
 import { mixerSteps } from './mixer';
@@ -17,7 +18,7 @@ import { retouchBounds, retouchFixture } from './retouch-image';
 import { compositeLayout, previewCoverage } from './shaders';
 import { smudgeSourceBounds, smudgeStep } from './smudge';
 import type { PreviewInput, PreviewStroke } from './stroke';
-import { previewColor } from './stroke';
+import { previewColor, stampStride } from './stroke';
 
 /** Bounded GPU scratch for sequential retouching. Each stamp reads an unchanged one-pixel halo. */
 export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
@@ -28,6 +29,11 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
   const capture = root.createRenderPipeline({
     vertex: stepVertex,
     fragment: captureFragment,
+    targets: { format: 'rgba8unorm' }
+  });
+  const updateCarry = root.createRenderPipeline({
+    vertex: stepVertex,
+    fragment: carryFragment,
     targets: { format: 'rgba8unorm' }
   });
   const updateWells = root.createRenderPipeline({
@@ -62,17 +68,18 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
     ) {
       colorMixing.write(input.colorMixing === 'linear' && input.values.tool.type !== 'MixB' ? 1 : 0);
       const mixer = input.values.tool.type === 'MixB';
+      const smudge = input.values.tool.type === 'SmTl';
       if (
         !target ||
         target.mixer !== mixer ||
+        target.smudge !== smudge ||
         target.width !== input.width ||
         target.height !== input.height ||
         target.dpr !== input.dpr
       ) {
         target?.destroy();
-        target = createTarget(input.width, input.height, input.dpr, mixer);
+        target = createTarget(input.width, input.height, input.dpr, mixer, smudge);
       }
-      const smudge = input.values.tool.type === 'SmTl';
       const mixing = mixer ? mixerSteps(input, stroke) : undefined;
       const placements = mixing
         ? mixing
@@ -82,7 +89,21 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
       if (smudge || mixer) {
         const data = new Float32Array(stroke.count * 16);
         for (const [i, step] of placements.entries()) {
-          data.set([step.x, step.y, step.radius, step.size, step.sourceX, step.sourceY, 0, 0], i * 16);
+          const previous = placements[i - 1];
+          data.set(
+            [
+              step.x,
+              step.y,
+              step.radius,
+              step.size,
+              step.sourceX,
+              step.sourceY,
+              previous?.radius ?? 0,
+              previous?.size ?? 0
+            ],
+            i * 16
+          );
+          if (smudge) data.set(stroke.data.subarray(i * stampStride + 12, i * stampStride + 15), i * 16 + 12);
           const controls = mixing?.[i];
           if (controls)
             data.set(
@@ -122,8 +143,7 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
       }
       for (let index = 0; index < stroke.count; index++) {
         const bounds = retouchBounds(input, stroke, index);
-        if (!mixer && (!bounds || input.values.tool.strength === 0)) continue;
-        if (smudge && index === 0 && !input.values.tool.fingerPainting) continue;
+        if (!mixer && ((!bounds && !smudge) || input.values.tool.strength === 0)) continue;
         if (bounds) {
           const x = Math.max(0, bounds.x - 1),
             y = Math.max(0, bounds.y - 1);
@@ -143,7 +163,7 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
             { texture: root.unwrap(target.snapshot), origin: [source.x, source.y] },
             [source.width, source.height]
           );
-        if (step && (mixer || index > 0)) {
+        if (step) {
           const pass = encoder.beginRenderPass({
             colorAttachments: [{ view: target.patchView, loadOp: 'clear', storeOp: 'store' }]
           });
@@ -151,6 +171,17 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
           pass.setScissorRect(0, 0, step.size, step.size);
           capture.with(pass).with(target.captureGroup).draw(3, 1, 0, index);
           pass.end();
+        }
+        if (smudge && step && target.carry) {
+          const back = 1 - front;
+          const pass = encoder.beginRenderPass({
+            colorAttachments: [{ view: target.carry.views[back]!, loadOp: 'clear', storeOp: 'store' }]
+          });
+          pass.setViewport(0, 0, step.size, step.size, 0, 1);
+          pass.setScissorRect(0, 0, step.size, step.size);
+          updateCarry.with(pass).with(target.carry.updateGroups[front]!).draw(3, 1, 0, index);
+          pass.end();
+          front = back;
         }
         if (target.wells) {
           const back = 1 - front;
@@ -169,13 +200,17 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
           composeWells.with(compose).with(target.wells.groups[front]!).draw(3, 1, 0, index);
           compose.end();
         }
-        if (!bounds) continue;
+        if (!bounds || (smudge && index === 0 && !input.values.tool.fingerPainting)) continue;
         mask(encoder, index);
         const pass = encoder.beginRenderPass({
           colorAttachments: [{ view: target.view, loadOp: 'load', storeOp: 'store' }]
         });
         pass.setScissorRect(bounds.x, bounds.y, bounds.width, bounds.height);
-        filter.with(pass).with(coverage).with(target.filterGroup).draw(3, 1, 0, index);
+        filter
+          .with(pass)
+          .with(coverage)
+          .with(smudge ? target.carry!.filterGroups[front]! : target.filterGroup)
+          .draw(3, 1, 0, index);
         pass.end();
       }
       const pass = encoder.beginRenderPass({ colorAttachments: [{ view: output, loadOp: 'clear', storeOp: 'store' }] });
@@ -185,7 +220,7 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
     }
   };
 
-  function createTarget(width: number, height: number, dpr: number, mixer: boolean) {
+  function createTarget(width: number, height: number, dpr: number, mixer: boolean, smudge: boolean) {
     const create = () =>
       root.createTexture({ size: [width, height], format: 'rgba8unorm' }).$usage('sampled', 'render');
     const layer = create(),
@@ -193,6 +228,11 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
       below = create(),
       seed = create();
     const patch = root.createTexture({ size: [1024, 1024], format: 'rgba8unorm' }).$usage('sampled', 'render');
+    const carryTextures = !smudge
+      ? undefined
+      : Array.from({ length: 2 }, () =>
+          root.createTexture({ size: [1024, 1024], format: 'rgba8unorm' }).$usage('sampled', 'render')
+        );
     const wellTexture = () =>
       root.createTexture({ size: [256, 256], format: 'rgba16float' }).$usage('sampled', 'render');
     const wellTextures = mixer ? Array.from({ length: 5 }, wellTexture) : undefined;
@@ -202,11 +242,17 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
       settings,
       colorMixing,
       patch,
+      carry: seed,
       sampler,
       steps,
       reservoir: seed,
       pickup: seed,
       dabPaint: wellTextures?.[4] ?? seed
+    };
+    const carry = carryTextures && {
+      views: carryTextures.map((texture) => root.unwrap(texture).createView()),
+      updateGroups: carryTextures.map((texture) => root.createBindGroup(layout, { ...commonGroup, carry: texture })),
+      filterGroups: carryTextures.map((texture) => root.createBindGroup(layout, { ...commonGroup, patch: texture }))
     };
     const wells = wellTextures && {
       reservoirViews: [root.unwrap(wellTextures[0]!).createView(), root.unwrap(wellTextures[1]!).createView()],
@@ -233,7 +279,9 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
     }
     return {
       mixer,
+      smudge,
       wells,
+      carry,
       width,
       height,
       dpr,
@@ -252,6 +300,7 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
         snapshot.destroy();
         below.destroy();
         patch.destroy();
+        carryTextures?.forEach((texture) => texture.destroy());
         wellTextures?.forEach((texture) => texture.destroy());
       }
     };
@@ -259,6 +308,7 @@ export function createRetouchPreview(root: TgpuRoot, format: GPUTextureFormat) {
 }
 
 const layout = tgpu.bindGroupLayout({
+  carry: { texture: d.texture2d() },
   reservoir: { texture: d.texture2d() },
   pickup: { texture: d.texture2d() },
   dabPaint: { texture: d.texture2d() },
@@ -326,6 +376,35 @@ const captureFragment = tgpu.fragmentFn({
   return pixel;
 });
 
+/** Brush-local bank overlap survives diameter changes without stretching the carried paint. */
+const carryFragment = tgpu.fragmentFn({
+  in: { position: d.builtin.position, step: d.interpolate('flat', d.u32) },
+  out: d.vec4f
+})((input) => {
+  'use gpu';
+  const fresh = std.textureLoad(layout.$.patch, d.vec2i(input.position.xy), 0);
+  if (input.step === 0) {
+    if (layout.$.settings.z > 0)
+      return smudgeCarry(
+        fresh,
+        d.vec4f(layout.$.steps[input.step * 4 + 3]!.rgb, 1),
+        layout.$.settings.x,
+        layout.$.colorMixing > 0
+      );
+    return fresh;
+  }
+  const step = layout.$.steps[input.step * 4]!;
+  const previous = layout.$.steps[input.step * 4 + 1]!;
+  const oldUv = std.add(
+    std.mul(std.sub(std.div(input.position.xy, step.w), d.vec2f(0.5)), step.z / previous.z),
+    d.vec2f(0.5)
+  );
+  if (oldUv.x < 0 || oldUv.y < 0 || oldUv.x >= 1 || oldUv.y >= 1) return fresh;
+  const oldPixel = std.clamp(std.mul(oldUv, previous.w), d.vec2f(0.5), d.vec2f(previous.w - 0.5));
+  const carried = sampleMixing(layout.$.carry, layout.$.sampler, std.div(oldPixel, 1024), layout.$.colorMixing > 0);
+  return smudgeCarry(fresh, carried, layout.$.settings.x, layout.$.colorMixing > 0);
+});
+
 /** Matches Paint's RGBA8 capture of either the active layer or the visible composite. */
 function readSource(xy: d.v2i) {
   'use gpu';
@@ -356,18 +435,27 @@ const filterFragment = tgpu.fragmentFn({
   }
   if (layout.$.settings.y === 2) {
     const base = std.textureLoad(layout.$.image, xy, 0);
-    const amount = previewCoverage(input.position) * layout.$.settings.x;
+    const amount = previewCoverage(input.position);
     if (input.step === 0) {
       const paint = std.textureLoad(compositeLayout.$.paint, xy, 0);
       return fingerPaintCompositeInSpace(
         base,
         std.div(paint.rgb, std.max(0.00001, paint.a)),
-        amount,
+        amount * layout.$.settings.x,
         compositeLayout.$.params.extra.w,
         layout.$.colorMixing > 0
       );
     }
     const step = layout.$.steps[input.step * 4]!;
+    const previous = layout.$.steps[input.step * 4 + 1]!;
+    const oldOffset = std.sub(input.position.xy, step.xy);
+    if (
+      oldOffset.x < -previous.z ||
+      oldOffset.y < -previous.z ||
+      oldOffset.x >= previous.z ||
+      oldOffset.y >= previous.z
+    )
+      return base;
     const patchPixel = std.mul(
       std.div(std.add(std.sub(input.position.xy, step.xy), d.vec2f(step.z)), step.z * 2),
       step.w

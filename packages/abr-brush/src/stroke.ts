@@ -20,6 +20,8 @@ export type PreviewInput = {
   /** Unique per gesture on a canvas; allows completed frames to display while the same stroke continues. */
   strokeId?: number;
   tipScale?: number;
+  /** Defaults to primary Scatter's full width. Dual tips retain the legacy radius model pending native parity. */
+  scatterExtent?: 'width' | 'radius';
   /** Renders a resource swatch instead of a stroke, through the same worker queue. */
   resourcePreview?: 'tip' | 'dual' | 'pattern';
 };
@@ -76,7 +78,7 @@ export function createPreviewStroke(input: PreviewInput, tip: Pick<BrushTipImage
  * There is no total-stroke stamp cap. Callers should submit input batches regularly.
  */
 export function createAbrStrokeSampler(
-  input: Pick<PreviewInput, 'values' | 'color' | 'secondaryColor' | 'opacity' | 'flow'> & {
+  input: Pick<PreviewInput, 'values' | 'color' | 'secondaryColor' | 'opacity' | 'flow' | 'scatterExtent'> & {
     size: number;
     seed?: number;
     /** Preview-only budget. The document engine leaves this unset. */
@@ -100,9 +102,13 @@ export function createAbrStrokeSampler(
     ? { ...v.transfer, opacityControl: 2, opacityJitter: 0, opacityMinimum: 0 }
     : v.transfer;
   const buildUp = v.useBuildUp && supportsAirbrush(v.tool);
+  // Only the sampled Smudge route has been traced in Photoshop 2025.
+  const sampledSmudge = v.tool.type === 'SmTl' && v.tipKind === 'sampledBrush' && input.scatterExtent !== 'radius';
   const random = rng(input.seed ?? 0x6d2b79f5),
     colorRandom = rng((input.seed ?? 0x152dc2e1) ^ 0x124f),
-    mixingRandom = rng((input.seed ?? 0x152dc2e1) ^ 0x46b9);
+    mixingRandom = rng((input.seed ?? 0x152dc2e1) ^ 0x46b9),
+    scatterRandom = smudgeRandom((input.seed ?? 0x152dc2e1) ^ 3),
+    countRandom = smudgeRandom((input.seed ?? 0x152dc2e1) ^ 4);
   const size = input.size;
   let data: number[] = [];
   let mixing: number[] = [];
@@ -166,7 +172,9 @@ export function createAbrStrokeSampler(
         strokeColor,
         random: random.state(),
         color: colorRandom.state(),
-        mixing: mixingRandom.state()
+        mixing: mixingRandom.state(),
+        scatter: scatterRandom.state(),
+        count: countRandom.state()
       };
       try {
         return add(points);
@@ -175,6 +183,8 @@ export function createAbrStrokeSampler(
         random.restore(saved.random);
         colorRandom.restore(saved.color);
         mixingRandom.restore(saved.mixing);
+        scatterRandom.restore(saved.scatter);
+        countRandom.restore(saved.count);
         mixing = [];
         data = [];
       }
@@ -208,18 +218,31 @@ export function createAbrStrokeSampler(
     if (v.tipKind === 'dTips' && v.erodible.physics)
       sizeFactor *= 1 + Math.min(0.5, ((step * v.erodible.softness) / 100) * 0.002);
     const stampSize = Math.max(0.05, size * sizeFactor);
+    // Photoshop's primary Scatter percentage describes the entire distribution, not each side.
+    // At diameter 50 and Scatter 208%, centers span 104 pixels, or ±52 from the stroke.
     const scatterAmount = v.useScattering
-      ? ((size * scatter.scatter) / 100) * inputValue(scatter.control, scatter.fade)
+      ? ((size * scatter.scatter) / (input.scatterExtent === 'radius' ? 100 : 200)) *
+        inputValue(scatter.control, scatter.fade)
       : 0;
+    // Count Jitter varies around Count; empty intervals still advance spacing and fade below.
     const copies = v.useScattering
-      ? Math.max(
-          1,
-          Math.round(
-            scatter.count *
-              (1 - (random() * scatter.countJitter) / 100) *
-              inputValue(scatter.countControl, scatter.countFade)
+      ? sampledSmudge
+        ? step === 0 && !scatter.bothAxes
+          ? 1
+          : smudgeCount(
+              scatter.count,
+              inputValue(scatter.countControl, scatter.countFade),
+              scatter.countJitter,
+              countRandom
+            )
+        : Math.max(
+            0,
+            Math.round(
+              scatter.count *
+                (1 + ((random() * 2 - 1) * scatter.countJitter) / 100) *
+                inputValue(scatter.countControl, scatter.countFade)
+            )
           )
-        )
       : 1;
     for (let copy = 0; copy < copies && data.length / stampStride < (input.maxStamps ?? Infinity); copy++) {
       let angle = (v.angle * Math.PI) / 180;
@@ -240,8 +263,12 @@ export function createAbrStrokeSampler(
           angle += Math.atan2(ty, tx) + (rotation * Math.PI) / 180;
         }
       }
-      const along = v.useScattering && scatter.bothAxes ? (random() * 2 - 1) * scatterAmount : 0;
-      const across = (random() * 2 - 1) * scatterAmount;
+      let along: number, across: number;
+      if (sampledSmudge) [along, across] = smudgeScatter(scatterAmount, v.useScattering && scatter.bothAxes, scatterRandom);
+      else {
+        along = v.useScattering && scatter.bothAxes ? (random() * 2 - 1) * scatterAmount : 0;
+        across = (random() * 2 - 1) * scatterAmount;
+      }
       const flow = usesPencilCoverage(v.tool)
         ? 1
         : input.flow *
@@ -306,6 +333,44 @@ export function createAbrStrokeSampler(
   }
 }
 
+/** Applies sampled-Smudge count dynamics before bounded, signed integer jitter. */
+function smudgeCount(count: number, control: number, jitter: number, random: () => number): number {
+  const dynamicCount = Math.trunc(1 + (count - 1) * control);
+  if (jitter <= 0 || dynamicCount <= 0) return Math.max(0, dynamicCount);
+  const amplitude = dynamicCount * jitter * 0.01;
+  const bound = Math.trunc(amplitude);
+  const offset = Math.max(-bound, Math.min(bound, Math.floor((random() * 2 - 1) * amplitude + 0.5)));
+  return Math.max(0, dynamicCount + offset);
+}
+
+/** Native sampled-Smudge uses a signed radius, producing more marks near the center. */
+function smudgeScatter(amount: number, bothAxes: boolean, random: () => number): [number, number] {
+  if (amount <= 0) return [0, 0];
+  const radius = (random() * 2 - 1) * amount;
+  if (!bothAxes) return [0, radius];
+  // Photoshop 2025's recovered helper wraps 720/360, then calls sin/cos directly.
+  // Preserve its radians input; converting this value from degrees changes the distribution.
+  const angle = (((random() - 0.5) * 720) % 360 + 360) % 360;
+  return [Math.sin(angle) * radius, Math.cos(angle) * radius];
+}
+
+/** Park-Miller streams isolate native count/scatter channels. Host seeds are not Photoshop's seeds. */
+function smudgeRandom(seed: number) {
+  seed = ((seed >>> 0) % 2147483646) + 1;
+  const next = () => {
+    const quotient = Math.trunc(seed / 127773);
+    seed = 16807 * (seed - quotient * 127773) - 2836 * quotient;
+    if (seed < 0) seed += 2147483647;
+    return seed / 2147483648;
+  };
+  return Object.assign(next, {
+    state: () => seed,
+    restore: (value: number) => {
+      seed = value;
+    }
+  });
+}
+
 /** A secondary stroke masks the primary stroke; its size stays relative to the primary preset. */
 export function dualPreviewInput(input: PreviewInput): PreviewInput {
   const v = input.values,
@@ -313,6 +378,7 @@ export function dualPreviewInput(input: PreviewInput): PreviewInput {
   return {
     ...input,
     tipScale: d.diameter / Math.max(1, v.diameter),
+    scatterExtent: 'radius',
     color: '#ffffff',
     flow: 1,
     opacity: 1,

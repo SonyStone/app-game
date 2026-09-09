@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { packTile, unpackTile, TILE_BYTES } from './tilePixels';
-import { createDocument } from './document';
 import { defaultCamera } from './camera';
+import { createDocument } from './document';
 import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from './storage';
+import { isEmptyPackedTile, packTile, TILE_BYTES, unpackTile } from './tilePixels';
 
 describe('lossless sparse tiles', () => {
   it('preserves every byte of a soft diagonal and stores only its occupied runs', () => {
@@ -17,6 +17,43 @@ describe('lossless sparse tiles', () => {
     const pixels = new Uint8Array(TILE_BYTES).fill(57);
     expect(packTile(pixels)).toBe(pixels);
     expect(unpackTile(pixels)).toBe(pixels);
+  });
+  it('preserves the version-1 packet format for offset views and zero-alpha RGB', () => {
+    const storage = new Uint8Array(TILE_BYTES + 6).fill(99);
+    const pixels = storage.subarray(3, 3 + TILE_BYTES);
+    pixels.fill(0);
+    pixels.set([1, 2, 3, 0], 4);
+    expect(packTile(pixels)).toEqual(
+      Uint8Array.of(0x50, 0x4c, 0x54, 0x31, 1, 0, 0, 0x80, 1, 0, 0, 0, 1, 2, 3, 0, 0xfe, 0xff, 0, 0x80)
+    );
+    expect(unpackTile(packTile(pixels))).toEqual(pixels);
+    expect(storage.subarray(0, 3)).toEqual(Uint8Array.of(99, 99, 99));
+    expect(storage.subarray(-3)).toEqual(Uint8Array.of(99, 99, 99));
+  });
+  it('round-trips fragmented runs and returns raw data when run headers exceed the budget', () => {
+    const pixels = Uint8Array.from({ length: TILE_BYTES }, (_, i) => (Math.floor(i / 4) % 4 ? 0 : 57));
+    const packed = packTile(pixels);
+    expect(packed.byteLength).toBe(196612);
+    expect(unpackTile(packed)).toEqual(pixels);
+    for (let i = 0; i < TILE_BYTES; i += 8) pixels.set([57, 57, 57, 57], i);
+    expect(packTile(pixels)).toBe(pixels);
+  });
+  it('recognizes only validated empty packets, including offset views', () => {
+    const empty = packTile(new Uint8Array(TILE_BYTES));
+    const storage = new Uint8Array(11);
+    storage.set(empty, 3);
+    expect(isEmptyPackedTile(storage.subarray(3))).toBe(true);
+    for (const source of [
+      undefined,
+      new Uint8Array(TILE_BYTES),
+      new Uint8Array(8),
+      { storageId: 'empty', byteLength: 8 },
+      packTile(diagonal())
+    ])
+      expect(isEmptyPackedTile(source)).toBe(false);
+    empty[6] = 0;
+    expect(isEmptyPackedTile(empty)).toBe(false);
+    expect(() => unpackTile(empty)).toThrow();
   });
   it('rejects corrupt, truncated, overflowing and incomplete packets', () => {
     const packed = packTile(diagonal());

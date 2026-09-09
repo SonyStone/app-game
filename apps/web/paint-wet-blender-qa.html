@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Wet Blender comparison</title>
+  <style>
+    body {
+      font: 14px/1.5 system-ui;
+      margin: 24px;
+      color: #20353d;
+    }
+    button {
+      padding: 10px 20px;
+    }
+    pre {
+      white-space: pre-wrap;
+    }
+    .images {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    figure {
+      margin: 0;
+      flex: 1;
+      min-width: 220px;
+      max-width: 384px;
+    }
+    img,
+    canvas {
+      width: 100%;
+      height: auto;
+      border: 1px solid #ccc;
+    }
+    figcaption {
+      font-weight: 600;
+    }
+  </style>
+  <h1>Wet Blender: document-pixel comparison</h1>
+  <p>
+    Original megapack preset, 50 px, 208% scatter, Strength 90%. Straight 768 px path, no simulated pressure. Paint uses
+    Classic mixing. Documents and autosave are untouched.
+  </p>
+  <button id="run">Compare Wet Blender</button>
+  <pre id="output">Ready</pre>
+  <div class="images">
+    <figure>
+      <figcaption>Photoshop 2025</figcaption>
+      <img id="native" alt="Native Photoshop Wet Blender stroke" />
+    </figure>
+    <figure>
+      <figcaption>Corrected Paint</figcaption>
+      <canvas id="after" width="768" height="1024"></canvas>
+    </figure>
+  </div>
+  <script type="module">
+    import nativeUrl from '../../packages/abr-brush/fixtures/photoshop-wet-blender/smudge.png?url';
+    document.querySelector('#native').src = nativeUrl;
+    import { AbrParser } from '../../packages/abr-parser/src/abr-parser';
+    import megapack from '../abr-viewer/src/assets/examples/megapack.abr?url';
+    import { verifyWetBlender } from '../../packages/paint/studio/gpu/wetBlenderVerification';
+    const button = document.querySelector('#run'),
+      output = document.querySelector('#output');
+    button.onclick = async () => {
+      button.disabled = true;
+      output.textContent = 'Loading original preset…\n';
+      try {
+        const response = await fetch(megapack);
+        if (!response.ok) throw Error('Could not load megapack.abr');
+        const file = new AbrParser().parse(await response.arrayBuffer());
+        const preset = file.brushes.find((b) => b.name === "Kyle's Paintbox - Wet Blender");
+        if (!preset) throw Error('Wet Blender missing');
+        const image = await verifyWetBlender(preset, (message) => (output.textContent += message + '\n'));
+        document.querySelector('#after').getContext('2d').putImageData(image, 0, 0);
+        output.textContent +=
+          'PASS. Placement bounds checked; random stamp patterns and native smudge pixels are not expected to be identical.';
+      } catch (error) {
+        output.textContent += 'FAIL: ' + String(error);
+      } finally {
+        button.disabled = false;
+      }
+    };
+  </script>
+</html>

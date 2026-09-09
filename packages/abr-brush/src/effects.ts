@@ -19,6 +19,7 @@ export {
   mixerReservoirChannel
 } from './mixer';
 export {
+  smudgeCarry,
   fingerPaintComposite,
   fingerPaintCompositeInSpace,
   retouchColor,

@@ -39,6 +39,12 @@
     <button id="smudge-performance">Measure dense smudge</button>
     <button id="long-smudge-performance">Measure long smudge</button>
     <button id="huge-smudge-performance">Measure huge smudge</button>
+    <button id="mip-batch-performance">Measure batched mipmaps</button>
+    <button id="classic-mip-performance">Measure Classic smudge</button>
+    <button id="wet-blender-performance">Measure original Wet Blender</button>
+    <button id="smudge-multi-dab">Measure Smudge multi-dab batching</button>
+    <button id="smudge-dab-batch">Measure Smudge submission batching</button>
+    <button id="smudge-responsiveness">Measure Smudge responsiveness</button>
     <button id="abr-mixing">Check ABR color mixing</button>
     <button id="abr-brush">Check ABR presets</button>
     <button id="textured-brush">Check textured brushes</button>
@@ -202,7 +208,7 @@
       document.querySelector('#smudge-performance').onclick = async () => {
         output.textContent = 'Measuring dense smudge…\n';
         try {
-          await verifySmudgePerformance((message) => (output.textContent += message + '\n'));
+          await verifySmudgePerformance((message) => (output.textContent += message + '\n'), { compareReference: true });
         } catch (error) {
           output.textContent += 'FAIL: ' + (error.stack ?? error);
         }
@@ -213,7 +219,7 @@
           for (const size of [50, 512]) {
             output.textContent += `Brush ${size}px, distance 4096px, cache 16 tiles\n`;
             await verifySmudgePerformance((message) => (output.textContent += message + '\n'),
-              { size, distance: 4096, runs: 2, cacheTiles: 16, present: true });
+              { size, distance: 4096, runs: 2, cacheTiles: 16, present: true, compareReference: true });
           }
         } catch (error) {
           output.textContent += 'FAIL: ' + (error.stack ?? error);
@@ -223,13 +229,84 @@
         output.textContent = 'Measuring large footprints with the production tile-cache budget…\n';
         try {
           for (const size of [512, 2048]) {
-            output.textContent += `Brush ${size}px, distance 8192px, cache 128 tiles\n`;
+            output.textContent += `Brush ${size}px, distance 8192px, production cache budget\n`;
             await verifySmudgePerformance((message) => (output.textContent += message + '\n'),
-              { size, distance: 8192, runs: 2, cacheTiles: 128, present: true });
+              { size, distance: 8192, runs: 4, present: true, compareReference: true });
           }
         } catch (error) {
           output.textContent += 'FAIL: ' + (error.stack ?? error);
         }
+      };
+      document.querySelector('#mip-batch-performance').onclick = async () => {
+        output.textContent = 'Comparing legacy vs cached/demand-generated mipmaps…\n';
+        try {
+          for (const size of [512, 2048]) {
+            output.textContent += `Brush ${size}px, distance 8192px, production cache budget\n`;
+            await verifySmudgePerformance((message) => (output.textContent += message + '\n'),
+              { size, distance: 8192, runs: 4, present: true, compareReference: true, compareMipBatch: true });
+          }
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#classic-mip-performance').onclick = async () => {
+        output.textContent = 'Classic color: comparing legacy vs cached/demand-generated mipmaps…\n';
+        try {
+          for (const size of [512, 2048]) {
+            output.textContent += `Brush ${size}px, distance 8192px, production cache budget\n`;
+            await verifySmudgePerformance((message) => (output.textContent += message + '\n'),
+              { size, distance: 8192, runs: 4, present: true, compareReference: true, compareMipBatch: true, mixing: 'classic' });
+          }
+        } catch (error) {
+          output.textContent += 'FAIL: ' + (error.stack ?? error);
+        }
+      };
+      document.querySelector('#wet-blender-performance').onclick = async () => {
+        output.textContent = 'Loading original Wet Blender preset…\n';
+        try {
+          const { AbrParser } = await import('../../packages/abr-parser/src/abr-parser');
+          const { default: url } = await import('../abr-viewer/src/assets/examples/megapack.abr?url');
+          const response = await fetch(url);
+          if (!response.ok) throw Error('Could not load megapack.abr');
+          const file = new AbrParser().parse(await response.arrayBuffer());
+          const preset = file.brushes.find((brush) => brush.name === "Kyle's Paintbox - Wet Blender");
+          if (!preset) throw Error('Wet Blender missing');
+          for (const size of [50, 512, 2048]) {
+            output.textContent += `Real Wet Blender ${size}px, 4096px path, Smooth color\n`;
+            await verifySmudgePerformance((message) => (output.textContent += message + '\n'),
+              { preset, size, distance: 4096, runs: 4, present: true });
+          }
+        } catch (error) { output.textContent += 'FAIL: ' + (error.stack ?? error); }
+      };
+      document.querySelector('#smudge-multi-dab').onclick = async () => {
+        output.textContent = 'Comparing one-dab vs bounded multi-dab submissions…\n';
+        try {
+          for (const size of [50, 512, 2048]) {
+            output.textContent += `Brush ${size}px, distance 4096px, Smooth color\n`;
+            await verifySmudgePerformance((message) => (output.textContent += message + '\n'),
+              { size, distance: 4096, runs: 4, present: true, compareReference: true, compareMultiDab: true });
+          }
+        } catch (error) { output.textContent += 'FAIL: ' + (error.stack ?? error); }
+      };
+      document.querySelector('#smudge-dab-batch').onclick = async () => {
+        output.textContent = 'Comparing separate vs batched Smudge passes on long strokes…\n';
+        try {
+          for (const size of [50, 512, 2048]) {
+            output.textContent += `Brush ${size}px, distance 4096px, Smooth color\n`;
+            await verifySmudgePerformance((message) => (output.textContent += message + '\n'),
+              { size, distance: 4096, runs: 4, present: true, compareReference: true, compareDabBatch: true });
+          }
+        } catch (error) { output.textContent += 'FAIL: ' + (error.stack ?? error); }
+      };
+      document.querySelector('#smudge-responsiveness').onclick = async () => {
+        output.textContent = 'One sparse 8192px pointer segment: comparing progress within the segment…\n';
+        try {
+          for (const size of [512, 2048]) {
+            output.textContent += `Brush ${size}px, Classic\n`;
+            await verifySmudgePerformance((message) => (output.textContent += message + '\n'),
+              { size, distance: 8192, runs: 2, compareReference: true, compareProgress: true, mixing: 'classic' });
+          }
+        } catch (error) { output.textContent += 'FAIL: ' + (error.stack ?? error); }
       };
       document.querySelector('#abr-mixing').onclick = async () => {
         output.textContent = 'Checking ABR color mixing…\n';
