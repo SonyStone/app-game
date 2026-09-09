@@ -1,13 +1,7 @@
 {
-  "name": "@app-game/paint",
+  "name": "@app-game/paint-examples",
   "version": "0.0.0",
   "private": true,
-  "scripts": {
-    "build:studio": "vite build --config vite.studio.config.ts",
-    "test:studio": "pnpm --dir ../.. exec vitest run --config packages/paint/vitest.config.ts",
-    "test:studio-ui": "pnpm --dir ../.. exec vitest run --config packages/paint/vitest.ui.config.ts",
-    "typecheck:studio": "tsc -p tsconfig.studio.json"
-  },
   "dependencies": {
     "@solid-primitives/event-listener": "catalog:",
     "solid-js": "catalog:",
@@ -28,15 +22,15 @@
     "@app-game/abr-parser": "workspace:*",
     "@app-game/abr-viewer": "workspace:*",
     "@app-game/abr-brush": "workspace:*",
-    "@solid-primitives/timer": "catalog:"
+    "@solid-primitives/timer": "catalog:",
+    "@app-game/paint": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "catalog:",
     "@unocss/vite": "catalog:"
   },
   "exports": {
-    "./routes": "./routes.tsx",
-    "./studio/composition": "./studio/composition/index.ts"
+    "./routes": "./routes.tsx"
   },
   "type": "module"
 }

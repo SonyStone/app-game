@@ -1,7 +1,7 @@
 import { brushToFormValues, descriptorRgbColor, formValuesToBrush } from '@app-game/abr-brush/form';
 import { AbrParser, AbrWriter, createAbrFile } from '@app-game/abr-parser/browser';
 import { expect, it } from 'vitest';
-import native from '../../../abr-brush/fixtures/photoshop-colors.json';
+import native from '../../../../packages/abr-brush/fixtures/photoshop-colors.json';
 import { viewerBrush } from '../brushLibrary/viewerBrush';
 
 it.each(native.hsb)('converts native HSB $hsb to $hex in the editor and Paint', ({ hsb, hex }) => {

@@ -114,7 +114,7 @@ pnpm --filter @app-game/paint test:studio
 pnpm --filter @app-game/paint build:studio
 ```
 
-Production build находится в `packages/paint/dist-studio`. Он использует тот же компонент редактора и тот же worker, что `/paint/studio`, без зависимости от остальных экспериментов playground.
+Production build находится в `apps/paint/dist`. Он использует тот же компонент редактора и тот же worker, что `/paint/studio`, без зависимости от остальных экспериментов playground.
 
 При запущенном общем dev server откройте `/paint-studio-qa.html`. Кнопки запускают проверки реального GPU и production worker. Они используют отдельные документы и отдельную временную базу IndexedDB, не изменяя автосохранение редактора.
 

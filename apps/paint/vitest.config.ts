@@ -5,5 +5,5 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [solid(), typegpu()],
   resolve: { conditions: ['development', 'browser'] },
-  test: { environment: 'node', include: ['packages/paint/studio/**/*.test.ts'] }
+  test: { environment: 'node', include: ['src/**/*.test.ts'] }
 });

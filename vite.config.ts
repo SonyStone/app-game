@@ -81,7 +81,7 @@ export default defineConfig({
       '@app-game/math': resolve(packages, 'math'),
       '@app-game/math-examples': resolve(packages, 'math-examples'),
       '@app-game/ogl-examples': resolve(packages, 'ogl-examples'),
-      '@app-game/paint': resolve(packages, 'paint'),
+      '@app-game/paint-examples': resolve(packages, 'paint'),
       '@app-game/navigation-puck': resolve(packages, 'navigation-puck/src'),
       '@app-game/penner-easing-equations': resolve(packages, 'penner-easing-equations'),
       '@app-game/piecs': resolve(packages, 'piecs'),

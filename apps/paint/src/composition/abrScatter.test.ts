@@ -234,7 +234,7 @@ it.each(['PbTl', 'MixB', 'BlTl'] as const)('keeps the existing count model for t
 });
 
 function wetBlender() {
-  const file = new AbrParser().parse(readFileSync('apps/abr-viewer/src/assets/examples/megapack.abr'));
+  const file = new AbrParser().parse(readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url)));
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Paintbox - Wet Blender");
   if (!brush?.brushTip) throw new Error('The bundled Wet Blender preset or its sampled tip is missing.');
   return { values: brushToFormValues(brush), tip: brush.brushTip };

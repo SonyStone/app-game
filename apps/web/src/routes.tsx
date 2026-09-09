@@ -8,7 +8,7 @@ import { gsapExamplesRoutes } from '@app-game/gsap-examples/routes';
 import { mathRoutes } from '@app-game/math-examples/routes';
 import { nightDefenseRoutes } from '@app-game/night-defense/routes';
 import { oglRoutes } from '@app-game/ogl-examples/routes';
-import { paintRoutes } from '@app-game/paint/routes';
+import { paintRoutes } from '@app-game/paint-examples/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
 import { pixijsRoutes } from '@app-game/pixijs-examples/routes';
 import { routes as solidDndPlaygroundRoutes } from '@app-game/solid-dnd-playground/routes';

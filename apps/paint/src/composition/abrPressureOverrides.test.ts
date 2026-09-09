@@ -2,7 +2,7 @@ import { brushToFormValues, formValuesToBrush } from '@app-game/abr-brush/form';
 import { createAbrStrokeSampler, type PreviewPoint } from '@app-game/abr-brush/stroke';
 import { AbrParser, AbrWriter, createAbrFile } from '@app-game/abr-parser/browser';
 import { expect, it } from 'vitest';
-import calibration from '../../../abr-brush/fixtures/photoshop-pressure-overrides.json';
+import calibration from '../../../../packages/abr-brush/fixtures/photoshop-pressure-overrides.json';
 import { viewerBrush } from '../brushLibrary/viewerBrush';
 
 it.each(calibration.cases)('matches Photoshop effective dynamics for $name without rewriting the preset', (fixture) => {

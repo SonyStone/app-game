@@ -7,7 +7,7 @@ import {
 import { AbrParser, AbrWriter, createAbrFile } from '@app-game/abr-parser/browser';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import native from '../../../abr-brush/fixtures/photoshop-profile-colors.json';
+import native from '../../../../packages/abr-brush/fixtures/photoshop-profile-colors.json';
 import { viewerBrush } from '../brushLibrary/viewerBrush';
 
 it.each(native.cases.filter((row) => row.model === 'Gray'))(
@@ -23,7 +23,7 @@ it.each(native.cases.filter((row) => row.model === 'Gray'))(
 );
 
 it('matches native fractional Gray fills and stays within one level of the measured Brush pixels', () => {
-  const csv = readFileSync(new URL('../../../abr-brush/fixtures/photoshop-gray-paint.csv', import.meta.url), 'utf8');
+  const csv = readFileSync(new URL('../../../../packages/abr-brush/fixtures/photoshop-gray-paint.csv', import.meta.url), 'utf8');
   for (const row of csv.trim().split('\n').slice(1)) {
     const [gray, fill, , , , , , brush] = row.split(',');
     const actual = descriptorRgbColor(preset(Number(gray)).settings.toolOptions.FrgC)!;

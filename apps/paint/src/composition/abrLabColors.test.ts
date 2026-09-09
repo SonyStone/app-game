@@ -5,9 +5,9 @@ import {
   formValuesToBrush
 } from '@app-game/abr-brush/form';
 import { AbrParser, AbrWriter, createAbrFile } from '@app-game/abr-parser/browser';
-import { labD50ToRgb } from '../../../chroma/io/lab/labD50ToRgb';
+import { labD50ToRgb } from '../../../../packages/chroma/io/lab/labD50ToRgb';
 import { expect, it } from 'vitest';
-import native from '../../../abr-brush/fixtures/photoshop-lab-raster.json';
+import native from '../../../../packages/abr-brush/fixtures/photoshop-lab-raster.json';
 import { viewerBrush } from '../brushLibrary/viewerBrush';
 
 it.each(native.cases)('converts Lab $lab while exposing sRGB gamut loss', ({ lab, pixel }) => {

@@ -57,9 +57,9 @@
     <button id="navigation">Measure navigation</button>
     <pre id="output">Ready</pre>
     <script type="module">
-      import { verifySmudgePerformance } from '../../packages/paint/studio/gpu/smudgePerformanceVerification';
-      import { verifyAbrColorMixing } from '../../packages/paint/studio/gpu/abrColorMixingVerification';
-      import { verifyAbrBrush } from '../../packages/paint/studio/gpu/abrBrushVerification';
+      import { verifySmudgePerformance } from '../paint/src/gpu/smudgePerformanceVerification';
+      import { verifyAbrColorMixing } from '../paint/src/gpu/abrColorMixingVerification';
+      import { verifyAbrBrush } from '../paint/src/gpu/abrBrushVerification';
       import { AbrParser } from '../../packages/abr-parser/src/abr-parser';
       import abrExampleUrl from '../abr-viewer/src/assets/examples/spatter_brushes.abr?url';
       import { verifyTexturedBrush } from '@app-game/paint/studio/gpu/texturedBrushVerification';

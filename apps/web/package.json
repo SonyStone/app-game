@@ -43,7 +43,8 @@
     "@app-game/webgl-examples": "workspace:*",
     "@app-game/webgl-state-diagram": "workspace:*",
     "@app-game/webgpu-examples": "workspace:*",
-    "@app-game/abr-viewer": "workspace:*"
+    "@app-game/abr-viewer": "workspace:*",
+    "@app-game/paint-examples": "workspace:*"
   },
   "scripts": {
     "dev": "pnpm --dir ../.. exec vite --config vite.config.ts",

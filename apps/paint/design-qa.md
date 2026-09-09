@@ -8,9 +8,9 @@ The user requested the minimal floating controls of `/grease-pencil-typegpu`, Sk
 
 | Reference | Implementation | Assessment |
 | --- | --- | --- |
-| [Grease Pencil, 1280×720](studio/qa/grease-reference.jpg) | [Paint, 1280×720](studio/qa/mixing-layers-desktop.jpg) | Same small line icons, neutral surfaces, narrow left rail, right brush/color controls, compact bottom actions. Canvas content and painting-specific controls intentionally differ. |
-| [User Puck image](../navigation-puck/src/assets/navigation-puck.png) | [Desktop Puck](studio/qa/puck-desktop.jpg), [mobile Puck](studio/qa/puck-mobile-final.jpg) | Exact supplied image, scaled proportionally. Blue pan ring, center zoom, lower rotation arc and close button aligned to image. |
-| [Initial mobile panel](studio/qa/brush-mobile.jpg) | [Final mobile panel](studio/qa/brush-mobile-final.jpg) | Removed duplicate heading and heavy native slider tracks; retained readable values and generous input hit areas. |
+| [Grease Pencil, 1280×720](src/qa/grease-reference.jpg) | [Paint, 1280×720](src/qa/mixing-layers-desktop.jpg) | Same small line icons, neutral surfaces, narrow left rail, right brush/color controls, compact bottom actions. Canvas content and painting-specific controls intentionally differ. |
+| [User Puck image](../../packages/navigation-puck/src/assets/navigation-puck.png) | [Desktop Puck](src/qa/puck-desktop.jpg), [mobile Puck](src/qa/puck-mobile-final.jpg) | Exact supplied image, scaled proportionally. Blue pan ring, center zoom, lower rotation arc and close button aligned to image. |
+| [Initial mobile panel](src/qa/brush-mobile.jpg) | [Final mobile panel](src/qa/brush-mobile-final.jpg) | Removed duplicate heading and heavy native slider tracks; retained readable values and generous input hit areas. |
 
 ## Responsive checks
 
@@ -18,11 +18,11 @@ Screenshots and DOM measurements were taken in the in-app browser against the st
 
 | Viewport | Evidence | Result |
 | --- | --- | --- |
-| 320×568 | [Panel](studio/qa/brush-small-final.jpg), [lower controls after scrolling](studio/qa/brush-small-scrolled.jpg), [Puck](studio/qa/puck-mobile-final.jpg) | No document overflow. Panel scroll exposes color mixing, heading/close remain available. Open Puck stays inside viewport after resizing. |
-| 390×844 | [Brush panel](studio/qa/brush-mobile-final.jpg) | Bottom panel fits with readable controls and persistent bottom actions. |
-| 844×390 | [Landscape panel](studio/qa/brush-landscape.jpg) | Panel uses window height and scrolls; close stays visible. |
-| 1280×720 | [Layers](studio/qa/mixing-layers-desktop.jpg), [Drawing menu](studio/qa/drawing-menu-desktop.jpg) | Floating panels fit; opening panels does not resize canvas. |
-| 1920×1080 | [Brush panel](studio/qa/brush-large-final.jpg) | Controls retain useful size; additional space goes to canvas. |
+| 320×568 | [Panel](src/qa/brush-small-final.jpg), [lower controls after scrolling](src/qa/brush-small-scrolled.jpg), [Puck](src/qa/puck-mobile-final.jpg) | No document overflow. Panel scroll exposes color mixing, heading/close remain available. Open Puck stays inside viewport after resizing. |
+| 390×844 | [Brush panel](src/qa/brush-mobile-final.jpg) | Bottom panel fits with readable controls and persistent bottom actions. |
+| 844×390 | [Landscape panel](src/qa/brush-landscape.jpg) | Panel uses window height and scrolls; close stays visible. |
+| 1280×720 | [Layers](src/qa/mixing-layers-desktop.jpg), [Drawing menu](src/qa/drawing-menu-desktop.jpg) | Floating panels fit; opening panels does not resize canvas. |
+| 1920×1080 | [Brush panel](src/qa/brush-large-final.jpg) | Controls retain useful size; additional space goes to canvas. |
 
 The large-screen screenshot precedes the final mirror-icon replacement; the desktop Layers screenshot shows the corrected mirror icon.
 
@@ -57,7 +57,7 @@ Adapted the controller and invocation lifecycle from Grease Pencil's `createNavi
 
 ## Shared library extraction, 2026-09-05
 
-Puck UI, image, styles, 2D/3D controller and canvas hotkey/right-drag bindings now belong to `@app-game/navigation-puck`. Both editors use its 2D component; Grease 3D uses its Orbit layout. Paint retains only `paintNavigation.ts` for camera conversion. See [shared verification](../navigation-puck/QA.md). Previous local controller/component paths in the historical entries above describe earlier iterations and have been removed.
+Puck UI, image, styles, 2D/3D controller and canvas hotkey/right-drag bindings now belong to `@app-game/navigation-puck`. Both editors use its 2D component; Grease 3D uses its Orbit layout. Paint retains only `paintNavigation.ts` for camera conversion. See [shared verification](../../packages/navigation-puck/QA.md). Previous local controller/component paths in the historical entries above describe earlier iterations and have been removed.
 
 
 ## Sparse document storage and canvas wireframe — 2026-09-05

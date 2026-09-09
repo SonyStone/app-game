@@ -5,7 +5,7 @@ import { expect, it } from 'vitest';
 import { viewerBrush } from '../brushLibrary/viewerBrush';
 
 it('applies all bundled HSB-color presets without replacing their native color descriptors', () => {
-  const file = new AbrParser().parse(readFileSync('apps/abr-viewer/src/assets/examples/megapack.abr'));
+  const file = new AbrParser().parse(readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url)));
   const patterns = readPatternIndex(file.rawPatternData!);
   for (const [name, color] of [
     ["Kyle's FX Box - Add Canvas New", '#9e9e9e'],
@@ -24,7 +24,7 @@ it('applies all bundled HSB-color presets without replacing their native color d
 });
 
 it('imports embedded example presets with their full dynamics and auxiliary resources', () => {
-  const bytes = readFileSync('apps/abr-viewer/src/assets/examples/halftones_and_screentones.abr');
+  const bytes = readFileSync(new URL('../../../abr-viewer/src/assets/examples/halftones_and_screentones.abr', import.meta.url));
   const file = new AbrParser().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Halftone - Circle Range Tiny")!;
   expect(brush).toBeDefined();
@@ -38,7 +38,7 @@ it('imports embedded example presets with their full dynamics and auxiliary reso
 });
 
 it('Charcoal Champ 3 pressure controls flow, while tilt controls size and texture depth', () => {
-  const file = new AbrParser().parse(readFileSync('apps/abr-viewer/src/assets/examples/megapack.abr'));
+  const file = new AbrParser().parse(readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url)));
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Drawing Box - Charcoal Champ 3");
   expect(brush).toBeDefined();
   const preset = viewerBrush({ ...brush!, patternResources: readPatternIndex(file.rawPatternData!) } as Parameters<

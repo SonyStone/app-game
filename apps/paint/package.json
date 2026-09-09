@@ -1,0 +1,48 @@
+{
+  "name": "@app-game/paint",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3030",
+    "build": "vite build",
+    "preview": "vite preview --port 4030",
+    "test": "vitest run",
+    "test:ui": "vitest run --config vitest.ui.config.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "build:studio": "pnpm build",
+    "test:studio": "pnpm test",
+    "test:studio-ui": "pnpm test:ui",
+    "typecheck:studio": "pnpm typecheck"
+  },
+  "dependencies": {
+    "@app-game/abr-brush": "workspace:*",
+    "@app-game/abr-parser": "workspace:*",
+    "@app-game/abr-viewer": "workspace:*",
+    "@app-game/navigation-puck": "workspace:*",
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/timer": "catalog:",
+    "@solidjs/web": "2.0.0-rc.4",
+    "solid-js": "catalog:",
+    "typegpu": "^0.11.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "catalog:",
+    "@unocss/vite": "catalog:",
+    "@webgpu/types": "^0.1.70",
+    "jsdom": "catalog:",
+    "typescript": "catalog:",
+    "unplugin-typegpu": "^0.11.3",
+    "vite": "catalog:",
+    "vite-plugin-pwa": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:",
+    "workbox-window": "catalog:"
+  },
+  "exports": {
+    "./editor": "./src/PaintStudio.tsx",
+    "./studio/composition": "./src/composition/index.ts",
+    "./studio/*": "./src/*"
+  }
+}

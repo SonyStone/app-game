@@ -8,6 +8,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: [fileURLToPath(import.meta.resolve('@testing-library/jest-dom/vitest'))],
-    include: ['packages/paint/studio/**/*.test.tsx']
+    include: ['src/**/*.test.tsx']
   }
 });

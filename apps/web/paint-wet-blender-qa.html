@@ -57,7 +57,7 @@
     document.querySelector('#native').src = nativeUrl;
     import { AbrParser } from '../../packages/abr-parser/src/abr-parser';
     import megapack from '../abr-viewer/src/assets/examples/megapack.abr?url';
-    import { verifyWetBlender } from '../../packages/paint/studio/gpu/wetBlenderVerification';
+    import { verifyWetBlender } from '../paint/src/gpu/wetBlenderVerification';
     const button = document.querySelector('#run'),
       output = document.querySelector('#output');
     button.onclick = async () => {

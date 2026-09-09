@@ -1,3 +1,4 @@
+import type { JSX } from '@solidjs/web';
 import { blockEraserSize, isBlockEraser } from '@app-game/abr-brush/blockEraser';
 import { record } from '@app-game/abr-brush/form';
 import { NavigationPuck } from '@app-game/navigation-puck';
@@ -19,7 +20,12 @@ import { SymmetryGuide } from './SymmetryGuide';
 import { SymmetryPanel } from './SymmetryPanel';
 
 /** Full-canvas workspace with on-demand controls; opening panels never resizes the drawing surface. */
-export default function PaintStudio() {
+export default function PaintStudio(props: {
+  /** Optional link back to the embedding playground; omitted in the standalone app. */
+  experimentsHref?: string;
+  /** Host-specific controls shown in the drawing menu. */
+  applicationControls?: JSX.Element;
+} = {}) {
   let canvas!: HTMLCanvasElement, stage!: HTMLDivElement, file!: HTMLInputElement, editor!: HTMLDivElement;
   const session = createPaintSession({ canvas: () => canvas, stage: () => stage });
   const {
@@ -429,7 +435,10 @@ export default function PaintStudio() {
                 >
                   Developer
                 </button>
-                <a href={location.pathname.startsWith('/paint/') ? '/paint' : './'}>Paint experiments</a>
+                {props.applicationControls}
+                <Show when={props.experimentsHref}>
+                  <a href={props.experimentsHref}>Paint experiments</a>
+                </Show>
               </div>
               <p class="paint-panel-note">
                 B · Brush &nbsp; E · Eraser

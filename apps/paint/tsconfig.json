@@ -12,5 +12,5 @@
     "jsx": "preserve",
     "jsxImportSource": "@solidjs/web"
   },
-  "include": ["studio"]
+  "include": ["src"]
 }
