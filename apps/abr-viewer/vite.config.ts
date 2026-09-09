@@ -1,3 +1,4 @@
+import { checkExampleAssets } from './scripts/check-example-assets.mjs';
 import UnoCSS from '@unocss/vite';
 import { fileURLToPath } from 'node:url';
 import typegpu from 'unplugin-typegpu/vite';
@@ -7,6 +8,7 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   plugins: [
+    { name: 'validate-abr-examples', apply: 'build', buildStart: () => checkExampleAssets() },
     solid(),
     typegpu(),
     tsconfigPaths(),

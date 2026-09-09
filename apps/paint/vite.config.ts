@@ -1,3 +1,4 @@
+import { checkExampleAssets } from '../abr-viewer/scripts/check-example-assets.mjs';
 import UnoCSS from '@unocss/vite';
 import { fileURLToPath } from 'node:url';
 import typegpu from 'unplugin-typegpu/vite';
@@ -8,6 +9,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 /** A standalone production build keeps the editor independent of unrelated playground experiments. */
 export default defineConfig({
   plugins: [
+    { name: 'validate-abr-examples', apply: 'build', buildStart: () => checkExampleAssets() },
     solid(), typegpu(), UnoCSS({ configFile: fileURLToPath(new URL('../../uno.config.ts', import.meta.url)) }),
     VitePWA({
       registerType: 'prompt',

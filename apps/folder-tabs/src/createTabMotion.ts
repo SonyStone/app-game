@@ -1,27 +1,31 @@
 import { createRAF } from '@solid-primitives/raf';
-import { createEffect, createSignal, type Accessor } from 'solid-js';
+import { createEffect, createSignal, untrack, type Accessor } from 'solid-js';
 
 /**
- * Follows tab destinations at a shared speed in screen-width units per second.
+ * Follows scalar destinations at a shared speed in caller-defined units per second.
  * Distance determines arrival time; acceleration and braking keep starts/stops soft.
  * During a direct horizontal drag, `dragOffset` translates the painted positions
  * together, preserving any unfinished catch-up instead of snapping to destinations.
+ * `speed` may track viewport geometry; changes retain the current position and velocity.
+ * `directId` keeps just the grabbed item attached to its target while other items catch up.
  * The owned RAF loop stops when settled or disposed. Reduced motion settles immediately.
  */
 export function createTabMotion(
   targets: Accessor<readonly { id: string; x: number }[]>,
   dragOffset: Accessor<number | undefined>,
   reducedMotion: Accessor<boolean>,
-  speed = 100
+  speed: number | Accessor<number> = 100,
+  directId: Accessor<string | undefined> = () => undefined
 ) {
-  const current = new Map(targets().map(({ id, x }) => [id, { x, velocity: 0 }]));
-  let destination = targets();
+  const current = new Map(untrack(targets).map(({ id, x }) => [id, { x, velocity: 0 }]));
+  let destination = untrack(targets);
   const [positions, setPositions] = createSignal(new Map([...current].map(([id, value]) => [id, value.x])));
   let lastTime: number | undefined;
   let lastDrag: number | undefined;
   let looping = false;
-  const acceleration = speed * 6;
   const [, start, stop] = createRAF((time) => {
+    const maximumSpeed = typeof speed === 'function' ? speed() : speed;
+    const acceleration = maximumSpeed * 6;
     const dt = Math.min(0.032, lastTime === undefined ? 1 / 60 : (time - lastTime) / 1000);
     lastTime = time;
     let pending = false;
@@ -33,7 +37,7 @@ export function createTabMotion(
         value.velocity = 0;
         continue;
       }
-      const desired = Math.sign(distance) * Math.min(speed, Math.sqrt(2 * acceleration * Math.abs(distance)));
+      const desired = Math.sign(distance) * Math.min(maximumSpeed, Math.sqrt(2 * acceleration * Math.abs(distance)));
       value.velocity += Math.max(-acceleration * dt, Math.min(acceleration * dt, desired - value.velocity));
       const step = value.velocity * dt;
       if (Math.sign(step) === Math.sign(distance) && Math.abs(step) >= Math.abs(distance)) {
@@ -53,13 +57,26 @@ export function createTabMotion(
   }
 
   function halt() {
-    stop();
+    untrack(stop);
     looping = false;
     lastTime = undefined;
   }
 
+  /** Transfers painted coordinates from another animator without changing destinations. */
+  function rebase(painted: ReadonlyMap<string, number>) {
+    for (const [id, x] of painted) {
+      if (current.has(id)) current.set(id, { x, velocity: 0 });
+    }
+    lastTime = undefined;
+    publish();
+    if (!looping) {
+      looping = true;
+      untrack(start);
+    }
+  }
+
   createEffect(
-    () => ({ targets: targets(), drag: dragOffset(), reduced: reducedMotion() }),
+    () => ({ targets: targets(), drag: dragOffset(), reduced: reducedMotion(), directId: directId() }),
     (next) => {
       destination = next.targets;
       const live = new Set(destination.map(({ id }) => id));
@@ -84,11 +101,16 @@ export function createTabMotion(
         return;
       }
       lastDrag = undefined;
+      const direct = destination.find(({ id }) => id === next.directId);
+      if (direct) {
+        current.set(direct.id, { x: direct.x, velocity: 0 });
+        publish();
+      }
       if (!looping) {
         looping = true;
-        start();
+        untrack(start);
       }
     }
   );
-  return positions;
+  return Object.assign(positions, { rebase });
 }

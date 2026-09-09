@@ -15,6 +15,7 @@
     "@solid-primitives/media": "catalog:",
     "@solid-primitives/pointer": "catalog:",
     "@solid-primitives/raf": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
     "@solid-primitives/scheduled": "catalog:",
     "@solidjs/web": "2.0.0-rc.4",
     "solid-js": "catalog:"

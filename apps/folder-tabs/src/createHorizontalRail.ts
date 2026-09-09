@@ -1,7 +1,8 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createPointerListeners } from '@solid-primitives/pointer';
 import { debounce } from '@solid-primitives/scheduled';
-import { createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
+import { createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
+import { dragAxis } from './dragAxis';
 
 /**
  * Horizontal tab scrolling in screen-width units, without moving the attached panels.
@@ -13,7 +14,11 @@ import { createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
 export function createHorizontalRail(options: {
   target: Accessor<HTMLElement | undefined>;
   enabled: Accessor<boolean>;
+  /** Lower scroll bound; negative values allow a stack to pan right from its resting pose. */
+  min?: Accessor<number>;
   max: Accessor<number>;
+  /** Full visible tab width, in the same units as offset. Defaults to 30. */
+  tabWidth?: Accessor<number>;
   accepts: (target: EventTarget | null) => boolean;
   /** Wheel routing can stay limited to the tabs while pointer swipes use the card. */
   acceptsWheel?: (target: EventTarget | null) => boolean;
@@ -36,7 +41,7 @@ export function createHorizontalRail(options: {
     | undefined;
   let suppressClick = false;
   const finishWheel = debounce(() => setDirect(false), 140);
-  const clamp = (value: number) => Math.max(0, Math.min(options.max(), value));
+  const clamp = (value: number) => Math.max(options.min?.() ?? 0, Math.min(options.max(), value));
   const units = (pixels: number) => (pixels / Math.max(1, options.target()?.clientWidth ?? 1)) * 100;
 
   /** Smoothly moves the rail to a bounded destination. */
@@ -48,8 +53,9 @@ export function createHorizontalRail(options: {
   /** Keeps a full tab inside the viewport, moving only when it is outside the margins. */
   function reveal(left: number) {
     const current = offset();
+    const width = options.tabWidth?.() ?? 30;
     if (left < current + 3) scrollTo(left - 3);
-    else if (left + 30 > current + 97) scrollTo(left + 30 - 97);
+    else if (left + width > current + 97) scrollTo(left + width - 97);
   }
 
   function release(momentum = false) {
@@ -63,15 +69,16 @@ export function createHorizontalRail(options: {
   }
 
   createPointerListeners({
-    target: options.target,
+    target: () => (options.target() && typeof document !== 'undefined' ? document : undefined),
     passive: false,
     onDown(event) {
+      const element = options.target();
+      if (!element || !(event.target instanceof Node) || !element.contains(event.target)) return;
       if (!options.enabled() || !event.isPrimary || event.button !== 0 || !options.accepts(event.target)) return;
       release();
       finishWheel.clear();
       suppressClick = false;
-      const element = options.target();
-      if (!element) return;
+      event.preventDefault();
       const start = clamp(options.readPainted());
       pointer = {
         id: event.pointerId,
@@ -92,11 +99,12 @@ export function createHorizontalRail(options: {
       const dx = event.clientX - pointer.x;
       const dy = event.clientY - pointer.y;
       if (!pointer.moved) {
-        if (Math.abs(dy) > 7 && Math.abs(dy) > Math.abs(dx)) {
+        const axis = dragAxis(dx, dy);
+        if (!axis) return;
+        if (axis === 'vertical') {
           release();
           return;
         }
-        if (Math.abs(dx) < 7 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
         pointer.moved = true;
         suppressClick = true;
         pointer.element.setPointerCapture(event.pointerId);
@@ -114,7 +122,7 @@ export function createHorizontalRail(options: {
       if (pointer?.id === event.pointerId) release();
     },
     onLostCapture(event) {
-      if (pointer?.id === event.pointerId) release();
+      if (pointer?.id === event.pointerId && event.target === pointer.element) release();
     }
   });
   createEventListener(
@@ -151,6 +159,9 @@ export function createHorizontalRail(options: {
       finishWheel.clear();
     }
   );
+  createEffect(options.max, () => {
+    setOffset((value) => untrack(() => clamp(value)));
+  });
   onCleanup(release);
   return { offset, direct, scrollTo, reveal, scrollBy: (amount: number) => scrollTo(offset() + amount) };
 }
