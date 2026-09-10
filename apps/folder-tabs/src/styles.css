@@ -230,6 +230,8 @@ button {
   --y: calc(var(--stack-top) + var(--painted-offset, var(--offset)));
   --sheet-height: calc(var(--screen-height) - var(--y) - var(--tab-height));
   transform: translateY(calc(var(--y) + var(--card-drag-offset, 0px)));
+  /* Keep the moving sheet's backing layer stable, including between pointer moves. */
+  will-change: transform;
   transition: none;
   color: #090a08;
   /* The transparent space alongside the tab must not block tabs underneath. */
@@ -352,6 +354,8 @@ button {
   height: var(--sheet-height);
   padding-top: 2.2cqw;
   background: var(--folder-color);
+  /* Descendant scroll/animation layers must paint within this opaque sheet. */
+  contain: layout paint;
 }
 .is-dark .folder-sheet {
   color: #fafbf9;
@@ -1197,6 +1201,8 @@ button {
 .creative-viewport {
   display: block;
   contain: layout paint;
+  /* Native scroll layers need their own opaque backing, not an ancestor's fill. */
+  background: var(--paper);
   height: max(0px, calc(var(--sheet-height) - 2.2cqw - 17cqw));
   overflow: hidden;
 }
