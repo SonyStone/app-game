@@ -1,4 +1,4 @@
-import s from './base.module.scss';
+import s from './Hierarchy.module.css';
 
 export default function Hierarchy(props: any) {
   return (

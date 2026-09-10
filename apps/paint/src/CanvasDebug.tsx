@@ -1,6 +1,7 @@
 import { TILE_SIZE } from './brush';
 import { worldToScreen, type Camera, type ViewSize } from './camera';
 import type { PaintSession } from './createPaintSession';
+import styles from './CanvasDebug.module.css';
 
 /** Opt-in overlay of occupied raster tiles and the same two triangles used by tileVertex.
  * Kept outside the drawing canvas so exports and saved pixels never include debugging graphics.
@@ -8,7 +9,7 @@ import type { PaintSession } from './createPaintSession';
 export function CanvasDebug(props: { session: PaintSession }) {
   const path = () => tileWireframe(props.session.debugTiles(), props.session.camera(), props.session.size());
   return (
-    <div class="paint-debug" aria-label="Infinite canvas wireframe">
+    <div class={styles.debug} aria-label="Infinite canvas wireframe">
       <svg width="100%" height="100%" aria-hidden="true">
         <path
           opacity="0.25"
@@ -28,7 +29,7 @@ export function CanvasDebug(props: { session: PaintSession }) {
           stroke-dasharray="4 4"
         />
       </svg>
-      <output class="paint-debug-stats">
+      <output class={styles.debugStats}>
         {props.session.debugTiles().length} occupied tiles · 256×256 px · 2 triangles / tile
         <br />
         Document {(props.session.state().pixelBytes / 1048576).toFixed(2)} MiB stored /{' '}

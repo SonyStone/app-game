@@ -2,6 +2,7 @@ import { For } from 'solid-js';
 import type { PaintSession } from './createPaintSession';
 import type { BlendMode } from './document';
 import { SketchIcon } from './SketchIcon';
+import styles from './LayersPanel.module.css';
 
 /** Edits layer order and compositing properties through undoable document commands. */
 export function LayersPanel(props: Pick<PaintSession, 'state' | 'ready' | 'layer'>) {
@@ -9,13 +10,13 @@ export function LayersPanel(props: Pick<PaintSession, 'state' | 'ready' | 'layer
   const selected = () => state().layers.find((item) => item.id === state().activeId)!;
   return (
     <section class="paint-layers">
-      <div class="paint-section-heading">
+      <div class={styles.sectionHeading}>
         <span>{state().layers.length} layers</span>
         <button aria-label="Add layer" disabled={!ready()} onClick={() => layer({ type: 'add' })}>
           <SketchIcon name="plus" size={18} />
         </button>
       </div>
-      <div class="paint-layer-controls">
+      <div class={styles.layerControls}>
         <select
           aria-label="Layer blend mode"
           value={selected().blend}
@@ -46,26 +47,26 @@ export function LayersPanel(props: Pick<PaintSession, 'state' | 'ready' | 'layer
         />
         <span>%</span>
       </div>
-      <p class="paint-blend-note">
+      <p class={styles.blendNote}>
         {selected().blend === 'multiply'
           ? 'Multiply darkens overlaps. Choose Smooth color for brighter color transitions.'
           : selected().blend === 'linear'
             ? 'Blends colors in linear light.'
             : 'Standard layer blend mode.'}
       </p>
-      <div class="paint-layer-list">
+      <div class={styles.layerList}>
         <For each={[...state().layers].reverse()} keyed={(item) => item.id}>
           {(item) => (
-            <div class={['paint-layer', { selected: item().id === state().activeId }]}>
+            <div class={[styles.layer, { [styles.selected!]: item().id === state().activeId }]}>
               <button
-                class="paint-layer-eye"
+                class={styles.layerEye}
                 aria-label={`${item().visible ? 'Hide' : 'Show'} ${item().name}`}
                 onClick={() => layer({ type: 'update', id: item().id, patch: { visible: !item().visible } })}
               >
                 <SketchIcon name={item().visible ? 'eye' : 'hidden'} size={18} />
               </button>
               <button
-                class="paint-layer-select"
+                class={styles.layerSelect}
                 aria-label={`Select ${item().name}`}
                 onClick={() => layer({ type: 'select', id: item().id })}
               >
@@ -79,7 +80,7 @@ export function LayersPanel(props: Pick<PaintSession, 'state' | 'ready' | 'layer
           )}
         </For>
       </div>
-      <div class="paint-layer-actions">
+      <div class={styles.layerActions}>
         <button
           aria-label="Move layer up"
           title="Move layer up"

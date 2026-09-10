@@ -7,6 +7,7 @@ import settingsIcon from '../../../../assets/icons/tool-options/settings.svg?url
 import airbrushIcon from '../../../../assets/icons/tool-options/spray.svg?url';
 import { brushToolIcon } from '../../../../components/BrushToolIcon';
 import { OptionMenu } from '../../../../components/OptionMenu';
+import styles from './ToolOptionsBar.module.css';
 import type { BrushFormValues } from '../../brush-form-schema';
 import type { ColorMixingPreference } from '../../color-mixing';
 import { settingGroups, smudgeModes, type SettingField } from '../../settings-fields';
@@ -26,7 +27,7 @@ export function ToolOptionsBar(props: {
       Object.assign(draft.tool, { [key]: value });
     });
   return (
-    <div class="abr-tool-options" role="group" aria-label="Brush tool options">
+    <div class={styles.toolOptions} role="group" aria-label="Brush tool options">
       <For each={toolbarToolFields.filter((key) => key !== 'pressureOverridesSize')}>
         {(key) => (
           <Show when={toolOptionVisible(props.values.tool, key)}>
@@ -57,7 +58,7 @@ export function ToolOptionsBar(props: {
             <Show when={key === 'type'}>
               <button
                 type="button"
-                class="abr-tool-icon"
+                class={styles.toolIcon}
                 aria-label="Open Brush Settings"
                 title="Brush Settings"
                 onClick={() => props.onSettings('brush-tip')}
@@ -71,7 +72,7 @@ export function ToolOptionsBar(props: {
       <Show when={props.colorMixing}>
         {(preference) => (
           <label
-            class="abr-tool-field"
+            class={styles.toolField}
             title="Smooth color blends Normal-mode paint and processes Smudge, Blur and Sharpen in linear light. Mixer Brush retains its own mixing model. This preference is not exported in ABR files."
           >
             <span>Color mixing:</span>
@@ -99,7 +100,7 @@ export function ToolOptionsBar(props: {
           }
         />
       </Show>
-      <div class="abr-tool-cluster">
+      <div class={styles.toolCluster}>
         <CompactNumber
           label="Smoothing"
           value={props.values.smoothing.amount}
@@ -115,7 +116,7 @@ export function ToolOptionsBar(props: {
         />
         <button
           type="button"
-          class="abr-tool-icon"
+          class={styles.toolIcon}
           aria-label="Smoothing options"
           title="Smoothing options"
           onClick={() => props.onSettings('smoothing')}
@@ -159,7 +160,7 @@ function ToolField(props: {
     <Show
       when={props.field.kind === 'number'}
       fallback={
-        <label class="abr-tool-field">
+        <label class={styles.toolField}>
           <span>{props.field.label === 'Eraser Mode' ? 'Mode' : props.field.label}:</span>
           <OptionMenu
             label={props.field.label}
@@ -201,9 +202,9 @@ function CompactNumber(props: {
   onChange: (value: number) => void;
 }) {
   return (
-    <label class="abr-tool-field abr-tool-number">
+    <label class={`${styles.toolField} ${styles.toolNumber}`}>
       <span>{props.displayLabel ?? props.label}:</span>
-      <span class="abr-tool-number-box">
+      <span class={styles.toolNumberBox}>
         <input
           type="number"
           aria-label={props.label}
@@ -232,7 +233,7 @@ function OptionToggle(props: { label: string; icon: string; pressed: boolean; on
   return (
     <button
       type="button"
-      class="abr-tool-icon"
+      class={styles.toolIcon}
       aria-label={props.label}
       title={props.label}
       aria-pressed={props.pressed ? 'true' : 'false'}

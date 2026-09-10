@@ -1,6 +1,7 @@
 import type { JSX } from '@solidjs/web';
 import { For, createSignal, onSettled } from 'solid-js';
 import { WebGLIframeStateDiagram } from './iframe-state-diagram';
+import styles from './three-examples-state-diagram.module.css';
 
 const THREE_EXAMPLES_URL = 'https://threejs.org/examples/';
 const DEFAULT_EXAMPLE = 'webgl_postprocessing_unreal_bloom';
@@ -62,7 +63,7 @@ export function ThreeExamplesStateDiagram(): JSX.Element {
       diagramTitle={`${exampleTitle()} · WebGL state diagram`}
       pageControls={
         <>
-          <label class="wgsd-example-picker">
+          <label class={styles.examplePicker}>
             <span>{loading() ? 'loading example…' : 'official example'}</span>
             <select
               aria-label="Three.js example"
@@ -85,7 +86,7 @@ export function ThreeExamplesStateDiagram(): JSX.Element {
             </select>
           </label>
           <a
-            class="wgsd-example-picker__link"
+            class={styles.examplePickerLink}
             href={`${THREE_EXAMPLES_URL}#${selectedExample()}`}
             target="_blank"
             rel="noreferrer"
@@ -135,12 +136,7 @@ function statusDocument(message: string, error = false): string {
   return `<!doctype html>
     <html lang="en">
       <meta charset="utf-8">
-      <style>
-        html, body { height: 100%; }
-        body { display: grid; margin: 0; place-items: center; color: ${color}; background: #07111f;
-          font: 600 14px/1.5 system-ui, sans-serif; text-align: center; }
-      </style>
-      <body><p>${escapeHtml(message)}</p></body>
+      <body style="display:grid;min-height:100dvh;margin:0;place-items:center;color:${color};background:#07111f;font:600 14px/1.5 system-ui,sans-serif;text-align:center"><p>${escapeHtml(message)}</p></body>
     </html>`;
 }
 

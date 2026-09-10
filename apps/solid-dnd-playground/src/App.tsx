@@ -1,7 +1,7 @@
-import { cn } from '@app-game/utils/cn';
-import type { ComponentProps, JSX } from '@solidjs/web';
-import { createTrackedEffect, Errored, onCleanup } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { Errored } from 'solid-js';
 import Sidebar from './components/Sidebar';
+import styles from './App.module.css';
 
 // ============================================================================
 // MARK: App (root layout)
@@ -9,8 +9,7 @@ import Sidebar from './components/Sidebar';
 
 export default function App(props: { children?: JSX.Element }): JSX.Element {
   return (
-    <div class="flex h-screen flex-col">
-      <Body class="m-0 bg-[#1a1a2e] text-[#e0e0e0]" />
+    <div class={`${styles.root} flex h-screen flex-col bg-[#1a1a2e] text-[#e0e0e0]`}>
       {/* Header */}
       <header class="flex items-center gap-4 border-b border-white/10 bg-white/5 px-6 py-3">
         {/* Spacer for mobile hamburger */}
@@ -56,18 +55,6 @@ function DemoError(props: { error: Error; reset: () => void }): JSX.Element {
       </button>
     </div>
   );
-}
-
-function Body(props: Pick<ComponentProps<'body'>, 'class'>) {
-  createTrackedEffect(() => {
-    document.body.className = cn(props.class);
-  });
-
-  onCleanup(() => {
-    document.body.className = '';
-  });
-
-  return null;
 }
 
 function toError(reason: unknown): Error {

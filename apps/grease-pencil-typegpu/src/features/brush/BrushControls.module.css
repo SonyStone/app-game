@@ -1,0 +1,21 @@
+@value root from '../../App.module.css';
+
+.root {
+  .brushSliders {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .rangeControl {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #666;
+
+    > span {
+      display: flex;
+      justify-content: space-between;
+    }
+  }
+}

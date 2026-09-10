@@ -1,0 +1,6 @@
+.root {
+  display: contents;
+  :global {
+    @import 'dockview-core/dist/styles/dockview';
+  }
+}

@@ -1,0 +1,19 @@
+.block {
+  transition: none;
+
+  &[data-kind='container'] > .block + .block {
+    margin-top: var(--solidnest-spacing);
+  }
+
+  &[data-kind='container'][data-layout='wrap'] > .block + .block {
+    margin-top: 0;
+  }
+
+  &[data-kind='container'] > .block + .block[data-kind='placeholder'] {
+    display: none;
+  }
+
+  &[data-measuring] .spacer {
+    display: none;
+  }
+}

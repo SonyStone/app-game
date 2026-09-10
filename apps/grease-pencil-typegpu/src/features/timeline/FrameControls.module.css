@@ -1,0 +1,57 @@
+@value root from '../../App.module.css';
+
+.root {
+  .iconButton {
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    flex: 0 0 auto;
+    border-radius: 4px;
+  }
+
+  .commandButton {
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #fff;
+    font-size: 11px;
+
+    @media (max-width: 700px) {
+      min-height: 44px;
+    }
+  }
+
+  .frameInput {
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: #fff;
+    padding: 0 8px;
+    color: var(--ink);
+  }
+
+  .frameControls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    padding: 16px;
+
+    .iconButton {
+      width: 100%;
+    }
+  }
+
+  .frameInput {
+    text-align: center;
+
+    @media (max-width: 700px) {
+      font-size: 16px;
+      min-height: 44px;
+    }
+  }
+}

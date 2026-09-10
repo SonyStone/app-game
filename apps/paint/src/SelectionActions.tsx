@@ -1,4 +1,5 @@
 import type { PaintSession } from './createPaintSession';
+import styles from './SelectionActions.module.css';
 
 /** Mouse, pen, and keyboard users share the same undoable selection commands. */
 export function SelectionActions(props: { session: PaintSession }) {
@@ -6,7 +7,7 @@ export function SelectionActions(props: { session: PaintSession }) {
   const unavailable = () => !props.session.ready() || selection.busy() || selection.drawing();
   const empty = () => unavailable() || selection.points().length < 3;
   return (
-    <div class="paint-selection-actions" aria-label="Selection actions">
+    <div class={styles.selectionActions} aria-label="Selection actions">
       <span role="status">
         {selection.busy()
           ? 'Applying selection…'

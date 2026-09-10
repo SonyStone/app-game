@@ -1,0 +1,16 @@
+.document {
+  font: 14px/1.7 system-ui;
+  margin: 40px;
+  max-width: 1000px;
+  color: #20353d;
+
+  button {
+    padding: 10px 20px;
+  }
+
+  pre {
+    white-space: pre-wrap;
+    background: #f2f5f4;
+    padding: 24px;
+  }
+}

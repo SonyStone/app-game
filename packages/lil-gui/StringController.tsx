@@ -1,4 +1,4 @@
-import s from './base.module.scss';
+import s from './StringController.module.css';
 import { getNameId } from './name_id';
 
 interface Props {

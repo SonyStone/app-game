@@ -15,7 +15,7 @@ import {
 } from 'three';
 
 import { useCamera } from './Camera.provider';
-import s from './SvgLoader.module.scss';
+import s from './Three.module.css';
 
 export default function Three() {
   const canvas = (<canvas class={s.canvas}></canvas>) as HTMLCanvasElement;

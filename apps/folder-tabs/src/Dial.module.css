@@ -1,0 +1,106 @@
+@value layoutDark from './FolderContent.module.css';
+@value layoutOrbits from './FolderContent.module.css';
+@value dialCell from './FolderContent.module.css';
+@value isFullscreen from './App.module.css';
+
+[data-playing='true'] :is([data-active], [data-revealed]) .dialRotor {
+  animation: dial-spin 7s linear infinite;
+}
+
+.dial {
+  grid-area: 1 / 1;
+  display: grid;
+  width: 16.7cqw;
+  height: 16.7cqw;
+  border-radius: 50%;
+  background: #20211f;
+  color: var(--paper);
+  transition: scale 0.25s;
+
+  &:hover {
+    scale: 1.035;
+  }
+
+  &:active {
+    scale: 0.98;
+  }
+}
+
+.dialRotor {
+  grid-area: 1 / 1;
+  display: grid;
+  grid-template-rows: 3cqw 1fr 3cqw;
+  justify-items: center;
+  padding-block: 1.4cqw;
+  transition: transform 650ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  > span {
+    width: 0.56cqw;
+    height: 3cqw;
+    border-radius: 1cqw;
+    background: currentColor;
+  }
+
+  > span + span {
+    grid-row: 3;
+  }
+}
+
+.layoutDark .dial {
+  background: var(--ink);
+}
+
+.layoutOrbits .dial {
+  background: #020402;
+}
+
+@keyframes dial-spin {
+  from {
+    transform: rotate(var(--angle));
+  }
+
+  to {
+    transform: rotate(calc(var(--angle) + 360deg));
+  }
+}
+
+[data-playing='true'] :is([data-active], [data-revealed]) .dialCell[data-index='0'] .dialRotor {
+  animation-duration: 5.8s;
+}
+
+[data-playing='true'] :is([data-active], [data-revealed]) .dialCell[data-index='1'] .dialRotor {
+  animation-duration: 4.2s;
+  animation-direction: reverse;
+}
+
+[data-playing='true'] :is([data-active], [data-revealed]) .dialCell[data-index='2'] .dialRotor {
+  animation-duration: 5.1s;
+}
+
+@property --screen-y {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+.isFullscreen {
+  .dial {
+    width: calc(var(--cell) * 2.5);
+    height: calc(var(--cell) * 2.5);
+
+    @media (max-width: 600px) {
+      width: calc(var(--cell) * 1.8);
+      height: calc(var(--cell) * 1.8);
+    }
+  }
+
+  .dialRotor {
+    grid-template-rows: 18% 1fr 18%;
+    padding-block: 9%;
+
+    > span {
+      width: clamp(3px, 0.56cqw, 6px);
+      height: 100%;
+    }
+  }
+}

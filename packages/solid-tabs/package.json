@@ -1,0 +1,47 @@
+{
+  "name": "@app-game/solid-tabs",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Unstyled, draggable and sortable Solid tab decks with interruptible motion.",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "solid-js": "2.0.0-rc.4",
+    "@solidjs/web": "2.0.0-rc.4"
+  },
+  "dependencies": {
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/pointer": "catalog:",
+    "@solid-primitives/raf": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
+    "@solid-primitives/scheduled": "catalog:"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "catalog:",
+    "jsdom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:",
+    "solid-js": "catalog:",
+    "@solidjs/web": "2.0.0-rc.4"
+  }
+}

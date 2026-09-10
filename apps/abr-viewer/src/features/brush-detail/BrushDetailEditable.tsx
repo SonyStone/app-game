@@ -15,6 +15,7 @@ import {
 } from 'solid-js';
 import type { BrushWithPreview } from '../../lib/abr';
 import { brushTipToPngBlob } from '../../lib/abr';
+import styles from './BrushDetailEditable.module.css';
 import { brushFormSchema, brushToFormValues, formValuesToBrush, type BrushFormValues } from './brush-form-schema';
 import { chooseDualTip, choosePattern } from './brush-resources';
 import type { ColorMixingPreference } from './color-mixing';
@@ -22,7 +23,8 @@ import { ColorProfileControl, useColorProfile } from './ColorProfile';
 import { BrushPreviewCanvas } from './components/panel-components/BrushPreviewCanvas';
 import { BrushTipPanel } from './components/panel-components/BrushTipPanel';
 import { RawSettingsPanel } from './components/panel-components/RawSettingsPanel';
-import { DualBrushPicker, TexturePicker } from './components/panel-components/ResourcePickers';
+import { DualBrushPicker } from './components/panel-components/DualBrushPicker';
+import { TexturePicker } from './components/panel-components/TexturePicker';
 import { SettingsPanel } from './components/panel-components/SettingsPanel';
 import { ToolOptionsBar } from './components/panel-components/ToolOptionsBar';
 import { sanitizeFilename } from './helper-functions/sanitizeFilename';
@@ -113,8 +115,8 @@ export function BrushDetailEditable(props: {
   }
 
   return (
-    <div ref={inspector} data-abr-brush-detail class="abr-inspector">
-      <div class="abr-brush-name">
+    <div ref={inspector} data-abr-brush-detail class={styles.inspector}>
+      <div class={styles.brushName}>
         <input
           aria-label="Brush name"
           value={values.name}
@@ -136,15 +138,15 @@ export function BrushDetailEditable(props: {
       </div>
       <ToolOptionsBar colorMixing={props.colorMixing} values={values} setValues={update} onSettings={setCategory} />
       <Show when={error()}>
-        <p class="abr-validation" role="alert">
+        <p class={styles.validation} role="alert">
           {error()}
         </p>
       </Show>
-      <div class="abr-settings-body">
-        <nav class="abr-categories" aria-label="Settings categories">
+      <div class={styles.settingsBody}>
+        <nav class={styles.categories} aria-label="Settings categories">
           <For each={categories}>
             {(item) => (
-              <div class={`abr-category ${category() === item.id ? 'is-active' : ''}`}>
+              <div class={`${styles.category} ${category() === item.id ? styles.isActive : ''}`}>
                 <Show when={item.field}>
                   {(field) => (
                     <input
@@ -193,7 +195,7 @@ export function BrushDetailEditable(props: {
             )}
           </For>
         </nav>
-        <div class="abr-settings-controls">
+        <div class={styles.settingsControls}>
           <h3>{selected().label}</h3>
           <Switch>
             <Match when={category() === 'tool'}>
@@ -202,12 +204,12 @@ export function BrushDetailEditable(props: {
               </Show>
               <SettingsPanel group="tool" values={values} setValues={update} mixer={values.tool.type === 'MixB'} />
               <Show when={clippedColor()}>
-                <p class="abr-feature-note">
+                <p class={styles.featureNote}>
                   A saved Lab color is outside sRGB. Its displayed color may differ from Photoshop; the original Lab
                   value is preserved on export.
                 </p>
               </Show>
-              <p class="abr-feature-note">
+              <p class={styles.featureNote}>
                 Saved with the preset. Tool algorithms and compatibility vary between hosts.
               </p>
             </Match>
@@ -221,13 +223,13 @@ export function BrushDetailEditable(props: {
               />
               <Show when={values.tipKind === 'dBrush'}>
                 <SettingsPanel group="bristle" values={values} setValues={update} />
-                <p class="abr-feature-note">
+                <p class={styles.featureNote}>
                   Bristle preview is approximate; Photoshop’s physical brush simulation may differ.
                 </p>
               </Show>
               <Show when={values.tipKind === 'dTips'}>
                 <SettingsPanel group="erodible" values={values} setValues={update} />
-                <p class="abr-feature-note">
+                <p class={styles.featureNote}>
                   Tip wear is preserved on export. This preview approximates the tip shape.
                 </p>
               </Show>
@@ -293,7 +295,7 @@ export function BrushDetailEditable(props: {
               </fieldset>
             </Match>
             <Match when={true}>
-              <div class="abr-feature-note">
+              <div class={styles.featureNote}>
                 <p>
                   {category() === 'noise'
                     ? 'Adds grain to soft edges. Most visible on a soft round tip.'
@@ -319,7 +321,7 @@ export function BrushDetailEditable(props: {
         aria-valuenow={previewHeight()}
         aria-valuetext={`${previewHeight()} pixels`}
         tabindex="0"
-        class="abr-preview-divider"
+        class={styles.previewDivider}
         title="Drag to resize stroke preview. Double-click to reset."
         onDblClick={() => resizePreview(260)}
         onKeyDown={(event) => {
@@ -344,8 +346,8 @@ export function BrushDetailEditable(props: {
         }}
         onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
       />
-      <div class="abr-stroke-preview">
-        <div class="abr-preview-tools">
+      <div class={styles.strokePreview}>
+        <div class={styles.previewTools}>
           <label>
             Foreground{' '}
             <input

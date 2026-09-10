@@ -1,0 +1,36 @@
+.myAddDocumentButtonWrapper {
+  height: 100%;
+  cursor: pointer;
+  display: flex;
+  opacity: 0;
+
+  &[data-active-group='true'] {
+    opacity: 0.7;
+  }
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.myAddDocumentButtonText {
+  font-size: 15px;
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  text-align: center;
+  margin: auto 4px;
+  border-radius: 2px;
+
+  .myAddDocumentButtonWrapper:hover & {
+    background-color: #ccc;
+  }
+}
+
+.myTextarea {
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  outline: 0;
+}

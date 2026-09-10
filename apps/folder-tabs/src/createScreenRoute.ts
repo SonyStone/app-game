@@ -1,5 +1,6 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, flush, onCleanup, type Accessor } from 'solid-js';
+import styles from './transitions.module.css';
 
 /**
  * Two same-document routes sharing one mounted deck. History navigation uses the
@@ -8,6 +9,7 @@ import { createSignal, flush, onCleanup, type Accessor } from 'solid-js';
  * A newer navigation supersedes the pending snapshot; disposal cancels it.
  */
 export function createScreenRoute(reducedMotion: Accessor<boolean>, screen: Accessor<HTMLElement | undefined>) {
+  document.documentElement.classList.add(styles.transitionDocument!);
   const [fullscreen, setFullscreen] = createSignal(window.location.pathname.replace(/\/$/, '') === '/fullscreen');
   let transition: ViewTransition | undefined;
   let animation: Animation | undefined;
@@ -74,6 +76,7 @@ export function createScreenRoute(reducedMotion: Accessor<boolean>, screen: Acce
 
   createEventListener(window, 'popstate', update);
   onCleanup(() => {
+    document.documentElement.classList.remove(styles.transitionDocument!);
     disposed = true;
     transition?.skipTransition();
     animation?.cancel();

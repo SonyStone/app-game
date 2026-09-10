@@ -1,28 +1,25 @@
-import { For } from 'solid-js'
-import type { Vec4 } from '../../shared/vector'
-import {
-  colorOptions,
-  sameRgb,
-  withAlpha,
-} from '../shared/color'
+import { For } from 'solid-js';
+import styles from './MaterialColorStrip.module.css';
+import type { Vec4 } from '../../shared/vector';
+import { colorOptions, sameRgb, withAlpha } from '../shared/color';
 
 type MaterialColorStripProps = {
-  activeColor: Vec4
-  alpha: number
-  label: string
-  onSelectColor: (color: Vec4) => void
-}
+  activeColor: Vec4;
+  alpha: number;
+  label: string;
+  onSelectColor: (color: Vec4) => void;
+};
 
 export function MaterialColorStrip(props: MaterialColorStripProps) {
   return (
     <>
-      <div class="control-group-label">{props.label}</div>
-      <div class="fill-color-strip">
+      <div class={styles.controlGroupLabel}>{props.label}</div>
+      <div class={styles.fillColorStrip}>
         <For each={colorOptions}>
           {(color) => (
             <button
-              class={`color-swatch ${
-                sameRgb(props.activeColor, color.value) ? 'color-swatch-active' : ''
+              class={`${styles.colorSwatch} ${
+                sameRgb(props.activeColor, color.value) ? styles.colorSwatchActive : ''
               }`}
               style={{ 'background-color': color.swatch }}
               type="button"
@@ -33,5 +30,5 @@ export function MaterialColorStrip(props: MaterialColorStripProps) {
         </For>
       </div>
     </>
-  )
+  );
 }

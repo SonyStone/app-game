@@ -27,7 +27,9 @@ The fullscreen route removes the decorative device frame and fake status bar. Ta
 - The plus button adds a sample idea. Search filters the current folder's sample ideas; Escape closes search.
 - Folder state survives tab changes and resets on reload. System motion preferences do not change the demo animations.
 
-`src/FolderStack.tsx` controls the deck and keyboard behavior. `src/createFreeDrag.ts` owns pointer capture, both live coordinates, cancellation, and click suppression. The deck uses `src/createHorizontalRail.ts` for wheel input, bounds, and focus reveal; `src/createVerticalGesture.ts` groups vertical wheel momentum. Pointer handling is disabled in those two adapters so they cannot interrupt the free gesture. The reference labels and content are in `src/folders.ts`; the three panel layouts are in `src/FolderContent.tsx`.
+The gesture controller, layout, motion and scroll geometry live in [`@app-game/solid-tabs`](../../packages/solid-tabs/README.md). `src/FolderStack.tsx` supplies only the folder skin and preview rail buttons. `src/folders.ts` supplies the demo data; `src/FolderContent.tsx` composes the content with the package's viewport, footer and square grid. Route continuity remains in the application.
+
+A second consumer at `/examples/plain.html` uses rectangular notebook tabs and editable content without importing the folder CSS or SVGs. Both examples are included in the production build. Package-level tests now live in `packages/solid-tabs/test`; this app retains its end-to-end component gesture and route tests.
 
 Icons are local SVG component imports, compiled by `vite-plugin-solid-svg`:
 

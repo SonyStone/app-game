@@ -1,0 +1,35 @@
+.featureNote {
+  color: #bbb;
+  font-size: 12px;
+  max-width: 330px;
+
+  p {
+    margin-bottom: 14px;
+  }
+}
+
+.validation {
+  color: #e5bba9;
+  font-size: 11px;
+  padding: 5px 12px;
+}
+
+.colorProfile {
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #555;
+
+  label {
+    display: grid;
+    gap: 6px;
+  }
+
+  input {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  p {
+    overflow-wrap: anywhere;
+  }
+}

@@ -1,0 +1,5 @@
+@value settingsControls from '../../BrushDetailEditable.module.css';
+
+.settingsControls .spaceY4 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 12px;
+}

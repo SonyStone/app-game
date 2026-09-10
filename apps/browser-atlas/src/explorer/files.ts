@@ -1,6 +1,6 @@
 import type { ExplorerBackend } from './backend';
-import type { ExplorerSourceId } from './model';
 import { parseTabsOutlinerDocument } from './legacyTabsOutliner';
+import type { ExplorerSourceId } from './model';
 import type { ExplorerDocument, PortableExplorerNode } from './portable';
 import {
   createEmptyExplorerDocument,
@@ -33,10 +33,7 @@ export async function readExplorerFile(file: File): Promise<ExplorerDocument> {
 function hasBrowserAtlasFormat(serialized: string): boolean {
   try {
     const value: unknown = JSON.parse(serialized);
-    return typeof value === 'object' &&
-      value !== null &&
-      'format' in value &&
-      value.format === 'browser-atlas';
+    return typeof value === 'object' && value !== null && 'format' in value && value.format === 'browser-atlas';
   } catch {
     return false;
   }
@@ -60,7 +57,11 @@ export async function createExplorerDocumentSnapshot(
 
 /** Downloads a complete portable document as JSON. */
 export function downloadExplorerDocument(document: ExplorerDocument): void {
-  downloadText(`${safeFilename(document.title)}.browser-atlas.json`, serializeExplorerDocument(document), 'application/json');
+  downloadText(
+    `${safeFilename(document.title)}.browser-atlas.json`,
+    serializeExplorerDocument(document),
+    'application/json'
+  );
 }
 
 /** Downloads one portable collection as a newline-oriented URL list. */
@@ -104,29 +105,25 @@ export function serializeExplorerHtml(
   rows: readonly ExplorerHtmlRow[],
   document?: ExplorerDocument
 ): string {
-  const contents = rows.map((row) => {
-    const label = row.url
-      ? `<a href="${escapeHtml(row.url)}">${escapeHtml(row.title)}</a>`
-      : `<span>${escapeHtml(row.title)}</span>`;
-    const description = row.description
-      ? `<small>${escapeHtml(row.description)}</small>`
-      : '';
-    return `<li style="--depth:${Math.max(0, row.depth)}">${label}${description}</li>`;
-  }).join('');
+  const contents = rows
+    .map((row) => {
+      const label = row.url
+        ? `<a style="color:#075985;text-decoration:none" href="${escapeHtml(row.url)}">${escapeHtml(row.title)}</a>`
+        : `<span>${escapeHtml(row.title)}</span>`;
+      const description = row.description
+        ? `<small style="display:block;color:#737373;font-size:.75rem">${escapeHtml(row.description)}</small>`
+        : '';
+      return `<li style="margin:.2rem 0;padding-left:${Math.max(0, row.depth) * 1.25}rem">${label}${description}</li>`;
+    })
+    .join('');
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)}</title>
-  <style>
-    body{font:14px/1.45 system-ui,sans-serif;margin:2rem;color:#171717;background:#fff}
-    h1{font-size:1.25rem;margin:0 0 1rem}ol{list-style:none;margin:0;padding:0}
-    li{margin:.2rem 0;padding-left:calc(var(--depth)*1.25rem)}a{color:#075985;text-decoration:none}
-    small{display:block;color:#737373;font-size:.75rem}@media print{body{margin:.5in}a{color:inherit}}
-  </style>
 </head>
-<body><h1>${escapeHtml(title)}</h1><ol>${contents}</ol>${document ? serializeHtmlDocumentEnvelope(document) : ''}</body>
+<body style="font:14px/1.45 system-ui,sans-serif;margin:2rem;color:#171717;background:#fff"><h1 style="font-size:1.25rem;margin:0 0 1rem">${escapeHtml(title)}</h1><ol style="list-style:none;margin:0;padding:0">${contents}</ol>${document ? serializeHtmlDocumentEnvelope(document) : ''}</body>
 </html>`;
 }
 
@@ -180,8 +177,7 @@ function escapeHtml(value: string): string {
 
 const EXPLORER_SOURCE_IDS = ['explore', 'bookmarks', 'history'] as const satisfies readonly ExplorerSourceId[];
 
-const EXPLORER_HTML_DOCUMENT_PREFIX =
-  '<script type="application/json" id="browser-atlas-document">\n';
+const EXPLORER_HTML_DOCUMENT_PREFIX = '<script type="application/json" id="browser-atlas-document">\n';
 const EXPLORER_HTML_DOCUMENT_SUFFIX = '\n</script>';
 
 const HTML_ENTITIES: Readonly<Record<string, string>> = {

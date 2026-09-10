@@ -1,7 +1,7 @@
 import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal } from 'solid-js';
 import { cn } from '../lib/utils';
-import s from './App.module.css';
+import s from './CodeBlock.module.css';
 
 // ============================================================================
 // MARK: CodeBlock

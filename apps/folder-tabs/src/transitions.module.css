@@ -1,0 +1,28 @@
+.transitionDocument {
+  &::view-transition-group(folder-screen) {
+    animation-duration: 800ms;
+    animation-timing-function: cubic-bezier(0.22, 0.7, 0.18, 1);
+  }
+
+  &::view-transition-old(root),
+  &::view-transition-old(folder-screen) {
+    display: none;
+    animation: none;
+  }
+
+  &::view-transition-group(root) {
+    animation: none;
+  }
+
+  &::view-transition-new(root),
+  &::view-transition-new(folder-screen) {
+    animation: none;
+    opacity: 1;
+    mix-blend-mode: normal;
+  }
+
+  &::view-transition-new(folder-screen) {
+    height: 100%;
+    object-fit: fill;
+  }
+}

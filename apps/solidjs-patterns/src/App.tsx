@@ -1,7 +1,6 @@
-import { cn } from '@app-game/utils/cn';
 import { createEventListener } from '@solid-primitives/event-listener';
-import type { ComponentProps, JSX } from '@solidjs/web';
-import { createMemo, createSignal, createTrackedEffect, Errored, For, onCleanup, onSettled } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createMemo, createSignal, createTrackedEffect, Errored, For, onSettled } from 'solid-js';
 import { Sidebar } from './components/Sidebar';
 import {
   applyTheme,
@@ -42,9 +41,7 @@ export function App(props: { children?: JSX.Element }): JSX.Element {
   });
 
   return (
-    <div class={`flex h-screen flex-col`}>
-      <Body class="m-0 bg-stone-50 text-stone-900 dark:bg-neutral-950 dark:text-slate-200" />
-
+    <div class="flex h-screen flex-col bg-stone-50 text-stone-900 dark:bg-neutral-950 dark:text-slate-200">
       {/* Header */}
       <header class="flex shrink-0 items-center gap-3 border-b border-stone-300 bg-stone-100/90 px-6 py-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/90">
         <div class="w-8 md:hidden" />
@@ -126,18 +123,6 @@ function PageError(props: { error: Error; reset: () => void }): JSX.Element {
       </button>
     </div>
   );
-}
-
-function Body(props: Pick<ComponentProps<'body'>, 'class'>): null {
-  createTrackedEffect(() => {
-    document.body.className = cn(props.class);
-  });
-
-  onCleanup(() => {
-    document.body.className = '';
-  });
-
-  return null;
 }
 
 function toError(reason: unknown): Error {

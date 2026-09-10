@@ -1,11 +1,12 @@
 import { Show } from 'solid-js';
+import styles from './BrushControls.module.css';
 import type { ToolMode } from '../../shared/toolMode';
 
 /** Shows the size for the current tool, with opacity for drawing tools. */
 export function BrushControls(props: BrushControlsProps) {
   return (
-    <div class="brush-sliders">
-      <label class="range-control">
+    <div class={styles.brushSliders}>
+      <label class={styles.rangeControl}>
         <span>
           {props.mode === 'erase' ? 'Eraser size' : 'Size'}
           <output>{(props.mode === 'erase' ? props.eraserRadius : props.strokeRadius).toFixed(3)}</output>
@@ -25,7 +26,7 @@ export function BrushControls(props: BrushControlsProps) {
         />
       </label>
       <Show when={props.mode !== 'erase'}>
-        <label class="range-control">
+        <label class={styles.rangeControl}>
           <span>
             Opacity<output>{Math.round(props.brushStrength * 100)}%</output>
           </span>

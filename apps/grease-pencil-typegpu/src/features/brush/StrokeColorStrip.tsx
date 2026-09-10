@@ -1,4 +1,5 @@
 import { For } from 'solid-js';
+import styles from './StrokeColorStrip.module.css';
 import type { Vec4 } from '../../shared/vector';
 import { colorOptions, sameVec4 } from '../shared/color';
 
@@ -9,11 +10,11 @@ type StrokeColorStripProps = {
 
 export function StrokeColorStrip(props: StrokeColorStripProps) {
   return (
-    <div class="color-strip">
+    <div class={styles.colorStrip}>
       <For each={colorOptions}>
         {(color) => (
           <button
-            class={`color-swatch ${sameVec4(props.activeStrokeColor, color.value) ? 'color-swatch-active' : ''}`}
+            class={`${styles.colorSwatch} ${sameVec4(props.activeStrokeColor, color.value) ? styles.colorSwatchActive : ''}`}
             style={{ 'background-color': color.swatch }}
             type="button"
             title={color.name}

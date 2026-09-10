@@ -1,7 +1,7 @@
 import { CameraProvider } from '@app-game/three-examples';
 import { createComponent, render } from '@solidjs/web';
-import '@unocss/reset/tailwind.css';
 import 'uno.css';
+import reset from '../../../packages/styles/reset.module.css';
 import { App } from './App';
 import { StatsProvider } from './Stats.provider';
 
@@ -24,3 +24,6 @@ render(
     }),
   root
 );
+
+// Scope the utility baseline to this standalone document.
+document.body.classList.add(reset.root, 'app-utilities');

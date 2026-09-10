@@ -145,12 +145,7 @@ function statusDocument(message: string, error = false): string {
   return `<!doctype html>
     <html lang="en">
       <meta charset="utf-8">
-      <style>
-        html, body { height: 100%; }
-        body { display: grid; margin: 0; place-items: center; color: ${color}; background: #07111f;
-          font: 600 14px/1.5 system-ui, sans-serif; text-align: center; }
-      </style>
-      <body><p>${escapeHtml(message)}</p></body>
+      <body style="display:grid;min-height:100dvh;margin:0;place-items:center;color:${color};background:#07111f;font:600 14px/1.5 system-ui,sans-serif;text-align:center"><p>${escapeHtml(message)}</p></body>
     </html>`;
 }
 

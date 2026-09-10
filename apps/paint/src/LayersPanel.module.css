@@ -1,0 +1,125 @@
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 14px;
+
+  h2 {
+    font-size: 12px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  span,
+  code {
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+  }
+
+  button {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+  }
+}
+
+.layerControls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 12px;
+
+  select {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    min-width: 0;
+    height: 36px;
+    padding: 0 6px;
+    flex: 1;
+  }
+
+  input {
+    width: 46px;
+    height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    text-align: right;
+    background: #fff;
+    padding: 3px;
+  }
+}
+
+.layerList {
+  max-height: min(320px, 38dvh);
+  overflow: auto;
+}
+
+.layer {
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border-top: 1px solid #ececec;
+
+  &.selected {
+    background: #e6f3fa;
+  }
+}
+
+.layerEye {
+  width: 32px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.layerSelect {
+  flex: 1;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px !important;
+  text-align: left;
+  align-items: center;
+
+  > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  small {
+    display: block;
+    color: var(--muted);
+    font-size: 10px;
+  }
+}
+
+.layerActions {
+  display: flex;
+  padding-top: 10px;
+  gap: 4px;
+
+  button {
+    min-width: 36px;
+    min-height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 4px;
+    padding: 0 6px;
+
+    &:last-child {
+      margin-left: auto;
+      color: #a45b52;
+    }
+  }
+}
+
+.blendNote {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}

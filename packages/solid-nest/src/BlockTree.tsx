@@ -28,7 +28,7 @@ import {
   SelectionEvent
 } from './events';
 import { calculateSelectionMode, normaliseSelection, updateSelection } from './selection';
-import { blockClass, injectCSS, spacerClass, spacingVar } from './styles';
+import { blockClass, spacerClass, spacingVar } from './styles';
 import { notNull } from './util/notNull';
 import { VirtualTree } from './virtual-tree';
 
@@ -118,7 +118,6 @@ export function BlockTree<K, T>(props: BlockTreeProps<K, T>) {
   const itemElements = new Map<ItemId, HTMLElement>();
   let focusElement!: HTMLDivElement;
 
-  onSettled(injectCSS);
   onCleanup(() => itemElements.clear());
 
   const options = createMemo(() => ({

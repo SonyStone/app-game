@@ -1,7 +1,7 @@
 /* @refresh reload */
 import { render } from '@solidjs/web';
-import '@unocss/reset/tailwind.css';
 import 'uno.css';
+import reset from '../../../packages/styles/reset.module.css';
 import WebBrowserAtlas from './WebApp';
 
 const root = document.getElementById('root');
@@ -10,3 +10,6 @@ if (!root) {
 }
 
 render(() => <WebBrowserAtlas />, root);
+
+// Scope the utility baseline to this standalone document.
+document.body.classList.add(reset.root, 'app-utilities');

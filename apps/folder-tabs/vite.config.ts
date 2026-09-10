@@ -4,5 +4,6 @@ import solidSvg from 'vite-plugin-solid-svg';
 
 export default defineConfig({
   plugins: [solid(), solidSvg({ svgo: { enabled: false } })],
-  server: { host: '0.0.0.0' }
+  server: { host: '0.0.0.0' },
+  build: { rollupOptions: { input: { main: 'index.html', notebook: 'examples/plain.html' } } }
 });

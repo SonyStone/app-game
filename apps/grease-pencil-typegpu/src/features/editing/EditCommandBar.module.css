@@ -1,0 +1,14 @@
+@value root from '../../App.module.css';
+
+.root .commandButton {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 11px;
+
+  @media (max-width: 700px) {
+    min-height: 44px;
+  }
+}

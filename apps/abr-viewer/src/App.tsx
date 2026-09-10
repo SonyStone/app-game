@@ -11,7 +11,7 @@ import { AbrParser, AbrWriter, brushTipToDataUrl, downloadAbrFile, type AbrFileW
 import { fetchBrushExample, type BrushExample } from './lib/brush-examples';
 import { allBrushNodes, type GroupNode } from './lib/brush-tree';
 import { createWorkspace } from './lib/workspace';
-import './styles.css';
+import styles from './App.module.css';
 
 /** Single brush workspace with live settings, undoable organization, and ABR export. */
 export function App(
@@ -133,7 +133,7 @@ export function App(
     <ColorProfileContext value={colors}>
       <div
         ref={shell}
-        class="abr-viewer abr-workspace"
+        class={`${styles.viewer} ${styles.workspace}`}
         onDragEnter={(event) => {
           if (event.dataTransfer?.types.includes('Files')) {
             event.preventDefault();
@@ -162,10 +162,10 @@ export function App(
           }
         }}
       >
-        <header class="abr-toolbar">
+        <header class={styles.toolbar}>
           <h1>Brush Editor</h1>
-          <span class="abr-document-state">{workspace.dirty() ? 'Modified' : 'Workspace'}</span>
-          <div class="abr-toolbar-history">
+          <span class={styles.documentState}>{workspace.dirty() ? 'Modified' : 'Workspace'}</span>
+          <div class={styles.toolbarHistory}>
             <button disabled={!workspace.canUndo()} onClick={workspace.undo} title="Undo (⌘Z / Ctrl+Z)">
               Undo
             </button>
@@ -196,14 +196,14 @@ export function App(
           />
         </header>
         <Show when={props.onUseBrush}>
-          <div class="abr-use-brush">
+          <div class={styles.useBrush}>
             <span>{props.useBrushNote}</span>
             <button disabled={busy() || usingBrush() || !workspace.active()} onClick={() => void useBrush()}>
               {usingBrush() ? 'Preparing brush…' : 'Use in Paint'}
             </button>
           </div>
         </Show>
-        <main class="abr-panels" style={{ '--collection-width': `${split()}%` }}>
+        <main class={styles.panels} style={{ '--collection-width': `${split()}%` }}>
           <BrushPanel workspace={workspace} onImport={() => input.click()} onExport={exportBrushes} />
           <div
             role="separator"
@@ -213,7 +213,7 @@ export function App(
             aria-valuemax={60}
             aria-valuenow={split()}
             tabindex="0"
-            class="abr-divider"
+            class={styles.divider}
             onKeyDown={(event) => {
               if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
                 event.preventDefault();
@@ -231,15 +231,15 @@ export function App(
             }}
             onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
           />
-          <section class="abr-settings" aria-label="Brush Settings">
-            <header class="abr-panel-heading">
+          <section class={styles.settings} aria-label="Brush Settings">
+            <header class={styles.panelHeading}>
               <h2>Brush Settings</h2>
               <span>{workspace.active() ? 'Live preview' : ''}</span>
             </header>
             <Show
               when={workspace.active()}
               fallback={
-                <div class="abr-empty-settings">
+                <div class={styles.emptySettings}>
                   <p>Select a brush to edit its settings</p>
                   <span>Your collection stays open while you edit.</span>
                 </div>
@@ -256,10 +256,10 @@ export function App(
             </Show>
           </section>
         </main>
-        <footer class="abr-status" role="status">
+        <footer class={styles.status} role="status">
           <span>
             <Show when={busy()}>
-              <span class="abr-loading-spinner" aria-hidden="true" />
+              <span class={styles.loadingSpinner} aria-hidden="true" />
             </Show>
             {status()}
           </span>
@@ -269,7 +269,7 @@ export function App(
           </span>
         </footer>
         <Show when={draggingFiles()}>
-          <div class="abr-drop-indicator">Drop to add brushes</div>
+          <div class={styles.dropIndicator}>Drop to add brushes</div>
         </Show>
       </div>
     </ColorProfileContext>

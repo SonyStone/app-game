@@ -474,14 +474,14 @@ Simple: returns `getBoundingClientRect()` for every element. Used as the "First"
 
 | Name          | Value                    | Purpose                                    |
 | ------------- | ------------------------ | ------------------------------------------ |
-| `blockClass`  | `'solidnest-block'`      | CSS class on all item wrappers             |
-| `spacerClass` | `'solidnest-spacer'`     | CSS class on container bottom spacers      |
+| `blockClass`  | module-generated      | CSS class on all item wrappers             |
+| `spacerClass` | module-generated     | CSS class on container bottom spacers      |
 | `durationVar` | `'--solidnest-duration'` | CSS custom property for animation duration |
 | `spacingVar`  | `'--solidnest-spacing'`  | CSS custom property for container spacing  |
 
-### `injectCSS()`
+### Stylesheet loading
 
-Called once on mount. Uses `document.adoptedStyleSheets` to inject styles without creating `<style>` elements. Idempotent (checks `adopted` flag).
+Importing `styles.ts` loads `styles.module.css`. Block and spacer selectors use the exported module classes; no stylesheet is adopted into the document at runtime.
 
 ---
 

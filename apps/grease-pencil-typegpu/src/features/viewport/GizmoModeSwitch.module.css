@@ -1,0 +1,15 @@
+@value root from '../../App.module.css';
+
+.root .gizmoModeSwitch {
+  position: absolute;
+  z-index: 22;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #ddd;
+  border-radius: 50%;
+  background: #f8f8f8ee;
+  box-shadow: 0 2px 8px #0000000a;
+  color: #237aab;
+}

@@ -3,8 +3,7 @@
 import { cn } from '@app-game/utils/cn';
 import { createEventListener } from '@solid-primitives/event-listener';
 import type { ComponentProps, JSX } from '@solidjs/web';
-import { Portal } from '@solidjs/web';
-import { createMemo, createSignal, createStore, For, omit, Show } from 'solid-js';
+import { createSignal, createStore, For, omit, Show } from 'solid-js';
 import { SolidDockView } from '../solid-dockview';
 import { RoundOutBordersExample } from './RoundOutBordersExample';
 import { SolidDockingExample } from './SolidDockingExample';
@@ -189,8 +188,6 @@ export default function DockingExample() {
       </div>
 
       <dockview-demo class="flex h-full w-full flex-1 flex-col gap-4 rounded-lg p-2">
-        <GlobalCursorStyle />
-
         <RoundOutBordersExample />
 
         <SolidTabsExample />
@@ -410,35 +407,6 @@ function ResizableHandle(props: { type?: 'horizontal' | 'vertical' }) {
         <title>Resizable handle</title>
       </svg>
     </div>
-  );
-}
-
-function GlobalCursorStyle(props: { globalCursorStyle?: 'horizontal' | 'vertical' | 'both' }) {
-  const cursorStyle = createMemo(() => {
-    switch (props.globalCursorStyle) {
-      case 'horizontal':
-        return 'col-resize';
-      case 'vertical':
-        return 'row-resize';
-      case 'both':
-        return 'move';
-      default:
-        return undefined;
-    }
-  });
-
-  return (
-    <Show when={cursorStyle()}>
-      {(cursorStyle) => (
-        <Portal mount={document.head}>
-          <style>
-            {`
-          * { cursor: ${cursorStyle()}!important; }
-        `}
-          </style>
-        </Portal>
-      )}
-    </Show>
   );
 }
 

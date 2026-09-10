@@ -11,6 +11,7 @@ import type {
 } from '../document';
 import { deleteActiveFrame, duplicateHeldFrame, insertBlankFrame, setCurrentFrame } from '../document';
 import { FrameControls } from '../features/timeline/FrameControls';
+import styles from './AppSidebar.module.css';
 import { SketchIcon } from '../shared/SketchIcon';
 import { sketchPanels, type SketchPanel } from '../shared/sketchPanel';
 import { LayerSection } from './sidebar/LayerSection';
@@ -43,19 +44,19 @@ export function AppSidebar(props: AppSidebarProps) {
   return (
     <Show when={props.panel}>
       <aside
-        class="layer-panel"
+        class={styles.layerPanel}
         id="sketch-inspector"
         aria-label={`${sketchPanels.find((panel) => panel.id === props.panel)?.label} settings`}
       >
-        <div class="inspector-heading">
+        <div class={styles.inspectorHeading}>
           <div>
             <h2>{sketchPanels.find((panel) => panel.id === props.panel)?.label}</h2>
           </div>
-          <button class="icon-button" type="button" aria-label="Close panel" onClick={props.onClose}>
+          <button class={styles.iconButton} type="button" aria-label="Close panel" onClick={props.onClose}>
             <SketchIcon name="close" />
           </button>
         </div>
-        <div class="inspector-content">
+        <div class={styles.inspectorContent}>
           <Show when={props.panel === 'layers'}>
             <LayerSection
               activeLayerId={props.activeLayerId}
@@ -65,7 +66,7 @@ export function AppSidebar(props: AppSidebarProps) {
               countVisibleStrokes={props.countVisibleStrokes}
               updateDocument={props.updateDocument}
             />
-            <p class="inspector-note">Draw on the selected layer. Use opacity to build up your sketch.</p>
+            <p class={styles.inspectorNote}>Draw on the selected layer. Use opacity to build up your sketch.</p>
           </Show>
           <Show when={props.panel === 'brush'}>
             <MaterialSection
@@ -82,10 +83,12 @@ export function AppSidebar(props: AppSidebarProps) {
               workplanes={props.workplanes}
               updateDocument={props.updateDocument}
             />
-            <p class="inspector-note">Each grid is a drawing plane in 3D space. Paper view faces the selected grid.</p>
+            <p class={styles.inspectorNote}>
+              Each grid is a drawing plane in 3D space. Paper view faces the selected grid.
+            </p>
           </Show>
           <Show when={props.panel === 'animation'}>
-            <div class="panel-header">Drawing frames</div>
+            <div class={styles.panelHeader}>Drawing frames</div>
             <FrameControls
               currentFrame={props.currentFrame}
               onSetCurrentFrame={(frame) => props.updateDocument((document) => setCurrentFrame(document, frame))}
@@ -100,7 +103,7 @@ export function AppSidebar(props: AppSidebarProps) {
               onDeleteActiveFrame={() => props.updateDocument(deleteActiveFrame)}
             />
             <OnionSkinSection onionSkin={props.onionSkin} updateDocument={props.updateDocument} />
-            <p class="inspector-note">Onion skin shows nearby frames as a guide while you draw.</p>
+            <p class={styles.inspectorNote}>Onion skin shows nearby frames as a guide while you draw.</p>
           </Show>
         </div>
       </aside>

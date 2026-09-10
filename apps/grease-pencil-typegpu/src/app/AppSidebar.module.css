@@ -1,0 +1,85 @@
+@value root from '../App.module.css';
+
+.root {
+  .iconButton {
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    flex: 0 0 auto;
+    border-radius: 4px;
+  }
+
+  .layerPanel {
+    position: absolute;
+    z-index: 40;
+    right: max(12px, env(safe-area-inset-right));
+    top: max(12px, env(safe-area-inset-top));
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    width: 310px;
+    max-height: 650px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: #fafafa;
+    box-shadow: 0 5px 20px #00000018;
+    overflow: hidden;
+
+    @media (max-width: 700px) {
+      left: max(54px, env(safe-area-inset-left));
+      width: auto;
+      max-height: none;
+    }
+  }
+
+  .inspectorHeading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+
+    h2 {
+      margin: 0;
+      font:
+        600 13px/1.4 Arial,
+        sans-serif;
+    }
+
+    .iconButton {
+      @media (max-width: 700px) {
+        width: 44px;
+        height: 44px;
+      }
+    }
+  }
+
+  .inspectorContent {
+    overflow: auto;
+    min-height: 0;
+    overscroll-behavior: contain;
+  }
+
+  .inspectorNote {
+    margin: 16px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  .panelHeader {
+    display: flex;
+    min-height: 52px;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    gap: 8px;
+  }
+}

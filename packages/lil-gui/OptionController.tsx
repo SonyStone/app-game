@@ -1,5 +1,5 @@
 import { createMemo, createSignal, For } from 'solid-js';
-import s from './base.module.scss';
+import s from './OptionController.module.css';
 import { getNameId } from './name_id';
 
 interface Props {

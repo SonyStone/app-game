@@ -1,11 +1,10 @@
 import { DockPanel, DockView, openPanel } from '@app-game/ui-components/solid-dockview';
-import 'dockview-core/dist/styles/dockview.css';
 import { For, createSignal, createTrackedEffect } from 'solid-js';
 
 import { DockviewComponent } from 'dockview-core';
 import { StarSVG } from './StarSVG';
 import nyan from './nyancat.ico';
-import './style.scss';
+import styles from './style.module.scss';
 
 type MyDocument = {
   id: string;
@@ -121,7 +120,7 @@ export function SolidDockView() {
             }}
           >
             <textarea
-              class="myTextarea"
+              class={styles.myTextarea}
               value={document.content}
               onChange={(e) => {
                 document.content = e.currentTarget.value;
@@ -187,9 +186,13 @@ function ComplexExamplePanel(props: {}) {
 
 function MyRightHeaderActions(props: { onAddPanel(): void; isGroupActive: boolean }) {
   return (
-    <div class="myAddDocumentButton-wrapper" data-active-group={props.isGroupActive} onClick={props.onAddPanel}>
+    <div
+      class={styles.myAddDocumentButtonWrapper}
+      data-active-group={props.isGroupActive}
+      onClick={props.onAddPanel}
+    >
       {/* display a green circle in active group */}
-      <div class="myAddDocumentButton-text">+</div>
+      <div class={styles.myAddDocumentButtonText}>+</div>
     </div>
   );
 }

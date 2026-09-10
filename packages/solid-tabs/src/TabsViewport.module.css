@@ -1,0 +1,22 @@
+@value root from './Tabs.module.css';
+
+.viewport {
+  display: block;
+  contain: layout paint;
+  background: var(--tabs-surface, white);
+  height: max(0px, calc(var(--sheet-height) - var(--ledge) - var(--footer-height)));
+  overflow: hidden;
+}
+
+.root[data-scrollable] .viewport {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  overflow-anchor: none;
+  touch-action: pan-y pinch-zoom;
+  scrollbar-width: none;
+}
+
+.viewport::-webkit-scrollbar {
+  width: 0;
+}

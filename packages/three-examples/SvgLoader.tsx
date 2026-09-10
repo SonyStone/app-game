@@ -6,7 +6,7 @@ import { useCamera } from './Camera.provider';
 import Controls from './Controls';
 import { loadSVG } from './loadSVG';
 import hexagon from './svg/diogram.drawio.svg?url';
-import s from './SvgLoader.module.scss';
+import s from './SvgLoader.module.css';
 
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import a from './airboat.obj?raw';

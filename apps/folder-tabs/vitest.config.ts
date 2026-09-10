@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [solid(), solidSvg({ svgo: { enabled: false } })],
   resolve: { conditions: ['development', 'browser'] },
   test: {
+    css: true,
     environment: 'jsdom',
     setupFiles: ['./test/setup.ts'],
     environmentOptions: { jsdom: { pretendToBeVisual: true } },

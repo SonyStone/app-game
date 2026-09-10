@@ -121,9 +121,9 @@ export function VideoApp() {
 
   return (
     <div>
-      <div class={s.App}>
+      <div class={s.app}>
         <div
-          class={s.column_container}
+          class={s.columnContainer}
           onWheel={(event) => {
             if (event.deltaY > 0) {
               nextFrame();
@@ -145,7 +145,7 @@ export function VideoApp() {
           </div>
         </div>
         <div class={s.player}>
-          <div class={s.action_start}>
+          <div class={s.actionStart}>
             {/* <FilesInput></FilesInput> */}
 
             <button
@@ -284,7 +284,7 @@ export function VideoApp() {
           <span>
             Is playing: <b>{`${isPlaying()}`}</b>
           </span>
-          <div class={s.frame_rate}>
+          <div class={s.frameRate}>
             <span>
               Frame rate: <b>{fps()}</b>
             </span>
@@ -293,7 +293,7 @@ export function VideoApp() {
             </select>
             <input type="number" min={0} max={9000} value={fps()} onInput={(e) => setFps((e.target as any).value)} />
           </div>
-          <div class={s.frame_rate}>
+          <div class={s.frameRate}>
             <span>Videos: </span>
             <select
               value={src()}
@@ -305,7 +305,7 @@ export function VideoApp() {
             </select>
           </div>
 
-          <div class={s.action_start}>
+          <div class={s.actionStart}>
             <button>
               <SaveIcon />
             </button>

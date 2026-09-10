@@ -4,11 +4,9 @@ import { createSignal, For, onCleanup, onSettled, ParentProps } from 'solid-js';
 import { createDockViewContext, DockViewContext } from './context';
 import { HTMLDomAttrs } from './dom-attrs';
 import { DockviewEventListeners, dockviewEventNames } from './events';
-import style from './style.scss?inline';
+import styles from './DockView.module.scss';
 import { DockViewGroupHeaderComponentProps, DockViewWatermarkProps } from './user-component';
 import { strictKeys } from './utils';
-
-let styleLoadCounter = 0;
 
 export type DockViewProps = ParentProps<
   Partial<DockviewEventListeners> & {
@@ -51,16 +49,6 @@ export const dockViewPropKeys = strictKeys<DockViewProps>()([
 export function DockView(props: DockViewProps & HTMLDomAttrs) {
   const context = createDockViewContext(props);
 
-  if (styleLoadCounter++ === 0) {
-    const styleElement = document.createElement('style');
-    const parent = document.head || document.body;
-    styleElement.textContent = style;
-    parent.appendChild(styleElement);
-    onCleanup(() => {
-      if (!--styleLoadCounter) parent.removeChild(styleElement);
-    });
-  }
-
   const [ready, setReady] = createSignal(false);
   onSettled(() => {
     const { clientWidth, clientHeight } = context.element;
@@ -76,7 +64,7 @@ export function DockView(props: DockViewProps & HTMLDomAttrs) {
 
   return (
     <DockViewContext value={context}>
-      {context.element}
+      <div class={styles.root}>{context.element}</div>
       {ready() && props.children}
       <For each={context.extraRenders()}>{(el) => el()}</For>
     </DockViewContext>

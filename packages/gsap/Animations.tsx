@@ -2,7 +2,7 @@ import { createSignal, createTrackedEffect, For, onCleanup } from 'solid-js';
 
 import PauseIcon from '@app-game/film-annotation-player/icons/pause.svg';
 import PlayIcon from '@app-game/film-annotation-player/icons/play.svg';
-import s from './Animations.module.scss';
+import s from './Animations.module.css';
 import { Box, Slider } from './Box';
 import { back, bounce, circ, expo, linear, sine } from './core/easing-2';
 import { clamp, round } from './core/utils';

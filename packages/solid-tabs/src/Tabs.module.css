@@ -1,0 +1,143 @@
+.root {
+  --stack-top: 24px;
+  --screen-height: 680px;
+  --ledge: 0px;
+  --footer-height: 0px;
+  position: relative;
+  height: var(--screen-height);
+  isolation: isolate;
+  container-type: inline-size;
+  touch-action: pan-x pinch-zoom;
+  user-select: none;
+
+  &[data-scrollable] {
+    touch-action: auto;
+  }
+}
+
+.list {
+  display: contents;
+}
+
+.card {
+  --card-drag-offset: 0px;
+  --y: calc(var(--stack-top) + var(--painted-offset, var(--offset)));
+  --sheet-height: calc(var(--screen-height) - var(--y) - var(--tab-height));
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--tab-height) var(--sheet-height);
+  transform: translateY(calc(var(--y) + var(--card-drag-offset, 0px)));
+  will-change: transform;
+  transition: none;
+  pointer-events: none;
+}
+
+.root[data-scrollable] > .card {
+  --sheet-height: calc(var(--screen-height) - var(--stack-top) - var(--tab-height));
+}
+
+.trigger {
+  position: relative;
+  grid-area: 1 / 1;
+  z-index: 1;
+  width: var(--tab-width);
+  height: calc(var(--tab-height) + 1px);
+  transform: translateX(var(--painted-left, 0px));
+  will-change: transform;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.root[data-dragging] .trigger {
+  cursor: grabbing;
+}
+
+.panel {
+  position: relative;
+  grid-area: 2 / 1;
+  width: 100%;
+  height: var(--sheet-height);
+  box-sizing: border-box;
+  padding-top: var(--ledge);
+  background: var(--tabs-surface, white);
+  contain: layout paint;
+}
+
+.card {
+  &[data-active] > .panel {
+    pointer-events: auto;
+  }
+
+  &[data-phase='departing'] {
+    animation: tabsExit 600ms
+      linear(
+        0,
+        0.006 11.11%,
+        0.027 22.22%,
+        0.066 33.33%,
+        0.133 44.44%,
+        0.244 55.56%,
+        0.432 66.67%,
+        0.701 77.78%,
+        0.904 88.89%,
+        1
+      )
+      both;
+    transition: none;
+    z-index: calc(60 + var(--rank)) !important;
+    pointer-events: none;
+  }
+
+  &[data-phase='returning'] {
+    animation: tabsReturn 500ms cubic-bezier(0.16, 0.8, 0.25, 1) -66.667ms both;
+    transition: none;
+    pointer-events: none;
+  }
+}
+
+@keyframes tabsExit {
+  from {
+    transform: translateY(var(--exit-start));
+  }
+
+  to {
+    transform: translateY(max(var(--screen-height), var(--exit-start)));
+  }
+}
+
+@keyframes tabsReturn {
+  from {
+    transform: translateY(calc(var(--y) + 7cqw));
+  }
+
+  to {
+    transform: translateY(var(--y));
+  }
+}
+
+.echo {
+  z-index: 0;
+  transition: none;
+  animation: tabsEchoReturn 500ms cubic-bezier(0.16, 0.8, 0.25, 1) 533.333ms forwards;
+  visibility: hidden;
+  opacity: 0;
+}
+
+@keyframes tabsEchoReturn {
+  from {
+    transform: translateY(calc(var(--y) + 7cqw));
+    visibility: visible;
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(var(--y));
+    visibility: visible;
+    opacity: 1;
+  }
+}

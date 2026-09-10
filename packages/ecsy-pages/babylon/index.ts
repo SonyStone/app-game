@@ -1,4 +1,4 @@
-import './index.scss';
+import styles from './index.module.scss';
 
 import { World } from '@app-game/ecsy';
 
@@ -47,6 +47,7 @@ function init() {
   const size = 0.2;
 
   const canvas = document.getElementById('renderCanvas');
+  canvas?.classList.add(styles.canvas);
   const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
 
   const scene = new BABYLON.Scene(engine);

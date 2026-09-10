@@ -647,24 +647,15 @@ importers:
 
   apps/folder-tabs:
     dependencies:
+      '@app-game/solid-tabs':
+        specifier: workspace:*
+        version: link:../../packages/solid-tabs
       '@solid-primitives/event-listener':
         specifier: 'catalog:'
         version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/media':
         specifier: 'catalog:'
         version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
-      '@solid-primitives/pointer':
-        specifier: 'catalog:'
-        version: 1.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
-      '@solid-primitives/raf':
-        specifier: 'catalog:'
-        version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
-      '@solid-primitives/resize-observer':
-        specifier: 'catalog:'
-        version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
-      '@solid-primitives/scheduled':
-        specifier: 'catalog:'
-        version: 2.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solidjs/web':
         specifier: 2.0.0-rc.4
         version: 2.0.0-rc.4(solid-js@2.0.0-rc.4)
@@ -1725,6 +1716,50 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
+
+  packages/solid-tabs:
+    dependencies:
+      '@solid-primitives/event-listener':
+        specifier: 'catalog:'
+        version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/pointer':
+        specifier: 'catalog:'
+        version: 1.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/raf':
+        specifier: 'catalog:'
+        version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/resize-observer':
+        specifier: 'catalog:'
+        version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/scheduled':
+        specifier: 'catalog:'
+        version: 2.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+    devDependencies:
+      '@solidjs/web':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(solid-js@2.0.0-rc.4)
+      '@testing-library/jest-dom':
+        specifier: 'catalog:'
+        version: 6.9.1
+      jsdom:
+        specifier: 'catalog:'
+        version: 29.1.1
+      solid-js:
+        specifier: 'catalog:'
+        version: 2.0.0-rc.4
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4)
+      vite-plugin-solid:
+        specifier: 'catalog:'
+        version: 3.0.0-next.27(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(@testing-library/jest-dom@6.9.1)(solid-js@2.0.0-rc.4)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
+
 
   packages/solid-three: {}
 

@@ -1,8 +1,8 @@
-import type { JSX } from '@solidjs/web';
 import { blockEraserSize, isBlockEraser } from '@app-game/abr-brush/blockEraser';
 import { record } from '@app-game/abr-brush/form';
 import { NavigationPuck } from '@app-game/navigation-puck';
 import { createEventListener } from '@solid-primitives/event-listener';
+import type { JSX } from '@solidjs/web';
 import { createSignal, For, onSettled, Show } from 'solid-js';
 import { AbrViewerDialog } from './brushLibrary/AbrViewerDialog';
 import { BrushPanel, ColorPanel } from './BrushPanel';
@@ -15,17 +15,19 @@ import { HistorySourceControl } from './HistorySourceControl';
 import { LayersPanel } from './LayersPanel';
 import { SelectionActions } from './SelectionActions';
 import { SketchIcon } from './SketchIcon';
-import './studio.css';
+import styles from './PaintStudio.module.css';
 import { SymmetryGuide } from './SymmetryGuide';
 import { SymmetryPanel } from './SymmetryPanel';
 
 /** Full-canvas workspace with on-demand controls; opening panels never resizes the drawing surface. */
-export default function PaintStudio(props: {
-  /** Optional link back to the embedding playground; omitted in the standalone app. */
-  experimentsHref?: string;
-  /** Host-specific controls shown in the drawing menu. */
-  applicationControls?: JSX.Element;
-} = {}) {
+export default function PaintStudio(
+  props: {
+    /** Optional link back to the embedding playground; omitted in the standalone app. */
+    experimentsHref?: string;
+    /** Host-specific controls shown in the drawing menu. */
+    applicationControls?: JSX.Element;
+  } = {}
+) {
   let canvas!: HTMLCanvasElement, stage!: HTMLDivElement, file!: HTMLInputElement, editor!: HTMLDivElement;
   const session = createPaintSession({ canvas: () => canvas, stage: () => stage });
   const {
@@ -83,7 +85,7 @@ export default function PaintStudio(props: {
     }
   );
   return (
-    <div ref={editor} class="paint-studio">
+    <div ref={editor} class={styles.studio}>
       <input
         ref={file}
         type="file"
@@ -98,7 +100,12 @@ export default function PaintStudio(props: {
           closePanel();
         }}
       />
-      <main ref={stage} class="paint-stage" aria-label="Drawing workspace" data-picking={session.mixerPicking()}>
+      <main
+        ref={stage}
+        class={styles.stage}
+        aria-label="Drawing workspace"
+        data-picking={session.mixerPicking()}
+      >
         <For each={[session.canvasVersion()]} keyed={(version) => version}>
           {() => (
             <PaintCanvas
@@ -114,7 +121,7 @@ export default function PaintStudio(props: {
           <CanvasDebug session={session} />
         </Show>
         <Show when={ready() && (state().tileCount === 0 || (session.tool() === 'abr-brush' && !brush().engine))}>
-          <div class="paint-welcome">
+          <div class={styles.welcome}>
             <p>
               {session.tool() === 'abr-brush' && !brush().engine
                 ? 'Choose an ABR brush in Brush settings.'
@@ -124,7 +131,7 @@ export default function PaintStudio(props: {
         </Show>
         <Show when={cursor() && ready() && session.tool() !== 'lasso'}>
           <div
-            class="paint-brush-cursor"
+            class={styles.brushCursor}
             style={{
               left: `${cursor()!.x}px`,
               top: `${cursor()!.y}px`,
@@ -138,7 +145,7 @@ export default function PaintStudio(props: {
           <NavigationPuck navigation={session.navigation} focusTarget={() => canvas} />
         </Show>
         <Show when={session.mixerPicking()}>
-          <div class="paint-welcome" role="status">
+          <div class={styles.welcome} role="status">
             <p>Tap the canvas to load paint. Escape to cancel.</p>
           </div>
         </Show>
@@ -153,9 +160,9 @@ export default function PaintStudio(props: {
           }}
         />
       </Show>
-      <div class="paint-ui">
+      <div class={styles.ui}>
         <span
-          class="paint-save-state"
+          class={styles.saveState}
           role="status"
           title={
             saveState() === 'saved'
@@ -173,7 +180,7 @@ export default function PaintStudio(props: {
                 : 'Unsaved changes'
             : 'Preparing drawing…'}
         </span>
-        <div class="paint-view-controls" aria-label="Canvas view">
+        <div class={styles.viewControls} aria-label="Canvas view">
           <FullscreenButton target={() => editor} onError={(message) => setError({ message, recoverable: false })} />
           <button aria-label="Zoom out" onClick={() => zoom(0.8)}>
             <SketchIcon name="minus" size={16} />
@@ -202,7 +209,7 @@ export default function PaintStudio(props: {
             </button>
           </Show>
         </div>
-        <nav class="paint-tools" aria-label="Drawing tools">
+        <nav class={styles.tools} aria-label="Drawing tools">
           <button
             aria-label="Brush"
             title="Brush · B"
@@ -235,7 +242,7 @@ export default function PaintStudio(props: {
           >
             <SketchIcon name="lasso" />
           </button>
-          <span class="paint-tool-separator" />
+          <span class={styles.toolSeparator} />
           <button
             aria-label="Mirror canvas"
             title="Mirror view"
@@ -266,7 +273,7 @@ export default function PaintStudio(props: {
         <Show when={session.tool() === 'lasso'}>
           <SelectionActions session={session} />
         </Show>
-        <div class="paint-double-puck" aria-label="Brush and color">
+        <div class={styles.doublePuck} aria-label="Brush and color">
           <button
             aria-label="Brush settings"
             title="Brush settings"
@@ -281,7 +288,7 @@ export default function PaintStudio(props: {
             <small>{blockCursor() ? 'Block' : Math.round(brush().size)}</small>
           </button>
           <button
-            class="paint-color-launcher"
+            class={styles.colorLauncher}
             aria-label="Color palette"
             title="Color palette"
             aria-expanded={panel() === 'color' ? 'true' : 'false'}
@@ -291,9 +298,9 @@ export default function PaintStudio(props: {
             <span style={{ background: brush().color }} />
           </button>
         </div>
-        <div class="paint-history">
+        <div class={styles.history}>
           <button
-            class="paint-floating"
+            class={styles.floating}
             aria-label="Undo"
             aria-keyshortcuts="Control+Z Meta+Z"
             title="Undo · ⌘/Ctrl Z"
@@ -303,7 +310,7 @@ export default function PaintStudio(props: {
             <SketchIcon name="undo" />
           </button>
           <button
-            class="paint-floating paint-redo"
+            class={`${styles.floating} ${styles.redo}`}
             aria-label="Redo"
             aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z"
             title="Redo · ⌘/Ctrl Shift Z"
@@ -314,7 +321,7 @@ export default function PaintStudio(props: {
           </button>
         </div>
         <button
-          class="paint-menu-trigger paint-floating"
+          class={`${styles.menuTrigger} ${styles.floating}`}
           aria-label="Drawing menu"
           title="Drawing menu"
           aria-expanded={panel() === 'file' ? 'true' : 'false'}
@@ -324,7 +331,7 @@ export default function PaintStudio(props: {
           <SketchIcon name="tools" />
         </button>
         <button
-          class="paint-nav-trigger paint-floating"
+          class={`${styles.navTrigger} ${styles.floating}`}
           aria-label="Navigation puck"
           title="Navigation · hold Space / V / Right click"
           onClick={() => {
@@ -335,9 +342,9 @@ export default function PaintStudio(props: {
           <SketchIcon name="pan" />
         </button>
         <Show when={panel()}>
-          <button class="paint-panel-dismiss" aria-label="Close panel" onClick={closePanel} />
-          <aside id="paint-panel" class="paint-panel" data-panel={panel()} aria-label={`${panel()} panel`}>
-            <div class="paint-panel-title">
+          <button class={styles.panelDismiss} aria-label="Close panel" onClick={closePanel} />
+          <aside id="paint-panel" class={styles.panel} data-panel={panel()} aria-label={`${panel()} panel`}>
+            <div class={styles.panelTitle}>
               <strong>
                 {panel() === 'symmetry'
                   ? 'Paint symmetry'
@@ -362,7 +369,7 @@ export default function PaintStudio(props: {
             <Show when={panel() === 'color'}>
               <ColorPanel brush={brush} updateBrush={updateBrush} />
               <Show when={session.isMixerBrush()}>
-                <div class="paint-mixer-actions" role="group" aria-label="Mixer Brush load">
+                <div class={styles.mixerActions} role="group" aria-label="Mixer Brush load">
                   <button
                     disabled={!ready() || session.brushCommandBusy()}
                     onClick={() => session.mixerCommand('load')}
@@ -376,7 +383,7 @@ export default function PaintStudio(props: {
                     Clean Brush
                   </button>
                   <button
-                    class="paint-mixer-pick"
+                    class={styles.mixerPick}
                     disabled={!ready() || session.brushCommandBusy()}
                     onClick={() => {
                       session.pickMixerPaint();
@@ -385,7 +392,7 @@ export default function PaintStudio(props: {
                   >
                     Load from canvas
                   </button>
-                  <p class="paint-panel-note">
+                  <p class={styles.panelNote}>
                     Alt/Option-click also loads canvas paint. Choose solid or multiple colors in the preset’s Tool
                     Options.
                   </p>
@@ -397,7 +404,7 @@ export default function PaintStudio(props: {
               <HistorySourceControl state={state} ready={ready} send={send} />
             </Show>
             <Show when={panel() === 'file'}>
-              <div class="paint-file-actions">
+              <div class={styles.fileActions}>
                 <button disabled={!ready()} onClick={() => file.click()}>
                   Open drawing<span>.paint</span>
                 </button>
@@ -440,7 +447,7 @@ export default function PaintStudio(props: {
                   <a href={props.experimentsHref}>Paint experiments</a>
                 </Show>
               </div>
-              <p class="paint-panel-note">
+              <p class={styles.panelNote}>
                 B · Brush &nbsp; E · Eraser
                 <br />
                 Space · Navigation &nbsp; V · Navigation
@@ -459,7 +466,7 @@ export default function PaintStudio(props: {
         />
       </Show>
       <Show when={error()}>
-        <div class="paint-error" role="alert">
+        <div class={styles.error} role="alert">
           <strong>{error()!.recoverable ? 'Canvas paused' : 'Could not complete that action'}</strong>
           <p>{error()!.message}</p>
           <Show when={error()!.recoverable}>

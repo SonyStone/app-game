@@ -1,4 +1,5 @@
 import type { StoreSetter } from 'solid-js';
+import styles from './ShapeDynamicsPanel.module.css';
 import type { BrushFormValues } from '../../brush-form-schema';
 import { CheckboxInput } from '../editable-input-components/CheckboxInput';
 import { ControlSelect } from '../editable-input-components/ControlSelect';
@@ -9,7 +10,7 @@ export function ShapeDynamicsPanel(props: {
   setValues: StoreSetter<BrushFormValues>;
 }) {
   return (
-    <div class="space-y-4">
+    <div class={styles.spaceY4}>
       <div>
         <SliderInput
           label="Size Jitter"

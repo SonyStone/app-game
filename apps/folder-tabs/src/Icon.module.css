@@ -1,0 +1,13 @@
+.icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+@property --screen-y {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}

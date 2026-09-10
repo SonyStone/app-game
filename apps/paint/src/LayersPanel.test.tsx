@@ -3,6 +3,7 @@ import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createDocument } from './document';
 import { LayersPanel } from './LayersPanel';
+import styles from './LayersPanel.module.css';
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
@@ -47,8 +48,8 @@ it('preserves controls across worker snapshots and reorders, keeping focus on pr
     layers: [...previous.layers].reverse().map((item) => ({ ...item }))
   }));
   flush();
-  expect(host.querySelector('.paint-layer-eye')).toBe(eye);
-  expect(eye.closest('.paint-layer')?.classList.contains('selected')).toBe(true);
+  expect(host.querySelector(`.${styles.layerEye}`)).toBe(eye);
+  expect(eye.closest(`.${styles.layer}`)?.classList.contains(styles.selected!)).toBe(true);
   const select = host.querySelector<HTMLButtonElement>(`[aria-label="Select ${first.name}"]`)!;
   select.click();
   expect(layer).toHaveBeenLastCalledWith({ type: 'select', id: first.id });

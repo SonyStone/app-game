@@ -1,0 +1,38 @@
+.settingSelect {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+  font-size: 12px;
+
+  > span {
+    min-width: 115px;
+    color: #bbb;
+
+    @media (max-width: 700px) {
+      min-width: 0;
+    }
+  }
+
+  select {
+    min-width: 0;
+    flex: 1;
+    background: #252525;
+    border: 1px solid #555;
+    color: #ddd;
+    padding: 4px;
+
+    @media (max-width: 700px) {
+      flex-basis: 100%;
+    }
+  }
+
+  @media (max-width: 700px) {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+}
+
+.settingFields {
+  max-width: 520px;
+}

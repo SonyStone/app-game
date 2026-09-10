@@ -1,0 +1,51 @@
+.examplePicker {
+  display: grid;
+  gap: 2px;
+  min-width: 180px;
+  color: aquamarine;
+  font:
+    700 8px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+
+  select {
+    width: 220px;
+    height: 28px;
+    padding: 0 7px;
+    color: #fff;
+    border: 1px solid #7ec7ff;
+    border-radius: 0;
+    background: #0d43bb;
+    font:
+      700 10px/1 ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      monospace;
+
+    &:disabled {
+      opacity: 0.65;
+    }
+
+    @media (max-width: 850px) {
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 850px) {
+    flex: 1 1 auto;
+  }
+}
+
+.examplePickerLink {
+  flex: 0 0 auto;
+  color: #9fd9ff;
+  font:
+    700 18px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  text-decoration: underline;
+}

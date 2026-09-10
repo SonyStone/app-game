@@ -1,0 +1,22 @@
+.previewToolNote {
+  position: absolute;
+  pointer-events: none;
+  bottom: 6px;
+  left: 6px;
+  right: 6px;
+  padding: 5px;
+  color: #dedede;
+  background: #252525e6;
+  font-size: 11px;
+}
+
+.previewWarning {
+  position: absolute;
+  bottom: 4px;
+  left: 6px;
+  right: 6px;
+  color: #eac68a;
+  font-size: 11px;
+  background: #252525cc;
+  padding: 3px;
+}

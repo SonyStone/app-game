@@ -1,5 +1,6 @@
 import licenseUrl from '@app-game/chroma/io/cmyk/LittleCMS-LICENSE.txt?url';
 import { createContext, Show, useContext } from 'solid-js';
+import styles from './ColorProfile.module.css';
 import type { createColorProfile } from './createColorProfile';
 
 /** Editor-owned profile. Independent editor instances never share source-profile selection. */
@@ -16,7 +17,7 @@ export function ColorProfileControl() {
   return (
     <Show when={colors}>
       {(state) => (
-        <div class="abr-color-profile">
+        <div class={styles.colorProfile}>
           <label>
             CMYK source profile
             <input
@@ -30,7 +31,7 @@ export function ColorProfileControl() {
               }}
             />
           </label>
-          <p class="abr-feature-note" role="status">
+          <p class={styles.featureNote} role="status">
             {state().loading()
               ? 'Opening profile…'
               : (state().profile()?.name ?? 'Select the CMYK working profile used by Photoshop.')}
@@ -39,11 +40,11 @@ export function ColorProfileControl() {
             <button onClick={() => state().clear()}>Clear profile</button>
           </Show>
           <Show when={state().error()}>
-            <p class="abr-validation" role="alert">
+            <p class={styles.validation} role="alert">
               {state().error()}
             </p>
           </Show>
-          <p class="abr-feature-note">
+          <p class={styles.featureNote}>
             <a href={licenseUrl} target="_blank" rel="noreferrer">
               LittleCMS
             </a>{' '}

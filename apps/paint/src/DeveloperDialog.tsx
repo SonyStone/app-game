@@ -2,6 +2,7 @@ import { onSettled } from 'solid-js';
 import type { PaintSession } from './createPaintSession';
 import { supportsRawPointerUpdates } from './input';
 import { SketchIcon } from './SketchIcon';
+import styles from './DeveloperDialog.module.css';
 
 /** Compact development controls; native modal focus containment keeps drawing shortcuts inactive. */
 export function DeveloperDialog(props: {
@@ -31,7 +32,7 @@ export function DeveloperDialog(props: {
   return (
     <dialog
       ref={dialog}
-      class="paint-developer"
+      class={styles.developer}
       aria-labelledby="paint-developer-title"
       onClose={props.close}
       onCancel={(event) => {
@@ -39,13 +40,13 @@ export function DeveloperDialog(props: {
         props.close();
       }}
     >
-      <div class="paint-panel-title">
+      <div class={styles.panelTitle}>
         <strong id="paint-developer-title">Developer</strong>
         <button autofocus aria-label="Close developer tools" onClick={props.close}>
           <SketchIcon name="close" size={18} />
         </button>
       </div>
-      <div class="paint-developer-controls">
+      <div class={styles.developerControls}>
         <label>
           <input
             type="checkbox"
@@ -85,7 +86,7 @@ export function DeveloperDialog(props: {
           Web Worker + OffscreenCanvas
         </label>
       </div>
-      <p class="paint-panel-note" role="status">
+      <p class={styles.panelNote} role="status">
         {props.session.switchingRenderer()
           ? 'Switching drawing engine…'
           : 'Switching keeps the drawing and settings. Undo history and the selection clipboard reset.'}
@@ -114,7 +115,7 @@ export function DeveloperDialog(props: {
           <dd>{props.session.metrics().ms.toFixed(1)} ms</dd>
         </div>
       </dl>
-      <p class="paint-panel-note">
+      <p class={styles.panelNote}>
         Submission measures CPU preparation, not pen latency. Execution mode stays in the URL; other switches apply to
         this session.
       </p>

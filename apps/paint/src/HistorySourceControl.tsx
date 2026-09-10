@@ -1,5 +1,6 @@
 import { For } from 'solid-js';
 import type { PaintSession } from './createPaintSession';
+import styles from './HistorySourceControl.module.css';
 
 /** Selects the immutable source used by ABR Erase to History without moving the undo cursor. */
 export function HistorySourceControl(props: Pick<PaintSession, 'state' | 'ready' | 'send'>) {
@@ -11,7 +12,7 @@ export function HistorySourceControl(props: Pick<PaintSession, 'state' | 'ready'
   };
   return (
     <section>
-      <label class="paint-mixing">
+      <label class={styles.mixing}>
         Erase to History source
         <select
           aria-label="Erase to History source"
@@ -29,7 +30,7 @@ export function HistorySourceControl(props: Pick<PaintSession, 'state' | 'ready'
           </For>
         </select>
       </label>
-      <p class="paint-blend-note">
+      <p class={styles.blendNote}>
         Enable Erase to History in the ABR eraser’s Tool Options, or hold Alt/Option before starting a stroke. The
         source is kept for this editing session.
       </p>

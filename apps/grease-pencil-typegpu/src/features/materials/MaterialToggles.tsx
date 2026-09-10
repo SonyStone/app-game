@@ -1,14 +1,15 @@
+import styles from './MaterialToggles.module.css';
 type MaterialTogglesProps = {
-  useStroke: boolean
-  useFill: boolean
-  onSetUseStroke: (useStroke: boolean) => void
-  onSetUseFill: (useFill: boolean) => void
-}
+  useStroke: boolean;
+  useFill: boolean;
+  onSetUseStroke: (useStroke: boolean) => void;
+  onSetUseFill: (useFill: boolean) => void;
+};
 
 export function MaterialToggles(props: MaterialTogglesProps) {
   return (
-    <div class="material-toggles">
-      <label class="toggle-control">
+    <div class={styles.materialToggles}>
+      <label class={styles.toggleControl}>
         <input
           name="material-use-stroke"
           type="checkbox"
@@ -17,7 +18,7 @@ export function MaterialToggles(props: MaterialTogglesProps) {
         />
         Stroke
       </label>
-      <label class="toggle-control">
+      <label class={styles.toggleControl}>
         <input
           name="material-use-fill"
           type="checkbox"
@@ -27,5 +28,5 @@ export function MaterialToggles(props: MaterialTogglesProps) {
         Fill
       </label>
     </div>
-  )
+  );
 }

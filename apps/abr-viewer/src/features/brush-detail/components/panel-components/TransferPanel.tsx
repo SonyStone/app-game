@@ -1,11 +1,12 @@
 import type { StoreSetter } from 'solid-js';
+import styles from './TransferPanel.module.css';
 import type { BrushFormValues } from '../../brush-form-schema';
 import { ControlSelect } from '../editable-input-components/ControlSelect';
 import { SliderInput } from '../editable-input-components/SliderInput';
 
 export function TransferPanel(props: { values: BrushFormValues['transfer']; setValues: StoreSetter<BrushFormValues> }) {
   return (
-    <div class="space-y-4">
+    <div class={styles.spaceY4}>
       <div>
         <SliderInput
           label="Opacity Jitter"

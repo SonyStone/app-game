@@ -1,7 +1,7 @@
 import { createRouter } from '@solidjs/router';
 import { render } from '@solidjs/web';
 import { standaloneNightDefenseRoutes } from './routes';
-import './styles.css';
+import styles from './main.module.css';
 
 const root = document.getElementById('root');
 
@@ -12,3 +12,5 @@ if (!root) {
 const Router = createRouter({ routes: [standaloneNightDefenseRoutes] });
 
 render(() => <Router />, root);
+
+root.classList.add(styles.root);

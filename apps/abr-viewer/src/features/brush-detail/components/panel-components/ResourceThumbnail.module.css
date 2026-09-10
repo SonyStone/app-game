@@ -1,0 +1,7 @@
+.resourceThumbnail {
+  width: 44px;
+  height: 44px;
+  display: block;
+  background: #282828;
+  flex-shrink: 0;
+}

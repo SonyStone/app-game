@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { BoxGeometry, Camera, Color, GridHelper, Mesh, MeshBasicMaterial, Scene, WebGLRenderer } from 'three';
 
 import { useCamera } from './Camera.provider';
-import s from './SvgLoader.module.scss';
+import s from './Sprites.module.css';
 import { createHouse, createTiles } from './tiles';
 
 export default function Sprites() {

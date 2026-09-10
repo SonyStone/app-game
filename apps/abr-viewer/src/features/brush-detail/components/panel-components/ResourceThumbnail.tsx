@@ -1,5 +1,6 @@
 import { createEffect, onSettled } from 'solid-js';
 import type { BrushTipImage } from '../../../../lib/abr';
+import styles from './ResourceThumbnail.module.css';
 import { attachPreview } from '../../../brush-preview/client';
 import type { PreviewResourceSource } from '../../../brush-preview/resources';
 import { brushToFormValues } from '../../brush-form-schema';
@@ -62,7 +63,7 @@ export function ResourceThumbnail(props: {
   return (
     <canvas
       ref={canvas}
-      class="abr-resource-thumbnail"
+      class={styles.resourceThumbnail}
       role="img"
       aria-label={props.label}
       data-preview-state="waiting"

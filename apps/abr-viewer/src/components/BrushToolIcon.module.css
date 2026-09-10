@@ -1,0 +1,6 @@
+.brushToolIcon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  filter: invert(0.8);
+}

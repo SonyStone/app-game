@@ -4,18 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>solid-dnd E2E Tests</title>
-    <style>
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-      body {
-        font-family: system-ui, sans-serif;
-        background: #1a1a1a;
-        color: #e0e0e0;
-      }
-    </style>
+    <script type="module">
+      import styles from './index.module.css';
+      document.body.classList.add(styles.document);
+    </script>
   </head>
   <body>
     <div id="app"></div>

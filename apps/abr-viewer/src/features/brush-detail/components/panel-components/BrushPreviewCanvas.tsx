@@ -2,6 +2,7 @@ import type { ColorMixing } from '@app-game/abr-brush/effects';
 import { supportsAirbrush } from '@app-game/abr-brush/stroke';
 import { createEffect, createSignal, onSettled, Show } from 'solid-js';
 import type { BrushWithPreview } from '../../../../lib/abr';
+import styles from './BrushPreviewCanvas.module.css';
 import { attachPreview } from '../../../brush-preview/client';
 import { brushPreviewResources } from '../../../brush-preview/resources';
 import type { PreviewPoint } from '../../../brush-preview/stroke';
@@ -162,25 +163,27 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
         data-preview-state="waiting"
       />
       <Show when={props.interactive && warning()}>
-        <span class="abr-preview-warning" role="status">
+        <span class={styles.previewWarning} role="status">
           {warning()}
         </span>
       </Show>
       <Show when={props.interactive && props.values.tool.type === 'MixB'}>
-        <span class="abr-preview-tool-note">Mixes a sample image. Each stroke starts with fresh foreground paint.</span>
+        <span class={styles.previewToolNote}>
+          Mixes a sample image. Each stroke starts with fresh foreground paint.
+        </span>
       </Show>
       <Show when={props.interactive && props.values.tool.type === 'SmTl'}>
-        <span class="abr-preview-tool-note">
+        <span class={styles.previewToolNote}>
           Smudges a sample image. The tinted band has two layers. Each stroke starts fresh.
         </span>
       </Show>
       <Show when={props.interactive && ['ShTl', 'BlTl'].includes(props.values.tool.type)}>
-        <span class="abr-preview-tool-note">
+        <span class={styles.previewToolNote}>
           Filters a sample image. The tinted band has two layers. Each stroke starts fresh.
         </span>
       </Show>
       <Show when={props.interactive && props.values.tool.type === 'ErTl'}>
-        <span class="abr-preview-tool-note">
+        <span class={styles.previewToolNote}>
           {props.values.tool.eraseToHistory
             ? 'Restores the sample layer from transparency. Each stroke starts fresh.'
             : 'Erases the sample layer to transparency. Each stroke starts fresh.'}

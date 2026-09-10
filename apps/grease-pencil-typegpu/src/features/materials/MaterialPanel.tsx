@@ -5,40 +5,41 @@ import {
   type MaterialId,
   type MaterialStrokeMode,
   type StrokeCapStyle,
-  type StrokeJoinStyle,
-} from '../../document'
-import type { Vec4 } from '../../shared/vector'
-import { MaterialColorStrip } from './MaterialColorStrip'
-import { MaterialFillControls } from './MaterialFillControls'
-import { MaterialList } from './MaterialList'
-import { MaterialStrokeControls } from './MaterialStrokeControls'
-import { MaterialToggles } from './MaterialToggles'
+  type StrokeJoinStyle
+} from '../../document';
+import styles from './MaterialPanel.module.css';
+import type { Vec4 } from '../../shared/vector';
+import { MaterialColorStrip } from './MaterialColorStrip';
+import { MaterialFillControls } from './MaterialFillControls';
+import { MaterialList } from './MaterialList';
+import { MaterialStrokeControls } from './MaterialStrokeControls';
+import { MaterialToggles } from './MaterialToggles';
 
 type MaterialPanelProps = {
-  activeMaterial: GreaseMaterial
-  activeMaterialId: MaterialId
-  materials: readonly GreaseMaterial[]
-  onSelectMaterial: (materialId: MaterialId) => void
-  onSetUseStroke: (useStroke: boolean) => void
-  onSetUseFill: (useFill: boolean) => void
-  onSetStrokeMode: (strokeMode: MaterialStrokeMode) => void
-  onSetCapStyle: (capStyle: StrokeCapStyle) => void
-  onSetJoinStyle: (joinStyle: StrokeJoinStyle) => void
-  onSetFillStyle: (fillStyle: MaterialFillStyle) => void
-  onSetGradientType: (gradientType: MaterialGradientType) => void
-  onSetFillColor: (fillColor: Vec4) => void
-  onSetMixColor: (mixColor: Vec4) => void
-}
+  activeMaterial: GreaseMaterial;
+  activeMaterialId: MaterialId;
+  materials: readonly GreaseMaterial[];
+  onSelectMaterial: (materialId: MaterialId) => void;
+  onSetUseStroke: (useStroke: boolean) => void;
+  onSetUseFill: (useFill: boolean) => void;
+  onSetStrokeMode: (strokeMode: MaterialStrokeMode) => void;
+  onSetCapStyle: (capStyle: StrokeCapStyle) => void;
+  onSetJoinStyle: (joinStyle: StrokeJoinStyle) => void;
+  onSetFillStyle: (fillStyle: MaterialFillStyle) => void;
+  onSetGradientType: (gradientType: MaterialGradientType) => void;
+  onSetFillColor: (fillColor: Vec4) => void;
+  onSetMixColor: (mixColor: Vec4) => void;
+};
 
 export function MaterialPanel(props: MaterialPanelProps) {
   return (
     <section class="material-panel">
-      <div class="panel-header">
+      <div class={styles.panelHeader}>
         <span>Materials</span>
-        <span class="panel-subtle">{props.activeMaterial.name}</span>
+        <span class={styles.panelSubtle}>{props.activeMaterial.name}</span>
       </div>
 
-      <div class="material-controls">
+      <div class={styles.materialControls}>
         <MaterialList
           activeMaterialId={props.activeMaterialId}
           materials={props.materials}
@@ -83,5 +84,5 @@ export function MaterialPanel(props: MaterialPanelProps) {
         />
       </div>
     </section>
-  )
+  );
 }

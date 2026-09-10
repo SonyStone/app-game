@@ -1,0 +1,12 @@
+.document,
+.document * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.document {
+  font-family: system-ui, sans-serif;
+  background: #1a1a1a;
+  color: #e0e0e0;
+}

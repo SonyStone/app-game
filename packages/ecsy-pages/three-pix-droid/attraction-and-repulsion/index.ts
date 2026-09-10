@@ -1,4 +1,4 @@
-import './index.scss';
+import styles from './index.module.scss';
 
 import { Read, System, SystemData, World } from '@app-game/ecsy';
 
@@ -19,6 +19,7 @@ const config = {
 
 // Initialize canvas
 const canvas = document.querySelector('canvas');
+canvas?.classList.add(styles.canvas);
 let canvasWidth = (canvas.width = window.innerWidth);
 let canvasHeight = (canvas.height = window.innerHeight);
 const ctx = canvas.getContext('2d');

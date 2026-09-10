@@ -3,6 +3,8 @@ import { createRoot, flush } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
 import { createScreenRoute } from '../src/createScreenRoute';
+import appStyles from '../src/App.module.css';
+import contentStyles from '../src/FolderContent.module.css';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -20,22 +22,22 @@ describe('fullscreen route', () => {
     document.body.append(host);
     disposers.push(render(() => <App />, host));
     flush();
-    const screen = host.querySelector('.workspace');
+    const screen = host.querySelector(`.${appStyles.workspace}`);
     const panel = host.querySelector('#panel-music');
     host.querySelector<HTMLButtonElement>('[aria-label="Add an idea to Music"]')!.click();
     flush();
-    expect(panel!.querySelector('.file-count')!.textContent).toContain('285');
-    host.querySelector<HTMLAnchorElement>('.screen-route-control')!.click();
+    expect(panel!.querySelector(`.${contentStyles.fileCount}`)!.textContent).toContain('285');
+    host.querySelector<HTMLAnchorElement>('a[href="/fullscreen"], a[href="/"]')!.click();
     flush();
     expect(location.pathname).toBe('/fullscreen');
-    expect(host.querySelector('.app')!.classList.contains('is-fullscreen')).toBe(true);
-    expect(host.querySelector('.workspace')).toBe(screen);
+    expect(host.querySelector(`.${appStyles.app}`)!.classList.contains(appStyles.isFullscreen!)).toBe(true);
+    expect(host.querySelector(`.${appStyles.workspace}`)).toBe(screen);
     expect(host.querySelector('#panel-music')).toBe(panel);
-    expect(panel!.querySelector('.file-count')!.textContent).toContain('285');
+    expect(panel!.querySelector(`.${contentStyles.fileCount}`)!.textContent).toContain('285');
     window.history.replaceState(null, '', '/');
     window.dispatchEvent(new PopStateEvent('popstate'));
     flush();
-    expect(host.querySelector('.app')!.classList.contains('is-preview')).toBe(true);
+    expect(host.querySelector(`.${appStyles.app}`)!.classList.contains('is-preview')).toBe(true);
     expect(host.querySelector('#panel-music')).toBe(panel);
   });
 
@@ -62,15 +64,15 @@ describe('fullscreen route', () => {
       document.body.append(host);
       disposers.push(render(() => <App />, host));
       flush();
-      const screen = host.querySelector('.workspace');
-      host.querySelector<HTMLAnchorElement>('.screen-route-control')!.click();
+      const screen = host.querySelector(`.${appStyles.workspace}`);
+      host.querySelector<HTMLAnchorElement>('a[href="/fullscreen"], a[href="/"]')!.click();
       flush();
       expect(location.pathname).toBe('/fullscreen');
-      host.querySelector<HTMLAnchorElement>('.screen-route-control')!.click();
+      host.querySelector<HTMLAnchorElement>('a[href="/fullscreen"], a[href="/"]')!.click();
       flush();
       expect(location.pathname).toBe('/');
       expect(transition).toHaveBeenCalledTimes(2);
-      expect(host.querySelector('.workspace')).toBe(screen);
+      expect(host.querySelector(`.${appStyles.workspace}`)).toBe(screen);
     } finally {
       window.matchMedia = originalMatchMedia;
     }

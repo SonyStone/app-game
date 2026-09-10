@@ -1,4 +1,4 @@
-import './index.scss';
+import styles from './index.module.scss';
 
 import { World } from '@app-game/ecsy';
 
@@ -149,6 +149,7 @@ function init() {
   renderer.setClearColor(0x333333);
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.domElement.classList.add(styles.canvas);
   document.body.appendChild(renderer.domElement);
   //
   window.addEventListener('resize', onWindowResize, false);

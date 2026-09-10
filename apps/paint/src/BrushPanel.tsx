@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import type { PaintSession } from './createPaintSession';
 import { normalizeStrokeSettings, type StrokeSettings } from './strokeSettings';
+import styles from './BrushPanel.module.css';
 
 /** Controls the captured settings of the next stroke, including independent flow and opacity. */
 export function BrushPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
@@ -9,7 +10,7 @@ export function BrushPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
     <>
       <StrokeControls brush={brush} updateBrush={updateBrush} />
       <section>
-        <div class="paint-section-heading">
+        <div class={styles.sectionHeading}>
           <span>{brush().engine?.id === 'textured' ? 'Textured tip' : 'Soft round'}</span>
         </div>
         <Range
@@ -57,7 +58,7 @@ export function BrushPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
             change={(spacing) => updateBrush({ spacing: spacing / 100 })}
           />
         </Show>
-        <label class="paint-check">
+        <label class={styles.check}>
           <input
             type="checkbox"
             checked={brush().pressureSize}
@@ -65,7 +66,7 @@ export function BrushPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
           />
           Pressure controls size
         </label>
-        <label class="paint-check">
+        <label class={styles.check}>
           <input
             type="checkbox"
             checked={brush().pressureFlow}
@@ -73,7 +74,7 @@ export function BrushPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
           />
           Pressure controls flow
         </label>
-        <label class="paint-mixing">
+        <label class={styles.mixing}>
           Color mixing
           <select
             aria-label="Brush color mixing"
@@ -95,11 +96,11 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
   return (
     <>
       <section>
-        <div class="paint-section-heading">
+        <div class={styles.sectionHeading}>
           <span>Foreground</span>
           <code>{brush().color.toUpperCase()}</code>
         </div>
-        <label class="paint-color-field" style={{ background: brush().color }}>
+        <label class={styles.colorField} style={{ background: brush().color }}>
           <input
             aria-label="Brush color"
             type="color"
@@ -108,7 +109,7 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
           />
           <span>Choose foreground</span>
         </label>
-        <div class="paint-swatches">
+        <div class={styles.swatches}>
           <For
             each={[
               '#1e252b',
@@ -130,17 +131,17 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
                 aria-label={`Set color ${color}`}
                 title={color}
                 style={{ background: color }}
-                class={{ selected: brush().color === color }}
+                class={{ [styles.selected!]: brush().color === color }}
                 onClick={() => updateBrush({ color })}
               />
             )}
           </For>
         </div>
-        <div class="paint-section-heading">
+        <div class={styles.sectionHeading}>
           <span>Background</span>
           <code>{(brush().backgroundColor ?? '#ffffff').toUpperCase()}</code>
         </div>
-        <label class="paint-color-field" style={{ background: brush().backgroundColor ?? '#ffffff' }}>
+        <label class={styles.colorField} style={{ background: brush().backgroundColor ?? '#ffffff' }}>
           <input
             aria-label="Background color"
             type="color"
@@ -149,7 +150,7 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
           />
           <span>Choose background</span>
         </label>
-        <div class="paint-mixer-actions" role="group" aria-label="Foreground and background colors">
+        <div class={styles.mixerActions} role="group" aria-label="Foreground and background colors">
           <button
             title="Swap colors (X)"
             onClick={() => updateBrush({ color: brush().backgroundColor ?? '#ffffff', backgroundColor: brush().color })}
@@ -163,7 +164,7 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
             Reset colors
           </button>
         </div>
-        <p class="paint-panel-note">
+        <p class={styles.panelNote}>
           Background is used by Color Dynamics and Pencil Auto Erase. It does not fill the canvas.
         </p>
       </section>
@@ -178,7 +179,7 @@ function StrokeControls(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
     props.updateBrush({ stroke: normalizeStrokeSettings({ ...settings(), ...patch }) });
   return (
     <section>
-      <label class="paint-mixing">
+      <label class={styles.mixing}>
         Stroke smoothing
         <select
           aria-label="Stroke smoothing"
@@ -195,7 +196,9 @@ function StrokeControls(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
         </select>
       </label>
       <Show when={settings().mode === 'none'}>
-        <p class="paint-panel-note">No path smoothing or stabilization. Brush stamps connect input points directly.</p>
+        <p class={styles.panelNote}>
+          No path smoothing or stabilization. Brush stamps connect input points directly.
+        </p>
       </Show>
       <Show when={settings().mode === 'normal' || settings().mode === 'smooth'}>
         <Range
@@ -206,11 +209,11 @@ function StrokeControls(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
           value={settings().mode === 'smooth' ? settings().smooth : settings().normal}
           change={(value) => update(settings().mode === 'smooth' ? { smooth: value } : { normal: value })}
         />
-        <p class="paint-panel-note">
+        <p class={styles.panelNote}>
           Higher values smooth more and follow the pen more slowly. Zero keeps curve smoothing only.
         </p>
         <Show when={settings().mode === 'smooth'}>
-          <label class="paint-check">
+          <label class={styles.check}>
             <input
               type="checkbox"
               checked={settings().catchUp}
@@ -219,7 +222,7 @@ function StrokeControls(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
             Catch up on pen lift
           </label>
         </Show>
-        <details class="paint-pressure-controls">
+        <details class={styles.pressureControls}>
           <summary>Pen pressure</summary>
           <Range
             label="Pressure minimum"
@@ -246,7 +249,7 @@ function StrokeControls(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
             value={settings().firmness * 100}
             change={(value) => update({ firmness: value / 100 })}
           />
-          <p class="paint-panel-note">
+          <p class={styles.panelNote}>
             Minimum and maximum set the pen's pressure range. Firmness at 100% is linear; higher values need a firmer
             press.
           </p>
@@ -267,7 +270,7 @@ function Range(props: {
   change: (value: number) => void;
 }) {
   return (
-    <label class="paint-range">
+    <label class={styles.range}>
       <span>
         {props.label}
         <output>

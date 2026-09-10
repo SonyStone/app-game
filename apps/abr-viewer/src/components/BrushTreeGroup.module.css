@@ -1,0 +1,44 @@
+@value block as treeBlock from '../../../../packages/solid-nest/src/BlockTree.module.css';
+@value collection from './BrushPanel.module.css';
+
+.treeGroup {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: #282828;
+
+  > div:first-child {
+    min-height: 29px;
+    padding: 4px 6px;
+    background: #282828;
+    border-bottom: 1px solid #242424;
+  }
+
+  > div:first-child > span {
+    font-size: 12px;
+    font-weight: 400;
+  }
+
+  > div:first-child > svg {
+    color: #c5c5c5;
+  }
+
+  > div:first-child > button {
+    width: 22px;
+    height: 22px;
+  }
+}
+
+.groupMenu {
+  min-height: 22px;
+  min-width: 22px;
+}
+
+.groupChildren {
+  padding: 3px 2px 5px 12px;
+}
+
+.collection .treeBlock[data-layout='wrap'] > .treeBlock:has(> div > .treeGroup) {
+  width: 100% !important;
+  flex: 0 0 100% !important;
+}

@@ -10,6 +10,7 @@ import SkipEndIcon from './icons/skip-end.svg';
 import SkipStartIcon from './icons/skip-start.svg';
 import ZoomInIcon from './icons/zoom-in.svg';
 import ZoomOutIcon from './icons/zoom-out.svg';
+import styles from './TimelineEditor.module.css';
 
 const HEADER_HEIGHT = 24;
 const ROW_HEIGHT = 24;
@@ -318,14 +319,6 @@ export function TimelineEditor(props: {
 
   return (
     <section class="absolute right-0 bottom-0 left-0 z-50 border-t border-[#c8cdd2] bg-[#f2f3f4] text-[#26323a] shadow-[0_-2px_10px_rgb(0_0_0/0.16)] select-none">
-      <style>
-        {`
-          .timeline-editor-scrollbar {
-            scrollbar-color: #7f8a8f #edf2f2;
-            scrollbar-width: auto;
-          }
-        `}
-      </style>
       <div class="grid h-10 grid-cols-[12rem_1fr_12rem] items-center border-b border-[#cfd4d8] bg-[#f7f7f7] px-3">
         <div class="flex items-center">
           <div class="inline-flex overflow-hidden rounded-[3px] border border-[#c9cdd2] shadow-[0_1px_1px_rgb(0_0_0/0.08)]">
@@ -453,7 +446,7 @@ export function TimelineEditor(props: {
               scheduleScrollbarHeightUpdate();
             }}
             aria-label="Timeline horizontal scroll"
-            class="timeline-editor-scrollbar absolute right-0 bottom-0 left-0 overflow-x-auto overflow-y-hidden"
+            class={`${styles.timelineEditorScrollbar} absolute right-0 bottom-0 left-0 overflow-x-auto overflow-y-hidden`}
             data-timeline-scrollbar
             onScroll={handleTimelineScrollbarScroll}
             style={{ height: `${scrollbarHeight()}px` }}

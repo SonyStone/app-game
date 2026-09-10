@@ -1,0 +1,89 @@
+@value isFullscreen from './App.module.css';
+
+.icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+
+.authorCredit {
+  width: var(--device-width);
+  display: grid;
+  grid-template-columns: 1fr auto 40px;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 2px;
+  border-block: 1px solid #26332f1c;
+  color: #111210;
+  text-decoration: none;
+  letter-spacing: -0.04em;
+}
+
+.creditAuthor {
+  display: grid;
+  gap: 3px;
+}
+
+.creditLabel,
+.creditSource {
+  font-size: 12px;
+  color: #737870;
+}
+
+.creditName {
+  font-size: 20px;
+  font-weight: 750;
+
+  @media (max-width: 480px) {
+    font-size: 17px;
+  }
+}
+
+.creditArrow {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #111210;
+  color: #fafbf9;
+  font-size: 30px;
+  transition:
+    background 180ms,
+    color 180ms;
+}
+
+.authorCredit {
+  &:hover .creditArrow {
+    background: #ffc66e;
+    color: #111210;
+  }
+
+  &:hover .creditName {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  @media (max-width: 480px) {
+    gap: 10px;
+  }
+}
+
+.creditSource {
+  @media (max-width: 480px) {
+    max-width: 64px;
+    text-align: right;
+  }
+}
+
+.isFullscreen > .authorCredit {
+  display: none;
+}
+
+@property --screen-y {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}

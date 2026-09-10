@@ -1,8 +1,11 @@
 import { render } from '@solidjs/web';
-import '@unocss/reset/tailwind.css';
 import 'uno.css';
+import reset from '../../../packages/styles/reset.module.css';
 import { App } from './App';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('ABR Viewer root element is missing.');
 render(() => <App />, root);
+
+// Scope the utility baseline to this standalone document.
+document.body.classList.add(reset.root, 'app-utilities');

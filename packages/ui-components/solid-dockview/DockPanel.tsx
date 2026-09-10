@@ -12,6 +12,7 @@ import {
 } from 'solid-js';
 import { DockViewContext, PanelContentRendererParams } from './context';
 import { PanelState, panelStateLUT } from './global-api';
+import styles from './DockPanel.module.scss';
 import { watch, withReactiveProps } from './utils';
 
 export type DockPanelEvent<T> = {
@@ -33,7 +34,7 @@ export type DockPanelProps = ParentProps<{
   /** set to false to hide closing button */
   closeable?: boolean;
 
-  /** one or more buttons before "close button", typically is `<div class="tab-action"> ... </div>` */
+  /** one or more buttons before "close button", typically is `<div class={styles["tab-action"]}> ... </div>` */
   actions?: JSXElement | JSXElement[];
 
   floating?: AddPanelOptions['floating'];
@@ -101,7 +102,7 @@ export function DockPanel(props: DockPanelProps) {
   createTrackedEffect(() => {
     const div = contentElement();
     if (div) {
-      div.className = props.class || 'solid-dockview-panel-content';
+      div.className = props.class || styles.panelContent;
     }
   });
 
@@ -161,7 +162,7 @@ function setupTab(props: DockPanelProps, panel: DockviewPanel, placeholder: HTML
   });
   onCleanup(() => titleObserver?.disconnect());
 
-  const className = createMemo(() => props.tabClass || 'default-tab');
+  const className = createMemo(() => props.tabClass || styles.defaultTab);
   const [tabElement, setTabElement] = createSignal<HTMLDivElement>();
   createTrackedEffect(() => {
     const div = tabElement();
@@ -179,7 +180,7 @@ function setupTab(props: DockPanelProps, panel: DockviewPanel, placeholder: HTML
           {props.actions}
           {!!(props.closeable ?? true) && (
             <div
-              class="tab-action"
+              class={styles.tabAction}
               onClick={(e) => {
                 panel.api.close();
                 e.preventDefault();

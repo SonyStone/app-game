@@ -1,4 +1,4 @@
-import s from './base.module.scss';
+import s from './GUI.module.css';
 import Hierarchy from './Hierarchy';
 
 export default function GUI(props: any) {

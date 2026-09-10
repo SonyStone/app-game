@@ -1,7 +1,7 @@
 import { Title } from '@solidjs/meta';
 import { Show, createSignal, onSettled } from 'solid-js';
 import { createDemoRecording, demoCaption } from './demo-recording';
-import './multitouch.css';
+import styles from './multitouch.module.css';
 import {
   MAX_RECORDING_MS,
   createPlayback,
@@ -247,19 +247,19 @@ export default function Multitouch() {
   });
 
   return (
-    <main class="pointer-studio" data-mode={mode()} data-live-mouse={hasLiveMouse() ? 'true' : 'false'}>
+    <main class={styles.studio} data-mode={mode()} data-live-mouse={hasLiveMouse() ? 'true' : 'false'}>
       <Title>Pointer Studio · Multitouch</Title>
       <div
         ref={surface}
-        class="pointer-studio__surface"
+        class={styles.surface}
         aria-label="Рабочая поверхность для мыши, стилуса и мультитача"
       >
         <canvas ref={canvas} aria-hidden="true" />
         <canvas ref={stylusCanvas} aria-hidden="true" />
       </div>
-      <header class="pointer-studio__header">
-        <div class="pointer-studio__brand">
-          <span class="pointer-studio__mark">
+      <header class={styles.header}>
+        <div class={styles.brand}>
+          <span class={styles.mark}>
             <Icon name="pen" />
           </span>
           <div>
@@ -267,13 +267,13 @@ export default function Multitouch() {
             <p>Мышь · Стилус · Мультитач</p>
           </div>
         </div>
-        <div class="pointer-studio__header-actions">
-          <span class="pointer-studio__status" role="status">
+        <div class={styles.headerActions}>
+          <span class={styles.status} role="status">
             <i />
             {status()}
           </span>
           <button
-            class={`pointer-studio__icon-button ${details() ? 'is-active' : ''}`}
+            class={`${styles.iconButton} ${details() ? styles.isActive : ''}`}
             onClick={() => setDetails(!details())}
             aria-label="Показывать данные PointerEvents"
             aria-pressed={details() ? 'true' : 'false'}
@@ -284,8 +284,8 @@ export default function Multitouch() {
         </div>
       </header>
       <Show when={!hasInk() && !isReplay()}>
-        <div class="pointer-studio__welcome">
-          <div class="pointer-studio__welcome-art">
+        <div class={styles.welcome}>
+          <div class={styles.welcomeArt}>
             <span />
             <span />
             <span />
@@ -297,19 +297,19 @@ export default function Multitouch() {
             <br />
             Запишите движение и рассмотрите его снова.
           </p>
-          <span class="pointer-studio__hint">Одна запись · до 60 секунд</span>
+          <span class={styles.hint}>Одна запись · до 60 секунд</span>
         </div>
       </Show>
       <Show when={isReplay()}>
-        <div class="pointer-studio__replay-note">
+        <div class={styles.replayNote}>
           <Icon name="play" /> {isDemo() ? demoCaption(position()) : 'Записанные действия'}{' '}
           <span>{isDemo() ? 'Демо' : '1×'}</span>
         </div>
       </Show>
-      <footer class="pointer-studio__footer">
+      <footer class={styles.footer}>
         <Show when={details()}>
-          <div class="pointer-studio__telemetry">
-            <span class="pointer-studio__event">{telemetry()?.type ?? 'PointerEvents'}</span>
+          <div class={styles.telemetry}>
+            <span class={styles.event}>{telemetry()?.type ?? 'PointerEvents'}</span>
             <span>
               {telemetry()?.pointerType ?? 'нет ввода'}
               {telemetry() ? ` #${telemetry()?.pointerId}` : ''}
@@ -320,17 +320,17 @@ export default function Multitouch() {
             <span>
               нажим <b>{(telemetry()?.pressure ?? 0).toFixed(2)}</b>
             </span>
-            <span class="pointer-studio__extra">
+            <span class={styles.extra}>
               наклон{' '}
               <b>
                 {telemetry()?.tiltX ?? 0}° / {telemetry()?.tiltY ?? 0}°
               </b>
             </span>
-            <span class="pointer-studio__extra">
+            <span class={styles.extra}>
               кнопки <b>{telemetry()?.buttons ?? 0}</b>
             </span>
             <Show when={telemetry()?.pointerType === 'pen'}>
-              <span class="pointer-studio__extra">
+              <span class={styles.extra}>
                 поворот <b>{telemetry()?.twist ?? 0}°</b>
               </span>
             </Show>
@@ -339,19 +339,19 @@ export default function Multitouch() {
             </Show>
           </div>
         </Show>
-        <div class="pointer-studio__dock" role="toolbar" aria-label="Запись и воспроизведение">
+        <div class={styles.dock} role="toolbar" aria-label="Запись и воспроизведение">
           <button
-            class={`pointer-studio__record ${mode() === 'recording' ? 'is-recording' : ''}`}
+            class={`${styles.record} ${mode() === 'recording' ? styles.isRecording : ''}`}
             onClick={toggleRecording}
             title="Запись / стоп · R"
             aria-label={mode() === 'recording' ? 'Остановить запись' : 'Начать новую запись'}
           >
-            <span class="pointer-studio__record-dot" />
+            <span class={styles.recordDot} />
             <span>{mode() === 'recording' ? 'Стоп' : 'Запись'}</span>
           </button>
-          <span class="pointer-studio__divider" />
+          <span class={styles.divider} />
           <button
-            class="pointer-studio__icon-button"
+            class={styles.iconButton}
             onClick={togglePlayback}
             disabled={!count() || mode() === 'recording'}
             aria-label={mode() === 'playing' ? 'Пауза' : 'Воспроизвести запись'}
@@ -359,8 +359,8 @@ export default function Multitouch() {
           >
             <Icon name={mode() === 'playing' ? 'pause' : 'play'} />
           </button>
-          <div class="pointer-studio__timeline">
-            <div class="pointer-studio__time">
+          <div class={styles.timeline}>
+            <div class={styles.time}>
               <span>{formatTime(position())}</span>
               <span>{formatTime(mode() === 'recording' ? MAX_RECORDING_MS : duration())}</span>
             </div>
@@ -376,9 +376,9 @@ export default function Multitouch() {
               aria-valuetext={`${formatTime(position())} из ${formatTime(duration())}`}
             />
           </div>
-          <span class="pointer-studio__divider" />
+          <span class={styles.divider} />
           <button
-            class="pointer-studio__icon-button"
+            class={styles.iconButton}
             onClick={returnToLive}
             disabled={mode() === 'recording'}
             aria-label={isReplay() ? 'Вернуться к живому вводу' : 'Очистить поверхность'}
@@ -387,7 +387,7 @@ export default function Multitouch() {
             <Icon name={isReplay() ? 'pen' : 'clear'} />
           </button>
         </div>
-        <p class="pointer-studio__footnote">
+        <p class={styles.footnote}>
           {mode() === 'recording'
             ? 'Записываем движения и касания'
             : isReplay()

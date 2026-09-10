@@ -1,0 +1,5 @@
+@value root from './Tabs.module.css';
+
+.root[data-scrollable] .scrollBody {
+  margin-bottom: max(0px, var(--painted-offset, var(--offset)));
+}

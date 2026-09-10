@@ -1,4 +1,13 @@
-import type { Folder } from './FolderStack';
+/** Data and visual treatment specific to the folder demo. */
+type Folder = {
+  id: string;
+  number: string;
+  name: string;
+  detail: string;
+  color: string;
+  dark: boolean;
+  left: number;
+};
 
 /** Demo content and tab positions, ordered from the back to the front initially. */
 export const folders = [

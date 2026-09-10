@@ -1,5 +1,6 @@
 import { For } from 'solid-js';
 import type { GreaseLayer, LayerId } from '../../document';
+import styles from './LayerPanel.module.css';
 import { SketchIcon } from '../../shared/SketchIcon';
 
 type LayerPanelProps = {
@@ -21,9 +22,15 @@ type LayerPanelProps = {
 export function LayerPanel(props: LayerPanelProps) {
   return (
     <>
-      <div class="panel-header">
+      <div class={styles.panelHeader}>
         <span>Layers</span>
-        <button class="icon-button" type="button" title="Add layer" onClick={props.onAddLayer} aria-label="Add layer">
+        <button
+          class={styles.iconButton}
+          type="button"
+          title="Add layer"
+          onClick={props.onAddLayer}
+          aria-label="Add layer"
+        >
           <SketchIcon name="plus" />
         </button>
       </div>
@@ -32,23 +39,23 @@ export function LayerPanel(props: LayerPanelProps) {
         <For each={props.layersTopFirst}>
           {(layer) => (
             <div
-              class={`layer-row ${
-                layer.id === props.activeLayerId ? 'layer-row-active' : ''
-              } ${layer.visible ? '' : 'layer-row-muted'}`}
+              class={`${styles.layerRow} ${
+                layer.id === props.activeLayerId ? styles.layerRowActive : ''
+              } ${layer.visible ? '' : styles.layerRowMuted}`}
             >
               <button
-                class="layer-main"
+                class={styles.layerMain}
                 type="button"
                 aria-pressed={layer.id === props.activeLayerId ? 'true' : 'false'}
                 onClick={() => props.onSelectLayer(layer.id)}
               >
-                <span class="layer-name">{layer.name}</span>
-                <span class="layer-meta">{props.countVisibleStrokes(layer.id)} strokes</span>
+                <span class={styles.layerName}>{layer.name}</span>
+                <span class={styles.layerMeta}>{props.countVisibleStrokes(layer.id)} strokes</span>
               </button>
 
-              <div class="layer-actions">
+              <div class={styles.layerActions}>
                 <button
-                  class="icon-button"
+                  class={styles.iconButton}
                   type="button"
                   title="Move layer up"
                   aria-label="Move layer up"
@@ -58,7 +65,7 @@ export function LayerPanel(props: LayerPanelProps) {
                   <SketchIcon name="up" size={16} />
                 </button>
                 <button
-                  class="icon-button"
+                  class={styles.iconButton}
                   type="button"
                   title="Move layer down"
                   aria-label="Move layer down"
@@ -68,7 +75,7 @@ export function LayerPanel(props: LayerPanelProps) {
                   <SketchIcon name="down" size={16} />
                 </button>
                 <button
-                  class="icon-button"
+                  class={styles.iconButton}
                   type="button"
                   title={layer.visible ? 'Hide layer' : 'Show layer'}
                   aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
@@ -77,7 +84,7 @@ export function LayerPanel(props: LayerPanelProps) {
                   <SketchIcon name={layer.visible ? 'eye' : 'hidden'} size={16} />
                 </button>
                 <button
-                  class="icon-button"
+                  class={styles.iconButton}
                   type="button"
                   title={layer.locked ? 'Unlock layer' : 'Lock layer'}
                   aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
@@ -86,7 +93,7 @@ export function LayerPanel(props: LayerPanelProps) {
                   <SketchIcon name={layer.locked ? 'lock' : 'unlock'} size={16} />
                 </button>
                 <button
-                  class="icon-button"
+                  class={styles.iconButton}
                   type="button"
                   title="Remove layer"
                   aria-label="Remove layer"
@@ -96,7 +103,7 @@ export function LayerPanel(props: LayerPanelProps) {
                 </button>
               </div>
 
-              <label class="layer-opacity">
+              <label class={styles.layerOpacity}>
                 Opacity
                 <input
                   type="range"

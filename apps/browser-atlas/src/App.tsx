@@ -4,7 +4,7 @@ import type { Accessor } from 'solid-js';
 import { createMemo, createSignal, createTrackedEffect, For, Match, onCleanup, Show, Switch } from 'solid-js';
 import type { DocumentExplorerBackend } from './backends/document/createDocumentExplorerBackend';
 import { createDocumentExplorerBackend } from './backends/document/createDocumentExplorerBackend';
-import './browser-atlas.css';
+import styles from './App.module.css';
 import type {
   ExplorerBackend,
   ExplorerCloudBackupAttempt,
@@ -126,7 +126,7 @@ export function BrowserAtlas(props: BrowserAtlasProps) {
   return (
     <main
       data-browser-atlas-theme={settings().appearance.lightBackground ? 'light' : 'dark'}
-      class="h-screen min-h-0 overflow-hidden bg-neutral-950 text-neutral-100 print:h-auto print:overflow-visible print:bg-white print:text-black"
+      class={`${styles.theme} h-screen min-h-0 overflow-hidden bg-neutral-950 text-neutral-100 print:h-auto print:overflow-visible print:bg-white print:text-black`}
     >
       <header class="relative flex h-8 items-center border-b border-neutral-700 px-2 print:hidden">
         <h1 class="text-sm font-medium">Browser Atlas</h1>

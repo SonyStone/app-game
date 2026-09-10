@@ -10,6 +10,7 @@ import { BrushControls } from '../features/brush/BrushControls';
 import { StrokeColorStrip } from '../features/brush/StrokeColorStrip';
 import { vec4ToCss } from '../features/shared/color';
 import { ToolModeBar } from '../features/tools/ToolModeBar';
+import styles from './AppToolbar.module.css';
 import { SketchIcon } from '../shared/SketchIcon';
 import { sketchPanels, type SketchPanel } from '../shared/sketchPanel';
 import type { ToolMode } from '../shared/toolMode';
@@ -33,7 +34,7 @@ export function AppToolbar(props: AppToolbarProps) {
 
   return (
     <div
-      class="canvas-ui"
+      class={styles.canvasUi}
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || !popup()) return;
         event.preventDefault();
@@ -43,7 +44,7 @@ export function AppToolbar(props: AppToolbarProps) {
     >
       <ToolModeBar viewportMode={props.viewportMode} mode={props.mode} onSetMode={props.onSetMode} />
 
-      <div class="viewport-mode-switch" role="group" aria-label="Viewport mode">
+      <div class={styles.viewportModeSwitch} role="group" aria-label="Viewport mode">
         <For each={['2d', '3d'] as const}>
           {(view) => (
             <button
@@ -58,9 +59,9 @@ export function AppToolbar(props: AppToolbarProps) {
         </For>
       </div>
 
-      <div class="double-puck" aria-label="Brush and color">
+      <div class={styles.doublePuck} aria-label="Brush and color">
         <button
-          class="brush-puck"
+          class={styles.brushPuck}
           type="button"
           aria-label="Brush settings"
           title="Brush settings"
@@ -68,13 +69,13 @@ export function AppToolbar(props: AppToolbarProps) {
           onClick={(event) => togglePopup('brush', event.currentTarget)}
         >
           <span
-            class="brush-stamp"
+            class={styles.brushStamp}
             style={{ width: `${Math.max(5, props.activeMaterial.strokeRadius * 240)}px`, opacity: props.brushStrength }}
           />
           <SketchIcon name={props.mode === 'erase' ? 'erase' : 'draw'} size={19} />
         </button>
         <button
-          class="color-puck"
+          class={styles.colorPuck}
           type="button"
           aria-label="Color palette"
           title="Color palette"
@@ -86,7 +87,7 @@ export function AppToolbar(props: AppToolbarProps) {
       </div>
 
       <button
-        class="corner-undo floating-button"
+        class={`${styles.cornerUndo} ${styles.floatingButton}`}
         type="button"
         title="Undo last stroke"
         aria-label="Undo last stroke"
@@ -97,7 +98,8 @@ export function AppToolbar(props: AppToolbarProps) {
       </button>
 
       <button
-        class="marking-trigger floating-button"
+        data-quick-tools
+        class={`${styles.markingTrigger} ${styles.floatingButton}`}
         type="button"
         aria-label="Quick tools"
         title="Quick tools"
@@ -108,14 +110,14 @@ export function AppToolbar(props: AppToolbarProps) {
       </button>
 
       <Show when={popup()}>
-        <button class="popup-dismiss" type="button" aria-label="Close quick controls" onClick={closePopup} />
+        <button class={styles.popupDismiss} type="button" aria-label="Close quick controls" onClick={closePopup} />
       </Show>
       <Show when={popup() === 'menu'}>
-        <nav class="marking-menu" aria-label="Quick tools menu">
+        <nav class={styles.markingMenu} aria-label="Quick tools menu">
           <For each={sketchPanels}>
             {(panel, index) => (
               <button
-                class="panel-launcher floating-button"
+                class={`panel-launcher ${styles.floatingButton}`}
                 type="button"
                 aria-label={panel.label}
                 title={panel.label}
@@ -132,7 +134,7 @@ export function AppToolbar(props: AppToolbarProps) {
             )}
           </For>
           <button
-            class="floating-button"
+            class={styles.floatingButton}
             type="button"
             aria-label="Drawing actions"
             title="Drawing actions"
@@ -145,10 +147,10 @@ export function AppToolbar(props: AppToolbarProps) {
       </Show>
 
       <Show when={popup() === 'brush'}>
-        <section class="puck-popover brush-popover" aria-label="Brush settings panel">
-          <div class="popover-heading">
+        <section class={`${styles.puckPopover} brush-popover`} aria-label="Brush settings panel">
+          <div class={styles.popoverHeading}>
             Brush
-            <button class="icon-button" type="button" aria-label="Close brush settings" onClick={closePopup}>
+            <button class={styles.iconButton} type="button" aria-label="Close brush settings" onClick={closePopup}>
               <SketchIcon name="close" size={17} />
             </button>
           </div>
@@ -166,10 +168,10 @@ export function AppToolbar(props: AppToolbarProps) {
         </section>
       </Show>
       <Show when={popup() === 'color'}>
-        <section class="puck-popover color-popover" aria-label="Color palette panel">
-          <div class="popover-heading">
+        <section class={`${styles.puckPopover} color-popover`} aria-label="Color palette panel">
+          <div class={styles.popoverHeading}>
             Color
-            <button class="icon-button" type="button" aria-label="Close color palette" onClick={closePopup}>
+            <button class={styles.iconButton} type="button" aria-label="Close color palette" onClick={closePopup}>
               <SketchIcon name="close" size={17} />
             </button>
           </div>
@@ -179,7 +181,7 @@ export function AppToolbar(props: AppToolbarProps) {
               props.updateDocument((document) => setActiveMaterialStrokeColor(document, color))
             }
           />
-          <label class="custom-color-control">
+          <label class={styles.customColorControl}>
             Custom color
             <input
               type="color"
@@ -208,22 +210,22 @@ export function AppToolbar(props: AppToolbarProps) {
         </section>
       </Show>
       <Show when={popup() === 'actions'}>
-        <section class="drawing-actions-popover" aria-label="Drawing actions panel">
-          <div class="popover-heading">
+        <section class={styles.drawingActionsPopover} aria-label="Drawing actions panel">
+          <div class={styles.popoverHeading}>
             Drawing
-            <button class="icon-button" type="button" aria-label="Close drawing actions" onClick={closePopup}>
+            <button class={styles.iconButton} type="button" aria-label="Close drawing actions" onClick={closePopup}>
               <SketchIcon name="close" size={17} />
             </button>
           </div>
           <Show when={props.viewportMode === '3d'}>
-          <label class="touch-drawing-toggle toggle-control">
-            <input
-              type="checkbox"
-              checked={props.touchDrawing}
-              onChange={(event) => props.onSetTouchDrawing(event.currentTarget.checked)}
-            />
-            Draw with finger
-          </label>
+            <label class={`${styles.touchDrawingToggle} ${styles.toggleControl}`}>
+              <input
+                type="checkbox"
+                checked={props.touchDrawing}
+                onChange={(event) => props.onSetTouchDrawing(event.currentTarget.checked)}
+              />
+              Draw with finger
+            </label>
           </Show>
           <button
             type="button"

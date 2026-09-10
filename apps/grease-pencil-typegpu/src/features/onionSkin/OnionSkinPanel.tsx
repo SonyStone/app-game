@@ -1,19 +1,20 @@
-import type { OnionSkinSettings } from '../../document'
+import type { OnionSkinSettings } from '../../document';
+import styles from './OnionSkinPanel.module.css';
 
 type OnionSkinPanelProps = {
-  onionSkin: OnionSkinSettings
-  onSetEnabled: (enabled: boolean) => void
-  onSetPreviousFrames: (previousFrames: number) => void
-  onSetNextFrames: (nextFrames: number) => void
-  onSetOpacity: (opacity: number) => void
-}
+  onionSkin: OnionSkinSettings;
+  onSetEnabled: (enabled: boolean) => void;
+  onSetPreviousFrames: (previousFrames: number) => void;
+  onSetNextFrames: (nextFrames: number) => void;
+  onSetOpacity: (opacity: number) => void;
+};
 
 export function OnionSkinPanel(props: OnionSkinPanelProps) {
   return (
     <section class="onion-panel">
-      <div class="panel-header">
+      <div class={styles.panelHeader}>
         <span>Onion Skin</span>
-        <label class="toggle-control">
+        <label class={styles.toggleControl}>
           <input
             name="onion-enabled"
             type="checkbox"
@@ -24,8 +25,8 @@ export function OnionSkinPanel(props: OnionSkinPanelProps) {
         </label>
       </div>
 
-      <div class="onion-controls">
-        <label class="number-control">
+      <div class={styles.onionControls}>
+        <label class={styles.numberControl}>
           Back
           <input
             name="onion-previous"
@@ -37,7 +38,7 @@ export function OnionSkinPanel(props: OnionSkinPanelProps) {
             onInput={(event) => props.onSetPreviousFrames(event.currentTarget.valueAsNumber)}
           />
         </label>
-        <label class="number-control">
+        <label class={styles.numberControl}>
           Ahead
           <input
             name="onion-next"
@@ -49,7 +50,7 @@ export function OnionSkinPanel(props: OnionSkinPanelProps) {
             onInput={(event) => props.onSetNextFrames(event.currentTarget.valueAsNumber)}
           />
         </label>
-        <label class="onion-opacity">
+        <label class={styles.onionOpacity}>
           Opacity
           <input
             name="onion-opacity"
@@ -63,5 +64,5 @@ export function OnionSkinPanel(props: OnionSkinPanelProps) {
         </label>
       </div>
     </section>
-  )
+  );
 }

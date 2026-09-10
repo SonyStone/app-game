@@ -1,0 +1,126 @@
+@value gui from './GUI.module.css';
+@value root from './GUI.module.css';
+
+@charset "UTF-8";
+
+.gui {
+  &.root > .children > .gui > .title {
+    border: 0 solid var(--widget-color);
+    border-width: 1px 0;
+    transition: border-color 300ms;
+  }
+
+  &.root > .children > .gui.closed > .title {
+    border-bottom-color: transparent;
+  }
+
+  .gui .gui {
+    > .title {
+      border: none;
+    }
+
+    > .children {
+      border: none;
+      margin-left: var(--folder-indent);
+      border-left: 2px solid var(--widget-color);
+    }
+  }
+}
+
+.title {
+  --title-height: calc(var(--widget-height) + var(--spacing) * 1.25);
+  height: var(--title-height);
+  line-height: calc(var(--title-height) - 4px);
+  font-weight: 600;
+  padding: 0 var(--padding);
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  outline: none;
+  text-decoration-skip: objects;
+
+  &:before {
+    font-family: 'lil-gui';
+    content: '▾';
+    padding-right: 2px;
+    display: inline-block;
+  }
+
+  &:active {
+    background: var(--title-background-color);
+    opacity: 0.75;
+  }
+
+  &:focus {
+    @media (hover: hover) {
+      text-decoration: underline var(--focus-color);
+    }
+  }
+}
+
+body:not(.lilGuiDragging) .title:hover {
+  @media (hover: hover) {
+    background: var(--title-background-color);
+    opacity: 0.85;
+  }
+}
+
+.root {
+  > .title {
+    background: var(--title-background-color);
+    color: var(--title-text-color);
+  }
+
+  > .children {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  > .children::-webkit-scrollbar {
+    width: var(--scrollbar-width);
+    height: var(--scrollbar-width);
+    background: var(--background-color);
+  }
+
+  > .children::-webkit-scrollbar-thumb {
+    border-radius: var(--scrollbar-width);
+    background: var(--focus-color);
+  }
+
+  > .title:focus {
+    text-decoration: none !important;
+  }
+}
+
+.closed {
+  > .title:before {
+    content: '▸';
+  }
+
+  > .children {
+    transform: translateY(-7px);
+    opacity: 0;
+  }
+
+  &:not(.transition) > .children {
+    display: none;
+  }
+}
+
+.transition > .children {
+  transition-duration: 300ms;
+  transition-property: height, opacity, transform;
+  transition-timing-function: cubic-bezier(0.2, 0.6, 0.35, 1);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.children:empty:before {
+  content: 'Empty';
+  padding: 0 var(--padding);
+  margin: var(--spacing) 0;
+  display: block;
+  height: var(--widget-height);
+  font-style: italic;
+  line-height: var(--widget-height);
+  opacity: 0.5;
+}

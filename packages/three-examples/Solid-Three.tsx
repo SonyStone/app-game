@@ -1,5 +1,5 @@
 import { Renderer } from './renderer';
-import s from './SvgLoader.module.scss';
+import s from './Solid-Three.module.css';
 import TestScene from './Test-Scene';
 
 export default function SolidThree() {

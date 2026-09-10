@@ -1,0 +1,45 @@
+.panelNote {
+  padding: 0 16px;
+  font-size: 10px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.symmetryControls {
+  display: grid;
+  gap: 12px;
+  border: 0;
+  margin: 0;
+  padding: 16px;
+  min-width: 0;
+
+  > label:not(.checkbox) {
+    display: grid;
+    grid-template-columns: 1fr minmax(0, 130px);
+    align-items: center;
+    gap: 12px;
+  }
+
+  input[type='number'],
+  select {
+    min-width: 0;
+    width: 100%;
+    min-height: 36px;
+    padding: 4px 8px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+
+  > button {
+    min-height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+  }
+
+  > .checkbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+  }
+}

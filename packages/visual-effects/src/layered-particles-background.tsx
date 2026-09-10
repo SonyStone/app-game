@@ -97,37 +97,6 @@ const createSpecks = (
   });
 };
 
-const layeredParticlesStyles = `
-  @keyframes layered-particles-twinkle {
-    0% {
-      opacity: 0;
-      transform: translate3d(0, 0, 0) scale(0.35);
-    }
-
-    30% {
-      opacity: 0;
-    }
-
-    52% {
-      opacity: var(--layered-speck-opacity, 0.7);
-    }
-
-    72% {
-      opacity: 0;
-    }
-
-    100% {
-      opacity: 0;
-      transform: translate3d(
-          var(--layered-speck-drift-x, 160px),
-          var(--layered-speck-drift-y, 90px),
-          0
-        )
-        scale(1);
-    }
-  }
-`;
-
 export function LayeredParticlesBackground(rawProps: ParticlesBackgroundProps): JSX.Element {
   const props = merge(
     {
@@ -256,7 +225,6 @@ export function LayeredParticlesBackground(rawProps: ParticlesBackgroundProps): 
       style={rootStyle()}
       aria-hidden="true"
     >
-      <style>{layeredParticlesStyles}</style>
       <div
         style={
           {
@@ -321,14 +289,17 @@ export function LayeredParticlesBackground(rawProps: ParticlesBackgroundProps): 
               }
             >
               <span
+                class={s.twinkle}
                 style={
                   {
                     '--layered-speck-drift-x': `${speck.driftX}px`,
                     '--layered-speck-drift-y': `${speck.driftY}px`,
                     '--layered-speck-opacity': speck.opacity.toFixed(2),
-                    animation: shouldReduceMotion()
-                      ? 'none'
-                      : `layered-particles-twinkle ${speck.duration}s cubic-bezier(0.25, 0.25, 0.75, 0.75) ${speck.delay}s infinite`,
+                    'animation-duration': `${speck.duration}s`,
+                    'animation-delay': `${speck.delay}s`,
+                    'animation-timing-function': 'cubic-bezier(0.25, 0.25, 0.75, 0.75)',
+                    'animation-iteration-count': 'infinite',
+                    'animation-play-state': shouldReduceMotion() ? 'paused' : 'running',
                     background: `radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95), ${toRgba(
                       speck.color,
                       props.alphaParticles ? 0.45 : 0.72

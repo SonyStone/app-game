@@ -1,6 +1,7 @@
 import { createEffect, lazy, onCleanup } from 'solid-js';
 import type { PaintSession } from '../createPaintSession';
 import { SketchIcon } from '../SketchIcon';
+import styles from './AbrViewerDialog.module.css';
 
 const Viewer = lazy(() => import('@app-game/abr-viewer/editor').then((module) => ({ default: module.App })));
 
@@ -22,7 +23,7 @@ export function AbrViewerDialog(props: {
   return (
     <dialog
       ref={dialog}
-      class="paint-abr-viewer"
+      class={styles.abrViewer}
       aria-label="ABR brush editor"
       onCancel={(event) => {
         event.preventDefault();
@@ -32,7 +33,7 @@ export function AbrViewerDialog(props: {
         if (!dialog.open && props.open) props.close();
       }}
     >
-      <header class="paint-abr-title">
+      <header class={styles.abrTitle}>
         <strong>ABR Brush · experimental</strong>
         <button aria-label="Close ABR editor" onClick={props.close}>
           <SketchIcon name="close" />

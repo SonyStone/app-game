@@ -1,0 +1,334 @@
+.viewer {
+  /* Photoshop-like dark theme colors */
+  --color-ps-bg-dark: #1e1e1e;
+  --color-ps-bg: #2b2b2b;
+  --color-ps-bg-light: #3c3c3c;
+  --color-ps-bg-lighter: #4a4a4a;
+
+  --color-ps-border-dark: #1a1a1a;
+  --color-ps-border: #3d3d3d;
+  --color-ps-border-light: #5a5a5a;
+
+  --color-ps-text-muted: #8c8c8c;
+  --color-ps-text: #cccccc;
+  --color-ps-text-bright: #ffffff;
+
+  --color-ps-accent: #2d9cdb;
+  --color-ps-accent-hover: #3daee9;
+  --color-ps-accent-active: #1d8cc9;
+
+  --color-ps-success: #27ae60;
+  --color-ps-warning: #f39c12;
+  --color-ps-error: #e74c3c;
+
+  --font-sans: 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+  --font-mono: 'Consolas', 'Monaco', 'Andale Mono', 'Ubuntu Mono', monospace;
+
+  --shadow-ps: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-ps-lg: 0 4px 16px rgba(0, 0, 0, 0.6);
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #1e1e1e;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #4a4a4a;
+    border-radius: 5px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #5a5a5a;
+  }
+
+  ::selection {
+    background-color: rgba(45, 156, 219, 0.4);
+  }
+}
+
+.workspace {
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #282828;
+  color: #d5d5d5;
+  font:
+    13px/1.35 'Segoe UI',
+    Arial,
+    sans-serif;
+  --color-ps-text-muted: #b0b0b0;
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  button {
+    cursor: pointer;
+
+    &:disabled {
+      cursor: default;
+      opacity: 0.38;
+    }
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 1px solid #55b5ea;
+    outline-offset: -1px;
+  }
+
+  input {
+    &[type='checkbox'] {
+      accent-color: #bababa;
+      width: 13px;
+      height: 13px;
+      flex-shrink: 0;
+    }
+
+    &[type='range'] {
+      accent-color: #c6c6c6;
+      height: 4px;
+      border-radius: 0;
+      background: #535353;
+    }
+
+    &[type='range']::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #c6c6c6;
+    }
+  }
+}
+
+.toolbar {
+  height: 37px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  background: #242424;
+  border-bottom: 1px solid #151515;
+
+  h1 {
+    font-size: 12px;
+    font-weight: 600;
+    margin: 0 9px 0 0;
+  }
+
+  @media (max-width: 700px) {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 64px;
+    padding: 5px 8px;
+  }
+}
+
+.toolbar button,
+.panelHeading button {
+  border: 1px solid #4c4c4c;
+  background: #363636;
+  color: #dedede;
+  padding: 3px 9px;
+  font-size: 11px;
+  white-space: nowrap;
+  border-radius: 2px;
+}
+
+.toolbar button:hover:not(:disabled),
+.panelHeading button:hover {
+  background: #464646;
+}
+
+.toolbarHistory {
+  margin-left: auto;
+  display: flex;
+  gap: 3px;
+  margin-right: 12px;
+
+  @media (max-width: 700px) {
+    margin-right: 0;
+  }
+}
+
+.loadingSpinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -2px;
+  animation: abr-loading-spin 750ms linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes abr-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.documentState {
+  color: #b0b0b0;
+  font-size: 10px;
+
+  @media (max-width: 700px) {
+    display: none;
+  }
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: minmax(280px, var(--collection-width)) 5px minmax(420px, 1fr);
+  flex: 1;
+  min-height: 0;
+
+  @media (max-width: 950px) {
+    grid-template-columns: minmax(245px, 40%) 5px minmax(0, 1fr);
+  }
+
+  @media (max-width: 700px) {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+}
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+  background: #303030;
+
+  @media (max-width: 700px) {
+    min-height: 540px;
+    flex: 1 0 540px;
+    min-height: 820px;
+    flex-basis: 820px;
+  }
+}
+
+.panelHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 4px 10px;
+  background: #292929;
+  border-bottom: 1px solid #222;
+  flex-shrink: 0;
+
+  h2 {
+    font-weight: 600;
+    font-size: 13px;
+    margin: 0;
+  }
+
+  > span {
+    color: #aaa;
+    font-size: 10px;
+  }
+}
+
+.divider {
+  background: #202020;
+  border-left: 1px solid #414141;
+  border-right: 1px solid #171717;
+  cursor: col-resize;
+  touch-action: none;
+
+  @media (max-width: 700px) {
+    display: none;
+  }
+}
+
+.status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 23px;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 10px;
+  color: #aaa;
+  background: #242424;
+  border-top: 1px solid #1c1c1c;
+
+  > span:first-child {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+
+  > span:last-child {
+    flex-shrink: 0;
+  }
+}
+
+.emptySettings {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #b0b0b0;
+
+  span {
+    font-size: 11px;
+    color: #999;
+  }
+}
+
+.dropIndicator {
+  position: absolute;
+  inset: 38px 0 23px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #252525e8;
+  border: 2px solid #30abe0;
+  color: #ddd;
+  font-size: 16px;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.useBrush {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #242424;
+  border-bottom: 1px solid #444;
+
+  span {
+    font-size: 11px;
+    color: #bbb;
+  }
+
+  button {
+    background: #287cae;
+    color: white;
+    border-radius: 4px;
+    padding: 8px 12px;
+    flex-shrink: 0;
+  }
+}

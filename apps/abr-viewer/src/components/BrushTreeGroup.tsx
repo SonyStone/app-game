@@ -1,4 +1,5 @@
 import type { JSX } from '@solidjs/web';
+import styles from './BrushTreeGroup.module.css';
 /**
  * MARK: BrushTreeGroup
  *
@@ -54,7 +55,7 @@ export function BrushTreeGroup(props: BrushTreeGroupProps): JSX.Element {
     <div
       data-drag-handle
       data-group-id={props.block.id}
-      class={`abr-tree-group cursor-grab touch-none ${
+      class={`${styles.treeGroup} cursor-grab touch-none ${
         props.selected
           ? 'border-ps-accent bg-ps-accent/10'
           : isTopLevel()
@@ -130,7 +131,7 @@ export function BrushTreeGroup(props: BrushTreeGroupProps): JSX.Element {
           <button
             aria-label={`Actions for ${props.block.name}`}
             aria-expanded={showActions() ? 'true' : 'false'}
-            class="abr-group-menu text-ps-text-muted hover:text-ps-text-bright p-0.5"
+            class={`${styles.groupMenu} text-ps-text-muted hover:text-ps-text-bright p-0.5`}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();
@@ -222,7 +223,7 @@ export function BrushTreeGroup(props: BrushTreeGroupProps): JSX.Element {
 
       {/* Children (expanded) — rendered by solid-nest */}
       <Show when={props.block.expanded}>
-        <div class="abr-group-children">{props.childrenSlot}</div>
+        <div class={styles.groupChildren}>{props.childrenSlot}</div>
       </Show>
     </div>
   );

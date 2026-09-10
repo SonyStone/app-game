@@ -1,4 +1,5 @@
 import { For, Match, Show, Switch, type StoreSetter } from 'solid-js';
+import styles from './SettingsPanel.module.css';
 import type { BrushFormValues } from '../../brush-form-schema';
 import { settingGroups } from '../../settings-fields';
 import { toolbarToolFields, toolOptionVisible } from '../../tool-options';
@@ -41,7 +42,7 @@ export function SettingsPanel(props: {
     return true;
   };
   return (
-    <div class="abr-setting-fields">
+    <div class={styles.settingFields}>
       <For each={fields()}>
         {([key, field]) => (
           <Show when={visible(key)}>
@@ -59,7 +60,7 @@ export function SettingsPanel(props: {
                 />
               </Match>
               <Match when={field.kind === 'control' || field.kind === 'choice'}>
-                <label class="abr-setting-select">
+                <label class={styles.settingSelect}>
                   <span>{field.label}</span>
                   <select
                     aria-label={field.label}
@@ -79,7 +80,7 @@ export function SettingsPanel(props: {
                 </label>
               </Match>
               <Match when={field.kind === 'color'}>
-                <div class="abr-setting-select">
+                <div class={styles.settingSelect}>
                   <CheckboxInput
                     label={field.label}
                     checked={() => Boolean(value(key))}

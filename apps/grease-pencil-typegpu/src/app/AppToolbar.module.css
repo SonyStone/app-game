@@ -1,0 +1,277 @@
+@value root from '../App.module.css';
+
+.root {
+  .canvasUi {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+
+    > * {
+      pointer-events: auto;
+    }
+  }
+
+  .viewportModeSwitch {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    padding: 3px;
+    border: 1px solid #ddd;
+    border-radius: 24px;
+    background: #f8f8f8ee;
+    box-shadow: 0 2px 8px #0000000a;
+
+    button {
+      width: 44px;
+      height: 40px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+
+      &[aria-pressed='true'] {
+        background: #dfeff8;
+        color: #237aab;
+      }
+    }
+  }
+
+  .doublePuck {
+    position: absolute;
+    right: max(24px, env(safe-area-inset-right));
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 32;
+    width: 62px;
+    padding: 4px;
+    background: linear-gradient(#f4f4f4, #fbfbfb);
+    border: 1px solid #e2e2e2;
+    border-radius: 36px;
+    box-shadow:
+      0 2px 5px #00000012,
+      inset 0 0 0 2px #ffffffc9;
+
+    @media (max-width: 700px) {
+      width: 56px;
+      right: max(12px, env(safe-area-inset-right));
+    }
+  }
+
+  .brushPuck {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 52px;
+    height: 58px;
+    padding: 4px;
+    border-radius: 50%;
+
+    @media (max-width: 700px) {
+      width: 46px;
+      height: 54px;
+    }
+  }
+
+  .brushStamp {
+    display: block;
+    aspect-ratio: 1;
+    max-width: 29px;
+    border-radius: 50%;
+    background: #333;
+  }
+
+  .colorPuck {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    padding: 3px;
+    border-radius: 50%;
+
+    > span {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 1px solid #0000000d;
+    }
+
+    @media (max-width: 700px) {
+      width: 46px;
+      height: 46px;
+    }
+  }
+
+  .floatingButton {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    background: #656565;
+    color: white;
+    box-shadow: 0 1px 3px #00000018;
+
+    &:not(:disabled):hover {
+      @media (hover: hover) {
+        background-color: #4a4a4a;
+      }
+    }
+  }
+
+  .cornerUndo {
+    position: absolute;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: max(18px, env(safe-area-inset-left));
+    background: #828282;
+  }
+
+  .popupDismiss {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    cursor: default;
+  }
+
+  .markingMenu {
+    position: absolute;
+    bottom: calc(28px + env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 272px;
+    height: 192px;
+    z-index: 31;
+    pointer-events: none;
+
+    .floatingButton {
+      position: absolute;
+      pointer-events: auto;
+    }
+
+    [aria-pressed='true'] {
+      color: #85cef7;
+      background: #454545;
+      box-shadow: inset 0 0 0 1px #449ccc;
+    }
+  }
+
+  .puckPopover,
+  .drawingActionsPopover {
+    position: absolute;
+    z-index: 33;
+    width: 240px;
+    background: #f7f7f7;
+    border: 1px solid #d8d8d8;
+    border-radius: 6px;
+    box-shadow: 0 4px 16px #00000017;
+    padding: 12px;
+  }
+
+  .puckPopover {
+    top: 50%;
+    right: calc(100px + env(safe-area-inset-right));
+    transform: translateY(-50%);
+
+    @media (max-width: 700px) {
+      width: min(220px, calc(100% - 130px));
+      right: calc(78px + env(safe-area-inset-right));
+    }
+
+    @media (max-height: 500px) {
+      max-height: calc(100% - 24px);
+      overflow: auto;
+    }
+  }
+
+  .drawingActionsPopover {
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    max-height: calc(100% - 100px);
+    overflow: auto;
+  }
+
+  .popoverHeading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: -5px -5px 12px 0;
+    font-weight: 600;
+  }
+
+  .iconButton {
+    display: inline-grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    flex: 0 0 auto;
+    border-radius: 4px;
+  }
+
+  .customColorControl {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 14px;
+
+    input {
+      width: 48px;
+      height: 36px;
+      padding: 0;
+      border: 1px solid #ccc;
+      background: transparent;
+    }
+  }
+
+  .drawingActionsPopover > button {
+    width: 100%;
+    min-height: 42px;
+    padding: 8px;
+    text-align: left;
+    border-radius: 3px;
+  }
+
+  .touchDrawingToggle {
+    min-height: 44px;
+    padding: 8px;
+  }
+
+  .toggleControl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 400;
+
+    input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+    }
+  }
+
+  button.popupDismiss:not(:disabled):hover {
+    @media (hover: hover) {
+      background: transparent;
+    }
+  }
+}
+
+.root .markingTrigger {
+  position: absolute;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 32;
+  background: #575757;
+
+  &[aria-expanded='true'] {
+    background: #343434;
+    color: #66b7ec;
+  }
+}

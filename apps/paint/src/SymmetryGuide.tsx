@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 import { worldToScreen } from './camera';
 import type { PaintSession } from './createPaintSession';
+import styles from './SymmetryGuide.module.css';
 import { supportsPaintSymmetry, symmetryGuide } from './symmetry';
 
 /** Projects document-owned symmetry guides without adding them to GPU pixels, exports or history. */
@@ -23,7 +24,7 @@ export function SymmetryGuide(props: { session: PaintSession }) {
   };
   return (
     <Show when={visible()}>
-      <svg class="paint-symmetry-guide" aria-label="Paint symmetry guide" data-active={active()}>
+      <svg class={styles.symmetryGuide} aria-label="Paint symmetry guide" data-active={active()}>
         <path d={path()} fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="6 5" />
       </svg>
     </Show>

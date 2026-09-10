@@ -5,7 +5,10 @@
   font-size: inherit;
   font-weight: 400;
   line-height: 1.125;
-  font-family: Roboto,Helvetica Neue,sans-serif;
+  font-family:
+    Roboto,
+    Helvetica Neue,
+    sans-serif;
   letter-spacing: normal;
 }
 
@@ -65,8 +68,6 @@
   flex-grow: 1;
 }
 
-
-
 .infix {
   padding: 1em 0;
   display: block;
@@ -77,7 +78,9 @@
   border-top: 0.84375em solid transparent;
 }
 
-@keyframes cdk-text-field-autofill-end {/*!*/}
+@keyframes cdk-text-field-autofill-end {
+  /*!*/
+}
 
 .input {
   caret-color: #673ab7;

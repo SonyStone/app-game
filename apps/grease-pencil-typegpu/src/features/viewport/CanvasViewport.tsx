@@ -2,6 +2,7 @@ import { NavigationPuck, attachNavigationPuck } from '@app-game/navigation-puck'
 import { ViewCube, type ViewNavigation } from '@app-game/solid-view-cube';
 import { Show, onSettled } from 'solid-js';
 import type { DrawingWorkplane } from '../../document';
+import styles from './CanvasViewport.module.css';
 import type { CameraState } from '../../render/math';
 import { cameraOrientation } from '../../render/viewCubeCamera';
 import type { WorkplaneGizmoMode } from '../../render/workplaneGizmoTypes';
@@ -30,13 +31,13 @@ export function CanvasViewport(props: CanvasViewportProps) {
   onSettled(() => attachNavigationPuck(canvas, navigation, { busy: () => canvasPointers.size > 0 }));
 
   return (
-    <div class="canvas-shell">
+    <div class={styles.canvasShell}>
       <canvas
         ref={(element) => {
           canvas = element;
           props.canvasRef(element);
         }}
-        class="drawing-canvas"
+        class={styles.drawingCanvas}
         aria-label="Drawing canvas"
         tabindex={0}
         onPointerDown={(event) => {
@@ -52,7 +53,7 @@ export function CanvasViewport(props: CanvasViewportProps) {
         onWheel={props.onWheel}
       />
       <button
-        class="navigation-puck-launcher floating-button"
+        class={`${styles.navigationPuckLauncher} ${styles.floatingButton}`}
         type="button"
         aria-label="Open navigation puck"
         title="Navigation · hold Space / right click"
@@ -63,7 +64,7 @@ export function CanvasViewport(props: CanvasViewportProps) {
       </button>
       <NavigationPuck navigation={navigation} focusTarget={() => canvas} />
       <Show when={props.status !== 'WebGPU ready.'}>
-        <div class="status-panel" role="status">
+        <div class={styles.statusPanel} role="status">
           {props.status}
         </div>
       </Show>
@@ -80,7 +81,7 @@ export function CanvasViewport(props: CanvasViewportProps) {
           orientation={cameraOrientation(props.camera)}
           onHome={props.onHomeView}
           onNavigate={props.onNavigateView}
-          class="viewport-cube"
+          class={styles.viewportCube}
         />
       </Show>
     </div>

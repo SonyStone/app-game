@@ -9,7 +9,7 @@ import { presetOutRounded } from './unocss/preset-out-rounded';
 export default defineConfig({
   configDeps: ['unocss/preset-out-rounded.ts'],
   presets: [
-    presetWind4(),
+    scopedWindPreset(),
     presetOutRounded(),
     presetWebFonts({
       provider: 'google',
@@ -102,3 +102,26 @@ export default defineConfig({
     }
   }
 });
+
+/** Keep generated theme variables and browser fallbacks inside utility consumers. */
+function scopedWindPreset() {
+  const preset = presetWind4({
+    preflights: {
+      reset: false,
+      property: {
+        selector:
+          '.app-utilities, .app-utilities *, .app-utilities ::before, .app-utilities ::after, .app-utilities ::backdrop'
+      }
+    }
+  });
+  return {
+    ...preset,
+    preflights: preset.preflights?.map((preflight) => ({
+      ...preflight,
+      async getCSS(context: Parameters<typeof preflight.getCSS>[0]) {
+        const css = await preflight.getCSS(context);
+        return css?.replace(/:root\b|:host\b/g, '.app-utilities');
+      }
+    }))
+  };
+}

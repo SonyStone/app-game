@@ -1,0 +1,270 @@
+@value isFullscreen from './App.module.css';
+@value workspace from './App.module.css';
+
+.folderStack {
+  --ledge: 2.2cqw;
+  --footer-height: 17cqw;
+  --tab-height: 6cqw;
+  --stack-top: 7.4cqw;
+
+  /* Even the highest card extends past the screen edge, including fractional pixels. */
+  --screen-height: 108.5cqw;
+  --sheet-height: calc(var(--screen-height) - var(--stack-top) - var(--tab-height) + 0.1cqw);
+  height: var(--screen-height);
+  position: relative;
+  isolation: isolate;
+}
+
+.folderTab {
+  position: relative;
+  grid-area: 1 / 1;
+  z-index: 1;
+
+  /* Move the handle without laying out the full sheet beneath it. */
+  width: var(--tab-width, 30cqw);
+  height: calc(var(--tab-height) + 0.2cqw);
+  display: flex;
+  gap: 1.5cqw;
+  align-items: center;
+  padding: 0 6cqw 0 1.15cqw;
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.folderStack {
+  &[data-layout='compact'] {
+    /* Both axes belong to the app's captured gestures; retain native pinch zoom. */
+    touch-action: pinch-zoom;
+  }
+
+  &[data-layout='compact'] .folderTab {
+    touch-action: none;
+    cursor: grab;
+  }
+}
+
+[data-direct] .folderTab {
+  transition: none;
+  cursor: grabbing;
+}
+
+.railControls {
+  position: absolute;
+  top: 2.35cqw;
+  right: 19cqw;
+  display: flex;
+  gap: 0.7cqw;
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 350ms ease;
+}
+
+.folderStack[data-layout='compact'] .railControls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.railControls {
+  button {
+    display: grid;
+    place-items: center;
+    width: 3cqw;
+    height: 3cqw;
+    background: transparent;
+    color: #151714;
+    border-radius: 50%;
+
+    &:hover:not(:disabled) {
+      background: #0000000d;
+    }
+
+    &:disabled {
+      opacity: 0.2;
+    }
+  }
+
+  svg {
+    width: 2.5cqw;
+    height: 2.5cqw;
+  }
+}
+
+.railArrowLeft {
+  rotate: 180deg;
+}
+
+.folderTab {
+  &:focus-visible {
+    outline: none;
+  }
+
+  &:focus-visible .tabNumber {
+    outline: 3px solid #e65936;
+    outline-offset: 2px;
+  }
+}
+
+.tabNumber {
+  height: 4.5cqw;
+  min-width: 4.5cqw;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #00000004;
+  font-size: 1.9cqw;
+  font-weight: 750;
+  letter-spacing: -0.08em;
+}
+
+.tabLabel {
+  display: flex;
+  min-width: 0;
+  font-size: 2.15cqw;
+  letter-spacing: -0.045em;
+  font-weight: 750;
+}
+
+.tabName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tabDetail {
+  opacity: 0.36;
+  font-weight: 600;
+  margin-left: 0.35cqw;
+}
+
+.isDark {
+  .folderTab {
+    color: #f9faf8;
+  }
+
+  .tabNumber {
+    background: #ffffff22;
+  }
+}
+
+.folderSheet {
+  color: #090a08;
+  padding-top: 2.2cqw;
+  background: var(--folder-color);
+}
+
+.isDark .folderSheet {
+  color: #fafbf9;
+}
+
+.folderCard[data-active] > .folderSheet {
+  pointer-events: auto;
+}
+
+.folderStack {
+  touch-action: pan-x pinch-zoom;
+  user-select: none;
+  cursor: grab;
+
+  &[data-motion='departing'] > .folderCard {
+    transition-delay: var(--stack-delay, 0ms);
+  }
+
+  &[data-dragging] {
+    transition: none;
+    cursor: grabbing;
+  }
+}
+
+[data-dragging] .folderCard,
+[data-dragging] .folderTab,
+[data-dragging] .tabNumber,
+[data-dragging] .tabLabel,
+[data-dragging] .tabDetail {
+  transition: none;
+}
+
+.tabShape {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+
+  /* The SVG base extends below its viewBox to overlap the sheet at fractional
+     positions, without scaling the tab or changing its layout dimensions. */
+  overflow: visible;
+  color: var(--folder-color);
+  z-index: -1;
+}
+
+.isFullscreen .folderStack {
+  --stack-top: calc(3cqw + env(safe-area-inset-top, 0px));
+  --tab-height: calc(6 * var(--deck-unit));
+  --ledge: calc(2.2 * var(--deck-unit));
+  --footer-height: calc(132px + env(safe-area-inset-bottom));
+  --cell: calc(100cqw / 15);
+  --screen-height: max(
+    100dvh,
+    calc(
+      var(--stack-top) + var(--front-offset) + var(--tab-height) + var(--ledge) + var(--footer-height) + 2 * var(--cell)
+    )
+  );
+  touch-action: auto;
+
+  @media (max-width: 600px) {
+    --cell: calc(100cqw / 6);
+    --footer-height: calc(108px + env(safe-area-inset-bottom));
+  }
+}
+
+@property --screen-y {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+.isFullscreen {
+  .folderSheet {
+    padding-top: var(--ledge);
+  }
+
+  .folderTab {
+    height: var(--tab-height);
+    width: var(--tab-width);
+    padding: 0 calc(6 * var(--deck-unit)) 0 calc(1.15 * var(--deck-unit));
+    gap: calc(1.5 * var(--deck-unit));
+    font-size: calc(2.15 * var(--deck-unit));
+    touch-action: none;
+  }
+
+  .tabNumber {
+    flex-shrink: 0;
+    min-width: calc(4.5 * var(--deck-unit));
+    width: calc(4.5 * var(--deck-unit));
+    height: calc(4.5 * var(--deck-unit));
+    font-size: calc(1.8 * var(--deck-unit));
+  }
+
+  .tabLabel {
+    font-size: calc(2.15 * var(--deck-unit));
+  }
+
+  .tabDetail {
+    margin-left: calc(0.35 * var(--deck-unit));
+  }
+
+  .railControls {
+    display: none;
+  }
+}
+
+.workspace[data-route-layout] .folderCard {
+  transition: none;
+}
+
+.isFullscreen [data-dragging] .folderCard {
+  transition: none;
+}

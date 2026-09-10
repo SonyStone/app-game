@@ -1,44 +1,36 @@
-import { For } from 'solid-js'
-import type {
-  Axis,
-  DrawingGrid,
-  DrawingWorkplane,
-  WorkplaneId,
-} from '../../document'
+import { For } from 'solid-js';
+import type { Axis, DrawingGrid, DrawingWorkplane, WorkplaneId } from '../../document';
+import styles from './WorkplanePanel.module.css';
 
-const workplaneAxes = ['x', 'y', 'z'] as const satisfies readonly Axis[]
+const workplaneAxes = ['x', 'y', 'z'] as const satisfies readonly Axis[];
 
 type WorkplanePanelProps = {
-  activeWorkplaneId: WorkplaneId
-  workplane: DrawingWorkplane
-  workplanes: readonly DrawingGrid[]
-  onAddWorkplane: () => void
-  onRemoveActiveWorkplane: () => void
-  onReset: () => void
-  onSetActiveWorkplane: (workplaneId: WorkplaneId) => void
-  onSetOrigin: (axis: Axis, value: number) => void
-  onSetRotation: (axis: Axis, value: number) => void
-  onSetScale: (value: number) => void
-}
+  activeWorkplaneId: WorkplaneId;
+  workplane: DrawingWorkplane;
+  workplanes: readonly DrawingGrid[];
+  onAddWorkplane: () => void;
+  onRemoveActiveWorkplane: () => void;
+  onReset: () => void;
+  onSetActiveWorkplane: (workplaneId: WorkplaneId) => void;
+  onSetOrigin: (axis: Axis, value: number) => void;
+  onSetRotation: (axis: Axis, value: number) => void;
+  onSetScale: (value: number) => void;
+};
 
 export function WorkplanePanel(props: WorkplanePanelProps) {
   return (
     <section class="workplane-panel">
-      <div class="panel-header">
+      <div class={styles.panelHeader}>
         <span>Drawing Grid</span>
-        <div class="workplane-header-actions">
-          <button class="command-button" type="button" onClick={props.onReset}>
+        <div class={styles.workplaneHeaderActions}>
+          <button class={styles.commandButton} type="button" onClick={props.onReset}>
             Reset
           </button>
-          <button
-            class="command-button"
-            type="button"
-            onClick={props.onAddWorkplane}
-          >
+          <button class={styles.commandButton} type="button" onClick={props.onAddWorkplane}>
             +
           </button>
           <button
-            class="command-button"
+            class={styles.commandButton}
             type="button"
             disabled={props.workplanes.length <= 1}
             onClick={props.onRemoveActiveWorkplane}
@@ -48,14 +40,12 @@ export function WorkplanePanel(props: WorkplanePanelProps) {
         </div>
       </div>
 
-      <div class="workplane-grid-list">
+      <div class={styles.workplaneGridList}>
         <For each={props.workplanes}>
           {(grid) => (
             <button
-              class={`workplane-grid-button ${
-                grid.id === props.activeWorkplaneId
-                  ? 'workplane-grid-button-active'
-                  : ''
+              class={`${styles.workplaneGridButton} ${
+                grid.id === props.activeWorkplaneId ? styles.workplaneGridButtonActive : ''
               }`}
               type="button"
               onClick={() => props.onSetActiveWorkplane(grid.id)}
@@ -66,47 +56,40 @@ export function WorkplanePanel(props: WorkplanePanelProps) {
         </For>
       </div>
 
-      <div class="workplane-controls">
-        <div class="control-group-label">Position</div>
+      <div class={styles.workplaneControls}>
+        <div class={styles.controlGroupLabel}>Position</div>
         <For each={workplaneAxes}>
           {(axis) => (
-            <label class="number-control">
+            <label class={styles.numberControl}>
               {axis.toUpperCase()}
               <input
                 name={`grid-origin-${axis}`}
                 type="number"
                 step="0.1"
                 value={formatScalar(axisValue(props.workplane.origin, axis))}
-                onInput={(event) =>
-                  props.onSetOrigin(axis, event.currentTarget.valueAsNumber)
-                }
+                onInput={(event) => props.onSetOrigin(axis, event.currentTarget.valueAsNumber)}
               />
             </label>
           )}
         </For>
 
-        <div class="control-group-label">Rotation</div>
+        <div class={styles.controlGroupLabel}>Rotation</div>
         <For each={workplaneAxes}>
           {(axis) => (
-            <label class="number-control">
+            <label class={styles.numberControl}>
               {axis.toUpperCase()}
               <input
                 name={`grid-rotation-${axis}`}
                 type="number"
                 step="5"
                 value={formatDegrees(axisValue(props.workplane.rotation, axis))}
-                onInput={(event) =>
-                  props.onSetRotation(
-                    axis,
-                    degreesToRadians(event.currentTarget.valueAsNumber),
-                  )
-                }
+                onInput={(event) => props.onSetRotation(axis, degreesToRadians(event.currentTarget.valueAsNumber))}
               />
             </label>
           )}
         </For>
 
-        <label class="number-control number-control-wide">
+        <label class={`${styles.numberControl} ${styles.numberControlWide}`}>
           Scale
           <input
             name="grid-scale"
@@ -120,32 +103,32 @@ export function WorkplanePanel(props: WorkplanePanelProps) {
         </label>
       </div>
     </section>
-  )
+  );
 }
 
 function axisValue(value: [number, number, number], axis: Axis) {
   switch (axis) {
     case 'x':
-      return value[0]
+      return value[0];
     case 'y':
-      return value[1]
+      return value[1];
     case 'z':
-      return value[2]
+      return value[2];
     default: {
-      const exhaustive: never = axis
-      return exhaustive
+      const exhaustive: never = axis;
+      return exhaustive;
     }
   }
 }
 
 function formatScalar(value: number) {
-  return Number.isFinite(value) ? Number(value.toFixed(3)) : 0
+  return Number.isFinite(value) ? Number(value.toFixed(3)) : 0;
 }
 
 function formatDegrees(value: number) {
-  return Number.isFinite(value) ? Number(((value * 180) / Math.PI).toFixed(1)) : 0
+  return Number.isFinite(value) ? Number(((value * 180) / Math.PI).toFixed(1)) : 0;
 }
 
 function degreesToRadians(value: number) {
-  return Number.isFinite(value) ? (value * Math.PI) / 180 : 0
+  return Number.isFinite(value) ? (value * Math.PI) / 180 : 0;
 }

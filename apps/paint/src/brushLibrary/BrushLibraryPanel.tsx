@@ -1,6 +1,7 @@
 import { createSignal, For, onSettled, Show } from 'solid-js';
 import type { BrushResource } from '../composition/brushResources';
 import type { PaintSession } from '../createPaintSession';
+import styles from './BrushLibraryPanel.module.css';
 
 /** Compact tip-only library picker. Opening/closing the panel does not own imports or source pixels. */
 export function BrushLibraryPanel(props: Pick<PaintSession, 'brushLibrary' | 'ready' | 'switchingRenderer'>) {
@@ -11,7 +12,7 @@ export function BrushLibraryPanel(props: Pick<PaintSession, 'brushLibrary' | 're
   const items = () =>
     library.library()?.brushes.filter((brush) => brush.name.toLowerCase().includes(search().toLowerCase())) ?? [];
   return (
-    <section class="paint-brush-library">
+    <section class={styles.brushLibrary}>
       <input
         ref={file}
         type="file"
@@ -24,14 +25,14 @@ export function BrushLibraryPanel(props: Pick<PaintSession, 'brushLibrary' | 're
           if (picked) void library.importFile(picked);
         }}
       />
-      <div class="paint-section-heading">
+      <div class={styles.sectionHeading}>
         <span>Brush tip</span>
         <button disabled={disabled()} onClick={() => file.click()}>
           Import ABR…
         </button>
       </div>
       <button
-        class="paint-tip-choice"
+        class={styles.tipChoice}
         disabled={disabled()}
         aria-pressed={!library.selected() ? 'true' : 'false'}
         onClick={() => void library.choose(undefined)}
@@ -39,22 +40,22 @@ export function BrushLibraryPanel(props: Pick<PaintSession, 'brushLibrary' | 're
         Soft round
       </button>
       <Show when={library.library()}>
-        <p class="paint-panel-note paint-library-name" title={library.library()!.name}>
+        <p class={`${styles.panelNote} ${styles.libraryName}`} title={library.library()!.name}>
           {library.library()!.name}
         </p>
         <input
-          class="paint-tip-search"
+          class={styles.tipSearch}
           type="search"
           aria-label="Find brush tip"
           placeholder="Find a tip…"
           value={search()}
           onInput={(event) => setSearch(event.currentTarget.value)}
         />
-        <div class="paint-tip-list" aria-label="Imported brush tips">
+        <div class={styles.tipList} aria-label="Imported brush tips">
           <For each={items()}>
             {(item) => (
               <button
-                class="paint-tip-choice"
+                class={styles.tipChoice}
                 disabled={disabled()}
                 aria-pressed={library.selected() === item.id ? 'true' : 'false'}
                 onClick={() => void library.choose(item.id)}
@@ -66,25 +67,25 @@ export function BrushLibraryPanel(props: Pick<PaintSession, 'brushLibrary' | 're
             )}
           </For>
           <Show when={!items().length}>
-            <p class="paint-panel-note">No matching tips.</p>
+            <p class={styles.panelNote}>No matching tips.</p>
           </Show>
         </div>
-        <p class="paint-panel-note">
+        <p class={styles.panelNote}>
           Tips only; Photoshop dynamics are not applied. The library lasts until this page reloads.
         </p>
         <Show when={library.library()!.skipped || library.library()!.notices}>
-          <p class="paint-panel-note">
+          <p class={styles.panelNote}>
             {library.library()!.skipped} unsupported presets skipped. {library.library()!.notices} import notices.
           </p>
         </Show>
       </Show>
       <Show when={library.busy()}>
-        <p role="status" class="paint-panel-note">
+        <p role="status" class={styles.panelNote}>
           Preparing brush…
         </p>
       </Show>
       <Show when={library.error()}>
-        <p role="alert" class="paint-library-error">
+        <p role="alert" class={styles.libraryError}>
           {library.error()}
         </p>
       </Show>

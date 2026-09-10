@@ -2,6 +2,7 @@ import type { StoreSetter } from 'solid-js';
 import { createMemo, Show } from 'solid-js';
 import type { BrushWithPreview } from '../../../../lib/abr';
 import { brushTipToDataUrl } from '../../../../lib/abr';
+import styles from './BrushTipPanel.module.css';
 import { generateComputedBrushTip } from '../../../brush-preview/stroke';
 import type { BrushFormValues } from '../../brush-form-schema';
 import { AngleRoundnessControl } from '../editable-input-components/AngleRoundnessControl';
@@ -24,10 +25,10 @@ export function BrushTipPanel(props: {
         : undefined)
   );
   return (
-    <div class="abr-tip-panel">
+    <div class={styles.tipPanel}>
       {/* Preview */}
-      <div class="abr-tip-image">
-        <div class="checkered-bg relative mx-auto aspect-square max-w-64 overflow-hidden rounded-lg">
+      <div class={styles.tipImage}>
+        <div class={`${styles.checkeredBg} relative mx-auto aspect-square max-w-64 overflow-hidden rounded-lg`}>
           <Show
             when={tip()}
             fallback={
@@ -160,7 +161,7 @@ export function BrushTipPanel(props: {
           />
         </Show>
 
-        <div class="border-ps-border mt-4 border-t pt-4">
+        <div class={`border-ps-border ${styles.mt4} border-t pt-4`}>
           <CheckboxInput
             label="Use Spacing"
             checked={() => props.values.spacingEnabled}

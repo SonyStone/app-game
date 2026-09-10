@@ -1,4 +1,4 @@
-import './index.scss';
+import styles from './index.module.scss';
 
 import { World } from '@app-game/ecsy';
 
@@ -13,6 +13,7 @@ import { DrawCurveSystem, UpdateControls, UpdateCurvesSystem, UpdateFrameCounter
   const world = new World();
 
   const canvas = new CanvasData(document.querySelector('canvas'));
+  canvas.canvas.classList.add(styles.canvas);
 
   const singletonEntity = world
     .createEntity()

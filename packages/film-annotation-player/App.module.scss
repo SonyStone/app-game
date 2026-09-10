@@ -1,4 +1,4 @@
-.App {
+.app {
   display: block;
   flex: 1 0 auto;
   // margin: 50px;
@@ -22,7 +22,7 @@
   flex: 0 0 300px;
 }
 
-.comments_wrapper {
+.commentsWrapper {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -41,7 +41,7 @@
   }
 }
 
-.add_comment {
+.addComment {
   flex: 0 0 auto;
   background-color: #eaeef5;
   min-height: 40px;
@@ -82,7 +82,7 @@
     outline: blue 4px solid;
   }
 
-  .comment_content {
+  .commentContent {
     resize: none;
     border: unset;
     box-sizing: content-box;
@@ -109,14 +109,14 @@
     }
   }
 
-  &:focus-within .comment_content,
-  &:hover .comment_content,
-  &.active .comment_content {
+  &:focus-within .commentContent,
+  &:hover .commentContent,
+  &.active .commentContent {
     max-height: 300px;
   }
 }
 
-.comment_header {
+.commentHeader {
   flex: 1 0 auto;
   display: flex;
   justify-content: flex-end;
@@ -127,7 +127,7 @@
   border: unset;
 }
 
-.comment_content {
+.commentContent {
   padding: 8px;
   font-size: 0.9em;
 }
@@ -144,7 +144,7 @@
   user-select: none;
 }
 
-.file_drop {
+.fileDrop {
   background-color: red;
   height: 100px;
   width: 100px;
@@ -164,18 +164,18 @@
   // padding: 4px 0;
 }
 
-.action_start {
+.actionStart {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
   // padding: 4px 0;
 }
 
-button {
+.app button {
   padding: 2px;
 }
 
-.frame_rate {
+.frameRate {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
@@ -185,11 +185,11 @@ button {
   font-family: monospace;
 }
 
-input[type='color'] {
+.app input[type='color'] {
   height: unset;
 }
 
-input[type='range'] {
+.app input[type='range'] {
   touch-action: none;
 }
 
@@ -201,7 +201,7 @@ input[type='range'] {
   // pointer-events: none;
 }
 
-:host {
+.app {
   display: flex;
   place-content: center;
   // flex: 1 0 auto;
@@ -210,7 +210,7 @@ input[type='range'] {
   overflow: hidden;
 }
 
-.column_container {
+.columnContainer {
   display: flex;
   flex-direction: column;
   place-content: center;

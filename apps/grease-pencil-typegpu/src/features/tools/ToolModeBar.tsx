@@ -1,4 +1,5 @@
 import { For } from 'solid-js';
+import styles from './ToolModeBar.module.css';
 import { SketchIcon } from '../../shared/SketchIcon';
 import { toolModeOptions, type ToolMode } from '../../shared/toolMode';
 import type { ViewportMode } from '../../shared/viewportMode';
@@ -12,11 +13,11 @@ type ToolModeBarProps = {
 /** Compact icon palette; tool names remain available to assistive technology and tooltips. */
 export function ToolModeBar(props: ToolModeBarProps) {
   return (
-    <nav class="tool-rail" aria-label="Drawing tools">
+    <nav class={styles.toolRail} aria-label="Drawing tools">
       <For each={toolModeOptions}>
         {(option) => (
           <button
-            class={`tool-button ${props.mode === option.mode ? 'tool-button-active' : ''}`}
+            class={`${styles.toolButton} ${props.mode === option.mode ? styles.toolButtonActive : ''}`}
             type="button"
             onClick={() => props.onSetMode(option.mode)}
             title={option.mode === 'orbit' && props.viewportMode === '2d' ? 'Rotate canvas' : option.title}

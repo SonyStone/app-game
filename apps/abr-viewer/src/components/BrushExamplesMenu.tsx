@@ -1,6 +1,7 @@
 import { createSignal, For, Show } from 'solid-js';
 import closeIcon from '../assets/icons/x.svg?url';
 import { brushExamples, type BrushExample } from '../lib/brush-examples';
+import styles from './BrushExamplesMenu.module.css';
 
 /** Modal gallery of bundled collections; native dialog handles focus trapping and Escape. */
 export function BrushExamplesMenu(props: {
@@ -16,7 +17,7 @@ export function BrushExamplesMenu(props: {
     <>
       <button
         disabled={props.busy}
-        class={loading() ? 'abr-is-loading' : undefined}
+        class={loading() ? styles.isLoading : undefined}
         aria-haspopup="dialog"
         onClick={() => {
           setOpened(true);
@@ -24,13 +25,13 @@ export function BrushExamplesMenu(props: {
         }}
       >
         <Show when={loading()} fallback="Examples…">
-          <span class="abr-loading-spinner" aria-hidden="true" />
+          <span class={styles.loadingSpinner} aria-hidden="true" />
           Loading brushes…
         </Show>
       </button>
       <dialog
         ref={dialog}
-        class="abr-examples-dialog"
+        class={styles.examplesDialog}
         aria-label="Example brushes"
         onClick={(event) => {
           if (event.target === dialog) {
@@ -46,7 +47,7 @@ export function BrushExamplesMenu(props: {
         }}
       >
         <button
-          class="abr-examples-close"
+          class={styles.examplesClose}
           type="button"
           aria-label="Close examples"
           autofocus
@@ -55,7 +56,7 @@ export function BrushExamplesMenu(props: {
           <img src={closeIcon} width="20" height="20" alt="" />
         </button>
         <div
-          class="abr-examples-gallery"
+          class={styles.examplesGallery}
           role="group"
           aria-label="Example brush collections"
           onClick={(event) => {
@@ -65,7 +66,7 @@ export function BrushExamplesMenu(props: {
           <Show when={opened()}>
             <For each={brushExamples}>
               {(example, index) => (
-                <article class="abr-example-card" style={{ '--reveal-delay': `${index() * 45}ms` }}>
+                <article class={styles.exampleCard} style={{ '--reveal-delay': `${index() * 45}ms` }}>
                   <img
                     src={example.cover}
                     alt={`${example.name} brush artwork`}
@@ -73,11 +74,11 @@ export function BrushExamplesMenu(props: {
                     width="611"
                     height="425"
                   />
-                  <div class="abr-example-body">
+                  <div class={styles.exampleBody}>
                     <h3>{example.name}</h3>
                     <p>{example.description}</p>
                     <Show when={loading() === example}>
-                      <p class="abr-example-loading" role="status">
+                      <p class={styles.exampleLoading} role="status">
                         {props.loadingMessage}
                       </p>
                     </Show>
@@ -88,7 +89,7 @@ export function BrushExamplesMenu(props: {
                       <button
                         type="button"
                         disabled={props.busy}
-                        class={loading() === example ? 'abr-is-loading' : undefined}
+                        class={loading() === example ? styles.isLoading : undefined}
                         aria-label={`Add ${example.name}`}
                         onClick={async () => {
                           if (props.busy || loading()) return;
@@ -102,7 +103,7 @@ export function BrushExamplesMenu(props: {
                         }}
                       >
                         <Show when={loading() === example} fallback="Add brushes">
-                          <span class="abr-loading-spinner" aria-hidden="true" />
+                          <span class={styles.loadingSpinner} aria-hidden="true" />
                           Loading…
                         </Show>
                       </button>

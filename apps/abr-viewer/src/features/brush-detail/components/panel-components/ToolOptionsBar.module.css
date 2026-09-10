@@ -1,0 +1,125 @@
+.toolOptions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #222;
+  background: #343434;
+  color: #ccc;
+  font-size: 12px;
+}
+
+.toolField,
+.toolCluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.toolField > select {
+  width: 114px;
+  max-width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 2px 5px;
+  border: 1px solid #535353;
+  border-radius: 2px;
+  background: #262626;
+  color: #eee;
+  font: inherit;
+
+  @media (pointer: coarse) {
+    height: 36px;
+  }
+}
+
+.toolNumberBox {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  border: 1px solid #535353;
+  border-radius: 2px;
+  background: #262626;
+  padding-right: 5px;
+
+  input {
+    width: 46px;
+    min-width: 0;
+    height: 26px;
+    border: 0;
+    border-radius: 0;
+    padding: 2px 3px;
+    background: transparent;
+    color: #eee;
+    font: inherit;
+    text-align: right;
+    appearance: textfield;
+    -moz-appearance: textfield;
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    @media (pointer: coarse) {
+      height: 34px;
+    }
+  }
+
+  @media (pointer: coarse) {
+    height: 36px;
+  }
+}
+
+.toolNumber:has(input:disabled) {
+  opacity: 0.5;
+}
+
+.toolOptions .toolIcon {
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 5px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+}
+
+.toolIcon img {
+  width: 20px;
+  height: 20px;
+  filter: invert(0.8);
+  pointer-events: none;
+}
+
+.toolOptions {
+  .toolIcon {
+    &:hover {
+      background: #474747;
+    }
+
+    &[aria-pressed='true'] {
+      background: #202020;
+      border-color: #737373;
+    }
+
+    @media (pointer: coarse) {
+      width: 36px;
+      height: 36px;
+      flex-basis: 36px;
+    }
+  }
+
+  :is(input, select, button):focus-visible {
+    outline: 2px solid #6fb9ee;
+    outline-offset: 2px;
+  }
+}

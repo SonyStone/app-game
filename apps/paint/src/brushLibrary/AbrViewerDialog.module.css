@@ -1,0 +1,38 @@
+@value workspace from '../../../abr-viewer/src/App.module.css';
+
+.abrViewer {
+  margin: auto;
+  width: min(1200px, calc(100vw - 24px));
+  height: calc(100dvh - 40px);
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid #555;
+  border-radius: 10px;
+  background: #282828;
+  color: #ddd;
+  overflow: hidden;
+
+  &::backdrop {
+    background: #0008;
+  }
+}
+
+.abrTitle {
+  height: 44px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  button {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+  }
+}
+
+.abrViewer .workspace {
+  height: calc(100% - 44px);
+}

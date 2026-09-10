@@ -1,3 +1,4 @@
+import styles from './FrameControls.module.css';
 import { SketchIcon } from '../../shared/SketchIcon';
 
 type FrameControlsProps = {
@@ -12,9 +13,9 @@ type FrameControlsProps = {
 
 export function FrameControls(props: FrameControlsProps) {
   return (
-    <div class="frame-controls">
+    <div class={styles.frameControls}>
       <button
-        class="icon-button"
+        class={styles.iconButton}
         type="button"
         title="Previous frame"
         aria-label="Previous frame"
@@ -24,7 +25,7 @@ export function FrameControls(props: FrameControlsProps) {
         <SketchIcon name="left" />
       </button>
       <input
-        class="frame-input"
+        class={styles.frameInput}
         id="current-frame"
         name="current-frame"
         type="number"
@@ -34,16 +35,22 @@ export function FrameControls(props: FrameControlsProps) {
         title="Current frame"
         aria-label="Current frame"
       />
-      <button class="icon-button" type="button" title="Next frame" aria-label="Next frame" onClick={props.onNextFrame}>
+      <button
+        class={styles.iconButton}
+        type="button"
+        title="Next frame"
+        aria-label="Next frame"
+        onClick={props.onNextFrame}
+      >
         <SketchIcon name="right" />
       </button>
-      <button class="command-button" type="button" onClick={props.onInsertBlankFrame}>
+      <button class={styles.commandButton} type="button" onClick={props.onInsertBlankFrame}>
         New frame
       </button>
-      <button class="command-button" type="button" onClick={props.onDuplicateHeldFrame}>
+      <button class={styles.commandButton} type="button" onClick={props.onDuplicateHeldFrame}>
         Duplicate
       </button>
-      <button class="command-button" type="button" onClick={props.onDeleteActiveFrame}>
+      <button class={styles.commandButton} type="button" onClick={props.onDeleteActiveFrame}>
         Delete frame
       </button>
     </div>

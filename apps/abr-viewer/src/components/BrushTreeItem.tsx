@@ -4,6 +4,7 @@ import { useColorProfile } from '../features/brush-detail/ColorProfile';
 import { BrushPreviewCanvas } from '../features/brush-detail/components/panel-components/BrushPreviewCanvas';
 import { settingGroups } from '../features/brush-detail/settings-fields';
 import type { BrushNode } from '../lib/brush-tree';
+import styles from './BrushTreeItem.module.css';
 import { BrushToolIcon } from './BrushToolIcon';
 
 /** A compact, draggable preset with a rendered stroke and a persistent selection outline. */
@@ -23,7 +24,7 @@ export function BrushTreeItem(props: {
     <div
       data-drag-handle
       data-brush-id={props.block.id}
-      class={`abr-preset ${props.selected ? 'is-selected' : ''} ${props.dragging ? 'is-dragging' : ''}`}
+      class={`${styles.preset} ${props.selected ? styles.isSelected : ''} ${props.dragging ? styles.isDragging : ''}`}
       role="button"
       tabindex="0"
       aria-label={props.block.name}
@@ -44,8 +45,8 @@ export function BrushTreeItem(props: {
         backgroundColor="#333333"
         thumbnail
       />
-      <span class="abr-preset-name">{props.block.name}</span>
-      <span class="abr-preset-tool" title={`Tool: ${toolLabel()}`}>
+      <span class={styles.presetName}>{props.block.name}</span>
+      <span class={styles.presetTool} title={`Tool: ${toolLabel()}`}>
         <BrushToolIcon type={values().tool.type} label={`Tool: ${toolLabel()}`} />
       </span>
     </div>

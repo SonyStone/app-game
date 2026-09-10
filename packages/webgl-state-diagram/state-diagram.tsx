@@ -17,7 +17,7 @@ import {
   type WebGLHelpArticle,
   type WebGLHelpTopic
 } from './help-content';
-import './webgl-state-diagram.css';
+import styles from './state-diagram.module.css';
 
 /** Props for the reusable Solid WebGL state diagram. */
 export interface WebGLStateDiagramProps {
@@ -145,7 +145,9 @@ export function WebGLStateDiagram(props: WebGLStateDiagramProps): JSX.Element {
   }
 
   function fitView(): void {
-    const panels = [...workspace.querySelectorAll<HTMLElement>('.wgsd-panel, .wgsd-resource-group')];
+    const panels = [
+      ...workspace.querySelectorAll<HTMLElement>(`.${styles.panel}, .${styles.resourceGroup}`)
+    ];
     if (panels.length === 0 || viewport.clientWidth === 0 || viewport.clientHeight === 0) return;
     const bounds = panelBounds(panels);
     const availableWidth = Math.max(1, viewport.clientWidth - FIT_PADDING * 2);
@@ -165,7 +167,7 @@ export function WebGLStateDiagram(props: WebGLStateDiagramProps): JSX.Element {
 
   function startPanning(event: PointerEvent): void {
     const target = event.target;
-    const overPanel = target instanceof Element && target.closest('.wgsd-panel');
+    const overPanel = target instanceof Element && target.closest(`.${styles.panel}`);
     const overControl = target instanceof Element && target.closest('button, a, input, select, textarea');
     if ((event.button !== 0 || overPanel || overControl) && event.button !== 1) return;
 
@@ -198,18 +200,18 @@ export function WebGLStateDiagram(props: WebGLStateDiagramProps): JSX.Element {
   }
 
   return (
-    <section class="wgsd-shell">
-      <header class="wgsd-toolbar">
+    <section class={styles.shell}>
+      <header class={styles.toolbar}>
         <div>
-          <p class="wgsd-kicker">live context inspector</p>
+          <p class={styles.kicker}>live context inspector</p>
           <h1>{props.title ?? `WebGL ${snapshot().version} state diagram`}</h1>
         </div>
-        <div class="wgsd-toolbar__stats" aria-live="polite">
+        <div class={styles.toolbarStats} aria-live="polite">
           <span>revision {snapshot().revision}</span>
           <span>{snapshot().drawCalls} draw calls</span>
           <span>{snapshot().resources.filter((resource) => !resource.deleted).length} live objects</span>
         </div>
-        <div class="wgsd-toolbar__actions">
+        <div class={styles.toolbarActions}>
           <Button type="button" onClick={togglePaused}>
             {paused() ? 'Resume' : 'Pause'}
           </Button>
@@ -222,25 +224,29 @@ export function WebGLStateDiagram(props: WebGLStateDiagramProps): JSX.Element {
           <Button type="button" onClick={() => setShowUnbound((value) => !value)}>
             {showUnbound() ? 'Hide unbound' : `Show unbound (${unboundCount()})`}
           </Button>
-          <HelpPopover topic="overview" triggerClass="wgsd-toolbar__help" defaultOpen={props.initialHelpOpen !== false}>
+          <HelpPopover
+            topic="overview"
+            triggerClass={styles.toolbarHelp}
+            defaultOpen={props.initialHelpOpen !== false}
+          >
             Help
           </HelpPopover>
         </div>
       </header>
 
-      <div class="wgsd-legend" aria-label="Connection legend">
+      <div class={styles.legend} aria-label="Connection legend">
         <span>
           <i class="is-direct" /> direct binding or attachment
         </span>
         <span>
-          <i class="is-indirect" /> relationship observed at draw time
+          <i class={styles.isIndirect} /> relationship observed at draw time
         </span>
         <span>arrows point to the referenced state or object</span>
       </div>
 
       <div
         ref={viewport}
-        class={`wgsd-viewport${panning() ? 'is-panning' : ''}`}
+        class={`${styles.viewport} ${panning() ? styles.isPanning : ''}`}
         style={{
           'background-position': `${camera().x}px ${camera().y}px`,
           'background-size': `${24 * camera().zoom}px ${24 * camera().zoom}px`
@@ -248,7 +254,7 @@ export function WebGLStateDiagram(props: WebGLStateDiagramProps): JSX.Element {
         onPointerDown={startPanning}
         onWheel={handleWheel}
       >
-        <nav class="wgsd-camera-controls" aria-label="Diagram camera controls">
+        <nav class={styles.cameraControls} aria-label="Diagram camera controls">
           <Button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => zoomBy(1 / 1.2)}>
             −
           </Button>
@@ -273,7 +279,7 @@ export function WebGLStateDiagram(props: WebGLStateDiagramProps): JSX.Element {
 
         <div
           ref={workspace}
-          class="wgsd-workspace"
+          class={styles.workspace}
           style={{
             width: `${resourceLayout().width}px`,
             height: `${resourceLayout().height}px`,
@@ -283,7 +289,7 @@ export function WebGLStateDiagram(props: WebGLStateDiagramProps): JSX.Element {
           <For each={resourceLayout().groups}>
             {(group) => (
               <div
-                class="wgsd-resource-group"
+                class={styles.resourceGroup}
                 style={{
                   left: `${group.x}px`,
                   top: `${group.y}px`,
@@ -333,7 +339,7 @@ export function WebGLStateDiagram(props: WebGLStateDiagramProps): JSX.Element {
               when={props.canvas}
               keyed
               fallback={
-                <p class="wgsd-external-canvas">
+                <p class={styles.externalCanvas}>
                   {props.externalCanvasLabel ?? 'The canvas remains in the inspected application.'}
                 </p>
               }
@@ -567,10 +573,10 @@ function DiagramPanel(props: DiagramPanelProps): JSX.Element {
   const [position, setPosition] = createSignal(untrack(() => props.initial));
   const panelClass = () =>
     [
-      'wgsd-panel',
-      `wgsd-panel--${props.tone}`,
-      props.deleted ? 'is-deleted' : undefined,
-      props.unbound ? 'is-unbound' : undefined
+      styles.panel,
+      panelToneStyles[props.tone],
+      props.deleted ? styles.isDeleted : undefined,
+      props.unbound ? styles.isUnbound : undefined
     ]
       .filter(Boolean)
       .join(' ');
@@ -643,9 +649,9 @@ function DiagramPanel(props: DiagramPanelProps): JSX.Element {
       style={{ left: `${position().x}px`, top: `${position().y}px`, width: `${position().width}px` }}
       data-connection-target={props.connectionTargetId}
     >
-      <header class="wgsd-panel__title" onPointerDown={startDragging}>
+      <header class={styles.panelTitle} onPointerDown={startDragging}>
         <span>{props.title}</span>
-        <span class="wgsd-panel__controls">
+        <span class={styles.panelControls}>
           <Show when={props.deleted}>
             <small>delete requested</small>
           </Show>
@@ -653,10 +659,10 @@ function DiagramPanel(props: DiagramPanelProps): JSX.Element {
             <small>unbound</small>
           </Show>
           <HelpButton topic={props.helpTopic} />
-          <span class="wgsd-grip">drag</span>
+          <span class={styles.grip}>drag</span>
         </span>
       </header>
-      <div class="wgsd-panel__body">{props.children}</div>
+      <div class={styles.panelBody}>{props.children}</div>
     </article>
   );
 }
@@ -668,7 +674,7 @@ function samePosition(left: PanelPosition, right: PanelPosition): boolean {
 function StateGroupView(props: { readonly group: WebGLStateSnapshot['groups'][number] }): JSX.Element {
   const topic = () => (props.group.id in WEBGL_HELP ? (props.group.id as WebGLHelpTopic) : 'state');
   return (
-    <details class="wgsd-group" open={props.group.id === 'common' || props.group.id === 'clear'}>
+    <details class={styles.group} open={props.group.id === 'common' || props.group.id === 'clear'}>
       <summary>
         <span>{props.group.title}</span>
         <HelpButton topic={topic()} />
@@ -680,17 +686,17 @@ function StateGroupView(props: { readonly group: WebGLStateSnapshot['groups'][nu
 
 function StateTable(props: { readonly rows: readonly WebGLStateRow[] }): JSX.Element {
   return (
-    <table class="wgsd-table">
+    <table class={styles.table}>
       <tbody>
         <For each={props.rows} keyed={false}>
           {(row) => (
             <tr>
               <th>
-                <HelpPopover topic={helpTopicForState(row().key)} triggerClass="wgsd-help-target">
+                <HelpPopover topic={helpTopicForState(row().key)} triggerClass={styles.helpTarget}>
                   {row().key}
                 </HelpPopover>
               </th>
-              <td data-source-id={row().resourceId} class={row().resourceId ? 'is-link' : undefined}>
+              <td data-source-id={row().resourceId} class={row().resourceId ? styles.isLink : undefined}>
                 {row().value}
               </td>
             </tr>
@@ -704,13 +710,13 @@ function StateTable(props: { readonly rows: readonly WebGLStateRow[] }): JSX.Ele
 function TextureUnits(props: { readonly snapshot: WebGLStateSnapshot }): JSX.Element {
   const columns = () => props.snapshot.textureUnits[0]?.bindings ?? [];
   return (
-    <details class="wgsd-group" open>
+    <details class={styles.group} open>
       <summary>
         <span>texture units</span>
         <HelpButton topic="texture-units" />
       </summary>
-      <div class="wgsd-table-scroll">
-        <table class="wgsd-table wgsd-table--indexed">
+      <div class={styles.tableScroll}>
+        <table class={`${styles.table} ${styles.tableIndexed}`}>
           <thead>
             <tr>
               <th>unit</th>
@@ -721,7 +727,7 @@ function TextureUnits(props: { readonly snapshot: WebGLStateSnapshot }): JSX.Ele
             <For each={props.snapshot.textureUnits} keyed={false}>
               {(unit) => (
                 <tr
-                  class={unit().active ? 'is-active' : undefined}
+                  class={unit().active ? styles.isActive : undefined}
                   data-connection-target={`texture-unit-${unit().index}`}
                 >
                   <th>{unit().index}</th>
@@ -744,12 +750,12 @@ function IndexedBufferBindings(props: {
   const visible = () => props.bindings.filter((binding) => binding.bufferId);
   return (
     <Show when={visible().length}>
-      <details class="wgsd-group" open>
+      <details class={styles.group} open>
         <summary>
           <span>indexed buffer bindings</span>
           <HelpButton topic="indexed-buffers" />
         </summary>
-        <table class="wgsd-table wgsd-table--indexed">
+        <table class={`${styles.table} ${styles.tableIndexed}`}>
           <thead>
             <tr>
               <th>target</th>
@@ -784,12 +790,12 @@ function VertexAttributes(props: { readonly snapshot: WebGLStateSnapshot }): JSX
     return props.snapshot.resources.find((candidate) => candidate.id === id);
   };
   return (
-    <div class="wgsd-table-scroll">
-      <div class="wgsd-section-heading">
+    <div class={styles.tableScroll}>
+      <div class={styles.sectionHeading}>
         <span>attribute bindings</span>
         <HelpButton topic="vertex-attributes" />
       </div>
-      <table class="wgsd-table wgsd-table--indexed">
+      <table class={`${styles.table} ${styles.tableIndexed}`}>
         <thead>
           <tr>
             <th>#</th>
@@ -806,7 +812,7 @@ function VertexAttributes(props: { readonly snapshot: WebGLStateSnapshot }): JSX
         <tbody>
           <For each={props.snapshot.vertexAttributes} keyed={false}>
             {(attribute) => (
-              <tr class={attribute().enabled ? 'is-active' : undefined}>
+              <tr class={attribute().enabled ? styles.isActive : undefined}>
                 <th>{attribute().index}</th>
                 <td>{String(attribute().enabled)}</td>
                 <td>{attribute().size}</td>
@@ -830,10 +836,10 @@ function VertexAttributes(props: { readonly snapshot: WebGLStateSnapshot }): JSX
 
 function CallLog(props: { readonly snapshot: WebGLStateSnapshot }): JSX.Element {
   return (
-    <ol class="wgsd-call-log">
+    <ol class={styles.callLog}>
       <For each={[...props.snapshot.recentCalls].reverse().slice(0, 18)}>
         {(call) => (
-          <li class={call.status === 'error' ? 'is-error' : undefined}>
+          <li class={call.status === 'error' ? styles.isError : undefined}>
             <span>{call.sequence}</span>
             <code>
               {call.name}({call.arguments})
@@ -850,12 +856,12 @@ function CallLog(props: { readonly snapshot: WebGLStateSnapshot }): JSX.Element 
 
 function ResourceView(props: { readonly resource: WebGLResourceSnapshot }): JSX.Element {
   return (
-    <div class="wgsd-resource">
-      <div class="wgsd-resource__kind">
+    <div class={styles.resource}>
+      <div class={styles.resourceKind}>
         <span>{props.resource.kind}</span>
         <HelpButton topic={helpTopicForResource(props.resource.kind)} />
       </div>
-      <Show when={props.resource.details.length} fallback={<p class="wgsd-empty">No recorded setup calls</p>}>
+      <Show when={props.resource.details.length} fallback={<p class={styles.empty}>No recorded setup calls</p>}>
         <StateTable rows={props.resource.details} />
       </Show>
       <Show when={props.resource.relations.length}>
@@ -867,13 +873,13 @@ function ResourceView(props: { readonly resource: WebGLResourceSnapshot }): JSX.
 
 function ResourceRelations(props: { readonly relations: WebGLResourceSnapshot['relations'] }): JSX.Element {
   return (
-    <div class="wgsd-resource__links">
+    <div class={styles.resourceLinks}>
       <span>references</span>
       <For each={props.relations}>
         {(relation) => (
           <button
             type="button"
-            class={relation.direct ? 'is-direct' : 'is-indirect'}
+            class={relation.direct ? 'is-direct' : styles.isIndirect}
             data-source-id={relation.targetId}
             data-connection-direct={String(relation.direct)}
             title={`${relation.label}: ${relation.targetId}`}
@@ -890,14 +896,14 @@ function ResourceRelations(props: { readonly relations: WebGLResourceSnapshot['r
 function CanvasHost(props: { readonly canvas: HTMLCanvasElement }): JSX.Element {
   let host!: HTMLDivElement;
   onSettled(() => host.append(props.canvas));
-  return <div ref={host} class="wgsd-canvas-host" />;
+  return <div ref={host} class={styles.canvasHost} />;
 }
 
 function HelpButton(props: { readonly topic: WebGLHelpTopic }): JSX.Element {
   return (
     <HelpPopover
       topic={props.topic}
-      triggerClass="wgsd-help-button"
+      triggerClass={styles.helpButton}
       ariaLabel={`Help: ${WEBGL_HELP[props.topic].title}`}
     >
       ?
@@ -926,13 +932,13 @@ function HelpPopover(props: HelpPopoverProps): JSX.Element {
       >
         {props.children}
       </PopoverTrigger>
-      <PopoverContent class="wgsd-help-popover">
+      <PopoverContent class={styles.helpPopover}>
         <header>
           <p>WebGL state guide</p>
           <h2>{article().title}</h2>
         </header>
-        <div class="wgsd-help-popover__content">
-          <p class="wgsd-help-popover__intro">{article().intro}</p>
+        <div class={styles.helpPopoverContent}>
+          <p class={styles.helpPopoverIntro}>{article().intro}</p>
           <For each={article().sections}>
             {(section) => (
               <section>
@@ -970,10 +976,10 @@ interface ConnectionPath {
 
 function ConnectionLayer(props: { readonly paths: readonly ConnectionPath[] }): JSX.Element {
   return (
-    <svg class="wgsd-connections" aria-hidden="true">
+    <svg class={styles.connections} aria-hidden="true">
       <For each={props.paths}>
         {(path) => (
-          <g class={path.direct ? 'is-direct' : 'is-indirect'}>
+          <g class={path.direct ? 'is-direct' : styles.isIndirect}>
             <path d={path.d} stroke={path.color} />
             <polygon points={path.arrowHead} fill={path.color} />
           </g>
@@ -1003,7 +1009,7 @@ function findConnections(root: HTMLElement, snapshot: WebGLStateSnapshot): reado
     const id = source.dataset.sourceId;
     if (!id) continue;
     const target = targets.get(id);
-    if (!target || target === source.closest('.wgsd-panel')) continue;
+    if (!target || target === source.closest(`.${styles.panel}`)) continue;
     const kind = kindById.get(id) ?? 'unknown';
     const route = routeConnection(
       toWorkspaceRect(source.getBoundingClientRect(), rootRect, scaleX, scaleY),
@@ -1204,4 +1210,23 @@ const RESOURCE_COLORS: Readonly<Record<WebGLResourceKind, string>> = {
   'transform-feedback': '#96df68',
   'vertex-array': '#b69df8',
   unknown: '#9aa8bd'
+};
+
+/** Local panel colors indexed by the WebGL resource kind. */
+const panelToneStyles: Record<string, string> = {
+  global: styles.panelGlobal,
+  canvas: styles.panelCanvas,
+  activity: styles.panelActivity,
+  'vertex-array': styles.panelVertexArray,
+  buffer: styles.panelBuffer,
+  renderbuffer: styles.panelRenderbuffer,
+  framebuffer: styles.panelFramebuffer,
+  program: styles.panelProgram,
+  shader: styles.panelShader,
+  sampler: styles.panelSampler,
+  texture: styles.panelTexture,
+  'transform-feedback': styles.panelTransformFeedback,
+  query: styles.panelQuery,
+  sync: styles.panelSync,
+  unknown: styles.panelUnknown
 };

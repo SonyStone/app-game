@@ -1,0 +1,23 @@
+@value root from '../../App.module.css';
+
+.root {
+  .materialToggles {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .toggleControl {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 400;
+
+    input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+    }
+  }
+}

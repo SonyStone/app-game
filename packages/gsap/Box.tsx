@@ -1,4 +1,4 @@
-import s from './Animations.module.scss';
+import s from './Box.module.css';
 
 export function Box(props: { time: number; width: number }) {
   return (

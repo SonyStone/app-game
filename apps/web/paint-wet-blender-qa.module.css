@@ -1,0 +1,37 @@
+.document {
+  font: 14px/1.5 system-ui;
+  margin: 24px;
+  color: #20353d;
+
+  button {
+    padding: 10px 20px;
+  }
+
+  pre {
+    white-space: pre-wrap;
+  }
+
+  :global(.images) {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  figure {
+    margin: 0;
+    flex: 1;
+    min-width: 220px;
+    max-width: 384px;
+  }
+
+  img,
+  canvas {
+    width: 100%;
+    height: auto;
+    border: 1px solid #ccc;
+  }
+
+  figcaption {
+    font-weight: 600;
+  }
+}

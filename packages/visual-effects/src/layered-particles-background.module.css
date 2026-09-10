@@ -57,15 +57,19 @@
   0% {
     transform: translate(0px, 0px);
   }
+
   30% {
     opacity: 0;
   }
+
   50% {
     opacity: 0.75;
   }
+
   70% {
     opacity: 0;
   }
+
   100% {
     transform: translate(175px, 100px);
   }
@@ -75,7 +79,36 @@
   0% {
     transform: translate(0px, 0px);
   }
+
   100% {
     transform: translate(3000px, -6000px);
   }
+}
+
+@keyframes layered-particles-twinkle {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.35);
+  }
+
+  30% {
+    opacity: 0;
+  }
+
+  52% {
+    opacity: var(--layered-speck-opacity, 0.7);
+  }
+
+  72% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--layered-speck-drift-x, 160px), var(--layered-speck-drift-y, 90px), 0) scale(1);
+  }
+}
+
+.twinkle {
+  animation-name: layered-particles-twinkle;
 }

@@ -1,6 +1,5 @@
-import { cn } from '@app-game/utils/cn';
-import type { ComponentProps, JSX } from '@solidjs/web';
-import { createSignal, createStore, createTrackedEffect, onCleanup, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { createSignal, createStore, Show } from 'solid-js';
 import { BlockTree } from 'solid-nest';
 import {
   countBrushes,
@@ -11,6 +10,7 @@ import {
   type GroupBlock,
   type MyBlock
 } from './mock-data';
+import styles from './App.module.css';
 
 // ============================================================================
 // MARK: Tree helpers (same logic as solid-nest internals)
@@ -60,8 +60,9 @@ export default function App(): JSX.Element {
   const [lastEvent, setLastEvent] = createSignal('None');
 
   return (
-    <div class="bg-ps-bg-dark flex h-screen flex-col text-neutral-300 select-none">
-      <Body class="m-0 bg-[#1e1e1e] text-[#b0b0b0]" />
+    <div
+      class={`${styles.root} bg-ps-bg-dark flex h-screen flex-col bg-[#1e1e1e] text-[#b0b0b0] text-neutral-300 select-none`}
+    >
       {/* Header */}
       <header class="bg-ps-bg flex items-center gap-4 border-b border-neutral-700 px-4 py-2">
         <h1 class="text-sm font-bold tracking-wide text-neutral-200 uppercase">DnD Playground</h1>
@@ -237,16 +238,4 @@ function BrushItem(props: { block: BrushBlock; selected: boolean; dragging: bool
       </div>
     </div>
   );
-}
-
-function Body(props: Pick<ComponentProps<'body'>, 'class'>) {
-  createTrackedEffect(() => {
-    document.body.className = cn(props.class);
-  });
-
-  onCleanup(() => {
-    document.body.className = '';
-  });
-
-  return null;
 }

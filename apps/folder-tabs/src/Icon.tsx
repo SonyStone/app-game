@@ -8,10 +8,11 @@ import PauseIcon from './icons/pause.svg';
 import PlayIcon from './icons/play.svg';
 import PlusIcon from './icons/plus.svg';
 import SearchIcon from './icons/search.svg';
+import styles from './Icon.module.css';
 
 /** Local SVG components render inline and inherit their control's text color. */
 export function Icon(props: { name: keyof typeof icons }) {
-  return <Dynamic component={icons[props.name]} class="icon" aria-hidden="true" />;
+  return <Dynamic component={icons[props.name]} class={styles.icon} aria-hidden="true" />;
 }
 
 const icons = {

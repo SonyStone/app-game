@@ -1,5 +1,6 @@
 import { For, Show } from 'solid-js';
 import type { PaintSession } from './createPaintSession';
+import styles from './SymmetryPanel.module.css';
 import { supportsPaintSymmetry, type PaintSymmetry } from './symmetry';
 
 /** Document controls; changing guides never changes an ABR preset or the camera's mirror state. */
@@ -8,7 +9,7 @@ export function SymmetryPanel(props: { session: PaintSession }) {
   const update = (change: Partial<PaintSymmetry>) => props.session.updateSymmetry({ ...symmetry(), ...change });
   return (
     <fieldset
-      class="paint-symmetry-controls"
+      class={styles.symmetryControls}
       aria-label="Symmetry controls"
       disabled={!props.session.canUpdateSymmetry()}
     >
@@ -30,7 +31,7 @@ export function SymmetryPanel(props: { session: PaintSession }) {
       </label>
       <Show when={symmetry().mode !== 'off'}>
         <Show when={!supportsPaintSymmetry(props.session.brush()) || props.session.tool() === 'lasso'}>
-          <p class="paint-panel-note">
+          <p class={styles.panelNote}>
             Symmetry is inactive for this tool. Choose Brush, Pencil or Eraser with a round or sampled tip.
           </p>
         </Show>
@@ -86,7 +87,7 @@ export function SymmetryPanel(props: { session: PaintSession }) {
         <button onClick={() => update({ x: props.session.camera().x, y: props.session.camera().y })}>
           Center in view
         </button>
-        <label class="paint-checkbox">
+        <label class={styles.checkbox}>
           <input
             type="checkbox"
             checked={symmetry().visible}
@@ -94,7 +95,7 @@ export function SymmetryPanel(props: { session: PaintSession }) {
           />
           Show symmetry guide
         </label>
-        <p class="paint-panel-note">
+        <p class={styles.panelNote}>
           Copies share one stroke and one Undo. Guides stay fixed in the document as you move the camera.
         </p>
       </Show>

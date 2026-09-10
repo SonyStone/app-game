@@ -1,29 +1,25 @@
-<!DOCTYPE html>
+<!doctype html>
 
 <!-- Created with Ai->Canvas Export Plug-In Version 1.3 (PC/64) -->
 <!-- By Mike Swanson (http://blog.mikeswanson.com/)             -->
 
 <html lang="en">
- <head>
-  <meta charset="UTF-8" />
-  <title>Untitled-1</title>
-  <script>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Untitled-1</title>
+    <script>
+      function init() {
+        var canvas = document.getElementById('canvas');
+        var ctx = canvas.getContext('2d');
 
-    function init() {
+        draw(ctx);
+      }
 
-      var canvas = document.getElementById("canvas");
-      var ctx = canvas.getContext("2d");
-
-      draw(ctx);
-    }
-
-    function draw(ctx) {
-
-
-      // layer1/Group/body
-      ctx.save();
-      //ctx.fillStyle = "rgb(47, 191, 59)";
-      //ctx.scale(3,3);
+      function draw(ctx) {
+        // layer1/Group/body
+        ctx.save();
+        //ctx.fillStyle = "rgb(47, 191, 59)";
+        //ctx.scale(3,3);
         // layer1/Group/body/Rectangle
         //ctx.save();
         //ctx.scale(0.5,0.5);
@@ -38,9 +34,9 @@
 
         ctx.fill();
         ctx.lineWidth = 2.0;
-        ctx.strokeStyle = "rgb(25, 25, 25)";
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
+        ctx.strokeStyle = 'rgb(25, 25, 25)';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.stroke();
 
         // layer1/Group/body/Path
@@ -52,10 +48,10 @@
         ctx.closePath();
         ctx.fill();
         //ctx.stroke();
-  
+
         // layer1/Group/gun
         ctx.restore();
-  
+
         // layer1/Group/gun/Rectangle
         //ctx.save();
         ctx.beginPath();
@@ -65,14 +61,14 @@
         ctx.lineTo(20.0, 1.0);
         ctx.lineTo(20.0, 31.0);
         ctx.closePath();
-        ctx.fillStyle = "rgb(47, 191, 59)";
+        ctx.fillStyle = 'rgb(47, 191, 59)';
         ctx.fill();
         ctx.lineWidth = 2.0;
-        ctx.strokeStyle = "rgb(25, 25, 25)";
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
+        ctx.strokeStyle = 'rgb(25, 25, 25)';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         ctx.stroke();
-  
+
         // layer1/Group/gun/Ellipse
         ctx.beginPath();
         ctx.moveTo(26.0, 31.0);
@@ -85,12 +81,11 @@
         ctx.stroke();
         //ctx.restore();
 
-
-    ctx.restore();    
-    }
-  </script>
- </head>
- <body onload="init()">
-   <canvas id="canvas" width="300" height="300"></canvas>
- </body>
+        ctx.restore();
+      }
+    </script>
+  </head>
+  <body onload="init()" style="margin: 0">
+    <canvas id="canvas" width="300" height="300"></canvas>
+  </body>
 </html>

@@ -2,6 +2,7 @@ import { makeEventListener } from '@solid-primitives/event-listener';
 import { createSignal, createUniqueId, For, onSettled, Show } from 'solid-js';
 import checkIcon from '../assets/icons/tool-options/check.svg?url';
 import chevronIcon from '../assets/icons/tool-options/chevron-down.svg?url';
+import styles from './OptionMenu.module.css';
 
 /** Controlled choice list with icons and separators. Native popovers escape clipping in the embedded editor. */
 export function OptionMenu(props: {
@@ -75,7 +76,7 @@ export function OptionMenu(props: {
       <button
         ref={trigger}
         type="button"
-        class="abr-option-trigger"
+        class={styles.optionTrigger}
         role="combobox"
         aria-label={props.label}
         aria-haspopup="listbox"
@@ -93,7 +94,7 @@ export function OptionMenu(props: {
       >
         <Show when={selected()?.icon}>{(icon) => <img src={icon()} alt="" />}</Show>
         <span>{selected()?.label ?? `Imported (${props.value})`}</span>
-        <img class="abr-option-chevron" src={chevronIcon} alt="" />
+        <img class={styles.optionChevron} src={chevronIcon} alt="" />
       </button>
       <div
         ref={popup}
@@ -101,7 +102,7 @@ export function OptionMenu(props: {
         popover="auto"
         role="listbox"
         aria-label={props.label}
-        class="abr-option-menu"
+        class={styles.optionMenu}
         onToggle={() => setOpen(popup.matches(':popover-open'))}
         onKeyDown={(event) => {
           event.stopPropagation();
@@ -153,7 +154,7 @@ export function OptionMenu(props: {
                 }}
               >
                 <img
-                  class="abr-option-check"
+                  class={styles.optionCheck}
                   src={checkIcon}
                   alt=""
                   style={{ visibility: option.value === props.value ? 'visible' : 'hidden' }}

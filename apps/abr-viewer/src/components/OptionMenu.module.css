@@ -1,0 +1,97 @@
+.optionTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 114px;
+  max-width: 220px;
+  height: 28px;
+  padding: 2px 5px;
+  border: 1px solid #535353;
+  border-radius: 2px;
+  background: #262626;
+  color: #eee;
+  font: inherit;
+
+  > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @media (pointer: coarse) {
+    height: 36px;
+  }
+}
+
+.optionTrigger img,
+.optionMenu img {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  filter: invert(0.8);
+}
+
+.optionTrigger .optionChevron {
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+}
+
+.optionMenu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: max-content;
+  min-width: 180px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid #787878;
+  border-radius: 5px;
+  background: #424242;
+  color: #eee;
+  box-shadow: 0 3px 12px #0008;
+  font:
+    12px Arial,
+    sans-serif;
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-height: 23px;
+    padding: 3px 12px 3px 3px;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    white-space: nowrap;
+    cursor: default;
+
+    &:focus,
+    &:hover {
+      outline: none;
+      color: #fff;
+      background: #0878d3;
+    }
+
+    @media (pointer: coarse) {
+      min-height: 36px;
+    }
+  }
+
+  hr {
+    margin: 5px 8px 5px 24px;
+    border: 0;
+    border-top: 1px solid #676767;
+  }
+
+  .optionCheck {
+    width: 15px;
+    height: 15px;
+  }
+}

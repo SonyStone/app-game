@@ -1,0 +1,247 @@
+:where(.root),
+:where(.root) *,
+:where(.root)::before,
+:where(.root) ::before,
+:where(.root)::after,
+:where(.root) ::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: var(--un-default-border-color, #e5e7eb);
+}
+
+:where(.root)::before,
+:where(.root) ::before,
+:where(.root)::after,
+:where(.root) ::after {
+  --un-content: '';
+}
+
+:where(.root) {
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  -moz-tab-size: 4;
+  tab-size: 4;
+  font-family:
+    ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  font-feature-settings: normal;
+  font-variation-settings: normal;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(.root) {
+  margin: 0;
+}
+
+:where(.root) hr {
+  height: 0;
+  color: inherit;
+  border-top-width: 1px;
+}
+
+:where(.root) abbr:where([title]) {
+  text-decoration: underline dotted;
+}
+
+:where(.root) h1,
+:where(.root) h2,
+:where(.root) h3,
+:where(.root) h4,
+:where(.root) h5,
+:where(.root) h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+:where(.root) a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+:where(.root) b,
+:where(.root) strong {
+  font-weight: bolder;
+}
+
+:where(.root) code,
+:where(.root) kbd,
+:where(.root) samp,
+:where(.root) pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-feature-settings: normal;
+  font-variation-settings: normal;
+  font-size: 1em;
+}
+
+:where(.root) small {
+  font-size: 80%;
+}
+
+:where(.root) sub,
+:where(.root) sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+:where(.root) sub {
+  bottom: -0.25em;
+}
+
+:where(.root) sup {
+  top: -0.5em;
+}
+
+:where(.root) table {
+  text-indent: 0;
+  border-color: inherit;
+  border-collapse: collapse;
+}
+
+:where(.root) button,
+:where(.root) input,
+:where(.root) optgroup,
+:where(.root) select,
+:where(.root) textarea {
+  font-family: inherit;
+  font-feature-settings: inherit;
+  font-variation-settings: inherit;
+  font-size: 100%;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+}
+
+:where(.root) button,
+:where(.root) select {
+  text-transform: none;
+}
+
+:where(.root) button,
+:where(.root) [type='button'],
+:where(.root) [type='reset'],
+:where(.root) [type='submit'] {
+  -webkit-appearance: button;
+  background-color: transparent;
+  background-image: none;
+}
+
+:where(.root) :-moz-focusring {
+  outline: auto;
+}
+
+:where(.root) :-moz-ui-invalid {
+  box-shadow: none;
+}
+
+:where(.root) progress {
+  vertical-align: baseline;
+}
+
+:where(.root)::-webkit-inner-spin-button,
+:where(.root) ::-webkit-inner-spin-button,
+:where(.root)::-webkit-outer-spin-button,
+:where(.root) ::-webkit-outer-spin-button {
+  height: auto;
+}
+
+:where(.root) [type='search'] {
+  -webkit-appearance: textfield;
+  outline-offset: -2px;
+}
+
+:where(.root)::-webkit-search-decoration,
+:where(.root) ::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+
+:where(.root)::-webkit-file-upload-button,
+:where(.root) ::-webkit-file-upload-button {
+  -webkit-appearance: button;
+  font: inherit;
+}
+
+:where(.root) summary {
+  display: list-item;
+}
+
+:where(.root) blockquote,
+:where(.root) dl,
+:where(.root) dd,
+:where(.root) h1,
+:where(.root) h2,
+:where(.root) h3,
+:where(.root) h4,
+:where(.root) h5,
+:where(.root) h6,
+:where(.root) hr,
+:where(.root) figure,
+:where(.root) p,
+:where(.root) pre {
+  margin: 0;
+}
+
+:where(.root) fieldset {
+  margin: 0;
+  padding: 0;
+}
+
+:where(.root) legend {
+  padding: 0;
+}
+
+:where(.root) ol,
+:where(.root) ul,
+:where(.root) menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+:where(.root) dialog {
+  padding: 0;
+}
+
+:where(.root) textarea {
+  resize: vertical;
+}
+
+:where(.root) input::placeholder,
+:where(.root) textarea::placeholder {
+  opacity: 1;
+  color: #9ca3af;
+}
+
+:where(.root) button,
+:where(.root) [role='button'] {
+  cursor: pointer;
+}
+
+:where(.root) :disabled {
+  cursor: default;
+}
+
+:where(.root) img,
+:where(.root) svg,
+:where(.root) video,
+:where(.root) canvas,
+:where(.root) audio,
+:where(.root) iframe,
+:where(.root) embed,
+:where(.root) object {
+  display: block;
+  vertical-align: middle;
+}
+
+:where(.root) img,
+:where(.root) video {
+  max-width: 100%;
+  height: auto;
+}
+
+:where(.root) [hidden]:where(:not([hidden='until-found'])) {
+  display: none;
+}

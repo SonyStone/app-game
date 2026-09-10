@@ -1,5 +1,6 @@
 import { For, Loading, Show, lazy } from 'solid-js';
 import type { createInspectorSession } from './inspector-session';
+import styles from './panel.module.css';
 
 /** Pure panel presentation; all page operations and reactive state belong to the session. */
 export function SpectorDevToolsPanel(props: { session: ReturnType<typeof createInspectorSession> }) {
@@ -29,14 +30,14 @@ export function SpectorDevToolsPanel(props: { session: ReturnType<typeof createI
     readTexture
   } = props.session;
   return (
-    <main class="panel-shell">
+    <main class={styles.panelShell}>
       <Show
         when={!showResults()}
         fallback={
-          <section class="result-shell">
+          <section class={styles.resultShell}>
             <Loading
               fallback={
-                <p class="empty-message" role="status">
+                <p class={styles.emptyMessage} role="status">
                   Loading capture viewer…
                 </p>
               }
@@ -54,9 +55,9 @@ export function SpectorDevToolsPanel(props: { session: ReturnType<typeof createI
           </section>
         }
       >
-        <header class="panel-header">
-          <div class="brand">
-            <span class="brand-mark" aria-hidden="true" />
+        <header class={styles.panelHeader}>
+          <div class={styles.brand}>
+            <span class={styles.brandMark} aria-hidden="true" />
             <div>
               <h1>WebGL Spector</h1>
               <p>
@@ -64,62 +65,72 @@ export function SpectorDevToolsPanel(props: { session: ReturnType<typeof createI
               </p>
             </div>
           </div>
-          <div class="header-actions">
+          <div class={styles.headerActions}>
             <Show when={captures().length > 0}>
-              <button class="button quiet" type="button" onClick={() => openResults()}>
+              <button class={`${styles.button} ${styles.quiet}`} type="button" onClick={() => openResults()}>
                 Captures ({captures().length})
               </button>
             </Show>
-            <button class="button quiet" type="button" onClick={() => void refresh()} disabled={refreshing()}>
+            <button
+              class={`${styles.button} ${styles.quiet}`}
+              type="button"
+              onClick={() => void refresh()}
+              disabled={refreshing()}
+            >
               Refresh
             </button>
           </div>
         </header>
 
         <Show when={busyMessage()}>
-          <div class="notice progress" role="status">
-            <span class="activity-spinner" aria-hidden="true" />
+          <div class={`${styles.notice} ${styles.progress}`} role="status">
+            <span class={styles.activitySpinner} aria-hidden="true" />
             <span>{busyMessage()}</span>
           </div>
         </Show>
         <Show when={errorMessage()}>
           {(message) => (
-            <div class="notice error" role="alert">
+            <div class={`${styles.notice} ${styles.error}`} role="alert">
               {message()}
             </div>
           )}
         </Show>
 
-        <div class="workspace">
-          <aside class="canvas-browser">
-            <div class="section-heading">
+        <div class={styles.workspace}>
+          <aside class={styles.canvasBrowser}>
+            <div class={styles.sectionHeading}>
               <span>Page canvases</span>
-              <span class="count">{canvasCount()}</span>
+              <span class={styles.count}>{canvasCount()}</span>
             </div>
             <Show
               when={frames().length > 0}
-              fallback={<p class="empty-message">No canvas elements found in the inspected page or its frames.</p>}
+              fallback={
+                <p class={styles.emptyMessage}>No canvas elements found in the inspected page or its frames.</p>
+              }
             >
               <For each={frames()}>
                 {(frame) => (
-                  <section class="frame-group">
-                    <div class="frame-heading" title={frame.target.url}>
+                  <section class={styles.frameGroup}>
+                    <div class={styles.frameHeading} title={frame.target.url}>
                       <span>{frame.snapshot?.documentTitle || frameHost(frame.target.url)}</span>
-                      <span class="duplicate-badge">
+                      <span class={styles.duplicateBadge}>
                         {frame.target.isTop ? 'Top' : `Frame ${frame.target.frameId}`}
                       </span>
                     </div>
-                    <Show when={frame.error}>{(message) => <p class="frame-error">{message()}</p>}</Show>
+                    <Show when={frame.error}>{(message) => <p class={styles.frameError}>{message()}</p>}</Show>
                     <For each={frame.snapshot?.canvases ?? []}>
                       {(canvas) => (
                         <button
-                          class={['canvas-row', { selected: isSelected(frame.target, canvas) }]}
+                          class={[styles.canvasRow, { [styles.selected]: isSelected(frame.target, canvas) }]}
                           aria-pressed={isSelected(frame.target, canvas) ? 'true' : 'false'}
                           type="button"
                           onClick={() => selectCanvas(frame.target, canvas)}
                         >
-                          <span class={['canvas-preview', { 'is-hidden': !canvas.visible }]} aria-hidden="true" />
-                          <span class="canvas-copy">
+                          <span
+                            class={[styles.canvasPreview, { [styles.isHidden]: !canvas.visible }]}
+                            aria-hidden="true"
+                          />
+                          <span class={styles.canvasCopy}>
                             <strong>{canvas.label}</strong>
                             <small>
                               {canvas.width} × {canvas.height} · {canvas.context}
@@ -134,12 +145,12 @@ export function SpectorDevToolsPanel(props: { session: ReturnType<typeof createI
             </Show>
           </aside>
 
-          <section class="canvas-detail">
+          <section class={styles.canvasDetail}>
             <Show
               when={selectedCanvas()}
               fallback={
-                <div class="detail-empty">
-                  <span class="empty-graphic" aria-hidden="true" />
+                <div class={styles.detailEmpty}>
+                  <span class={styles.emptyGraphic} aria-hidden="true" />
                   <h2>Select a canvas</h2>
                   <p>Canvas elements from the top page and cross-origin frames appear in the sidebar.</p>
                 </div>
@@ -147,18 +158,20 @@ export function SpectorDevToolsPanel(props: { session: ReturnType<typeof createI
             >
               {(canvas) => (
                 <>
-                  <div class="detail-title-row">
+                  <div class={styles.detailTitleRow}>
                     <div>
-                      <p class="eyebrow">Selected canvas</p>
+                      <p class={styles.eyebrow}>Selected canvas</p>
                       <h2>{canvas().label}</h2>
-                      <p class="frame-url">{selectedFrame()?.snapshot?.documentUrl}</p>
+                      <p class={styles.frameUrl}>{selectedFrame()?.snapshot?.documentUrl}</p>
                     </div>
-                    <span class={['context-badge', { observed: canvas().context !== 'Not observed' }]}>
+                    <span
+                      class={[styles.contextBadge, { [styles.observed]: canvas().context !== 'Not observed' }]}
+                    >
                       {canvas().context}
                     </span>
                   </div>
 
-                  <dl class="metrics">
+                  <dl class={styles.metrics}>
                     <div>
                       <dt>Drawing buffer</dt>
                       <dd>
@@ -181,23 +194,27 @@ export function SpectorDevToolsPanel(props: { session: ReturnType<typeof createI
                     </div>
                   </dl>
 
-                  <div class="capture-card">
+                  <div class={styles.captureCard}>
                     <div>
                       <h3>Capture WebGL activity</h3>
                       <p>
                         Wait for the next WebGL render, or record a fixed number of calls on an already-running page.
                       </p>
                     </div>
-                    <div class="capture-actions">
+                    <div class={styles.captureActions}>
                       <Show
                         when={!activeCapture()}
                         fallback={
                           activeCapture()?.snapshot?.status.type === 'processing' ? (
-                            <button class="button" type="button" disabled>
+                            <button class={styles.button} type="button" disabled>
                               Processing…
                             </button>
                           ) : (
-                            <button class="button danger" type="button" onClick={() => void stopCapture()}>
+                            <button
+                              class={`${styles.button} ${styles.danger}`}
+                              type="button"
+                              onClick={() => void stopCapture()}
+                            >
                               {activeCapture()?.snapshot?.status.type === 'waiting'
                                 ? 'Cancel waiting'
                                 : 'Cancel capture'}
@@ -206,7 +223,7 @@ export function SpectorDevToolsPanel(props: { session: ReturnType<typeof createI
                         }
                       >
                         <button
-                          class="button primary"
+                          class={`${styles.button} ${styles.primary}`}
                           type="button"
                           disabled={capturePending()}
                           onClick={() => void capture(0)}
@@ -214,7 +231,7 @@ export function SpectorDevToolsPanel(props: { session: ReturnType<typeof createI
                           Capture next frame
                         </button>
                         <button
-                          class="button"
+                          class={styles.button}
                           type="button"
                           disabled={capturePending()}
                           onClick={() => void capture(500)}

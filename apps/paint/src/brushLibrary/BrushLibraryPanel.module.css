@@ -1,0 +1,106 @@
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 14px;
+
+  h2 {
+    font-size: 12px;
+    font-weight: 500;
+    margin: 0;
+  }
+
+  span,
+  code {
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+  }
+
+  button {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+  }
+}
+
+.panelNote {
+  padding: 0 16px;
+  font-size: 10px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.brushLibrary {
+  .sectionHeading button {
+    width: auto;
+    height: auto;
+    padding: 6px 10px;
+    min-height: 32px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+
+  .panelNote {
+    padding: 0;
+    margin: 8px 0;
+    line-height: 1.5;
+  }
+}
+
+.tipChoice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 8px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 6px;
+
+  &[aria-pressed='true'] {
+    border-color: var(--paint-accent, #1684bd);
+    background: #e8f4fa;
+  }
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  canvas {
+    flex: 0 0 48px;
+  }
+}
+
+.tipList {
+  max-height: 200px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.tipSearch {
+  width: 100%;
+  min-height: 36px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px solid #d5dfe2;
+  border-radius: 6px;
+}
+
+.libraryName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.libraryError {
+  color: #9d352e;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

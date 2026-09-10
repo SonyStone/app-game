@@ -1,15 +1,14 @@
-import type { WorkplaneGizmoMode } from './render/workplaneGizmoTypes';
 import type { ViewNavigation } from '@app-game/solid-view-cube';
 import { createSignal, onSettled } from 'solid-js';
 import { AppSidebar } from './app/AppSidebar';
 import { AppToolbar } from './app/AppToolbar';
-import { BodyClass } from './app/BodyClass';
 import { useDocumentSession } from './app/useDocumentSession';
 import { useGreaseRenderer } from './app/useGreaseRenderer';
 import { useSelectionShortcuts } from './app/useSelectionShortcuts';
 import { useCanvasInteraction } from './features/interaction/useCanvasInteraction';
 import { CanvasViewport } from './features/viewport/CanvasViewport';
-import './index.css';
+import styles from './App.module.css';
+import type { WorkplaneGizmoMode } from './render/workplaneGizmoTypes';
 import type { SketchPanel } from './shared/sketchPanel';
 import type { ToolMode } from './shared/toolMode';
 import type { ViewportMode } from './shared/viewportMode';
@@ -102,7 +101,7 @@ export default function App() {
   });
 
   const closePanel = () => {
-    const launcher = document.querySelector<HTMLButtonElement>('.marking-trigger');
+    const launcher = document.querySelector<HTMLButtonElement>('[data-quick-tools]');
     setPanel(undefined);
     launcher?.focus();
   };
@@ -127,8 +126,7 @@ export default function App() {
   };
 
   return (
-    <main class="grease-pencil-root" data-panel-open={Boolean(panel())} data-tool={mode()}>
-      <BodyClass class="m-0 overflow-hidden" />
+    <main class={styles.root} data-panel-open={Boolean(panel())} data-tool={mode()}>
       <AppToolbar
         touchDrawing={touchDrawing()}
         onSetTouchDrawing={(enabled) => setTouchDrawingByView((current) => ({ ...current, [viewportMode()]: enabled }))}
@@ -152,7 +150,7 @@ export default function App() {
         updateDocument={updateDocument}
       />
 
-      <section class="workspace">
+      <section class={styles.workspace}>
         <CanvasViewport
           workplane={workplane()}
           gizmoMode={gizmoMode()}

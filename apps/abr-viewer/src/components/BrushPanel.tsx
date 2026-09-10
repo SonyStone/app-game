@@ -2,6 +2,7 @@ import { createProjection, createSignal, Show } from 'solid-js';
 import { BlockTree, type BlockProps } from 'solid-nest';
 import { createRootNode, filterTree, type GroupNode, type TreeNode } from '../lib/brush-tree';
 import type { Workspace } from '../lib/workspace';
+import styles from './BrushPanel.module.css';
 import { BrushTreeGroup } from './BrushTreeGroup';
 import { BrushTreeItem } from './BrushTreeItem';
 
@@ -23,12 +24,12 @@ export function BrushPanel(props: {
     createRootNode()
   );
   return (
-    <section class="abr-brushes" aria-label="Brushes">
-      <header class="abr-panel-heading">
+    <section class={styles.brushes} aria-label="Brushes">
+      <header class={styles.panelHeading}>
         <h2>Brushes</h2>
         <button onClick={props.onImport}>Import…</button>
       </header>
-      <div class="abr-search">
+      <div class={styles.search}>
         <input
           aria-label="Search brushes"
           placeholder="Search Brushes"
@@ -36,17 +37,17 @@ export function BrushPanel(props: {
           onInput={(event) => setQuery(event.currentTarget.value)}
         />
       </div>
-      <div class="abr-collection" aria-label="Brush collection">
+      <div class={styles.collection} aria-label="Brush collection">
         <Show
           when={props.workspace.root().children.length}
           fallback={
-            <div class="abr-empty">
+            <div class={styles.empty}>
               <p>Drop .abr files here</p>
               <button onClick={props.onImport}>Import brushes…</button>
             </div>
           }
         >
-          <Show when={tree.children.length} fallback={<p class="abr-empty">No matching brushes</p>}>
+          <Show when={tree.children.length} fallback={<p class={styles.empty}>No matching brushes</p>}>
             <BlockTree<string, TreeNode>
               root={tree}
               getKey={(node) => node.id}
@@ -109,7 +110,7 @@ export function BrushPanel(props: {
           </Show>
         </Show>
       </div>
-      <footer class="abr-collection-tools">
+      <footer class={styles.collectionTools}>
         <label>
           Preview size
           <input
@@ -135,10 +136,10 @@ export function BrushPanel(props: {
 
 /** Visible destination while rearranging presets. */
 function InsertionMarker() {
-  return <div class="abr-insertion-marker" />;
+  return <div class={styles.insertionMarker} />;
 }
 
 /** Gives empty folders a usable drop target. */
 function EmptyGroup() {
-  return <div class="abr-empty-group">Drop brushes here</div>;
+  return <div class={styles.emptyGroup}>Drop brushes here</div>;
 }

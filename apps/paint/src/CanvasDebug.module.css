@@ -1,0 +1,19 @@
+.debug {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.debugStats {
+  position: absolute;
+  left: 64px;
+  bottom: 78px;
+  max-width: calc(100% - 80px);
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 90%);
+  color: #166683;
+  font: 12px/1.6 monospace;
+  overflow-wrap: anywhere;
+}

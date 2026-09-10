@@ -8,7 +8,7 @@ import {
   type WebGLInspectorOptions
 } from './gl-debug-wrapper';
 import { WebGLStateDiagram } from './state-diagram';
-import './webgl-state-diagram.css';
+import styles from './iframe-state-diagram.module.css';
 
 /** Same-origin document source loaded after the iframe's WebGL hook is installed. */
 export type WebGLIframeSource =
@@ -120,14 +120,14 @@ export function WebGLIframeStateDiagram(props: WebGLIframeStateDiagramProps): JS
   const iframeTitle = () => props.iframeTitle ?? 'Inspected WebGL page';
 
   return (
-    <main class="wgsd-split-view">
-      <section class="wgsd-split-view__page" aria-label={iframeTitle()}>
-        <header class="wgsd-split-view__bar">
+    <main class={styles.splitView}>
+      <section class={styles.splitViewPage} aria-label={iframeTitle()}>
+        <header class={styles.splitViewBar}>
           <div>
             <span>inspected page</span>
             <strong>{iframeTitle()}</strong>
           </div>
-          <div class="wgsd-split-view__bar-actions">
+          <div class={styles.splitViewBarActions}>
             {props.pageControls}
             <Button type="button" onClick={() => void loadFrame(currentSource())}>
               Reload page
@@ -137,9 +137,9 @@ export function WebGLIframeStateDiagram(props: WebGLIframeStateDiagramProps): JS
         <iframe ref={iframe} title={iframeTitle()} sandbox="allow-same-origin allow-scripts" />
       </section>
 
-      <section class="wgsd-split-view__diagram" aria-label="WebGL state diagram">
+      <section class={styles.splitViewDiagram} aria-label="WebGL state diagram">
         <Show when={inspectors().length > 1}>
-          <label class="wgsd-split-view__context">
+          <label class={styles.splitViewContext}>
             Context
             <select
               value={selectedInspector()}
@@ -173,7 +173,7 @@ type IframeLoadState =
 
 function FrameStatus(props: { readonly state: IframeLoadState }): JSX.Element {
   return (
-    <div class={`wgsd-frame-status is-${props.state.status}`}>
+    <div class={styles.frameStatus} data-status={props.state.status}>
       <Show when={props.state.status === 'loading'}>Loading the inspected page…</Show>
       <Show when={props.state.status === 'waiting'}>Waiting for the page to create a WebGL or WebGL2 context.</Show>
       <Show when={props.state.status === 'error'}>{props.state.status === 'error' ? props.state.message : ''}</Show>

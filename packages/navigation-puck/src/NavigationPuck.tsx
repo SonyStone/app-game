@@ -1,7 +1,7 @@
 import { For, Show } from 'solid-js';
 import puckImage from './assets/navigation-puck.svg?url';
 import type { createNavigationPuck, PuckAction } from './controller';
-import './style.css';
+import styles from './NavigationPuck.module.css';
 
 /** Shared 2D/3D controls that hide while a captured pointer navigates the canvas. */
 export function NavigationPuck(props: {
@@ -41,10 +41,10 @@ export function NavigationPuck(props: {
   };
   return (
     <Show when={props.navigation.center()}>
-      <div class="shared-puck-overlay" data-navigating={props.navigation.activeAction() ? 'true' : 'false'}>
-        <button class="shared-puck-dismiss" aria-label="Dismiss navigation puck" onPointerDown={close} />
+      <div class={styles.overlay} data-navigating={props.navigation.activeAction() ? 'true' : 'false'}>
+        <button class={styles.dismiss} aria-label="Dismiss navigation puck" onPointerDown={close} />
         <div
-          class="shared-puck"
+          class={styles.puck}
           data-mode={props.navigation.mode()}
           role="group"
           aria-label="Canvas navigation"
@@ -60,11 +60,11 @@ export function NavigationPuck(props: {
           <Show
             when={props.navigation.mode() === '2d'}
             fallback={
-              <div class="shared-puck-zones">
+              <div class={styles.zones}>
                 <For each={zones}>
                   {(zone) => (
                     <button
-                      class="shared-puck-zone"
+                      class={styles.zone}
                       aria-label={zone.label}
                       title={zone.label}
                       onPointerDown={(e) => begin(e, zone.action)}
@@ -97,7 +97,7 @@ export function NavigationPuck(props: {
           >
             <img src={puckImage} alt="" draggable={false} />
             <button
-              class="shared-puck-rotate"
+              class={styles.rotate}
               aria-label="Drag to rotate"
               title="Rotate around canvas center · Shift: 15° steps"
               onPointerDown={(e) => begin(e, 'rotate')}
@@ -111,7 +111,7 @@ export function NavigationPuck(props: {
               onKeyDown={(e) => nudge(e, 'rotate')}
             />
             <button
-              class="shared-puck-pan"
+              class={styles.pan}
               aria-label="Drag to pan"
               title="Move canvas · drag or arrow keys"
               onPointerDown={(e) => begin(e, 'pan')}
@@ -125,7 +125,7 @@ export function NavigationPuck(props: {
               onKeyDown={(e) => nudge(e, 'pan')}
             />
             <button
-              class="shared-puck-zoom"
+              class={styles.zoom}
               aria-label="Drag to zoom"
               title="Zoom · drag up/down or arrow keys"
               onPointerDown={(e) => begin(e, 'zoom')}
@@ -139,7 +139,12 @@ export function NavigationPuck(props: {
               onKeyDown={(e) => nudge(e, 'zoom')}
             />
           </Show>
-          <button class="shared-puck-close" aria-label="Close navigation" title="Close · Escape" onClick={close}>
+          <button
+            class={styles.close}
+            aria-label="Close navigation"
+            title="Close · Escape"
+            onClick={close}
+          >
             <Show when={props.navigation.mode() === '3d'}>×</Show>
           </button>
         </div>

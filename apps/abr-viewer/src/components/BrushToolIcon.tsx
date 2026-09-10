@@ -6,6 +6,7 @@ import pencil from '../assets/icons/brush-tools/pencil.svg?url';
 import sharpen from '../assets/icons/brush-tools/triangle.svg?url';
 import blur from '../assets/icons/brush-tools/water.svg?url';
 import unknown from '../assets/icons/tool-options/question-mark.svg?url';
+import styles from './BrushToolIcon.module.css';
 
 /** One tool vocabulary for the picker and preset badges; unknown imported classes remain identifiable. */
 export function brushToolIcon(type: string): string {
@@ -15,7 +16,12 @@ export function brushToolIcon(type: string): string {
 /** Decorative icon when embedded beside a label; supply a label for an icon-only preset badge. */
 export function BrushToolIcon(props: { type: string; label?: string }) {
   return (
-    <img class="abr-brush-tool-icon" src={brushToolIcon(props.type)} alt={props.label ?? ''} title={props.label} />
+    <img
+      class={styles.brushToolIcon}
+      src={brushToolIcon(props.type)}
+      alt={props.label ?? ''}
+      title={props.label}
+    />
   );
 }
 

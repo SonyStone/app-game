@@ -1,0 +1,487 @@
+.panelShell,
+.resultShell {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.panelHeader {
+  height: 58px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+
+  @media (max-width: 480px) {
+    gap: 6px;
+    padding: 0 8px;
+  }
+}
+
+.brand,
+.headerActions,
+.detailTitleRow,
+.captureActions {
+  display: flex;
+  align-items: center;
+}
+
+.brand {
+  min-width: 0;
+  gap: 10px;
+}
+
+.brand h1,
+.brand p,
+.canvasDetail h2,
+.captureCard h3,
+.captureCard p {
+  margin: 0;
+}
+
+.brand {
+  h1 {
+    font-size: 14px;
+    font-weight: 650;
+    line-height: 18px;
+
+    @media (max-width: 480px) {
+      font-size: 12px;
+    }
+  }
+
+  p {
+    color: var(--muted);
+    line-height: 16px;
+
+    @media (max-width: 720px) {
+      display: none;
+    }
+  }
+}
+
+.brandMark {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--accent);
+  border-radius: 5px;
+  box-shadow:
+    inset 0 0 0 5px var(--surface),
+    inset 0 0 0 8px var(--accent);
+
+  @media (max-width: 480px) {
+    display: none;
+  }
+}
+
+.headerActions,
+.captureActions {
+  gap: 8px;
+}
+
+.button {
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--shadow);
+
+  &:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &.primary {
+    border-color: var(--accent-strong);
+    background: var(--accent-strong);
+    color: #fff;
+  }
+
+  &.danger {
+    border-color: var(--danger);
+    background: var(--danger);
+    color: #fff;
+  }
+
+  &.quiet {
+    background: var(--surface-soft);
+    box-shadow: none;
+  }
+}
+
+.notice {
+  position: absolute;
+  z-index: 2;
+  top: 58px;
+  right: 0;
+  left: 0;
+  min-height: 28px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+
+  &.progress {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+}
+
+.activitySpinner {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: capture-spin 700ms linear infinite;
+}
+
+@keyframes capture-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.notice.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.workspace {
+  position: absolute;
+  inset: 59px 0 0;
+  display: grid;
+  grid-template-columns: minmax(230px, 29%) 1fr;
+  min-height: 0;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 210px 1fr;
+  }
+
+  @media (max-width: 480px) {
+    grid-template-columns: 135px minmax(0, 1fr);
+  }
+}
+
+.notice + .workspace {
+  top: 87px;
+}
+
+.canvasBrowser {
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.sectionHeading {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.count,
+.duplicateBadge,
+.contextBadge {
+  border-radius: 999px;
+  background: var(--surface-soft);
+}
+
+.count {
+  min-width: 22px;
+  padding: 2px 6px;
+  text-align: center;
+}
+
+.frameGroup {
+  padding: 5px 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.frameHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+
+  > span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.duplicateBadge {
+  flex: none;
+  padding: 2px 6px;
+}
+
+.frameError,
+.emptyMessage {
+  margin: 8px 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.frameError {
+  color: var(--danger);
+}
+
+.canvasRow {
+  width: 100%;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--surface-soft);
+  }
+
+  &.selected {
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+
+.canvasPreview {
+  width: 30px;
+  height: 22px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: linear-gradient(145deg, var(--accent-soft), var(--surface-soft));
+
+  &.isHidden {
+    opacity: 0.35;
+  }
+}
+
+.canvasCopy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    font-weight: 600;
+  }
+
+  small {
+    color: var(--muted);
+  }
+}
+
+.canvasDetail {
+  min-width: 0;
+  overflow-y: auto;
+  padding: 24px;
+
+  @media (max-width: 480px) {
+    padding: 12px;
+  }
+}
+
+.detailTitleRow {
+  justify-content: space-between;
+  gap: 16px;
+
+  @media (max-width: 480px) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.eyebrow {
+  margin: 0 0 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.canvasDetail h2 {
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.frameUrl {
+  max-width: 680px;
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contextBadge {
+  padding: 5px 9px;
+  color: var(--muted);
+  white-space: nowrap;
+
+  &.observed {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+}
+
+.metrics {
+  margin: 24px 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(100px, 1fr));
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+
+  div {
+    min-width: 0;
+    padding: 12px 14px;
+    border-right: 1px solid var(--border);
+
+    &:last-child {
+      border-right: 0;
+    }
+
+    &:nth-child(2) {
+      @media (max-width: 720px) {
+        border-right: 0;
+      }
+    }
+
+    &:nth-child(-n + 2) {
+      @media (max-width: 720px) {
+        border-bottom: 1px solid var(--border);
+      }
+    }
+  }
+
+  dt {
+    margin-bottom: 4px;
+    color: var(--muted);
+  }
+
+  dd {
+    margin: 0;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.captureCard {
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+
+  h3 {
+    margin-bottom: 5px;
+    font-size: 14px;
+  }
+
+  p {
+    max-width: 620px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  @media (max-width: 720px) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.captureActions {
+  flex: none;
+
+  @media (max-width: 480px) {
+    flex-wrap: wrap;
+  }
+}
+
+.detailEmpty {
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  color: var(--muted);
+  text-align: center;
+
+  h2 {
+    margin-top: 14px;
+    color: var(--text);
+  }
+
+  p {
+    max-width: 380px;
+    line-height: 1.5;
+  }
+}
+
+.emptyGraphic {
+  width: 52px;
+  height: 38px;
+  border: 2px solid var(--border);
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 10px var(--panel-bg);
+}
+
+.detailTitleRow > div {
+  min-width: 0;
+}
+
+.canvasDetail h2 {
+  overflow-wrap: anywhere;
+}

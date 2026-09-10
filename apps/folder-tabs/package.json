@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 3170",
-    "build": "tsc --noEmit && vite build",
+    "build": "pnpm --filter @app-game/solid-tabs build && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "preview": "vite preview --port 4170"
@@ -13,12 +13,9 @@
   "dependencies": {
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/media": "catalog:",
-    "@solid-primitives/pointer": "catalog:",
-    "@solid-primitives/raf": "catalog:",
-    "@solid-primitives/resize-observer": "catalog:",
-    "@solid-primitives/scheduled": "catalog:",
     "@solidjs/web": "2.0.0-rc.4",
-    "solid-js": "catalog:"
+    "solid-js": "catalog:",
+    "@app-game/solid-tabs": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "catalog:",
