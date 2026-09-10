@@ -1262,7 +1262,8 @@ button {
   --screen-y: calc(var(--stack-top) + var(--painted-offset, var(--offset)));
   --y: var(--screen-y);
   transition: none;
-  --sheet-height: calc(var(--screen-height) - var(--y) - var(--tab-height));
+  /* Dragging changes transforms, not the size of eight native scroll layers. */
+  --sheet-height: calc(var(--screen-height) - var(--stack-top) - var(--tab-height));
 }
 .is-fullscreen .folder-sheet {
   padding-top: var(--ledge);
@@ -1300,6 +1301,7 @@ button {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
+  overflow-anchor: none;
   touch-action: pan-y pinch-zoom;
   scrollbar-width: none;
   transition: none;
@@ -1310,15 +1312,24 @@ button {
   min-height: 100%;
   overflow: hidden;
   transition: none;
+  /* The footer covers this much of the fixed scrollport. Keep its final rows reachable. */
+  margin-bottom: max(0px, var(--painted-offset, var(--offset)));
 }
 .is-fullscreen .creative-viewport::-webkit-scrollbar {
   width: 0;
 }
 .is-fullscreen .folder-footer {
+  position: relative;
+  z-index: 1;
+  will-change: transform;
+  transform: translateY(calc(-1 * var(--painted-offset, var(--offset))));
   height: var(--footer-height);
   grid-template-rows: 1fr 1fr 16px;
   padding-bottom: env(safe-area-inset-bottom);
   background-color: var(--paper);
+}
+.is-fullscreen .search-panel {
+  transform: translateY(calc(-1 * var(--painted-offset, var(--offset))));
 }
 .is-fullscreen .file-count > span:first-child {
   font-size: 112px;

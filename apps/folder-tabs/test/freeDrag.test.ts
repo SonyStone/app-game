@@ -6,9 +6,36 @@ const disposers: (() => void)[] = [];
 afterEach(() => {
   disposers.splice(0).forEach((dispose) => dispose());
   document.body.replaceChildren();
+  vi.restoreAllMocks();
 });
 
 describe('free pointer ownership', () => {
+  it('publishes only the latest movement once per rendered frame', () => {
+    const f = fixture();
+    f.pointer('pointerdown', 10, 10, f.handle);
+    for (let i = 1; i <= 20; i++) f.pointer('pointermove', 10 + i * 10, 10 + i * 5);
+    expect(f.drag.position()).toEqual({ x: 0, y: 0 });
+    expect(f.frames.size).toBe(1);
+    f.advance();
+    expect(f.drag.position()).toEqual({ x: 200, y: 100 });
+    expect(f.frames.size).toBe(0);
+    f.pointer('pointermove', 220, 120);
+    f.advance();
+    expect(f.drag.position()).toEqual({ x: 210, y: 110 });
+  });
+
+  it('finishes an unpainted drag at release coordinates and cancels its queued frame', () => {
+    const f = fixture();
+    f.pointer('pointerdown', 10, 10, f.handle);
+    f.pointer('pointermove', 80, 90);
+    f.pointer('pointerup', 100, 110);
+    expect(f.finish).toHaveBeenCalledExactlyOnceWith({ x: 90, y: 100, cancelled: false });
+    expect(f.frames.size).toBe(0);
+    f.advance();
+    expect(f.drag.position()).toEqual({ x: 0, y: 0 });
+    expect(f.drag.dragging()).toBe(false);
+  });
+
   it('captures after leaving the original handle and keeps both coordinates live', () => {
     const f = fixture();
     f.pointer('pointerdown', 10, 10, f.handle);
@@ -17,6 +44,7 @@ describe('free pointer ownership', () => {
     f.pointer('pointermove', 100, 12, document.body);
     expect(f.start).toHaveBeenCalledExactlyOnceWith(f.handle);
     f.pointer('pointermove', 80, 200, document.body);
+    f.advance();
     expect(f.drag.position()).toEqual({ x: 70, y: 190 });
     expect(f.captured.has(1)).toBe(true);
     f.pointer('pointerup', 90, 210, document.body);
@@ -63,6 +91,7 @@ describe('free pointer ownership', () => {
     flush();
     expect(f.finish).toHaveBeenCalledExactlyOnceWith({ x: 70, y: 80, cancelled: true });
     expect(f.captured.size).toBe(0);
+    expect(f.frames.size).toBe(0);
     f.setTarget(f.element);
     flush();
     f.dispose();
@@ -73,6 +102,21 @@ describe('free pointer ownership', () => {
 });
 
 function fixture() {
+  let sequence = 0;
+  const frames = new Map<number, FrameRequestCallback>();
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+    frames.set(++sequence, callback);
+    return sequence;
+  });
+  vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+    frames.delete(id);
+  });
+  function advance() {
+    const callbacks = [...frames.values()];
+    frames.clear();
+    callbacks.forEach((callback) => callback(performance.now()));
+    flush();
+  }
   const element = document.createElement('div');
   const handle = document.createElement('button');
   element.append(handle);
@@ -110,5 +154,5 @@ function fixture() {
     );
     flush();
   }
-  return { element, handle, captured, drag, start, finish, pointer, setTarget, dispose };
+  return { element, handle, captured, drag, start, finish, pointer, setTarget, dispose, frames, advance };
 }

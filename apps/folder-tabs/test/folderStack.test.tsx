@@ -310,12 +310,13 @@ describe('folder transition sequence', () => {
     vi.spyOn(f.card('menu'), 'getBoundingClientRect').mockReturnValue({ top: 420 } as DOMRect);
     f.pointer('pointerdown', 200, document.querySelector('#tab-play')!);
     expect(f.stack.dataset.motion).toBe('departing'); // a tap still uses the click sequence
-    f.pointer('pointermove', 220);
+    f.dispatchPointer('pointermove', 220);
     expect(f.stack.dataset.motion).toBe('idle');
     expect(f.stack.classList.contains('is-dragging')).toBe(true);
-    expect(f.painted('play')).toBeCloseTo(held + 20 / 8);
     expect(f.painted('music')).toBeCloseTo(50);
     expect(f.painted('menu')).toBeCloseTo(45);
+    f.advance(1);
+    expect(f.painted('play')).toBeCloseTo(held + 20 / 8);
     f.pointer('pointermove', 260);
     expect(f.painted('play')).toBeCloseTo(held + 60 / 8);
     f.pointer('pointercancel', 260);
@@ -825,7 +826,7 @@ function fixture(pointerType: 'mouse' | 'touch' = 'mouse') {
   });
   const card = (id: string) => host.querySelector<HTMLElement>(`[data-folder="${id}"]`)!;
   const panel = (id: string) => host.querySelector<HTMLElement>(`#panel-${id}`)!;
-  function pointer(type: string, y: number, target: Element = stack, x = 50, timeStamp?: number) {
+  function dispatchPointer(type: string, y: number, target: Element = stack, x = 50, timeStamp?: number) {
     const event = new PointerEvent(type, {
       bubbles: true,
       cancelable: true,
@@ -840,6 +841,11 @@ function fixture(pointerType: 'mouse' | 'touch' = 'mouse') {
     target.dispatchEvent(event);
     flush();
   }
+  function pointer(...args: Parameters<typeof dispatchPointer>) {
+    dispatchPointer(...args);
+    // Observe the latest pointer position at its next rendered frame.
+    if (args[0] === 'pointermove') advance(1);
+  }
   return {
     stack,
     tabs: () => (stack.dataset.tabOrder ?? '').split(' '),
@@ -852,6 +858,7 @@ function fixture(pointerType: 'mouse' | 'touch' = 'mouse') {
         (a, b) => Number(card(a).style.getPropertyValue('--rank')) - Number(card(b).style.getPropertyValue('--rank'))
       ),
     pointer,
+    dispatchPointer,
     painted: (id: string) =>
       parseFloat(card(id).style.getPropertyValue('--painted-offset')) +
       parseFloat(card(id).style.getPropertyValue('--card-drag-offset')) / 8,

@@ -1,8 +1,13 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createPointerListeners } from '@solid-primitives/pointer';
+import { createRAF } from '@solid-primitives/raf';
 import { createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 
-/** One captured pointer with simultaneous horizontal and vertical displacement. */
+/**
+ * One captured pointer with simultaneous horizontal and vertical displacement.
+ * Publishes the latest move once per animation frame. Finish/cancel always receive
+ * the latest pointer coordinates, including movement not painted before release.
+ */
 export function createFreeDrag(options: {
   target: Accessor<HTMLElement | undefined>;
   accepts: (target: EventTarget | null) => boolean;
@@ -17,8 +22,17 @@ export function createFreeDrag(options: {
     | { id: number; x: number; y: number; origin: EventTarget | null; element: HTMLElement; captured: boolean }
     | undefined;
   let suppressClick = false;
+  let pending: { x: number; y: number } | undefined;
+  const [, schedule, stop] = createRAF(() => {
+    untrack(stop);
+    const latest = pending;
+    pending = undefined;
+    if (latest) setPosition(latest);
+  });
 
   function reset() {
+    untrack(stop);
+    pending = undefined;
     const previous = pointer;
     pointer = undefined;
     if (previous?.captured && previous.element.hasPointerCapture(previous.id))
@@ -27,7 +41,7 @@ export function createFreeDrag(options: {
     setPosition({ x: 0, y: 0 });
   }
 
-  function finish(cancelled: boolean, x = position().x, y = position().y) {
+  function finish(cancelled: boolean, x = pending?.x ?? position().x, y = pending?.y ?? position().y) {
     if (pointer?.captured) options.onFinish({ x, y, cancelled });
     reset();
   }
@@ -71,7 +85,8 @@ export function createFreeDrag(options: {
         suppressClick = true;
       }
       event.preventDefault();
-      setPosition({ x, y });
+      pending = { x, y };
+      untrack(schedule);
     },
     onUp(event) {
       if (pointer?.id === event.pointerId) finish(false, event.clientX - pointer.x, event.clientY - pointer.y);
