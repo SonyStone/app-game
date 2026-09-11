@@ -1,9 +1,9 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import motionStyles from '../../../packages/solid-tabs/src/Tabs.module.css';
-import dialStyles from '../src/Dial.module.css';
+import motionStyles from '../../../packages/card-stack/src/CardStack.module.css';
 import { App } from '../src/App';
+import dialStyles from '../src/Dial.module.css';
 import contentStyles from '../src/FolderContent.module.css';
 import stackStyles from '../src/FolderStack.module.css';
 
@@ -86,11 +86,26 @@ describe('folder transition sequence', () => {
     f.advance(240);
     f.pointer('pointerdown', 200, tab, 50, 2000);
     f.pointer('pointermove', 230, f.stack, 50, 2500);
-    f.pointer('pointerup', 230, f.stack, 50, 3000);
+    f.pointer('pointerup', 320, f.stack, 50, 3000);
     expect(f.stack.dataset.selectionTarget).toBe('play');
     for (const id of ['music', 'menu']) f.end(id, 'tabs-exit');
     for (const id of ['music', 'menu']) f.end(id, 'tabs-return');
     expect(f.selected()).toBe('tab-play');
+  });
+
+  it('does not select after releasing below the selection threshold, even after a deeper pull', () => {
+    const f = fixture('touch');
+    const order = f.order();
+    f.pointer('pointerdown', 100, f.tab('style'));
+    f.pointer('pointermove', 350);
+    f.advance(240);
+    f.pointer('pointermove', 130);
+    f.pointer('pointerup', 130);
+    f.advance(240);
+    expect(f.order()).toEqual(order);
+    expect(f.selected()).toBe('tab-music');
+    expect(f.stack.dataset.selectionTarget).toBeUndefined();
+    expect(f.stack.dataset.motion).toBe('idle');
   });
 
   it.each(['mouse', 'touch'] as const)(
@@ -254,6 +269,7 @@ describe('folder transition sequence', () => {
     f.pointer('pointerdown', 100, document.querySelector('#tab-music')!, 600);
     f.pointer('pointermove', 1000, f.stack, 600);
     f.pointer('pointerup', 1000, f.stack, 600);
+    finishSelection(f);
     f.advance(240);
     expect(f.selected()).toBe('tab-menu');
     expect(f.tabs()).toEqual(tabs);
@@ -283,11 +299,11 @@ describe('folder transition sequence', () => {
     ids.forEach((id) => expect(f.painted(id)).toBeCloseTo(0));
   });
 
-  it('cancels a rear reveal when a downward pull reverses upward', () => {
+  it('gathers without selection when a downward pull reverses upward', () => {
     const f = fixture('touch');
     f.pointer('pointerdown', 300, document.querySelector('#tab-play')!);
     f.pointer('pointermove', 420);
-    expect(f.card('play').hasAttribute('data-revealed')).toBe(true);
+    expect(f.card('play').hasAttribute('data-revealed')).toBe(false);
     f.advance(8);
     f.pointer('pointermove', 200);
     expect(f.stack.querySelector('[data-revealed]')).toBeNull();
@@ -301,6 +317,9 @@ describe('folder transition sequence', () => {
 
   it('hands an unfinished click selection to a drag without jumping or replaying the cancelled batch', () => {
     const f = fixture();
+    vi.spyOn(f.card('play'), 'getBoundingClientRect').mockImplementation(
+      () => ({ top: 60 + f.painted('play') * 8 }) as DOMRect
+    );
     document.querySelector<HTMLButtonElement>('#tab-play')!.click();
     flush();
     f.advance(8);
@@ -335,6 +354,9 @@ describe('folder transition sequence', () => {
     'lets a returning tab be grabbed with %s before its animation ends',
     (pointerType) => {
       const f = fixture(pointerType);
+      vi.spyOn(f.card('menu'), 'getBoundingClientRect').mockImplementation(
+        () => ({ top: 60 + f.painted('menu') * 8 }) as DOMRect
+      );
       document.querySelector<HTMLButtonElement>('#tab-menu')!.click();
       flush();
       f.end('music', 'tabs-exit');
@@ -396,14 +418,15 @@ describe('folder transition sequence', () => {
     expect(f.stack.dataset.motion).toBe('idle');
   });
 
-  it('reveals the underlying content and moves the remaining stack during a held drag', () => {
+  it('spreads the existing depth during a held drag without previewing another selection', () => {
     const f = fixture();
     const original = f.offset('perceive');
     f.pointer('pointerdown', 300);
     f.pointer('pointermove', 450);
-    expect(f.card('menu').hasAttribute('data-revealed')).toBe(true);
+    expect(f.card('menu').hasAttribute('data-revealed')).toBe(false);
     expect(f.panel('menu').querySelector(`.${contentStyles.boardTitle}`)?.textContent).toBe('AI Generation Place');
-    expect(f.offset('perceive')).toBeGreaterThan(original);
+    expect(f.offset('perceive')).toBe(original);
+    expect(f.offset('play')).toBeGreaterThan(13.4);
     expect(f.stack.style.getPropertyValue('--drag-offset')).toBe('150px');
     expect(f.selected()).toBe('tab-music');
   });
@@ -416,8 +439,9 @@ describe('folder transition sequence', () => {
     expect(f.selected()).toBe('tab-music');
     expect(f.card('music').classList.contains('is-departing')).toBe(true);
     expect(f.card('menu').hasAttribute('data-revealed')).toBe(true);
-    expect(f.stack.querySelector('.folder-echo')).not.toBeNull();
-    expect(f.offset('perceive')).toBe(1.6);
+    expect(f.stack.querySelector('.folder-echo')).toBeNull();
+    expect(f.offset('perceive')).toBe(0);
+    expect(parseFloat(f.card('perceive').style.getPropertyValue('--reveal-end'))).toBe(1.6);
     f.end('music', 'dial-spin', f.panel('music').querySelector(`.${dialStyles.dialRotor}`)!);
     expect(f.stack.dataset.motion).toBe('departing');
     f.end('music', 'tabs-exit');
@@ -426,6 +450,7 @@ describe('folder transition sequence', () => {
     expect(f.card('music').classList.contains('is-returning')).toBe(true);
     expect(f.card('music').classList.contains('is-departing')).toBe(false);
     expect(f.offset('perceive')).toBe(1.6);
+    expect(parseFloat(f.card('perceive').style.getPropertyValue('--reveal-end'))).toBe(1.6);
     f.end('music', 'tabs-exit');
     expect(f.stack.dataset.motion).toBe('returning');
     f.end('music', 'tabs-return');
@@ -498,9 +523,11 @@ describe('folder transition sequence', () => {
     f.pointer('pointermove', 300);
     expect(f.selected()).toBe('tab-music');
     f.pointer('pointermove', 850);
-    expect(f.selected()).toBe('tab-menu');
+    expect(f.selected()).toBe('tab-music');
     expect(f.stack.hasAttribute('data-dragging')).toBe(true);
     f.pointer('pointerup', 850);
+    expect(f.stack.dataset.motion).toBe('departing');
+    finishSelection(f);
     expect(f.selected()).toBe('tab-menu');
   });
 
@@ -515,8 +542,9 @@ describe('folder transition sequence', () => {
     expect(f.painted('music')).toBeCloseTo(62.5);
     expect(f.selected()).toBe('tab-music');
     f.pointer('pointermove', 950);
-    expect(f.selected()).toBe('tab-menu');
+    expect(f.selected()).toBe('tab-music');
     f.pointer('pointerup', 950);
+    finishSelection(f);
     expect(f.stack.dataset.layout).toBe('stacked');
     expect(f.stack.dataset.motion).toBe('idle');
     expect(f.selected()).toBe('tab-menu');
@@ -552,7 +580,7 @@ describe('folder transition sequence', () => {
   );
 
   it.each(['mouse', 'touch'] as const)(
-    'opens a rear tab and then the next card in the same held %s gesture',
+    'selects the held rear tab only after releasing a long %s gesture',
     (pointerType) => {
       const f = fixture(pointerType);
       f.drag(450, 300);
@@ -560,16 +588,19 @@ describe('folder transition sequence', () => {
       f.pointer('pointerdown', 100, document.querySelector('#tab-play')!, 400);
       f.pointer('pointermove', 220, f.stack, 440);
       f.advance(120);
-      expect(f.selected()).toBe('tab-play');
+      expect(f.selected()).toBe('tab-music');
+      expect(f.stack.dataset.motion).toBe('idle');
       expect(f.painted('play')).toBeCloseTo(15);
       expect(f.stack.hasPointerCapture(1)).toBe(true);
       f.pointer('pointermove', 950, f.stack, 500);
       f.advance(2);
-      expect(f.selected()).toBe('tab-evolution');
+      expect(f.selected()).toBe('tab-music');
       expect(f.stack.hasPointerCapture(1)).toBe(true);
       f.pointer('pointerup', 950, f.stack, 500);
+      expect(f.stack.dataset.selectionTarget).toBe('play');
+      finishSelection(f);
       f.advance(240);
-      expect(f.selected()).toBe('tab-evolution');
+      expect(f.selected()).toBe('tab-play');
       expect(f.stack.dataset.motion).toBe('idle');
       for (const id of ids) expect(f.painted(id)).toBeCloseTo(f.offset(id));
     }
@@ -582,21 +613,21 @@ describe('folder transition sequence', () => {
     f.pointer('pointerdown', 100, document.querySelector('#tab-play')!);
     f.pointer('pointermove', 200);
     f.pointer('pointerup', 950);
-    for (const id of ['play', 'menu', 'music']) f.end(id, 'tabs-exit');
-    for (const id of ['play', 'menu', 'music']) f.end(id, 'tabs-return');
-    expect(f.selected()).toBe('tab-evolution');
+    finishSelection(f);
+    expect(f.selected()).toBe('tab-play');
     expect(f.stack.dataset.motion).toBe('idle');
   });
 
   it.each(['pointercancel', 'reverse'] as const)(
-    'restores the original order after a live rear promotion: %s',
+    'retains the original order when a rear pull ends with %s',
     (ending) => {
       const f = fixture('touch');
       const original = f.order();
       f.pointer('pointerdown', 100, document.querySelector('#tab-play')!);
       f.pointer('pointermove', 250);
       f.advance(120);
-      expect(f.selected()).toBe('tab-play');
+      expect(f.selected()).toBe('tab-music');
+      expect(f.order()).toEqual(original);
       if (ending === 'reverse') {
         f.pointer('pointermove', 100);
         f.pointer('pointerup', 100);
@@ -608,39 +639,46 @@ describe('folder transition sequence', () => {
     }
   );
 
-  it.each([false, true])(
-    'previews a rear selection while held and restores it when pulled back (compact: %s)',
-    (compact) => {
-      const f = fixture();
-      if (compact) f.drag(450, 300);
-      f.advance(120);
-      const before = ids.map((id) => f.offset(id));
-      const paintedBefore = ids.map((id) => f.painted(id));
-      const label = document.querySelector(`#tab-style .${stackStyles.tabLabel}`)!;
-      f.pointer('pointerdown', 100, label);
-      f.pointer('pointermove', 250);
-      const outgoing = ['child', 'site', 'evolution', 'play', 'menu', 'music'];
-      // Covering cards keep their painted positions until their own animation frame.
-      for (const id of outgoing) {
-        expect(f.painted(id)).toBe(paintedBefore[ids.indexOf(id)]);
-      }
-      f.advance(12);
-      const moved = outgoing.map((id) => f.painted(id) - paintedBefore[ids.indexOf(id)]!);
-      expect(moved.every((value) => value > 0 && value <= 51)).toBe(true);
-      moved.forEach((value) => expect(value).toBeCloseTo(moved[0]!));
-      expect(f.card('style').hasAttribute('data-revealed')).toBe(true);
-      expect(f.selected()).toBe('tab-music');
-      expect(f.stack.dataset.motion).toBe('idle');
-      f.pointer('pointermove', 100);
-      expect(ids.map((id) => f.offset(id))).toEqual(before);
-      f.pointer('pointerup', 100);
-      expect(f.selected()).toBe('tab-music');
-      expect(f.stack.dataset.layout).toBe(compact ? 'compact' : 'stacked');
-      expect(f.stack.dataset.selectionTarget).toBeUndefined();
-      f.advance(240);
-      expect(ids.map((id) => f.painted(id))).toEqual(before);
+  it.each([false, true])('spreads proportionally while held and restores on reversal (compact: %s)', (compact) => {
+    const f = fixture();
+    if (compact) f.drag(450, 300);
+    f.advance(120);
+    const before = ids.map((id) => f.offset(id));
+    const paintedBefore = ids.map((id) => f.painted(id));
+    const label = document.querySelector(`#tab-style .${stackStyles.tabLabel}`)!;
+    f.pointer('pointerdown', 100, label);
+    f.pointer('pointermove', 250);
+    const outgoing = ['child', 'site', 'evolution', 'play', 'menu', 'music'];
+    // Covering cards keep their painted positions until their own animation frame.
+    for (const id of outgoing) {
+      expect(f.painted(id)).toBe(paintedBefore[ids.indexOf(id)]);
     }
-  );
+    f.advance(12);
+    const moved = outgoing.map((id) => f.painted(id) - paintedBefore[ids.indexOf(id)]!);
+    expect(moved.every((value) => value > 0 && value <= 51)).toBe(true);
+    const depth = f.order();
+    f.advance(240);
+    const firstSpread = f.painted(depth.at(-1)!) - f.painted(depth[0]!);
+    // Waiting at a fixed pointer position must not send covers a screen-height away.
+    for (const id of outgoing) expect(f.painted(id) * 8).toBeLessThan(600);
+    expect(f.order()).toEqual(depth);
+    expect(f.stack.querySelector('[data-revealed], [data-tabs-echo], [data-phase]')).toBeNull();
+    f.pointer('pointermove', 350);
+    f.advance(240);
+    expect(f.painted(depth.at(-1)!) - f.painted(depth[0]!)).toBeGreaterThan(firstSpread);
+    expect(f.order()).toEqual(depth);
+    expect(f.card('style').hasAttribute('data-revealed')).toBe(false);
+    expect(f.selected()).toBe('tab-music');
+    expect(f.stack.dataset.motion).toBe('idle');
+    f.pointer('pointermove', 100);
+    expect(ids.map((id) => f.offset(id))).toEqual(before);
+    f.pointer('pointerup', 100);
+    expect(f.selected()).toBe('tab-music');
+    expect(f.stack.dataset.layout).toBe(compact ? 'compact' : 'stacked');
+    expect(f.stack.dataset.selectionTarget).toBeUndefined();
+    f.advance(240);
+    expect(ids.map((id) => f.painted(id))).toEqual(before);
+  });
 
   it('cancels an oversized compact pull without advancing or leaving preview offsets', () => {
     const f = fixture();
@@ -683,14 +721,94 @@ describe('folder transition sequence', () => {
     expect(document.querySelectorAll('[role="tabpanel"]:not([inert])')).toHaveLength(1);
   });
 
-  it('moves all intervening cards together and waits for every wrapper before reordering', () => {
+  it('keeps the revealed card behind the last cover and preserves its endpoint at the depth commit', () => {
+    const f = fixture();
+    f.tab('site').click();
+    flush();
+    const target = f.card('site');
+    const moving = ['music', 'menu', 'play', 'evolution'];
+    const value = (id: string, name: string) => parseFloat(f.card(id).style.getPropertyValue(name));
+    const exits = moving.map((id) => ({
+      start: value(id, '--exit-delay'),
+      duration: value(id, '--exit-duration')
+    }));
+    expect(exits.map(({ start }) => start)).toEqual([0, 40, 80, 120]);
+    expect(new Set(exits.map(({ start, duration }) => start + duration)).size).toBe(4);
+    expect(target.dataset.phase).toBe('revealing');
+    expect(value('site', '--reveal-delay')).toBe(exits.at(-1)!.start);
+    expect(value('site', '--reveal-duration')).toBe(exits.at(-1)!.duration);
+    const endpoint = value('site', '--reveal-end');
+    f.advance(20);
+    // The follower must not race ahead while CSS owns the reveal.
+    expect(f.painted('site')).toBeCloseTo(f.offset('site'));
+    for (const id of moving) f.end(id, 'tabs-exit');
+    expect(f.selected()).toBe('tab-site');
+    expect(target.dataset.phase).toBeUndefined();
+    expect(f.painted('site')).toBeCloseTo(endpoint);
+    f.advance(10);
+    expect(f.painted('site')).toBeCloseTo(endpoint);
+  });
+
+  it('returns the original cards from beneath the selected sheet with distinct timings', () => {
+    const f = fixture();
+    f.tab('site').click();
+    flush();
+    const moving = ['music', 'menu', 'play', 'evolution'];
+    const originals = moving.map((id) => f.card(id));
+    expect(f.stack.querySelector('[data-tabs-echo]')).toBeNull();
+    for (const id of moving) f.end(id, 'tabs-exit');
+    const value = (id: string, key: string) => parseFloat(f.card(id).style.getPropertyValue(key));
+    const starts = moving.map((id) => value(id, '--return-delay'));
+    const ends = moving.map((id, index) => starts[index]! + value(id, '--return-duration'));
+    expect(starts.every((start) => start >= 0)).toBe(true);
+    expect(new Set(starts).size).toBe(4);
+    expect(new Set(ends).size).toBe(4);
+    moving.forEach((id, index) => {
+      expect(f.card(id)).toBe(originals[index]);
+      expect(value(id, '--return-start-offset')).toBeGreaterThan(f.offset('site') + 6);
+    });
+  });
+
+  it.each([
+    [false, 'play'],
+    [true, 'play'],
+    [false, 'music'],
+    [true, 'music']
+  ] as const)('spaces rear sheets evenly and clears the held content during diagonal inspection (compact: %s, held: %s)', (compact, held) => {
+    const f = fixture();
+    if (compact) f.drag(450, 300);
+    f.advance(180);
+    const before = ids.map((id) => f.painted(id));
+    const rank = ids.indexOf(held);
+    const rear = ids.slice(0, rank);
+    const covering = ids.slice(rank + 1);
+    f.pointer('pointerdown', 200, f.tab(held), 400);
+    f.pointer('pointermove', 600, f.stack, 400);
+    f.advance(240);
+    // A long pull must reveal content, not leave only a narrow strip below the handle.
+    covering.forEach((id) => expect((f.painted(id) - f.painted(held)) * 8).toBeGreaterThan(400));
+    for (const [x, y] of [[-300, 850], [1100, 850], [1100, 650], [400, 700]] as const) {
+      f.pointer('pointermove', y, f.stack, x);
+      f.advance(240);
+      rear.forEach((id, index) => expect(f.painted(id)).toBeCloseTo(f.painted(held) * index / rank));
+      expect(f.painted(held)).toBeCloseTo(before[rank]! + (y - 200) / 8);
+      covering.forEach((id) => expect((f.painted(id) - f.painted(held)) * 8).toBeGreaterThan(400));
+      expect(f.order()).toEqual(ids);
+      expect(f.selected()).toBe('tab-music');
+    }
+    f.pointer('pointercancel', 700);
+    f.advance(240);
+    ids.forEach((id, index) => expect(f.painted(id)).toBeCloseTo(before[index]!));
+  });
+
+  it('staggers intervening cards and waits for every wrapper before reordering', () => {
     const f = fixture();
     document.querySelector<HTMLButtonElement>('#tab-site')!.click();
     flush();
     const departing = ['music', 'menu', 'play', 'evolution'];
     expect(f.selected()).toBe('tab-music');
     expect(f.card('site').hasAttribute('data-revealed')).toBe(true);
-    expect(f.stack.querySelectorAll('.folder-echo')).toHaveLength(4);
+    expect(f.stack.querySelectorAll('.folder-echo')).toHaveLength(0);
     for (const id of departing) expect(f.card(id).classList.contains('is-departing')).toBe(true);
     for (const id of ['play', 'music', 'menu']) {
       f.end(id, 'tabs-exit');
@@ -887,4 +1005,10 @@ function fixture(pointerType: 'mouse' | 'touch' = 'mouse') {
       flush();
     }
   };
+}
+
+/** Complete only the active selection batch, as wrapper CSS animations do in the browser. */
+function finishSelection(f: ReturnType<typeof fixture>) {
+  for (const id of ids) f.end(id, 'tabs-exit');
+  for (const id of ids) f.end(id, 'tabs-return');
 }

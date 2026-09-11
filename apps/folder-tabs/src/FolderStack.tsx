@@ -1,13 +1,13 @@
-import { Tabs, type TabsProps } from '@app-game/solid-tabs';
+import { CardStack, type CardStackProps } from '@app-game/card-stack';
 import type { DemoFolder } from './folders';
 import ArrowRightIcon from './icons/arrow-right.svg';
 import FolderTabShape from './icons/folder-tab.svg';
 import styles from './FolderStack.module.css';
 
-/** The folder skin. Selection, gestures, layout and motion belong to solid-tabs. */
-export function FolderStack(props: Omit<TabsProps<DemoFolder>, 'label' | 'getLabel' | 'renderTab'>) {
+/** The folder skin. Selection, gestures, layout and motion belong to card-stack. */
+export function FolderStack(props: Omit<CardStackProps<DemoFolder>, 'label' | 'getLabel' | 'renderTab'>) {
   return (
-    <Tabs
+    <CardStack
       {...props}
       id=""
       label="Creative folders"
@@ -16,8 +16,7 @@ export function FolderStack(props: Omit<TabsProps<DemoFolder>, 'label' | 'getLab
         list: 'folder-tabs',
         card: styles.folderCard!,
         trigger: styles.folderTab!,
-        panel: styles.folderSheet!,
-        echo: 'folder-echo'
+        panel: styles.folderSheet!
       }}
       initialTabOrder={[...props.items].sort((a, b) => a.left - b.left).map((item) => item.id)}
       cardClass={(item) => (item.dark ? styles.isDark! : '')}

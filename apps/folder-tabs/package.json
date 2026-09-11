@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 3170",
-    "build": "pnpm --filter @app-game/solid-tabs build && tsc --noEmit && vite build",
+    "build": "pnpm --filter @app-game/card-stack build && tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "preview": "vite preview --port 4170"
@@ -15,7 +15,9 @@
     "@solid-primitives/media": "catalog:",
     "@solidjs/web": "2.0.0-rc.4",
     "solid-js": "catalog:",
-    "@app-game/solid-tabs": "workspace:*"
+    "@app-game/card-stack": "workspace:*",
+    "@app-game/app-router": "workspace:*",
+    "@solidjs/router": "catalog:"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "catalog:",
@@ -25,5 +27,8 @@
     "vite-plugin-solid": "catalog:",
     "vite-plugin-solid-svg": "0.8.1",
     "vitest": "catalog:"
+  },
+  "exports": {
+    "./routes": "./src/routes.tsx"
   }
 }

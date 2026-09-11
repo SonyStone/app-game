@@ -1,0 +1,27 @@
+.footer {
+  --footer-rest-offset: var(--painted-offset, var(--offset));
+  position: relative;
+  z-index: 1;
+  will-change: transform;
+  height: var(--footer-height);
+  background: var(--tabs-surface, white);
+}
+
+:global([data-tabs-root][data-scrollable]) .footer {
+  --footer-rest-offset: 0px;
+  transform: translateY(calc(-1 * var(--painted-offset, var(--offset))));
+}
+
+/* Counter the reveal wrapper with the same timeline to keep the footer at the viewport edge. */
+:global([data-tabs-card][data-phase='revealing']) .footer {
+  animation: revealFooter var(--reveal-duration) var(--exit-easing) var(--reveal-delay) both;
+}
+
+@keyframes revealFooter {
+  from {
+    transform: translateY(calc(var(--footer-rest-offset) + var(--stack-top) - var(--reveal-start)));
+  }
+  to {
+    transform: translateY(calc(var(--footer-rest-offset) - var(--reveal-end)));
+  }
+}

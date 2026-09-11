@@ -4,6 +4,7 @@
 }
 
 .page {
+  min-height: 100svh;
   margin: 0;
   background: #f5f4f0;
   color: #20312d;
@@ -44,6 +45,83 @@
   max-width: 680px;
   margin: 24px 0;
   color: #5b6863;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-bottom: 20px;
+
+  small {
+    color: #5b6863;
+  }
+}
+
+.cardCount {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+
+  select {
+    min-width: 80px;
+    min-height: 40px;
+    padding: 6px 12px;
+    border: 1px solid #20312d44;
+    border-radius: 6px;
+    color: inherit;
+    background: #fff;
+    font: inherit;
+  }
+}
+
+.spacing {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 40px;
+  font-weight: 600;
+
+  input {
+    width: 150px;
+    accent-color: #20312d;
+  }
+
+  output {
+    min-width: 5ch;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.page[data-motion-workbench] {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+
+  main {
+    width: 50vw;
+    height: 100dvh;
+    max-width: none;
+    overflow: auto;
+    margin: 0;
+    padding: 12px;
+  }
+
+  &:has([data-motion-debug][data-dock='bottom']) main {
+    width: 100vw;
+    height: 50dvh;
+  }
+}
+
+.workbench {
+  display: block;
+
+  > .notebook {
+    --screen-height: max(520px, 80dvh);
+  }
 }
 
 .notebook {

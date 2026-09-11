@@ -1,8 +1,8 @@
 {
-  "name": "@app-game/solid-tabs",
+  "name": "@app-game/card-stack",
   "version": "0.1.0",
   "type": "module",
-  "description": "Unstyled, draggable and sortable Solid tab decks with interruptible motion.",
+  "description": "Unstyled, draggable and sortable card stacks for Solid with interruptible motion.",
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -24,24 +24,26 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "solid-js": "2.0.0-rc.4",
-    "@solidjs/web": "2.0.0-rc.4"
+    "@solidjs/web": "2.0.0-rc.4",
+    "solid-js": "2.0.0-rc.4"
   },
   "dependencies": {
+    "@app-game/components": "workspace:*",
     "@solid-primitives/event-listener": "catalog:",
     "@solid-primitives/pointer": "catalog:",
     "@solid-primitives/raf": "catalog:",
     "@solid-primitives/resize-observer": "catalog:",
-    "@solid-primitives/scheduled": "catalog:"
+    "@solid-primitives/scheduled": "catalog:",
+    "@solid-primitives/storage": "catalog:"
   },
   "devDependencies": {
+    "@solidjs/web": "2.0.0-rc.4",
     "@testing-library/jest-dom": "catalog:",
     "jsdom": "catalog:",
+    "solid-js": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:",
-    "vitest": "catalog:",
-    "solid-js": "catalog:",
-    "@solidjs/web": "2.0.0-rc.4"
+    "vitest": "catalog:"
   }
 }

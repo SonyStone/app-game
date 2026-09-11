@@ -1,4 +1,4 @@
-import { SquareGrid, TabsFooter, TabsScrollBody, TabsViewport } from '@app-game/solid-tabs';
+import { SquareGrid, CardStackFooter, CardStackScrollBody, CardStackViewport } from '@app-game/card-stack';
 import { createSignal, For, Show } from 'solid-js';
 import { ExplorationBoard } from './ExplorationBoard';
 import { Dial } from './Dial';
@@ -18,6 +18,8 @@ export function FolderContent(props: {
   folder: DemoFolder;
   onNext: () => void;
   scrollable?: boolean;
+  /** Preview destination, including any host application route prefix. */
+  previewHref?: string;
   /** Shows the preview link on the active fullscreen card; modified clicks retain native navigation. */
   onPreview?: ((event: MouseEvent) => void) | undefined;
 }) {
@@ -44,12 +46,12 @@ export function FolderContent(props: {
       data-folder-theme={props.folder.dark ? 'dark' : 'light'}
       class={`${styles.folderContent} ${props.folder.layout === 'orbits' ? styles.layoutOrbits : ''} ${props.folder.dark ? styles.layoutDark : ''}`}
     >
-      <TabsViewport
+      <CardStackViewport
         class={styles.creativeViewport!}
         scrollable={props.scrollable ?? false}
         label={`${props.folder.name} content`}
       >
-        <TabsScrollBody>
+        <CardStackScrollBody>
           <SquareGrid class={styles.creativeBoard!} columns={15} rows={13}>
             <div class={styles.boardGrid} aria-hidden="true" />
             <Show when={!props.folder.dark && props.folder.layout === 'studio'}>
@@ -180,9 +182,9 @@ export function FolderContent(props: {
               <ExplorationBoard colors={colors()} onPalette={() => setPalette((value) => value + 1)} />
             </Show>
           </SquareGrid>
-        </TabsScrollBody>
-      </TabsViewport>
-      <TabsFooter class={styles.folderFooter!}>
+        </CardStackScrollBody>
+      </CardStackViewport>
+      <CardStackFooter class={styles.folderFooter!}>
         <div class={styles.fileCount}>
           <span aria-live="polite">{count()}</span>
           <span>Files</span>
@@ -190,7 +192,7 @@ export function FolderContent(props: {
         <Show when={props.onPreview}>
           <a
             class={`${styles.screenRouteControl} ${styles.previewReturn}`}
-            href="/"
+            href={props.previewHref ?? '/'}
             aria-label="Back to preview"
             onClick={(event) => props.onPreview?.(event)}
           >
@@ -220,7 +222,7 @@ export function FolderContent(props: {
         >
           <Icon name={searching() ? 'x' : 'search'} />
         </button>
-      </TabsFooter>
+      </CardStackFooter>
       <Show when={searching()}>
         <div
           class={styles.searchPanel}

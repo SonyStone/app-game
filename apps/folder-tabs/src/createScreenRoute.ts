@@ -8,15 +8,25 @@ import styles from './transitions.module.css';
  * shared element from its previous bounds; reduced motion updates immediately.
  * A newer navigation supersedes the pending snapshot; disposal cancels it.
  */
-export function createScreenRoute(reducedMotion: Accessor<boolean>, screen: Accessor<HTMLElement | undefined>) {
+export function createScreenRoute(
+  reducedMotion: Accessor<boolean>,
+  screen: Accessor<HTMLElement | undefined>,
+  options: {
+    /** Mount path without a trailing slash; defaults to the standalone root. */
+    basePath?: string;
+    /** Delegates URL changes to the host router; the deck still owns layout transitions. */
+    navigate?: (path: string) => void;
+  } = {}
+) {
+  const href = (path: '/' | '/fullscreen') => `${options.basePath ?? ''}${path === '/' ? '' : path}` || '/';
   document.documentElement.classList.add(styles.transitionDocument!);
-  const [fullscreen, setFullscreen] = createSignal(window.location.pathname.replace(/\/$/, '') === '/fullscreen');
+  const [fullscreen, setFullscreen] = createSignal(window.location.pathname.replace(/\/$/, '') === href('/fullscreen'));
   let transition: ViewTransition | undefined;
   let animation: Animation | undefined;
   let disposed = false;
   let previewScroll = 0;
 
-  function update() {
+  function update(next = window.location.pathname.replace(/\/$/, '') === href('/fullscreen')) {
     transition?.skipTransition();
     const element = screen();
     const before = element?.getBoundingClientRect();
@@ -25,7 +35,6 @@ export function createScreenRoute(reducedMotion: Accessor<boolean>, screen: Acce
     animation?.cancel();
     const commit = () => {
       if (disposed) return;
-      const next = window.location.pathname.replace(/\/$/, '') === '/fullscreen';
       if (next && !fullscreen()) previewScroll = window.scrollY;
       // The shared screen owns route motion; settle its internal layout before capture.
       element?.setAttribute('data-route-layout', '');
@@ -69,17 +78,19 @@ export function createScreenRoute(reducedMotion: Accessor<boolean>, screen: Acce
   function navigate(event: MouseEvent, path: '/' | '/fullscreen') {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    if (window.location.pathname === path) return;
-    window.history.pushState(null, '', path);
-    update();
+    const destination = href(path);
+    if (window.location.pathname === destination) return;
+    if (options.navigate) options.navigate(destination);
+    else window.history.pushState(null, '', destination);
+    update(path === '/fullscreen');
   }
 
-  createEventListener(window, 'popstate', update);
+  createEventListener(window, 'popstate', () => update());
   onCleanup(() => {
     document.documentElement.classList.remove(styles.transitionDocument!);
     disposed = true;
     transition?.skipTransition();
     animation?.cancel();
   });
-  return { fullscreen, navigate };
+  return { fullscreen, navigate, href };
 }

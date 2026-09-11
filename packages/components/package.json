@@ -12,7 +12,11 @@
     "./ui/menubar": "./ui/menubar.tsx",
     "./ui/popover": "./ui/popover.tsx",
     "./ui/range-2d": "./ui/range-2d.tsx",
-    "./ui/resizable": "./ui/resizable.tsx"
+    "./ui/resizable": "./ui/resizable.tsx",
+    "./ui/checkbox": "./ui/checkbox.tsx",
+    "./ui/select": "./ui/select.tsx",
+    "./ui/slider": "./ui/slider.tsx",
+    "./ui/text-field": "./ui/text-field.tsx"
   },
   "type": "module"
 }

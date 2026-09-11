@@ -17,6 +17,10 @@ const PopoverContext = createContext<PopoverState>();
 let popoverId = 0;
 
 export type PopoverProps = ParentProps<{
+  /** Optional controlled state, used together with onOpenChange. */
+  open?: boolean;
+  /** Reports trigger, Escape and outside-pointer changes. */
+  onOpenChange?: (open: boolean) => void;
   /** Opens the popover on initial render. */
   defaultOpen?: boolean;
   /** Preferred Floating UI placement. Defaults to bottom-start. */
@@ -33,8 +37,8 @@ export type PopoverProps = ParentProps<{
 export function Popover(props: PopoverProps): JSX.Element {
   const [open, setOpen] = createSignal(props.defaultOpen ?? false);
   const state: PopoverState = {
-    open,
-    setOpen,
+    open: () => props.open ?? open(),
+    setOpen: value => { setOpen(value); props.onOpenChange?.(value); },
     contentId: `solid-ui-popover-${++popoverId}`,
     gutter: props.gutter ?? 5,
     placement: props.placement ?? 'bottom-start',
@@ -57,7 +61,7 @@ export function PopoverTrigger(props: ComponentProps<'button'>): JSX.Element {
       }}
       aria-controls={popover.contentId}
       aria-expanded={popover.open() ? 'true' : 'false'}
-      aria-haspopup="dialog"
+      aria-haspopup={props['aria-haspopup'] ?? 'dialog'}
       onClick={(event) => {
         callHandler(props.onClick, event);
         popover.setOpen(!popover.open());
@@ -66,7 +70,10 @@ export function PopoverTrigger(props: ComponentProps<'button'>): JSX.Element {
   );
 }
 
-export type PopoverContentProps = ComponentProps<'div'>;
+export type PopoverContentProps = ComponentProps<'div'> & {
+  /** Move focus into interactive content on open; close when focus leaves. Defaults false. */
+  initialFocus?: boolean;
+};
 
 /** Renders popover content in a portal so diagram clipping cannot hide it. */
 export function PopoverContent(props: PopoverContentProps): JSX.Element {
@@ -82,24 +89,30 @@ export function PopoverContent(props: PopoverContentProps): JSX.Element {
 
 function PopoverSurface(props: PopoverContentProps & { readonly popoverState: PopoverState }): JSX.Element {
   let content!: HTMLDivElement;
-  const rest = omit(props, 'class', 'popoverState', 'ref', 'role', 'id');
+  const rest = omit(props, 'class', 'popoverState', 'ref', 'role', 'id', 'initialFocus');
 
   onSettled(() => {
     const trigger = props.popoverState.trigger;
     if (!trigger) return;
     const update = () => positionPopover(trigger, content, props.popoverState);
     const stopUpdating = autoUpdate(trigger, content, update);
+    if (props.initialFocus) (content.querySelector<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]') ?? content).focus({ preventScroll: true });
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') props.popoverState.setOpen(false);
+      if (event.key === 'Escape') { props.popoverState.setOpen(false); trigger.focus({ preventScroll: true }); }
     };
     const closeOnOutsidePointer = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
       if (!content.contains(event.target) && !trigger.contains(event.target)) props.popoverState.setOpen(false);
     };
+    const closeOnOutsideFocus = (event: FocusEvent) => {
+      if (props.initialFocus && event.target instanceof Node && !content.contains(event.target) && !trigger.contains(event.target)) props.popoverState.setOpen(false);
+    };
+    document.addEventListener('focusin', closeOnOutsideFocus);
     document.addEventListener('keydown', closeOnEscape);
     document.addEventListener('pointerdown', closeOnOutsidePointer);
     return () => {
       stopUpdating();
+      document.removeEventListener('focusin', closeOnOutsideFocus);
       document.removeEventListener('keydown', closeOnEscape);
       document.removeEventListener('pointerdown', closeOnOutsidePointer);
     };
@@ -108,9 +121,10 @@ function PopoverSurface(props: PopoverContentProps & { readonly popoverState: Po
   return (
     <div
       {...rest}
-      ref={content}
+      ref={element => { content = element; if (typeof props.ref === 'function') props.ref(element); }}
+      tabindex={props.tabindex ?? -1}
       id={props.popoverState.contentId}
-      role="dialog"
+      role={props.role ?? 'dialog'}
       class={cn(
         'bg-popover text-popover-foreground z-50 w-72 rounded-md border p-4 shadow-md outline-none',
         props.class

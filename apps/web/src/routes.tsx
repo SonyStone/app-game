@@ -2,6 +2,7 @@ import { abrViewerRoutes } from '@app-game/abr-viewer/routes';
 import { Thumbnail, type Routes } from '@app-game/app-router';
 import { browserAtlasRoutes } from '@app-game/browser-atlas/routes';
 import { escyRoutes } from '@app-game/ecsy-pages/routes';
+import { cardStackRoutes, notebookRoute } from '@app-game/folder-tabs/routes';
 import { filmAnnotationPlayerRoutes } from '@app-game/film-annotation-player/routes';
 import { routes as greasePencilTypegpuRoutes } from '@app-game/grease-pencil-typegpu/routes';
 import { gsapExamplesRoutes } from '@app-game/gsap-examples/routes';
@@ -61,6 +62,8 @@ export const routes: Routes[] = [
     Preview: (props) => <Thumbnail href={props.path} name={props.name} />,
     children: [solidSvgEditorRoutes]
   },
+  cardStackRoutes,
+  notebookRoute,
   abrViewerRoutes,
   nightDefenseRoutes,
   {

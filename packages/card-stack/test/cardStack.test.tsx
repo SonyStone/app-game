@@ -1,8 +1,8 @@
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Tabs } from '../src';
-import motionStyles from '../src/Tabs.module.css';
+import { CardStack } from '../src';
+import motionStyles from '../src/CardStack.module.css';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -11,7 +11,31 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('public Tabs interface', () => {
+describe('public CardStack interface', () => {
+  it('updates expanded spacing without replacing cards, input state or selection', () => {
+    const f = fixture();
+    const panel = f.panel('beta');
+    const input = panel.querySelector('input')!;
+    input.value = 'Keep my draft';
+    const offset = () => parseFloat((panel.parentElement as HTMLElement).style.getPropertyValue('--offset'));
+    const initial = offset();
+    expect(initial).toBeGreaterThan(0);
+    for (const spacing of [2, 0.5, 1.5, 1]) {
+      f.setSpacing(spacing);
+      flush();
+      expect(offset()).toBeCloseTo(initial * spacing);
+      expect(f.panel('beta')).toBe(panel);
+      expect(input.value).toBe('Keep my draft');
+      expect(f.tab('beta').getAttribute('aria-selected')).toBe('true');
+      expect(f.mounts()).toBe(2);
+    }
+    for (const invalid of [0, -1, NaN, Infinity]) {
+      f.setSpacing(invalid);
+      flush();
+      expect(offset()).toBe(initial);
+    }
+  });
+
   it('accepts arbitrary content and styling without folder metadata', () => {
     const f = fixture();
     expect(f.host.querySelector('[role="tablist"]')?.getAttribute('aria-label')).toBe('Documents');
@@ -85,17 +109,57 @@ describe('public Tabs interface', () => {
     expect(document.activeElement).toBe(f.tab('alpha'));
   });
 
-  it('snapshots every panel child without duplicate IDs or mounting more application effects', async () => {
+  it('reuses the mounted panels throughout selection without creating snapshot copies', () => {
     const f = fixture();
+    const panel = f.panel('beta');
     f.tab('alpha').click();
     flush();
-    await Promise.resolve();
-    const echo = f.host.querySelector('[data-tabs-echo]')!;
-    expect(echo.querySelector('[id]')).toBeNull();
-    expect(echo.querySelectorAll('input')).toHaveLength(1);
-    expect(echo.querySelector('p')?.textContent).toBe('Second panel child');
-    expect(echo.hasAttribute('inert')).toBe(true);
+    expect(f.host.querySelector('[data-tabs-echo]')).toBeNull();
+    expect(f.host.querySelectorAll('input')).toHaveLength(2);
+    f.finish('beta', 'tabs-exit');
+    expect(f.panel('beta')).toBe(panel);
     expect(f.mounts()).toBe(2);
+    f.finish('beta', 'tabs-return');
+    expect(f.panel('beta')).toBe(panel);
+  });
+
+  it('caps exposed cards while retaining all mounted content and accepts reactive limits', () => {
+    const host = document.createElement('div');
+    document.body.append(host);
+    const [limit, setLimit] = createSignal<number | undefined>();
+    const items = Array.from({ length: 40 }, (_, index) => ({ id: `card-${index}` }));
+    disposers.push(
+      render(
+        () => (
+          <CardStack
+            items={items}
+            maxExpandedCards={limit()}
+            label="Large deck"
+            getLabel={(item) => item.id}
+            renderTab={(item) => item.id}
+          >
+            {(item) => <input aria-label={item.id} />}
+          </CardStack>
+        ),
+        host
+      )
+    );
+    flush();
+    const exposed = () => [...host.querySelectorAll<HTMLElement>('[data-tabs-card]:not([data-stack-hidden])')];
+    expect(exposed()).toHaveLength(8);
+    expect(exposed().at(-1)?.dataset.tabsCard).toBe('card-39');
+    expect(host.querySelectorAll('input')).toHaveLength(40);
+    const lastPanel = host.querySelector('[data-tabs-card="card-39"]');
+    setLimit(4);
+    flush();
+    expect(exposed()).toHaveLength(4);
+    setLimit(12);
+    flush();
+    expect(exposed()).toHaveLength(12);
+    setLimit(Infinity);
+    flush();
+    expect(exposed()).toHaveLength(40);
+    expect(host.querySelector('[data-tabs-card="card-39"]')).toBe(lastPanel);
   });
 });
 
@@ -104,11 +168,13 @@ function fixture(onChange?: (order: readonly string[]) => void, initialTabOrder?
   document.body.append(host);
   let mounts = 0;
   const [order, setOrder] = createSignal<readonly string[]>(['alpha', 'beta']);
+  const [spacing, setSpacing] = createSignal(1);
   disposers.push(
     render(
       () => (
-        <Tabs
+        <CardStack
           items={[{ id: 'alpha' }, { id: 'beta' }]}
+          expandedSpacing={spacing()}
           {...(initialTabOrder ? { initialTabOrder } : {})}
           {...(onChange
             ? {
@@ -135,7 +201,7 @@ function fixture(onChange?: (order: readonly string[]) => void, initialTabOrder?
               </>
             );
           }}
-        </Tabs>
+        </CardStack>
       ),
       host
     )
@@ -143,6 +209,7 @@ function fixture(onChange?: (order: readonly string[]) => void, initialTabOrder?
   flush();
   return {
     host,
+    setSpacing,
     mounts: () => mounts,
     tab: (id: string) => host.querySelector<HTMLButtonElement>(`button[data-tabs-trigger="${id}"]`)!,
     panel: (id: string) => host.querySelector<HTMLElement>(`[data-tabs-card="${id}"] [role="tabpanel"]`)!,

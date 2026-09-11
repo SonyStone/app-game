@@ -1,0 +1,13 @@
+.navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 24px;
+  background: #fafbfa;
+  color: #20312d;
+  font: 14px/1.5 Arial, sans-serif;
+}
+
+.navigation a {
+  color: inherit;
+}

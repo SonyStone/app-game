@@ -6,16 +6,16 @@ export default defineConfig({
   plugins: [
     solid(),
     {
-      name: 'solid-tabs-module-css',
+      name: 'card-stack-module-css',
       // Vite extracts library CSS; retain its import for consuming bundlers.
       renderChunk(code, chunk) {
         if (!chunk.isEntry) return;
-        return { code: `${code}\nimport "./solid-tabs.css";`, map: null };
+        return { code: `${code}\nimport "./card-stack.css";`, map: null };
       }
     }
   ],
   build: {
-    lib: { entry: 'src/index.ts', formats: ['es'], fileName: 'index', cssFileName: 'solid-tabs' },
+    lib: { entry: 'src/index.ts', formats: ['es'], fileName: 'index', cssFileName: 'card-stack' },
     minify: false,
     sourcemap: true,
     rollupOptions: {

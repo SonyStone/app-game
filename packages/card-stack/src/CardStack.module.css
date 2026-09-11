@@ -20,6 +20,18 @@
 }
 
 .card {
+  --exit-easing: linear(
+    0,
+    0.006 11.11%,
+    0.027 22.22%,
+    0.066 33.33%,
+    0.133 44.44%,
+    0.244 55.56%,
+    0.432 66.67%,
+    0.701 77.78%,
+    0.904 88.89%,
+    1
+  );
   --card-drag-offset: 0px;
   --y: calc(var(--stack-top) + var(--painted-offset, var(--offset)));
   --sheet-height: calc(var(--screen-height) - var(--y) - var(--tab-height));
@@ -73,28 +85,27 @@
     pointer-events: auto;
   }
 
-  &[data-phase='departing'] {
-    animation: tabsExit 600ms
-      linear(
-        0,
-        0.006 11.11%,
-        0.027 22.22%,
-        0.066 33.33%,
-        0.133 44.44%,
-        0.244 55.56%,
-        0.432 66.67%,
-        0.701 77.78%,
-        0.904 88.89%,
-        1
-      )
-      both;
+  &[data-phase='departing'],
+  &[data-phase='revealing'] {
+    animation: tabsExit var(--exit-duration) var(--exit-easing) var(--exit-delay) both;
     transition: none;
-    z-index: calc(60 + var(--rank)) !important;
     pointer-events: none;
   }
 
+  &[data-phase='departing'] {
+    z-index: var(--exit-layer) !important;
+    pointer-events: none;
+  }
+
+  &[data-phase='revealing'] {
+    animation-name: tabsReveal;
+    animation-duration: var(--reveal-duration);
+    animation-delay: var(--reveal-delay);
+  }
+
   &[data-phase='returning'] {
-    animation: tabsReturn 500ms cubic-bezier(0.16, 0.8, 0.25, 1) -66.667ms both;
+    animation: tabsReturn var(--return-duration) cubic-bezier(0.16, 0.8, 0.25, 1) var(--return-delay) forwards;
+    visibility: hidden;
     transition: none;
     pointer-events: none;
   }
@@ -110,34 +121,33 @@
   }
 }
 
+@keyframes tabsReveal {
+  from {
+    transform: translateY(var(--reveal-start));
+  }
+  to {
+    transform: translateY(calc(var(--stack-top) + var(--reveal-end)));
+  }
+}
+
 @keyframes tabsReturn {
   from {
-    transform: translateY(calc(var(--y) + 7cqw));
+    visibility: visible;
+    transform: translateY(calc(var(--stack-top) + var(--return-start-offset)));
   }
 
   to {
-    transform: translateY(var(--y));
+    visibility: visible;
+    transform: translateY(calc(var(--stack-top) + var(--return-offset)));
   }
 }
 
-.echo {
-  z-index: 0;
-  transition: none;
-  animation: tabsEchoReturn 500ms cubic-bezier(0.16, 0.8, 0.25, 1) 533.333ms forwards;
+/* Keep capped sheets mounted without exposing their handles or hit targets. */
+.card[data-stack-hidden] {
+  visibility: hidden !important;
+  pointer-events: none;
+}
+.card[data-stack-hidden] .trigger {
   visibility: hidden;
-  opacity: 0;
-}
-
-@keyframes tabsEchoReturn {
-  from {
-    transform: translateY(calc(var(--y) + 7cqw));
-    visibility: visible;
-    opacity: 1;
-  }
-
-  to {
-    transform: translateY(var(--y));
-    visibility: visible;
-    opacity: 1;
-  }
+  pointer-events: none;
 }

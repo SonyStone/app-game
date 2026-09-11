@@ -38,6 +38,7 @@
 }
 
 .creativeBoard {
+  width: 100%;
   grid-template-rows: repeat(8, var(--cell)) minmax(0, 1fr);
   height: calc(8 * var(--cell) + var(--extra-height, 0cqw));
   min-height: 100%;

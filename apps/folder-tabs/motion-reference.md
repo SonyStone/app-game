@@ -43,7 +43,7 @@ For frames 60–92, the final browser trace has a mean absolute vertical error o
 
 ## Concurrent selection verification
 
-The latest browser trace contains 331 animation frames. Selecting Site starts Evolution, Play, Menu, and Music together in the first sampled frame. Site becomes selected at 603 ms, and all four return animations finish at 1036 ms. No intermediate folder becomes selected. Tab-to-panel overlap remains 1.776 pixels throughout the trace at the tested desktop width. Evidence: `.tmp/qa/middle-selection-batch.json`.
+An earlier browser trace contains 331 animation frames. Selecting Site starts Evolution, Play, Menu, and Music together in the first sampled frame. Site becomes selected at 603 ms, and all four return animations finish at 1036 ms. No intermediate folder becomes selected. Tab-to-panel overlap remains 1.776 pixels throughout the trace at the tested desktop width. Evidence: `.tmp/qa/middle-selection-batch.json`.
 
 Before and after compacting, every tab measured 265.966 pixels wide and 54.957 pixels high, with 19.061-pixel label text and a 39.886-pixel badge. All eight badge centers hit their own tab buttons after overlapping. Evidence: `.tmp/qa/compact-fixed-tabs.json` and `.tmp/qa/compact-fixed-tabs.png`.
 
@@ -56,3 +56,9 @@ Compact positions now depend on the original horizontal coordinates, independent
 The user selected a horizontal scrolling rail, replacing the fixed compact positions above. Whole tabs are spaced 28cqw apart at their existing 30cqw width, with only the trailing shoulders overlapping. The rail's order follows the original horizontal anchors and does not change when the deck rotates. The visible window can move by drag, wheel, scroll arrows, or keyboard focus. Upward collapse brings the active tab into view; downward gestures restore the stack. There are no tab masks or width changes.
 
 Horizontal destinations are followed by an owned RAF controller capped at 100cqw per second, with 600cqw per second squared acceleration and braking. Travel distance determines arrival time rather than a shared duration. Direct swipes over either the tabs or card content translate the painted positions together; reduced motion settles immediately. Release drift is limited to 90 pixels and clamped at the rail edges. An interrupted scroll samples the painted tab position before capture. Panel positions remain independent of horizontal scrolling while each tab still shares its card's vertical motion wrapper.
+
+## Selection choreography update
+
+Click selection now starts the frontmost outgoing card first. Each following card starts 40 ms later and takes 20 ms longer than the base 600 ms exit. Revealed cards follow the final covering card's start and easing instead of racing ahead through the gesture follower. Depth changes after every outgoing card clears the viewport. The follower is then rebased to the reveal endpoint.
+
+The latest revision removes the echo handoff. After all outgoing wrappers clear, their depth changes while they are outside the viewport. Original wrappers then rise from beneath the selected sheet, with an 80 ms base delay and staggered starts and durations. The return origin is derived from the selected sheet geometry rather than a fixed seven-unit offset, so a tall stack cannot expose a return's initial pose. Stagger spread is capped at seven intervals for large batches. A new drag samples all animated wrappers before cancelling the sequence.

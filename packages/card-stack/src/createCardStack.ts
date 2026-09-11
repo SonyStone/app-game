@@ -1,18 +1,18 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createEffect, createMemo, createSignal, createUniqueId, untrack } from 'solid-js';
+import styles from './CardStack.module.css';
 import { fitTabSlots, reorderTab, tabRows } from './layout';
 import { createFreeDrag } from './primitives/createFreeDrag';
 import { createHorizontalRail } from './primitives/createHorizontalRail';
 import { createTabMotion } from './primitives/createTabMotion';
 import { createVerticalGesture, type VerticalGesture } from './primitives/createVerticalGesture';
-import styles from './Tabs.module.css';
 
 /** Stable identity; labels, visuals and application data belong to the caller. */
-export type TabItem = { id: string };
+export type CardStackItem = { id: string };
 
 /** Reactive inputs for a deck. IDs must be unique and stable for its mounted lifetime. */
-export type TabsOptions<T extends TabItem> = {
+export type CardStackOptions<T extends CardStackItem> = {
   items: readonly T[];
   /** Back-to-front depth. When supplied, onOrderChange must synchronously update it. */
   order?: readonly string[];
@@ -31,17 +31,24 @@ export type TabsOptions<T extends TabItem> = {
   /** Overlap of adjacent compact handles, in geometry units. Defaults to 2. */
   tabOverlap?: number;
   initiallyCollapsed?: boolean;
+  /** Maximum exposed cards in the expanded stack, including the active/held card. Defaults 8.
+   * Clamped to at least 2. Other cards stay mounted and accessible in the compact row. Infinity exposes all cards. */
+  maxExpandedCards?: number | undefined;
+  /** Multiplier for resting expanded vertical distances. Defaults to 1; positive finite values only.
+   * Values below 1 compress the stack and may partially overlap handles. Does not resize handles or the compact row.
+   * Updates animate in place; an active pointer gesture retains its captured spacing until release. */
+  expandedSpacing?: number | undefined;
   /** Reserve content for native scrolling, restricting deck drags to handles. Defaults true. */
   scrollableContent?: boolean;
 };
 
 /**
  * Owns selection, independent rail sorting, interruptible motion and pointer lifetime.
- * Create under a Solid owner. Render with Tabs or bind the returned part props once
+ * Create under a Solid owner. Render with CardStack or bind the returned part props once
  * to the corresponding native elements and preserve their generated module classes.
- * All real panels stay mounted; outgoing echoes are inert DOM snapshots.
+ * All real panels stay mounted. Cards change depth only while outside the viewport.
  */
-export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
+export function createCardStack<T extends CardStackItem>(props: CardStackOptions<T>) {
   const prefix = props.id ?? createUniqueId();
   const tabId = (id: string) => `${prefix ? prefix + '-' : ''}tab-${encodeURIComponent(id)}`;
   const panelId = (id: string) => `${prefix ? prefix + '-' : ''}panel-${encodeURIComponent(id)}`;
@@ -55,10 +62,17 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
   const size = createElementSize(tablist);
   const length = (value: number) => (props.geometryUnit ? `${value * props.geometryUnit}px` : `${value}cqw`);
   // A batch changes order only after every outgoing wrapper has left the screen.
-  type MovingCard = { id: string; start: number };
+  type MovingCard = { id: string; start: number; index: number };
+  type Reveal = { id: string; start: number; end: number };
+  type Choreography = {
+    cards: readonly MovingCard[];
+    reveals: readonly Reveal[];
+    /** Shared inset captured before CSS takes ownership of vertical motion. */
+    inset: number;
+  };
   type Transition =
-    | { phase: 'departing'; cards: readonly MovingCard[]; complete: () => void; order: readonly string[] }
-    | { phase: 'returning'; cards: readonly MovingCard[] };
+    | (Choreography & { phase: 'departing'; complete: () => void; order: readonly string[] })
+    | (Choreography & { phase: 'returning' });
   // Completion bookkeeping is not rendered; duplicate events must not finish a batch early.
   const completed = new Set<string>();
   const [transition, setTransition] = createSignal<Transition>();
@@ -73,6 +87,8 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
     tabs: readonly string[];
     slots: readonly number[];
     field: ReadonlyMap<string, number>;
+    /** Expanded rows stay fixed throughout a grab, even while horizontal sorting changes collisions. */
+    rows: ReadonlyMap<string, number>;
     spread: number;
     compact: boolean;
     rail: number;
@@ -80,8 +96,8 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
     advanceAfter: number;
   };
   const [interruptedGrab, setInterruptedGrab] = createSignal<Grab>();
-  const [promoted, setPromoted] = createSignal(false);
-  const [passed, setPassed] = createSignal(false);
+  const [inspectedId, setInspectedId] = createSignal<string>();
+  const [fieldStart, setFieldStart] = createSignal(3);
   const [railDrag, setRailDrag] = createSignal(0);
   let previousPointerX = 0;
   const [tabOrder, setTabOrder] = createSignal<readonly string[]>(
@@ -90,17 +106,6 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
   const [slots, setSlots] = createSignal<readonly number[]>(
     untrack(() => props.items.map((_, index) => index / Math.max(1, props.items.length - 1)))
   );
-  const rowLayouts = createMemo(() => {
-    const positions = new Map(tabOrder().map((id) => [id, stackLeftId(id)]));
-    const width = tabWidth();
-    const depth = [...depthOrder()];
-    return new Map(
-      depth.map((_, index) => {
-        const order = [...depth.slice(index), ...depth.slice(0, index)];
-        return [order.join(' '), tabRows(order, (id) => positions.get(id) ?? 0, width, props.tabHeight ?? 6)];
-      })
-    );
-  });
   const panels = new Map<string, HTMLElement>();
   const activeId = () => depthOrder().at(-1);
   const free = createFreeDrag({
@@ -112,6 +117,23 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
       (props.scrollableContent === false || isRailTab(target)),
     onStart: startDrag,
     onFinish: finishDrag
+  });
+  const rowLayouts = createMemo(() => {
+    const depth = [...depthOrder()];
+    const requestedSpacing = props.expandedSpacing ?? 1;
+    const spacing = Number.isFinite(requestedSpacing) && requestedSpacing > 0 ? requestedSpacing : 1;
+    return new Map(
+      depth.map((_, index) => {
+        const order = [...depth.slice(index), ...depth.slice(0, index)];
+        return [
+          order.join(' '),
+          new Map(
+            [...tabRows(expandedOrder(order), (id) => stackLeftId(id, order), tabWidth(), props.tabHeight ?? 6)]
+              .map(([id, row]) => [id, row * spacing])
+          )
+        ];
+      })
+    );
   });
   // Wheel gestures share layout commands, but never compete for pointer ownership.
   createVerticalGesture(
@@ -167,22 +189,10 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
         }
       })
   );
-  const pulledRearTab = () => {
-    if (!gesture.dragging() || passed() || gesture.offset() <= 24) return;
-    const origin = gesture.startTarget();
-    const id =
-      origin instanceof Element ? origin.closest<HTMLElement>('[data-tabs-trigger]')?.dataset.tabsTrigger : undefined;
-    return id && id !== activeId() && depthOrder().includes(id) ? id : undefined;
-  };
-  const selectionProgress = () => Math.min(1, Math.abs(gesture.offset()) / Math.max(90, travel()));
   const revealedId = () => {
     const current = transition();
-    return current?.phase === 'departing'
-      ? current.order.at(-1)
-      : (pulledRearTab() ?? (dragOffset() > 0 ? depthOrder().at(-2) : undefined));
+    return current?.phase === 'departing' ? current.order.at(-1) : undefined;
   };
-  const shiftProgress = () =>
-    transition()?.phase === 'departing' ? 1 : Math.min(1, dragOffset() / Math.max(1, widthUnit() * 22));
   const compactItems = createMemo(() =>
     tabOrder().flatMap((id) => {
       const item = props.items.find((candidate) => candidate.id === id);
@@ -217,11 +227,18 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
     }
   });
 
-  // Keep the selected tab visible when the responsive breakpoint changes its width.
-  createEffect(tabWidth, () =>
-    untrack(() => {
-      if (collapsed()) rail.reveal(railLeft(activeId() ?? ''));
-    })
+  // Only a real resize should reveal the active tab. The first measurement must
+  // not send a newly mounted long compact rail scrolling through dozens of tabs.
+  let measuredWidth: number | undefined;
+  createEffect(
+    () => ({ width: tabWidth(), measured: size.clientWidth }),
+    ({ width, measured }) =>
+      untrack(() => {
+        if (!measured) return;
+        const resized = measuredWidth !== undefined && measuredWidth !== width;
+        measuredWidth = width;
+        if (resized && collapsed()) rail.reveal(railLeft(activeId() ?? ''));
+      })
   );
 
   const tabMotion = createTabMotion(
@@ -248,39 +265,6 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
     directTab
   );
 
-  // Promotion waits until all covering sheets have physically cleared the held tab.
-  // It does not wait for pointer-up, so the same pull can continue to the next sheet.
-  createEffect(
-    () => ({ dragging: free.dragging(), y: free.position().y, positions: verticalMotion() }),
-    (state) => {
-      untrack(() => {
-        const grab = interruptedGrab();
-        if (!state.dragging || !grab) return;
-        if (state.y <= 12) {
-          if (promoted() || passed()) commitSelection(grab.order.at(-1)!);
-          setPromoted(false);
-          setPassed(false);
-          return;
-        }
-        const covers = grab.order.slice(grab.order.indexOf(grab.id) + 1);
-        if (
-          !promoted() &&
-          !passed() &&
-          covers.length &&
-          state.y > 24 &&
-          covers.every((id) => (state.positions.get(id) ?? 0) * pixelUnit() >= (size.clientHeight || 868))
-        ) {
-          commitSelection(grab.id);
-          setPromoted(true);
-        }
-        if (!passed() && (promoted() || !covers.length) && state.y >= grab.advanceAfter) {
-          commitCycle({ direction: 'down', offset: state.y });
-          setPassed(true);
-        }
-      });
-    }
-  );
-
   return {
     activeId,
     order: depthOrder,
@@ -291,7 +275,6 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
     scrollBy: (amount: number) => rail.scrollBy(amount),
     canScrollBack: () => rail.offset() > 0,
     canScrollForward: () => rail.offset() < railMax(),
-    departingItems,
     rootProps: () => ({
       ref: setTablist,
       'data-tabs-root': '',
@@ -327,14 +310,17 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
       'data-active': activeId() === item.id ? '' : undefined,
       'data-revealed': revealedId() === item.id ? '' : undefined,
       'data-phase': motionClass(item.id).replace('is-', '') || undefined,
+      'data-stack-hidden': stackHidden(item.id) ? '' : undefined,
+      inert: stackHidden(item.id),
       onAnimationEnd: (event: AnimationEvent) => finishMotion(event, item.id),
       style: {
         '--rank': depthOrder().indexOf(item.id),
+        '--exit-layer': props.items.length + depthOrder().indexOf(item.id) + 1,
         '--exit-start': `${exitStart(item.id)}px`,
         '--offset': length(offsetUnits(item.id)),
         '--painted-offset': length(paintedRow(item.id)),
         '--card-drag-offset': `${paintedDrag(item.id)}px`,
-        '--stack-delay': `${Math.max(0, props.items.length - 1 - depthOrder().indexOf(item.id)) * 33.333}ms`,
+        ...motionStyle(item.id),
         '--left': `${tabTarget(item)}%`,
         'z-index': depthOrder().indexOf(item.id) + 1
       } as JSX.CSSProperties
@@ -372,30 +358,7 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
       'aria-hidden': activeId() !== item.id ? ('true' as const) : ('false' as const),
       inert: activeId() !== item.id,
       tabindex: activeId() === item.id ? 0 : -1
-    }),
-    echoProps: (item: T) => ({
-      class: `${styles.card} ${styles.echo}`,
-      'data-tabs-card': item.id,
-      'data-tabs-echo': '',
-      'aria-hidden': 'true' as const,
-      inert: true,
-      style: {
-        '--offset': length(rearOffset(item.id) * (1 - collapseProgress())),
-        '--left': `${tabTarget(item)}%`,
-        'z-index': echoRank(item.id)
-      } as JSX.CSSProperties
-    }),
-    /** Snapshot once without mounting application effects a second time. */
-    snapshot: (id: string, element: HTMLElement) => {
-      queueMicrotask(() => {
-        if (!element.isConnected) return;
-        const source = panels.get(id);
-        if (!source) return;
-        const copy = source.cloneNode(true) as HTMLElement;
-        copy.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
-        element.replaceChildren(...copy.childNodes);
-      });
-    }
+    })
   };
 
   function updateOrder(next: readonly string[]) {
@@ -423,12 +386,53 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
       : (props.tabWidth ?? 30);
   }
 
-  function fieldSpan() {
-    return Math.max(1, 94 - tabWidth());
+  function expandedLimit() {
+    const value = props.maxExpandedCards ?? 8;
+    return value === Infinity ? props.items.length : Math.max(2, Math.floor(Number.isFinite(value) ? value : 8));
   }
 
-  function stackLeftId(id: string) {
-    return 3 + (slots()[tabOrder().indexOf(id)] ?? 0) * fieldSpan();
+  /** Keep the nearest front cards, making room for a rear handle currently held from the compact row. */
+  function expandedOrder(order: readonly string[] = depthOrder(), held = inspectedId()) {
+    const limit = expandedLimit();
+    const visible = order.slice(-limit);
+    if (!held || visible.includes(held) || !order.includes(held)) return visible;
+    const ids = new Set([held, ...visible.slice(1)]);
+    return order.filter((id) => ids.has(id));
+  }
+
+  function stackHidden(id: string) {
+    if (collapseProgress() === 1) return false;
+    return !expandedOrder().includes(id);
+  }
+
+  function fieldSpan(order: readonly string[] = depthOrder()) {
+    return Math.max(1, Math.min(94 - tabWidth(), (expandedOrder(order).length - 1) * tabWidth() * 0.8));
+  }
+
+  function fieldOrigin(order: readonly string[] = depthOrder()) {
+    return Math.max(3, Math.min(97 - tabWidth() - fieldSpan(order), fieldStart()));
+  }
+
+  function stackLeftId(id: string, order: readonly string[] = depthOrder()) {
+    const visible = new Set(expandedOrder(order));
+    if (visible.size === props.items.length)
+      return fieldOrigin(order) + (slots()[tabOrder().indexOf(id)] ?? 0) * fieldSpan(order);
+    const visibleIndices = tabOrder().flatMap((id, index) => (visible.has(id) ? [index] : []));
+    const index = tabOrder().indexOf(id);
+    let before = -1;
+    visibleIndices.forEach((position, rank) => {
+      if (position <= index) before = rank;
+    });
+    const last = visibleIndices.length - 1;
+    // Hidden slots retain their list order between the exposed handles, so a sort
+    // crosses neighbors in the same order as the full compact rail.
+    const rank =
+      before < 0
+        ? index - (visibleIndices[0] ?? 0)
+        : before === last
+          ? last + index - visibleIndices[last]!
+          : before + (index - visibleIndices[before]!) / (visibleIndices[before + 1]! - visibleIndices[before]!);
+    return fieldOrigin(order) + (rank / Math.max(1, last)) * fieldSpan(order);
   }
 
   /** Capture both painted axes, including unfinished RAF and CSS motion. */
@@ -438,22 +442,29 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
       (target instanceof Element
         ? target.closest<HTMLElement>('[data-tabs-trigger]')?.dataset.tabsTrigger
         : undefined) ?? activeId();
-    setPromoted(false);
-    setPassed(false);
     setRailDrag(0);
     previousPointerX = 0;
     const tabs = [...tabOrder()];
+    if (id && !expandedOrder().includes(id)) setInspectedId(id);
+    if (collapsed() && id) {
+      const visible = new Set(expandedOrder());
+      const visibleTabs = tabs.filter((id) => visible.has(id));
+      const rank = Math.max(0, visibleTabs.indexOf(id));
+      setFieldStart((tabMotion().get(id) ?? 3) - (rank / Math.max(1, visibleTabs.length - 1)) * fieldSpan());
+    }
     const fractions =
       collapsed() && id
         ? fitTabSlots(
             tabs.map(
               (_, index) =>
-                ((tabMotion().get(id) ?? 3) - 3) / fieldSpan() +
+                ((tabMotion().get(id) ?? 3) - fieldOrigin()) / fieldSpan() +
                 (index - tabs.indexOf(id)) / Math.max(1, tabs.length - 1)
             )
           )
         : [...slots()];
-    const field = new Map(tabs.map((id, index) => [id, 3 + fractions[index]! * fieldSpan()]));
+    const field = new Map(
+      tabs.map((id, index) => [id, collapsed() ? fieldOrigin() + fractions[index]! * fieldSpan() : stackLeftId(id)])
+    );
     const spread = rowPosition(activeId() ?? '') * pixelUnit();
     if (collapsed()) setSlots(fractions);
     setInterruptedGrab(
@@ -467,6 +478,7 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
             tabs,
             slots: fractions,
             field,
+            rows: new Map(expandedOrder().map((id) => [id, rowPosition(id)])),
             spread,
             compact: collapsed(),
             rail: rail.offset(),
@@ -512,16 +524,11 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
       setTabOrder(grab.tabs);
       setSlots(grab.slots);
     }
-    if (result.cancelled || Math.abs(result.y) < 24) {
-      if (promoted() || passed()) commitSelection(grab.order.at(-1)!);
-    } else if (result.y < 0) {
-      if (promoted() || passed()) commitSelection(grab.order.at(-1)!);
-    } else {
-      const atBottom = result.y >= grab.advanceAfter;
-      if (!passed() && atBottom) {
-        if (grab.id === activeId()) commitCycle({ direction: 'down', offset: result.y });
-        else select(grab.order.at(grab.order.indexOf(grab.id) - 1)!);
-      } else if (!passed() && !promoted() && grab.id !== activeId()) select(grab.id);
+    // A held gesture only changes the spread. Commit depth after a deliberate
+    // downward release, using the final pointer coordinate even between frames.
+    if (!result.cancelled && result.y >= Math.max(48, Math.min(90, grab.spread / 2))) {
+      if (grab.id !== activeId()) select(grab.id);
+      else if (result.y >= grab.advanceAfter) next();
     }
     // Preserve physical slot positions and the held x after sorting. Depth stays
     // controlled by depthOrder(); rearranging the list never selects another sheet.
@@ -529,7 +536,7 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
       const order = finalOrder;
       const nextSlots = grab.slots.map((value) => value + shared / widthUnit() / fieldSpan());
       const heldIndex = order.indexOf(grab.id);
-      if (heldIndex >= 0) nextSlots[heldIndex] = ((painted.get(grab.id) ?? grab.left) - 3) / fieldSpan();
+      if (heldIndex >= 0) nextSlots[heldIndex] = ((painted.get(grab.id) ?? grab.left) - fieldOrigin()) / fieldSpan();
       setSlots(fitTabSlots(nextSlots));
     }
     if (nextCompact && !result.cancelled) {
@@ -543,7 +550,7 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
     const grab = interruptedGrab();
     if (gesture.dragging() && grab?.id === id && directTab() === id)
       return Math.max(0, grab.position + gesture.offset() / pixelUnit());
-    return offsetUnits(id) + cardDragOffset(id) / pixelUnit();
+    return offsetUnits(id);
   }
 
   /** Cancel the superseded selection, retaining every wrapper's painted coordinates. */
@@ -551,16 +558,10 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
     const current = transition();
     if (!current) return;
     const painted = new Map(verticalMotion());
-    // At least the selection target is outside the exit/return batch. Its position
-    // resolves the shared CSS stack inset, including responsive units and safe areas.
-    const anchor = props.items.find((item) => !current.cards.some((card) => card.id === item.id));
-    const anchorElement = anchor && panels.get(anchor.id)?.parentElement;
-    if (anchor && anchorElement) {
-      const inset = anchorElement.getBoundingClientRect().top - (painted.get(anchor.id) ?? 0) * pixelUnit();
-      for (const { id } of current.cards) {
-        const element = panels.get(id)?.parentElement;
-        if (element) painted.set(id, (element.getBoundingClientRect().top - inset) / pixelUnit());
-      }
+    const inset = (tablist()?.getBoundingClientRect().top ?? 0) + current.inset;
+    for (const { id } of props.items) {
+      const element = panels.get(id)?.parentElement;
+      if (element) painted.set(id, (element.getBoundingClientRect().top - inset) / pixelUnit());
     }
     completed.clear();
     setSelectionTarget(undefined);
@@ -609,7 +610,7 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
       setSelectionTarget(undefined);
       return;
     }
-    // All cards in front of the target leave and return as one batch.
+    // Each covering card has its own timing; depth commits once the last one clears.
     depart(target, () => commitSelection(target));
   }
 
@@ -653,12 +654,25 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
     const order = [...front, ...depthOrder().slice(0, index + 1)];
     const top = tablist()?.getBoundingClientRect().top ?? 0;
     // Capture each painted position, including a collapse or expansion still settling.
-    const cards = front.map((id) => ({
+    const cards = front.map((id, index) => ({
       id,
+      index: front.length - 1 - index,
       start: (panels.get(id)?.parentElement?.getBoundingClientRect().top ?? top) - top
     }));
+    const anchor = target!;
+    const inset =
+      (panels.get(anchor)?.parentElement?.getBoundingClientRect().top ?? top) -
+      top -
+      (verticalMotion().get(anchor) ?? 0) * pixelUnit();
+    const reveals = depthOrder()
+      .slice(0, index + 1)
+      .map((id) => ({
+        id,
+        start: (panels.get(id)?.parentElement?.getBoundingClientRect().top ?? top) - top,
+        end: rowPosition(id, order) * (1 - collapseProgress())
+      }));
     completed.clear();
-    setTransition({ phase: 'departing', cards, complete, order });
+    setTransition({ phase: 'departing', cards, reveals, inset, complete, order });
   }
 
   /** Only wrapper completions count; all cards must finish before the batch changes phase. */
@@ -672,7 +686,12 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
     if (completed.size !== current.cards.length) return;
     completed.clear();
     if (current.phase === 'departing') {
-      setTransition({ phase: 'returning', cards: current.cards });
+      // CSS has carried the revealed cards to these exact destinations. Seed the
+      // follower there before removing that animation, preventing a second drop.
+      verticalMotion.rebase(
+        new Map(props.items.map(({ id }) => [id, rowPosition(id, current.order) * (1 - collapseProgress())]))
+      );
+      setTransition({ phase: 'returning', cards: current.cards, reveals: current.reveals, inset: current.inset });
       current.complete();
     } else {
       setTransition(undefined);
@@ -682,19 +701,46 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
 
   function motionClass(id: string) {
     const current = transition();
-    return current?.cards.some((card) => card.id === id) ? `is-${current.phase}` : '';
+    if (current?.cards.some((card) => card.id === id)) return `is-${current.phase}`;
+    return current?.phase === 'departing' ? 'is-revealing' : '';
+  }
+
+  /** Frontmost leaves first; rear appearances wait until their own card has cleared. */
+  function motionStyle(id: string) {
+    const motion = transition();
+    if (!motion) return {};
+    const card = motion.cards.find((card) => card.id === id);
+    const last = motion.cards.length - 1;
+    const index = card?.index ?? last;
+    const stagger = Math.min(1, 7 / Math.max(1, last));
+    const reveal = motion.reveals.find((card) => card.id === id);
+    return {
+      '--exit-delay': `${index * 40 * stagger}ms`,
+      '--exit-duration': `${600 + index * 20 * stagger}ms`,
+      '--return-delay': `${80 + index * 60 * stagger}ms`,
+      '--return-duration': `${500 + index * 30 * stagger}ms`,
+      '--return-start-offset': length(
+        (rowPosition(
+          (motion.phase === 'departing' ? motion.order : depthOrder()).at(-1) ?? '',
+          motion.phase === 'departing' ? motion.order : depthOrder()
+        ) +
+          (props.tabHeight ?? 6)) *
+          (1 - collapseProgress()) +
+          (props.tabHeight ?? 6)
+      ),
+      '--return-offset': length(
+        rowPosition(id, motion.phase === 'departing' ? motion.order : depthOrder()) * (1 - collapseProgress())
+      ),
+      '--reveal-start': `${reveal?.start ?? 0}px`,
+      '--reveal-end': length(reveal?.end ?? 0),
+      '--reveal-delay': `${last * 40 * stagger}ms`,
+      '--reveal-duration': `${600 + last * 20 * stagger}ms`
+    };
   }
 
   function exitStart(id: string) {
     const current = transition();
     return current?.phase === 'departing' ? (current.cards.find((card) => card.id === id)?.start ?? 0) : 0;
-  }
-
-  function departingItems() {
-    const current = transition();
-    return current?.phase === 'departing'
-      ? props.items.filter((item) => current.cards.some((card) => card.id === item.id))
-      : [];
   }
 
   function tabTarget(item: T) {
@@ -718,56 +764,33 @@ export function createTabs<T extends TabItem>(props: TabsOptions<T>) {
     return rowLayouts().get(order.join(' '))?.get(id) ?? 0;
   }
 
-  function rearOffset(id: string) {
-    const current = transition();
-    return current?.phase === 'departing' ? rowPosition(id, current.order) : 0;
-  }
-
-  function echoRank(id: string) {
-    const current = transition();
-    return current?.phase === 'departing' ? current.order.indexOf(id) - current.cards.length : -1;
-  }
-
-  /** Preview selection without changing order, so reversing the pointer restores every card. */
-  function cardDragOffset(id: string) {
-    if (transition()) return 0;
-    const target = pulledRearTab();
-    if (!target) return id === activeId() ? dragOffset() : 0;
-    if (id === target) {
-      const unit = pixelUnit();
-      const row = rowPosition(id) * unit;
-      const initial = collapsed() ? 0 : row;
-      return Math.max(0, initial + gesture.offset()) - row * (1 - collapseProgress());
-    }
-    if (depthOrder().indexOf(id) > depthOrder().indexOf(target)) {
-      // All covering cards move together, with enough separation to uncover the pulled sheet.
-      return (size.clientHeight || 868) + 8 * pixelUnit();
-    }
-    return 0;
-  }
-
+  /** Distribute exposed rear sheets up to the held card and clear its content below. */
   function offsetUnits(id: string) {
-    const current = rowPosition(id);
-    const front = activeId();
-    const motion = transition();
-    const target = pulledRearTab();
-    const index = target ? depthOrder().indexOf(target) : -1;
-    const future =
-      motion?.phase === 'departing'
-        ? motion.order
-        : target
-          ? [...depthOrder().slice(index + 1), ...depthOrder().slice(0, index + 1)]
-          : front
-            ? [front, ...depthOrder().slice(0, -1)]
-            : depthOrder();
-    const shift = target
-      ? depthOrder().indexOf(id) < index
-        ? (rowPosition(id, future) - current) * selectionProgress()
-        : 0
-      : id === front
-        ? 0
-        : (rowPosition(id, future) - current) * shiftProgress();
-    return (current + shift) * (1 - collapseProgress());
+    const grab = interruptedGrab();
+    const current = free.dragging() && grab ? (grab.rows.get(id) ?? 0) : rowPosition(id);
+    if (free.dragging() && grab && gesture.offset() > 0) {
+      const spread = Math.max(grab.spread / pixelUnit(), (props.tabHeight ?? 6) * 2);
+      const distance = gesture.offset() / pixelUnit();
+      const progress = grab.compact ? Math.min(1, distance / spread) : 1;
+      const heldRow = grab.rows.get(grab.id) ?? 0;
+      const heldPosition = grab.position + distance;
+      if (grab.order.indexOf(id) > grab.order.indexOf(grab.id)) {
+        // Grow a real content preview, capped at half the deck's height.
+        const height = size.clientHeight || tablist()?.clientHeight || 868;
+        const preview = Math.min(distance, Math.max((props.tabHeight ?? 6) * 2, height / pixelUnit() / 2));
+        return Math.max(current * progress, heldPosition + (current - heldRow) * progress + preview);
+      }
+      const exposed = [...grab.rows.keys()];
+      const rank = exposed.indexOf(id);
+      const heldRank = exposed.indexOf(grab.id);
+      if (rank < 0 || heldRank <= 0) return current * progress;
+      const evenlySpaced = (rank / heldRank) * heldPosition;
+      // Blend out the resting collision layout, using fixed ranks so sorting
+      // cannot send a sheet up and down while the pointer stays at the same y.
+      const unfold = Math.min(1, distance / ((props.tabHeight ?? 6) * 2));
+      return current * progress + (evenlySpaced - current * progress) * unfold;
+    }
+    return current * (1 - collapseProgress());
   }
 
   function navigate(event: KeyboardEvent, index: number) {

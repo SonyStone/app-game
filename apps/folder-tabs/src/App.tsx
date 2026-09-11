@@ -12,11 +12,11 @@ import WifiIcon from './icons/wifi.svg';
 import styles from './App.module.css';
 
 /** The reference's device-screen composition, with reversible folder gestures. */
-export function App() {
+export function App(props: { routing?: Parameters<typeof createScreenRoute>[2] } = {}) {
   const narrow = typeof window.matchMedia === 'function' ? createMediaQuery('(max-width: 600px)') : () => false;
   const [screen, setScreen] = createSignal<HTMLDivElement>();
   // This motion demo keeps its choreography independent of OS motion preferences.
-  const route = createScreenRoute(() => false, screen);
+  const route = createScreenRoute(() => false, screen, props.routing);
   return (
     <main class={`${styles.app} ${route.fullscreen() ? styles.isFullscreen : 'is-preview'}`} data-playing="true">
       <h1 class={styles.srOnly}>Creative folders</h1>
@@ -24,16 +24,16 @@ export function App() {
         Drag any tab up to gather the current deck into a scrolling row without changing the open folder. Swipe tabs
         sideways to scroll the compact row, or drag sideways in the expanded stack to sort tabs. Diagonal gestures
         combine sorting and expansion. Scroll over the compact tabs, or use the preview scroll arrows. Pull a rear tab
-        down to open its folder while holding it; keep pulling to the bottom to open the folder behind it. Return to the
-        starting position to cancel. Drag down to expand the stack and keep pulling to open the next folder in one
-        gesture. Selecting a tab moves the cards in front of it to the back. You can also use arrow keys. In full
+        down to spread the stack; pull farther to increase the spacing. Release after a deliberate downward pull to
+        open that folder. Return to the starting position to cancel. Pull the active folder to the bottom and release
+        to open the folder underneath. Selecting a tab moves the cards in front of it to the back. You can also use arrow keys. In full
         screen, use the tabs for vertical deck gestures; drag or scroll the content vertically.
       </p>
       <Show when={!route.fullscreen()}>
         <div class={styles.previewActions}>
           <a
             class={styles.screenRouteControl}
-            href="/fullscreen"
+            href={route.href('/fullscreen')}
             onClick={(event) => route.navigate(event, '/fullscreen')}
           >
             <span class={styles.screenRouteLabel}>Open full screen</span>
@@ -67,6 +67,7 @@ export function App() {
                 folder={folder}
                 onNext={next}
                 scrollable={route.fullscreen()}
+                previewHref={route.href('/')}
                 onPreview={route.fullscreen() && active() ? (event) => route.navigate(event, '/') : undefined}
               />
             )}

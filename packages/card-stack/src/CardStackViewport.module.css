@@ -1,5 +1,3 @@
-@value root from './Tabs.module.css';
-
 .viewport {
   display: block;
   contain: layout paint;
@@ -8,7 +6,7 @@
   overflow: hidden;
 }
 
-.root[data-scrollable] .viewport {
+:global([data-tabs-root][data-scrollable]) .viewport {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
