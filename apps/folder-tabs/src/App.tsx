@@ -42,8 +42,8 @@ export function App(props: { routing?: Parameters<typeof createScreenRoute>[2] }
             </span>
           </a>
         </div>
+        <AuthorCredit />
       </Show>
-      <AuthorCredit />
       <div class={styles.deviceFrame}>
         <div class={styles.workspace} ref={setScreen} aria-describedby="gesture-help">
           <div class={styles.workspaceTopline}>
@@ -75,7 +75,9 @@ export function App(props: { routing?: Parameters<typeof createScreenRoute>[2] }
           <span class={styles.screenCorner} aria-hidden="true" />
         </div>
       </div>
-      <AuthorCredit />
+      <Show when={!route.fullscreen()}>
+        <AuthorCredit />
+      </Show>
     </main>
   );
 }

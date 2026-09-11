@@ -40,9 +40,8 @@
 .creativeBoard {
   width: 100%;
   grid-template-rows: repeat(8, var(--cell)) minmax(0, 1fr);
-  height: calc(8 * var(--cell) + var(--extra-height, 0cqw));
-  min-height: 100%;
-  transition: height 600ms cubic-bezier(0.65, 0, 0.35, 1);
+  height: 100%;
+  min-height: calc(8 * var(--cell));
   overflow: hidden;
 }
 

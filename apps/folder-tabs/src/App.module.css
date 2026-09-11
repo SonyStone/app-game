@@ -124,14 +124,18 @@
 }
 
 .workspace {
+  --screen-radius: calc(var(--frame-radius) - 17px);
   position: relative;
   width: 100%;
   container-type: inline-size;
   background: #e6e6e4;
-  border-radius: calc(var(--frame-radius) - 17px);
+  border-radius: var(--screen-radius);
 
   /* Departing focused controls must not scroll the screen's clipped interior. */
   overflow: clip;
+  /* One persistent paint boundary for the moving, composited cards. */
+  contain: paint;
+  clip-path: inset(0 round var(--screen-radius));
 }
 
 .workspaceTopline {
@@ -262,6 +266,7 @@
   }
 
   .workspace {
+    --screen-radius: 0px;
     border-radius: 0;
   }
 }

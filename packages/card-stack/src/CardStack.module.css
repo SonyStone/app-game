@@ -34,7 +34,8 @@
   );
   --card-drag-offset: 0px;
   --y: calc(var(--stack-top) + var(--painted-offset, var(--offset)));
-  --sheet-height: calc(var(--screen-height) - var(--y) - var(--tab-height));
+  /* Stable raster bounds: moving a sheet must not resize every descendant each frame. */
+  --sheet-height: calc(var(--screen-height) - var(--stack-top) - var(--tab-height));
   position: absolute;
   top: 0;
   left: 0;
@@ -46,10 +47,6 @@
   will-change: transform;
   transition: none;
   pointer-events: none;
-}
-
-.root[data-scrollable] > .card {
-  --sheet-height: calc(var(--screen-height) - var(--stack-top) - var(--tab-height));
 }
 
 .trigger {
