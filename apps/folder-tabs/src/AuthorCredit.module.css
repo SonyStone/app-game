@@ -1,5 +1,3 @@
-@value isFullscreen from './App.module.css';
-
 .icon {
   display: inline-block;
   width: 1em;
@@ -76,10 +74,6 @@
     max-width: 64px;
     text-align: right;
   }
-}
-
-.isFullscreen > .authorCredit {
-  display: none;
 }
 
 @property --screen-y {

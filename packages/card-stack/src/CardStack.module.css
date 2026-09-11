@@ -3,6 +3,7 @@
   --screen-height: 680px;
   --ledge: 0px;
   --footer-height: 0px;
+  --card-stack-screen-height: var(--screen-height);
   position: relative;
   height: var(--screen-height);
   isolation: isolate;
@@ -19,7 +20,26 @@
   display: contents;
 }
 
+/* Motion belongs to the wrappers. Stop its inherited variables at the content
+   boundary so each pointer frame does not restyle the whole card's artwork.
+   Footer and scroll-body wrappers still receive their counter-translation. */
+.root :is([data-tabs-scroll-body], [data-tabs-footer], [data-tabs-trigger]) > * {
+  --drag-offset: initial;
+  --collapse: initial;
+  --extra-height: initial;
+  --front-offset: initial;
+  --painted-left: initial;
+  --y: initial;
+  --card-drag-offset: initial;
+  --offset: initial;
+  --painted-offset: initial;
+  --left: initial;
+}
+
 .card {
+  /* Inherit a computed length, not a changing max()/calc() expression that
+     invalidates every descendant even while the viewport height stays equal. */
+  --screen-height: var(--card-stack-screen-height);
   --exit-easing: linear(
     0,
     0.006 11.11%,
@@ -147,4 +167,10 @@
 .card[data-stack-hidden] .trigger {
   visibility: hidden;
   pointer-events: none;
+}
+
+@property --card-stack-screen-height {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 680px;
 }

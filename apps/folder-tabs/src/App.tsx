@@ -18,7 +18,11 @@ export function App(props: { routing?: Parameters<typeof createScreenRoute>[2] }
   // This motion demo keeps its choreography independent of OS motion preferences.
   const route = createScreenRoute(() => false, screen, props.routing);
   return (
-    <main class={`${styles.app} ${route.fullscreen() ? styles.isFullscreen : 'is-preview'}`} data-playing="true">
+    <main
+      class={`${styles.app} ${route.fullscreen() ? styles.isFullscreen : 'is-preview'}`}
+      data-playing="true"
+      data-folder-view={route.fullscreen() ? 'fullscreen' : 'preview'}
+    >
       <h1 class={styles.srOnly}>Creative folders</h1>
       <p class={styles.srOnly} id="gesture-help">
         Drag any tab up to gather the current deck into a scrolling row without changing the open folder. Swipe tabs
@@ -45,7 +49,7 @@ export function App(props: { routing?: Parameters<typeof createScreenRoute>[2] }
         <AuthorCredit />
       </Show>
       <div class={styles.deviceFrame}>
-        <div class={styles.workspace} ref={setScreen} aria-describedby="gesture-help">
+        <div class={styles.workspace} data-folder-workspace="" ref={setScreen} aria-describedby="gesture-help">
           <div class={styles.workspaceTopline}>
             <span>
               <strong>9:41</strong> Mon Apr 26

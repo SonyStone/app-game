@@ -1,8 +1,3 @@
-@value layoutDark from './FolderContent.module.css';
-@value layoutOrbits from './FolderContent.module.css';
-@value dialCell from './FolderContent.module.css';
-@value isFullscreen from './App.module.css';
-
 [data-playing='true'] :is([data-active], [data-revealed]) .dialRotor {
   animation: dial-spin 7s linear infinite;
 }
@@ -46,11 +41,11 @@
   }
 }
 
-.layoutDark .dial {
+:global([data-folder-theme='dark']) .dial {
   background: var(--ink);
 }
 
-.layoutOrbits .dial {
+:global([data-folder-layout='orbits']) .dial {
   background: #020402;
 }
 
@@ -64,16 +59,16 @@
   }
 }
 
-[data-playing='true'] :is([data-active], [data-revealed]) .dialCell[data-index='0'] .dialRotor {
+[data-playing='true'] :is([data-active], [data-revealed]) :global([data-dial-cell])[data-index='0'] .dialRotor {
   animation-duration: 5.8s;
 }
 
-[data-playing='true'] :is([data-active], [data-revealed]) .dialCell[data-index='1'] .dialRotor {
+[data-playing='true'] :is([data-active], [data-revealed]) :global([data-dial-cell])[data-index='1'] .dialRotor {
   animation-duration: 4.2s;
   animation-direction: reverse;
 }
 
-[data-playing='true'] :is([data-active], [data-revealed]) .dialCell[data-index='2'] .dialRotor {
+[data-playing='true'] :is([data-active], [data-revealed]) :global([data-dial-cell])[data-index='2'] .dialRotor {
   animation-duration: 5.1s;
 }
 
@@ -83,7 +78,7 @@
   initial-value: 0px;
 }
 
-.isFullscreen {
+:global([data-folder-view='fullscreen']) {
   .dial {
     width: calc(var(--cell) * 2.5);
     height: calc(var(--cell) * 2.5);

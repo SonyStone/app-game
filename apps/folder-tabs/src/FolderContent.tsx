@@ -44,6 +44,7 @@ export function FolderContent(props: {
   return (
     <div
       data-folder-theme={props.folder.dark ? 'dark' : 'light'}
+      data-folder-layout={props.folder.layout}
       class={`${styles.folderContent} ${props.folder.layout === 'orbits' ? styles.layoutOrbits : ''} ${props.folder.dark ? styles.layoutDark : ''}`}
     >
       <CardStackViewport
@@ -62,7 +63,7 @@ export function FolderContent(props: {
             <div class={styles.dialGroup}>
               <For each={props.folder.layout === 'orbits' ? [0, 1, 2, 3] : [0, 1, 2]}>
                 {(index) => (
-                  <div class={styles.dialCell} data-index={index}>
+                  <div class={styles.dialCell} data-dial-cell="" data-index={index}>
                     <span
                       class={styles.colorDot}
                       style={{

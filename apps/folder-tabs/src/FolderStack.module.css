@@ -1,6 +1,3 @@
-@value isFullscreen from './App.module.css';
-@value workspace from './App.module.css';
-
 .folderStack {
   --ledge: 2.2cqw;
   --footer-height: 17cqw;
@@ -200,7 +197,7 @@
   z-index: -1;
 }
 
-.isFullscreen .folderStack {
+:global([data-folder-view='fullscreen']) .folderStack {
   --stack-top: calc(3cqw + env(safe-area-inset-top, 0px));
   --tab-height: calc(6 * var(--deck-unit));
   --ledge: calc(2.2 * var(--deck-unit));
@@ -226,7 +223,7 @@
   initial-value: 0px;
 }
 
-.isFullscreen {
+:global([data-folder-view='fullscreen']) {
   .folderSheet {
     padding-top: var(--ledge);
   }
@@ -261,10 +258,10 @@
   }
 }
 
-.workspace[data-route-layout] .folderCard {
+:global([data-folder-workspace][data-route-layout]) .folderCard {
   transition: none;
 }
 
-.isFullscreen [data-dragging] .folderCard {
+:global([data-folder-view='fullscreen']) [data-dragging] .folderCard {
   transition: none;
 }
