@@ -69,6 +69,8 @@ export function createAbrStamps(root: TgpuRoot) {
   const paramsData = new Float32Array(d.sizeOf(Params) / 4);
   const paramsIntegers = new Uint32Array(paramsData.buffer);
   const pickupData = new Float32Array(d.sizeOf(PickupParams) / 4);
+  const directStamps = Array.from({ length: 8 }, () => createDirectStamp(root));
+  let nextDirectStamp = 0;
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
   const primary = root.createRenderPipeline({
     attribs: abrStampLayout.attrib,
@@ -108,6 +110,12 @@ export function createAbrStamps(root: TgpuRoot) {
     targets: { format: 'rgba8unorm' }
   });
   const direct = root.createRenderPipeline({
+    attribs: abrStampLayout.attrib,
+    vertex,
+    fragment: directFragment,
+    targets: { format: 'rgba8unorm' }
+  });
+  const sharedDirect = root.with(sharedStamp, true).createRenderPipeline({
     attribs: abrStampLayout.attrib,
     vertex,
     fragment: directFragment,
@@ -260,6 +268,17 @@ export function createAbrStamps(root: TgpuRoot) {
     /** One primary Smudge stamp can composite directly unless coverage needs neighboring or secondary pixels. */
     canDrawDirect: () =>
       !!settings?.smudge && !settings.values.useWetEdges && !(settings.values.useDualBrush && settings.dual),
+    /** Upload one primary dab for all its tiles. Encode its draws before preparing
+     * another dab. Slots submit pending readers before their bytes are recycled.
+     * The vertex shader reads tile placement from the pickup uniform's spare bytes.
+     */
+    prepareDirect(dab: Dab) {
+      if (!dab.abr || dab.abr.secondary) throw new Error('Direct Smudge requires one primary ABR dab.');
+      const slot = directStamps[nextDirectStamp++ % directStamps.length]!;
+      if (slot.batch && slot.batch.version === slot.version) slot.batch.flush();
+      root.device.queue.writeBuffer(root.unwrap(slot.buffer), 0, dab.abr.data);
+      return slot;
+    },
     /** All writes are tile-local; uniforms carry world origin for a continuous pattern across seams.
      * A destination bypasses coverage scratch: requires canDrawDirect(), one primary dab,
      * a refreshed base inside the pass scissor, and caller-owned pass.end().
@@ -270,7 +289,7 @@ export function createAbrStamps(root: TgpuRoot) {
       dabs: readonly Dab[],
       tx: number,
       ty: number,
-      destination?: { pass: GPURenderPassEncoder; pickup: AbrPickup }
+      destination?: { pass: GPURenderPassEncoder; pickup: AbrPickup; stamps?: ReturnType<typeof createDirectStamp> }
     ) {
       if (pendingPlanBytes >= 8 * 1024 * 1024) commands.flush();
       const encoder = commands.encoder();
@@ -293,6 +312,14 @@ export function createAbrStamps(root: TgpuRoot) {
         binding.color = color;
         binding.originX = tx;
         binding.originY = ty;
+      }
+      if (destination?.stamps) {
+        sharedDirect.with(destination.pass).with(binding.primary)
+          .with(pickupBinding(tile, destination.pickup, dabs[0]!.x - tx * 256, dabs[0]!.y - ty * 256))
+          .with(abrStampLayout, destination.stamps.buffer).draw(6);
+        destination.stamps.batch = commands;
+        destination.stamps.version = commands.version;
+        return;
       }
       // One upload, separate vertex ranges: never overwrite a buffer before its draws are submitted.
       const ordered = [...dabs.filter((dab) => dab.abr?.secondary), ...dabs.filter((dab) => !dab.abr?.secondary)];
@@ -398,9 +425,10 @@ export function createAbrStamps(root: TgpuRoot) {
       sampledPlanRows: (sampledSource?.planner.rows ?? 0) + (secondarySource?.planner.rows ?? 0),
       pendingTipPlanBytes: pendingPlanBytes,
       pendingPatternBytes,
-      bytes: textures.reduce((sum, texture) => sum + (texture.props.size[0] * texture.props.size[1] * 4) / 3, 0) + (maskRaster?.bytes ?? 0) + (sampledSource?.bytes ?? 0) + (secondarySource?.bytes ?? 0) + pendingPlanBytes + pendingPatternBytes + (patternSource?.gpu.bytes ?? 0)
+      bytes: directStamps.length * d.sizeOf(Stamp) + textures.reduce((sum, texture) => sum + (texture.props.size[0] * texture.props.size[1] * 4) / 3, 0) + (maskRaster?.bytes ?? 0) + (sampledSource?.bytes ?? 0) + (secondarySource?.bytes ?? 0) + pendingPlanBytes + pendingPatternBytes + (patternSource?.gpu.bytes ?? 0)
     }),
     destroy() {
+      for (const slot of directStamps) slot.buffer.destroy();
       maskRaster?.destroy();
       sampledSource?.gpu.destroy();
       sampledSource = undefined;
@@ -429,7 +457,7 @@ export function createAbrStamps(root: TgpuRoot) {
     bindings.delete(tile);
   }
 
-  function pickupBinding(tile: AbrTile, pickup: AbrPickup | undefined) {
+  function pickupBinding(tile: AbrTile, pickup: AbrPickup | undefined, centerX = 0, centerY = 0) {
     const placement = pickupOffsets.placement, flags = pickupOffsets.flags;
     const clip = pickupOffsets.clip, sampleSize = pickupOffsets.sampleSize;
     pickupData[placement] = pickup?.x ?? 0;
@@ -446,6 +474,8 @@ export function createAbrStamps(root: TgpuRoot) {
     pickupData[clip + 3] = pickup?.clip?.[3] ?? 1;
     pickupData[sampleSize] = pickup?.patch.width ?? 256;
     pickupData[sampleSize + 1] = pickup?.patch.height ?? 256;
+    pickupData[pickupOffsets.center] = centerX;
+    pickupData[pickupOffsets.center + 1] = centerY;
     tile.pickupParams.write(pickupData.buffer);
     const image = pickup?.patch.texture ?? tile.base;
     const binding = bindingsFor(tile);
@@ -510,6 +540,17 @@ type AbrPickup = {
   mixer?: boolean;
   history?: boolean;
 };
+
+/** A stamp can span submissions while its tiles load. Track its last draw's
+ * batch version, rather than the version at upload, before recycling its bytes.
+ */
+function createDirectStamp(root: TgpuRoot) {
+  return {
+    buffer: root.createBuffer(d.arrayOf(Stamp, 1)).$usage('vertex'),
+    batch: undefined as ReturnType<typeof commandBatch> | undefined,
+    version: 0
+  };
+}
 
 /** Extra ABR scratch survives eviction and disposable preview copies along with the ordinary mask. */
 export type AbrTile = ReturnType<typeof createAbrTile>;
@@ -585,6 +626,7 @@ const layout = tgpu.bindGroupLayout({
   pattern: { texture: d.texture2d() },
   sampler: { sampler: 'filtering' }
 });
+const sharedStamp = tgpu.slot(false);
 const vertex = tgpu.vertexFn({
   in: { index: d.builtin.vertexIndex, bounds: d.vec4f, transform: d.vec4f, dynamics: d.vec4f, color: d.vec4f },
   out: { position: d.builtin.position, uv: d.vec2f, dynamics: d.vec4f, color: d.vec4f }
@@ -596,8 +638,13 @@ const vertex = tgpu.vertexFn({
   )([d.vec2f(-1, -1), d.vec2f(1, -1), d.vec2f(-1, 1), d.vec2f(-1, 1), d.vec2f(1, -1), d.vec2f(1, 1)]);
   const corner = corners[input.index]!;
   const local = std.mul(corner, input.bounds.zw);
+  let center = d.vec2f(input.bounds.xy);
+  if (sharedStamp.$) {
+    // CPU subtraction preserves local precision at large document coordinates.
+    center = d.vec2f(compositeLayout.$.pickupParams.center);
+  }
   const pixel = std.add(
-    input.bounds.xy,
+    center,
     d.vec2f(
       local.x * input.transform.x - local.y * input.transform.y,
       local.x * input.transform.y + local.y * input.transform.x
@@ -676,13 +723,14 @@ const secondaryFragment = tgpu.fragmentFn({ in: { uv: d.vec2f, dynamics: d.vec4f
   'use gpu';
   return d.vec4f(std.floor(std.textureSample(layout.$.tip, layout.$.sampler, input.uv).r * 255 + 0.5) / 255);
 });
-const PickupParams = d.struct({ placement: d.vec4f, flags: d.vec4f, clip: d.vec4f, sampleSize: d.vec2f });
+const PickupParams = d.struct({ placement: d.vec4f, flags: d.vec4f, clip: d.vec4f, sampleSize: d.vec2f, center: d.vec2f });
 // Offsets come from the shader schema, including struct alignment and padding.
 const pickupOffsets = {
   placement: d.memoryLayoutOf(PickupParams, value => value.placement).offset / 4,
   flags: d.memoryLayoutOf(PickupParams, value => value.flags).offset / 4,
   clip: d.memoryLayoutOf(PickupParams, value => value.clip).offset / 4,
-  sampleSize: d.memoryLayoutOf(PickupParams, value => value.sampleSize).offset / 4
+  sampleSize: d.memoryLayoutOf(PickupParams, value => value.sampleSize).offset / 4,
+  center: d.memoryLayoutOf(PickupParams, value => value.center).offset / 4
 };
 const compositeLayout = tgpu.bindGroupLayout({
   pickup: { texture: d.texture2d() },

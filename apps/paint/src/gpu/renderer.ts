@@ -437,6 +437,9 @@ export async function createPaintRenderer(
     batch?: ReturnType<typeof commandBatch>
   ) {
     if (!stroke || !dabs.length) return;
+    const direct =
+      !!sampled && !!smudge && options.directSmudge !== false && abrStamps!.canDrawDirect() &&
+      dabs.length === 1 && !dabs[0]!.abr?.secondary;
     const groups = new Map<string, Dab[]>();
     if (onlyTile !== undefined) {
       const [x, y] = coordinates(onlyTile);
@@ -453,6 +456,7 @@ export async function createPaintRenderer(
           group.push(dab);
         }
     const commands = batch ?? commandBatch(device);
+    const directStamp = direct ? abrStamps!.prepareDirect(dabs[0]!) : undefined;
     let pendingTiles = 0;
     try {
       for (const [key, dabs] of groups) {
@@ -483,13 +487,6 @@ export async function createPaintRenderer(
         const tile = await ensure(stroke.layer, key, commands);
         const [tx, ty] = coordinates(key);
         const bounds = stampBounds(dabs, tx, ty);
-        const direct =
-          !!sampled &&
-          !!smudge &&
-          options.directSmudge !== false &&
-          abrStamps!.canDrawDirect() &&
-          dabs.length === 1 &&
-          !dabs[0]!.abr?.secondary;
         const scratch = sharedScratch
           ? (samplingScratch[reserveSamplingScratch(commands)] ??= createStrokeScratch(root))
           : prepareStroke(root, tile);
@@ -569,7 +566,7 @@ export async function createPaintRenderer(
                   y: ty * TILE_SIZE - captured.y
                 }
               : undefined;
-            if (direct) abrStamps!.draw(scratch.abr!, commands, dabs, tx, ty, { pass, pickup: pickup! });
+            if (direct) abrStamps!.draw(scratch.abr!, commands, dabs, tx, ty, { pass, pickup: pickup!, stamps: directStamp });
             else abrStamps!.composite(scratch.abr!, pass, pickup);
           } else pipelines.stroke.with(pass).with(brushGroup).with(scratch.strokeGroup).draw(3);
           pass.end();
