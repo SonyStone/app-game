@@ -1,3 +1,4 @@
+import { sampledTipTransform } from '@app-game/abr-brush/sampledTipRaster';
 import { expect, it } from 'vitest';
 import { defaultBrush, type Dab } from './brush';
 import { defaultCamera, screenToWorld, worldToScreen } from './camera';
@@ -137,4 +138,29 @@ it('stores guides in JSON, binary and internal checkpoints; legacy files default
     expect(supportsPaintSymmetry(brush)).toBe(false);
   }
   expect(supportsPaintSymmetry(defaultBrush())).toBe(true);
+});
+
+
+it('preserves double-precision sampled-tip geometry and conservative culling through symmetry', () => {
+  const center = { x: 1000000.125, y: -1000000.75 };
+  const tip = sampledTipTransform({ left: center.x - 5, right: center.x + 6,
+    top: center.y - 4, bottom: center.y + 4 }, center, .75, 14, 60);
+  const data = new Float32Array(16);
+  data[0] = center.x; data[1] = center.y; data[4] = 1; data[6] = 1; data[7] = 1;
+  const dab: Dab = { ...center, radius: 20, flow: 1, abr: { data, secondary: false, sampledTip: tip } };
+  const matrices = symmetryTransforms({ ...defaultPaintSymmetry(), mode: 'mandala', x: 12, y: -8, segments: 7, angle: .8 });
+  const result = symmetryDabs([dab], matrices);
+  expect(result[0]).toBe(dab);
+  for (let i = 1; i < result.length; i++) {
+    const copy = result[i]!;
+    for (const vertex of tip.quad) {
+      const expected = symmetryPoint({ x: vertex[0], y: vertex[1] }, matrices[i]!);
+      const actual = copy.abr!.sampledTip!.quad.find(point => point[2] === vertex[2] && point[3] === vertex[3])!;
+      expect(actual[0]).toBe(expected.x);
+      expect(actual[1]).toBe(expected.y);
+      expect(Math.abs(actual[0] - copy.x)).toBeLessThanOrEqual(copy.radius);
+      expect(Math.abs(actual[1] - copy.y)).toBeLessThanOrEqual(copy.radius);
+      expect(Math.hypot(actual[0] - copy.x, actual[1] - copy.y)).toBeLessThanOrEqual(copy.radius);
+    }
+  }
 });

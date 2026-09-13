@@ -1,7 +1,8 @@
 import { decodePattern, readSample, type PatternResource } from '@app-game/abr-parser/browser';
 import type { BrushTipImage, Brush as BrushWithPreview } from '@app-game/abr-parser/reader';
 import { record } from './form';
-import { generateComputedBrushTip } from './stroke';
+import { dualPreviewInput, previewStrokeSize, type PreviewInput } from './stroke';
+import { computedSecondaryTip } from './computedTip';
 
 /** Compressed auxiliary resources cross the worker boundary only on cache misses. */
 export type PreviewResourceSource = {
@@ -11,7 +12,16 @@ export type PreviewResourceSource = {
   missing?: string;
 };
 /** Decoded coverage textures consumed by either rendering backend. */
-export type PreviewResources = { pattern?: BrushTipImage; dualTip?: BrushTipImage; warning?: string };
+export type PreviewResources = { pattern?: BrushTipImage; dualTip?: BrushTipImage; dualKey?: string; warning?: string };
+
+/** Prepares a computed secondary at the same output size used by the preview sampler.
+ * Cached decoded inputs remain immutable, so edits and output resizing cannot reuse stale geometry.
+ */
+export function preparePreviewResources(input: PreviewInput, resources: PreviewResources): PreviewResources {
+  if (!input.values.useDualBrush || input.values.dualBrush.tipId || !resources.dualTip) return resources;
+  const tip = computedSecondaryTip(previewStrokeSize(dualPreviewInput(input)), input.values.dualBrush);
+  return { ...resources, dualTip: tip, dualKey: tip.key };
+}
 
 /** Resolves resources by UUID without decoding pixels on the UI thread. */
 export function brushPreviewResources(
@@ -55,7 +65,7 @@ export function decodePreviewResources(source: PreviewResourceSource): PreviewRe
     result.dualTip = source.dualSample
       ? readSample(source.dualSample.data, source.dualSample.subVersion).tip
       : source.dualHardness !== undefined
-        ? generateComputedBrushTip(128, source.dualHardness)
+        ? computedSecondaryTip(128, { hardness: source.dualHardness, angle: 0, roundness: 100 })
         : undefined;
   } catch (error) {
     result.warning = String(error);

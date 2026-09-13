@@ -4,6 +4,9 @@ import { AbrParser } from '@app-game/abr-parser/browser';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 
+// Wet Blender's 36×25 tip has a rounded minor diameter of 35 at size 50.
+// Count/scatter probes use 35px events at 100% spacing to isolate one group per sample.
+
 it.each([1, 0.5])('Wet Blender scatter uses the full distribution width at pressure %s', (pressure) => {
   const { values, tip } = wetBlender();
   expect(values.diameter).toBe(50);
@@ -28,8 +31,8 @@ it.each([1, 0.5])('Wet Blender scatter uses the full distribution width at press
       centered.data.slice(offset + 2, offset + stampStride)
     );
   }
-  // Native Photoshop 50 px / 208% exports span about 153 px including the sampled tip.
-  // Stamp centers span 104 px at full pressure, rather than the old 208 px.
+  // The traced radius call multiplies the 50 px diameter by 0.5 and 208 / 100.
+  // Stamp centers therefore span 104 px at full pressure.
   expect(Math.min(...offsets)).toBeGreaterThanOrEqual(-52 * pressure);
   expect(Math.max(...offsets)).toBeLessThanOrEqual(52 * pressure);
   expect(Math.min(...offsets)).toBeLessThan(-48 * pressure);
@@ -45,11 +48,13 @@ it.each([false, true])('scatter respects count and the stroke axes (both axes: %
     point(0, 0),
     point(300, 0)
   ]);
-  expect(result.count).toBe(201 * 3); // One group at contact, then one every 1.5 document pixels.
+  const firstCount = bothAxes ? 3 : 1;
+  expect(result.count).toBe(firstCount + 285 * 3); // Rounded 35px minor diameter × 3% = 1.05px per group.
   let largestAlong = 0;
   let largestAcross = 0;
   for (let i = 0; i < result.count; i++) {
-    const along = result.data[i * stampStride]! - Math.floor(i / 3) * 1.5;
+    const group = i < firstCount ? 0 : 1 + Math.floor((i - firstCount) / 3);
+    const along = result.data[i * stampStride]! - group * 1.05;
     const across = result.data[i * stampStride + 1]!;
     largestAlong = Math.max(largestAlong, Math.abs(along));
     largestAcross = Math.max(largestAcross, Math.abs(across));
@@ -58,7 +63,7 @@ it.each([false, true])('scatter respects count and the stroke axes (both axes: %
   }
   expect(largestAcross).toBeGreaterThan(24);
   if (bothAxes) expect(largestAlong).toBeGreaterThan(24);
-  else expect(largestAlong).toBe(0);
+  else expect(largestAlong).toBeLessThan(0.0001);
 });
 
 it('Wet Blender scatter stays deterministic across input batches and disposable previews', () => {
@@ -76,7 +81,7 @@ it('Wet Blender scatter stays deterministic across input batches and disposable 
   expect(new Float32Array(actual)).toEqual(expected.data);
 });
 
-it('dual tips retain their existing scatter radius without changing preview fitting or saved settings', () => {
+it('dual tips use Photoshop half-diameter scatter without changing the saved settings', () => {
   const { values, tip } = wetBlender();
   Object.assign(values.dualBrush, { diameter: 50, scatter: 208, bothAxes: true, count: 3 });
   const saved = structuredClone(values);
@@ -92,12 +97,15 @@ it('dual tips retain their existing scatter radius without changing preview fitt
   });
   expect(secondary.values.scattering.scatter).toBe(208);
   expect(values).toEqual(saved);
-  const result = createAbrStrokeSampler({ ...secondary, size: 50, seed: 12345 }, tip).add([point(0, 0), point(0, 400)]);
+  const result = createAbrStrokeSampler({ ...secondary, size: 50, seed: 12345 }, tip).add([
+    point(0, 0),
+    point(0, 4000)
+  ]);
   const centers = Array.from({ length: result.count }, (_, i) => result.data[i * stampStride]!);
-  expect(Math.min(...centers)).toBeGreaterThanOrEqual(-104);
-  expect(Math.max(...centers)).toBeLessThanOrEqual(104);
-  expect(Math.min(...centers)).toBeLessThan(-100);
-  expect(Math.max(...centers)).toBeGreaterThan(100);
+  expect(Math.min(...centers)).toBeGreaterThanOrEqual(-52);
+  expect(Math.max(...centers)).toBeLessThanOrEqual(52);
+  expect(Math.min(...centers)).toBeLessThan(-48);
+  expect(Math.max(...centers)).toBeGreaterThan(48);
 });
 
 it.each([
@@ -112,7 +120,7 @@ it.each([
   values.spacing = 100;
   Object.assign(values.scattering, { scatter: 0, count: 3, countJitter: jitter, countControl: 0 });
   const sampler = createAbrStrokeSampler({ values, size: 50, color: '#000000', flow: 1, opacity: 1, seed: 12345 }, tip);
-  const counts = Array.from({ length: 4096 }, (_, i) => sampler.add([point(i * 50, 0)]).count);
+  const counts = Array.from({ length: 4096 }, (_, i) => sampler.add([point(i * 35, 0)]).count);
   expect(Math.min(...counts)).toBe(minimum);
   expect(Math.max(...counts)).toBe(maximum);
   if (jitter === 50) {
@@ -120,7 +128,7 @@ it.each([
     // Drawing with an amplitude truncated to 1 would put half the marks in the center bin.
     for (const count of [2, 3, 4]) {
       const frequency = counts.filter((value) => value === count).length / counts.length;
-      expect(frequency).toBeGreaterThan(0.30);
+      expect(frequency).toBeGreaterThan(0.3);
       expect(frequency).toBeLessThan(0.37);
     }
   }
@@ -146,7 +154,7 @@ it('empty count-jitter intervals advance spacing and retain the mouse count-cont
   values.spacing = 100;
   Object.assign(values.scattering, { scatter: 0, count: 3, countJitter: 100, countControl: 0 });
   const input = { values, size: 50, color: '#000000', flow: 1, opacity: 1, seed: 12345 };
-  const points = Array.from({ length: 129 }, (_, i) => point(i * 50, 0));
+  const points = Array.from({ length: 129 }, (_, i) => point(i * 35, 0));
   const sampler = createAbrStrokeSampler(input, tip);
   const combined: number[] = [];
   let empty = 0;
@@ -178,7 +186,7 @@ it.each([
   values.spacing = 100;
   Object.assign(values.scattering, { scatter: 0, count: 3, countJitter: 30, countControl: 2 });
   const sampler = createAbrStrokeSampler({ values, size: 50, color: '#000000', flow: 1, opacity: 1 }, tip);
-  for (let i = 0; i < 32; i++) expect(sampler.add([point(i * 50, 0, pressure)]).count).toBe(count);
+  for (let i = 0; i < 32; i++) expect(sampler.add([point(i * 35, 0, pressure)]).count).toBe(count);
 });
 
 it('sampled Smudge both-axis scatter fills a disk with a uniform radius, not a square or uniform area', () => {
@@ -190,9 +198,9 @@ it('sampled Smudge both-axis scatter fills a disk with a uniform radius, not a s
   let insideHalfRadius = 0;
   const radii: number[] = [];
   for (let i = 0; i < 4096; i++) {
-    const result = sampler.add([point(i * 50, 0)]);
+    const result = sampler.add([point(i * 35, 0)]);
     expect(result.count).toBe(1);
-    const radius = Math.hypot(result.data[0]! - i * 50, result.data[1]!);
+    const radius = Math.hypot(result.data[0]! - i * 35, result.data[1]!);
     // Float32 position storage loses a small fraction of a pixel this far from the origin.
     expect(radius).toBeLessThanOrEqual(25.02);
     if (radius < 12.5) insideHalfRadius++;
@@ -212,29 +220,108 @@ it('sampled Smudge starts one-axis scattering with one mark, then expands later 
   expect(sampler.preview([point(0, 0)]).count).toBe(1);
   expect(sampler.add([point(0, 0)]).count).toBe(1);
   for (let i = 1; i < 32; i++) {
-    const result = sampler.add([point(i * 50, 0)]);
+    const result = sampler.add([point(i * 35, 0)]);
     expect(result.count).toBe(3);
     for (let copy = 0; copy < result.count; copy++) {
-      expect(result.data[copy * stampStride]).toBe(i * 50);
+      expect(result.data[copy * stampStride]).toBe(i * 35);
       expect(Math.abs(result.data[copy * stampStride + 1]!)).toBeLessThanOrEqual(25);
     }
   }
 });
 
-it.each(['PbTl', 'MixB', 'BlTl'] as const)('keeps the existing count model for the unverified %s route', (type) => {
-  const { values, tip } = wetBlender();
-  values.tool.type = type;
-  values.useShapeDynamics = false;
-  values.spacing = 100;
-  Object.assign(values.scattering, { scatter: 0, count: 3, countJitter: 30, countControl: 0 });
-  const sampler = createAbrStrokeSampler({ values, size: 50, color: '#000000', flow: 1, opacity: 1, seed: 37 }, tip);
-  const counts = Array.from({ length: 256 }, (_, i) => sampler.add([point(i * 50, 0)]).count);
-  expect(Math.min(...counts)).toBe(2);
-  expect(Math.max(...counts)).toBe(4);
-});
+it.each(['PbTl', 'PcTl', 'SmTl', 'BlTl', 'ShTl'] as const)(
+  '%s uses Photoshop count truncation and bounded jitter',
+  (type) => {
+    const { values, tip } = wetBlender();
+    values.tool.type = type;
+    values.useShapeDynamics = false;
+    values.spacing = 100;
+    Object.assign(values.scattering, { scatter: 0, count: 3, countJitter: 30, countControl: 2 });
+    const sampler = createAbrStrokeSampler({ values, size: 50, color: '#000000', flow: 1, opacity: 1, seed: 37 }, tip);
+    // Count 3 at 25% pressure truncates 1 + (3 - 1) * 0.25 to 1, before jitter.
+    // At full pressure, the ±0.9 jitter is clamped to integer bounds of zero.
+    for (let i = 0; i < 256; i++) {
+      expect(sampler.add([point(i * 35, 0, i % 2 ? 1 : 0.25)]).count).toBe(i % 2 ? 3 : 1);
+    }
+  }
+);
+
+it.each(['PbTl', 'PcTl', 'SmTl', 'BlTl', 'ShTl'] as const)(
+  '%s starts one-axis scatter at contact without consuming the scatter stream',
+  (type) => {
+    const { values, tip } = wetBlender();
+    values.tool.type = type;
+    values.useShapeDynamics = false;
+    values.spacing = 100;
+    Object.assign(values.scattering, { scatter: 100, bothAxes: false, control: 0, count: 3, countJitter: 0 });
+    const input = { values, size: 50, color: '#000000', flow: 1, opacity: 1, seed: 37 };
+    const sampler = createAbrStrokeSampler(input, tip);
+    const contact = sampler.add([point(0, 0)]);
+    expect(contact.count).toBe(1);
+    const quantized = type === 'PcTl' ? 0.5 : 0;
+    expect([...contact.data.slice(0, 2)]).toEqual([quantized, quantized]);
+    const next = sampler.add([point(50, 0)]);
+    // Compare to the same stream with scatter disabled only for the contact mark.
+    const settings = structuredClone(values);
+    settings.scattering.scatter = 0;
+    const reference = createAbrStrokeSampler({ ...input, values: settings }, tip);
+    reference.add([point(0, 0)]);
+    settings.scattering.scatter = 100;
+    expect(next).toEqual(reference.add([point(50, 0)]));
+  }
+);
+
+it.each(['PbTl', 'SmTl', 'BlTl', 'ShTl'] as const)(
+  '%s keeps both-axis scatter offsets in document coordinates when the path turns',
+  (type) => {
+    const { values, tip } = wetBlender();
+    values.tool.type = type;
+    values.useShapeDynamics = false;
+    values.spacing = 100;
+    Object.assign(values.scattering, { scatter: 100, bothAxes: true, control: 0, count: 1, countJitter: 0 });
+    const input = { values, size: 50, color: '#000000', flow: 1, opacity: 1, seed: 37 };
+    const horizontal = createAbrStrokeSampler(input, tip).add([point(0, 0), point(50, 0)]);
+    const vertical = createAbrStrokeSampler(input, tip).add([point(0, 0), point(0, 50)]);
+    expect(horizontal.count).toBe(2);
+    expect(vertical.count).toBe(2);
+    expect(horizontal.data[stampStride]! - 35).toBeCloseTo(vertical.data[stampStride]!, 4);
+    expect(horizontal.data[stampStride + 1]!).toBeCloseTo(vertical.data[stampStride + 1]! - 35, 4);
+  }
+);
+
+it.each(['PbTl', 'PcTl', 'SmTl', 'BlTl', 'ShTl'] as const)(
+  '%s clamps tightly spaced primary marks to one pixel and preserves the spacing remainder',
+  (type) => {
+    const { values, tip } = wetBlender();
+    values.tool.type = type;
+    values.useShapeDynamics = false;
+    values.useScattering = false;
+    values.spacing = 1;
+    const input = { values, size: 50, color: '#000000', flow: 1, opacity: 1 };
+    const sampler = createAbrStrokeSampler(input, tip);
+    const a = sampler.add([point(0, 0), point(0.4, 0)]);
+    const b = sampler.add([point(0.9, 0)]);
+    sampler.preview([point(3.5, 0)]);
+    const c = sampler.add([point(3.5, 0)]);
+    expect(a.count).toBe(1);
+    expect(b.count).toBe(0);
+    expect(c.count).toBe(3);
+    const offset = type === 'PcTl' ? 0.5 : 0;
+    expect(Array.from({ length: c.count }, (_, i) => c.data[i * stampStride])).toEqual([
+      1 + offset,
+      2 + offset,
+      3 + offset
+    ]);
+    expect([...a.data, ...c.data]).toEqual([
+      ...createAbrStrokeSampler(input, tip).add([point(0, 0), point(3.5, 0)]).data
+    ]);
+  }
+);
 
 function wetBlender() {
-  const file = new AbrParser().parse(readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url)));
+  const file = new AbrParser().parse(
+    readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url))
+  );
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Paintbox - Wet Blender");
   if (!brush?.brushTip) throw new Error('The bundled Wet Blender preset or its sampled tip is missing.');
   return { values: brushToFormValues(brush), tip: brush.brushTip };

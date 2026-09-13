@@ -2,7 +2,9 @@ import { common, d, std, tgpu, type RenderFlag, type TgpuRoot, type TgpuTexture 
 
 /** Device-owned RGBA8 mip generator. Reuses pipelines/views and submits a whole mip chain together.
  * Requires a single-layer 2D texture and integer 0 <= base <= last < mipLevelCount.
- * Source writes must already be submitted. Does not own textures or track their dirty levels.
+ * Source writes must already be submitted or precede these passes in the supplied encoder.
+ * A supplied encoder is borrowed: its owner must submit it before destroying/reusing textures.
+ * Does not own textures or track their dirty levels.
  * Pixel filtering matches TypeGPU's generateMipmaps helper, including premultiplied stored values.
  */
 export function createTileMipmaps(root: TgpuRoot) {
@@ -14,12 +16,12 @@ export function createTileMipmaps(root: TgpuRoot) {
   });
   type Level = { view: GPUTextureView; group: ReturnType<typeof root.createBindGroup<typeof layout.entries>> };
   const textures = new WeakMap<TgpuTexture, Map<number, Level>>();
-  return (texture: TgpuTexture & RenderFlag, base: number, last: number) => {
+  return (texture: TgpuTexture & RenderFlag, base: number, last: number, encoder?: GPUCommandEncoder) => {
     if (texture.props.format !== 'rgba8unorm') throw new Error('Tile mipmaps require rgba8unorm.');
     if (last <= base) return;
     let levels = textures.get(texture);
     if (!levels) textures.set(texture, (levels = new Map()));
-    const encoder = root.device.createCommandEncoder();
+    const commands = encoder ?? root.device.createCommandEncoder();
     for (let mip = base + 1; mip <= last; mip++) {
       let level = levels.get(mip);
       if (!level) {
@@ -30,13 +32,13 @@ export function createTileMipmaps(root: TgpuRoot) {
         };
         levels.set(mip, level);
       }
-      const pass = encoder.beginRenderPass({
+      const pass = commands.beginRenderPass({
         colorAttachments: [{ view: level.view, loadOp: 'clear', storeOp: 'store' }]
       });
       pipeline.with(pass).with(level.group).draw(3);
       pass.end();
     }
-    root.device.queue.submit([encoder.finish()]);
+    if (!encoder) root.device.queue.submit([commands.finish()]);
   };
 }
 

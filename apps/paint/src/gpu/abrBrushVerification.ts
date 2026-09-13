@@ -16,7 +16,7 @@ import { createPaintRenderer } from './renderer';
 import { verifySamplingScratch } from './samplingScratchVerification';
 
 /** Runs against the real GPU in an isolated document. Eviction must preserve every ABR accumulator. */
-export async function verifyAbrBrush(report: (message: string) => void) {
+export async function verifyAbrBrush(report: (message: string) => void, paintbrushMaskOnly = false, onlyAccumulation = paintbrushMaskOnly, tipKind: 'computedBrush' | 'sampledBrush' = 'computedBrush', secondaryTipKind: 'sampledBrush' | 'computedBrush' = 'sampledBrush') {
   const points: Sample[] = Array.from({ length: 45 }, (_, i) => ({
     x: 60 + (i < 23 ? i : 45 - i) * 28,
     y: 200 + Math.sin(i / 4) * 20,
@@ -34,9 +34,10 @@ export async function verifyAbrBrush(report: (message: string) => void) {
     spacing: 15,
     diameter: 80
   });
+  values.tipKind = tipKind;
   values.useShapeDynamics = true;
   values.shapeDynamics.angleJitter = 30;
-  values.useColorDynamics = true;
+  values.useColorDynamics = !paintbrushMaskOnly;
   values.colorDynamics.applyPerTip = true;
   values.colorDynamics.hueJitter = 30;
   values.useTransfer = true;
@@ -47,6 +48,8 @@ export async function verifyAbrBrush(report: (message: string) => void) {
   values.texture.mode = 'Mltp';
   values.useDualBrush = true;
   values.dualBrush.diameter = 48;
+  values.dualBrush.tipId = secondaryTipKind === 'sampledBrush' ? 'dual' : '';
+  if (secondaryTipKind === 'computedBrush') Object.assign(values.dualBrush, { hardness: 40, angle: 31, roundness: 35 });
   values.dualBrush.mode = 'Mltp';
   const textures: BrushResource[] = ['tip', 'pattern', 'dual'].map((id, n) => ({
     id,
@@ -118,8 +121,10 @@ export async function verifyAbrBrush(report: (message: string) => void) {
     for (const [key, pixels] of reference) {
       for (const result of [evicted, batched]) {
         const actual = result.get(key);
-        if (!actual || actual.length !== pixels.length || pixels.some((value, i) => value !== actual[i]))
-          throw new Error(`ABR tile ${key} changed with eviction or event batching.`);
+        if (!actual || actual.length !== pixels.length || pixels.some((value, i) => value !== actual[i])) {
+          const i = pixels.findIndex((value, i) => value !== actual?.[i]);
+          throw new Error(`ABR ${secondaryTipKind} ${mode} tile ${key} changed with ${result === evicted ? 'eviction/preview' : 'batching'}; byte ${i}: ${pixels[i]} -> ${actual?.[i]}.`);
+        }
       }
       colored += pixels.filter((value, i) => i % 4 === 3 && value > 0).length;
     }
@@ -128,6 +133,7 @@ export async function verifyAbrBrush(report: (message: string) => void) {
       `ABR GPU ${mode}: ${reference.size} tiles, ${colored} painted pixels; eviction and batching are pixel-identical.`
     );
   }
+  if (onlyAccumulation) return;
   await verifyPressureFade(report);
   await verifyAbrEraser(report);
   await verifyCanvasPickup(report);

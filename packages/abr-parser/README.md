@@ -7,13 +7,13 @@ Workspace package for reading and writing Adobe Photoshop brush files.
 - Run `pnpm --filter @app-game/abr-parser test`, `typecheck`, or `build` from the repository root.
 - `files/` contains the 11 original brush files and the binary pattern definition.
 - `fixtures/original-roundtrip/` preserves 12 original output files. Tests write new results into ignored `test-output/`.
-- `docs/` contains format research, brush settings, and documentation imported from disassembly-lab.
+- Format research and Photoshop readback comparisons live in the sibling [photoshop-analysis project](../../../photoshop-analysis/integration/README.md).
 
 The source repository remains at `/home/driver/projects/disassembly-lab`, including its original Git history and uncommitted work. Existing app-game solid-dnd and solid-nest packages were reused, not replaced by their older copies.
 
 ## Compatibility
 
-Read [the compatibility audit](docs/compatibility.md) and [Photoshop settings verification](docs/settings-audit.md) before treating this as a complete ABR implementation.
+The parser supports the contracts below; complete Photoshop rendering equivalence is not established.
 The parser supports modern containers 6, 9 and 10 with sample layouts 1 and 2; legacy ABR 1/2 is unsupported.
 Parsing and resource preservation do not establish identical Photoshop brush rendering.
 

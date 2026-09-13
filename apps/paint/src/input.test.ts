@@ -94,7 +94,7 @@ describe('input to worker contract', () => {
   it('preserves tilt, wheel and barrel rotation on the first and coalesced samples', () => {
     const { commands, pointer } = setup();
     pointer('pointerdown', 10, 10, { pointerType: 'pen', tiltX: 30, tiltY: -10, twist: 350, tangentialPressure: 0.4 });
-    expect(commands[0]).toMatchObject({ samples: [{ tiltX: 30, tiltY: -10, rotation: 350, tangentialPressure: 0.4 }] });
+    expect(commands[0]).toMatchObject({ samples: [{ pointerType: 'pen', tiltX: 30, tiltY: -10, rotation: 350, tangentialPressure: 0.4 }] });
     pointer('pointermove', 20, 20, {
       pointerType: 'pen',
       getCoalescedEvents: () => [

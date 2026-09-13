@@ -1,11 +1,13 @@
 import { blockEraserTip, blockEraserValues, isBlockEraser } from '@app-game/abr-brush/blockEraser';
 import { brushFormSchema } from '@app-game/abr-brush/form';
+import { computedSecondaryTip } from '@app-game/abr-brush/computedTip';
 import { paintModes } from '@app-game/abr-brush/paintBlend';
 import { pencilUsesBackground } from '@app-game/abr-brush/pencil';
 import {
   createAbrStrokeSampler,
   dualPreviewInput,
   supportsAirbrush,
+  strokeCompositeOpacity,
   type PreviewPoint,
   type PreviewStroke
 } from '@app-game/abr-brush/stroke';
@@ -72,7 +74,14 @@ export const abrBrush = defineBrushEngine({
         }
       : resources.get(settings.tipId);
     const pattern = settings.patternId ? resources.get(settings.patternId) : undefined;
-    const dual = settings.dualId ? resources.get(settings.dualId) : undefined;
+    const storedDual = settings.dualId ? resources.get(settings.dualId) : undefined;
+    const computedDual = storedDual && !settings.values.dualBrush.tipId
+      ? computedSecondaryTip(brush.size * settings.values.dualBrush.diameter / Math.max(1, settings.values.diameter), settings.values.dualBrush)
+      : undefined;
+    const dual = computedDual
+      ? { id: computedDual.key, width: computedDual.width, height: computedDual.height,
+          pixels: computedDual.data, format: 'r8unorm' as const }
+      : storedDual;
     const input = {
       seed: settings.seed ?? crypto.getRandomValues(new Uint32Array(1))[0]!,
       values: settings.values,
@@ -80,7 +89,8 @@ export const abrBrush = defineBrushEngine({
       secondaryColor: brush.backgroundColor ?? settings.secondaryColor,
       flow: filter ? 1 : brush.flow,
       opacity: filter ? 1 : brush.opacity,
-      size: brush.size
+      size: brush.size,
+      sampledTipGeometry: true
     };
     const sampler = createAbrStrokeSampler(input, tip);
     let pencilContact = settings.values.tool.type === 'PcTl' && settings.values.tool.autoErase;
@@ -102,6 +112,7 @@ export const abrBrush = defineBrushEngine({
       pattern,
       dual,
       size: brush.size,
+      compositeOpacity: strokeCompositeOpacity(input),
       mixing: brush.mixing,
       blendMode: settings.blendMode,
       historySource: restoreHistory ? historySource : undefined,
@@ -225,14 +236,18 @@ function tabletPoint(sample: Sample): PreviewPoint {
 function dabs(stroke: PreviewStroke, secondary: boolean): Dab[] {
   return Array.from({ length: stroke.count }, (_, i) => {
     const data = stroke.data.subarray(i * 16, i * 16 + 16);
+    const sampledTip = stroke.sampledTips?.[i];
     return {
       x: data[0]!,
       y: data[1]!,
-      radius: Math.hypot(data[2]!, data[3]!),
+      radius: sampledTip ? Math.hypot(
+        Math.max(data[0]! - sampledTip.bounds.left, sampledTip.bounds.right - data[0]!),
+        Math.max(data[1]! - sampledTip.bounds.top, sampledTip.bounds.bottom - data[1]!)) : Math.hypot(data[2]!, data[3]!),
       flow: data[8]!,
       abr: {
         data,
         secondary,
+        sampledTip,
         mixing: stroke.mixing ? { wet: stroke.mixing[i * 2]!, mix: stroke.mixing[i * 2 + 1]! } : undefined
       }
     };

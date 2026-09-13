@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./computedTip": "./src/computedTip.ts",
     "./blockEraser": "./src/blockEraser.ts",
     "./pencil": "./src/pencil.ts",
     "./form": "./src/form.ts",
@@ -12,7 +13,21 @@
     "./effects": "./src/effects.ts",
     "./resources": "./src/resources.ts",
     "./physical-tip": "./src/physical-tip.ts",
-    "./paintBlend": "./src/paintBlend.ts"
+    "./paintBlend": "./src/paintBlend.ts",
+    "./maskAccumulation": "./src/maskAccumulation.ts",
+    "./maskAccumulationGpu": "./src/maskAccumulationGpu.ts",
+    "./maskRaster": "./src/maskRaster.ts",
+    "./maskRasterGpu": "./src/maskRasterGpu.ts",
+    "./maskRounding": "./src/maskRounding.ts",
+    "./secondaryMask": "./src/secondaryMask.ts",
+    "./colorMaskAccumulation": "./src/colorMaskAccumulation.ts",
+    "./colorMaskAccumulationGpu": "./src/colorMaskAccumulationGpu.ts",
+    "./sampledTipRaster": "./src/sampledTipRaster.ts",
+    "./tipPyramid": "./src/tipPyramid.ts",
+    "./tipRasterGpu": "./src/tipRasterGpu.ts",
+    "./patternPyramid": "./src/patternPyramid.ts",
+    "./patternRaster": "./src/patternRaster.ts",
+    "./patternRasterGpu": "./src/patternRasterGpu.ts"
   },
   "dependencies": {
     "@app-game/abr-parser": "workspace:*",

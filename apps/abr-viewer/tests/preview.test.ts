@@ -176,7 +176,26 @@ describe('preview stroke', () => {
 });
 
 describe('coverage reference', () => {
-  test('flow accumulates while stroke opacity remains a ceiling', () => {
+  test('Color Dynamics changes RGB at an already reached opacity ceiling', () => {
+    const job = input();
+    job.width = job.height = 1;
+    job.values.useColorDynamics = true;
+    job.values.colorDynamics.hueJitter = 1;
+    const stamp = (opacity: number, red: number, blue: number) =>
+      [0.5, 0.5, 1, 1, 1, 0, 1, 1, 1, opacity, 0, 0, red, 0, blue, 1];
+    const pixels = renderPreviewPixels(job,
+      { width: 1, height: 1, depth: 8, data: new Uint8Array([255]) },
+      { count: 2, data: new Float32Array([...stamp(0.2, 1, 0), ...stamp(0.1, 0, 1)]) });
+    // The executed kernels retain alpha 51 and use divide(26, 51) = 130 for the
+    // second color, rather than replacing it. The channel rounding phases vary
+    // with allocation identity, so each final channel can differ by one byte.
+    expect(pixels[0]).toBeGreaterThanOrEqual(24);
+    expect(pixels[0]).toBeLessThanOrEqual(26);
+    expect(pixels[2]).toBeGreaterThanOrEqual(25);
+    expect(pixels[2]).toBeLessThanOrEqual(27);
+    expect(pixels[1]).toBe(0);
+  });
+  test('partial flow accumulates toward the per-dab opacity in the Photoshop mask path', () => {
     const job = input();
     job.width = 1;
     job.height = 1;
@@ -187,8 +206,8 @@ describe('coverage reference', () => {
         count,
         data: new Float32Array(Array.from({ length: count }, () => stamp).flat())
       })[0];
-    expect(render(1)).toBe(51);
-    expect(render(2)).toBe(92);
+    expect(render(1)).toBe(26);
+    expect(render(2)).toBe(47);
     expect(render(20)).toBe(128);
   });
   test('alpha remains coverage without gamma conversion', () => {
@@ -215,4 +234,16 @@ test('queue coalesces edits, prioritizes the active preview and cancels hidden t
   expect(queue.take()?.target).toBe(2);
   expect(queue.take()).toEqual({ target: 1, priority: 0, revision: 2 });
   expect(queue.take()).toBeUndefined();
+});
+
+
+test('Paintbrush applies global opacity after accumulated flow in the preview compositor', () => {
+  const job = input();
+  job.flow = 0.5;
+  job.opacity = 0.5;
+  job.path = [{ x: 0.5, y: 0.5, pressure: 1, tiltX: 0, tiltY: 0, rotation: 0, time: 0 }];
+  const pixels = renderPreviewPixels(job, tip);
+  // Flow is quantized to 128/255 by Photoshop's tool-option getter. Global opacity
+  // independently supplies 128/255 after the mask. Clamping flow to opacity gives 128 instead.
+  expect(pixels[(32 * job.width + 120) * 4]).toBe(64);
 });

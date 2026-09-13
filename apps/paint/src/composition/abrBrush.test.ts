@@ -66,10 +66,10 @@ describe('shared ABR stroke state', () => {
     config.size = 1;
     const stroke = createAbrStrokeSampler(config, tip).add([
       { ...points[0]!, x: 0, y: 0 },
-      { ...points[1]!, x: 5000, y: 0 }
+      { ...points[1]!, x: 20000, y: 0 }
     ]);
     expect(stroke.count).toBeGreaterThan(16384);
-    expect(stroke.data[(stroke.count - 1) * 16]).toBeCloseTo(5000);
+    expect(stroke.data[(stroke.count - 1) * 16]).toBeCloseTo(20000);
   });
   it('wheel controls use tangential pressure rather than the canvas X coordinate', () => {
     const config = input();
@@ -84,5 +84,7 @@ describe('shared ABR stroke state', () => {
     const a = { ...points[0]!, rotation: 355 },
       b = { ...points[1]!, rotation: 5 };
     expect(interpolateTabletAxes(a, b, 0.5).rotation).toBe(360);
+    expect(interpolateTabletAxes({ ...a, pointerType: 'mouse' }, { ...b, pointerType: 'mouse' }, 0.5).pointerType)
+      .toBe('mouse');
   });
 });

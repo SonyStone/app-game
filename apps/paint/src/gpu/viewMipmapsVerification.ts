@@ -17,13 +17,15 @@ export async function verifyViewMipmaps(root: TgpuRoot) {
     { zoom: 0.4, angle: -0.34, edit: false },
     { zoom: 0.8, angle: 0.2, edit: false }
   ];
-  const run = async (adaptiveMipmaps: boolean, batchedMipmaps: boolean) => {
+  const run = async (adaptiveMipmaps: boolean, batchedMipmaps: boolean, batchViewMipmaps = true, cacheTiles?: number) => {
     const canvas = new OffscreenCanvas(317, 239);
     const errors: string[] = [];
     const renderer = await createPaintRenderer(canvas, (error) => errors.push(error), {
       device: root.device,
       adaptiveMipmaps,
-      batchedMipmaps
+      batchedMipmaps,
+      batchViewMipmaps,
+      cacheTiles
     });
     const document = createDocument();
     const pixels = Uint8Array.from({ length: 256 * 256 * 4 }, (_, i) => {
@@ -67,5 +69,15 @@ export async function verifyViewMipmaps(root: TgpuRoot) {
     const difference = actual.findIndex((value, channel) => value !== pixels[channel]);
     if (actual.length !== pixels.length || difference !== -1)
       throw new Error(`Batched/adaptive mipmaps changed frame ${index}, byte ${difference}.`);
+  }
+  // Two resident tiles force reloads across display batches. Compare against the
+  // same cache budget so this isolates submission ordering across eviction/tails.
+  const separate = await run(true, true, false, 2);
+  const grouped = await run(true, true, true, 2);
+  for (const [index, pixels] of separate.entries()) {
+    const actual = grouped[index]!;
+    const difference = actual.findIndex((value, channel) => value !== pixels[channel]);
+    if (actual.length !== pixels.length || difference !== -1)
+      throw new Error(`View mip batching changed constrained-cache frame ${index}, byte ${difference}.`);
   }
 }

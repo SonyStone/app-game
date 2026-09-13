@@ -100,8 +100,10 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
       x: (event.clientX - bounds.left) / bounds.width,
       y: (event.clientY - bounds.top) / bounds.height,
       pressure: event.pointerType === 'pen' ? event.pressure : 1,
-      tiltX: (event.tiltX / 90) * 100,
-      tiltY: (event.tiltY / 90) * 100,
+      pointerType: event.pointerType,
+      tiltX: event.tiltX,
+      tiltY: event.tiltY,
+      tangentialPressure: event.pointerType === 'pen' ? event.tangentialPressure : undefined,
       rotation: event.twist,
       time: performance.now()
     });

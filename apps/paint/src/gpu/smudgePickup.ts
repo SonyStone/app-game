@@ -125,9 +125,19 @@ const carryFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, ou
   'use gpu';
   const p = Layout.$.params;
   const uv = std.div(input.position.xy, p.size.xy);
-  const canvas = sampleMixing(Layout.$.canvas, Layout.$.sampler, uv, p.carry.w > 0);
+  // Capture normally has exactly this viewport's dimensions. Its texel is already
+  // filtered in the selected working space; do not filter/decode/encode it again.
+  let canvas = std.textureLoad(Layout.$.canvas, d.vec2i(input.position.xy), 0);
+  if (!std.all(std.eq(d.vec2f(std.textureDimensions(Layout.$.canvas)), p.size.xy)))
+    canvas = sampleMixing(Layout.$.canvas, Layout.$.sampler, uv, p.carry.w > 0);
   if (p.carry.z <= 0) return canvas;
   if (p.seed.a > 0) return smudgeCarry(canvas, p.seed, p.carry.z, p.carry.w > 0);
+  // Stable physical and pixel extents map pixel centers one-to-one, even when
+  // the previous bank's allocation is larger than its active viewport.
+  if (std.all(std.eq(p.size.zw, p.carry.xy)) && std.all(std.eq(p.size.xy, p.oldSize))) {
+    const previous = std.textureLoad(Layout.$.old, d.vec2i(input.position.xy), 0);
+    return smudgeCarry(canvas, previous, p.carry.z, p.carry.w > 0);
+  }
   // Preserve physical brush-local extent during diameter changes instead of stretching old paint.
   const oldUv = std.add(std.mul(std.sub(uv, d.vec2f(0.5)), std.div(p.size.zw, p.carry.xy)), d.vec2f(0.5));
   if (oldUv.x < 0 || oldUv.y < 0 || oldUv.x > 1 || oldUv.y > 1) return canvas;

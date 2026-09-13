@@ -32,7 +32,10 @@ export function readPatternIndex(data: Uint8Array): PatternResource[] {
   return patterns;
 }
 
-/** Decodes grayscale/RGB pattern coverage on demand; unsupported color modes fail explicitly. */
+/** Decodes grayscale/RGB patterns on demand using Photoshop's byte luminance rule.
+ * Composites stored transparency over white before texture filtering or tone
+ * adjustment. Unsupported color modes fail explicitly.
+ */
 export function decodePattern(pattern: PatternResource): BrushTipImage {
   if (pattern.mode !== 1 && pattern.mode !== 3)
     throw new Error(`Pattern ${pattern.name}: unsupported color mode ${pattern.mode}`);
@@ -42,7 +45,8 @@ export function decodePattern(pattern: PatternResource): BrushTipImage {
   arrays.skip(16);
   const count = arrays.readUInt32BE();
   if (count + 2 > arrays.remaining / 4) throw new Error('Pattern channel count exceeds boundary');
-  const channels: BrushTipImage[] = [];
+  const channels: ReturnType<typeof readPatternChannel>[] = [];
+  let alpha: ReturnType<typeof readPatternChannel> | undefined;
   for (let i = 0; i < count + 2; i++) {
     const written = arrays.readUInt32BE();
     if (!written) continue;
@@ -50,23 +54,47 @@ export function decodePattern(pattern: PatternResource): BrushTipImage {
     const size = arrays.readUInt32BE();
     if (!size) continue;
     const channel = arrays.subReader(size);
-    if (i >= count) continue;
-    const depth = channel.readUInt32BE();
-    const pixels = readChannelPixels(channel);
-    if (pixels.depth !== depth || !channel.isEof()) throw new Error('Invalid pattern channel data');
-    channels.push(pixels);
+    if (i === count) continue;
+    const pixels = readPatternChannel(channel);
+    if (i === count + 1) alpha = pixels;
+    else channels.push(pixels);
   }
   const first = channels[0];
   if (!first || !arrays.isEof() || !reader.isEof()) throw new Error('Incomplete pattern array');
   if ((pattern.mode === 1 && channels.length !== 1) || (pattern.mode === 3 && channels.length !== 3))
     throw new Error('Unexpected pattern image channel count');
-  if (channels.some((channel) => channel.width !== first.width || channel.height !== first.height))
+  if (channels.some((channel) => channel.width !== first.width || channel.height !== first.height
+    || channel.left !== first.left || channel.top !== first.top))
     throw new Error('Pattern channel bounds differ');
   const pixels = new Uint8Array(first.data.length);
-  for (let i = 0; i < pixels.length; i++)
+  for (let i = 0; i < pixels.length; i++) {
     pixels[i] =
       channels.length === 1
         ? first.data[i]!
-        : Math.round(channels[0]!.data[i]! * 0.299 + channels[1]!.data[i]! * 0.587 + channels[2]!.data[i]! * 0.114);
+        // Photoshop's pattern constructor dispatches to the 14-bit byte kernel.
+        : (channels[0]!.data[i]! * 0x1333 + channels[1]!.data[i]! * 0x25c3
+          + channels[2]!.data[i]! * 0x070a + 0x2000) >> 14;
+    if (alpha) {
+      const x = first.left + i % first.width - alpha.left;
+      const y = first.top + Math.floor(i / first.width) - alpha.top;
+      const coverage = x >= 0 && y >= 0 && x < alpha.width && y < alpha.height
+        ? alpha.data[y * alpha.width + x]!
+        : 0;
+      const product = (255 - pixels[i]!) * coverage + 128;
+      pixels[i] = 255 - ((product + (product >> 8)) >> 8);
+    }
+  }
   return { width: first.width, height: first.height, depth: 8, data: pixels };
+}
+
+/** Retains channel origins so a cropped transparency plane maps to image pixels. */
+function readPatternChannel(channel: BinaryReader) {
+  const depth = channel.readUInt32BE();
+  const start = channel.position;
+  const top = channel.readInt32BE();
+  const left = channel.readInt32BE();
+  channel.seek(start);
+  const pixels = readChannelPixels(channel);
+  if (pixels.depth !== depth || !channel.isEof()) throw new Error('Invalid pattern channel data');
+  return { ...pixels, top, left };
 }

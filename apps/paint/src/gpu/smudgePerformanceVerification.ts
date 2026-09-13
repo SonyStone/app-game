@@ -29,6 +29,8 @@ export async function verifySmudgePerformance(
     compareReference?: boolean;
     /** Compare cached/batched view and demand-generated pickup mipmaps against the previous per-level full pickup chain. */
     compareMipBatch?: boolean;
+    /** Compare per-tile mip submissions against mip updates encoded with their display draws. */
+    compareViewMipmaps?: boolean;
     /** Compare completion-only display against progress frames inside one long pointer segment. */
     compareProgress?: boolean;
     /** Isolate per-dab submission batching at the same sampling, mipmap and display settings. */
@@ -122,8 +124,10 @@ export async function verifySmudgePerformance(
           options.compareDabBatch ||
           options.compareProgress ||
           options.compareMipBatch ||
+          options.compareViewMipmaps ||
           run >= 0,
         batchedMipmaps: !options.compareMipBatch || run >= 0,
+        batchViewMipmaps: !options.compareViewMipmaps || run >= 0,
         adaptivePickupMipmaps: !options.compareMipBatch || run >= 0,
         onPaintProgress:
           options.compareProgress && run >= 0

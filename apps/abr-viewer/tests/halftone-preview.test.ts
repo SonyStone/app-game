@@ -13,7 +13,7 @@ const patterns = readPatternIndex(file.rawPatternData!);
 test('Height depth reveals dark pattern features before filling the stroke', () => {
   const mode = blendModeId('Hght');
   expect(textureCoverage(1, 0.2, mode, 0.08)).toBeGreaterThan(0.5);
-  expect(textureCoverage(1, 0.9, mode, 0.08)).toBe(0);
+  expect(textureCoverage(1, 0.9, mode, 0.08)).toBeCloseTo(10 / 255);
   expect(textureCoverage(1, 0.9, mode, 0.5)).toBe(1);
   expect(textureCoverage(0, 0, mode, 1)).toBe(0);
 });
@@ -67,12 +67,12 @@ test('the real circle halftone retains holes through densely overlapping stamps'
 
 test('Hard Mix makes the halftone edges crisp without painting outside the primary tip', () => {
   const mode = blendModeId('hardMix');
-  expect(dualCoverage(0.3, 0.9, mode)).toBe(1);
-  expect(dualCoverage(0.3, 0.6, mode)).toBe(0);
+  expect(dualCoverage(0.3, 0.9, mode)).toBeCloseTo(233 / 255);
+  expect(dualCoverage(0.3, 0.6, mode)).toBeCloseTo(2 / 255);
   expect(dualCoverage(0, 1, mode)).toBe(0);
 });
 
-test('Hard Mix thresholds accumulated flow, while opacity still controls the darkness of surviving grain', () => {
+test('Hard Mix applies its coverage ramp before global tool opacity', () => {
   const values = brushToFormValues({
     id: 'grain',
     name: 'Grain',
@@ -83,6 +83,7 @@ test('Hard Mix thresholds accumulated flow, while opacity still controls the dar
   });
   values.useDualBrush = true;
   values.dualBrush.mode = 'hardMix';
+  values.dualBrush.tipId = 'uniform-test-sample';
   values.dualBrush.diameter = 16;
   values.dualBrush.spacing = 10;
   values.dualBrush.scatter = 0;
@@ -101,8 +102,9 @@ test('Hard Mix thresholds accumulated flow, while opacity still controls the dar
   };
   const center = (16 * 32 + 16) * 4;
   const pixel = (flow: number, opacity: number) =>
-    renderPreviewPixels({ ...input, flow, opacity }, tip, undefined, { dualTip: tip })[center];
-  expect(pixel(1, 1)).toBe(0);
+    renderPreviewPixels({ ...input, flow, opacity }, tip, undefined, { dualTip: { ...tip, width: 32, height: 32, data: new Uint8Array(1024).fill(128) } })[center];
+  expect(pixel(1, 1)).toBe(124);
   expect(pixel(0.1, 1)).toBe(255);
-  expect(pixel(1, 0.25)).toBe(191);
+  // The verified Hard Mix mask is 131/255; global 25% supplies 64/255 afterward.
+  expect(pixel(1, 0.25)).toBe(222);
 });

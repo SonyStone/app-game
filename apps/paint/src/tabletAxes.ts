@@ -5,8 +5,10 @@ export function interpolateTabletAxes(
   a: Sample,
   b: Sample,
   t: number
-): Pick<Sample, 'tiltX' | 'tiltY' | 'rotation' | 'tangentialPressure'> {
+): Pick<Sample, 'tiltX' | 'tiltY' | 'rotation' | 'tangentialPressure' | 'pointerType'> {
   const result: ReturnType<typeof interpolateTabletAxes> = {};
+  const pointerType = b.pointerType ?? a.pointerType;
+  if (pointerType !== undefined) result.pointerType = pointerType;
   for (const key of ['tiltX', 'tiltY', 'rotation', 'tangentialPressure'] as const) {
     if (a[key] === undefined && b[key] === undefined) continue;
     const start = a[key] ?? b[key] ?? 0;

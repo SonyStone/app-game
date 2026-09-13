@@ -330,8 +330,8 @@ export function editable(target: EventTarget | null): boolean {
 /** Raw/coalesced events retain stylus axes without routing high-frequency samples through signals. */
 function tabletAxes(event: PointerEvent) {
   return event.pointerType === 'pen'
-    ? { tiltX: event.tiltX, tiltY: event.tiltY, rotation: event.twist, tangentialPressure: event.tangentialPressure }
-    : {};
+    ? { pointerType: event.pointerType, tiltX: event.tiltX, tiltY: event.tiltY, rotation: event.twist, tangentialPressure: event.tangentialPressure }
+    : { pointerType: event.pointerType };
 }
 
 /** Build-up is an opt-in preset behavior, independent of redraw/RAF frequency. */

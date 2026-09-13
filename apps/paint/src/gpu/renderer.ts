@@ -47,6 +47,8 @@ export async function createPaintRenderer(
     directSmudge?: boolean;
     /** Cache and batch mipmap passes; false retains TypeGPU's per-level helper for GPU comparisons. */
     batchedMipmaps?: boolean;
+    /** Include visible tiles' mip updates in their display submission; false submits each chain for verification. */
+    batchViewMipmaps?: boolean;
     /** Generate only mip levels used by Classic pickup; false builds all eight source levels for verification. */
     adaptivePickupMipmaps?: boolean;
     /** Submit pickup, carry and deposit together for each Smudge dab; false keeps separate submissions for verification. */
@@ -110,10 +112,10 @@ export async function createPaintRenderer(
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
   const mipmaps = createTileMipmaps(root);
   const generateMipmaps = options.batchedMipmaps === false ? undefined : mipmaps;
-  const ensureMipmaps = (tile: { texture: TgpuTexture & RenderFlag; mipLevelReady: number }, requested: number) => {
+  const ensureMipmaps = (tile: { texture: TgpuTexture & RenderFlag; mipLevelReady: number }, requested: number, encoder?: GPUCommandEncoder) => {
     const last = Math.max(0, Math.min((tile.texture.props.mipLevelCount ?? 1) - 1, requested));
     if (last <= tile.mipLevelReady) return;
-    if (generateMipmaps) generateMipmaps(tile.texture, tile.mipLevelReady, last);
+    if (generateMipmaps) generateMipmaps(tile.texture, tile.mipLevelReady, last, encoder);
     else tile.texture.generateMipmaps(tile.mipLevelReady, last - tile.mipLevelReady + 1);
     tile.mipLevelReady = last;
   };
@@ -403,7 +405,7 @@ export async function createPaintRenderer(
       if (offset) commands.flush();
       const stamps = tail.slice(offset, offset + STAMP_CAPACITY);
       if (abrActive) {
-        abrStamps!.draw(scratch.abr!, commands.encoder(), stamps, x, y);
+        abrStamps!.draw(scratch.abr!, commands, stamps, x, y);
         continue;
       }
       const data = new Float32Array(stamps.length * 4);
@@ -534,7 +536,7 @@ export async function createPaintRenderer(
           if (offset) commands.flush();
           const stamps = dabs.slice(offset, offset + STAMP_CAPACITY);
           if (abrActive) {
-            abrStamps!.draw(scratch.abr!, commands.encoder(), stamps, tx, ty);
+            abrStamps!.draw(scratch.abr!, commands, stamps, tx, ty);
             continue;
           }
           const data = new Float32Array(stamps.length * 4);
@@ -567,7 +569,7 @@ export async function createPaintRenderer(
                   y: ty * TILE_SIZE - captured.y
                 }
               : undefined;
-            if (direct) abrStamps!.draw(scratch.abr!, commands.encoder(), dabs, tx, ty, { pass, pickup: pickup! });
+            if (direct) abrStamps!.draw(scratch.abr!, commands, dabs, tx, ty, { pass, pickup: pickup! });
             else abrStamps!.composite(scratch.abr!, pass, pickup);
           } else pipelines.stroke.with(pass).with(brushGroup).with(scratch.strokeGroup).draw(3);
           pass.end();
@@ -1196,17 +1198,6 @@ export async function createPaintRenderer(
                   : (displayCache.find(id, source, camera.zoom * scale) ??
                     displayCache.get(id, (await readTile(source))!, camera.zoom * scale, source));
               if (tail) tile = prepareTail(cache.get(id)!, !!snapshot, tail, tailSlot++, x, y);
-              // Magnified tiles sample level zero. Build the mip chain only when a view needs it.
-              const mipScale = camera.zoom * Math.min(width / size.width, height / size.height);
-              if (mipScale < 1) {
-                // Keep one level beyond the ideal LOD for trilinear filtering and viewport rounding.
-                // Coarse cache entries already represent fewer texels across the same document tile.
-                const required =
-                  options.adaptiveMipmaps === false
-                    ? 8
-                    : Math.ceil(Math.log2(tile.texture.props.size[0] / (TILE_SIZE * mipScale))) + 1;
-                ensureMipmaps(tile, required);
-              }
               tile.camera.write({
                 size: d.vec2f(size.width, size.height),
                 zoom: camera.zoom,
@@ -1218,6 +1209,22 @@ export async function createPaintRenderer(
               batch.push(tile);
             }
             const encoder = device.createCommandEncoder();
+            // Load the entire bounded tile batch before encoding mipmaps. Loading can
+            // evict textures or submit tail updates; no unsubmitted mip writes may span it.
+            // The mip passes and their display reads then share one submission.
+            for (const tile of batch) {
+              // Magnified tiles sample level zero. Build the mip chain only when a view needs it.
+              const mipScale = camera.zoom * Math.min(width / size.width, height / size.height);
+              if (mipScale < 1) {
+                // Keep one level beyond the ideal LOD for trilinear filtering and viewport rounding.
+                // Coarse cache entries already represent fewer texels across the same document tile.
+                const required =
+                  options.adaptiveMipmaps === false
+                    ? 8
+                    : Math.ceil(Math.log2(tile.texture.props.size[0] / (TILE_SIZE * mipScale))) + 1;
+                ensureMipmaps(tile, required, options.batchViewMipmaps === false ? undefined : encoder);
+              }
+            }
             const pass = encoder.beginRenderPass({
               colorAttachments: [
                 { view: view.layerRender, loadOp: offset === 0 && !streamed ? 'clear' : 'load', storeOp: 'store' }
@@ -1410,7 +1417,8 @@ function createStrokeScratch(root: TgpuRoot) {
 
 /** Texture and instance-buffer footprint; small uniforms/bindings are excluded from this estimate. */
 function scratchBytes(scratch: ReturnType<typeof createStrokeScratch>) {
-  return TILE_SIZE * TILE_SIZE * 4 * (2 + (scratch.abr ? 2 : 0)) + STAMP_CAPACITY * (16 + (scratch.abr ? 64 : 0));
+  return TILE_SIZE * TILE_SIZE * 4 * (2 + (scratch.abr ? 2 : 0)) + STAMP_CAPACITY * (16 + (scratch.abr ? 64 : 0)) +
+    (scratch.abr?.maskBatch?.bytes ?? 0) + (scratch.abr?.pattern?.region.bytes ?? 0);
 }
 
 function destroyStrokeScratch(scratch: ReturnType<typeof createStrokeScratch>) {

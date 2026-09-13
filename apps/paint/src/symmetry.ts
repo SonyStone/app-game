@@ -1,3 +1,4 @@
+import { transformSampledTip } from '@app-game/abr-brush/sampledTipRaster';
 import { record } from '@app-game/abr-brush/form';
 import { z } from 'zod';
 import type { Brush, Dab } from './brush';
@@ -90,9 +91,12 @@ export function symmetryDabs(dabs: readonly Dab[], transforms: readonly Symmetry
         data[4] = transform.a * cosine + transform.c * sine;
         data[5] = transform.b * cosine + transform.d * sine;
         if (transform.a * transform.d - transform.b * transform.c < 0) data[7] = -data[7]!;
-        abr = { ...abr, data };
+        abr = { ...abr, data, sampledTip: abr.sampledTip ? transformSampledTip(abr.sampledTip, transform) : undefined };
       }
-      result.push({ ...dab, ...position, abr });
+      const bounds = abr?.sampledTip?.bounds;
+      const radius = bounds ? Math.hypot(Math.max(position.x - bounds.left, bounds.right - position.x),
+        Math.max(position.y - bounds.top, bounds.bottom - position.y)) : dab.radius;
+      result.push({ ...dab, ...position, radius, abr });
     }
   }
   return result;

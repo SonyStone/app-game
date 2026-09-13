@@ -1,3 +1,4 @@
+import type { sampledTipTransform } from '@app-game/abr-brush/sampledTipRaster';
 import type { ColorMixing } from '@app-game/abr-brush/effects';
 import type { Point } from './camera';
 import type { BrushEngineSelection } from './composition/defineBrushEngine';
@@ -25,6 +26,8 @@ export type Brush = {
 };
 /** Actual, non-predicted input in document space. Mouse pressure is normalized by the input adapter. */
 export type Sample = Point & {
+  /** Retains device capability information through smoothing and worker transfer. */
+  pointerType?: string;
   pressure: number;
   time: number;
   /** Tablet tilt in degrees and clockwise barrel rotation, when available. */
@@ -41,6 +44,10 @@ export type Dab = Point & {
   abr?: {
     data: Float32Array;
     secondary: boolean;
+    /** Double-precision raster geometry in document coordinates.
+     * Secondary preset source-rectangle preparation is not yet Photoshop-verified.
+     */
+    sampledTip?: ReturnType<typeof sampledTipTransform>;
     /** Per-stamp Mixer Brush dynamics, independent of flow and opacity. */
     mixing?: { wet: number; mix: number };
   };

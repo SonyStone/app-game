@@ -37,7 +37,7 @@ it('imports embedded example presets with their full dynamics and auxiliary reso
   expect(preset.resources.length).toBeGreaterThan(1);
 });
 
-it('Charcoal Champ 3 pressure controls flow, while tilt controls size and texture depth', () => {
+it('Charcoal Champ 3 preserves its controls and Photoshop’s pressure-dependent base size', () => {
   const file = new AbrParser().parse(readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url)));
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Drawing Box - Charcoal Champ 3");
   expect(brush).toBeDefined();
@@ -69,8 +69,11 @@ it('Charcoal Champ 3 pressure controls flow, while tilt controls size and textur
     ).add([{ x: 0, y: 0, pressure, tiltX: 30, tiltY: 10, rotation: 0, time: 0 }]).data;
   const strong = stamp(1),
     light = stamp(0.1);
-  // Packed attributes: flow responds to pressure; opacity, radius and depth do not.
+  // Original 0x103e3ae08 reads pressure for the Pen Tilt size-control branch.
+  // Full tilt geometry is separate; the old pressure-independent radius assertion
+  // described our previous sampler, not Photoshop's size evaluator.
   expect(light[8]).toBeCloseTo(strong[8]! * 0.1);
-  for (const attribute of [2, 3, 9, 10]) expect(light[attribute]).toBe(strong[attribute]);
+  for (const attribute of [2, 3]) expect(light[attribute]).toBeCloseTo(strong[attribute]! * 0.1);
+  for (const attribute of [9, 10]) expect(light[attribute]).toBe(strong[attribute]);
   expect(light[9]).toBeGreaterThan(0.98);
 });

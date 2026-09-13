@@ -3,7 +3,7 @@ import { brushToFormValues } from '../src/features/brush-detail/brush-form-schem
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
 import { generateComputedBrushTip, type PreviewInput } from '../src/features/brush-preview/stroke';
 
-/** Pixel expectations are independent of the shared shader: equal red/green is 188 in linear light, 128 in sRGB. */
+/** Paintbrush quantizes tool opacity to 128/255. Pencil's factor is still untraced. */
 function input(type = 'PbTl', mode = 'Nrml'): PreviewInput {
   const values = brushToFormValues({
     id: 'mix',
@@ -35,12 +35,14 @@ describe('ABR color mixing', () => {
   test.each(['PbTl', 'PcTl'])('%s switches working space without changing coverage or preset settings', (tool) => {
     const job = input(tool);
     const saved = structuredClone(job.values);
-    expect(center(job)).toEqual([128, 128, 0, 255]);
-    expect(center({ ...job, colorMixing: 'linear' })).toEqual([188, 188, 0, 255]);
+    const classic = tool === 'PbTl' ? [128, 127, 0, 255] : [128, 128, 0, 255];
+    const smooth = tool === 'PbTl' ? [188, 187, 0, 255] : [188, 188, 0, 255];
+    expect(center(job)).toEqual(classic);
+    expect(center({ ...job, colorMixing: 'linear' })).toEqual(smooth);
     expect(center({ ...job, colorMixing: 'linear', color: '#00ff00', background: '#ff0000' })).toEqual([
-      188, 188, 0, 255
+      smooth[1], smooth[0], 0, 255
     ]);
-    expect(center({ ...job, colorMixing: 'classic' })).toEqual([128, 128, 0, 255]);
+    expect(center({ ...job, colorMixing: 'classic' })).toEqual(classic);
     expect(job.values).toEqual(saved);
   });
   test.each(['Mltp', 'Scrn', 'Ovrl', 'Cler', 'Bhnd', 'Dslv'])('%s keeps its paint mode', (mode) => {

@@ -70,6 +70,26 @@ export async function verifySmudgePickup(report: (message: string) => void) {
     pickup.step(patch([255, 0, 0, 255]), 0.5, true);
     result = pickup.step(patch([0, 255, 0, 255]), 0.5, true);
     check((await read(result))(4), [188, 188, 0, 255], 'Smooth color uses linear pickup mixing');
+    for (const linear of [false, true]) {
+      for (const size of [8, 4]) {
+        pickup.reset();
+        const input = patch([0, 0, 0, 0], size, size);
+        const pixels = Uint8Array.from({ length: size * size * 4 }, (_, channel) => {
+          const pixel = Math.floor(channel / 4);
+          const alpha = pixel % 2 ? 255 : 128;
+          return [pixel % 3 ? alpha : 0, pixel % 5 ? 0 : alpha, alpha, alpha][channel % 4]!;
+        });
+        root.device.queue.writeTexture({ texture: root.unwrap(input.texture) }, pixels, { bytesPerRow: size * 4 }, [size, size]);
+        const initialized = await read(pickup.step(input, 1, linear));
+        const retained = await read(pickup.step(patch([0, 0, 0, 0], size, size), 1, linear));
+        for (let y = 0; y < size; y++)
+          for (let x = 0; x < size; x++) {
+            const expected = [...pixels.subarray((y * size + x) * 4, (y * size + x + 1) * 4)];
+            check(initialized(x, y), expected, 'Pixel-aligned capture preserves detailed color/alpha', 0);
+            check(retained(x, y), expected, 'Pixel-aligned carry preserves the active bank inside a larger allocation', 0);
+          }
+      }
+    }
     pickup.reset();
     pickup.step(patch([0, 0, 0, 0]), 1, false, [0, 0, 1]);
     result = pickup.step(patch([0, 0, 0, 0]), 1, false);
@@ -77,7 +97,7 @@ export async function verifySmudgePickup(report: (message: string) => void) {
     for (let i = 0; i < 100; i++) pickup.step(patch([0, 255, 0, 255]), 0.9, false);
     if (pickup.bytes() !== 2 * 8 * 8 * 4) throw new Error('Smudge banks grew with stroke length.');
     report(
-      'Smudge GPU banks: persistent mixture, transparency, resize overlap, reset, Smooth color, Finger Painting and bounded reuse passed.'
+      'Smudge GPU banks: persistent mixture, detailed color/alpha, resize overlap, reset, Smooth color, Finger Painting and bounded reuse passed.'
     );
   } finally {
     staging.destroy();
