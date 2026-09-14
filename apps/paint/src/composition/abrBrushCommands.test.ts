@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { abrBrushCommand } from './abrBrushCommands';
+import { abrBrushCommand } from '@app-game/abr-paint/commands';
 
 it('accepts finite world points and rejects malformed canvas load commands', () => {
   expect(abrBrushCommand.parse({ type: 'load-canvas', point: { x: -123.5, y: 256 } })).toEqual({

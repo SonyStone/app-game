@@ -22,6 +22,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @app-game/abr-paint typecheck
+      - run: pnpm --filter @app-game/abr-paint test
       - run: pnpm --filter @app-game/paint typecheck
       - run: pnpm --filter @app-game/paint test
       - run: pnpm --filter @app-game/paint test:ui

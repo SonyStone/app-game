@@ -2,7 +2,7 @@ import { brushToFormValues } from '@app-game/abr-brush/form';
 import { tgpu } from 'typegpu';
 import { defaultBrush } from '../brush';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources } from '../composition/brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';

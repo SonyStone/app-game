@@ -1,7 +1,7 @@
 import { defaultBrush } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources } from '../composition/brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
@@ -48,7 +48,7 @@ async function render(options: {
   const red = new Uint8Array(256 * 256 * 4);
   for (let i = 0; i < red.length; i += 4) red.set([255, 0, 0, 255], i);
   document.active.tiles.set('-1,0', packTile(red));
-  const preset = viewerBrush({
+  const preset = prepareAbrBrush({
     id: 'pencil-qa',
     name: 'Pencil QA',
     type: 'computed',

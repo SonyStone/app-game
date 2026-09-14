@@ -1,7 +1,7 @@
 import { defaultBrush } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources } from '../composition/brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
@@ -54,7 +54,7 @@ async function loadAndStamp(options: {
     for (let x = 0; x < 256; x++) source.set(x < 128 ? [alpha, 0, 0, alpha] : [0, 0, alpha, alpha], (y * 256 + x) * 4);
   document.active.tiles.set('0,0', source);
   if (options.otherLayer) document.changeLayer({ type: 'add' });
-  const preset = viewerBrush({
+  const preset = prepareAbrBrush({
     id: 'load-qa',
     name: 'Mixer load',
     type: 'computed',

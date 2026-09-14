@@ -1,16 +1,16 @@
 import { expect, it, vi } from 'vitest';
 import { defaultBrush } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
 import { abrBrush } from './abrBrushEngine';
-import { createBrushResources } from './brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import type { PaintRenderer } from './contracts';
 
 it.each(['ErTl', 'PbTl', 'PcTl', 'SmTl', 'MixB', 'BlTl', 'ShTl'])(
   'temporary history mode affects only the Eraser, without editing %s settings',
   (type) => {
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'modifier',
       name: 'Modifier',
       type: 'computed',

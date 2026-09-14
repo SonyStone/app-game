@@ -1,4 +1,4 @@
-import { TILE_SIZE, type Dab } from '../brush';
+import { TILE_SIZE, type Dab } from '../input';
 
 /** Integer tile-local damage bounds, including the stamp shader's one-pixel antialiasing fringe.
  * Outside these bounds the accumulated mask has not changed, so previous stroke output remains valid.

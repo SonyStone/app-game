@@ -6,7 +6,7 @@ import { defaultCamera } from '../camera';
 import { createDocument } from '../document';
 import type { PaintEvent } from '../protocol';
 import { createRawProcessor } from '../strokeProcessors';
-import { createBrushResources } from './brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { CanvasTarget } from './CanvasTarget';
 import type { BrushEngine, PaintRenderer } from './contracts';
 import { defineBrushEngine } from './defineBrushEngine';

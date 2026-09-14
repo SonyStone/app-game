@@ -1,7 +1,7 @@
 import { defaultBrush } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources } from '../composition/brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
@@ -25,7 +25,7 @@ export async function verifyAbrEraser(report: (message: string) => void) {
         after: base
       }))
     );
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'eraser-qa',
       name: 'ABR Eraser QA',
       type: 'computed',

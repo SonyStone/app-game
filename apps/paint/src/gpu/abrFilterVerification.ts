@@ -1,7 +1,7 @@
 import { defaultBrush } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources } from '../composition/brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
@@ -91,7 +91,7 @@ async function renderFilter(options: {
   }
   if (options.otherLayer) document.changeLayer({ type: 'add' });
   const before = new Map(document.active.tiles);
-  const preset = viewerBrush({
+  const preset = prepareAbrBrush({
     id: 'filter-qa',
     name: 'Retouch',
     type: 'computed',

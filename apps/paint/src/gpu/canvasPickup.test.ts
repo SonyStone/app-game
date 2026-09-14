@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { planCanvasPickup } from './canvasPickup';
+import { planCanvasPickup } from '@app-game/abr-paint/gpu/canvasPickup';
 
 it('captures negative coordinates and exact tile boundaries without including extra source tiles', () => {
   expect(planCanvasPickup({ x: -256, y: -128, width: 256, height: 128 }, 1024)).toEqual({

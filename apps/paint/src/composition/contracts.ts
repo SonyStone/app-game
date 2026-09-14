@@ -4,7 +4,7 @@ import type { createDocument, Layer, TileChange } from '../document';
 import type { createPaintRenderer } from '../gpu/renderer';
 import type { StrokeProcessor, StrokeProcessorFactory } from '../strokeProcessors';
 import type { createTileStore } from '../tileStore';
-import type { BrushResourceReader, BrushResourcesFactory } from './brushResources';
+import type { BrushResourceReader, BrushResourcesFactory } from '@app-game/abr-paint/resources';
 
 /** Raster document operations shared by tools, persistence, history and selection. */
 export type PaintDocument = ReturnType<typeof createDocument>;

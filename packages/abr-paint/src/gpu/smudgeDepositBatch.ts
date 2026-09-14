@@ -1,5 +1,5 @@
 import type { TgpuRoot } from 'typegpu';
-import { TILE_SIZE, type Dab } from '../brush';
+import { TILE_SIZE, type Dab } from '../input';
 import type { createAbrStamps } from './abrStamps';
 import type { commandBatch } from './commandBatch';
 import { directStampBounds } from './stampBounds';

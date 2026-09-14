@@ -1,8 +1,8 @@
 import type { ColorMixing } from '@app-game/abr-brush/effects';
 import { defaultBrush } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources } from '../composition/brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
@@ -68,7 +68,7 @@ async function render(tool: string, mixing: ColorMixing, mode: string, retouch =
     document.active.tiles.set('0,0', packTile(red));
   }
   const before = new Map([...document.active.tiles].map(([key, tile]) => [key, unpackTile(tile)]));
-  const preset = viewerBrush({
+  const preset = prepareAbrBrush({
     id: 'mixing',
     name: 'Mixing QA',
     type: 'computed',

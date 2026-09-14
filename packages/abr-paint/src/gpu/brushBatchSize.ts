@@ -1,4 +1,4 @@
-import type { Dab } from '../brush';
+import type { Dab } from '../input';
 
 /** Bounds approximate stamp coverage between presentation opportunities. Tiny tips still batch up to 256 stamps. */
 export function adaptivePaintBatchSize(dabs: readonly Dab[], rasterScale = 1): number {

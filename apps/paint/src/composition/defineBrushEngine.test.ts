@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { defaultBrush } from '../brush';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
-import { createBrushResources } from './brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import type { BrushEngine, PaintRenderer } from './contracts';
 import { defineBrushEngine } from './defineBrushEngine';
 import { roundBrush } from './roundBrushEngine';

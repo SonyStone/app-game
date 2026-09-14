@@ -1,4 +1,5 @@
-import type { sampledTipTransform } from '@app-game/abr-brush/sampledTipRaster';
+import { TILE_SIZE, type Sample, type Dab } from '@app-game/abr-paint/input';
+export { TILE_SIZE, type Sample, type Dab } from '@app-game/abr-paint/input';
 import type { ColorMixing } from '@app-game/abr-brush/effects';
 import type { Point } from './camera';
 import type { BrushEngineSelection } from './composition/defineBrushEngine';
@@ -24,37 +25,6 @@ export type Brush = {
   /** Input filtering, interpolation, and pressure calibration for this stroke. */
   stroke: StrokeSettings;
 };
-/** Actual, non-predicted input in document space. Mouse pressure is normalized by the input adapter. */
-export type Sample = Point & {
-  /** Retains device capability information through smoothing and worker transfer. */
-  pointerType?: string;
-  pressure: number;
-  time: number;
-  /** Tablet tilt in degrees and clockwise barrel rotation, when available. */
-  tiltX?: number;
-  tiltY?: number;
-  rotation?: number;
-  tangentialPressure?: number;
-};
-/** A GPU-ready round brush stamp, in document pixels. */
-export type Dab = Point & {
-  radius: number;
-  flow: number;
-  /** Packed ABR bounds/transform/dynamics/color. Radius is the conservative tile-culling extent. */
-  abr?: {
-    data: Float32Array;
-    secondary: boolean;
-    /** Detailed stamp intervals represented by this adaptive stamp; omitted means one. */
-    spacingRatio?: number;
-    /** Double-precision raster geometry in document coordinates.
-     * Secondary preset source-rectangle preparation is not yet Photoshop-verified.
-     */
-    sampledTip?: ReturnType<typeof sampledTipTransform>;
-    /** Per-stamp Mixer Brush dynamics, independent of flow and opacity. */
-    mixing?: { wet: number; mix: number };
-  };
-};
-
 /** A soft round brush with explicit, independent flow and stroke opacity. */
 export function defaultBrush(): Brush {
   return {
@@ -181,4 +151,3 @@ export function dabIntersectsTile(dab: Dab, x: number, y: number, size = TILE_SI
 }
 
 /** Tile edge in document pixels; persisted files record this value for format compatibility. */
-export const TILE_SIZE = 256;

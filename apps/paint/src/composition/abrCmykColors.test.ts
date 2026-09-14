@@ -7,7 +7,7 @@ import {
 } from '@app-game/abr-brush/form';
 import { AbrParser, AbrWriter, createAbrFile } from '@app-game/abr-parser/browser';
 import { expect, it, vi } from 'vitest';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 
 it('uses the explicit CMYK converter for form colors and detaches the host RGB snapshot', () => {
   const original = preset();
@@ -19,13 +19,13 @@ it('uses the explicit CMYK converter for form colors and detaches the host RGB s
   expect(convert).toHaveBeenCalledWith([20.125, 30, 40, 10]);
   const detached = brushWithResolvedColors(original, convert);
   expect(detached).not.toBe(original);
-  expect(viewerBrush(detached).color).toBe('#bba08a');
+  expect(prepareAbrBrush(detached).color).toBe('#bba08a');
   expect(original.settings.toolOptions.FrgC).toMatchObject({ __classId: 'CMYC', 'Cyn ': 20.125 });
   // The handoff has only RGB values; a retired transform cannot affect it.
   convert.mockImplementation(() => {
     throw new Error('disposed');
   });
-  expect(viewerBrush(detached).color).toBe('#bba08a');
+  expect(prepareAbrBrush(detached).color).toBe('#bba08a');
 });
 
 it('keeps CMYK bytes and unknown fields through unrelated edits/export, but supports RGB edit and clear', () => {

@@ -2,7 +2,7 @@ import { expect, it, vi } from 'vitest';
 import { defaultBrush } from '../brush';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
-import { createBrushResources } from './brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import type { PaintRenderer } from './contracts';
 import { createResourceSession } from './resourceSession';
 import { texturedBrush } from './texturedBrushEngine';

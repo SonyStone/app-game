@@ -1,9 +1,8 @@
 import { planCanvasPickup, sampleMixing } from '@app-game/abr-brush/effects';
 import { common, d, std, tgpu, type SampledFlag, type TgpuRoot, type TgpuTexture } from 'typegpu';
-import type { Layer } from '../document';
 import { commandBatch } from './commandBatch';
 import { commandSlots } from './commandSlots';
-import { compositeFragment, compositeLayout } from './shaders';
+import { compositeFragment, compositeLayout } from './layerComposite';
 export { planCanvasPickup } from '@app-game/abr-brush/effects';
 
 /** World-space rectangle. Pixel centers, rather than tile origins, determine sampling. */
@@ -15,7 +14,7 @@ export type PickupRegion = { x: number; y: number; width: number; height: number
  * Each returned texture is borrowed; submit consumers or encode them in the same batch before recapturing.
  * Capture calls must be serialized. No GPU-to-CPU readback is performed by this module.
  */
-export function createCanvasPickup(
+export function createCanvasPickup<Layer extends PickupLayer>(
   root: TgpuRoot,
   getTile: (
     layer: Layer,
@@ -356,3 +355,6 @@ const smallTileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })
     return sampleMixing(smallPlacementLayout.$.image, smallPlacementLayout.$.sampler, input.uv, true);
   return std.textureSample(smallPlacementLayout.$.image, smallPlacementLayout.$.sampler, input.uv);
 });
+
+/** Layer properties needed to composite captured tiles. Tile storage remains owned by the host. */
+export type PickupLayer = { visible: boolean; opacity: number; blend: string };

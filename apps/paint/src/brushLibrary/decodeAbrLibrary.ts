@@ -1,5 +1,5 @@
 import { AbrParser } from '@app-game/abr-parser/reader';
-import type { BrushResource } from '../composition/brushResources';
+import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { BrushEngineSelection } from '../composition/defineBrushEngine';
 
 /** Imports sampled grayscale tips only. Preset dynamics are deliberately not interpreted as Studio controls. */

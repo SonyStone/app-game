@@ -1,7 +1,7 @@
 import { defaultBrush, type Sample } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources } from '../composition/brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
@@ -85,7 +85,7 @@ async function renderMixerStroke(options: {
   for (let y = 0; y < 256; y++) for (let x = 0; x < 200; x++) pixels.set([255, 0, 0, 255], (y * 256 + x) * 4);
   document.active.tiles.set('0,0', pixels);
   if (options.otherLayer) document.changeLayer({ type: 'add' });
-  const preset = viewerBrush({
+  const preset = prepareAbrBrush({
     id: 'mixer-qa',
     name: 'Mixer',
     type: 'computed',

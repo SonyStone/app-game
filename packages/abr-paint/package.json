@@ -1,0 +1,46 @@
+{
+  "name": "@app-game/abr-paint",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./commands": "./src/commands.ts",
+    "./resources": "./src/resources.ts",
+    "./input": "./src/input.ts",
+    "./engine": "./src/engine.ts",
+    "./preset": "./src/preset.ts",
+    "./adaptiveQuality": "./src/adaptiveQuality.ts",
+    "./gpu/stampBounds": "./src/gpu/stampBounds.ts",
+    "./gpu/commandSlots": "./src/gpu/commandSlots.ts",
+    "./gpu/commandBatch": "./src/gpu/commandBatch.ts",
+    "./gpu/layerComposite": "./src/gpu/layerComposite.ts",
+    "./gpu/canvasPickup": "./src/gpu/canvasPickup.ts",
+    "./gpu/brushBatchSize": "./src/gpu/brushBatchSize.ts",
+    "./gpu/mixerWells": "./src/gpu/mixerWells.ts",
+    "./gpu/smudgePickup": "./src/gpu/smudgePickup.ts",
+    "./gpu/abrStamps": "./src/gpu/abrStamps.ts",
+    "./gpu/canvasFilter": "./src/gpu/canvasFilter.ts",
+    "./gpu/smudgeDepositBatch": "./src/gpu/smudgeDepositBatch.ts",
+    "./gpu/toolState": "./src/gpu/toolState.ts",
+    "./contracts": "./src/contracts.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@app-game/abr-brush": "workspace:*",
+    "@app-game/abr-parser": "workspace:*",
+    "typegpu": "^0.11.4",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.70",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "vite": "catalog:",
+    "unplugin-typegpu": "^0.11.3",
+    "@types/node": "25.8.0"
+  }
+}

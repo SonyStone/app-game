@@ -1,6 +1,6 @@
 import { unwrapResult } from './asyncResult';
 import { defaultBrush, type Brush, type Sample } from './brush';
-import { viewerBrush } from './brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { defaultCamera } from './camera';
 import { createDocument } from './document';
 import { readPaintFile, writePaintFile } from './paintFile';
@@ -23,7 +23,7 @@ export async function verifyEraserPersistence(report: (message: string) => void)
         await imported;
         const state = await connection.command({ type: 'debug', enabled: false }, 'state');
         await connection.command({ type: 'history-source', id: state.document.historyCurrentId }, 'state');
-        const preset = viewerBrush({
+        const preset = prepareAbrBrush({
           id: `eraser-persistence-${mode}`,
           name: 'Eraser persistence',
           type: 'computed',

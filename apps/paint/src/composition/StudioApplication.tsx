@@ -4,7 +4,7 @@ import { studioProcessors } from '../strokeProcessors';
 import { createTileStore } from '../tileStore';
 import { abrBrush } from './abrBrushEngine';
 import { createAbrProcessor } from './abrStrokeProcessor';
-import { createBrushResources } from './brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import {
   BrushEngines,
   BrushResources,

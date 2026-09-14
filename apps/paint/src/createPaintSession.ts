@@ -5,7 +5,7 @@ import { attempt } from './asyncResult';
 import { defaultBrush, type Brush } from './brush';
 import { createBrushLibrary } from './brushLibrary/createBrushLibrary';
 import { defaultCamera, transformAt, type Camera, type Point } from './camera';
-import type { AbrBrushCommand } from './composition/abrBrushCommands';
+import type { AbrBrushCommand } from '@app-game/abr-paint/commands';
 import { createBrushCommands } from './composition/createBrushCommands';
 import { createSelection } from './createSelection';
 import { createDocument, type LayerAction } from './document';
@@ -404,8 +404,8 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
     /** Applies a detached preset and its resources only after upload succeeds; the Viewer owns the editable preset. */
     async useAbrBrush(brush: AbrBrush) {
       setMixerPicking(false);
-      const { viewerBrush } = await import('./brushLibrary/viewerBrush');
-      const selected = viewerBrush(brush);
+      const { prepareAbrBrush } = await import('@app-game/abr-paint/preset');
+      const selected = prepareAbrBrush(brush);
       const applied = await brushLibrary.usePreset(selected);
       if (!applied) throw new Error(untrack(brushLibrary.error) ?? 'Wait for Paint to finish the current operation.');
       updateBrush({

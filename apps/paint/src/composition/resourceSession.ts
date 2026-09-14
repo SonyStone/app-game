@@ -1,4 +1,4 @@
-import type { BrushResourceReader, createBrushResources } from './brushResources';
+import type { BrushResourceReader, createBrushResources } from '@app-game/abr-paint/resources';
 import type { BrushSession } from './contracts';
 
 /** Gives every engine the same resource lifetime, including engines not using defineBrushEngine.

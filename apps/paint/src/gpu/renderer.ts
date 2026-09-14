@@ -1,30 +1,30 @@
-import { expandToRasterGrid } from './brushBatchSize';
+import { expandToRasterGrid } from '@app-game/abr-paint/gpu/brushBatchSize';
 import { visibleTileKeys } from './visibleTileKeys';
 import { d, tgpu, type RenderFlag, type TgpuRoot, type TgpuTexture } from 'typegpu';
 import { attempt, unwrapResult, type Result } from '../asyncResult';
 import { TILE_SIZE, dabIntersectsTile, dabTiles, type Brush, type Dab } from '../brush';
 import { screenToWorld, type Camera, type Point, type ViewSize } from '../camera';
-import type { BrushResource } from '../composition/brushResources';
+import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { Layer, TileChange } from '../document';
 import { isEmptyPackedTile, packTile, unpackTile, type TileData } from '../tilePixels';
 import { viewLod, type OverviewStorage } from '../virtualPages';
-import { createAbrStamps, type AbrRasterSettings, type AbrTile } from './abrStamps';
-import { createCanvasFilter } from './canvasFilter';
-import { createCanvasPickup, type PickupRegion } from './canvasPickup';
-import { commandBatch } from './commandBatch';
-import { commandSlots } from './commandSlots';
+import { createAbrStamps, type AbrRasterSettings, type AbrTile } from '@app-game/abr-paint/gpu/abrStamps';
+import { createCanvasFilter } from '@app-game/abr-paint/gpu/canvasFilter';
+import { createCanvasPickup, type PickupRegion } from '@app-game/abr-paint/gpu/canvasPickup';
+import { commandBatch } from '@app-game/abr-paint/gpu/commandBatch';
+import { commandSlots } from '@app-game/abr-paint/gpu/commandSlots';
 import { createDisplayCache } from './displayCache';
 import { filterTiles } from './filterTiles';
 import { createLassoOverlay } from './lassoOverlay';
-import { createMixerWells } from './mixerWells';
+import { createMixerWells } from '@app-game/abr-paint/gpu/mixerWells';
 import { createReadbackQueue } from './readbackQueue';
 import * as shader from './shaders';
-import { createSmudgePickup } from './smudgePickup';
-import { createSmudgeDepositBatch, planSmudgeDeposits } from './smudgeDepositBatch';
-import { directStampBounds, stampBounds } from './stampBounds';
+import { createSmudgePickup } from '@app-game/abr-paint/gpu/smudgePickup';
+import { createSmudgeDepositBatch, planSmudgeDeposits } from '@app-game/abr-paint/gpu/smudgeDepositBatch';
+import { directStampBounds, stampBounds } from '@app-game/abr-paint/gpu/stampBounds';
 import { createTexturedStamps } from './texturedStamps';
 import { createTileMipmaps } from './tileMipmaps';
-import { rendererToolState, type RendererToolState } from './toolState';
+import { rendererToolState, type RendererToolState } from '@app-game/abr-paint/gpu/toolState';
 import { createViewDamage } from './viewDamage';
 import { createViewFallback } from './viewFallback';
 import { createVirtualTexture } from './virtualTexture';
@@ -102,18 +102,18 @@ export async function createPaintRenderer(
   let abrActive = false;
   // Sampling tools replace coverage at every stamp; only dual-brush coverage persists.
   let transientCoverage = false;
-  let smudge: AbrRasterSettings['smudge'];
+  let smudge: AbrRasterSettings<Layer>['smudge'];
   let retouchLinear = false;
-  let filter: AbrRasterSettings['filter'];
+  let filter: AbrRasterSettings<Layer>['filter'];
   let canvasFilter: ReturnType<typeof createCanvasFilter> | undefined;
-  let mixer: AbrRasterSettings['mixer'];
+  let mixer: AbrRasterSettings<Layer>['mixer'];
   let historySource: Layer | undefined;
   let historyTexture: ReturnType<typeof historyTarget> | undefined;
   let mixerWells: ReturnType<typeof createMixerWells> | undefined;
   let smudgePickup: ReturnType<typeof createSmudgePickup> | undefined;
   let previousSmudge: Point | undefined;
   let smudgeSecondary: Dab[] = [];
-  let pickup: ReturnType<typeof createCanvasPickup> | undefined;
+  let pickup: ReturnType<typeof createCanvasPickup<Layer>> | undefined;
   let animateSelection = true;
   // Match virtual pages so touching a magnified tile does not change existing artwork's filtering.
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
@@ -633,7 +633,7 @@ export async function createPaintRenderer(
     commands?: ReturnType<typeof commandBatch>,
     maxDimension?: number
   ) {
-    pickup ??= createCanvasPickup(root, async (layer, key, minify, flush, requiredMip) => {
+    pickup ??= createCanvasPickup<Layer>(root, async (layer, key, minify, flush, requiredMip) => {
       const id = keyFor(layer, key);
       const snapshot = strokeTiles.get(id);
       if (!layer.tiles.has(key) && !snapshot) return undefined;
@@ -840,7 +840,7 @@ export async function createPaintRenderer(
     /** Captures brush settings and the target layer until commit/cancel. Optional native coverage replaces hardness.
      * Textured dabs must carry the tip's circumscribed radius; use texturedBrush to map brush size correctly.
      */
-    begin(layer: Layer, brush: Brush, tip?: { resource: BrushResource; angle: number }, abr?: AbrRasterSettings) {
+    begin(layer: Layer, brush: Brush, tip?: { resource: BrushResource; angle: number }, abr?: AbrRasterSettings<Layer>) {
       if (stroke) throw new Error('Finish the current stroke before beginning another.');
       if (abr) (abrStamps ??= createAbrStamps(root, options.batchSampledMasks)).prepare(abr);
       abrActive = !!abr;

@@ -2,7 +2,7 @@ import { createAbrStrokeSampler } from '@app-game/abr-brush/stroke';
 import { AbrParser, readPatternIndex } from '@app-game/abr-parser/browser';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 
 it('applies all bundled HSB-color presets without replacing their native color descriptors', () => {
   const file = new AbrParser().parse(readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url)));
@@ -16,7 +16,7 @@ it('applies all bundled HSB-color presets without replacing their native color d
     const brush = file.brushes.find((brush) => brush.name === name)!;
     expect(brush).toBeDefined();
     const saved = structuredClone(brush.settings.toolOptions);
-    const preset = viewerBrush({ ...brush, patternResources: patterns } as Parameters<typeof viewerBrush>[0]);
+    const preset = prepareAbrBrush({ ...brush, patternResources: patterns } as Parameters<typeof prepareAbrBrush>[0]);
     expect(preset.color).toBe(color);
     expect(preset.engine.settings.values.tool.foreground).toBe(color);
     expect(brush.settings.toolOptions).toEqual(saved);
@@ -28,8 +28,8 @@ it('imports embedded example presets with their full dynamics and auxiliary reso
   const file = new AbrParser().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Halftone - Circle Range Tiny")!;
   expect(brush).toBeDefined();
-  const preset = viewerBrush({ ...brush, patternResources: readPatternIndex(file.rawPatternData!) } as Parameters<
-    typeof viewerBrush
+  const preset = prepareAbrBrush({ ...brush, patternResources: readPatternIndex(file.rawPatternData!) } as Parameters<
+    typeof prepareAbrBrush
   >[0]);
   expect(preset.engine.settings.values.useTexture).toBe(true);
   expect(preset.flow).toBe(0.5);
@@ -41,8 +41,8 @@ it('Charcoal Champ 3 preserves its controls and Photoshop’s pressure-dependent
   const file = new AbrParser().parse(readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url)));
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Drawing Box - Charcoal Champ 3");
   expect(brush).toBeDefined();
-  const preset = viewerBrush({ ...brush!, patternResources: readPatternIndex(file.rawPatternData!) } as Parameters<
-    typeof viewerBrush
+  const preset = prepareAbrBrush({ ...brush!, patternResources: readPatternIndex(file.rawPatternData!) } as Parameters<
+    typeof prepareAbrBrush
   >[0]);
   const values = preset.engine.settings.values;
   expect(values.transfer).toMatchObject({

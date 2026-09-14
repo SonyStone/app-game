@@ -1,5 +1,5 @@
 import { d, std, tgpu, type TgpuRoot } from 'typegpu';
-import type { BrushResource } from '../composition/brushResources';
+import type { BrushResource } from '@app-game/abr-paint/resources';
 import { stampLayout, stampVertex } from './shaders';
 
 /** Device-local counterpart of the decoded brush cache. Uploads once per resource identity and reuses

@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { dabTiles, type Dab } from '../brush';
-import { planSmudgeDeposits } from './smudgeDepositBatch';
-import { directStampBounds } from './stampBounds';
+import { planSmudgeDeposits } from '@app-game/abr-paint/gpu/smudgeDepositBatch';
+import { directStampBounds } from '@app-game/abr-paint/gpu/stampBounds';
 
 it('covers every eligible tile once while bounding scratch dimensions and residency', () => {
   const dab: Dab = {

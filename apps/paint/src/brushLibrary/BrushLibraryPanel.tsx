@@ -1,5 +1,5 @@
 import { createSignal, For, onSettled, Show } from 'solid-js';
-import type { BrushResource } from '../composition/brushResources';
+import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { PaintSession } from '../createPaintSession';
 import styles from './BrushLibraryPanel.module.css';
 

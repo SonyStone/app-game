@@ -1,5 +1,5 @@
 import { defaultBrush, type Brush } from './brush';
-import { viewerBrush } from './brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { verifyBrushResourceTransport } from './composition/resourceVerification';
 import { texturedBrush } from './composition/texturedBrushEngine';
 import { verifyEraserPersistence } from './eraserPersistenceVerification';
@@ -88,7 +88,7 @@ export async function verifyMainThread(report: (message: string) => void) {
     if (x.length !== y.length || !x.every((v, i) => v === y[i])) throw new Error('Mode switch changed document pixels');
   };
   const paintMixer = async (y: number) => {
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'mixer-transport',
       name: 'Mixer transport',
       type: 'computed',
@@ -155,7 +155,7 @@ export async function verifyMainThread(report: (message: string) => void) {
   const checkFilters = async () => {
     const before = (await command({ type: 'download' }, 'download')).blob;
     for (const type of ['BlTl', 'ShTl'] as const) {
-      const preset = viewerBrush({
+      const preset = prepareAbrBrush({
         id: `filter-transport-${type}`,
         name: `Filter transport ${type}`,
         type: 'computed',
@@ -204,7 +204,7 @@ export async function verifyMainThread(report: (message: string) => void) {
   /** Two contacts at the same location must alternate foreground/background without creating transparency. */
   const checkPencil = async () => {
     const before = (await command({ type: 'download' }, 'download')).blob;
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'pencil-runtime',
       name: 'Pencil runtime',
       type: 'computed',
@@ -246,7 +246,7 @@ export async function verifyMainThread(report: (message: string) => void) {
         throw new Error('Pencil runtime lost Auto Erase color selection.');
     }
     const ink = (await command({ type: 'download' }, 'download')).blob;
-    const eraser = viewerBrush({
+    const eraser = prepareAbrBrush({
       id: 'eraser-pencil-runtime',
       name: 'Pencil eraser runtime',
       type: 'computed',
@@ -341,7 +341,7 @@ export async function verifyMainThread(report: (message: string) => void) {
   };
   const checkSavedColors = async (model: 'HSB' | 'Lab' | 'Gray' = 'HSB') => {
     const before = (await command({ type: 'download' }, 'download')).blob;
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: `${model}-runtime`,
       name: `${model} runtime`,
       type: 'computed',
@@ -415,7 +415,7 @@ export async function verifyMainThread(report: (message: string) => void) {
   };
   const checkPressureOverrides = async () => {
     const before = (await command({ type: 'download' }, 'download')).blob;
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'pressure-override-runtime',
       name: 'Pressure override runtime',
       type: 'computed',
@@ -463,7 +463,7 @@ export async function verifyMainThread(report: (message: string) => void) {
   };
   const checkAirbrush = async () => {
     const before = (await command({ type: 'download' }, 'download')).blob;
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'airbrush-runtime',
       name: 'Airbrush runtime',
       type: 'computed',
@@ -528,7 +528,7 @@ export async function verifyMainThread(report: (message: string) => void) {
   };
   const checkSmoothing = async () => {
     const before = (await command({ type: 'download' }, 'download')).blob;
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'smoothing-runtime',
       name: 'Smoothing runtime',
       type: 'computed',
@@ -591,7 +591,7 @@ export async function verifyMainThread(report: (message: string) => void) {
     const state = await command({ type: 'debug', enabled: false }, 'state');
     await command({ type: 'history-source', id: state.document.historyCurrentId }, 'state');
     await equal(before, (await command({ type: 'download' }, 'download')).blob);
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'restore-runtime',
       name: 'Restore',
       type: 'computed',

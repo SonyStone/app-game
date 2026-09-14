@@ -39,8 +39,8 @@ export { defineBrushEngine } from './defineBrushEngine';
 export type { BrushEngineSelection } from './defineBrushEngine';
 export { roundBrush } from './roundBrushEngine';
 
-export { createBrushResources } from './brushResources';
-export type { BrushResource, BrushResourceReader, BrushResourcesFactory } from './brushResources';
+export { createBrushResources } from '@app-game/abr-paint/resources';
+export type { BrushResource, BrushResourceReader, BrushResourcesFactory } from '@app-game/abr-paint/resources';
 
 export { texturedBrush } from './texturedBrushEngine';
 

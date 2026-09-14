@@ -2,7 +2,7 @@ import { render } from '@solidjs/web';
 import { flush, For, onSettled } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createPaintSession, type PaintSession } from './createPaintSession';
-import type { RendererToolState } from './gpu/toolState';
+import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
 import type { PaintEndpoint } from './mainThreadEndpoint';
 import type { PaintCommand, PaintEvent } from './protocol';
 import { defaultPaintSymmetry } from './symmetry';

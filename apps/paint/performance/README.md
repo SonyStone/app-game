@@ -16,9 +16,10 @@ From the repository root:
 pnpm --filter @app-game/paint test:performance
 pnpm --filter @app-game/paint test:ui
 pnpm --filter @app-game/paint typecheck
+pnpm --filter @app-game/abr-paint typecheck
 ```
 
-`Paint regressions` runs all Paint tests, UI tests, TypeScript, and the benchmark comparator tests on pull requests and pushes to master. Repository branch protection must require that job if merges should be blocked by failures.
+`Paint regressions` runs the abr-paint package tests and typecheck, all Paint tests, UI tests, TypeScript, and the benchmark comparator tests on pull requests and pushes to master. Repository branch protection must require that job if merges should be blocked by failures.
 
 The deterministic checks cover:
 

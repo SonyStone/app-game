@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createStrokeSampler, type Dab } from '../brush';
-import { brushQualityAtLod } from './adaptiveBrushQuality';
+import { brushQualityAtLod } from '@app-game/abr-paint/adaptiveQuality';
 import { defineBrushEngine } from './defineBrushEngine';
 
 /** Native grayscale tip rasterization. Size is the longest side; the tip replaces round hardness.

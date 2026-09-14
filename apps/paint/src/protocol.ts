@@ -1,10 +1,10 @@
 import type { Result } from './asyncResult';
 import type { Brush, Sample } from './brush';
 import type { Camera, Point, ViewSize } from './camera';
-import type { BrushResource, createBrushResources } from './composition/brushResources';
+import type { BrushResource, createBrushResources } from '@app-game/abr-paint/resources';
 import type { BrushEngine } from './composition/contracts';
 import type { HistorySource, LayerAction, createDocument } from './document';
-import type { RendererToolState } from './gpu/toolState';
+import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
 import type { PaintSymmetry } from './symmetry';
 
 /** Main-thread commands are processed in order; all sample batches precede their stroke end. */

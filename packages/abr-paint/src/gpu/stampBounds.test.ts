@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import type { Dab } from '../brush';
+import type { Dab } from '../input';
 import { directStampBounds, stampBounds } from './stampBounds';
 
 it('includes the fractional stamp fringe without recompositing the full tile', () => {

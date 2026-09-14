@@ -3,9 +3,9 @@ import { brushToFormValues } from '@app-game/abr-brush/form';
 import type { Brush } from '@app-game/abr-parser/reader';
 import { tgpu } from 'typegpu';
 import { defaultBrush } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources } from '../composition/brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
@@ -45,7 +45,7 @@ export async function verifySmudgePerformance(
 ) {
   const size = options.size ?? 50;
   const distance = options.distance ?? 160;
-  const selected = options.preset ? viewerBrush(options.preset) : undefined;
+  const selected = options.preset ? prepareAbrBrush(options.preset) : undefined;
   const root = await tgpu.init();
   const resources = createBrushResources();
   if (selected) selected.resources.forEach((resource) => resources.put(resource));

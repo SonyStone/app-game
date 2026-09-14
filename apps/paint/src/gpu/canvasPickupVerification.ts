@@ -2,8 +2,8 @@ import { tgpu, type TgpuRoot } from 'typegpu';
 import { defaultBrush } from '../brush';
 import { createDocument, type Layer } from '../document';
 import { packTile } from '../tilePixels';
-import { createCanvasPickup } from './canvasPickup';
-import { commandBatch } from './commandBatch';
+import { createCanvasPickup } from '@app-game/abr-paint/gpu/canvasPickup';
+import { commandBatch } from '@app-game/abr-paint/gpu/commandBatch';
 import { createPaintRenderer } from './renderer';
 import { verifyViewMipmaps } from './viewMipmapsVerification';
 

@@ -2,7 +2,7 @@ import { blockEraserTip, blockEraserValues } from '@app-game/abr-brush/blockEras
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import { createAbrStrokeSampler } from '@app-game/abr-brush/stroke';
 import { expect, it } from 'vitest';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 
 it('Block preserves dormant preset data while applying a screen-sized square without resources', () => {
   const source = {
@@ -18,7 +18,7 @@ it('Block preserves dormant preset data while applying a screen-sized square wit
       toolOptions: { __classId: 'ErTl', ErsB: 3, flow: 1, Opct: 2 }
     }
   };
-  const preset = viewerBrush(source);
+  const preset = prepareAbrBrush(source);
   expect(preset.resources).toHaveLength(1);
   expect(preset.resource.pixels).toEqual(new Uint8Array([255]));
   expect(preset.opacity).toBe(1);

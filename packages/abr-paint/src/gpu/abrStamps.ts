@@ -24,15 +24,14 @@ import type { BrushFormValues } from '@app-game/abr-brush/form';
 import { paintBlend, paintModes } from '@app-game/abr-brush/paintBlend';
 import { pencilCoverage, usesPencilCoverage } from '@app-game/abr-brush/pencil';
 import { common, d, std, tgpu, type TgpuRoot, type TgpuTexture } from 'typegpu';
-import type { Dab } from '../brush';
-import type { BrushResource } from '../composition/brushResources';
-import type { Layer } from '../document';
+import type { Dab } from '../input';
+import type { BrushResource } from '../resources';
 import type { createCanvasPickup } from './canvasPickup';
-import { linearSourceOver } from './colorMixing';
+import { linearSourceOver } from '@app-game/abr-brush/effects';
 import type { createMixerWells } from './mixerWells';
 
 /** Immutable preset resources pinned by the brush session. */
-export type AbrRasterSettings = {
+export type AbrRasterSettings<Layer = unknown> = {
   /** Selected immutable document state; restoration interpolates premultiplied pixels by accumulated coverage. */
   historySource?: Layer;
   values: BrushFormValues;

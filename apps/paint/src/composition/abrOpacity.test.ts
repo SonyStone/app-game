@@ -1,16 +1,16 @@
 import { expect, it, vi } from 'vitest';
 import { defaultBrush } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
 import { abrBrush } from './abrBrushEngine';
-import { createBrushResources } from './brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import type { PaintRenderer } from './contracts';
 
 it.each(['PbTl', 'PcTl', 'SmTl'])(
   '%s passes global opacity to the renderer only when its stamps exclude it',
   (type) => {
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'opacity', name: 'Opacity', type: 'computed', diameter: 16, spacing: 10,
       settings: { toolOptions: { __classId: type } }
     });

@@ -3,10 +3,10 @@ import { AbrParser, readPatternIndex } from '@app-game/abr-parser/browser';
 import { readFileSync } from 'node:fs';
 import { expect, it, vi } from 'vitest';
 import { defaultBrush, type Dab } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { adaptiveBrushQuality } from '../composition/adaptiveBrushQuality';
-import { createBrushResources } from '../composition/brushResources';
+import { adaptiveBrushQuality } from '@app-game/abr-paint/adaptiveQuality';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import type { PaintRenderer } from '../composition/contracts';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
@@ -35,7 +35,7 @@ it.each([
   ["Kyle's Paintbox - Wet Blender", 222, 3, 2700]
 ] as const)('bounds real %s (%ipx) long-stroke work at LOD %i', async (name, size, lod, limit) => {
   const source = megapack.brushes.find(brush => brush.name === name)!;
-  const preset = viewerBrush({ ...source, patternResources: patterns } as Parameters<typeof viewerBrush>[0]);
+  const preset = prepareAbrBrush({ ...source, patternResources: patterns } as Parameters<typeof prepareAbrBrush>[0]);
   const cache = createBrushResources();
   preset.resources.forEach(resource => cache.put(resource));
   for (const mixing of ['classic', 'linear'] as const) {

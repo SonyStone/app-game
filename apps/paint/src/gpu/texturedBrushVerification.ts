@@ -1,7 +1,7 @@
 import { tgpu } from 'typegpu';
 import { defaultBrush } from '../brush';
 import { defaultCamera } from '../camera';
-import { createBrushResources, type BrushResource } from '../composition/brushResources';
+import { createBrushResources, type BrushResource } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { texturedBrush } from '../composition/texturedBrushEngine';
 import { createDocument } from '../document';

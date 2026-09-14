@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createStrokeSampler } from '../brush';
-import { brushQualityAtLod } from './adaptiveBrushQuality';
+import { brushQualityAtLod } from '@app-game/abr-paint/adaptiveQuality';
 import { defineBrushEngine } from './defineBrushEngine';
 
 /** Typed preset overrides for the round engine; omitted values preserve the current brush controls. */

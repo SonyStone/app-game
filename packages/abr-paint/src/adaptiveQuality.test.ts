@@ -1,7 +1,7 @@
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import { createAbrStrokeSampler, type PreviewPoint } from '@app-game/abr-brush/stroke';
 import { expect, it } from 'vitest';
-import { adaptiveBrushQuality, brushQualityAtLod } from './adaptiveBrushQuality';
+import { adaptiveBrushQuality, brushQualityAtLod } from './adaptiveQuality';
 
 const values = () => ({ ...brushToFormValues({ id: 'quality', name: 'Quality', type: 'sampled', settings: {}, spacing: 1, diameter: 16 }), tipKind: 'sampledBrush' as const });
 

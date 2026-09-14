@@ -1,7 +1,7 @@
 import { defaultBrush, type Brush } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources } from '../composition/brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { roundBrush } from '../composition/roundBrushEngine';
 import { symmetryRenderer } from '../composition/symmetryRenderer';
@@ -24,7 +24,7 @@ export async function verifyPaintSymmetry(report: (message: string) => void) {
     for (let y = 0; y < 16; y++)
       for (let x = 0; x < 16; x++)
         if ((x >= 2 && x <= 5 && y >= 2 && y <= 13) || (y >= 10 && y <= 13 && x >= 2 && x <= 12)) tip[y * 16 + x] = 255;
-    const selected = viewerBrush({
+    const selected = prepareAbrBrush({
       id: 'symmetry',
       name: 'Asymmetric symmetry',
       type: 'sampled',

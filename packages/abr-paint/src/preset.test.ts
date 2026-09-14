@@ -1,11 +1,11 @@
 import { pencilUsesBackground } from '@app-game/abr-brush/pencil';
 import type { Brush } from '@app-game/abr-parser/reader';
 import { expect, it } from 'vitest';
-import { viewerBrush } from './viewerBrush';
+import { prepareAbrBrush } from './preset';
 
 it('native Pencil erasers ignore Flow and soft hardness while retaining opacity and Clear compositing', () => {
   for (const type of ['ErTl', 'eraserTool']) {
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'eraser-pencil',
       name: 'Pencil eraser',
       type: 'computed',
@@ -24,7 +24,7 @@ it('native Pencil erasers ignore Flow and soft hardness while retaining opacity 
 
 it('Pencil ignores dormant Flow and soft hardness without overwriting saved settings', () => {
   for (const type of ['PcTl', 'pencilTool']) {
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'pencil',
       name: 'Pencil',
       type: 'computed',
@@ -59,22 +59,22 @@ it('copies edited coverage and maps supported viewer settings without retaining 
     angle: 90,
     brushTip: { width: 2, height: 1, depth: 8, data: new Uint8Array([120, 255]) }
   };
-  const snapshot = viewerBrush(brush);
+  const snapshot = prepareAbrBrush(brush);
   brush.brushTip!.data.fill(0);
   expect(snapshot.resource.pixels).toEqual(new Uint8Array([120, 255]));
   expect(snapshot.size).toBe(64);
   expect(snapshot.spacing).toBe(0.25);
   expect(snapshot.angle).toBeCloseTo(Math.PI / 2);
-  expect(viewerBrush({ ...brush, diameter: 5000, spacing: 1000 }).size).toBe(5000);
-  expect(() => viewerBrush({ ...brush, spacing: 0 })).toThrow();
+  expect(prepareAbrBrush({ ...brush, diameter: 5000, spacing: 1000 }).size).toBe(5000);
+  expect(() => prepareAbrBrush({ ...brush, spacing: 0 })).toThrow();
   expect(snapshot.engine.id).toBe('abr');
 });
 
 it('generates computed tips and rejects oversized sampled resources before upload', () => {
   const brush: Brush = { id: 'a', name: 'Round', type: 'computed', spacing: 25, settings: {} };
-  expect(viewerBrush(brush).resource.pixels.some((value) => value > 0)).toBe(true);
+  expect(prepareAbrBrush(brush).resource.pixels.some((value) => value > 0)).toBe(true);
   expect(() =>
-    viewerBrush({
+    prepareAbrBrush({
       ...brush,
       type: 'sampled',
       brushTip: { width: 8193, height: 1, depth: 8, data: new Uint8Array(8193) }
@@ -84,7 +84,7 @@ it('generates computed tips and rejects oversized sampled resources before uploa
 
 it('normalizes Mixer Brush aliases and keeps wet settings independent from ordinary stroke opacity', () => {
   for (const type of ['mixerBrushTool', 'MixB']) {
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: 'mixer',
       name: 'Mixer',
       type: 'computed',
@@ -98,7 +98,7 @@ it('normalizes Mixer Brush aliases and keeps wet settings independent from ordin
 });
 
 it('applies an ABR eraser with Clear compositing and the saved flow and opacity', () => {
-  const preset = viewerBrush({
+  const preset = prepareAbrBrush({
     id: 'eraser',
     name: 'Eraser',
     type: 'computed',
@@ -112,7 +112,7 @@ it('applies an ABR eraser with Clear compositing and the saved flow and opacity'
 
 it('routes native filters with strength, mode, sampling and detail controls, without paint opacity/flow', () => {
   for (const type of ['BlTl', 'ShTl']) {
-    const preset = viewerBrush({
+    const preset = prepareAbrBrush({
       id: type,
       name: type,
       type: 'computed',
@@ -143,23 +143,23 @@ it('routes native filters with strength, mode, sampling and detail controls, wit
 
 it('applies saved foreground and background colors without inventing a saved foreground for other presets', () => {
   const brush: Brush = { id: 'colors', name: 'Colors', type: 'computed', spacing: 25, settings: {} };
-  expect(viewerBrush(brush).color).toBeUndefined();
-  expect(viewerBrush(brush).backgroundColor).toBeUndefined();
+  expect(prepareAbrBrush(brush).color).toBeUndefined();
+  expect(prepareAbrBrush(brush).backgroundColor).toBeUndefined();
   brush.settings.toolOptions = {
     __classId: 'PbTl',
     FrgC: { __classId: 'RGBC', 'Rd  ': 18, 'Grn ': 52, 'Bl  ': 86 },
     BckC: { __classId: 'RGBC', 'Rd  ': 250, 'Grn ': 128, 'Bl  ': 64 }
   };
-  const selected = viewerBrush(brush);
+  const selected = prepareAbrBrush(brush);
   expect(selected.color).toBe('#123456');
   expect(selected.backgroundColor).toBe('#fa8040');
   expect(selected.engine.settings.secondaryColor).toBe('#fa8040');
   brush.settings.toolOptions = { __classId: 'PbTl', FrgC: { __classId: 'LabC' } };
-  expect(() => viewerBrush(brush)).toThrow('Unsupported saved foreground color');
+  expect(() => prepareAbrBrush(brush)).toThrow('Unsupported saved foreground color');
 });
 
 it('routes native Smudge options and isolates Strength from the host paint flow/opacity', () => {
-  const preset = viewerBrush({
+  const preset = prepareAbrBrush({
     id: 'smudge',
     name: 'Smudge',
     type: 'computed',

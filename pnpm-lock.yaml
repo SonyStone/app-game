@@ -807,6 +807,9 @@ importers:
       '@app-game/abr-brush':
         specifier: workspace:*
         version: link:../../packages/abr-brush
+      '@app-game/abr-paint':
+        specifier: workspace:*
+        version: link:../../packages/abr-paint
       '@app-game/abr-parser':
         specifier: workspace:*
         version: link:../../packages/abr-parser
@@ -1218,6 +1221,40 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+
+  packages/abr-paint:
+    dependencies:
+      '@app-game/abr-brush':
+        specifier: workspace:*
+        version: link:../abr-brush
+      '@app-game/abr-parser':
+        specifier: workspace:*
+        version: link:../abr-parser
+      typegpu:
+        specifier: ^0.11.4
+        version: 0.11.4
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 25.8.0
+        version: 25.8.0
+      '@webgpu/types':
+        specifier: ^0.1.70
+        version: 0.1.70
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      unplugin-typegpu:
+        specifier: ^0.11.3
+        version: 0.11.3(typegpu@0.11.4)
+      vite:
+        specifier: 'catalog:'
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
 
   packages/abr-parser:
     dependencies:

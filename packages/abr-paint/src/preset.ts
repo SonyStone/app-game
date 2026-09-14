@@ -6,13 +6,13 @@ import { generatePreviewTip } from '@app-game/abr-brush/physical-tip';
 import { brushPreviewResources, decodePreviewResources } from '@app-game/abr-brush/resources';
 import { smudgeModes } from '@app-game/abr-brush/settings-fields';
 import type { Brush as AbrBrush, BrushTipImage } from '@app-game/abr-parser/reader';
-import type { abrBrush } from '../composition/abrBrushEngine';
-import type { BrushResource } from '../composition/brushResources';
+import type { AbrBrushSettings } from './engine';
+import type { BrushResource } from './resources';
 
 /** Detaches the editable preset and every referenced resource before selecting the runtime engine.
  * Missing embedded resources fail explicitly rather than silently rendering a different brush.
  */
-export function viewerBrush(brush: AbrBrush) {
+export function prepareAbrBrush(brush: AbrBrush) {
   const type = record(brush.settings.toolOptions).__classId;
   const tool = brushToolSettings(brush);
   const rawTool = record(brush.settings.toolOptions);
@@ -52,7 +52,7 @@ export function viewerBrush(brush: AbrBrush) {
   const resources = [resource, ...(pattern ? [pattern] : []), ...(dual ? [dual] : [])];
   if (resources.reduce((sum, resource) => sum + resource.pixels.byteLength, 0) > 48 * 1024 * 1024)
     throw new Error('This preset’s combined resources exceed the 48 MiB brush budget.');
-  const engine: ReturnType<typeof abrBrush.select> = {
+  const engine: { id: 'abr'; settings: AbrBrushSettings } = {
     id: 'abr',
     settings: {
       tipId: resource.id,

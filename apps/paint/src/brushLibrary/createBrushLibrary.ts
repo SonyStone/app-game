@@ -1,6 +1,6 @@
 import { createSignal, onCleanup } from 'solid-js';
 import { attempt } from '../asyncResult';
-import type { BrushResource } from '../composition/brushResources';
+import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { BrushEngineSelection } from '../composition/defineBrushEngine';
 import type { texturedBrush } from '../composition/texturedBrushEngine';
 import type { PaintEndpoint } from '../mainThreadEndpoint';

@@ -1,7 +1,7 @@
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import { defaultBrush, type Sample } from '../brush';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources, type BrushResource } from '../composition/brushResources';
+import { createBrushResources, type BrushResource } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';

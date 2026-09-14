@@ -1,7 +1,7 @@
 import { defaultBrush } from '../brush';
-import { viewerBrush } from '../brushLibrary/viewerBrush';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { abrBrush } from '../composition/abrBrushEngine';
-import { createBrushResources } from '../composition/brushResources';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { createResourceSession } from '../composition/resourceSession';
 import { createDocument } from '../document';
 import { createRawProcessor } from '../strokeProcessors';
@@ -10,7 +10,7 @@ import { createPaintRenderer } from './renderer';
 
 /** Measures the committed Block footprint at several views, independent of dormant preset controls. */
 export async function verifyAbrBlock(report: (message: string) => void) {
-  const preset = viewerBrush({
+  const preset = prepareAbrBrush({
     id: 'block',
     name: 'Block',
     type: 'sampled',

@@ -1,5 +1,5 @@
 import tgpu from 'typegpu';
-import { createSmudgePickup } from './smudgePickup';
+import { createSmudgePickup } from '@app-game/abr-paint/gpu/smudgePickup';
 
 /** Checks actual GPU recurrence, alpha, diameter changes and stroke reset without involving document storage. */
 export async function verifySmudgePickup(report: (message: string) => void) {
