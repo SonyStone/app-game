@@ -215,3 +215,31 @@ test('resource upload unwraps reactive objects and transfers only bounded copies
   connection.dispose();
   await vi.advanceTimersByTimeAsync(1001);
 });
+
+test('a persisted thumbnail presents without starting a renderer, including after pause/remount', async () => {
+  const cache = await import('../src/features/brush-preview/thumbnail-cache');
+  vi.spyOn(cache, 'thumbnailKey').mockResolvedValue('stored');
+  vi.spyOn(cache, 'readThumbnail').mockResolvedValue(new Blob(['png']));
+  const image = bitmap();
+  vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(image));
+  const { attachPreview } = await import('../src/features/brush-preview/client');
+  const target = canvas();
+  const connection = attachPreview(target as unknown as HTMLCanvasElement);
+  connection.update(input(), undefined, 0, {}, true);
+  await vi.advanceTimersByTimeAsync(10);
+  expect(TestWorker.instances).toHaveLength(0);
+  expect(target.present).toHaveBeenCalledTimes(1);
+  connection.pause();
+  connection.update(input(), undefined, 0, {}, true);
+  await vi.advanceTimersByTimeAsync(10);
+  expect(target.present).toHaveBeenCalledTimes(1);
+  connection.dispose();
+  const next = canvas();
+  const remounted = attachPreview(next as unknown as HTMLCanvasElement);
+  remounted.update(input(), undefined, 0, {}, true);
+  await vi.advanceTimersByTimeAsync(10);
+  expect(next.present).toHaveBeenCalledTimes(1);
+  expect(TestWorker.instances).toHaveLength(0);
+  remounted.dispose();
+  await vi.advanceTimersByTimeAsync(1001);
+});

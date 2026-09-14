@@ -1,3 +1,4 @@
+import { readThumbnail, storeThumbnail, thumbnailKey } from './thumbnail-cache';
 import type { BrushTipImage } from '../../lib/abr';
 import { generatePreviewTip } from './physical-tip';
 import type { PreviewJob, PreviewReply } from './protocol';
@@ -24,6 +25,8 @@ export function previewTipKey(tip: BrushTipImage | undefined, hardness: number) 
 
 function createPreviewService() {
   type Request = PreviewJob & {
+    thumbnail?: boolean;
+    cacheKey?: string;
     target: number;
     priority: number;
     streamKey?: string;
@@ -54,6 +57,31 @@ function createPreviewService() {
     if (active) return;
     active = queue.take();
     if (!active) return;
+    if (active.thumbnail) {
+      void restoreThumbnail(active);
+      return;
+    }
+    renderActive();
+  }
+  async function restoreThumbnail(job: Request) {
+    try {
+      job.cacheKey = await thumbnailKey(job.input, job.sourceTip, job.resourceSource);
+      const blob = await readThumbnail(job.cacheKey);
+      if (active !== job) return;
+      if (blob) {
+        const bitmap = await createImageBitmap(blob);
+        job.cacheKey = undefined;
+        receive({ type: 'image', id: job.id, bitmap, backend: 'cpu' });
+        return;
+      }
+    } catch (error) {
+      console.warn('Could not restore brush thumbnail:', error);
+    }
+    if (active === job) renderActive();
+  }
+  function renderActive() {
+    if (!active) return;
+    if (!canPresent(active, targets.get(active.target))) { finish(); return; }
     if (fallback) {
       void renderFallback(active);
       return;
@@ -131,6 +159,10 @@ function createPreviewService() {
     if (reply.type === 'error') {
       failWorker(reply.message);
       return;
+    }
+    if (active.cacheKey) {
+      try { storeThumbnail(active.cacheKey, reply.bitmap); }
+      catch (error) { console.warn('Could not cache brush thumbnail:', error); }
     }
     const target = targets.get(active.target);
     if (target && canPresent(active, target)) {
@@ -214,7 +246,8 @@ function createPreviewService() {
           input: PreviewInput,
           tip: BrushTipImage | undefined,
           priority: number,
-          resources: PreviewResourceSource = {}
+          resources: PreviewResourceSource = {},
+          thumbnail = false
         ) {
           const auxKey = [
             resources.pattern ? resourceId(resources.pattern.data) : '',
@@ -237,6 +270,7 @@ function createPreviewService() {
           canvas.dataset.previewState = 'pending';
           canvas.dataset.previewRevision = String(state.revision);
           queue.put({
+            thumbnail,
             id: state.revision,
             target: id,
             priority,
@@ -253,7 +287,7 @@ function createPreviewService() {
         pause() {
           queue.remove(id);
           state.revision = ++nextJob;
-          state.signature = '';
+          if (canvas.dataset.previewState !== 'ready') state.signature = '';
           state.streamKey = undefined;
         },
         dispose() {

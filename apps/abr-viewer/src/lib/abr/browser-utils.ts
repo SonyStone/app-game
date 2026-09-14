@@ -135,6 +135,8 @@ export async function createBrushTipFromImage(img: HTMLImageElement, maxSize: nu
  */
 export function brushTipToDataUrl(brushTip: BrushTipImage): string {
   const { width, height, data } = brushTip;
+  const cached = tipUrls.get(brushTip);
+  if (cached) return cached;
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -159,7 +161,9 @@ export function brushTipToDataUrl(brushTip: BrushTipImage): string {
   }
 
   ctx.putImageData(imageData, 0, 0);
-  return canvas.toDataURL('image/png');
+  const url = canvas.toDataURL('image/png');
+  tipUrls.set(brushTip, url);
+  return url;
 }
 
 /**
@@ -178,3 +182,6 @@ export function downloadAbrFile(data: Uint8Array, filename: string): void {
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// Tip images are immutable; releasing the brush also releases its cached display URL.
+const tipUrls = new WeakMap<BrushTipImage, string>();

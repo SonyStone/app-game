@@ -7,9 +7,10 @@ import { BrushDetailEditable } from './features/brush-detail/BrushDetailEditable
 import type { ColorMixingPreference } from './features/brush-detail/color-mixing';
 import { ColorProfileContext } from './features/brush-detail/ColorProfile';
 import { createColorProfile } from './features/brush-detail/createColorProfile';
-import { AbrParser, AbrWriter, brushTipToDataUrl, downloadAbrFile, type AbrFileWithMeta, type Brush } from './lib/abr';
+import { AbrParser, AbrWriter, downloadAbrFile, type AbrFileWithMeta, type Brush } from './lib/abr';
 import { fetchBrushExample, type BrushExample } from './lib/brush-examples';
 import { allBrushNodes, type GroupNode } from './lib/brush-tree';
+import { persistWorkspace } from './lib/workspace-storage';
 import { createWorkspace } from './lib/workspace';
 import styles from './App.module.css';
 
@@ -34,6 +35,7 @@ export function App(
   const workspace = createWorkspace();
   const colors = createColorProfile();
   const [status, setStatus] = createSignal('Ready');
+  persistWorkspace(workspace, setStatus);
   createEffect(
     () => colors.profile(),
     (profile) => {
@@ -86,14 +88,8 @@ export function App(
           const parsed: AbrFileWithMeta = new AbrParser().parse(bytes);
           if (!parsed.brushes.length) throw new Error(parsed.errors.join('; ') || 'No brushes found');
           parsed.fileName = file.name.replace(/\.abr$/i, '');
-          for (const [index, brush] of parsed.brushes.entries()) {
-            if (index % 8 === 0) {
-              setStatus(`Preparing brushes ${index + 1} of ${parsed.brushes.length}…`);
-              await paintImportStatus();
-            }
-            brush.id = crypto.randomUUID();
-            if (brush.brushTip) Object.assign(brush, { imageDataUrl: brushTipToDataUrl(brush.brushTip) });
-          }
+          // The tip panel generates its image on demand; do not encode every tip during import.
+          for (const brush of parsed.brushes) brush.id = crypto.randomUUID();
           imported.push(parsed);
           if (parsed.errors.length) errors.push(`${file.name}: ${parsed.errors.join('; ')}`);
         } catch (error) {

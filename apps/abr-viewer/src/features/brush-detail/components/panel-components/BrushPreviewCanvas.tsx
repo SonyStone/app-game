@@ -1,3 +1,4 @@
+import { thumbnailSize } from '../../../brush-preview/thumbnail-cache';
 import type { ColorMixing } from '@app-game/abr-brush/effects';
 import { supportsAirbrush } from '@app-game/abr-brush/stroke';
 import { createEffect, createSignal, onSettled, Show } from 'solid-js';
@@ -16,6 +17,7 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
   let container!: HTMLDivElement;
   let connection: ReturnType<typeof attachPreview> | undefined;
   let visible = false;
+  let rasterWidth = 0;
   let refresh = () => {};
   let path: PreviewPoint[] | undefined;
   let strokeId = 0;
@@ -47,7 +49,9 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
     if (props.interactive) status.observe(canvas, { attributes: true, attributeFilter: ['data-preview-reason'] });
     refresh = () => {
       if (!visible) return;
-      const width = container.clientWidth;
+      const measuredWidth = container.clientWidth;
+      if (measuredWidth < 1) return;
+      const width = props.thumbnail ? (rasterWidth = thumbnailSize(measuredWidth, rasterWidth)) : measuredWidth;
       const height = props.height ?? 100;
       if (width < 1 || height < 1) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2, 2048 / width, 512 / height);
@@ -68,7 +72,8 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
         },
         props.brush.brushTip,
         props.priority ?? 0,
-        brushPreviewResources(props.brush)
+        brushPreviewResources(props.brush),
+        props.thumbnail === true
       );
     };
     const resize = new ResizeObserver(refresh);

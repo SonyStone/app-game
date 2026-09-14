@@ -914,7 +914,16 @@ export async function createPaintRenderer(
     },
     /** Paint accumulates by tile; canvas-sampling tools transport pixels in stamp order. */
     async paint(dabs: readonly Dab[]) {
-      if (!smudge && !mixer && !filter) return paintStamps(dabs);
+      if (!smudge && !mixer && !filter) {
+        if (!abrActive || !options.onPaintProgress || dabs.length <= 32) return paintStamps(dabs);
+        // A coalesced pointer packet can contain hundreds of textured pencil stamps.
+        // Submit bounded batches so the existing progress presenter can show ink before it finishes.
+        for (let offset = 0; offset < dabs.length; offset += 32) {
+          await paintStamps(dabs.slice(offset, offset + 32));
+          await options.onPaintProgress();
+        }
+        return;
+      }
       if (smudge?.strength === 0 || filter?.strength === 0) return;
       smudgeSecondary.push(...dabs.filter((dab) => dab.abr?.secondary));
       const batchDabs =

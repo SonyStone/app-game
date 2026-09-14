@@ -20,9 +20,11 @@ export function BrushTipPanel(props: {
   const tip = createMemo(
     () =>
       props.brush.imageDataUrl ??
-      (props.values.tipKind === 'computedBrush'
-        ? brushTipToDataUrl(generateComputedBrushTip(96, props.values.hardness))
-        : undefined)
+      (props.brush.brushTip
+        ? brushTipToDataUrl(props.brush.brushTip)
+        : props.values.tipKind === 'computedBrush'
+          ? brushTipToDataUrl(generateComputedBrushTip(96, props.values.hardness))
+          : undefined)
   );
   return (
     <div class={styles.tipPanel}>

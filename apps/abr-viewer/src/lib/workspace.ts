@@ -1,5 +1,5 @@
 import { attachBrushResources } from '../features/brush-detail/brush-resources';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, untrack } from 'solid-js';
 import type { ReorderEvent } from 'solid-nest';
 import type { AbrFile, AbrFileWithMeta, BrushWithPreview } from './abr';
 import {
@@ -38,6 +38,18 @@ export function createWorkspace() {
   }
 
   return {
+    /** Immutable tree containers and binary resources form one structured-clone checkpoint. */
+    snapshot: () => ({ root: root(), sources: [...importedSources], activeId: untrack(activeId) }),
+    /** Restore only during startup; undo history intentionally starts empty. */
+    restore(snapshot: { root: GroupNode; sources: AbrFileWithMeta[]; activeId?: string }) {
+      importedSources.splice(0, importedSources.length, ...snapshot.sources);
+      setPast([]);
+      setFuture([]);
+      setRoot(snapshot.root);
+      setSavedRoot(snapshot.root);
+      setActiveId(snapshot.activeId);
+      setSelection(snapshot.activeId ? [snapshot.activeId] : []);
+    },
     root,
     selection,
     setSelection,

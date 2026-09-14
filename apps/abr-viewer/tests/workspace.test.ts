@@ -143,3 +143,23 @@ describe('brush workspace', () => {
       dispose();
     }));
 });
+
+test('a stored workspace preserves edits, removal and export resources across reloads', () =>
+  createRoot(dispose => {
+    const original = createWorkspace();
+    flush(() => original.importFiles([sample()]));
+    const first = original.active()!;
+    flush(() => original.updateBrush(first.id, { ...first.brush, name: 'Saved pencil', diameter: 73 }));
+    const checkpoint = structuredClone(original.snapshot());
+    const restored = createWorkspace();
+    flush(() => restored.restore(checkpoint));
+    expect(restored.active()?.brush.name).toBe('Saved pencil');
+    expect(restored.active()?.brush.diameter).toBe(73);
+    expect(restored.exportFile('all')).toEqual(original.exportFile('all'));
+    expect(restored.canUndo()).toBe(false);
+    flush(() => restored.remove([restored.root().children[0]!.id]));
+    const empty = createWorkspace();
+    flush(() => empty.restore(structuredClone(restored.snapshot())));
+    expect(empty.root().children).toHaveLength(0);
+    dispose();
+  }));
