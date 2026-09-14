@@ -43,6 +43,48 @@ it('shares upload and job budgets across concurrent producers', async () => {
   expect([...windows.values()]).toEqual([100, 100, 100, 100, 100, 100]);
   expect(work.stats().peakUploadBytes).toBe(100);
 });
+
+it('resumes blocking chunks on the next task and restores background throttling', async () => {
+  let time = 0;
+  const waits: number[] = [];
+  const work = createPageWork({
+    operations: 1,
+    now: () => time,
+    wait: async (ms) => { waits.push(ms); time += Math.max(1, ms); }
+  });
+  await work.run(() => {});
+  await work.blocking(async () => {
+    await work.run(() => {});
+    await work.run(() => {});
+  });
+  expect(waits).toEqual([0, 0]);
+  expect(work.stats().peakWorkOperations).toBe(1);
+  await work.run(() => {});
+  expect(waits).toEqual([0, 0, 16]);
+});
+
+it('keeps upload limits while blocking and restores priority after nested failure', async () => {
+  let time = 0;
+  const waits: number[] = [];
+  const uploaded = new Map<number, number>();
+  const work = createPageWork({
+    uploadBytes: 100,
+    now: () => time,
+    wait: async (ms) => { waits.push(ms); time += Math.max(1, ms); }
+  });
+  const upload = () => work.run(() => uploaded.set(time, (uploaded.get(time) ?? 0) + 50), () => true, 50);
+  await expect(work.blocking(async () => {
+    await work.blocking(async () => {
+      await Promise.all(Array.from({ length: 6 }, upload));
+      throw new Error('Upload failed');
+    });
+  })).rejects.toThrow('Upload failed');
+  expect(waits).toEqual([0, 0]);
+  expect([...uploaded.values()]).toEqual([100, 100, 100]);
+  expect(work.stats().peakUploadBytes).toBe(100);
+  await upload();
+  expect(waits).toEqual([0, 0, 16]);
+});
 it('yields after CPU time is spent, allowing one bounded operation to overrun', async () => {
   let time = 0,
     waits = 0;

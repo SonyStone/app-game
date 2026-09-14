@@ -3,6 +3,7 @@ import { defaultBrush } from '../brush';
 import { createDocument, type Layer } from '../document';
 import { packTile } from '../tilePixels';
 import { createCanvasPickup } from './canvasPickup';
+import { commandBatch } from './commandBatch';
 import { createPaintRenderer } from './renderer';
 import { verifyViewMipmaps } from './viewMipmapsVerification';
 
@@ -114,6 +115,7 @@ export async function verifyCanvasPickup(report: (message: string) => void) {
     const small = await renderer.captureRegion(region, [document.active]);
     checkPixel(await readPatch(root, small), 64, 64, [255, 0, 0, 255]);
     await verifyPickupBatches(root, document.active);
+    await verifyPlacementReuse(root, document.active);
     await verifyDeferredMipmaps(root, renderer, canvas);
     await verifyViewMipmaps(root);
     await verifyPickupMipLevels(root);
@@ -223,7 +225,7 @@ async function verifyDeferredMipmaps(
   }
 }
 
-/** More than one uniform-pool cycle, then a cache that overwrites its only texture on every lookup. */
+/** One upload covers 64 sources; recycling a sampled texture still submits its prior reads. */
 async function verifyPickupBatches(root: TgpuRoot, layer: Layer) {
   const images = Array.from({ length: 3 }, () =>
     root.createTexture({ size: [256, 256], format: 'rgba8unorm' }).$usage('sampled', 'render')
@@ -250,7 +252,7 @@ async function verifyPickupBatches(root: TgpuRoot, layer: Layer) {
       upload(0, x % 2);
       return images[0];
     }
-    // An unrelated eviction must not split the 32-source batch.
+    // An unrelated eviction must not split the capture.
     flush(images[2]);
     return images[x % 2];
   });
@@ -272,7 +274,13 @@ async function verifyPickupBatches(root: TgpuRoot, layer: Layer) {
     for (const reused of [false, true]) {
       recycle = reused;
       const submit = root.device.queue.submit;
-      let submissions = 0;
+      let submissions = 0,
+        uploads = 0;
+      const writeBuffer = root.device.queue.writeBuffer;
+      root.device.queue.writeBuffer = function (...args) {
+        uploads++;
+        return Reflect.apply(writeBuffer, this, args);
+      };
       root.device.queue.submit = function (buffers) {
         submissions++;
         return submit.call(this, buffers);
@@ -282,8 +290,10 @@ async function verifyPickupBatches(root: TgpuRoot, layer: Layer) {
         patch = await capture();
       } finally {
         root.device.queue.submit = submit;
+        root.device.queue.writeBuffer = writeBuffer;
       }
-      if (submissions !== (reused ? 64 : 2))
+      if (uploads !== 1) throw new Error(`Pickup uploaded ${uploads} buffers for one capture.`);
+      if (submissions !== (reused ? 64 : 1))
         throw new Error(`Pickup ${reused ? 'recycled' : 'unrelated'} invalidation submitted ${submissions} batches.`);
       const actual = await readPatch(root, patch);
       for (let y = 0; y < patch.height; y++)
@@ -297,6 +307,56 @@ async function verifyPickupBatches(root: TgpuRoot, layer: Layer) {
   } finally {
     pickup.destroy();
     for (const image of images) image.destroy();
+  }
+}
+
+/** Retained consumers survive placement ring wrap and buffer growth within a borrowed command batch. */
+async function verifyPlacementReuse(root: TgpuRoot, layer: Layer) {
+  const tile = root.createTexture({ size: [256, 256], format: 'rgba8unorm' }).$usage('sampled');
+  root.device.queue.writeTexture(
+    { texture: root.unwrap(tile) },
+    Uint8Array.from({ length: 256 * 256 * 4 }, (_, i) => (i % 4 === 0 || i % 4 === 3 ? 255 : 0)),
+    { bytesPerRow: 1024 },
+    [256, 256]
+  );
+  const pickup = createCanvasPickup(root, async (_layer, key) =>
+    Number(key.split(',')[0]) % 2 === 0 ? tile : undefined
+  );
+  const outputs: Array<{ patch: Parameters<typeof readPatch>[1]; columns: number; index: number }> = [];
+  const commands = commandBatch(root.device);
+  try {
+    for (let i = 0; i < 20; i++) {
+      // First eight slots grow on reuse. Last captures wrap again without growth.
+      const columns = i < 8 ? 64 : 256;
+      const patch = await pickup.capture({ x: i * 256, y: 0, width: columns * 256, height: 256 }, [layer], {
+        commands,
+        linear: true
+      });
+      const output = root
+        .createTexture({ size: [patch.width, patch.height], format: 'rgba8unorm' })
+        .$usage('sampled', 'render');
+      outputs.push({ patch: { ...patch, texture: output }, columns, index: i });
+      commands
+        .encoder()
+        .copyTextureToTexture({ texture: root.unwrap(patch.texture) }, { texture: root.unwrap(output) }, [
+          patch.width,
+          patch.height
+        ]);
+    }
+    commands.flush();
+    for (const { patch, columns, index: i } of outputs) {
+      const pixels = await readPatch(root, patch);
+      for (let x = 0; x < patch.width; x++) {
+        const expected = (Math.floor(x / (patch.width / columns)) + i) % 2 === 0 ? 255 : 0;
+        if (pixels[x * 4] !== expected || pixels[x * 4 + 3] !== expected)
+          throw new Error(`Pickup placement reuse changed pixel ${i}/${x}.`);
+      }
+    }
+  } finally {
+    commands.flush();
+    pickup.destroy();
+    outputs.forEach(({ patch }) => patch.texture.destroy());
+    tile.destroy();
   }
 }
 

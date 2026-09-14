@@ -1,5 +1,6 @@
 /** Shares CPU, operation and upload budgets across overview construction and texture streaming.
- * Budgets use demand-driven 16ms windows, including in workers without animation frames.
+ * Background budgets use demand-driven 16ms windows, including workers without animation frames.
+ * Blocking work keeps bounded chunks but resumes at the next task instead of the next window.
  * All budget options must be positive and finite; invalid values throw RangeError.
  * CPU limits are cooperative: a single bounded tile operation may overrun the time budget.
  */
@@ -33,12 +34,25 @@ export function createPageWork(
     peakJobs = 0,
     peakBytes = 0;
   let continuation: Promise<void> | undefined;
+  let blocking = 0;
   let active = 0;
   const slots: (() => void)[] = [];
   const check = (valid: () => boolean) => {
     if (disposed || !valid()) throw new ObsoletePageError();
   };
   return {
+    /** Prioritizes work that the input queue must await, without removing cooperative yields or job limits.
+     * Nested/concurrent callers share priority until the last caller settles, including on failure.
+     */
+    async blocking<T>(operation: () => Promise<T>): Promise<T> {
+      check(() => true);
+      blocking++;
+      try {
+        return await operation();
+      } finally {
+        blocking--;
+      }
+    },
     /** Executes one synchronous tile operation after reserving its budget. Never charge I/O wait time. */
     async run<T>(operation: () => T, valid: () => boolean = () => true, upload = 0): Promise<T> {
       check(valid);
@@ -53,9 +67,18 @@ export function createPageWork(
         if (jobs < operations && cpu < cpuMs && (bytes === 0 || bytes + upload <= uploadBytes)) break;
         if (!continuation) {
           yields++;
-          continuation = wait(Math.max(0, start + windowMs - now())).finally(() => {
-            continuation = undefined;
-          });
+          continuation = wait(blocking ? 0 : Math.max(0, start + windowMs - now()))
+            .then(() => {
+              if (blocking) {
+                start = now();
+                cpu = 0;
+                jobs = 0;
+                bytes = 0;
+              }
+            })
+            .finally(() => {
+              continuation = undefined;
+            });
         }
         await continuation;
         check(valid);

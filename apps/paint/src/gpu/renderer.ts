@@ -18,7 +18,8 @@ import { createMixerWells } from './mixerWells';
 import { createReadbackQueue } from './readbackQueue';
 import * as shader from './shaders';
 import { createSmudgePickup } from './smudgePickup';
-import { stampBounds } from './stampBounds';
+import { createSmudgeDepositBatch, planSmudgeDeposits } from './smudgeDepositBatch';
+import { directStampBounds, stampBounds } from './stampBounds';
 import { createTexturedStamps } from './texturedStamps';
 import { createTileMipmaps } from './tileMipmaps';
 import { rendererToolState, type RendererToolState } from './toolState';
@@ -45,6 +46,8 @@ export async function createPaintRenderer(
     displayCache?: boolean;
     /** Use fused Smudge coverage by default; false retains the multipass reference for GPU verification. */
     directSmudge?: boolean;
+    /** Batch eligible multi-tile Smudge deposits; false preserves individual tile passes for comparison. */
+    batchSmudgeTiles?: boolean;
     /** Cache and batch mipmap passes; false retains TypeGPU's per-level helper for GPU comparisons. */
     batchedMipmaps?: boolean;
     /** Include visible tiles' mip updates in their display submission; false submits each chain for verification. */
@@ -122,6 +125,7 @@ export async function createPaintRenderer(
   const displayCache = createDisplayCache(root, sampler, generateMipmaps);
   const cache = new Map<string, ReturnType<typeof createTile>>();
   const samplingScratch: ReturnType<typeof createStrokeScratch>[] = [];
+  let smudgeDeposits: ReturnType<typeof createSmudgeDepositBatch> | undefined;
   let sharedScratch = false;
   let residentLimit = Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES);
   const scratchLimit = Math.min(32, residentLimit);
@@ -456,10 +460,41 @@ export async function createPaintRenderer(
           group.push(dab);
         }
     const commands = batch ?? commandBatch(device);
+    if (direct && sharedScratch && options.batchSmudgeTiles !== false && groups.size >= 8 &&
+        residentLimit >= 8 && !historySource && abrStamps!.canBatchDirect()) {
+      const dab = dabs[0]!;
+      // Batch eviction can retire several LRU tiles together. Leave that many spare slots
+      // so every newly acquired destination stays resident until its copy-back is encoded.
+      const capacity = Math.min(32, residentLimit - evictionSize + 1);
+      smudgeDeposits ??= createSmudgeDepositBatch(root, abrStamps!);
+      try {
+        for (const chunk of planSmudgeDeposits(dab, groups.keys(), capacity)) {
+          const tiles: Awaited<ReturnType<typeof ensure>>[] = [];
+          for (const { key } of chunk.tiles) tiles.push(await ensure(stroke.layer, key, commands));
+          for (const { key } of chunk.tiles) {
+            const id = keyFor(stroke.layer, key);
+            if (!strokeTiles.has(id)) strokeTiles.set(id, { before: stroke.layer.tiles.get(key) });
+          }
+          smudgeDeposits.draw(commands, dab, sampled!, chunk, tiles.map(tile => root.unwrap(tile.texture)));
+          chunk.tiles.forEach(({ key }, index) => {
+            tiles[index]!.mipLevelReady = 0;
+            tiles[index]!.strokeDirty = true;
+            displayCache.remove(keyFor(stroke!.layer, key), batch?.flush);
+            markTile(key);
+          });
+        }
+      } finally {
+        if (!batch) commands.flush();
+      }
+      return;
+    }
     const directStamp = direct ? abrStamps!.prepareDirect(dabs[0]!) : undefined;
     let pendingTiles = 0;
     try {
       for (const [key, dabs] of groups) {
+        const [tx, ty] = coordinates(key);
+        const bounds = direct ? directStampBounds(dabs[0]!, tx, ty) : stampBounds(dabs, tx, ty);
+        if (!bounds) continue;
         let historyPickup: typeof sampled;
         if (historySource) {
           // A single scratch texture is reused; submit every prior reader before uploading the next tile.
@@ -485,8 +520,6 @@ export async function createPaintRenderer(
         }
         const id = keyFor(stroke.layer, key);
         const tile = await ensure(stroke.layer, key, commands);
-        const [tx, ty] = coordinates(key);
-        const bounds = stampBounds(dabs, tx, ty);
         const scratch = sharedScratch
           ? (samplingScratch[reserveSamplingScratch(commands)] ??= createStrokeScratch(root))
           : prepareStroke(root, tile);
@@ -779,6 +812,7 @@ export async function createPaintRenderer(
           (historyTexture ? TILE_SIZE * TILE_SIZE * 4 : 0) +
           (mixerWells?.bytes ?? 0) +
           (smudgePickup?.bytes() ?? 0) +
+          (smudgeDeposits?.bytes() ?? 0) +
           samplingScratch.reduce((sum, scratch) => sum + scratchBytes(scratch), 0) +
           [...cache.values(), ...spareTiles, ...tailPool].reduce(
             (sum, tile) => sum + (TILE_SIZE * TILE_SIZE * 4 * 4) / 3 + (tile.scratch ? scratchBytes(tile.scratch) : 0),
@@ -1299,6 +1333,7 @@ export async function createPaintRenderer(
       disposed = true;
       readbacks.destroy();
       lasso.destroy();
+      smudgeDeposits?.destroy();
       abrStamps?.destroy();
       historyTexture?.destroy();
       pickup?.destroy();

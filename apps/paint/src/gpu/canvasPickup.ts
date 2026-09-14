@@ -27,18 +27,23 @@ export function createCanvasPickup(
 ) {
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
   const mixing = root.createBuffer(d.u32).$usage('uniform');
-  // One placement per encoded draw. Reusing a shared uniform would move earlier
-  // tiles when the queue receives the final write before a batched submission.
-  const slots = Array.from({ length: 32 }, () => ({
-    placement: root.createBuffer(d.vec4f).$usage('uniform'),
-    groups: new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof tileLayout.entries>>>()
-  }));
-  const reserve = commandSlots(slots.length);
+  // A whole capture shares one placement upload. Texture bindings no longer depend on placement slots.
+  const slots: Array<ReturnType<typeof createPlacements> | undefined> = Array(8);
+  let nextSlot = 0;
+  const smallSlots: Array<ReturnType<typeof createSmallPlacement> | undefined> = Array(32);
+  const reserveSmall = commandSlots(smallSlots.length);
+  const groups = new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof tileLayout.entries>>>();
   let uploadedMixing: boolean | undefined;
   const layerParams = root.createBuffer(d.vec4f).$usage('uniform');
   const tilePipeline = root.createRenderPipeline({
+    attribs: { placement: placementLayout.attrib },
     vertex: tileVertex,
     fragment: tileFragment,
+    targets: { format: 'rgba8unorm' }
+  });
+  const smallPipeline = root.createRenderPipeline({
+    vertex: smallTileVertex,
+    fragment: smallTileFragment,
     targets: { format: 'rgba8unorm' }
   });
   const composite = root.createRenderPipeline({
@@ -101,6 +106,11 @@ export function createCanvasPickup(
           if (options.allLayers && (!layer.visible || layer.opacity <= 0)) continue;
           const target = direct ? result : patch.layer;
           const targetView = root.unwrap(target).createView();
+          const count = (plan.maxX - plan.minX + 1) * (plan.maxY - plan.minY + 1);
+          const placements = count > 32 ? reservePlacements(region, plan) : undefined;
+          const placedPipeline = placements ? tilePipeline.with(placementLayout, placements.buffer) : undefined;
+          const pending = { commands, version: commands.version };
+          const columns = plan.maxX - plan.minX + 1;
           let populated = false;
           let pass: GPURenderPassEncoder | undefined;
           const pendingSources = new Set<TgpuTexture>();
@@ -119,25 +129,47 @@ export function createCanvasPickup(
                 const tile = await getTile(layer, `${x},${y}`, minify, flush, requiredMip);
                 if (disposed) throw new Error('Canvas pickup was disposed during capture.');
                 if (!tile) continue;
-                // Subtract the world origin on the CPU so large coordinates retain local pixel precision.
-                const slot = slots[reserve(commands, flush)]!;
-                slot.placement.write(
-                  d.vec4f(
-                    (x * 256 - region.x) / region.width,
-                    (y * 256 - region.y) / region.height,
-                    256 / region.width,
-                    256 / region.height
-                  )
-                );
+                let small: ReturnType<typeof createSmallPlacement> | undefined;
+                if (!placements) {
+                  const index = reserveSmall(commands, flush);
+                  small = smallSlots[index] ??= createSmallPlacement();
+                  small.buffer.write(
+                    d.vec4f(
+                      (x * 256 - region.x) / region.width,
+                      (y * 256 - region.y) / region.height,
+                      256 / region.width,
+                      256 / region.height
+                    )
+                  );
+                }
                 pass ??= commands.encoder().beginRenderPass({
                   colorAttachments: [{ view: targetView, loadOp: populated ? 'load' : 'clear', storeOp: 'store' }]
                 });
-                let group = slot.groups.get(tile);
-                if (!group) {
-                  group = root.createBindGroup(tileLayout, { image: tile, sampler, placement: slot.placement, mixing });
-                  slot.groups.set(tile, group);
+                if (placements) {
+                  let group = groups.get(tile);
+                  if (!group) {
+                    group = root.createBindGroup(tileLayout, { image: tile, sampler, mixing });
+                    groups.set(tile, group);
+                  }
+                  placedPipeline!
+                    .with(pass)
+                    .with(group)
+                    .draw(6, 1, 0, (y - plan.minY) * columns + x - plan.minX);
+                  pending.version = commands.version;
+                  placements.pending = pending;
+                } else {
+                  let group = small!.groups.get(tile);
+                  if (!group) {
+                    group = root.createBindGroup(smallPlacementLayout, {
+                      image: tile,
+                      sampler,
+                      mixing,
+                      placement: small!.buffer
+                    });
+                    small!.groups.set(tile, group);
+                  }
+                  smallPipeline.with(pass).with(group).draw(6);
                 }
-                tilePipeline.with(pass).with(group).draw(6);
                 pendingSources.add(tile);
                 populated = true;
               }
@@ -149,6 +181,7 @@ export function createCanvasPickup(
             // Close the pass on failure. Owned commands are discarded; a borrowed
             // batch may submit scratch-only writes during owner cleanup. No patch escapes.
             pass?.end();
+            if (placements && (!direct || !options.commands)) placements.pending = undefined;
             throw error;
           }
           // An empty capture must not expose pixels left by the preceding dab.
@@ -188,17 +221,64 @@ export function createCanvasPickup(
       }
     },
     /** Persistent memory stays bounded independently of canvas area and document tile count. */
-    bytes: () => (scratch ? scratch.width * scratch.height * 4 * 3 : 0),
+    bytes: () =>
+      (scratch ? scratch.width * scratch.height * 4 * 3 : 0) +
+      slots.reduce((bytes, slot) => bytes + (slot ? slot.capacity * 16 : 0), 0) +
+      smallSlots.reduce((bytes, slot) => bytes + (slot ? 16 : 0), 0),
     destroy() {
       if (disposed) return;
       disposed = true;
+      for (const slot of slots) slot?.pending?.commands.flush();
       scratch?.destroy();
       scratch = undefined;
       mixing.destroy();
-      for (const slot of slots) slot.placement.destroy();
+      for (const slot of slots) {
+        slot?.buffer.destroy();
+      }
+      for (const slot of smallSlots) slot?.buffer.destroy();
       layerParams.destroy();
     }
   };
+
+  /** Submit pending readers before recycling or growing a placement buffer. No open pass exists here. */
+  function reservePlacements(region: PickupRegion, plan: ReturnType<typeof planCanvasPickup>) {
+    const index = nextSlot++ % slots.length;
+    let slot = slots[index];
+    if (slot?.pending && slot.pending.commands.version === slot.pending.version) slot.pending.commands.flush();
+    const count = (plan.maxX - plan.minX + 1) * (plan.maxY - plan.minY + 1);
+    if (!slot || slot.capacity < count) {
+      slot?.buffer.destroy();
+      slot = slots[index] = createPlacements(2 ** Math.ceil(Math.log2(count)));
+    }
+    let offset = 0;
+    for (let y = plan.minY; y <= plan.maxY; y++)
+      for (let x = plan.minX; x <= plan.maxX; x++) {
+        // CPU subtraction preserves local precision at large document coordinates.
+        slot.data[offset++] = (x * 256 - region.x) / region.width;
+        slot.data[offset++] = (y * 256 - region.y) / region.height;
+        slot.data[offset++] = 256 / region.width;
+        slot.data[offset++] = 256 / region.height;
+      }
+    root.device.queue.writeBuffer(root.unwrap(slot.buffer), 0, slot.data, 0, count * 4);
+    return slot;
+  }
+
+  function createSmallPlacement() {
+    const buffer = root.createBuffer(d.vec4f).$usage('uniform');
+    return {
+      buffer,
+      groups: new WeakMap<TgpuTexture, ReturnType<typeof root.createBindGroup<typeof smallPlacementLayout.entries>>>()
+    };
+  }
+
+  function createPlacements(capacity: number) {
+    return {
+      capacity,
+      buffer: root.createBuffer(d.arrayOf(d.vec4f, capacity)).$usage('vertex'),
+      data: new Float32Array(capacity * 4),
+      pending: undefined as { commands: ReturnType<typeof commandBatch>; version: number } | undefined
+    };
+  }
 }
 
 function createScratch(root: TgpuRoot, width: number, height: number) {
@@ -228,27 +308,51 @@ function clear(root: TgpuRoot, texture: ReturnType<typeof createScratch>['a']) {
     .end();
   root.device.queue.submit([encoder.finish()]);
 }
+const placementLayout = tgpu.vertexLayout(d.arrayOf(d.vec4f), 'instance');
+const smallPlacementLayout = tgpu.bindGroupLayout({
+  placement: { uniform: d.vec4f },
+  image: { texture: d.texture2d() },
+  sampler: { sampler: 'filtering' },
+  mixing: { uniform: d.u32 }
+});
 const tileLayout = tgpu.bindGroupLayout({
   image: { texture: d.texture2d() },
   sampler: { sampler: 'filtering' },
-  placement: { uniform: d.vec4f },
   mixing: { uniform: d.u32 }
 });
 const tileVertex = tgpu.vertexFn({
+  in: { index: d.builtin.vertexIndex, placement: d.vec4f },
+  out: { position: d.builtin.position, uv: d.vec2f }
+})((input) => {
+  'use gpu';
+  return placeTile(input.index, input.placement);
+});
+const smallTileVertex = tgpu.vertexFn({
   in: { index: d.builtin.vertexIndex },
   out: { position: d.builtin.position, uv: d.vec2f }
 })((input) => {
+  'use gpu';
+  return placeTile(input.index, smallPlacementLayout.$.placement);
+});
+function placeTile(index: number, placement: d.v4f) {
   'use gpu';
   const corners = d.arrayOf(
     d.vec2f,
     6
   )([d.vec2f(0, 0), d.vec2f(1, 0), d.vec2f(0, 1), d.vec2f(0, 1), d.vec2f(1, 0), d.vec2f(1, 1)]);
-  const uv = corners[input.index]!;
-  const position = std.add(tileLayout.$.placement.xy, std.mul(uv, tileLayout.$.placement.zw));
+  const uv = corners[index]!;
+  const position = std.add(placement.xy, std.mul(uv, placement.zw));
   return { position: d.vec4f(position.x * 2 - 1, 1 - position.y * 2, 0, 1), uv };
-});
+}
 const tileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) => {
   'use gpu';
   if (tileLayout.$.mixing > 0) return sampleMixing(tileLayout.$.image, tileLayout.$.sampler, input.uv, true);
   return std.textureSample(tileLayout.$.image, tileLayout.$.sampler, input.uv);
+});
+
+const smallTileFragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) => {
+  'use gpu';
+  if (smallPlacementLayout.$.mixing > 0)
+    return sampleMixing(smallPlacementLayout.$.image, smallPlacementLayout.$.sampler, input.uv, true);
+  return std.textureSample(smallPlacementLayout.$.image, smallPlacementLayout.$.sampler, input.uv);
 });

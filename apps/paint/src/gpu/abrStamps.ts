@@ -268,6 +268,10 @@ export function createAbrStamps(root: TgpuRoot) {
     /** One primary Smudge stamp can composite directly unless coverage needs neighboring or secondary pixels. */
     canDrawDirect: () =>
       !!settings?.smudge && !settings.values.useWetEdges && !(settings.values.useDualBrush && settings.dual),
+    /** Shared-area deposition currently excludes effects whose coordinates or masks are tile-local. */
+    canBatchDirect: () => !!settings?.smudge && !settings.values.useWetEdges &&
+      !(settings.values.useDualBrush && settings.dual) && !settings.values.useNoise &&
+      !(settings.values.useTexture && settings.pattern) && settings.blendMode !== 'Dslv',
     /** Upload one primary dab for all its tiles. Encode its draws before preparing
      * another dab. Slots submit pending readers before their bytes are recycled.
      * The vertex shader reads tile placement from the pickup uniform's spare bytes.
@@ -591,8 +595,8 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
 function coverageTexture(root: TgpuRoot, width: number, height: number, mipLevelCount: number) {
   return root.createTexture({ size: [width, height], format: 'r8unorm', mipLevelCount }).$usage('sampled', 'render');
 }
-function texture(root: TgpuRoot) {
-  return root.createTexture({ size: [256, 256], format: 'rgba8unorm' }).$usage('sampled', 'render');
+function texture(root: TgpuRoot, side = 256) {
+  return root.createTexture({ size: [side, side], format: 'rgba8unorm' }).$usage('sampled', 'render');
 }
 type Texture = ReturnType<typeof texture>;
 const Params = d.struct({
@@ -639,9 +643,11 @@ const vertex = tgpu.vertexFn({
   const corner = corners[input.index]!;
   const local = std.mul(corner, input.bounds.zw);
   let center = d.vec2f(input.bounds.xy);
+  let halfTarget = d.vec2f(128);
   if (sharedStamp.$) {
     // CPU subtraction preserves local precision at large document coordinates.
     center = d.vec2f(compositeLayout.$.pickupParams.center);
+    halfTarget = std.mul(d.vec2f(std.textureDimensions(compositeLayout.$.base)), 0.5);
   }
   const pixel = std.add(
     center,
@@ -651,7 +657,7 @@ const vertex = tgpu.vertexFn({
     )
   );
   return {
-    position: d.vec4f(pixel.x / 128 - 1, 1 - pixel.y / 128, 0, 1),
+    position: d.vec4f(pixel.x / halfTarget.x - 1, 1 - pixel.y / halfTarget.y, 0, 1),
     uv: std.add(std.mul(std.mul(corner, input.transform.zw), 0.5), d.vec2f(0.5)),
     dynamics: d.vec4f(input.dynamics),
     color: d.vec4f(input.color)

@@ -170,29 +170,33 @@ export function createVirtualTexture(
     /** Refreshes the last frame's detail and coarse coverage before another stroke can expose the edit.
      * Unchanged page tokens skip all work; refreshed resident pages reuse their existing atlas slots.
      */
-    async prepare(layers: Layer[]) {
-      begin(layers, false);
-      await pages.retain(coverage);
-      const refresh = new Map(
-        [...displayed].filter(([key, page]) => entries.has(key) && layers.some((layer) => layer.id === page.layerId))
-      );
-      for (const page of coverage) refresh.set(id(page), page);
-      const targets = [...refresh.values()];
-      for (let offset = 0; offset < targets.length; offset += 2) {
-        await Promise.all(
-          targets.slice(offset, offset + 2).map(async (page) => {
-            const key = id(page),
-              token = pages.token(page);
-            if (entries.get(key)?.token === token) return;
-            const valid = () => !disposed && pages.token(page) === token;
-            await work.task(async () => {
-              const pixels = await pages.bordered(page, valid);
-              if (!(await work.run(() => upload(page, token, pixels), valid, pixels.byteLength)))
-                throw new Error('Could not prepare the drawing overview.');
-            }, valid);
-          })
+    prepare(layers: Layer[]) {
+      // Stroke completion awaits this coverage before accepting the next contact.
+      // Keep bounded cooperative chunks, but don't throttle them as background streaming.
+      return work.blocking(async () => {
+        begin(layers, false);
+        await pages.retain(coverage);
+        const refresh = new Map(
+          [...displayed].filter(([key, page]) => entries.has(key) && layers.some((layer) => layer.id === page.layerId))
         );
-      }
+        for (const page of coverage) refresh.set(id(page), page);
+        const targets = [...refresh.values()];
+        for (let offset = 0; offset < targets.length; offset += 2) {
+          await Promise.all(
+            targets.slice(offset, offset + 2).map(async (page) => {
+              const key = id(page),
+                token = pages.token(page);
+              if (entries.get(key)?.token === token) return;
+              const valid = () => !disposed && pages.token(page) === token;
+              await work.task(async () => {
+                const pixels = await pages.bordered(page, valid);
+                if (!(await work.run(() => upload(page, token, pixels), valid, pixels.byteLength)))
+                  throw new Error('Could not prepare the drawing overview.');
+              }, valid);
+            })
+          );
+        }
+      });
     },
     /** Draws committed pages without waiting for reads. Returns true only when every occupied
      * part of the selection has resident coverage. Empty branches need no texture.
