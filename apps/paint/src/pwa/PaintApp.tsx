@@ -3,6 +3,7 @@ import { registerSW } from 'virtual:pwa-register';
 import PaintStudio from '../PaintStudio';
 import styles from './PaintApp.module.css';
 import { createPwa } from './createPwa';
+import { paintBuild } from './buildInfo';
 
 /** Standalone host owns installation and offline status; the embedded editor never registers a service worker. */
 export function PaintApp() {
@@ -24,6 +25,22 @@ export function PaintApp() {
               {pwa.error()}
             </p>
           </Show>
+          <p class={styles.buildInfo} aria-label="App version">
+            <span>{paintBuild?.development ? 'Development build' : 'Paint build'}</span>
+            <Show when={paintBuild}>
+              {(build) => (
+                <>
+                  <time datetime={build().builtAt}>
+                    {build().builtAt.slice(0, 19).replace('T', ' ')} UTC
+                  </time>
+                  <span title={build().revision ?? undefined}>
+                    {build().revision?.slice(0, 7) ?? 'No commit ID'}
+                    {build().localChanges ? ' · local changes' : ''}
+                  </span>
+                </>
+              )}
+            </Show>
+          </p>
         </>
       }
     />
