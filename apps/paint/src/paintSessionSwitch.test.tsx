@@ -134,6 +134,8 @@ it.each([false, true])(
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', altKey: true }));
     flush();
     expect(session.brush()).toMatchObject({ color: '#abcdef', backgroundColor: '#123456' });
+    expect(session.adaptiveQuality()).toBe(true);
+    session.setAdaptiveQuality(false);
     session.setLiveTail(false);
     session.setShowPenCursor(true);
     session.toggleDebug();
@@ -210,6 +212,8 @@ it.each([false, true])(
       expect(session.brush().size).toBe(123);
       expect(session.brush().engine?.id).toBe('textured');
     }
+    expect(session.adaptiveQuality()).toBe(false);
+    expect(second.postMessage).toHaveBeenCalledWith({ type: 'adaptive-quality', enabled: false });
     expect(session.showPenCursor()).toBe(true);
     expect(second.postMessage).toHaveBeenCalledWith({ type: 'live-tail', enabled: false });
     expect(second.postMessage).toHaveBeenCalledWith({ type: 'debug', enabled: true });

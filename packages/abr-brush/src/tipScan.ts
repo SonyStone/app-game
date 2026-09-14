@@ -22,17 +22,16 @@ export function writeTipRows(
   target: Parameters<typeof rasterizeTipRows>[3], left: TipEdge, right: TipEdge, leftStep: TipEdge, rightStep: TipEdge
 ): void {
   const sampling = tipSamplingLevel(scale, levelCount - 1);
-  const rows = tipScanRows(target.width, target.rows, left, right, leftStep, rightStep);
-  for (const [index, row] of rows.entries()) {
+  scanTipRows(target.width, target.rows, left, right, leftStep, rightStep, (index, start, count, x, y, dx, dy) => {
     const offset = target.offset + index * target.stride;
-    if (row.count === 0) {
+    if (count === 0) {
       if (target.clear) writer.clear(offset, offset + target.width);
-      continue;
+      return;
     }
-    if (target.clear) writer.clear(offset, offset + row.start);
-    writer.span({ offset: offset + row.start, count: row.count, x: row.x, y: row.y, dx: row.dx, dy: row.dy, sampling });
-    if (target.clear) writer.clear(offset + row.start + row.count - 1, offset + target.width);
-  }
+    if (target.clear && start > 0) writer.clear(offset, offset + start);
+    writer.span({ offset: offset + start, count, x, y, dx, dy, sampling });
+    if (target.clear) writer.clear(offset + start + count - 1, offset + target.width);
+  });
 }
 
 /** A scan edge's viewport x and source coordinates, or their row advances.
@@ -48,6 +47,16 @@ export function tipScanRows(
   width: number, count: number, left: TipEdge, right: TipEdge, leftStep: TipEdge, rightStep: TipEdge
 ) {
   const rows: { start: number; count: number; x: number; y: number; dx: number; dy: number }[] = [];
+  scanTipRows(width, count, left, right, leftStep, rightStep,
+    (_index, start, count, x, y, dx, dy) => rows.push({ start, count, x, y, dx, dy }));
+  return rows;
+}
+
+/** Streams rows to the writer without allocating an intermediate row array or row records. */
+function scanTipRows(
+  width: number, count: number, left: TipEdge, right: TipEdge, leftStep: TipEdge, rightStep: TipEdge,
+  emit: (index: number, start: number, count: number, x: number, y: number, dx: number, dy: number) => void
+) {
   let a = [left[0], left[1], left[2]], b = [right[0], right[1], right[2]], da = leftStep, db = rightStep;
   for (let row = 0; row < count; row++) {
     if (b[0]! < a[0]!) {
@@ -56,23 +65,22 @@ export function tipScanRows(
     }
     const start = Math.max(0, int32(Math.floor(a[0]!)));
     const end = Math.min(width - 1, int32(Math.ceil(b[0]!)));
-    if (end < start) rows.push({ start: 0, count: 0, x: 0, y: 0, dx: 0, dy: 0 });
+    if (end < start) emit(row, 0, 0, 0, 0, 0, 0);
     else {
       const distance = b[0]! - a[0]!;
       const reciprocal = distance === 0 ? 1 : 1 / distance;
       const dx = (b[1]! - a[1]!) * reciprocal, dy = (b[2]! - a[2]!) * reciprocal;
       const advance = start - a[0]!;
-      rows.push({
-        start, count: end - start + 1,
-        x: int32(multiplyAdd(dx, advance, a[1]!) * 65536),
-        y: int32(multiplyAdd(dy, advance, a[2]!) * 65536),
-        dx: int32(dx * 65536), dy: int32(dy * 65536)
-      });
+      emit(row, start, end - start + 1,
+        int32(multiplyAdd(dx, advance, a[1]!) * 65536),
+        int32(multiplyAdd(dy, advance, a[2]!) * 65536),
+        int32(dx * 65536), int32(dy * 65536));
     }
-    a = a.map((value, i) => value + da[i]!);
-    b = b.map((value, i) => value + db[i]!);
+    for (let i = 0; i < 3; i++) {
+      a[i] = a[i]! + da[i]!;
+      b[i] = b[i]! + db[i]!;
+    }
   }
-  return rows;
 }
 
 function int32(value: number): number {

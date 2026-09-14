@@ -1,11 +1,15 @@
 import { projectionBlockWords as block } from './tipProjectionBlocks';
 import { d, tgpu, type TgpuRoot } from 'typegpu';
 import type { createTipRasterPlan } from './tipRasterPlan';
+import { writeSampledTip, type sampledTipTransform } from './sampledTipRaster';
+import type { TipRasterSpan } from './tipRasterWriter';
 import type { TipLevel } from './tipSampling';
 
 /** Uploads the verified tip pyramid once, preserving its byte-valued levels.
  * Prepared batches own immutable command buffers, so recording later batches
- * cannot overwrite commands awaiting submission. Supply levels from createTipPyramid.
+ * cannot overwrite commands awaiting submission. Released batches reuse a bounded
+ * pool of at most 16 uploads / 4 MiB of GPU storage plus equally sized CPU arrays.
+ * Supply levels from createTipPyramid.
  * Submit recorded commands before destroying their batches or this owner.
  * No CPU pixel rasterization or GPU readback.
  */
@@ -21,21 +25,119 @@ export function createTipRasterGpu(root: TgpuRoot, levels: readonly TipLevel[]) 
   }
   const pixels = root.createBuffer(d.arrayOf(d.u32, packed.length), packed).$usage('storage');
   const sizes = root.createBuffer(d.arrayOf(d.vec4u, descriptors.length), descriptors).$usage('storage');
+  const available: ReturnType<typeof makeUpload>[] = [];
+  let availableBytes = 0;
+  let disposed = false;
   return {
+    /** Packs small affine tips directly into reusable row buffers. Returns undefined for
+     * overlapping/split row writes or perspective tips, which require the general planner.
+     * Exterior bytes are zero coverage; this path is for mask consumers only.
+     */
+    prepareAffine(tips: readonly ReturnType<typeof sampledTipTransform>[]) {
+      if (disposed) throw new Error('The tip rasterizer is disposed.');
+      if (tips.some(tip => tip.quad.some(vertex => vertex[4] !== undefined))) return undefined;
+      const origins = tips.map(tip => ({ x: Math.floor(tip.bounds.left / 4) * 4, y: tip.bounds.top }));
+      const rowCount = tips.reduce((sum, tip) => sum + tip.bounds.bottom - tip.bounds.top, 0);
+      const upload = borrowUpload(rowCount, rowCount, tips.length, 1);
+      const { rowWords, spanWords, destinationWords } = upload;
+      rowWords.fill(0, 0, rowCount * rowWordStride);
+      let baseRow = 0, length = 0, supported = true;
+      const firstRows: number[] = [];
+      for (let index = 0; index < tips.length; index++) {
+        const tip = tips[index]!, origin = origins[index]!;
+        const width = tip.bounds.right - origin.x, height = tip.bounds.bottom - origin.y;
+        const stride = Math.ceil((width + 4) / 4) * 4;
+        firstRows.push(baseRow);
+        const at = index * destinationWordStride;
+        destinationWords[at] = width; destinationWords[at + 1] = height;
+        destinationWords[at + 2] = baseRow; destinationWords[at + 3] = length;
+        length += width * height;
+        const write = (offset: number, count: number, source?: TipRasterSpan) => {
+          let consumed = 0;
+          while (consumed < count) {
+            const row = Math.floor((offset + consumed) / stride), start = (offset + consumed) % stride;
+            const size = Math.min(count - consumed, stride - start), end = start + size;
+            if (row >= 0 && row < height && size > 0) {
+              const rowAt = (baseRow + row) * rowWordStride;
+              const spanAt = (baseRow + row) * tipSpanWords;
+              const o = tipSpanOffsets;
+              if (source) {
+                // A convex affine tip normally emits one source span per row. Keep
+                // the general planner for any future writer that violates that contract.
+                if (rowWords[rowAt + 1] || source.options?.perspective) { supported = false; return; }
+                rowWords[rowAt] = baseRow + row; rowWords[rowAt + 1] = 1;
+                packAffineSpan(spanWords, spanAt, start, size, source, consumed);
+              } else if (rowWords[rowAt + 1]) {
+                const oldStart = spanWords[spanAt + o.start]!, oldEnd = oldStart + spanWords[spanAt + o.count]!;
+                if (start <= oldStart && end >= oldEnd) rowWords[rowAt + 1] = 0;
+                else if (start <= oldStart && end > oldStart) {
+                  const advance = end - oldStart;
+                  spanWords[spanAt + o.start] = end;
+                  spanWords[spanAt + o.count] = oldEnd - end;
+                  spanWords[spanAt + o.x] = spanWords[spanAt + o.x]! + spanWords[spanAt + o.dx]! * advance;
+                  spanWords[spanAt + o.y] = spanWords[spanAt + o.y]! + spanWords[spanAt + o.dy]! * advance;
+                } else if (start > oldStart && start < oldEnd) {
+                  if (end < oldEnd) { supported = false; return; }
+                  spanWords[spanAt + o.count] = start - oldStart;
+                }
+              }
+            }
+            consumed += size;
+          }
+        };
+        // Each tip starts in distinct, zeroed rows. Initial clears cannot remove
+        // anything until the writer has emitted its first source span.
+        let hasSource = false;
+        writeSampledTip(levels, tip, { byteOffset: 0, clear: (start, end) => {
+          if (hasSource) write(start, end - start);
+        }, span: source => { hasSource = true; write(source.offset, source.count, source); } },
+          { offset: 0, stride, width, height, originX: origin.x, originY: origin.y });
+        baseRow += height;
+        if (!supported) { recycleUpload(upload); return undefined; }
+      }
+      const queue = root.device.queue;
+      if (rowCount) {
+        queue.writeBuffer(root.unwrap(upload.rows), 0, rowWords.buffer, 0, rowCount * rowWordStride * 4);
+        queue.writeBuffer(root.unwrap(upload.spans), 0, spanWords.buffer, 0, rowCount * tipSpanWords * 4);
+      }
+      if (tips.length) queue.writeBuffer(root.unwrap(upload.destinations), 0, destinationWords.buffer, 0, tips.length * destinationWordStride * 4);
+      return { ...borrowedBatch(upload, firstRows, length), origins };
+    },
     /** Compiles a batch of row plans into GPU buffers, with no shared mutable upload slots. */
     prepare(plans: readonly ReturnType<typeof createTipRasterPlan>[]) {
+      if (disposed) throw new Error('The tip rasterizer is disposed.');
       const projection = collectProjectionBlocks(plans);
-      const rows: d.v2u[] = [];
-      const spanCount = plans.reduce((sum, plan) => sum + plan.rows.reduce((count, row) => count + row.length, 0), 0);
-      const spanWords = new Uint32Array(Math.max(1, spanCount) * tipSpanWords);
+      const rowCount = plans.reduce((sum, plan) => sum + plan.rows.length, 0);
+      let spanCount = 0;
+      for (const plan of plans) {
+        const first = plan.rowRange?.[0] ?? 0, end = plan.rowRange?.[1] ?? plan.rows.length;
+        for (let row = first; row < end; row++) spanCount += plan.rows[row]!.length;
+      }
+      const upload = borrowUpload(rowCount, spanCount, plans.length, projection.length);
+      const { rowWords, spanWords, destinationWords, blockWords } = upload;
+      rowWords.fill(0);
+      blockWords.fill(0);
       let spanIndex = 0;
-      const destinations: d.v4u[] = [];
+      const firstRows: number[] = [];
+      let rowIndex = 0, destinationIndex = 0;
       let length = 0;
       for (const plan of plans) {
-        destinations.push(d.vec4u(plan.width, plan.height, rows.length, length));
+        firstRows.push(rowIndex);
+        const at = destinationIndex++ * destinationWordStride;
+        destinationWords[at] = plan.width;
+        destinationWords[at + 1] = plan.height;
+        destinationWords[at + 2] = rowIndex;
+        destinationWords[at + 3] = length;
         length += plan.width * plan.height;
-        for (const row of plan.rows) {
-          rows.push(d.vec2u(spanIndex, row.length));
+        const first = plan.rowRange?.[0] ?? 0, end = plan.rowRange?.[1] ?? plan.rows.length;
+        // Untouched rows already contain zero counts in the typed upload. Their offsets are immaterial.
+        const baseRow = rowIndex;
+        rowIndex += plan.rows.length;
+        for (let index = first; index < end; index++) {
+          const row = plan.rows[index]!;
+          const rowAt = (baseRow + index) * rowWordStride;
+          rowWords[rowAt] = spanIndex;
+          rowWords[rowAt + 1] = row.length;
           for (const segment of row) {
             const source = segment.source;
             const sampling = source?.sampling;
@@ -64,34 +166,78 @@ export function createTipRasterGpu(root: TgpuRoot, levels: readonly TipLevel[]) 
           }
         }
       }
-      // Copy row blocks straight into mapped GPU memory. A full intermediate
-      // packed array would duplicate every block and add another large copy.
-      const blockBuffer = root.createBuffer(d.arrayOf(d.i32, projection.length), buffer => {
-        const words = new Int32Array(buffer.arrayBuffer);
-        for (const [data, range] of projection.ranges)
-          words.set(data.subarray(range.first * block.stride, range.end * block.stride), range.base);
-        projection.ranges.clear();
-      }).$usage('storage');
-      // Snapshot now, retaining neither caller arrays nor mutable upload slots.
-      root.unwrap(blockBuffer);
-      const rowBuffer = root.createBuffer(d.arrayOf(d.vec2u, Math.max(1, rows.length)), rows.length ? rows : [d.vec2u()]).$usage('storage');
-      // Pack directly into schema-derived offsets, avoiding one temporary object
-      // per block and a second field-by-field serialization during upload.
-      const spanBuffer = root.createBuffer(d.arrayOf(TipSpan, Math.max(1, spanCount)),
-        buffer => buffer.write(spanWords.buffer)).$usage('storage');
-      const destinationBuffer = root.createBuffer(d.arrayOf(d.vec4u, Math.max(1, destinations.length)), destinations.length ? destinations : [d.vec4u()]).$usage('storage');
-      return {
-        /** Bind once per batch; sampleTipPlanByte is shared by compute and fragment consumers. */
-        group: root.createBindGroup(tipRasterLayout, { pixels, sizes, rows: rowBuffer, spans: spanBuffer, blocks: blockBuffer }),
-        destinations: destinationBuffer,
-        length,
-        /** Bytes owned by this batch, excluding the shared source pyramid. */
-        bytes: Math.max(1, rows.length) * 8 + spanWords.byteLength + projection.length * Int32Array.BYTES_PER_ELEMENT + Math.max(1, destinations.length) * 16,
-        destroy() { blockBuffer.destroy(); rowBuffer.destroy(); spanBuffer.destroy(); destinationBuffer.destroy(); }
-      };
+      for (const [data, range] of projection.ranges)
+        blockWords.set(data.subarray(range.first * block.stride, range.end * block.stride), range.base);
+      projection.ranges.clear();
+      upload.blocks.write(blockWords.buffer);
+      upload.rows.write(rowWords.buffer);
+      upload.spans.write(spanWords.buffer);
+      upload.destinations.write(destinationWords.buffer);
+      return borrowedBatch(upload, firstRows, length);
     },
-    destroy() { pixels.destroy(); sizes.destroy(); }
+    /** Retained upload storage; borrowed active batches report their own bytes. */
+    get pooledBytes() { return availableBytes; },
+    destroy() {
+      disposed = true;
+      for (const upload of available) upload.destroy();
+      available.length = 0;
+      availableBytes = 0;
+      pixels.destroy(); sizes.destroy();
+    }
   };
+
+  function borrowUpload(rowCount: number, spanCount: number, planCount: number, blockCount: number) {
+    const index = available.findIndex(slot => slot.rowCount >= rowCount && slot.spanCount >= spanCount &&
+      slot.planCount >= planCount && slot.blockCount >= blockCount);
+    if (index < 0) return makeUpload(rowCount, spanCount, planCount, blockCount);
+    const upload = available.splice(index, 1)[0]!;
+    availableBytes -= upload.bytes;
+    return upload;
+  }
+
+  function recycleUpload(upload: ReturnType<typeof makeUpload>) {
+    if (!disposed && available.length < 16 && availableBytes + upload.bytes <= 4 * 1024 * 1024) {
+      available.push(upload);
+      availableBytes += upload.bytes;
+    } else upload.destroy();
+  }
+
+  function borrowedBatch(upload: ReturnType<typeof makeUpload>, firstRows: number[], length: number) {
+    let released = false;
+    return {
+      group: upload.group,
+      destinations: upload.destinations,
+      /** First uploaded row for each input plan, including mixed-height plans. */
+      firstRows,
+      length,
+      /** Bytes borrowed until release or destroy. */
+      bytes: upload.bytes,
+      /** Submit all readers before releasing this batch back to its owner. */
+      release() { if (!released) { released = true; recycleUpload(upload); } },
+      destroy() { if (!released) { released = true; upload.destroy(); } }
+    };
+  }
+
+  /** Power-of-two capacities amortize immutable batch uploads without growing with stroke length. */
+  function makeUpload(rowCount: number, spanCount: number, planCount: number, blockCount: number) {
+    const capacity = (size: number) => 2 ** Math.ceil(Math.log2(Math.max(1, size)));
+    rowCount = capacity(rowCount); spanCount = capacity(spanCount);
+    planCount = capacity(planCount); blockCount = capacity(blockCount);
+    const rowWords = new Uint32Array(rowCount * rowWordStride);
+    const spanWords = new Uint32Array(spanCount * tipSpanWords);
+    const destinationWords = new Uint32Array(planCount * destinationWordStride);
+    const blockWords = new Int32Array(blockCount);
+    const rows = root.createBuffer(d.arrayOf(d.vec2u, rowCount)).$usage('storage');
+    const spans = root.createBuffer(d.arrayOf(TipSpan, spanCount)).$usage('storage');
+    const destinations = root.createBuffer(d.arrayOf(d.vec4u, planCount)).$usage('storage');
+    const blocks = root.createBuffer(d.arrayOf(d.i32, blockCount)).$usage('storage');
+    return { rowCount, spanCount, planCount, blockCount, rowWords, spanWords, destinationWords, blockWords,
+      rows, spans, destinations, blocks,
+      group: root.createBindGroup(tipRasterLayout, { pixels, sizes, rows, spans, blocks }),
+      bytes: rowWords.byteLength + spanWords.byteLength + destinationWords.byteLength + blockWords.byteLength,
+      destroy() { rows.destroy(); spans.destroy(); destinations.destroy(); blocks.destroy(); }
+    };
+  }
 }
 
 /** Integer parameters for a final, nonoverlapping row interval.
@@ -103,6 +249,8 @@ const TipSpan = d.struct({
   level: d.u32, weight: d.i32, bias: d.i32, mode: d.u32, clear: d.u32, generalAffine: d.u32
 });
 
+const rowWordStride = d.sizeOf(d.vec2u) / Uint32Array.BYTES_PER_ELEMENT;
+const destinationWordStride = d.sizeOf(d.vec4u) / Uint32Array.BYTES_PER_ELEMENT;
 const tipSpanWords = d.sizeOf(TipSpan) / Uint32Array.BYTES_PER_ELEMENT;
 const tipSpanOffsets = Object.fromEntries(Object.keys(TipSpan.propTypes).map(key => [key,
   d.memoryLayoutOf(TipSpan, span => span[key as keyof d.InferInput<typeof TipSpan>]).offset / Uint32Array.BYTES_PER_ELEMENT
@@ -212,15 +360,35 @@ const signedBits = tgpu.fn([d.u32], d.i32)`(value: u32) -> i32 { return bitcast<
 /** Assigns upload offsets to referenced ranges, shared by all crops of a row. */
 function collectProjectionBlocks(plans: readonly ReturnType<typeof createTipRasterPlan>[]) {
   const ranges = new Map<Int32Array, { first: number; end: number; base: number }>();
-  for (const plan of plans) for (const row of plan.rows) for (const segment of row) {
-    const perspective = segment.source?.options?.perspective;
-    if (!perspective) continue;
-    const first = perspective.offset >>> 3, end = Math.ceil((perspective.offset + segment.count) / 8);
-    const range = ranges.get(perspective.data);
-    if (range) { range.first = Math.min(first, range.first); range.end = Math.max(end, range.end); }
-    else ranges.set(perspective.data, { first, end, base: 0 });
+  for (const plan of plans) {
+    const firstRow = plan.rowRange?.[0] ?? 0, endRow = plan.rowRange?.[1] ?? plan.rows.length;
+    for (let row = firstRow; row < endRow; row++) for (const segment of plan.rows[row]!) {
+      const perspective = segment.source?.options?.perspective;
+      if (!perspective) continue;
+      const first = perspective.offset >>> 3, end = Math.ceil((perspective.offset + segment.count) / 8);
+      const range = ranges.get(perspective.data);
+      if (range) { range.first = Math.min(first, range.first); range.end = Math.max(end, range.end); }
+      else ranges.set(perspective.data, { first, end, base: 0 });
+    }
   }
   let length = 0;
   for (const range of ranges.values()) { range.base = length; length += (range.end - range.first) * block.stride; }
   return { length: Math.max(1, length), ranges };
+}
+
+/** Packs the same fixed-point affine fields as the general span compiler. */
+function packAffineSpan(words: Uint32Array, at: number, start: number, count: number, source: TipRasterSpan, advance: number) {
+  const o = tipSpanOffsets, sampling = source.sampling;
+  const boundary = 65536 >> sampling.level;
+  words[at + o.start] = start; words[at + o.count] = count;
+  words[at + o.x] = source.x + source.dx * advance; words[at + o.y] = source.y + source.dy * advance;
+  words[at + o.dx] = source.dx; words[at + o.dy] = source.dy;
+  words[at + o.level] = sampling.level;
+  words[at + o.weight] = sampling.blend ? Math.max(0, Math.min(255, Math.trunc(
+    (boundary - sampling.fixed) * (255 / (boundary - (boundary >> 1))) + .5))) + 1 : 0;
+  words[at + o.bias] = source.options?.fractionBias ?? 1;
+  words[at + o.mode] = Number(source.options?.allowCopy !== false && !sampling.blend && sampling.level === 0 &&
+    source.dx === 65536 && source.dy === 0 && ((words[at + o.x]! | words[at + o.y]!) & 65280) === 0);
+  words[at + o.clear] = 0;
+  words[at + o.generalAffine] = Number(source.options?.rowSpecialization === false);
 }

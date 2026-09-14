@@ -36,6 +36,7 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
     }
   });
   const [debug, setDebug] = createSignal(false);
+  const [adaptiveQuality, setAdaptiveQuality] = createSignal(false);
   const [liveTail, setLiveTail] = createSignal(true);
   const [showPenCursor, setShowPenCursor] = createSignal(false);
   const [rawReceived, setRawReceived] = createSignal(false);
@@ -46,6 +47,8 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   const close = vi.fn();
   const session = {
     debug,
+    adaptiveQuality,
+    setAdaptiveQuality,
     liveTail,
     setLiveTail,
     showPenCursor,
@@ -66,11 +69,14 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   setRawReceived(true);
   flush();
   expect(dialog.textContent).toContain(supported ? 'Receiving pen events' : 'Unavailable · using pointermove');
-  const [wireframe, tail, cursor, worker] = [...dialog.querySelectorAll('input')];
+  const [wireframe, tail, cursor, worker, quality] = [...dialog.querySelectorAll('input')];
   wireframe!.click();
   tail!.click();
   cursor!.click();
   worker!.click();
+  quality!.click();
+  flush();
+  expect(adaptiveQuality()).toBe(true);
   expect(session.setWorkerEnabled).toHaveBeenCalledWith(false);
   expect(dialog.textContent).toContain('Undo history and the selection clipboard reset');
   flush();

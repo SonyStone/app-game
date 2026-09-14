@@ -4,6 +4,8 @@
 
 [Руководство по сопровождению](./MAINTENANCE.md): карта модулей, контракты ошибок, ограничения очередей и необходимые проверки.
 
+[Brush performance regression checks](../performance/README.md): adaptive LOD contracts, CI checks, and the Wacom device baseline.
+
 ## Возможности
 
 - Растровый холст с разреженными тайлами 256×256 и отрицательными координатами.
@@ -263,3 +265,16 @@ Worker импортируется через `./paint.worker?worker`. Оба Vit
 UI использует Solid 2 rc.4. Строки слоёв сохраняют DOM по `For keyed={(item) => item.id}`, поскольку каждое сообщение worker содержит новые объекты даже для неизменившихся слоёв. Значения строки читаются через accessor, чтобы обработчики использовали актуальную видимость и имя. Listener закрытия панели создаётся через совместимый `@solid-primitives/event-listener` на уровне компонента. `PaintCanvas` вызывает `session.attachCanvas` из `onSettled` и возвращает teardown для конкретного canvas; внутри такого callback нельзя создавать primitives, вызывающие `onCleanup`. Последовательность GPU-команд и сэмплы пера остаются вне реактивного графа.
 
 `pnpm --filter @app-game/paint test:studio-ui` запускает DOM-проверки с браузерным runtime Solid 2 отдельно от node-тестов модели и worker. Проверка слоёв подтверждает сохранение фокуса при обновлении клонированных записей, идентичности кнопок при перестановке и актуальности callback-значений. Проверка puck подтверждает возврат фокуса канвасу после одноразового жеста; решение о закрытии возвращается из контроллера синхронно, без чтения ещё не обновлённого сигнала. `workerRecovery.test.ts` проверяет ошибки финальной растеризации и readback: неудавшийся preview сбрасывается, завершённые пиксели сохраняются, следующий мазок рисуется и проходит обычное автосохранение.
+
+
+### Adaptive brush quality
+
+Developer → **Adaptive brush quality** is on by default for every brush engine. Turning it off selects detailed rendering for the next stroke; switching Worker/main-thread preserves that choice. Reload restores the default.
+
+At contact, the renderer selects the layer's target document LOD using the same viewport pixel budget and sparse page budget as canvas rendering. Empty layers use the base view LOD. Temporary coarse loading fallback pages do not lower brush quality. The engine receives an integer LOD, not zoom or DPR, and holds it for the whole stroke. LOD 0 is the finest level; each following level covers twice the document distance per pixel.
+
+All brush families use a one-LOD-pixel minimum spacing, bounded by 64 document pixels and a quarter dynamic tip diameter. Larger preset spacing is preserved. Paint and Eraser compensate Flow; canvas sampling tools carry their spacing ratio separately. Smudge preserves configured strength and ordered pickup; reduced sampling can change fine texture and pigment transport. Blur/Sharpen compensate application strength while retaining the exact document-pixel kernel and tile halos. Timed stationary Build-up preserves its original dose and cadence. Mixer reservoir dosing continues to use distance traveled.
+
+Ordinary sampled Normal Paintbrush tips additionally accumulate GPU masks at the selected LOD, up to LOD 3, and expand them into document tiles. Composite regions align to that mask grid so input batching cannot clip coarse pixels. Eviction transfers compact mask squares; committed document pixels retain the usual full-resolution tile format. Progress batches are bounded by raster pixel coverage instead of always processing 256 stamps. Dual brushes, projected tips, Wet Edges, Build-up and other blend modes keep their specialized mask path with the shared LOD spacing budget. Smooth Smudge and Mixer use smaller pickup textures at coarse LODs. Classic Smudge keeps its source mip filtering, with reduced stamp work at coarse LODs.
+
+Reduced detail is permanent. This changes newly painted pixels only and writes normal document tiles through existing save, undo, redo and export paths. Document tiles still use full-resolution storage; there is no detailed replay. Full-resolution tile residency, readback and overview generation can still dominate large stroke completion.

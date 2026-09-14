@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createStrokeSampler, type Dab } from '../brush';
+import { brushQualityAtLod } from './adaptiveBrushQuality';
 import { defineBrushEngine } from './defineBrushEngine';
 
 /** Native grayscale tip rasterization. Size is the longest side; the tip replaces round hardness.
@@ -8,10 +9,10 @@ import { defineBrushEngine } from './defineBrushEngine';
 export const texturedBrush = defineBrushEngine({
   id: 'textured',
   parse: (input: unknown) => settings.parse(input),
-  create: ({ brush: input, settings, resources, layer, processor, renderer }) => {
+  create: ({ brush: input, settings, resources, layer, processor, renderer, adaptiveQuality, lod }) => {
     const tip = resources.get(settings.tipId);
     const brush = { ...input, spacing: settings.spacing ?? input.spacing };
-    const sampler = createStrokeSampler(brush);
+    const sampler = createStrokeSampler(brush, brushQualityAtLod(adaptiveQuality ?? false, lod)?.minimumSpacing);
     // The renderer bins by circles. Use the circumscribed radius to include rotated rectangular corners.
     const scale = Math.hypot(tip.width, tip.height) / Math.max(tip.width, tip.height);
     const bounds = (dabs: Dab[]) => dabs.map((dab) => ({ ...dab, radius: dab.radius * scale }));

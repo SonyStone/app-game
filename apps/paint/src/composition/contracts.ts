@@ -51,6 +51,10 @@ export type BrushEngine = ((context: {
   modifiers?: Readonly<{ altKey: boolean }>;
   /** Camera captured at contact for tools with a fixed screen footprint. Defaults to unrotated 100%. */
   view?: Readonly<Pick<Camera, 'zoom' | 'angle' | 'mirrored'>>;
+  /** Allows permanent LOD-based approximation; fixed at contact. */
+  adaptiveQuality?: boolean;
+  /** Target document LOD selected by the renderer, excluding temporary loading fallbacks. Defaults to zero. */
+  lod?: number;
   processor: StrokeProcessor;
   renderer: PaintRenderer;
 }) => BrushSession) & {

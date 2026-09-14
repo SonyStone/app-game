@@ -12,7 +12,9 @@ import { createPaintRenderer } from './renderer';
 /** Pixel checks for native MixB routing, paint depletion and cross-stroke well ownership.
  * These establish tool behavior and state invariants, not numerical Photoshop mixing parity.
  */
-export async function verifyAbrMixer(report: (message: string) => void) {
+export async function verifyAbrMixer(report: (message: string) => void, adaptiveQuality = false, lod = 0) {
+  const renderMixer = (options: Parameters<typeof renderMixerStroke>[0]) =>
+    renderMixerStroke(options, adaptiveQuality, lod);
   const dry = await renderMixer({ wet: 0, mix: 100 });
   const loaded = await renderMixer({ wet: 0, mix: 0 });
   assertEqual(dry, loaded, 'Wet 0 must use loaded color regardless of Mix.');
@@ -61,7 +63,7 @@ export async function verifyAbrMixer(report: (message: string) => void) {
   await verifyAbrMixerLoad(report);
 }
 
-async function renderMixer(options: {
+async function renderMixerStroke(options: {
   wet?: number;
   mix?: number;
   load?: number;
@@ -77,7 +79,7 @@ async function renderMixer(options: {
   before?: 'load' | 'clean';
   between?: 'load' | 'clean';
   replace?: boolean;
-}): Promise<Uint8Array[]> {
+}, adaptiveQuality: boolean, lod: number): Promise<Uint8Array[]> {
   const document = createDocument();
   const pixels = new Uint8Array(256 * 256 * 4);
   for (let y = 0; y < 256; y++) for (let x = 0; x < 200; x++) pixels.set([255, 0, 0, 255], (y * 256 + x) * 4);
@@ -156,6 +158,8 @@ async function renderMixer(options: {
         abrBrush.engine({
           resources,
           renderer,
+          adaptiveQuality,
+          lod,
           layer: document.active,
           layers: document.layers,
           processor: createRawProcessor(),

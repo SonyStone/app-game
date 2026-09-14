@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createVirtualPages } from './virtualPages';
+import { createVirtualPages, viewLod } from './virtualPages';
 import { createDocument } from './document';
 import { defaultCamera } from './camera';
 import { unpackTile } from './tilePixels';
@@ -178,4 +178,42 @@ it('distinguishes missing occupied coverage from known transparent portions of a
   doc.undo();
   pages.sync(doc.layers);
   expect(pages.isCovered(target, [])).toBe(true);
+});
+
+
+it('box filters every RGBA channel with exact scalar rounding, including offset views', async () => {
+  const doc = createDocument();
+  const source = new Uint8Array(256 * 256 * 4 + 1).subarray(1);
+  let seed = 73491;
+  for (let i = 0; i < source.length; i++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    source[i] = seed >>> 24;
+  }
+  doc.commit([{ layerId: doc.active.id, key: '0,0', before: undefined, after: source }]);
+  const pyramid = createVirtualPages(async data => unpackTile(data));
+  pyramid.sync(doc.layers);
+  const actual = await pyramid.pagePixels({ layerId: doc.active.id, level: 1, x: 0, y: 0 });
+  const expected = new Uint8Array(256 * 256 * 4);
+  for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) for (let c = 0; c < 4; c++) {
+    const at = (y * 512 + x * 2) * 4 + c;
+    expected[(y * 256 + x) * 4 + c] = Math.round((source[at]! + source[at + 4]! + source[at + 1024]! + source[at + 1028]!) / 4);
+  }
+  expect(actual).toEqual(expected);
+});
+
+it('selects LOD from display density and then coarsens for the occupied page budget', () => {
+  expect(viewLod(0.24, 1.75)).toBe(1);
+  expect(viewLod(0.05, 1.75)).toBe(3);
+  expect(viewLod(0.5, 1)).toBe(viewLod(0.25, 2));
+  const doc = createDocument();
+  const pixels = new Uint8Array(256 * 256 * 4);
+  for (let y = -8; y < 8; y++) for (let x = -8; x < 8; x++) doc.active.tiles.set(`${x},${y}`, pixels);
+  const pages = createVirtualPages(async data => unpackTile(data)); pages.sync(doc.layers);
+  const camera = { ...defaultCamera(), zoom: 1 };
+  const size = { width: 4096, height: 4096 };
+  const detailed = pages.visible(doc.active.id, camera, size, 1, 256);
+  const bounded = pages.visible(doc.active.id, camera, size, 1, 4);
+  expect(detailed[0]!.level).toBe(0);
+  expect(bounded[0]!.level).toBeGreaterThan(detailed[0]!.level);
+  expect(bounded.length).toBeLessThanOrEqual(4);
 });

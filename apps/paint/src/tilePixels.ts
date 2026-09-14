@@ -5,7 +5,8 @@ import { TILE_SIZE } from './brush';
  */
 export function packTile(pixels: Uint8Array): Uint8Array {
   if (pixels.byteLength !== TILE_BYTES) return pixels;
-  const source = new DataView(pixels.buffer, pixels.byteOffset, pixels.byteLength);
+  const aligned = pixels.byteOffset % 4 ? pixels.slice() : pixels;
+  const source = new Uint32Array(aligned.buffer, aligned.byteOffset, aligned.byteLength / 4);
   // Record run lengths before allocating pixels. Readback often contains wholly
   // empty or dense tiles; neither needs a temporary 256 KiB encoding buffer.
   const runs: number[] = [];
@@ -13,10 +14,8 @@ export function packTile(pixels: Uint8Array): Uint8Array {
     size = 4;
   while (read < TILE_BYTES && runs.length < 1024) {
     const start = read;
-    const empty = source.getUint32(read, true) === 0;
-    do {
-      read += 4;
-    } while (read < TILE_BYTES && (source.getUint32(read, true) === 0) === empty);
+    const empty = source[read / 4] === 0;
+    read = scanRun(source, read / 4, empty) * 4;
     const length = read - start;
     size += 4 + (empty ? 0 : length);
     if (size >= TILE_BYTES) return pixels;
@@ -41,10 +40,8 @@ export function packTile(pixels: Uint8Array): Uint8Array {
   }
   while (read < TILE_BYTES) {
     const start = read;
-    const empty = source.getUint32(read, true) === 0;
-    do {
-      read += 4;
-    } while (read < TILE_BYTES && (source.getUint32(read, true) === 0) === empty);
+    const empty = source[read / 4] === 0;
+    read = scanRun(source, read / 4, empty) * 4;
     const length = read - start;
     if (write + 4 + (empty ? 0 : length) >= TILE_BYTES) return pixels;
     target.setUint32(write, (length / 4) | (empty ? 0x80000000 : 0), true);
@@ -55,6 +52,18 @@ export function packTile(pixels: Uint8Array): Uint8Array {
     }
   }
   return write === output.length ? output : output.slice(0, write);
+}
+
+/** Skips empty space eight pixels at a time; preserves the existing byte packet format. */
+function scanRun(source: Uint32Array, start: number, empty: boolean): number {
+  let end = start;
+  if (empty) {
+    while (end + 8 <= source.length &&
+      (source[end]! | source[end + 1]! | source[end + 2]! | source[end + 3]! |
+       source[end + 4]! | source[end + 5]! | source[end + 6]! | source[end + 7]!) === 0) end += 8;
+    while (end < source.length && source[end] === 0) end++;
+  } else while (end < source.length && source[end] !== 0) end++;
+  return end;
 }
 
 /** Recognizes the complete all-zero packet without decoding it. Raw pixels and unloaded

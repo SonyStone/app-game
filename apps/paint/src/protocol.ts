@@ -15,6 +15,8 @@ export type PaintCommand =
       size: ViewSize;
       dpr: number;
       storageName?: string;
+      /** Opt-in frame/input timing for diagnostic clients; disabled in the editor by default. */
+      diagnostics?: boolean;
       tools?: RendererToolState;
       historySource?: HistorySource;
     }
@@ -24,10 +26,12 @@ export type PaintCommand =
       | { action: 'stats' }
     ))
   | { type: 'debug'; enabled: boolean }
+  | { type: 'diagnostics'; enabled: boolean }
   | { type: 'symmetry'; settings: PaintSymmetry }
   | { type: 'history-source'; id: number }
   | { type: 'brush-command'; requestId: string; brush: Brush; command: unknown }
   | { type: 'live-tail'; enabled: boolean }
+  | { type: 'adaptive-quality'; enabled: boolean }
   | { type: 'selection-view'; points: Point[]; animate: boolean }
   | { type: 'view'; camera: Camera; size: ViewSize; dpr: number }
   | {
@@ -53,6 +57,17 @@ export type PaintRuntimeCommand =
 
 /** Lightweight status; pixel payloads are limited to explicit downloads and requested tool handoffs. */
 export type PaintEvent =
+  | {
+      type: 'frame';
+      /** Original input-clock timestamp of the last fully processed sample batch, if any. */
+      processedInputTime?: number;
+      /** Original input-clock timestamp of the newest received sample, including queued work. */
+      receivedInputTime?: number;
+      /** CPU time submitting this frame, excluding queue completion. */
+      renderMs: number;
+      /** Wall time waiting for submitted GPU work, not a GPU timestamp measurement. */
+      queueWaitMs: number;
+    }
   | {
       type: 'state';
       /** Document-owned guides and painting transforms. Absent from older/custom endpoints. */

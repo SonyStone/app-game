@@ -198,7 +198,7 @@ export function createVirtualPages(
         [0, size.height],
         [size.width, size.height]
       ].map(([x, y]) => screenToWorld({ x: x!, y: y! }, camera, size));
-      let level = Math.max(0, Math.min(MAX_LEVEL, Math.floor(-Math.log2(camera.zoom * scale))));
+      let level = viewLod(camera.zoom, scale);
       const bounds = (level: number) => {
         const span = TILE_SIZE * 2 ** level;
         return {
@@ -305,14 +305,18 @@ function address(page: VirtualPage) {
 
 /** Box-filter premultiplied channels together; four children each fill one quadrant. */
 function downsampleInto(source: Uint8Array, target: Uint8Array, qx: number, qy: number) {
+  // Two separated byte lanes fit four sums and rounding bias without carry
+  // into the neighboring lane. This is exactly Math.round(sum / 4) per channel.
+  const aligned = source.byteOffset % 4 ? source.slice() : source;
+  const input = new Uint32Array(aligned.buffer, aligned.byteOffset, aligned.byteLength / 4);
+  const output = new Uint32Array(target.buffer, target.byteOffset, target.byteLength / 4);
   for (let y = 0; y < 128; y++)
     for (let x = 0; x < 128; x++) {
-      const from = (y * 2 * 256 + x * 2) * 4;
-      const to = ((y + qy * 128) * 256 + x + qx * 128) * 4;
-      for (let c = 0; c < 4; c++)
-        target[to + c] = Math.round(
-          (source[from + c]! + source[from + 4 + c]! + source[from + 1024 + c]! + source[from + 1028 + c]!) / 4
-        );
+      const from = y * 512 + x * 2;
+      const a = input[from]!, b = input[from + 1]!, c = input[from + 256]!, d = input[from + 257]!;
+      const low = ((a & 0x00ff00ff) + (b & 0x00ff00ff) + (c & 0x00ff00ff) + (d & 0x00ff00ff) + 0x00020002) >>> 2;
+      const high = ((a >>> 8 & 0x00ff00ff) + (b >>> 8 & 0x00ff00ff) + (c >>> 8 & 0x00ff00ff) + (d >>> 8 & 0x00ff00ff) + 0x00020002) >>> 2;
+      output[(y + qy * 128) * 256 + x + qx * 128] = (low & 0x00ff00ff) | (high & 0x00ff00ff) << 8;
     }
 }
 const EMPTY = new Uint8Array(TILE_SIZE * TILE_SIZE * 4);
@@ -323,3 +327,10 @@ export type OverviewStorage = {
   read: (key: string) => Promise<Uint8Array | undefined>;
   write: (key: string, pixels: Uint8Array) => void | Promise<void>;
 };
+
+/** Base document LOD before sparse-page residency budgets request a coarser level. */
+export function viewLod(zoom: number, scale: number): number {
+  const pixelsPerUnit = zoom * scale;
+  return pixelsPerUnit > 0 && Number.isFinite(pixelsPerUnit)
+    ? Math.max(0, Math.min(MAX_LEVEL, Math.floor(-Math.log2(pixelsPerUnit)))) : 0;
+}

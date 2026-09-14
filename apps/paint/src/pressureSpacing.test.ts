@@ -46,3 +46,23 @@ it('leaves mouse and size-pressure-disabled spacing unchanged', () => {
   expect(points[1]!.x).toBe(brush.size * brush.spacing);
   expect(points.at(-1)!.flow).toBeGreaterThan(points[1]!.flow);
 });
+
+it('adaptive round stamps preserve pressure batching and compensate Flow without widening the tip', () => {
+  const brush = { ...defaultBrush(), size: 9, spacing: 0.03, pressureFlow: true };
+  const point = (t: number): Sample => ({ x: 200 * t, y: 0, pressure: 0.1 + t * 0.8, time: t });
+  const detailed = createStrokeSampler(brush).add([point(0), point(1)]);
+  const expected = createStrokeSampler(brush, 2).add([point(0), point(1)]);
+  expect(expected.length).toBeLessThan(detailed.length / 2);
+  expect(expected[0]!.radius).toBe(detailed[0]!.radius);
+  expect(expected[0]!.flow).toBeGreaterThan(detailed[0]!.flow);
+  const sampler = createStrokeSampler(brush, 2);
+  const actual = Array.from({length: 11}, (_, i) => i / 10).flatMap(t => {
+    sampler.preview([point(t)]);
+    return sampler.add([point(t)]);
+  });
+  expect(actual.length).toBe(expected.length);
+  for (let i = 0; i < actual.length; i++) {
+    expect(actual[i]!.x).toBeCloseTo(expected[i]!.x, 8);
+    expect(actual[i]!.flow).toBeCloseTo(expected[i]!.flow, 8);
+  }
+});

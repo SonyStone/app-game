@@ -1,6 +1,6 @@
 import { makeTimer } from '@solid-primitives/timer';
 import { createRoot, onCleanup } from 'solid-js';
-import { attempt, createTaskQueue, unwrapResult } from './asyncResult';
+import { attempt, createTaskQueue, unwrapResult, type Result } from './asyncResult';
 import { defaultCamera, type Point } from './camera';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
@@ -38,6 +38,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let symmetry = defaultPaintSymmetry();
     let debug = false;
     let liveTail = true;
+    let adaptiveQuality = true;
     let size = { width: 1, height: 1 },
       dpr = 1;
     let strokeSession: BrushSession | undefined;
@@ -50,6 +51,10 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
     const queue = createTaskQueue();
     let active = true;
+    let previousFrame: Promise<Result<void>> | undefined;
+    let diagnostics = false;
+    let processedInputTime: number | undefined;
+    let receivedInputTime: number | undefined;
     let pendingSamples: Extract<PaintRuntimeCommand, { type: 'samples' }> | undefined;
     let clearIdle: (() => void) | undefined;
     let idleGeneration = 0;
@@ -106,7 +111,22 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       if (primaryAttached) await renderer.render(document.layers, camera, size, dpr, exact, canvas);
       renderMs = performance.now() - start;
       status();
-      await renderer.submitted();
+      const waitStart = performance.now();
+      const timing = { processedInputTime, receivedInputTime, renderMs };
+      const frameRenderer = renderer;
+      const completion = attempt(async () => {
+        await frameRenderer.submitted();
+        if (diagnostics && active && renderer === frameRenderer)
+          post({ type: 'frame', ...timing, queueWaitMs: performance.now() - waitStart });
+      });
+      // While drawing, prepare the next frame while this one runs on GPU. Waiting
+      // for the preceding fence caps this at two frames; idle/exact draws drain both.
+      const ready = strokeSession && !exact ? previousFrame : completion;
+      previousFrame = completion;
+      if (ready) {
+        const result = await ready;
+        if (!result.ok) throw result.error;
+      }
       presentedAt = performance.now();
       if (!exact) {
         clearTimeout(selectionTimer);
@@ -179,7 +199,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         presentedAt = performance.now();
         for (let offset = 0; offset < samples.length; offset += 16) {
           await strokeSession?.add(samples.slice(offset, offset + 16));
-          if (offset + 16 < samples.length && performance.now() - presentedAt >= 8) {
+          processedInputTime = samples[Math.min(samples.length, offset + 16) - 1]?.time;
+          if (offset + 16 < samples.length && performance.now() - presentedAt >= progressFrameInterval) {
             strokeSession?.preview(liveTail);
             await draw();
             presentedAt = performance.now();
@@ -287,7 +308,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           onPaintProgress: async () => {
             // One pointer segment can contain hundreds of dependent sampling dabs.
             // Present only after a whole dab, without enqueueing behind the stroke itself.
-            if (strokeSession && active && !lost && performance.now() - presentedAt >= 8) await draw();
+            if (strokeSession && active && !lost && performance.now() - presentedAt >= progressFrameInterval) await draw();
           },
           onError: failure
         }
@@ -343,6 +364,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       // Merge only consecutive, not-yet-started input packets. Keep every point and pressure,
       // but render their latest state once after GPU backpressure clears. Commands such as
       // end/cancel/begin seal the batch so points never cross a stroke boundary.
+      if (command.type === 'diagnostics') {
+        diagnostics = command.enabled;
+        return;
+      }
+      if (command.type === 'begin' || command.type === 'samples') receivedInputTime = command.samples.at(-1)?.time;
       if (command.type === 'samples' && pendingSamples) {
         for (const sample of command.samples) pendingSamples.samples.push(sample);
         return;
@@ -352,6 +378,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         if (pendingSamples === command) pendingSamples = undefined;
         switch (command.type) {
           case 'init': {
+            diagnostics = command.diagnostics ?? false;
             canvas = command.canvas;
             storageName = command.storageName ?? 'paint-studio';
             size = command.size;
@@ -430,6 +457,9 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             debugAt = 0;
             status();
             break;
+          case 'adaptive-quality':
+            adaptiveQuality = command.enabled;
+            break;
           case 'live-tail':
             liveTail = command.enabled;
             updatePreview();
@@ -445,6 +475,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             break;
           }
           case 'begin': {
+            processedInputTime = undefined;
             if (!renderer || lost || !document.active.visible) return;
             await end();
             const engineId = command.brush.engine?.id ?? modules.selectEngine(command.brush);
@@ -468,6 +499,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                 historySource: document.historySourceLayer(document.active.id),
                 modifiers: command.modifiers,
                 view: { zoom: command.zoom ?? camera.zoom, angle: camera.angle, mirrored: camera.mirrored },
+                adaptiveQuality,
+                lod: renderer!.brushLod?.(document.layers, document.active, camera, size, dpr) ?? 0,
                 renderer: strokeRenderer,
                 processor: processor(command.brush, command.zoom ?? camera.zoom)
               })
@@ -717,3 +750,6 @@ async function canvasPng(canvas: OffscreenCanvas | HTMLCanvasElement): Promise<B
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not export the canvas.'))), 'image/png');
   });
 }
+
+/** At most 60 intermediate redraws per second; first contact and packet completion still present immediately. */
+const progressFrameInterval = 16;

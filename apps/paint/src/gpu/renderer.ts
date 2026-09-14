@@ -1,3 +1,5 @@
+import { expandToRasterGrid } from './brushBatchSize';
+import { visibleTileKeys } from './visibleTileKeys';
 import { d, tgpu, type RenderFlag, type TgpuRoot, type TgpuTexture } from 'typegpu';
 import { attempt, unwrapResult, type Result } from '../asyncResult';
 import { TILE_SIZE, dabIntersectsTile, dabTiles, type Brush, type Dab } from '../brush';
@@ -5,7 +7,7 @@ import { screenToWorld, type Camera, type Point, type ViewSize } from '../camera
 import type { BrushResource } from '../composition/brushResources';
 import type { Layer, TileChange } from '../document';
 import { isEmptyPackedTile, packTile, unpackTile, type TileData } from '../tilePixels';
-import type { OverviewStorage } from '../virtualPages';
+import { viewLod, type OverviewStorage } from '../virtualPages';
 import { createAbrStamps, type AbrRasterSettings, type AbrTile } from './abrStamps';
 import { createCanvasFilter } from './canvasFilter';
 import { createCanvasPickup, type PickupRegion } from './canvasPickup';
@@ -44,6 +46,8 @@ export async function createPaintRenderer(
     /** Build only view-required mip levels by default; false retains full chains for GPU comparisons. */
     adaptiveMipmaps?: boolean;
     displayCache?: boolean;
+    /** Batch small sampled-brush masks on GPU; false retains per-stamp passes for pixel/performance comparisons. */
+    batchSampledMasks?: boolean;
     /** Use fused Smudge coverage by default; false retains the multipass reference for GPU verification. */
     directSmudge?: boolean;
     /** Batch eligible multi-tile Smudge deposits; false preserves individual tile passes for comparison. */
@@ -284,21 +288,19 @@ export async function createPaintRenderer(
       // back again makes large smudge footprints thrash the CPU/GPU boundary.
       const active = victims.filter(([id, tile]) => strokeTiles.has(id) && tile.strokeDirty);
       if (active.length) {
-        const channels = transientCoverage ? 1 : abrActive ? 4 : 2;
+        const masks = abrActive ? abrStamps!.snapshotMasks() : { mask: true, dual: false };
+        const maskIndex = !transientCoverage && masks.mask ? 1 : -1;
+        const paintIndex = !transientCoverage && abrActive ? 1 + Number(maskIndex >= 0) : -1;
+        const dualIndex = paintIndex >= 0 && masks.dual ? paintIndex + 1 : -1;
+        const channels = 1 + Number(maskIndex >= 0) + Number(paintIndex >= 0) + Number(dualIndex >= 0);
         const snapshots = active.map(([id]) => ({ id, snapshot: strokeTiles.get(id)! }));
-        const job = await readbacks.capture(
-          active.flatMap(([, tile]) =>
-            channels === 1
-              ? [root.unwrap(tile.texture)]
-              : [
-                  root.unwrap(tile.scratch!.mask),
-                  root.unwrap(tile.texture),
-                  ...(abrActive
-                    ? [root.unwrap(tile.scratch!.abr!.paint), root.unwrap(tile.scratch!.abr!.dualMask)]
-                    : [])
-                ]
-          )
-        );
+        const side = abrActive ? TILE_SIZE / abrStamps!.rasterScale() : TILE_SIZE;
+        const job = await readbacks.capture(active.flatMap(([, tile]) => [
+          root.unwrap(tile.texture),
+          ...(maskIndex >= 0 ? [{ texture: root.unwrap(tile.scratch!.mask), side }] : []),
+          ...(paintIndex >= 0 ? [{ texture: root.unwrap(tile.scratch!.abr!.paint), side }] : []),
+          ...(dualIndex >= 0 ? [root.unwrap(tile.scratch!.abr!.dualMask)] : [])
+        ]));
         const pending = attempt(async () => {
           const result = await job.ready;
           // Cancellation removes the snapshot; late outcomes belong to that discarded stroke.
@@ -310,12 +312,11 @@ export async function createPaintRenderer(
           const pixels = result.value;
           snapshots.forEach(({ id, snapshot }, index) => {
             if (strokeTiles.get(id) !== snapshot || snapshot.pending !== pending) return;
-            snapshot.output = pixels[index * channels + (channels === 1 ? 0 : 1)]!;
-            snapshot.mask = channels === 1 ? undefined : pixels[index * channels]!;
-            if (channels === 4) {
-              snapshot.abrPaint = pixels[index * channels + 2]!;
-              snapshot.abrDual = pixels[index * channels + 3]!;
-            }
+            const at = index * channels;
+            snapshot.output = pixels[at]!;
+            snapshot.mask = maskIndex >= 0 ? pixels[at + maskIndex] : undefined;
+            snapshot.abrPaint = paintIndex >= 0 ? pixels[at + paintIndex] : undefined;
+            snapshot.abrDual = dualIndex >= 0 ? pixels[at + dualIndex] : undefined;
             snapshot.pending = undefined;
           });
         });
@@ -342,12 +343,12 @@ export async function createPaintRenderer(
         const scratch = prepareStroke(root, tile);
         if (!transientCoverage) {
           replacePixels(device, root.unwrap(scratch.base), await readTile(active.before), batch);
-          replacePixels(device, root.unwrap(scratch.mask), active.mask, batch);
+          replaceCoveragePixels(device, root.unwrap(scratch.mask), active.mask, abrActive ? abrStamps!.rasterScale() : 1, batch);
         }
         if (abrActive) {
           scratch.abr ??= abrStamps!.createTile(scratch.base, scratch.mask, STAMP_CAPACITY);
           if (!transientCoverage) {
-            replacePixels(device, root.unwrap(scratch.abr.paint), active.abrPaint, batch);
+            replaceCoveragePixels(device, root.unwrap(scratch.abr.paint), active.abrPaint, abrStamps!.rasterScale(), batch);
             replacePixels(device, root.unwrap(scratch.abr.dualMask), active.abrDual, batch);
           }
         }
@@ -493,7 +494,10 @@ export async function createPaintRenderer(
     try {
       for (const [key, dabs] of groups) {
         const [tx, ty] = coordinates(key);
-        const bounds = direct ? directStampBounds(dabs[0]!, tx, ty) : stampBounds(dabs, tx, ty);
+        const bounds = expandToRasterGrid(
+          direct ? directStampBounds(dabs[0]!, tx, ty) : stampBounds(dabs, tx, ty),
+          abrActive ? abrStamps!.rasterScale() : 1
+        );
         if (!bounds) continue;
         let historyPickup: typeof sampled;
         if (historySource) {
@@ -586,6 +590,7 @@ export async function createPaintRenderer(
         // Output depends on the final accumulated mask, so composite once per touched region.
         // Keep previous output outside this region, including ink from earlier input batches.
         if (bounds) {
+          if (direct) abrStamps!.prepareTile(scratch.abr!, commands, tx, ty);
           const pass = commands.encoder().beginRenderPass({
             colorAttachments: [{ view: tile.render, loadOp: 'load', storeOp: 'store' }]
           });
@@ -625,7 +630,8 @@ export async function createPaintRenderer(
     allLayers = false,
     exact = false,
     linear = false,
-    commands?: ReturnType<typeof commandBatch>
+    commands?: ReturnType<typeof commandBatch>,
+    maxDimension?: number
   ) {
     pickup ??= createCanvasPickup(root, async (layer, key, minify, flush, requiredMip) => {
       const id = keyFor(layer, key);
@@ -665,7 +671,7 @@ export async function createPaintRenderer(
       }
       return tile.texture;
     });
-    return pickup.capture(region, layers, { allLayers, exact, linear, commands });
+    return pickup.capture(region, layers, { allLayers, exact, linear, commands, maxDimension });
   }
 
   /** Keep each source halo unchanged until every dependent tile has read it. Outputs stay GPU-owned. */
@@ -690,7 +696,7 @@ export async function createPaintRenderer(
             {
               patch: output,
               ...output.region,
-              strength: filter!.strength,
+              strength: 1 - (1 - filter!.strength) ** (dab.abr?.spacingRatio ?? 1),
               fingerPainting: false
             },
             finished
@@ -836,7 +842,7 @@ export async function createPaintRenderer(
      */
     begin(layer: Layer, brush: Brush, tip?: { resource: BrushResource; angle: number }, abr?: AbrRasterSettings) {
       if (stroke) throw new Error('Finish the current stroke before beginning another.');
-      if (abr) (abrStamps ??= createAbrStamps(root)).prepare(abr);
+      if (abr) (abrStamps ??= createAbrStamps(root, options.batchSampledMasks)).prepare(abr);
       abrActive = !!abr;
       smudge = abr?.smudge;
       retouchLinear = abr?.mixing === 'linear';
@@ -915,11 +921,12 @@ export async function createPaintRenderer(
     /** Paint accumulates by tile; canvas-sampling tools transport pixels in stamp order. */
     async paint(dabs: readonly Dab[]) {
       if (!smudge && !mixer && !filter) {
-        if (!abrActive || !options.onPaintProgress || dabs.length <= 32) return paintStamps(dabs);
-        // A coalesced pointer packet can contain hundreds of textured pencil stamps.
-        // Submit bounded batches so the existing progress presenter can show ink before it finishes.
-        for (let offset = 0; offset < dabs.length; offset += 32) {
-          await paintStamps(dabs.slice(offset, offset + 32));
+        if (!abrActive || !options.onPaintProgress) return paintStamps(dabs);
+        // Small sampled tips can share more upload/submission work without a large GPU workload.
+        // Larger stamps retain the smaller progress batches.
+        const batchSize = abrStamps!.paintBatchSize(dabs);
+        for (let offset = 0; offset < dabs.length; offset += batchSize) {
+          await paintStamps(dabs.slice(offset, offset + batchSize));
           await options.onPaintProgress();
         }
         return;
@@ -947,6 +954,7 @@ export async function createPaintRenderer(
           const center = dab;
           const region = { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 };
           const tool = mixer ?? smudge!;
+          const pickupScale = tool.pickupScale;
           const commands = shared ?? (smudge && options.batchSmudgePasses !== false ? commandBatch(device) : undefined);
           // Cross-dab batching helps submission-bound small footprints. Large dabs
           // already batch many tile passes and gain little from retaining extra scratch.
@@ -959,7 +967,11 @@ export async function createPaintRenderer(
               tool.allLayers,
               false,
               !!smudge && retouchLinear,
-              commands
+              commands,
+              // Quantize the pressure-dependent budget to avoid reallocating at every pixel of diameter.
+              pickupScale !== undefined
+                ? Math.min(1024, Math.max(64, Math.ceil(Math.max(region.width, region.height) * pickupScale / 64) * 64))
+                : undefined
             );
             const carried = smudge
               ? (smudgePickup ??= createSmudgePickup(root)).step(
@@ -1077,6 +1089,7 @@ export async function createPaintRenderer(
       holdPresentation = '';
       for (const id of strokeTiles.keys()) markTile(id.slice(stroke!.layer.id.length + 1));
       for (const id of strokeTiles.keys()) {
+        displayCache.remove(id);
         const tile = cache.get(id);
         if (tile) destroyTile(tile);
         cache.delete(id);
@@ -1112,16 +1125,17 @@ export async function createPaintRenderer(
     invalidateView() {
       invalidateViews();
     },
+    /** Captures the target LOD used for drawing this layer, including viewport and sparse-page budgets. */
+    brushLod(layers: Layer[], layer: Layer, camera: Camera, size: ViewSize, dpr: number) {
+      const scale = renderScale(size, dpr, device.limits.maxTextureDimension2D);
+      return virtual && layers.filter(l => l.visible && l.opacity > 0).length <= 24
+        ? virtual.brushLod(layers, layer, camera, size, scale) : viewLod(camera.zoom, scale);
+    },
     /** Rebuilds changed screen regions; camera/layer changes rebuild the full view. Cached output survives tile eviction. */
     async render(layers: Layer[], camera: Camera, size: ViewSize, dpr: number, exact = false, target = primaryCanvas) {
       if (disposed) throw new Error('The renderer is disposed.');
       selectTarget(target);
-      const scale = Math.min(
-        dpr,
-        2,
-        device.limits.maxTextureDimension2D / Math.max(size.width, size.height),
-        Math.sqrt(8_388_608 / Math.max(1, size.width * size.height))
-      );
+      const scale = renderScale(size, dpr, device.limits.maxTextureDimension2D);
       const width = Math.max(1, Math.round(size.width * scale)),
         height = Math.max(1, Math.round(size.height * scale));
       if (!view || view.width !== width || view.height !== height) {
@@ -1202,18 +1216,8 @@ export async function createPaintRenderer(
         if (!streamed || active) {
           // Committed pixels already come from the pyramid. Only the active stroke's output
           // replaces those pixels; scanning/loading every document tile here defeats virtual texturing.
-          const keys = streamed ? new Set<string>() : new Set(layer.tiles.keys());
-          if (active) for (const id of strokeTiles.keys()) keys.add(id.slice(layer.id.length + 1));
-          if (active && !exact) for (const key of tailTiles.keys()) keys.add(key);
-          const visible = [...keys].filter((key) => {
-            const [x, y] = coordinates(key);
-            return (
-              (x + 1) * TILE_SIZE >= minX &&
-              x * TILE_SIZE <= maxX &&
-              (y + 1) * TILE_SIZE >= minY &&
-              y * TILE_SIZE <= maxY
-            );
-          });
+          const visible = visibleTileKeys(layer, active ? strokeTiles : undefined,
+            active && !exact ? tailTiles : undefined, streamed, { minX, maxX, minY, maxY });
           if (!visible.length && !streamed) continue;
           const batchSize = Math.min(
             tailTiles.size && !exact ? 8 : 64,
@@ -1535,6 +1539,17 @@ async function readTextures(device: GPUDevice, textures: GPUTexture[]): Promise<
     buffer.destroy();
   }
 }
+/** Restores the complete compact mask region; pixels outside it are never sampled during this stroke. */
+function replaceCoveragePixels(
+  device: GPUDevice, texture: GPUTexture, pixels: Uint8Array | undefined,
+  scale: number, batch?: ReturnType<typeof commandBatch>
+) {
+  if (scale <= 1 || !pixels) return replacePixels(device, texture, pixels, batch);
+  const side = TILE_SIZE / scale;
+  if (pixels.byteLength !== side * side * 4) throw new Error('Invalid adaptive mask snapshot size.');
+  device.queue.writeTexture({ texture }, pixels, { bytesPerRow: side * 4 }, [side, side]);
+}
+
 /** Assigns every level-zero pixel when recycling a slot, including transparent source/base/mask. */
 function replacePixels(
   device: GPUDevice,
@@ -1576,4 +1591,10 @@ const MAX_RESIDENT_TILES = 128;
 /** One reusable full-resolution history tile, independent of destination tile-cache eviction. */
 function historyTarget(root: TgpuRoot) {
   return root.createTexture({ size: [TILE_SIZE, TILE_SIZE], format: 'rgba8unorm' }).$usage('sampled', 'render');
+}
+
+/** Shared target pixel budget for presentation and contact-time LOD selection. */
+function renderScale(size: ViewSize, dpr: number, maxDimension: number) {
+  return Math.min(dpr, 2, maxDimension / Math.max(size.width, size.height),
+    Math.sqrt(8_388_608 / Math.max(1, size.width * size.height)));
 }

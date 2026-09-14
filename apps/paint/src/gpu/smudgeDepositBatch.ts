@@ -62,6 +62,7 @@ export function createSmudgeDepositBatch(root: TgpuRoot, stamps: ReturnType<type
       }
       const { base, output, tile } = scratch;
       const shared = stamps.prepareDirect(dab);
+      stamps.prepareTile(tile, commands, chunk.x, chunk.y);
       const encoder = commands.encoder();
       chunk.tiles.forEach(({ x, y, bounds }, index) => {
         encoder.copyTextureToTexture(

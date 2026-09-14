@@ -1,7 +1,7 @@
 import { d, std, tgpu, type TgpuRoot } from 'typegpu';
 import type { Layer } from '../document';
 import type { Camera, ViewSize } from '../camera';
-import { createVirtualPages, PAGE_SIDE, MAX_LEVEL, type VirtualPage, type OverviewStorage } from '../virtualPages';
+import { createVirtualPages, PAGE_SIDE, MAX_LEVEL, viewLod, type VirtualPage, type OverviewStorage } from '../virtualPages';
 import { type TileData } from '../tilePixels';
 import { pageCrop, pageFallback } from './pageFallback';
 import { createPageWork, ObsoletePageError } from '../pageWork';
@@ -139,7 +139,7 @@ export function createVirtualTexture(
         });
     }
   };
-  const begin = (layers: Layer[], resetDisplayed = true) => {
+  const sync = (layers: Layer[]) => {
     pages.sync(layers);
     if (coverageLayers !== layers) {
       coverageLayers = layers;
@@ -157,6 +157,9 @@ export function createVirtualTexture(
       4,
       Math.floor((capacity - pinned.size) / Math.max(1, layers.filter((l) => l.visible && l.opacity > 0).length))
     );
+  };
+  const begin = (layers: Layer[], resetDisplayed = true) => {
+    sync(layers);
     frame++;
     requests = new Map();
     wanted = new Set(pinned);
@@ -167,6 +170,11 @@ export function createVirtualTexture(
   };
   return {
     begin,
+    /** Uses the same occupied-page budget as draw, without resetting a frame or following temporary fallback pages. */
+    brushLod(layers: Layer[], layer: Layer, camera: Camera, size: ViewSize, scale: number) {
+      sync(layers);
+      return pages.visible(layer.id, camera, size, scale, maxPages)[0]?.level ?? viewLod(camera.zoom, scale);
+    },
     /** Refreshes the last frame's detail and coarse coverage before another stroke can expose the edit.
      * Unchanged page tokens skip all work; refreshed resident pages reuse their existing atlas slots.
      */

@@ -44,6 +44,8 @@ export type Dab = Point & {
   abr?: {
     data: Float32Array;
     secondary: boolean;
+    /** Detailed stamp intervals represented by this adaptive stamp; omitted means one. */
+    spacingRatio?: number;
     /** Double-precision raster geometry in document coordinates.
      * Secondary preset source-rectangle preparation is not yet Photoshop-verified.
      */
@@ -73,12 +75,16 @@ export function defaultBrush(): Brush {
 /** Resamples by distance measured in pressure-scaled brush diameters.
  * Carries fractional stamp spacing across input batches; linearly interpolated pressure ramps
  * produce the same stamps even when the browser subdivides their pointer samples.
+ * Optional minimumAdvance supplies a document-space LOD budget, capped at a quarter diameter, with Flow compensation.
  */
-export function createStrokeSampler(brush: Brush) {
+export function createStrokeSampler(brush: Brush, minimumAdvance?: number) {
   let previous: Sample | undefined;
-  const baseSpacing = brush.size * brush.spacing;
+  const spacing = minimumAdvance && Number.isFinite(minimumAdvance) && minimumAdvance > 0
+    ? Math.max(brush.spacing, Math.min(0.25, minimumAdvance / brush.size)) : brush.spacing;
+  const ratio = spacing / brush.spacing;
+  const baseSpacing = brush.size * spacing;
   // Match the radius floor below; a half-pixel minimum step would visibly dot thin tips.
-  const minimumSpacing = Math.max(0.05, 0.5 * brush.spacing, baseSpacing * 0.04);
+  const minimumSpacing = Math.max(0.05, 0.5 * spacing, baseSpacing * 0.04);
   const step = (pressure: number) =>
     brush.pressureSize ? Math.max(minimumSpacing, baseSpacing * pressure) : Math.max(0.05, baseSpacing);
   let remaining = 1;
@@ -86,7 +92,8 @@ export function createStrokeSampler(brush: Brush) {
     x: sample.x,
     y: sample.y,
     radius: Math.max(0.25, brush.size * 0.5 * (brush.pressureSize ? Math.max(0.04, sample.pressure) : 1)),
-    flow: brush.flow * (brush.pressureFlow ? sample.pressure : 1)
+    flow: ratio > 1 ? 1 - (1 - brush.flow * (brush.pressureFlow ? sample.pressure : 1)) ** ratio
+      : brush.flow * (brush.pressureFlow ? sample.pressure : 1)
   });
   const sampler = {
     /** Appends real input samples. No repeated endpoint stamp is added on pointerup. */

@@ -15,22 +15,24 @@ export function createPatternSamplingGpu(root: TgpuRoot, source: TipLevel) {
   return {
     /** Prepares only O(width + height) coordinate entries per rectangle, not pixels. */
     prepare(plans: readonly ReturnType<typeof planPatternSampling>[]) {
-      const axes: d.v2u[] = [], windows: d.InferInput<typeof PatternWindow>[] = [];
+      const axes = new Uint32Array(Math.max(2, plans.reduce((sum, plan) => sum + plan.x.length + plan.y.length, 0)));
+      let axisOffset = 0;
+      const windows: d.InferInput<typeof PatternWindow>[] = [];
       let length = 0;
       for (const plan of plans) {
-        windows.push({ xStart: axes.length, yStart: axes.length + plan.width,
+        windows.push({ xStart: axisOffset / 2, yStart: axisOffset / 2 + plan.width,
           width: plan.width, height: plan.height, outputStart: length });
-        for (const axis of [plan.x, plan.y])
-          for (let i = 0; i < axis.length; i += 2) axes.push(d.vec2u(axis[i]!, axis[i + 1]!));
+        axes.set(plan.x, axisOffset); axisOffset += plan.x.length;
+        axes.set(plan.y, axisOffset); axisOffset += plan.y.length;
         length += plan.width * plan.height;
       }
-      const axisBuffer = root.createBuffer(d.arrayOf(d.vec2u, Math.max(1, axes.length)), axes.length ? axes : [d.vec2u()]).$usage('storage');
+      const axisBuffer = root.createBuffer(d.arrayOf(d.vec2u, axes.length / 2), buffer => buffer.write(axes.buffer)).$usage('storage');
       const windowBuffer = root.createBuffer(d.arrayOf(PatternWindow, Math.max(1, windows.length)), windows.length ? windows : [PatternWindow()]).$usage('storage');
       return {
         group: root.createBindGroup(patternSamplingLayout, { pixels, size, axes: axisBuffer, windows: windowBuffer }),
         length,
         /** Owned coordinate/descriptor bytes; excludes the shared source. */
-        bytes: Math.max(1, axes.length) * 8 + Math.max(1, windows.length) * 20,
+        bytes: axes.byteLength + Math.max(1, windows.length) * 20,
         destroy() { axisBuffer.destroy(); windowBuffer.destroy(); }
       };
     },

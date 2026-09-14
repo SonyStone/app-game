@@ -192,9 +192,9 @@ export function createSampledTipTilePlanner(levels: readonly TipLevel[], seconda
   }>();
   let rows = 0;
   let projectionBytes = 0;
-  return {
-    /** Returns tile-local spans while retaining the original stamp sampling phase. */
-    crop(tip: ReturnType<typeof sampledTipTransform>, x: number, y: number, width: number, height: number) {
+  const planner = {
+    /** Returns the immutable full stamp plan and its document origin, shared across tiles. */
+    get(tip: ReturnType<typeof sampledTipTransform>) {
       let entry = cache.get(tip);
       if (!entry) {
         const left = Math.floor(tip.bounds.left / 4) * 4;
@@ -211,6 +211,11 @@ export function createSampledTipTilePlanner(levels: readonly TipLevel[], seconda
         projectionBytes -= value.projectionBytes;
         cache.delete(old);
       }
+      return entry;
+    },
+    /** Returns tile-local spans while retaining the original stamp sampling phase. */
+    crop(tip: ReturnType<typeof sampledTipTransform>, x: number, y: number, width: number, height: number) {
+      const entry = planner.get(tip);
       return cropTipRasterPlan(entry.plan, x - entry.x, y - entry.y, width, height);
     },
     /** Number of retained scan rows, useful for bounded-cache diagnostics. */
@@ -218,6 +223,7 @@ export function createSampledTipTilePlanner(levels: readonly TipLevel[], seconda
     /** Bytes retained in packed perspective blocks, excluding interval objects. */
     get projectionBytes() { return projectionBytes; }
   };
+  return planner;
 }
 
 /** Cropped/split spans can share blocks; count their backing arrays once. */
@@ -231,7 +237,8 @@ function countProjectionBytes(plan: ReturnType<typeof planSampledTip>) {
   return bytes;
 }
 
-function writeSampledTip(
+/** Emits clipped tip writes directly to a byte writer or GPU upload compiler. */
+export function writeSampledTip(
   levels: readonly TipLevel[], transform: ReturnType<typeof sampledTipTransform>, writer: TipRasterWriter,
   target: Parameters<typeof rasterizeSampledTip>[3]
 ) {

@@ -13,6 +13,7 @@ import {
 } from '@app-game/abr-brush/stroke';
 import { z } from 'zod/v3';
 import type { Dab, Sample } from '../brush';
+import { adaptiveBrushQuality } from './adaptiveBrushQuality';
 import { abrBrushCommand } from './abrBrushCommands';
 import { defineBrushEngine } from './defineBrushEngine';
 
@@ -46,7 +47,7 @@ export const abrBrush = defineBrushEngine({
         });
     }
   },
-  create: ({ settings, resources, brush, layer, layers, processor, renderer, view, historySource, modifiers }) => {
+  create: ({ settings, resources, brush, layer, layers, processor, renderer, view, historySource, modifiers, adaptiveQuality, lod }) => {
     const restoreHistory =
       settings.values.tool.type === 'ErTl' && (settings.values.tool.eraseToHistory || modifiers?.altKey === true);
     if (restoreHistory && !historySource)
@@ -82,6 +83,9 @@ export const abrBrush = defineBrushEngine({
       ? { id: computedDual.key, width: computedDual.width, height: computedDual.height,
           pixels: computedDual.data, format: 'r8unorm' as const }
       : storedDual;
+    const quality = adaptiveBrushQuality(
+      adaptiveQuality ?? false, settings.values, lod, settings.blendMode, brush.mixing
+    );
     const input = {
       seed: settings.seed ?? crypto.getRandomValues(new Uint32Array(1))[0]!,
       values: settings.values,
@@ -90,7 +94,8 @@ export const abrBrush = defineBrushEngine({
       flow: filter ? 1 : brush.flow,
       opacity: filter ? 1 : brush.opacity,
       size: brush.size,
-      sampledTipGeometry: true
+      sampledTipGeometry: quality?.lod === undefined,
+      minimumSpacing: quality?.minimumSpacing
     };
     const sampler = createAbrStrokeSampler(input, tip);
     let pencilContact = settings.values.tool.type === 'PcTl' && settings.values.tool.autoErase;
@@ -113,6 +118,7 @@ export const abrBrush = defineBrushEngine({
       dual,
       size: brush.size,
       compositeOpacity: strokeCompositeOpacity(input),
+      tipLodBias: quality?.lod,
       mixing: brush.mixing,
       blendMode: settings.blendMode,
       historySource: restoreHistory ? historySource : undefined,
@@ -129,6 +135,7 @@ export const abrBrush = defineBrushEngine({
         settings.values.tool.type === 'MixB'
           ? {
               key: settings.tipId,
+              pickupScale: quality?.pickupScale,
               wet: settings.values.tool.wetness / 100,
               load: settings.values.tool.load / 100,
               mix: settings.values.tool.mix / 100,
@@ -143,6 +150,7 @@ export const abrBrush = defineBrushEngine({
           ? {
               strength: settings.values.tool.strength / 100,
               fingerPainting: settings.values.tool.fingerPainting,
+              pickupScale: quality?.pickupScale,
               allLayers: settings.values.tool.smudgeAllLayers,
               layers: settings.values.tool.smudgeAllLayers ? (layers ?? [layer]) : [layer]
             }
@@ -248,6 +256,7 @@ function dabs(stroke: PreviewStroke, secondary: boolean): Dab[] {
         data,
         secondary,
         sampledTip,
+        spacingRatio: stroke.spacingRatios?.[i],
         mixing: stroke.mixing ? { wet: stroke.mixing[i * 2]!, mix: stroke.mixing[i * 2 + 1]! } : undefined
       }
     };

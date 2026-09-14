@@ -16,10 +16,11 @@ import { createPaintRenderer } from './renderer';
 import { verifySamplingScratch } from './samplingScratchVerification';
 
 /** Runs against the real GPU in an isolated document. Eviction must preserve every ABR accumulator. */
-export async function verifyAbrBrush(report: (message: string) => void, paintbrushMaskOnly = false, onlyAccumulation = paintbrushMaskOnly, tipKind: 'computedBrush' | 'sampledBrush' = 'computedBrush', secondaryTipKind: 'sampledBrush' | 'computedBrush' = 'sampledBrush') {
+export async function verifyAbrBrush(report: (message: string) => void, paintbrushMaskOnly = false, onlyAccumulation = paintbrushMaskOnly, tipKind: 'computedBrush' | 'sampledBrush' = 'computedBrush', secondaryTipKind: 'sampledBrush' | 'computedBrush' = 'sampledBrush', size = 80, options: { dualBrush?: boolean; progress?: boolean; zoom?: number; lod?: number; adaptiveQuality?: boolean } = {}) {
   const points: Sample[] = Array.from({ length: 45 }, (_, i) => ({
-    x: 60 + (i < 23 ? i : 45 - i) * 28,
-    y: 200 + Math.sin(i / 4) * 20,
+    // Progress batches also cross zero to exercise full-plan origins in negative tiles.
+    x: (options.progress ? -60 : 60) + (i < 23 ? i : 45 - i) * 28,
+    y: (options.progress ? 0 : 200) + Math.sin(i / 4) * 20,
     pressure: 0.3 + (0.7 * (i % 7)) / 6,
     time: i * 12,
     tiltX: i,
@@ -46,7 +47,7 @@ export async function verifyAbrBrush(report: (message: string) => void, paintbru
   values.texture.eachTip = true;
   values.texture.depth = 50;
   values.texture.mode = 'Mltp';
-  values.useDualBrush = true;
+  values.useDualBrush = options.dualBrush ?? true;
   values.dualBrush.diameter = 48;
   values.dualBrush.tipId = secondaryTipKind === 'sampledBrush' ? 'dual' : '';
   if (secondaryTipKind === 'computedBrush') Object.assign(values.dualBrush, { hardness: 40, angle: 31, roundness: 35 });
@@ -58,13 +59,13 @@ export async function verifyAbrBrush(report: (message: string) => void, paintbru
     format: 'r8unorm',
     pixels: Uint8Array.from({ length: 64 }, (_, i) => (n === 1 ? (i % 2 ? 255 : 150) : 255))
   }));
-  const run = async (capacity: number, batch: number, withPreview: boolean) => {
+  const run = async (capacity: number, batch: number, withPreview: boolean, batchSampledMasks = true) => {
     const document = createDocument();
     const resources = createBrushResources();
     textures.forEach((resource) => resources.put(resource));
     const errors: string[] = [];
     const renderer = await createPaintRenderer(new OffscreenCanvas(800, 400), (error) => errors.push(error), {
-      cacheTiles: capacity
+      cacheTiles: capacity, batchSampledMasks, onPaintProgress: options.progress ? async () => {} : undefined
     });
     try {
       const brush = {
@@ -72,13 +73,16 @@ export async function verifyAbrBrush(report: (message: string) => void, paintbru
         color: '#b73a34',
         flow: 0.6,
         opacity: 0.7,
-        size: 80,
+        size,
         mixing: 'classic' as const
       };
       let endpoint = points[0]!;
       const stroke = createResourceSession(resources, (resources) =>
         abrBrush.engine({
           brush,
+          adaptiveQuality: options.adaptiveQuality,
+          lod: options.lod,
+          view: { zoom: options.zoom ?? 1, angle: 0, mirrored: false },
           layer: document.active,
           resources,
           renderer,
@@ -96,7 +100,7 @@ export async function verifyAbrBrush(report: (message: string) => void, paintbru
           stroke.preview(true);
           await renderer.render(
             document.layers,
-            { x: 400, y: 200, zoom: 1, angle: 0, mirrored: false },
+            { x: 400, y: 200, zoom: options.zoom ?? 1, angle: 0, mirrored: false },
             { width: 800, height: 400 },
             1
           );
@@ -113,7 +117,7 @@ export async function verifyAbrBrush(report: (message: string) => void, paintbru
   };
   for (const mode of ['Mltp', 'hardMix']) {
     values.dualBrush.mode = mode;
-    const reference = await run(64, 1, false),
+    const reference = await run(64, 1, false, false),
       evicted = await run(1, 1, true),
       batched = await run(64, 9, false);
     if (!reference.size) throw new Error('ABR stroke produced no tiles.');

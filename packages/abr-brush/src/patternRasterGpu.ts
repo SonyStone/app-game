@@ -14,30 +14,57 @@ export function createPatternRasterGpu(root: TgpuRoot, source: Parameters<typeof
   return {
     /** Resident host pixels, packed GPU source bytes and size uniforms. */
     bytes: levels.reduce((sum, level) => sum + level.data.length + Math.ceil(level.data.length / 4) * 4 + 8, 0),
-    /** Submits a complete immutable region. Read it with textureLoad at local
-     * integer pixels. Destroy the result only after submitting its final reader.
-     */
+    /** Submits an immutable region immediately. Destroy after its final reader is submitted. */
     rasterize(
       scale: number,
       bounds: Parameters<typeof preparePatternRegion>[2],
       origin?: Parameters<typeof preparePatternRegion>[3]
     ) {
-      const { level, plan } = preparePatternRegion(levels, scale, bounds, origin);
-      const batch = samplers[level]!.prepare([plan]);
-      const texture = root.createTexture({ size: [plan.width, plan.height], format: 'rgba8unorm' }).$usage('storage', 'sampled');
+      const region = createRegion(bounds.width, bounds.height);
+      const encoder = root.device.createCommandEncoder();
       try {
-        const output = root.createBindGroup(patternRasterOutput, { output: texture });
-        pipeline.with(batch.group).with(output).dispatchWorkgroups(Math.ceil(plan.width / 8), Math.ceil(plan.height / 8));
+        const batch = record(encoder, region, scale, bounds, origin);
+        try { root.device.queue.submit([encoder.finish()]); }
+        finally { batch.destroy(); }
       } catch (error) {
-        texture.destroy();
+        region.destroy();
         throw error;
-      } finally {
-        batch.destroy();
       }
-      return { texture, bytes: plan.width * plan.height * 4, destroy() { texture.destroy(); } };
+      return region;
     },
+    /** Allocates a reusable destination. Record writes and readers in command order. */
+    createRegion,
+    /** Encodes a region into the caller's batch, avoiding a separate queue submission.
+     * The returned coordinate buffers must survive until that batch is submitted.
+     * Reusing a destination is safe when all its earlier readers precede this write.
+     */
+    record,
     destroy() { samplers.forEach(sampler => sampler.destroy()); }
   };
+
+  function createRegion(width: number, height: number) {
+    const texture = root.createTexture({ size: [width, height], format: 'rgba8unorm' }).$usage('storage', 'sampled');
+    const output = root.createBindGroup(patternRasterOutput, { output: texture });
+    return { texture, output, bytes: width * height * 4, destroy() { texture.destroy(); } };
+  }
+
+  function record(
+    encoder: GPUCommandEncoder, region: ReturnType<typeof createRegion>, scale: number,
+    bounds: Parameters<typeof preparePatternRegion>[2], origin?: Parameters<typeof preparePatternRegion>[3]
+  ) {
+    if (bounds.width !== region.texture.props.size[0] || bounds.height !== region.texture.props.size[1])
+      throw new RangeError('Pattern region dimensions must match its destination.');
+    const { level, plan } = preparePatternRegion(levels, scale, bounds, origin);
+    const batch = samplers[level]!.prepare([plan]);
+    try {
+      pipeline.with(batch.group).with(region.output).with(encoder)
+        .dispatchWorkgroups(Math.ceil(plan.width / 8), Math.ceil(plan.height / 8));
+    } catch (error) {
+      batch.destroy();
+      throw error;
+    }
+    return batch;
+  }
 }
 
 const patternRasterOutput = tgpu.bindGroupLayout({

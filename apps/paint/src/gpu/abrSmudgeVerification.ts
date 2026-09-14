@@ -11,7 +11,7 @@ import { createPaintRenderer } from './renderer';
 import { verifySmudgePickup } from './smudgePickupVerification';
 
 /** Native SmTl must transport existing pixels, react to strength, and sample other layers only when requested. */
-export async function verifyAbrSmudge(report: (message: string) => void) {
+export async function verifyAbrSmudge(report: (message: string) => void, adaptiveQuality = false, lod = 0) {
   await verifySmudgePickup(report);
   const run = async (
     strength: number,
@@ -93,6 +93,8 @@ export async function verifyAbrSmudge(report: (message: string) => void) {
           resources,
           renderer,
           layer: document.active,
+          adaptiveQuality,
+          lod,
           layers: document.layers,
           processor: createRawProcessor(),
           brush: { ...defaultBrush(), size: 32, flow: 1, opacity: 1, color: '#0000ff', mixing },
@@ -176,8 +178,18 @@ export async function verifyAbrSmudge(report: (message: string) => void) {
       if (reference.tiles.size !== fused.tiles.size) throw new Error('Fused Smudge changed tile allocation.');
       for (const [key, expected] of reference.tiles) {
         const actual = fused.tiles.get(key);
-        if (!actual || expected.some((value, i) => value !== actual[i]))
-          throw new Error(`Fused Smudge changed pixels: ${mixing}/${scenario}/${key}.`);
+        // Fused and multipass shaders can round an RGBA8 channel differently on Adreno.
+        // Permit one quantization step only across these two kernels; batching, eviction,
+        // history, and progress checks against the same kernel remain byte-exact.
+        if (!actual || expected.some((value, i) => Math.abs(value - actual[i]!) > 1)) {
+          let changed = 0, maximum = 0;
+          for (let i = 0; i < expected.length; i++) {
+            const delta = Math.abs(expected[i]! - (actual?.[i] ?? 0));
+            if (delta) changed++;
+            maximum = Math.max(maximum, delta);
+          }
+          throw new Error(`Fused Smudge changed pixels: ${mixing}/${scenario}/${key}: ${changed} channels, maximum error ${maximum}/255.`);
+        }
       }
     }
   }
@@ -227,7 +239,7 @@ export async function verifyAbrSmudge(report: (message: string) => void) {
     'Smudge progress: intermediate frames between dabs preserve Classic/Smooth pixels and history with a one-tile cache.'
   );
   report(
-    'Smudge fused/reference: Classic/Smooth, partial strength, Sample All Layers, Finger Painting and Dual Brush fallback are pixel-identical with eviction.'
+    'Smudge fused/reference: Classic/Smooth, partial strength, Sample All Layers, Finger Painting and Dual Brush fallback agree within one RGBA8 quantization step.'
   );
   report(
     `ABR SmTl: transported alpha at Strength 100/20/0 = ${moved(strong)}/${moved(weak)}/${moved(zero)}; batching/eviction identical; Sample All Layers, Finger Painting, Dual Brush and undo/redo passed.`

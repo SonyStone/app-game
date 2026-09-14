@@ -22,6 +22,7 @@ it('presents the first pen contact before a queued release can wait on readback'
     release = resolve;
   });
   const renderer = {
+    brushLod: vi.fn(() => 5),
     preview: vi.fn(),
     setSelection: vi.fn(),
     begin: vi.fn(() => order.push('begin')),
@@ -74,6 +75,9 @@ it('presents the first pen contact before a queued release can wait on readback'
     await until(() => order.includes('finish'));
     expect(order).toEqual(['begin', 'paint', 'render', 'paint', 'finish']);
     expect(renderer.paint.mock.calls[0]?.[0]).toEqual([expect.objectContaining({ x: 128, y: 128 })]);
+    expect(renderer.brushLod).toHaveBeenCalledTimes(1);
+    // The default-on runtime passes renderer LOD 5 even though this contact is at 100% zoom.
+    expect(renderer.paint.mock.calls[0]![0][0]!.flow).toBeGreaterThan(defaultBrush().flow);
   } finally {
     release();
     send({ type: 'debug', enabled: true });
@@ -106,7 +110,7 @@ it.each([false, true])(
       setSelection: vi.fn(),
       begin: vi.fn(),
       paint: vi.fn(async (_dabs: readonly Dab[]) => {
-        if (slow) elapsed += 10;
+        if (slow) elapsed += 20;
       }),
       render: vi.fn(async () => {}),
       submitted: vi.fn(async () => {}),
@@ -149,9 +153,9 @@ it.each([false, true])(
       // A later stroke must not merge into the batch sealed by end().
       send({ type: 'begin', brush, zoom: 1, samples: [{ ...contact, x: 300 }] });
       send({ type: 'samples', samples: [{ ...contact, x: 320 }] });
-      for (let i = 0; i < 50; i++) await Promise.resolve();
-      expect(renderer.paint).toHaveBeenCalledTimes(1);
-      expect(renderer.render).toHaveBeenCalledTimes(1);
+      await until(() => renderer.submitted.mock.calls.length === 2);
+      expect(renderer.paint).toHaveBeenCalledTimes(slow ? 2 : 8);
+      expect(renderer.render).toHaveBeenCalledTimes(2);
       release();
       await until(() => renderer.submitted.mock.calls.length === (slow ? 10 : 4));
       expect(renderer.render).toHaveBeenCalledTimes(slow ? 10 : 4);
@@ -188,7 +192,7 @@ it('presents progress inside one expensive pointer segment without letting relea
       // Model one sparse pointer segment expanding into six expensive GPU dabs.
       for (let i = 0; i < 6; i++) {
         order.push(`dab-${i}`);
-        elapsed += 5;
+        elapsed += 9;
         await progress?.();
       }
     }),
@@ -247,4 +251,59 @@ it('presents progress inside one expensive pointer segment without letting relea
     'render'
   ]);
   expect(order.indexOf('finish')).toBeGreaterThan(order.lastIndexOf('dab-5'));
+});
+
+it('overlaps two drawing frames, bounds the backlog, and reports completed input rather than received input', async () => {
+  vi.resetModules();
+  vi.useFakeTimers();
+  const fences: (() => void)[] = [];
+  let gate = false;
+  const renderer = {
+    preview: vi.fn(), setSelection: vi.fn(), begin: vi.fn(),
+    paint: vi.fn(async () => {}), render: vi.fn(async () => {}),
+    submitted: vi.fn(() => gate ? new Promise<void>(resolve => fences.push(resolve)) : Promise.resolve()),
+    finish: vi.fn(async () => []), prepareOverview: vi.fn(async () => {}),
+    stats: () => ({ gpuBytes: 0, residentTiles: 0 })
+  };
+  dependencies.renderer.mockResolvedValue(renderer);
+  dependencies.store.mockResolvedValue({ load: async () => undefined, capture: (pixels: unknown) => pixels,
+    save: async () => {}, stats: () => undefined });
+  const events: PaintEvent[] = [];
+  const worker = { onmessage: undefined as ((event: MessageEvent<PaintCommand>) => void) | undefined,
+    postMessage: (event: PaintEvent) => events.push(event) };
+  vi.stubGlobal('self', worker);
+  await import('./paint.worker');
+  const send = (command: PaintCommand) => worker.onmessage!({ data: command } as MessageEvent<PaintCommand>);
+  const until = async (condition: () => boolean) => {
+    for (let i = 0; i < 500; i++) { if (condition()) return; await Promise.resolve(); }
+    throw new Error('Worker did not reach the expected frame boundary.');
+  };
+  send({ type: 'init', diagnostics: true, canvas: {} as OffscreenCanvas, size: { width: 256, height: 256 }, dpr: 1 });
+  await until(() => events.some(event => event.type === 'ready'));
+  gate = true;
+  const brush = defaultBrush();
+  brush.stroke.mode = 'none';
+  try {
+    send({ type: 'begin', brush, samples: [{ x: 10, y: 10, pressure: 1, time: 10 }] });
+    await until(() => fences.length === 1);
+    send({ type: 'samples', samples: [{ x: 20, y: 10, pressure: 1, time: 20 }] });
+    await until(() => fences.length === 2);
+    // The second CPU frame is prepared before the first GPU fence completes.
+    send({ type: 'samples', samples: [{ x: 30, y: 10, pressure: 1, time: 30 }] });
+    for (let i = 0; i < 100; i++) await Promise.resolve();
+    expect(fences).toHaveLength(2);
+    fences[0]!();
+    await until(() => fences.length === 3);
+    const completed = events.filter(event => event.type === 'frame' && event.processedInputTime !== undefined);
+    expect(completed).toEqual([expect.objectContaining({ processedInputTime: 10, receivedInputTime: 10 })]);
+    fences[1]!();
+    fences[2]!();
+    await until(() => events.some(event => event.type === 'frame' && event.processedInputTime === 30));
+  } finally {
+    gate = false;
+    fences.forEach(resolve => resolve());
+    send({ type: 'end' });
+    await until(() => renderer.finish.mock.calls.length > 0);
+    for (let i = 0; i < 100; i++) await Promise.resolve();
+  }
 });

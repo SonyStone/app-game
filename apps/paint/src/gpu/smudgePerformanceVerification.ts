@@ -17,6 +17,10 @@ export async function verifySmudgePerformance(
   report: (message: string) => void,
   options: {
     size?: number;
+    /** Contact-time quality policy used by the actual brush engine. */
+    adaptiveQuality?: boolean;
+    zoom?: number;
+    lod?: number;
     /** Use a real ABR preset and decoded resources instead of the synthetic tip/settings. */
     preset?: Brush;
     /** Smooth color by default; Classic also exercises mipmaps used by minified canvas pickup. */
@@ -79,6 +83,8 @@ export async function verifySmudgePerformance(
     });
   }
   const errors: string[] = [];
+  const measurements: { drawMs: number; finishMs: number; stamps: number; submissions: number;
+    maxFrameGapMs: number; gpuBytes: number; pixelHash: number }[] = [];
   const warmTimes: number[] = [];
   const referenceTimes: number[] = [];
   const runs = options.runs ?? 7;
@@ -149,6 +155,9 @@ export async function verifySmudgePerformance(
         abrBrush.engine({
           resources,
           layer: document.active,
+          adaptiveQuality: options.adaptiveQuality,
+          lod: options.lod,
+          view: { zoom: options.zoom ?? 1, angle: 0, mirrored: false },
           layers: document.layers,
           processor: createRawProcessor(),
           renderer: {
@@ -209,6 +218,9 @@ export async function verifySmudgePerformance(
         report(
           `Cache: ${renderer.stats().residentTiles} pixels, ${renderer.stats().samplingScratchTiles} scratch, ${(renderer.stats().gpuBytes / 1048576).toFixed(1)} MiB; readback: ${JSON.stringify(renderer.stats().readback)}`
         );
+      measurements.push({ drawMs: elapsed, finishMs, stamps, submissions: submits,
+        maxFrameGapMs: frameGaps.length ? Math.max(...frameGaps) : 0,
+        gpuBytes: renderer.stats().gpuBytes, pixelHash: hash >>> 0 });
       renderer.destroy();
       renderer = undefined;
       report(
@@ -226,6 +238,7 @@ export async function verifySmudgePerformance(
       report(`${label} median: ${median.toFixed(1)} ms; ${times.length} runs, pixels identical.`);
     }
     if (errors.length) throw new Error(errors.join('\n'));
+    return measurements;
   } finally {
     root.device.queue.submit = original;
     renderer?.destroy();

@@ -1,18 +1,19 @@
 import { z } from 'zod';
 import { createStrokeSampler } from '../brush';
+import { brushQualityAtLod } from './adaptiveBrushQuality';
 import { defineBrushEngine } from './defineBrushEngine';
 
 /** Typed preset overrides for the round engine; omitted values preserve the current brush controls. */
 export const roundBrush = defineBrushEngine({
   id: 'round',
   parse: (input: unknown) => roundSettings.parse(input),
-  create: ({ brush: input, settings, layer, processor, renderer }) => {
+  create: ({ brush: input, settings, layer, processor, renderer, adaptiveQuality, lod }) => {
     const brush = {
       ...input,
       hardness: settings.hardness ?? input.hardness,
       spacing: settings.spacing ?? input.spacing
     };
-    const sampler = createStrokeSampler(brush);
+    const sampler = createStrokeSampler(brush, brushQualityAtLod(adaptiveQuality ?? false, lod)?.minimumSpacing);
     renderer.begin(layer, brush);
     return {
       async add(samples) {

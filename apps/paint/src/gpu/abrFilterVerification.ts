@@ -9,7 +9,8 @@ import { unpackTile } from '../tilePixels';
 import { createPaintRenderer } from './renderer';
 
 /** Pixel and ownership invariants for canvas retouching. Native kernel/Protect Detail parity is not assumed. */
-export async function verifyAbrFilter(report: (message: string) => void) {
+export async function verifyAbrFilter(report: (message: string) => void, adaptiveQuality = false, lod = 0) {
+  const render = (options: Parameters<typeof renderFilter>[0]) => renderFilter({ ...options, adaptiveQuality, lod });
   const blurred = await render({ type: 'BlTl' }),
     sharp = await render({ type: 'ShTl', protect: false });
   const protectedSharp = await render({ type: 'ShTl', protect: true });
@@ -62,7 +63,9 @@ export async function verifyAbrFilter(report: (message: string) => void) {
   );
 }
 
-async function render(options: {
+async function renderFilter(options: {
+  adaptiveQuality?: boolean;
+  lod?: number;
   type: 'BlTl' | 'ShTl';
   protect?: boolean;
   strength?: number;
@@ -126,6 +129,8 @@ async function render(options: {
             color: '#ff0000'
           },
           layer: document.active,
+          adaptiveQuality: options.adaptiveQuality,
+          lod: options.lod,
           layers: document.layers,
           processor: createRawProcessor(),
           settings: { ...preset.engine.settings, seed: 1 }

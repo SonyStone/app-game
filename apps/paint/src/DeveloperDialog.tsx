@@ -11,6 +11,8 @@ export function DeveloperDialog(props: {
     | 'debug'
     | 'ready'
     | 'toggleDebug'
+    | 'adaptiveQuality'
+    | 'setAdaptiveQuality'
     | 'liveTail'
     | 'setLiveTail'
     | 'showPenCursor'
@@ -85,7 +87,18 @@ export function DeveloperDialog(props: {
           />
           Web Worker + OffscreenCanvas
         </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={props.session.adaptiveQuality()}
+            onChange={(event) => props.session.setAdaptiveQuality(event.currentTarget.checked)}
+          />
+          Adaptive brush quality
+        </label>
       </div>
+      <p class={styles.panelNote}>
+        On by default for all brushes. Uses the canvas LOD to reduce work. New strokes may keep reduced detail; no detailed replay.
+      </p>
       <p class={styles.panelNote} role="status">
         {props.session.switchingRenderer()
           ? 'Switching drawing engine…'

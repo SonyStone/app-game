@@ -1,0 +1,29 @@
+name: Paint regressions
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  brush-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @app-game/paint typecheck
+      - run: pnpm --filter @app-game/paint test
+      - run: pnpm --filter @app-game/paint test:ui
+      - run: node --test apps/paint/scripts/compare-brush-performance.test.mjs
+      # GPU timings run on the reference tablet, not GitHub's virtual GPU.

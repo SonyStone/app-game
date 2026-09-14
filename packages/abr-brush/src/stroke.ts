@@ -66,6 +66,8 @@ export type PreviewPoint = {
 export type PreviewStroke = {
   data: Float32Array;
   count: number;
+  /** Detailed placement intervals represented by each adaptive stamp. Not part of the GPU vertex layout. */
+  spacingRatios?: Float32Array;
   /** Mixer-only wetness/mix pairs, aligned with stamps; ordinary brush layout stays unchanged. */
   mixing?: Float32Array;
   /** Primary/secondary sampled-source placement retained in double precision through row planning. */
@@ -130,6 +132,11 @@ export function createAbrStrokeSampler(
     seed?: number;
     /** Retains source geometry for consumers using Photoshop row rasterization. Defaults to false. */
     sampledTipGeometry?: boolean;
+    /** Optional approximate placement in document units. Caps spacing at a quarter tip diameter and
+     * compensates paint Flow or emits spacingRatios for canvas tools. Timed Build-up keeps its dose.
+     * Alters random/fade evolution; omit for detailed rendering.
+     */
+    minimumSpacing?: number;
     /** Preview-only budget. The document engine leaves this unset. */
     maxStamps?: number;
   },
@@ -152,6 +159,8 @@ export function createAbrStrokeSampler(
     ? { ...v.transfer, opacityControl: 2, opacityJitter: 0, opacityMinimum: 0 }
     : v.transfer;
   const buildUp = v.useBuildUp && supportsAirbrush(v.tool);
+  const samplingTool = ['SmTl', 'BlTl', 'ShTl', 'MixB'].includes(v.tool.type);
+  const retainSpacing = samplingTool && input.minimumSpacing !== undefined;
   // Photoshop 2025's common count/placement path is shared by these stamp tools.
   // Physical tips still need their own call-path trace.
   const secondary = input.stampRole === 'secondary';
@@ -186,6 +195,7 @@ export function createAbrStrokeSampler(
   const size = input.size;
   let data: number[] = [];
   let mixing: number[] = [];
+  let spacingRatios: number[] = [];
   let sampledTips: NonNullable<PreviewStroke['sampledTips']> = [];
   const sampledPrimary = input.sampledTipGeometry && !secondary && v.tool.type === 'PbTl' && v.tipKind === 'sampledBrush';
   const computedSecondary = input.sampledTipGeometry && secondary && v.tipKind === 'computedBrush';
@@ -202,12 +212,13 @@ export function createAbrStrokeSampler(
   function add(points: readonly PreviewPoint[]): PreviewStroke {
     data = [];
     mixing = [];
+    spacingRatios = [];
     sampledTips = [];
     for (const b of points) {
       if (data.length / stampStride >= (input.maxStamps ?? Infinity)) break;
       if (!previous) {
         previous = { ...b };
-        nextDistance = stamp(b, direction);
+        nextDistance = stamp(b, direction, buildUp);
         nextTime = b.time + 30;
         continue;
       }
@@ -229,7 +240,7 @@ export function createAbrStrokeSampler(
         if (Math.min(distanceT, timeT) > 1) break;
         if (distanceT <= timeT) nextDistance += stamp(interpolate(a, b, distanceT), direction);
         else {
-          stamp(interpolate(a, b, timeT), direction);
+          stamp(interpolate(a, b, timeT), direction, true);
           nextTime += 30;
         }
       }
@@ -239,6 +250,7 @@ export function createAbrStrokeSampler(
     return {
       data: new Float32Array(data),
       count: data.length / stampStride,
+      ...(retainSpacing ? { spacingRatios: new Float32Array(spacingRatios) } : {}),
       ...(sampledPrimary || sampledSecondary ? { sampledTips } : {}),
       ...(v.tool.type === 'MixB' ? { mixing: new Float32Array(mixing) } : {})
     };
@@ -294,11 +306,13 @@ export function createAbrStrokeSampler(
         roundnessRandom.restore(saved.roundness);
         mixing = [];
         sampledTips = [];
+        spacingRatios = [];
         data = [];
       }
     }
   };
-  function stamp(p: PreviewPoint, direction: number) {
+  function stamp(p: PreviewPoint, direction: number, timed = false) {
+    const firstStamp = data.length;
     const tablet = prepareTabletInput(browserTabletInput(p), v.useBrushPose ? v.brushPose : undefined);
     const { pressure, rotation, tiltX: tx, tiltY: ty } = tablet;
     const tiltMagnitude = tabletTiltMagnitude({ x: tx, y: ty });
@@ -568,10 +582,18 @@ export function createAbrStrokeSampler(
         : stampSize * (v.spacingEnabled ? v.spacing / 100 : 0.01);
     // Photoshop's primary and secondary spacing loops both clamp the advance to
     // one document pixel, including their subpixel-coordinate paths.
-    return Math.max(
-      photoshopPlacement || secondary ? 1 : 0.25,
-      advance
-    );
+    const detailed = Math.max(photoshopPlacement || secondary ? 1 : 0.25, advance);
+    const requested = timed ? undefined : input.minimumSpacing;
+    const spacing = requested && Number.isFinite(requested) && requested > detailed
+      ? Math.max(detailed, Math.min(requested, stampSize * 0.25)) : detailed;
+    // Contact is one application, regardless of the spacing used for the following movement.
+    const ratio = step === 1 ? 1 : spacing / detailed;
+    for (let at = firstStamp; at < data.length; at += stampStride) {
+      if (retainSpacing) spacingRatios.push(ratio);
+      if (ratio > 1 && !samplingTool)
+        data[at + 8] = 1 - Math.pow(1 - Math.max(0, Math.min(1, data[at + 8]!)), ratio);
+    }
+    return spacing;
   }
 }
 

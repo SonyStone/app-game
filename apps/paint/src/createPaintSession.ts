@@ -27,6 +27,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
   const [camera, setCamera] = createSignal(defaultCamera(), { ownedWrite: true });
   const [state, setState] = createSignal(createDocument().state(), { ownedWrite: true });
   const [debug, setDebug] = createSignal(false, { ownedWrite: true });
+  const [adaptiveQuality, setAdaptiveQuality] = createSignal(true, { ownedWrite: true });
   const [liveTail, setLiveTail] = createSignal(true, { ownedWrite: true });
   const [showPenCursor, setShowPenCursor] = createSignal(false, { ownedWrite: true });
   const [mixerPicking, setMixerPicking] = createSignal(false, { ownedWrite: true });
@@ -205,6 +206,7 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
           historySource = undefined;
           setReady(true);
           setSwitchingRenderer(false);
+          endpoint.postMessage({ type: 'adaptive-quality', enabled: untrack(adaptiveQuality) });
           endpoint.postMessage({ type: 'live-tail', enabled: untrack(liveTail) });
           endpoint.postMessage({ type: 'debug', enabled: untrack(debug) });
           syncSelection();
@@ -448,6 +450,11 @@ export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; 
       worker?.postMessage({ type: 'checkpoint', includeTools: true });
     },
     tool,
+    adaptiveQuality,
+    setAdaptiveQuality(enabled: boolean) {
+      setAdaptiveQuality(enabled);
+      send({ type: 'adaptive-quality', enabled });
+    },
     liveTail,
     setLiveTail(enabled: boolean) {
       setLiveTail(enabled);

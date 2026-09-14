@@ -54,14 +54,21 @@ export function maskRasterRects(data: ArrayLike<number>, offset: number, width: 
  * Their random phase is not claimed to match a particular Photoshop process allocation.
  */
 export function maskRasterAddresses(rect: MaskRasterRect, surfaceWidth: number, period: number) {
+  return {
+    ...maskRasterMaskAddresses(rect, surfaceWidth, period),
+    colorAddresses: [0x21000000, 0x22000000, 0x23000000].map(base =>
+      (base + rect.y * surfaceWidth + rect.x) >>> 0)
+  };
+}
+
+/** Mask-only addresses avoid allocating unused RGB channel addresses per stamp. */
+export function maskRasterMaskAddresses(rect: MaskRasterRect, surfaceWidth: number, period: number) {
   const stride = Math.ceil(rect.width / 64) * 64;
   const sourceAddress = (0x10000000 + rect.y * stride + rect.x) >>> 0;
   const scaledSourceAddress = (0x18000000 + rect.y * stride + rect.x) >>> 0;
   const destinationAddress = (0x20000000 + rect.y * surfaceWidth + rect.x) >>> 0;
-  const colorAddresses = [0x21000000, 0x22000000, 0x23000000].map(base =>
-    (base + rect.y * surfaceWidth + rect.x) >>> 0);
   return {
-    stride, sourceAddress, scaledSourceAddress, destinationAddress, colorAddresses,
+    stride, sourceAddress, scaledSourceAddress, destinationAddress,
     sourceStart: maskRoundingOffset(sourceAddress, rect.y, rect.x, period),
     destinationStart: maskRoundingOffset(destinationAddress, rect.y, rect.x, period)
   };
