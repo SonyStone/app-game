@@ -1,0 +1,14 @@
+{
+  "dist/abr-wasm-runtime.d.ts": "28ce8d56bb0a0b078456050a2ff073af8c2fc29c87be56fba4ead5e49e456d3b",
+  "dist/abr-wasm-runtime.js": "db935168d873c6f4150024b974d9c99617488e533208b43dfedeef2a86086346",
+  "dist/brands.d.ts": "afe51cd5fc0e82365c6553167878d7e98a84560e2686d200ee326e5c8a8557e1",
+  "dist/brands.js": "6014ebff4f59cb79d5e990727db801d166ba226169cdcda935d0b5aa30ed2227",
+  "dist/index.d.ts": "296036df858d76ba2dce6600a75615e57e0ec2ba3320cc6319aafc1f9ccc676d",
+  "dist/index.js": "181a4852eb2a0aa4f57684d5de600bc84d8246a32951112559cab90db9b77eff",
+  "dist/model.d.ts": "5210525371292514c895cc1da65c51f4862cab744fdf3f034d4b2056dcfb23ec",
+  "dist/model.js": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881",
+  "pkg/photoshop_abr_wasm.d.ts": "0ffa2aed6bcda90f15eb59e15365b9a003048ff34770c57bd5ac84c2acccb459",
+  "pkg/photoshop_abr_wasm.js": "06660b3a611230ac82de69a589ec9aacb8dfad9a73ebaec289417446eab11e75",
+  "pkg/photoshop_abr_wasm_bg.wasm": "d6c98cafe776d6e7d5279cd3b71ee37b6211d6444c321607cfbc7280df334ece",
+  "pkg/photoshop_abr_wasm_bg.wasm.d.ts": "e1bd4bb1a8fc1d9e9d80f5b2039d25605345b0ccd8a718b02db7fc4715137bb3"
+}

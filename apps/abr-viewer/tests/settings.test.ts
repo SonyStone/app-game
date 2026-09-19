@@ -1,6 +1,10 @@
-import { AbrParser, AbrWriter, createAbrFile } from '@app-game/abr-parser/browser';
+import { loadBrushLibrary, type BrushAsset } from '@app-game/abr-brush/library';
+import { composeAbr, percent, pixels } from '@app-game/abr-parser';
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
+import { AbrParser as ReferenceParser } from '../../../packages/abr-parser/tests/reference/abr-parser';
+import { AbrWriter as ReferenceWriter, createAbrFile } from '../../../packages/abr-parser/tests/reference/abr-writer';
+import type { Brush as ReferenceBrush } from '../../../packages/abr-parser/tests/reference/types';
 import { brushToFormValues, formValuesToBrush } from '../src/features/brush-detail/brush-form-schema';
 import { settingGroups } from '../src/features/brush-detail/settings-fields';
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
@@ -10,8 +14,12 @@ import {
   stampStride,
   type PreviewInput
 } from '../src/features/brush-preview/stroke';
+import './initAbr';
 
-const source = new AbrParser().parse(readFileSync('../../packages/abr-parser/files/Brushes To Implement.abr'));
+const input = readFileSync('../../packages/abr-parser/files/Brushes To Implement.abr');
+const source = loadBrushLibrary(input);
+const reference = new ReferenceParser().parse(input);
+const native = reference.brushes[0]!;
 const brush = source.brushes[0]!;
 
 test('Eraser Mode uses Photoshop native IDs and defaults to Brush', () => {
@@ -20,32 +28,29 @@ test('Eraser Mode uses Photoshop native IDs and defaults to Brush', () => {
     { label: 'Pencil', value: 2 },
     { label: 'Block', value: 3 }
   ]);
-  expect(brushToFormValues({ ...brush, settings: {} }).tool.eraserMode).toBe(1);
+  expect(brushToFormValues({ ...brush, preset: { kind: 'brush', sourceId: 'fixture' } }).tool.eraserMode).toBe(1);
   for (const mode of [1, 2, 3]) {
-    const original = { ...brush, settings: { toolOptions: { __classId: 'ErTl', ErsB: mode } } };
+    const original = withSettings({ toolOptions: { __classId: 'ErTl', ErsB: mode } });
     const values = brushToFormValues(original);
     expect(values.tool.eraserMode).toBe(mode);
   }
 });
 
 test('tool options edit and export without changing unknown or dormant settings', () => {
-  const original = {
-    ...brush,
-    settings: {
-      ...brush.settings,
-      toolOptions: {
-        __classId: 'MixB',
-        flow: 73,
-        Opct: 42,
-        wetness: 12,
-        dryness: 54,
-        mix: 67,
-        'Md  ': { type: 'BlnM', value: 'Mltp' },
-        autoClean: true,
-        futureOption: 123
-      }
+  const original = withSettings({
+    ...native.settings,
+    toolOptions: {
+      __classId: 'MixB',
+      flow: 73,
+      Opct: 42,
+      wetness: 12,
+      dryness: 54,
+      mix: 67,
+      'Md  ': { type: 'BlnM', value: 'Mltp' },
+      autoClean: true,
+      futureOption: 123
     }
-  };
+  });
   const values = brushToFormValues(original);
   expect(values.tool).toMatchObject({
     type: 'MixB',
@@ -60,11 +65,9 @@ test('tool options edit and export without changing unknown or dormant settings'
   expect(formValuesToBrush(original, values)).toBe(original);
   Object.assign(values.tool, { type: 'ErTl', flow: 25, opacity: 80, mode: 'Scrn', pressureOverridesSize: true });
   const edited = formValuesToBrush(original, values);
-  const parsed = new AbrParser().parse(
-    new AbrWriter().write({ ...createAbrFile([edited]), rawPatternData: source.rawPatternData })
-  );
+  const parsed = roundtrip(edited);
   expect(parsed.errors).toEqual([]);
-  expect(parsed.brushes[0]!.settings.toolOptions).toMatchObject({
+  expect(nativeSettings(parsed.brushes[0]!).toolOptions).toMatchObject({
     __classId: 'ErTl',
     flow: 25,
     Opct: 80,
@@ -90,11 +93,9 @@ test('Photoshop mappings survive writing and parsing the edited preset', () => {
   v.useBuildUp = true;
   v.useProtectTexture = true;
   const edited = formValuesToBrush(brush, v);
-  const parsed = new AbrParser().parse(
-    new AbrWriter().write({ ...createAbrFile([edited]), rawPatternData: source.rawPatternData })
-  );
+  const parsed = roundtrip(edited);
   expect(parsed.errors).toEqual([]);
-  expect(parsed.brushes[0]!.settings).toMatchObject({
+  expect(nativeSettings(parsed.brushes[0]!)).toMatchObject({
     'Cnt ': 4,
     scatterDynamics: { __classId: 'brVr', jitter: { unit: '#Prc', value: 137 }, bVTy: 1, fStp: 47 },
     opVr: { jitter: { value: 13 }, 'Mnm ': { value: 17 } },
@@ -118,27 +119,24 @@ test('Photoshop mappings survive writing and parsing the edited preset', () => {
 test('opening a preset is a no-op and one edit leaves unrelated descriptor branches untouched', () => {
   const v = brushToFormValues(brush);
   expect(formValuesToBrush(brush, v)).toBe(brush);
-  const original = brush.settings;
+  const original = brush.preset;
   v.scattering.scatter = 231;
   const edited = formValuesToBrush(brush, v);
-  expect(edited.settings.Brsh).toBe(original.Brsh);
-  expect(edited.settings.dualBrush).toBe(original.dualBrush);
-  expect(edited.settings.prVr).toBe(original.prVr);
+  expect(edited.preset.tip).toBe(original.tip);
+  expect(edited.preset.dualBrush).toBe(original.dualBrush);
+  expect(edited.preset.flowDynamics).toBe(original.flowDynamics);
   expect(brushToFormValues(edited).scattering.scatter).toBe(231);
 });
 
 test('renaming a brush does not enable its dormant dual scattering settings', () => {
-  const original = {
-    ...brush,
-    settings: {
-      ...brush.settings,
-      dualBrush: { __classId: 'dualBrush', useDualBrush: true, useScatter: false, Brsh: brush.settings.Brsh }
-    }
-  };
+  const original = withSettings({
+    ...native.settings,
+    dualBrush: { __classId: 'dualBrush', useDualBrush: true, useScatter: false, Brsh: native.settings.Brsh }
+  });
   const values = brushToFormValues(original);
   values.name += ' renamed';
   const edited = formValuesToBrush(original, values);
-  expect(edited.settings.dualBrush).toBe(original.settings.dualBrush);
+  expect(edited.preset.dualBrush).toBe(original.preset.dualBrush);
 });
 
 describe('all scalar controls round-trip while disabled', () => {
@@ -160,12 +158,7 @@ describe('all scalar controls round-trip while disabled', () => {
                   ? field.max
                   : field.min;
         values[key] = next;
-        const file = new AbrParser().parse(
-          new AbrWriter().write({
-            ...createAbrFile([formValuesToBrush(brush, v)]),
-            rawPatternData: source.rawPatternData
-          })
-        );
+        const file = roundtrip(formValuesToBrush(brush, v));
         expect(file.errors).toEqual([]);
         expect(
           (brushToFormValues(file.brushes[0]!)[group as keyof typeof settingGroups] as Record<string, unknown>)[key]
@@ -178,11 +171,11 @@ function preview(): PreviewInput {
     values: brushToFormValues({
       id: 'p',
       name: 'Preview',
-      type: 'computed',
-      settings: {},
-      diameter: 20,
-      spacing: 15,
-      hardness: 30
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        tip: { kind: 'computed', diameter: pixels(20), spacing: percent(15), hardness: percent(30) }
+      }
     }),
     width: 160,
     height: 64,
@@ -253,54 +246,63 @@ test('build-up stamps while stationary; smoothing changes a jagged input path', 
 });
 
 test('saved RGB colors preserve fractional source values until edited and can be removed on export', () => {
-  const original = {
-    ...brush,
-    settings: {
-      ...brush.settings,
-      toolOptions: {
-        __classId: 'PbTl',
-        FrgC: { __classId: 'RGBC', 'Rd  ': 18.4, 'Grn ': 52, 'Bl  ': 86, futureChannel: 9 },
-        BckC: { __classId: 'RGBC', 'Rd  ': 255, 'Grn ': 255, 'Bl  ': 255 }
-      }
+  const original = withSettings({
+    ...native.settings,
+    toolOptions: {
+      __classId: 'PbTl',
+      FrgC: { __classId: 'RGBC', 'Rd  ': 18.4, 'Grn ': 52, 'Bl  ': 86, futureChannel: 9 },
+      BckC: { __classId: 'RGBC', 'Rd  ': 255, 'Grn ': 255, 'Bl  ': 255 }
     }
-  };
+  });
   const values = brushToFormValues(original);
   expect(values.tool.foreground).toBe('#123456');
   expect(formValuesToBrush(original, values)).toBe(original);
   values.name = 'Only renamed';
-  expect(formValuesToBrush(original, values).settings.toolOptions).toEqual(original.settings.toolOptions);
+  expect(formValuesToBrush(original, values).preset.toolOptions).toEqual(original.preset.toolOptions);
   values.tool.foreground = '#fa8040';
   values.tool.background = '';
   const edited = formValuesToBrush(original, values);
-  const parsed = new AbrParser().parse(
-    new AbrWriter().write({
-      ...createAbrFile([edited]),
-      rawPatternData: source.rawPatternData
-    })
-  );
+  const parsed = roundtrip(edited);
   expect(parsed.errors).toEqual([]);
-  expect(parsed.brushes[0]!.settings.toolOptions).toMatchObject({
+  expect(nativeSettings(parsed.brushes[0]!).toolOptions).toMatchObject({
     FrgC: { __classId: 'RGBC', 'Rd  ': 250, 'Grn ': 128, 'Bl  ': 64, futureChannel: 9 }
   });
-  expect(parsed.brushes[0]!.settings.toolOptions).not.toHaveProperty('BckC');
+  expect(nativeSettings(parsed.brushes[0]!).toolOptions).not.toHaveProperty('BckC');
   expect(brushToFormValues(parsed.brushes[0]!).tool.background).toBe('');
 });
 
 test('unrecognized saved color descriptors survive unrelated edits', () => {
-  const original = {
-    ...brush,
-    settings: {
-      ...brush.settings,
-      toolOptions: {
-        __classId: 'PbTl',
-        FrgC: { __classId: 'futureColorSpace', channel: 42 }
-      }
+  const original = withSettings({
+    ...native.settings,
+    toolOptions: {
+      __classId: 'PbTl',
+      FrgC: { __classId: 'futureColorSpace', channel: 42 }
     }
-  };
+  });
   const values = brushToFormValues(original);
   expect(values.tool.foreground).toBe('');
   values.tool.flow = 31;
-  expect(formValuesToBrush(original, values).settings.toolOptions).toMatchObject({
-    FrgC: original.settings.toolOptions.FrgC
+  expect(formValuesToBrush(original, values).preset.toolOptions).toMatchObject({
+    foregroundColor: original.preset.toolOptions?.foregroundColor
   });
 });
+
+/** Independent historical writer authors native test input, including unknown fields. */
+function withSettings(settings: ReferenceBrush['settings']): BrushAsset {
+  return loadBrushLibrary(
+    new ReferenceWriter().write({
+      ...createAbrFile([{ ...native, settings }]),
+      rawPatternData: reference.rawPatternData,
+      rawSampleData: reference.rawSampleData
+    })
+  ).brushes[0]!;
+}
+/** Current public Rust export path; the reference reader is used only by native-key assertions. */
+function roundtrip(brush: BrushAsset) {
+  return loadBrushLibrary(
+    composeAbr({ sources: [brush.source], brushes: [{ source: 0, preset: brush.preset }], hierarchy: [] })
+  );
+}
+function nativeSettings(brush: BrushAsset) {
+  return new ReferenceParser().parse(brush.source.bytes).brushes[0]!.settings;
+}

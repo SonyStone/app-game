@@ -1,53 +1,32 @@
-import { readPatternIndex, type PatternResource } from '@app-game/abr-parser/browser';
+import type { PatternResource } from '@app-game/abr-brush/resources';
 import type { AbrFileWithMeta, BrushWithPreview } from '../../lib/abr';
-import { record } from './brush-form-schema';
 
-/** Adds a shared, compressed resource index without expanding pattern pixels on the UI thread. */
+/** Rust's bulk loader already attached standalone sources; expose patterns to picker views. */
 export function attachBrushResources(file: AbrFileWithMeta) {
-  let patterns: PatternResource[] = [];
-  try {
-    patterns = file.rawPatternData ? readPatternIndex(file.rawPatternData) : [];
-  } catch {
-    /* Preserve the source block; previews report missing patterns individually. */
-  }
-  for (const brush of file.brushes) brush.patternResources = patterns;
+  for (const brush of file.brushes)
+    brush.patternResources = brush.resources.filter((r) => r.resource.kind === 'pattern');
 }
-
-/** Replaces the secondary tip and retains its original sample record for lossless ABR export. */
+/** Selects a secondary preset tip and retains the source archive for composition. */
 export function chooseDualTip(brush: BrushWithPreview, source: BrushWithPreview): BrushWithPreview {
-  const dependencies = [...(brush.sampleDependencies ?? [])];
-  if (
-    source.sampledDataUuid &&
-    source.brushTip?.sourceSample &&
-    !dependencies.some((item) => item.uuid === source.sampledDataUuid)
-  ) {
-    dependencies.push({ uuid: source.sampledDataUuid, source: source.brushTip.sourceSample });
-  }
   return {
     ...brush,
-    sampleDependencies: dependencies,
-    settings: {
-      ...brush.settings,
-      dualBrush: {
-        ...record(brush.settings.dualBrush),
-        __classId: 'dualBrush',
-        useDualBrush: true,
-        Brsh: { ...record(source.settings.Brsh) }
-      }
+    resources: [...brush.resources, ...source.resources],
+    preset: {
+      ...brush.preset,
+      dualBrush: { ...brush.preset.dualBrush, kind: 'dualBrush', enabled: true, tip: source.preset.tip }
     }
   };
 }
-
-/** Changes the texture reference and makes its compressed resource available to previews. */
+/** Selects a pattern using readable fields and its independent encoded source. */
 export function choosePattern(brush: BrushWithPreview, pattern: PatternResource): BrushWithPreview {
-  const resources = [...(brush.patternResources ?? []).filter((item) => item.id !== pattern.id), pattern];
   return {
     ...brush,
-    patternResources: resources,
-    settings: {
-      ...brush.settings,
-      useTexture: true,
-      Txtr: { __classId: 'Ptrn', Idnt: pattern.id, 'Nm  ': pattern.name }
+    resources: [...brush.resources, pattern],
+    patternResources: [...(brush.patternResources ?? []).filter((r) => r.resource.id !== pattern.resource.id), pattern],
+    preset: {
+      ...brush.preset,
+      textureEnabled: true,
+      texture: { kind: 'pattern', identifier: pattern.resource.id, name: pattern.resource.name ?? '' }
     }
   };
 }

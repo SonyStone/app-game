@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
-import { AbrParser } from '../src/abr-parser';
-import { decodePattern, readPatternIndex } from '../src/pattern-reader';
+import { AbrParser } from './reference/abr-parser';
+import { decodePattern, readPatternIndex } from './reference/pattern-reader';
 
 describe('embedded pattern decoding', () => {
   const file = new AbrParser().parse(readFileSync('files/Brushes To Implement.abr'));

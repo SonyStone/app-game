@@ -1,6 +1,7 @@
-import { expect, test } from 'vitest';
-import { createAbrStrokeSampler, stampStride, type PreviewInput } from '@app-game/abr-brush/stroke';
 import { brushToFormValues } from '@app-game/abr-brush/form';
+import { createAbrStrokeSampler, stampStride, type PreviewInput } from '@app-game/abr-brush/stroke';
+import { percent, pixels } from '@app-game/abr-parser';
+import { expect, test } from 'vitest';
 
 // Contract tests stay with the product. Original/Rust reference grids live in photoshop-analysis.
 test('a rectangular sampled tip spaces by its minor extent across input batches', () => {
@@ -8,7 +9,7 @@ test('a rectangular sampled tip spaces by its minor extent across input batches'
   const tip = { width: 3350, height: 3298 };
   const points = [point(0), point(31.5), point(63), point(126)];
   const sampler = createAbrStrokeSampler(input, tip);
-  const chunks = points.flatMap(p => Array.from(sampler.add([p]).data));
+  const chunks = points.flatMap((p) => Array.from(sampler.add([p]).data));
   const whole = createAbrStrokeSampler(input, tip).add(points);
   expect(chunks).toEqual(Array.from(whole.data));
   expect(centers(whole.data)).toEqual([0, 15.75, 31.5, 47.25, 63, 78.75, 94.5, 110.25, 126]);
@@ -34,10 +35,38 @@ test('secondary sampled tips share the source-spacing rule and previews preserve
 });
 
 function settings(kind: 'sampledBrush' | 'computedBrush'): PreviewInput & { size: number } {
-  const values = brushToFormValues({ id: 'spacing', name: 'Spacing', type: 'computed', settings: {}, diameter: 64, spacing: 25 });
-  Object.assign(values, { tipKind: kind, roundness: 100, spacing: 25, spacingEnabled: true,
-    useShapeDynamics: false, useScattering: false, useBuildUp: false });
-  return { values, size: 64, width: 256, height: 64, dpr: 1, color: '#000000', background: '#ffffff', flow: 1, opacity: 1 };
+  const values = brushToFormValues({
+    id: 'spacing',
+    name: 'Spacing',
+    preset: {
+      kind: 'brush',
+      sourceId: 'fixture',
+      ...{},
+      tip: { kind: 'computed', diameter: pixels(64), spacing: percent(25) }
+    },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+  });
+  Object.assign(values, {
+    tipKind: kind,
+    roundness: 100,
+    spacing: 25,
+    spacingEnabled: true,
+    useShapeDynamics: false,
+    useScattering: false,
+    useBuildUp: false
+  });
+  return {
+    values,
+    size: 64,
+    width: 256,
+    height: 64,
+    dpr: 1,
+    color: '#000000',
+    background: '#ffffff',
+    flow: 1,
+    opacity: 1
+  };
 }
 function point(x: number) {
   return { x, y: 0, time: x, pressure: 1, tiltX: 0, tiltY: 0, rotation: 0, pointerType: 'mouse' };

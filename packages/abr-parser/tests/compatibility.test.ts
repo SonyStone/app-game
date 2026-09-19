@@ -1,18 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
-import {
-  AbrParser,
-  AbrWriter,
-  BinaryReader,
-  BinaryWriter,
-  createAbrFile,
-  createBrush,
-  createBrushTip,
-  DescriptorParser,
-  DescriptorSerializer
-} from '../src/browser';
-import type { DescriptorValue } from '../src/types';
+import { AbrParser } from './reference/abr-parser';
+import { AbrWriter, createAbrFile, createBrush, createBrushTip } from './reference/abr-writer';
+import { BinaryReader } from './reference/binary-reader';
+import { BinaryWriter } from './reference/binary-writer';
+import { DescriptorParser } from './reference/descriptor-parser';
+import { DescriptorSerializer } from './reference/descriptor-serializer';
+import type { DescriptorValue } from './reference/types';
 import { abrFiles, FILES_DIR } from './test-helpers';
 
 const uuid = '11111111-1111-1111-1111-111111111111';

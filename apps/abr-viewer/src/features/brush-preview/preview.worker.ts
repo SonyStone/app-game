@@ -1,3 +1,4 @@
+import { initAbr } from '@app-game/abr-parser';
 import type { BrushTipImage } from '../../lib/abr';
 import { renderPreviewPixels } from './cpu';
 import { createPreviewGpu } from './gpu';
@@ -31,6 +32,7 @@ self.onmessage = (event: MessageEvent<PreviewJob>) => {
 
 async function render(job: PreviewJob) {
   await ready;
+  await initAbr();
   const signature = JSON.stringify([
     job.tipKey,
     job.auxKey,

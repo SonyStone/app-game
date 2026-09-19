@@ -1,14 +1,14 @@
-import { thumbnailSize } from '../../../brush-preview/thumbnail-cache';
 import type { ColorMixing } from '@app-game/abr-brush/effects';
 import { supportsAirbrush } from '@app-game/abr-brush/stroke';
 import { createEffect, createSignal, onSettled, Show } from 'solid-js';
 import type { BrushWithPreview } from '../../../../lib/abr';
-import styles from './BrushPreviewCanvas.module.css';
 import { attachPreview } from '../../../brush-preview/client';
 import { brushPreviewResources } from '../../../brush-preview/resources';
 import type { PreviewPoint } from '../../../brush-preview/stroke';
+import { thumbnailSize } from '../../../brush-preview/thumbnail-cache';
 import type { BrushFormValues } from '../../brush-form-schema';
 import { previewAppearance } from '../../preview-appearance';
+import styles from './BrushPreviewCanvas.module.css';
 
 /** Canvas and optional pointer input; rendering runs through the shared preview service. */
 export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
@@ -31,8 +31,8 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
   createEffect(
     () => [
       JSON.stringify(props.values),
-      props.brush.brushTip,
-      props.brush.settings,
+      props.brush.tipImage,
+      props.brush.preset,
       props.secondaryColor,
       props.height,
       props.backgroundColor,
@@ -70,7 +70,7 @@ export function BrushPreviewCanvas(props: BrushPreviewCanvasProps) {
           flow: values.tool.flow / 100,
           opacity: values.tool.opacity / 100
         },
-        props.brush.brushTip,
+        props.brush.tipImage,
         props.priority ?? 0,
         brushPreviewResources(props.brush),
         props.thumbnail === true

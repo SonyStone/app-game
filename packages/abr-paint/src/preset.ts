@@ -1,11 +1,11 @@
 import { blockEraserTip, isBlockEraser } from '@app-game/abr-brush/blockEraser';
 import { brushFormSchema, brushToFormValues, brushToolSettings, record } from '@app-game/abr-brush/form';
+import type { BrushAsset as AbrBrush, BrushTipImage } from '@app-game/abr-brush/library';
 import { paintModes } from '@app-game/abr-brush/paintBlend';
 import { usesPencilCoverage } from '@app-game/abr-brush/pencil';
 import { generatePreviewTip } from '@app-game/abr-brush/physical-tip';
 import { brushPreviewResources, decodePreviewResources } from '@app-game/abr-brush/resources';
 import { smudgeModes } from '@app-game/abr-brush/settings-fields';
-import type { Brush as AbrBrush, BrushTipImage } from '@app-game/abr-parser/reader';
 import type { AbrBrushSettings } from './engine';
 import type { BrushResource } from './resources';
 
@@ -13,16 +13,16 @@ import type { BrushResource } from './resources';
  * Missing embedded resources fail explicitly rather than silently rendering a different brush.
  */
 export function prepareAbrBrush(brush: AbrBrush) {
-  const type = record(brush.settings.toolOptions).__classId;
+  const type = record(brush.preset.toolOptions).kind;
   const tool = brushToolSettings(brush);
-  const rawTool = record(brush.settings.toolOptions);
+  const rawTool = record(brush.preset.toolOptions);
   for (const [key, color] of [
-    ['FrgC', tool.foreground],
-    ['BckC', tool.background]
+    ['foregroundColor', tool.foreground],
+    ['backgroundColor', tool.background]
   ] as const)
     if (rawTool[key] !== undefined && color === undefined)
       throw new Error(
-        `Unsupported saved ${key === 'FrgC' ? 'foreground' : 'background'} color. Choose an RGB color in Tool Options before applying this preset.`
+        `Unsupported saved ${key === 'foregroundColor' ? 'foreground' : 'background'} color. Choose an RGB color in Tool Options before applying this preset.`
       );
   const blendMode = paintModes.find((mode) => mode === tool.blendMode);
   if (!blendMode) throw new Error(`Unsupported ABR paint mode: ${tool.blendMode}`);
@@ -42,8 +42,8 @@ export function prepareAbrBrush(brush: AbrBrush) {
   if (auxiliary.warning) throw new Error(auxiliary.warning);
   const image = block
     ? blockEraserTip()
-    : values.tipKind === 'sampledBrush' || brush.type === 'sampled'
-      ? brush.brushTip
+    : values.tipKind === 'sampledBrush' || brush.preset.tip?.kind === 'sampled'
+      ? brush.tipImage
       : generatePreviewTip(values);
   if (!image) throw new Error('The sampled brush tip is missing.');
   const resource = copyResource(image);

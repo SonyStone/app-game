@@ -1,7 +1,7 @@
-import type { PatternResource } from '@app-game/abr-parser/browser';
+import type { PatternResource } from '@app-game/abr-brush/resources';
 import { createMemo, For } from 'solid-js';
-import styles from './TexturePicker.module.css';
 import { ResourceThumbnail } from './ResourceThumbnail';
+import styles from './TexturePicker.module.css';
 
 /** A selected pattern swatch opens the embedded pattern library without a modal. */
 export function TexturePicker(props: {
@@ -12,7 +12,7 @@ export function TexturePicker(props: {
   onSelect: (pattern: PatternResource) => void;
 }) {
   let picker!: HTMLDetailsElement;
-  const selected = createMemo(() => props.patterns.find((pattern) => pattern.id === props.selectedId));
+  const selected = createMemo(() => props.patterns.find((pattern) => pattern.resource.id === props.selectedId));
   return (
     <details ref={picker} class={styles.patternPicker}>
       <summary
@@ -22,28 +22,32 @@ export function TexturePicker(props: {
           if (props.disabled) event.preventDefault();
         }}
       >
-        <ResourceThumbnail kind="pattern" label="Selected texture preview" resources={{ pattern: selected() }} />
-        <span>{selected()?.name || props.selectedName || 'No embedded pattern'}</span>
+        <ResourceThumbnail
+          kind="pattern"
+          label="Selected texture preview"
+          resources={{ pattern: selected()?.source }}
+        />
+        <span>{selected()?.resource.name || props.selectedName || 'No embedded pattern'}</span>
         <span aria-hidden="true">⌄</span>
       </summary>
-      <div
-        class={`${styles.resourceGrid} ${styles.patternGrid}`}
-        role="group"
-        aria-label="Texture patterns"
-      >
+      <div class={`${styles.resourceGrid} ${styles.patternGrid}`} role="group" aria-label="Texture patterns">
         <For each={props.patterns}>
           {(pattern) => (
             <button
               type="button"
-              title={pattern.name}
-              aria-label={pattern.name}
-              aria-pressed={pattern.id === props.selectedId ? 'true' : 'false'}
+              title={pattern.resource.name}
+              aria-label={pattern.resource.name}
+              aria-pressed={pattern.resource.id === props.selectedId ? 'true' : 'false'}
               onClick={() => {
                 props.onSelect(pattern);
                 picker.open = false;
               }}
             >
-              <ResourceThumbnail kind="pattern" label={`${pattern.name} texture`} resources={{ pattern }} />
+              <ResourceThumbnail
+                kind="pattern"
+                label={`${pattern.resource.name} texture`}
+                resources={{ pattern: pattern.source }}
+              />
             </button>
           )}
         </For>

@@ -1,14 +1,16 @@
-import { AbrParser, AbrWriter } from '@app-game/abr-parser/browser';
+import { loadBrushLibrary } from '@app-game/abr-brush/library';
+import { composeAbr, pixels } from '@app-game/abr-parser';
 import { readFileSync } from 'node:fs';
 import { createRoot, runWithOwner, flush as solidFlush } from 'solid-js';
 import { describe, expect, test } from 'vitest';
 import { brushToFormValues, formValuesToBrush } from '../src/features/brush-detail/brush-form-schema';
 import { allBrushNodes, type GroupNode } from '../src/lib/brush-tree';
 import { createWorkspace } from '../src/lib/workspace';
+import './initAbr';
 
 /** Loads a real fixture, preserving its format resources. */
 function sample(name = 'Basic_3') {
-  const file = new AbrParser().parse(
+  const file = loadBrushLibrary(
     readFileSync(new URL(`../../../packages/abr-parser/files/${name}.abr`, import.meta.url))
   );
   file.brushes.forEach((brush, index) => {
@@ -19,7 +21,7 @@ function sample(name = 'Basic_3') {
 
 /** Exercises the same binary export path used by the browser. */
 function roundtrip(file: ReturnType<ReturnType<typeof createWorkspace>['exportFile']>) {
-  return new AbrParser().parse(new AbrWriter().write(file));
+  return loadBrushLibrary(composeAbr(file));
 }
 
 /** Simulates a user event outside component initialization, then publishes its writes. */
@@ -47,13 +49,16 @@ describe('brush workspace', () => {
       const parsed = roundtrip(workspace.exportFile('all'));
       expect(parsed.errors).toEqual([]);
       const edited = parsed.brushes[0];
-      expect(edited).toMatchObject({ name: values.name, diameter: 80, spacing: 17, angle: 25, hardness: 40 });
+      expect(edited.preset).toMatchObject({
+        name: values.name,
+        tip: { diameter: 80, spacing: 17, angle: 25, hardness: 40 }
+      });
       expect(brushToFormValues(edited).flipX).toBe(true);
       expect(brushToFormValues(edited).shapeDynamics.minimumDiameter).toBe(12);
       flush(workspace.undo);
-      expect(workspace.active()!.brush.diameter).toBe(40);
+      expect(workspace.active()!.brush.preset.tip?.diameter).toBe(40);
       flush(workspace.redo);
-      expect(workspace.active()!.brush.diameter).toBe(80);
+      expect(workspace.active()!.brush.preset.tip?.diameter).toBe(80);
       dispose();
     }));
 
@@ -74,13 +79,13 @@ describe('brush workspace', () => {
         'Hard Flat 40',
         'Chalk 36 pixels 1'
       ]);
-      expect(parsed.hierarchy?.filter((item) => item.type === 'group').map((item) => item.name)).toEqual([
+      expect(parsed.hierarchy?.filter((item) => item.kind === 'group').map((item) => item.name)).toEqual([
         'Basic_3',
         'New Group',
         'Chunky_Chalk_Brush_by_MarkWinters'
       ]);
-      expect(parsed.brushes.at(-1)?.brushTip?.data).toEqual(
-        sample('Chunky_Chalk_Brush_by_MarkWinters').brushes[0].brushTip?.data
+      expect(parsed.brushes.at(-1)?.tipImage?.data).toEqual(
+        sample('Chunky_Chalk_Brush_by_MarkWinters').brushes[0].tipImage?.data
       );
       dispose();
     }));
@@ -95,7 +100,7 @@ describe('brush workspace', () => {
       flush(() => workspace.setSelection([group.children[1].id]));
       const parsed = roundtrip(workspace.exportFile('selection'));
       expect(parsed.brushes.map((brush) => brush.name)).toEqual(['Hard Flat 40']);
-      expect(parsed.hierarchy?.find((item) => item.type === 'group')?.name).toBe('Basic_3');
+      expect(parsed.hierarchy?.find((item) => item.kind === 'group')?.name).toBe('Basic_3');
       dispose();
     }));
 
@@ -113,6 +118,7 @@ describe('brush workspace', () => {
         'Hard Round 35'
       ]);
       expect(brushes[1].brush.id).not.toBe(original.brush.id);
+      expect(roundtrip(workspace.exportFile('all')).brushes[1].name).toBe('Soft Round 40 copy');
       flush(() => workspace.remove([original.id]));
       expect(allBrushNodes(workspace.root().children)).toHaveLength(3);
       flush(workspace.undo);
@@ -125,7 +131,7 @@ describe('brush workspace', () => {
     createRoot((dispose) => {
       const workspace = createWorkspace();
       const partial = sample();
-      partial.errors.push('Unsupported descriptor type in another record');
+      partial.errors = [...partial.errors, 'Unsupported descriptor type in another record'];
       flush(() => workspace.importFiles([partial]));
       expect(() => roundtrip(workspace.exportFile('all'))).toThrow('incompletely parsed');
       dispose();
@@ -145,16 +151,26 @@ describe('brush workspace', () => {
 });
 
 test('a stored workspace preserves edits, removal and export resources across reloads', () =>
-  createRoot(dispose => {
+  createRoot((dispose) => {
     const original = createWorkspace();
     flush(() => original.importFiles([sample()]));
     const first = original.active()!;
-    flush(() => original.updateBrush(first.id, { ...first.brush, name: 'Saved pencil', diameter: 73 }));
+    flush(() =>
+      original.updateBrush(first.id, {
+        ...first.brush,
+        name: 'Saved pencil',
+        preset: {
+          ...first.brush.preset,
+          name: 'Saved pencil',
+          tip: { ...first.brush.preset.tip!, diameter: pixels(73) }
+        }
+      })
+    );
     const checkpoint = structuredClone(original.snapshot());
     const restored = createWorkspace();
     flush(() => restored.restore(checkpoint));
     expect(restored.active()?.brush.name).toBe('Saved pencil');
-    expect(restored.active()?.brush.diameter).toBe(73);
+    expect(restored.active()?.brush.preset.tip?.diameter).toBe(73);
     expect(restored.exportFile('all')).toEqual(original.exportFile('all'));
     expect(restored.canUndo()).toBe(false);
     flush(() => restored.remove([restored.root().children[0]!.id]));

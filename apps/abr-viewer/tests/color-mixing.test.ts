@@ -1,3 +1,4 @@
+import { percent, pixels } from '@app-game/abr-parser';
 import { describe, expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
@@ -8,11 +9,14 @@ function input(type = 'PbTl', mode = 'Nrml'): PreviewInput {
   const values = brushToFormValues({
     id: 'mix',
     name: 'Mix',
-    type: 'computed',
-    settings: {},
-    diameter: 32,
-    hardness: 100,
-    spacing: 10
+    preset: {
+      kind: 'brush',
+      sourceId: 'fixture',
+      ...{},
+      tip: { kind: 'computed', diameter: pixels(32), spacing: percent(10), hardness: percent(100) }
+    },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
   });
   Object.assign(values.tool, { type, mode });
   return {
@@ -40,7 +44,10 @@ describe('ABR color mixing', () => {
     expect(center(job)).toEqual(classic);
     expect(center({ ...job, colorMixing: 'linear' })).toEqual(smooth);
     expect(center({ ...job, colorMixing: 'linear', color: '#00ff00', background: '#ff0000' })).toEqual([
-      smooth[1], smooth[0], 0, 255
+      smooth[1],
+      smooth[0],
+      0,
+      255
     ]);
     expect(center({ ...job, colorMixing: 'classic' })).toEqual(classic);
     expect(job.values).toEqual(saved);

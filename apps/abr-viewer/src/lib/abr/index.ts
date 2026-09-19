@@ -1,39 +1,8 @@
-/**
- * ABR Parser - Browser Edition
- * Re-exports the core parser and adds browser-specific utilities.
- */
-
-// Re-export everything from the browser-safe package (excludes Node.js-only modules)
-export {
-  AbrParser,
-  AbrWriter,
-  BinaryReader,
-  BinaryWriter,
-  DescriptorParser,
-  DescriptorSerializer,
-  createAbrFile,
-  createBrush,
-  createBrushTip,
-  makeDescriptor
-} from '@app-game/abr-parser/browser';
-
-// Re-export core types (can be extended by browser types)
-export type {
-  AbrFile,
-  Brush,
-  BrushDynamics,
-  BrushTipImage,
-  DescriptorValue,
-  DynamicControl,
-  ExportResult,
-  ParseOptions,
-  Pattern,
-  ResourceBlock
-} from '@app-game/abr-parser/browser';
-
-export type { WriteOptions } from '@app-game/abr-parser/browser';
-
-// Browser-specific utilities
+/** Viewer operations use the Rust-backed parser and the shared application brush model. */
+export { loadBrushLibrary } from '@app-game/abr-brush/library';
+export type { BrushLibrary as AbrFile, BrushAsset as Brush, BrushTipImage } from '@app-game/abr-brush/library';
+export { composeAbr, initAbr } from '@app-game/abr-parser';
+export type { Composition } from '@app-game/abr-parser';
 export {
   brushTipToDataUrl,
   brushTipToPngBlob,
@@ -41,6 +10,4 @@ export {
   createBrushTipFromImage,
   downloadAbrFile
 } from './browser-utils';
-
-// Browser-specific extended types
 export type { AbrFileWithMeta, BrushWithPreview } from './browser-utils';

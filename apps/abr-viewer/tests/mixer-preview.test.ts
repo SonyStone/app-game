@@ -1,3 +1,4 @@
+import { pixels } from '@app-game/abr-parser';
 import { expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
@@ -64,7 +65,13 @@ test('Mixer capacity and wet/mix dynamics follow emitted stamps, not host Streng
 });
 
 function fixture(): PreviewInput {
-  const values = brushToFormValues({ id: 'mixer', name: 'Mixer', type: 'computed', settings: {}, diameter: 16 });
+  const values = brushToFormValues({
+    id: 'mixer',
+    name: 'Mixer',
+    preset: { kind: 'brush', sourceId: 'fixture', ...{}, tip: { kind: 'computed', diameter: pixels(16) } },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+  });
   values.useSmoothing = false;
   Object.assign(values.tool, { type: 'MixB', wetness: 0, mix: 0, load: 100 });
   return {

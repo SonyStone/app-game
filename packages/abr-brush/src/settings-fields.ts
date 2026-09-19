@@ -3,7 +3,7 @@ import { z } from 'zod/v3';
 /** Descriptor bindings also supply labels, ranges and options to the settings panels. */
 export const settingGroups = {
   tool: {
-    type: plainChoice('Tool', 'toolOptions.__classId', 'PbTl', [
+    type: plainChoice('Tool', 'toolOptions.kind', 'PbTl', [
       ['PbTl', 'Brush'],
       ['PcTl', 'Pencil'],
       ['ErTl', 'Eraser'],
@@ -12,18 +12,18 @@ export const settingGroups = {
       ['ShTl', 'Sharpen'],
       ['BlTl', 'Blur']
     ]),
-    mode: choice('Mode', 'toolOptions.Md  ', 'Nrml', paintToolModes),
-    opacity: number('Opacity (%)', 'toolOptions.Opct', 0, 100, 100),
+    mode: choice('Mode', 'toolOptions.mode', 'Nrml', paintToolModes),
+    opacity: number('Opacity (%)', 'toolOptions.opacity', 0, 100, 100),
     flow: number('Flow (%)', 'toolOptions.flow', 0, 100, 100),
-    foreground: color('Saved foreground', 'toolOptions.FrgC'),
-    background: color('Saved background', 'toolOptions.BckC'),
+    foreground: color('Saved foreground', 'toolOptions.foregroundColor'),
+    background: color('Saved background', 'toolOptions.backgroundColor'),
     pressureOverridesOpacity: checkbox('Always use pressure for opacity', 'toolOptions.usePressureOverridesOpacity'),
     pressureOverridesSize: checkbox('Always use pressure for size', 'toolOptions.usePressureOverridesSize'),
     pressureSmoothing: checkbox('Smooth pressure (stored only)', 'toolOptions.pressureSmoothing'),
     legacy: checkbox('Legacy mode (stored only)', 'toolOptions.useLegacy'),
-    strength: number('Strength (%)', 'toolOptions.Prs ', 0, 100, 50),
-    fingerPainting: checkbox('Finger Painting', 'toolOptions.SmdF'),
-    smudgeAllLayers: checkbox('Sample All Layers', 'toolOptions.SmdS'),
+    strength: number('Strength (%)', 'toolOptions.strength', 0, 100, 50),
+    fingerPainting: checkbox('Finger Painting', 'toolOptions.fingerPainting'),
+    smudgeAllLayers: checkbox('Sample All Layers', 'toolOptions.smudgeAllLayers'),
     wetness: number('Wet (%)', 'toolOptions.wetness', 0, 100, 0),
     load: number('Load (%)', 'toolOptions.dryness', 0, 100, 100),
     mix: number('Mix (%)', 'toolOptions.mix', 0, 100, 0),
@@ -31,14 +31,14 @@ export const settingGroups = {
     autoClean: checkbox('Clean brush after each stroke', 'toolOptions.autoClean'),
     loadSolidColorOnly: checkbox('Load solid colors only', 'toolOptions.loadSolidColorOnly', true),
     sampleAllLayers: checkbox('Sample All Layers', 'toolOptions.sampleAllLayers'),
-    autoErase: checkbox('Auto Erase', 'toolOptions.PncA'),
-    eraseToHistory: checkbox('Erase to History', 'toolOptions.MgcE'),
-    eraserMode: numericChoice('Eraser Mode', 'toolOptions.ErsB', ['Brush', 'Pencil', 'Block'], 1),
-    sharpenAllLayers: checkbox('Sample All Layers', 'toolOptions.BlrS'),
+    autoErase: checkbox('Auto Erase', 'toolOptions.autoErase'),
+    eraseToHistory: checkbox('Erase to History', 'toolOptions.eraseToHistory'),
+    eraserMode: numericChoice('Eraser Mode', 'toolOptions.eraserMode', ['Brush', 'Pencil', 'Block'], 1),
+    sharpenAllLayers: checkbox('Sample All Layers', 'toolOptions.filterAllLayers'),
     protectDetail: checkbox('Protect Detail', 'toolOptions.detailBoost', true)
   },
   bristle: {
-    shape: numericChoice('Shape', 'Brsh.Shp ', [
+    shape: numericChoice('Shape', 'tip.shape', [
       'Round Point',
       'Round Blunt',
       'Round Curve',
@@ -50,38 +50,41 @@ export const settingGroups = {
       'Flat Angle',
       'Flat Fan'
     ]),
-    density: fraction('Bristles', 'Brsh.Dnst', 50),
-    length: fraction('Length', 'Brsh.Lngt', 50),
-    thickness: fraction('Thickness', 'Brsh.thickness', 10),
-    stiffness: fraction('Stiffness', 'Brsh.stiffness', 50),
-    clumping: fraction('Clumping', 'Brsh.clumping', 25),
-    physics: checkbox('Simulate Bristle Physics', 'Brsh.physics', true)
+    density: fraction('Bristles', 'tip.density', 50),
+    length: fraction('Length', 'tip.length', 50),
+    thickness: fraction('Thickness', 'tip.thickness', 10),
+    stiffness: fraction('Stiffness', 'tip.stiffness', 50),
+    clumping: fraction('Clumping', 'tip.clumping', 25),
+    physics: checkbox('Simulate Bristle Physics', 'tip.physics', true)
   },
   erodible: {
-    shape: numericChoice('Shape', 'Brsh.Shp ', ['Point', 'Flat', 'Round', 'Square', 'Triangle', 'Custom']),
-    softness: percent('Softness', 'Brsh.dtipsHardness', 100),
-    length: percent('Length', 'Brsh.dtipsLengthRatio', 100),
-    physics: checkbox('Simulate Tip Wear', 'Brsh.physics', true),
-    cutoff: number('Cutoff Angle', 'Brsh.dtipsAirbrushCutoffAngle', 0, 90, 15),
-    granularity: percent('Granularity', 'Brsh.dtipsAirbrushGranularity', 1),
-    streakiness: percent('Spatter Jitter', 'Brsh.dtipsAirbrushStreakiness', 1),
-    splatSize: percent('Spatter Size', 'Brsh.dtipsAirbrushSplatSize', 1),
-    splatCount: number('Spatter Count', 'Brsh.dtipsAirbrushSplatCount', 1, 1000, 100)
+    shape: numericChoice('Shape', 'tip.shape', ['Point', 'Flat', 'Round', 'Square', 'Triangle', 'Custom']),
+    softness: percent('Softness', 'tip.dtipsHardness', 100),
+    length: percent('Length', 'tip.dtipsLengthRatio', 100),
+    physics: checkbox('Simulate Tip Wear', 'tip.physics', true),
+    cutoff: number('Cutoff Angle', 'tip.dtipsAirbrushCutoffAngle', 0, 90, 15),
+    granularity: percent('Granularity', 'tip.dtipsAirbrushGranularity', 1),
+    streakiness: percent('Spatter Jitter', 'tip.dtipsAirbrushStreakiness', 1),
+    splatSize: percent('Spatter Size', 'tip.dtipsAirbrushSplatSize', 1),
+    splatCount: number('Spatter Count', 'tip.dtipsAirbrushSplatCount', 1, 1000, 100)
   },
   shapeDynamics: {
-    sizeJitter: percent('Size Jitter', 'szVr.jitter'),
-    sizeControl: control('Size Control', 'szVr.bVTy', 'size'),
-    sizeFade: steps('Size Fade', 'szVr.fStp'),
-    sizeMinimum: percent('Control Minimum', 'szVr.Mnm '),
+    sizeJitter: percent('Size Jitter', 'sizeDynamics.jitter'),
+    sizeControl: control('Size Control', 'sizeDynamics.control', 'size'),
+    sizeFade: steps('Size Fade', 'sizeDynamics.fadeSteps'),
+    sizeMinimum: percent('Control Minimum', 'sizeDynamics.minimum'),
     minimumDiameter: percent('Minimum Diameter', 'minimumDiameter'),
     tiltScale: number('Tilt Scale', 'tiltScale', 0, 200, 200, '#Prc'),
     angleJitter: percent('Angle Jitter', 'angleDynamics.jitter'),
-    angleControl: control('Angle Control', 'angleDynamics.bVTy', 'angle'),
-    angleFade: steps('Angle Fade', 'angleDynamics.fStp'),
+    angleControl: control('Angle Control', 'angleDynamics.control', 'angle'),
+    angleFade: steps('Angle Fade', 'angleDynamics.fadeSteps'),
     roundnessJitter: percent('Roundness Jitter', 'roundnessDynamics.jitter'),
-    roundnessControl: control('Roundness Control', 'roundnessDynamics.bVTy'),
-    roundnessFade: steps('Roundness Fade', 'roundnessDynamics.fStp'),
-    roundnessControlMinimum: { ...percent('Control Minimum', 'roundnessDynamics.Mnm '), schema: z.number().finite().min(0).max(100).default(0) },
+    roundnessControl: control('Roundness Control', 'roundnessDynamics.control'),
+    roundnessFade: steps('Roundness Fade', 'roundnessDynamics.fadeSteps'),
+    roundnessControlMinimum: {
+      ...percent('Control Minimum', 'roundnessDynamics.minimum'),
+      schema: z.number().finite().min(0).max(100).default(0)
+    },
     roundnessMinimum: percent('Minimum Roundness', 'minimumRoundness', 25),
     flipXJitter: checkbox('Flip X Jitter', 'flipX'),
     flipYJitter: checkbox('Flip Y Jitter', 'flipY'),
@@ -90,72 +93,75 @@ export const settingGroups = {
   scattering: {
     scatter: number('Scatter', 'scatterDynamics.jitter', 0, 1000, 0, '#Prc'),
     bothAxes: checkbox('Both Axes', 'bothAxes'),
-    control: control('Scatter Control', 'scatterDynamics.bVTy', 'size'),
-    fade: steps('Scatter Fade', 'scatterDynamics.fStp'),
-    count: number('Count', 'Cnt ', 1, 16, 1),
+    control: control('Scatter Control', 'scatterDynamics.control', 'size'),
+    fade: steps('Scatter Fade', 'scatterDynamics.fadeSteps'),
+    count: number('Count', 'count', 1, 16, 1),
     countJitter: percent('Count Jitter', 'countDynamics.jitter'),
-    countControl: control('Count Control', 'countDynamics.bVTy', 'size'),
-    countFade: steps('Count Fade', 'countDynamics.fStp')
+    countControl: control('Count Control', 'countDynamics.control', 'size'),
+    countFade: steps('Count Fade', 'countDynamics.fadeSteps')
   },
   texture: {
-    patternId: text('Pattern', 'Txtr.Idnt'),
-    patternName: text('Pattern Name', 'Txtr.Nm  '),
-    invert: checkbox('Invert', 'InvT'),
+    patternId: text('Pattern', 'texture.identifier'),
+    patternName: text('Pattern Name', 'texture.name'),
+    invert: checkbox('Invert', 'invertTexture'),
     scale: number('Scale', 'textureScale', 1, 1000, 100, '#Prc'),
     brightness: number('Brightness', 'textureBrightness', -150, 150, 0),
     contrast: number('Contrast', 'textureContrast', -50, 100, 0),
-    eachTip: checkbox('Texture Each Tip', 'TxtC'),
+    eachTip: checkbox('Texture Each Tip', 'textureEachTip'),
     mode: choice('Mode', 'textureBlendMode', 'Hght', textureModes),
     depth: percent('Depth', 'textureDepth', 100),
     minimumDepth: percent('Minimum Depth', 'minimumDepth'),
     depthJitter: percent('Depth Jitter', 'textureDepthDynamics.jitter'),
-    depthControl: control('Depth Control', 'textureDepthDynamics.bVTy'),
-    depthFade: steps('Depth Fade', 'textureDepthDynamics.fStp')
+    depthControl: control('Depth Control', 'textureDepthDynamics.control'),
+    depthFade: steps('Depth Fade', 'textureDepthDynamics.fadeSteps')
   },
   dualBrush: {
-    tipId: text('Second Tip', 'dualBrush.Brsh.sampledData'),
-    mode: choice('Mode', 'dualBrush.BlnM', 'Mltp', dualModes),
-    flip: checkbox('Flip', 'dualBrush.Flip'),
-    diameter: number('Size', 'dualBrush.Brsh.Dmtr', 1, 5000, 30, '#Pxl'),
-    hardness: { ...number('Hardness', 'dualBrush.Brsh.Hrdn', 0, 100, 100, '#Prc'), schema: z.number().finite().min(0).max(100).default(100) },
-    spacing: number('Spacing', 'dualBrush.Brsh.Spcn', 1, 1000, 25, '#Prc'),
-    angle: number('Angle', 'dualBrush.Brsh.Angl', -180, 180, 0, '#Ang'),
-    roundness: number('Roundness', 'dualBrush.Brsh.Rndn', 1, 100, 100, '#Prc'),
-    flipX: checkbox('Flip X', 'dualBrush.Brsh.flipX'),
-    flipY: checkbox('Flip Y', 'dualBrush.Brsh.flipY'),
+    tipId: text('Second Tip', 'dualBrush.tip.sampleId'),
+    mode: choice('Mode', 'dualBrush.blendMode', 'Mltp', dualModes),
+    flip: checkbox('Flip', 'dualBrush.flip'),
+    diameter: number('Size', 'dualBrush.tip.diameter', 1, 5000, 30, '#Pxl'),
+    hardness: {
+      ...number('Hardness', 'dualBrush.tip.hardness', 0, 100, 100, '#Prc'),
+      schema: z.number().finite().min(0).max(100).default(100)
+    },
+    spacing: number('Spacing', 'dualBrush.tip.spacing', 1, 1000, 25, '#Prc'),
+    angle: number('Angle', 'dualBrush.tip.angle', -180, 180, 0, '#Ang'),
+    roundness: number('Roundness', 'dualBrush.tip.roundness', 1, 100, 100, '#Prc'),
+    flipX: checkbox('Flip X', 'dualBrush.tip.flipX'),
+    flipY: checkbox('Flip Y', 'dualBrush.tip.flipY'),
     scatter: number('Scatter', 'dualBrush.scatterDynamics.jitter', 0, 1000, 0, '#Prc'),
     bothAxes: checkbox('Both Axes', 'dualBrush.bothAxes'),
-    count: number('Count', 'dualBrush.Cnt ', 1, 16, 1)
+    count: number('Count', 'dualBrush.count', 1, 16, 1)
   },
   colorDynamics: {
     applyPerTip: checkbox('Apply Per Tip', 'colorDynamicsPerTip'),
-    foregroundBackgroundJitter: percent('Foreground/Background Jitter', 'clVr.jitter'),
-    control: control('Color Control', 'clVr.bVTy'),
-    fade: steps('Color Fade', 'clVr.fStp'),
-    hueJitter: percent('Hue Jitter', 'H   '),
-    saturationJitter: percent('Saturation Jitter', 'Strt'),
-    brightnessJitter: percent('Brightness Jitter', 'Brgh'),
+    foregroundBackgroundJitter: percent('Foreground/Background Jitter', 'colorDynamics.jitter'),
+    control: control('Color Control', 'colorDynamics.control'),
+    fade: steps('Color Fade', 'colorDynamics.fadeSteps'),
+    hueJitter: percent('Hue Jitter', 'hue'),
+    saturationJitter: percent('Saturation Jitter', 'saturation'),
+    brightnessJitter: percent('Brightness Jitter', 'brightness'),
     purity: number('Purity', 'purity', -100, 100, 0, '#Prc')
   },
   transfer: {
     // Photoshop's prVr is flow; opVr is opacity. Keep both read and write paths
     // aligned with the wire format, not inferred from a preset's appearance.
-    opacityJitter: percent('Opacity Jitter', 'opVr.jitter'),
-    opacityControl: control('Opacity Control', 'opVr.bVTy', 'size'),
-    opacityFade: steps('Opacity Fade', 'opVr.fStp'),
-    opacityMinimum: percent('Minimum Opacity', 'opVr.Mnm '),
-    flowJitter: percent('Flow Jitter', 'prVr.jitter'),
-    flowControl: control('Flow Control', 'prVr.bVTy', 'size'),
-    flowFade: steps('Flow Fade', 'prVr.fStp'),
-    flowMinimum: percent('Minimum Flow', 'prVr.Mnm '),
-    wetnessJitter: percent('Wetness Jitter', 'wtVr.jitter'),
-    wetnessControl: control('Wetness Control', 'wtVr.bVTy', 'size'),
-    wetnessFade: steps('Wetness Fade', 'wtVr.fStp'),
-    wetnessMinimum: percent('Minimum Wetness', 'wtVr.Mnm '),
-    mixJitter: percent('Mix Jitter', 'mxVr.jitter'),
-    mixControl: control('Mix Control', 'mxVr.bVTy', 'size'),
-    mixFade: steps('Mix Fade', 'mxVr.fStp'),
-    mixMinimum: percent('Minimum Mix', 'mxVr.Mnm ')
+    opacityJitter: percent('Opacity Jitter', 'opacityDynamics.jitter'),
+    opacityControl: control('Opacity Control', 'opacityDynamics.control', 'size'),
+    opacityFade: steps('Opacity Fade', 'opacityDynamics.fadeSteps'),
+    opacityMinimum: percent('Minimum Opacity', 'opacityDynamics.minimum'),
+    flowJitter: percent('Flow Jitter', 'flowDynamics.jitter'),
+    flowControl: control('Flow Control', 'flowDynamics.control', 'size'),
+    flowFade: steps('Flow Fade', 'flowDynamics.fadeSteps'),
+    flowMinimum: percent('Minimum Flow', 'flowDynamics.minimum'),
+    wetnessJitter: percent('Wetness Jitter', 'wetnessDynamics.jitter'),
+    wetnessControl: control('Wetness Control', 'wetnessDynamics.control', 'size'),
+    wetnessFade: steps('Wetness Fade', 'wetnessDynamics.fadeSteps'),
+    wetnessMinimum: percent('Minimum Wetness', 'wetnessDynamics.minimum'),
+    mixJitter: percent('Mix Jitter', 'mixDynamics.jitter'),
+    mixControl: control('Mix Control', 'mixDynamics.control', 'size'),
+    mixFade: steps('Mix Fade', 'mixDynamics.fadeSteps'),
+    mixMinimum: percent('Minimum Mix', 'mixDynamics.minimum')
   },
   brushPose: {
     tiltX: number('Tilt X', 'brushPoseTiltX', -100, 100, 0),
@@ -178,16 +184,16 @@ export const settingGroups = {
 
 /** Feature switches use Photoshop's wire names, including nested Dual Brush and tool smoothing. */
 export const featureFields = {
-  useShapeDynamics: checkbox('Shape Dynamics', 'useTipDynamics'),
-  useScattering: checkbox('Scattering', 'useScatter'),
-  useTexture: checkbox('Texture', 'useTexture'),
-  useDualBrush: checkbox('Dual Brush', 'dualBrush.useDualBrush'),
+  useShapeDynamics: checkbox('Shape Dynamics', 'shapeDynamicsEnabled'),
+  useScattering: checkbox('Scattering', 'scatteringEnabled'),
+  useTexture: checkbox('Texture', 'textureEnabled'),
+  useDualBrush: checkbox('Dual Brush', 'dualBrush.enabled'),
   useColorDynamics: checkbox('Color Dynamics', 'useColorDynamics'),
-  useTransfer: checkbox('Transfer', 'usePaintDynamics'),
+  useTransfer: checkbox('Transfer', 'transferEnabled'),
   useBrushPose: checkbox('Brush Pose', 'useBrushPose'),
-  useNoise: checkbox('Noise', 'Nose'),
-  useWetEdges: checkbox('Wet Edges', 'Wtdg'),
-  useBuildUp: checkbox('Build-up', 'Rpt '),
+  useNoise: checkbox('Noise', 'noiseEnabled'),
+  useWetEdges: checkbox('Wet Edges', 'wetEdgesEnabled'),
+  useBuildUp: checkbox('Build-up', 'buildUpEnabled'),
   useSmoothing: checkbox('Smoothing', 'toolOptions.smoothing', true),
   useProtectTexture: checkbox('Protect Texture', 'protectTexture')
 };
@@ -324,8 +330,8 @@ function paintToolModes(): readonly [string, string][] {
     ['Xclu', 'Exclusion'],
     ['Sbtr', 'Subtract'],
     ['divide', 'Divide'],
-    ['H   ', 'Hue'],
-    ['Strt', 'Saturation'],
+    ['hue', 'Hue'],
+    ['saturation', 'Saturation'],
     ['Clr ', 'Color'],
     ['Lmns', 'Luminosity']
   ];
@@ -351,4 +357,4 @@ function color(label: string, path: string): SettingField<z.ZodString> {
 }
 
 /** Smudge exposes color replacement modes, rather than the full paint-tool mode list. */
-export const smudgeModes = ['Nrml', 'Drkn', 'Lghn', 'H   ', 'Strt', 'Clr ', 'Lmns'] as const;
+export const smudgeModes = ['Nrml', 'Drkn', 'Lghn', 'hue', 'saturation', 'Clr ', 'Lmns'] as const;

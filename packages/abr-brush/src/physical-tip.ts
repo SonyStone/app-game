@@ -1,5 +1,5 @@
-import type { BrushTipImage } from '@app-game/abr-parser/reader';
 import type { BrushFormValues } from './form';
+import type { BrushTipImage } from './library';
 import { usesPencilCoverage } from './pencil';
 import { generateComputedBrushTip } from './stroke';
 

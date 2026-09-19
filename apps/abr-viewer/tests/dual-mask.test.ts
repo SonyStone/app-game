@@ -1,3 +1,4 @@
+import { percent, pixels } from '@app-game/abr-parser';
 import { expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
@@ -11,7 +12,11 @@ test('overlapping affine secondary tips accumulate byte coverage', () => {
   input.values.dualBrush.scatter = 0;
   const tip = { width: 1, height: 1, depth: 8 as const, data: new Uint8Array([255]) };
   const dualTip = { ...tip, width: 32, height: 32, data: new Uint8Array(1024).fill(128) };
-  for (const [count, expected] of [[1, 128], [2, 192], [8, 255]]) {
+  for (const [count, expected] of [
+    [1, 128],
+    [2, 192],
+    [8, 255]
+  ]) {
     input.values.dualBrush.count = count;
     const pixels = renderPreviewPixels(input, tip, undefined, { dualTip });
     expect(pixels[(16 * 32 + 16) * 4], `secondary Count ${count}`).toBe(expected);
@@ -29,8 +34,9 @@ test('repeated opaque primary dabs do not repeatedly accumulate the secondary ma
   for (const count of [1, 2, 8]) {
     const stroke: PreviewStroke = {
       count,
-      data: Float32Array.from(Array.from({ length: count }, () =>
-        [16, 16, 8, 8, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0]).flat())
+      data: Float32Array.from(
+        Array.from({ length: count }, () => [16, 16, 8, 8, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0]).flat()
+      )
     };
     const pixels = renderPreviewPixels(input, tip, stroke, { dualTip });
     // Photoshop combines prepared primary 255 with secondary 128 once.
@@ -50,7 +56,10 @@ test('stroke-wide texture modifies primary coverage before Dual Brush Hard Mix',
   input.values.texture.depth = 100;
   const tip = { width: 1, height: 1, depth: 8 as const, data: new Uint8Array([255]) };
   const half = { ...tip, data: new Uint8Array([128]) };
-  const pixels = renderPreviewPixels(input, tip, undefined, { dualTip: { ...half, width: 32, height: 32, data: new Uint8Array(1024).fill(128) }, pattern: half });
+  const pixels = renderPreviewPixels(input, tip, undefined, {
+    dualTip: { ...half, width: 32, height: 32, data: new Uint8Array(1024).fill(128) },
+    pattern: half
+  });
   // The verified Hard Mix kernel receives textured P=128, S=128 and yields 131.
   // Reversing these operations yields 128.
   expect(pixels[(16 * 32 + 16) * 4]).toBe(131);
@@ -84,12 +93,27 @@ test('a later secondary mark preserves mask pixels outside its quad', () => {
 
 function fixture(): PreviewInput {
   const values = brushToFormValues({
-    id: 'dual-mask', name: 'Dual mask', type: 'computed', settings: {}, diameter: 16, spacing: 10
+    id: 'dual-mask',
+    name: 'Dual mask',
+    preset: {
+      kind: 'brush',
+      sourceId: 'fixture',
+      ...{},
+      tip: { kind: 'computed', diameter: pixels(16), spacing: percent(10) }
+    },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
   });
   values.dualBrush.tipId = 'uniform-test-sample';
   return {
-    values, width: 32, height: 32, dpr: 1,
-    color: '#ffffff', background: '#000000', flow: 1, opacity: 1,
+    values,
+    width: 32,
+    height: 32,
+    dpr: 1,
+    color: '#ffffff',
+    background: '#000000',
+    flow: 1,
+    opacity: 1,
     path: [{ x: 0.5, y: 0.5, pressure: 1, tiltX: 0, tiltY: 0, rotation: 0, time: 0 }]
   };
 }

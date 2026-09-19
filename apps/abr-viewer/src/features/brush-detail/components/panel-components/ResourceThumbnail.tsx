@@ -1,9 +1,9 @@
 import { createEffect, onSettled } from 'solid-js';
 import type { BrushTipImage } from '../../../../lib/abr';
-import styles from './ResourceThumbnail.module.css';
 import { attachPreview } from '../../../brush-preview/client';
 import type { PreviewResourceSource } from '../../../brush-preview/resources';
 import { brushToFormValues } from '../../brush-form-schema';
+import styles from './ResourceThumbnail.module.css';
 
 /** Lazily renders a tip or texture on the shared worker; hidden picker items don't decode resources. */
 export function ResourceThumbnail(props: {
@@ -26,14 +26,13 @@ export function ResourceThumbnail(props: {
       if (!visible) return;
       connection.update(
         {
-          values: brushToFormValues({
-            id: 'swatch',
-            name: '',
-            type: 'computed',
-            settings: {},
-            spacing: 25,
+          values: {
+            ...brushToFormValues({
+              name: '',
+              preset: { kind: 'brush', sourceId: 'preview' }
+            }),
             hardness: props.hardness ?? 100
-          }),
+          },
           width: 96,
           height: 96,
           dpr: 1,

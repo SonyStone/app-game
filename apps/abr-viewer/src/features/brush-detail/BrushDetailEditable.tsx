@@ -15,17 +15,17 @@ import {
 } from 'solid-js';
 import type { BrushWithPreview } from '../../lib/abr';
 import { brushTipToPngBlob } from '../../lib/abr';
-import styles from './BrushDetailEditable.module.css';
 import { brushFormSchema, brushToFormValues, formValuesToBrush, type BrushFormValues } from './brush-form-schema';
 import { chooseDualTip, choosePattern } from './brush-resources';
+import styles from './BrushDetailEditable.module.css';
 import type { ColorMixingPreference } from './color-mixing';
 import { ColorProfileControl, useColorProfile } from './ColorProfile';
 import { BrushPreviewCanvas } from './components/panel-components/BrushPreviewCanvas';
 import { BrushTipPanel } from './components/panel-components/BrushTipPanel';
-import { RawSettingsPanel } from './components/panel-components/RawSettingsPanel';
 import { DualBrushPicker } from './components/panel-components/DualBrushPicker';
-import { TexturePicker } from './components/panel-components/TexturePicker';
+import { RawSettingsPanel } from './components/panel-components/RawSettingsPanel';
 import { SettingsPanel } from './components/panel-components/SettingsPanel';
+import { TexturePicker } from './components/panel-components/TexturePicker';
 import { ToolOptionsBar } from './components/panel-components/ToolOptionsBar';
 import { sanitizeFilename } from './helper-functions/sanitizeFilename';
 
@@ -84,24 +84,24 @@ export function BrushDetailEditable(props: {
     ...new Map(
       [props.brush, ...(props.brushes ?? [])]
         .flatMap((brush) => brush.patternResources ?? [])
-        .map((pattern) => [pattern.id, pattern])
+        .map((pattern) => [pattern.resource.id, pattern])
     ).values()
   ]);
   const selected = createMemo(() => categories.find((item) => item.id === category()) ?? categories[0]!);
   const hasCmyk = () => {
-    const tool = record(props.brush.settings.toolOptions);
-    return [tool.FrgC, tool.BckC].some((value) => record(value).__classId === 'CMYC');
+    const tool = record(props.brush.preset.toolOptions);
+    return [tool.foregroundColor, tool.backgroundColor].some((value) => record(value).kind === 'CMYC');
   };
   const clippedColor = () => {
-    const tool = record(props.brush.settings.toolOptions);
-    return descriptorColorClipped(tool.FrgC) || descriptorColorClipped(tool.BckC);
+    const tool = record(props.brush.preset.toolOptions);
+    return descriptorColorClipped(tool.foregroundColor) || descriptorColorClipped(tool.backgroundColor);
   };
 
   async function downloadTip() {
-    if (!props.brush.brushTip) return;
+    if (!props.brush.tipImage) return;
     setDownloading(true);
     try {
-      const url = URL.createObjectURL(await brushTipToPngBlob(props.brush.brushTip));
+      const url = URL.createObjectURL(await brushTipToPngBlob(props.brush.tipImage));
       const link = document.createElement('a');
       link.href = url;
       link.download = `${sanitizeFilename(props.brush.name)}.png`;
@@ -255,7 +255,7 @@ export function BrushDetailEditable(props: {
               </fieldset>
             </Match>
             <Match when={category() === 'raw'}>
-              <RawSettingsPanel settings={props.brush.settings ?? {}} />
+              <RawSettingsPanel settings={props.brush.preset ?? {}} />
             </Match>
             <Match when={category() === 'texture'}>
               <fieldset disabled={!values.useTexture}>

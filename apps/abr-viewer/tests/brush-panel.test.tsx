@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { AbrParser } from '@app-game/abr-parser/browser';
+import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import { render } from '@solidjs/web';
 import { readFileSync } from 'node:fs';
 import { createRoot, runWithOwner, flush as solidFlush } from 'solid-js';
@@ -8,6 +8,7 @@ import { BrushPanel } from '../src/components/BrushPanel';
 import { brushToFormValues, formValuesToBrush } from '../src/features/brush-detail/brush-form-schema';
 import { allBrushNodes } from '../src/lib/brush-tree';
 import { createWorkspace } from '../src/lib/workspace';
+import './initAbr';
 
 const previews = vi.hoisted(() => ({ mounted: vi.fn(), disposed: vi.fn(), updated: vi.fn() }));
 
@@ -41,9 +42,7 @@ test('spacing edits and undo preserve every preset canvas and update only the ed
     cleanupWorkspace = dispose;
     return createWorkspace();
   });
-  const file = new AbrParser().parse(
-    readFileSync(`${import.meta.dirname}/../../../packages/abr-parser/files/Basic_3.abr`)
-  );
+  const file = loadBrushLibrary(readFileSync(`${import.meta.dirname}/../../../packages/abr-parser/files/Basic_3.abr`));
   flush(() => workspace.importFiles([{ ...file, fileName: 'Basic_3.abr' }]));
   const nodes = allBrushNodes(workspace.root().children);
   const initial = nodes[0].brush;
@@ -63,7 +62,7 @@ test('spacing edits and undo preserve every preset canvas and update only the ed
     expect(previews.mounted).toHaveBeenCalledTimes(3);
     expect(previews.disposed).not.toHaveBeenCalled();
     expect(previews.updated.mock.calls.every(([id]) => id === initial.id)).toBe(true);
-    expect(initial.spacing).toBe(10);
+    expect(initial.preset.tip?.spacing).toBe(10);
     flush(workspace.undo);
     await vi.waitFor(() => expect(previews.updated).toHaveBeenLastCalledWith(initial.id, 75));
     expect([...host.querySelectorAll('canvas')]).toEqual(canvases);

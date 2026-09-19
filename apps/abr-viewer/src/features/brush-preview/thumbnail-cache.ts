@@ -10,13 +10,20 @@ export function thumbnailSize(width: number, previous = 0) {
 
 /** Content-addressed keys survive reloads, while edits and resource replacements invalidate previews. */
 export async function thumbnailKey(input: PreviewInput, tip?: BrushTipImage, resources: PreviewResourceSource = {}) {
-  const parts = await Promise.all([tip?.data, resources.pattern?.data, resources.dualSample?.data].map(hashBytes));
-  return hashBytes(new TextEncoder().encode(JSON.stringify([
-    { ...input, values: { ...input.values, name: '' } }, parts,
-    tip && [tip.width, tip.height, tip.depth],
-    resources.pattern && [resources.pattern.width, resources.pattern.height, resources.pattern.mode],
-    resources.dualSample?.subVersion, resources.dualHardness, resources.missing
-  ])));
+  const parts = await Promise.all([tip?.data, resources.pattern?.bytes, resources.dualSample?.bytes].map(hashBytes));
+  return hashBytes(
+    new TextEncoder().encode(
+      JSON.stringify([
+        { ...input, values: { ...input.values, name: '' } },
+        parts,
+        tip && [tip.width, tip.height, tip.depth],
+        resources.pattern?.kind === 'pattern' && [resources.pattern.mode, resources.pattern.palette],
+        resources.dualSample?.kind === 'sample' && resources.dualSample.layout,
+        resources.dualHardness,
+        resources.missing
+      ])
+    )
+  );
 }
 
 /** Cached PNGs own no GPU resources. Storage failure only disables persistence, never drawing. */
@@ -34,22 +41,27 @@ export async function readThumbnail(key: string): Promise<Blob | undefined> {
     const blob = await response.blob();
     remember(key, blob);
     return blob;
-  } catch (error) { warn(error); }
+  } catch (error) {
+    warn(error);
+  }
 }
 
 /** Encode a copy before the presentation canvas consumes the transferred bitmap. */
 export function storeThumbnail(key: string, bitmap: ImageBitmap) {
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
-  void canvas.convertToBlob({ type: 'image/png' }).then(async blob => {
-    remember(key, blob);
-    const cache = await openCache();
-    if (!cache) return;
-    await cache.put(cacheUrl(key), new Response(blob));
-    const keys = await cache.keys();
-    // Thumbnails are disposable, unlike the user's brush library.
-    await Promise.all(keys.slice(0, Math.max(0, keys.length - 512)).map(request => cache.delete(request)));
-  }).catch(warn);
+  void canvas
+    .convertToBlob({ type: 'image/png' })
+    .then(async (blob) => {
+      remember(key, blob);
+      const cache = await openCache();
+      if (!cache) return;
+      await cache.put(cacheUrl(key), new Response(blob));
+      const keys = await cache.keys();
+      // Thumbnails are disposable, unlike the user's brush library.
+      await Promise.all(keys.slice(0, Math.max(0, keys.length - 512)).map((request) => cache.delete(request)));
+    })
+    .catch(warn);
 }
 
 function remember(key: string, blob: Blob) {
@@ -67,14 +79,19 @@ function hashBytes(bytes?: Uint8Array): Promise<string> {
   if (!bytes) return Promise.resolve('none');
   let result = hashes.get(bytes);
   if (!result) {
-    result = crypto.subtle.digest('SHA-256', bytes as Uint8Array<ArrayBuffer>).then(buffer =>
-      Array.from(new Uint8Array(buffer), byte => byte.toString(16).padStart(2, '0')).join(''));
+    result = crypto.subtle
+      .digest('SHA-256', bytes as Uint8Array<ArrayBuffer>)
+      .then((buffer) => Array.from(new Uint8Array(buffer), (byte) => byte.toString(16).padStart(2, '0')).join(''));
     hashes.set(bytes, result);
   }
   return result;
 }
-function openCache() { return typeof caches === 'undefined' ? undefined : caches.open('abr-thumbnails-v1'); }
-function cacheUrl(key: string) { return new URL(`/__abr_thumbnail__/${key}`, location.origin).href; }
+function openCache() {
+  return typeof caches === 'undefined' ? undefined : caches.open('abr-thumbnails-v1');
+}
+function cacheUrl(key: string) {
+  return new URL(`/__abr_thumbnail__/${key}`, location.origin).href;
+}
 function warn(error: unknown) {
   if (!warned) console.warn('Brush thumbnail cache unavailable:', error);
   warned = true;

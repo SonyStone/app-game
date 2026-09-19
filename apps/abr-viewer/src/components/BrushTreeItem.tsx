@@ -4,8 +4,8 @@ import { useColorProfile } from '../features/brush-detail/ColorProfile';
 import { BrushPreviewCanvas } from '../features/brush-detail/components/panel-components/BrushPreviewCanvas';
 import { settingGroups } from '../features/brush-detail/settings-fields';
 import type { BrushNode } from '../lib/brush-tree';
-import styles from './BrushTreeItem.module.css';
 import { BrushToolIcon } from './BrushToolIcon';
+import styles from './BrushTreeItem.module.css';
 
 /** A compact, draggable preset with a rendered stroke and a persistent selection outline. */
 export function BrushTreeItem(props: {
@@ -29,7 +29,7 @@ export function BrushTreeItem(props: {
       tabindex="0"
       aria-label={props.block.name}
       aria-pressed={props.selected ? 'true' : 'false'}
-      title={`${props.block.name} · ${Math.round(props.block.brush.diameter ?? 30)} px`}
+      title={`${props.block.name} · ${Math.round(props.block.brush.preset.tip?.diameter ?? 30)} px`}
       onClick={() => props.onActivate()}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {

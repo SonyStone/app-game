@@ -1,3 +1,4 @@
+import { initAbr } from '@app-game/abr-parser';
 import { createEffect, onCleanup, onSettled } from 'solid-js';
 import type { Workspace } from './workspace';
 import { packBrushData, unpackBrushData } from './workspace-binary';
@@ -20,39 +21,54 @@ export function persistWorkspace(workspace: Workspace, report: (message: string)
     const value = pending;
     pending = undefined;
     writing = true;
-    try { await writeWorkspace(db, value); }
-    catch (error) { if (!disposed) report(`Brush library could not be saved locally: ${String(error)}`); }
-    finally {
+    try {
+      await writeWorkspace(db, value);
+    } catch (error) {
+      if (!disposed) report(`Brush library could not be saved locally: ${String(error)}`);
+    } finally {
       writing = false;
       if (pending) void flush();
       else if (disposed) db.close();
     }
   }
-  createEffect(() => workspace.snapshot(), snapshot => {
-    if (!ready) return;
-    pending = snapshot;
-    clearTimeout(timer);
-    timer = setTimeout(() => void flush(), 800);
-  });
+  createEffect(
+    () => workspace.snapshot(),
+    (snapshot) => {
+      if (!ready) return;
+      pending = snapshot;
+      clearTimeout(timer);
+      timer = setTimeout(() => void flush(), 800);
+    }
+  );
   onSettled(() => {
-    void openWorkspaceDatabase().then(async database => {
-      db = database;
-      const snapshot = await readWorkspace(database);
-      if (disposed) { database.close(); return; }
-      // A late restore must never overwrite an import already started by the user.
-      if (snapshot && workspace.root() === initial) workspace.restore(snapshot);
-      ready = true;
-      if (workspace.root() !== initial && !snapshot) {
-        pending = workspace.snapshot();
-        void flush();
-      } else if (snapshot && workspace.root() !== snapshot.root) {
-        pending = workspace.snapshot();
-        void flush();
-      }
-    }).catch(error => {
-      db?.close();
-      if (!disposed) report(`Local brush library unavailable: ${String(error)}`);
-    });
+    void openWorkspaceDatabase()
+      .then(async (database) => {
+        db = database;
+        await initAbr();
+        const snapshot = await readWorkspace(database);
+        if (!snapshot && (await getRecord(database, 'workspace', 'current')))
+          report(
+            'The previous brush library is retained in local storage. Reimport its ABR files to use the Rust model; new edits are saved separately.'
+          );
+        if (disposed) {
+          database.close();
+          return;
+        }
+        // A late restore must never overwrite an import already started by the user.
+        if (snapshot && workspace.root() === initial) workspace.restore(snapshot);
+        ready = true;
+        if (workspace.root() !== initial && !snapshot) {
+          pending = workspace.snapshot();
+          void flush();
+        } else if (snapshot && workspace.root() !== snapshot.root) {
+          pending = workspace.snapshot();
+          void flush();
+        }
+      })
+      .catch((error) => {
+        db?.close();
+        if (!disposed) report(`Local brush library unavailable: ${String(error)}`);
+      });
   });
   onCleanup(() => {
     disposed = true;
@@ -82,9 +98,12 @@ export function openWorkspaceDatabase(): Promise<IDBDatabase> {
 /** Reads a complete checkpoint including ABR source resources needed by export. */
 export function readWorkspace(db: IDBDatabase): Promise<ReturnType<Workspace['snapshot']> | undefined> {
   return new Promise((resolve, reject) => {
-    const request = db.transaction('workspace').objectStore('workspace').get('current');
+    const request = db.transaction('workspace').objectStore('workspace').get('current-rust-v3');
     request.onsuccess = () => {
-      void unpackBrushData(request.result, (id, length) => readBytes(db, id, length)).then(value => resolve(value as ReturnType<Workspace['snapshot']> | undefined), reject);
+      void unpackBrushData(request.result, (id, length) => readBytes(db, id, length)).then(
+        (value) => resolve(value as ReturnType<Workspace['snapshot']> | undefined),
+        reject
+      );
     };
     request.onerror = () => reject(request.error);
   });
@@ -97,7 +116,7 @@ export async function writeWorkspace(db: IDBDatabase, snapshot: ReturnType<Works
   const packed = packBrushData(snapshot);
   for (const [id, bytes] of packed.buffers) {
     if (knownBytes(db).has(id)) continue;
-    if (await getRecord(db, 'binary', id) !== bytes.byteLength) {
+    if ((await getRecord(db, 'binary', id)) !== bytes.byteLength) {
       for (let offset = 0; offset < bytes.byteLength; offset += CHUNK_BYTES) {
         await putRecord(db, 'binary', `${id}:${offset}`, bytes.slice(offset, offset + CHUNK_BYTES));
       }
@@ -105,7 +124,7 @@ export async function writeWorkspace(db: IDBDatabase, snapshot: ReturnType<Works
     }
     knownBytes(db).add(id);
   }
-  await putRecord(db, 'workspace', 'current', packed.value);
+  await putRecord(db, 'workspace', 'current-rust-v3', packed.value);
 }
 
 async function readBytes(db: IDBDatabase, id: string, length: number) {
@@ -139,7 +158,10 @@ const CHUNK_BYTES = 8 * 1024 * 1024;
 
 function knownBytes(db: IDBDatabase) {
   let known = stored.get(db);
-  if (!known) { known = new Set<string>(); stored.set(db, known); }
+  if (!known) {
+    known = new Set<string>();
+    stored.set(db, known);
+  }
   return known;
 }
 const stored = new WeakMap<IDBDatabase, Set<string>>();

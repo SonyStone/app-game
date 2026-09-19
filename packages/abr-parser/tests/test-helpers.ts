@@ -4,9 +4,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { AbrParser } from '../src/node';
-import { AbrWriter } from '../src/node';
-import { createAbrFile, createBrush, createBrushTip } from '../src/abr-writer';
+import { createAbrFile, createBrush, createBrushTip } from './reference/abr-writer';
+import { AbrParser, AbrWriter } from './reference/node';
 
 export const FILES_DIR = path.join(__dirname, '..', 'files');
 export const TEST_OUTPUT_DIR = path.join(__dirname, '..', 'test-output');

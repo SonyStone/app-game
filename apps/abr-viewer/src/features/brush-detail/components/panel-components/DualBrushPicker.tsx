@@ -14,29 +14,29 @@ export function DualBrushPicker(props: {
   const tips = createMemo(() => [
     ...new Map(
       props.brushes
-        .filter((brush) => !['dBrush', 'dTips'].includes(String(record(brush.settings.Brsh).__classId)))
-        .map((brush) => [brush.sampledDataUuid || brush.id, brush])
+        .filter((brush) => !['bristle', 'naturalMedia'].includes(String(record(brush.preset.tip).kind)))
+        .map((brush) => [brush.preset.tip?.sampleId || brush.id, brush])
     ).values()
   ]);
-  const selectedTip = () => record(record(props.brush.settings.dualBrush).Brsh);
+  const selectedTip = () => record(record(props.brush.preset.dualBrush).tip);
   const isSelected = (brush: BrushWithPreview) => {
     const selected = selectedTip();
-    if (selected.sampledData) return selected.sampledData === brush.sampledDataUuid;
-    const tip = record(brush.settings.Brsh);
+    if (selected.sampleId) return selected.sampleId === brush.preset.tip?.sampleId;
+    const tip = record(brush.preset.tip);
     return (
-      !brush.sampledDataUuid && tip.__classId === selected.__classId && JSON.stringify(tip) === JSON.stringify(selected)
+      !brush.preset.tip?.sampleId && tip.kind === selected.kind && JSON.stringify(tip) === JSON.stringify(selected)
     );
   };
   const selectedName = () =>
     tips().find(isSelected)?.name ||
-    String(selectedTip()['Nm  '] || (selectedTip().sampledData ? 'Embedded tip' : 'Round tip'));
+    String(selectedTip().name || (selectedTip().sampleId ? 'Embedded tip' : 'Round tip'));
   const resources = createMemo(() => {
     const source = brushPreviewResources({
       ...props.brush,
-      settings: {
-        ...props.brush.settings,
-        useTexture: false,
-        dualBrush: { ...record(props.brush.settings.dualBrush), useDualBrush: true }
+      preset: {
+        ...props.brush.preset,
+        textureEnabled: false,
+        dualBrush: { ...record(props.brush.preset.dualBrush), kind: 'dualBrush', enabled: true }
       }
     });
     return source;
@@ -60,10 +60,10 @@ export function DualBrushPicker(props: {
               <ResourceThumbnail
                 kind="tip"
                 label={`${brush.name} tip`}
-                tip={brush.brushTip}
-                hardness={brush.hardness}
+                tip={brush.tipImage}
+                hardness={brush.preset.tip?.hardness}
               />
-              <span>{Math.round(brush.diameter ?? 30)}</span>
+              <span>{Math.round(brush.preset.tip?.diameter ?? 30)}</span>
             </button>
           )}
         </For>

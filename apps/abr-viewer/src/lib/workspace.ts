@@ -1,7 +1,8 @@
-import { attachBrushResources } from '../features/brush-detail/brush-resources';
+import type { AbrSource, Composition } from '@app-game/abr-parser';
 import { createMemo, createSignal, untrack } from 'solid-js';
 import type { ReorderEvent } from 'solid-nest';
-import type { AbrFile, AbrFileWithMeta, BrushWithPreview } from './abr';
+import { attachBrushResources } from '../features/brush-detail/brush-resources';
+import type { AbrFileWithMeta, BrushWithPreview } from './abr';
 import {
   allBrushNodes,
   buildTreeFromFile,
@@ -174,7 +175,7 @@ export function createWorkspace() {
         insertBlocksAtPlace(draft, nodes, event.place);
       });
     },
-    exportFile(scope: 'all' | 'selection' | GroupNode): AbrFile {
+    exportFile(scope: 'all' | 'selection' | GroupNode): Composition {
       const group =
         typeof scope === 'object' ? scope : scope === 'all' ? root() : selectedTree(root(), new Set(selection()));
       return workspaceToAbrFile(group, root(), importedSources);
@@ -190,7 +191,7 @@ export function workspaceToAbrFile(
   group: GroupNode,
   sourceRoot: GroupNode,
   importedSources: AbrFileWithMeta[] = []
-): AbrFile {
+): Composition {
   const file = groupToAbrFile(group);
   const sources = new Set<AbrFileWithMeta>(importedSources);
   const visit = (node: TreeNode) => {
@@ -199,31 +200,20 @@ export function workspaceToAbrFile(
     node.children.forEach(visit);
   };
   visit(sourceRoot);
-  // Retain patterns; the writer preserves selected sample records and their dual-tip dependencies.
-  const patterns = [...sources].flatMap((source) => (source.rawPatternData ? [source.rawPatternData] : []));
-  const rawPatternData = new Uint8Array(patterns.reduce((size, data) => size + data.length, 0));
-  let offset = 0;
-  for (const data of patterns) {
-    rawPatternData.set(data, offset);
-    offset += data.length;
-  }
-  const sourceFiles = [...sources];
-  const subVersions = new Set(
-    sourceFiles.filter((source) => source.rawSampleData?.length).map((source) => source.subVersion)
-  );
-  if (subVersions.size > 1)
-    throw new Error('Cannot combine different ABR sample layouts without converting their metadata');
+  const errors = [...sources].flatMap((source) => source.errors);
+  if (errors.length) throw new Error('Cannot export an incompletely parsed ABR: ' + errors.join('; '));
+  const sourceList: AbrSource[] = [
+    ...new Set([...sources].flatMap((file) => file.sources).concat(file.brushes.map((brush) => brush.source)))
+  ];
+  const hierarchy = file.hierarchy.map((item) => ({
+    kind: item.kind as 'group' | 'groupEnd' | 'preset',
+    ...(typeof item.name === 'string' ? { name: item.name } : {}),
+    ...(typeof item.uuid === 'string' ? { uuid: item.uuid } : {})
+  }));
   return {
-    ...file,
-    version: Math.max(6, ...sourceFiles.map((source) => source.version)),
-    subVersion: subVersions.values().next().value ?? 2,
-    rawSampleData: undefined,
-    rawPatternData,
-    descriptorRoot: sourceFiles.length === 1 ? sourceFiles[0]!.descriptorRoot : undefined,
-    resourceBlocks: sourceFiles
-      .flatMap((source) => source.resourceBlocks ?? [])
-      .filter((block) => !['samp', 'patt', 'desc', 'phry'].includes(block.key)),
-    errors: sourceFiles.flatMap((source) => source.errors.map((error) => `${source.fileName}: ${error}`))
+    sources: sourceList,
+    brushes: file.brushes.map((brush) => ({ source: sourceList.indexOf(brush.source), preset: brush.preset })),
+    hierarchy
   };
 }
 

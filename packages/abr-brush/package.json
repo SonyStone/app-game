@@ -27,7 +27,8 @@
     "./tipRasterGpu": "./src/tipRasterGpu.ts",
     "./patternPyramid": "./src/patternPyramid.ts",
     "./patternRaster": "./src/patternRaster.ts",
-    "./patternRasterGpu": "./src/patternRasterGpu.ts"
+    "./patternRasterGpu": "./src/patternRasterGpu.ts",
+    "./library": "./src/library.ts"
   },
   "dependencies": {
     "@app-game/abr-parser": "workspace:*",

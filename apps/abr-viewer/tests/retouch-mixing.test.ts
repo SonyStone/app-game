@@ -1,4 +1,5 @@
 import { mixPremultiplied } from '@app-game/abr-brush/effects';
+import { percent, pixels } from '@app-game/abr-parser';
 import { d } from 'typegpu';
 import { expect, test, vi } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
@@ -27,11 +28,14 @@ function job(type: string): PreviewInput {
   const values = brushToFormValues({
     id: 'mix',
     name: 'Mix',
-    type: 'computed',
-    settings: {},
-    diameter: 16,
-    hardness: 100,
-    spacing: 25
+    preset: {
+      kind: 'brush',
+      sourceId: 'fixture',
+      ...{},
+      tip: { kind: 'computed', diameter: pixels(16), spacing: percent(25), hardness: percent(100) }
+    },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
   });
   Object.assign(values.tool, { type, strength: 100, mode: 'Nrml' });
   return {

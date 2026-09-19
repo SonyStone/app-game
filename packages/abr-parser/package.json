@@ -1,29 +1,32 @@
 {
   "name": "@app-game/abr-parser",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "description": "Parse and write Adobe Photoshop brush files (.abr).",
   "exports": {
     ".": "./src/index.ts",
     "./browser": "./src/browser.ts",
-    "./reader": "./src/reader.ts"
+    "./reader": "./src/reader.ts",
+    "./wasm": "./wasm/pkg/photoshop_abr_wasm_bg.wasm",
+    "./js": "./src/index.ts",
+    "./wasm-parser": "./src/wasm.ts",
+    "./types": "./src/types.ts"
   },
   "scripts": {
     "build": "tsc --emitDeclarationOnly",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "pngjs": "^7.0.0",
-    "uuid": "^11.0.0",
-    "zod": "^4.4.3"
+    "typecheck": "tsc --noEmit",
+    "sync:wasm": "python3 scripts/sync-wasm.py"
   },
   "devDependencies": {
     "@types/node": "25.8.0",
     "@types/pngjs": "^6.0.5",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "pngjs": "^7.0.0",
+    "uuid": "^11.0.0",
+    "zod": "^4.4.3"
   }
 }

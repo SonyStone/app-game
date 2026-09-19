@@ -1,18 +1,20 @@
 import type { ColorMixing } from '@app-game/abr-brush/effects';
 import { brushWithResolvedColors } from '@app-game/abr-brush/form';
+import { prepareAbrBrush } from '@app-game/abr-paint/preset';
+import { encodeRuntimeBrush } from '@app-game/abr-paint/runtimeBrush';
 import { createEffect, createSignal, Show } from 'solid-js';
+import styles from './App.module.css';
 import { BrushExamplesMenu } from './components/BrushExamplesMenu';
 import { BrushPanel } from './components/BrushPanel';
 import { BrushDetailEditable } from './features/brush-detail/BrushDetailEditable';
 import type { ColorMixingPreference } from './features/brush-detail/color-mixing';
 import { ColorProfileContext } from './features/brush-detail/ColorProfile';
 import { createColorProfile } from './features/brush-detail/createColorProfile';
-import { AbrParser, AbrWriter, downloadAbrFile, type AbrFileWithMeta, type Brush } from './lib/abr';
+import { composeAbr, downloadAbrFile, initAbr, loadBrushLibrary, type AbrFileWithMeta, type Brush } from './lib/abr';
 import { fetchBrushExample, type BrushExample } from './lib/brush-examples';
 import { allBrushNodes, type GroupNode } from './lib/brush-tree';
-import { persistWorkspace } from './lib/workspace-storage';
 import { createWorkspace } from './lib/workspace';
-import styles from './App.module.css';
+import { persistWorkspace } from './lib/workspace-storage';
 
 /** Single brush workspace with live settings, undoable organization, and ABR export. */
 export function App(
@@ -85,7 +87,8 @@ export function App(
           setStatus(`Importing ${file.name.replace(/\.abr$/i, '')}…`);
           const bytes = await file.arrayBuffer();
           await paintImportStatus();
-          const parsed: AbrFileWithMeta = new AbrParser().parse(bytes);
+          await initAbr();
+          const parsed: AbrFileWithMeta = loadBrushLibrary(bytes);
           if (!parsed.brushes.length) throw new Error(parsed.errors.join('; ') || 'No brushes found');
           parsed.fileName = file.name.replace(/\.abr$/i, '');
           // The tip panel generates its image on demand; do not encode every tip during import.
@@ -117,11 +120,26 @@ export function App(
         return;
       }
       const name = typeof scope === 'object' ? scope.name : scope === 'all' ? 'Brushes' : 'Selected Brushes';
-      downloadAbrFile(new AbrWriter().write(file), `${name.replace(/\.abr$/i, '').replace(/[\\/:*?"<>|]/g, '_')}.abr`);
+      downloadAbrFile(composeAbr(file), `${name.replace(/\.abr$/i, '').replace(/[\\/:*?"<>|]/g, '_')}.abr`);
       if (scope === 'all') workspace.markExported();
       setStatus(`Exported ${file.brushes.length} brushes · ${name}.abr`);
     } catch (error) {
       setStatus(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /** Publishes only the active brush's runtime inputs; source ABR records remain in the editor. */
+  function exportRuntimeBrush() {
+    const brush = workspace.active()?.brush;
+    if (!brush) return;
+    try {
+      const preset = prepareAbrBrush(brushWithResolvedColors(brush, colors.converter()));
+      const bytes = encodeRuntimeBrush(preset);
+      const name = `${brush.name.replace(/[\\/:*?"<>|]/g, '_')}.abrbrush`;
+      downloadAbrFile(bytes, name);
+      setStatus(`Exported runtime brush · ${name}`);
+    } catch (error) {
+      setStatus(`Runtime export failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -179,6 +197,13 @@ export function App(
           <button disabled={!workspace.root().children.length} onClick={() => exportBrushes('all')}>
             Export all…
           </button>
+          <button
+            disabled={busy() || !workspace.active()}
+            onClick={exportRuntimeBrush}
+            title="Export the active brush for an embedded drawing preview"
+          >
+            Export runtime brush…
+          </button>
           <input
             ref={input}
             type="file"
@@ -227,7 +252,7 @@ export function App(
             }}
             onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
           />
-          <section class={styles.settings} aria-label="Brush Settings">
+          <section class={styles.preset} aria-label="Brush Settings">
             <header class={styles.panelHeading}>
               <h2>Brush Settings</h2>
               <span>{workspace.active() ? 'Live preview' : ''}</span>

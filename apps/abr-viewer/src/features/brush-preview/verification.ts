@@ -11,15 +11,12 @@ export async function verifyPreviewGpu() {
   if (!adapter) throw new Error('WebGPU unavailable: verification cannot pass');
   const device = await adapter.requestDevice();
   const gpu = await createPreviewGpu({ device });
-  const values = brushToFormValues({
-    id: 'test',
-    name: 'Preview test',
-    type: 'computed',
-    settings: {},
+  const values = {
+    ...brushToFormValues({ name: 'Preview test', preset: { kind: 'brush', sourceId: 'preview' } }),
     spacing: 10,
     diameter: 45,
     hardness: 45
-  });
+  };
   const base: PreviewInput = {
     values,
     width: 320,

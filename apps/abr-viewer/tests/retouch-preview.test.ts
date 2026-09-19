@@ -1,3 +1,4 @@
+import { percent, pixels } from '@app-game/abr-parser';
 import { expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
@@ -84,10 +85,14 @@ function fixture(): PreviewInput {
   const values = brushToFormValues({
     id: 'filter',
     name: 'Filter',
-    type: 'computed',
-    settings: {},
-    diameter: 16,
-    spacing: 10
+    preset: {
+      kind: 'brush',
+      sourceId: 'fixture',
+      ...{},
+      tip: { kind: 'computed', diameter: pixels(16), spacing: percent(10) }
+    },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
   });
   values.useSmoothing = false;
   Object.assign(values.tool, { type: 'BlTl', strength: 100, protectDetail: false });

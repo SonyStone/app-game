@@ -1,10 +1,11 @@
-import { readThumbnail, storeThumbnail, thumbnailKey } from './thumbnail-cache';
+import type { ResourceSource } from '@app-game/abr-parser';
 import type { BrushTipImage } from '../../lib/abr';
 import { generatePreviewTip } from './physical-tip';
 import type { PreviewJob, PreviewReply } from './protocol';
 import { createPreviewQueue } from './queue';
 import { decodePreviewResources, type PreviewResourceSource } from './resources';
 import { type PreviewInput } from './stroke';
+import { readThumbnail, storeThumbnail, thumbnailKey } from './thumbnail-cache';
 
 /** Registers a presentation canvas with the shared worker. Disposing cancels pending work for that canvas. */
 export function attachPreview(canvas: HTMLCanvasElement) {
@@ -81,7 +82,10 @@ function createPreviewService() {
   }
   function renderActive() {
     if (!active) return;
-    if (!canPresent(active, targets.get(active.target))) { finish(); return; }
+    if (!canPresent(active, targets.get(active.target))) {
+      finish();
+      return;
+    }
     if (fallback) {
       void renderFallback(active);
       return;
@@ -126,23 +130,14 @@ function createPreviewService() {
       const pattern = source?.pattern;
       const sample = source?.dualSample;
       const resources: PreviewResourceSource = {
-        pattern: pattern
-          ? {
-              id: pattern.id,
-              name: pattern.name,
-              mode: pattern.mode,
-              width: pattern.width,
-              height: pattern.height,
-              data: new Uint8Array(pattern.data)
-            }
-          : undefined,
-        dualSample: sample ? { subVersion: sample.subVersion, data: new Uint8Array(sample.data) } : undefined,
+        pattern: pattern ? copyResourceSource(pattern) : undefined,
+        dualSample: sample ? copyResourceSource(sample) : undefined,
         dualHardness: source?.dualHardness,
         missing: source?.missing
       };
       const transfers: ArrayBuffer[] = [data.buffer];
-      if (resources.pattern) transfers.push(resources.pattern.data.buffer as ArrayBuffer);
-      if (resources.dualSample) transfers.push(resources.dualSample.data.buffer as ArrayBuffer);
+      if (resources.pattern) transfers.push(resources.pattern.bytes.buffer as ArrayBuffer);
+      if (resources.dualSample) transfers.push(resources.dualSample.bytes.buffer as ArrayBuffer);
       worker!.postMessage(
         {
           id: active.id,
@@ -161,8 +156,11 @@ function createPreviewService() {
       return;
     }
     if (active.cacheKey) {
-      try { storeThumbnail(active.cacheKey, reply.bitmap); }
-      catch (error) { console.warn('Could not cache brush thumbnail:', error); }
+      try {
+        storeThumbnail(active.cacheKey, reply.bitmap);
+      } catch (error) {
+        console.warn('Could not cache brush thumbnail:', error);
+      }
     }
     const target = targets.get(active.target);
     if (target && canPresent(active, target)) {
@@ -250,8 +248,8 @@ function createPreviewService() {
           thumbnail = false
         ) {
           const auxKey = [
-            resources.pattern ? resourceId(resources.pattern.data) : '',
-            resources.dualSample ? resourceId(resources.dualSample.data) : '',
+            resources.pattern ? resourceId(resources.pattern.bytes) : '',
+            resources.dualSample ? resourceId(resources.dualSample.bytes) : '',
             resources.dualHardness ?? '',
             resources.missing ?? ''
           ].join(':');
@@ -321,4 +319,17 @@ function resourceId(data: Uint8Array) {
     tipIds.set(data, id);
   }
   return id;
+}
+
+/** Unwraps reactive metadata and copies only the selected resource bytes for transfer. */
+function copyResourceSource(source: ResourceSource): ResourceSource {
+  const bytes = new Uint8Array(source.bytes);
+  return source.kind === 'sample'
+    ? { kind: 'sample', layout: source.layout, bytes }
+    : {
+        kind: 'pattern',
+        mode: source.mode,
+        bytes,
+        ...(source.palette ? { palette: new Uint8Array(source.palette) } : {})
+      };
 }

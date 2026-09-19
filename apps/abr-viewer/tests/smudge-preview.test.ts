@@ -1,3 +1,4 @@
+import { pixels } from '@app-game/abr-parser';
 import { d } from 'typegpu';
 import { expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
@@ -76,7 +77,13 @@ test('generated Smudge masks ignore dormant tool Opacity/Flow and changing tools
 });
 
 function fixture(): PreviewInput {
-  const values = brushToFormValues({ id: 'smudge', name: 'Smudge', type: 'computed', settings: {}, diameter: 16 });
+  const values = brushToFormValues({
+    id: 'smudge',
+    name: 'Smudge',
+    preset: { kind: 'brush', sourceId: 'fixture', ...{}, tip: { kind: 'computed', diameter: pixels(16) } },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+  });
   values.useSmoothing = false;
   Object.assign(values.tool, { type: 'SmTl', strength: 100 });
   return {

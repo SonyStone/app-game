@@ -1,3 +1,5 @@
 node_modules/
 dist/
+!wasm/dist/
+!wasm/dist/**
 test-output/

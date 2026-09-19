@@ -1,5 +1,5 @@
-import type { BrushTipImage } from '@app-game/abr-parser/reader';
 import { brushToFormValues, record, type BrushFormValues } from './form';
+import type { BrushTipImage } from './library';
 
 /** Fixed CSS-pixel square. Exact Photoshop CC footprint and pixel placement still need native calibration. */
 export const blockEraserSize = 16;
@@ -21,7 +21,7 @@ export function blockEraserValues(
     throw new Error('Block eraser requires a finite view and positive zoom.');
   const degrees = ((view.mirrored ? view.angle : -view.angle) * 180) / Math.PI;
   return {
-    ...brushToFormValues({ id: 'block-eraser', name: source.name, type: 'computed', spacing: 6.25, settings: {} }),
+    ...brushToFormValues({ name: source.name, preset: { kind: 'brush', sourceId: 'preview' } }),
     diameter: blockEraserSize / view.zoom,
     useSmoothing: source.useSmoothing,
     smoothing: { ...source.smoothing },

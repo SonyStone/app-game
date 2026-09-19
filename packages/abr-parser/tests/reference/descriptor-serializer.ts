@@ -139,7 +139,7 @@ export const makeDescriptor = {
     className
   }),
   list: (value: DescriptorValue[]): DescriptorValue => ({ type: 'VlLs', value }),
-  data: (value: Uint8Array | Buffer): DescriptorValue => ({
+  data: (value: Uint8Array): DescriptorValue => ({
     type: 'tdta',
     value: value instanceof Uint8Array ? value : new Uint8Array(value)
   })

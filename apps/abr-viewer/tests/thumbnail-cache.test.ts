@@ -1,3 +1,4 @@
+import { pixels } from '@app-game/abr-parser';
 import { webcrypto } from 'node:crypto';
 import { afterEach, expect, test, vi } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
@@ -15,8 +16,20 @@ test('layout jitter keeps the raster; major resizes choose another stable resolu
 test('cache keys survive resource reloading and invalidate for changed settings or pixels', async () => {
   vi.stubGlobal('crypto', webcrypto);
   const input = {
-    values: brushToFormValues({ id: 'a', name: 'Brush', type: 'computed', settings: {}, diameter: 20 }),
-    width: 256, height: 100, dpr: 1, color: '#fff', background: '#333', flow: 1, opacity: 1
+    values: brushToFormValues({
+      id: 'a',
+      name: 'Brush',
+      preset: { kind: 'brush', sourceId: 'fixture', ...{}, tip: { kind: 'computed', diameter: pixels(20) } },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+    }),
+    width: 256,
+    height: 100,
+    dpr: 1,
+    color: '#fff',
+    background: '#333',
+    flow: 1,
+    opacity: 1
   };
   const tip = { width: 2, height: 2, depth: 8, data: new Uint8Array([0, 20, 50, 255]) };
   const key = await thumbnailKey(input, tip);

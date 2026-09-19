@@ -1,18 +1,25 @@
-import { secondaryScatterOffset } from './secondaryDynamics';
-import { createBrushRandomChannels } from './randomChannels';
-import { deviceControlValue, deviceControlInput } from './deviceControl';
-import { browserTabletInput, prepareTabletInput } from './tabletInput';
-import { placeSampledTip } from './tipPlacement';
-import { sampledTipSpacing, computedTipSpacing } from './tipSpacing';
-import { sampledTipTransform, secondaryTipTransform, sampledTipScale, sampledTipRenderScale } from './sampledTipRaster';
-import type { BrushTipImage } from '@app-game/abr-parser/reader';
-import type { ColorMixing } from './colorMixing';
-import type { BrushFormValues } from './form';
-import { pencilUsesBackground, usesPencilCoverage } from './pencil';
-import { textureDepth } from './textureDynamics';
 import { dabColor } from './colorDynamics';
+import type { ColorMixing } from './colorMixing';
+import { deviceControlInput, deviceControlValue } from './deviceControl';
+import type { BrushFormValues } from './form';
+import type { BrushTipImage } from './library';
+import { pencilUsesBackground, usesPencilCoverage } from './pencil';
+import { createBrushRandomChannels } from './randomChannels';
+import { sampledTipRenderScale, sampledTipScale, sampledTipTransform, secondaryTipTransform } from './sampledTipRaster';
+import { secondaryScatterOffset } from './secondaryDynamics';
+import {
+  deviceTipAngle,
+  directionalTipAngle,
+  primaryRoundnessChange,
+  primarySizeValue,
+  tabletTiltMagnitude,
+  tiltTipAngle
+} from './shapeDynamics';
+import { browserTabletInput, prepareTabletInput } from './tabletInput';
+import { textureDepth } from './textureDynamics';
+import { placeSampledTip } from './tipPlacement';
+import { computedTipSpacing, sampledTipSpacing } from './tipSpacing';
 import { transferValue } from './transferDynamics';
-import { directionalTipAngle, primaryRoundnessChange, primarySizeValue, tiltTipAngle, tabletTiltMagnitude, deviceTipAngle } from './shapeDynamics';
 
 /** Preview settings and synthetic or recorded tablet samples, independent of saved preset data. */
 export type PreviewInput = {
@@ -86,8 +93,11 @@ export function strokeCompositeOpacity(input: Pick<PreviewInput, 'values' | 'opa
 
 /** Selects the sampled/computed Paintbrush method whose transfer dispatch has been traced. */
 function usesPaintbrushTransfer(input: Pick<PreviewInput, 'values' | 'stampRole'>): boolean {
-  return input.stampRole !== 'secondary' && input.values.tool.type === 'PbTl' &&
-    (input.values.tipKind === 'sampledBrush' || input.values.tipKind === 'computedBrush');
+  return (
+    input.stampRole !== 'secondary' &&
+    input.values.tool.type === 'PbTl' &&
+    (input.values.tipKind === 'sampledBrush' || input.values.tipKind === 'computedBrush')
+  );
 }
 
 /** Tools whose Flow can accumulate with elapsed contact time. Dormant flags survive tool changes. */
@@ -127,7 +137,10 @@ export function previewStrokeSize(input: PreviewInput): number {
  * There is no total-stroke stamp cap. Callers should submit input batches regularly.
  */
 export function createAbrStrokeSampler(
-  input: Pick<PreviewInput, 'values' | 'color' | 'secondaryColor' | 'opacity' | 'flow' | 'stampRole' | 'randomState' | 'initialTangent'> & {
+  input: Pick<
+    PreviewInput,
+    'values' | 'color' | 'secondaryColor' | 'opacity' | 'flow' | 'stampRole' | 'randomState' | 'initialTangent'
+  > & {
     size: number;
     seed?: number;
     /** Retains source geometry for consumers using Photoshop row rasterization. Defaults to false. */
@@ -183,7 +196,8 @@ export function createAbrStrokeSampler(
     depthRandom = channels.channel(5),
     flowRandom = channels.channel(7),
     opacityRandom = channels.channel(6);
-  const sizeRandom = channels.channel(0), roundnessRandom = channels.channel(2);
+  const sizeRandom = channels.channel(0),
+    roundnessRandom = channels.channel(2);
   const colorStreams = {
     foreground: channels.channel(8),
     hue: channels.channel(9),
@@ -197,7 +211,8 @@ export function createAbrStrokeSampler(
   let mixing: number[] = [];
   let spacingRatios: number[] = [];
   let sampledTips: NonNullable<PreviewStroke['sampledTips']> = [];
-  const sampledPrimary = input.sampledTipGeometry && !secondary && v.tool.type === 'PbTl' && v.tipKind === 'sampledBrush';
+  const sampledPrimary =
+    input.sampledTipGeometry && !secondary && v.tool.type === 'PbTl' && v.tipKind === 'sampledBrush';
   const computedSecondary = input.sampledTipGeometry && secondary && v.tipKind === 'computedBrush';
   const sampledSecondary = input.sampledTipGeometry && secondary && (v.tipKind === 'sampledBrush' || computedSecondary);
   let nextDistance = 0,
@@ -207,7 +222,8 @@ export function createAbrStrokeSampler(
     nextTime = 0,
     direction = initialDirection;
   let previous: PreviewPoint | undefined;
-  let directionVector = { ...(input.initialTangent ?? { x: 0, y: 0 }) }, initialVector = directionVector;
+  let directionVector = { ...(input.initialTangent ?? { x: 0, y: 0 }) },
+    initialVector = directionVector;
   let strokeColor: [number, number, number] | undefined;
   function add(points: readonly PreviewPoint[]): PreviewStroke {
     data = [];
@@ -289,7 +305,18 @@ export function createAbrStrokeSampler(
       try {
         return add(points);
       } finally {
-        ({ nextDistance, traveled, step, initialDirection, directionVector, initialVector, nextTime, direction, previous, strokeColor } = saved);
+        ({
+          nextDistance,
+          traveled,
+          step,
+          initialDirection,
+          directionVector,
+          initialVector,
+          nextTime,
+          direction,
+          previous,
+          strokeColor
+        } = saved);
         random.restore(saved.random);
         colorRandom.restore(saved.color);
         Object.values(colorStreams).forEach((stream, i) => stream.restore(saved.colorStreams[i]!));
@@ -320,7 +347,8 @@ export function createAbrStrokeSampler(
       deviceControlValue(control, fade, minimum, step, tablet);
     const evaluateColor = (): [number, number, number] => {
       if (!v.useColorDynamics) return previewColor(input.color);
-      const device = paintbrushTransfer ? deviceControlInput(v.colorDynamics.control, tablet)
+      const device = paintbrushTransfer
+        ? deviceControlInput(v.colorDynamics.control, tablet)
         : inputValue(v.colorDynamics.control, v.colorDynamics.fade);
       if (!paintbrushTransfer) return unverifiedToolColor(input, colorRandom, device, step);
       const rgb = dabColor(foreground16, background16, v.colorDynamics, device, step, colorStreams);
@@ -344,11 +372,14 @@ export function createAbrStrokeSampler(
     let sampledScale = sampledTipScale(size, Math.max(tip.width, tip.height));
     // Photoshop's primary Scatter percentage describes the entire distribution, not each side.
     // At diameter 50 and Scatter 208%, centers span 104 pixels, or ±52 from the stroke.
-    const secondaryDiameter = v.tipKind === 'computedBrush'
-      ? Math.max(1, Math.min(5000, Math.trunc(size + 0.5)))
-      : sampledScale * Math.max(tip.width, tip.height);
+    const secondaryDiameter =
+      v.tipKind === 'computedBrush'
+        ? Math.max(1, Math.min(5000, Math.trunc(size + 0.5)))
+        : sampledScale * Math.max(tip.width, tip.height);
     const baseScatterAmount = secondary
-      ? (v.useScattering ? scatter.scatter * 0.01 * (secondaryDiameter * 0.5) : 0)
+      ? v.useScattering
+        ? scatter.scatter * 0.01 * (secondaryDiameter * 0.5)
+        : 0
       : v.useScattering && !(photoshopPlacement && step === 0 && !scatter.bothAxes)
         ? ((size * scatter.scatter) / 200) * inputValue(scatter.control, scatter.fade)
         : 0;
@@ -378,16 +409,28 @@ export function createAbrStrokeSampler(
       if (sampledShape) {
         // The original evaluates size inside each Count copy, before placement.
         const active = v.useShapeDynamics || v.tool.pressureOverridesSize;
-        const value = active ? primarySizeValue(shape.sizeControl, shape.sizeFade, shape.sizeMinimum,
-          shape.sizeJitter, shape.sizeControl === 3 ? pressure : inputValue(shape.sizeControl, shape.sizeFade),
-          step, sizeRandom) : 1;
-        sampledScale = sampledTipScale(size, Math.max(tip.width, tip.height),
-          active ? { minimumDiameter: shape.minimumDiameter, value } : undefined);
+        const value = active
+          ? primarySizeValue(
+              shape.sizeControl,
+              shape.sizeFade,
+              shape.sizeMinimum,
+              shape.sizeJitter,
+              shape.sizeControl === 3 ? pressure : inputValue(shape.sizeControl, shape.sizeFade),
+              step,
+              sizeRandom
+            )
+          : 1;
+        sampledScale = sampledTipScale(
+          size,
+          Math.max(tip.width, tip.height),
+          active ? { minimumDiameter: shape.minimumDiameter, value } : undefined
+        );
         stampSize = sampledScale * Math.max(tip.width, tip.height);
       }
-      const scatterAmount = sampledShape && baseScatterAmount !== 0
-        ? ((stampSize * scatter.scatter) / 200) * inputValue(scatter.control, scatter.fade)
-        : baseScatterAmount;
+      const scatterAmount =
+        sampledShape && baseScatterAmount !== 0
+          ? ((stampSize * scatter.scatter) / 200) * inputValue(scatter.control, scatter.fade)
+          : baseScatterAmount;
       // Secondary marks always use a separate signed 360-degree rotation draw.
       const angleDegrees = (computedSecondary ? 0 : v.angle) + (secondary ? (angleRandom() * 2 - 1) * 360 : 0);
       let angle = (angleDegrees * Math.PI) / 180;
@@ -399,8 +442,9 @@ export function createAbrStrokeSampler(
         if (sampledShape) {
           sampledControlAngle = directional
             ? directionalTipAngle(shape.angleControl as 5 | 6, directionVector, initialVector)
-            : shape.angleControl === 3 ? tiltTipAngle({ x: tx, y: ty })
-            : deviceTipAngle(shape.angleControl, shape.angleFade, 0, step, tablet);
+            : shape.angleControl === 3
+              ? tiltTipAngle({ x: tx, y: ty })
+              : deviceTipAngle(shape.angleControl, shape.angleFade, 0, step, tablet);
           // Original helper 0x10212e78c: signed ±360°, scaled by jitter.
           // Disabled jitter must leave channel 1 untouched.
           if (shape.angleJitter > 0) {
@@ -414,16 +458,26 @@ export function createAbrStrokeSampler(
         else if (!sampledShape && !directional && shape.angleControl) {
           const controlOffset = (1 - inputValue(shape.angleControl, shape.angleFade)) * 360;
           sampledControlAngle = controlOffset;
-          angle += controlOffset * Math.PI / 180;
+          angle += (controlOffset * Math.PI) / 180;
         }
-        if (sampledShape) roundness += primaryRoundnessChange(v.roundness, shape.roundnessMinimum,
-          shape.roundnessControl, shape.roundnessControlMinimum, shape.roundnessFade, shape.roundnessJitter,
-          step, tablet, roundnessRandom);
-        else roundness *= Math.max(
-          shape.roundnessMinimum / 100,
-          inputValue(shape.roundnessControl, shape.roundnessFade, shape.roundnessMinimum) *
-            (1 - (random() * shape.roundnessJitter) / 100)
-        );
+        if (sampledShape)
+          roundness += primaryRoundnessChange(
+            v.roundness,
+            shape.roundnessMinimum,
+            shape.roundnessControl,
+            shape.roundnessControlMinimum,
+            shape.roundnessFade,
+            shape.roundnessJitter,
+            step,
+            tablet,
+            roundnessRandom
+          );
+        else
+          roundness *= Math.max(
+            shape.roundnessMinimum / 100,
+            inputValue(shape.roundnessControl, shape.roundnessFade, shape.roundnessMinimum) *
+              (1 - (random() * shape.roundnessJitter) / 100)
+          );
         if (!sampledShape && shape.sizeControl === 3) roundness *= shape.tiltScale / 100;
         if (shape.brushProjection && !sampledPrimary) {
           roundness *= Math.max(0.05, 1 - Math.hypot(tx, ty) / 1.2);
@@ -447,7 +501,8 @@ export function createAbrStrokeSampler(
       // A zero-scale primary still evaluates placement dynamics, but deposits no mask.
       if (sampledShape && sampledScale <= 0) continue;
       const renderedScale = sampledShape
-        ? sampledTipRenderScale(sampledScale, Math.max(tip.width, tip.height)) : sampledScale;
+        ? sampledTipRenderScale(sampledScale, Math.max(tip.width, tip.height))
+        : sampledScale;
       const renderedSize = sampledShape ? renderedScale * Math.max(tip.width, tip.height) : stampSize;
       const flow = usesPencilCoverage(v.tool)
         ? 1
@@ -463,10 +518,10 @@ export function createAbrStrokeSampler(
               flowRandom
             )
           : input.flow *
-          (v.useTransfer
-            ? (1 - (random() * v.transfer.flowJitter) / 100) *
-              inputValue(v.transfer.flowControl, v.transfer.flowFade, v.transfer.flowMinimum)
-            : 1);
+            (v.useTransfer
+              ? (1 - (random() * v.transfer.flowJitter) / 100) *
+                inputValue(v.transfer.flowControl, v.transfer.flowFade, v.transfer.flowMinimum)
+              : 1);
       const opacity = ['MixB', 'ShTl', 'BlTl'].includes(v.tool.type)
         ? 1
         : paintbrushTransfer
@@ -481,15 +536,14 @@ export function createAbrStrokeSampler(
               opacityRandom
             )
           : input.opacity *
-          (v.useTransfer || v.tool.pressureOverridesOpacity
-            ? (1 - (random() * transfer.opacityJitter) / 100) *
-              inputValue(transfer.opacityControl, transfer.opacityFade, transfer.opacityMinimum)
-            : 1);
+            (v.useTransfer || v.tool.pressureOverridesOpacity
+              ? (1 - (random() * transfer.opacityJitter) / 100) *
+                inputValue(transfer.opacityControl, transfer.opacityFade, transfer.opacityMinimum)
+              : 1);
       const depth = textureDepth(v.texture, deviceControlInput(v.texture.depthControl, tablet), step, depthRandom);
       // Per-tip color has no extra discarded stroke-start evaluation in Photoshop.
-      const color = v.useColorDynamics && v.colorDynamics.applyPerTip
-        ? evaluateColor()
-        : (strokeColor ??= evaluateColor());
+      const color =
+        v.useColorDynamics && v.colorDynamics.applyPerTip ? evaluateColor() : (strokeColor ??= evaluateColor());
       const aspect = tip.width / Math.max(tip.width, tip.height),
         aspectY = tip.height / Math.max(tip.width, tip.height);
       if (v.tool.type === 'MixB') {
@@ -524,19 +578,25 @@ export function createAbrStrokeSampler(
             ? v.dualBrush.flip && flipXRandom() >= 0.5
               ? -1
               : 1
-            : sampledShape ? primaryFlipX ? -1 : 1
-            : v.useShapeDynamics && shape.flipXJitter && random() < 0.5
-              ? -1
-              : 1),
+            : sampledShape
+              ? primaryFlipX
+                ? -1
+                : 1
+              : v.useShapeDynamics && shape.flipXJitter && random() < 0.5
+                ? -1
+                : 1),
         (v.flipY ? -1 : 1) *
           (secondary
             ? v.dualBrush.flip && flipYRandom() >= 0.5
               ? -1
               : 1
-            : sampledShape ? primaryFlipY ? -1 : 1
-            : v.useShapeDynamics && shape.flipYJitter && random() < 0.5
-              ? -1
-              : 1),
+            : sampledShape
+              ? primaryFlipY
+                ? -1
+                : 1
+              : v.useShapeDynamics && shape.flipYJitter && random() < 0.5
+                ? -1
+                : 1),
         flow,
         opacity,
         depth,
@@ -547,51 +607,91 @@ export function createAbrStrokeSampler(
       if (sampledPrimary) {
         const scale = sampledScale;
         const stretch = v.useShapeDynamics && shape.sizeControl === 3 && !v.tool.pressureOverridesSize;
-        const tilt = stretch ? { magnitude: tiltMagnitude, amount: shape.tiltScale,
-          direction: sampledControlAngle, beforeRotation: false } : undefined;
-        const angleChange = (angle - v.angle * Math.PI / 180) * 180 / Math.PI;
-        const roundnessChange = roundness - v.roundness * .01;
-        const nominalSize = Math.max(1, Math.min(5000, Math.trunc(size + .5)));
-        const placement = placeSampledTip({ x, y }, {
-          left: -Math.floor(tip.width / 2) - 1, top: -Math.floor(tip.height / 2) - 1,
-          right: Math.ceil(tip.width / 2) + 1, bottom: Math.ceil(tip.height / 2) + 1
-        }, {
-          fractional: true, tipOffset: false,
-          snapIdentity: !v.useDualBrush && v.spacing > 10 && nominalSize > 60,
-          scale, angle: 0, tilt: stretch ? tiltMagnitude : 0, angleJitter: angleChange, roundnessChange
-        });
-        sampledTips.push(sampledTipTransform(placement.sourceBounds, placement.center, renderedScale,
-          tilt ? angleDegrees + sampledJitterAngle : v.angle + angleChange, v.roundness, roundnessChange,
-          data[data.length - stampStride + 6]! < 0, data[data.length - stampStride + 7]! < 0, tilt,
-          v.useShapeDynamics && shape.brushProjection ? {
-            stored: v.angle, jitter: sampledJitterAngle, control: sampledControlAngle, tablet
-          } : undefined));
+        const tilt = stretch
+          ? { magnitude: tiltMagnitude, amount: shape.tiltScale, direction: sampledControlAngle, beforeRotation: false }
+          : undefined;
+        const angleChange = ((angle - (v.angle * Math.PI) / 180) * 180) / Math.PI;
+        const roundnessChange = roundness - v.roundness * 0.01;
+        const nominalSize = Math.max(1, Math.min(5000, Math.trunc(size + 0.5)));
+        const placement = placeSampledTip(
+          { x, y },
+          {
+            left: -Math.floor(tip.width / 2) - 1,
+            top: -Math.floor(tip.height / 2) - 1,
+            right: Math.ceil(tip.width / 2) + 1,
+            bottom: Math.ceil(tip.height / 2) + 1
+          },
+          {
+            fractional: true,
+            tipOffset: false,
+            snapIdentity: !v.useDualBrush && v.spacing > 10 && nominalSize > 60,
+            scale,
+            angle: 0,
+            tilt: stretch ? tiltMagnitude : 0,
+            angleJitter: angleChange,
+            roundnessChange
+          }
+        );
+        sampledTips.push(
+          sampledTipTransform(
+            placement.sourceBounds,
+            placement.center,
+            renderedScale,
+            tilt ? angleDegrees + sampledJitterAngle : v.angle + angleChange,
+            v.roundness,
+            roundnessChange,
+            data[data.length - stampStride + 6]! < 0,
+            data[data.length - stampStride + 7]! < 0,
+            tilt,
+            v.useShapeDynamics && shape.brushProjection
+              ? {
+                  stored: v.angle,
+                  jitter: sampledJitterAngle,
+                  control: sampledControlAngle,
+                  tablet
+                }
+              : undefined
+          )
+        );
       }
       if (sampledSecondary) {
-        sampledTips.push(secondaryTipTransform(tip, { x, y }, computedSecondary ? 1 : sampledScale, angleDegrees,
-          data[data.length - stampStride + 6]! < 0, data[data.length - stampStride + 7]! < 0));
+        sampledTips.push(
+          secondaryTipTransform(
+            tip,
+            { x, y },
+            computedSecondary ? 1 : sampledScale,
+            angleDegrees,
+            data[data.length - stampStride + 6]! < 0,
+            data[data.length - stampStride + 7]! < 0
+          )
+        );
       }
     }
     step++;
     const percent = v.spacingEnabled ? Math.trunc(v.spacing) : 0;
-    const advance = v.tipKind === 'sampledBrush'
-      ? sampledTipSpacing(sampledShape ? sampledScale : sampledTipScale(size, Math.max(tip.width, tip.height)) * sizeFactor,
-          tip, percent)
-      : v.tipKind === 'computedBrush'
-        ? computedTipSpacing(size, Math.trunc(v.roundness), sizeFactor, percent)
-        : stampSize * (v.spacingEnabled ? v.spacing / 100 : 0.01);
+    const advance =
+      v.tipKind === 'sampledBrush'
+        ? sampledTipSpacing(
+            sampledShape ? sampledScale : sampledTipScale(size, Math.max(tip.width, tip.height)) * sizeFactor,
+            tip,
+            percent
+          )
+        : v.tipKind === 'computedBrush'
+          ? computedTipSpacing(size, Math.trunc(v.roundness), sizeFactor, percent)
+          : stampSize * (v.spacingEnabled ? v.spacing / 100 : 0.01);
     // Photoshop's primary and secondary spacing loops both clamp the advance to
     // one document pixel, including their subpixel-coordinate paths.
     const detailed = Math.max(photoshopPlacement || secondary ? 1 : 0.25, advance);
     const requested = timed ? undefined : input.minimumSpacing;
-    const spacing = requested && Number.isFinite(requested) && requested > detailed
-      ? Math.max(detailed, Math.min(requested, stampSize * 0.25)) : detailed;
+    const spacing =
+      requested && Number.isFinite(requested) && requested > detailed
+        ? Math.max(detailed, Math.min(requested, stampSize * 0.25))
+        : detailed;
     // Contact is one application, regardless of the spacing used for the following movement.
     const ratio = step === 1 ? 1 : spacing / detailed;
     for (let at = firstStamp; at < data.length; at += stampStride) {
       if (retainSpacing) spacingRatios.push(ratio);
-      if (ratio > 1 && !samplingTool)
-        data[at + 8] = 1 - Math.pow(1 - Math.max(0, Math.min(1, data[at + 8]!)), ratio);
+      if (ratio > 1 && !samplingTool) data[at + 8] = 1 - Math.pow(1 - Math.max(0, Math.min(1, data[at + 8]!)), ratio);
     }
     return spacing;
   }
@@ -615,7 +715,8 @@ function scatterOffset(amount: number, bothAxes: boolean, random: () => number, 
   // Photoshop 2025's recovered helper wraps 720/360, then calls sin/cos directly.
   // Preserve its radians input; converting this value from degrees changes the distribution.
   const angle = ((((random() - 0.5) * 720) % 360) + 360) % 360;
-  return primary ? [Math.cos(angle) * radius, Math.sin(angle) * radius]
+  return primary
+    ? [Math.cos(angle) * radius, Math.sin(angle) * radius]
     : [Math.sin(angle) * radius, Math.cos(angle) * radius];
 }
 

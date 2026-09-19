@@ -23,7 +23,10 @@
     "./gpu/canvasFilter": "./src/gpu/canvasFilter.ts",
     "./gpu/smudgeDepositBatch": "./src/gpu/smudgeDepositBatch.ts",
     "./gpu/toolState": "./src/gpu/toolState.ts",
-    "./contracts": "./src/contracts.ts"
+    "./contracts": "./src/contracts.ts",
+    "./runtimeBrush": "./src/runtimeBrush.ts",
+    "./gpu/retouch": "./src/gpu/retouch.ts",
+    "./gpu/coverage": "./src/gpu/coverage.ts"
   },
   "scripts": {
     "test": "vitest run",

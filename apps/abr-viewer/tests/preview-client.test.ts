@@ -1,3 +1,4 @@
+import { percent, pixels } from '@app-game/abr-parser';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
 import type { PreviewJob, PreviewReply } from '../src/features/brush-preview/protocol';
@@ -19,7 +20,18 @@ function canvas() {
 }
 function input(): PreviewInput {
   return {
-    values: brushToFormValues({ id: 'a', name: 'Brush', type: 'computed', settings: {}, spacing: 10, diameter: 10 }),
+    values: brushToFormValues({
+      id: 'a',
+      name: 'Brush',
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{},
+        tip: { kind: 'computed', diameter: pixels(10), spacing: percent(10) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+    }),
     width: 32,
     height: 16,
     dpr: 1,
@@ -197,10 +209,7 @@ test('resource upload unwraps reactive objects and transfers only bounded copies
   const connection = attachPreview(canvas() as unknown as HTMLCanvasElement);
   const source = new Uint8Array(1024);
   source.set([1, 2, 3, 4], 500);
-  const pattern = new Proxy(
-    { id: 'pattern', name: 'Texture', width: 2, height: 2, mode: 1, data: source.subarray(500, 504) },
-    {}
-  );
+  const pattern = new Proxy({ kind: 'pattern' as const, mode: 1, bytes: source.subarray(500, 504) }, {});
   connection.update(input(), undefined, 10, { pattern });
   await vi.advanceTimersByTimeAsync(1);
   const worker = TestWorker.instances[0]!,
@@ -208,8 +217,8 @@ test('resource upload unwraps reactive objects and transfers only bounded copies
   worker.onmessage!({ data: { type: 'need-tip', id } });
   const [job, transfer] = worker.postMessage.mock.calls[1]!;
   expect(() => structuredClone(job)).not.toThrow();
-  expect(job.resources?.pattern?.data.buffer.byteLength).toBe(4);
-  expect(transfer).toContain(job.resources?.pattern?.data.buffer);
+  expect(job.resources?.pattern?.bytes.buffer.byteLength).toBe(4);
+  expect(transfer).toContain(job.resources?.pattern?.bytes.buffer);
   expect(source.byteLength).toBe(1024);
   expect([...source.subarray(500, 504)]).toEqual([1, 2, 3, 4]);
   connection.dispose();

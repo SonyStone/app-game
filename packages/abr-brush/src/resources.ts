@@ -1,13 +1,12 @@
-import { decodePattern, readSample, type PatternResource } from '@app-game/abr-parser/browser';
-import type { BrushTipImage, Brush as BrushWithPreview } from '@app-game/abr-parser/reader';
-import { record } from './form';
-import { dualPreviewInput, previewStrokeSize, type PreviewInput } from './stroke';
+import { decodeResource, resolveResources, type EmbeddedResource, type ResourceSource } from '@app-game/abr-parser';
 import { computedSecondaryTip } from './computedTip';
+import type { BrushTipImage, BrushAsset as BrushWithPreview } from './library';
+import { dualPreviewInput, previewStrokeSize, type PreviewInput } from './stroke';
 
 /** Compressed auxiliary resources cross the worker boundary only on cache misses. */
 export type PreviewResourceSource = {
-  pattern?: PatternResource;
-  dualSample?: { data: Uint8Array; subVersion: number };
+  pattern?: ResourceSource;
+  dualSample?: ResourceSource;
   dualHardness?: number;
   missing?: string;
 };
@@ -24,46 +23,44 @@ export function preparePreviewResources(input: PreviewInput, resources: PreviewR
 }
 
 /** Resolves resources by UUID without decoding pixels on the UI thread. */
-export function brushPreviewResources(
-  brush: BrushWithPreview & { patternResources?: PatternResource[] }
-): PreviewResourceSource {
-  const s = brush.settings,
-    dual = record(s.dualBrush),
-    tip = record(dual.Brsh);
-  const patternId = record(s.Txtr).Idnt;
-  const pattern = s.useTexture ? brush.patternResources?.find((item) => item.id === patternId) : undefined;
-  const dualId = tip.sampledData;
-  const dualSample =
-    dual.useDualBrush && dualId
-      ? dualId === brush.sampledDataUuid
-        ? brush.brushTip?.sourceSample
-        : brush.sampleDependencies?.find((item) => item.uuid === dualId)?.source
+export function brushPreviewResources(brush: BrushWithPreview): PreviewResourceSource {
+  const selected = resolveResources(
+    brush.resources.map((r) => r.resource),
+    brush.preset
+  );
+  const source = (resource: typeof selected.sample) =>
+    resource
+      ? brush.resources.find(
+          (r) =>
+            r.resource.kind === resource.kind &&
+            r.resource.id === resource.id &&
+            r.resource.section === resource.section &&
+            r.resource.index === resource.index
+        )?.source
       : undefined;
-  const missing =
-    s.useTexture && !pattern
-      ? 'Embedded texture unavailable'
-      : dual.useDualBrush && dualId && !dualSample
-        ? 'Secondary brush sample unavailable'
-        : undefined;
+  const dual = brush.preset.dualBrush;
   return {
-    pattern,
-    dualSample,
-    dualHardness: dual.useDualBrush && !dualId ? Number(record(tip.Hrdn).value ?? 100) : undefined,
-    missing
+    pattern: source(selected.pattern),
+    dualSample: source(selected.dualSample),
+    dualHardness: dual?.enabled && !dual.tip?.sampleId ? (dual.tip?.hardness ?? 100) : undefined,
+    missing: selected.warnings[0]
   };
 }
+
+/** Pattern metadata paired with a standalone compressed source. */
+export type PatternResource = EmbeddedResource;
 
 /** Decodes only resources needed by the current brush; source arrays remain immutable. */
 export function decodePreviewResources(source: PreviewResourceSource): PreviewResources {
   const result: PreviewResources = { warning: source.missing };
   try {
-    if (source.pattern) result.pattern = decodePattern(source.pattern);
+    if (source.pattern) result.pattern = decodeResource(source.pattern);
   } catch (error) {
     result.warning = String(error);
   }
   try {
     result.dualTip = source.dualSample
-      ? readSample(source.dualSample.data, source.dualSample.subVersion).tip
+      ? decodeResource(source.dualSample)
       : source.dualHardness !== undefined
         ? computedSecondaryTip(128, { hardness: source.dualHardness, angle: 0, roundness: 100 })
         : undefined;

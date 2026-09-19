@@ -2,13 +2,13 @@ import type { StoreSetter } from 'solid-js';
 import { createMemo, Show } from 'solid-js';
 import type { BrushWithPreview } from '../../../../lib/abr';
 import { brushTipToDataUrl } from '../../../../lib/abr';
-import styles from './BrushTipPanel.module.css';
 import { generateComputedBrushTip } from '../../../brush-preview/stroke';
 import type { BrushFormValues } from '../../brush-form-schema';
 import { AngleRoundnessControl } from '../editable-input-components/AngleRoundnessControl';
 import { CheckboxInput } from '../editable-input-components/CheckboxInput';
 import { NonLinearSliderInput } from '../editable-input-components/NonLinearSliderInput';
 import { SliderInput } from '../editable-input-components/SliderInput';
+import styles from './BrushTipPanel.module.css';
 
 export function BrushTipPanel(props: {
   brush: BrushWithPreview;
@@ -20,8 +20,8 @@ export function BrushTipPanel(props: {
   const tip = createMemo(
     () =>
       props.brush.imageDataUrl ??
-      (props.brush.brushTip
-        ? brushTipToDataUrl(props.brush.brushTip)
+      (props.brush.tipImage
+        ? brushTipToDataUrl(props.brush.tipImage)
         : props.values.tipKind === 'computedBrush'
           ? brushTipToDataUrl(generateComputedBrushTip(96, props.values.hardness))
           : undefined)
@@ -52,7 +52,7 @@ export function BrushTipPanel(props: {
           </Show>
         </div>
 
-        <Show when={props.brush.brushTip}>
+        <Show when={props.brush.tipImage}>
           <button
             onClick={props.onDownload}
             disabled={props.downloading}

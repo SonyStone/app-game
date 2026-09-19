@@ -1,4 +1,5 @@
 import { createAbrStrokeSampler } from '@app-game/abr-brush/stroke';
+import { percent, pixels } from '@app-game/abr-parser';
 import { describe, expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
@@ -15,11 +16,14 @@ function input(): PreviewInput {
     values: brushToFormValues({
       id: 'test',
       name: 'Test',
-      type: 'computed',
-      settings: {},
-      spacing: 10,
-      diameter: 40,
-      hardness: 100
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{},
+        tip: { kind: 'computed', diameter: pixels(40), spacing: percent(10), hardness: percent(100) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     }),
     width: 240,
     height: 64,
@@ -181,11 +185,29 @@ describe('coverage reference', () => {
     job.width = job.height = 1;
     job.values.useColorDynamics = true;
     job.values.colorDynamics.hueJitter = 1;
-    const stamp = (opacity: number, red: number, blue: number) =>
-      [0.5, 0.5, 1, 1, 1, 0, 1, 1, 1, opacity, 0, 0, red, 0, blue, 1];
-    const pixels = renderPreviewPixels(job,
+    const stamp = (opacity: number, red: number, blue: number) => [
+      0.5,
+      0.5,
+      1,
+      1,
+      1,
+      0,
+      1,
+      1,
+      1,
+      opacity,
+      0,
+      0,
+      red,
+      0,
+      blue,
+      1
+    ];
+    const pixels = renderPreviewPixels(
+      job,
       { width: 1, height: 1, depth: 8, data: new Uint8Array([255]) },
-      { count: 2, data: new Float32Array([...stamp(0.2, 1, 0), ...stamp(0.1, 0, 1)]) });
+      { count: 2, data: new Float32Array([...stamp(0.2, 1, 0), ...stamp(0.1, 0, 1)]) }
+    );
     // The executed kernels retain alpha 51 and use divide(26, 51) = 130 for the
     // second color, rather than replacing it. The channel rounding phases vary
     // with allocation identity, so each final channel can differ by one byte.
@@ -235,7 +257,6 @@ test('queue coalesces edits, prioritizes the active preview and cancels hidden t
   expect(queue.take()).toEqual({ target: 1, priority: 0, revision: 2 });
   expect(queue.take()).toBeUndefined();
 });
-
 
 test('Paintbrush applies global opacity after accumulated flow in the preview compositor', () => {
   const job = input();

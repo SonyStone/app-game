@@ -3,8 +3,8 @@
  * These functions use browser APIs (Canvas, Blob) and won't work in Node.js
  */
 
-import type { PatternResource } from '@app-game/abr-parser/browser';
-import type { BrushTipImage, AbrFile as CoreAbrFile, Brush as CoreBrush } from '@app-game/abr-parser';
+import type { BrushTipImage, BrushLibrary as CoreAbrFile, BrushAsset as CoreBrush } from '@app-game/abr-brush/library';
+import type { PatternResource } from '@app-game/abr-brush/resources';
 
 /**
  * Extended Brush type with browser-specific display properties

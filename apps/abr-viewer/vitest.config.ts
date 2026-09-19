@@ -14,5 +14,5 @@ export default defineConfig({
     ],
     conditions: ['development', 'browser']
   },
-  test: { include: ['tests/**/*.test.{ts,tsx}'], environment: 'node' }
+  test: { setupFiles: ['./tests/initAbr.ts'], include: ['tests/**/*.test.{ts,tsx}'], environment: 'node' }
 });

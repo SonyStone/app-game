@@ -1,8 +1,8 @@
-import type { Brush as BrushWithPreview } from '@app-game/abr-parser/reader';
 import type { CmykConverter } from '@app-game/chroma/io/cmyk/cmykProfile';
 import { hsv2rgb } from '@app-game/chroma/io/hsv/hsv2rgb';
 import { labD50ToRgb } from '@app-game/chroma/io/lab/labD50ToRgb';
 import { z } from 'zod/v3';
+import type { BrushAsset as BrushWithPreview } from './library';
 import { featureFields, fieldsSchema, settingGroups, type SettingField } from './settings-fields';
 
 /** Editable preset values; original descriptors remain the source of unknown and unchanged data. */
@@ -38,27 +38,31 @@ export type BrushFormValues = z.infer<typeof brushFormSchema>;
 /** Reads Photoshop descriptor fields without treating valid zero values as missing.
  * Pass the selected CMYK converter for profile-dependent saved colors.
  */
-export function brushToFormValues(brush: BrushWithPreview, cmyk?: CmykConverter): BrushFormValues {
-  const s = brush.settings ?? {};
-  const brsh = record(s.Brsh);
+export function brushToFormValues<T extends Pick<BrushWithPreview, 'preset' | 'name'>>(
+  brush: T,
+  cmyk?: CmykConverter
+): BrushFormValues {
+  const s = record(brush.preset);
+  const brsh = record(s.tip);
   return {
-    tipKind: ['dBrush', 'dTips', 'sampledBrush'].includes(String(brsh.__classId))
-      ? (brsh.__classId as BrushFormValues['tipKind'])
+    tipKind: ['dBrush', 'dTips', 'sampledBrush'].includes(String(tipKinds[String(brsh.kind)] ?? brsh.kind))
+      ? (tipKinds[String(brsh.kind)] as BrushFormValues['tipKind'])
       : 'computedBrush',
     tipVariant: Number(brsh.dtipsType ?? 0),
     bristle: readFields(settingGroups.bristle, s),
     erodible: readFields(settingGroups.erodible, s),
     name: brush.name,
-    diameter: brush.diameter ?? 30,
-    spacing: brush.spacing ?? 25,
-    spacingEnabled: brsh.Intr !== false,
-    angle: brush.angle ?? 0,
-    roundness: brush.roundness ?? 100,
-    hardness: brush.hardness ?? 100,
+    diameter: brush.preset.tip?.diameter ?? 30,
+    spacing: brush.preset.tip?.spacing ?? 25,
+    spacingEnabled: brsh.spacingEnabled !== false,
+    angle: brush.preset.tip?.angle ?? 0,
+    roundness: brush.preset.tip?.roundness ?? 100,
+    hardness: brush.preset.tip?.hardness ?? 100,
     flipX: brsh.flipX === true,
     flipY: brsh.flipY === true,
     ...readFields(featureFields, s),
-    useBuildUp: typeof s['Rpt '] === 'boolean' ? s['Rpt '] : record(s.toolOptions)['Rpt '] === true,
+    useBuildUp:
+      typeof s.buildUpEnabled === 'boolean' ? s.buildUpEnabled : record(s.toolOptions).buildUpEnabled === true,
     shapeDynamics: readFields(settingGroups.shapeDynamics, s),
     scattering: readFields(settingGroups.scattering, s),
     texture: readFields(settingGroups.texture, s),
@@ -81,32 +85,34 @@ export function formValuesToBrush(
 ): BrushWithPreview {
   const before = brushToFormValues(brush, cmyk);
   if (JSON.stringify(before) === JSON.stringify(values)) return brush;
-  let settings = { ...brush.settings };
+  let settings: Record<string, unknown> = { ...brush.preset };
   const write = (path: string, value: unknown) => {
     settings = writePath(settings, path.split('.'), value);
     // Tool presets also carry copies of brush dynamics. Photoshop must not restore
     // stale copies after the user edits the corresponding Brush Settings control.
     const root = path.split('.')[0]!;
-    if (settings.toolOptions && ['prVr', 'opVr', 'szVr', 'clVr', 'wtVr', 'mxVr', 'Rpt '].includes(root))
+    if (
+      settings.toolOptions &&
+      [
+        'flowDynamics',
+        'opacityDynamics',
+        'sizeDynamics',
+        'colorDynamics',
+        'wetnessDynamics',
+        'mixDynamics',
+        'buildUpEnabled'
+      ].includes(root)
+    )
       settings = writePath(settings, ['toolOptions', ...path.split('.')], value);
   };
-  const core = {
-    diameter: ['Dmtr', '#Pxl'],
-    spacing: ['Spcn', '#Prc'],
-    angle: ['Angl', '#Ang'],
-    roundness: ['Rndn', '#Prc'],
-    hardness: ['Hrdn', '#Prc']
-  } as const;
-  for (const key of Object.keys(core) as (keyof typeof core)[]) {
-    if (values[key] !== before[key] && (key !== 'hardness' || brush.type === 'computed')) {
-      const [field, unit] = core[key];
-      write(`Brsh.${field}`, { unit, value: values[key] });
-    }
+  for (const key of ['diameter', 'spacing', 'angle', 'roundness', 'hardness'] as const) {
+    if (values[key] !== before[key] && (key !== 'hardness' || brush.preset.tip?.kind === 'computed'))
+      write(`tip.${key}`, values[key]);
   }
-  if (values.name !== before.name) write('Nm  ', values.name);
-  if (values.flipX !== before.flipX) write('Brsh.flipX', values.flipX);
-  if (values.flipY !== before.flipY) write('Brsh.flipY', values.flipY);
-  if (values.spacingEnabled !== before.spacingEnabled) write('Brsh.Intr', values.spacingEnabled);
+  if (values.name !== before.name) write('name', values.name);
+  if (values.flipX !== before.flipX) write('tip.flipX', values.flipX);
+  if (values.flipY !== before.flipY) write('tip.flipY', values.flipY);
+  if (values.spacingEnabled !== before.spacingEnabled) write('tip.spacingEnabled', values.spacingEnabled);
   writeFields(featureFields, before, values, write);
   for (const key of Object.keys(settingGroups) as (keyof typeof settingGroups)[]) {
     writeFields(settingGroups[key], before[key], values[key], write);
@@ -127,15 +133,15 @@ export function formValuesToBrush(
   ][]) {
     if (values[toggle] && !before[toggle]) writeFields(settingGroups[group], {}, values[group], write);
   }
-  if (values.useDualBrush && !record(record(settings.dualBrush).Brsh).__classId) {
-    write('dualBrush.Brsh', {
-      __classId: 'computedBrush',
-      Dmtr: { unit: '#Pxl', value: values.dualBrush.diameter },
-      Spcn: { unit: '#Prc', value: values.dualBrush.spacing },
-      Angl: { unit: '#Ang', value: 0 },
-      Rndn: { unit: '#Prc', value: 100 },
-      Hrdn: { unit: '#Prc', value: 100 },
-      Intr: true,
+  if (values.useDualBrush && !record(record(settings.dualBrush).tip).kind) {
+    write('dualBrush.tip', {
+      kind: 'computed',
+      diameter: values.dualBrush.diameter,
+      spacing: values.dualBrush.spacing,
+      angle: 0,
+      roundness: 100,
+      hardness: 100,
+      spacingEnabled: true,
       flipX: false,
       flipY: false
     });
@@ -147,17 +153,8 @@ export function formValuesToBrush(
       values.dualBrush.count !== before.dualBrush.count ||
       values.dualBrush.bothAxes !== before.dualBrush.bothAxes)
   )
-    write('dualBrush.useScatter', true);
-  return {
-    ...brush,
-    name: values.name,
-    diameter: values.diameter,
-    spacing: values.spacing,
-    angle: values.angle,
-    roundness: values.roundness,
-    hardness: brush.type === 'computed' ? values.hardness : brush.hardness,
-    settings
-  };
+    write('dualBrush.scatteringEnabled', true);
+  return { ...brush, name: values.name, preset: { ...brush.preset, ...settings } };
 }
 
 /** Reads a descriptor object safely; scalar values and binary data are not objects here. */
@@ -176,7 +173,7 @@ function readFields<T extends Record<string, SettingField>>(
     Object.entries(fields).map(([key, field]) => {
       let value: unknown = settings;
       for (const part of field.path.split('.')) value = record(value)[part];
-      if (field.unit || (field.kind === 'choice' && !field.plain)) value = record(value).value;
+      if (field.kind === 'choice' && !field.plain) value = record(value).value;
       if (field.kind === 'color') value = descriptorRgbColor(value, cmyk);
       if (field.factor && typeof value === 'number') value *= field.factor;
       return [key, typeof value === typeof field.initial ? value : field.initial];
@@ -201,24 +198,17 @@ function writeFields(
         field.path,
         hex
           ? {
-              __classId: 'RGBC',
-              'Rd  ': parseInt(hex.slice(1, 3), 16),
-              'Grn ': parseInt(hex.slice(3, 5), 16),
-              'Bl  ': parseInt(hex.slice(5, 7), 16)
+              kind: 'RGBC',
+              red: parseInt(hex.slice(1, 3), 16),
+              green: parseInt(hex.slice(3, 5), 16),
+              blue: parseInt(hex.slice(5, 7), 16)
             }
           : undefined
       );
       continue;
     }
     if (field.factor && typeof value === 'number') value /= field.factor;
-    write(
-      field.path,
-      field.unit
-        ? { unit: field.unit, value }
-        : field.kind === 'choice' && !field.plain
-          ? { type: 'BlnM', value }
-          : value
-    );
+    write(field.path, field.kind === 'choice' && !field.plain ? { domain: 'BlnM', value } : value);
   }
 }
 
@@ -227,55 +217,57 @@ function writePath(source: Record<string, unknown>, [key, ...rest]: string[], va
   if (!rest.length) {
     const next = { ...source };
     if (value === undefined) delete next[key!];
-    else if (record(value).__classId === 'RGBC' && record(source[key!]).__classId === 'RGBC')
+    else if (record(value).kind === 'RGBC' && record(source[key!]).kind === 'RGBC')
       next[key!] = { ...record(source[key!]), ...record(value) };
+    else if (record(value).kind === 'RGBC' && record(source[key!]).extensions !== undefined)
+      next[key!] = { ...record(value), extensions: record(source[key!]).extensions };
     else next[key!] = value;
     return next;
   }
   const existing = record(source[key!]);
-  const classId =
+  const kind =
     key === 'dualBrush'
       ? 'dualBrush'
-      : key === 'Txtr'
-        ? 'Ptrn'
+      : key === 'texture'
+        ? 'pattern'
         : key === 'toolOptions'
           ? 'PbTl'
-          : key === 'Brsh'
-            ? 'computedBrush'
-            : 'brVr';
+          : key === 'tip'
+            ? 'computed'
+            : 'dynamics';
   const defaults =
-    classId === 'computedBrush'
+    kind === 'computed'
       ? {
-          Dmtr: { unit: '#Pxl', value: 30 },
-          Spcn: { unit: '#Prc', value: 25 },
-          Hrdn: { unit: '#Prc', value: 100 },
-          Angl: { unit: '#Ang', value: 0 },
-          Rndn: { unit: '#Prc', value: 100 },
-          Intr: true,
+          diameter: 30,
+          spacing: 25,
+          hardness: 100,
+          angle: 0,
+          roundness: 100,
+          spacingEnabled: true,
           flipX: false,
           flipY: false
         }
-      : classId === 'brVr'
-        ? { bVTy: 0, fStp: 25, jitter: { unit: '#Prc', value: 0 }, 'Mnm ': { unit: '#Prc', value: 0 } }
+      : kind === 'dynamics'
+        ? { control: 0, fadeSteps: 25, jitter: 0, minimum: 0 }
         : {};
-  return { ...source, [key!]: writePath({ __classId: classId, ...defaults, ...existing }, rest, value) };
+  return { ...source, [key!]: writePath({ kind, ...defaults, ...existing }, rest, value) };
 }
 
 /** Tool options saved with a preset. Absence keeps the host's current paint/color controls. */
 export function brushToolSettings(brush: BrushWithPreview, cmyk?: CmykConverter) {
-  const tool = record(brush.settings.toolOptions);
+  const tool = record(brush.preset.toolOptions);
   const percentage = (value: unknown) => {
     const number = typeof value === 'number' ? value : record(value).value;
     return typeof number === 'number' && Number.isFinite(number) ? Math.max(0, Math.min(1, number / 100)) : undefined;
   };
   return {
-    foreground: descriptorRgbColor(tool.FrgC, cmyk),
-    background: descriptorRgbColor(tool.BckC, cmyk),
+    foreground: descriptorRgbColor(tool.foregroundColor, cmyk),
+    background: descriptorRgbColor(tool.backgroundColor, cmyk),
     pressureOverridesSize: tool.usePressureOverridesSize === true,
     pressureOverridesOpacity: tool.usePressureOverridesOpacity === true,
     flow: percentage(tool.flow),
-    opacity: percentage(tool.Opct),
-    blendMode: typeof record(tool['Md  ']).value === 'string' ? String(record(tool['Md  ']).value) : 'Nrml'
+    opacity: percentage(tool.opacity),
+    blendMode: typeof record(tool['mode']).value === 'string' ? String(record(tool['mode']).value) : 'Nrml'
   };
 }
 
@@ -286,32 +278,32 @@ export function brushToolSettings(brush: BrushWithPreview, cmyk?: CmykConverter)
  */
 export function descriptorRgbColor(value: unknown, cmyk?: CmykConverter): string | undefined {
   const color = record(value);
-  if (color.__classId === 'CMYC') {
-    const channels = ['Cyn ', 'Mgnt', 'Ylw ', 'Blck'].map((key) => colorChannel(color[key], '#Prc'));
+  if (color.kind === 'CMYC') {
+    const channels = ['cyan', 'magenta', 'yellow', 'black'].map((key) => colorChannel(color[key], '#Prc'));
     if (!cmyk || !channels.every((channel): channel is number => inRange(channel, 100))) return undefined;
     const converted = cmyk([channels[0]!, channels[1]!, channels[2]!, channels[3]!]);
     return converted.every((channel) => inRange(channel, 255)) ? rgbHex(converted) : undefined;
   }
-  if (color.__classId === 'RGBC') {
-    const channels = [color['Rd  '], color['Grn '], color['Bl  ']];
+  if (color.kind === 'RGBC') {
+    const channels = [color['red'], color['green'], color['blue']];
     if (!channels.every((channel): channel is number => inRange(channel, 255))) return undefined;
     return rgbHex(channels);
   }
-  if (color.__classId === 'HSBC') {
-    const hue = colorChannel(color['H   '], '#Ang');
-    const saturation = colorChannel(color.Strt, '#Prc');
-    const brightness = colorChannel(color.Brgh, '#Prc');
+  if (color.kind === 'HSBC') {
+    const hue = colorChannel(color['hue'], '#Ang');
+    const saturation = colorChannel(color.saturation, '#Prc');
+    const brightness = colorChannel(color.brightness, '#Prc');
     if (!inRange(hue, 360) || !inRange(saturation, 100) || !inRange(brightness, 100)) return undefined;
     return rgbHex(hsv2rgb(hue, saturation / 100, brightness / 100).slice(0, 3));
   }
-  if (color.__classId === 'Grsc') {
-    const gray = colorChannel(color['Gry '], '#Prc');
+  if (color.kind === 'Grsc') {
+    const gray = colorChannel(color['gray'], '#Prc');
     if (!inRange(gray, 100)) return undefined;
     // Subtract before scaling: 90% must round 25.5 to 26, not 25.499999999999993 to 25.
     const channel = ((100 - gray) * 255) / 100;
     return rgbHex([channel, channel, channel]);
   }
-  if (color.__classId === 'LbCl') {
+  if (color.kind === 'LbCl') {
     const channels = labChannels(color);
     return channels ? rgbHex(channels.map((channel) => Math.max(0, Math.min(255, channel)))) : undefined;
   }
@@ -323,10 +315,10 @@ export function descriptorRgbColor(value: unknown, cmyk?: CmykConverter): string
  * Throws when a saved CMYK color is malformed or its source profile has not been selected.
  */
 export function brushWithResolvedColors(brush: BrushWithPreview, cmyk?: CmykConverter): BrushWithPreview {
-  const tool = record(brush.settings.toolOptions);
+  const tool = record(brush.preset.toolOptions);
   let resolved = tool;
-  for (const key of ['FrgC', 'BckC'] as const) {
-    if (record(tool[key]).__classId !== 'CMYC') continue;
+  for (const key of ['foregroundColor', 'backgroundColor'] as const) {
+    if (record(tool[key]).kind !== 'CMYC') continue;
     const color = descriptorRgbColor(tool[key], cmyk);
     if (!color)
       throw new Error(
@@ -337,14 +329,22 @@ export function brushWithResolvedColors(brush: BrushWithPreview, cmyk?: CmykConv
     resolved = {
       ...resolved,
       [key]: {
-        __classId: 'RGBC',
-        'Rd  ': parseInt(color.slice(1, 3), 16),
-        'Grn ': parseInt(color.slice(3, 5), 16),
-        'Bl  ': parseInt(color.slice(5, 7), 16)
+        kind: 'RGBC',
+        red: parseInt(color.slice(1, 3), 16),
+        green: parseInt(color.slice(3, 5), 16),
+        blue: parseInt(color.slice(5, 7), 16)
       }
     };
   }
-  return resolved === tool ? brush : { ...brush, settings: { ...brush.settings, toolOptions: resolved } };
+  return resolved === tool
+    ? brush
+    : {
+        ...brush,
+        preset: {
+          ...brush.preset,
+          toolOptions: { ...brush.preset.toolOptions, kind: String(resolved.kind), ...resolved }
+        }
+      };
 }
 
 /** Reports a valid Lab color that loses gamut when displayed in the application's sRGB canvas. */
@@ -353,10 +353,10 @@ export function descriptorColorClipped(value: unknown): boolean {
 }
 
 function labChannels(color: Record<string, unknown>) {
-  const lightness = color.Lmnc,
-    a = color['A   '],
-    b = color['B   '];
-  if (color.__classId !== 'LbCl' || !inRange(lightness, 100) || !inRange(a, 127, -128) || !inRange(b, 127, -128))
+  const lightness = color.lightness,
+    a = color['a'],
+    b = color['b'];
+  if (color.kind !== 'LbCl' || !inRange(lightness, 100) || !inRange(a, 127, -128) || !inRange(b, 127, -128))
     return undefined;
   return labD50ToRgb(lightness, a, b);
 }
@@ -371,3 +371,10 @@ function colorChannel(value: unknown, unit: '#Ang' | '#Prc'): unknown {
 function rgbHex(channels: readonly number[]): string {
   return `#${channels.map((channel) => Math.round(channel).toString(16).padStart(2, '0')).join('')}`;
 }
+
+const tipKinds: Record<string, BrushFormValues['tipKind']> = {
+  computed: 'computedBrush',
+  sampled: 'sampledBrush',
+  bristle: 'dBrush',
+  naturalMedia: 'dTips'
+};

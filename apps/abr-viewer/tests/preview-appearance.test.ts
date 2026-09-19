@@ -5,8 +5,10 @@ import { previewAppearance } from '../src/features/brush-detail/preview-appearan
 const preset = () =>
   brushToFormValues({
     name: 'Saved colored Multiply brush',
-    settings: {
-      toolOptions: { __classId: 'PbTl', 'Md  ': { type: 'BlnM', value: 'Mltp' } }
+    preset: {
+      kind: 'brush',
+      sourceId: 'fixture',
+      toolOptions: { kind: 'PbTl', mode: { domain: 'BlnM', value: 'Mltp' } }
     }
   });
 

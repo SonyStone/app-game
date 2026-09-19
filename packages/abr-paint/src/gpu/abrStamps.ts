@@ -1,3 +1,4 @@
+import { abrCoveragePlan, createAbrCoverage } from './coverage';
 import { adaptivePaintBatchSize } from './brushBatchSize';
 import { maskParams } from '@app-game/abr-brush/maskAccumulationGpu';
 import { createPatternRasterGpu } from '@app-game/abr-brush/patternRasterGpu';
@@ -296,7 +297,9 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
       return Math.min(sampledMaskBatchLimit, Math.floor(256 * 256 / largestCoverage));
     },
     /** Only persistent masks used by this preset need eviction snapshots. */
-    snapshotMasks: () => ({
+    coveragePlan: (transient: boolean) => abrCoveragePlan({
+      transient,
+      scale: paramsData[paramsOffsets.rasterScale]!,
       mask: !settings || settings.tipLodBias !== undefined || paintbrushMaskMode(settings.values) === 0,
       dual: !!settings?.values.useDualBrush && !!settings.dual
     }),
@@ -641,8 +644,12 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
   const params = root.createBuffer(Params).$usage('uniform');
   const pickupParams = root.createBuffer(PickupParams).$usage('uniform');
   const stamps = root.createBuffer(d.arrayOf(Stamp, capacity)).$usage('vertex');
+  const coverage = createAbrCoverage(root.device, { mask: root.unwrap(mask), paint: root.unwrap(paint), dual: root.unwrap(dualMask) });
   const tile = {
     capacity,
+    coverage,
+    /** Additional ABR textures and instance data, excluding borrowed base/mask and small uniforms. */
+    bytes: (): number => 256 * 256 * 4 * 2 + capacity * 64 + (tile.maskBatch?.bytes ?? 0) + (tile.pattern?.region.bytes ?? 0),
     pattern: undefined as { region: ReturnType<ReturnType<typeof createPatternRasterGpu>['rasterize']>;
       source: symbol; tx: number; ty: number; scale: number } | undefined,
     maskBatch: undefined as ReturnType<ReturnType<typeof createMaskRasterGpu>['createBatch']> | undefined,
@@ -651,9 +658,9 @@ function createAbrTile(root: TgpuRoot, base: Texture, mask: Texture, capacity: n
     params,
     pickupParams,
     stamps,
-    paintView: root.unwrap(paint).createView(),
-    dualView: root.unwrap(dualMask).createView(),
-    maskView: root.unwrap(mask).createView(),
+    paintView: coverage.views.paint,
+    dualView: coverage.views.dual,
+    maskView: coverage.views.mask,
     base,
     mask,
     destroy() {

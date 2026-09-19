@@ -1,5 +1,6 @@
-import { AbrParser } from '@app-game/abr-parser';
+import { initAbr, parseAbr } from '@app-game/abr-parser';
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -86,12 +87,13 @@ test('opens from app-game navigation, inspects brushes, and exports them', async
   const download = await downloadEvent;
   const exported = testInfo.outputPath('exported.abr');
   await download.saveAs(exported);
-  const parser = new AbrParser();
-  const result = parser.parse(await readFile(exported));
-  const original = parser.parse(await readFile(sample));
-  expect(result.errors).toEqual([]);
-  expect(result.brushes[0].diameter).toBe(80);
-  expect(result.hierarchy?.find((item) => item.type === 'group')?.name).toBe('Basic_3');
+  await initAbr(
+    readFileSync(new URL('../../../packages/abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url))
+  );
+  const result = parseAbr(await readFile(exported));
+  const original = parseAbr(await readFile(sample));
+  expect(result.brushes[0].tip?.diameter).toBe(80);
+  expect(result.hierarchy?.find((item) => item.kind === 'group')?.name).toBe('Basic_3');
   expect(result.brushes.map((brush) => brush.name)).toEqual(original.brushes.map((brush) => brush.name));
   expect(errors).toEqual([]);
 });
@@ -103,8 +105,8 @@ test('loads sampled tips through file drop and filters the brush list', async ({
   await expect(page.getByRole('heading', { name: 'Brush Editor' })).toBeVisible();
   const name = 'Chunky_Chalk_Brush_by_MarkWinters.abr';
   const bytes = [...(await readFile(new URL(name, samples)))];
-  const expected = new AbrParser().parse(new Uint8Array(bytes));
-  await page.locator('.abr-viewer').evaluate(
+  const expected = parseAbr(new Uint8Array(bytes));
+  await page.getByRole('heading', { name: 'Brush Editor' }).evaluate(
     (element, data) => {
       const transfer = new DataTransfer();
       transfer.items.add(new File([new Uint8Array(data.bytes)], data.name));
@@ -119,4 +121,63 @@ test('loads sampled tips through file drop and filters the brush list', async ({
   await page.getByPlaceholder('Search Brushes').fill('');
   await expect(page.locator('[data-brush-id]')).toHaveCount(expected.brushes.length);
   expect(errors).toEqual([]);
+});
+
+test.beforeAll(async () => {
+  await initAbr(
+    readFileSync(new URL('../../../packages/abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url))
+  );
+});
+
+/** An older checkpoint remains recoverable while the new model starts saving independently. */
+test('keeps the previous checkpoint and restores new-model edits after reload', async ({ page }) => {
+  await page.goto('/abr-viewer');
+  await expect(page.getByRole('heading', { name: 'Brush Editor' })).toBeVisible();
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const r = indexedDB.open('abr-workspace');
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('workspace', 'readwrite');
+      tx.objectStore('workspace').put({ legacyMarker: 'retained' }, 'current');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  });
+  await page.reload();
+  await expect(page.getByText(/previous brush library is retained/)).toBeVisible();
+  await page.locator('input[type=file]').setInputFiles(fileURLToPath(new URL('Basic_3.abr', samples)));
+  await page.locator('[data-brush-id]').first().click();
+  await page.getByRole('textbox', { name: 'Brush name' }).fill('Persisted through Rust');
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const db = await new Promise<IDBDatabase>((resolve) => {
+          const r = indexedDB.open('abr-workspace');
+          r.onsuccess = () => resolve(r.result);
+        });
+        const values = await Promise.all(
+          ['current', 'current-rust-v3'].map(
+            (key) =>
+              new Promise<unknown>((resolve) => {
+                const r = db.transaction('workspace').objectStore('workspace').get(key);
+                r.onsuccess = () => resolve(r.result);
+              })
+          )
+        );
+        db.close();
+        return {
+          legacy: (values[0] as { legacyMarker?: string })?.legacyMarker,
+          newCheckpoint: (JSON.stringify(values[1], (_, v) => (typeof v === 'bigint' ? String(v) : v)) ?? '').includes(
+            'Persisted through Rust'
+          )
+        };
+      })
+    )
+    .toEqual({ legacy: 'retained', newCheckpoint: true });
+  await page.reload();
+  await expect(page.getByRole('textbox', { name: 'Brush name' })).toHaveValue('Persisted through Rust');
 });

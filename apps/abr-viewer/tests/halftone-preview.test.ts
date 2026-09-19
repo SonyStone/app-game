@@ -1,4 +1,5 @@
-import { AbrParser, readPatternIndex } from '@app-game/abr-parser/browser';
+import { loadBrushLibrary } from '@app-game/abr-brush/library';
+import { percent, pixels } from '@app-game/abr-parser';
 import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
@@ -6,9 +7,9 @@ import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
 import { blendModeId, dualCoverage, textureCoverage } from '../src/features/brush-preview/effects';
 import { brushPreviewResources, decodePreviewResources } from '../src/features/brush-preview/resources';
 import { generateComputedBrushTip, type PreviewInput } from '../src/features/brush-preview/stroke';
+import './initAbr';
 
-const file = new AbrParser().parse(readFileSync('src/assets/examples/halftones_and_screentones.abr'));
-const patterns = readPatternIndex(file.rawPatternData!);
+const file = loadBrushLibrary(readFileSync('src/assets/examples/halftones_and_screentones.abr'));
 
 test('Height depth reveals dark pattern features before filling the stroke', () => {
   const mode = blendModeId('Hght');
@@ -20,7 +21,7 @@ test('Height depth reveals dark pattern features before filling the stroke', () 
 
 test('the real circle halftone retains holes through densely overlapping stamps', () => {
   const brush = file.brushes.find((b) => b.name === "Kyle's Halftone - Circle Range Tiny")!;
-  const resources = decodePreviewResources(brushPreviewResources({ ...brush, patternResources: patterns }));
+  const resources = decodePreviewResources(brushPreviewResources(brush));
   expect(resources.warning).toBeUndefined();
   expect(resources.pattern).toBeDefined();
   const input: PreviewInput = {
@@ -76,10 +77,11 @@ test('Hard Mix applies its coverage ramp before global tool opacity', () => {
   const values = brushToFormValues({
     id: 'grain',
     name: 'Grain',
-    type: 'computed',
-    settings: {},
-    diameter: 16,
-    spacing: 10
+    preset: {
+      kind: 'brush',
+      sourceId: 'fixture',
+      tip: { kind: 'computed', diameter: pixels(16), spacing: percent(10) }
+    }
   });
   values.useDualBrush = true;
   values.dualBrush.mode = 'hardMix';
@@ -102,7 +104,9 @@ test('Hard Mix applies its coverage ramp before global tool opacity', () => {
   };
   const center = (16 * 32 + 16) * 4;
   const pixel = (flow: number, opacity: number) =>
-    renderPreviewPixels({ ...input, flow, opacity }, tip, undefined, { dualTip: { ...tip, width: 32, height: 32, data: new Uint8Array(1024).fill(128) } })[center];
+    renderPreviewPixels({ ...input, flow, opacity }, tip, undefined, {
+      dualTip: { ...tip, width: 32, height: 32, data: new Uint8Array(1024).fill(128) }
+    })[center];
   expect(pixel(1, 1)).toBe(124);
   expect(pixel(0.1, 1)).toBe(255);
   // The verified Hard Mix mask is 131/255; global 25% supplies 64/255 afterward.

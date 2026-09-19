@@ -1,3 +1,4 @@
+import { pixels } from '@app-game/abr-parser';
 import { expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
@@ -72,7 +73,13 @@ test('switching tool or resource preview removes eraser compositing', () => {
 
 /** One full-coverage stamp isolates tool compositing from sampling and smoothing. */
 function fixture(eraserMode = 1): PreviewInput {
-  const values = brushToFormValues({ id: 'eraser', name: 'Eraser', type: 'computed', settings: {}, diameter: 16 });
+  const values = brushToFormValues({
+    id: 'eraser',
+    name: 'Eraser',
+    preset: { kind: 'brush', sourceId: 'fixture', ...{}, tip: { kind: 'computed', diameter: pixels(16) } },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+  });
   values.useSmoothing = false;
   Object.assign(values.tool, { type: 'ErTl', eraserMode });
   return {
