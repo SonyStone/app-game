@@ -1,0 +1,27 @@
+{
+  "name": "@app-game/brush-preview-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 3035",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@app-game/brush-preview": "workspace:*",
+    "@app-game/abr-paint": "workspace:*",
+    "solid-js": "catalog:",
+    "@solidjs/web": "2.0.0-rc.4"
+  },
+  "devDependencies": {
+    "@app-game/abr-parser": "workspace:*",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "unplugin-typegpu": "^0.11.3",
+    "typegpu": "^0.11.4",
+    "typescript": "catalog:",
+    "@webgpu/types": "^0.1.70",
+    "@app-game/paint-core": "workspace:*"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@app-game/brush-preview",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/BrushPreview.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@app-game/paint-core": "workspace:*",
+    "@app-game/abr-paint": "workspace:*",
+    "@solid-primitives/resize-observer": "catalog:",
+    "solid-js": "catalog:",
+    "@solidjs/web": "2.0.0-rc.4"
+  },
+  "devDependencies": {
+    "@app-game/abr-parser": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "@webgpu/types": "^0.1.70",
+    "jsdom": "catalog:",
+    "@testing-library/jest-dom": "catalog:"
+  }
+}
