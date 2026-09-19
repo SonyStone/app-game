@@ -11,7 +11,9 @@
     "@solid-primitives/active-element": "catalog:",
     "@solid-primitives/timer": "catalog:",
     "@solid-primitives/props": "catalog:",
-    "solid-dnd": "workspace:*"
+    "solid-dnd": "workspace:*",
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/mutation-observer": "3.0.0-next.2"
   },
   "exports": {
     "./routes": "./routes.tsx"

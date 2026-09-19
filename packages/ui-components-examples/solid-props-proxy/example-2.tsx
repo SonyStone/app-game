@@ -1,5 +1,5 @@
+import type { Props } from '@app-game/solid-props-proxy';
 import { createSpread } from '@app-game/solid-props-proxy';
-import type { Props } from '@app-game/solid-props-proxy/types';
 import type { JSX } from '@solidjs/web';
 import { createSignal, Show } from 'solid-js';
 

@@ -1,93 +1,109 @@
 import type { MaybeAccessor } from '@solid-primitives/utils';
 import { access } from '@solid-primitives/utils';
-import { ChildProperties, DOMWithState, Namespaces } from '@solidjs/web';
-import { createMemo, createTrackedEffect, onCleanup, untrack } from 'solid-js';
-import { setAttributeNS } from './attribute-ns-patch';
-import { setAttribute, setBoolAttribute, setClassName, setProperty, setStyle } from './attribute-patch';
-import { setEventListener, setSolidEvent } from './event-listener-patch';
+import { DOMWithState, isServer } from '@solidjs/web';
+import { createEffect, onCleanup, sharedConfig, untrack } from 'solid-js';
+import { setProperty } from './attribute-patch';
+import { assignDOMProp } from './solid-dom';
 import type { Cleanup, Props } from './types';
-import { cleanupAll, isEqual, noop, readProps, runCleanupUpdate, toPropertyName } from './utils';
-
-/** Applied prop state tracked so updates can diff and restore in reverse order. */
-type AppliedProp = {
-  /** Last value applied for the prop key. */
-  value: unknown;
-  /** Cleanup that removes or updates the applied prop layer. */
-  cleanup: Cleanup;
-};
+import { cleanupAll, isElement, isEqual, noop, readProps, runCleanupUpdate } from './utils';
 
 /**
- * Creates a Solid-aware spread function for an existing target.
+ * Creates a reversible Solid 2 prop updater owned by the current Solid scope.
  *
- * The returned function applies props using DOM-expression-style assignment, tracks
- * the current target accessor, and restores prior values when props or targets change.
+ * Calling the updater reads prop getters immediately, even without a target, and
+ * applies their snapshot synchronously, except during a hydration claim, when the
+ * latest update waits for a microtask. Target changes are applied after rendering.
+ * Call inside a tracked effect for reactive props, or use createPropsProxy.
+ * Do not call the updater in a memo or an effect compute callback.
+ * Disposal restores the target and makes subsequent updater calls inert. SSR is inert.
  */
 export function createSpread<T extends object>(target: MaybeAccessor<T | null | undefined>): (props: Props<T>) => void {
   let currentTarget: T | undefined;
-  let latestProps: Props<T> | undefined;
+  let latestProps: ReturnType<typeof readProps> | undefined;
+  let disposed = false;
+  let queued = false;
+  let updateVersion = 0;
+  let pendingTarget: T | null | undefined;
   const applied = new Map<string, AppliedProp>();
 
   const disposeCurrent = () => {
-    const cleanup = cleanupAll(Array.from(applied.values(), ({ cleanup }) => cleanup));
-
-    cleanup();
+    cleanupAll(Array.from(applied.values(), ({ cleanup }) => cleanup))();
     applied.clear();
     currentTarget = undefined;
   };
 
-  const ensureCurrent = createMemo(() => {
-    const nextTarget = access(target);
-
-    if (!nextTarget) {
-      disposeCurrent();
-      return undefined;
+  const syncTarget = (nextTarget: T | null | undefined) => {
+    if (disposed) return;
+    // client.ts skips writes during the synchronous hydration claim. A proxy has
+    // no SSR output to claim, so install its layers after that pass has finished.
+    if (sharedConfig.hydrating) {
+      pendingTarget = nextTarget;
+      if (!queued) {
+        queued = true;
+        queueMicrotask(() => {
+          if (!queued) return;
+          queued = false;
+          const next = pendingTarget;
+          pendingTarget = undefined;
+          syncTarget(next);
+        });
+      }
+      return;
     }
+    queued = false;
+    pendingTarget = undefined;
+    if (currentTarget !== (nextTarget ?? undefined)) disposeCurrent();
+    currentTarget = nextTarget ?? undefined;
+    if (currentTarget && latestProps) assign(currentTarget, latestProps, applied);
+  };
 
-    if (currentTarget !== nextTarget) {
-      disposeCurrent();
-      currentTarget = nextTarget;
-    }
-
-    return currentTarget;
+  onCleanup(() => {
+    disposed = true;
+    latestProps = undefined;
+    pendingTarget = undefined;
+    disposeCurrent();
   });
 
-  onCleanup(disposeCurrent);
-
-  createTrackedEffect(() => {
-    const currentTarget = ensureCurrent();
-
-    if (currentTarget && latestProps) {
-      const props = latestProps;
-
-      untrack(() => assign(currentTarget, props, applied));
+  // Keep DOM writes out of Solid 2's speculative compute phase.
+  createEffect(
+    () => ({ target: isServer ? undefined : access(target), version: updateVersion }),
+    (snapshot) => {
+      // An explicit updater call can supersede a target captured by a pending effect.
+      if (snapshot.version === updateVersion) syncTarget(snapshot.target);
     }
-  });
+  );
 
   return (props: Props<T>) => {
-    const nextProps = props ?? {};
-
-    latestProps = nextProps;
-    const currentTarget = untrack(ensureCurrent);
-
-    if (currentTarget) {
-      assign(currentTarget, nextProps, applied);
-    }
+    if (disposed || isServer) return;
+    updateVersion++;
+    const snapshot = readProps(props);
+    untrack(() => {
+      const nextTarget = access(target);
+      latestProps = snapshot;
+      syncTarget(nextTarget);
+    });
   };
 }
+
+/** One prop's last snapshot and reversible layer. */
+type AppliedProp = {
+  value: unknown;
+  cleanup: Cleanup;
+};
 
 /**
  * Synchronizes a prop bag onto a target and disposes props that disappeared.
  *
- * This mirrors dom-expressions' assign step while keeping cleanup state for
+ * This follows @solidjs/web 2.0.0-rc.4's assign step while keeping cleanup state for
  * reversible overlays on existing DOM nodes or plain objects.
  */
-function assign<T extends object>(target: T, props: Props<T>, applied: Map<string, AppliedProp>): void {
-  const entries = readProps(props);
+function assign(target: object, entries: ReturnType<typeof readProps>, applied: Map<string, AppliedProp>): void {
   const nextKeys = new Set(Object.keys(entries));
   const syncProp = (prop: string, value: unknown, apply: () => Cleanup): void => {
     const current = applied.get(prop);
 
-    if (current && isEqual(current.value, value)) {
+    const stateful = isElement(target) && DOMWithState[target.nodeName]?.[prop] === 1;
+    if (current && isEqual(current.value, value) && !stateful) {
       return;
     }
 
@@ -112,11 +128,9 @@ function assign<T extends object>(target: T, props: Props<T>, applied: Map<strin
     applied.delete(prop);
   }
 
-  if (typeof Element !== 'undefined' && target instanceof Element) {
-    const isSVG = typeof SVGElement !== 'undefined' && target instanceof SVGElement;
-
+  if (isElement(target)) {
     for (const [prop, value] of Object.entries(entries)) {
-      syncProp(prop, value, () => assignProp(target, prop, value, entries, isSVG));
+      syncProp(prop, value, () => assignDOMProp(target, prop, value));
     }
 
     return;
@@ -137,65 +151,4 @@ function assign<T extends object>(target: T, props: Props<T>, applied: Map<strin
 
     syncProp(prop, value, () => setProperty(target, prop, value, false));
   }
-}
-
-/** Applies a single DOM prop through Solid-compatible property, attribute, or event handling. */
-function assignProp(element: Element, prop: string, value: unknown, props: object, isSVG: boolean): Cleanup {
-  if (prop === 'ref') {
-    if (typeof value === 'function') {
-      (value as (element: Element) => void)(element);
-    }
-
-    return noop;
-  }
-
-  if (prop === 'style') {
-    return setStyle(element, value);
-  }
-
-  if (prop === 'class' || prop === 'className') {
-    return setClassName(element, value);
-  }
-
-  if (prop.startsWith('on:')) {
-    return setEventListener(element, prop.slice(3), value, false);
-  }
-
-  if (prop.startsWith('oncapture:')) {
-    return setEventListener(element, prop.slice(10), value, true);
-  }
-
-  if (prop.startsWith('on')) {
-    return setSolidEvent(element, prop.slice(2).toLowerCase(), value);
-  }
-
-  if (prop.startsWith('attr:')) {
-    return setAttribute(element, prop.slice(5), value);
-  }
-
-  if (prop.startsWith('bool:')) {
-    return setBoolAttribute(element, prop.slice(5), value);
-  }
-
-  const isForcedProp = prop.startsWith('prop:');
-  const childProp = ChildProperties.has(prop);
-  const elementProp = Boolean(DOMWithState[element.tagName]?.[prop]);
-  const customElement = element.nodeName.includes('-') || 'is' in props;
-
-  if (isForcedProp || childProp || (!isSVG && elementProp) || customElement) {
-    const propertyName = isForcedProp
-      ? prop.slice(5)
-      : customElement && !elementProp && !childProp
-        ? toPropertyName(prop)
-        : prop;
-    return setProperty(element, propertyName, value, true);
-  }
-
-  const namespace = isSVG && prop.includes(':') ? Namespaces[prop.split(':')[0] ?? ''] : undefined;
-
-  if (namespace) {
-    return setAttributeNS(element, namespace, prop, value);
-  }
-
-  return setAttribute(element, prop, value);
 }

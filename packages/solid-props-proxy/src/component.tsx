@@ -1,8 +1,10 @@
 import type { MaybeAccessor } from '@solid-primitives/utils';
 import type { JSX } from '@solidjs/web';
-import { createTrackedEffect, omit } from 'solid-js';
+import { isServer } from '@solidjs/web';
+import { createEffect, omit } from 'solid-js';
 import { createSpread } from './spread';
 import type { Props } from './types';
+import { readProps } from './utils';
 
 /**
  * Applies Solid-style props to an already-created target while the component is mounted.
@@ -31,7 +33,8 @@ export function PropsProxy<T extends object>(
 export function createPropsProxy<T extends object>(target: MaybeAccessor<T | null | undefined>, props: Props<T>): void {
   const spread = createSpread(target);
 
-  createTrackedEffect(() => {
-    spread(props);
-  });
+  createEffect(
+    () => (isServer ? {} : readProps(props)),
+    (snapshot) => spread(snapshot as Props<T>)
+  );
 }

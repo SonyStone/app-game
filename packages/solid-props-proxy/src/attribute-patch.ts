@@ -1,14 +1,16 @@
+import { setStyleProperty, setAttribute as writeAttribute } from '@solidjs/web';
 import type { AnyRecord, AttributeValue, Cleanup, ProxyValueCombiner } from './types';
 import {
   findPropertyDescriptor,
   hasOwn,
+  isElement,
   isEqual,
   isHTMLElement,
   isRecord,
   removeArrayItem,
-  restoreAttribute,
   runCleanupUpdate,
   splitClassNames,
+  toAttributeValue,
   withCleanupUpdate
 } from './utils';
 
@@ -35,14 +37,6 @@ type AttributeStateMap = Map<string, AttributeState>;
 type PropertyLayer = {
   /** Value requested by the overlay layer. */
   value: unknown;
-};
-
-/** Snapshot of one CSS declaration value and priority. */
-type StyleSnapshot = {
-  /** CSS property value. */
-  value: string;
-  /** CSS property priority such as important. */
-  priority: string;
 };
 
 /** Descriptor and layer state for a patched DOM property. */
@@ -95,7 +89,10 @@ type PatchedAttributeMethod<Key extends AttributeMethodKey> = {
 };
 
 /** Patch controller for stackable setAttribute/removeAttribute overlays. */
-export type AttributePatch = Pick<AttributePatchRecord, 'setAttribute' | 'removeAttribute' | 'lock'>;
+export type AttributePatch = Pick<
+  AttributePatchRecord,
+  'setAttribute' | 'removeAttribute' | 'lock' | 'updateBase' | 'isApplying'
+>;
 
 const attributePatches = new WeakMap<Element, AttributePatchRecord>();
 const propertyPatches = new WeakMap<Element, Map<string, PropertyPatch>>();
@@ -120,12 +117,10 @@ export function getAttributePatch(element: Element): AttributePatch {
  * Cleanup updates can replace the value without recreating the native method patch.
  */
 export function setAttribute(element: Element, name: string, value: unknown, combine?: ProxyValueCombiner): Cleanup {
-  const nextValue = value == null ? null : String(value);
+  const nextValue = toAttributeValue(value);
   const cleanup = getAttributePatch(element).lock(name, nextValue, combine);
 
-  return withCleanupUpdate(cleanup, (nextValue) =>
-    runCleanupUpdate(cleanup, nextValue == null ? null : String(nextValue))
-  );
+  return withCleanupUpdate(cleanup, (nextValue) => runCleanupUpdate(cleanup, toAttributeValue(nextValue)));
 }
 
 /** Applies a boolean attribute overlay, using an empty string for truthy values. */
@@ -135,133 +130,177 @@ export function setBoolAttribute(element: Element, name: string, value: unknown)
   return withCleanupUpdate(cleanup, (nextValue) => runCleanupUpdate(cleanup, nextValue ? '' : null));
 }
 
-/** Applies a class value as a stackable className/property or class attribute overlay. */
+/** Applies a stackable class layer through Solid 2's attribute and classList paths. */
 export function setClassName(element: Element, value: unknown): Cleanup {
-  if (!isHTMLElement(element)) {
-    return setAttribute(element, 'class', value, combineClassValue);
+  const patch = getAttributePatch(element);
+  const cleanup = patch.lock('class', value, combineClassValue);
+  let bridge = classBridges.get(element);
+  if (!bridge) {
+    bridge = createClassBridge(element, patch);
+    classBridges.set(element, bridge);
   }
-
-  const cleanup = lockProperty(element, 'className', value, combineClassValue);
-
-  if (cleanup) {
-    return cleanup;
-  }
-
-  return setProperty(element, 'className', combineClassValue(element.className, [value]), true);
-}
-
-/** Applies a style prop as either a style attribute or per-declaration style overlay. */
-export function setStyle(element: Element, value: unknown): Cleanup {
-  const htmlElement = element as HTMLElement | SVGElement;
-
-  if (!isRecord(value)) {
-    const cleanup = setAttribute(element, 'style', value);
-
-    return withCleanupUpdate(cleanup, (nextValue) => {
-      if (isRecord(nextValue)) {
-        return false;
-      }
-
-      return runCleanupUpdate(cleanup, nextValue);
-    });
-  }
-
-  const style = htmlElement.style;
-  const original = new Map<string, StyleSnapshot>();
-  const applied = new Map<string, StyleSnapshot>();
-
-  applyStyleRecord(style, value, original, applied);
-
+  bridge.count++;
+  const current = bridge;
   return withCleanupUpdate(
     () => {
-      for (const name of Array.from(original.keys())) {
-        restoreAppliedStyle(style, name, original, applied);
+      cleanup();
+      if (--current.count === 0) {
+        current.dispose();
+        classBridges.delete(element);
       }
     },
-    (nextValue) => {
-      if (!isRecord(nextValue)) {
-        return false;
-      }
-
-      applyStyleRecord(style, nextValue, original, applied);
-      return true;
-    }
+    (next) => runCleanupUpdate(cleanup, next)
   );
 }
 
-/** Applies an object style record while tracking original declarations for restoration. */
-function applyStyleRecord(
-  style: CSSStyleDeclaration,
-  value: Record<string, unknown>,
-  original: Map<string, StyleSnapshot>,
-  applied: Map<string, StyleSnapshot>
-): void {
-  const nextNames = new Set(Object.keys(value));
-
-  for (const name of Array.from(applied.keys())) {
-    if (nextNames.has(name)) {
-      continue;
-    }
-
-    restoreAppliedStyle(style, name, original, applied);
-    original.delete(name);
-    applied.delete(name);
+/** Routes the class mutations used by Solid 2 into the shared attribute base. */
+function createClassBridge(element: Element, patch: AttributePatch) {
+  const cleanups: Cleanup[] = [];
+  const ownClassName = Object.getOwnPropertyDescriptor(element, 'className');
+  const nativeClassName = findPropertyDescriptor(element, 'className');
+  if (isHTMLElement(element) && nativeClassName?.get && (!ownClassName || ownClassName.configurable)) {
+    Object.defineProperty(element, 'className', {
+      configurable: true,
+      get: () => nativeClassName.get!.call(element),
+      set: (value) => element.setAttribute('class', String(value))
+    });
+    cleanups.push(() => {
+      if (ownClassName) Object.defineProperty(element, 'className', ownClassName);
+      else Reflect.deleteProperty(element, 'className');
+    });
   }
-
-  for (const [name, styleValue] of Object.entries(value)) {
-    const previousApplied = applied.get(name);
-    const current = readStyleSnapshot(style, name);
-
-    if (!previousApplied || current.value !== previousApplied.value || current.priority !== previousApplied.priority) {
-      original.set(name, current);
-    }
-
-    if (styleValue == null) {
-      style.removeProperty(name);
-    } else {
-      style.setProperty(name, String(styleValue));
-    }
-
-    applied.set(name, readStyleSnapshot(style, name));
+  const list = element.classList;
+  const scratch = element.ownerDocument.createElement('div');
+  for (const name of ['add', 'remove'] as const) {
+    const own = Object.getOwnPropertyDescriptor(list, name);
+    const original = list[name];
+    Object.defineProperty(list, name, {
+      configurable: true,
+      value: function (this: DOMTokenList, ...tokens: string[]) {
+        if (this !== list) return original.apply(this, tokens);
+        patch.updateBase('class', (base) => {
+          scratch.className = base ?? '';
+          scratch.classList[name](...tokens);
+          return scratch.className;
+        });
+      }
+    });
+    cleanups.push(() => {
+      if (own) Object.defineProperty(list, name, own);
+      else Reflect.deleteProperty(list, name);
+    });
   }
+  return { count: 0, dispose: () => cleanups.reverse().forEach((cleanup) => cleanup()) };
 }
 
-/** Restores one style declaration only if the proxy-applied value is still present. */
-function restoreAppliedStyle(
-  style: CSSStyleDeclaration,
-  name: string,
-  original: Map<string, StyleSnapshot>,
-  applied: Map<string, StyleSnapshot>
-): void {
-  const originalStyle = original.get(name);
-  const appliedStyle = applied.get(name);
+const classBridges = new WeakMap<Element, ReturnType<typeof createClassBridge>>();
 
-  if (!originalStyle || !appliedStyle) {
-    return;
+/**
+ * Adds an ordered CSS declaration layer. Updates retain its position in the stack.
+ * Strings and records overlay declarations; null record entries remove lower values.
+ * Cleanup restores the latest base captured through the supported CSSOM write paths.
+ */
+export function setStyle(element: Element, value: unknown): Cleanup {
+  const patch = getAttributePatch(element);
+  let bridge = styleBridges.get(element);
+  if (!bridge) {
+    bridge = createStyleBridge(element, patch);
+    styleBridges.set(element, bridge);
   }
-
-  if (
-    style.getPropertyValue(name) !== appliedStyle.value ||
-    style.getPropertyPriority(name) !== appliedStyle.priority
-  ) {
-    return;
-  }
-
-  if (originalStyle.value === '') {
-    style.removeProperty(name);
-    return;
-  }
-
-  style.setProperty(name, originalStyle.value, originalStyle.priority);
+  bridge.count++;
+  const current = bridge;
+  const cleanup = patch.lock('style', value, current.combine);
+  let active = true;
+  return withCleanupUpdate(
+    () => {
+      if (!active) return;
+      active = false;
+      cleanup();
+      if (--current.count === 0) {
+        current.dispose();
+        styleBridges.delete(element);
+      }
+    },
+    (next) => active && runCleanupUpdate(cleanup, next)
+  );
 }
 
-/** Reads one CSS declaration value and priority. */
-function readStyleSnapshot(style: CSSStyleDeclaration, name: string): StyleSnapshot {
-  return {
-    value: style.getPropertyValue(name),
-    priority: style.getPropertyPriority(name)
+/** Replays CSS layers using native parsing, including shorthand expansion and priorities. */
+function createStyleBridge(element: Element, patch: AttributePatch) {
+  const scratch = element.ownerDocument.createElement('div');
+  const parsed = element.ownerDocument.createElement('div').style;
+  const baseStyle = element.ownerDocument.createElement('div').style;
+  const style = (element as HTMLElement | SVGElement).style;
+  const cleanups: Cleanup[] = [];
+
+  const combine: ProxyValueCombiner = (base, layers) => {
+    if (!layers.length) return base;
+    scratch.style.cssText = String(base ?? '');
+    for (const layer of layers) {
+      if (isRecord(layer)) {
+        for (const name in layer) setStyleProperty(scratch, name, layer[name]);
+      } else if (typeof layer === 'string') {
+        parsed.cssText = layer;
+        for (let index = 0; index < parsed.length; index++) {
+          const name = parsed.item(index);
+          scratch.style.setProperty(name, parsed.getPropertyValue(name), parsed.getPropertyPriority(name));
+        }
+      }
+    }
+    return scratch.style.cssText || (base == null ? null : '');
   };
+
+  // Solid's object-style renderer uses these methods. Mutate a separate base so
+  // an update to a covered declaration cannot leak through the active layers.
+  for (const name of ['setProperty', 'removeProperty'] as const) {
+    const own = Object.getOwnPropertyDescriptor(style, name);
+    const original = style[name];
+    Object.defineProperty(style, name, {
+      configurable: true,
+      value: function (this: CSSStyleDeclaration, ...args: string[]) {
+        if (this !== style || patch.isApplying) return Reflect.apply(original, this, args);
+        let result: unknown;
+        patch.updateBase('style', (base) => {
+          baseStyle.cssText = base ?? '';
+          result = Reflect.apply(baseStyle[name], baseStyle, args);
+          return baseStyle.cssText;
+        });
+        return result;
+      }
+    });
+    cleanups.push(() => restoreOwnDescriptor(style, name, own));
+  }
+
+  const own = Object.getOwnPropertyDescriptor(style, 'cssText');
+  const native = findPropertyDescriptor(style, 'cssText')!;
+  Object.defineProperty(style, 'cssText', {
+    configurable: true,
+    enumerable: native.enumerable,
+    get() {
+      return native.get!.call(this);
+    },
+    set(value: string) {
+      if (this !== style || patch.isApplying) {
+        native.set!.call(this, value);
+        return;
+      }
+      patch.updateBase('style', () => {
+        baseStyle.cssText = value;
+        return baseStyle.cssText;
+      });
+    }
+  });
+  cleanups.push(() => restoreOwnDescriptor(style, 'cssText', own));
+  return { count: 0, combine, dispose: () => cleanups.reverse().forEach((cleanup) => cleanup()) };
 }
+
+/** Restores only the own descriptor that a bridge temporarily replaced. */
+function restoreOwnDescriptor(target: object, name: string, own: PropertyDescriptor | undefined): void {
+  if (own) Object.defineProperty(target, name, own);
+  else Reflect.deleteProperty(target, name);
+}
+
+const styleBridges = new WeakMap<Element, ReturnType<typeof createStyleBridge>>();
 
 /**
  * Applies a property overlay to an element or plain object and returns a cleanup.
@@ -270,7 +309,7 @@ function readStyleSnapshot(style: CSSStyleDeclaration, name: string): StyleSnaps
  * the base value below the proxy layer.
  */
 export function setProperty(target: object, key: string, value: unknown, alwaysSetOnRestore: boolean): Cleanup {
-  if (typeof Element !== 'undefined' && target instanceof Element) {
+  if (isElement(target)) {
     const cleanup = lockProperty(target, key, value);
 
     if (cleanup) {
@@ -487,12 +526,26 @@ class AttributePatchRecord {
     );
   }
 
+  /** True while applying a resolved attribute, including CSSOM reflection by DOM emulators. */
+  get isApplying(): boolean {
+    return this.proxyDepth > 0;
+  }
+
+  /** Updates an attribute's underlying value while retaining active layers. */
+  updateBase(name: string, update: (base: AttributeValue) => AttributeValue): void {
+    const state = this.states.get(name);
+    if (!state) return;
+    state.base = update(state.base);
+    this.applyState(name, state);
+  }
+
   /** Applies the resolved value for one attribute state. */
   private applyState(name: string, state: AttributeState): void {
     const value = resolveAttributeStateValue(state);
 
     this.runAsProxy(() => {
-      restoreAttribute(this.element, name, value);
+      // The compiler-facing type says string; client.ts also accepts null to remove attributes.
+      writeAttribute(this.element, name, value as string);
     });
   }
 
@@ -597,7 +650,7 @@ function topPropertyValue(patch: PropertyPatch): unknown {
     );
   }
 
-  return patch.layers[patch.layers.length - 1]?.value ?? patch.base;
+  return patch.layers.length ? patch.layers[patch.layers.length - 1]!.value : patch.base;
 }
 
 /** Writes a resolved value through the native setter path while preserving the proxy descriptor. */
@@ -650,7 +703,9 @@ function writeRestoredPropertyValue(
     return;
   }
 
-  (target as unknown as AnyRecord)[key] = value;
+  if (value !== undefined || findPropertyDescriptor(target, key)) {
+    (target as unknown as AnyRecord)[key] = value;
+  }
 }
 
 /** Resolves the top attribute layer to the string value expected by the DOM. */
@@ -660,9 +715,11 @@ function resolveAttributeStateValue(state: AttributeState): AttributeValue {
         state.base,
         state.layers.map((layer) => layer.value)
       )
-    : (state.layers[state.layers.length - 1]?.value ?? state.base);
+    : state.layers.length
+      ? state.layers[state.layers.length - 1]!.value
+      : state.base;
 
-  return value == null ? null : String(value);
+  return toAttributeValue(value);
 }
 
 /** Combines Solid 2 class-value overlay layers with a base class string. */
@@ -698,7 +755,7 @@ function applyClassLayer(classNames: string[], layer: unknown): void {
     return;
   }
 
-  if (layer == null) {
+  if (layer == null || typeof layer === 'boolean') {
     return;
   }
 

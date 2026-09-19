@@ -6,28 +6,33 @@
   "main": "./src/index.tsx",
   "types": "./src/index.tsx",
   "exports": {
-    ".": "./src/index.tsx",
-    "./attribute-ns-patch": "./src/attribute-ns-patch.ts",
-    "./attribute-patch": "./src/attribute-patch.ts",
-    "./component": "./src/component.tsx",
-    "./event-listener-patch": "./src/event-listener-patch.ts",
-    "./spread": "./src/spread.ts",
-    "./types": "./src/types.ts",
-    "./utils": "./src/utils.ts"
+    ".": "./src/index.tsx"
   },
   "scripts": {
-    "test": "vitest run --config vitest.config.ts",
-    "typecheck": "tsc --project tsconfig.test.json --pretty false"
+    "test": "vitest run --config vitest.config.ts && vitest run --config vitest.server.config.ts",
+    "typecheck": "tsc --project tsconfig.test.json --pretty false",
+    "test:browser": "node scripts/check-browser.mjs",
+    "measure": "node scripts/measure.mjs",
+    "dev": "vite --config playground.config.ts"
   },
   "peerDependencies": {
+    "@solidjs/web": "2.0.0-rc.4",
     "solid-js": "catalog:"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "catalog:",
     "happy-dom": "^20.9.0",
+    "jsdom": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:",
-    "vitest": "catalog:"
-  }
+    "vitest": "catalog:",
+    "@playwright/test": "catalog:",
+    "esbuild": "^0.28.0"
+  },
+  "dependencies": {
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/utils": "catalog:"
+  },
+  "sideEffects": false
 }

@@ -5,8 +5,12 @@
   },
   "include": [
     "./src/index.tsx",
-    "./src/index.test.tsx",
+    "./src/*.test.tsx",
+    "./src/server.test.ts",
     "../ui-components-examples/docking/SolidTabsExample.tsx",
-    "../ui-components-examples/solid-props-proxy/index.tsx"
+    "../ui-components-examples/solid-props-proxy/index.tsx",
+    "./tests/*.ts",
+    "./tests/*.tsx",
+    "./playground/*.tsx"
   ]
 }

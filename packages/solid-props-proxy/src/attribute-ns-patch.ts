@@ -1,11 +1,6 @@
+import { setAttributeNS as writeAttributeNS } from '@solidjs/web';
 import type { AttributeValue, Cleanup } from './types';
-import {
-  namespaceAttributeKey,
-  removeArrayItem,
-  restoreNamespacedAttribute,
-  runCleanupUpdate,
-  withCleanupUpdate
-} from './utils';
+import { namespaceAttributeKey, removeArrayItem, runCleanupUpdate, toAttributeValue, withCleanupUpdate } from './utils';
 
 /** One active namespaced attribute overlay layer. */
 type AttributeNSLayer = {
@@ -77,18 +72,11 @@ export function getAttributeNSPatch(element: Element): AttributeNSPatch {
  *
  * Cleanup updates can replace the value without recreating the native method patch.
  */
-export function setAttributeNS(
-  element: Element,
-  namespace: string,
-  name: string,
-  value: unknown
-): Cleanup {
-  const nextValue = value == null ? null : String(value);
+export function setAttributeNS(element: Element, namespace: string, name: string, value: unknown): Cleanup {
+  const nextValue = toAttributeValue(value);
   const cleanup = getAttributeNSPatch(element).lock(namespace, name, nextValue);
 
-  return withCleanupUpdate(cleanup, (nextValue) =>
-    runCleanupUpdate(cleanup, nextValue == null ? null : String(nextValue))
-  );
+  return withCleanupUpdate(cleanup, (nextValue) => runCleanupUpdate(cleanup, toAttributeValue(nextValue)));
 }
 
 /** Own-property patch record for one namespaced attribute method. */
@@ -173,7 +161,7 @@ class AttributeNSPatchRecord {
 
         state.base = String(value);
         state.qualifiedName = name;
-        self.applyState(namespace, localName, state);
+        self.applyState(namespace, state);
       }
     );
 
@@ -200,7 +188,7 @@ class AttributeNSPatchRecord {
         }
 
         state.base = null;
-        self.applyState(namespace, localName, state);
+        self.applyState(namespace, state);
       }
     );
   }
@@ -222,12 +210,12 @@ class AttributeNSPatchRecord {
     state.qualifiedName = name;
     state.layers.push(layer);
     this.states.set(key, state);
-    this.applyState(namespace, localName, state);
+    this.applyState(namespace, state);
 
     return withCleanupUpdate(
       () => {
         removeArrayItem(state.layers, layer);
-        this.applyState(namespace, localName, state);
+        this.applyState(namespace, state);
 
         if (state.layers.length === 0) {
           this.states.delete(key);
@@ -236,18 +224,19 @@ class AttributeNSPatchRecord {
       },
       (nextValue) => {
         layer.value = nextValue;
-        this.applyState(namespace, localName, state);
+        this.applyState(namespace, state);
         return true;
       }
     );
   }
 
   /** Applies the resolved value for a namespaced attribute state. */
-  private applyState(namespace: string | null, localName: string, state: AttributeNSState): void {
+  private applyState(namespace: string | null, state: AttributeNSState): void {
     const value = resolveAttributeStateValue(state);
 
     this.runAsProxy(() => {
-      restoreNamespacedAttribute(this.element, namespace, state.qualifiedName, localName, value);
+      // The runtime accepts nullable namespaces and removal values despite its compiler-facing types.
+      writeAttributeNS(this.element, namespace as string, state.qualifiedName, value as string);
     });
   }
 
@@ -276,9 +265,9 @@ class AttributeNSPatchRecord {
 
 /** Resolves the top namespaced attribute layer to the string value expected by the DOM. */
 function resolveAttributeStateValue(state: AttributeNSState): AttributeValue {
-  const value = state.layers[state.layers.length - 1]?.value ?? state.base;
+  const value = state.layers.length ? state.layers[state.layers.length - 1]!.value : state.base;
 
-  return value == null ? null : String(value);
+  return toAttributeValue(value);
 }
 
 /** Extracts the local name from a qualified namespaced attribute. */

@@ -24,19 +24,24 @@ export type SolidEventTupleHandler = (data: unknown, event: Event) => void;
 /** String attribute value, or null when the attribute should be removed. */
 export type AttributeValue = string | null;
 
-/** Event listener options accepted by both native and proxy listener paths. */
-export type EventOptions = boolean | AddEventListenerOptions | EventListenerOptions | undefined;
-
 /** Combines an original value with active proxy layers for stackable DOM values. */
 export type ProxyValueCombiner = (base: unknown, layers: readonly unknown[]) => unknown;
 
-/** Intrinsic element name that best matches an element instance type. */
+/** Exact structural matches avoid mixing generic HTMLElement event handlers into specific element props. */
 type ElementTagName<T extends Element> = Extract<
   | {
-      [Key in keyof HTMLElementTagNameMap]: T extends HTMLElementTagNameMap[Key] ? Key : never;
+      [Key in keyof HTMLElementTagNameMap]: T extends HTMLElementTagNameMap[Key]
+        ? HTMLElementTagNameMap[Key] extends T
+          ? Key
+          : never
+        : never;
     }[keyof HTMLElementTagNameMap]
   | {
-      [Key in keyof SVGElementTagNameMap]: T extends SVGElementTagNameMap[Key] ? Key : never;
+      [Key in keyof SVGElementTagNameMap]: T extends SVGElementTagNameMap[Key]
+        ? SVGElementTagNameMap[Key] extends T
+          ? Key
+          : never
+        : never;
     }[keyof SVGElementTagNameMap],
   keyof JSX.IntrinsicElements
 >;
@@ -46,24 +51,14 @@ type ElementProps<T extends Element> = [ElementTagName<T>] extends [never]
   ? JSX.HTMLAttributes<T>
   : ComponentProps<ElementTagName<T>>;
 
-/** Values accepted by proxy-specific event namespace props. */
-type ProxyEventValue = EventListenerOrEventListenerObject | EventTuple | null | undefined;
-
-/** Extra prop namespaces handled by the proxy in addition to normal Solid props. */
+/** Explicit properties for custom elements and standard XML namespaces. */
 export type ProxyNamespacedProps = {
-  [Key in `on:${string}` | `oncapture:${string}`]?: ProxyEventValue;
-} & {
-  [Key in `attr:${string}` | `bool:${string}` | `prop:${string}`]?: unknown;
-} & {
-  className?: string | undefined;
+  [Key in `prop:${string}` | `xlink:${string}` | `xml:${string}` | 'xmlns:xlink']?: unknown;
 };
 
-/** SVG namespaced attributes such as xlink:href accepted for SVG targets. */
-export type SVGNamespacedProps = {
-  [Key in `${string}:${string}`]?: unknown;
-};
-
-/** Prop bag accepted by PropsProxy and createSpread for DOM elements or plain objects. */
+/**
+ * Solid 2 props for an existing target. Children are never applied by this package.
+ * Removed Solid 1 namespaces and className are not part of this interface.
+ */
 export type Props<P extends object = HTMLElement> = Partial<P extends Element ? ElementProps<P> : P> &
-  ProxyNamespacedProps &
-  (P extends SVGElement ? SVGNamespacedProps : {});
+  (P extends Element ? ProxyNamespacedProps : {});

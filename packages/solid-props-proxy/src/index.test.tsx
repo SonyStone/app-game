@@ -1,4 +1,4 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
 
 import { render } from '@solidjs/web';
 import { createRoot, createSignal, createTrackedEffect, type Setter } from 'solid-js';
@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { getAttributeNSPatch } from './attribute-ns-patch';
 import { getAttributePatch } from './attribute-patch';
 import { PropsProxy } from './component';
-import { getEventListenerPatch } from './event-listener-patch';
 import { createSpread as createSpreadController } from './spread';
 import type { Cleanup, Props } from './types';
 
@@ -112,7 +111,7 @@ describe('createSpread', () => {
       class: 'first'
     });
     const cleanupSecond = applySpread(button, {
-      className: 'second'
+      class: 'second'
     });
 
     expect(button.className).toBe('base first second');
@@ -261,39 +260,6 @@ describe('createSpread', () => {
     expect(button.removeAttribute).toBe(originalRemoveAttribute);
   });
 
-  it('does not patch event methods until the event listener patch is locked', () => {
-    const button = document.createElement('button');
-    const originalSetAttribute = button.setAttribute;
-    const originalRemoveAttribute = button.removeAttribute;
-    const originalSetAttributeNS = button.setAttributeNS;
-    const originalRemoveAttributeNS = button.removeAttributeNS;
-    const originalAddEventListener = button.addEventListener;
-    const originalRemoveEventListener = button.removeEventListener;
-
-    const eventPatch = getEventListenerPatch(button);
-
-    expect(button.setAttribute).toBe(originalSetAttribute);
-    expect(button.removeAttribute).toBe(originalRemoveAttribute);
-    expect(button.setAttributeNS).toBe(originalSetAttributeNS);
-    expect(button.removeAttributeNS).toBe(originalRemoveAttributeNS);
-    expect(button.addEventListener).toBe(originalAddEventListener);
-    expect(button.removeEventListener).toBe(originalRemoveEventListener);
-
-    const cleanup = eventPatch.lock('pointerdown', false);
-
-    expect(button.setAttribute).toBe(originalSetAttribute);
-    expect(button.removeAttribute).toBe(originalRemoveAttribute);
-    expect(button.setAttributeNS).toBe(originalSetAttributeNS);
-    expect(button.removeAttributeNS).toBe(originalRemoveAttributeNS);
-    expect(button.addEventListener).not.toBe(originalAddEventListener);
-    expect(button.removeEventListener).not.toBe(originalRemoveEventListener);
-
-    cleanup();
-
-    expect(button.addEventListener).toBe(originalAddEventListener);
-    expect(button.removeEventListener).toBe(originalRemoveEventListener);
-  });
-
   it('patches only namespaced attribute methods for namespaced attribute locks', () => {
     const xlinkNamespace = 'http://www.w3.org/1999/xlink';
     const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
@@ -325,31 +291,6 @@ describe('createSpread', () => {
     expect(use.getAttributeNS(xlinkNamespace, 'href')).toBe('#external');
     expect(use.setAttributeNS).toBe(originalSetAttributeNS);
     expect(use.removeAttributeNS).toBe(originalRemoveAttributeNS);
-  });
-
-  it('queues listeners through the standalone event listener patch', () => {
-    const button = document.createElement('button');
-    const originalAddEventListener = button.addEventListener;
-    const originalRemoveEventListener = button.removeEventListener;
-    const externalClick = vi.fn();
-
-    const eventPatch = getEventListenerPatch(button);
-    const cleanup = eventPatch.lock('click', false);
-
-    expect(button.addEventListener).not.toBe(originalAddEventListener);
-    expect(button.removeEventListener).not.toBe(originalRemoveEventListener);
-
-    button.addEventListener('click', externalClick);
-    button.click();
-
-    expect(externalClick).not.toHaveBeenCalled();
-
-    cleanup();
-    button.click();
-
-    expect(externalClick).toHaveBeenCalledTimes(1);
-    expect(button.addEventListener).toBe(originalAddEventListener);
-    expect(button.removeEventListener).toBe(originalRemoveEventListener);
   });
 
   it('records attribute removals and restores the removal on cleanup', () => {
@@ -405,17 +346,17 @@ describe('createSpread', () => {
     const onClick = vi.fn();
 
     const cleanup = applySpread(button, {
-      'on:click': onClick
+      onScroll: onClick
     });
 
-    button.click();
+    button.dispatchEvent(new Event('scroll'));
     cleanup();
-    button.click();
+    button.dispatchEvent(new Event('scroll'));
 
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('queues event listeners added while overlaid and restores event methods on cleanup', () => {
+  it('keeps native event subscriptions independent while overlaid', () => {
     const button = document.createElement('button');
     const originalAddEventListener = button.addEventListener;
     const originalRemoveEventListener = button.removeEventListener;
@@ -423,20 +364,20 @@ describe('createSpread', () => {
     const externalClick = vi.fn();
 
     const cleanup = applySpread(button, {
-      'on:click': proxyClick
+      onScroll: proxyClick
     });
 
-    button.addEventListener('click', externalClick);
-    button.click();
-
-    expect(proxyClick).toHaveBeenCalledTimes(1);
-    expect(externalClick).not.toHaveBeenCalled();
-
-    cleanup();
-    button.click();
+    button.addEventListener('scroll', externalClick);
+    button.dispatchEvent(new Event('scroll'));
 
     expect(proxyClick).toHaveBeenCalledTimes(1);
     expect(externalClick).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    button.dispatchEvent(new Event('scroll'));
+
+    expect(proxyClick).toHaveBeenCalledTimes(1);
+    expect(externalClick).toHaveBeenCalledTimes(2);
     expect(button.addEventListener).toBe(originalAddEventListener);
     expect(button.removeEventListener).toBe(originalRemoveEventListener);
   });
@@ -646,7 +587,7 @@ describe('PropsProxy', () => {
     expect(input.value).toBe('base');
   });
 
-  it('keeps unchanged native event locks while another prop changes', async () => {
+  it('keeps native event listeners while another prop changes', async () => {
     const host = document.createElement('div');
     const proxyClick = vi.fn();
     const externalClick = vi.fn();
@@ -662,7 +603,7 @@ describe('PropsProxy', () => {
           <input ref={setTarget} value="base" />
           <PropsProxy
             target={target()}
-            {...({ value: proxyValue(), 'on:click': proxyClick } satisfies Props<HTMLInputElement>)}
+            {...({ value: proxyValue(), onScroll: proxyClick } satisfies Props<HTMLInputElement>)}
           />
         </>
       );
@@ -677,21 +618,21 @@ describe('PropsProxy', () => {
       return;
     }
 
-    input.addEventListener('click', externalClick);
+    input.addEventListener('scroll', externalClick);
 
     setProxyValue('next proxy');
     await Promise.resolve();
 
-    input.click();
+    input.dispatchEvent(new Event('scroll'));
 
     expect(input.value).toBe('next proxy');
     expect(proxyClick).toHaveBeenCalledTimes(1);
-    expect(externalClick).not.toHaveBeenCalled();
+    expect(externalClick).toHaveBeenCalledTimes(1);
 
     dispose();
-    input.click();
+    input.dispatchEvent(new Event('scroll'));
 
     expect(proxyClick).toHaveBeenCalledTimes(1);
-    expect(externalClick).toHaveBeenCalledTimes(1);
+    expect(externalClick).toHaveBeenCalledTimes(2);
   });
 });

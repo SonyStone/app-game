@@ -1,24 +1,19 @@
-import type {
-  AnyRecord,
-  AttributeValue,
-  Cleanup,
-  EventOptions,
-  EventTuple,
-  Props,
-  UpdatableCleanup
-} from './types';
+import type { AnyRecord, AttributeValue, Cleanup, EventTuple, Props, UpdatableCleanup } from './types';
 
 /** Reads enumerable props and removes children, which the proxy never applies post-render. */
 export function readProps<T extends object>(props: Props<T>): AnyRecord {
   const propRecord = props as unknown as AnyRecord;
-  const nextProps: AnyRecord = {};
+  const nextProps: AnyRecord = Object.create(null);
 
-  for (const key of Object.keys(propRecord)) {
+  // Solid client.ts enumerates inherited enumerable props as well as own props.
+  for (const key in propRecord) {
     if (key === 'children') {
       continue;
     }
 
-    nextProps[key] = propRecord[key];
+    const value = propRecord[key];
+    nextProps[key] =
+      key === 'class' ? snapshotClass(value) : key === 'style' && isRecord(value) ? snapshotStyle(value) : value;
   }
 
   return nextProps;
@@ -142,9 +137,18 @@ export function isRecord(value: unknown): value is AnyRecord {
   return typeof value === 'object' && value !== null;
 }
 
-/** Narrows an Element to HTMLElement in runtimes where HTMLElement exists. */
+/** Recognizes DOM elements from this window or an accessible iframe's window. */
+export function isElement(target: object): target is Element {
+  if (typeof Element !== 'undefined' && target instanceof Element) return true;
+  const constructor = (target as Element).ownerDocument?.defaultView?.Element;
+  return !!constructor && target instanceof constructor;
+}
+
+/** Recognizes HTML elements using the element's own document realm when available. */
 export function isHTMLElement(element: Element): element is HTMLElement {
-  return typeof HTMLElement !== 'undefined' && element instanceof HTMLElement;
+  if (typeof HTMLElement !== 'undefined' && element instanceof HTMLElement) return true;
+  const constructor = element.ownerDocument.defaultView?.HTMLElement;
+  return !!constructor && element instanceof constructor;
 }
 
 /** Compares two values using Object.is so cleanup diffs match JavaScript identity semantics. */
@@ -168,19 +172,23 @@ export function splitNamespaceAttributeKey(key: string): [string, string] {
   return [namespace, name];
 }
 
-/** Creates a stable map key for an event name plus capture phase. */
-export function eventKey(name: string, capture: boolean): string {
-  return `${name}\u0000${capture ? 'capture' : 'bubble'}`;
-}
-
-/** Reads the capture flag from native event listener options. */
-export function eventCapture(options: EventOptions): boolean {
-  if (typeof options === 'boolean') {
-    return options;
-  }
-
-  return Boolean(options?.capture);
-}
-
 /** No-op cleanup used when a prop path has nothing to restore. */
 export function noop(): void {}
+
+/** Reads nested class getters during computation so stable objects remain reactive. */
+function snapshotClass(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(snapshotClass);
+  return isRecord(value) ? { ...value } : value;
+}
+
+/** Solid 2 boolean attributes use presence/absence, including XML attributes. */
+export function toAttributeValue(value: unknown): AttributeValue {
+  return value == null || value === false ? null : value === true ? '' : String(value);
+}
+
+/** Snapshots the inherited enumerable declarations consumed by client.ts's style loop. */
+function snapshotStyle(value: AnyRecord): AnyRecord {
+  const snapshot: AnyRecord = Object.create(null);
+  for (const key in value) snapshot[key] = value[key];
+  return snapshot;
+}

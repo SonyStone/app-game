@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [solid()],
   test: {
     environment: 'happy-dom',
-    include: ['src/index.test.tsx'],
+    include: ['src/*.test.tsx'],
     deps: {
       inline: [/solid-js/]
     }
