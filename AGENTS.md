@@ -2,7 +2,7 @@
 
 ### Solid Primitives reuse and design
 
-When implementing features, fixing bugs, or refactoring code, read `~/.codex/skills/solid-primitives/SKILL.md`.
+When implementing features, fixing bugs, or refactoring SolidJS code, read `~/.codex/skills/solid-primitives/SKILL.md`.
 
 ### Newspaper code structure preference
 
