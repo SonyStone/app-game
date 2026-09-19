@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { defaultCamera } from '../camera';
-import { createViewDamage } from './viewDamage';
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { createViewDamage } from '@app-game/paint-core/gpu/viewDamage';
 
 const size = { width: 1024, height: 1024 };
 const camera = defaultCamera();

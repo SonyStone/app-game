@@ -1,5 +1,5 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
-import type { Result } from '../asyncResult';
+import type { Result } from '@app-game/paint-core/asyncResult';
 import type { BrushLibrary } from './decodeAbrLibrary';
 import Worker from './importAbr.worker?worker';
 

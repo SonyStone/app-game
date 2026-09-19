@@ -1,9 +1,9 @@
-import { createDocument } from '../document';
-import { createPaintRenderer } from '../gpu/renderer';
-import { studioProcessors } from '../strokeProcessors';
-import { createTileStore } from '../tileStore';
-import { abrBrush } from './abrBrushEngine';
-import { createAbrProcessor } from './abrStrokeProcessor';
+import { createDocument } from '@app-game/paint-core/document';
+import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { studioProcessors } from '@app-game/paint-core/strokeProcessors';
+import { createTileStore } from '@app-game/paint-core/tileStore';
+import { abrBrush } from '@app-game/paint-core/composition/abrBrushEngine';
+import { createAbrProcessor } from '@app-game/paint-core/composition/abrStrokeProcessor';
 import { createBrushResources } from '@app-game/abr-paint/resources';
 import {
   BrushEngines,
@@ -15,9 +15,9 @@ import {
   Storage,
   StrokeProcessor,
   type RuntimeBinding
-} from './PaintApplication';
-import { roundBrush } from './roundBrushEngine';
-import { texturedBrush } from './texturedBrushEngine';
+} from '@app-game/paint-core/composition/PaintApplication';
+import { roundBrush } from '@app-game/paint-core/composition/roundBrushEngine';
+import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
 
 /** The Studio recipe is shared by Vite's worker bundle and the local lazy-loaded endpoint. */
 export function StudioApplication(props: RuntimeBinding) {

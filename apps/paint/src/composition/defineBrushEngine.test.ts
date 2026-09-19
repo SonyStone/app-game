@@ -1,12 +1,12 @@
 import { expect, expectTypeOf, it, vi } from 'vitest';
 import { z } from 'zod';
-import { defaultBrush } from '../brush';
-import { createDocument } from '../document';
-import { createRawProcessor } from '../strokeProcessors';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { createDocument } from '@app-game/paint-core/document';
+import { createRawProcessor } from '@app-game/paint-core/strokeProcessors';
 import { createBrushResources } from '@app-game/abr-paint/resources';
-import type { BrushEngine, PaintRenderer } from './contracts';
-import { defineBrushEngine } from './defineBrushEngine';
-import { roundBrush } from './roundBrushEngine';
+import type { BrushEngine, PaintRenderer } from '@app-game/paint-core/composition/contracts';
+import { defineBrushEngine } from '@app-game/paint-core/composition/defineBrushEngine';
+import { roundBrush } from '@app-game/paint-core/composition/roundBrushEngine';
 
 it('infers settings and snapshots them on selection and on stroke creation', () => {
   const schema = z.object({ tipId: z.string(), dynamics: z.object({ jitter: z.number().finite() }) });

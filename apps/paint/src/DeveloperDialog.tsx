@@ -1,6 +1,6 @@
 import { onSettled } from 'solid-js';
 import type { PaintSession } from './createPaintSession';
-import { supportsRawPointerUpdates } from './input';
+import { supportsRawPointerUpdates } from '@app-game/paint-core/input';
 import { SketchIcon } from './SketchIcon';
 import styles from './DeveloperDialog.module.css';
 

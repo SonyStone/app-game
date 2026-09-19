@@ -1,11 +1,11 @@
-import { defaultBrush } from './brush';
-import { defaultCamera } from './camera';
-import { createDocument } from './document';
-import { createPaintRenderer } from './gpu/renderer';
-import { readPaintFile, writePaintFile } from './paintFile';
-import { snapshotDocument } from './storage';
-import { packTile, unpackTile } from './tilePixels';
-import { createTileStore } from './tileStore';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { readPaintFile, writePaintFile } from '@app-game/paint-core/paintFile';
+import { snapshotDocument } from '@app-game/paint-core/storage';
+import { packTile, unpackTile } from '@app-game/paint-core/tilePixels';
+import { createTileStore } from '@app-game/paint-core/tileStore';
 
 /** Real IndexedDB and WebGPU checks, isolated from the user's drawing. */
 export async function verifyStreaming(report: (message: string) => void) {

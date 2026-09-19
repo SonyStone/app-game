@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { visibleTileKeys } from './visibleTileKeys';
+import { visibleTileKeys } from '@app-game/paint-core/gpu/visibleTileKeys';
 
 const pixels = new Uint8Array(0);
 describe('bounded redraw tile selection', () => {

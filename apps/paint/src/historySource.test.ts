@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { createDocument } from './document';
-import type { TileData } from './tilePixels';
+import { createDocument } from '@app-game/paint-core/document';
+import type { TileData } from '@app-game/paint-core/tilePixels';
 
 it('selects past and redo states without mutating current layers, pixels or undo position', () => {
   const doc = createDocument();

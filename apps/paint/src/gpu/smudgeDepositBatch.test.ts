@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { dabTiles, type Dab } from '../brush';
+import { dabTiles, type Dab } from '@app-game/paint-core/brush';
 import { planSmudgeDeposits } from '@app-game/abr-paint/gpu/smudgeDepositBatch';
 import { directStampBounds } from '@app-game/abr-paint/gpu/stampBounds';
 

@@ -1,20 +1,20 @@
 import { record } from '@app-game/abr-brush/form';
-import type { Brush as AbrBrush } from '@app-game/abr-parser/reader';
-import { createSignal, createTrackedEffect, untrack } from 'solid-js';
-import { attempt } from './asyncResult';
-import { defaultBrush, type Brush } from './brush';
-import { createBrushLibrary } from './brushLibrary/createBrushLibrary';
-import { defaultCamera, transformAt, type Camera, type Point } from './camera';
+import type { BrushAsset as AbrBrush } from '@app-game/abr-brush/library';
 import type { AbrBrushCommand } from '@app-game/abr-paint/commands';
+import { attempt } from '@app-game/paint-core/asyncResult';
+import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
+import { defaultCamera, transformAt, type Camera, type Point } from '@app-game/paint-core/camera';
+import { createDocument, type LayerAction } from '@app-game/paint-core/document';
+import { attachInput, editable } from '@app-game/paint-core/input';
+import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
+import { defaultPaintSymmetry, paintSymmetrySchema, type PaintSymmetry } from '@app-game/paint-core/symmetry';
+import { createSignal, createTrackedEffect, untrack } from 'solid-js';
+import { createBrushLibrary } from './brushLibrary/createBrushLibrary';
 import { createBrushCommands } from './composition/createBrushCommands';
 import { createSelection } from './createSelection';
-import { createDocument, type LayerAction } from './document';
-import { attachInput, editable } from './input';
 import { createMainThreadEndpoint, type PaintEndpoint } from './mainThreadEndpoint';
 import Worker from './paint.worker?worker';
 import { createPaintNavigation } from './paintNavigation';
-import type { PaintCommand, PaintEvent } from './protocol';
-import { defaultPaintSymmetry, paintSymmetrySchema, type PaintSymmetry } from './symmetry';
 
 /** Scopes the selected engine transport, input and UI state to one editor mount. */
 export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; stage: () => HTMLDivElement }) {

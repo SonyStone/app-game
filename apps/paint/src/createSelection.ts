@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
-import type { Point } from './camera';
-import type { PaintCommand, PaintEvent, SelectionAction } from './protocol';
-import { pointInSelection, translateSelection } from './selection';
+import type { Point } from '@app-game/paint-core/camera';
+import type { PaintCommand, PaintEvent, SelectionAction } from '@app-game/paint-core/protocol';
+import { pointInSelection, translateSelection } from '@app-game/paint-core/selection';
 
 /** Owns transient lasso geometry and serializes pixel edits through the worker.
  * Dragging inside the polygon moves it; dragging outside replaces it. Pixels commit on release.

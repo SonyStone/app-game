@@ -1,6 +1,7 @@
 import { brushToFormValues } from '@app-game/abr-brush/form';
+import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import { createAbrStrokeSampler, dualPreviewInput, stampStride, type PreviewPoint } from '@app-game/abr-brush/stroke';
-import { AbrParser } from '@app-game/abr-parser/browser';
+import { initAbr } from '@app-game/abr-parser';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 
@@ -65,6 +66,10 @@ it.each([false, true])('scatter respects count and the stroke axes (both axes: %
   if (bothAxes) expect(largestAlong).toBeGreaterThan(24);
   else expect(largestAlong).toBeLessThan(0.0001);
 });
+
+await initAbr(
+  readFileSync(new URL('../../../../packages/abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url))
+);
 
 it('Wet Blender scatter stays deterministic across input batches and disposable previews', () => {
   const { values, tip } = wetBlender();
@@ -319,12 +324,12 @@ it.each(['PbTl', 'PcTl', 'SmTl', 'BlTl', 'ShTl'] as const)(
 );
 
 function wetBlender() {
-  const file = new AbrParser().parse(
+  const file = loadBrushLibrary(
     readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url))
   );
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Paintbox - Wet Blender");
-  if (!brush?.brushTip) throw new Error('The bundled Wet Blender preset or its sampled tip is missing.');
-  return { values: brushToFormValues(brush), tip: brush.brushTip };
+  if (!brush?.tipImage) throw new Error('The bundled Wet Blender preset or its sampled tip is missing.');
+  return { values: brushToFormValues(brush), tip: brush.tipImage };
 }
 
 function point(x: number, y: number, pressure = 1): PreviewPoint {

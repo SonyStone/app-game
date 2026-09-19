@@ -1,9 +1,9 @@
-import { unpackTile } from './tilePixels';
+import { unpackTile } from '@app-game/paint-core/tilePixels';
 import { describe, expect, it } from 'vitest';
-import { createStrokeSampler, dabTiles, defaultBrush, TILE_SIZE, type Sample } from './brush';
-import { defaultCamera, panCamera, screenToWorld, transformAt, worldToScreen } from './camera';
-import { createDocument, TILE_BYTES } from './document';
-import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from './storage';
+import { createStrokeSampler, dabTiles, defaultBrush, TILE_SIZE, type Sample } from '@app-game/paint-core/brush';
+import { defaultCamera, panCamera, screenToWorld, transformAt, worldToScreen } from '@app-game/paint-core/camera';
+import { createDocument, TILE_BYTES } from '@app-game/paint-core/document';
+import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from '@app-game/paint-core/storage';
 
 describe('stroke sampling', () => {
   it('produces identical stamps across different event/frame batch sizes', () => {

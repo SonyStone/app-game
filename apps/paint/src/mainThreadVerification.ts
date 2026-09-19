@@ -1,17 +1,19 @@
-import { defaultBrush, type Brush } from './brush';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
+import { degrees, initAbr, percent, pixels } from '@app-game/abr-parser';
+import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
+import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
+import { readPaintFile } from '@app-game/paint-core/paintFile';
+import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/protocol';
+import { unpackTile } from '@app-game/paint-core/tilePixels';
 import { verifyBrushResourceTransport } from './composition/resourceVerification';
-import { texturedBrush } from './composition/texturedBrushEngine';
 import { verifyEraserPersistence } from './eraserPersistenceVerification';
 import { createMainThreadEndpoint, type PaintEndpoint } from './mainThreadEndpoint';
 import Worker from './paint.worker?worker';
-import { readPaintFile } from './paintFile';
-import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { verifySymmetryPersistence } from './symmetryPersistenceVerification';
-import { unpackTile } from './tilePixels';
 
 /** Verifies real DOM-canvas rendering and document exchange between both execution modes in an isolated database. */
 export async function verifyMainThread(report: (message: string) => void) {
+  await initAbr();
   const storageName = `paint-main-qa-${crypto.randomUUID()}`;
   let endpoint: PaintEndpoint = createMainThreadEndpoint();
   const waiters = new Set<(event: PaintEvent) => void>();
@@ -91,11 +93,14 @@ export async function verifyMainThread(report: (message: string) => void) {
     const preset = prepareAbrBrush({
       id: 'mixer-transport',
       name: 'Mixer transport',
-      type: 'computed',
-      diameter: 32,
-      hardness: 100,
-      spacing: 12.5,
-      settings: { toolOptions: { __classId: 'MixB', wetness: 50, dryness: 100, mix: 40, flow: 75, autoFill: true } }
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{ toolOptions: { kind: 'MixB', wetness: 50, dryness: 100, mix: 40, flow: 75, autoFill: true } },
+        tip: { kind: 'computed', diameter: pixels(32), spacing: percent(12.5), hardness: percent(100) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     });
     for (const resource of preset.resources) {
       const uploaded = await command(
@@ -158,11 +163,14 @@ export async function verifyMainThread(report: (message: string) => void) {
       const preset = prepareAbrBrush({
         id: `filter-transport-${type}`,
         name: `Filter transport ${type}`,
-        type: 'computed',
-        diameter: 64,
-        hardness: 100,
-        spacing: 25,
-        settings: { toolOptions: { __classId: type, 'Prs ': 100, detailBoost: false } }
+        preset: {
+          kind: 'brush',
+          sourceId: 'fixture',
+          ...{ toolOptions: { kind: type, strength: 100, detailBoost: false } },
+          tip: { kind: 'computed', diameter: pixels(64), spacing: percent(25), hardness: percent(100) }
+        },
+        resources: [],
+        source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
       });
       for (const resource of preset.resources) {
         const response = await command(
@@ -207,11 +215,14 @@ export async function verifyMainThread(report: (message: string) => void) {
     const preset = prepareAbrBrush({
       id: 'pencil-runtime',
       name: 'Pencil runtime',
-      type: 'computed',
-      diameter: 16,
-      hardness: 0,
-      spacing: 10,
-      settings: { toolOptions: { __classId: 'PcTl', PncA: true } }
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{ toolOptions: { kind: 'PcTl', autoErase: true } },
+        tip: { kind: 'computed', diameter: pixels(16), spacing: percent(10), hardness: percent(0) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     });
     for (const resource of preset.resources) {
       const response = await command(
@@ -249,11 +260,14 @@ export async function verifyMainThread(report: (message: string) => void) {
     const eraser = prepareAbrBrush({
       id: 'eraser-pencil-runtime',
       name: 'Pencil eraser runtime',
-      type: 'computed',
-      diameter: 16,
-      hardness: 0,
-      spacing: 10,
-      settings: { toolOptions: { __classId: 'ErTl', ErsB: 2, Opct: 25, flow: 1 } }
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{ toolOptions: { kind: 'ErTl', eraserMode: 2, opacity: 25, flow: 1 } },
+        tip: { kind: 'computed', diameter: pixels(16), spacing: percent(10), hardness: percent(0) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     });
     for (const resource of eraser.resources) {
       const response = await command(
@@ -344,28 +358,31 @@ export async function verifyMainThread(report: (message: string) => void) {
     const preset = prepareAbrBrush({
       id: `${model}-runtime`,
       name: `${model} runtime`,
-      type: 'computed',
-      diameter: 16,
-      hardness: 100,
-      spacing: 10,
-      settings: {
-        toolOptions: {
-          __classId: 'PcTl',
-          PncA: true,
-          FrgC:
-            model === 'Gray'
-              ? { __classId: 'Grsc', 'Gry ': 50 }
-              : model === 'Lab'
-                ? { __classId: 'LbCl', Lmnc: 50, 'A   ': 0, 'B   ': 0 }
-                : { __classId: 'HSBC', 'H   ': { unit: '#Ang', value: 30 }, Strt: 100, Brgh: 100 },
-          BckC:
-            model === 'Gray'
-              ? { __classId: 'Grsc', 'Gry ': 25 }
-              : model === 'Lab'
-                ? { __classId: 'LbCl', Lmnc: 75, 'A   ': 0, 'B   ': 0 }
-                : { __classId: 'HSBC', 'H   ': { unit: '#Ang', value: 240 }, Strt: 100, Brgh: 100 }
-        }
-      }
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{
+          toolOptions: {
+            kind: 'PcTl',
+            autoErase: true,
+            foregroundColor:
+              model === 'Gray'
+                ? { kind: 'Grsc', gray: 50 }
+                : model === 'Lab'
+                  ? { kind: 'LbCl', lightness: 50, a: 0, b: 0 }
+                  : { kind: 'HSBC', hue: degrees(30), saturation: 100, brightness: 100 },
+            backgroundColor:
+              model === 'Gray'
+                ? { kind: 'Grsc', gray: 25 }
+                : model === 'Lab'
+                  ? { kind: 'LbCl', lightness: 75, a: 0, b: 0 }
+                  : { kind: 'HSBC', hue: degrees(240), saturation: 100, brightness: 100 }
+          }
+        },
+        tip: { kind: 'computed', diameter: pixels(16), spacing: percent(10), hardness: percent(100) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     });
     for (const resource of preset.resources) {
       const response = await command(
@@ -418,11 +435,14 @@ export async function verifyMainThread(report: (message: string) => void) {
     const preset = prepareAbrBrush({
       id: 'pressure-override-runtime',
       name: 'Pressure override runtime',
-      type: 'computed',
-      diameter: 16,
-      hardness: 100,
-      spacing: 10,
-      settings: {}
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{},
+        tip: { kind: 'computed', diameter: pixels(16), spacing: percent(10), hardness: percent(100) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     });
     for (const resource of preset.resources) {
       const response = await command(
@@ -466,11 +486,14 @@ export async function verifyMainThread(report: (message: string) => void) {
     const preset = prepareAbrBrush({
       id: 'airbrush-runtime',
       name: 'Airbrush runtime',
-      type: 'computed',
-      diameter: 16,
-      hardness: 100,
-      spacing: 10,
-      settings: { toolOptions: { __classId: 'PbTl', 'Rpt ': true, flow: 5, Opct: 50 } }
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{ toolOptions: { kind: 'PbTl', buildUpEnabled: true, flow: 5, opacity: 50 } },
+        tip: { kind: 'computed', diameter: pixels(16), spacing: percent(10), hardness: percent(100) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     });
     for (const resource of preset.resources) {
       const response = await command(
@@ -531,13 +554,14 @@ export async function verifyMainThread(report: (message: string) => void) {
     const preset = prepareAbrBrush({
       id: 'smoothing-runtime',
       name: 'Smoothing runtime',
-      type: 'computed',
-      diameter: 4,
-      hardness: 100,
-      spacing: 10,
-      settings: {
-        toolOptions: { __classId: 'PbTl', smoothing: true, smoothingValue: 100, smoothingCatchupAtEnd: false }
-      }
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{ toolOptions: { kind: 'PbTl', smoothing: true, smoothingValue: 100, smoothingCatchupAtEnd: false } },
+        tip: { kind: 'computed', diameter: pixels(4), spacing: percent(10), hardness: percent(100) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     });
     for (const resource of preset.resources) {
       const response = await command(
@@ -594,11 +618,14 @@ export async function verifyMainThread(report: (message: string) => void) {
     const preset = prepareAbrBrush({
       id: 'restore-runtime',
       name: 'Restore',
-      type: 'computed',
-      diameter: 32,
-      hardness: 100,
-      spacing: 10,
-      settings: { toolOptions: { __classId: 'ErTl', ErsB: 2, Opct: 100 } }
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{ toolOptions: { kind: 'ErTl', eraserMode: 2, opacity: 100 } },
+        tip: { kind: 'computed', diameter: pixels(32), spacing: percent(10), hardness: percent(100) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     });
     for (const resource of preset.resources) {
       const result = await command(

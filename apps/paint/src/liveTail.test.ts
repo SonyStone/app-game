@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { defaultBrush, type Sample } from './brush';
+import { defaultBrush, type Sample } from '@app-game/paint-core/brush';
 import { createSmoothStroke } from './smoothStroke';
 
 it.each(['none', 'studio', 'normal', 'smooth'] as const)(

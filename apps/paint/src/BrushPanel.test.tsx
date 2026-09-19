@@ -1,7 +1,7 @@
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { expect, it } from 'vitest';
-import { defaultBrush } from './brush';
+import { defaultBrush } from '@app-game/paint-core/brush';
 import { BrushPanel } from './BrushPanel';
 
 it('selects raw input without Leonardo controls and retains stabilization settings when switching back', () => {

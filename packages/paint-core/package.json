@@ -1,0 +1,35 @@
+{
+  "name": "@app-game/paint-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/composition/index.ts",
+    "./*": "./src/*.ts",
+    "./composition/CanvasTarget": "./src/composition/CanvasTarget.tsx",
+    "./composition/PaintApplication": "./src/composition/PaintApplication.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@app-game/abr-paint": "workspace:*",
+    "@app-game/abr-brush": "workspace:*",
+    "@solid-primitives/timer": "catalog:",
+    "solid-js": "catalog:",
+    "@solidjs/web": "2.0.0-rc.4",
+    "typegpu": "^0.11.4",
+    "zod": "^4.4.3",
+    "@app-game/navigation-puck": "workspace:*"
+  },
+  "devDependencies": {
+    "@webgpu/types": "^0.1.70",
+    "@types/node": "25.8.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "unplugin-typegpu": "^0.11.3"
+  }
+}

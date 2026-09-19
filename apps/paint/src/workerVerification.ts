@@ -1,11 +1,11 @@
-import { defaultBrush } from './brush';
-import { defaultCamera } from './camera';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { defaultCamera } from '@app-game/paint-core/camera';
 import { verifyBrushResourceTransport } from './composition/resourceVerification';
-import { texturedBrush } from './composition/texturedBrushEngine';
+import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
 import Worker from './paint.worker?worker';
-import { readPaintFile } from './paintFile';
-import type { PaintCommand, PaintEvent } from './protocol';
-import { unpackTile } from './tilePixels';
+import { readPaintFile } from '@app-game/paint-core/paintFile';
+import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
+import { unpackTile } from '@app-game/paint-core/tilePixels';
 
 /** Exercises the production worker protocol and IndexedDB using a unique disposable database. */
 export async function verifyWorker(report: (message: string) => void) {

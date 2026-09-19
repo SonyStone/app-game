@@ -1,22 +1,21 @@
-import { AbrParser } from '@app-game/abr-parser/reader';
 import type { BrushResource } from '@app-game/abr-paint/resources';
-import type { BrushEngineSelection } from '../composition/defineBrushEngine';
+import { initAbr, readLibrary } from '@app-game/abr-parser';
+import type { BrushEngineSelection } from '@app-game/paint-core/composition/defineBrushEngine';
 
 /** Imports sampled grayscale tips only. Preset dynamics are deliberately not interpreted as Studio controls. */
-export function decodeAbrLibrary(buffer: ArrayBuffer, name: string): BrushLibrary {
+export async function decodeAbrLibrary(buffer: ArrayBuffer, name: string): Promise<BrushLibrary> {
   if (buffer.byteLength > MAX_ABR_BYTES) throw new Error('Choose an ABR file smaller than 32 MiB.');
-  const parsed = new AbrParser({
-    extractImages: true,
-    includeRawSettings: false,
-    maxDecodedBytes: 64 * 1024 * 1024
-  }).parse(buffer);
+  await initAbr();
+  const parsed = readLibrary(buffer, 64 * 1024 * 1024);
+  const images = new Map(parsed.images.map((item) => [`${item.section}/${item.index}`, item.image]));
   const libraryId = crypto.randomUUID();
   const tips: BrushResource[] = [];
   const brushes: BrushLibrary['brushes'] = [];
   const seen = new Map<Uint8Array, string>();
   let skipped = 0;
-  for (const brush of parsed.brushes) {
-    const tip = brush.brushTip;
+  for (const [index, brush] of parsed.document.brushes.entries()) {
+    const resource = parsed.selections[index]?.sample;
+    const tip = resource ? images.get(`${resource.section}/${resource.index}`) : undefined;
     if (
       !tip ||
       tip.width > 8192 ||
@@ -33,7 +32,7 @@ export function decodeAbrLibrary(buffer: ArrayBuffer, name: string): BrushLibrar
       seen.set(tip.data, tipId);
       tips.push({ id: tipId, width: tip.width, height: tip.height, format: 'r8unorm', pixels: tip.data });
     }
-    brushes.push({ id: `${libraryId}:brush:${brushes.length}`, name: brush.name, tipId });
+    brushes.push({ id: `${libraryId}:brush:${brushes.length}`, name: brush.name ?? 'Unnamed brush', tipId });
   }
   if (!brushes.length) throw new Error(parsed.errors[0] ?? 'This ABR has no supported sampled brush tips.');
   return { name, brushes, tips, skipped, notices: parsed.errors.length };

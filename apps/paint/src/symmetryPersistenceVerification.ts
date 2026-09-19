@@ -1,10 +1,10 @@
-import { unwrapResult } from './asyncResult';
-import { defaultBrush } from './brush';
-import { readPaintFile, writePaintFile } from './paintFile';
-import { snapshotDocument } from './storage';
-import { defaultPaintSymmetry, type PaintSymmetry } from './symmetry';
-import { unpackTile } from './tilePixels';
-import { createTileStore } from './tileStore';
+import { unwrapResult } from '@app-game/paint-core/asyncResult';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { readPaintFile, writePaintFile } from '@app-game/paint-core/paintFile';
+import { snapshotDocument } from '@app-game/paint-core/storage';
+import { defaultPaintSymmetry, type PaintSymmetry } from '@app-game/paint-core/symmetry';
+import { unpackTile } from '@app-game/paint-core/tilePixels';
+import { createTileStore } from '@app-game/paint-core/tileStore';
 import { openVerificationEndpoint } from './verificationEndpoint';
 
 /** Actual main/worker transports: guide state, mirrored ink, idle autosave, file import and renderer handoff. */

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { pageCrop, pageFallback } from './pageFallback';
-import { MAX_LEVEL } from '../virtualPages';
+import { pageCrop, pageFallback } from '@app-game/paint-core/gpu/pageFallback';
+import { MAX_LEVEL } from '@app-game/paint-core/virtualPages';
 const page = (level: number, x: number, y: number, layerId = 'paint') => ({ page: { level, x, y, layerId } });
 
 it('keeps previously visible fine pages during zoom-out without painting missing areas', () => {

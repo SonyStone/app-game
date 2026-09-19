@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { defaultCamera } from './camera';
-import { createDocument } from './document';
-import { readPaintFile, writePaintFile } from './paintFile';
-import { encodeDocument, snapshotDocument } from './storage';
-import { packTile, unpackTile } from './tilePixels';
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import { readPaintFile, writePaintFile } from '@app-game/paint-core/paintFile';
+import { encodeDocument, snapshotDocument } from '@app-game/paint-core/storage';
+import { packTile, unpackTile } from '@app-game/paint-core/tilePixels';
 
 describe('portable paged drawings', () => {
   const fixture = () => {

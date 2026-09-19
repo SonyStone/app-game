@@ -1,10 +1,10 @@
-import { defaultBrush } from './brush';
-import { defaultCamera } from './camera';
-import { createDocument } from './document';
-import { createPaintRenderer } from './gpu/renderer';
-import { snapshotDocument } from './storage';
-import { createTileStore } from './tileStore';
-import { createVirtualPages } from './virtualPages';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { snapshotDocument } from '@app-game/paint-core/storage';
+import { createTileStore } from '@app-game/paint-core/tileStore';
+import { createVirtualPages } from '@app-game/paint-core/virtualPages';
 
 /** Real database reopen and close-zoom painting checks. A tiny RAM budget forces reads from disk. */
 export async function verifyPersistentOverview(report: (message: string) => void) {

@@ -1,16 +1,16 @@
 import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { defaultBrush } from '../brush';
-import { defaultCamera } from '../camera';
-import { createDocument } from '../document';
-import type { PaintEvent } from '../protocol';
-import { createRawProcessor } from '../strokeProcessors';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import type { PaintEvent } from '@app-game/paint-core/protocol';
+import { createRawProcessor } from '@app-game/paint-core/strokeProcessors';
 import { createBrushResources } from '@app-game/abr-paint/resources';
-import { CanvasTarget } from './CanvasTarget';
-import type { BrushEngine, PaintRenderer } from './contracts';
-import { defineBrushEngine } from './defineBrushEngine';
-import { createMemoryStorage } from './memoryStorage';
+import { CanvasTarget } from '@app-game/paint-core/composition/CanvasTarget';
+import type { BrushEngine, PaintRenderer } from '@app-game/paint-core/composition/contracts';
+import { defineBrushEngine } from '@app-game/paint-core/composition/defineBrushEngine';
+import { createMemoryStorage } from '@app-game/paint-core/composition/memoryStorage';
 import {
   BrushEngines,
   BrushResources,
@@ -21,7 +21,7 @@ import {
   Storage,
   StrokeProcessor,
   type RuntimeBinding
-} from './PaintApplication';
+} from '@app-game/paint-core/composition/PaintApplication';
 
 const cleanup: (() => void)[] = [];
 afterEach(async () => {

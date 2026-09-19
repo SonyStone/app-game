@@ -1,6 +1,6 @@
-import { attempt } from './asyncResult';
+import { attempt } from '@app-game/paint-core/asyncResult';
 import type { createStudioRuntime } from './composition/StudioApplication';
-import type { PaintEvent, PaintRuntimeCommand } from './protocol';
+import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/protocol';
 
 /** Transport surface shared with Worker; a DOM canvas is accepted only by the local endpoint. */
 export type PaintEndpoint = {

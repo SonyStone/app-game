@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { createBrushResources } from '@app-game/abr-paint/resources';
-import type { BrushSession } from './contracts';
-import { createResourceSession } from './resourceSession';
+import type { BrushSession } from '@app-game/paint-core/composition/contracts';
+import { createResourceSession } from '@app-game/paint-core/composition/resourceSession';
 
 it('releases resources when engine creation fails partway through resolving dependencies', () => {
   const cache = createBrushResources();

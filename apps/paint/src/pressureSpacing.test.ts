@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { createStrokeSampler, defaultBrush, type Sample } from './brush';
+import { createStrokeSampler, defaultBrush, type Sample } from '@app-game/paint-core/brush';
 
 it.each([32, 128, 512])('keeps low-pressure stamps overlapping for a %i px stylus brush', (size) => {
   const brush = { ...defaultBrush(), size };

@@ -1,12 +1,12 @@
 import { dualCoverage, textureCoverage, textureTone } from '@app-game/abr-brush/effects';
 import { d, tgpu } from 'typegpu';
 import { describe, expect, it } from 'vitest';
-import { lassoEdge, lassoFill, lassoVertex } from './lassoOverlay';
-import * as shaders from './shaders';
-import { texturedStampFragment } from './texturedStamps';
-import { fallbackFragment } from './viewFallback';
+import { lassoEdge, lassoFill, lassoVertex } from '@app-game/paint-core/gpu/lassoOverlay';
+import * as shaders from '@app-game/paint-core/gpu/shaders';
+import { texturedStampFragment } from '@app-game/paint-core/gpu/texturedStamps';
+import { fallbackFragment } from '@app-game/paint-core/gpu/viewFallback';
 import { accumulatePaintbrushMaskByte } from '../../../../packages/abr-brush/src/maskAccumulation';
-import { fragment, vertex } from './virtualTexture';
+import { fragment, vertex } from '@app-game/paint-core/gpu/virtualTexture';
 import { paintbrushMaskKernel } from '../../../../packages/abr-brush/src/maskAccumulationGpu';
 import { compositeFragment as previewComposite } from '../../../abr-viewer/src/features/brush-preview/shaders';
 

@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { flush } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { defaultBrush } from './brush';
-import { defaultCamera, screenToWorld } from './camera';
-import { attachInput } from './input';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { defaultCamera, screenToWorld } from '@app-game/paint-core/camera';
+import { attachInput } from '@app-game/paint-core/input';
 import { createPaintNavigation as createNavigationPuck } from './paintNavigation';
-import type { PaintCommand } from './protocol';
+import type { PaintCommand } from '@app-game/paint-core/protocol';
 
 const disposals: (() => void)[] = [];
 afterEach(() => {

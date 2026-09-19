@@ -1,17 +1,19 @@
-import { unwrapResult } from './asyncResult';
-import { defaultBrush, type Brush, type Sample } from './brush';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
-import { defaultCamera } from './camera';
-import { createDocument } from './document';
-import { readPaintFile, writePaintFile } from './paintFile';
-import type { PaintEvent } from './protocol';
-import { snapshotDocument } from './storage';
-import { packTile, unpackTile } from './tilePixels';
-import { createTileStore } from './tileStore';
+import { initAbr, percent, pixels } from '@app-game/abr-parser';
+import { unwrapResult } from '@app-game/paint-core/asyncResult';
+import { defaultBrush, type Brush, type Sample } from '@app-game/paint-core/brush';
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import { readPaintFile, writePaintFile } from '@app-game/paint-core/paintFile';
+import type { PaintEvent } from '@app-game/paint-core/protocol';
+import { snapshotDocument } from '@app-game/paint-core/storage';
+import { packTile, unpackTile } from '@app-game/paint-core/tilePixels';
+import { createTileStore } from '@app-game/paint-core/tileStore';
 import { openVerificationEndpoint } from './verificationEndpoint';
 
 /** Real endpoint checks: autosave must publish exact eraser pixels before shutdown can save anything. */
 export async function verifyEraserPersistence(report: (message: string) => void) {
+  await initAbr();
   const fixture = await coloredTiles();
   for (const main of [true, false]) {
     const name = `paint-eraser-persistence-${crypto.randomUUID()}`;
@@ -26,11 +28,14 @@ export async function verifyEraserPersistence(report: (message: string) => void)
         const preset = prepareAbrBrush({
           id: `eraser-persistence-${mode}`,
           name: 'Eraser persistence',
-          type: 'computed',
-          diameter: 48,
-          hardness: 100,
-          spacing: 10,
-          settings: { toolOptions: { __classId: 'ErTl', ErsB: mode, MgcE: false, Opct: 60, flow: 25 } }
+          preset: {
+            kind: 'brush',
+            sourceId: 'fixture',
+            ...{ toolOptions: { kind: 'ErTl', eraserMode: mode, eraseToHistory: false, opacity: 60, flow: 25 } },
+            tip: { kind: 'computed', diameter: pixels(48), spacing: percent(10), hardness: percent(100) }
+          },
+          resources: [],
+          source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
         });
         const brush: Brush = {
           ...defaultBrush(),

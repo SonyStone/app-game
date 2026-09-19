@@ -45,30 +45,31 @@
     <button id="navigation">Measure navigation</button>
     <pre id="output">Ready</pre>
     <script type="module">
-      import { verifySmudgePerformance } from '../paint/src/gpu/smudgePerformanceVerification';
-      import { verifyAbrColorMixing } from '../paint/src/gpu/abrColorMixingVerification';
-      import { verifyAbrBrush } from '../paint/src/gpu/abrBrushVerification';
-      import { AbrParser } from '../../packages/abr-parser/src/abr-parser';
+      import { verifySmudgePerformance } from '../paint/tests/gpu/smudgePerformanceVerification';
+      import { verifyAbrColorMixing } from '../paint/tests/gpu/abrColorMixingVerification';
+      import { verifyAbrBrush } from '../paint/tests/gpu/abrBrushVerification';
+      import {initAbr} from '@app-game/abr-parser';
+      import {loadBrushLibrary} from '@app-game/abr-brush/library';
       import abrExampleUrl from '../abr-viewer/src/assets/examples/spatter_brushes.abr?url';
-      import { verifyTexturedBrush } from '@app-game/paint/studio/gpu/texturedBrushVerification';
+      import { verifyTexturedBrush } from '@app-game/paint/tests/gpu/texturedBrushVerification';
       import { verifySelection } from '@app-game/paint/studio/selectionVerification';
-      import { verifyPressureSpacing } from '@app-game/paint/studio/gpu/pressureVerification';
-      import { verifyStrokeFiltering } from '@app-game/paint/studio/gpu/strokeFilteringVerification';
-      import { verifyLiveTail } from '@app-game/paint/studio/gpu/liveTailVerification';
-      import { verifyReadbackQueue } from '@app-game/paint/studio/gpu/readbackVerification';
-      import { verifyBrushBatches } from '@app-game/paint/studio/gpu/brushBatchVerification';
-      import { verifyActivePreview } from '@app-game/paint/studio/gpu/activePreviewVerification';
-      import { verifyRefinement } from '@app-game/paint/studio/gpu/refinementVerification';
-      import { verifyOverviewQuality } from '@app-game/paint/studio/gpu/overviewQualityVerification';
-      import { verifyLargeBrush } from '@app-game/paint/studio/gpu/largeBrushVerification';
+      import { verifyPressureSpacing } from '@app-game/paint/tests/gpu/pressureVerification';
+      import { verifyStrokeFiltering } from '@app-game/paint/tests/gpu/strokeFilteringVerification';
+      import { verifyLiveTail } from '@app-game/paint/tests/gpu/liveTailVerification';
+      import { verifyReadbackQueue } from '@app-game/paint/tests/gpu/readbackVerification';
+      import { verifyBrushBatches } from '@app-game/paint/tests/gpu/brushBatchVerification';
+      import { verifyActivePreview } from '@app-game/paint/tests/gpu/activePreviewVerification';
+      import { verifyRefinement } from '@app-game/paint/tests/gpu/refinementVerification';
+      import { verifyOverviewQuality } from '@app-game/paint/tests/gpu/overviewQualityVerification';
+      import { verifyLargeBrush } from '@app-game/paint/tests/gpu/largeBrushVerification';
       import { verifyPersistentOverview } from '@app-game/paint/studio/persistentOverviewVerification';
       import { verifyColdNavigation } from '@app-game/paint/studio/navigationStreamingVerification';
       import { verifyStreaming } from '@app-game/paint/studio/streamingVerification';
-      import { verifyGpu } from '@app-game/paint/studio/gpu/verification';
+      import { verifyGpu } from '@app-game/paint/tests/gpu/verification';
       import { verifyCanvasTargets } from '@app-game/paint/studio/composition/targetVerification';
       import { verifyMainThread } from '@app-game/paint/studio/mainThreadVerification';
       import { verifyWorker } from '@app-game/paint/studio/workerVerification';
-      import { measurePainting, measureDensePainting, measureNavigation } from '@app-game/paint/studio/gpu/performance';
+      import { measurePainting, measureDensePainting, measureNavigation } from '@app-game/paint/tests/gpu/performance';
       const button = document.querySelector('#run'),
         output = document.querySelector('#output');
       document.querySelector('#textured-brush').onclick = async () => {
@@ -79,8 +80,9 @@
             async () => {
               const response = await fetch(abrExampleUrl);
               if (!response.ok) throw new Error('Could not load the repository ABR fixture.');
-              const abr = new AbrParser({ extractImages: true }).parse(await response.arrayBuffer());
-              const tip = abr.brushes.find((brush) => brush.brushTip?.data.some((value) => value > 0))?.brushTip;
+              await initAbr();
+              const abr = loadBrushLibrary(await response.arrayBuffer());
+              const tip = abr.brushes.find((brush) => brush.tipImage?.data.some((value) => value > 0))?.tipImage;
               if (!tip) throw new Error(`No decoded ABR tip: ${abr.errors.join('; ')}`);
               return { id: 'abr-fixture', width: tip.width, height: tip.height, format: 'r8unorm', pixels: tip.data };
             }
@@ -278,11 +280,11 @@
       document.querySelector('#wet-blender-performance').onclick = async () => {
         output.textContent = 'Loading original Wet Blender preset…\n';
         try {
-          const { AbrParser } = await import('../../packages/abr-parser/src/abr-parser');
           const { default: url } = await import('../abr-viewer/src/assets/examples/megapack.abr?url');
           const response = await fetch(url);
           if (!response.ok) throw Error('Could not load megapack.abr');
-          const file = new AbrParser().parse(await response.arrayBuffer());
+          await initAbr();
+          const file = loadBrushLibrary(await response.arrayBuffer());
           const preset = file.brushes.find((brush) => brush.name === "Kyle's Paintbox - Wet Blender");
           if (!preset) throw Error('Wet Blender missing');
           for (const size of [50, 512, 2048]) {

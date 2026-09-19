@@ -1,7 +1,7 @@
 import { For, Show } from 'solid-js';
 import type { PaintSession } from './createPaintSession';
 import styles from './SymmetryPanel.module.css';
-import { supportsPaintSymmetry, type PaintSymmetry } from './symmetry';
+import { supportsPaintSymmetry, type PaintSymmetry } from '@app-game/paint-core/symmetry';
 
 /** Document controls; changing guides never changes an ABR preset or the camera's mirror state. */
 export function SymmetryPanel(props: { session: PaintSession }) {

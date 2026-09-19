@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultCamera } from './camera';
+import { defaultCamera } from '@app-game/paint-core/camera';
 import { createPaintNavigation as createNavigationPuck } from './paintNavigation';
 
 /** Behavior ported from Grease Pencil, including held invocation and camera pivot invariants. */

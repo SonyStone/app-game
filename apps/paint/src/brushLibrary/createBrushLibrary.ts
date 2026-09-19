@@ -1,10 +1,10 @@
 import { createSignal, onCleanup } from 'solid-js';
-import { attempt } from '../asyncResult';
+import { attempt } from '@app-game/paint-core/asyncResult';
 import type { BrushResource } from '@app-game/abr-paint/resources';
-import type { BrushEngineSelection } from '../composition/defineBrushEngine';
-import type { texturedBrush } from '../composition/texturedBrushEngine';
+import type { BrushEngineSelection } from '@app-game/paint-core/composition/defineBrushEngine';
+import type { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
 import type { PaintEndpoint } from '../mainThreadEndpoint';
-import type { PaintEvent } from '../protocol';
+import type { PaintEvent } from '@app-game/paint-core/protocol';
 import type { BrushLibrary } from './decodeAbrLibrary';
 
 /** Owns a session library and correlated uploads. Changes become selectable only after upload succeeds.

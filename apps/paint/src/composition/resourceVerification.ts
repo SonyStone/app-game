@@ -1,4 +1,4 @@
-import type { PaintCommand, PaintEvent } from '../protocol';
+import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
 
 /** Exercises the same upload/ack protocol in the production main and worker recipes, without editing pixels. */
 export async function verifyBrushResourceTransport(

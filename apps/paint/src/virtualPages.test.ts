@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { createVirtualPages, viewLod } from './virtualPages';
-import { createDocument } from './document';
-import { defaultCamera } from './camera';
-import { unpackTile } from './tilePixels';
+import { createVirtualPages, viewLod } from '@app-game/paint-core/virtualPages';
+import { createDocument } from '@app-game/paint-core/document';
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { unpackTile } from '@app-game/paint-core/tilePixels';
 
 it('combines four children, including negative tile coordinates, and refreshes after undo', async () => {
   const doc = createDocument();
@@ -122,7 +122,7 @@ it('reloads stored low resolution without reading high resolution, then rebuilds
       stored.set(key, pixels);
     }
   };
-  const reader = async (data: import('./tilePixels').TileData) => {
+  const reader = async (data: import('@app-game/paint-core/tilePixels').TileData) => {
     reads++;
     return data instanceof Uint8Array ? data : sources.get(data.storageId)!;
   };

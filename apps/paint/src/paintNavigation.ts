@@ -1,5 +1,5 @@
 import { createNavigationPuck } from '@app-game/navigation-puck/controller';
-import { panCamera, transformAt, type Camera, type ViewSize } from './camera';
+import { panCamera, transformAt, type Camera, type ViewSize } from '@app-game/paint-core/camera';
 
 /** Adapts shared client-space navigation to Paint's clockwise 2D camera. */
 export function createPaintNavigation(params: {

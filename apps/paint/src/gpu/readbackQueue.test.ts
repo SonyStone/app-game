@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { readbackLayout } from './readbackQueue';
+import { readbackLayout } from '@app-game/paint-core/gpu/readbackQueue';
 
 it('copies compact LOD masks without allocating full-tile staging ranges', () => {
   const layout = readbackLayout([256, 32, 32]);

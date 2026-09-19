@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import type { Sample } from './brush';
-import { createCubicStroke } from './cubicStroke';
+import type { Sample } from '@app-game/paint-core/brush';
+import { createCubicStroke } from '@app-game/paint-core/cubicStroke';
 
 it('passes through interior controls and matches the recovered cubic at the segment midpoint', () => {
   const curve = createCubicStroke(4);

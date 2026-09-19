@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { defaultBrush } from './brush';
-import type { TileChange } from './document';
-import type { PaintCommand, PaintEvent } from './protocol';
-import type { SavedDocument } from './storage';
-import { unpackTile } from './tilePixels';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import type { TileChange } from '@app-game/paint-core/document';
+import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
+import type { SavedDocument } from '@app-game/paint-core/storage';
+import { unpackTile } from '@app-game/paint-core/tilePixels';
 
 const dependencies = vi.hoisted(() => ({ renderer: vi.fn(), store: vi.fn() }));
-vi.mock('./gpu/renderer', () => ({ createPaintRenderer: dependencies.renderer }));
-vi.mock('./tileStore', () => ({ createTileStore: dependencies.store }));
+vi.mock('@app-game/paint-core/gpu/renderer', () => ({ createPaintRenderer: dependencies.renderer }));
+vi.mock('@app-game/paint-core/tileStore', () => ({ createTileStore: dependencies.store }));
 
 beforeEach(() => {
   vi.resetModules();

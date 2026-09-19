@@ -4,8 +4,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createPaintSession, type PaintSession } from './createPaintSession';
 import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
 import type { PaintEndpoint } from './mainThreadEndpoint';
-import type { PaintCommand, PaintEvent } from './protocol';
-import { defaultPaintSymmetry } from './symmetry';
+import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
+import { defaultPaintSymmetry } from '@app-game/paint-core/symmetry';
 
 const transports = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock('./paint.worker?worker', () => ({

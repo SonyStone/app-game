@@ -1,7 +1,7 @@
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createDocument } from './document';
+import { createDocument } from '@app-game/paint-core/document';
 import { LayersPanel } from './LayersPanel';
 import styles from './LayersPanel.module.css';
 

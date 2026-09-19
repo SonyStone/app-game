@@ -1,5 +1,6 @@
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import { createAbrStrokeSampler, dualPreviewInput, stampStride, type PreviewPoint } from '@app-game/abr-brush/stroke';
+import { percent } from '@app-game/abr-parser';
 import { expect, it } from 'vitest';
 
 it('secondary marks follow the traced channel-12/14/19/20 arithmetic', () => {
@@ -139,7 +140,13 @@ it('secondary random channels survive batching and disposable predictions', () =
 });
 
 it('secondary settings do not inherit a physical primary tip or reinterpret Flip as a fixed mirror', () => {
-  const values = brushToFormValues({ type: 'computed', id: 'test', spacing: 100, settings: {}, name: 'Test' });
+  const values = brushToFormValues({
+    id: 'test',
+    name: 'Test',
+    preset: { kind: 'brush', sourceId: 'fixture', ...{}, tip: { kind: 'computed', spacing: percent(100) } },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+  });
   values.tipKind = 'dBrush';
   values.dualBrush.flip = true;
   values.dualBrush.flipX = false;
@@ -160,7 +167,13 @@ it('secondary settings do not inherit a physical primary tip or reinterpret Flip
 });
 
 function secondaryInput() {
-  const values = brushToFormValues({ type: 'computed', id: 'test', spacing: 100, settings: {}, name: 'Test' });
+  const values = brushToFormValues({
+    id: 'test',
+    name: 'Test',
+    preset: { kind: 'brush', sourceId: 'fixture', ...{}, tip: { kind: 'computed', spacing: percent(100) } },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+  });
   Object.assign(values.dualBrush, { diameter: 50, spacing: 100, count: 1, scatter: 0, flip: false, angle: 14 });
   const input = dualPreviewInput({
     values,

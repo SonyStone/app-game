@@ -1,12 +1,12 @@
 import { tgpu } from 'typegpu';
-import { defaultCamera, worldToScreen, type Point } from './camera';
-import { createDocument } from './document';
-import { createLassoOverlay } from './gpu/lassoOverlay';
-import { createPaintRenderer } from './gpu/renderer';
-import { captureSelection, editSelection, pointInSelection, type SelectionStorage } from './selection';
-import { snapshotDocument } from './storage';
-import { TILE_BYTES, unpackTile } from './tilePixels';
-import { createTileStore } from './tileStore';
+import { defaultCamera, worldToScreen, type Point } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import { createLassoOverlay } from '@app-game/paint-core/gpu/lassoOverlay';
+import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { captureSelection, editSelection, pointInSelection, type SelectionStorage } from '@app-game/paint-core/selection';
+import { snapshotDocument } from '@app-game/paint-core/storage';
+import { TILE_BYTES, unpackTile } from '@app-game/paint-core/tilePixels';
+import { createTileStore } from '@app-game/paint-core/tileStore';
 
 /** Verifies shader pixels and large, disk-backed edits using a disposable canvas and database. */
 export async function verifySelection(report: (message: string) => void) {

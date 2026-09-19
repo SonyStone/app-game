@@ -1,5 +1,6 @@
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import { createAbrSmoothing, type PreviewPoint } from '@app-game/abr-brush/stroke';
+import { percent } from '@app-game/abr-parser';
 import { expect, it } from 'vitest';
 
 it('Pulled String paints only when taut and ignores dormant catch-up flags on movement and release', () => {
@@ -79,7 +80,13 @@ it('captures settings and rejects invalid scales and coordinates', () => {
 });
 
 function settings() {
-  const values = brushToFormValues({ id: 'smooth', name: 'Smooth', type: 'computed', spacing: 25, settings: {} });
+  const values = brushToFormValues({
+    id: 'smooth',
+    name: 'Smooth',
+    preset: { kind: 'brush', sourceId: 'fixture', ...{}, tip: { kind: 'computed', spacing: percent(25) } },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+  });
   values.useSmoothing = true;
   values.smoothing.amount = 100;
   return values;

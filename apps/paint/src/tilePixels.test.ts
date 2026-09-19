@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { defaultCamera } from './camera';
-import { createDocument } from './document';
-import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from './storage';
-import { isEmptyPackedTile, packTile, TILE_BYTES, unpackTile } from './tilePixels';
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from '@app-game/paint-core/storage';
+import { isEmptyPackedTile, packTile, TILE_BYTES, unpackTile } from '@app-game/paint-core/tilePixels';
 
 describe('lossless sparse tiles', () => {
   it('preserves every byte of a soft diagonal and stores only its occupied runs', () => {

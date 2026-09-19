@@ -1,6 +1,6 @@
 import { For } from 'solid-js';
 import type { PaintSession } from './createPaintSession';
-import type { BlendMode } from './document';
+import type { BlendMode } from '@app-game/paint-core/document';
 import { SketchIcon } from './SketchIcon';
 import styles from './LayersPanel.module.css';
 

@@ -1,8 +1,8 @@
 import { Show } from 'solid-js';
-import { worldToScreen } from './camera';
+import { worldToScreen } from '@app-game/paint-core/camera';
 import type { PaintSession } from './createPaintSession';
 import styles from './SymmetryGuide.module.css';
-import { supportsPaintSymmetry, symmetryGuide } from './symmetry';
+import { supportsPaintSymmetry, symmetryGuide } from '@app-game/paint-core/symmetry';
 
 /** Projects document-owned symmetry guides without adding them to GPU pixels, exports or history. */
 export function SymmetryGuide(props: { session: PaintSession }) {

@@ -6,7 +6,7 @@ import type { JSX } from '@solidjs/web';
 import { createSignal, For, onSettled, Show } from 'solid-js';
 import { AbrViewerDialog } from './brushLibrary/AbrViewerDialog';
 import { BrushPanel, ColorPanel } from './BrushPanel';
-import { defaultCamera, transformAt } from './camera';
+import { defaultCamera, transformAt } from '@app-game/paint-core/camera';
 import { CanvasDebug } from './CanvasDebug';
 import { createPaintSession, type PaintSession } from './createPaintSession';
 import { DeveloperDialog } from './DeveloperDialog';

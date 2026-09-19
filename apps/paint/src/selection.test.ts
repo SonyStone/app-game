@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { Point } from './camera';
-import { createDocument, type Layer } from './document';
-import { captureSelection, editSelection, pointInSelection, type SelectionStorage } from './selection';
-import { TILE_BYTES, unpackTile, type TileData } from './tilePixels';
+import type { Point } from '@app-game/paint-core/camera';
+import { createDocument, type Layer } from '@app-game/paint-core/document';
+import { captureSelection, editSelection, pointInSelection, type SelectionStorage } from '@app-game/paint-core/selection';
+import { TILE_BYTES, unpackTile, type TileData } from '@app-game/paint-core/tilePixels';
 
 describe('lasso raster edits', () => {
   it('captures a concave polygon from disk references, preserving premultiplied bytes', async () => {

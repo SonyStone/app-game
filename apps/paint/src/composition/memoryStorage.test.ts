@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
-import { defaultCamera } from '../camera';
-import { createDocument, TILE_BYTES } from '../document';
-import { snapshotDocument } from '../storage';
-import { createMemoryStorage } from './memoryStorage';
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { createDocument, TILE_BYTES } from '@app-game/paint-core/document';
+import { snapshotDocument } from '@app-game/paint-core/storage';
+import { createMemoryStorage } from '@app-game/paint-core/composition/memoryStorage';
 
 it('isolates namespaces, snapshots pixels, and restores the checkpoint after reopening', async () => {
   const open = createMemoryStorage();

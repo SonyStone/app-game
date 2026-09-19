@@ -1,29 +1,31 @@
 import { brushToFormValues, formValuesToBrush } from '@app-game/abr-brush/form';
 import { createAbrStrokeSampler, createPreviewStroke, type PreviewPoint } from '@app-game/abr-brush/stroke';
-import { AbrParser, AbrWriter, createAbrFile } from '@app-game/abr-parser/browser';
+import { percent } from '@app-game/abr-parser';
 import { expect, it } from 'vitest';
+import { fixtureWithFields, nativeObject, roundTripBrush } from '../../tests/abrFixture';
 
 it('reads toolbar-only Airbrush and synchronizes the two native descriptor locations on edits', () => {
-  const brush = {
-    id: 'air',
-    name: 'Airbrush',
-    type: 'computed' as const,
-    spacing: 25,
-    settings: { toolOptions: { __classId: 'PbTl', 'Rpt ': true, futureOption: 17 } }
-  };
+  const brush = fixtureWithFields({
+    toolOptions: nativeObject('PbTl', { 'Rpt ': { Boolean: 1 }, futureOption: { Integer: 17 } })
+  });
   const values = brushToFormValues(brush);
   expect(values.useBuildUp).toBe(true);
   values.useBuildUp = false;
   const edited = formValuesToBrush(brush, values);
-  expect(edited.settings['Rpt ']).toBe(false);
-  expect(edited.settings.toolOptions).toMatchObject({ 'Rpt ': false, futureOption: 17 });
+  expect(edited.preset.buildUpEnabled).toBe(false);
+  expect(edited.preset.toolOptions).toMatchObject({
+    buildUpEnabled: false,
+    extensions: brush.preset.toolOptions?.extensions
+  });
   values.useBuildUp = true;
   const enabled = formValuesToBrush(edited, values);
-  expect(enabled.settings.toolOptions).toMatchObject({ 'Rpt ': true });
-  const reopened = new AbrParser().parse(new AbrWriter().write(createAbrFile([enabled])));
-  expect(reopened.errors).toEqual([]);
-  expect(brushToFormValues(reopened.brushes[0]!).useBuildUp).toBe(true);
-  expect(reopened.brushes[0]!.settings.toolOptions).toMatchObject({ 'Rpt ': true, futureOption: 17 });
+  expect(enabled.preset.toolOptions).toMatchObject({ buildUpEnabled: true });
+  const reopened = roundTripBrush(enabled);
+  expect(brushToFormValues(reopened).useBuildUp).toBe(true);
+  expect(reopened.preset.toolOptions).toMatchObject({
+    buildUpEnabled: true,
+    extensions: brush.preset.toolOptions?.extensions
+  });
 });
 
 it('emits timed stamps independently of packet boundaries and excludes disposable previews from the clock', () => {
@@ -76,7 +78,13 @@ it('preview hold builds paint with smoothing enabled, without exceeding the inpu
 });
 
 function settings() {
-  const values = brushToFormValues({ id: 'a', name: 'Airbrush', type: 'computed', spacing: 25, settings: {} });
+  const values = brushToFormValues({
+    id: 'a',
+    name: 'Airbrush',
+    preset: { kind: 'brush', sourceId: 'fixture', ...{}, tip: { kind: 'computed', spacing: percent(25) } },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+  });
   values.useBuildUp = true;
   return values;
 }

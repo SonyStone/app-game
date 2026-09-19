@@ -24,6 +24,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @app-game/abr-paint typecheck
       - run: pnpm --filter @app-game/abr-paint test
+      - run: pnpm --filter @app-game/paint-core typecheck
+      - run: pnpm --filter @app-game/paint-core test
+      - run: pnpm --filter @app-game/brush-preview typecheck
+      - run: pnpm --filter @app-game/brush-preview test
+      - run: pnpm --filter @app-game/brush-preview-demo build
       - run: pnpm --filter @app-game/paint typecheck
       - run: pnpm --filter @app-game/paint test
       - run: pnpm --filter @app-game/paint test:ui

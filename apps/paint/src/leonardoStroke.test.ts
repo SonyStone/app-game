@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { defaultBrush, type Sample } from './brush';
-import { createStrokeFilter } from './leonardoStroke';
+import { defaultBrush, type Sample } from '@app-game/paint-core/brush';
+import { createStrokeFilter } from '@app-game/paint-core/leonardoStroke';
 import { createSmoothStroke } from './smoothStroke';
-import { defaultStrokeSettings, normalizeStrokeSettings } from './strokeSettings';
+import { defaultStrokeSettings, normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
 
 describe('recovered sample filter', () => {
   it('seeds all history with the first sample and averages raw pressure before calibration', () => {

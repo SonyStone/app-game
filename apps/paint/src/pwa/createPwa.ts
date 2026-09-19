@@ -1,7 +1,7 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, onCleanup, onSettled } from 'solid-js';
 import type { registerSW } from 'virtual:pwa-register';
-import { attempt } from '../asyncResult';
+import { attempt } from '@app-game/paint-core/asyncResult';
 
 /** Tracks the browser's one-shot install prompt and service-worker readiness.
  * Never calls skipWaiting or reload: updates activate after every Paint window closes.

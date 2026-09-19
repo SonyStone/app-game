@@ -1,7 +1,7 @@
 import { createRoot, flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import type { PaintEndpoint } from '../mainThreadEndpoint';
-import type { PaintCommand } from '../protocol';
+import type { PaintCommand } from '@app-game/paint-core/protocol';
 import { createBrushLibrary } from './createBrushLibrary';
 import type { BrushLibrary } from './decodeAbrLibrary';
 

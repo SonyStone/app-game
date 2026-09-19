@@ -1,10 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { defaultBrush, type Dab } from './brush';
-import type { PaintCommand, PaintEvent } from './protocol';
+import { defaultBrush, type Dab } from '@app-game/paint-core/brush';
+import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
 
 const dependencies = vi.hoisted(() => ({ renderer: vi.fn(), store: vi.fn() }));
-vi.mock('./gpu/renderer', () => ({ createPaintRenderer: dependencies.renderer }));
-vi.mock('./tileStore', () => ({ createTileStore: dependencies.store }));
+vi.mock('@app-game/paint-core/gpu/renderer', () => ({ createPaintRenderer: dependencies.renderer }));
+vi.mock('@app-game/paint-core/tileStore', () => ({ createTileStore: dependencies.store }));
 
 afterEach(() => {
   vi.clearAllTimers();

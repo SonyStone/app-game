@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defaultCamera, worldToScreen } from '../camera';
-import { dirtyRegion } from './dirtyRegion';
+import { defaultCamera, worldToScreen } from '@app-game/paint-core/camera';
+import { dirtyRegion } from '@app-game/paint-core/gpu/dirtyRegion';
 
 describe('dirty framebuffer regions', () => {
   it('clips to the framebuffer and omits empty/offscreen changes', () => {

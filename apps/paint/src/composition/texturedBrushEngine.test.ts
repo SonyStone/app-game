@@ -1,11 +1,11 @@
 import { expect, it, vi } from 'vitest';
-import { defaultBrush } from '../brush';
-import { createDocument } from '../document';
-import { createRawProcessor } from '../strokeProcessors';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { createDocument } from '@app-game/paint-core/document';
+import { createRawProcessor } from '@app-game/paint-core/strokeProcessors';
 import { createBrushResources } from '@app-game/abr-paint/resources';
-import type { PaintRenderer } from './contracts';
-import { createResourceSession } from './resourceSession';
-import { texturedBrush } from './texturedBrushEngine';
+import type { PaintRenderer } from '@app-game/paint-core/composition/contracts';
+import { createResourceSession } from '@app-game/paint-core/composition/resourceSession';
+import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
 
 it('resolves tips before creating renderer state, preserving pressure and native aspect bounds', async () => {
   const cache = createBrushResources();

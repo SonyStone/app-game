@@ -1,6 +1,6 @@
-import { defaultCamera, worldToScreen } from './camera';
-import { createDocument } from './document';
-import { createPaintRenderer } from './gpu/renderer';
+import { defaultCamera, worldToScreen } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
 
 /** Cold-transition regression. Deliberately stalls storage and verifies the very first zoomed frame. */
 export async function verifyColdNavigation(report: (message: string) => void) {

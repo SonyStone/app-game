@@ -1,7 +1,7 @@
-import { defaultBrush } from '../brush';
-import { defaultCamera } from '../camera';
-import { createDocument } from '../document';
-import { createPaintRenderer } from '../gpu/renderer';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { defaultCamera } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
 
 /** Real GPU check: differently sized HTML/offscreen targets share one renderer and survive detach/replacement. */
 export async function verifyCanvasTargets(report: (message: string) => void) {

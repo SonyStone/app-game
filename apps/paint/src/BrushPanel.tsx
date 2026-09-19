@@ -1,6 +1,6 @@
 import { For, Show } from 'solid-js';
 import type { PaintSession } from './createPaintSession';
-import { normalizeStrokeSettings, type StrokeSettings } from './strokeSettings';
+import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
 import styles from './BrushPanel.module.css';
 
 /** Controls the captured settings of the next stroke, including independent flow and opacity. */

@@ -1,16 +1,21 @@
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import { createAbrStrokeSampler, type PreviewPoint } from '@app-game/abr-brush/stroke';
+import { percent, pixels } from '@app-game/abr-parser';
+import { interpolateTabletAxes } from '@app-game/paint-core/tabletAxes';
 import { describe, expect, it } from 'vitest';
-import { interpolateTabletAxes } from '../tabletAxes';
 
 function input() {
   const values = brushToFormValues({
     id: 'test',
     name: 'Dynamics',
-    type: 'computed',
-    settings: {},
-    spacing: 8,
-    diameter: 24
+    preset: {
+      kind: 'brush',
+      sourceId: 'fixture',
+      ...{},
+      tip: { kind: 'computed', diameter: pixels(24), spacing: percent(8) }
+    },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
   });
   values.useShapeDynamics = true;
   values.shapeDynamics.sizeJitter = 30;
@@ -84,7 +89,8 @@ describe('shared ABR stroke state', () => {
     const a = { ...points[0]!, rotation: 355 },
       b = { ...points[1]!, rotation: 5 };
     expect(interpolateTabletAxes(a, b, 0.5).rotation).toBe(360);
-    expect(interpolateTabletAxes({ ...a, pointerType: 'mouse' }, { ...b, pointerType: 'mouse' }, 0.5).pointerType)
-      .toBe('mouse');
+    expect(interpolateTabletAxes({ ...a, pointerType: 'mouse' }, { ...b, pointerType: 'mouse' }, 0.5).pointerType).toBe(
+      'mouse'
+    );
   });
 });

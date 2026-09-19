@@ -1,11 +1,12 @@
-import { expect, it, vi } from 'vitest';
-import { defaultBrush } from '../brush';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
-import { createDocument } from '../document';
-import { createRawProcessor } from '../strokeProcessors';
-import { abrBrush } from './abrBrushEngine';
 import { createBrushResources } from '@app-game/abr-paint/resources';
-import type { PaintRenderer } from './contracts';
+import { percent, pixels } from '@app-game/abr-parser';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { abrBrush } from '@app-game/paint-core/composition/abrBrushEngine';
+import type { PaintRenderer } from '@app-game/paint-core/composition/contracts';
+import { createDocument } from '@app-game/paint-core/document';
+import { createRawProcessor } from '@app-game/paint-core/strokeProcessors';
+import { expect, it, vi } from 'vitest';
 
 it.each(['ErTl', 'PbTl', 'PcTl', 'SmTl', 'MixB', 'BlTl', 'ShTl'])(
   'temporary history mode affects only the Eraser, without editing %s settings',
@@ -13,10 +14,14 @@ it.each(['ErTl', 'PbTl', 'PcTl', 'SmTl', 'MixB', 'BlTl', 'ShTl'])(
     const preset = prepareAbrBrush({
       id: 'modifier',
       name: 'Modifier',
-      type: 'computed',
-      diameter: 16,
-      spacing: 10,
-      settings: { toolOptions: { __classId: type, MgcE: false } }
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{ toolOptions: { kind: type, eraseToHistory: false } },
+        tip: { kind: 'computed', diameter: pixels(16), spacing: percent(10) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     });
     const saved = structuredClone(preset.engine.settings);
     const cache = createBrushResources();

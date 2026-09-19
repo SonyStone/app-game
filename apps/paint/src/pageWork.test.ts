@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { createPageWork, ObsoletePageError } from './pageWork';
+import { createPageWork, ObsoletePageError } from '@app-game/paint-core/pageWork';
 
 it('identifies obsolete work by type without treating unrelated errors as cancellation', async () => {
   const work = createPageWork();

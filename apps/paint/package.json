@@ -28,7 +28,8 @@
     "solid-js": "catalog:",
     "typegpu": "^0.11.4",
     "zod": "^4.4.3",
-    "@app-game/abr-paint": "workspace:*"
+    "@app-game/abr-paint": "workspace:*",
+    "@app-game/paint-core": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "catalog:",
@@ -46,6 +47,7 @@
   "exports": {
     "./editor": "./src/PaintStudio.tsx",
     "./studio/composition": "./src/composition/index.ts",
-    "./studio/*": "./src/*"
+    "./studio/*": "./src/*",
+    "./tests/*": "./tests/*.ts"
   }
 }

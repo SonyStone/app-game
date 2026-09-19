@@ -1,6 +1,6 @@
 import { createRoot, flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
-import { defaultBrush } from '../brush';
+import { defaultBrush } from '@app-game/paint-core/brush';
 import type { PaintEndpoint } from '../mainThreadEndpoint';
 import { createBrushCommands } from './createBrushCommands';
 

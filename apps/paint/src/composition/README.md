@@ -1,8 +1,8 @@
 # Сборка приложения рисования
 
-Studio использует `StudioApplication.tsx` и в worker, и в main-thread режиме. `paintRuntime.ts` получает зависимости из JSX Provider. В очереди команд нет выбора конкретного хранилища, renderer или алгоритма сглаживания.
+Общие модули находятся в `packages/paint-core`; приложение хранит свой рецепт сборки. Studio использует `StudioApplication.tsx` и в worker, и в main-thread режиме. `paintRuntime.ts` получает зависимости из JSX Provider. В очереди команд нет выбора конкретного хранилища, renderer или алгоритма сглаживания.
 
-Публичный импорт: `@app-game/paint/studio/composition`. Рецепт состоит из обычных Solid 2 компонентов без DOM-элементов. `createPaintApplication` создаёт Solid root и материализует JSX через `flatten`; поэтому тот же рецепт выполняется в worker. Настройки GPU не пересылаются через `postMessage`: Vite собирает рецепт отдельно для каждого режима.
+Публичный импорт: `@app-game/paint-core`. Рецепт состоит из обычных Solid 2 компонентов без DOM-элементов. `createPaintApplication` создаёт Solid root и материализует JSX через `flatten`; поэтому тот же рецепт выполняется в worker. Настройки GPU не пересылаются через `postMessage`: Vite собирает рецепт отдельно для каждого режима.
 
 ## Пример другой сборки
 
@@ -27,7 +27,7 @@ import {
   studioProcessors,
   roundBrushEngine,
   defaultCamera
-} from '@app-game/paint/studio/composition';
+} from '@app-game/paint-core';
 
 const openMemory = createMemoryStorage();
 const [preview, setPreview] = createSignal<HTMLCanvasElement | undefined>(undefined);
@@ -99,7 +99,7 @@ setPreview(document.createElement('canvas'));
 
 ```tsx
 import { z } from 'zod';
-import { defineBrushEngine, roundBrush, BrushEngines, defaultBrush } from '@app-game/paint/studio/composition';
+import { defineBrushEngine, roundBrush, BrushEngines, defaultBrush } from '@app-game/paint-core';
 
 const inkSettings = z
   .object({

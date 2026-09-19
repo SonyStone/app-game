@@ -1,22 +1,27 @@
 import { blockEraserTip, blockEraserValues } from '@app-game/abr-brush/blockEraser';
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import { createAbrStrokeSampler } from '@app-game/abr-brush/stroke';
-import { expect, it } from 'vitest';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
+import { percent, pixels } from '@app-game/abr-parser';
+import { expect, it } from 'vitest';
 
 it('Block preserves dormant preset data while applying a screen-sized square without resources', () => {
   const source = {
     id: 'block',
     name: 'Block',
-    type: 'sampled' as const,
-    spacing: 500,
-    diameter: 512,
-    settings: {
-      useTexture: true,
-      useTipDynamics: true,
-      dualBrush: { useDualBrush: true },
-      toolOptions: { __classId: 'ErTl', ErsB: 3, flow: 1, Opct: 2 }
-    }
+    preset: {
+      kind: 'brush',
+      sourceId: 'fixture',
+      ...{
+        textureEnabled: true,
+        shapeDynamicsEnabled: true,
+        dualBrush: { kind: 'dualBrush', enabled: true },
+        toolOptions: { kind: 'ErTl', eraserMode: 3, flow: 1, opacity: 2 }
+      },
+      tip: { kind: 'sampled', diameter: pixels(512), spacing: percent(500) }
+    },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
   };
   const preset = prepareAbrBrush(source);
   expect(preset.resources).toHaveLength(1);
@@ -53,7 +58,13 @@ it('Block preserves dormant preset data while applying a screen-sized square wit
 });
 
 it('Block rejects an invalid view and compensates for rotation and mirror', () => {
-  const values = brushToFormValues({ id: 'b', name: 'Block', type: 'computed', spacing: 25, settings: {} });
+  const values = brushToFormValues({
+    id: 'b',
+    name: 'Block',
+    preset: { kind: 'brush', sourceId: 'fixture', ...{}, tip: { kind: 'computed', spacing: percent(25) } },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+  });
   expect(blockEraserValues(values, { zoom: 1, angle: Math.PI / 6, mirrored: false }).angle).toBeCloseTo(-30);
   expect(blockEraserValues(values, { zoom: 1, angle: Math.PI / 6, mirrored: true }).angle).toBeCloseTo(30);
   expect(() => blockEraserValues(values, { zoom: 0, angle: 0, mirrored: false })).toThrow('positive zoom');

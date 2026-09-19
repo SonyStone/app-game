@@ -1,10 +1,10 @@
 import { sampledTipTransform } from '@app-game/abr-brush/sampledTipRaster';
 import { expect, it } from 'vitest';
-import { defaultBrush, type Dab } from './brush';
-import { defaultCamera, screenToWorld, worldToScreen } from './camera';
-import { createDocument } from './document';
-import { readPaintFile, writePaintFile } from './paintFile';
-import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from './storage';
+import { defaultBrush, type Dab } from '@app-game/paint-core/brush';
+import { defaultCamera, screenToWorld, worldToScreen } from '@app-game/paint-core/camera';
+import { createDocument } from '@app-game/paint-core/document';
+import { readPaintFile, writePaintFile } from '@app-game/paint-core/paintFile';
+import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from '@app-game/paint-core/storage';
 import {
   defaultPaintSymmetry,
   paintSymmetrySchema,
@@ -13,7 +13,7 @@ import {
   symmetryGuide,
   symmetryPoint,
   symmetryTransforms
-} from './symmetry';
+} from '@app-game/paint-core/symmetry';
 
 it('reflects about document axes and composes radial/mandala copies without duplicating full turns', () => {
   const origin = { ...defaultPaintSymmetry(), x: 10, y: -20 };

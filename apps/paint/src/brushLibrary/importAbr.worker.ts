@@ -1,4 +1,4 @@
-import { attempt } from '../asyncResult';
+import { attempt } from '@app-game/paint-core/asyncResult';
 import { decodeAbrLibrary } from './decodeAbrLibrary';
 
 /** One-shot decoder; the UI owns termination, including cancellation and malformed inputs. */

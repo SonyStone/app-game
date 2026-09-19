@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import type { Result } from '../asyncResult';
+import type { Result } from '@app-game/paint-core/asyncResult';
 import type { BrushLibrary } from './decodeAbrLibrary';
 import { importAbr } from './importAbr';
 

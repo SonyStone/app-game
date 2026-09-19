@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
-import { createStrokeSampler, defaultBrush, type Sample } from './brush';
+import { createStrokeSampler, defaultBrush, type Sample } from '@app-game/paint-core/brush';
 import { createSmoothStroke } from './smoothStroke';
-import { normalizeStrokeSettings } from './strokeSettings';
+import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
 
 it.each([0.05, 1, 8])('None immediately preserves raw segments and pressure at zoom %s', (zoom) => {
   const brush = defaultBrush();

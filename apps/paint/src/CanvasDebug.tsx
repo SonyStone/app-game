@@ -1,5 +1,5 @@
-import { TILE_SIZE } from './brush';
-import { worldToScreen, type Camera, type ViewSize } from './camera';
+import { TILE_SIZE } from '@app-game/paint-core/brush';
+import { worldToScreen, type Camera, type ViewSize } from '@app-game/paint-core/camera';
 import type { PaintSession } from './createPaintSession';
 import styles from './CanvasDebug.module.css';
 

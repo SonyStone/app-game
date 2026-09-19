@@ -5,5 +5,5 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [solid(), typegpu()],
   resolve: { conditions: ['development', 'browser'] },
-  test: { environment: 'node', include: ['src/**/*.test.ts'] }
+  test: { environment: 'node', setupFiles: ['./tests/initAbr.ts'], include: ['src/**/*.test.ts'] }
 });

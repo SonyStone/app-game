@@ -1,18 +1,27 @@
-import { expect, it, vi } from 'vitest';
-import { defaultBrush } from '../brush';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
-import { createDocument } from '../document';
-import { createRawProcessor } from '../strokeProcessors';
-import { abrBrush } from './abrBrushEngine';
 import { createBrushResources } from '@app-game/abr-paint/resources';
-import type { PaintRenderer } from './contracts';
+import { percent, pixels } from '@app-game/abr-parser';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { abrBrush } from '@app-game/paint-core/composition/abrBrushEngine';
+import type { PaintRenderer } from '@app-game/paint-core/composition/contracts';
+import { createDocument } from '@app-game/paint-core/document';
+import { createRawProcessor } from '@app-game/paint-core/strokeProcessors';
+import { expect, it, vi } from 'vitest';
 
 it.each(['PbTl', 'PcTl', 'SmTl'])(
   '%s passes global opacity to the renderer only when its stamps exclude it',
   (type) => {
     const preset = prepareAbrBrush({
-      id: 'opacity', name: 'Opacity', type: 'computed', diameter: 16, spacing: 10,
-      settings: { toolOptions: { __classId: type } }
+      id: 'opacity',
+      name: 'Opacity',
+      preset: {
+        kind: 'brush',
+        sourceId: 'fixture',
+        ...{ toolOptions: { kind: type } },
+        tip: { kind: 'computed', diameter: pixels(16), spacing: percent(10) }
+      },
+      resources: [],
+      source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
     });
     const cache = createBrushResources();
     preset.resources.forEach((resource) => cache.put(resource));

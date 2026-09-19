@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { attempt, createTaskQueue, unwrapResult } from './asyncResult';
+import { attempt, createTaskQueue, unwrapResult } from '@app-game/paint-core/asyncResult';
 
 it('starts browser/GPU operations synchronously and returns a typed success', async () => {
   let started = false;

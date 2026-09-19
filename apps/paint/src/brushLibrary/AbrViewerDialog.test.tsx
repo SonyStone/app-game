@@ -2,7 +2,7 @@ import type { App } from '@app-game/abr-viewer/editor';
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
-import { defaultBrush, type Brush } from '../brush';
+import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { AbrViewerDialog } from './AbrViewerDialog';
 
 vi.mock('@app-game/abr-viewer/editor', () => ({
