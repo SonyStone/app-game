@@ -34,7 +34,11 @@ test('stroke frames remain visible during continuous input and build-up stops on
   await page.mouse.move(bounds.x + 20, bounds.y + bounds.height / 2);
   const before = Number(await canvas.getAttribute('data-presented-frames'));
   await page.mouse.down();
-  await page.mouse.move(bounds.x + bounds.width - 20, bounds.y + bounds.height / 2, { steps: 40 });
+  // Keep input active across frame boundaries; an unpaced burst can finish before the delayed worker replies.
+  for (let step = 1; step <= 40; step++) {
+    await page.mouse.move(bounds.x + 20 + ((bounds.width - 40) * step) / 40, bounds.y + bounds.height / 2);
+    await page.waitForTimeout(16);
+  }
   expect(Number(await canvas.getAttribute('data-presented-frames'))).toBeGreaterThan(before + 1);
   const movingRevision = await canvas.getAttribute('data-preview-revision');
   await expect.poll(() => canvas.getAttribute('data-preview-revision')).not.toBe(movingRevision);

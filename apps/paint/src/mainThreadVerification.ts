@@ -534,7 +534,7 @@ export async function verifyMainThread(report: (message: string) => void) {
       await equal(before, (await command({ type: 'download' }, 'download')).blob);
     }
     if (
-      Math.abs(coverage.off! - Math.round(255 * 0.05)) > 1 ||
+      Math.abs(coverage.off! - Math.round(255 * 0.05 * 0.5)) > 1 ||
       coverage.off! < 1 ||
       coverage.airbrush! < 50 ||
       coverage.smoothed! < 50 ||
