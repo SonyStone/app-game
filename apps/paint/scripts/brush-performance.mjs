@@ -1,3 +1,4 @@
+import { readAdobeBrushFixture } from '../../../scripts/adobe-brush-fixture.mjs';
 import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -17,6 +18,8 @@ const page = await browser.contexts()[0].newPage();
 try {
   const url = new URL('/__brush-performance', values.url).href;
   await page.route(url, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Brush performance checks</title>' }));
+  const fixture = await readAdobeBrushFixture('megapack.abr');
+  await page.route(new URL('/__megapack.abr', values.url).href, route => route.fulfill({ contentType: 'application/octet-stream', body: fixture }));
   await page.goto(url);
   await page.exposeFunction('reportBrushPerformance', message => console.log(message));
   const result = await page.evaluate(async (verify) => {
@@ -29,7 +32,7 @@ try {
       return { schema: 1, environment: {
         userAgent: navigator.userAgent, dpr: devicePixelRatio, width: innerWidth, height: innerHeight,
         gpu: { vendor: adapter.info.vendor, architecture: adapter.info.architecture, description: adapter.info.description }
-      }, cases: await measureBrushPerformance(message => window.reportBrushPerformance(message)) };
+      }, cases: await measureBrushPerformance(message => window.reportBrushPerformance(message), await (await fetch('/__megapack.abr')).blob()) };
     } finally { await lock.release(); }
   }, values.verify);
   result.environment.device = values.device;

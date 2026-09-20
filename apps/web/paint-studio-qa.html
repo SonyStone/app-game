@@ -50,7 +50,7 @@
       import { verifyAbrBrush } from '../paint/tests/gpu/abrBrushVerification';
       import {initAbr} from '@app-game/abr-parser';
       import {loadBrushLibrary} from '@app-game/abr-brush/library';
-      import abrExampleUrl from '../abr-viewer/src/assets/examples/spatter_brushes.abr?url';
+      import { selectBrushFile } from '../abr-viewer/src/lib/select-brush-file';
       import { verifyTexturedBrush } from '@app-game/paint/tests/gpu/texturedBrushVerification';
       import { verifySelection } from '@app-game/paint/studio/selectionVerification';
       import { verifyPressureSpacing } from '@app-game/paint/tests/gpu/pressureVerification';
@@ -78,8 +78,7 @@
           await verifyTexturedBrush(
             (message) => (output.textContent += message + '\n'),
             async () => {
-              const response = await fetch(abrExampleUrl);
-              if (!response.ok) throw new Error('Could not load the repository ABR fixture.');
+              const response = await selectBrushFile('spatter_brushes.abr');
               await initAbr();
               const abr = loadBrushLibrary(await response.arrayBuffer());
               const tip = abr.brushes.find((brush) => brush.tipImage?.data.some((value) => value > 0))?.tipImage;
@@ -280,9 +279,7 @@
       document.querySelector('#wet-blender-performance').onclick = async () => {
         output.textContent = 'Loading original Wet Blender preset…\n';
         try {
-          const { default: url } = await import('../abr-viewer/src/assets/examples/megapack.abr?url');
-          const response = await fetch(url);
-          if (!response.ok) throw Error('Could not load megapack.abr');
+          const response = await selectBrushFile('megapack.abr');
           await initAbr();
           const file = loadBrushLibrary(await response.arrayBuffer());
           const preset = file.brushes.find((brush) => brush.name === "Kyle's Paintbox - Wet Blender");

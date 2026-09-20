@@ -1,4 +1,3 @@
-import { checkExampleAssets } from '../abr-viewer/scripts/check-example-assets.mjs';
 import UnoCSS from '@unocss/vite';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +11,6 @@ import type { PaintBuild } from './src/pwa/buildInfo';
 export default defineConfig(({ command }) => ({
   define: { __PAINT_BUILD__: JSON.stringify(buildInfo(command === 'serve')) },
   plugins: [
-    { name: 'validate-abr-examples', apply: 'build', buildStart: () => checkExampleAssets() },
     solid(), typegpu(), UnoCSS({ configFile: fileURLToPath(new URL('../../uno.config.ts', import.meta.url)) }),
     VitePWA({
       registerType: 'prompt',

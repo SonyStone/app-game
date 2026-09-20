@@ -11,7 +11,6 @@ import type { ColorMixingPreference } from './features/brush-detail/color-mixing
 import { ColorProfileContext } from './features/brush-detail/ColorProfile';
 import { createColorProfile } from './features/brush-detail/createColorProfile';
 import { composeAbr, downloadAbrFile, initAbr, loadBrushLibrary, type AbrFileWithMeta, type Brush } from './lib/abr';
-import { fetchBrushExample, type BrushExample } from './lib/brush-examples';
 import { allBrushNodes, type GroupNode } from './lib/brush-tree';
 import { createWorkspace } from './lib/workspace';
 import { persistWorkspace } from './lib/workspace-storage';
@@ -68,12 +67,11 @@ export function App(
     }
   }
 
-  async function importFiles(source: File[] | BrushExample) {
+  async function importFiles(files: File[]) {
     if (busy()) return;
     setBusy(true);
-    setStatus(Array.isArray(source) ? 'Importing brushes…' : `Downloading ${source.name}…`);
+    setStatus('Importing brushes…');
     try {
-      const files = Array.isArray(source) ? source : [await fetchBrushExample(source)];
       const abrFiles = files.filter((file) => file.name.toLowerCase().endsWith('.abr'));
       if (!abrFiles.length) {
         setStatus('Choose an .abr brush file.');
@@ -187,7 +185,7 @@ export function App(
               Redo
             </button>
           </div>
-          <BrushExamplesMenu busy={busy()} loadingMessage={status()} onSelect={importFiles} />
+          <BrushExamplesMenu busy={busy()} />
           <button disabled={busy()} onClick={() => input.click()}>
             Import…
           </button>

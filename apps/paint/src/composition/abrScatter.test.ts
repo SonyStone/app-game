@@ -1,9 +1,12 @@
+import { readAdobeBrushFixture } from '../../../../scripts/adobe-brush-fixture.mjs';
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import { createAbrStrokeSampler, dualPreviewInput, stampStride, type PreviewPoint } from '@app-game/abr-brush/stroke';
 import { initAbr } from '@app-game/abr-parser';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
+
+const adobeFixtures = Object.fromEntries(await Promise.all(['megapack.abr'].map(async (name) => [name, await readAdobeBrushFixture(name)])));
 
 // Wet Blender's 36×25 tip has a rounded minor diameter of 35 at size 50.
 // Count/scatter probes use 35px events at 100% spacing to isolate one group per sample.
@@ -325,7 +328,7 @@ it.each(['PbTl', 'PcTl', 'SmTl', 'BlTl', 'ShTl'] as const)(
 
 function wetBlender() {
   const file = loadBrushLibrary(
-    readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url))
+    adobeFixtures['megapack.abr']!
   );
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Paintbox - Wet Blender");
   if (!brush?.tipImage) throw new Error('The bundled Wet Blender preset or its sampled tip is missing.');

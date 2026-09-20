@@ -1,3 +1,4 @@
+import { readAdobeBrushFixture } from '../../../../scripts/adobe-brush-fixture.mjs';
 import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import { createAbrStrokeSampler } from '@app-game/abr-brush/stroke';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
@@ -5,13 +6,15 @@ import { initAbr } from '@app-game/abr-parser';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 
+const adobeFixtures = Object.fromEntries(await Promise.all(['megapack.abr', 'halftones_and_screentones.abr'].map(async (name) => [name, await readAdobeBrushFixture(name)])));
+
 await initAbr(
   readFileSync(new URL('../../../../packages/abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url))
 );
 
 it('applies all bundled HSB-color presets without replacing their native color descriptors', () => {
   const file = loadBrushLibrary(
-    readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url))
+    adobeFixtures['megapack.abr']!
   );
   for (const [name, color] of [
     ["Kyle's FX Box - Add Canvas New", '#9e9e9e'],
@@ -30,9 +33,7 @@ it('applies all bundled HSB-color presets without replacing their native color d
 });
 
 it('imports embedded example presets with their full dynamics and auxiliary resources', () => {
-  const bytes = readFileSync(
-    new URL('../../../abr-viewer/src/assets/examples/halftones_and_screentones.abr', import.meta.url)
-  );
+  const bytes = adobeFixtures['halftones_and_screentones.abr']!;
   const file = loadBrushLibrary(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Halftone - Circle Range Tiny")!;
   expect(brush).toBeDefined();
@@ -45,7 +46,7 @@ it('imports embedded example presets with their full dynamics and auxiliary reso
 
 it('Charcoal Champ 3 preserves its controls and Photoshop’s pressure-dependent base size', () => {
   const file = loadBrushLibrary(
-    readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url))
+    adobeFixtures['megapack.abr']!
   );
   const brush = file.brushes.find((brush) => brush.name === "Kyle's Drawing Box - Charcoal Champ 3");
   expect(brush).toBeDefined();

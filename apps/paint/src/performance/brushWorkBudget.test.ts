@@ -1,3 +1,4 @@
+import { readAdobeBrushFixture } from '../../../../scripts/adobe-brush-fixture.mjs';
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import { adaptiveBrushQuality } from '@app-game/abr-paint/adaptiveQuality';
@@ -12,6 +13,8 @@ import { createDocument } from '@app-game/paint-core/document';
 import { createRawProcessor } from '@app-game/paint-core/strokeProcessors';
 import { readFileSync } from 'node:fs';
 import { expect, it, vi } from 'vitest';
+
+const adobeFixtures = Object.fromEntries(await Promise.all(['megapack.abr'].map(async (name) => [name, await readAdobeBrushFixture(name)])));
 
 await initAbr(
   readFileSync(new URL('../../../../packages/abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url))
@@ -94,5 +97,5 @@ it.each([
 });
 
 const megapack = loadBrushLibrary(
-  readFileSync(new URL('../../../abr-viewer/src/assets/examples/megapack.abr', import.meta.url))
+  adobeFixtures['megapack.abr']!
 );

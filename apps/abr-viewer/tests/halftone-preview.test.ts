@@ -1,6 +1,6 @@
+import { readAdobeBrushFixture } from '../../../scripts/adobe-brush-fixture.mjs';
 import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import { percent, pixels } from '@app-game/abr-parser';
-import { readFileSync } from 'node:fs';
 import { expect, test } from 'vitest';
 import { brushToFormValues } from '../src/features/brush-detail/brush-form-schema';
 import { renderPreviewPixels } from '../src/features/brush-preview/cpu';
@@ -9,7 +9,9 @@ import { brushPreviewResources, decodePreviewResources } from '../src/features/b
 import { generateComputedBrushTip, type PreviewInput } from '../src/features/brush-preview/stroke';
 import './initAbr';
 
-const file = loadBrushLibrary(readFileSync('src/assets/examples/halftones_and_screentones.abr'));
+const adobeFixtures = Object.fromEntries(await Promise.all(['halftones_and_screentones.abr'].map(async (name) => [name, await readAdobeBrushFixture(name)])));
+
+const file = loadBrushLibrary(adobeFixtures['halftones_and_screentones.abr']!);
 
 test('Height depth reveals dark pattern features before filling the stroke', () => {
   const mode = blendModeId('Hght');

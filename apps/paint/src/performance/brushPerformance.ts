@@ -1,16 +1,15 @@
 import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import { initAbr } from '@app-game/abr-parser';
-import megapackUrl from '../../../abr-viewer/src/assets/examples/megapack.abr?url';
+import { selectBrushFile } from '../../../abr-viewer/src/lib/select-brush-file';
 import { verifyAbrBrush } from '../../tests/gpu/abrBrushVerification';
 import { verifyAbrFilter } from '../../tests/gpu/abrFilterVerification';
 import { verifyAbrMixer } from '../../tests/gpu/abrMixerVerification';
 import { verifyAbrSmudge } from '../../tests/gpu/abrSmudgeVerification';
 import { verifySmudgePerformance } from '../../tests/gpu/smudgePerformanceVerification';
 
-/** Device benchmark only. Uses isolated documents and actual bundled presets; never opens saved artwork. */
-export async function measureBrushPerformance(report: (message: string) => void) {
-  const response = await fetch(megapackUrl);
-  if (!response.ok) throw new Error(`Megapack benchmark fixture unavailable (${response.status}).`);
+/** Device benchmark only. Uses isolated documents and downloaded Adobe presets; never opens saved artwork. */
+export async function measureBrushPerformance(report: (message: string) => void, fixture?: Blob) {
+  const response = fixture ?? await selectBrushFile('megapack.abr');
   await initAbr();
   const file = loadBrushLibrary(await response.arrayBuffer());
   const results = [];

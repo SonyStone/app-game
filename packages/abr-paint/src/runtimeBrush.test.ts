@@ -1,3 +1,4 @@
+import { readAdobeBrushFixture } from '../../../scripts/adobe-brush-fixture.mjs';
 import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import { initAbr, percent } from '@app-game/abr-parser';
 import { createHash } from 'node:crypto';
@@ -6,11 +7,13 @@ import { expect, it } from 'vitest';
 import { prepareAbrBrush } from './preset';
 import { decodeRuntimeBrush, encodeRuntimeBrush } from './runtimeBrush';
 
+const adobeFixtures = Object.fromEntries(await Promise.all(['megapack.abr'].map(async (name) => [name, await readAdobeBrushFixture(name)])));
+
 await initAbr(readFileSync(new URL('../../abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url)));
 
 it('preserves every prepared Megapack preset and every referenced coverage byte', () => {
   const file = loadBrushLibrary(
-    readFileSync(new URL('../../../apps/abr-viewer/src/assets/examples/megapack.abr', import.meta.url))
+    adobeFixtures['megapack.abr']!
   );
   expect(file.errors).toEqual([]);
   expect(file.brushes).toHaveLength(465);

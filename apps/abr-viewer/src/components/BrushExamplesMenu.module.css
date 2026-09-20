@@ -224,7 +224,8 @@
   }
 }
 
-.toolbar .exampleBody button {
+.exampleBody a {
+  text-decoration: none;
   border: 2px solid #454545;
   border-radius: 20px;
   color: #333;
@@ -238,7 +239,7 @@
   }
 }
 
-.exampleBody button:focus-visible {
+.exampleBody a:focus-visible {
   outline: 2px solid #1473e6;
   outline-offset: 3px;
 }

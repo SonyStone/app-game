@@ -1,8 +1,11 @@
+import { readAdobeBrushFixture } from '../../../../scripts/adobe-brush-fixture.mjs';
 /// <reference types="node" />
 import { initAbr, readLibrary } from '@app-game/abr-parser';
 import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
 import { decodeAbrLibrary, MAX_ABR_BYTES } from './decodeAbrLibrary';
+
+const adobeFixtures = Object.fromEntries(await Promise.all(['spatter_brushes.abr'].map(async (name) => [name, await readAdobeBrushFixture(name)])));
 
 await initAbr(
   readFileSync(new URL('../../../../packages/abr-parser/wasm/pkg/photoshop_abr_wasm_bg.wasm', import.meta.url))
@@ -10,7 +13,7 @@ await initAbr(
 
 const example = () =>
   new Uint8Array(
-    readFileSync(new URL('../../../../apps/abr-viewer/src/assets/examples/spatter_brushes.abr', import.meta.url))
+    adobeFixtures['spatter_brushes.abr']!
   ).buffer;
 
 it('decodes real ABR tips and exposes names without retaining descriptors or compressed source blocks', async () => {
