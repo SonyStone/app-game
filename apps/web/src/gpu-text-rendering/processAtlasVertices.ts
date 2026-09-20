@@ -69,6 +69,7 @@ export function processAtlasVertices(
   gl.clear(GL_CLEAR_MASK.COLOR_BUFFER_BIT);
 
   gl.useProgram(glyphProgramNoRast);
+  gl.uniformMatrix2fv(glyphProgramNoRast.uniforms!.uRotation, false, [1, 0, 0, 1]);
 
   gl.enable(GL_STATIC_VARIABLES.BLEND);
   gl.disable(GL_STATIC_VARIABLES.DEPTH_TEST);

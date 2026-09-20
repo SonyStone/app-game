@@ -5,6 +5,7 @@ import { UnpackedBMP } from './unpackBmp';
 const int16PerGlyph = 10;
 const int16PerVertex = 6; // const
 
+/** Expands packed glyphs into GPU vertices and returns centers for automatic camera navigation. */
 export function processGlyphs(gl: WebGLRenderingContext, data: UnpackedBMP) {
   const uposition = new Int16Array(data.buf, 0);
   const position = new Int16Array(data.buf, 0);
@@ -77,7 +78,7 @@ export function processGlyphs(gl: WebGLRenderingContext, data: UnpackedBMP) {
   gl.bufferData(GL_BUFFER_TYPE.ARRAY_BUFFER, vbuf, GL_STATIC_VARIABLES.STATIC_DRAW);
   gl.bindBuffer(GL_BUFFER_TYPE.ARRAY_BUFFER, null);
 
-  return glyphBuffer;
+  return { glyphBuffer, positions };
 }
 
 function ushortWithFlag(x: number, flag: boolean | number) {
