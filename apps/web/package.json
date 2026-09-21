@@ -16,6 +16,7 @@
     "@app-game/film-annotation-player": "workspace:*",
     "@app-game/folder-tabs": "workspace:*",
     "@app-game/game-shaders-for-beginners": "workspace:*",
+    "@app-game/gpu-text-rendering": "workspace:*",
     "@app-game/grease-pencil-typegpu": "workspace:*",
     "@app-game/gsap": "workspace:*",
     "@app-game/gsap-examples": "workspace:*",

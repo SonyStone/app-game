@@ -1,0 +1,40 @@
+{
+  "name": "@app-game/gpu-text-rendering",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/features/viewer/GpuTextRendering.tsx"
+  },
+  "scripts": {
+    "dev": "vite --port 3180",
+    "build": "vite build",
+    "preview": "vite preview --port 4180",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "node tests/browser/controls.browser.mjs && node tests/browser/scene.browser.mjs && node tests/browser/rendering.browser.mjs"
+  },
+  "dependencies": {
+    "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/jsx-tokenizer": "catalog:",
+    "@solid-primitives/page-utilities": "catalog:",
+    "@solid-primitives/raf": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
+    "@solidjs/web": "2.0.0-rc.4",
+    "neverthrow": "catalog:",
+    "solid-js": "catalog:",
+    "typegpu": "^0.11.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@types/node": "25.8.0",
+    "@webgpu/types": "^0.1.70",
+    "happy-dom": "^20.9.0",
+    "sass": "^1.99.0",
+    "typescript": "catalog:",
+    "unplugin-typegpu": "^0.11.3",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:",
+    "vitest": "catalog:"
+  }
+}

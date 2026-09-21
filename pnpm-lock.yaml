@@ -51,6 +51,9 @@ catalogs:
     '@solid-primitives/intersection-observer':
       specifier: 3.0.0-next.3
       version: 3.0.0-next.3
+    '@solid-primitives/jsx-tokenizer':
+      specifier: 3.0.0-next.2
+      version: 3.0.0-next.2
     '@solid-primitives/keyboard':
       specifier: 2.0.0-next.5
       version: 2.0.0-next.5
@@ -66,6 +69,9 @@ catalogs:
     '@solid-primitives/mouse':
       specifier: 4.0.0-next.3
       version: 4.0.0-next.3
+    '@solid-primitives/page-utilities':
+      specifier: 3.0.0-next.0
+      version: 3.0.0-next.0
     '@solid-primitives/pointer':
       specifier: 1.0.0-next.2
       version: 1.0.0-next.2
@@ -126,6 +132,9 @@ catalogs:
     jsdom:
       specifier: ^29.1.1
       version: 29.1.1
+    neverthrow:
+      specifier: ^8.2.0
+      version: 8.2.0
     shiki:
       specifier: ^4.1.0
       version: 4.1.0
@@ -377,6 +386,9 @@ importers:
       '@mdx-js/rollup':
         specifier: 'catalog:'
         version: 3.1.1(rollup@4.60.4)
+      '@testing-library/jest-dom':
+        specifier: 'catalog:'
+        version: 6.9.1
       '@types/chroma-js':
         specifier: ^3.1.2
         version: 3.1.2
@@ -730,6 +742,67 @@ importers:
       vite-plugin-solid-svg:
         specifier: 0.8.1
         version: 0.8.1(patch_hash=7c6645f6fbe6c96fc2a79f09a40f44ef6eb15cb0e19933b6b602c7bbcac0f839)(solid-js@2.0.0-rc.4)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
+
+  apps/gpu-text-rendering:
+    dependencies:
+      '@solid-primitives/event-listener':
+        specifier: 'catalog:'
+        version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/jsx-tokenizer':
+        specifier: 'catalog:'
+        version: 3.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/page-utilities':
+        specifier: 'catalog:'
+        version: 3.0.0-next.0(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/raf':
+        specifier: 'catalog:'
+        version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/resize-observer':
+        specifier: 'catalog:'
+        version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solidjs/web':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4(solid-js@2.0.0-rc.4)
+      neverthrow:
+        specifier: 'catalog:'
+        version: 8.2.0
+      solid-js:
+        specifier: 'catalog:'
+        version: 2.0.0-rc.4
+      typegpu:
+        specifier: ^0.11.4
+        version: 0.11.4
+    devDependencies:
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.60.0
+      '@types/node':
+        specifier: 25.8.0
+        version: 25.8.0
+      '@webgpu/types':
+        specifier: ^0.1.70
+        version: 0.1.70
+      happy-dom:
+        specifier: ^20.9.0
+        version: 20.9.0
+      sass:
+        specifier: ^1.99.0
+        version: 1.99.0
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      unplugin-typegpu:
+        specifier: ^0.11.3
+        version: 0.11.3(typegpu@0.11.4)
+      vite:
+        specifier: 'catalog:'
+        version: 8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4)
+      vite-plugin-solid:
+        specifier: 'catalog:'
+        version: 3.0.0-next.27(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(@testing-library/jest-dom@6.9.1)(solid-js@2.0.0-rc.4)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
       vitest:
         specifier: 'catalog:'
         version: 4.1.6(@types/node@25.8.0)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.8.0)(esbuild@0.28.0)(jiti@2.7.0)(sass@1.99.0)(terser@5.51.2)(tsx@4.22.4))
@@ -1162,6 +1235,9 @@ importers:
       '@app-game/game-shaders-for-beginners':
         specifier: workspace:*
         version: link:../../packages/game-shaders-for-beginners
+      '@app-game/gpu-text-rendering':
+        specifier: workspace:*
+        version: link:../gpu-text-rendering
       '@app-game/grease-pencil-typegpu':
         specifier: workspace:*
         version: link:../grease-pencil-typegpu
@@ -4027,6 +4103,12 @@ packages:
       '@solidjs/web': ^2.0.0-rc.0
       solid-js: ^2.0.0-rc.0
 
+  '@solid-primitives/jsx-tokenizer@3.0.0-next.2':
+    resolution: {integrity: sha512-fT05hB6R2KSgwyAVatwpKy5dZaSPiURuElz0/FljEnGzvuGWXDpzer40ejPl7FDooFyY6A7gShTN0zv9QXAS4g==}
+    peerDependencies:
+      '@solidjs/web': ^2.0.0-rc.0
+      solid-js: ^2.0.0-rc.0
+
   '@solid-primitives/keyboard@2.0.0-next.5':
     resolution: {integrity: sha512-kTdYQNMqVBzsZdSxzxlVPRAfuR3ENmkPw04WIEoIeV5rNDJYFRQQw7LaD4YWum4tLPtquzBWvYG3maPduSCc5g==}
     peerDependencies:
@@ -4068,6 +4150,12 @@ packages:
     peerDependencies:
       '@solidjs/web': ^2.0.0-rc.0
       solid-js: ^2.0.0-rc.0
+
+  '@solid-primitives/page-utilities@3.0.0-next.0':
+    resolution: {integrity: sha512-GmFq5Caqa6SHhJo8USTzZrNJsxqdqblI31y4nUC4w790kVwDpIBX2Ax9NcswFUV5mYTqNH5A943SwD8h00Xl4g==}
+    peerDependencies:
+      '@solidjs/web': ^2.0.0-beta.15
+      solid-js: ^2.0.0-beta.15
 
   '@solid-primitives/pointer@1.0.0-next.2':
     resolution: {integrity: sha512-BaNEkQW8hmrAslMZD6Z41jlza2XxW85TTevAa9W6kpwNkNbRFbAUAFX+jVMq4mdEtVdYM4On7b25nE8tAB+zIQ==}
@@ -6150,6 +6238,10 @@ packages:
 
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
+
+  neverthrow@8.2.0:
+    resolution: {integrity: sha512-kOCT/1MCPAxY5iUV3wytNFUMUolzuwd/VF/1KCx7kf6CutrOsTie+84zTGTpgQycjvfLdBBdvBvFLqFD2c0wkQ==}
+    engines: {node: '>=18'}
 
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
@@ -9070,6 +9162,12 @@ snapshots:
       '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
       solid-js: 2.0.0-rc.4
 
+  '@solid-primitives/jsx-tokenizer@3.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
+    dependencies:
+      '@solid-primitives/utils': 7.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
+      solid-js: 2.0.0-rc.4
+
   '@solid-primitives/keyboard@2.0.0-next.5(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
     dependencies:
       '@solid-primitives/event-listener': 3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -9115,6 +9213,14 @@ snapshots:
 
   '@solid-primitives/mutation-observer@3.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
     dependencies:
+      '@solid-primitives/utils': 7.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
+      solid-js: 2.0.0-rc.4
+
+  '@solid-primitives/page-utilities@3.0.0-next.0(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
+    dependencies:
+      '@solid-primitives/event-listener': 3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/rootless': 2.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/utils': 7.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
       solid-js: 2.0.0-rc.4
@@ -11575,6 +11681,10 @@ snapshots:
   nanoid@3.3.12: {}
 
   natural-compare@1.4.0: {}
+
+  neverthrow@8.2.0:
+    optionalDependencies:
+      '@rollup/rollup-linux-x64-gnu': 4.60.4
 
   node-addon-api@7.1.1:
     optional: true
