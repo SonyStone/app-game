@@ -10,10 +10,12 @@ const output = process.env.GPU_TEXT_OUTPUT ?? path.join(os.tmpdir(), 'gpu-text-r
 const baseline = process.env.GPU_TEXT_BASELINE;
 await fs.mkdir(output, { recursive: true });
 const browser = await chromium.launch({
+  channel: process.env.GPU_TEXT_BROWSER_CHANNEL || undefined,
   headless: true,
   args: ['--enable-unsafe-webgpu', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : [])]
 });
 const page = await browser.newPage({ viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 });
+await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 page.on('console', (message) => {

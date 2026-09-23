@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 
 const baseURL = process.env.GPU_TEXT_URL ?? 'http://localhost:3180';
 const browser = await chromium.launch({
+  channel: process.env.GPU_TEXT_BROWSER_CHANNEL || undefined,
   headless: true,
   args: ['--enable-unsafe-webgpu', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : [])]
 });
 const page = await browser.newPage({ viewport: { width: 800, height: 600 }, deviceScaleFactor: 1 });
+await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 page.on('console', (message) => {
@@ -103,6 +105,8 @@ try {
     deviceScaleFactor: 3,
     mobile: false
   });
+  // CDP can change DPR without emitting the resize event produced by a real display change.
+  await page.evaluate(() => window.dispatchEvent(new Event('resize')));
   await page.waitForFunction(() => document.querySelector('canvas').width === 1600);
   assert.deepEqual(await pixel(40, 40), [0, 0, 255], 'screen geometry uses CSS pixels at high DPR');
   assert.deepEqual(await pixel(65, 40), [160, 169, 175], 'screen rectangle retains its CSS size');

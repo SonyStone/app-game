@@ -6,6 +6,7 @@ const viewerPath = process.env.GPU_TEXT_PATH ?? '/';
 const baseURL = process.env.GPU_TEXT_URL ?? 'http://localhost:3180';
 for (const gpu of [true, false]) {
   const browser = await chromium.launch({
+  channel: process.env.GPU_TEXT_BROWSER_CHANNEL || undefined,
     headless: true,
     args: gpu
       ? ['--enable-unsafe-webgpu', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : [])]
@@ -13,6 +14,7 @@ for (const gpu of [true, false]) {
   });
   try {
     const page = await browser.newPage({ viewport: { width: 1200, height: 800 }, hasTouch: true });
+    await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
@@ -49,6 +51,10 @@ for (const gpu of [true, false]) {
         };
       }
     });
+    if (!gpu) {
+      // Installed Chrome versions can ignore --disable-webgpu; exercise the actual missing-API branch.
+      await page.addInitScript(() => Object.defineProperty(navigator, 'gpu', { value: undefined }));
+    }
     await page.goto(`${baseURL}${viewerPath}`);
     await page.getByLabel('Document canvas').waitFor();
     assert.equal(await page.locator('canvas').count(), 1);
@@ -115,9 +121,11 @@ for (const gpu of [true, false]) {
     await page.goto('about:blank');
     assert.deepEqual(errors, []);
     // A failed document request must produce a visible loading error.
-    await page.route('**/glyphs.bmp*', (route) =>
-      route.request().resourceType() === 'fetch' ? route.abort() : route.continue()
-    );
+    await page
+      .context()
+      .route('**/demo*.gdoc*', (route) =>
+        route.request().resourceType() === 'fetch' ? route.abort() : route.continue()
+      );
     await page.goto(`${baseURL}${viewerPath}`);
     await page.getByRole('alert').waitFor();
     assert.match(await page.getByRole('alert').textContent(), /fetch|load/i);

@@ -6,7 +6,15 @@ export type ViewerError = DocumentError | GpuError | AbortedError;
 /** Asset transport, decoding and structural validation failures. */
 export type DocumentError = {
   kind: 'document';
-  code: 'load' | 'http' | 'decode' | 'invalid-data';
+  code:
+    | 'load'
+    | 'http'
+    | 'decode'
+    | 'invalid-data'
+    | 'unsupported-format'
+    | 'document-limit'
+    | 'checksum'
+    | 'unsupported-pdf';
   message: string;
   cause?: unknown;
 };
@@ -18,6 +26,7 @@ export type GpuError = {
     | 'unavailable'
     | 'adapter'
     | 'buffer-limit'
+    | 'texture-limit'
     | 'device'
     | 'canvas'
     | 'validation'

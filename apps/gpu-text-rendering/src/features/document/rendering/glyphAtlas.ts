@@ -8,7 +8,7 @@ import { glyphFragment, glyphVertex } from './glyphShader';
 /** Uploads curve metadata and prerenders mipmapped glyph coverage for small text. */
 export async function createGlyphAtlas(
   gpu: GpuContext,
-  document: TextDocument,
+  document: Extract<TextDocument, { kind: 'glyphs' }>,
   blend: GPUBlendState,
   keep: KeepGpuResource
 ) {

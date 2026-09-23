@@ -5,6 +5,8 @@ import tgpu from 'typegpu';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
 import { gpuError } from '../../shared/errors';
+import { GpuCanvasProvider } from '../../shared/gpu/GpuCanvasProvider';
+import { TypeGPURootProvider } from '../../shared/gpu/TypeGPURootProvider';
 import { loadDocument, type TextDocument } from '../document/document';
 import { createTypeGpuRenderer, type TextRenderer } from '../document/rendering/createTypeGpuRenderer';
 import { createViewerState } from './createViewerState';
@@ -49,7 +51,7 @@ describe('document viewer ownership and reactivity', () => {
     const { viewer, setCanvas, dispose } = setup();
     expect(loadDocument).not.toHaveBeenCalled();
     setCanvas(makeCanvas());
-    flush();
+    await settle();
     const signal = vi.mocked(loadDocument).mock.calls[0]![0]!;
     const state = viewer.state();
     dispose();
@@ -72,13 +74,13 @@ describe('document viewer ownership and reactivity', () => {
     setCanvas(canvas);
     await settle();
     expect(viewer.state().phase).toBe('ready');
-    tick();
+    await tick();
     expect(renderer.draw).toHaveBeenCalledOnce();
     expect(frames.size).toBe(0);
     viewer.setGrids(true);
     viewer.setVectorOnly(true);
     flush();
-    tick();
+    await tick();
     expect(renderer.draw).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.objectContaining({ grids: true, vectorOnly: true })
@@ -86,12 +88,12 @@ describe('document viewer ownership and reactivity', () => {
     expect(frames.size).toBe(0);
     viewer.setAutoZoom(true);
     flush();
-    tick();
+    await tick();
     expect(frames.size).toBe(1);
     canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, clientX: 400, clientY: 300 }));
     flush();
     expect(viewer.autoZoom()).toBe(false);
-    tick();
+    await tick();
     expect(frames.size).toBe(0);
   });
 
@@ -104,7 +106,7 @@ describe('document viewer ownership and reactivity', () => {
     const oldCanvas = makeCanvas();
     setCanvas(oldCanvas);
     await settle();
-    tick();
+    await tick();
     oldCanvas.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, pointerType: 'touch' }));
     flush();
     expect(viewer.dragging()).toBe(true);
@@ -115,7 +117,7 @@ describe('document viewer ownership and reactivity', () => {
     expect(first.destroy).toHaveBeenCalledOnce();
     expect(disconnect).toHaveBeenCalledOnce();
     expect(vi.mocked(loadDocument).mock.calls[0]![0]!.aborted).toBe(true);
-    tick();
+    await tick();
     oldCanvas.dispatchEvent(new WheelEvent('wheel', { deltaY: 100 }));
     expect(frames.size).toBe(0);
     setCanvas(undefined);
@@ -144,9 +146,30 @@ describe('document viewer ownership and reactivity', () => {
     expect(late.destroy).toHaveBeenCalledOnce();
     expect(current.destroy).not.toHaveBeenCalled();
     expect(viewer.state()).toEqual(state);
-    tick();
+    await tick();
     expect(current.draw).toHaveBeenCalledOnce();
     expect(late.draw).not.toHaveBeenCalled();
+  });
+
+  it('reuses the device and canvas when replacing the document', async () => {
+    const first = rendererFixture();
+    const second = rendererFixture();
+    vi.mocked(loadDocument).mockImplementation(async () => ok(documentFixture().data));
+    vi.mocked(createTypeGpuRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
+    const { setCanvas, setSession, dispose } = setup();
+    setCanvas(makeCanvas());
+    await settle();
+    const gpu = vi.mocked(createTypeGpuRenderer).mock.calls[0]![0]!;
+    setSession({ file: new File(['pdf'], 'replacement.pdf') });
+    await settle();
+    expect(first.destroy).toHaveBeenCalledOnce();
+    expect(vi.mocked(loadDocument).mock.calls[0]![0]!.aborted).toBe(true);
+    expect(vi.mocked(createTypeGpuRenderer).mock.calls[1]![0]).toBe(gpu);
+    expect(gpu.signal.aborted).toBe(false);
+    expect(tgpu.initFromDevice).toHaveBeenCalledOnce();
+    dispose();
+    expect(second.destroy).toHaveBeenCalledOnce();
+    expect(gpu.device.destroy).toHaveBeenCalledOnce();
   });
 
   it('surfaces initialization errors and device loss while idle', async () => {
@@ -162,7 +185,7 @@ describe('document viewer ownership and reactivity', () => {
     expect(frames.size).toBe(0);
     setCanvas(makeCanvas());
     await settle();
-    tick();
+    await tick();
     const gpu = vi.mocked(createTypeGpuRenderer).mock.calls[1]![0]!;
     loseDevice.get(gpu.device)!({ message: 'Device lost', reason: 'unknown' });
     await settle();
@@ -178,11 +201,26 @@ function setup() {
   const result = createRoot((disposeState) => {
     const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
     const viewer = createViewerState();
+    const [session, setSession] = createSignal<{ file?: File }>({});
     const host = document.createElement('div');
     const disposeView = render(
       () => (
         <Show when={canvas()} keyed>
-          {(target) => <DocumentViewer canvas={target} viewer={viewer} />}
+          {(target) => (
+            <TypeGPURootProvider
+              requiredBufferBytes={256 * 1024 * 1024}
+              error={(error) => {
+                viewer.setState({ phase: 'error', message: error.message, error });
+                return null;
+              }}
+            >
+              <GpuCanvasProvider canvas={target} error={() => null}>
+                <Show when={session()} keyed>
+                  {(current) => <DocumentViewer viewer={viewer} file={current.file} />}
+                </Show>
+              </GpuCanvasProvider>
+            </TypeGPURootProvider>
+          )}
         </Show>
       ),
       host
@@ -192,7 +230,7 @@ function setup() {
       disposeState();
     };
     cleanups.push(dispose);
-    return { viewer, setCanvas, dispose };
+    return { viewer, setCanvas, setSession, dispose };
   });
   flush();
   return result;
@@ -249,6 +287,7 @@ function documentFixture() {
   const close = vi.fn();
   const data: TextDocument = {
     pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6, images: [], x: 0, y: 0 }],
+    kind: 'glyphs',
     glyphVertices: new ArrayBuffer(72),
     positions: { x: new Float32Array([0.5]), y: new Float32Array([0.5]) },
     atlas: { buf: new ArrayBuffer(4), width: 1, height: 1 },
@@ -265,7 +304,9 @@ function rendererFixture(): TextRenderer {
     render: vi.fn(() => ok()),
     destroy: vi.fn(),
     settle: vi.fn(() => okAsync()),
-    resourceBytes: 1024
+    events: new EventTarget(),
+    resourceBytes: 1024,
+    refinement: undefined
   };
 }
 
@@ -286,8 +327,9 @@ async function settle() {
   flush();
 }
 
-function tick() {
+async function tick() {
   const pending = [...frames.values()];
   frames.clear();
   pending.forEach((callback) => callback(performance.now()));
+  await settle();
 }

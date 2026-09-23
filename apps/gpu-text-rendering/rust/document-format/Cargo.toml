@@ -1,0 +1,50 @@
+[package]
+name = "gpu-document"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+wasm = ["dep:wasm-bindgen"]
+migration = ["dep:serde", "dep:serde_json"]
+pdf = ["dep:hayro-interpret", "dep:kurbo"]
+
+[dependencies]
+hayro-interpret = { version = "=0.7.0", optional = true }
+kurbo = { version = "0.13", optional = true }
+crc32fast = "1.5"
+miniz_oxide = "0.8.9"
+moxcms = "=0.8.1"
+zune-jpeg = "=0.5.15"
+thiserror = "2"
+wasm-bindgen = { version = "=0.2.100", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+
+[[bin]]
+name = "migrate-demo"
+required-features = ["migration"]
+
+[[bin]]
+name = "convert-pdf"
+required-features = ["pdf"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+
+[patch.crates-io]
+hayro-interpret = { path = "../vendor/hayro-interpret-0.7.0" }
+hayro-syntax = { path = "../vendor/hayro-syntax-0.7.2" }

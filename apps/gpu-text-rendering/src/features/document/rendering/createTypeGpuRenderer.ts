@@ -65,49 +65,36 @@ export async function createTypeGpuRenderer(gpu: GpuContext, document: TextDocum
       (cause) => gpuError('device', errorMessage(cause), cause)
     )();
 
-    const { view, rasterSize, glyphPipeline, pagePipeline, imagePipeline, imageGroups, resourceBytes } =
-      yield* prepared;
+    const preparation = yield* prepared;
+    const { draw: drawDocument } = preparation;
+    const events = preparation.events;
+    let standaloneFrame: SceneFrame | undefined;
 
     yield* checkActive();
 
     const draw = (pass: GPURenderPassEncoder, frame: SceneFrame) =>
-      checkActive().andThen(() =>
-        Result.fromThrowable(
-          () => {
-            view.write({
-              mul: frame.mul,
-              add: frame.add,
-              rotation: frame.rotation,
-              rasterTexel: [1 / rasterSize[0], 1 / rasterSize[1]],
-              debug: Number(frame.grids),
-              vectorOnly: Number(frame.vectorOnly)
-            });
+      checkActive().andThen(() => {
+        if (preparation.failure) {
+          return err(preparation.failure);
+        }
 
-            pagePipeline.with(pass).draw(document.pages.length * 6);
-
-            for (const item of frame.visible) {
-              for (const image of item.page.images) {
-                const group = imageGroups.get(image.filename);
-
-                if (group) {
-                  imagePipeline.with(pass).with(group).draw(image.numVerts, 1, image.vertexOffset, item.index);
-                }
-              }
-            }
-
-            const glyphs = glyphPipeline.with(pass);
-
-            for (const item of frame.visible) {
-              glyphs.draw(item.page.endVertex - item.page.beginVertex, 1, item.page.beginVertex, item.index);
-            }
-          },
+        return Result.fromThrowable(
+          () => drawDocument(pass, frame),
           (cause) => gpuError('render', errorMessage(cause), cause)
-        )()
-      );
+        )();
+      });
 
     return ok({
       /** Estimated explicit buffer and texture bytes, excluding driver overhead and swapchain. */
-      resourceBytes,
+      get resourceBytes() {
+        return preparation.resourceBytes;
+      },
+      /** Optional composed-page counters for performance and in-motion quality diagnostics. */
+      get refinement() {
+        return 'refinement' in preparation ? preparation.refinement : undefined;
+      },
+      /** Image uploads notify owner-managed frame subscriptions. */
+      events,
 
       /** Releases document buffers/textures. The providers retain their device and canvas. */
       destroy,
@@ -115,9 +102,31 @@ export async function createTypeGpuRenderer(gpu: GpuContext, document: TextDocum
       /** Waits for submitted GPU work and returns any completion or lifetime failure. */
       settle() {
         return ResultAsync.fromThrowable(
-          () => device.queue.onSubmittedWorkDone(),
+          async () => {
+            const active = checkActive();
+
+            if (active.isErr()) {
+              return active;
+            }
+
+            await preparation.settle();
+
+            if (standaloneFrame && checkActive().isOk()) {
+              const rendered = renderScene(gpu, [({ pass }) => draw(pass, standaloneFrame!)]);
+
+              if (rendered.isErr()) {
+                return rendered;
+              }
+            }
+
+            await device.queue.onSubmittedWorkDone();
+            return ok<void>(undefined);
+          },
           (cause) => gpuError('render', errorMessage(cause), cause)
-        )().andThen(() => checkActive());
+        )()
+          .andThen((result) => result)
+          .andThen(() => checkActive())
+          .andThen(() => (preparation.failure ? err(preparation.failure) : ok<void>(undefined)));
       },
 
       /** Records document draws in a scene-owned pass without clearing, ending or submitting it. */
@@ -125,6 +134,7 @@ export async function createTypeGpuRenderer(gpu: GpuContext, document: TextDocum
 
       /** Standalone rendering for callers outside JSX; the shared scene helper owns the pass. */
       render(frame: SceneFrame) {
+        standaloneFrame = frame;
         return renderScene(gpu, [({ pass }) => draw(pass, frame)]);
       }
     });

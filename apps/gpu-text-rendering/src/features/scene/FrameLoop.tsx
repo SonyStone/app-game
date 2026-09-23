@@ -7,6 +7,7 @@ import type { ViewerError } from '../../shared/errors';
 import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
 import { useViewport } from '../viewport/Viewport';
 import { createFrameScheduler, type FrameSubscription } from './createFrameScheduler';
+import { makeGpuFrameGate } from './makeGpuFrameGate';
 import { RenderLayer } from './RenderLayer';
 import { renderScene, type SceneDraw } from './renderScene';
 import { resolveSceneChildren } from './resolveSceneChildren';
@@ -29,9 +30,13 @@ export function FrameLoop(props: {
   let layers: Accessor<SceneDraw[]> = () => [];
 
   const loop = createFrameScheduler(
-    ({ timestamp }) => renderScene(gpu, layers(), timestamp),
+    ({ timestamp }) => gate.draw(() => renderScene(gpu, layers(), timestamp)),
     (error) => props.onError(error)
   );
+
+  const gate = makeGpuFrameGate(() => gpu.device.queue.onSubmittedWorkDone(), loop.invalidate, loop.fail);
+  onCleanup(gate.destroy);
+  makeEventListener(gpu.signal, 'abort', gate.destroy, { once: true });
 
   createEffect(visible, loop.setActive);
   createEffect(() => props.continuous ?? false, loop.setContinuous);

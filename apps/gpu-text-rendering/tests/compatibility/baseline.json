@@ -1,0 +1,1315 @@
+{
+  "pdfjsRevision": "d54c193bd4dd6c34759cb88f1a3b78db66f0962c",
+  "pdfjsReference": {
+    "version": "6.3.289",
+    "chromium": "148.0.7778.96"
+  },
+  "cases": [
+    {
+      "id": "pdfjs-Embedded_font",
+      "sha256": "4b7588e070cd37c7cfa2ce0a493ba9ec6d57fb36a2ca3c6ab50c74a7818a2f9a",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.36220873786407765,
+            "maxError": 103,
+            "rawChangedPercent": 0.5339805825242718,
+            "tolerantChangedPercent": 0.5337783171521036,
+            "foregroundChangedPercent": 68.05054151624549,
+            "blurredMeanError": 0.30448422330097086
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-ArabicCIDTrueType",
+      "sha256": "1cad1de912ba29f89a6d8b08bc5b0f84382874ffedab2c8f9e05ef608c265bb1",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.258037610619469,
+            "maxError": 251,
+            "rawChangedPercent": 1.2542035398230087,
+            "tolerantChangedPercent": 0.7535398230088496,
+            "foregroundChangedPercent": 32.35489693169944,
+            "blurredMeanError": 1.073654867256637
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-simpletype3font",
+      "sha256": "a5697cbc51c19816944658b91e3a41f86e98ae63fbd1007798994b073385aef1",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.0634668284789644,
+            "maxError": 255,
+            "rawChangedPercent": 0.046723300970873786,
+            "tolerantChangedPercent": 0.02588996763754045,
+            "foregroundChangedPercent": 24.90272373540856,
+            "blurredMeanError": 0.05891788025889968
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-Type3WordSpacing",
+      "sha256": "8ac40dc49d40af8b5a50b442ced56b8db962c961a779a0284cd3a6207adc0bb7",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 2.185758998435055,
+            "maxError": 255,
+            "rawChangedPercent": 3.102699530516432,
+            "tolerantChangedPercent": 2.1179577464788735,
+            "foregroundChangedPercent": 38.2471386180585,
+            "blurredMeanError": 1.7756651017214398
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-vertical",
+      "sha256": "514511143db12309893fb69cdf98c76f2361c20da394f79fdff2c119ed7a4393",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.7246483118971061,
+            "maxError": 255,
+            "rawChangedPercent": 0.5152733118971061,
+            "tolerantChangedPercent": 0.5152733118971061,
+            "foregroundChangedPercent": 95.52906110283159,
+            "blurredMeanError": 0.7254541800643087
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 2,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.31875,
+            "maxError": 191,
+            "rawChangedPercent": 0.25,
+            "tolerantChangedPercent": 0.25,
+            "foregroundChangedPercent": 100.0,
+            "blurredMeanError": 0.32
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 3,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.31875,
+            "maxError": 191,
+            "rawChangedPercent": 0.25,
+            "tolerantChangedPercent": 0.25,
+            "foregroundChangedPercent": 100.0,
+            "blurredMeanError": 0.32
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-text_clip_cff_cid",
+      "sha256": "81aaf48f55c659d29d7a533cd913bd9d028ffad183b46580a2122eebe5187506",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.2908967391304348,
+            "maxError": 116,
+            "rawChangedPercent": 0.7346014492753623,
+            "tolerantChangedPercent": 0.568840579710145,
+            "foregroundChangedPercent": 3.7660040178705287,
+            "blurredMeanError": 0.23590579710144927
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-cmykjpeg",
+      "sha256": "659d6b19912f63db988b0b26b9bde0e6d8100667ef162051a4a84ea8e5b90272",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.43698624595469254,
+            "maxError": 209,
+            "rawChangedPercent": 0.24251618122977348,
+            "tolerantChangedPercent": 0.009506472491909385,
+            "foregroundChangedPercent": 0.15242419328684936,
+            "blurredMeanError": 0.3886623516720604
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-calrgb",
+      "sha256": "c59544af2bdce1e53e28359a8320f26c90f7f5fcf7b294c3d2d8a35abccd9428",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "pdfjs",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.647005798274002,
+            "maxError": 196,
+            "rawChangedPercent": 2.9053398058252426,
+            "tolerantChangedPercent": 1.6041666666666665,
+            "foregroundChangedPercent": 1.877857570742264,
+            "blurredMeanError": 1.1043608414239483
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 2,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.8204638619201725,
+            "maxError": 196,
+            "rawChangedPercent": 2.965008090614887,
+            "tolerantChangedPercent": 1.6664644012944985,
+            "foregroundChangedPercent": 1.9530083297381609,
+            "blurredMeanError": 1.2185902103559871
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 3,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.6831600593311757,
+            "maxError": 196,
+            "rawChangedPercent": 2.866504854368932,
+            "tolerantChangedPercent": 1.5887944983818771,
+            "foregroundChangedPercent": 1.839384608179466,
+            "blurredMeanError": 1.1233744606256741
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 4,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 2.0565898058252428,
+            "maxError": 196,
+            "rawChangedPercent": 3.046116504854369,
+            "tolerantChangedPercent": 1.70044498381877,
+            "foregroundChangedPercent": 1.9904255016904528,
+            "blurredMeanError": 1.3780164509169364
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 5,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.6464252966558792,
+            "maxError": 196,
+            "rawChangedPercent": 2.9019012944983817,
+            "tolerantChangedPercent": 1.604368932038835,
+            "foregroundChangedPercent": 1.8782455500593167,
+            "blurredMeanError": 1.1040331715210356
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 6,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.4793385922330098,
+            "maxError": 196,
+            "rawChangedPercent": 3.109425566343042,
+            "tolerantChangedPercent": 1.7413025889967637,
+            "foregroundChangedPercent": 2.014611726823424,
+            "blurredMeanError": 0.9902076591154261
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 7,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 2.0575256202804746,
+            "maxError": 196,
+            "rawChangedPercent": 3.042880258899676,
+            "tolerantChangedPercent": 1.70165857605178,
+            "foregroundChangedPercent": 1.992025269099812,
+            "blurredMeanError": 1.3776665318230852
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 8,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.9667172330097087,
+            "maxError": 196,
+            "rawChangedPercent": 3.129854368932039,
+            "tolerantChangedPercent": 1.7669902912621358,
+            "foregroundChangedPercent": 2.044235611258272,
+            "blurredMeanError": 1.3172559331175837
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 9,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.4784917745415318,
+            "maxError": 196,
+            "rawChangedPercent": 3.1082119741100325,
+            "tolerantChangedPercent": 1.743527508090615,
+            "foregroundChangedPercent": 2.01736525544712,
+            "blurredMeanError": 0.9897862729234088
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 10,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.968871359223301,
+            "maxError": 196,
+            "rawChangedPercent": 3.1231796116504853,
+            "tolerantChangedPercent": 1.7665857605177995,
+            "foregroundChangedPercent": 2.0439302246123456,
+            "blurredMeanError": 1.3173112189859764
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 11,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.667550566343042,
+            "maxError": 196,
+            "rawChangedPercent": 2.9122168284789645,
+            "tolerantChangedPercent": 1.6104368932038835,
+            "foregroundChangedPercent": 1.8852020400528482,
+            "blurredMeanError": 1.1181067961165048
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 12,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.7800606796116505,
+            "maxError": 170,
+            "rawChangedPercent": 3.0562297734627832,
+            "tolerantChangedPercent": 1.7137944983818771,
+            "foregroundChangedPercent": 2.006236784717273,
+            "blurredMeanError": 1.1924932578209277
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 13,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 2.0529402642934196,
+            "maxError": 196,
+            "rawChangedPercent": 2.9601537216828477,
+            "tolerantChangedPercent": 1.6741504854368932,
+            "foregroundChangedPercent": 1.938257699053703,
+            "blurredMeanError": 1.3723091963322547
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 14,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.8042165587918015,
+            "maxError": 196,
+            "rawChangedPercent": 3.13915857605178,
+            "tolerantChangedPercent": 1.7872168284789645,
+            "foregroundChangedPercent": 2.0921730565237158,
+            "blurredMeanError": 1.2113814724919094
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 15,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.781421925566343,
+            "maxError": 196,
+            "rawChangedPercent": 3.2139967637540456,
+            "tolerantChangedPercent": 1.8705501618122975,
+            "foregroundChangedPercent": 2.164044291771577,
+            "blurredMeanError": 1.194875269687163
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 16,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.6683083872707658,
+            "maxError": 196,
+            "rawChangedPercent": 3.037621359223301,
+            "tolerantChangedPercent": 1.6709142394822007,
+            "foregroundChangedPercent": 1.9332795076116591,
+            "blurredMeanError": 1.117396170442287
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 17,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.9212007820927723,
+            "maxError": 196,
+            "rawChangedPercent": 3.1316747572815538,
+            "tolerantChangedPercent": 1.792071197411003,
+            "foregroundChangedPercent": 2.0735040814798174,
+            "blurredMeanError": 1.2889563106796116
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-devicen",
+      "sha256": "1fbaf094e1c714513aea19258e74269b6b5365ea769e288a8e142773f6cf2b94",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.07250471952535059,
+            "maxError": 77,
+            "rawChangedPercent": 0.17617313915857605,
+            "tolerantChangedPercent": 0.16241909385113268,
+            "foregroundChangedPercent": 2.7436107694410277,
+            "blurredMeanError": 0.04911070658036677
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-devicen-none-zero-domain",
+      "sha256": "aff262dc5d70f832cadf2c705b5cf7a0651825e4b0627f25cd4129aa1d10d09e",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 62.50666666666667,
+            "maxError": 186,
+            "rawChangedPercent": 64.0,
+            "tolerantChangedPercent": 64.0,
+            "foregroundChangedPercent": 100.0,
+            "blurredMeanError": 62.50666666666667
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-bug_jpx",
+      "sha256": "4010d808557a72278368c05518367735ed186cbdd04974b8506275f9ac40f999",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.0,
+            "maxError": 0,
+            "rawChangedPercent": 0.0,
+            "tolerantChangedPercent": 0.0,
+            "foregroundChangedPercent": 0.0,
+            "blurredMeanError": 0.0
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-jpx_smaskindata",
+      "sha256": "a82813559c74f074b0caf92c80875fc018acb737269a2af5508c7e083b2a5fd3",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "pdfjs",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.6063318777292577,
+            "maxError": 192,
+            "rawChangedPercent": 0.8569868995633189,
+            "tolerantChangedPercent": 0.43668122270742354,
+            "foregroundChangedPercent": 0.43668122270742354,
+            "blurredMeanError": 0.6063318777292577
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-jbig2_file_header",
+      "sha256": "5edb6045fc86ee5fa8e837685a35a57014764d1f72518e136e5e8f13fcf92c8d",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "pdfjs",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.0,
+            "maxError": 0,
+            "rawChangedPercent": 0.0,
+            "tolerantChangedPercent": 0.0,
+            "foregroundChangedPercent": 0.0,
+            "blurredMeanError": 0.0
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-jbig2_symbol_offset",
+      "sha256": "305b71c67829ef0bb8bddab9fa3ee763dcecd173f5fd996740d17212888fa97d",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 2.0503732332155478,
+            "maxError": 255,
+            "rawChangedPercent": 1.552120141342756,
+            "tolerantChangedPercent": 1.4401501766784452,
+            "foregroundChangedPercent": 76.8080094228504,
+            "blurredMeanError": 1.7021753533568904
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-images_1bit_grayscale",
+      "sha256": "afbed07b9fe25563b2604b81cd7186c91d4356e5428a05322b8b7eae88301e24",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 7.642747349823321,
+            "maxError": 255,
+            "rawChangedPercent": 6.060070671378092,
+            "tolerantChangedPercent": 5.204726148409894,
+            "foregroundChangedPercent": 53.8871358668313,
+            "blurredMeanError": 5.821095406360424
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-colorkeymask",
+      "sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.22438162544169613,
+            "maxError": 255,
+            "rawChangedPercent": 0.1682862190812721,
+            "tolerantChangedPercent": 0.056095406360424024,
+            "foregroundChangedPercent": 0.7462686567164178,
+            "blurredMeanError": 0.22475559481743226
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-large_jpeg_downscale",
+      "sha256": "876d768b597e5176afb2bb35119916414f03851d544bc4589467a2491f8c86f5",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.706175,
+            "maxError": 215,
+            "rawChangedPercent": 1.494375,
+            "tolerantChangedPercent": 0.903125,
+            "foregroundChangedPercent": 0.994843337992,
+            "blurredMeanError": 1.6875854166666666
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-image-rotated-black-white-ratio",
+      "sha256": "dd884a5f5676d5e32cd70590f793238faddedbd6d135918735c0c99b89e28279",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.06286812297734627,
+            "maxError": 134,
+            "rawChangedPercent": 0.10173948220064724,
+            "tolerantChangedPercent": 0.09142394822006472,
+            "foregroundChangedPercent": 2.5509340256222135,
+            "blurredMeanError": 0.03378438511326861
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-clippath",
+      "sha256": "cbcbf53e8109ed56f9a3fbc696081455c8a5d32cc5cff4e741e85250788dcbff",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.024,
+            "maxError": 32,
+            "rawChangedPercent": 0.075,
+            "tolerantChangedPercent": 0.075,
+            "foregroundChangedPercent": 0.2079002079002079,
+            "blurredMeanError": 0.02475
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-tiling-pattern-box",
+      "sha256": "b67ae1bd9c8064f4ddc94b10c9c80fb2aeac668694a2cb4c2cd840712ba7190b",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.487988074204947,
+            "maxError": 165,
+            "rawChangedPercent": 0.8409893992932862,
+            "tolerantChangedPercent": 0.7815812720848057,
+            "foregroundChangedPercent": 63.15132048536759,
+            "blurredMeanError": 0.3481956713780919
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-tiling-pattern-large-steps",
+      "sha256": "10df93162f8b7b9c8846f2e394fa45bcef2b752b4cbe96a1b065b728437dfe99",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.126484375,
+            "maxError": 230,
+            "rawChangedPercent": 2.6218749999999997,
+            "tolerantChangedPercent": 2.6218749999999997,
+            "foregroundChangedPercent": 3.580879214682032,
+            "blurredMeanError": 1.1313802083333333
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-tiling_patterns_variations",
+      "sha256": "2b7b9cccccef7407c18690cf4f007a04fc8a013b868738d025a71113a4700350",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 3.5399118055555556,
+            "maxError": 255,
+            "rawChangedPercent": 3.448958333333333,
+            "tolerantChangedPercent": 3.241458333333333,
+            "foregroundChangedPercent": 18.48476928194649,
+            "blurredMeanError": 2.6084770833333333
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-pattern_text_embedded_font",
+      "sha256": "0d87537cfba850b7501db8010801bebe62b9cc19776ae387f9dafc61e00b1699",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 3.327154004711425,
+            "maxError": 186,
+            "rawChangedPercent": 3.453401060070671,
+            "tolerantChangedPercent": 3.087234982332155,
+            "foregroundChangedPercent": 28.593344106036124,
+            "blurredMeanError": 2.843976001177856
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-gradientfill",
+      "sha256": "47df49b25adf1cc4048c3ec2051f1b304535b5d99090bbfb6eaf2f7a45e0bb14",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.1992432273262662,
+            "maxError": 255,
+            "rawChangedPercent": 0.13096289752650175,
+            "tolerantChangedPercent": 0.0443904593639576,
+            "foregroundChangedPercent": 0.5127158635818687,
+            "blurredMeanError": 0.19923586572438162
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-radial_gradients",
+      "sha256": "4ff43a6591900d190a5c48dace581028a47f4d9bc8a2ae151e8d5805ead7ddc0",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 3.3706010324483775,
+            "maxError": 255,
+            "rawChangedPercent": 3.11216814159292,
+            "tolerantChangedPercent": 2.586061946902655,
+            "foregroundChangedPercent": 6.733915568255139,
+            "blurredMeanError": 2.5054026548672566
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 2,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 3.4079137168141593,
+            "maxError": 255,
+            "rawChangedPercent": 2.8650442477876106,
+            "tolerantChangedPercent": 2.4710176991150443,
+            "foregroundChangedPercent": 4.17351727848858,
+            "blurredMeanError": 2.5801902654867255
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 3,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 3.725683628318584,
+            "maxError": 255,
+            "rawChangedPercent": 2.9573008849557523,
+            "tolerantChangedPercent": 2.544026548672566,
+            "foregroundChangedPercent": 5.785718598426148,
+            "blurredMeanError": 2.821227138643068
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 4,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 5.415710914454277,
+            "maxError": 255,
+            "rawChangedPercent": 4.395353982300885,
+            "tolerantChangedPercent": 3.5851769911504427,
+            "foregroundChangedPercent": 8.38681295932098,
+            "blurredMeanError": 4.114897492625369
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 5,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 5.626685840707965,
+            "maxError": 255,
+            "rawChangedPercent": 4.573230088495575,
+            "tolerantChangedPercent": 3.6323008849557525,
+            "foregroundChangedPercent": 8.219932510238618,
+            "blurredMeanError": 4.257308997050147
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-function_based_shading",
+      "sha256": "21a0d4951f2d45f86d90dd9bac824805b54b2bd2fefe6efad763d227d484ed64",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "pdfjs",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.5717691477885654,
+            "maxError": 254,
+            "rawChangedPercent": 0.8638754045307444,
+            "tolerantChangedPercent": 0.760720064724919,
+            "foregroundChangedPercent": 1.6232547098556291,
+            "blurredMeanError": 1.5271810949298814
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-function_based_shading_cmyk",
+      "sha256": "c624d33b595af80746dd96f6440d335a30b1bee3e484d9b0b2cfb0cd54c62be3",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 3.73128125,
+            "maxError": 254,
+            "rawChangedPercent": 4.79296875,
+            "tolerantChangedPercent": 4.44375,
+            "foregroundChangedPercent": 9.981223787881447,
+            "blurredMeanError": 3.7092625
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 2,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 7.335673973880597,
+            "maxError": 254,
+            "rawChangedPercent": 18.051305970149254,
+            "tolerantChangedPercent": 16.55340485074627,
+            "foregroundChangedPercent": 18.133580629173757,
+            "blurredMeanError": 7.210500621890548
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-ShowText-ShadingPattern",
+      "sha256": "13ac785e8445fbf01d5a8200e0e899daa204cdbe723b02f38f8af61ac48707bb",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.4464118122977345,
+            "maxError": 255,
+            "rawChangedPercent": 1.7572815533980584,
+            "tolerantChangedPercent": 1.151294498381877,
+            "foregroundChangedPercent": 9.5439302481556,
+            "blurredMeanError": 1.2617435275080906
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-shading_extend",
+      "sha256": "f71e22d120201b289e5fad9609060bb06611db387921e946878aef35db079774",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 2.016689487632509,
+            "maxError": 255,
+            "rawChangedPercent": 1.9054770318021201,
+            "tolerantChangedPercent": 1.4737190812720848,
+            "foregroundChangedPercent": 4.202670361506487,
+            "blurredMeanError": 1.4941615135453474
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-alphatrans",
+      "sha256": "234c0ab8e9458f4d17133b08d2b66170eeb92be2a80e1508aa5117a2bf568f63",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.8744397820965842,
+            "maxError": 219,
+            "rawChangedPercent": 1.1298586572438163,
+            "tolerantChangedPercent": 0.6592314487632509,
+            "foregroundChangedPercent": 2.8158517833727963,
+            "blurredMeanError": 0.5816769729093051
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-blendmode",
+      "sha256": "39ce34c2d32738c7c94970fd76559ecb9efd671f5ab99e515a853674e7a824ce",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 3.139102620730271,
+            "maxError": 255,
+            "rawChangedPercent": 5.023409893992933,
+            "tolerantChangedPercent": 1.1735865724381627,
+            "foregroundChangedPercent": 5.474512712737463,
+            "blurredMeanError": 2.1096223498233218
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-transparency_group",
+      "sha256": "029dd50635adee0711836095b76aab62226ca8731f6642a9454b25e2668226dd",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.1991875,
+            "maxError": 65,
+            "rawChangedPercent": 0.23354166666666668,
+            "tolerantChangedPercent": 0.19166666666666665,
+            "foregroundChangedPercent": 0.9931987477059269,
+            "blurredMeanError": 0.15230694444444445
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-knockout_blend_multiply",
+      "sha256": "ff31a84877c957101040906f087d4a73d0f29f3a3060448cb6f6929dbcee5280",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.0183359375,
+            "maxError": 32,
+            "rawChangedPercent": 0.171875,
+            "tolerantChangedPercent": 0.171875,
+            "foregroundChangedPercent": 0.171875,
+            "blurredMeanError": 0.018904947916666668
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-knockout_smask",
+      "sha256": "8c33ad7d984a62355e1c5643b50855ea82538756bc8303256a791177d186f540",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.030631510416666667,
+            "maxError": 44,
+            "rawChangedPercent": 0.078125,
+            "tolerantChangedPercent": 0.078125,
+            "foregroundChangedPercent": 0.20733982998133943,
+            "blurredMeanError": 0.030880859375
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-nonisolated_blend_smask",
+      "sha256": "866d8d75177357eb29cf330a0c30676cc07e22c9e5bd759fbb29f1de79e51f33",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.6813416666666667,
+            "maxError": 255,
+            "rawChangedPercent": 2.276041666666667,
+            "tolerantChangedPercent": 1.6658333333333335,
+            "foregroundChangedPercent": 5.065440216909296,
+            "blurredMeanError": 1.5380145833333334
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-smask_alpha_bc",
+      "sha256": "fda2a361be849a4b4d95120c8a87208f3d68b06d92fa2293e4dcb96e052d1e34",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "pdfjs",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.06919315578465063,
+            "maxError": 103,
+            "rawChangedPercent": 0.09858247422680412,
+            "tolerantChangedPercent": 0.0977233676975945,
+            "foregroundChangedPercent": 0.0977233676975945,
+            "blurredMeanError": 0.0663659793814433
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-smask_alpha_oob",
+      "sha256": "38472de8c3e42b94859deae76931fa232b85ba7b86f23d18ccaadb907d697832",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "pdfjs",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.07238802083333333,
+            "maxError": 101,
+            "rawChangedPercent": 0.16609375,
+            "tolerantChangedPercent": 0.16609375,
+            "foregroundChangedPercent": 5.832967515364355,
+            "blurredMeanError": 0.06969635416666667
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-smask_alpha_oob_transfer",
+      "sha256": "90b1909aa674c400c76dae0e265e89a83bebc77da4a875a8137c58c7a35a49ec",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.10847291666666667,
+            "maxError": 162,
+            "rawChangedPercent": 0.125,
+            "tolerantChangedPercent": 0.125,
+            "foregroundChangedPercent": 0.125,
+            "blurredMeanError": 0.0814609375
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-smask_luminosity_oob_transfer",
+      "sha256": "c691fb3206b5163d0af4d02a1471c0e96f78d9f63804d8ba85867dbdc1c0e740",
+      "status": "within-tolerance",
+      "error": null,
+      "reference": "pdfjs",
+      "pages": [
+        {
+          "number": 1,
+          "status": "within-tolerance",
+          "metrics": {
+            "meanError": 0.3483159722222222,
+            "maxError": 45,
+            "rawChangedPercent": 0.0020833333333333333,
+            "tolerantChangedPercent": 0.0020833333333333333,
+            "foregroundChangedPercent": 0.0020833333333333333,
+            "blurredMeanError": 0.34758680555555554
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-smaskdim",
+      "sha256": "e03b8359f8b64e1a18a795aa9376bc98d98dca89a828ec20c49a4ac2f36a3d82",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.07263956310679612,
+            "maxError": 254,
+            "rawChangedPercent": 0.07362459546925566,
+            "tolerantChangedPercent": 0.041868932038834954,
+            "foregroundChangedPercent": 32.49607535321821,
+            "blurredMeanError": 0.047107605177993526
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-annotation-highlight",
+      "sha256": "72b6387356ccfdfb95a0a5eff5e1ceb9b7667019807d7b04abaf64dad7ea143a",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.08199793875147232,
+            "maxError": 180,
+            "rawChangedPercent": 0.1437720848056537,
+            "tolerantChangedPercent": 0.08568904593639576,
+            "foregroundChangedPercent": 32.715008431703204,
+            "blurredMeanError": 0.04424175500588928
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-annotation-text-widget",
+      "sha256": "9f091ceb368ad0406094efaa6c50d5033735ee52f383e0973dc53a7467089d7c",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 1.985231256742179,
+            "maxError": 241,
+            "rawChangedPercent": 2.483616504854369,
+            "tolerantChangedPercent": 1.654126213592233,
+            "foregroundChangedPercent": 30.976099390174618,
+            "blurredMeanError": 1.2104813915857606
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-rotation",
+      "sha256": "5087c2afe763d145537d652bb3bc6c321ace3a267b2679ae2c178add3ba7f1d9",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.27971076051779936,
+            "maxError": 206,
+            "rawChangedPercent": 0.31816343042071193,
+            "tolerantChangedPercent": 0.14603559870550162,
+            "foregroundChangedPercent": 33.58139534883721,
+            "blurredMeanError": 0.15490898058252428
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 2,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 0.1732443365695793,
+            "maxError": 234,
+            "rawChangedPercent": 0.24797734627831713,
+            "tolerantChangedPercent": 0.12378640776699028,
+            "foregroundChangedPercent": 31.941544885177453,
+            "blurredMeanError": 0.10158980582524271
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "pdfjs-tracemonkey",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 9.70365291262136,
+            "maxError": 243,
+            "rawChangedPercent": 12.693567961165048,
+            "tolerantChangedPercent": 6.104571197411003,
+            "foregroundChangedPercent": 32.15773603401063,
+            "blurredMeanError": 5.642536407766991
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 2,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 11.590999190938511,
+            "maxError": 244,
+            "rawChangedPercent": 14.954085760517799,
+            "tolerantChangedPercent": 7.1332928802588995,
+            "foregroundChangedPercent": 30.389487289961224,
+            "blurredMeanError": 6.839793689320389
+          },
+          "reopenExact": true
+        },
+        {
+          "number": 3,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 8.834524676375404,
+            "maxError": 242,
+            "rawChangedPercent": 11.516585760517799,
+            "tolerantChangedPercent": 5.9079692556634305,
+            "foregroundChangedPercent": 35.122590575135575,
+            "blurredMeanError": 5.150669498381877
+          },
+          "reopenExact": true
+        }
+      ]
+    }
+  ]
+}

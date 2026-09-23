@@ -1,0 +1,430 @@
+{
+  "version": 1,
+  "pdfjsRevision": "d54c193bd4dd6c34759cb88f1a3b78db66f0962c",
+  "blockedSources": [
+    {
+      "suite": "calpoly-pdfvt",
+      "url": "https://pdfa.org/resource/cal-poly-pdfvt-test-suite/",
+      "reason": "Official Cerebellum 10/1000 PDF downloads returned HTTP 403 in the local downloader. Browser displayed a PDF tab but did not expose a downloadable local file. Not tested."
+    }
+  ],
+  "cases": [
+    {
+      "id": "pdfjs-Embedded_font",
+      "suite": "pdfjs",
+      "topic": "fonts",
+      "file": "pdfjs/Embedded_font.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/Embedded_font.pdf",
+      "sha256": "4b7588e070cd37c7cfa2ce0a493ba9ec6d57fb36a2ca3c6ab50c74a7818a2f9a",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-ArabicCIDTrueType",
+      "suite": "pdfjs",
+      "topic": "fonts",
+      "file": "pdfjs/ArabicCIDTrueType.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/ArabicCIDTrueType.pdf",
+      "sha256": "1cad1de912ba29f89a6d8b08bc5b0f84382874ffedab2c8f9e05ef608c265bb1",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-simpletype3font",
+      "suite": "pdfjs",
+      "topic": "fonts",
+      "file": "pdfjs/simpletype3font.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/simpletype3font.pdf",
+      "sha256": "a5697cbc51c19816944658b91e3a41f86e98ae63fbd1007798994b073385aef1",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-Type3WordSpacing",
+      "suite": "pdfjs",
+      "topic": "fonts",
+      "file": "pdfjs/Type3WordSpacing.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/Type3WordSpacing.pdf",
+      "sha256": "8ac40dc49d40af8b5a50b442ced56b8db962c961a779a0284cd3a6207adc0bb7",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-vertical",
+      "suite": "pdfjs",
+      "topic": "fonts",
+      "file": "pdfjs/vertical.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/vertical.pdf",
+      "sha256": "514511143db12309893fb69cdf98c76f2361c20da394f79fdff2c119ed7a4393",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-text_clip_cff_cid",
+      "suite": "pdfjs",
+      "topic": "fonts",
+      "file": "pdfjs/text_clip_cff_cid.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/text_clip_cff_cid.pdf",
+      "sha256": "81aaf48f55c659d29d7a533cd913bd9d028ffad183b46580a2122eebe5187506",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-cmykjpeg",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/cmykjpeg.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/cmykjpeg.pdf",
+      "sha256": "659d6b19912f63db988b0b26b9bde0e6d8100667ef162051a4a84ea8e5b90272",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-calrgb",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/calrgb.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/calrgb.pdf",
+      "sha256": "c59544af2bdce1e53e28359a8320f26c90f7f5fcf7b294c3d2d8a35abccd9428",
+      "pages": "all",
+      "reference": "pdfjs",
+      "referenceReason": "CalRGB adaptation differs across readers; the importer follows the PDF.js transform."
+    },
+    {
+      "id": "pdfjs-devicen",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/devicen.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/devicen.pdf",
+      "sha256": "1fbaf094e1c714513aea19258e74269b6b5365ea769e288a8e142773f6cf2b94",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-devicen-none-zero-domain",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/devicen-none-zero-domain.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/devicen-none-zero-domain.pdf",
+      "sha256": "aff262dc5d70f832cadf2c705b5cf7a0651825e4b0627f25cd4129aa1d10d09e",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-bug_jpx",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/bug_jpx.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/bug_jpx.pdf",
+      "sha256": "4010d808557a72278368c05518367735ed186cbdd04974b8506275f9ac40f999",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-jpx_smaskindata",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/jpx_smaskindata.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/jpx_smaskindata.pdf",
+      "sha256": "a82813559c74f074b0caf92c80875fc018acb737269a2af5508c7e083b2a5fd3",
+      "pages": "all",
+      "reference": "pdfjs",
+      "referenceReason": "PDF.js 6.3 handles associated JPX alpha and Matte; Poppler 26.05 differs."
+    },
+    {
+      "id": "pdfjs-jbig2_file_header",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/jbig2_file_header.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/jbig2_file_header.pdf",
+      "sha256": "5edb6045fc86ee5fa8e837685a35a57014764d1f72518e136e5e8f13fcf92c8d",
+      "pages": "all",
+      "reference": "pdfjs",
+      "referenceReason": "Poppler 26.05 drops the complete embedded JBIG2 file; PDF.js 6.3 displays it."
+    },
+    {
+      "id": "pdfjs-jbig2_symbol_offset",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/jbig2_symbol_offset.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/jbig2_symbol_offset.pdf",
+      "sha256": "305b71c67829ef0bb8bddab9fa3ee763dcecd173f5fd996740d17212888fa97d",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-images_1bit_grayscale",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/images_1bit_grayscale.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/images_1bit_grayscale.pdf",
+      "sha256": "afbed07b9fe25563b2604b81cd7186c91d4356e5428a05322b8b7eae88301e24",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-colorkeymask",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/colorkeymask.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/colorkeymask.pdf",
+      "sha256": "655a470881a3bc4fac682abe88522c86c11ff41d08ecf94fae2f53ecd0c2d27c",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-large_jpeg_downscale",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/large_jpeg_downscale.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/large_jpeg_downscale.pdf",
+      "sha256": "876d768b597e5176afb2bb35119916414f03851d544bc4589467a2491f8c86f5",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-image-rotated-black-white-ratio",
+      "suite": "pdfjs",
+      "topic": "images",
+      "file": "pdfjs/image-rotated-black-white-ratio.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/image-rotated-black-white-ratio.pdf",
+      "sha256": "dd884a5f5676d5e32cd70590f793238faddedbd6d135918735c0c99b89e28279",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-clippath",
+      "suite": "pdfjs",
+      "topic": "clipping-patterns",
+      "file": "pdfjs/clippath.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/clippath.pdf",
+      "sha256": "cbcbf53e8109ed56f9a3fbc696081455c8a5d32cc5cff4e741e85250788dcbff",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-tiling-pattern-box",
+      "suite": "pdfjs",
+      "topic": "clipping-patterns",
+      "file": "pdfjs/tiling-pattern-box.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/tiling-pattern-box.pdf",
+      "sha256": "b67ae1bd9c8064f4ddc94b10c9c80fb2aeac668694a2cb4c2cd840712ba7190b",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-tiling-pattern-large-steps",
+      "suite": "pdfjs",
+      "topic": "clipping-patterns",
+      "file": "pdfjs/tiling-pattern-large-steps.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/tiling-pattern-large-steps.pdf",
+      "sha256": "10df93162f8b7b9c8846f2e394fa45bcef2b752b4cbe96a1b065b728437dfe99",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-tiling_patterns_variations",
+      "suite": "pdfjs",
+      "topic": "clipping-patterns",
+      "file": "pdfjs/tiling_patterns_variations.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/tiling_patterns_variations.pdf",
+      "sha256": "2b7b9cccccef7407c18690cf4f007a04fc8a013b868738d025a71113a4700350",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-pattern_text_embedded_font",
+      "suite": "pdfjs",
+      "topic": "clipping-patterns",
+      "file": "pdfjs/pattern_text_embedded_font.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/pattern_text_embedded_font.pdf",
+      "sha256": "0d87537cfba850b7501db8010801bebe62b9cc19776ae387f9dafc61e00b1699",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-gradientfill",
+      "suite": "pdfjs",
+      "topic": "shading",
+      "file": "pdfjs/gradientfill.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/gradientfill.pdf",
+      "sha256": "47df49b25adf1cc4048c3ec2051f1b304535b5d99090bbfb6eaf2f7a45e0bb14",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-radial_gradients",
+      "suite": "pdfjs",
+      "topic": "shading",
+      "file": "pdfjs/radial_gradients.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/radial_gradients.pdf",
+      "sha256": "4ff43a6591900d190a5c48dace581028a47f4d9bc8a2ae151e8d5805ead7ddc0",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-function_based_shading",
+      "suite": "pdfjs",
+      "topic": "shading",
+      "file": "pdfjs/function_based_shading.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/function_based_shading.pdf",
+      "sha256": "21a0d4951f2d45f86d90dd9bac824805b54b2bd2fefe6efad763d227d484ed64",
+      "pages": "all",
+      "reference": "pdfjs",
+      "referenceReason": "Poppler 26.05 reports PostScript type errors and loses the checkerboard; PDF.js 6.3 evaluates it."
+    },
+    {
+      "id": "pdfjs-function_based_shading_cmyk",
+      "suite": "pdfjs",
+      "topic": "shading",
+      "file": "pdfjs/function_based_shading_cmyk.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/function_based_shading_cmyk.pdf",
+      "sha256": "c624d33b595af80746dd96f6440d335a30b1bee3e484d9b0b2cfb0cd54c62be3",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-ShowText-ShadingPattern",
+      "suite": "pdfjs",
+      "topic": "shading",
+      "file": "pdfjs/ShowText-ShadingPattern.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/ShowText-ShadingPattern.pdf",
+      "sha256": "13ac785e8445fbf01d5a8200e0e899daa204cdbe723b02f38f8af61ac48707bb",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-shading_extend",
+      "suite": "pdfjs",
+      "topic": "shading",
+      "file": "pdfjs/shading_extend.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/shading_extend.pdf",
+      "sha256": "f71e22d120201b289e5fad9609060bb06611db387921e946878aef35db079774",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-alphatrans",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/alphatrans.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/alphatrans.pdf",
+      "sha256": "234c0ab8e9458f4d17133b08d2b66170eeb92be2a80e1508aa5117a2bf568f63",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-blendmode",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/blendmode.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/blendmode.pdf",
+      "sha256": "39ce34c2d32738c7c94970fd76559ecb9efd671f5ab99e515a853674e7a824ce",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-transparency_group",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/transparency_group.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/transparency_group.pdf",
+      "sha256": "029dd50635adee0711836095b76aab62226ca8731f6642a9454b25e2668226dd",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-knockout_blend_multiply",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/knockout_blend_multiply.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/knockout_blend_multiply.pdf",
+      "sha256": "ff31a84877c957101040906f087d4a73d0f29f3a3060448cb6f6929dbcee5280",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-knockout_smask",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/knockout_smask.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/knockout_smask.pdf",
+      "sha256": "8c33ad7d984a62355e1c5643b50855ea82538756bc8303256a791177d186f540",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-nonisolated_blend_smask",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/nonisolated_blend_smask.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/nonisolated_blend_smask.pdf",
+      "sha256": "866d8d75177357eb29cf330a0c30676cc07e22c9e5bd759fbb29f1de79e51f33",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-smask_alpha_bc",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/smask_alpha_bc.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/smask_alpha_bc.pdf",
+      "sha256": "fda2a361be849a4b4d95120c8a87208f3d68b06d92fa2293e4dcb96e052d1e34",
+      "pages": "all",
+      "reference": "pdfjs",
+      "referenceReason": "Alpha masks ignore BC; PDF.js 6.3 agrees with ISO 32000 mask semantics."
+    },
+    {
+      "id": "pdfjs-smask_alpha_oob",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/smask_alpha_oob.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/smask_alpha_oob.pdf",
+      "sha256": "38472de8c3e42b94859deae76931fa232b85ba7b86f23d18ccaadb907d697832",
+      "pages": "all",
+      "reference": "pdfjs",
+      "referenceReason": "Alpha masks ignore BC outside their bounds; PDF.js 6.3 agrees with the mask transfer semantics."
+    },
+    {
+      "id": "pdfjs-smask_alpha_oob_transfer",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/smask_alpha_oob_transfer.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/smask_alpha_oob_transfer.pdf",
+      "sha256": "90b1909aa674c400c76dae0e265e89a83bebc77da4a875a8137c58c7a35a49ec",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-smask_luminosity_oob_transfer",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/smask_luminosity_oob_transfer.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/smask_luminosity_oob_transfer.pdf",
+      "sha256": "c691fb3206b5163d0af4d02a1471c0e96f78d9f63804d8ba85867dbdc1c0e740",
+      "pages": "all",
+      "reference": "pdfjs",
+      "referenceReason": "The transfer function applies to the luminosity background outside mask bounds; PDF.js 6.3 displays that result."
+    },
+    {
+      "id": "pdfjs-smaskdim",
+      "suite": "pdfjs",
+      "topic": "transparency",
+      "file": "pdfjs/smaskdim.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/smaskdim.pdf",
+      "sha256": "e03b8359f8b64e1a18a795aa9376bc98d98dca89a828ec20c49a4ac2f36a3d82",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-annotation-highlight",
+      "suite": "pdfjs",
+      "topic": "annotations",
+      "file": "pdfjs/annotation-highlight.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/annotation-highlight.pdf",
+      "sha256": "72b6387356ccfdfb95a0a5eff5e1ceb9b7667019807d7b04abaf64dad7ea143a",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-annotation-text-widget",
+      "suite": "pdfjs",
+      "topic": "annotations",
+      "file": "pdfjs/annotation-text-widget.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/annotation-text-widget.pdf",
+      "sha256": "9f091ceb368ad0406094efaa6c50d5033735ee52f383e0973dc53a7467089d7c",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-rotation",
+      "suite": "pdfjs",
+      "topic": "layout",
+      "file": "pdfjs/rotation.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/rotation.pdf",
+      "sha256": "5087c2afe763d145537d652bb3bc6c321ace3a267b2679ae2c178add3ba7f1d9",
+      "pages": "all"
+    },
+    {
+      "id": "pdfjs-tracemonkey",
+      "suite": "pdfjs",
+      "topic": "layout",
+      "file": "pdfjs/tracemonkey.pdf",
+      "url": "https://raw.githubusercontent.com/mozilla/pdf.js/d54c193bd4dd6c34759cb88f1a3b78db66f0962c/test/pdfs/tracemonkey.pdf",
+      "sha256": "3662ff519e485810520552bf301d8c3b2b917fd2f83303f4965d7abed367e113",
+      "pages": [1, 2, 3]
+    }
+  ],
+  "localSuites": [
+    {
+      "suite": "ghent-5",
+      "manifest": "ghent-manifest.json",
+      "findings": "ghent-findings.md"
+    }
+  ]
+}

@@ -37,26 +37,26 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('runs updates before drawing even if JSX mounts the drawing component first', () => {
+it('runs updates before drawing even if JSX mounts the drawing component first', async () => {
   const { calls, loop } = mount();
 
   loop.invalidate();
   loop.invalidate();
   expect(frames.size).toBe(1);
 
-  tick();
+  await tick();
   expect(calls).toEqual(['update', 'draw']);
   expect(frames.size).toBe(0);
 });
 
-it('unsubscribes removed components and redraws the remaining scene once', () => {
+it('unsubscribes removed components and redraws the remaining scene once', async () => {
   const { calls, setDraw } = mount();
-  tick();
+  await tick();
   calls.length = 0;
 
   setDraw(false);
   flush();
-  tick();
+  await tick();
 
   expect(calls).toEqual(['update']);
   expect(frames.size).toBe(0);
@@ -64,15 +64,15 @@ it('unsubscribes removed components and redraws the remaining scene once', () =>
   calls.length = 0;
   setDraw(true);
   flush();
-  tick();
+  await tick();
 
   expect(calls).toEqual(['update', 'draw']);
   expect(frames.size).toBe(0);
 });
 
-it('switches between continuous rendering and idle without creating duplicate RAF loops', () => {
+it('switches between continuous rendering and idle without creating duplicate RAF loops', async () => {
   const { setContinuous, loop } = mount();
-  tick();
+  await tick();
 
   setContinuous(true);
   flush();
@@ -80,48 +80,48 @@ it('switches between continuous rendering and idle without creating duplicate RA
   loop.invalidate();
   expect(frames.size).toBe(1);
 
-  tick();
+  await tick();
   expect(frames.size).toBe(1);
 
   setContinuous(false);
   flush();
-  tick();
+  await tick();
   expect(frames.size).toBe(0);
 });
 
-it('stops synchronously on GPU cancellation and ignores subsequent invalidations', () => {
+it('stops synchronously on GPU cancellation and ignores subsequent invalidations', async () => {
   const { loop, calls } = mount();
   expect(frames.size).toBe(1);
 
   abort.abort();
   loop.invalidate();
-  tick();
+  await tick();
 
   expect(frames.size).toBe(0);
   expect(calls).toEqual([]);
 });
 
-it('cancels scheduled callbacks when the JSX tree is disposed', () => {
+it('cancels scheduled callbacks when the JSX tree is disposed', async () => {
   const { dispose, loop, calls } = mount();
   dispose();
   loop.invalidate();
-  tick();
+  await tick();
 
   expect(frames.size).toBe(0);
   expect(calls).toEqual([]);
 });
 
-it('preserves a new invalidation requested from a frame callback', () => {
+it('preserves a new invalidation requested from a frame callback', async () => {
   const { calls } = mount(true);
-  tick();
+  await tick();
   expect(frames.size).toBe(1);
 
-  tick();
+  await tick();
   expect(calls).toEqual(['update', 'draw', 'update', 'draw']);
   expect(frames.size).toBe(0);
 });
 
-it('composes independently mounted layers, reacts to order and removes them without stopping siblings', () => {
+it('composes independently mounted layers, reacts to order and removes them without stopping siblings', async () => {
   const calls: string[] = [];
   const mounted = createRoot((disposeState) => {
     const [visible, setVisible] = createSignal(false);
@@ -156,28 +156,28 @@ it('composes independently mounted layers, reacts to order and removes them with
   });
 
   flush();
-  tick();
+  await tick();
   expect(calls.splice(0)).toEqual(['sibling']);
 
   mounted.setVisible(true);
   flush();
-  tick();
+  await tick();
   expect(calls.splice(0)).toEqual(['late', 'sibling']);
 
   mounted.setOrder(1);
   flush();
-  tick();
+  await tick();
   expect(calls.splice(0)).toEqual(['sibling', 'late']);
 
   mounted.setVisible(false);
   flush();
-  tick();
+  await tick();
   expect(calls.splice(0)).toEqual(['sibling']);
   expect(frames.size).toBe(0);
   expect(gpu.device.queue.submit).toHaveBeenCalledTimes(4);
 });
 
-it('evaluates render children under the loop context and owns their subscriptions and cleanup', () => {
+it('evaluates render children under the loop context and owns their subscriptions and cleanup', async () => {
   const cleanup = vi.fn();
   const callback = vi.fn();
   const onError = vi.fn();
@@ -218,13 +218,13 @@ it('evaluates render children under the loop context and owns their subscription
   });
 
   flush();
-  tick();
+  await tick();
   expect(callback).toHaveBeenCalledOnce();
 
   mounted.setContinuous(true);
   mounted.setVisible(false);
   flush();
-  tick();
+  await tick();
   expect(mounts).toBe(1);
   expect(cleanup).not.toHaveBeenCalled();
   expect(callback).toHaveBeenCalledTimes(2);
@@ -232,7 +232,7 @@ it('evaluates render children under the loop context and owns their subscription
   const error = gpuError('render', 'Cannot prepare document');
   loop.fail(error);
   loop.invalidate();
-  tick();
+  await tick();
   expect(onError).toHaveBeenCalledExactlyOnceWith(error);
   expect(frames.size).toBe(0);
 
@@ -241,7 +241,7 @@ it('evaluates render children under the loop context and owns their subscription
   expect(callback).toHaveBeenCalledTimes(2);
 });
 
-it('follows JSX order for late siblings and keyed list reordering without recreating GPU owners', () => {
+it('follows JSX order for late siblings and keyed list reordering without recreating GPU owners', async () => {
   const calls: string[] = [];
   const mountedLayers: number[] = [];
   const disposedLayers: number[] = [];
@@ -286,17 +286,17 @@ it('follows JSX order for late siblings and keyed list reordering without recrea
   });
 
   flush();
-  tick();
+  await tick();
   expect(calls.splice(0)).toEqual(['1:2', '2:2']);
 
   mounted.setEarly(true);
   flush();
-  tick();
+  await tick();
   expect(calls.splice(0)).toEqual(['0:2', '1:2', '2:2']);
 
   mounted.setIds([2, 1]);
   flush();
-  tick();
+  await tick();
   expect(calls.splice(0)).toEqual(['0:2', '2:2', '1:2']);
   expect(mountedLayers).toEqual([1, 2, 0]);
   expect(disposedLayers).toEqual([]);
@@ -304,14 +304,14 @@ it('follows JSX order for late siblings and keyed list reordering without recrea
   mounted.setEarly(false);
   mounted.setIds([]);
   flush();
-  tick();
+  await tick();
   expect(calls).toEqual([]);
   expect(disposedLayers.sort()).toEqual([0, 1, 2]);
   expect(gpu.device.queue.submit).toHaveBeenCalledTimes(4);
   expect(frames.size).toBe(0);
 });
 
-it('reacts to replacing a token draw prop without remounting the layer', () => {
+it('reacts to replacing a token draw prop without remounting the layer', async () => {
   const first = vi.fn();
   const second = vi.fn();
   const mounted = createRoot((disposeState) => {
@@ -334,18 +334,18 @@ it('reacts to replacing a token draw prop without remounting the layer', () => {
   });
 
   flush();
-  tick();
+  await tick();
   expect(first).toHaveBeenCalledOnce();
 
   mounted.setDraw(() => second);
   flush();
-  tick();
+  await tick();
   expect(first).toHaveBeenCalledOnce();
   expect(second).toHaveBeenCalledOnce();
   expect(frames.size).toBe(0);
 });
 
-it('keeps independent animations running until the last enabled owner unsubscribes', () => {
+it('keeps independent animations running until the last enabled owner unsubscribes', async () => {
   const a = vi.fn();
   const b = vi.fn();
   const mounted = createRoot((disposeState) => {
@@ -382,32 +382,32 @@ it('keeps independent animations running until the last enabled owner unsubscrib
   });
 
   flush();
-  tick(1000);
-  tick(1016);
+  await tick(1000);
+  await tick(1016);
   expect(a.mock.calls[1]![0]).toMatchObject({ delta: 0.016, time: 0.016 });
   expect(frames.size).toBe(1);
 
   mounted.setA(false);
   flush();
-  tick(1032);
+  await tick(1032);
   expect(a).toHaveBeenCalledTimes(2);
   expect(b).toHaveBeenCalledTimes(3);
   expect(frames.size).toBe(1);
 
   mounted.mountB(false);
   flush();
-  tick(1048);
+  await tick(1048);
   expect(b).toHaveBeenCalledTimes(3);
   expect(frames.size).toBe(0);
 
   mounted.setA(true);
   flush();
-  tick(5000);
+  await tick(5000);
   expect(a.mock.lastCall![0].delta).toBe(0);
   expect(frames.size).toBe(1);
 });
 
-it('pauses hidden pages, retains invalidation and resumes without advancing animation time', () => {
+it('pauses hidden pages, retains invalidation and resumes without advancing animation time', async () => {
   const callback = vi.fn();
   let loop!: ReturnType<typeof useFrameLoop>;
   const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
@@ -429,8 +429,8 @@ it('pauses hidden pages, retains invalidation and resumes without advancing anim
   });
 
   flush();
-  tick(1000);
-  tick(1020);
+  await tick(1000);
+  await tick(1020);
 
   visibility.mockReturnValue('hidden');
   document.dispatchEvent(new Event('visibilitychange'));
@@ -442,9 +442,9 @@ it('pauses hidden pages, retains invalidation and resumes without advancing anim
   visibility.mockReturnValue('visible');
   document.dispatchEvent(new Event('visibilitychange'));
   flush();
-  tick(10000);
+  await tick(10000);
   expect(callback.mock.lastCall![0]).toEqual({ timestamp: 10000, delta: 0, time: 0.02 });
-  tick(20000);
+  await tick(20000);
   expect(callback.mock.lastCall![0].delta).toBe(0.1);
 
   dispose();
@@ -453,7 +453,7 @@ it('pauses hidden pages, retains invalidation and resumes without advancing anim
   expect(frames.size).toBe(0);
 });
 
-it('hides keyed layers without disposing resources and preserves owners when object identities change', () => {
+it('hides keyed layers without disposing resources and preserves owners when object identities change', async () => {
   const created: string[] = [];
   const disposed: string[] = [];
   const drawn: number[] = [];
@@ -496,11 +496,11 @@ it('hides keyed layers without disposing resources and preserves owners when obj
   });
 
   flush();
-  tick();
+  await tick();
   expect(drawn.splice(0)).toEqual([1, 2]);
   mounted.setVisible(false);
   flush();
-  tick();
+  await tick();
   expect(drawn).toEqual([]);
   expect(disposed).toEqual([]);
 
@@ -510,18 +510,18 @@ it('hides keyed layers without disposing resources and preserves owners when obj
   ]);
   mounted.setVisible(true);
   flush();
-  tick();
+  await tick();
   expect(drawn).toEqual([20, 10]);
   expect(created).toEqual(['a', 'b']);
   expect(disposed).toEqual([]);
 
   mounted.setItems([]);
   flush();
-  tick();
+  await tick();
   expect(disposed.sort()).toEqual(['a', 'b']);
 });
 
-it('turns a thrown frame callback failure into one typed error and stops submission', () => {
+it('turns a thrown frame callback failure into one typed error and stops submission', async () => {
   const onError = vi.fn();
   const dispose = render(
     () => (
@@ -537,7 +537,7 @@ it('turns a thrown frame callback failure into one typed error and stops submiss
   cleanups.push(dispose);
 
   flush();
-  tick();
+  await tick();
   expect(onError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ kind: 'gpu', code: 'render' }));
   expect(gpu.device.queue.submit).not.toHaveBeenCalled();
   expect(frames.size).toBe(0);
@@ -596,9 +596,10 @@ function mount(invalidateFirstFrame = false) {
   return { ...result, calls, loop };
 }
 
-function tick(timestamp = performance.now()) {
+async function tick(timestamp = performance.now()) {
   const pending = [...frames.values()];
   frames.clear();
   pending.forEach((callback) => callback(timestamp));
+  await new Promise((resolve) => setTimeout(resolve, 0));
   flush();
 }

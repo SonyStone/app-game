@@ -46,6 +46,7 @@ catalog:
   clsx: ^2.1.1
   jsdom: ^29.1.1
   neverthrow: ^8.2.0
+  pdfjs-dist: 6.3.289
   shiki: ^4.1.0
   solid-js: 2.0.0-rc.4
   tailwind-merge: ^3.6.0

@@ -12,7 +12,15 @@
     "preview": "vite preview --port 4180",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:browser": "node tests/browser/controls.browser.mjs && node tests/browser/scene.browser.mjs && node tests/browser/rendering.browser.mjs"
+    "test:browser": "node tests/browser/pdf.browser.mjs && node tests/browser/images.browser.mjs && node tests/browser/cmyk.browser.mjs && node tests/browser/virtualTextures.browser.mjs && node tests/browser/curveQuality.browser.mjs && node tests/browser/pageTiles.browser.mjs && node tests/browser/selectiveComposition.browser.mjs && node tests/browser/coverage.browser.mjs && node tests/browser/graphics.browser.mjs && node tests/browser/mesh.browser.mjs && node tests/browser/groups.browser.mjs && node tests/browser/compositing.browser.mjs && node tests/browser/format.browser.mjs && node tests/browser/controls.browser.mjs && node tests/browser/scene.browser.mjs && node tests/browser/rendering.browser.mjs",
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "test:rust": "cargo +1.92.0 test --manifest-path rust/document-format/Cargo.toml --locked --all-features",
+    "test:wasm": "node scripts/verify-demo.mjs",
+    "migrate:demo": "cargo +1.92.0 run --manifest-path rust/document-format/Cargo.toml --locked --release --features migration --bin migrate-demo -- tools/legacy-demo src/features/document/assets/demo.gdoc",
+    "test:performance": "node tests/performance/suite.mjs",
+    "fetch:compatibility": "node tests/compatibility/fetch.mjs",
+    "test:compatibility": "node tests/compatibility/check.mjs",
+    "test:corpus": "node tests/performance/corpus.mjs"
   },
   "dependencies": {
     "@solid-primitives/event-listener": "catalog:",
@@ -30,6 +38,7 @@
     "@types/node": "25.8.0",
     "@webgpu/types": "^0.1.70",
     "happy-dom": "^20.9.0",
+    "pdfjs-dist": "catalog:",
     "sass": "^1.99.0",
     "typescript": "catalog:",
     "unplugin-typegpu": "^0.11.3",

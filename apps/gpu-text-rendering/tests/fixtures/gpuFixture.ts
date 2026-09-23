@@ -13,7 +13,7 @@ export function gpuFixture(signal = new AbortController().signal) {
     device: {
       limits: { maxTextureDimension2D: 8192 },
       createCommandEncoder: vi.fn(() => encoder),
-      queue: { submit: vi.fn() }
+      queue: { submit: vi.fn(), onSubmittedWorkDone: vi.fn(async () => {}) }
     },
     context: {
       canvas: { width: 800, height: 600 },

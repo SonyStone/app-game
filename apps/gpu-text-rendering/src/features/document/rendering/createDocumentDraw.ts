@@ -1,3 +1,4 @@
+import { makeEventListener } from '@solid-primitives/event-listener';
 import { createEffect, type Accessor } from 'solid-js';
 import { useDocumentCamera } from '../../camera/DocumentCamera';
 import { useFrameLoop } from '../../scene/FrameLoop';
@@ -23,6 +24,8 @@ export function createDocumentDraw(
   const camera = useDocumentCamera();
   const loop = useFrameLoop();
   const viewport = useViewport();
+
+  makeEventListener(renderer.events, 'change', () => loop.invalidate());
 
   createEffect(
     () => [options.vectorOnly?.(), options.grids?.()],

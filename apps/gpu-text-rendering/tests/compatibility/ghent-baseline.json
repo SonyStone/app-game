@@ -1,0 +1,1133 @@
+{
+  "pdfjsRevision": null,
+  "pdfjsReference": {
+    "version": "6.3.289",
+    "chromium": "148.0.7778.96"
+  },
+  "cases": [
+    {
+      "id": "ghent-GWG010_CMYK_OP_x3",
+      "sha256": "f11016fcc98eec8b600293526a666028979a7aa9007a8ba6d699b68af238d4c2",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 4.05210960960961,
+            "maxError": 251,
+            "rawChangedPercent": 11.820382882882882,
+            "tolerantChangedPercent": 10.811092342342342,
+            "foregroundChangedPercent": 51.90165972860464,
+            "blurredMeanError": 3.4082545045045043
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG011_Overprint-Mode_x3",
+      "sha256": "ac2a014378c94773de444f63ab3c98412f04e892a0c29224db2bad8afe5d372b",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 5.1323076201201205,
+            "maxError": 250,
+            "rawChangedPercent": 4.29054054054054,
+            "tolerantChangedPercent": 3.0501126126126126,
+            "foregroundChangedPercent": 12.120873096673865,
+            "blurredMeanError": 4.394133821321321
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG050_Font_Substitution_x3",
+      "sha256": "f14d922933e823d0265542de3b6aa699f3bc50341e99d305b39759aced17aa5d",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 3.6927130255255256,
+            "maxError": 214,
+            "rawChangedPercent": 4.215934684684685,
+            "tolerantChangedPercent": 3.029279279279279,
+            "foregroundChangedPercent": 30.350896987476023,
+            "blurredMeanError": 3.009118806306306
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG051_Font_subset_PSnames_ident_x1a",
+      "sha256": "4df797633d26b0ce6a0cd59e7074ba72f4176cdedbedc96a267adbe5f50747bc",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 5.958836336336336,
+            "maxError": 246,
+            "rawChangedPercent": 6.702702702702703,
+            "tolerantChangedPercent": 4.585585585585585,
+            "foregroundChangedPercent": 41.126120439338465,
+            "blurredMeanError": 4.472731794294294
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG052_Font_subset_PSnames_diff_x1a",
+      "sha256": "d9d7fa57bae64ab0c379e365caef90befd6c3ad5929ab19a0cbb04e89a66b6ea",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 6.0693975225225225,
+            "maxError": 246,
+            "rawChangedPercent": 6.720157657657658,
+            "tolerantChangedPercent": 4.6027590090090085,
+            "foregroundChangedPercent": 41.23017173984314,
+            "blurredMeanError": 4.732877252252252
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG060_Shading_x1a",
+      "sha256": "e870c9b47064cdb9c25901c042646fc0a278d0bfb95c6b332511fd8ddbf49a6b",
+      "status": "unsupported",
+      "error": {
+        "kind": "document",
+        "code": "unsupported-pdf",
+        "message": "Unsupported PDF on page 1: mesh shading"
+      },
+      "reference": "poppler",
+      "pages": []
+    },
+    {
+      "id": "ghent-GWG061_Shading_x1a",
+      "sha256": "97e66a4ec9e34c41b84254d287bb9c9bae88fc3673e8218781b109eed64bc44a",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 4.971745495495496,
+            "maxError": 255,
+            "rawChangedPercent": 8.857263513513514,
+            "tolerantChangedPercent": 6.052646396396397,
+            "foregroundChangedPercent": 26.071718751894835,
+            "blurredMeanError": 4.201145833333333
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG082_DeviceN-Support_4c_x3",
+      "sha256": "02176e142eeff944ad0812917c0b074a6c3ac8b839958760fb748a5990140819",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 8.274761636636637,
+            "maxError": 246,
+            "rawChangedPercent": 9.8125,
+            "tolerantChangedPercent": 7.531531531531531,
+            "foregroundChangedPercent": 16.611609249646058,
+            "blurredMeanError": 7.083299549549549
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG090_Font-Support_x3",
+      "sha256": "947e039754d2fb8cc816866613319d352db13e2cd52986ec32f2347fdc56b007",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 20.38466216216216,
+            "maxError": 255,
+            "rawChangedPercent": 21.7553490990991,
+            "tolerantChangedPercent": 13.335304054054053,
+            "foregroundChangedPercent": 41.85584136718301,
+            "blurredMeanError": 14.747345157657657
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG091_FontSupport-OpenType_X4",
+      "sha256": "b4481274c888270166135bb9960995e147dcfa74cf5f14a16ea572a16aac4e07",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 9.595356606606607,
+            "maxError": 255,
+            "rawChangedPercent": 10.173423423423424,
+            "tolerantChangedPercent": 6.618243243243244,
+            "foregroundChangedPercent": 36.945998616961084,
+            "blurredMeanError": 7.915224286786787
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG150_OptionalContent-OCCD_X4",
+      "sha256": "12f867efa346b538924dc47f879aae853e41316b584a7596fb293f8ac5bc9043",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 8.052793731231231,
+            "maxError": 254,
+            "rawChangedPercent": 25.103885135135133,
+            "tolerantChangedPercent": 23.175675675675674,
+            "foregroundChangedPercent": 74.63214295427966,
+            "blurredMeanError": 7.103622372372373
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG151_OptionalContent-RBGroup_X4",
+      "sha256": "739afcfbc5e4e2f7e2d7996fa59cdcdb241f548df38be0b68083482fc2dae1a2",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 8.327222222222222,
+            "maxError": 254,
+            "rawChangedPercent": 25.407376126126124,
+            "tolerantChangedPercent": 23.37359234234234,
+            "foregroundChangedPercent": 74.0377755582507,
+            "blurredMeanError": 7.3243618618618616
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG152_OptionalContent-OCMD_X4",
+      "sha256": "0d4c01ba1aa179126c843e7dfec20a658469df547943de2d46ed54ec409f93ac",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 16.58584740990991,
+            "maxError": 255,
+            "rawChangedPercent": 27.181306306306308,
+            "tolerantChangedPercent": 24.972972972972972,
+            "foregroundChangedPercent": 73.43046357615894,
+            "blurredMeanError": 15.451018205705706
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG160_Transp_Basic_BM_DeviceCMYK_Non-knockout_X4",
+      "sha256": "113f42ceb6c97555bcd28db13362e9defba401311f8fedd9bef8c12f38dc9e8b",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 7.344126313813814,
+            "maxError": 233,
+            "rawChangedPercent": 9.427927927927927,
+            "tolerantChangedPercent": 7.3282657657657655,
+            "foregroundChangedPercent": 26.07510994019654,
+            "blurredMeanError": 4.9207939189189185
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG1610_Softmasks_Text_part1_X4",
+      "sha256": "5649fc0b33f121b8c96cd0a98643f2a4feca13b5be5368c1cb0efbb274de06fb",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 51.32885792042042,
+            "maxError": 255,
+            "rawChangedPercent": 41.329391891891895,
+            "tolerantChangedPercent": 41.134009009009006,
+            "foregroundChangedPercent": 77.70090247235946,
+            "blurredMeanError": 51.032627627627626
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG1611_Softmasks_Text_part2_X4",
+      "sha256": "b2421e461dda0d780b2600342fe73e69ba73b43538df1165b28376bf4d6986a0",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 41.84818412162162,
+            "maxError": 255,
+            "rawChangedPercent": 32.06109234234234,
+            "tolerantChangedPercent": 31.978322072072075,
+            "foregroundChangedPercent": 71.80960689855732,
+            "blurredMeanError": 41.66508633633634
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG161_Transp_Basic_BM_DeviceCMYK_Knockout_X4",
+      "sha256": "b87d02c8e9c0e3400deecf129eca6c8aae05d4e2b58e0db2da2314dfa825ac4e",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 8.608767830330331,
+            "maxError": 247,
+            "rawChangedPercent": 13.565033783783784,
+            "tolerantChangedPercent": 11.528716216216216,
+            "foregroundChangedPercent": 31.926588338024214,
+            "blurredMeanError": 6.372972034534534
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG162_Transp_Basic_BM_DeviceCMYK_Isolate_X4",
+      "sha256": "33b6e24fbb7c21aa0741ab12a5d40ae92e514b7a7e4ebb56783d5b7eb65caea4",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 8.24540915915916,
+            "maxError": 236,
+            "rawChangedPercent": 13.167792792792794,
+            "tolerantChangedPercent": 10.964245495495495,
+            "foregroundChangedPercent": 30.24689919771352,
+            "blurredMeanError": 5.868530405405405
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG166_Softmasks_Images_DeviceCMYK_X4",
+      "sha256": "798d141cc6bdb680fd4ace8f92fda78cbcbb961786ec431a60120d80f334a6c7",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 6.385587462462462,
+            "maxError": 252,
+            "rawChangedPercent": 7.154842342342342,
+            "tolerantChangedPercent": 3.8119369369369367,
+            "foregroundChangedPercent": 13.125878532305753,
+            "blurredMeanError": 5.070491741741741
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG168_Softmasks_Vector_part1_X4",
+      "sha256": "da0deb27dc65338ffbe284fb0a67531cdca0ef773ab5bba96dca2476dea965e0",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 31.184268018018017,
+            "maxError": 255,
+            "rawChangedPercent": 21.75506756756757,
+            "tolerantChangedPercent": 21.75506756756757,
+            "foregroundChangedPercent": 90.46465072173639,
+            "blurredMeanError": 31.175945945945944
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG169_Softmasks_Vector_part2_X4",
+      "sha256": "3b29ef3be73f678c270e4a1d782f7ed5c03b471ab3030be87103587e63b6db11",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 23.103097785285286,
+            "maxError": 255,
+            "rawChangedPercent": 16.37668918918919,
+            "tolerantChangedPercent": 16.375844594594593,
+            "foregroundChangedPercent": 88.18258997604681,
+            "blurredMeanError": 23.09866647897898
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG170_JPEG2000_compression_DeviceCMYK_X4",
+      "sha256": "8e1608ae4be512a0e3d144015defcd67d89246753605b0667c32935e13d35388",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 2.7573658033033035,
+            "maxError": 182,
+            "rawChangedPercent": 3.213963963963964,
+            "tolerantChangedPercent": 2.4828265765765765,
+            "foregroundChangedPercent": 12.648442430153176,
+            "blurredMeanError": 2.310818318318318
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG173_JBIG2_compression_X4",
+      "sha256": "4e549cbf27a0b6eb88bc3f633c764f046233d25f298b822cf381f84af83a8ac2",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 3.076684496996997,
+            "maxError": 211,
+            "rawChangedPercent": 3.5028153153153156,
+            "tolerantChangedPercent": 2.786036036036036,
+            "foregroundChangedPercent": 14.16608213922728,
+            "blurredMeanError": 2.4615746996996997
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG181_16Bit_DeviceCMYK_x4",
+      "sha256": "358bfbec1319cc76a2fd1e0e9171694cbb6e373325cba753391993058269eaef",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 14.332466216216217,
+            "maxError": 255,
+            "rawChangedPercent": 13.939189189189188,
+            "tolerantChangedPercent": 12.185247747747747,
+            "foregroundChangedPercent": 58.569920701507485,
+            "blurredMeanError": 12.406025713213213
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG190_DeviceN_Overprint_Black_X1a",
+      "sha256": "fc1998b3661a10f5d8782852ed1f2ab582dcb89910956eb04d329807c3e08d9e",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 6.4273076201201205,
+            "maxError": 249,
+            "rawChangedPercent": 7.82179054054054,
+            "tolerantChangedPercent": 5.367117117117117,
+            "foregroundChangedPercent": 29.671595330739297,
+            "blurredMeanError": 4.748456268768769
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG191_DeviceN_Overprint_Yellow_X1a",
+      "sha256": "62a3e7d3fa911654cc3d884c6409c3b30b882c61335760a196c656f2098e760f",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 7.4002477477477475,
+            "maxError": 252,
+            "rawChangedPercent": 9.013231981981983,
+            "tolerantChangedPercent": 6.081362612612613,
+            "foregroundChangedPercent": 31.67952365588244,
+            "blurredMeanError": 5.5004307432432435
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG192_DeviceN_Overprint_White_X1a",
+      "sha256": "3de494b5cb0ba35618b5150ea861f7b3cbb632e2071c4236bb0c36e5af8d8db0",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 7.146150525525526,
+            "maxError": 253,
+            "rawChangedPercent": 8.60641891891892,
+            "tolerantChangedPercent": 5.94847972972973,
+            "foregroundChangedPercent": 38.50036443148689,
+            "blurredMeanError": 5.327552552552553
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG020_CMYKSpot_OP_x1a",
+      "sha256": "a72b1f4e3cc0c0b24dfa379c3dcc6557676627840afeed1e568b127dbbbfd7d7",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 4.604967154654655,
+            "maxError": 255,
+            "rawChangedPercent": 5.0625,
+            "tolerantChangedPercent": 3.774774774774775,
+            "foregroundChangedPercent": 22.706181202370875,
+            "blurredMeanError": 3.7660116366366365
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG030_Gray_K_black_OP_X1",
+      "sha256": "46ac6fc55f0c725f2eb7644514d8bae085c84ee9b85a87d6f51e51e1d4b562b1",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 7.183630818318318,
+            "maxError": 254,
+            "rawChangedPercent": 6.648930180180181,
+            "tolerantChangedPercent": 4.741554054054054,
+            "foregroundChangedPercent": 10.88012610144965,
+            "blurredMeanError": 5.954454767267268
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG031_Gray Image Overprint_CMYK+Spot_X1a",
+      "sha256": "76ebef190225a519b62f1c99a955ca5582f6e964f49a5bac9b5517789d72ad00",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 6.972232545045045,
+            "maxError": 235,
+            "rawChangedPercent": 7.885135135135135,
+            "tolerantChangedPercent": 6.266891891891892,
+            "foregroundChangedPercent": 20.015645652936257,
+            "blurredMeanError": 5.899748498498498
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG040_White_OP_x1a",
+      "sha256": "56e720a9bbe1a3a22e21d34733c103dca4427e067124d7525c42c3fba9b9391a",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 7.799917417417418,
+            "maxError": 253,
+            "rawChangedPercent": 7.706925675675675,
+            "tolerantChangedPercent": 5.752533783783783,
+            "foregroundChangedPercent": 19.97087397619094,
+            "blurredMeanError": 6.640801426426426
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG041_White_OP_x3",
+      "sha256": "e4ec202ed75c5ee5ea759c550b2955d763e433a201fbc855d0508a4ab6e9c02b",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 4.9186786786786785,
+            "maxError": 246,
+            "rawChangedPercent": 4.949887387387387,
+            "tolerantChangedPercent": 3.610641891891892,
+            "foregroundChangedPercent": 16.27662004721172,
+            "blurredMeanError": 4.1006456456456455
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG080_DeviceN-Support_6c_x3",
+      "sha256": "d8eaa8b365f17c02f358e535e495768ce8741109bc90b9d6b4bc5c3a6d9240cb",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 9.408826013513513,
+            "maxError": 246,
+            "rawChangedPercent": 9.02927927927928,
+            "tolerantChangedPercent": 4.41356981981982,
+            "foregroundChangedPercent": 8.159791802212101,
+            "blurredMeanError": 7.578233858858859
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG081_DeviceN-Support_5c_X1a",
+      "sha256": "5bfde623f7320becbcdcab7c563ded909e2c99d90f4241f6223968228bd86b6e",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 9.598631756756756,
+            "maxError": 255,
+            "rawChangedPercent": 11.099943693693694,
+            "tolerantChangedPercent": 7.051238738738738,
+            "foregroundChangedPercent": 13.102319036184918,
+            "blurredMeanError": 8.311786786786787
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG120_White_OP-KO_X1",
+      "sha256": "355f07349484e907716f5147f6a5cc5c545f68021cdaf2828f604e9d8eb0e301",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 6.017134009009009,
+            "maxError": 252,
+            "rawChangedPercent": 6.682995495495496,
+            "tolerantChangedPercent": 5.063626126126127,
+            "foregroundChangedPercent": 32.38853273788086,
+            "blurredMeanError": 4.797657657657657
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG130_ICC_Source_Profile_x4",
+      "sha256": "ed0a1526fb643f47325a5f1d0f626df8207fc5cd7e3bd7448707d74fc571b4ae",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 10.961585022522522,
+            "maxError": 252,
+            "rawChangedPercent": 40.983108108108105,
+            "tolerantChangedPercent": 39.34037162162162,
+            "foregroundChangedPercent": 87.50078272739796,
+            "blurredMeanError": 9.867922297297298
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG132_ICCbasedCMYK_OverPrint_x4",
+      "sha256": "4f0e20e0a2a79c566e7da85e900d151791f250a1316bcce754109f18feb3d74b",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 6.2599089714714715,
+            "maxError": 251,
+            "rawChangedPercent": 14.227477477477477,
+            "tolerantChangedPercent": 12.706362612612612,
+            "foregroundChangedPercent": 69.4824188681569,
+            "blurredMeanError": 5.1578181306306305
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG133_ICCbasedRGB_OverPrint_x4",
+      "sha256": "276847756104229d1f35c7ef5ce0254aae69aeb5c614b8fbc656ee7dbd822cb9",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 6.276452702702703,
+            "maxError": 235,
+            "rawChangedPercent": 5.764076576576577,
+            "tolerantChangedPercent": 4.10304054054054,
+            "foregroundChangedPercent": 21.951109303691656,
+            "blurredMeanError": 5.082771208708709
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG161_Transp_Basic_BM_ICCBasedRGB_x4",
+      "sha256": "f68aead61e8690f0eb818552610d5d5806dba6bedfea73bdf9a85ebe1998c34a",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 14.310412912912913,
+            "maxError": 254,
+            "rawChangedPercent": 23.202984234234233,
+            "tolerantChangedPercent": 20.29786036036036,
+            "foregroundChangedPercent": 51.88511553933951,
+            "blurredMeanError": 11.537317004504505
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG164_Transp_Basic_BM_ICCbasedCMYK_x4",
+      "sha256": "eeebcd1bc32880ca24fcac17d30af1a6cc70586f24c01bc2829ac2c80f0ee768",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 7.508871058558559,
+            "maxError": 232,
+            "rawChangedPercent": 9.611204954954955,
+            "tolerantChangedPercent": 7.397522522522522,
+            "foregroundChangedPercent": 25.86984345771389,
+            "blurredMeanError": 5.099779466966967
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG167_Softmasks_Images_ICCBasedRGB_x4",
+      "sha256": "156c26895e1140f155ae9e883c279247107794b7b2f94ff182e6e365192412c9",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 9.142293543543543,
+            "maxError": 252,
+            "rawChangedPercent": 14.833051801801803,
+            "tolerantChangedPercent": 10.910191441441441,
+            "foregroundChangedPercent": 37.48597407622364,
+            "blurredMeanError": 7.785004692192192
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG172_JPEG2000_compression_ICCBasedRGB_x4",
+      "sha256": "f2276204c4181839707bc2a2cc5490e3f1d91793af09619619159c2bd466e1f5",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 5.481673235735736,
+            "maxError": 177,
+            "rawChangedPercent": 7.576295045045045,
+            "tolerantChangedPercent": 6.839245495495495,
+            "foregroundChangedPercent": 34.75691761810742,
+            "blurredMeanError": 5.0420533033033035
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG180_16Bit_Images_ICCbasedRGB_x4",
+      "sha256": "dde2e89118b0a3d6cf746358b47a227379b0327037afe134299d25c01d3e0b71",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 12.804502627627627,
+            "maxError": 255,
+            "rawChangedPercent": 13.525619369369368,
+            "tolerantChangedPercent": 11.666385135135135,
+            "foregroundChangedPercent": 55.28959692590962,
+            "blurredMeanError": 11.34878566066066
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG182_16Bit_Images_ICCbasedGray_x4",
+      "sha256": "f1cff066ce59ab56d85c6320d2d247881afc53c2fd536640c4288a1cda61b077",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 13.11197728978979,
+            "maxError": 246,
+            "rawChangedPercent": 12.59177927927928,
+            "tolerantChangedPercent": 10.92483108108108,
+            "foregroundChangedPercent": 50.79853383950778,
+            "blurredMeanError": 12.100254316816816
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG183_16Bit_Images_DeviceGray_x4",
+      "sha256": "f51ade5f3c500e864bcd15cb840810209c79d6ff50daaf4c99833a48d3d5b57f",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 12.827737424924925,
+            "maxError": 255,
+            "rawChangedPercent": 12.629504504504505,
+            "tolerantChangedPercent": 11.081081081081082,
+            "foregroundChangedPercent": 52.886165752982905,
+            "blurredMeanError": 9.32221753003003
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG184_16Bit_Images_ICCbasedCMYK_x4",
+      "sha256": "da74b90e75447508703fcede9c973e7c432ca79b0c81f14155f599a033e3ad9d",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 13.514149774774776,
+            "maxError": 255,
+            "rawChangedPercent": 14.134572072072071,
+            "tolerantChangedPercent": 12.16188063063063,
+            "foregroundChangedPercent": 57.42638750415421,
+            "blurredMeanError": 11.89789039039039
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG205_ICC-V4-CMYK-Image_x4",
+      "sha256": "38723315e7dce469d4b7bbe881ef48b67e75d9ac14905750812dc9b0f51f4f2b",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 8.800447635135136,
+            "maxError": 253,
+            "rawChangedPercent": 8.17257882882883,
+            "tolerantChangedPercent": 4.815878378378378,
+            "foregroundChangedPercent": 15.216830494151138,
+            "blurredMeanError": 7.2619406906906905
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG206_ICC_V4-RGB-Image_x4",
+      "sha256": "7a9e97fe232e44fc948dfac341d816af9d01f7bb7159b392d8ef4e746409dba0",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 8.950050675675676,
+            "maxError": 254,
+            "rawChangedPercent": 11.094313063063064,
+            "tolerantChangedPercent": 5.320664414414415,
+            "foregroundChangedPercent": 16.98023360287511,
+            "blurredMeanError": 7.258090277777778
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG220_ColorConversionIndicator_x4",
+      "sha256": "12e1dd6f8b9b690aa4164ed711c023a2d787c038f9c67a33f16e3ded64fd7197",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 5.662649211711711,
+            "maxError": 252,
+            "rawChangedPercent": 5.023648648648649,
+            "tolerantChangedPercent": 3.6632882882882885,
+            "foregroundChangedPercent": 17.065589465815048,
+            "blurredMeanError": 4.7247954204204206
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG221_OutputIntentChangeIndicator_x4",
+      "sha256": "22a5a3f0668965bf45c483a118b1d0c6873f7401037e6902a852e4d78b1f32e7",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 5.877057995495496,
+            "maxError": 252,
+            "rawChangedPercent": 4.14161036036036,
+            "tolerantChangedPercent": 3.078265765765766,
+            "foregroundChangedPercent": 15.309222777614428,
+            "blurredMeanError": 5.194387199699699
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-GWG230_Four_different Grays_x1a",
+      "sha256": "e9012b04c593fcf6624fd0b816f317659d7f04590b6643069497690b5a676c53",
+      "status": "visual-difference",
+      "error": null,
+      "reference": "poppler",
+      "pages": [
+        {
+          "number": 1,
+          "status": "visual-difference",
+          "metrics": {
+            "meanError": 8.494749436936937,
+            "maxError": 254,
+            "rawChangedPercent": 5.8665540540540535,
+            "tolerantChangedPercent": 4.282657657657658,
+            "foregroundChangedPercent": 9.606931743545697,
+            "blurredMeanError": 7.3604138513513515
+          },
+          "reopenExact": true
+        }
+      ]
+    },
+    {
+      "id": "ghent-Ghent_PDF-Output-Test-V50_ALL_X4",
+      "sha256": "6d9686303ea9049350bc1b3253c22a3cc8578bd7dfcc6afeaef89cbbe37d4cbe",
+      "status": "unsupported",
+      "error": {
+        "kind": "document",
+        "code": "unsupported-pdf",
+        "message": "Unsupported PDF on page 1: mesh shading"
+      },
+      "reference": "poppler",
+      "pages": []
+    }
+  ]
+}

@@ -10,7 +10,7 @@ export function mountRenderingGpu(canvas: HTMLCanvasElement, bytes: number) {
       createEffect(state, (current) => {
         if (current.status === 'error') {
           disposeRoot();
-          reject(current.error);
+          reject(new Error(JSON.stringify(current.error)));
         }
         if (current.status === 'ready') {
           return createRoot((disposeCanvas) => {
@@ -18,7 +18,7 @@ export function mountRenderingGpu(canvas: HTMLCanvasElement, bytes: number) {
             if (result.isErr()) {
               disposeCanvas();
               disposeRoot();
-              reject(result.error);
+              reject(new Error(JSON.stringify(result.error)));
             } else {
               resolve({ gpu: result.value, dispose: disposeRoot });
             }

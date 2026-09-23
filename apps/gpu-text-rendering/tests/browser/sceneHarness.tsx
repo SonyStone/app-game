@@ -68,7 +68,14 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
 
     const disposeView = render(
       () => (
-        <TypeGPURootProvider requiredBufferBytes={document.glyphVertices.byteLength} error={fail}>
+        <TypeGPURootProvider
+          requiredBufferBytes={
+            document.kind === 'glyphs'
+              ? document.glyphVertices.byteLength
+              : Math.max(document.curves.byteLength, document.instances.byteLength)
+          }
+          error={fail}
+        >
           <GpuCanvasProvider canvas={canvas} error={fail}>
             <Viewport maxDpr={maxDpr()}>
               <FrameLoop onError={fail}>

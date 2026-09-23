@@ -1,16 +1,22 @@
 import { err, ok } from 'neverthrow';
 import { d, type TgpuBindGroup } from 'typegpu';
-import { documentError } from '../../../shared/errors';
+import { documentError, type GpuError } from '../../../shared/errors';
 import type { GpuContext } from '../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../shared/gpu/resources';
 import { pageVertices, type TextDocument } from '../document';
 import { View, glyphLayout, imageLayout, imageTextureLayout, pageLayout, viewLayout } from './bindings';
+import type { SceneFrame } from './createFrame';
+import { prepareCurveDocument } from './curves/prepareCurveDocument';
 import { createGlyphAtlas } from './glyphAtlas';
 import { glyphFragment, glyphVertex } from './glyphShader';
 import { imageFragment, imageVertex, pageFragment, pageVertex } from './pageShader';
 
-/** Uploads geometry, builds pipelines and prerenders the atlas. The renderer boundary captures TypeGPU exceptions. */
+/** Selects a profile renderer, uploads geometry and builds its pipelines. The renderer boundary captures TypeGPU exceptions. */
 export async function prepareDocument(gpu: GpuContext, document: TextDocument, keep: KeepGpuResource) {
+  if (document.kind === 'curves') {
+    return prepareCurveDocument(gpu, document, keep);
+  }
+
   if (document.imageVertices.byteLength % 10 !== 0) {
     return err(documentError('invalid-data', 'Invalid image vertex length'));
   }
@@ -121,7 +127,40 @@ export async function prepareDocument(gpu: GpuContext, document: TextDocument, k
     atlasBytes +
     [...document.images.values()].reduce((n, b) => n + b.width * b.height * 4, 0);
 
-  return ok({ view, rasterSize, glyphPipeline, pagePipeline, imagePipeline, imageGroups, resourceBytes });
+  return ok({
+    events: new EventTarget(),
+    settle: async () => {},
+    failure: undefined as GpuError | undefined,
+    resourceBytes,
+    draw(pass: GPURenderPassEncoder, frame: SceneFrame) {
+      view.write({
+        mul: frame.mul,
+        add: frame.add,
+        rotation: frame.rotation,
+        rasterTexel: [1 / rasterSize[0], 1 / rasterSize[1]],
+        debug: Number(frame.grids),
+        vectorOnly: Number(frame.vectorOnly)
+      });
+
+      pagePipeline.with(pass).draw(document.pages.length * 6);
+
+      for (const item of frame.visible) {
+        for (const image of item.page.images) {
+          const group = imageGroups.get(image.filename);
+
+          if (group) {
+            imagePipeline.with(pass).with(group).draw(image.numVerts, 1, image.vertexOffset, item.index);
+          }
+        }
+      }
+
+      const glyphs = glyphPipeline.with(pass);
+
+      for (const item of frame.visible) {
+        glyphs.draw(item.page.endVertex - item.page.beginVertex, 1, item.page.beginVertex, item.index);
+      }
+    }
+  });
 }
 
 /** Copies ten-byte legacy image vertices into WebGPU's four-byte-aligned stride. */
@@ -129,7 +168,9 @@ function padImageVertices(source: ArrayBuffer) {
   const result = new Uint8Array(Math.max(12, (source.byteLength / 10) * 12));
   const bytes = new Uint8Array(source);
 
-  for (let i = 0; i < source.byteLength / 10; i++) result.set(bytes.subarray(i * 10, i * 10 + 10), i * 12);
+  for (let i = 0; i < source.byteLength / 10; i++) {
+    result.set(bytes.subarray(i * 10, i * 10 + 10), i * 12);
+  }
 
   return result;
 }

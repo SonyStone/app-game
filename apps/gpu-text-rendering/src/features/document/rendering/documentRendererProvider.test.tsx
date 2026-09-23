@@ -133,7 +133,9 @@ function rendererFixture(): TextRenderer {
     render: vi.fn(() => ok()),
     destroy: vi.fn(),
     settle: vi.fn(() => okAsync()),
-    resourceBytes: 1024
+    events: new EventTarget(),
+    resourceBytes: 1024,
+    refinement: undefined
   };
 }
 

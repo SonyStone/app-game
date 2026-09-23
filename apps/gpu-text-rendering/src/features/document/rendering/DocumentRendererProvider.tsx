@@ -18,12 +18,20 @@ export function DocumentRendererProvider(props: {
   children: JSX.Element | ((value: ReturnType<typeof useDocumentRenderer>) => JSX.Element);
   loading?: JSX.Element;
   error: (error: ViewerError) => JSX.Element;
+  /** Reports residency changes as visible images enter or leave the GPU cache. */
+  onResourceUsage?: (bytes: number) => void;
   onReady?: (info: { preparationMs: number; resourceBytes: number }) => void;
 }) {
   return (
     <Show when={props.document} keyed>
       {(document) => (
-        <DocumentSession document={document} loading={props.loading} error={props.error} onReady={props.onReady}>
+        <DocumentSession
+          document={document}
+          loading={props.loading}
+          error={props.error}
+          onReady={props.onReady}
+          onResourceUsage={props.onResourceUsage}
+        >
           {props.children}
         </DocumentSession>
       )}
@@ -63,6 +71,11 @@ function DocumentSession(props: Parameters<typeof DocumentRendererProvider>[0]) 
     }
 
     renderer = prepared.value;
+    const notifyUsage = () => props.onResourceUsage?.(prepared.value.resourceBytes);
+    prepared.value.events.addEventListener('change', notifyUsage);
+    abort.signal.addEventListener('abort', () => prepared.value.events.removeEventListener('change', notifyUsage), {
+      once: true
+    });
     closeImages();
 
     props.onReady?.({ preparationMs: performance.now() - started, resourceBytes: renderer.resourceBytes });

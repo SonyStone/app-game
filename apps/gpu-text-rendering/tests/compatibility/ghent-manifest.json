@@ -1,0 +1,477 @@
+{
+  "version": 1,
+  "suite": "Ghent PDF Output Suite 5.0",
+  "pdfjsRevision": null,
+  "blockedSources": [],
+  "cases": [
+    {
+      "id": "ghent-GWG010_CMYK_OP_x3",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG010_CMYK_OP_x3.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "f11016fcc98eec8b600293526a666028979a7aa9007a8ba6d699b68af238d4c2",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG011_Overprint-Mode_x3",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG011_Overprint-Mode_x3.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "ac2a014378c94773de444f63ab3c98412f04e892a0c29224db2bad8afe5d372b",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG050_Font_Substitution_x3",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG050_Font_Substitution_x3.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "f14d922933e823d0265542de3b6aa699f3bc50341e99d305b39759aced17aa5d",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG051_Font_subset_PSnames_ident_x1a",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG051_Font_subset_PSnames_ident_x1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "4df797633d26b0ce6a0cd59e7074ba72f4176cdedbedc96a267adbe5f50747bc",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG052_Font_subset_PSnames_diff_x1a",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG052_Font_subset_PSnames_diff_x1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "d9d7fa57bae64ab0c379e365caef90befd6c3ad5929ab19a0cbb04e89a66b6ea",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG060_Shading_x1a",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG060_Shading_x1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "e870c9b47064cdb9c25901c042646fc0a278d0bfb95c6b332511fd8ddbf49a6b",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG061_Shading_x1a",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG061_Shading_x1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "97e66a4ec9e34c41b84254d287bb9c9bae88fc3673e8218781b109eed64bc44a",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG082_DeviceN-Support_4c_x3",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG082_DeviceN-Support_4c_x3.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "02176e142eeff944ad0812917c0b074a6c3ac8b839958760fb748a5990140819",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG090_Font-Support_x3",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG090_Font-Support_x3.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "947e039754d2fb8cc816866613319d352db13e2cd52986ec32f2347fdc56b007",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG091_FontSupport-OpenType_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG091_FontSupport-OpenType_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "b4481274c888270166135bb9960995e147dcfa74cf5f14a16ea572a16aac4e07",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG150_OptionalContent-OCCD_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG150_OptionalContent-OCCD_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "12f867efa346b538924dc47f879aae853e41316b584a7596fb293f8ac5bc9043",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG151_OptionalContent-RBGroup_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG151_OptionalContent-RBGroup_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "739afcfbc5e4e2f7e2d7996fa59cdcdb241f548df38be0b68083482fc2dae1a2",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG152_OptionalContent-OCMD_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG152_OptionalContent-OCMD_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "0d4c01ba1aa179126c843e7dfec20a658469df547943de2d46ed54ec409f93ac",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG160_Transp_Basic_BM_DeviceCMYK_Non-knockout_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG160_Transp_Basic_BM_DeviceCMYK_Non-knockout_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "113f42ceb6c97555bcd28db13362e9defba401311f8fedd9bef8c12f38dc9e8b",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG1610_Softmasks_Text_part1_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG1610_Softmasks_Text_part1_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "5649fc0b33f121b8c96cd0a98643f2a4feca13b5be5368c1cb0efbb274de06fb",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG1611_Softmasks_Text_part2_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG1611_Softmasks_Text_part2_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "b2421e461dda0d780b2600342fe73e69ba73b43538df1165b28376bf4d6986a0",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG161_Transp_Basic_BM_DeviceCMYK_Knockout_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG161_Transp_Basic_BM_DeviceCMYK_Knockout_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "b87d02c8e9c0e3400deecf129eca6c8aae05d4e2b58e0db2da2314dfa825ac4e",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG162_Transp_Basic_BM_DeviceCMYK_Isolate_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG162_Transp_Basic_BM_DeviceCMYK_Isolate_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "33b6e24fbb7c21aa0741ab12a5d40ae92e514b7a7e4ebb56783d5b7eb65caea4",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG166_Softmasks_Images_DeviceCMYK_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG166_Softmasks_Images_DeviceCMYK_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "798d141cc6bdb680fd4ace8f92fda78cbcbb961786ec431a60120d80f334a6c7",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG168_Softmasks_Vector_part1_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG168_Softmasks_Vector_part1_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "da0deb27dc65338ffbe284fb0a67531cdca0ef773ab5bba96dca2476dea965e0",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG169_Softmasks_Vector_part2_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG169_Softmasks_Vector_part2_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "3b29ef3be73f678c270e4a1d782f7ed5c03b471ab3030be87103587e63b6db11",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG170_JPEG2000_compression_DeviceCMYK_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG170_JPEG2000_compression_DeviceCMYK_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "8e1608ae4be512a0e3d144015defcd67d89246753605b0667c32935e13d35388",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG173_JBIG2_compression_X4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG173_JBIG2_compression_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "4e549cbf27a0b6eb88bc3f633c764f046233d25f298b822cf381f84af83a8ac2",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG181_16Bit_DeviceCMYK_x4",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG181_16Bit_DeviceCMYK_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "358bfbec1319cc76a2fd1e0e9171694cbb6e373325cba753391993058269eaef",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG190_DeviceN_Overprint_Black_X1a",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG190_DeviceN_Overprint_Black_X1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "fc1998b3661a10f5d8782852ed1f2ab582dcb89910956eb04d329807c3e08d9e",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG191_DeviceN_Overprint_Yellow_X1a",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG191_DeviceN_Overprint_Yellow_X1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "62a3e7d3fa911654cc3d884c6409c3b30b882c61335760a196c656f2098e760f",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG192_DeviceN_Overprint_White_X1a",
+      "suite": "ghent-5",
+      "topic": "1-CMYK",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/1-CMYK/Patches/GWG192_DeviceN_Overprint_White_X1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "3de494b5cb0ba35618b5150ea861f7b3cbb632e2071c4236bb0c36e5af8d8db0",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG020_CMYKSpot_OP_x1a",
+      "suite": "ghent-5",
+      "topic": "2-SPOT",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/2-SPOT/Patches/GWG020_CMYKSpot_OP_x1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "a72b1f4e3cc0c0b24dfa379c3dcc6557676627840afeed1e568b127dbbbfd7d7",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG030_Gray_K_black_OP_X1",
+      "suite": "ghent-5",
+      "topic": "2-SPOT",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/2-SPOT/Patches/GWG030_Gray_K_black_OP_X1.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "46ac6fc55f0c725f2eb7644514d8bae085c84ee9b85a87d6f51e51e1d4b562b1",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG031_Gray Image Overprint_CMYK+Spot_X1a",
+      "suite": "ghent-5",
+      "topic": "2-SPOT",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/2-SPOT/Patches/GWG031_Gray Image Overprint_CMYK+Spot_X1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "76ebef190225a519b62f1c99a955ca5582f6e964f49a5bac9b5517789d72ad00",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG040_White_OP_x1a",
+      "suite": "ghent-5",
+      "topic": "2-SPOT",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/2-SPOT/Patches/GWG040_White_OP_x1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "56e720a9bbe1a3a22e21d34733c103dca4427e067124d7525c42c3fba9b9391a",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG041_White_OP_x3",
+      "suite": "ghent-5",
+      "topic": "2-SPOT",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/2-SPOT/Patches/GWG041_White_OP_x3.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "e4ec202ed75c5ee5ea759c550b2955d763e433a201fbc855d0508a4ab6e9c02b",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG080_DeviceN-Support_6c_x3",
+      "suite": "ghent-5",
+      "topic": "2-SPOT",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/2-SPOT/Patches/GWG080_DeviceN-Support_6c_x3.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "d8eaa8b365f17c02f358e535e495768ce8741109bc90b9d6b4bc5c3a6d9240cb",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG081_DeviceN-Support_5c_X1a",
+      "suite": "ghent-5",
+      "topic": "2-SPOT",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/2-SPOT/Patches/GWG081_DeviceN-Support_5c_X1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "5bfde623f7320becbcdcab7c563ded909e2c99d90f4241f6223968228bd86b6e",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG120_White_OP-KO_X1",
+      "suite": "ghent-5",
+      "topic": "2-SPOT",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/2-SPOT/Patches/GWG120_White_OP-KO_X1.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "355f07349484e907716f5147f6a5cc5c545f68021cdaf2828f604e9d8eb0e301",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG130_ICC_Source_Profile_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG130_ICC_Source_Profile_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "ed0a1526fb643f47325a5f1d0f626df8207fc5cd7e3bd7448707d74fc571b4ae",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG132_ICCbasedCMYK_OverPrint_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG132_ICCbasedCMYK_OverPrint_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "4f0e20e0a2a79c566e7da85e900d151791f250a1316bcce754109f18feb3d74b",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG133_ICCbasedRGB_OverPrint_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG133_ICCbasedRGB_OverPrint_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "276847756104229d1f35c7ef5ce0254aae69aeb5c614b8fbc656ee7dbd822cb9",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG161_Transp_Basic_BM_ICCBasedRGB_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG161_Transp_Basic_BM_ICCBasedRGB_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "f68aead61e8690f0eb818552610d5d5806dba6bedfea73bdf9a85ebe1998c34a",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG164_Transp_Basic_BM_ICCbasedCMYK_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG164_Transp_Basic_BM_ICCbasedCMYK_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "eeebcd1bc32880ca24fcac17d30af1a6cc70586f24c01bc2829ac2c80f0ee768",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG167_Softmasks_Images_ICCBasedRGB_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG167_Softmasks_Images_ICCBasedRGB_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "156c26895e1140f155ae9e883c279247107794b7b2f94ff182e6e365192412c9",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG172_JPEG2000_compression_ICCBasedRGB_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG172_JPEG2000_compression_ICCBasedRGB_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "f2276204c4181839707bc2a2cc5490e3f1d91793af09619619159c2bd466e1f5",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG180_16Bit_Images_ICCbasedRGB_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG180_16Bit_Images_ICCbasedRGB_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "dde2e89118b0a3d6cf746358b47a227379b0327037afe134299d25c01d3e0b71",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG182_16Bit_Images_ICCbasedGray_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG182_16Bit_Images_ICCbasedGray_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "f1cff066ce59ab56d85c6320d2d247881afc53c2fd536640c4288a1cda61b077",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG183_16Bit_Images_DeviceGray_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG183_16Bit_Images_DeviceGray_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "f51ade5f3c500e864bcd15cb840810209c79d6ff50daaf4c99833a48d3d5b57f",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG184_16Bit_Images_ICCbasedCMYK_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG184_16Bit_Images_ICCbasedCMYK_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "da74b90e75447508703fcede9c973e7c432ca79b0c81f14155f599a033e3ad9d",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG205_ICC-V4-CMYK-Image_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG205_ICC-V4-CMYK-Image_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "38723315e7dce469d4b7bbe881ef48b67e75d9ac14905750812dc9b0f51f4f2b",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG206_ICC_V4-RGB-Image_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG206_ICC_V4-RGB-Image_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "7a9e97fe232e44fc948dfac341d816af9d01f7bb7159b392d8ef4e746409dba0",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG220_ColorConversionIndicator_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG220_ColorConversionIndicator_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "12e1dd6f8b9b690aa4164ed711c023a2d787c038f9c67a33f16e3ded64fd7197",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG221_OutputIntentChangeIndicator_x4",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG221_OutputIntentChangeIndicator_x4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "22a5a3f0668965bf45c483a118b1d0c6873f7401037e6902a852e4d78b1f32e7",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-GWG230_Four_different Grays_x1a",
+      "suite": "ghent-5",
+      "topic": "3-ICC-CMS",
+      "file": "Ghent_PDF_Output_Suite_V50_Patches/Categories/3-ICC-CMS/Patches/GWG230_Four_different Grays_x1a.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "e9012b04c593fcf6624fd0b816f317659d7f04590b6643069497690b5a676c53",
+      "pages": "all"
+    },
+    {
+      "id": "ghent-Ghent_PDF-Output-Test-V50_ALL_X4",
+      "suite": "ghent-5",
+      "topic": "combined",
+      "file": "Ghent_PDF_Output_Suite_V50_Testpages/Ghent_PDF-Output-Test-V50_ALL_X4.pdf",
+      "url": "https://www.gwg.org/workflow-tools/test-suites/ghent-output-suite/",
+      "sha256": "6d9686303ea9049350bc1b3253c22a3cc8578bd7dfcc6afeaef89cbbe37d4cbe",
+      "pages": "all"
+    }
+  ],
+  "description": "Locally supplied Ghent 5.0 PDFs. Paths are relative to the directory containing both extracted archives. No source PDFs are redistributed."
+}

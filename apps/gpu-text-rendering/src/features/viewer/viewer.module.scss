@@ -14,10 +14,16 @@
   right: 0;
   position: absolute;
   display: inline-block;
-  max-width: 22em;
+  max-width: min(22em, calc(100vw - 2em));
+  max-height: calc(100% - 2em);
+  overflow: auto;
   background-color: rgba(0, 0, 0, 0.6);
   color: white;
   padding: 1em;
+
+  a {
+    color: #bbd9ff;
+  }
 
   label {
     display: flex;
@@ -65,4 +71,13 @@
   margin-top: 0.75em;
   font-size: 0.8em;
   overflow-wrap: anywhere;
+}
+
+.toolbar .filePicker {
+  flex-direction: column;
+  align-items: stretch;
+
+  input {
+    max-width: 100%;
+  }
 }
