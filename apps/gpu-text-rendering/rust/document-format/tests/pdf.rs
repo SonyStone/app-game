@@ -4,6 +4,17 @@
 use gpu_document::{container, curves, pdf};
 
 #[test]
+fn import_reports_completed_pages_without_changing_output() {
+    let bytes = fixture("0 0 10 10 re f", "");
+    let mut progress = Vec::new();
+    let scene = pdf::import_owned_with_progress(bytes.clone(), |done, total| progress.push((done, total))).unwrap();
+    let expected = pdf::import_owned(bytes).unwrap();
+    assert_eq!(progress, vec![(0, 1), (1, 1)]);
+    assert_eq!(scene.instances, expected.instances);
+    assert_eq!(scene.curves, expected.curves);
+}
+
+#[test]
 fn preserves_cubics_holes_clipping_and_reuses_glyph_outlines() {
     let bytes = fixture(
         "0 0 1 rg 10 10 m 20 90 80 90 90 10 c h f\n0 0 0 rg 10 10 80 80 re 30 30 40 40 re f*\nq 20 20 60 60 re W n 0 0 100 100 re f Q\nBT /F1 12 Tf 10 50 Td (AAA) Tj ET",

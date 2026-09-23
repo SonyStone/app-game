@@ -31,5 +31,14 @@
   "backToMenu": "חזרה לתפריט",
   "dropHint": "שחררו קובץ PDF או GDOC כדי לפתוח אותו",
   "dropUnsupported": "בחרו קובץ PDF או GDOC",
-  "dropMultiple": "גררו מסמך אחד בכל פעם"
+  "dropMultiple": "גררו מסמך אחד בכל פעם",
+  "readingFile": "קורא קובץ…",
+  "loadingDecoder": "טוען מפענח מסמכים…",
+  "loadingDocument": "מוריד מסמך…",
+  "processingPages": "מעבד עמודי PDF…",
+  "decodingDocument": "מפענח GDOC…",
+  "preparingGraphics": "מכין גרפיקה…",
+  "cancelLoading": "ביטול טעינה",
+  "cancelled": "הטעינה בוטלה. ניתן לפתוח מסמך אחר.",
+  "pageProgress": "{{completed}} מתוך {{total}} עמודים"
 }

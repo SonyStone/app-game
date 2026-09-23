@@ -1,5 +1,6 @@
 import { createSignal } from 'solid-js';
 import type { ViewerError } from '../../shared/errors';
+import type { DocumentProgress } from '../document/documentProgress';
 
 /** UI state shared by the toolbar and the mounted document session. GPU ownership belongs to providers. */
 export function createViewerState() {
@@ -41,6 +42,7 @@ export type ViewerState = ReturnType<typeof createViewerState>;
 
 /** User-visible progress and terminal GPU or loading errors. */
 export type ViewerStatus =
-  | { phase: 'loading' | 'preparing'; message: string }
+  | { phase: 'loading' | 'preparing'; message: string; progress?: DocumentProgress }
+  | { phase: 'cancelled'; message: string }
   | { phase: 'ready'; message: string; resourceBytes?: number; preparationMs?: number }
   | { phase: 'error'; message: string; error: Exclude<ViewerError, { kind: 'aborted' }> };

@@ -31,5 +31,14 @@
   "backToMenu": "Volver al menú",
   "dropHint": "Suelta un PDF o GDOC para abrirlo",
   "dropUnsupported": "Selecciona un archivo PDF o GDOC",
-  "dropMultiple": "Suelta un solo documento a la vez"
+  "dropMultiple": "Suelta un solo documento a la vez",
+  "readingFile": "Leyendo archivo…",
+  "loadingDecoder": "Cargando el decodificador…",
+  "loadingDocument": "Descargando documento…",
+  "processingPages": "Procesando páginas PDF…",
+  "decodingDocument": "Decodificando GDOC…",
+  "preparingGraphics": "Preparando gráficos…",
+  "cancelLoading": "Cancelar carga",
+  "cancelled": "Carga cancelada. Abre otro documento.",
+  "pageProgress": "{{completed}} de {{total}} páginas"
 }

@@ -31,5 +31,14 @@
   "backToMenu": "Zurück zum Menü",
   "dropHint": "PDF oder GDOC zum Öffnen hier ablegen",
   "dropUnsupported": "Bitte eine PDF- oder GDOC-Datei auswählen",
-  "dropMultiple": "Bitte nur ein Dokument auf einmal ablegen"
+  "dropMultiple": "Bitte nur ein Dokument auf einmal ablegen",
+  "readingFile": "Datei wird gelesen…",
+  "loadingDecoder": "Dokumentdecoder wird geladen…",
+  "loadingDocument": "Dokument wird heruntergeladen…",
+  "processingPages": "PDF-Seiten werden verarbeitet…",
+  "decodingDocument": "GDOC wird dekodiert…",
+  "preparingGraphics": "Grafik wird vorbereitet…",
+  "cancelLoading": "Laden abbrechen",
+  "cancelled": "Laden abgebrochen. Öffnen Sie ein anderes Dokument.",
+  "pageProgress": "{{completed}} von {{total}} Seiten"
 }

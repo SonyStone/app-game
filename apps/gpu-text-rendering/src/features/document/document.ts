@@ -1,6 +1,7 @@
 import { err, ok } from 'neverthrow';
 import type { ResultValue } from '../../shared/errors';
 import demoUrl from './assets/demo.gdoc?url';
+import type { OnDocumentProgress } from './documentProgress';
 import { readGdoc } from './format/readGdoc';
 import { layoutPages as layoutDocumentPages } from './layoutPages';
 import { readDocumentSource, type ExportDocument } from './readDocumentSource';
@@ -9,9 +10,10 @@ import { readDocumentSource, type ExportDocument } from './readDocumentSource';
 export async function loadDocument(
   signal?: AbortSignal,
   file?: File,
-  onConverted?: (exportDocument: ExportDocument) => void
+  onConverted?: (exportDocument: ExportDocument) => void,
+  onProgress?: OnDocumentProgress
 ) {
-  const source = file ? await readDocumentSource(file, signal, onConverted) : ok(demoUrl);
+  const source = file ? await readDocumentSource(file, signal, onConverted, onProgress) : ok(demoUrl);
 
   if (source.isErr()) {
     return err(source.error);
@@ -19,7 +21,7 @@ export async function loadDocument(
 
   const result =
     typeof source.value === 'string' || source.value instanceof ArrayBuffer
-      ? await readGdoc(source.value, signal)
+      ? await readGdoc(source.value, signal, onProgress)
       : ok(source.value);
 
   return result.andThen((data) =>

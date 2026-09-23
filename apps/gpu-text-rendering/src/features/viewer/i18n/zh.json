@@ -31,5 +31,14 @@
   "backToMenu": "返回菜单",
   "dropHint": "拖放 PDF 或 GDOC 以打开",
   "dropUnsupported": "请选择 PDF 或 GDOC 文件",
-  "dropMultiple": "请一次拖放一个文档"
+  "dropMultiple": "请一次拖放一个文档",
+  "readingFile": "正在读取文件…",
+  "loadingDecoder": "正在加载文档解码器…",
+  "loadingDocument": "正在下载文档…",
+  "processingPages": "正在处理 PDF 页面…",
+  "decodingDocument": "正在解码 GDOC…",
+  "preparingGraphics": "正在准备图形…",
+  "cancelLoading": "取消加载",
+  "cancelled": "加载已取消。请打开其他文档。",
+  "pageProgress": "已处理 {{completed}} / {{total}} 页"
 }

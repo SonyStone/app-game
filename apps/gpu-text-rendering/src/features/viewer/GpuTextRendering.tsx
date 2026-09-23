@@ -1,5 +1,6 @@
 import { createFullscreen } from '@solid-primitives/fullscreen';
 import loaderIcon from '@tabler/icons/outline/loader-2.svg?url';
+import closeIcon from '@tabler/icons/outline/x.svg?url';
 import { ResultAsync } from 'neverthrow';
 import { createEffect, createSignal, Show, untrack } from 'solid-js';
 import { errorMessage, type FullscreenError, type GpuError } from '../../shared/errors';
@@ -22,7 +23,7 @@ export default function GpuTextRendering() {
   const t = i18n.t;
   const [container, setContainer] = createSignal<HTMLDivElement>();
   const fullscreenState = untrack(() => createFullscreen(container));
-  const [source, setSource] = createSignal<{ file?: File }>({});
+  const [source, setSource] = createSignal<{ file?: File } | undefined>({});
   const [converted, setConverted] = createSignal<ExportDocument>();
   const [download, setDownload] = createSignal<File>();
   const [exporting, setExporting] = createSignal(false);
@@ -52,6 +53,29 @@ export default function GpuTextRendering() {
     viewer.setAutoZoom(false);
     viewer.setDragging(false);
     setSource({ file });
+  }
+
+  const loading = () => viewer.state().phase === 'loading' || viewer.state().phase === 'preparing';
+  const progress = () => {
+    const state = viewer.state();
+    return state.phase === 'loading' || state.phase === 'preparing' ? state.progress : undefined;
+  };
+  const percent = () => {
+    const value = progress();
+    return value?.total && value.completed !== undefined
+      ? Math.min(100, Math.floor((100 * value.completed) / value.total))
+      : undefined;
+  };
+
+  /** Unmounting the session aborts reads, terminates its worker and releases preparation resources. */
+  function cancelLoading() {
+    setSource(undefined);
+    setConverted(undefined);
+    setDownload(undefined);
+    setProfile('glyphs');
+    viewer.setAutoZoom(false);
+    viewer.setDragging(false);
+    viewer.setState({ phase: 'cancelled', message: 'Loading cancelled' });
   }
 
   async function exportFile() {
@@ -108,6 +132,7 @@ export default function GpuTextRendering() {
         ref={setCanvas}
         id="beziercanvas"
         class={`${s.canvas} ${viewer.dragging() ? s.dragging : ''}`}
+        style={{ visibility: viewer.state().phase === 'cancelled' ? 'hidden' : undefined }}
         aria-label={t('canvas')}
         aria-busy={viewer.state().phase === 'loading' || viewer.state().phase === 'preparing' ? 'true' : 'false'}
       />
@@ -146,7 +171,7 @@ export default function GpuTextRendering() {
       <ViewerToolbar
         i18n={i18n}
         viewer={viewer}
-        filename={source().file?.name}
+        filename={source()?.file?.name}
         profile={profile()}
         canExport={!!converted()}
         exporting={exporting()}
@@ -183,16 +208,45 @@ export default function GpuTextRendering() {
       <Show when={viewer.state().phase !== 'ready'}>
         <div class={s.loadinginfo} role={viewer.state().phase === 'error' ? 'alert' : 'status'}>
           <div class={s.loadingHeading}>
-            <Show when={viewer.state().phase === 'loading' || viewer.state().phase === 'preparing'}>
-              <div role="progressbar" aria-label={i18n.status(viewer.state())} data-testid="document-loading">
+            <Show when={loading()}>
+              <div
+                role="progressbar"
+                aria-label={i18n.status(viewer.state())}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percent()}
+                data-testid="document-loading"
+              >
                 <img class={s.loadingSpinner} src={loaderIcon} alt="" />
               </div>
             </Show>
             <strong>{i18n.status(viewer.state())}</strong>
+            <Show when={loading()}>
+              <button
+                type="button"
+                class={s.cancelLoading}
+                aria-label={t('cancelLoading')}
+                title={t('cancelLoading')}
+                onClick={cancelLoading}
+              >
+                <img src={closeIcon} alt="" />
+              </button>
+            </Show>
           </div>
-          <Show when={source().file}>
+          <Show when={percent() !== undefined}>
+            <div class={s.loadingProgress}>
+              <span>{percent()}%</span>
+              <Show when={progress()?.stage === 'processingPages'}>
+                <span>
+                  {t('pageProgress', { completed: String(progress()?.completed), total: String(progress()?.total) })}
+                </span>
+              </Show>
+              <progress max={100} value={percent()} aria-hidden="true" />
+            </div>
+          </Show>
+          <Show when={source()?.file}>
             <div class={s.loadingFilename} dir="auto">
-              {source().file?.name}
+              {source()?.file?.name}
             </div>
           </Show>
           <Show when={viewer.state().phase === 'error'}>

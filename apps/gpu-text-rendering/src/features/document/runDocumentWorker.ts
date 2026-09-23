@@ -1,5 +1,6 @@
 import { err, ok, Result, type Result as WorkerResult } from 'neverthrow';
 import { checkAborted, documentError, errorMessage, type AbortedError, type DocumentError } from '../../shared/errors';
+import type { DocumentProgress, OnDocumentProgress } from './documentProgress';
 
 /**
  * One transferred request per Worker, owned by the document session's AbortSignal.
@@ -9,7 +10,8 @@ import { checkAborted, documentError, errorMessage, type AbortedError, type Docu
 export async function runDocumentWorker<T>(
   create: () => Worker,
   source: unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onProgress?: OnDocumentProgress
 ): Promise<WorkerResult<T, DocumentError | AbortedError>> {
   const active = checkAborted(signal);
 
@@ -43,7 +45,14 @@ export async function runDocumentWorker<T>(
 
     const abort = () => finish(err({ kind: 'aborted', message: 'Operation cancelled' }));
 
-    worker.onmessage = (event: MessageEvent<{ ok: true; value: T } | { ok: false; error: DocumentError }>) => {
+    worker.onmessage = (
+      event: MessageEvent<{ ok: true; value: T } | { ok: false; error: DocumentError } | { progress: DocumentProgress }>
+    ) => {
+      if (settled) return;
+      if ('progress' in event.data) {
+        onProgress?.(event.data.progress);
+        return;
+      }
       finish(event.data.ok ? ok(event.data.value) : err(event.data.error));
     };
 

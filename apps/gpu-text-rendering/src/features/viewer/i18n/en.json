@@ -31,5 +31,14 @@
   "backToMenu": "Back to menu",
   "dropHint": "Drop a PDF or GDOC to open it",
   "dropUnsupported": "Choose a PDF or GDOC file",
-  "dropMultiple": "Drop one document at a time"
+  "dropMultiple": "Drop one document at a time",
+  "readingFile": "Reading file…",
+  "loadingDecoder": "Loading document decoder…",
+  "loadingDocument": "Downloading document…",
+  "processingPages": "Processing PDF pages…",
+  "decodingDocument": "Decoding GDOC…",
+  "preparingGraphics": "Preparing graphics…",
+  "cancelLoading": "Cancel loading",
+  "cancelled": "Loading cancelled. Open another document.",
+  "pageProgress": "{{completed}} of {{total}} pages"
 }

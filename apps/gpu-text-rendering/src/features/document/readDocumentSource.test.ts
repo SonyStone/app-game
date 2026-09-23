@@ -107,3 +107,12 @@ it('does not start an export after its document session has been replaced', asyn
   expect((await onConverted.mock.calls[0]![0]())._unsafeUnwrapErr().kind).toBe('aborted');
   expect(convertPdf).not.toHaveBeenCalled();
 });
+
+it('cancels the actual file read and reports cancellation without starting PDF import', async () => {
+  const abort = new AbortController();
+  const result = await readDocumentSource(new File(['%PDF-1.7'], 'cancel.pdf'), abort.signal, undefined, (progress) => {
+    if (progress.stage === 'readingFile') abort.abort();
+  });
+  expect(result._unsafeUnwrapErr().kind).toBe('aborted');
+  expect(importPdf).not.toHaveBeenCalled();
+});

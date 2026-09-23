@@ -31,5 +31,14 @@
   "backToMenu": "Назад в меню",
   "dropHint": "Отпустите PDF или GDOC, чтобы открыть",
   "dropUnsupported": "Выберите файл PDF или GDOC",
-  "dropMultiple": "Перетаскивайте по одному документу"
+  "dropMultiple": "Перетаскивайте по одному документу",
+  "readingFile": "Чтение файла…",
+  "loadingDecoder": "Загрузка обработчика документов…",
+  "loadingDocument": "Загрузка документа…",
+  "processingPages": "Обработка страниц PDF…",
+  "decodingDocument": "Декодирование GDOC…",
+  "preparingGraphics": "Подготовка графики…",
+  "cancelLoading": "Отменить загрузку",
+  "cancelled": "Загрузка отменена. Откройте другой документ.",
+  "pageProgress": "{{completed}} из {{total}} страниц"
 }

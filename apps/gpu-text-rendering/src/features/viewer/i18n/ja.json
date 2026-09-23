@@ -31,5 +31,14 @@
   "backToMenu": "メニューに戻る",
   "dropHint": "PDF または GDOC をドロップして開く",
   "dropUnsupported": "PDF または GDOC ファイルを選択してください",
-  "dropMultiple": "ドキュメントは 1 つずつドロップしてください"
+  "dropMultiple": "ドキュメントは 1 つずつドロップしてください",
+  "readingFile": "ファイルを読み込み中…",
+  "loadingDecoder": "デコーダーを読み込み中…",
+  "loadingDocument": "ドキュメントをダウンロード中…",
+  "processingPages": "PDFページを処理中…",
+  "decodingDocument": "GDOCをデコード中…",
+  "preparingGraphics": "描画を準備中…",
+  "cancelLoading": "読み込みをキャンセル",
+  "cancelled": "読み込みをキャンセルしました。別のドキュメントを開いてください。",
+  "pageProgress": "{{total}}ページ中{{completed}}ページ"
 }

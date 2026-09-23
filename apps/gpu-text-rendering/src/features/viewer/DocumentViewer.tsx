@@ -41,7 +41,10 @@ export function DocumentViewer(props: {
   void loadDocument(
     abort.signal,
     untrack(() => props.file),
-    props.onConverted
+    props.onConverted,
+    (progress) => {
+      if (!abort.signal.aborted) viewer.setState({ phase: 'loading', message: 'Loading document…', progress });
+    }
   ).then((result) => {
     if (result.isErr()) {
       return fail(result.error);
@@ -54,7 +57,7 @@ export function DocumentViewer(props: {
 
     loaded = result.value;
     props.onProfile?.(loaded.kind);
-    viewer.setState({ phase: 'preparing', message: 'Preparing TypeGPU…' });
+    viewer.setState({ phase: 'preparing', message: 'Preparing TypeGPU…', progress: { stage: 'preparingGraphics' } });
     setDocument(loaded);
   });
 

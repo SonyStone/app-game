@@ -34,6 +34,18 @@ try {
     await importGate;
     await route.continue();
   });
+  await page.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    window.pdfProgress = [];
+    window.Worker = class extends NativeWorker {
+      constructor(...args) {
+        super(...args);
+        this.addEventListener('message', ({ data }) => {
+          if (data.progress?.stage === 'processingPages') window.pdfProgress.push(data.progress);
+        });
+      }
+    };
+  });
   await page.goto(viewerURL);
   await page.locator('input[type=file]').waitFor({ state: 'attached' });
   // Drop onto a toolbar child: the full viewer handles file drops, including its controls.
@@ -56,16 +68,28 @@ try {
   });
   await page.getByTestId('document-drop-overlay').waitFor({ state: 'hidden' });
   try {
-    await page.getByRole('progressbar', { name: 'Loading document…' }).waitFor();
+    await page.getByRole('progressbar', { name: 'Loading document decoder…' }).waitFor();
     assert.equal(await page.locator('canvas').getAttribute('aria-busy'), 'true');
     await page.getByText('curves.pdf', { exact: true }).waitFor();
     await page.screenshot({ path: `${output}/loading.png` });
+    await page.getByRole('button', { name: 'Cancel loading', exact: true }).click();
+    await page.locator('strong').filter({ hasText: 'Loading cancelled. Open another document.' }).waitFor();
+    assert.equal(await page.getByTestId('document-loading').count(), 0);
+    assert.equal(await page.locator('canvas').getAttribute('aria-busy'), 'false');
   } finally {
     releaseImport();
   }
   await page.getByTestId('document-loading').waitFor({ state: 'hidden' });
   await page.unroute('**/import.worker*');
-  await page.waitForFunction(() => document.querySelector('output')?.textContent.includes('MiB'), { timeout: 60000 });
+  // Reopening the same file after cancellation starts a fresh worker and exposes real page counts.
+  await page.locator('input[type=file]').setInputFiles(`${output}/curves.pdf`);
+  await page.waitForFunction(() => document.querySelector('output')?.textContent.includes('MiB'), null, {
+    timeout: 60000
+  });
+  assert.deepEqual(await page.evaluate(() => pdfProgress.filter((p) => p.total)), [
+    { stage: 'processingPages', completed: 0, total: 1 },
+    { stage: 'processingPages', completed: 1, total: 1 }
+  ]);
   await page.screenshot({ path: `${output}/viewer.png` });
   await page.getByRole('button', { name: 'More', exact: true }).click();
   const download = page.waitForEvent('download');

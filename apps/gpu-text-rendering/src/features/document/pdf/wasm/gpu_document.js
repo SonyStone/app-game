@@ -1,5 +1,20 @@
 let wasm;
 
+function addToExternrefTable0(obj) {
+    const idx = wasm.__externref_table_alloc();
+    wasm.__wbindgen_export_2.set(idx, obj);
+    return idx;
+}
+
+function handleError(f, args) {
+    try {
+        return f.apply(this, args);
+    } catch (e) {
+        const idx = addToExternrefTable0(e);
+        wasm.__wbindgen_exn_store(idx);
+    }
+}
+
 const cachedTextDecoder = (typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8', { ignoreBOM: true, fatal: true }) : { decode: () => { throw Error('TextDecoder not available') } } );
 
 if (typeof TextDecoder !== 'undefined') { cachedTextDecoder.decode(); };
@@ -73,16 +88,33 @@ function passArray8ToWasm0(arg, malloc) {
     WASM_VECTOR_LEN = arg.length;
     return ptr;
 }
+
+function isLikeNone(x) {
+    return x === undefined || x === null;
+}
 /**
  * Imports a PDF directly into validated render buffers inside a disposable Worker.
  * @param {Uint8Array} bytes
+ * @param {(completed: number, total: number) => void | null} [progress]
  * @returns {DecodeOutcome}
  */
-export function importPdf(bytes) {
+export function importPdf(bytes, progress) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.importPdf(ptr0, len0);
+    const ret = wasm.importPdf(ptr0, len0, isLikeNone(progress) ? 0 : addToExternrefTable0(progress));
     return DecodeOutcome.__wrap(ret);
+}
+
+/**
+ * Converts locally inside a disposable Worker; expected PDF failures never throw into JS.
+ * @param {Uint8Array} bytes
+ * @returns {ConvertOutcome}
+ */
+export function convertPdf(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.convertPdf(ptr0, len0);
+    return ConvertOutcome.__wrap(ret);
 }
 
 /**
@@ -97,18 +129,6 @@ export function decodeCmykJpeg(bytes, width, height) {
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.decodeCmykJpeg(ptr0, len0, width, height);
     return RasterOutcome.__wrap(ret);
-}
-
-/**
- * Converts locally inside a disposable Worker; expected PDF failures never throw into JS.
- * @param {Uint8Array} bytes
- * @returns {ConvertOutcome}
- */
-export function convertPdf(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.convertPdf(ptr0, len0);
-    return ConvertOutcome.__wrap(ret);
 }
 
 /**
@@ -581,8 +601,12 @@ async function __wbg_load(module, imports) {
 function __wbg_get_imports() {
     const imports = {};
     imports.wbg = {};
+    imports.wbg.__wbg_call_8b8310d3efae4e65 = function() { return handleError(function (arg0, arg1, arg2, arg3) {
+        const ret = arg0.call(arg1, arg2 >>> 0, arg3 >>> 0);
+        return ret;
+    }, arguments) };
     imports.wbg.__wbindgen_init_externref_table = function() {
-        const table = wasm.__wbindgen_export_0;
+        const table = wasm.__wbindgen_export_2;
         const offset = table.grow(4);
         table.set(0, undefined);
         table.set(offset + 0, undefined);

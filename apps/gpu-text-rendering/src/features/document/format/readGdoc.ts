@@ -1,5 +1,6 @@
 import { err, type Result as ReadResult } from 'neverthrow';
 import { checkAborted, documentError, type AbortedError, type DocumentError } from '../../../shared/errors';
+import type { OnDocumentProgress } from '../documentProgress';
 import { documentFileLimitMessage, maxDocumentFileBytes } from '../limits';
 import { runDocumentWorker } from '../runDocumentWorker';
 import type { DecodedDocument } from './types';
@@ -12,7 +13,8 @@ import type { DecodedDocument } from './types';
  */
 export async function readGdoc(
   source: string | ArrayBuffer,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onProgress?: OnDocumentProgress
 ): Promise<ReadResult<DecodedDocument, DocumentError | AbortedError>> {
   const active = checkAborted(signal);
 
@@ -27,6 +29,7 @@ export async function readGdoc(
   return runDocumentWorker<DecodedDocument>(
     () => new Worker(new URL('./decode.worker.ts', import.meta.url), { type: 'module' }),
     source,
-    signal
+    signal,
+    onProgress
   );
 }

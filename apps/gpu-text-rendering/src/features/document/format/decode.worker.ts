@@ -15,6 +15,7 @@ self.onmessage = (event: MessageEvent<string | ArrayBuffer>) => {
 };
 
 async function read(source: string | ArrayBuffer): Promise<DecodeReply> {
+  self.postMessage({ progress: { stage: 'loadingDecoder' } });
   const loading = typeof source === 'string' ? readUrl(source) : Promise.resolve(ok(source));
   const initialized = await ResultAsync.fromThrowable(
     () => init({ module_or_path: wasmUrl }),
@@ -31,6 +32,7 @@ async function read(source: string | ArrayBuffer): Promise<DecodeReply> {
     return { ok: false, error: bytes.error };
   }
 
+  self.postMessage({ progress: { stage: 'decodingDocument' } });
   const result = decodeGdoc(new Uint8Array(bytes.value));
 
   if (result.isErr()) {
@@ -86,6 +88,14 @@ function readResponseBytes(response: Response) {
         }
 
         chunks.push(next.value);
+        const length = Number(response.headers.get('content-length'));
+        self.postMessage({
+          progress: {
+            stage: 'loadingDocument',
+            completed: total,
+            total: response.headers.has('content-encoding') || length <= 0 ? undefined : length
+          }
+        });
       }
 
       reader.releaseLock();

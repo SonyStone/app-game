@@ -26,6 +26,9 @@ export function createViewerI18n() {
     },
     /** Localizes UI progress; original library errors remain available as technical details. */
     status(status: ViewerStatus) {
+      if (status.phase === 'cancelled') return t('cancelled');
+      if ((status.phase === 'loading' || status.phase === 'preparing') && status.progress)
+        return t(status.progress.stage);
       if (status.phase === 'loading') return t('loading');
       if (status.phase === 'preparing') return t('preparing');
       if (status.phase === 'error') return t('error');

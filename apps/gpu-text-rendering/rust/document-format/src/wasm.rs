@@ -21,8 +21,12 @@ pub fn decode_document(bytes: &[u8]) -> DecodeOutcome {
 /// Imports a PDF directly into validated render buffers inside a disposable Worker.
 #[cfg(feature = "pdf")]
 #[wasm_bindgen(js_name = importPdf)]
-pub fn import_pdf(bytes: Vec<u8>) -> DecodeOutcome {
-    match crate::pdf::import_owned(bytes) {
+pub fn import_pdf(bytes: Vec<u8>, progress: Option<PdfProgressCallback>) -> DecodeOutcome {
+    match crate::pdf::import_owned_with_progress(bytes, |completed, total| {
+        if let Some(callback) = &progress {
+            let _ = callback.report(&JsValue::NULL, completed as u32, total as u32);
+        }
+    }) {
         Ok(scene) => {
             let profile = if scene.images.table.is_empty() { 2 } else { 3 };
             DecodeOutcome {
@@ -35,6 +39,17 @@ pub fn import_pdf(bytes: Vec<u8>) -> DecodeOutcome {
             error: Some(error),
         },
     }
+}
+
+#[cfg(feature = "pdf")]
+#[wasm_bindgen]
+extern "C" {
+    /// Optional JavaScript callback receiving completed and total PDF pages.
+    #[wasm_bindgen(typescript_type = "(completed: number, total: number) => void")]
+    pub type PdfProgressCallback;
+
+    #[wasm_bindgen(method, catch, js_name = call)]
+    fn report(this: &PdfProgressCallback, context: &JsValue, completed: u32, total: u32) -> Result<JsValue, JsValue>;
 }
 
 /// Owns either validated data or a typed error. Free after taking the document.

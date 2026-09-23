@@ -43,17 +43,22 @@ pub fn convert(bytes: &[u8]) -> Result<Vec<u8>, DocumentError> {
 
 /// Consumes the PDF buffer, avoiding a second full-size copy during WASM import.
 pub fn convert_owned(bytes: Vec<u8>) -> Result<Vec<u8>, DocumentError> {
-    let document = interpret_pdf(bytes)?;
+    let document = interpret_pdf(bytes, &mut |_, _| {})?;
     curves::encode_owned(document)
 }
 
 /// Imports validated GPU buffers directly, without the GDOC serialization round trip.
 pub fn import_owned(bytes: Vec<u8>) -> Result<Document, DocumentError> {
-    curves::prepare_owned(interpret_pdf(bytes)?)
+    curves::prepare_owned(interpret_pdf(bytes, &mut |_, _| {})?)
+}
+
+/// Imports render buffers and reports completed pages, starting with zero once the page count is known.
+pub fn import_owned_with_progress(bytes: Vec<u8>, mut progress: impl FnMut(usize, usize)) -> Result<Document, DocumentError> {
+    curves::prepare_owned(interpret_pdf(bytes, &mut progress)?)
 }
 
 // Drop parser/font/soft-mask state before allocating the encoded output buffer.
-fn interpret_pdf(bytes: Vec<u8>) -> Result<Document, DocumentError> {
+fn interpret_pdf(bytes: Vec<u8>, progress: &mut impl FnMut(usize, usize)) -> Result<Document, DocumentError> {
     if bytes.len() > crate::limits::MAX_FILE_BYTES {
         return Err(DocumentError::Limit("PDF file size"));
     }
@@ -84,6 +89,7 @@ fn interpret_pdf(bytes: Vec<u8>) -> Result<Document, DocumentError> {
         .pixels
         .try_reserve_exact(image_capacity)
         .map_err(|_| DocumentError::Limit("image storage memory"))?;
+    progress(0, pages.len());
     for (index, page) in pages.iter().enumerate() {
         let (width, height) = page.render_dimensions();
         let width = f64::from(width);
@@ -139,6 +145,7 @@ fn interpret_pdf(bytes: Vec<u8>) -> Result<Document, DocumentError> {
             first: first_instance,
             count: (device.document.instances.len() / 80) as u32 - first_instance,
         });
+        progress(index + 1, pages.len());
     }
     Ok(device.document)
 }

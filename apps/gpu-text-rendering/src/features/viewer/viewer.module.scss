@@ -2,6 +2,7 @@
   position: fixed;
   inset: 0;
   z-index: 0;
+  background: #a0a9af;
   font-family: system-ui, sans-serif;
 }
 
@@ -267,5 +268,42 @@
 @media (prefers-reduced-motion: reduce) {
   .loadingSpinner {
     animation: none;
+  }
+}
+
+.cancelLoading {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  margin-inline-start: auto;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  img {
+    width: 20px;
+    height: 20px;
+    filter: invert(1);
+  }
+  &:hover {
+    background: #ffffff16;
+  }
+  &:focus-visible {
+    outline: 2px solid #efa93f;
+  }
+}
+.loadingProgress {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 12px;
+  font-variant-numeric: tabular-nums;
+  progress {
+    width: 100%;
+    height: 6px;
+    accent-color: #efa93f;
   }
 }

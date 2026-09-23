@@ -3,15 +3,15 @@
 /**
  * Imports a PDF directly into validated render buffers inside a disposable Worker.
  */
-export function importPdf(bytes: Uint8Array): DecodeOutcome;
-/**
- * Decodes retained PDF CMYK/YCCK without the inversion applied by browser JPEG readers.
- */
-export function decodeCmykJpeg(bytes: Uint8Array, width: number, height: number): RasterOutcome;
+export function importPdf(bytes: Uint8Array, progress?: (completed: number, total: number) => void | null): DecodeOutcome;
 /**
  * Converts locally inside a disposable Worker; expected PDF failures never throw into JS.
  */
 export function convertPdf(bytes: Uint8Array): ConvertOutcome;
+/**
+ * Decodes retained PDF CMYK/YCCK without the inversion applied by browser JPEG readers.
+ */
+export function decodeCmykJpeg(bytes: Uint8Array, width: number, height: number): RasterOutcome;
 /**
  * Decode synchronously inside a dedicated Worker; cancellation terminates that Worker.
  */
@@ -187,12 +187,14 @@ export interface InitOutput {
   readonly decodeoutcome_errorCode: (a: number) => [number, number];
   readonly decodeoutcome_errorMessage: (a: number) => [number, number];
   readonly decodeoutcome_takeDocument: (a: number) => number;
-  readonly importPdf: (a: number, b: number) => number;
+  readonly importPdf: (a: number, b: number, c: number) => number;
   readonly rasteroutcome_takePixels: (a: number) => [number, number];
   readonly rasteroutcome_errorMessage: (a: number) => [number, number];
   readonly rasteroutcome_errorCode: (a: number) => [number, number];
   readonly __wbg_rasteroutcome_free: (a: number, b: number) => void;
-  readonly __wbindgen_export_0: WebAssembly.Table;
+  readonly __wbindgen_exn_store: (a: number) => void;
+  readonly __externref_table_alloc: () => number;
+  readonly __wbindgen_export_2: WebAssembly.Table;
   readonly __wbindgen_free: (a: number, b: number, c: number) => void;
   readonly __wbindgen_malloc: (a: number, b: number) => number;
   readonly __wbindgen_start: () => void;
