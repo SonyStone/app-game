@@ -2,6 +2,7 @@ import { err, ok, ResultAsync } from 'neverthrow';
 import { documentError, errorMessage } from '../../../shared/errors';
 import { documentFileLimitMessage, maxDocumentFileBytes } from '../limits';
 import { decodeGdoc } from './decodeGdoc';
+import { documentTransfers } from './documentTransfers';
 import type { DecodeReply } from './types';
 import init from './wasm/gpu_document';
 import wasmUrl from './wasm/gpu_document_bg.wasm?url';
@@ -9,34 +10,12 @@ import wasmUrl from './wasm/gpu_document_bg.wasm?url';
 // One request per Worker: terminating it also releases its expanded WASM heap.
 self.onmessage = (event: MessageEvent<string | ArrayBuffer>) => {
   void read(event.data).then((reply) => {
-    const transfer: Transferable[] = [];
-
-    if (reply.ok) {
-      const data = reply.value;
-      transfer.push(data.positions.x.buffer, data.positions.y.buffer);
-      transfer.push(
-        ...(data.kind === 'glyphs'
-          ? [data.glyphVertices, data.atlas.buf, data.atlasVertices.buf]
-          : [
-              data.curves,
-              data.instances,
-              data.clips,
-              data.curveBins,
-              data.blends,
-              data.groups,
-              data.maskTransfers,
-              data.radialGradients,
-              data.rasterImages.table,
-              data.rasterImages.pixels
-            ])
-      );
-    }
-
-    self.postMessage(reply, { transfer });
+    self.postMessage(reply, { transfer: documentTransfers(reply) });
   });
 };
 
 async function read(source: string | ArrayBuffer): Promise<DecodeReply> {
+  const loading = typeof source === 'string' ? readUrl(source) : Promise.resolve(ok(source));
   const initialized = await ResultAsync.fromThrowable(
     () => init({ module_or_path: wasmUrl }),
     (cause) => documentError('decode', `Unable to load document decoder: ${errorMessage(cause)}`)
@@ -46,7 +25,7 @@ async function read(source: string | ArrayBuffer): Promise<DecodeReply> {
     return { ok: false, error: initialized.error };
   }
 
-  const bytes = typeof source === 'string' ? await readUrl(source) : ok(source);
+  const bytes = await loading;
 
   if (bytes.isErr()) {
     return { ok: false, error: bytes.error };

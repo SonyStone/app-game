@@ -55,8 +55,8 @@ await page.addInitScript(() => {
 const report = { url, files: [], pageErrors: errors };
 try {
   await page.goto(url);
-  await page.locator('input[type=file]').waitFor();
-  await page.getByRole('checkbox', { name: 'Auto zoom', exact: true }).uncheck();
+  await page.locator('input[type=file]').waitFor({ state: 'attached' });
+  // Opening a document starts with the camera tour disabled.
   for (const [index, name] of files.entries()) {
     const file = path.resolve(directory, name);
     const fileStat = await stat(file);
@@ -65,7 +65,9 @@ try {
     });
     const started = Date.now();
     await page.locator('input[type=file]').setInputFiles(file);
+    await page.getByRole('button', { name: 'More', exact: true }).click();
     await page.getByText(name, { exact: true }).waitFor();
+    await page.keyboard.press('Escape');
     await page.waitForFunction(
       () => document.querySelector('#beziercanvas')?.getAttribute('aria-busy') === 'false',
       undefined,
@@ -84,8 +86,9 @@ try {
     const result = { name, bytes: fileStat.size, elapsedMs: Date.now() - started, ...terminal };
     await page.screenshot({ path: `${output}/${index + 1}-viewer.png` });
     if (!terminal.failed) {
+      await page.getByRole('button', { name: 'More', exact: true }).click();
       const download = page.waitForEvent('download');
-      await page.getByRole('link', { name: 'Download GDOC' }).click();
+      await page.getByRole('menuitem', { name: 'Download GDOC' }).click();
       await (await download).saveAs(`${output}/${index + 1}.gdoc`);
       await page.locator('input[type=file]').setInputFiles(`${output}/${index + 1}.gdoc`);
       await page.waitForFunction(
@@ -102,7 +105,8 @@ try {
     await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
     console.log(JSON.stringify(result));
   }
-  await page.getByRole('button', { name: 'Back to demo' }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Back to demo' }).click();
   await page.waitForFunction(() => document.querySelector('output')?.textContent.includes('MiB'), undefined, {
     timeout: 60_000
   });

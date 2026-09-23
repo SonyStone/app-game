@@ -6,6 +6,8 @@ import { pageVertices, type TextDocument } from '../../document';
 import { View, pageLayout, viewLayout } from '../bindings';
 import type { SceneFrame } from '../createFrame';
 import { pageFragment, pageVertex } from '../pageShader';
+import { uploadBuffer } from '../uploadBuffer';
+import { buildCurvePreparation } from './buildCurvePreparation';
 import { createCompositionBudget } from './createCompositionBudget';
 import { croppedView } from './croppedView';
 import { Cubic, CurveInstance, curveLayout, shapeOnlySlot } from './curveBindings';
@@ -17,11 +19,8 @@ import { rasterFragment, rasterVertex } from './imageShader';
 import { createPageBundles } from './pageBundles';
 import { createPageTileCache } from './pageTileCache';
 import { createPaintBounds } from './paintBounds';
-import { paintRuns } from './paintRuns';
-import { paintTree, type PaintNode } from './paintTree';
-import { planPageComposition } from './planPageComposition';
+import { type PaintNode } from './paintTree';
 import { prepareCoverageTables } from './prepareCoverageTables';
-import { prepareCurveBins } from './prepareCurveBins';
 import { prepareRasterImages } from './prepareRasterImages';
 import { RadialGradient, radialLayout } from './radialGradient';
 
@@ -29,9 +28,11 @@ import { RadialGradient, radialLayout } from './radialGradient';
 export async function prepareCurveDocument(
   gpu: GpuContext,
   document: Extract<TextDocument, { kind: 'curves' }>,
-  keep: KeepGpuResource
+  keep: KeepGpuResource,
+  initialFrame?: SceneFrame
 ) {
   const { root, device, format } = gpu;
+  const coverage = await prepareCoverageTables(gpu, document, keep);
   const rasterResult = prepareRasterImages(gpu, document.rasterImages, keep);
 
   if (rasterResult.isErr()) {
@@ -39,39 +40,34 @@ export async function prepareCurveDocument(
   }
 
   const raster = rasterResult.value;
-  const runs = document.pages.map((page) =>
-    paintRuns(document.instances, page.beginVertex / 6, page.endVertex / 6, document.blends)
-  );
-  const trees = paintTree(document.instances, document.blends, document.groups, document.pages, document.maskTransfers);
-  const composition = planPageComposition(
-    document.instances,
+  const {
+    runs,
     trees,
-    document.pages.map((page) => (page.width * page.height) / (document.pages[0]!.width * document.pages[0]!.height)),
-    document.clips
-  );
+    composition,
+    indexed,
+    spatial: preparedSpatial,
+    placements
+  } = document.preparation ?? buildCurvePreparation(document);
+  delete document.preparation;
   const compositor = createGroupCompositor(gpu, keep);
-  const spatial = createPaintBounds(document.instances, document.pages);
-  const indexed = prepareCurveBins(document);
-  const curves = keep(
-    root.createBuffer(d.arrayOf(Cubic, Math.max(1, document.curves.byteLength / 32)), (buffer) =>
-      buffer.write(document.curves)
-    )
-  ).$usage('storage');
+  const matchingLayout =
+    placements.length === document.pages.length &&
+    placements.every((page, index) => page.x === document.pages[index]!.x && page.y === document.pages[index]!.y);
+  const spatial = createPaintBounds(document.instances, document.pages, matchingLayout ? preparedSpatial : undefined);
+  const curves = keep(root.createBuffer(d.arrayOf(Cubic, Math.max(1, document.curves.byteLength / 32)))).$usage(
+    'storage'
+  );
+  await uploadBuffer(gpu, curves.buffer, document.curves);
   const instances = keep(
-    root.createBuffer(d.arrayOf(CurveInstance, Math.max(1, document.instances.byteLength / 80)), (buffer) =>
-      buffer.write(indexed.instances)
-    )
+    root.createBuffer(d.arrayOf(CurveInstance, Math.max(1, document.instances.byteLength / 80)))
   ).$usage('storage');
-  const clips = keep(
-    root.createBuffer(d.arrayOf(CurveInstance, Math.max(1, document.clips.byteLength / 80)), (buffer) =>
-      buffer.write(indexed.clips)
-    )
-  ).$usage('storage');
-  const bins = keep(
-    root.createBuffer(d.arrayOf(d.u32, Math.max(1, indexed.bins.byteLength / 4)), (buffer) =>
-      buffer.write(indexed.bins)
-    )
-  ).$usage('storage');
+  await uploadBuffer(gpu, instances.buffer, indexed.instances);
+  const clips = keep(root.createBuffer(d.arrayOf(CurveInstance, Math.max(1, document.clips.byteLength / 80)))).$usage(
+    'storage'
+  );
+  await uploadBuffer(gpu, clips.buffer, indexed.clips);
+  const bins = keep(root.createBuffer(d.arrayOf(d.u32, Math.max(1, indexed.bins.byteLength / 4)))).$usage('storage');
+  await uploadBuffer(gpu, bins.buffer, indexed.bins);
   const offsets = keep(
     root.createBuffer(
       d.arrayOf(d.vec2f, document.pages.length),
@@ -97,7 +93,6 @@ export async function prepareCurveDocument(
     .with(pageLayout, pages);
   const croppedViews: { buffer: typeof view; group: typeof group }[] = [];
   const geometry = root.createBindGroup(curveLayout, { curves, instances, clips, bins });
-  const coverage = prepareCoverageTables(gpu, document, keep);
   const curveBatches = curveRuns(
     [...trees, ...composition.cached, ...composition.direct],
     document.instances,
@@ -145,12 +140,11 @@ export async function prepareCurveDocument(
   for (const variants of Object.values(fills)) {
     root.unwrap(variants.normal);
   }
-  const tails = await raster.prepareMipTails();
-
-  if (tails.isErr()) {
-    return err(tails.error);
-  }
-
+  const initialPages = initialFrame?.visible.map(({ index }) => index);
+  const tails = await raster.prepareMipTails(
+    initialPages?.flatMap((page) => runs[page]!.flatMap(({ image }) => (image === undefined ? [] : [image])))
+  );
+  if (tails.isErr()) return err(tails.error);
   await device.queue.onSubmittedWorkDone();
 
   const cachedPages = composition.pages;
@@ -160,7 +154,8 @@ export async function prepareCurveDocument(
     cachedPages,
     keep,
     (pass, frame) => drawDirect(pass, frame, 'cached'),
-    (page) => [...composition.images.get(page)!].every((image) => raster.isSettled(image))
+    (page) => [...composition.images.get(page)!].every((image) => raster.isSettled(image)),
+    (page) => [...composition.images.get(page)!].every((image) => !!raster.get(image))
   );
   const directBudget = keep(
     createCompositionBudget(
@@ -168,16 +163,16 @@ export async function prepareCurveDocument(
       () => tileCache.events.dispatchEvent(new Event('change'))
     )
   );
-  const previews = await tileCache.prepare();
-
-  if (previews.isErr()) {
-    return err(previews.error);
-  }
+  const previews = await tileCache.prepare(initialPages?.filter((page) => useComposedPage(page, initialFrame!)));
+  if (previews.isErr()) return err(previews.error);
 
   const imagePages = new Map<number, Set<number>>();
+  const readyImages = new Set<number>();
+  const imageRevisions = new Uint32Array(document.pages.length);
 
-  for (const index of cachedPages) {
-    for (const image of composition.images.get(index)!) {
+  for (const [index, pageRuns] of runs.entries()) {
+    for (const { image } of pageRuns) {
+      if (image === undefined) continue;
       const pages = imagePages.get(image) ?? new Set<number>();
       pages.add(index);
       imagePages.set(image, pages);
@@ -186,6 +181,10 @@ export async function prepareCurveDocument(
 
   const uploaded = (event: Event) => {
     const image = (event as CustomEvent<{ image: number }>).detail?.image;
+    if (image !== undefined && raster.get(image) && !readyImages.has(image)) {
+      readyImages.add(image);
+      for (const page of imagePages.get(image) ?? []) imageRevisions[page]!++;
+    }
     tileCache.invalidate(image === undefined ? cachedPages : (imagePages.get(image) ?? []));
     tileCache.events.dispatchEvent(new Event('change'));
   };
@@ -231,7 +230,8 @@ export async function prepareCurveDocument(
       raster.update(
         document.instances,
         frame.visible.flatMap((item) => runs[item.index]!),
-        frame
+        frame,
+        frame.visible.flatMap(({ index }) => (useComposedPage(index, frame) ? [...composition.images.get(index)!] : []))
       );
 
       if (frame.vectorOnly || cachedPages.size === 0) {
@@ -451,7 +451,7 @@ export async function prepareCurveDocument(
       if (!frame.vectorOnly && ordinaryPages.length > 4 && layer === 'all') {
         pass.executeBundles(
           ordinaryPages.map(({ index }) => {
-            return pageBundle(index, paint, `${cacheLevel}:${exactLevel}`);
+            return pageBundle(index, paint, `${cacheLevel}:${exactLevel}:${imageRevisions[index]}`);
           })
         );
       } else {

@@ -45,7 +45,7 @@ try {
     return {
       decodeMs: performance.now() - start,
       pages: doc.pages.length,
-      glyphs: doc.glyphVertices.byteLength / 72,
+      glyphs: doc.glyphVertices.byteLength / (doc.glyphEncoding === 'instances' ? 28 : 72),
       adapter: {
         vendor: adapter.info.vendor,
         architecture: adapter.info.architecture,
@@ -64,22 +64,39 @@ try {
   ];
   {
     const backend = 'typegpu';
-    report.initialization[backend] = await page.evaluate(async (backend) => {
-      document.body.innerHTML = '';
-      window.canvas = document.createElement('canvas');
-      canvas.width = 1200;
-      canvas.height = 800;
-      document.body.append(canvas);
-      const start = performance.now();
-      const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
-      const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
-      const mounted = await mountRenderingGpu(canvas, doc.glyphVertices.byteLength);
-      window.gpu = mounted.gpu;
-      window.disposeGpu = mounted.dispose;
-      window.makeRenderer = (_canvas, data) => createTypeGpuRenderer(gpu, data);
-      window.renderer = (await makeRenderer(canvas, doc))._unsafeUnwrap();
-      return { prepareMs: performance.now() - start, resourceBytes: renderer.resourceBytes };
-    }, backend);
+    report.initialization[backend] = await page.evaluate(
+      async (storageLimit) => {
+        document.body.innerHTML = '';
+        window.canvas = document.createElement('canvas');
+        canvas.width = 1200;
+        canvas.height = 800;
+        document.body.append(canvas);
+        const start = performance.now();
+        const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+        const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
+        const mounted = await mountRenderingGpu(canvas, doc.glyphVertices.byteLength);
+        window.gpu = mounted.gpu;
+        // Exercise page draws crossing storage-buffer boundaries on ordinary hardware.
+        if (storageLimit) {
+          window.gpu = {
+            ...gpu,
+            device: new Proxy(gpu.device, {
+              get(target, key) {
+                if (key === 'limits')
+                  return { maxBufferSize: target.limits.maxBufferSize, maxStorageBufferBindingSize: storageLimit };
+                const value = Reflect.get(target, key, target);
+                return typeof value === 'function' ? value.bind(target) : value;
+              }
+            })
+          };
+        }
+        window.disposeGpu = mounted.dispose;
+        window.makeRenderer = (_canvas, data) => createTypeGpuRenderer(gpu, data);
+        window.renderer = (await makeRenderer(canvas, doc))._unsafeUnwrap();
+        return { prepareMs: performance.now() - start, resourceBytes: renderer.resourceBytes };
+      },
+      Number(process.env.GPU_TEXT_TEST_STORAGE_LIMIT ?? 0)
+    );
     for (const current of cases) {
       const timing = await page.evaluate(async (current) => {
         let data = doc;
@@ -109,7 +126,7 @@ try {
           });
           data = {
             ...doc,
-            glyphVertices: doc.glyphVertices.slice(0, 72),
+            glyphVertices: doc.glyphVertices.slice(0, doc.glyphEncoding === 'instances' ? 28 : 72),
             imageVertices: buffer,
             pages: [
               {
@@ -197,6 +214,9 @@ try {
         };
       }, sources);
       report.differences.push({ name: current.name, ...difference });
+      if (process.env.GPU_TEXT_EXACT === '1') {
+        assert.equal(difference.maxChannelError, 0, `${current.name}: expected exact pixel parity`);
+      }
       assert.ok(difference.meanChannelError < 0.6, `${current.name}: mean pixel difference too large`);
       assert.ok(difference.changedPercent < 1, `${current.name}: too many differing pixels`);
     }

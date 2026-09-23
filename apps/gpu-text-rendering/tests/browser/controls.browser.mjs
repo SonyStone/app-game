@@ -1,12 +1,13 @@
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
 
 // Run against `pnpm --filter @app-game/gpu-text-rendering dev`. UI behavior and cleanup use the real Solid component and GPU.
 const viewerPath = process.env.GPU_TEXT_PATH ?? '/';
 const baseURL = process.env.GPU_TEXT_URL ?? 'http://localhost:3180';
 for (const gpu of [true, false]) {
   const browser = await chromium.launch({
-  channel: process.env.GPU_TEXT_BROWSER_CHANNEL || undefined,
+    channel: process.env.GPU_TEXT_BROWSER_CHANNEL || undefined,
     headless: true,
     args: gpu
       ? ['--enable-unsafe-webgpu', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : [])]
@@ -99,20 +100,77 @@ for (const gpu of [true, false]) {
     await page.waitForFunction(() => pendingFrames.size === 0);
     const manipulated = await snapshot();
     assert.ok(!before.equals(manipulated), 'gestures must change the rendered document');
-    await page.getByLabel('Vector only').check();
-    await page.getByLabel('Grids', { exact: true }).check();
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+    await page.getByRole('menuitemcheckbox', { name: 'Vector only' }).click();
+    await page.getByRole('menuitemcheckbox', { name: 'Grids', exact: true }).click();
     await page.waitForFunction(() => pendingFrames.size === 0);
     assert.ok(!manipulated.equals(await snapshot()), 'reactive options must redraw the document');
-    await page.getByLabel('Auto zoom').check();
+    await page.getByRole('menuitemcheckbox', { name: 'Auto zoom' }).click();
     await page.waitForFunction(() => pendingFrames.size > 0);
     await page.mouse.move(400, 400);
     await page.mouse.wheel(0, 100);
-    await page.waitForFunction(() => !document.querySelector('input[type="checkbox"]').checked);
-    assert.equal(await page.getByLabel('Auto zoom').isChecked(), false);
+    await page.waitForFunction(
+      () => document.querySelector('[role="menuitemcheckbox"]')?.getAttribute('aria-checked') === 'false'
+    );
+    assert.equal(
+      await page.getByRole('menuitemcheckbox', { name: 'Auto zoom' }).getAttribute('aria-checked'),
+      'false'
+    );
     await page.waitForFunction(() => pendingFrames.size === 0);
     await page.setViewportSize({ width: 800, height: 600 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 800 * devicePixelRatio);
     await page.waitForFunction(() => pendingFrames.size === 0);
+    if (!(await page.getByRole('menu').isVisible())) await page.getByRole('button', { name: 'More', exact: true }).click();
+    await page.getByRole('menuitemcheckbox', { name: 'Grids', exact: true }).click();
+    await page.getByRole('menuitemcheckbox', { name: 'Vector only' }).click();
+    await page.getByRole('button', { name: 'More', exact: true }).press('Escape');
+    await page.getByRole('button', { name: 'Show entire document' }).click();
+    await page.waitForFunction(() => pendingFrames.size === 0);
+    const overview = await snapshot();
+    await page.mouse.move(400, 300);
+    await page.mouse.wheel(0, -500);
+    await page.waitForFunction(() => pendingFrames.size === 0);
+    assert.ok(!overview.equals(await snapshot()));
+    await page.getByRole('button', { name: 'Show entire document' }).click();
+    await page.waitForFunction(() => pendingFrames.size === 0);
+    assert.ok(overview.equals(await snapshot()), 'overview must restore the exact fitted camera');
+    await page.getByRole('button', { name: 'Fullscreen', exact: true }).click();
+    await page.waitForFunction(() => !!document.fullscreenElement);
+    await page.getByRole('button', { name: 'Exit fullscreen' }).click();
+    await page.waitForFunction(() => !document.fullscreenElement);
+    const more = page.getByRole('button', { name: 'More', exact: true });
+    await more.press('ArrowDown');
+    assert.equal(await page.locator(':focus').getAttribute('role'), 'menuitemcheckbox');
+    await page.keyboard.press('End');
+    assert.equal(await page.locator(':focus').textContent(), 'About the technology');
+    await page.keyboard.press('Escape');
+    assert.equal(await more.getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator(':focus').getAttribute('aria-label'), 'More');
+    await more.click();
+    await page.mouse.click(20, 20);
+    assert.equal(await more.getAttribute('aria-expanded'), 'false');
+    const screenshots = process.env.GPU_TEXT_UI_SCREENSHOTS;
+    if (screenshots) await mkdir(screenshots, { recursive: true });
+    for (const [width, height] of [
+      [1440, 1024],
+      [390, 844],
+      [320, 568],
+      [844, 390]
+    ]) {
+      await page.setViewportSize({ width, height });
+      await page.getByRole('button', { name: 'Show entire document' }).click();
+      await page.waitForFunction(() => pendingFrames.size === 0);
+      const box = await page.locator('#toolbar').boundingBox();
+      assert.ok(box.width <= 220 && box.height <= 60 && box.x >= 0 && box.y + box.height <= height);
+      await page.mouse.move(10, 10);
+      if (screenshots) await page.screenshot({ path: `${screenshots}/${width}x${height}.png` });
+      await more.click();
+      const menu = await page.getByRole('menu').boundingBox();
+      assert.ok(menu.x >= 0 && menu.y >= 0 && menu.x + menu.width <= width && menu.y + menu.height <= height);
+      await page.mouse.move(10, 10);
+      if (screenshots) await page.screenshot({ path: `${screenshots}/${width}x${height}-menu.png` });
+      await page.keyboard.press('Escape');
+    }
     // Device loss is reported even when the demand-driven frame loop is stopped.
     await page.evaluate(() => viewerDevice.destroy());
     await page.getByRole('alert').waitFor();

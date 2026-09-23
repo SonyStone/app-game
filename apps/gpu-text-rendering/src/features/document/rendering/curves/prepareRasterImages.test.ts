@@ -33,6 +33,24 @@ describe('virtual image residency', () => {
     fixture.owner.destroy();
   });
 
+  it('prepares only requested initial tails, then loads a newly visited page on demand', async () => {
+    const fixture = setup(3, 64, 64);
+    const prepared = fixture.cache.prepareMipTails([0, 0]);
+    const worker = FakeWorker.all[0]!;
+    expect(worker.requests.map(({ id }) => id)).toEqual([0]);
+    drain();
+    expect((await prepared).isOk()).toBe(true);
+    expect(fixture.cache.get(0)).toBeDefined();
+    expect(fixture.cache.get(1)).toBeUndefined();
+    expect(fixture.cache.get(2)).toBeUndefined();
+    fixture.cache.update(fixture.instances, fixture.ranges.slice(1, 2), frame);
+    drain();
+    await fixture.cache.settle();
+    expect(fixture.cache.get(1)).toBeDefined();
+    expect(fixture.cache.get(2)).toBeUndefined();
+    fixture.owner.destroy();
+  });
+
   it('settles initial LOD preparation on cancellation and preserves decoder failures', async () => {
     const fixture = setup(2, 64, 64);
     const prepared = fixture.cache.prepareMipTails();

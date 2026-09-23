@@ -83,7 +83,7 @@ async function checkFile(index) {
   try {
     if (process.env.GPU_TEXT_SKIP_IMPORT !== '1') {
       await page.goto(url);
-      await page.getByRole('checkbox', { name: 'Auto zoom', exact: true }).uncheck();
+      // Opening a document starts with the camera tour disabled.
       await page.waitForFunction(
         () =>
           document.querySelector('output')?.textContent?.startsWith('TypeGPU') &&
@@ -105,7 +105,9 @@ async function checkFile(index) {
             }).observe(document.body, { subtree: true, childList: true, characterData: true });
           });
           await page.locator('input[type=file]').setInputFiles(path.join(directory, name));
+          await page.getByRole('button', { name: 'More', exact: true }).click();
           await page.getByText(name, { exact: true }).waitFor();
+          await page.keyboard.press('Escape');
           await page.waitForFunction(
             () => document.querySelector('#beziercanvas')?.getAttribute('aria-busy') === 'false',
             undefined,
@@ -140,9 +142,10 @@ async function checkFile(index) {
           await writeFile(path.join(destination, 'opened.png'), Buffer.from(opened.split(',')[1], 'base64'));
           report.importStep = 'download GDOC';
           await save();
+          await page.getByRole('button', { name: 'More', exact: true }).click();
           const [download] = await Promise.all([
             page.waitForEvent('download', { timeout: 60_000 }),
-            page.getByRole('link', { name: 'Download GDOC' }).click()
+            page.getByRole('menuitem', { name: 'Download GDOC' }).click()
           ]);
           await download.saveAs(path.join(destination, 'document.gdoc'));
         },

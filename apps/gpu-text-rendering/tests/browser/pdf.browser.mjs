@@ -26,19 +26,57 @@ page.on('console', (m) => {
 });
 
 try {
+  let releaseImport;
+  const importGate = new Promise((resolve) => {
+    releaseImport = resolve;
+  });
+  await page.route('**/import.worker*', async (route) => {
+    await importGate;
+    await route.continue();
+  });
   await page.goto(viewerURL);
-  await page
-    .locator('input[type=file]')
-    .setInputFiles({ name: 'curves.pdf', mimeType: 'application/pdf', buffer: pdf });
+  await page.locator('input[type=file]').waitFor({ state: 'attached' });
+  // Drop onto a toolbar child: the full viewer handles file drops, including its controls.
+  await page.evaluate(
+    (bytes) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([new Uint8Array(bytes)], 'curves.pdf', { type: 'application/pdf' }));
+      const target = document.querySelector('#toolbar button');
+      target.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+      window.documentDropTransfer = transfer;
+    },
+    [...pdf]
+  );
+  await page.getByTestId('document-drop-overlay').waitFor();
+  await page.evaluate(() => {
+    const event = new DragEvent('drop', { dataTransfer: window.documentDropTransfer, bubbles: true, cancelable: true });
+    document.querySelector('#toolbar button').dispatchEvent(event);
+    if (!event.defaultPrevented) throw new Error('File drop would navigate away');
+    delete window.documentDropTransfer;
+  });
+  await page.getByTestId('document-drop-overlay').waitFor({ state: 'hidden' });
+  try {
+    await page.getByRole('progressbar', { name: 'Loading document…' }).waitFor();
+    assert.equal(await page.locator('canvas').getAttribute('aria-busy'), 'true');
+    await page.getByText('curves.pdf', { exact: true }).waitFor();
+    await page.screenshot({ path: `${output}/loading.png` });
+  } finally {
+    releaseImport();
+  }
+  await page.getByTestId('document-loading').waitFor({ state: 'hidden' });
+  await page.unroute('**/import.worker*');
   await page.waitForFunction(() => document.querySelector('output')?.textContent.includes('MiB'), { timeout: 60000 });
   await page.screenshot({ path: `${output}/viewer.png` });
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   const download = page.waitForEvent('download');
-  await page.getByRole('link', { name: 'Download GDOC' }).click();
+  await page.getByRole('menuitem', { name: 'Download GDOC' }).click();
   const saved = await download;
   await saved.saveAs(`${output}/curves.gdoc`);
   await page.locator('input[type=file]').setInputFiles(`${output}/curves.gdoc`);
   await page.waitForFunction(() => document.querySelector('output')?.textContent.includes('MiB'));
-  assert.equal(await page.getByRole('checkbox', { name: 'Vector only' }).count(), 0);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  assert.equal(await page.getByRole('menuitemcheckbox', { name: 'Vector only' }).count(), 0);
+  await page.keyboard.press('Escape');
 
   let result = { uiOnly };
   if (!uiOnly) {
@@ -151,8 +189,9 @@ try {
     })
   });
   await page.waitForFunction(() =>
-    document.querySelector('output')?.textContent.includes('tiling patterns with blend modes')
+    document.querySelector('[role=alert]')?.textContent.includes('tiling patterns with blend modes')
   );
+  assert.equal(await page.getByTestId('document-loading').count(), 0);
   await page.locator('input[type=file]').setInputFiles({
     name: 'rotated.pdf',
     mimeType: 'application/pdf',

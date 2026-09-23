@@ -16,7 +16,11 @@ pub fn decode(bytes: &[u8]) -> Result<Document, DocumentError> {
     if !matches!(profile, 2 | 3) {
         return Err(DocumentError::Unsupported("curve scene profile"));
     }
-    let mut sections = container::decode_profile(bytes, profile)?;
+    decode_sections(container::decode_profile(bytes, profile)?, profile)
+}
+
+// Both file decoding and direct PDF import pass through the same validation.
+fn decode_sections(mut sections: Vec<Section>, profile: u32) -> Result<Document, DocumentError> {
     if sections.iter().any(|s| {
         s.required
             && !matches!(
@@ -305,7 +309,25 @@ pub fn encode(document: &Document) -> Result<Vec<u8>, DocumentError> {
 /// Consumes importer-owned scene buffers without a second full-size decoding allocation.
 /// Checks image resources and curve bins while encoding. Callers must decode/validate the
 /// resulting file before rendering; the browser does this in a fresh disposable Worker.
-pub fn encode_owned(mut document: Document) -> Result<Vec<u8>, DocumentError> {
+pub fn encode_owned(document: Document) -> Result<Vec<u8>, DocumentError> {
+    let (sections, profile) = scene_sections(document)?;
+    container::encode_profile_owned(sections, profile)
+}
+
+/// Builds acceleration data and validates importer buffers without serializing a GDOC.
+pub fn prepare_owned(document: Document) -> Result<Document, DocumentError> {
+    let (sections, profile) = scene_sections(document)?;
+    let mut total = 0usize;
+    for section in &sections {
+        if section.data.len() > crate::container::MAX_DECODED_BYTES - total {
+            return Err(DocumentError::Limit("decoded size"));
+        }
+        total += section.data.len();
+    }
+    decode_sections(sections, profile)
+}
+
+fn scene_sections(mut document: Document) -> Result<(Vec<Section>, u32), DocumentError> {
     let mut pages = Vec::with_capacity(document.pages.len() * 24);
     for page in &document.pages {
         pages.extend_from_slice(&page.width.to_le_bytes());
@@ -316,8 +338,12 @@ pub fn encode_owned(mut document: Document) -> Result<Vec<u8>, DocumentError> {
     if document.blends.len() != document.instances.len() / 80 {
         return Err(DocumentError::Invalid("blend record count"));
     }
-    let mut instances = document.instances.clone();
-    let mut clips = document.clips.clone();
+    let hairlines = document
+        .instances
+        .chunks_exact(80)
+        .any(|r| u32_at(r, 72) >= 3);
+    let mut instances = std::mem::take(&mut document.instances);
+    let mut clips = std::mem::take(&mut document.clips);
     let bins = crate::curve_bins::build(&document.curves, &mut instances, &mut clips)?;
     let mut sections = vec![
         Section {
@@ -328,7 +354,7 @@ pub fn encode_owned(mut document: Document) -> Result<Vec<u8>, DocumentError> {
         Section {
             tag: *b"CURV",
             required: true,
-            data: document.curves.clone(),
+            data: std::mem::take(&mut document.curves),
         },
         Section {
             tag: *b"DRAW",
@@ -366,7 +392,7 @@ pub fn encode_owned(mut document: Document) -> Result<Vec<u8>, DocumentError> {
             data: 1u32.to_le_bytes().to_vec(),
         });
     }
-    if !document.clips.is_empty() {
+    if !clips.is_empty() {
         sections.push(Section {
             tag: *b"CLIP",
             required: true,
@@ -422,11 +448,7 @@ pub fn encode_owned(mut document: Document) -> Result<Vec<u8>, DocumentError> {
             data: 1u32.to_le_bytes().to_vec(),
         });
     }
-    if document
-        .instances
-        .chunks_exact(80)
-        .any(|r| u32_at(r, 72) >= 3)
-    {
+    if hairlines {
         sections.push(Section {
             tag: *b"HAIR",
             required: true,
@@ -467,8 +489,7 @@ pub fn encode_owned(mut document: Document) -> Result<Vec<u8>, DocumentError> {
             data: 1u32.to_le_bytes().to_vec(),
         });
     }
-    let bytes = container::encode_profile_owned(sections, profile)?;
-    Ok(bytes)
+    Ok((sections, profile))
 }
 
 fn validate_instance(

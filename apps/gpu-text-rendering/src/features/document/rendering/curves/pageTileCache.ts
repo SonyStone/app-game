@@ -20,7 +20,8 @@ export function createPageTileCache(
   pages: Set<number>,
   keep: KeepGpuResource,
   render: (pass: GPURenderPassEncoder, frame: SceneFrame) => void,
-  sourcesReady: (page: number) => boolean = () => true
+  sourcesReady: (page: number) => boolean = () => true,
+  fallbacksReady: (page: number) => boolean = () => true
 ) {
   const { root, device, format } = gpu;
   const events = new EventTarget();
@@ -90,9 +91,9 @@ export function createPageTileCache(
     get resourceBytes() {
       return [...entries.values()].reduce((sum, entry) => sum + entry.bytes, 48);
     },
-    /** Coarse pages are ready before exposing the scene, including initially unseen pages. */
-    async prepare() {
-      for (const page of pages) {
+    /** Prepares the supplied initial pages, or all cacheable pages for offline callers. */
+    async prepare(initialPages: Iterable<number> = pages) {
+      for (const page of initialPages) {
         if (disposed || gpu.checkActive().isErr()) {
           return err(gpuError('destroyed', 'The page tile cache has been destroyed'));
         }
@@ -229,6 +230,7 @@ export function createPageTileCache(
     const overdue = performance.now() - (requestedAt.get(pageTileKey(tile)) ?? performance.now()) >= maxDeferralMs;
     return (
       needsRefinement(tile) &&
+      fallbacksReady(tile.page) &&
       (overdue || (sourcesReady(tile.page) && (!moving || (pageWorkMs.get(tile.page) ?? Infinity) <= 8)))
     );
   }
@@ -253,7 +255,7 @@ export function createPageTileCache(
           ...missing.map((tile) => (requestedAt.get(pageTileKey(tile)) ?? now) + maxDeferralMs)
         );
         const idle = movedAt + 80;
-        deferred.schedule(Math.max(1, (idle > now ? Math.min(idle, deadline) : deadline) - now));
+        deferred.schedule(Math.max(16, (idle > now ? Math.min(idle, deadline) : deadline) - now));
       } else {
         finish();
       }

@@ -1,4 +1,6 @@
 import type { DocumentError } from '../../../shared/errors';
+import type { CoverageTables } from '../rendering/curves/buildCoverageTables';
+import type { buildCurvePreparation } from '../rendering/curves/buildCurvePreparation';
 
 /** Validated CPU data from the Rust decoder, before viewer layout or GPU allocation. */
 export type DecodedDocument = {
@@ -7,12 +9,18 @@ export type DecodedDocument = {
 } & (
   | {
       kind: 'glyphs';
+      /** Omitted for legacy six-vertex callers; file loaders return lossless 28-byte instances. */
+      glyphEncoding?: 'instances';
       glyphVertices: ArrayBuffer;
       atlas: { buf: ArrayBuffer; width: number; height: number };
       atlasVertices: { buf: ArrayBuffer; width: number; height: number };
     }
   | {
       kind: 'curves';
+      /** Precomputed in the loading Worker and consumed by GPU preparation; optional for programmatic scenes. */
+      coverage?: CoverageTables;
+      /** Worker-built paint plans and lookup buffers, consumed on first renderer preparation. */
+      preparation?: ReturnType<typeof buildCurvePreparation>;
       curves: ArrayBuffer;
       instances: ArrayBuffer;
       /** Analytic clip chains and curve lookup tables; empty for older files. */

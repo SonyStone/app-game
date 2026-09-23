@@ -12,7 +12,7 @@
     "preview": "vite preview --port 4180",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:browser": "node tests/browser/pdf.browser.mjs && node tests/browser/images.browser.mjs && node tests/browser/cmyk.browser.mjs && node tests/browser/virtualTextures.browser.mjs && node tests/browser/curveQuality.browser.mjs && node tests/browser/pageTiles.browser.mjs && node tests/browser/selectiveComposition.browser.mjs && node tests/browser/coverage.browser.mjs && node tests/browser/graphics.browser.mjs && node tests/browser/mesh.browser.mjs && node tests/browser/groups.browser.mjs && node tests/browser/compositing.browser.mjs && node tests/browser/format.browser.mjs && node tests/browser/controls.browser.mjs && node tests/browser/scene.browser.mjs && node tests/browser/rendering.browser.mjs",
+    "test:browser": "node tests/browser/pdf.browser.mjs && node tests/browser/images.browser.mjs && node tests/browser/cmyk.browser.mjs && node tests/browser/virtualTextures.browser.mjs && node tests/browser/progressive.browser.mjs && node tests/browser/curveQuality.browser.mjs && node tests/browser/pageTiles.browser.mjs && node tests/browser/selectiveComposition.browser.mjs && node tests/browser/coverage.browser.mjs && node tests/browser/graphics.browser.mjs && node tests/browser/mesh.browser.mjs && node tests/browser/groups.browser.mjs && node tests/browser/compositing.browser.mjs && node tests/browser/format.browser.mjs && node tests/browser/controls.browser.mjs && node tests/browser/languages.browser.mjs && node tests/browser/scene.browser.mjs && node tests/browser/rendering.browser.mjs",
     "build:wasm": "node scripts/build-wasm.mjs",
     "test:rust": "cargo +1.92.0 test --manifest-path rust/document-format/Cargo.toml --locked --all-features",
     "test:wasm": "node scripts/verify-demo.mjs",
@@ -23,12 +23,18 @@
     "test:corpus": "node tests/performance/corpus.mjs"
   },
   "dependencies": {
+    "@app-game/components": "workspace:*",
+    "@solid-primitives/drag-drop": "catalog:",
     "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/fullscreen": "catalog:",
+    "@solid-primitives/i18n": "catalog:",
     "@solid-primitives/jsx-tokenizer": "catalog:",
     "@solid-primitives/page-utilities": "catalog:",
     "@solid-primitives/raf": "catalog:",
     "@solid-primitives/resize-observer": "catalog:",
+    "@solidjs/router": "catalog:",
     "@solidjs/web": "2.0.0-rc.4",
+    "@tabler/icons": "catalog:",
     "neverthrow": "catalog:",
     "solid-js": "catalog:",
     "typegpu": "^0.11.4"

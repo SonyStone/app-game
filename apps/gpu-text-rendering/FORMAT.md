@@ -172,7 +172,7 @@ Requires `PAGE`, `CURV`, `DRAW`, `IMAG` and `PIXL`. Geometry and page tables ret
 | 16     | u32  | Image interpolation: 0 nearest, 1 linear                         |
 | 20     | u32  | Codec: 0 raw RGBA, 1 zlib RGBA, 2 JPEG, 3 ICC JPEG, 4 tiled mips |
 
-Ranges must cover `PIXL` contiguously. The encoded payload is limited to **1536 MiB**; each individual decoded image is also limited to 128 MiB. Container limits are 2 GiB minus one byte on disk and across decoded sections. Packed image bytes remain packed when crossing the document decoder boundary.
+Ranges must cover `PIXL` contiguously. The encoded payload is limited to **1536 MiB**; each individual decoded image is also limited to 256 MiB. Container limits are 2 GiB minus one byte on disk and across decoded sections. Packed image bytes remain packed when crossing the document decoder boundary.
 
 Codec 0 stores top-down premultiplied RGBA8; codec 1 stores exactly those bytes as an independent zlib stream. Every decoded RGB component must be at most alpha. Rust validates each compressed resource independently, with its declared expansion limit. Codec 2 stores an RGB/gray JPEG; codec 3 stores a JPEG with the PDF color profile in APP2 records. Both have matching validated dimensions; decoding is validated before upload. Codec 4 stores the tiled pyramid described below. Nonzero codecs require an `IPCK` section marked required, containing little-endian u32 version `1`. Old profile-3 files without IPCK remain readable.
 
@@ -186,9 +186,9 @@ A document-owned worker expands one requested image at a time. The GPU cache has
 
 Tiling patterns with blend modes produce `unsupported-pdf` with a one-based page number. Axial/radial gradients, sampled function shadings, overlapping pattern cells, soft-mask transfer functions and all 16 RGB blend modes are supported. The local interpreter patches expose form group isolation and knockout properties. Required BLNX/GFLG/MTRF/RGRD extensions preserve these features on reopening; their records and approximation limits are documented below. The import is discarded on failure. Encrypted/password-protected or unparseable input returns `invalid-data`. This is an initial subset, **not a general PDF fidelity guarantee**: it also inherits Hayro's parser/interpreter limitations and warning coverage. Annotation appearances, forms, interactive content and text selection are not implemented.
 
-The input PDF is limited to 2 GiB minus one byte, 10,000 pages and the output profile's geometry budgets. Conversion runs in a separate module Worker with its own WASM build (about 3.7 MB before compression, including font support). The regular GDOC decoder remains about 100 KB and does not depend on the PDF interpreter. Both are loaded by Vite-managed asset URLs. Files stay local; conversion never sends the document to a server.
+The input PDF is limited to 2 GiB minus one byte, 10,000 pages and the output profile's geometry budgets. Conversion runs in a separate module Worker with its own WASM build (about 4.13 MB before compression, including font support). The regular GDOC decoder remains about 587 KB and does not depend on the PDF interpreter. Both are loaded by Vite-managed asset URLs. Files stay local; conversion never sends the document to a server.
 
-The viewer sniffs the input bytes, converts PDF to GDOC, copies the encoded result into a downloadable File and transfers the original result to the decoder Worker. Selecting another document disposes the old session and cancels outstanding work. Source parsing and conversion are currently whole-document operations; Worker termination bounds their lifetime, not their peak memory. Image decoding/upload is demand-driven after conversion; incremental source parsing remains future work.
+The viewer sniffs the input bytes and imports PDF directly into validated render buffers. The same section-level geometry, image, group and budget checks serve direct import and GDOC decoding. GDOC serialization is deferred until Download GDOC; that export reinterprets the original local File in a disposable Worker, so it adds work only when requested. Selecting another document disposes the old session and cancels outstanding work. Source parsing and conversion are currently whole-document operations; Worker termination bounds their lifetime, not their peak memory. The loader also builds coverage tables and boundary grids in its Worker before transferring render data. Image decoding/upload and composed page caches prioritize the initial visible pages; incremental PDF source parsing remains future work.
 
 ## Browser lifetime and errors
 
@@ -196,7 +196,7 @@ The viewer sniffs the input bytes, converts PDF to GDOC, copies the encoded resu
 
 WASM returns a `DecodeOutcome` object: either a document or a stable error code/message. Expected format failures never throw JavaScript exceptions. The adapter uses `neverthrow` at browser/WASM exception boundaries. Error codes are `invalid-data`, `unsupported-format`, `document-limit`, `checksum` and `decode`; transport additionally uses `http` and `load`. Cancellation is the existing distinct `aborted` result.
 
-The generated Vec getters copy data out of WASM memory. Those owned buffers are transferred to the main thread without another copy. The Worker is terminated on success, cancellation and failure, releasing its retained WASM heap. Peak CPU memory still includes compressed input, decoded sections, expanded vertices and WASM-to-JS copies. This is not a streaming/page-on-demand renderer. GPU memory remains about 189.2 MiB for the demo; instancing and streaming are separate improvements.
+The generated Vec getters copy data out of WASM memory. The browser adapter packs quadratic glyph vertices losslessly into 28-byte instances before transfer; the WASM API and GDOC bytes remain unchanged. Owned buffers are transferred to the main thread without structured-clone copies. The Worker is terminated on success, cancellation and failure, releasing its retained WASM heap. Peak CPU memory still includes compressed input, decoded sections, expanded vertices and WASM-to-JS copies. Source interpretation and geometry upload still process the whole document; image and composed-tile residency is demand-driven. The default full demo uses about 77.0 MiB of explicit GPU resources.
 
 ## Build and reproduce
 
@@ -287,7 +287,7 @@ colors retain the precision of the stored ramp.
 Function-based shadings use 512×512 sampled color tables with analytic outer clipping,
 stored as ordinary tiled image resources. Fine discontinuities in arbitrary functions
 can be softened at magnification. Very wide JPEGs use Rust decoding and lossless image
-tiles rather than a browser canvas; the 128 MiB decoded-image limit still applies.
+tiles rather than a browser canvas; the 256 MiB decoded-image limit still applies.
 
 ### Mesh shading import
 

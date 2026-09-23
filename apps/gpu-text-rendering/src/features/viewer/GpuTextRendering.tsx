@@ -1,25 +1,38 @@
+import { createFullscreen } from '@solid-primitives/fullscreen';
+import loaderIcon from '@tabler/icons/outline/loader-2.svg?url';
 import { ResultAsync } from 'neverthrow';
-import { createEffect, createSignal, Show } from 'solid-js';
+import { createEffect, createSignal, Show, untrack } from 'solid-js';
 import { errorMessage, type FullscreenError, type GpuError } from '../../shared/errors';
 import { GpuCanvasProvider } from '../../shared/gpu/GpuCanvasProvider';
 import { TypeGPURootProvider } from '../../shared/gpu/TypeGPURootProvider';
-import noticesUrl from '../document/pdf/wasm/third-party-notices.txt?url';
+import type { ExportDocument } from '../document/readDocumentSource';
+import { createDocumentDrop } from './createDocumentDrop';
 import { createViewerState } from './createViewerState';
 import { DocumentViewer } from './DocumentViewer';
+import { createViewerI18n } from './i18n/createViewerI18n';
 import s from './viewer.module.scss';
+import { ViewerToolbar } from './ViewerToolbar';
 
 /** Displays a selected PDF/GDOC or the bundled document with TypeGPU and pointer-based navigation. */
 export default function GpuTextRendering() {
   const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
   const [fullscreenError, setFullscreenError] = createSignal<FullscreenError>();
   const viewer = createViewerState();
-  let container: HTMLDivElement | undefined;
+  const i18n = createViewerI18n();
+  const t = i18n.t;
+  const [container, setContainer] = createSignal<HTMLDivElement>();
+  const fullscreenState = untrack(() => createFullscreen(container));
   const [source, setSource] = createSignal<{ file?: File }>({});
-  const [converted, setConverted] = createSignal<File>();
+  const [converted, setConverted] = createSignal<ExportDocument>();
+  const [download, setDownload] = createSignal<File>();
+  const [exporting, setExporting] = createSignal(false);
+  const [exportError, setExportError] = createSignal<string>();
   const [downloadUrl, setDownloadUrl] = createSignal<string>();
   const [profile, setProfile] = createSignal<'glyphs' | 'curves'>('glyphs');
 
-  createEffect(converted, (file) => {
+  const drop = createDocumentDrop(open);
+
+  createEffect(download, (file) => {
     const url = file ? URL.createObjectURL(file) : undefined;
     setDownloadUrl(url);
 
@@ -31,10 +44,37 @@ export default function GpuTextRendering() {
   });
 
   function open(file?: File) {
+    drop.clearError();
     setConverted(undefined);
+    setDownload(undefined);
+    setExporting(false);
+    setExportError(undefined);
     viewer.setAutoZoom(false);
     viewer.setDragging(false);
     setSource({ file });
+  }
+
+  async function exportFile() {
+    const exporter = converted();
+    if (!exporter || exporting()) return;
+    setExporting(true);
+    setExportError(undefined);
+    const result = await exporter();
+    if (converted() !== exporter) return;
+    setExporting(false);
+    if (result.isErr()) {
+      setExportError(result.error.message);
+      return;
+    }
+    setDownload(result.value);
+    // Use a separate temporary URL so the first click downloads immediately,
+    // independent of the reactive effect that installs the persistent link.
+    const url = URL.createObjectURL(result.value);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = result.value.name;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function failGpu(error: GpuError) {
@@ -45,7 +85,8 @@ export default function GpuTextRendering() {
   async function fullscreen() {
     const result = await ResultAsync.fromThrowable(
       async () => {
-        await container?.requestFullscreen();
+        if (fullscreenState.isActive()) await fullscreenState.exit();
+        else await fullscreenState.enter();
       },
       (cause): FullscreenError => ({ kind: 'fullscreen', message: errorMessage(cause), cause })
     )();
@@ -54,12 +95,20 @@ export default function GpuTextRendering() {
   }
 
   return (
-    <div ref={container} class={s.viewer}>
+    <div
+      ref={(element) => {
+        setContainer(element);
+        drop.ref(element);
+      }}
+      class={s.viewer}
+      lang={i18n.locale()}
+      dir={i18n.direction()}
+    >
       <canvas
         ref={setCanvas}
         id="beziercanvas"
         class={`${s.canvas} ${viewer.dragging() ? s.dragging : ''}`}
-        aria-label="Document canvas"
+        aria-label={t('canvas')}
         aria-busy={viewer.state().phase === 'loading' || viewer.state().phase === 'preparing' ? 'true' : 'false'}
       />
 
@@ -72,7 +121,7 @@ export default function GpuTextRendering() {
                   <DocumentViewer
                     viewer={viewer}
                     file={session.file}
-                    onConverted={setConverted}
+                    onConverted={(exportDocument) => setConverted(() => exportDocument)}
                     onProfile={setProfile}
                   />
                 )}
@@ -82,100 +131,73 @@ export default function GpuTextRendering() {
         )}
       </Show>
 
-      <div id="toolbar" class={s.toolbar}>
-        <a href="https://wdobbie.com/post/war-and-peace-and-webgl/" target="_blank" rel="noreferrer">
-          Resolution independent GPU text rendering
-        </a>
-
-        <label class={s.filePicker}>
-          Open PDF or GDOC
-          <input
-            type="file"
-            accept=".pdf,.gdoc,application/pdf"
-            aria-label="Open document"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              if (file) {
-                open(file);
-              }
-              event.currentTarget.value = '';
-            }}
-          />
-        </label>
-
-        <Show when={source().file}>
-          <p>{source().file?.name}</p>
-          <button type="button" onClick={() => open()}>
-            Back to demo
-          </button>
-        </Show>
-
-        <Show when={downloadUrl()}>
-          {(url) => (
-            <p>
-              <a href={url()} download={converted()?.name}>
-                Download GDOC
-              </a>
-            </p>
-          )}
-        </Show>
-
-        <p>
-          PDF import supports text, paths, images, axial and radial gradients, function and mesh shadings, tiling patterns and
-          transparency groups with masks. Unsupported graphics produce a page-specific error. Files stay on this device.
-        </p>
-
-        <p>Drag to pan, scroll to zoom. Two fingers to pan, pinch and rotate.</p>
-
-        <label>
-          <input
-            type="checkbox"
-            checked={viewer.autoZoom()}
-            onChange={(event) => viewer.setAutoZoom(event.currentTarget.checked)}
-          />
-          Auto zoom
-        </label>
-
-        <Show when={profile() === 'glyphs'}>
-          <label>
-            <input
-              type="checkbox"
-              checked={viewer.grids()}
-              onChange={(event) => viewer.setGrids(event.currentTarget.checked)}
-            />
-            Grids
-          </label>
-
-          <label>
-            <input
-              type="checkbox"
-              checked={viewer.vectorOnly()}
-              onChange={(event) => viewer.setVectorOnly(event.currentTarget.checked)}
-            />
-            Vector only
-          </label>
-        </Show>
-
-        <button type="button" onClick={() => void fullscreen()}>
-          Fullscreen
-        </button>
-
-        <p class={s.status}>
-          <output aria-live="polite">{viewer.state().message}</output>
-        </p>
-
-        <p class={s.status}>
-          <a href={noticesUrl} target="_blank" rel="noreferrer">
-            Open-source licenses
-          </a>
-        </p>
-
-        <Show when={fullscreenError()}>{(error) => <p role="alert">{error().message}</p>}</Show>
-      </div>
-
+      <Show when={drop.isOver()}>
+        <div class={s.dropOverlay} role="status" data-testid="document-drop-overlay">
+          <div>{t('dropHint')}</div>
+        </div>
+      </Show>
+      <Show when={drop.error()}>
+        {(key) => (
+          <div class={s.notice} role="alert">
+            {t(key())}
+          </div>
+        )}
+      </Show>
+      <ViewerToolbar
+        i18n={i18n}
+        viewer={viewer}
+        filename={source().file?.name}
+        profile={profile()}
+        canExport={!!converted()}
+        exporting={exporting()}
+        fullscreen={fullscreenState.isActive()}
+        fullscreenSupported={!!document.fullscreenEnabled}
+        onOpen={open}
+        onDemo={() => open()}
+        onFullscreen={() => void fullscreen()}
+        onExport={() => {
+          if (downloadUrl()) {
+            const link = document.createElement('a');
+            link.href = downloadUrl()!;
+            link.download = download()!.name;
+            link.click();
+          } else void exportFile();
+        }}
+      />
+      <output class={s.srOnly} aria-live="polite">
+        {i18n.status(viewer.state())}
+      </output>
+      <Show when={exporting()}>
+        <div class={s.notice} role="status">
+          {t('exporting')}
+        </div>
+      </Show>
+      <Show when={exportError() || fullscreenError()?.message}>
+        {(message) => (
+          <div class={s.notice} role="alert">
+            {exportError() ? t('exportError') : t('fullscreenError')}
+            <div dir="auto">{message()}</div>
+          </div>
+        )}
+      </Show>
       <Show when={viewer.state().phase !== 'ready'}>
         <div class={s.loadinginfo} role={viewer.state().phase === 'error' ? 'alert' : 'status'}>
-          {viewer.state().message}
+          <div class={s.loadingHeading}>
+            <Show when={viewer.state().phase === 'loading' || viewer.state().phase === 'preparing'}>
+              <div role="progressbar" aria-label={i18n.status(viewer.state())} data-testid="document-loading">
+                <img class={s.loadingSpinner} src={loaderIcon} alt="" />
+              </div>
+            </Show>
+            <strong>{i18n.status(viewer.state())}</strong>
+          </div>
+          <Show when={source().file}>
+            <div class={s.loadingFilename} dir="auto">
+              {source().file?.name}
+            </div>
+          </Show>
+          <Show when={viewer.state().phase === 'error'}>
+            <div dir="auto">{viewer.state().message}</div>
+          </Show>
         </div>
       </Show>
     </div>

@@ -7,9 +7,10 @@ import type { DecodedDocument } from '../../format/types';
 import type { SceneFrame } from '../createFrame';
 import { RasterImage, rasterLayout } from './imageShader';
 import type { RasterReply, RasterRequest } from './raster.worker';
+import { selectImageTiles } from './selectImageTiles';
 import {
   atlasColumns,
-  imageTiles,
+  createImageTileCache,
   lookupSize,
   mipSize,
   packMipTails,
@@ -32,6 +33,7 @@ export function prepareRasterImages(
   const table = new DataView(images.table);
   const packed = packMipTails(table);
   const events = new EventTarget();
+  const tilesForPlacement = createImageTileCache();
   const groups = new Map<number, TgpuBindGroup>();
   const ready = new Set<number>();
   const visible = new Map<number, number>();
@@ -62,6 +64,7 @@ export function prepareRasterImages(
   let workerImage: number | undefined;
   let pending = false;
   let nextTail: number | undefined;
+  let initialImages: number[] = [];
   let destroyed = false;
   let failure: GpuError | undefined;
   let clock = 0;
@@ -87,12 +90,13 @@ export function prepareRasterImages(
     get resourceBytes() {
       return destroyed ? 0 : (atlasSide ** 2 + packed.width * packed.height) * 4 + lookupSize * 16 + groups.size * 32;
     },
-    /** Prepares every image's fallback before the scene is exposed, including images on unseen pages. */
-    async prepareMipTails() {
+    /** Prepares requested image fallbacks before exposure; omitted means all images for offline callers. */
+    async prepareMipTails(images: Iterable<number> = packed.images.map(({ id }) => id)) {
       if (destroyed) {
         return err(gpuError('destroyed', 'The image cache has been destroyed'));
       }
 
+      initialImages = [...new Set(images)];
       nextTail = 0;
       pump();
 
@@ -106,7 +110,7 @@ export function prepareRasterImages(
 
       return destroyed ? err(gpuError('destroyed', 'The image cache has been destroyed')) : ok<void>(undefined);
     },
-    /** After prepareMipTails resolves, every image can draw immediately while detail is still loading. */
+    /** Prepared images can draw immediately while detail is still loading; unvisited images return undefined. */
     get(index: number) {
       return ready.has(index) ? groups.get(index) : undefined;
     },
@@ -123,7 +127,8 @@ export function prepareRasterImages(
     update(
       instances: ArrayBuffer,
       ranges: { first: number; count: number; image: number | undefined }[],
-      frame: SceneFrame
+      frame: SceneFrame,
+      fallbackImages: Iterable<number> = []
     ) {
       if (destroyed || failure) {
         return;
@@ -132,6 +137,7 @@ export function prepareRasterImages(
       clock++;
       visible.clear();
       const records = new DataView(instances);
+      const pages = new Map(frame.visible.map(({ index, page }) => [index, page]));
       const candidates = new Map<string, Tile & { priority: number }>();
 
       for (const run of ranges) {
@@ -148,7 +154,7 @@ export function prepareRasterImages(
         }
 
         for (let i = run.first; i < run.first + run.count; i++) {
-          const region = visibleImage(records, i, frame);
+          const region = visibleImage(records, i, frame, pages.get(records.getUint32(i * 80 + 76, true)));
 
           if (!region) {
             continue;
@@ -156,7 +162,7 @@ export function prepareRasterImages(
 
           visible.set(image.id, Math.min(visible.get(image.id) ?? Infinity, region.distance));
 
-          for (const tile of imageTiles(image, region)) {
+          for (const tile of tilesForPlacement(i, image, region)) {
             const key = tileKey(tile);
 
             if (!candidates.has(key) || candidates.get(key)!.priority > tile.priority) {
@@ -166,15 +172,14 @@ export function prepareRasterImages(
         }
       }
 
+      // A composed base covers the whole page, including source images outside
+      // the current crop. Decode their tiny tails without requesting hidden detail.
+      for (const image of fallbackImages) {
+        if (!ready.has(image) && !visible.has(image)) visible.set(image, Number.MAX_VALUE);
+      }
+
       // Coarse coverage wins before fine detail. Retained tiles win ties to avoid churn near equal priorities.
-      wanted = new Map(
-        [...candidates]
-          .sort(
-            ([a, left], [b, right]) =>
-              left.priority - right.priority + (resident.has(a) ? -0.1 : 0) - (resident.has(b) ? -0.1 : 0)
-          )
-          .slice(0, capacity)
-      );
+      wanted = selectImageTiles(candidates, capacity, resident);
 
       for (const key of wanted.keys()) {
         const entry = resident.get(key);
@@ -191,22 +196,27 @@ export function prepareRasterImages(
 
   function nextImage() {
     if (nextTail !== undefined) {
-      while (nextTail < packed.images.length && ready.has(nextTail)) {
+      while (nextTail < initialImages.length && ready.has(initialImages[nextTail]!)) {
         nextTail++;
       }
 
-      if (nextTail < packed.images.length) {
-        return nextTail;
+      if (nextTail < initialImages.length) {
+        return initialImages[nextTail];
       }
 
       nextTail = undefined;
+      initialImages = [];
     }
 
-    const missingTail = [...visible].filter(([id]) => !ready.has(id)).sort((a, b) => a[1] - b[1])[0];
-
-    if (missingTail) {
-      return missingTail[0];
+    let missingTail: number | undefined;
+    let distance = Infinity;
+    for (const [id, priority] of visible) {
+      if (!ready.has(id) && priority < distance) {
+        missingTail = id;
+        distance = priority;
+      }
     }
+    if (missingTail !== undefined) return missingTail;
 
     // Finish visible work on the decoded source before switching images. Otherwise
     // interleaved mip priorities repeatedly decode the same large JPEG from scratch.

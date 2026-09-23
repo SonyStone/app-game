@@ -1,5 +1,5 @@
 import tgpu, { d, std } from 'typegpu';
-import { atlasLayout, viewLayout } from './bindings';
+import { atlasLayout, glyphInstanceLayout, viewLayout } from './bindings';
 import { project } from './pageShader';
 
 /** Interpolants preserve the original atlas coordinates and expanded glyph bounds. */
@@ -13,14 +13,43 @@ const glyphVaryings = {
   color: d.vec4f
 };
 
-/** Decodes packed glyph headers and applies the page/camera transform. */
+/** Pulls one compact record while emitting the same six vertices and interpolants as the legacy stream. */
+export const glyphInstanceVertex = tgpu.vertexFn({
+  in: { vertex: d.builtin.vertexIndex },
+  out: { position: d.builtin.position, ...glyphVaryings }
+})((input) => {
+  'use gpu';
+  // Integer-vector division avoids f32 rounding at large vertex indices.
+  const glyph = glyphInstanceLayout.$.glyphs[std.div(d.vec2u(input.vertex), d.vec2u(6)).x]!;
+  let corner = input.vertex % 6;
+  if (corner === 4) corner = 2;
+  if (corner === 5) corner = 1;
+  let packedPosition = glyph.corner0;
+  if (corner === 1) packedPosition = glyph.corner1;
+  if (corner === 2) packedPosition = glyph.corner2;
+  if (corner === 3) packedPosition = glyph.corner3;
+  const curves = d.vec2u(glyph.curves & 65535, glyph.curves >> 16);
+  return glyphVertexOutput(
+    std.max(d.vec2f(-1), std.div(d.vec2f(d.i32(packedPosition << 16) >> 16, d.i32(packedPosition) >> 16), 32767)),
+    std.add(curves, d.vec2u(corner & 1, corner >> 1)),
+    std.unpack4x8unorm(glyph.color),
+    glyph.page
+  );
+});
+
+/** Legacy vertex entry point for callers using expanded vertices. */
 export const glyphVertex = tgpu.vertexFn({
   in: { position: d.vec2f, curves: d.vec2u, color: d.vec4f, page: d.builtin.instanceIndex },
   out: { position: d.builtin.position, ...glyphVaryings }
 })((input) => {
   'use gpu';
-  const curves = std.floor(std.mul(d.vec2f(input.curves), 0.5));
-  const corner = std.mod(d.vec2f(input.curves), d.vec2f(2));
+  return glyphVertexOutput(input.position, input.curves, input.color, input.page);
+});
+
+function glyphVertexOutput(position: d.v2f, packedCurves: d.v2u, color: d.v4f, page: number) {
+  'use gpu';
+  const curves = std.floor(std.mul(d.vec2f(packedCurves), 0.5));
+  const corner = std.mod(d.vec2f(packedCurves), d.vec2f(2));
   const gridMin = unpackPair(loadAtlas(curves));
   const rasterMin = unpackPair(loadAtlas(std.add(curves, d.vec2f(1, 0))));
   const sizes = std.mul(loadAtlas(std.add(curves, d.vec2f(2, 0))), 255);
@@ -32,16 +61,16 @@ export const glyphVertex = tgpu.vertexFn({
   const norm = std.add(std.mul(std.sub(corner, d.vec2f(0.5)), expand), d.vec2f(0.5));
 
   return {
-    position: project(d.vec2f(input.position.x + 0.5, 0.5 - input.position.y), input.page),
+    position: project(d.vec2f(position.x + 0.5, 0.5 - position.y), page),
     curves,
     gridMin,
     gridSize: sizes.xy,
     rasterMin,
     rasterSize: d.vec2f(rasterSize),
     norm,
-    color: d.vec4f(input.color)
+    color: d.vec4f(color)
   };
-});
+}
 
 /** Ports the original four-direction coverage integral, including its small-text raster fallback. */
 export const glyphFragment = tgpu.fragmentFn({

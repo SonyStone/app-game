@@ -74,6 +74,18 @@ function passArray8ToWasm0(arg, malloc) {
     return ptr;
 }
 /**
+ * Imports a PDF directly into validated render buffers inside a disposable Worker.
+ * @param {Uint8Array} bytes
+ * @returns {DecodeOutcome}
+ */
+export function importPdf(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.importPdf(ptr0, len0);
+    return DecodeOutcome.__wrap(ret);
+}
+
+/**
  * Decodes retained PDF CMYK/YCCK without the inversion applied by browser JPEG readers.
  * @param {Uint8Array} bytes
  * @param {number} width

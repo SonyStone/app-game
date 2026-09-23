@@ -31,8 +31,9 @@ try {
     .locator('input[type=file]')
     .setInputFiles({ name: 'images.pdf', mimeType: 'application/pdf', buffer: pdf });
   await page.waitForFunction(() => document.querySelector('output')?.textContent.includes('MiB'));
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   const download = page.waitForEvent('download');
-  await page.getByRole('link', { name: 'Download GDOC' }).click();
+  await page.getByRole('menuitem', { name: 'Download GDOC' }).click();
   await (await download).saveAs(`${output}/images.gdoc`);
   await page.locator('input[type=file]').setInputFiles(`${output}/images.gdoc`);
   await page.waitForFunction(() => document.querySelector('output')?.textContent.includes('MiB'));

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import type { SceneFrame } from '../createFrame';
-import { createPaintBounds } from './paintBounds';
+import { buildPaintBounds, createPaintBounds } from './paintBounds';
 import type { PaintNode } from './paintTree';
 
 const frame: SceneFrame = {
@@ -59,4 +59,27 @@ it('never narrows group content to its mask bounds', () => {
   };
   const group: PaintNode = { children: [content, mask], opacity: 1, blend: 0, isolated: true, knockout: false };
   expect(createPaintBounds(data.buffer, [{ x: 0, y: 0 }])(frame).rect(group)?.width).toBeGreaterThan(50);
+});
+
+it('preserves queries after worker spatial data is cloned and transferred', () => {
+  const instances = new ArrayBuffer(80 * 100);
+  const data = new DataView(instances);
+  for (let i = 0; i < 100; i++) {
+    data.setFloat32(i * 80, 0.03, true);
+    data.setFloat32(i * 80 + 12, 0.05, true);
+    data.setFloat32(i * 80 + 16, i / 50, true);
+  }
+  const pages = [{ x: 0, y: 0 }];
+  const prepared = buildPaintBounds(instances, pages);
+  const cloned = structuredClone(prepared, { transfer: [prepared.leaves.buffer] });
+  expect(prepared.leaves.byteLength).toBe(0);
+  const direct = createPaintBounds(instances, pages);
+  const transferred = createPaintBounds(instances, pages, cloned);
+  for (const rotation of [
+    [1, 0, 0, 1],
+    [0, 1, -1, 0]
+  ] as const) {
+    const view: SceneFrame = { ...frame, rotation: [...rotation] };
+    expect(transferred(view).ranges(0, 100)).toEqual(direct(view).ranges(0, 100));
+  }
 });

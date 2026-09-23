@@ -4,17 +4,32 @@ import { documentError, type GpuError } from '../../../shared/errors';
 import type { GpuContext } from '../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../shared/gpu/resources';
 import { pageVertices, type TextDocument } from '../document';
-import { View, glyphLayout, imageLayout, imageTextureLayout, pageLayout, viewLayout } from './bindings';
+import {
+  GlyphInstance,
+  glyphInstanceLayout,
+  imageLayout,
+  imageTextureLayout,
+  pageLayout,
+  View,
+  viewLayout
+} from './bindings';
+import { compactGlyphs } from './compactGlyphs';
 import type { SceneFrame } from './createFrame';
 import { prepareCurveDocument } from './curves/prepareCurveDocument';
 import { createGlyphAtlas } from './glyphAtlas';
-import { glyphFragment, glyphVertex } from './glyphShader';
+import { glyphFragment, glyphInstanceVertex } from './glyphShader';
 import { imageFragment, imageVertex, pageFragment, pageVertex } from './pageShader';
+import { uploadBuffer } from './uploadBuffer';
 
 /** Selects a profile renderer, uploads geometry and builds its pipelines. The renderer boundary captures TypeGPU exceptions. */
-export async function prepareDocument(gpu: GpuContext, document: TextDocument, keep: KeepGpuResource) {
+export async function prepareDocument(
+  gpu: GpuContext,
+  document: TextDocument,
+  keep: KeepGpuResource,
+  initialFrame?: SceneFrame
+) {
   if (document.kind === 'curves') {
-    return prepareCurveDocument(gpu, document, keep);
+    return prepareCurveDocument(gpu, document, keep, initialFrame);
   }
 
   if (document.imageVertices.byteLength % 10 !== 0) {
@@ -23,11 +38,23 @@ export async function prepareDocument(gpu: GpuContext, document: TextDocument, k
 
   const { root, device, format } = gpu;
 
-  const glyphs = keep(
-    root.createBuffer(glyphLayout.schemaForCount(document.glyphVertices.byteLength / 12), (buffer) =>
-      buffer.write(document.glyphVertices)
-    )
-  ).$usage('vertex');
+  const glyphData =
+    document.glyphEncoding === 'instances'
+      ? document.glyphVertices
+      : compactGlyphs(document.glyphVertices, document.pages);
+  const glyphCount = glyphData.byteLength / 28;
+  const batchSize = Math.floor(Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize) / 28);
+  const glyphBatches: { first: number; end: number; group: TgpuBindGroup }[] = [];
+  for (let first = 0; first < Math.max(1, glyphCount); first += batchSize) {
+    const count = Math.min(batchSize, glyphCount - first);
+    const buffer = keep(root.createBuffer(d.arrayOf(GlyphInstance, Math.max(1, count)))).$usage('storage');
+    await uploadBuffer(gpu, buffer.buffer, glyphData, first * 28, count * 28);
+    glyphBatches.push({
+      first,
+      end: first + count,
+      group: root.createBindGroup(glyphInstanceLayout, { glyphs: buffer })
+    });
+  }
 
   const pageData = pageVertices(document);
   const pages = keep(
@@ -58,15 +85,13 @@ export async function prepareDocument(gpu: GpuContext, document: TextDocument, k
 
   const glyphPipeline = root
     .createRenderPipeline({
-      attribs: glyphLayout.attrib,
-      vertex: glyphVertex,
+      vertex: glyphInstanceVertex,
       fragment: glyphFragment,
       targets: { format, blend },
       primitive: { topology: 'triangle-list' }
     })
     .with(frameGroup)
-    .with(atlasGroup)
-    .with(glyphLayout, glyphs);
+    .with(atlasGroup);
 
   const pagePipeline = root
     .createRenderPipeline({
@@ -119,7 +144,7 @@ export async function prepareDocument(gpu: GpuContext, document: TextDocument, k
   await device.queue.onSubmittedWorkDone();
 
   const resourceBytes =
-    document.glyphVertices.byteLength +
+    Math.max(28, glyphData.byteLength) +
     pageData.byteLength +
     document.pages.length * 8 +
     48 +
@@ -157,7 +182,11 @@ export async function prepareDocument(gpu: GpuContext, document: TextDocument, k
       const glyphs = glyphPipeline.with(pass);
 
       for (const item of frame.visible) {
-        glyphs.draw(item.page.endVertex - item.page.beginVertex, 1, item.page.beginVertex, item.index);
+        for (const batch of glyphBatches) {
+          const first = Math.max(batch.first, item.page.beginVertex / 6);
+          const end = Math.min(batch.end, item.page.endVertex / 6);
+          if (first < end) glyphs.with(batch.group).draw((end - first) * 6, 1, (first - batch.first) * 6);
+        }
       }
     }
   });

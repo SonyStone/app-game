@@ -48,7 +48,9 @@ export function moveCamera(
 
   const anchor = screenToWorld(camera, from, width, height, pageAspect);
 
-  camera.zoom = Math.min(64, Math.max(1 / 65536, camera.zoom / scale));
+  // A whole-document overview can exceed the normal zoom limit on a narrow viewport.
+  // Preserve that scale while panning, and let pinch/scroll approach the normal range smoothly.
+  camera.zoom = Math.min(Math.max(64, camera.zoom), Math.max(1 / 65536, camera.zoom / scale));
   camera.rotation = Math.atan2(Math.sin(camera.rotation + angle), Math.cos(camera.rotation + angle));
 
   const moved = screenToWorld(camera, to, width, height, pageAspect);

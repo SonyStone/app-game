@@ -1,15 +1,17 @@
-import { createSignal, onCleanup, Show, untrack } from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show, untrack } from 'solid-js';
 import type { ViewerError } from '../../shared/errors';
 import { CameraControls } from '../camera/CameraControls';
 import { CameraTour } from '../camera/CameraTour';
-import { DocumentCamera } from '../camera/DocumentCamera';
+import { DocumentCamera, useDocumentCamera } from '../camera/DocumentCamera';
 import { DocumentSpace } from '../camera/SceneSpace';
 import { loadDocument, type TextDocument } from '../document/document';
+import type { ExportDocument } from '../document/readDocumentSource';
 import { createDocumentDraw } from '../document/rendering/createDocumentDraw';
+import { createFrame } from '../document/rendering/createFrame';
 import { DocumentRendererProvider } from '../document/rendering/DocumentRendererProvider';
-import { FrameLoop } from '../scene/FrameLoop';
+import { FrameLoop, useFrameLoop } from '../scene/FrameLoop';
 import { RenderLayer } from '../scene/RenderLayer';
-import { Viewport } from '../viewport/Viewport';
+import { useViewport, Viewport } from '../viewport/Viewport';
 import type { ViewerState } from './createViewerState';
 
 /** A document session beneath shared GPU providers. Replacing the file retains the viewer device and canvas. */
@@ -17,8 +19,8 @@ export function DocumentViewer(props: {
   viewer: ViewerState;
   /** Fixed for this mounted session; omit to open the bundled demo. */
   file?: File;
-  /** Receives an owned downloadable GDOC before GPU preparation. */
-  onConverted?: (file: File) => void;
+  /** Receives an on-demand GDOC exporter after successful PDF import. */
+  onConverted?: (exportDocument: ExportDocument) => void;
   /** Runs after validated CPU data is ready so profile-specific controls can be shown. */
   onProfile?: (kind: TextDocument['kind']) => void;
 }) {
@@ -71,19 +73,24 @@ export function DocumentViewer(props: {
                       onDraggingChange={viewer.setDragging}
                     />
 
+                    <OverviewCamera document={data} viewer={viewer} />
+
                     <CameraTour document={data} enabled={viewer.autoZoom()} />
 
-                    <DocumentRendererProvider
+                    <ViewerDocumentRenderer
                       document={data}
                       onResourceUsage={(bytes) =>
                         viewer.setState({
                           phase: 'ready',
+                          resourceBytes: bytes,
                           message: `TypeGPU · ${(bytes / 1048576).toFixed(1)} MiB GPU resources`
                         })
                       }
                       onReady={(info) =>
                         viewer.setState({
                           phase: 'ready',
+                          resourceBytes: info.resourceBytes,
+                          preparationMs: info.preparationMs,
                           message: `TypeGPU · ${Math.round(info.preparationMs)} ms preparation · ${(info.resourceBytes / 1048576).toFixed(1)} MiB GPU resources`
                         })
                       }
@@ -100,7 +107,7 @@ export function DocumentViewer(props: {
 
                         return <RenderLayer draw={draw} />;
                       }}
-                    </DocumentRendererProvider>
+                    </ViewerDocumentRenderer>
                   </DocumentSpace>
                 </DocumentCamera>
               )}
@@ -129,4 +136,50 @@ export function DocumentViewer(props: {
     loaded?.images.forEach((image) => image.close());
     loaded?.images.clear();
   }
+}
+
+/** Captures the initial camera beneath its providers so preparation can prioritize visible pages. */
+function ViewerDocumentRenderer(props: Parameters<typeof DocumentRendererProvider>[0]) {
+  const camera = useDocumentCamera();
+  const viewport = useViewport();
+  const initialFrame = untrack(() => {
+    const { pixels, css } = viewport.size();
+    return createFrame(props.document, camera, pixels.width, pixels.height, false, false, css);
+  });
+  return <DocumentRendererProvider {...props} initialFrame={initialFrame} />;
+}
+
+/** Fits all page bounds, reserving space below for the floating toolbar. */
+function OverviewCamera(props: { document: TextDocument; viewer: ViewerState }) {
+  const camera = useDocumentCamera();
+  const viewport = useViewport();
+  const loop = useFrameLoop();
+  createEffect(props.viewer.overviewRequest, (request) => {
+    if (!request) return;
+    const document = untrack(() => props.document);
+    const first = document.pages[0]!;
+    let left = Infinity,
+      right = -Infinity,
+      bottom = Infinity,
+      top = -Infinity;
+    for (const page of document.pages) {
+      left = Math.min(left, -page.x);
+      right = Math.max(right, -page.x + page.width / first.width);
+      bottom = Math.min(bottom, 1 - page.y - page.height / first.height);
+      top = Math.max(top, 1 - page.y);
+    }
+    const { width, height } = untrack(viewport.size).css;
+    const aspect = first.width / first.height;
+    const availableHeight = Math.max(1, height - 128);
+    camera.zoom =
+      Math.max(
+        ((right - left) * height) / Math.max(1, width - 48),
+        ((top - bottom) * height) / (aspect * availableHeight)
+      ) / 2;
+    camera.x = (left + right) / 2;
+    camera.y = (bottom + top) / 2 - (40 * camera.zoom * aspect) / height;
+    camera.rotation = 0;
+    loop.invalidate();
+  });
+  return null;
 }

@@ -6,6 +6,7 @@ import { useGpuCanvas } from '../../../shared/gpu/GpuCanvasProvider';
 import { TokenContext } from '../../../shared/jsx/TokenContext';
 import { resolveSceneChildren } from '../../scene/resolveSceneChildren';
 import type { TextDocument } from '../document';
+import type { SceneFrame } from './createFrame';
 import { createTypeGpuRenderer, type TextRenderer } from './createTypeGpuRenderer';
 
 /**
@@ -14,6 +15,8 @@ import { createTypeGpuRenderer, type TextRenderer } from './createTypeGpuRendere
  */
 export function DocumentRendererProvider(props: {
   document: TextDocument;
+  /** Prepare only these initially visible pages; omitted keeps complete offline prewarming. */
+  initialFrame?: SceneFrame;
   /** JSX or a function mounted only when ready, beneath the document context and owned by this session. */
   children: JSX.Element | ((value: ReturnType<typeof useDocumentRenderer>) => JSX.Element);
   loading?: JSX.Element;
@@ -27,6 +30,7 @@ export function DocumentRendererProvider(props: {
       {(document) => (
         <DocumentSession
           document={document}
+          initialFrame={props.initialFrame}
           loading={props.loading}
           error={props.error}
           onReady={props.onReady}
@@ -55,7 +59,12 @@ function DocumentSession(props: Parameters<typeof DocumentRendererProvider>[0]) 
   makeEventListener(gpu.signal, 'abort', dispose, { once: true });
 
   const started = performance.now();
-  void createTypeGpuRenderer(gpu, document, abort.signal).then((prepared) => {
+  void createTypeGpuRenderer(
+    gpu,
+    document,
+    abort.signal,
+    untrack(() => props.initialFrame)
+  ).then((prepared) => {
     if (abort.signal.aborted || gpu.signal.aborted) {
       if (prepared.isOk()) {
         prepared.value.destroy();

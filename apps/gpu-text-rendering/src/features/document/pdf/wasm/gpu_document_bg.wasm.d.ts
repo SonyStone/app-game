@@ -31,6 +31,7 @@ export const decodeddocument_takeVertices: (a: number) => [number, number];
 export const decodeoutcome_errorCode: (a: number) => [number, number];
 export const decodeoutcome_errorMessage: (a: number) => [number, number];
 export const decodeoutcome_takeDocument: (a: number) => number;
+export const importPdf: (a: number, b: number) => number;
 export const rasteroutcome_takePixels: (a: number) => [number, number];
 export const rasteroutcome_errorMessage: (a: number) => [number, number];
 export const rasteroutcome_errorCode: (a: number) => [number, number];

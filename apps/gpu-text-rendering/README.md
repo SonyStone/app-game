@@ -1,6 +1,6 @@
 # GPU text rendering
 
-The viewer uses TypeGPU/WebGPU exclusively. Unsupported browsers and GPU failures display an error. It renders the bundled 1,273-page document with 2,675,369 glyph instances. The bundled document is a single GDOC file decoded by Rust/WASM in a Worker; the file picker also imports a supported subset of PDF through a separate Rust/WASM converter and offers the converted GDOC for download. See [FORMAT.md](FORMAT.md) for the format, ownership and build contracts.
+The viewer uses TypeGPU/WebGPU exclusively. Unsupported browsers and GPU failures display an error. Startup loads the complete 1,273-page, 2,675,369-glyph demo. GDOC decoding and PDF import run in Rust/WASM Workers. PDF import returns validated render buffers directly; Download GDOC reopens the original local File and encodes it only when requested. Export can therefore take additional time for a large PDF. See [FORMAT.md](FORMAT.md) for the format, ownership and build contracts.
 
 ## Running and integration
 
@@ -152,13 +152,13 @@ Picking, arbitrary nested transforms, depth attachments, postprocessing and reta
 
 ## Data conventions
 
-The GDOC file stores absolute glyph quads in compressed sections. Rust validates and expands them into the same six vertices per glyph as before. The file is 12,304,500 bytes; the old BMP/JSON sources are retained only under `tools/legacy-demo` for reproducible conversion. The renderer uses roughly 189.2 MiB of explicit GPU buffers and textures for the bundled document, excluding driver overhead and the swapchain.
+The GDOC file stores absolute glyph quads in compressed sections. Rust validates and expands them into the same six vertices per glyph as before. The file is 12,304,500 bytes; the old BMP/JSON sources are retained only under `tools/legacy-demo` for reproducible conversion. The loading Worker losslessly packs those vertices into 28-byte glyph instances before transfer. The renderer uses roughly 77.0 MiB of explicit GPU buffers and textures for the complete bundled document, excluding driver overhead and the swapchain.
 
 WebGPU render-target coordinates run top-to-bottom. The raster atlas uses unflipped sampling coordinates; the coverage integral negates `dpdy` to preserve the original algorithm's handedness. Derivatives run before pixel-dependent branches. Explicit texture LOD avoids derivative-uniformity violations. Curve metadata uses exact `textureLoad` reads, and ten-byte image records are padded to WebGPU's twelve-byte vertex stride.
 
 GDOC profile 2 stores reusable cubic contours and ordered affine/color/clip instances. The PDF importer supports filled/stroked text and paths, solid alpha colors, analytic nested clipping, tiling patterns, axial/radial gradients, sampled function shadings and rotated/cropped pages. The converter preserves curves across zoom, shares glyph outlines and runs locally in a cancellable Worker. The viewer can reopen all three GDOC profiles and save a PDF conversion as `.gdoc`.
 
-Profile 3 keeps shared raster images in paint order. RGB/gray/CMYK and ICC JPEGs without PDF pixel transformations retain their source compression and PDF color profile, including JPEGs wrapped in ASCII85 or ASCIIHex; other images use independently packed premultiplied RGBA. Retained CMYK/YCCK JPEGs decode in Rust/WASM with PDF component polarity and ICC conversion, avoiding the negative colors produced by standalone browser JPEG decoding. This also corrects existing GDOC files when reopened. All images use software virtual textures, including small images with a complete mip chain. A document-owned worker supplies 128×128 detail tiles with neighboring-texel gutters. The shared detail atlas stays below 64 MiB, and packed, permanently resident mip tails use at most 16 MiB. Before exposing the document, preparation uploads mip tails for every image, including unseen pages. Missing detail samples a resident parent or the pinned tail, so the first zoom-out has no empty image placeholders. This adds initial preparation work for whole-image codecs; detailed tiles still load on demand. Detail tiles are evicted by LRU only under memory pressure. LOD selection ignores a source axis that is only one texel wide: stretching a color ramp along that constant axis no longer fills the detail atlas with unnecessary gradient tiles. Requests prioritize coarse coverage and visible regions near the camera center, including rotated views. Source resolution stays available; ordinary JPEGs are decoded one image at a time, while prepared GDOC tiles decode independently. Transparency groups retain isolation, knockout, opacity, soft-mask transfer functions and all 16 PDF blend modes in RGB. Zero-width paths remain one device pixel wide when zoomed.
+Profile 3 keeps shared raster images in paint order. RGB/gray/CMYK and ICC JPEGs without PDF pixel transformations retain their source compression and PDF color profile, including JPEGs wrapped in ASCII85 or ASCIIHex; other images use independently packed premultiplied RGBA. Retained CMYK/YCCK JPEGs decode in Rust/WASM with PDF component polarity and ICC conversion, avoiding the negative colors produced by standalone browser JPEG decoding. This also corrects existing GDOC files when reopened. All images use software virtual textures, including small images with a complete mip chain. A document-owned worker supplies 128×128 detail tiles with neighboring-texel gutters. The shared detail atlas stays below 64 MiB, and packed, permanently resident mip tails use at most 16 MiB. The viewer supplies its initial camera to preparation, which uploads tails and composed base tiles only for initially visible pages. Other pages load when visited; content can appear progressively on that first visit. A composed tile waits for all of its source-image tails, including images outside the current crop. Image readiness invalidates command bundles so first-visit images cannot remain absent. Renderers created without an initial frame retain full prewarming for offline capture. Missing detail samples a resident parent or the pinned tail. Detail tiles are evicted by LRU only under memory pressure. LOD selection ignores a source axis that is only one texel wide: stretching a color ramp along that constant axis no longer fills the detail atlas with unnecessary gradient tiles. Requests prioritize coarse coverage and visible regions near the camera center, including rotated views. Source resolution stays available; ordinary JPEGs are decoded one image at a time, while prepared GDOC tiles decode independently. Transparency groups retain isolation, knockout, opacity, soft-mask transfer functions and all 16 PDF blend modes in RGB. Zero-width paths remain one device pixel wide when zoomed.
 
 This remains a PDF subset: tiling patterns with blend modes produce a page-specific typed error. Mesh shadings (types 4–7) use isolated tiled textures at up to 288 dpi, capped at 4096 pixels on the longer side. Text, paths and clipping remain vector; mesh gradients have finite detail at extreme zoom. Function shadings use 512×512 color tables, so fine discontinuities can soften at magnification. Hayro's own parser/interpreter limitations still apply. Required CLIP/BINS/BLND/GRUP/HAIR/IPCK/MASK/VTEX/BLNX/GFLG/MTRF/RGRD sections extend profiles 2/3 with clipping, curve lookup tables and compositing; old files remain readable. Large paths keep their curves and use row/column bins in the shader. The importer accepts up to 1.5 million drawing instances within a 2 GiB minus one byte decoded-section/file budget. Profiles 2/3 use area coverage, with bounded integral tables for frequently reused small outlines and original curves at magnification. Its performance still depends on document complexity and GPU hardware. See [FORMAT.md](FORMAT.md#pdf-conversion) for the exact contract and limits.
 
@@ -391,7 +391,7 @@ The CLI writes only after complete conversion/validation. Resource errors discov
 
 The four external PDFs used for corpus verification now convert, open, load their visible images and reopen as GDOC: CV (2 pages), FORCE (245), Game Engine Architecture (628), and The Art of How to Train Your Dragon (157). Source PDFs remain outside this repository. Group/hairline GPU regressions run in `groups.browser.mjs`; the corpus runner also waits for image workers and checks saved-file reopening.
 
-The expanded ten-file corpus additionally covers Art of Brother Bear (124 pages), Directing for Animation (251), GPU Pro 6 (574), GPU Pro 7 (322), Illustrative Rendering in Team Fortress 2 (6), and The AI Systems of Left 4 Dead (95). These exercise ICC/CMYK JPEG retention, Alpha/Luminosity soft masks, Type 3 glyph programs and axial gradients. PDF/GDOC input is bounded below 2 GiB. Aggregate encoded image payloads are bounded at 1536 MiB; each decoded image remains limited to 128 MiB. GPU residency remains independently bounded.
+The expanded ten-file corpus additionally covers Art of Brother Bear (124 pages), Directing for Animation (251), GPU Pro 6 (574), GPU Pro 7 (322), Illustrative Rendering in Team Fortress 2 (6), and The AI Systems of Left 4 Dead (95). These exercise ICC/CMYK JPEG retention, Alpha/Luminosity soft masks, Type 3 glyph programs and axial gradients. PDF/GDOC input is bounded below 2 GiB. Aggregate encoded image payloads are bounded at 1536 MiB; each decoded image remains limited to 256 MiB. GPU residency remains independently bounded.
 
 The Art of Star Wars: Episode III (222 pages, 295 MiB PDF) also opens and reopens as GDOC.
 Its ASCII85-wrapped JPEGs must retain their original compressed samples: decoding them
@@ -415,3 +415,45 @@ The locally supplied Ghent 5.0 suite adds 51 individual patches and a combined d
 Its [reviewed findings](tests/compatibility/ghent-findings.md) distinguish import success
 from the patches' visual criteria. Use the [separate Ghent manifest and baseline](tests/compatibility/README.md#local-ghent-50-suite)
 to reproduce the run without mixing its print-specific checks with the PDF.js corpus.
+
+### Performance comparisons
+
+Coverage tables and boundary grids are computed in the loading Worker. GPU preparation consumes those staging tables; programmatic scenes without them use a cancellable coverage Worker. Source curves, area-table resolution and image quality settings are unchanged. Module Workers retain the existing ownership/transfer protocol: Solid Primitives' function-serialized workers do not support these imported WASM modules and their transferable-buffer contract.
+
+Image projection uses scalar affine bounds and a per-frame page index. A bounded placement cache reuses tile membership between LOD/tile-boundary changes, with priorities updated every frame. Best-K selection sorts only the retained candidates; resident preference and stable ties remain covered by tests.
+
+The default demo retains all 1,273 pages and its golden byte-parity check.
+
+`tests/performance/compare.browser.mjs /absolute/document.gdoc` compares overview, reading scale and overview return in two dev servers. Set `GPU_TEXT_BASELINE_URL` and `GPU_TEXT_URL`; optionally set `GPU_TEXT_OUTPUT` and `GPU_TEXT_BROWSER_CHANNEL`.
+
+`tests/performance/startup.browser.mjs [/absolute/document.pdf]` compares cold-browser startup and optional PDF import in two production preview servers with the same URL variables. `GPU_TEXT_SAMPLES` defaults to 3. It records readiness, a first-frame GPU fence and main-thread long tasks. This does not measure completion of all offscreen resources or physical presentation FPS.
+
+### Lossless instance packing and worker preparation
+
+The full 1,273-page demo stays intact. The vertex shader reads compact records from storage buffers while retaining the original six-vertex triangle order. Buffers are split at the device storage-binding limit. Its glyph buffer stores four original signed-normalized corner positions, one atlas header, one RGBA color and one page index per glyph. This takes 28 bytes instead of 72, preserving skew, i16 wrapping, triangle order and the existing fragment coverage calculation. Decoded glyph documents set `glyphEncoding: 'instances'`; their `glyphVertices` buffer has a 28-byte stride. Page ranges still use legacy six-vertex units. Programmatic callers may omit the tag and supply the original 72-byte records.
+
+PDF/GDOC loading Workers also prepare paint runs, trees, composition plans, spatial bounds and curve lookup rows. GPU preparation consumes that staging data. Programmatic scenes without staging data still build the plans locally; custom page placement rebuilds spatial bounds. Large glyph, curve, instance, clip, bin and coverage buffers upload in writes of at most 4 MiB, yielding between chunks and checking cancellation before each write. This reduces uninterrupted main-thread work, but does not make PDF interpretation or geometry residency page-streamed.
+
+No persistent document cache, predictive prefetch, reduced motion resolution or new approximate text rendering is enabled.
+
+### Interface languages
+
+The viewer uses English by default. The More menu offers English, Russian, Spanish, German, Japanese,
+Simplified Chinese and Hebrew. The router stores the selection in `?lang=ru`,
+`?lang=es`, `?lang=de`, `?lang=ja`, `?lang=zh` or `?lang=he`; selecting English removes the parameter.
+Unsupported values fall back to English. Other query parameters and fragments are
+preserved, and browser back/forward updates the interface without reloading the document.
+Hebrew uses RTL controls while document pages retain their original orientation.
+Translations use `@solid-primitives/i18n`; native PDF/GPU error details remain in their
+original language below a localized error heading.
+
+### Drag and drop
+
+Drop one local PDF or GDOC anywhere inside the viewer, including over its toolbar,
+to open it. The highlighted drop target and validation messages follow the selected
+interface language. Unsupported or multiple-file drops leave the current document
+open. Text and URL drags do not open documents.
+
+The viewer uses `createNativeDroppable` from `@solid-primitives/drag-drop`.
+The pnpm patch for version `0.1.0-next.0` fixes its compiled `createComponent`
+import to use `solid-js`, matching Solid 2.

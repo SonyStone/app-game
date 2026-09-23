@@ -1,0 +1,12 @@
+diff --git a/dist/context.js b/dist/context.js
+index e235976aa5df0325420d10cef5158a65fdacb979..23b6561e5401a253a80cd7f4858c77c227259928 100644
+--- a/dist/context.js
++++ b/dist/context.js
+@@ -1,6 +1,6 @@
+ /* @ts-self-types="./context.d.ts" */
+ import { pointerWithin } from "./collision.js";
+-import { createComponent } from "solid-js/web";
++import { createComponent } from "solid-js";
+ import { createContext, createProjection, createSignal, onCleanup, untrack, useContext } from "solid-js";
+ import { isServer } from "@solidjs/web";
+ import { INTERNAL_OPTIONS } from "@solid-primitives/utils";

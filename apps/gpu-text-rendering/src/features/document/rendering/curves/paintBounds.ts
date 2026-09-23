@@ -7,30 +7,12 @@ export type PixelRect = { x: number; y: number; width: number; height: number };
 type Bounds = readonly [number, number, number, number];
 
 /** A contiguous-range hierarchy preserves PDF paint order while skipping offscreen instances. */
-export function createPaintBounds(instances: ArrayBuffer, pages: { x: number; y: number }[]) {
-  const data = new DataView(instances);
-  const count = instances.byteLength / 80;
-  const leaves = new Float64Array(count * 4);
-
-  for (let index = 0; index < count; index++) {
-    const offset = index * 80;
-    const a = data.getFloat32(offset, true);
-    const b = data.getFloat32(offset + 4, true);
-    const c = data.getFloat32(offset + 8, true);
-    const d = data.getFloat32(offset + 12, true);
-    const tx = data.getFloat32(offset + 16, true);
-    const ty = data.getFloat32(offset + 20, true);
-    const page = pages[data.getUint32(offset + 76, true)]!;
-    // Include the whole outline; clipping its box before adding the pixel fringe can lose thin edges.
-    const left = tx + Math.min(0, a) + Math.min(0, c);
-    const right = tx + Math.max(0, a) + Math.max(0, c);
-    const top = ty + Math.min(0, b) + Math.min(0, d);
-    const bottom = ty + Math.max(0, b) + Math.max(0, d);
-    leaves.set([left - page.x, 1 - bottom - page.y, right - page.x, 1 - top - page.y], index * 4);
-  }
-
-  type Branch = { first: number; end: number; bounds: Bounds; children?: [Branch, Branch] };
-  const tree = build(0, count);
+export function createPaintBounds(
+  instances: ArrayBuffer,
+  pages: { x: number; y: number }[],
+  prepared?: ReturnType<typeof buildPaintBounds>
+) {
+  const { leaves, tree } = prepared ?? buildPaintBounds(instances, pages);
   const nodes = new WeakMap<PaintNode, Bounds>();
 
   return (frame: SceneFrame) => {
@@ -153,6 +135,37 @@ export function createPaintBounds(instances: ArrayBuffer, pages: { x: number; y:
     return result;
   }
 
+  function at(index: number): Bounds {
+    return [leaves[index * 4]!, leaves[index * 4 + 1]!, leaves[index * 4 + 2]!, leaves[index * 4 + 3]!];
+  }
+}
+
+/** Builds transferable spatial data once; query closures stay on the render thread. */
+export function buildPaintBounds(instances: ArrayBuffer, pages: { x: number; y: number }[]) {
+  const data = new DataView(instances);
+  const count = instances.byteLength / 80;
+  const leaves = new Float64Array(count * 4);
+
+  for (let index = 0; index < count; index++) {
+    const offset = index * 80;
+    const a = data.getFloat32(offset, true);
+    const b = data.getFloat32(offset + 4, true);
+    const c = data.getFloat32(offset + 8, true);
+    const d = data.getFloat32(offset + 12, true);
+    const tx = data.getFloat32(offset + 16, true);
+    const ty = data.getFloat32(offset + 20, true);
+    const page = pages[data.getUint32(offset + 76, true)]!;
+    // Include the whole outline; clipping its box before adding the pixel fringe can lose thin edges.
+    const left = tx + Math.min(0, a) + Math.min(0, c);
+    const right = tx + Math.max(0, a) + Math.max(0, c);
+    const top = ty + Math.min(0, b) + Math.min(0, d);
+    const bottom = ty + Math.max(0, b) + Math.max(0, d);
+    leaves.set([left - page.x, 1 - bottom - page.y, right - page.x, 1 - top - page.y], index * 4);
+  }
+
+  const tree = build(0, count);
+  return { leaves, tree };
+
   function build(first: number, end: number): Branch {
     if (end - first <= 32) {
       let bounds = empty;
@@ -183,3 +196,5 @@ function union(a: Bounds, b: Bounds): Bounds {
 }
 
 const empty: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
+
+type Branch = { first: number; end: number; bounds: Bounds; children?: [Branch, Branch] };

@@ -1,18 +1,26 @@
 import { err, ok } from 'neverthrow';
-import { documentError, type ResultValue } from '../../shared/errors';
+import type { ResultValue } from '../../shared/errors';
 import demoUrl from './assets/demo.gdoc?url';
 import { readGdoc } from './format/readGdoc';
-import { readDocumentSource } from './readDocumentSource';
+import { layoutPages as layoutDocumentPages } from './layoutPages';
+import { readDocumentSource, type ExportDocument } from './readDocumentSource';
 
 /** Loads a selected PDF/GDOC or the bundled demo through Rust/WASM in a cancellable Worker, then lays out its pages. */
-export async function loadDocument(signal?: AbortSignal, file?: File, onConverted?: (file: File) => void) {
+export async function loadDocument(
+  signal?: AbortSignal,
+  file?: File,
+  onConverted?: (exportDocument: ExportDocument) => void
+) {
   const source = file ? await readDocumentSource(file, signal, onConverted) : ok(demoUrl);
 
   if (source.isErr()) {
     return err(source.error);
   }
 
-  const result = await readGdoc(source.value, signal);
+  const result =
+    typeof source.value === 'string' || source.value instanceof ArrayBuffer
+      ? await readGdoc(source.value, signal)
+      : ok(source.value);
 
   return result.andThen((data) =>
     layoutPages(data.pages, 2).map((pages) => ({
@@ -36,37 +44,9 @@ export type PageMetadata = {
   images: { filename: string; vertexOffset: number; numVerts: number }[];
 };
 
-/** Lays out pages once; resizing the viewport never moves them. */
+/** Lays out every page without changing placement during viewport resizing. */
 export function layoutPages(metadata: readonly PageMetadata[], viewportAspect: number) {
-  const first = metadata[0];
-  if (!first) {
-    return err(documentError('invalid-data', 'The document has no pages'));
-  }
-
-  const columns = Math.max(1, Math.floor(Math.sqrt((metadata.length * viewportAspect * first.height) / first.width)));
-
-  const widths = Array.from({ length: columns }, () => 1);
-  const heights = Array.from({ length: Math.ceil(metadata.length / columns) }, () => 1);
-
-  metadata.forEach((page, i) => {
-    widths[i % columns] = Math.max(widths[i % columns]!, page.width / first.width);
-    const row = Math.floor(i / columns);
-    heights[row] = Math.max(heights[row]!, page.height / first.height);
-  });
-
-  // Keep uniform demo placement byte-for-byte stable, adding space only for larger pages.
-  const offsets = (sizes: number[]) => {
-    let extra = 0;
-    return sizes.map((size, i) => {
-      const position = i * 1.06 + extra;
-      extra += size - 1;
-      return position;
-    });
-  };
-  const x = offsets(widths);
-  const y = offsets(heights);
-
-  return ok(metadata.map((page, i) => ({ ...page, x: -x[i % columns]!, y: y[Math.floor(i / columns)]! })));
+  return layoutDocumentPages(metadata, viewportAspect);
 }
 
 /** Produces page backgrounds as one triangle strip with degenerate joins. */

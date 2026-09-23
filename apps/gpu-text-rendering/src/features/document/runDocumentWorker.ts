@@ -8,7 +8,7 @@ import { checkAborted, documentError, errorMessage, type AbortedError, type Docu
  */
 export async function runDocumentWorker<T>(
   create: () => Worker,
-  source: string | ArrayBuffer,
+  source: unknown,
   signal?: AbortSignal
 ): Promise<WorkerResult<T, DocumentError | AbortedError>> {
   const active = checkAborted(signal);
@@ -56,7 +56,7 @@ export async function runDocumentWorker<T>(
     signal?.addEventListener('abort', abort, { once: true });
 
     const sent = Result.fromThrowable(
-      () => worker.postMessage(source, typeof source === 'string' ? [] : [source]),
+      () => worker.postMessage(source, source instanceof ArrayBuffer ? [source] : []),
       (cause) => documentError('load', errorMessage(cause), cause)
     )();
 

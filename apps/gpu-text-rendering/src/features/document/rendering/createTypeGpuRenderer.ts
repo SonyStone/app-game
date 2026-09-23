@@ -14,8 +14,17 @@ import type { TextDocument } from '../document';
 import type { SceneFrame } from './createFrame';
 import { prepareDocument } from './prepareDocument';
 
-/** Prepares a document using borrowed GPU resources. Disposal releases only this document's allocations. */
-export async function createTypeGpuRenderer(gpu: GpuContext, document: TextDocument, signal?: AbortSignal) {
+/**
+ * Prepares a document using borrowed GPU resources. Disposal releases only this document's allocations.
+ * An initial frame limits image/page prewarming to its visible pages; omitted prewarms the whole document.
+ * New pages load on first visit. settle() waits for the current visible work, not every offscreen resource.
+ */
+export async function createTypeGpuRenderer(
+  gpu: GpuContext,
+  document: TextDocument,
+  signal?: AbortSignal,
+  initialFrame?: SceneFrame
+) {
   const { device } = gpu;
   const resources = createGpuResources();
   let destroyed = false;
@@ -51,7 +60,7 @@ export async function createTypeGpuRenderer(gpu: GpuContext, document: TextDocum
         device.pushErrorScope('validation');
 
         const prepared = await ResultAsync.fromThrowable(
-          () => prepareDocument({ ...gpu, checkActive }, document, resources.keep),
+          () => prepareDocument({ ...gpu, checkActive }, document, resources.keep, initialFrame),
           (cause) => gpuError('device', errorMessage(cause), cause)
         )();
 

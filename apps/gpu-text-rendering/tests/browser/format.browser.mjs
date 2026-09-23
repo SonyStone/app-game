@@ -69,7 +69,7 @@ try {
       largeUrlPages,
       detached,
       pages: good.pages.length,
-      glyphs: good.glyphVertices.byteLength / 72,
+      glyphs: good.glyphVertices.byteLength / (good.glyphEncoding === 'instances' ? 28 : 72),
       ticks,
       invalid,
       unsupported,

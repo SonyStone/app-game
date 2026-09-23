@@ -4,7 +4,8 @@
   "private": true,
   "dependencies": {
     "@app-game/utils": "workspace:*",
-    "@floating-ui/dom": "catalog:"
+    "@floating-ui/dom": "catalog:",
+    "@solid-primitives/event-listener": "catalog:"
   },
   "exports": {
     "./ui/button": "./ui/button.tsx",

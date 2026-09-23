@@ -1,10 +1,13 @@
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { documentError } from '../../shared/errors';
+import type { DecodedDocument } from './format/types';
 import { maxDocumentFileBytes } from './limits';
 import { convertPdf } from './pdf/convertPdf';
+import { importPdf } from './pdf/importPdf';
 import { readDocumentSource } from './readDocumentSource';
 
+vi.mock('./pdf/importPdf', () => ({ importPdf: vi.fn() }));
 vi.mock('./pdf/convertPdf', () => ({ convertPdf: vi.fn() }));
 beforeEach(() => vi.resetAllMocks());
 
@@ -12,7 +15,9 @@ it('sniffs GDOC bytes regardless of the filename and leaves conversion idle', as
   const file = new File(['GDOC\r\n\x1a\ncontent'], 'renamed.pdf');
   const result = await readDocumentSource(file);
 
-  expect(new TextDecoder().decode(result._unsafeUnwrap())).toBe('GDOC\r\n\x1a\ncontent');
+  const value = result._unsafeUnwrap();
+  if (!(value instanceof ArrayBuffer)) throw new Error('Expected GDOC bytes');
+  expect(new TextDecoder().decode(value)).toBe('GDOC\r\n\x1a\ncontent');
   expect(convertPdf).not.toHaveBeenCalled();
 });
 
@@ -25,15 +30,17 @@ it('returns typed failures for other file types and oversized input', async () =
   expect((await readDocumentSource(file))._unsafeUnwrapErr()).toMatchObject({ code: 'document-limit' });
 });
 
-it('retains a downloadable GDOC before its buffer is consumed by the decoder', async () => {
+it('returns render data immediately and encodes GDOC only on request', async () => {
   const encoded = new TextEncoder().encode('GDOC result').buffer;
+  vi.mocked(importPdf).mockResolvedValue(ok(scene));
   vi.mocked(convertPdf).mockResolvedValue(ok(encoded));
   const onConverted = vi.fn();
   const result = await readDocumentSource(new File(['%PDF-1.7'], 'example.pdf'), undefined, onConverted);
 
-  expect(result._unsafeUnwrap()).toBe(encoded);
+  expect(result._unsafeUnwrap()).toBe(scene);
+  expect(convertPdf).not.toHaveBeenCalled();
   expect(onConverted).toHaveBeenCalledOnce();
-  const file: File = onConverted.mock.calls[0]![0];
+  const file: File = (await onConverted.mock.calls[0]![0]())._unsafeUnwrap();
   expect(file.name).toBe('example.gdoc');
   expect(await file.text()).toBe('GDOC result');
 });
@@ -41,9 +48,9 @@ it('retains a downloadable GDOC before its buffer is consumed by the decoder', a
 it('does not publish a stale conversion after cancellation', async () => {
   const abort = new AbortController();
   const onConverted = vi.fn();
-  vi.mocked(convertPdf).mockImplementation(async () => {
+  vi.mocked(importPdf).mockImplementation(async () => {
     abort.abort();
-    return ok(new ArrayBuffer(0));
+    return ok(scene);
   });
   const result = await readDocumentSource(new File(['%PDF-1.7'], 'example.pdf'), abort.signal, onConverted);
 
@@ -52,7 +59,7 @@ it('does not publish a stale conversion after cancellation', async () => {
 });
 
 it('propagates unsupported PDF features without offering an incomplete download', async () => {
-  vi.mocked(convertPdf).mockResolvedValue(err(documentError('unsupported-pdf', 'Unsupported PDF on page 2: images')));
+  vi.mocked(importPdf).mockResolvedValue(err(documentError('unsupported-pdf', 'Unsupported PDF on page 2: images')));
   const onConverted = vi.fn();
   const result = await readDocumentSource(new File(['%PDF-1.7'], 'example.pdf'), undefined, onConverted);
 
@@ -65,11 +72,10 @@ it.each([128 * 1024 * 1024 + 1, maxDocumentFileBytes])(
   async (size) => {
     const file = new File(['%PDF-1.7'], 'large.pdf');
     Object.defineProperty(file, 'size', { value: size });
-    const converted = new ArrayBuffer(8);
-    vi.mocked(convertPdf).mockResolvedValue(ok(converted));
+    vi.mocked(importPdf).mockResolvedValue(ok(scene));
 
-    expect((await readDocumentSource(file))._unsafeUnwrap()).toBe(converted);
-    expect(convertPdf).toHaveBeenCalledOnce();
+    expect((await readDocumentSource(file))._unsafeUnwrap()).toBe(scene);
+    expect(importPdf).toHaveBeenCalledOnce();
   }
 );
 
@@ -80,5 +86,24 @@ it('rejects an over-budget file before reading its bytes', async () => {
 
   expect((await readDocumentSource(file))._unsafeUnwrapErr()).toMatchObject({ code: 'document-limit' });
   expect(read).not.toHaveBeenCalled();
+  expect(convertPdf).not.toHaveBeenCalled();
+});
+
+const scene: DecodedDocument = {
+  kind: 'glyphs',
+  pages: [],
+  positions: { x: new Float32Array(), y: new Float32Array() },
+  glyphVertices: new ArrayBuffer(0),
+  atlas: { buf: new ArrayBuffer(0), width: 1, height: 1 },
+  atlasVertices: { buf: new ArrayBuffer(0), width: 1, height: 1 }
+};
+
+it('does not start an export after its document session has been replaced', async () => {
+  vi.mocked(importPdf).mockResolvedValue(ok(scene));
+  const abort = new AbortController();
+  const onConverted = vi.fn();
+  await readDocumentSource(new File(['%PDF-1.7'], 'example.pdf'), abort.signal, onConverted);
+  abort.abort();
+  expect((await onConverted.mock.calls[0]![0]())._unsafeUnwrapErr().kind).toBe('aborted');
   expect(convertPdf).not.toHaveBeenCalled();
 });

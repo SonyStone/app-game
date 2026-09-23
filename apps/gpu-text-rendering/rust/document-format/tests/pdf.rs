@@ -510,3 +510,22 @@ fn converts_all_four_mesh_shading_types_without_rasterizing_text() {
         );
     }
 }
+
+#[test]
+fn direct_import_matches_the_validated_gdoc_round_trip() {
+    let bytes = fixture(
+        "0 0 1 rg 10 10 m 20 90 80 90 90 10 c h f q 20 20 60 60 re W n 0 0 100 100 re f Q BT /F1 12 Tf 10 50 Td (ABBA) Tj ET",
+        "",
+    );
+    let encoded = pdf::convert(&bytes).unwrap();
+    let decoded = curves::decode(&encoded).unwrap();
+    let direct = pdf::import_owned(bytes).unwrap();
+    assert_eq!(format!("{direct:?}"), format!("{decoded:?}"));
+}
+
+#[test]
+fn direct_preparation_keeps_instance_validation() {
+    let mut scene = pdf::import_owned(fixture("0 0 10 10 re f", "")).unwrap();
+    scene.instances[32..36].copy_from_slice(&2.0_f32.to_le_bytes());
+    assert!(curves::prepare_owned(scene).is_err());
+}

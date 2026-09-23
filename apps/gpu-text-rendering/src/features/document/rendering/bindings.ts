@@ -34,6 +34,22 @@ export const glyphLayout = tgpu.vertexLayout(
   )
 );
 
+/** Lossless packed glyph record; each u32 position contains two original i16 coordinates. */
+export const GlyphInstance = d.struct({
+  corner0: d.u32,
+  corner1: d.u32,
+  corner2: d.u32,
+  corner3: d.u32,
+  curves: d.u32,
+  color: d.u32,
+  page: d.u32
+});
+
+/** Vertex pulling retains the original six-vertex draw order with one record per glyph. */
+export const glyphInstanceLayout = tgpu.bindGroupLayout({
+  glyphs: { storage: d.arrayOf(GlyphInstance), access: 'readonly' }
+});
+
 /** Page backgrounds retain the shared triangle-strip geometry. */
 export const pageLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2));
 

@@ -243,7 +243,7 @@ const MAGIC: [u8; 8] = *b"GDOC\r\n\x1a\n";
 const HEADER: usize = 32;
 const ENTRY: usize = 32;
 const MAX_SECTIONS: usize = 64;
-const MAX_DECODED_BYTES: usize = 2 * 1024 * 1024 * 1024 - 1;
+pub(crate) const MAX_DECODED_BYTES: usize = 2 * 1024 * 1024 * 1024 - 1;
 
 #[cfg(test)]
 mod owned_writer_tests {

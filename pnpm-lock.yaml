@@ -36,6 +36,9 @@ catalogs:
     '@solid-primitives/devices':
       specifier: 3.0.0-next.2
       version: 3.0.0-next.2
+    '@solid-primitives/drag-drop':
+      specifier: 0.1.0-next.0
+      version: 0.1.0-next.0
     '@solid-primitives/event-bus':
       specifier: 3.0.0-next.3
       version: 3.0.0-next.3
@@ -48,6 +51,9 @@ catalogs:
     '@solid-primitives/history':
       specifier: 1.0.0-next.3
       version: 1.0.0-next.3
+    '@solid-primitives/i18n':
+      specifier: 3.0.0-next.4
+      version: 3.0.0-next.4
     '@solid-primitives/intersection-observer':
       specifier: 3.0.0-next.3
       version: 3.0.0-next.3
@@ -114,6 +120,9 @@ catalogs:
     '@solidjs/router':
       specifier: 2.0.0-next.18
       version: 2.0.0-next.18
+    '@tabler/icons':
+      specifier: 3.34.1
+      version: 3.34.1
     '@testing-library/jest-dom':
       specifier: ^6.9.1
       version: 6.9.1
@@ -173,6 +182,9 @@ patchedDependencies:
   '@kittl/little-cms@1.0.3':
     hash: 131dfc699eff4275fd9787837f930b8292192e0cbc7b6ac39c5a371547e2ceed
     path: patches/@kittl__little-cms@1.0.3.patch
+  '@solid-primitives/drag-drop@0.1.0-next.0':
+    hash: d1ab21250a654d0876e2832902ed55627a512cc2d31a6ceae996b1cfe95c18cf
+    path: patches/@solid-primitives__drag-drop@0.1.0-next.0.patch
   vite-plugin-solid-svg@0.8.1:
     hash: 7c6645f6fbe6c96fc2a79f09a40f44ef6eb15cb0e19933b6b602c7bbcac0f839
     path: patches/vite-plugin-solid-svg@0.8.1.patch
@@ -751,9 +763,21 @@ importers:
 
   apps/gpu-text-rendering:
     dependencies:
+      '@app-game/components':
+        specifier: workspace:*
+        version: link:../../packages/components
+      '@solid-primitives/drag-drop':
+        specifier: 'catalog:'
+        version: 0.1.0-next.0(patch_hash=d1ab21250a654d0876e2832902ed55627a512cc2d31a6ceae996b1cfe95c18cf)(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/event-listener':
         specifier: 'catalog:'
         version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/fullscreen':
+        specifier: 'catalog:'
+        version: 2.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/i18n':
+        specifier: 'catalog:'
+        version: 3.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/jsx-tokenizer':
         specifier: 'catalog:'
         version: 3.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -766,9 +790,15 @@ importers:
       '@solid-primitives/resize-observer':
         specifier: 'catalog:'
         version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solidjs/router':
+        specifier: 'catalog:'
+        version: 2.0.0-next.18(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solidjs/web':
         specifier: 2.0.0-rc.4
         version: 2.0.0-rc.4(solid-js@2.0.0-rc.4)
+      '@tabler/icons':
+        specifier: 'catalog:'
+        version: 3.34.1
       neverthrow:
         specifier: 'catalog:'
         version: 8.2.0
@@ -1537,6 +1567,9 @@ importers:
       '@floating-ui/dom':
         specifier: 'catalog:'
         version: 1.7.6
+      '@solid-primitives/event-listener':
+        specifier: 'catalog:'
+        version: 3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
 
   packages/debug-layer:
     dependencies:
@@ -4155,6 +4188,12 @@ packages:
     peerDependencies:
       solid-js: ^2.0.0-rc.0
 
+  '@solid-primitives/drag-drop@0.1.0-next.0':
+    resolution: {integrity: sha512-1OOKH+QHItwDmZNdKCqajhuoL8uSmZMPIyCI6qC+qDSafkH0q3NljEvblBQLskcBBZrq6FIbLs6ct1AYUDKbig==}
+    peerDependencies:
+      '@solidjs/web': ^2.0.0-rc.0
+      solid-js: ^2.0.0-rc.0
+
   '@solid-primitives/event-bus@3.0.0-next.3':
     resolution: {integrity: sha512-MX58khCyijfCecmlSDQSrwTTFGKE0yTQZaOpbHj/JEJ0Ep+cpWJNQ8DeUaqq8h+1fkFECPT4j3Vu1Rt+LLV9qQ==}
     peerDependencies:
@@ -4174,6 +4213,12 @@ packages:
 
   '@solid-primitives/history@1.0.0-next.3':
     resolution: {integrity: sha512-bSigepNsLx1M30c+pCdjgamlOuwJoeGROvQJS9nk+TykeR8cmklzfQ9l4J/zFxpaI8KDW6trEZ2hgj/HcSQsYQ==}
+    peerDependencies:
+      '@solidjs/web': ^2.0.0-rc.0
+      solid-js: ^2.0.0-rc.0
+
+  '@solid-primitives/i18n@3.0.0-next.4':
+    resolution: {integrity: sha512-r5ZwXcxsE0NEC4MCs5nphs9gnEdDkvZ5zp3P/I0h0wHHXBQi1fuXkQv857HBgTi2Mwja7vS5D6nePyQQxd9q/A==}
     peerDependencies:
       '@solidjs/web': ^2.0.0-rc.0
       solid-js: ^2.0.0-rc.0
@@ -4522,6 +4567,9 @@ packages:
 
   '@swc/wasm@1.15.33':
     resolution: {integrity: sha512-uZPBvYMwjvTtyNm018KFV6ino5ZL4z9riN/tBsfTSgbfONW9Jn+ca88+UeEIdMOZY5Dm+y2OBf6o0kxa1wfD0A==}
+
+  '@tabler/icons@3.34.1':
+    resolution: {integrity: sha512-9gTnUvd7Fd/DmQgr3MKY+oJLa1RfNsQo8c/ir3TJAWghOuZXodbtbVp0QBY2DxWuuvrSZFys0HEbv1CoiI5y6A==}
 
   '@tailwindcss/node@4.3.1':
     resolution: {integrity: sha512-6NDaqRoAMSXD1mr/RXu0HBvNE9a2n5tHPsxu9XHLws8o4Twes5rBM2205SUUiJ9goAtadrN6xTGX0UDEwp/N4A==}
@@ -9263,6 +9311,12 @@ snapshots:
     dependencies:
       solid-js: 2.0.0-rc.4
 
+  '@solid-primitives/drag-drop@0.1.0-next.0(patch_hash=d1ab21250a654d0876e2832902ed55627a512cc2d31a6ceae996b1cfe95c18cf)(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
+    dependencies:
+      '@solid-primitives/utils': 7.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
+      solid-js: 2.0.0-rc.4
+
   '@solid-primitives/event-bus@3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
     dependencies:
       '@solid-primitives/utils': 7.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -9286,6 +9340,11 @@ snapshots:
   '@solid-primitives/history@1.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
     dependencies:
       '@solid-primitives/utils': 7.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
+      solid-js: 2.0.0-rc.4
+
+  '@solid-primitives/i18n@3.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
+    dependencies:
       '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
       solid-js: 2.0.0-rc.4
 
@@ -9613,6 +9672,8 @@ snapshots:
       '@swc/counter': 0.1.3
 
   '@swc/wasm@1.15.33': {}
+
+  '@tabler/icons@3.34.1': {}
 
   '@tailwindcss/node@4.3.1':
     dependencies:

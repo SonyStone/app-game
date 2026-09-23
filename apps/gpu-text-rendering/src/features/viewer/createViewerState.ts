@@ -13,7 +13,27 @@ export function createViewerState() {
   const [vectorOnly, setVectorOnly] = createSignal(false);
   const [grids, setGrids] = createSignal(false);
 
-  return { state, setState, dragging, setDragging, autoZoom, setAutoZoom, vectorOnly, setVectorOnly, grids, setGrids };
+  const [overviewRequest, setOverviewRequest] = createSignal(0);
+  /** Requests a one-shot fit without reloading the document or retaining its camera. */
+  const showOverview = () => {
+    setAutoZoom(false);
+    setOverviewRequest((request) => request + 1);
+  };
+
+  return {
+    overviewRequest,
+    showOverview,
+    state,
+    setState,
+    dragging,
+    setDragging,
+    autoZoom,
+    setAutoZoom,
+    vectorOnly,
+    setVectorOnly,
+    grids,
+    setGrids
+  };
 }
 
 /** Reactive options and progress for one viewer. */
@@ -21,5 +41,6 @@ export type ViewerState = ReturnType<typeof createViewerState>;
 
 /** User-visible progress and terminal GPU or loading errors. */
 export type ViewerStatus =
-  | { phase: 'loading' | 'preparing' | 'ready'; message: string }
+  | { phase: 'loading' | 'preparing'; message: string }
+  | { phase: 'ready'; message: string; resourceBytes?: number; preparationMs?: number }
   | { phase: 'error'; message: string; error: Exclude<ViewerError, { kind: 'aborted' }> };

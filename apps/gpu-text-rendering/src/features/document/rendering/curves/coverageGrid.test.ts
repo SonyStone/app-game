@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { outlineGrid } from './coverageGrid';
+import { outlineGrid } from './outlineGrid';
 
 it('retains thin boundaries instead of classifying them from a low-resolution raster', () => {
   const curves = rectangle(0.501, 0.1, 0.50101, 0.9);

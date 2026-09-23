@@ -97,6 +97,39 @@ describe('document viewer ownership and reactivity', () => {
     expect(frames.size).toBe(0);
   });
 
+  it('fits every mixed-size page and stops the tour without reloading', async () => {
+    const renderer = rendererFixture();
+    const { data } = documentFixture();
+    data.pages.push({ ...data.pages[0]!, width: 1224, height: 1584, x: -3, y: 5 });
+    vi.mocked(loadDocument).mockResolvedValue(ok(data));
+    vi.mocked(createTypeGpuRenderer).mockResolvedValue(ok(renderer));
+    const { viewer, setCanvas } = setup();
+    setCanvas(makeCanvas());
+    await settle();
+    await tick();
+    viewer.setAutoZoom(true);
+    flush();
+    viewer.showOverview();
+    flush();
+    await tick();
+    expect(viewer.autoZoom()).toBe(false);
+    const frame = vi.mocked(renderer.draw).mock.lastCall![1];
+    expect(frame.visible).toHaveLength(2);
+    expect(frame.rotation).toEqual([1, 0, -0, 1]);
+    for (const page of data.pages) {
+      const left = (-page.x * frame.mul[0] + frame.add[0] + 1) * 400;
+      const right = ((-page.x + page.width / 612) * frame.mul[0] + frame.add[0] + 1) * 400;
+      const top = (1 - ((1 - page.y) * frame.mul[1] + frame.add[1])) * 300;
+      const bottom = (1 - ((1 - page.y - page.height / 792) * frame.mul[1] + frame.add[1])) * 300;
+      expect(left).toBeGreaterThanOrEqual(23.99);
+      expect(right).toBeLessThanOrEqual(776.01);
+      expect(top).toBeGreaterThanOrEqual(43.99);
+      expect(bottom).toBeLessThanOrEqual(516.01);
+    }
+    expect(loadDocument).toHaveBeenCalledOnce();
+    expect(frames.size).toBe(0);
+  });
+
   it('releases old targets, pointer captures and observers on replacement and removal', async () => {
     const first = rendererFixture();
     const second = rendererFixture();

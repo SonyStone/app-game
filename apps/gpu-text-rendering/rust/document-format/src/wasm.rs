@@ -18,6 +18,25 @@ pub fn decode_document(bytes: &[u8]) -> DecodeOutcome {
     }
 }
 
+/// Imports a PDF directly into validated render buffers inside a disposable Worker.
+#[cfg(feature = "pdf")]
+#[wasm_bindgen(js_name = importPdf)]
+pub fn import_pdf(bytes: Vec<u8>) -> DecodeOutcome {
+    match crate::pdf::import_owned(bytes) {
+        Ok(scene) => {
+            let profile = if scene.images.table.is_empty() { 2 } else { 3 };
+            DecodeOutcome {
+                document: Some(from_scene(scene, profile)),
+                error: None,
+            }
+        }
+        Err(error) => DecodeOutcome {
+            document: None,
+            error: Some(error),
+        },
+    }
+}
+
 /// Owns either validated data or a typed error. Free after taking the document.
 #[wasm_bindgen]
 pub struct DecodeOutcome {
@@ -187,39 +206,7 @@ impl DecodedDocument {
 fn decode(bytes: &[u8]) -> Result<DecodedDocument, DocumentError> {
     if bytes.len() >= 16 && matches!(u32_at(bytes, 12), 2 | 3) {
         let scene = curves::decode(bytes)?;
-        let mut x = Vec::new();
-        let mut y = Vec::new();
-        for record in scene.instances.chunks_exact(80) {
-            x.push(
-                curves::f32_at(record, 16)
-                    + (curves::f32_at(record, 0) + curves::f32_at(record, 8)) * 0.5,
-            );
-            y.push(
-                curves::f32_at(record, 20)
-                    + (curves::f32_at(record, 4) + curves::f32_at(record, 12)) * 0.5,
-            );
-        }
-        Ok(DecodedDocument {
-            profile: u32_at(bytes, 12),
-            image_table: scene.images.table,
-            image_pixels: scene.images.pixels,
-            curves: scene.curves,
-            instances: scene.instances,
-            clips: scene.clips,
-            bins: scene.bins,
-            blends: scene.blends,
-            groups: scene.groups,
-            mask_transfers: scene.mask_transfers,
-            radial_gradients: scene.radial_gradients,
-            pages: scene
-                .pages
-                .into_iter()
-                .flat_map(|p| [p.width, p.height, f64::from(p.first), f64::from(p.count)])
-                .collect(),
-            positions_x: x,
-            positions_y: y,
-            ..DecodedDocument::default()
-        })
+        Ok(from_scene(scene, u32_at(bytes, 12)))
     } else {
         let document = quadratic::decode(bytes)?;
         Ok(DecodedDocument {
@@ -344,5 +331,42 @@ impl RasterOutcome {
         self.error
             .as_ref()
             .map_or(String::new(), ToString::to_string)
+    }
+}
+
+// Owns validated scene buffers; exported take methods perform the WASM-to-JS copy once.
+fn from_scene(scene: curves::Document, profile: u32) -> DecodedDocument {
+    let mut x = Vec::new();
+    let mut y = Vec::new();
+    for record in scene.instances.chunks_exact(80) {
+        x.push(
+            curves::f32_at(record, 16)
+                + (curves::f32_at(record, 0) + curves::f32_at(record, 8)) * 0.5,
+        );
+        y.push(
+            curves::f32_at(record, 20)
+                + (curves::f32_at(record, 4) + curves::f32_at(record, 12)) * 0.5,
+        );
+    }
+    DecodedDocument {
+        profile,
+        image_table: scene.images.table,
+        image_pixels: scene.images.pixels,
+        curves: scene.curves,
+        instances: scene.instances,
+        clips: scene.clips,
+        bins: scene.bins,
+        blends: scene.blends,
+        groups: scene.groups,
+        mask_transfers: scene.mask_transfers,
+        radial_gradients: scene.radial_gradients,
+        pages: scene
+            .pages
+            .into_iter()
+            .flat_map(|p| [p.width, p.height, f64::from(p.first), f64::from(p.count)])
+            .collect(),
+        positions_x: x,
+        positions_y: y,
+        ..DecodedDocument::default()
     }
 }

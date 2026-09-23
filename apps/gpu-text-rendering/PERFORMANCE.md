@@ -1,5 +1,164 @@
 # Navigation performance, 2026-09-22
 
+
+## How to Draw scan import, 2026-09-23
+
+The local Scott Robertson / Thomas Bertling PDF failed on page 2 with
+`image dimensions/pixels limit`. Its largest retained RGB JPEG is 5361×6650,
+requiring 142,602,600 decoded RGBA bytes, above the former 128 MiB limit.
+The shared per-image limit is now 256 MiB for PDF import and GDOC validation.
+Source image dimensions and JPEG samples are preserved; aggregate encoded
+resource limits and GPU tile-cache budgets remain unchanged. A single decoded
+image may therefore use more CPU memory than before.
+
+Verified the actual 286 MiB PDF in Chrome 153/Metal: all 211 pages import,
+Download GDOC completes, and the exported file reopens with 211 pages.
+Pages 2, 8 (the largest scan) and 211 render and settle at zoom 0.7 and 0.1
+without worker or GPU errors. Accounted GPU resources in those views were
+about 64 MiB. Local captures/report: `/tmp/gpu-scott-check`.
+The Rust regression covers this scan size, the new exact limit and rejection
+above it. All 54 Rust tests, Clippy, WASM golden parity and production build pass.
+This verifies this book, not a fresh run of every external PDF.
+
+## Lossless glyph storage and worker preparation, 2026-09-23
+
+The complete 1,273-page, 2,675,369-glyph demo is used throughout this comparison.
+Each glyph now occupies 28 bytes rather than 72: four original packed corners,
+one atlas header, one color and one page index. Vertex pulling reads these records
+from storage buffers and preserves the original six-vertex triangle order.
+Draws split at the device's storage-binding limit. Integer-vector division is
+required when converting large vertex indices to glyph indices; f32 division
+can select the wrong record in the whole-book view.
+
+Explicit demo GPU resources decreased from 198,421,394 to 80,705,158 bytes,
+or 189.2 to 77.0 MiB. This is a 59.3% reduction in accounted buffers/textures,
+not a measurement of driver memory or peak process RAM. Rust still expands
+the legacy records before the Worker packs them, so temporary decode memory
+has not been eliminated. GDOC bytes and the Rust decoder API are unchanged.
+
+The seven rendering cases match the pre-change screenshots exactly, including
+rotation, magnified vector text, grids, overview and an image overlay. A separate
+run forces 1,400,000-byte storage bindings to exercise page draws crossing buffer
+boundaries; all seven still match exactly. Reports and PNGs:
+`/tmp/gpu-glyph-before`, `/tmp/gpu-glyph-pulling`, `/tmp/gpu-glyph-batched`.
+Use `GPU_TEXT_BASELINE=<directory> GPU_TEXT_EXACT=1` with
+`tests/browser/rendering.browser.mjs`; optionally force a test binding limit with
+`GPU_TEXT_TEST_STORAGE_LIMIT=1400000`.
+
+The far-view smoke test measured 18.3 ms before and 8.1 ms after for median
+CPU submission plus GPU completion over seven frames. This is one local run,
+not a repeated throughput benchmark or an Android claim.
+
+File-loading Workers now prepare paint runs, trees, composition plans, spatial
+bounds and lookup rows. The render thread receives transferable buffers and
+cloned paint plans, consumes staging data and only rebuilds spatial bounds when
+a caller changes page placement. Programmatic scenes without staged plans retain
+local preparation. Large geometry and coverage uploads use at most 4 MiB per
+write, yielding between chunks and checking cancellation before writing again.
+
+Fresh production startup comparison against original commit `0e24d7d9`:
+Chrome 153.0.8010.53 / Apple Metal, 1440×900 at DPR 1, local network without
+throttling, three alternating fresh-browser samples. Both sides load the full
+demo before opening the same 21 MiB, 621-page Learning Web Design PDF.
+These medians measure the cumulative changes, not the isolated contribution
+of worker preparation or glyph packing.
+
+| Measurement | Original baseline | Current |
+| --- | ---: | ---: |
+| Full demo ready | 588 ms | 583 ms |
+| PDF ready | 8,976 ms | 5,617 ms |
+| PDF first-frame GPU fence | 9,008 ms | 5,650 ms |
+| Longest main-thread task during PDF opening | 666 ms | 106 ms |
+
+Full-demo startup is essentially unchanged. The earlier intermediate PDF
+sample had a 368 ms main-thread task; that was a separate run, not the baseline
+column above. A roughly 0.1-second task remains, so opening is not stall-free.
+Raw report: `/tmp/gpu-compact-final-startup/report.json`.
+
+Validation: 168 TypeScript tests, typecheck, production build, full-demo WASM
+golden parity, all 17 browser scripts, and exact glyph screenshots. The scene,
+controls and format scripts were rerun after the final vertex-pulling change.
+No persistent cache, predictive prefetch, reduced motion resolution or new
+approximate text rendering was added. Full PDF parsing and total geometry
+residency still precede readiness; this is not page-streamed import.
+
+## Visible-page preparation and direct PDF import, 2026-09-23
+
+Compared baseline commit `0e24d7d9` with this working tree in Chrome
+153.0.8010.53 on Apple Metal. All runs were local; no network throttling.
+The navigation measurements below are a fresh comparison, not the older
+127–131 ms Learning Web Design profile further down this file.
+
+Production startup used three alternating fresh-browser samples at 1440×900,
+DPR 1. The PDF was the 21 MiB, 621-page Learning Web Design file. Numbers are
+medians across the three samples:
+
+| Measurement | Before | After |
+| --- | ---: | ---: |
+| Original PDF ready | 8,877 ms | 5,534 ms |
+| PDF first-frame GPU fence | 8,910 ms | 5,566 ms |
+| Longest main-thread task during PDF opening | 655 ms | 368 ms |
+
+The 12-page startup experiment was reverted: the default demo again contains
+all 1,273 pages. The previously reported 105 ms startup and 6.8 MiB GPU usage
+measured that smaller workload and do not describe an optimization of the full
+book. The PDF samples above were recorded before restoring the default demo.
+PDF readiness prepares the initial viewport; offscreen images and composed bases are deferred.
+It does not mean every page/detail tile has finished loading.
+
+Navigation replay used the same GDOC in two dev builds at 2500×1600 CSS pixels,
+DPR 2, three alternating fresh-browser samples and 45 frames per scenario.
+Numbers below are medians of the three per-run statistics. At most one measured
+frame awaited GPU completion; these are not hardware presentation FPS.
+
+| Scenario | CPU median before/after | CPU p95 before/after | CPU+GPU median before/after |
+| --- | ---: | ---: | ---: |
+| Overview, 621 pages | 7.7 / 6.5 ms | 16.4 / 8.8 ms | 16.5 / 13.2 ms |
+| Reading scale | 3.5 / 3.6 ms | 3.8 / 3.8 ms | 10.6 / 8.1 ms |
+| Return to overview | 7.9 / 6.6 ms | 13.3 / 7.6 ms | 22.6 / 17.5 ms |
+
+Full-prewarm GDOC preparation in this offline harness was essentially unchanged,
+3.346 / 3.348 seconds. Reading-scale CPU cost did not improve. Dynamic refinement
+and the queue-pressure policy affect GPU timings, so the CPU overview reduction
+and startup medians are stronger evidence than a general FPS claim.
+
+Changes retained:
+
+- PDF import returns validated render buffers without encoding/decoding an
+  intermediate GDOC. Both paths share section validation and allocation budgets.
+  Download GDOC now reinterprets and encodes the original local File on demand.
+- Coverage tables and conservative boundary grids run in document Workers.
+  CPU grid code is separate from shader definitions so workers do not bundle
+  the TypeGPU runtime. Uploaded staging tables are released from the document.
+- Viewer preparation receives the initial frame. Only visible-page image tails
+  and composed bases block readiness. Offline callers without a frame keep full
+  prewarming. First-visit base tiles precede detail; image readiness repairs
+  command bundles; composed tiles wait for all source tails.
+- Scalar image projection and indexed page lookup remove per-placement corner
+  arrays and repeated linear page searches. Bounded tile-membership caching
+  updates exact priorities; stable best-K selection replaces full sorting.
+- GDOC fetching overlaps WASM initialization. The default full demo and its
+  golden byte-parity check remain unchanged.
+
+Validation: 163 TypeScript unit tests, 53 Rust tests, all 17 browser scripts,
+TypeScript checking, Clippy with warnings denied, WASM/full-demo byte parity
+and production build. The new progressive browser
+fixture first prepares one of sixteen image pages, visits the remainder, then
+compares direct bundles and composed prefixes against full prewarming. The
+settled images match exactly. Existing curve/area/pixel-error budgets were not
+relaxed.
+
+Remaining: PDF interpretation and geometry upload are still whole-document
+operations. Main-thread preparation still has a roughly 368 ms task in this
+sample. First visits to unprepared pages can show content progressively. This
+is not a claim that the previously failing corpus documents or Android now meet
+the frame-rate target; those were not rerun here.
+
+Raw results: `/tmp/gpu-startup-comparison/report.json` and
+`/tmp/gpu-performance-comparison-final/report.json`. Reproduce with
+`tests/performance/startup.browser.mjs` against production previews and
+`tests/performance/compare.browser.mjs` against dev servers, as described in README.
+
 ## Previously unopened DropMeFiles PDFs, 2026-09-23
 
 The nine failures from the 21-file `DropMeFiles_4nDdq` corpus now pass PDF import.

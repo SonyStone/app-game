@@ -82,7 +82,7 @@ pub fn pixel_bytes(width: u32, height: u32) -> Result<usize, DocumentError> {
 }
 
 /// Bounds one decoded image independently of the total encoded resource payload.
-pub const MAX_PIXEL_BYTES: usize = 128 * 1024 * 1024;
+pub const MAX_PIXEL_BYTES: usize = 256 * 1024 * 1024;
 
 /// Bounds all encoded image resources; the container also checks total decoded section bytes.
 pub const MAX_ENCODED_IMAGE_BYTES: usize = 1536 * 1024 * 1024;
@@ -115,4 +115,18 @@ pub fn jpeg_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
         offset += 2 + length;
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pixel_bytes;
+
+    #[test]
+    fn accepts_full_resolution_book_scans_with_bounded_allocation() {
+        assert_eq!(pixel_bytes(5361, 6650).unwrap(), 142_602_600);
+        assert_eq!(pixel_bytes(8192, 8192).unwrap(), 256 * 1024 * 1024);
+        assert!(pixel_bytes(8192, 8193).is_err());
+        assert!(pixel_bytes(0, 6650).is_err());
+        assert!(pixel_bytes(65536, 1).is_err());
+    }
 }

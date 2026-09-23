@@ -51,7 +51,7 @@ try {
     await page.route('**/quality-check', (route) =>
       route.fulfill({ contentType: 'text/html', body: '<body style="margin:0"></body>' })
     );
-    await page.goto('http://localhost:3180/quality-check');
+    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/quality-check`);
     await page.evaluate(async () => {
       const { convertPdf } = await import('/src/features/document/pdf/convertPdf.ts');
       const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');

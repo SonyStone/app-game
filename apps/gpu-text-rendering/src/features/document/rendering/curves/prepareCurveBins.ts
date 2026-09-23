@@ -1,12 +1,13 @@
-import type { TextDocument } from '../../document';
-
 /**
  * Adds GPU-only horizontal lookup rows for small outlines omitted by the file's large-path index.
  * Prioritizes repeated outlines within 32 MiB of additional storage; geometry and source bytes stay intact.
  */
-export function prepareCurveBins(
-  document: Pick<Extract<TextDocument, { kind: 'curves' }>, 'instances' | 'clips' | 'curves' | 'curveBins'>
-) {
+export function prepareCurveBins(document: {
+  instances: ArrayBuffer;
+  clips: ArrayBuffer;
+  curves: ArrayBuffer;
+  curveBins: ArrayBuffer;
+}) {
   const known = new Map<string, { first: number; count: number; uses: number; offset: number }>();
 
   for (const source of [document.instances, document.clips]) {

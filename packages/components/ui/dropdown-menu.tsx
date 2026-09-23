@@ -1,6 +1,7 @@
 import { cn } from '@app-game/utils/cn';
+import { makeEventListener } from '@solid-primitives/event-listener';
 import type { ComponentProps, JSX } from '@solidjs/web';
-import { createContext, createSignal, omit, Show, useContext, type ParentProps } from 'solid-js';
+import { createContext, createEffect, createSignal, omit, Show, useContext, type ParentProps } from 'solid-js';
 
 type MenuState = {
   open: () => boolean;
@@ -16,12 +17,63 @@ export type DropdownMenuProps = ParentProps<{
   shift?: number;
 }>;
 
-/** Solid 2-native dropdown state container. */
+/** Solid 2-native menu with arrow-key navigation, Escape, focus restoration and outside dismissal. */
 export function DropdownMenu(props: DropdownMenuProps): JSX.Element {
   const [open, setOpen] = createSignal(false);
+  let root: HTMLSpanElement | undefined;
+  const trigger = () => root?.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]');
+  const items = () => Array.from(root?.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)') ?? []);
+  const close = (restore: boolean) => {
+    setOpen(false);
+    if (restore) trigger()?.focus();
+  };
+  createEffect(open, (visible) => {
+    if (!visible) return;
+    items()[0]?.focus();
+    return makeEventListener(document, 'pointerdown', (event) => {
+      if (!root?.contains(event.target as Node)) close(false);
+    });
+  });
   return (
     <MenuContext value={{ open, setOpen }}>
-      <span class="relative inline-flex">{props.children}</span>
+      <span
+        ref={root}
+        class="relative inline-flex"
+        onFocusOut={(event) => {
+          if (event.relatedTarget) {
+            if (!root?.contains(event.relatedTarget as Node)) close(false);
+          } else {
+            // Replacing an in-place submenu briefly clears focus before its new items mount.
+            queueMicrotask(() => {
+              if (root?.isConnected && !root.contains(document.activeElement)) close(false);
+            });
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && open()) {
+            event.preventDefault();
+            event.stopPropagation();
+            close(true);
+          } else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+            event.preventDefault();
+            if (!open()) {
+              setOpen(true);
+              return;
+            }
+            const entries = items();
+            const current = entries.indexOf(document.activeElement as HTMLElement);
+            const next =
+              event.key === 'Home'
+                ? 0
+                : event.key === 'End'
+                  ? entries.length - 1
+                  : (current + (event.key === 'ArrowDown' ? 1 : -1) + entries.length) % entries.length;
+            entries[next]?.focus();
+          }
+        }}
+      >
+        {props.children}
+      </span>
     </MenuContext>
   );
 }
@@ -59,6 +111,7 @@ export function DropdownMenuContent(props: ComponentProps<'div'>): JSX.Element {
 
 export type DropdownMenuItemProps = ComponentProps<'button'> & { inset?: boolean };
 
+/** Runs the action and closes the menu; preventDefault keeps toggle items open. */
 export function DropdownMenuItem(props: DropdownMenuItemProps): JSX.Element {
   const menu = useMenuContext();
   const rest = omit(props, 'class', 'inset', 'type', 'onClick');
@@ -66,6 +119,7 @@ export function DropdownMenuItem(props: DropdownMenuItemProps): JSX.Element {
     <button
       type="button"
       role="menuitem"
+      tabindex={-1}
       class={cn(
         'focus:(bg-accent text-accent-foreground) disabled:(pointer-events-none opacity-50) relative flex w-full cursor-default items-center rounded-sm px-2 py-1.5 text-left text-sm transition-colors outline-none select-none',
         props.inset && 'pl-8',
@@ -73,7 +127,10 @@ export function DropdownMenuItem(props: DropdownMenuItemProps): JSX.Element {
       )}
       onClick={(event) => {
         callHandler(props.onClick, event);
-        menu.setOpen(false);
+        if (!event.defaultPrevented) {
+          menu.setOpen(false);
+          event.currentTarget.closest('span')?.querySelector<HTMLButtonElement>('[aria-haspopup="menu"]')?.focus();
+        }
       }}
       {...rest}
     />
@@ -138,7 +195,7 @@ export function DropdownMenuCheckboxItem(props: DropdownMenuCheckboxItemProps): 
   const rest = omit(props, 'children', 'checked');
   return (
     <DropdownMenuItem {...rest} role="menuitemcheckbox" aria-checked={props.checked ? 'true' : 'false'}>
-      <span class="absolute left-2">{props.checked ? '✓' : ''}</span>
+      <span class="absolute left-2" aria-hidden="true">{props.checked ? '✓' : ''}</span>
       {props.children}
     </DropdownMenuItem>
   );
@@ -150,7 +207,7 @@ export function DropdownMenuRadioItem(props: DropdownMenuRadioItemProps): JSX.El
   const rest = omit(props, 'children', 'checked', 'value');
   return (
     <DropdownMenuItem {...rest} role="menuitemradio" aria-checked={props.checked ? 'true' : 'false'}>
-      <span class="absolute left-2">{props.checked ? '●' : ''}</span>
+      <span class="absolute left-2" aria-hidden="true">{props.checked ? '●' : ''}</span>
       {props.children}
     </DropdownMenuItem>
   );

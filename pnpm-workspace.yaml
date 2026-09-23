@@ -13,10 +13,12 @@ catalog:
   '@solid-primitives/context': 2.0.0-next.2
   '@solid-primitives/cursor': 1.0.0-next.2
   '@solid-primitives/devices': 3.0.0-next.2
+  '@solid-primitives/drag-drop': 0.1.0-next.0
   '@solid-primitives/event-bus': 3.0.0-next.3
   '@solid-primitives/event-listener': 3.0.0-next.3
   '@solid-primitives/fullscreen': 2.0.0-next.3
   '@solid-primitives/history': 1.0.0-next.3
+  '@solid-primitives/i18n': 3.0.0-next.4
   '@solid-primitives/intersection-observer': 3.0.0-next.3
   '@solid-primitives/jsx-tokenizer': 3.0.0-next.2
   '@solid-primitives/keyboard': 2.0.0-next.5
@@ -39,6 +41,7 @@ catalog:
   '@solid-primitives/utils': 7.0.0-next.4
   '@solid-primitives/virtual': 1.0.0-next.4
   '@solidjs/router': 2.0.0-next.18
+  '@tabler/icons': 3.34.1
   '@testing-library/jest-dom': ^6.9.1
   '@unocss/reset': 66.6.8
   '@unocss/vite': 66.6.8
@@ -62,6 +65,7 @@ catalog:
 catalogMode: strict
 patchedDependencies:
   '@kittl/little-cms@1.0.3': patches/@kittl__little-cms@1.0.3.patch
+  '@solid-primitives/drag-drop@0.1.0-next.0': patches/@solid-primitives__drag-drop@0.1.0-next.0.patch
   vite-plugin-solid-svg@0.8.1: patches/vite-plugin-solid-svg@0.8.1.patch
 
 peerDependencyRules:

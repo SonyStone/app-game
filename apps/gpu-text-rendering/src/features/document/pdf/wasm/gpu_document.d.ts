@@ -1,6 +1,10 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Imports a PDF directly into validated render buffers inside a disposable Worker.
+ */
+export function importPdf(bytes: Uint8Array): DecodeOutcome;
+/**
  * Decodes retained PDF CMYK/YCCK without the inversion applied by browser JPEG readers.
  */
 export function decodeCmykJpeg(bytes: Uint8Array, width: number, height: number): RasterOutcome;
@@ -183,6 +187,7 @@ export interface InitOutput {
   readonly decodeoutcome_errorCode: (a: number) => [number, number];
   readonly decodeoutcome_errorMessage: (a: number) => [number, number];
   readonly decodeoutcome_takeDocument: (a: number) => number;
+  readonly importPdf: (a: number, b: number) => number;
   readonly rasteroutcome_takePixels: (a: number) => [number, number];
   readonly rasteroutcome_errorMessage: (a: number) => [number, number];
   readonly rasteroutcome_errorCode: (a: number) => [number, number];

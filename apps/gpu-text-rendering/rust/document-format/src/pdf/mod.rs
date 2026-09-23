@@ -47,6 +47,11 @@ pub fn convert_owned(bytes: Vec<u8>) -> Result<Vec<u8>, DocumentError> {
     curves::encode_owned(document)
 }
 
+/// Imports validated GPU buffers directly, without the GDOC serialization round trip.
+pub fn import_owned(bytes: Vec<u8>) -> Result<Document, DocumentError> {
+    curves::prepare_owned(interpret_pdf(bytes)?)
+}
+
 // Drop parser/font/soft-mask state before allocating the encoded output buffer.
 fn interpret_pdf(bytes: Vec<u8>) -> Result<Document, DocumentError> {
     if bytes.len() > crate::limits::MAX_FILE_BYTES {

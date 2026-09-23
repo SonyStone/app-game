@@ -39,6 +39,18 @@ describe('camera geometry', () => {
     expect(m[1]! * x + m[3]! * y).toBeCloseTo(1 - (point.y / 700) * 2);
   });
 
+  it('pans from a large-document overview without snapping to the normal zoom limit', () => {
+    const camera = { x: 20, y: -10, zoom: 120, rotation: 0 };
+    const anchor = screenToWorld(camera, { x: 100, y: 200 }, 390, 844, 612 / 792);
+    moveCamera(camera, { x: 100, y: 200 }, { x: 120, y: 230 }, 1, 0, 390, 844, 612 / 792);
+    expect(camera.zoom).toBe(120);
+    const moved = screenToWorld(camera, { x: 120, y: 230 }, 390, 844, 612 / 792);
+    expect(moved.x).toBeCloseTo(anchor.x);
+    expect(moved.y).toBeCloseTo(anchor.y);
+    moveCamera(camera, { x: 120, y: 230 }, { x: 120, y: 230 }, 1.2, 0, 390, 844, 612 / 792);
+    expect(camera.zoom).toBe(100);
+  });
+
   it('clamps magnification without losing the cursor anchor', () => {
     const camera = { x: 0, y: 0, zoom: 1, rotation: 1 };
     const point = { x: 20, y: 30 };
