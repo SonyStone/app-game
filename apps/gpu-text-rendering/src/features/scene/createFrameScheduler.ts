@@ -13,11 +13,10 @@ export function createFrameScheduler(
   let active = true;
   let continuous = false;
   let invalidated = false;
-  let running = false;
   let previous: number | undefined;
   let time = 0;
 
-  const [, start, cancel] = createRAF((timestamp) => advance(timestamp));
+  const [, start, cancel] = createRAF(advance);
 
   const loop = {
     /** Coalesces requests; hidden views retain the request until they resume. */
@@ -28,8 +27,7 @@ export function createFrameScheduler(
 
       invalidated = true;
 
-      if (active && !running) {
-        running = true;
+      if (active) {
         untrack(start);
       }
     },
@@ -138,11 +136,7 @@ export function createFrameScheduler(
   }
 
   function pause() {
-    if (running) {
-      running = false;
-      cancel();
-    }
-
+    cancel();
     previous = undefined;
   }
 }

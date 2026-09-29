@@ -10,14 +10,11 @@ try {
   const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.route('**/progressive-check', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<body style="margin:0"></body>' })
-  );
-  await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/progressive-check`);
+  await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/tests/browser/empty.html`);
   const results = await page.evaluate(async () => {
-    const { layoutPages } = await import('/src/features/document/document.ts');
+    const { layoutPages } = await import('/src/features/document/layoutPages.ts');
     const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
-    const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+    const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
     const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
     const canvas = document.createElement('canvas');
     canvas.width = 800;

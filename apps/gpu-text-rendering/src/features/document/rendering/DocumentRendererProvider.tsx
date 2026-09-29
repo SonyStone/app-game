@@ -1,13 +1,19 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
 import { createContext, createSignal, onCleanup, Show, untrack, useContext } from 'solid-js';
-import type { ViewerError } from '../../../shared/errors';
+import type { DocumentError, ViewerError } from '../../../shared/errors';
 import { useGpuCanvas } from '../../../shared/gpu/GpuCanvasProvider';
 import { TokenContext } from '../../../shared/jsx/TokenContext';
+import { runWorkerRequest } from '../../../shared/worker/runWorkerRequest';
+import { useDocumentCamera } from '../../camera/DocumentCamera';
 import { resolveSceneChildren } from '../../scene/resolveSceneChildren';
+import { useViewport } from '../../viewport/Viewport';
 import type { TextDocument } from '../document';
-import type { SceneFrame } from './createFrame';
+import { createFrame, type SceneFrame } from './createFrame';
 import { createTypeGpuRenderer, type TextRenderer } from './createTypeGpuRenderer';
+import type { buildCoverageTables, CoverageTables } from './curves/buildCoverageTables';
+import CoverageWorker from './curves/coverage.worker?worker';
+import { createRasterWorker } from './curves/createRasterWorker';
 
 /**
  * Prepares each document once; replacement disposes its renderer and all child frame subscriptions.
@@ -15,8 +21,8 @@ import { createTypeGpuRenderer, type TextRenderer } from './createTypeGpuRendere
  */
 export function DocumentRendererProvider(props: {
   document: TextDocument;
-  /** Prepare only these initially visible pages; omitted keeps complete offline prewarming. */
-  initialFrame?: SceneFrame;
+  /** Initial pages to prepare. 'viewport' captures the enclosing camera and viewport once; omit to prewarm all pages. */
+  initialFrame?: SceneFrame | 'viewport';
   /** JSX or a function mounted only when ready, beneath the document context and owned by this session. */
   children: JSX.Element | ((value: ReturnType<typeof useDocumentRenderer>) => JSX.Element);
   loading?: JSX.Element;
@@ -27,117 +33,92 @@ export function DocumentRendererProvider(props: {
 }) {
   return (
     <Show when={props.document} keyed>
-      {(document) => (
-        <DocumentSession
-          document={document}
-          initialFrame={props.initialFrame}
-          loading={props.loading}
-          error={props.error}
-          onReady={props.onReady}
-          onResourceUsage={props.onResourceUsage}
-        >
-          {props.children}
-        </DocumentSession>
-      )}
+      {prepare}
     </Show>
   );
+
+  function prepare(document: TextDocument) {
+    const gpu = useGpuCanvas();
+    // Loading resolves JSX children and would consume draw tokens before FrameLoop can read them.
+    const [prepared, setPrepared] = createSignal<Awaited<ReturnType<typeof createTypeGpuRenderer>>>();
+    const raster = createRasterWorker();
+    const abort = new AbortController();
+    const coverage = (input: Parameters<typeof buildCoverageTables>[0]) =>
+      runWorkerRequest<typeof input, CoverageTables, DocumentError>(() => new CoverageWorker(), input, {
+        signal: abort.signal
+      });
+    let renderer: TextRenderer | undefined;
+
+    onCleanup(dispose);
+    makeEventListener(gpu.signal, 'abort', dispose, { once: true });
+
+    const started = performance.now();
+    const initialFrame = untrack(() => {
+      if (props.initialFrame !== 'viewport') {
+        return props.initialFrame;
+      }
+      const { pixels, css } = useViewport().size();
+      return createFrame(document, useDocumentCamera(), pixels.width, pixels.height, false, false, css);
+    });
+    void createTypeGpuRenderer(gpu, document, { raster, coverage }, abort.signal, initialFrame).then((result) => {
+      if (abort.signal.aborted || gpu.signal.aborted) {
+        if (result.isOk()) {
+          result.value.destroy();
+        }
+
+        return;
+      }
+
+      if (result.isErr()) {
+        dispose();
+      } else {
+        renderer = result.value;
+        closeImages();
+        props.onReady?.({ preparationMs: performance.now() - started, resourceBytes: renderer.resourceBytes });
+      }
+
+      setPrepared(result);
+    });
+
+    return (
+      <Show when={prepared()} fallback={props.loading} keyed>
+        {(result) =>
+          result.match((renderer) => {
+            const value = { document, renderer };
+            makeEventListener(renderer.events, 'change', () => props.onResourceUsage?.(renderer.resourceBytes), {
+              signal: abort.signal
+            });
+            return (
+              <TokenContext context={DocumentContext} value={value}>
+                {resolveSceneChildren(props.children, value)}
+              </TokenContext>
+            );
+          }, props.error)
+        }
+      </Show>
+    );
+
+    function dispose() {
+      if (abort.signal.aborted) {
+        return;
+      }
+
+      abort.abort();
+      raster.destroy();
+      renderer?.destroy();
+      closeImages();
+    }
+
+    function closeImages() {
+      document.images.forEach((image) => image.close());
+      document.images.clear();
+    }
+  }
 }
 
 /** Reads a prepared renderer beneath DocumentRendererProvider. Its provider retains ownership. */
 export function useDocumentRenderer() {
   return useContext(DocumentContext);
 }
-
-function DocumentSession(props: Parameters<typeof DocumentRendererProvider>[0]) {
-  const gpu = useGpuCanvas();
-  const document = untrack(() => props.document);
-  const [state, setState] = createSignal<PreparationState>({ status: 'loading' });
-  const abort = new AbortController();
-  let renderer: TextRenderer | undefined;
-
-  onCleanup(dispose);
-  makeEventListener(gpu.signal, 'abort', dispose, { once: true });
-
-  const started = performance.now();
-  void createTypeGpuRenderer(
-    gpu,
-    document,
-    abort.signal,
-    untrack(() => props.initialFrame)
-  ).then((prepared) => {
-    if (abort.signal.aborted || gpu.signal.aborted) {
-      if (prepared.isOk()) {
-        prepared.value.destroy();
-      }
-
-      return;
-    }
-
-    if (prepared.isErr()) {
-      dispose();
-      setState({ status: 'error', error: prepared.error });
-      return;
-    }
-
-    renderer = prepared.value;
-    const notifyUsage = () => props.onResourceUsage?.(prepared.value.resourceBytes);
-    prepared.value.events.addEventListener('change', notifyUsage);
-    abort.signal.addEventListener('abort', () => prepared.value.events.removeEventListener('change', notifyUsage), {
-      once: true
-    });
-    closeImages();
-
-    props.onReady?.({ preparationMs: performance.now() - started, resourceBytes: renderer.resourceBytes });
-    setState({ status: 'ready', value: { document, renderer } });
-  });
-
-  const ready = () => {
-    const current = state();
-    return current.status === 'ready' ? current.value : undefined;
-  };
-
-  const failure = () => {
-    const current = state();
-    return current.status === 'error' ? current.error : undefined;
-  };
-
-  return (
-    <Show
-      when={ready()}
-      keyed
-      fallback={
-        <Show when={failure()} keyed fallback={props.loading}>
-          {props.error}
-        </Show>
-      }
-    >
-      {(value) => (
-        <TokenContext context={DocumentContext} value={value}>
-          {resolveSceneChildren(props.children, value)}
-        </TokenContext>
-      )}
-    </Show>
-  );
-
-  function dispose() {
-    if (abort.signal.aborted) {
-      return;
-    }
-
-    abort.abort();
-    renderer?.destroy();
-    closeImages();
-  }
-
-  function closeImages() {
-    document.images.forEach((image) => image.close());
-    document.images.clear();
-  }
-}
-
-type PreparationState =
-  | { status: 'loading' }
-  | { status: 'error'; error: ViewerError }
-  | { status: 'ready'; value: { document: TextDocument; renderer: TextRenderer } };
 
 const DocumentContext = createContext<{ document: TextDocument; renderer: TextRenderer }>();

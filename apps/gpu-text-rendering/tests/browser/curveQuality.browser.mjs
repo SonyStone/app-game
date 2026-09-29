@@ -48,15 +48,12 @@ try {
   for (const input of [pdf, makePdf('0 0 0 rg ' + text, { width: 100, height: 100, pages: 16 })]) {
     await page.unroute('**/quality-input.pdf');
     await page.route('**/quality-input.pdf', (route) => route.fulfill({ body: input }));
-    await page.route('**/quality-check', (route) =>
-      route.fulfill({ contentType: 'text/html', body: '<body style="margin:0"></body>' })
-    );
-    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/quality-check`);
+    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/tests/browser/empty.html`);
     await page.evaluate(async () => {
-      const { convertPdf } = await import('/src/features/document/pdf/convertPdf.ts');
-      const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');
-      const { layoutPages } = await import('/src/features/document/document.ts');
-      const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+      const { convertPdf } = await import('/tests/browser/workerHarness.tsx');
+      const { readGdoc } = await import('/tests/browser/workerHarness.tsx');
+      const { layoutPages } = await import('/src/features/document/layoutPages.ts');
+      const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
       const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
       const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
       const data = (

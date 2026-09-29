@@ -24,6 +24,9 @@ catalogs:
     '@solid-primitives/active-element':
       specifier: 3.0.0-next.2
       version: 3.0.0-next.2
+    '@solid-primitives/async':
+      specifier: 0.0.101-next.3
+      version: 0.0.101-next.3
     '@solid-primitives/clipboard':
       specifier: 2.0.0-next.17
       version: 2.0.0-next.17
@@ -66,6 +69,9 @@ catalogs:
     '@solid-primitives/keyed':
       specifier: 3.0.0-next.2
       version: 3.0.0-next.2
+    '@solid-primitives/match':
+      specifier: 1.0.0-next.2
+      version: 1.0.0-next.2
     '@solid-primitives/media':
       specifier: 4.0.0-next.2
       version: 4.0.0-next.2
@@ -93,6 +99,9 @@ catalogs:
     '@solid-primitives/resize-observer':
       specifier: 4.0.0-next.3
       version: 4.0.0-next.3
+    '@solid-primitives/rootless':
+      specifier: 2.0.0-next.2
+      version: 2.0.0-next.2
     '@solid-primitives/scheduled':
       specifier: 2.0.0-next.2
       version: 2.0.0-next.2
@@ -185,6 +194,9 @@ patchedDependencies:
   '@solid-primitives/drag-drop@0.1.0-next.0':
     hash: d1ab21250a654d0876e2832902ed55627a512cc2d31a6ceae996b1cfe95c18cf
     path: patches/@solid-primitives__drag-drop@0.1.0-next.0.patch
+  '@solid-primitives/raf@4.0.0-next.2':
+    hash: fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf
+    path: patches/@solid-primitives__raf@4.0.0-next.2.patch
   vite-plugin-solid-svg@0.8.1:
     hash: 7c6645f6fbe6c96fc2a79f09a40f44ef6eb15cb0e19933b6b602c7bbcac0f839
     path: patches/vite-plugin-solid-svg@0.8.1.patch
@@ -249,7 +261,7 @@ importers:
         version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/raf':
         specifier: 'catalog:'
-        version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+        version: 4.0.0-next.2(patch_hash=fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf)(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/refs':
         specifier: 3.0.0-next.2
         version: 3.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -766,6 +778,9 @@ importers:
       '@app-game/components':
         specifier: workspace:*
         version: link:../../packages/components
+      '@solid-primitives/async':
+        specifier: 'catalog:'
+        version: 0.0.101-next.3(solid-js@2.0.0-rc.4)
       '@solid-primitives/drag-drop':
         specifier: 'catalog:'
         version: 0.1.0-next.0(patch_hash=d1ab21250a654d0876e2832902ed55627a512cc2d31a6ceae996b1cfe95c18cf)(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -781,15 +796,27 @@ importers:
       '@solid-primitives/jsx-tokenizer':
         specifier: 'catalog:'
         version: 3.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/match':
+        specifier: 'catalog:'
+        version: 1.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/page-utilities':
         specifier: 'catalog:'
         version: 3.0.0-next.0(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/raf':
         specifier: 'catalog:'
-        version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+        version: 4.0.0-next.2(patch_hash=fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf)(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/resize-observer':
         specifier: 'catalog:'
         version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/rootless':
+        specifier: 'catalog:'
+        version: 2.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/scheduled':
+        specifier: 'catalog:'
+        version: 2.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+      '@solid-primitives/utils':
+        specifier: 'catalog:'
+        version: 7.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solidjs/router':
         specifier: 'catalog:'
         version: 2.0.0-next.18(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -1154,7 +1181,7 @@ importers:
         version: 1.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/raf':
         specifier: 'catalog:'
-        version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+        version: 4.0.0-next.2(patch_hash=fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf)(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/resize-observer':
         specifier: 'catalog:'
         version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -1517,7 +1544,7 @@ importers:
         version: 1.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/raf':
         specifier: 'catalog:'
-        version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+        version: 4.0.0-next.2(patch_hash=fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf)(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/resize-observer':
         specifier: 'catalog:'
         version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -2025,7 +2052,7 @@ importers:
     dependencies:
       '@solid-primitives/raf':
         specifier: 'catalog:'
-        version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+        version: 4.0.0-next.2(patch_hash=fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf)(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/resize-observer':
         specifier: 'catalog:'
         version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -2128,7 +2155,7 @@ importers:
     dependencies:
       '@solid-primitives/raf':
         specifier: 'catalog:'
-        version: 4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
+        version: 4.0.0-next.2(patch_hash=fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf)(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solid-primitives/resize-observer':
         specifier: 'catalog:'
         version: 4.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -4159,6 +4186,11 @@ packages:
       '@solidjs/web': ^2.0.0-rc.0
       solid-js: ^2.0.0-rc.0
 
+  '@solid-primitives/async@0.0.101-next.3':
+    resolution: {integrity: sha512-Op+3kB7DdrekwZwHtOpCk8gQ/jdIaKZfsjHu2IFfuItyQebv6FQmAGakeG4IDQi9IOcBViAxQRO1c5Vc6MDreA==}
+    peerDependencies:
+      solid-js: ^2.0.0-rc.0
+
   '@solid-primitives/clipboard@2.0.0-next.17':
     resolution: {integrity: sha512-Zvm2yeGR16OsX3Bzk/gyywdXxXiVq3kUhbukPkogEKgA2bNKwGlKDuRC48C26aPKBJmYxbRRbg2p0KKG5kvqlg==}
     peerDependencies:
@@ -4249,6 +4281,12 @@ packages:
 
   '@solid-primitives/map@1.0.0-next.2':
     resolution: {integrity: sha512-9TipViAZvtT9sNCJuriC7SbKTDA9THKseAxeGWmtvEcWEupwdCTsb/mA8qoobmo+rTgkkhYLyc2N+jHGH4KykQ==}
+    peerDependencies:
+      '@solidjs/web': ^2.0.0-rc.0
+      solid-js: ^2.0.0-rc.0
+
+  '@solid-primitives/match@1.0.0-next.2':
+    resolution: {integrity: sha512-T/OCS5HwHS1jeAcZL+5g5UX0gNi1KdoiHZb81ngwgmoTqohxG9hNHqNtmIPPMf5pTAuxEHZOvrnYjcScuRjwFw==}
     peerDependencies:
       '@solidjs/web': ^2.0.0-rc.0
       solid-js: ^2.0.0-rc.0
@@ -9284,6 +9322,10 @@ snapshots:
       '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
       solid-js: 2.0.0-rc.4
 
+  '@solid-primitives/async@0.0.101-next.3(solid-js@2.0.0-rc.4)':
+    dependencies:
+      solid-js: 2.0.0-rc.4
+
   '@solid-primitives/clipboard@2.0.0-next.17(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
     dependencies:
       '@solid-primitives/utils': 7.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -9379,6 +9421,11 @@ snapshots:
       '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
       solid-js: 2.0.0-rc.4
 
+  '@solid-primitives/match@1.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
+    dependencies:
+      '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
+      solid-js: 2.0.0-rc.4
+
   '@solid-primitives/media@4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
     dependencies:
       '@solid-primitives/event-listener': 3.0.0-next.3(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
@@ -9431,7 +9478,7 @@ snapshots:
       '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)
       solid-js: 2.0.0-rc.4
 
-  '@solid-primitives/raf@4.0.0-next.2(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
+  '@solid-primitives/raf@4.0.0-next.2(patch_hash=fe02f6a045310f51f4c8b03273171a830ec7fe41060f2132686977ec36523abf)(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)':
     dependencies:
       '@solid-primitives/utils': 7.0.0-next.4(@solidjs/web@2.0.0-rc.4(solid-js@2.0.0-rc.4))(solid-js@2.0.0-rc.4)
       '@solidjs/web': 2.0.0-rc.4(solid-js@2.0.0-rc.4)

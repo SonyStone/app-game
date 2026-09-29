@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { worldToScreen } from '../camera/camera';
-import { layoutPages, pageVertices, type TextDocument } from './document';
+import { pageVertices, type TextDocument } from './document';
+import { layoutPages } from './layoutPages';
 import { createFrame } from './rendering/createFrame';
 
 function documentFixture(): TextDocument {

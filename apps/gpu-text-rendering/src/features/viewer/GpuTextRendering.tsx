@@ -1,129 +1,88 @@
-import { createFullscreen } from '@solid-primitives/fullscreen';
+import { Button } from '@app-game/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@app-game/components/ui/dropdown-menu';
+import dots from '@tabler/icons/outline/dots.svg?url';
+import grid from '@tabler/icons/outline/layout-grid.svg?url';
 import loaderIcon from '@tabler/icons/outline/loader-2.svg?url';
+import expand from '@tabler/icons/outline/maximize.svg?url';
+import collapse from '@tabler/icons/outline/minimize.svg?url';
 import closeIcon from '@tabler/icons/outline/x.svg?url';
-import { ResultAsync } from 'neverthrow';
-import { createEffect, createSignal, Show, untrack } from 'solid-js';
-import { errorMessage, type FullscreenError, type GpuError } from '../../shared/errors';
+import { createMemo, createSignal, Loading, Show } from 'solid-js';
 import { GpuCanvasProvider } from '../../shared/gpu/GpuCanvasProvider';
 import { TypeGPURootProvider } from '../../shared/gpu/TypeGPURootProvider';
-import type { ExportDocument } from '../document/readDocumentSource';
+import { CameraControls } from '../camera/CameraControls';
+import { CameraTour } from '../camera/CameraTour';
+import { DocumentCamera } from '../camera/DocumentCamera';
+import { OverviewCamera, type OverviewCameraRef } from '../camera/OverviewCamera';
+import { DocumentSpace } from '../camera/SceneSpace';
+import { createDocumentSource } from '../document/createDocumentSource';
+import noticesUrl from '../document/pdf/wasm/third-party-notices.txt?url';
+import { DocumentLayer } from '../document/rendering/DocumentLayer';
+import { DocumentRendererProvider } from '../document/rendering/DocumentRendererProvider';
+import { FrameLoop } from '../scene/FrameLoop';
+import { Viewport } from '../viewport/Viewport';
 import { createDocumentDrop } from './createDocumentDrop';
-import { createViewerState } from './createViewerState';
-import { DocumentViewer } from './DocumentViewer';
+import { createDocumentExport } from './createDocumentExport';
+import { createFullscreenToggleButton } from './createFullscreenToggleButton';
+import { createViewerStatus } from './createViewerStatus';
+import { DocumentPicker } from './DocumentPicker';
 import { createViewerI18n } from './i18n/createViewerI18n';
+import { LanguageMenu } from './LanguageMenu';
 import s from './viewer.module.scss';
-import { ViewerToolbar } from './ViewerToolbar';
 
 /** Displays a selected PDF/GDOC or the bundled document with TypeGPU and pointer-based navigation. */
 export default function GpuTextRendering() {
-  const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
-  const [fullscreenError, setFullscreenError] = createSignal<FullscreenError>();
-  const viewer = createViewerState();
   const i18n = createViewerI18n();
-  const t = i18n.t;
-  const [container, setContainer] = createSignal<HTMLDivElement>();
-  const fullscreenState = untrack(() => createFullscreen(container));
-  const [source, setSource] = createSignal<{ file?: File } | undefined>({});
-  const [converted, setConverted] = createSignal<ExportDocument>();
-  const [download, setDownload] = createSignal<File>();
-  const [exporting, setExporting] = createSignal(false);
-  const [exportError, setExportError] = createSignal<string>();
-  const [downloadUrl, setDownloadUrl] = createSignal<string>();
-  const [profile, setProfile] = createSignal<'glyphs' | 'curves'>('glyphs');
+
+  const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
+
+  const [fileSource, setFileSource] = createSignal<{ file?: File }>({});
+  const documentSource = createDocumentSource(() => fileSource().file);
+
+  const preparedDocument = createMemo(() => documentSource.document()?.unwrapOr(undefined));
+
+  const documentExport = createDocumentExport(preparedDocument);
+
+  const [dragging, setDragging] = createSignal(
+    () => {
+      fileSource();
+      return false;
+    },
+    { ownedWrite: true }
+  );
+  const [autoZoom, setAutoZoom] = createSignal(
+    () => {
+      fileSource();
+      return false;
+    },
+    { ownedWrite: true }
+  );
+  const [vectorOnly, setVectorOnly] = createSignal(false);
+  const [grids, setGrids] = createSignal(false);
+
+  const { status, error: viewerError, isBusy, isReady, progress, percent, reportGpuError, rendererCallbacks } =
+    createViewerStatus(documentSource, fileSource);
+
+  /** Selects a file, or reopens the bundled demo. */
+  function open(file?: File) {
+    setFileSource({ file });
+  }
 
   const drop = createDocumentDrop(open);
 
-  createEffect(download, (file) => {
-    const url = file ? URL.createObjectURL(file) : undefined;
-    setDownloadUrl(url);
+  const fullscreen = createFullscreenToggleButton(i18n.t);
 
-    return () => {
-      if (url) {
-        URL.revokeObjectURL(url);
-      }
-    };
-  });
-
-  function open(file?: File) {
-    drop.clearError();
-    setConverted(undefined);
-    setDownload(undefined);
-    setExporting(false);
-    setExportError(undefined);
-    viewer.setAutoZoom(false);
-    viewer.setDragging(false);
-    setSource({ file });
-  }
-
-  const loading = () => viewer.state().phase === 'loading' || viewer.state().phase === 'preparing';
-  const progress = () => {
-    const state = viewer.state();
-    return state.phase === 'loading' || state.phase === 'preparing' ? state.progress : undefined;
-  };
-  const percent = () => {
-    const value = progress();
-    return value?.total && value.completed !== undefined
-      ? Math.min(100, Math.floor((100 * value.completed) / value.total))
-      : undefined;
-  };
-
-  /** Unmounting the session aborts reads, terminates its worker and releases preparation resources. */
-  function cancelLoading() {
-    setSource(undefined);
-    setConverted(undefined);
-    setDownload(undefined);
-    setProfile('glyphs');
-    viewer.setAutoZoom(false);
-    viewer.setDragging(false);
-    viewer.setState({ phase: 'cancelled', message: 'Loading cancelled' });
-  }
-
-  async function exportFile() {
-    const exporter = converted();
-    if (!exporter || exporting()) return;
-    setExporting(true);
-    setExportError(undefined);
-    const result = await exporter();
-    if (converted() !== exporter) return;
-    setExporting(false);
-    if (result.isErr()) {
-      setExportError(result.error.message);
-      return;
-    }
-    setDownload(result.value);
-    // Use a separate temporary URL so the first click downloads immediately,
-    // independent of the reactive effect that installs the persistent link.
-    const url = URL.createObjectURL(result.value);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = result.value.name;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  function failGpu(error: GpuError) {
-    viewer.setState({ phase: 'error', message: error.message, error });
-    return null;
-  }
-
-  async function fullscreen() {
-    const result = await ResultAsync.fromThrowable(
-      async () => {
-        if (fullscreenState.isActive()) await fullscreenState.exit();
-        else await fullscreenState.enter();
-      },
-      (cause): FullscreenError => ({ kind: 'fullscreen', message: errorMessage(cause), cause })
-    )();
-
-    setFullscreenError(result.isErr() ? result.error : undefined);
-  }
+  const [overviewCamera, setOverviewCamera] = createSignal<OverviewCameraRef>();
 
   return (
     <div
-      ref={(element) => {
-        setContainer(element);
-        drop.ref(element);
-      }}
+      ref={[fullscreen.setContainer, drop.ref]}
       class={s.viewer}
       lang={i18n.locale()}
       dir={i18n.direction()}
@@ -131,87 +90,208 @@ export default function GpuTextRendering() {
       <canvas
         ref={setCanvas}
         id="beziercanvas"
-        class={`${s.canvas} ${viewer.dragging() ? s.dragging : ''}`}
-        style={{ visibility: viewer.state().phase === 'cancelled' ? 'hidden' : undefined }}
-        aria-label={t('canvas')}
-        aria-busy={viewer.state().phase === 'loading' || viewer.state().phase === 'preparing' ? 'true' : 'false'}
+        class={`${s.canvas} ${dragging() ? s.dragging : ''}`}
+        style={{ visibility: status().phase === 'cancelled' ? 'hidden' : undefined }}
+        aria-label={i18n.t('canvas')}
+        aria-busy={isBusy() ? 'true' : 'false'}
       />
 
-      <Show when={canvas()} keyed>
-        {(target) => (
-          <TypeGPURootProvider requiredBufferBytes={256 * 1024 * 1024} error={failGpu}>
-            <GpuCanvasProvider canvas={target} error={failGpu}>
-              <Show when={source()} keyed>
-                {(session) => (
-                  <DocumentViewer
-                    viewer={viewer}
-                    file={session.file}
-                    onConverted={(exportDocument) => setConverted(() => exportDocument)}
-                    onProfile={setProfile}
-                  />
-                )}
-              </Show>
-            </GpuCanvasProvider>
-          </TypeGPURootProvider>
-        )}
-      </Show>
+      <TypeGPURootProvider requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
+        <GpuCanvasProvider canvas={canvas()} error={reportGpuError}>
+          <Show when={documentSource.active() && !documentSource.error() && fileSource()} keyed>
+            <Loading>
+              {documentSource.document()?.match(
+                ({ data, signal, fail }) => (
+                  <Viewport>
+                    <FrameLoop onError={fail}>
+                      {(loop) => (
+                        <DocumentCamera>
+                          <DocumentSpace pageAspect={data.pages[0]!.width / data.pages[0]!.height}>
+                            <CameraControls
+                              pageAspect={data.pages[0]!.width / data.pages[0]!.height}
+                              onInteraction={() => setAutoZoom(false)}
+                              onDraggingChange={setDragging}
+                            />
+
+                            <OverviewCamera
+                              ref={setOverviewCamera}
+                              document={data}
+                              padding={{ top: 44, right: 24, bottom: 84, left: 24 }}
+                            />
+
+                            <CameraTour document={data} enabled={autoZoom()} />
+
+                            <DocumentRendererProvider
+                              document={data}
+                              initialFrame="viewport"
+                              {...rendererCallbacks(signal)}
+                              error={(error) => {
+                                loop.fail(error);
+                                return null;
+                              }}
+                            >
+                              <DocumentLayer vectorOnly={vectorOnly()} grids={grids()} />
+                            </DocumentRendererProvider>
+                          </DocumentSpace>
+                        </DocumentCamera>
+                      )}
+                    </FrameLoop>
+                  </Viewport>
+                ),
+                documentSource.fail
+              )}
+            </Loading>
+          </Show>
+        </GpuCanvasProvider>
+      </TypeGPURootProvider>
 
       <Show when={drop.isOver()}>
         <div class={s.dropOverlay} role="status" data-testid="document-drop-overlay">
-          <div>{t('dropHint')}</div>
+          <div>{i18n.t('dropHint')}</div>
         </div>
       </Show>
       <Show when={drop.error()}>
         {(key) => (
           <div class={s.notice} role="alert">
-            {t(key())}
+            {i18n.t(key())}
           </div>
         )}
       </Show>
-      <ViewerToolbar
-        i18n={i18n}
-        viewer={viewer}
-        filename={source()?.file?.name}
-        profile={profile()}
-        canExport={!!converted()}
-        exporting={exporting()}
-        fullscreen={fullscreenState.isActive()}
-        fullscreenSupported={!!document.fullscreenEnabled}
-        onOpen={open}
-        onDemo={() => open()}
-        onFullscreen={() => void fullscreen()}
-        onExport={() => {
-          if (downloadUrl()) {
-            const link = document.createElement('a');
-            link.href = downloadUrl()!;
-            link.download = download()!.name;
-            link.click();
-          } else void exportFile();
-        }}
-      />
+      <div id="toolbar" class={s.toolbar} role="group" aria-label={i18n.t('controls')}>
+        <DocumentPicker label={i18n.t('open')} hint={i18n.t('openHint')} onOpen={open} />
+        <Button
+          class={s.iconButton}
+          variant="ghost"
+          size="icon"
+          aria-label={i18n.t('overview')}
+          title={i18n.t('overview')}
+          disabled={!isReady()}
+          onClick={() => {
+            setAutoZoom(false);
+            overviewCamera()?.fitToDocument();
+          }}
+        >
+          <img src={grid} alt="" />
+        </Button>
+        <Button class={s.iconButton} {...fullscreen.props} variant="ghost" size="icon">
+          <img src={fullscreen.isActive() ? collapse : expand} alt="" />
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger class={s.iconButton} aria-label={i18n.t('more')} title={i18n.t('more')}>
+            <img src={dots} alt="" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent class={s.menu} aria-label={i18n.t('menu')}>
+            <LanguageMenu i18n={i18n}>
+              {(languageItem) => (
+                <>
+                  <div class={s.documentInfo}>
+                    <strong dir="auto">{fileSource().file?.name ?? i18n.t('demo')}</strong>
+                    <span>{i18n.t('privacy')}</span>
+                  </div>
+                  <Loading on={fileSource()}>
+                    <Show when={documentExport.available()}>
+                      <DropdownMenuItem
+                        class={s.menuItem}
+                        disabled={documentExport.pending()}
+                        onClick={() => void documentExport.save()}
+                      >
+                        {documentExport.pending() ? i18n.t('exporting') : i18n.t('download')}
+                      </DropdownMenuItem>
+                    </Show>
+                  </Loading>
+                  <Show when={fileSource().file?.name}>
+                    <DropdownMenuItem class={s.menuItem} onClick={() => open()}>
+                      {i18n.t('back')}
+                    </DropdownMenuItem>
+                  </Show>
+                  <DropdownMenuSeparator class={s.separator} />
+                  <DropdownMenuCheckboxItem
+                    class={s.menuItem}
+                    checked={autoZoom()}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setAutoZoom(!autoZoom());
+                    }}
+                  >
+                    {i18n.t('autoZoom')}
+                  </DropdownMenuCheckboxItem>
+                  <Loading on={fileSource()}>
+                    <Show when={preparedDocument()?.data.kind === 'glyphs'}>
+                      <DropdownMenuCheckboxItem
+                        class={s.menuItem}
+                        checked={grids()}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setGrids(!grids());
+                        }}
+                      >
+                        {i18n.t('grids')}
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        class={s.menuItem}
+                        checked={vectorOnly()}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setVectorOnly(!vectorOnly());
+                        }}
+                      >
+                        {i18n.t('vectorOnly')}
+                      </DropdownMenuCheckboxItem>
+                    </Show>
+                  </Loading>
+                  <DropdownMenuSeparator class={s.separator} />
+                  {languageItem}
+                  <DropdownMenuSeparator class={s.separator} />
+                  <div class={s.documentInfo}>
+                    <span>{i18n.t('help')}</span>
+                    <output>{i18n.status(status())}</output>
+                  </div>
+                  <DropdownMenuItem
+                    class={s.menuItem}
+                    onClick={() => window.open(noticesUrl, '_blank', 'noopener,noreferrer')}
+                  >
+                    {i18n.t('licenses')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    class={s.menuItem}
+                    onClick={() =>
+                      window.open('https://wdobbie.com/post/war-and-peace-and-webgl/', '_blank', 'noopener,noreferrer')
+                    }
+                  >
+                    {i18n.t('about')}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </LanguageMenu>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       <output class={s.srOnly} aria-live="polite">
-        {i18n.status(viewer.state())}
+        {i18n.status(status())}
       </output>
-      <Show when={exporting()}>
-        <div class={s.notice} role="status">
-          {t('exporting')}
-        </div>
-      </Show>
-      <Show when={exportError() || fullscreenError()?.message}>
-        {(message) => (
-          <div class={s.notice} role="alert">
-            {exportError() ? t('exportError') : t('fullscreenError')}
-            <div dir="auto">{message()}</div>
+      <Loading on={fileSource()}>
+        <Show when={documentExport.pending()}>
+          <div class={s.notice} role="status">
+            {i18n.t('exporting')}
           </div>
-        )}
-      </Show>
-      <Show when={viewer.state().phase !== 'ready'}>
-        <div class={s.loadinginfo} role={viewer.state().phase === 'error' ? 'alert' : 'status'}>
+        </Show>
+        <Show when={documentExport.error() || fullscreen.error()?.message}>
+          {(message) => (
+            <div class={s.notice} role="alert">
+              {documentExport.error() ? i18n.t('exportError') : i18n.t('fullscreenError')}
+              <div dir="auto">{message()}</div>
+            </div>
+          )}
+        </Show>
+      </Loading>
+      <Show when={!isReady()}>
+        <div class={s.loadinginfo} role={viewerError() ? 'alert' : 'status'}>
           <div class={s.loadingHeading}>
-            <Show when={loading()}>
+            <Show when={isBusy()}>
               <div
                 role="progressbar"
-                aria-label={i18n.status(viewer.state())}
+                aria-label={i18n.status(status())}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={percent()}
@@ -220,14 +300,14 @@ export default function GpuTextRendering() {
                 <img class={s.loadingSpinner} src={loaderIcon} alt="" />
               </div>
             </Show>
-            <strong>{i18n.status(viewer.state())}</strong>
-            <Show when={loading()}>
+            <strong>{i18n.status(status())}</strong>
+            <Show when={isBusy()}>
               <button
                 type="button"
                 class={s.cancelLoading}
-                aria-label={t('cancelLoading')}
-                title={t('cancelLoading')}
-                onClick={cancelLoading}
+                aria-label={i18n.t('cancelLoading')}
+                title={i18n.t('cancelLoading')}
+                onClick={() => documentSource.cancel()}
               >
                 <img src={closeIcon} alt="" />
               </button>
@@ -238,19 +318,22 @@ export default function GpuTextRendering() {
               <span>{percent()}%</span>
               <Show when={progress()?.stage === 'processingPages'}>
                 <span>
-                  {t('pageProgress', { completed: String(progress()?.completed), total: String(progress()?.total) })}
+                  {i18n.t('pageProgress', {
+                    completed: String(progress()?.completed),
+                    total: String(progress()?.total)
+                  })}
                 </span>
               </Show>
               <progress max={100} value={percent()} aria-hidden="true" />
             </div>
           </Show>
-          <Show when={source()?.file}>
+          <Show when={fileSource().file}>
             <div class={s.loadingFilename} dir="auto">
-              {source()?.file?.name}
+              {fileSource().file?.name}
             </div>
           </Show>
-          <Show when={viewer.state().phase === 'error'}>
-            <div dir="auto">{viewer.state().message}</div>
+          <Show when={viewerError()}>
+            {(error) => <div dir="auto">{error().message}</div>}
           </Show>
         </div>
       </Show>

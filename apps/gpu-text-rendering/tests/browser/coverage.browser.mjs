@@ -30,20 +30,17 @@ await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 try {
-  await page.route('**/coverage-check', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<body style="margin:0"></body>' })
-  );
   for (const test of cases) {
     await page.unroute('**/coverage.pdf');
     await page.route('**/coverage.pdf', (route) =>
       route.fulfill({ body: makePdf(test.paint, { width: 100, height: 100 }) })
     );
-    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://127.0.0.1:3180'}/coverage-check`);
+    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://127.0.0.1:3180'}/tests/browser/empty.html`);
     await page.evaluate(async () => {
-      const { convertPdf } = await import('/src/features/document/pdf/convertPdf.ts');
-      const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');
-      const { layoutPages } = await import('/src/features/document/document.ts');
-      const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+      const { convertPdf } = await import('/tests/browser/workerHarness.tsx');
+      const { readGdoc } = await import('/tests/browser/workerHarness.tsx');
+      const { layoutPages } = await import('/src/features/document/layoutPages.ts');
+      const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
       const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
       const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
       const converted = (await convertPdf(await (await fetch('/coverage.pdf')).arrayBuffer()))._unsafeUnwrap();

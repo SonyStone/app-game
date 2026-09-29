@@ -9,9 +9,11 @@ import {
 } from '../../../shared/errors';
 import type { GpuContext } from '../../../shared/gpu/context';
 import { createGpuResources } from '../../../shared/gpu/resources';
+import { serializeGpuPreparation } from '../../../shared/gpu/serializeGpuPreparation';
 import { renderScene } from '../../scene/renderScene';
 import type { TextDocument } from '../document';
 import type { SceneFrame } from './createFrame';
+import type { DocumentWorkers } from './DocumentWorkers';
 import { prepareDocument } from './prepareDocument';
 
 /**
@@ -22,6 +24,7 @@ import { prepareDocument } from './prepareDocument';
 export async function createTypeGpuRenderer(
   gpu: GpuContext,
   document: TextDocument,
+  workers: DocumentWorkers,
   signal?: AbortSignal,
   initialFrame?: SceneFrame
 ) {
@@ -56,21 +59,24 @@ export async function createTypeGpuRenderer(
     yield* checkActive();
 
     const prepared = yield* await ResultAsync.fromThrowable(
-      async () => {
-        device.pushErrorScope('validation');
+      () =>
+        serializeGpuPreparation(device, async () => {
+          const active = checkActive();
+          if (active.isErr()) return err(active.error);
+          device.pushErrorScope('validation');
 
-        const prepared = await ResultAsync.fromThrowable(
-          () => prepareDocument({ ...gpu, checkActive }, document, resources.keep, initialFrame),
-          (cause) => gpuError('device', errorMessage(cause), cause)
-        )();
+          const prepared = await ResultAsync.fromThrowable(
+            () => prepareDocument({ ...gpu, checkActive }, document, resources.keep, workers, initialFrame),
+            (cause) => gpuError('device', errorMessage(cause), cause)
+          )();
 
-        const validation = await device.popErrorScope();
-        if (prepared.isErr()) {
-          return err(prepared.error);
-        }
+          const validation = await device.popErrorScope();
+          if (prepared.isErr()) {
+            return err(prepared.error);
+          }
 
-        return validation ? err(gpuError('validation', validation.message, validation)) : prepared.value;
-      },
+          return validation ? err(gpuError('validation', validation.message, validation)) : prepared.value;
+        }),
       (cause) => gpuError('device', errorMessage(cause), cause)
     )();
 

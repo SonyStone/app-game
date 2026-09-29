@@ -1,7 +1,8 @@
 import { render } from '@solidjs/web';
-import { ok, okAsync } from 'neverthrow';
+import { err, ok, okAsync } from 'neverthrow';
 import { createRoot, createSignal, flush, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { gpuError } from '../../../shared/errors';
 import type { GpuContext } from '../../../shared/gpu/context';
 import type { TextDocument } from '../document';
 import { DocumentRendererProvider, useDocumentRenderer } from './DocumentRendererProvider';
@@ -59,7 +60,7 @@ it.each(['jsx', 'render'] as const)('cancels preparation without mounting stale 
 
   const mounted = mount(mode);
   await settle();
-  const signal = vi.mocked(createTypeGpuRenderer).mock.calls[0]![2]!;
+  const signal = vi.mocked(createTypeGpuRenderer).mock.calls[0]![3]!;
   expect(mounted.bindings).toEqual([]);
 
   mounted.setDocument(documentFixture().document);
@@ -76,11 +77,61 @@ it.each(['jsx', 'render'] as const)('cancels preparation without mounting stale 
   expect(mounted.onError).not.toHaveBeenCalled();
 });
 
+it('observes only the current renderer and detaches residency listeners on GPU abort', async () => {
+  const abort = new AbortController();
+  gpu = { signal: abort.signal } as GpuContext;
+  const first = rendererFixture();
+  const second = rendererFixture();
+  vi.mocked(createTypeGpuRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
+  const mounted = mount('jsx');
+  await settle();
+  first.events.dispatchEvent(new Event('change'));
+  expect(mounted.onResourceUsage).toHaveBeenCalledWith(1024);
+  mounted.setDocument(documentFixture().document);
+  await settle();
+  mounted.onResourceUsage.mockClear();
+  first.events.dispatchEvent(new Event('change'));
+  expect(mounted.onResourceUsage).not.toHaveBeenCalled();
+  second.events.dispatchEvent(new Event('change'));
+  expect(mounted.onResourceUsage).toHaveBeenCalledOnce();
+  abort.abort();
+  second.events.dispatchEvent(new Event('change'));
+  expect(mounted.onResourceUsage).toHaveBeenCalledOnce();
+});
+
+it('replaces loading with a failure and releases images without mounting the ready branch', async () => {
+  let finish!: (result: Awaited<ReturnType<typeof createTypeGpuRenderer>>) => void;
+  vi.mocked(createTypeGpuRenderer).mockReturnValue(new Promise((resolve) => {
+    finish = resolve;
+  }));
+  const initial = documentFixture();
+  const host = document.createElement('div');
+  const onError = vi.fn(() => null);
+  const ready = vi.fn(() => <span>Ready</span>);
+  cleanups.push(
+    render(() => (
+      <DocumentRendererProvider document={initial.document} loading="Preparing" error={onError}>
+        {ready}
+      </DocumentRendererProvider>
+    ), host)
+  );
+  expect(host.textContent).toBe('Preparing');
+
+  const failure = gpuError('device', 'Preparation failed');
+  finish(err(failure));
+  await settle();
+  expect(host.textContent).toBe('');
+  expect(onError).toHaveBeenCalledExactlyOnceWith(failure);
+  expect(ready).not.toHaveBeenCalled();
+  expect(initial.close).toHaveBeenCalledOnce();
+});
+
 function mount(mode: 'jsx' | 'render') {
   const initial = documentFixture();
   const bindings: ReturnType<typeof useDocumentRenderer>[] = [];
   const detached = vi.fn();
   const onReady = vi.fn();
+  const onResourceUsage = vi.fn();
   const onError = vi.fn(() => null);
 
   function Consumer() {
@@ -94,7 +145,12 @@ function mount(mode: 'jsx' | 'render') {
     const host = globalThis.document.createElement('div');
     const disposeView = render(
       () => (
-        <DocumentRendererProvider document={document()} error={onError} onReady={onReady}>
+        <DocumentRendererProvider
+          document={document()}
+          error={onError}
+          onReady={onReady}
+          onResourceUsage={onResourceUsage}
+        >
           {mode === 'render' ? (
             (value) => {
               expect(value).toBe(useDocumentRenderer());
@@ -117,7 +173,7 @@ function mount(mode: 'jsx' | 'render') {
     return { setDocument };
   });
 
-  return { ...result, initial, bindings, detached, onReady, onError };
+  return { ...result, initial, bindings, detached, onReady, onError, onResourceUsage };
 }
 
 function documentFixture() {

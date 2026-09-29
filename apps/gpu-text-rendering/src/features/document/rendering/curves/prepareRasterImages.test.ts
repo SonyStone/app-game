@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mountRendererWorkers } from '../../../../../tests/browser/workerHarness';
 import type { GpuContext } from '../../../../shared/gpu/context';
 import { createGpuResources } from '../../../../shared/gpu/resources';
 import type { SceneFrame } from '../createFrame';
 import { prepareRasterImages } from './prepareRasterImages';
-import type { RasterRequest } from './raster.worker';
+import type { RasterRequest } from './rasterWorkerTypes';
 import { packMipTails, tileExtent } from './virtualTiles';
 
 describe('virtual image residency', () => {
@@ -20,7 +21,7 @@ describe('virtual image residency', () => {
     while (worker.requests.length) {
       const request = worker.requests.shift()!;
       expect(request.tiles).toEqual([]);
-      worker.reply(request);
+      await worker.reply(request);
     }
 
     expect((await prepared).isOk()).toBe(true);
@@ -38,13 +39,13 @@ describe('virtual image residency', () => {
     const prepared = fixture.cache.prepareMipTails([0, 0]);
     const worker = FakeWorker.all[0]!;
     expect(worker.requests.map(({ id }) => id)).toEqual([0]);
-    drain();
+    await drain();
     expect((await prepared).isOk()).toBe(true);
     expect(fixture.cache.get(0)).toBeDefined();
     expect(fixture.cache.get(1)).toBeUndefined();
     expect(fixture.cache.get(2)).toBeUndefined();
     fixture.cache.update(fixture.instances, fixture.ranges.slice(1, 2), frame);
-    drain();
+    await drain();
     await fixture.cache.settle();
     expect(fixture.cache.get(1)).toBeDefined();
     expect(fixture.cache.get(2)).toBeUndefined();
@@ -59,7 +60,7 @@ describe('virtual image residency', () => {
 
     const failed = setup(2, 64, 64);
     const preparation = failed.cache.prepareMipTails();
-    FakeWorker.all[0]!.onmessage?.({ data: { ok: false, error: 'Broken preview' } });
+    FakeWorker.all[0]!.dispatchEvent(new MessageEvent('message', { data: { ok: false, error: 'Broken preview' } }));
     expect((await preparation)._unsafeUnwrapErr().message).toContain('Broken preview');
     failed.owner.destroy();
   });
@@ -67,35 +68,35 @@ describe('virtual image residency', () => {
   it('keeps all shown images visible immediately through zoom in/out and offscreen eviction', async () => {
     const fixture = setup(16, 4096, 4096);
     fixture.cache.update(fixture.instances, fixture.ranges, frame);
-    drain();
+    await drain();
     await fixture.cache.settle();
     const groups = fixture.ranges.map((run) => fixture.cache.get(run.image));
     expect(groups.every(Boolean)).toBe(true);
 
     fixture.cache.update(fixture.instances, fixture.ranges.slice(0, 1), { ...frame, mul: [100, 100], add: [-50, -50] });
     expect(fixture.cache.get(0)).toBe(groups[0]);
-    drain();
+    await drain();
     await fixture.cache.settle();
     fixture.cache.update(fixture.instances, fixture.ranges, frame);
     expect(fixture.ranges.map((run) => fixture.cache.get(run.image))).toEqual(groups);
     expect(fixture.textures.every((texture) => texture.destroy.mock.calls.length === 0)).toBe(true);
     expect(fixture.cache.resourceBytes).toBeLessThan(96 * 1024 * 1024);
-    drain();
+    await drain();
     fixture.owner.destroy();
     expect(fixture.textures.every((texture) => texture.destroy.mock.calls.length === 1)).toBe(true);
   });
 
-  it('reuses slots under pressure while retaining every image fallback', () => {
+  it('reuses slots under pressure while retaining every image fallback', async () => {
     const fixture = setup(32, 4096, 4096);
     const large = { ...frame, width: 8000, height: 8000 };
     fixture.cache.update(fixture.instances, fixture.ranges, large);
-    drain();
+    await drain();
     const groups = fixture.ranges.map((run) => fixture.cache.get(run.image));
     const used = fixture.writeTexture.mock.calls.filter((call) => call[3][0] === tileExtent).length;
     expect(used).toBe(961);
 
     fixture.cache.update(fixture.instances, fixture.ranges.slice(0, 1), large);
-    drain();
+    await drain();
     const after = fixture.writeTexture.mock.calls.filter((call) => call[3][0] === tileExtent).length;
     expect(after).toBeGreaterThan(used);
     expect(fixture.ranges.map((run) => fixture.cache.get(run.image))).toEqual(groups);
@@ -103,10 +104,10 @@ describe('virtual image residency', () => {
     fixture.owner.destroy();
   });
 
-  it('reuses resident tiles without decoding when returning to an already loaded view', () => {
+  it('reuses resident tiles without decoding when returning to an already loaded view', async () => {
     const fixture = setup(1, 512, 512);
     fixture.cache.update(fixture.instances, fixture.ranges, frame);
-    drain();
+    await drain();
     const workers = FakeWorker.all.length;
     fixture.cache.update(fixture.instances, [], frame);
     fixture.cache.update(fixture.instances, fixture.ranges, frame);
@@ -118,7 +119,7 @@ describe('virtual image residency', () => {
   it('finishes requested tiles on the decoded image without repeatedly switching JPEG sources', async () => {
     const fixture = setup(3, 4096, 4096);
     const prepared = fixture.cache.prepareMipTails();
-    drain();
+    await drain();
     await prepared;
     fixture.cache.update(fixture.instances, fixture.ranges, { ...frame, width: 1600, height: 1600 });
     const worker = FakeWorker.all.at(-1)!;
@@ -130,7 +131,7 @@ describe('virtual image residency', () => {
       if (sources.at(-1) !== request.id) {
         sources.push(request.id);
       }
-      worker.reply(request);
+      await worker.reply(request);
     }
 
     expect(sources).toHaveLength(3);
@@ -146,24 +147,60 @@ describe('virtual image residency', () => {
     const worker = FakeWorker.all[0]!;
     const first = worker.requests.shift()!;
     fixture.cache.update(fixture.instances, fixture.ranges.slice(1), frame);
-    worker.reply(first);
+    await worker.reply(first);
     expect(fixture.cache.get(0)).toBeDefined();
     const second = worker.requests.shift()!;
     const settled = fixture.cache.settle();
     fixture.owner.destroy();
     const uploads = fixture.writeTexture.mock.calls.length;
     await settled;
-    worker.reply(second);
+    await worker.reply(second);
     expect(fixture.writeTexture).toHaveBeenCalledTimes(uploads);
     expect(worker.terminated).toBe(true);
     expect(fixture.cache.resourceBytes).toBe(0);
+  });
+
+  it.each(['create', 'post'] as const)('settles preparation when worker %s fails', async (stage) => {
+    const fixture = setup(1, 64, 64);
+    vi.stubGlobal(
+      'Worker',
+      class extends FakeWorker {
+        constructor() {
+          super();
+          if (stage === 'create') throw new Error('Worker unavailable');
+        }
+        postMessage() {
+          throw new Error('Cannot transfer pixels');
+        }
+      }
+    );
+    const result = await fixture.cache.prepareMipTails();
+    expect(result._unsafeUnwrapErr().message).toContain(
+      stage === 'create' ? 'Worker unavailable' : 'Cannot transfer pixels'
+    );
+    if (stage === 'post') expect(FakeWorker.all[0]!.terminated).toBe(true);
+    fixture.owner.destroy();
+  });
+
+  it.each(['error', 'messageerror'])('releases the worker and settles preparation on %s', async (type) => {
+    const fixture = setup(1, 64, 64);
+    const prepared = fixture.cache.prepareMipTails();
+    const worker = FakeWorker.all[0]!;
+    worker.dispatchEvent(
+      type === 'error'
+        ? new ErrorEvent('error', { message: 'Decoder crashed', cancelable: true })
+        : new MessageEvent('messageerror')
+    );
+    expect((await prepared).isErr()).toBe(true);
+    expect(worker.terminated).toBe(true);
+    fixture.owner.destroy();
   });
 
   it('retains the decoder briefly, releases it after idle, and releases failures immediately', async () => {
     vi.useFakeTimers();
     const fixture = setup(1, 1, 8192);
     fixture.cache.update(fixture.instances, fixture.ranges, frame);
-    drain();
+    await drain();
     await fixture.cache.settle();
     expect(FakeWorker.all.at(-1)!.terminated).toBe(false);
     await vi.advanceTimersByTimeAsync(5_000);
@@ -173,7 +210,7 @@ describe('virtual image residency', () => {
     const failed = setup(1, 256, 256);
     failed.cache.update(failed.instances, failed.ranges, frame);
     const settled = failed.cache.settle();
-    FakeWorker.all[0]!.onmessage?.({ data: { ok: false, error: 'Broken image' } });
+    FakeWorker.all[0]!.dispatchEvent(new MessageEvent('message', { data: { ok: false, error: 'Broken image' } }));
     await settled;
     expect(failed.cache.failure?.message).toContain('Broken image');
     expect(FakeWorker.all[0]!.terminated).toBe(true);
@@ -226,28 +263,35 @@ function setup(count: number, width: number, height: number) {
     }
   } as unknown as GpuContext;
   const owner = createGpuResources();
-  const cache = prepareRasterImages(gpu, { table, pixels: new ArrayBuffer(0) }, owner.keep)._unsafeUnwrap();
+  const fixture = mountRendererWorkers();
+  owner.keep({ destroy: fixture.dispose });
+  const cache = prepareRasterImages(
+    gpu,
+    { table, pixels: new ArrayBuffer(0) },
+    owner.keep,
+    fixture.workers.raster
+  )._unsafeUnwrap();
   return { owner, cache, instances, ranges, textures, writeTexture };
 }
 
-function drain() {
+async function drain() {
   const worker = FakeWorker.all.at(-1)!;
   let count = 0;
 
   while (worker.requests.length) {
     expect(count++).toBeLessThan(10000);
-    worker.reply(worker.requests.shift()!);
+    await worker.reply(worker.requests.shift()!);
   }
 }
 
-class FakeWorker {
+class FakeWorker extends EventTarget {
   static all: FakeWorker[] = [];
   static packed: ReturnType<typeof packMipTails>;
   requests: RasterRequest[] = [];
   terminated = false;
-  onmessage?: (event: { data: unknown }) => void;
 
   constructor() {
+    super();
     FakeWorker.all.push(this);
   }
 
@@ -259,25 +303,27 @@ class FakeWorker {
     this.terminated = true;
   }
 
-  reply(request: RasterRequest) {
+  async reply(request: RasterRequest) {
     const image = FakeWorker.packed.images[request.id]!;
-    this.onmessage?.({
-      data: {
-        ok: true,
-        value: {
-          id: request.id,
-          tail:
-            request.tailLevel === undefined
-              ? undefined
-              : {
-                  width: image.tailWidth,
-                  height: image.tailHeight,
-                  pixels: new ArrayBuffer(image.tailWidth * image.tailHeight * 4)
-                },
-          tiles: request.tiles.map((tile) => ({ tile, pixels: new ArrayBuffer(tileExtent ** 2 * 4) }))
+    this.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          ok: true,
+          value: {
+            id: request.id,
+            tail:
+              request.tailLevel === undefined
+                ? undefined
+                : {
+                    width: image.tailWidth,
+                    height: image.tailHeight,
+                    pixels: new ArrayBuffer(image.tailWidth * image.tailHeight * 4)
+                  },
+            tiles: request.tiles.map((tile) => ({ tile, pixels: new ArrayBuffer(tileExtent ** 2 * 4) }))
+          }
         }
-      }
-    });
+      })
+    );
   }
 }
 

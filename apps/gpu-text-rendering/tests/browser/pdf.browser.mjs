@@ -30,16 +30,20 @@ try {
   const importGate = new Promise((resolve) => {
     releaseImport = resolve;
   });
-  await page.route('**/import.worker*', async (route) => {
+  // Delay execution of the worker, not Vite's eagerly imported constructor module.
+  const importWorkerUrl = /\/import\.worker[^?]*\?worker_file(?:&|$)/;
+  await page.route(importWorkerUrl, async (route) => {
     await importGate;
     await route.continue();
   });
   await page.addInitScript(() => {
     const NativeWorker = window.Worker;
     window.pdfProgress = [];
+    window.pdfExports = 0;
     window.Worker = class extends NativeWorker {
       constructor(...args) {
         super(...args);
+        if (String(args[0]).includes('/convert.worker')) window.pdfExports++;
         this.addEventListener('message', ({ data }) => {
           if (data.progress?.stage === 'processingPages') window.pdfProgress.push(data.progress);
         });
@@ -80,7 +84,7 @@ try {
     releaseImport();
   }
   await page.getByTestId('document-loading').waitFor({ state: 'hidden' });
-  await page.unroute('**/import.worker*');
+  await page.unroute(importWorkerUrl);
   // Reopening the same file after cancellation starts a fresh worker and exposes real page counts.
   await page.locator('input[type=file]').setInputFiles(`${output}/curves.pdf`);
   await page.waitForFunction(() => document.querySelector('output')?.textContent.includes('MiB'), null, {
@@ -91,11 +95,35 @@ try {
     { stage: 'processingPages', completed: 1, total: 1 }
   ]);
   await page.screenshot({ path: `${output}/viewer.png` });
+  // Export has its own pending branch: the loaded viewer must remain usable.
+  let releaseExport;
+  const exportGate = new Promise((resolve) => {
+    releaseExport = resolve;
+  });
+  const exportWorkerUrl = /\/convert\.worker[^?]*\?worker_file(?:&|$)/;
+  await page.route(exportWorkerUrl, async (route) => {
+    await exportGate;
+    await route.continue();
+  });
   await page.getByRole('button', { name: 'More', exact: true }).click();
   const download = page.waitForEvent('download');
   await page.getByRole('menuitem', { name: 'Download GDOC' }).click();
+  try {
+    await page.getByText('Preparing GDOC…', { exact: true }).first().waitFor();
+    assert.equal(await page.locator('canvas').getAttribute('aria-busy'), 'false');
+    assert.equal(await page.getByTestId('document-loading').count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Show entire document', exact: true }).isEnabled(), true);
+  } finally {
+    releaseExport();
+  }
   const saved = await download;
   await saved.saveAs(`${output}/curves.gdoc`);
+  await page.unroute(exportWorkerUrl);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  const cachedDownload = page.waitForEvent('download');
+  await page.getByRole('menuitem', { name: 'Download GDOC' }).click();
+  await cachedDownload;
+  assert.equal(await page.evaluate(() => pdfExports), 1);
   await page.locator('input[type=file]').setInputFiles(`${output}/curves.gdoc`);
   await page.waitForFunction(() => document.querySelector('output')?.textContent.includes('MiB'));
   await page.getByRole('button', { name: 'More', exact: true }).click();
@@ -104,22 +132,19 @@ try {
 
   let result = { uiOnly };
   if (!uiOnly) {
-    await page.route('**/gpu-pdf-check', (route) =>
-      route.fulfill({ contentType: 'text/html', body: '<html><body style="margin:0"></body></html>' })
-    );
-    await page.goto(`${baseURL}/gpu-pdf-check`);
+    await page.goto(`${baseURL}/tests/browser/empty.html`);
     result = await page.evaluate(
       async (bytes) => {
-        const { convertPdf } = await import('/src/features/document/pdf/convertPdf.ts');
-        const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');
-        const { layoutPages } = await import('/src/features/document/document.ts');
+        const { convertPdf } = await import('/tests/browser/workerHarness.tsx');
+        const { readGdoc } = await import('/tests/browser/workerHarness.tsx');
+        const { layoutPages } = await import('/src/features/document/layoutPages.ts');
         const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
-        const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+        const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
         const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
         const source = new Uint8Array(bytes).buffer;
         const pending = convertPdf(source);
-        const detached = source.byteLength === 0;
         const encoded = (await pending)._unsafeUnwrap();
+        const detached = source.byteLength === 0;
         const data = (await readGdoc(encoded))._unsafeUnwrap();
         window.doc = {
           ...data,

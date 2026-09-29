@@ -25,15 +25,9 @@ page.on('console', (message) => {
 });
 const report = { initialization: {}, cases: [], differences: [] };
 try {
-  await page.route('**/gpu-render-check', (route) =>
-    route.fulfill({
-      contentType: 'text/html',
-      body: '<html><body style="margin:0"></body></html>'
-    })
-  );
-  await page.goto(`${baseURL}/gpu-render-check`);
+  await page.goto(`${baseURL}/tests/browser/empty.html`);
   report.document = await page.evaluate(async () => {
-    const { loadDocument } = await import('/src/features/document/document.ts');
+    const { loadDocument } = await import('/tests/browser/workerHarness.tsx');
     const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
     const start = performance.now();
     window.doc = (await loadDocument())._unsafeUnwrap();
@@ -72,7 +66,7 @@ try {
         canvas.height = 800;
         document.body.append(canvas);
         const start = performance.now();
-        const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+        const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
         const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
         const mounted = await mountRenderingGpu(canvas, doc.glyphVertices.byteLength);
         window.gpu = mounted.gpu;

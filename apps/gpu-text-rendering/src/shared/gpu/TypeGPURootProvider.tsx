@@ -1,5 +1,6 @@
+import { MatchTag } from '@solid-primitives/match';
 import type { JSX } from '@solidjs/web';
-import { createContext, Show, useContext } from 'solid-js';
+import { createContext, useContext } from 'solid-js';
 import type { GpuError } from '../errors';
 import { createGpuRoot, type GpuRoot } from './createGpuRoot';
 
@@ -12,30 +13,19 @@ export function TypeGPURootProvider(props: {
 }) {
   const state = createGpuRoot(() => props.requiredBufferBytes);
 
-  const ready = () => {
-    const current = state();
-
-    return current.status === 'ready' ? current.gpu : undefined;
-  };
-
-  const failure = () => {
-    const current = state();
-
-    return current.status === 'error' ? current.error : undefined;
-  };
-
   return (
-    <Show
-      when={ready()}
-      keyed
-      fallback={
-        <Show when={failure()} keyed fallback={props.loading}>
-          {props.error}
-        </Show>
-      }
-    >
-      {(gpu) => <RootContext value={gpu}>{props.children}</RootContext>}
-    </Show>
+    <MatchTag
+      on={state()}
+      tag="status"
+      case={{
+        loading: () => props.loading,
+        error: (state) => props.error(state().error),
+        ready: (state) => {
+          const gpu = state().gpu;
+          return <RootContext value={gpu}>{props.children}</RootContext>;
+        }
+      }}
+    />
   );
 }
 

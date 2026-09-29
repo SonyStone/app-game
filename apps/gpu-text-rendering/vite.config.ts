@@ -7,6 +7,10 @@ import solid from 'vite-plugin-solid';
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   plugins: [solid(), typegpu()],
+  worker: {
+    format: 'es',
+    plugins: () => [solid()]
+  },
   build: {
     target: 'esnext',
     assetsInlineLimit: 0

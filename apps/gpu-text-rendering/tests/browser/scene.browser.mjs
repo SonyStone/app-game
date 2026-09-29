@@ -20,7 +20,7 @@ page.on('console', (message) => {
 try {
   await page.goto(`${baseURL}/tests/browser/scene.html`);
   await page.evaluate(async () => {
-    const { loadDocument } = await import('/src/features/document/document.ts');
+    const { loadDocument } = await import('/tests/browser/workerHarness.tsx');
     const { mountScene } = await import('/tests/browser/sceneHarness.tsx');
     const document = (await loadDocument())._unsafeUnwrap();
     window.scene = mountScene(globalThis.document.querySelector('canvas'), document);
@@ -37,6 +37,20 @@ try {
   assert.deepEqual(await pixel(400, 300), [255, 0, 0], 'late document must respect JSX order at equal layer order');
   const pagePixel = await pixel(340, 250);
   assert.notDeepEqual(pagePixel, [160, 169, 175], 'document content must share the canvas');
+
+  const documentBuffers = await page.evaluate(() => scene.stats.destroyedBuffers);
+  await change(() => scene.setDocumentVisible(false));
+  assert.deepEqual(await pixel(340, 250), [160, 169, 175], 'hidden document clears its content');
+  assert.deepEqual(await pixel(400, 300), [255, 0, 0], 'hiding a document preserves sibling layers');
+  assert.equal(await page.evaluate(() => scene.stats.destroyedBuffers), documentBuffers);
+  await change(() => scene.setDocumentVisible(true));
+  assert.deepEqual(await pixel(340, 250), pagePixel);
+  assert.equal(await page.evaluate(() => scene.stats.ready), 1, 'showing a document reuses its renderer');
+
+  await change(() => scene.setDocumentOrder(1));
+  assert.notDeepEqual(await pixel(400, 300), [255, 0, 0], 'document order reacts without rebuilding its renderer');
+  await change(() => scene.setDocumentOrder(0));
+  assert.deepEqual(await pixel(400, 300), [255, 0, 0]);
 
   await change(() => scene.setOrder(-1));
   assert.notDeepEqual(await pixel(400, 300), [255, 0, 0], 'reactive order places the rectangle behind the page');

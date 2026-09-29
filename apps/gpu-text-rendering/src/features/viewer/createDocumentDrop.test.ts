@@ -16,6 +16,7 @@ describe('local document drop', () => {
     flush();
     dispatch(target, 'dragenter', [], ['text/plain']);
     expect(drop.isOver()).toBe(false);
+    dispatch(target, 'dragleave', [], ['text/plain']);
     dispatch(target, 'dragenter');
     dispatch(child, 'dragenter');
     flush();
@@ -29,6 +30,42 @@ describe('local document drop', () => {
     dispose();
     expect(dispatch(target, 'drop', [new File(['pdf'], 'file.pdf')]).defaultPrevented).toBe(false);
     expect(open).not.toHaveBeenCalled();
+  });
+
+  it('ignores text drops, creates no preview URLs and replaces its target', () => {
+    let dispose!: () => void;
+    const open = vi.fn();
+    const revoke = vi.spyOn(URL, 'revokeObjectURL');
+    const createUrl = vi.spyOn(URL, 'createObjectURL');
+    const drop = createRoot((stop) => {
+      dispose = stop;
+      return createDocumentDrop(open);
+    });
+    const oldTarget = document.createElement('div');
+    const target = document.createElement('div');
+    try {
+      drop.ref(oldTarget);
+      drop.ref(target);
+      flush();
+      expect(dispatch(oldTarget, 'drop', [new File(['pdf'], 'old.pdf')]).defaultPrevented).toBe(false);
+      dispatch(target, 'dragenter', [], ['text/plain']);
+      dispatch(target, 'drop', [], ['text/plain']);
+      flush();
+      expect(drop.error()).toBeUndefined();
+      expect(open).not.toHaveBeenCalled();
+      const file = new File(['pdf'], 'file.pdf');
+      dispatch(target, 'drop', [file]);
+      dispatch(target, 'drop', [new File(['text'], 'notes.txt')]);
+      dispatch(target, 'drop', [file, file]);
+      flush();
+      expect(open).toHaveBeenCalledExactlyOnceWith(file);
+      expect(createUrl).not.toHaveBeenCalled();
+      expect(revoke).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+      revoke.mockRestore();
+      createUrl.mockRestore();
+    }
   });
 
   it('opens PDF/GDOC, blocks browser navigation and rejects unsupported or multiple files', () => {
@@ -61,7 +98,10 @@ describe('local document drop', () => {
       flush();
       expect(drop.error()).toBe('dropMultiple');
       expect(open).toHaveBeenCalledTimes(3);
-      drop.clearError();
+      dispatch(target, 'drop');
+      flush();
+      expect(drop.error()).toBe('dropUnsupported');
+      dispatch(target, 'dragenter');
       flush();
       expect(drop.error()).toBeUndefined();
     } finally {

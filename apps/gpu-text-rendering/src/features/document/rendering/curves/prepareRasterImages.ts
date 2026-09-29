@@ -5,8 +5,9 @@ import type { GpuContext } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { DecodedDocument } from '../../format/types';
 import type { SceneFrame } from '../createFrame';
+import type { DocumentWorkers } from '../DocumentWorkers';
 import { RasterImage, rasterLayout } from './imageShader';
-import type { RasterReply, RasterRequest } from './raster.worker';
+import type { RasterReply, RasterRequest } from './rasterWorkerTypes';
 import { selectImageTiles } from './selectImageTiles';
 import {
   atlasColumns,
@@ -27,7 +28,8 @@ import {
 export function prepareRasterImages(
   gpu: GpuContext,
   images: Extract<DecodedDocument, { kind: 'curves' }>['rasterImages'],
-  keep: KeepGpuResource
+  keep: KeepGpuResource,
+  worker: DocumentWorkers['raster']
 ) {
   const { root, device } = gpu;
   const table = new DataView(images.table);
@@ -60,17 +62,13 @@ export function prepareRasterImages(
   const atlasView = atlas.createView();
   const tailsView = tails.createView();
   let wanted = new Map<string, Tile>();
-  let worker: Worker | undefined;
-  let workerImage: number | undefined;
+  let lastImage: number | undefined;
   let pending = false;
   let nextTail: number | undefined;
   let initialImages: number[] = [];
   let destroyed = false;
   let failure: GpuError | undefined;
   let clock = 0;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let idleTimer: ReturnType<typeof setTimeout> | undefined;
-
   keep({
     destroy() {
       destroyed = true;
@@ -78,7 +76,7 @@ export function prepareRasterImages(
       groups.clear();
       pending = false;
       finish();
-      releaseWorker();
+      worker.destroy();
     }
   });
 
@@ -220,8 +218,8 @@ export function prepareRasterImages(
 
     // Finish visible work on the decoded source before switching images. Otherwise
     // interleaved mip priorities repeatedly decode the same large JPEG from scratch.
-    if (workerImage !== undefined && missingImages.has(workerImage)) {
-      return workerImage;
+    if (lastImage !== undefined && missingImages.has(lastImage)) {
+      return lastImage;
     }
 
     return [...wanted].find(([key]) => !resident.has(key))?.[1].image;
@@ -232,7 +230,6 @@ export function prepareRasterImages(
       return;
     }
 
-    clearTimeout(idleTimer);
     const id = nextImage();
 
     if (id === undefined) {
@@ -242,23 +239,10 @@ export function prepareRasterImages(
 
     const scheduled = Result.fromThrowable(
       () => {
-        if (!worker) {
-          worker = new Worker(new URL('./raster.worker.ts', import.meta.url), { type: 'module' });
-          worker.onmessage = receive;
-          worker.onerror = (event) => {
-            event.preventDefault();
-            stop(gpuError('render', event.message));
-          };
-          worker.onmessageerror = () => stop(gpuError('render', 'Unable to transfer image tiles'));
-        }
-
         const image = packed.images[id]!;
         const offset = table.getUint32(id * 24 + 8, true);
-        const bytes =
-          workerImage === id ? undefined : images.pixels.slice(offset, offset + table.getUint32(id * 24 + 12, true));
-        const request: RasterRequest = {
+        const request: Omit<RasterRequest, 'bytes'> = {
           id,
-          bytes,
           width: image.width,
           height: image.height,
           codec: table.getUint32(id * 24 + 20, true),
@@ -278,10 +262,15 @@ export function prepareRasterImages(
                   .slice(0, 16)
                   .map(([, tile]) => tile)
         };
-        workerImage = id;
+        lastImage = id;
         pending = true;
-        timer = setTimeout(() => stop(gpuError('render', 'Image decoding exceeded 60 seconds')), 60_000);
-        worker.postMessage(request, bytes ? [bytes] : []);
+        void worker
+          .decode(request, () => images.pixels.slice(offset, offset + table.getUint32(id * 24 + 12, true)))
+          .then((result) => {
+            if (destroyed || failure) return;
+            if (result.isErr()) stop(result.error);
+            else receive(result.value);
+          });
       },
       (cause) => gpuError('render', errorMessage(cause))
     )();
@@ -291,20 +280,8 @@ export function prepareRasterImages(
     }
   }
 
-  function receive(event: MessageEvent<{ ok: true; value: RasterReply } | { ok: false; error: string }>) {
+  function receive({ id, tail, tiles }: RasterReply) {
     pending = false;
-    clearTimeout(timer);
-
-    if (destroyed || failure) {
-      return;
-    }
-
-    if (!event.data.ok) {
-      stop(gpuError('render', event.data.error));
-      return;
-    }
-
-    const { id, tail, tiles } = event.data.value;
     const uploaded = Result.fromThrowable(
       () => {
         const image = packed.images[id]!;
@@ -395,13 +372,6 @@ export function prepareRasterImages(
   }
 
   function finish() {
-    clearTimeout(timer);
-    // Keep the module and last decoded source warm across nearby zoom steps.
-    clearTimeout(idleTimer);
-    if (!destroyed && !failure) {
-      idleTimer = setTimeout(releaseWorker, 5_000);
-    }
-
     waiters.forEach((resolve) => resolve());
     waiters.clear();
   }
@@ -415,18 +385,11 @@ export function prepareRasterImages(
     }
   }
 
-  function releaseWorker() {
-    clearTimeout(idleTimer);
-    worker?.terminate();
-    worker = undefined;
-    workerImage = undefined;
-  }
-
   function stop(error: GpuError) {
     failure = error;
     pending = false;
     finish();
-    releaseWorker();
+    worker.destroy();
     events.dispatchEvent(new Event('change'));
   }
 }

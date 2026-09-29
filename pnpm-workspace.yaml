@@ -9,6 +9,7 @@ catalog:
   '@mdx-js/rollup': ^3.1.1
   '@playwright/test': ^1.60.0
   '@solid-primitives/active-element': 3.0.0-next.2
+  '@solid-primitives/async': 0.0.101-next.3
   '@solid-primitives/clipboard': 2.0.0-next.17
   '@solid-primitives/context': 2.0.0-next.2
   '@solid-primitives/cursor': 1.0.0-next.2
@@ -24,6 +25,7 @@ catalog:
   '@solid-primitives/keyboard': 2.0.0-next.5
   '@solid-primitives/keyed': 3.0.0-next.2
   '@solid-primitives/media': 4.0.0-next.2
+  '@solid-primitives/match': 1.0.0-next.2
   '@solid-primitives/memo': 2.0.0-next.2
   '@solid-primitives/mouse': 4.0.0-next.3
   '@solid-primitives/page-utilities': 3.0.0-next.0
@@ -32,12 +34,14 @@ catalog:
   '@solid-primitives/raf': 4.0.0-next.2
   '@solid-primitives/refs': 3.0.0-next.2
   '@solid-primitives/resize-observer': 4.0.0-next.3
+  '@solid-primitives/rootless': 2.0.0-next.2
   '@solid-primitives/scheduled': 2.0.0-next.2
   '@solid-primitives/scroll': 3.0.0-next.4
   '@solid-primitives/set': 1.0.0-next.2
   '@solid-primitives/storage': 5.0.0-next.4
   '@solid-primitives/timer': 1.4.5-next.1
   '@solid-primitives/trigger': 3.0.0-next.2
+  '@solid-primitives/upload': 1.0.0-next.4
   '@solid-primitives/utils': 7.0.0-next.4
   '@solid-primitives/virtual': 1.0.0-next.4
   '@solidjs/router': 2.0.0-next.18
@@ -66,6 +70,7 @@ catalogMode: strict
 patchedDependencies:
   '@kittl/little-cms@1.0.3': patches/@kittl__little-cms@1.0.3.patch
   '@solid-primitives/drag-drop@0.1.0-next.0': patches/@solid-primitives__drag-drop@0.1.0-next.0.patch
+  '@solid-primitives/raf@4.0.0-next.2': patches/@solid-primitives__raf@4.0.0-next.2.patch
   vite-plugin-solid-svg@0.8.1: patches/vite-plugin-solid-svg@0.8.1.patch
 
 peerDependencyRules:

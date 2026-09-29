@@ -49,7 +49,7 @@ tests/
 
 Unit tests live beside the feature they exercise. Browser fixtures remain outside `src` and are not exported by the package. No general `components`, `utils` or document-specific top-level `gpu` directory is needed.
 
-- Start with `features/viewer/GpuTextRendering.tsx` for the UI, or `features/viewer/DocumentViewer.tsx` for the full JSX composition. The viewer owns loading and connects ready GPU resources to the document, camera and scene.
+- Start with `features/viewer/GpuTextRendering.tsx` for the UI and full JSX composition. The viewer owns loading and connects ready GPU resources to the document, camera and scene.
 - `features/document/document.ts` exposes decoded data independent of the GPU. `rendering/DocumentRendererProvider.tsx` owns a prepared document's lifetime. `rendering/createTypeGpuRenderer.ts` remains usable outside Solid; buffers, shaders and batched draw commands are private to document rendering.
 - `features/camera` owns navigation and projection. Controls request frames after interaction; the tour owns its animation subscription. Camera motion does not require UI state updates.
 - `features/scene` owns one frame loop and one shared color pass for all graphics. It does not load documents or allocate their buffers. `resolveSceneChildren.ts` resolves render callbacks while preserving reactive lists and context ownership.
@@ -78,11 +78,7 @@ A document is one drawable in the scene. Add siblings without changing the docum
               return null;
             }}
           >
-            {() => {
-              const draw = createDocumentDraw();
-
-              return <RenderLayer draw={draw} visible={documentVisible()} />;
-            }}
+            <DocumentLayer visible={documentVisible()} />
           </DocumentRendererProvider>
 
           <For each={annotations()} keyed={(annotation) => annotation.id}>
@@ -113,7 +109,7 @@ This subtree needs `TypeGPURootProvider` and `GpuCanvasProvider` above it. DOM U
 
 `FrameLoop` accepts JSX or `(loop) => JSX`. `DocumentRendererProvider` accepts JSX or a function receiving `{ document, renderer }` beneath its ready context. `resolveSceneChildren` keeps zero-argument reactive JSX accessors reactive and evaluates them with their provider owner; it also preserves single draw tokens. This matters for a single `<For>` child whose items reorder. Composition functions do not run per frame.
 
-Call `createDocumentDraw()` once per prepared document. It reads the document camera and the shared viewport and creates a stable draw function. Pass option accessors, for example `createDocumentDraw({ vectorOnly: viewer.vectorOnly, grids: viewer.grids })`. The viewer explicitly declares its `RenderLayer`. GPU buffers and pipelines belong to `DocumentRendererProvider`.
+`DocumentLayer` reads the document camera and shared viewport, owns draw invalidation, and declares its `RenderLayer`. Pass reactive options as values, for example `<DocumentLayer vectorOnly={vectorOnly()} grids={grids()} />`. GPU buffers and pipelines belong to `DocumentRendererProvider`.
 
 `RenderLayer.visible`, default true, skips drawing without unmounting its owner or releasing buffers. Use `<Show>` around the owning component/provider when removal should release its resources. Hiding the last visible layer clears the canvas once. A hidden layer keeps its position in JSX and returns to that position when shown.
 
@@ -454,6 +450,8 @@ to open it. The highlighted drop target and validation messages follow the selec
 interface language. Unsupported or multiple-file drops leave the current document
 open. Text and URL drags do not open documents.
 
-The viewer uses `createNativeDroppable` from `@solid-primitives/drag-drop`.
-The pnpm patch for version `0.1.0-next.0` fixes its compiled `createComponent`
-import to use `solid-js`, matching Solid 2.
+The viewer uses `createDropzone` from `@solid-primitives/upload`. Its Solid 2
+release depends on the native drag-and-drop package internally, so the pnpm
+patch for that transitive dependency remains necessary to fix its compiled
+`createComponent` import. The viewer revokes the generated preview URLs immediately
+because it reads the dropped `File` objects directly.

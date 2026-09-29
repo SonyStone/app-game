@@ -10,13 +10,10 @@ const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 
 try {
-  await page.route('**/gpu-format-check', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<html></html>' })
-  );
-  await page.goto(`${baseURL}/gpu-format-check`);
+  await page.goto(`${baseURL}/tests/browser/empty.html`);
 
   const result = await page.evaluate(async () => {
-    const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');
+    const { readGdoc } = await import('/tests/browser/workerHarness.tsx');
     const { default: url } = await import('/src/features/document/assets/demo.gdoc?url');
     const source = await (await fetch(url)).arrayBuffer();
     const NativeWorker = window.Worker;
@@ -37,8 +34,8 @@ try {
 
     const timer = setInterval(() => ticks++, 1);
     const pending = readGdoc(source);
-    const detached = source.byteLength === 0;
     const good = (await pending)._unsafeUnwrap();
+    const detached = source.byteLength === 0;
     clearInterval(timer);
 
     const invalid = (await readGdoc(new ArrayBuffer(10)))._unsafeUnwrapErr().code;

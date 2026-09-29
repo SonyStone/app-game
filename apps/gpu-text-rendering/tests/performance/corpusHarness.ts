@@ -1,7 +1,7 @@
-import { layoutPages } from '../../src/features/document/document';
-import { readGdoc } from '../../src/features/document/format/readGdoc';
+import { layoutPages } from '../../src/features/document/layoutPages';
+import { readGdoc } from '../browser/workerHarness';
 import { createFrame } from '../../src/features/document/rendering/createFrame';
-import { createTypeGpuRenderer } from '../../src/features/document/rendering/createTypeGpuRenderer';
+import { createTypeGpuRenderer } from '../browser/workerHarness';
 import { mountRenderingGpu } from '../browser/renderingHarness';
 
 /** Loads one external document and measures navigation with at most one outstanding frame. */

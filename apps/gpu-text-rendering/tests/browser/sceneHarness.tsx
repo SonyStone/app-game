@@ -5,11 +5,10 @@ import { CameraControls } from '../../src/features/camera/CameraControls';
 import { DocumentCamera, useDocumentCamera } from '../../src/features/camera/DocumentCamera';
 import { DocumentSpace, ScreenSpace, useSceneSpace } from '../../src/features/camera/SceneSpace';
 import type { TextDocument } from '../../src/features/document/document';
-import { createDocumentDraw } from '../../src/features/document/rendering/createDocumentDraw';
+import { DocumentLayer } from '../../src/features/document/rendering/DocumentLayer';
 import { DocumentRendererProvider } from '../../src/features/document/rendering/DocumentRendererProvider';
 import { Rectangle } from '../../src/features/graphics/Rectangle';
 import { FrameLoop, useFrame } from '../../src/features/scene/FrameLoop';
-import { RenderLayer } from '../../src/features/scene/RenderLayer';
 import { useViewport, Viewport } from '../../src/features/viewport/Viewport';
 import type { ViewerError } from '../../src/shared/errors';
 import { GpuCanvasProvider, useGpuCanvas } from '../../src/shared/gpu/GpuCanvasProvider';
@@ -19,6 +18,8 @@ import { TypeGPURootProvider } from '../../src/shared/gpu/TypeGPURootProvider';
 export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
   return createRoot((disposeState) => {
     const [showDocument, setShowDocument] = createSignal(false);
+    const [documentVisible, setDocumentVisible] = createSignal(true);
+    const [documentOrder, setDocumentOrder] = createSignal(0);
     const [showRectangle, setShowRectangle] = createSignal(true);
     const [rectangleVisible, setRectangleVisible] = createSignal(true);
     const [worldVisible, setWorldVisible] = createSignal(false);
@@ -95,11 +96,7 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
                               return null;
                             }}
                           >
-                            {() => {
-                              const draw = createDocumentDraw();
-
-                              return <RenderLayer draw={draw} />;
-                            }}
+                            <DocumentLayer visible={documentVisible()} order={documentOrder()} />
                           </DocumentRendererProvider>
                         </Show>
                         <For each={annotations()} keyed={(item) => item.id}>
@@ -154,6 +151,8 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
         invalidate();
       },
       setShowDocument,
+      setDocumentVisible,
+      setDocumentOrder,
       setShowRectangle,
       setOrder,
       setX,

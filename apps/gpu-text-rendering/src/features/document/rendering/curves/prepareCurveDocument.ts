@@ -5,6 +5,7 @@ import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import { pageVertices, type TextDocument } from '../../document';
 import { View, pageLayout, viewLayout } from '../bindings';
 import type { SceneFrame } from '../createFrame';
+import type { DocumentWorkers } from '../DocumentWorkers';
 import { pageFragment, pageVertex } from '../pageShader';
 import { uploadBuffer } from '../uploadBuffer';
 import { buildCurvePreparation } from './buildCurvePreparation';
@@ -29,11 +30,12 @@ export async function prepareCurveDocument(
   gpu: GpuContext,
   document: Extract<TextDocument, { kind: 'curves' }>,
   keep: KeepGpuResource,
+  workers: DocumentWorkers,
   initialFrame?: SceneFrame
 ) {
   const { root, device, format } = gpu;
-  const coverage = await prepareCoverageTables(gpu, document, keep);
-  const rasterResult = prepareRasterImages(gpu, document.rasterImages, keep);
+  const coverage = await prepareCoverageTables(gpu, document, keep, workers.coverage);
+  const rasterResult = prepareRasterImages(gpu, document.rasterImages, keep, workers.raster);
 
   if (rasterResult.isErr()) {
     return err(rasterResult.error);

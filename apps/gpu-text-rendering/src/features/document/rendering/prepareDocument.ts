@@ -16,6 +16,7 @@ import {
 import { compactGlyphs } from './compactGlyphs';
 import type { SceneFrame } from './createFrame';
 import { prepareCurveDocument } from './curves/prepareCurveDocument';
+import type { DocumentWorkers } from './DocumentWorkers';
 import { createGlyphAtlas } from './glyphAtlas';
 import { glyphFragment, glyphInstanceVertex } from './glyphShader';
 import { imageFragment, imageVertex, pageFragment, pageVertex } from './pageShader';
@@ -26,10 +27,11 @@ export async function prepareDocument(
   gpu: GpuContext,
   document: TextDocument,
   keep: KeepGpuResource,
+  workers: DocumentWorkers,
   initialFrame?: SceneFrame
 ) {
   if (document.kind === 'curves') {
-    return prepareCurveDocument(gpu, document, keep, initialFrame);
+    return prepareCurveDocument(gpu, document, keep, workers, initialFrame);
   }
 
   if (document.imageVertices.byteLength % 10 !== 0) {

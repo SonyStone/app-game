@@ -81,13 +81,10 @@ try {
     await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await page.route('**/compositing-check', (route) =>
-      route.fulfill({ contentType: 'text/html', body: '<html><body style="margin:0"></body></html>' })
-    );
     await page.route('**/compatibility-input.pdf', (route) =>
       route.fulfill({ body: entry.pdf, contentType: 'application/pdf' })
     );
-    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://127.0.0.1:3180'}/compositing-check`);
+    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://127.0.0.1:3180'}/tests/browser/empty.html`);
     await page.evaluate(installHarness);
     const result = await page.evaluate(() => compatibility.open());
     assert.equal(result.ok, true, JSON.stringify(result));

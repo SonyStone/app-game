@@ -4,6 +4,7 @@ import { documentError } from '../../../shared/errors';
 import type { GpuContext } from '../../../shared/gpu/context';
 import type { TextDocument } from '../document';
 import { createTypeGpuRenderer } from './createTypeGpuRenderer';
+import type { DocumentWorkers } from './DocumentWorkers';
 import { prepareDocument } from './prepareDocument';
 
 vi.mock('./prepareDocument', () => ({ prepareDocument: vi.fn() }));
@@ -15,7 +16,7 @@ it('releases document resources after failure while leaving the provider resourc
     keep(resource);
     return err(documentError('invalid-data', 'Malformed document'));
   });
-  const result = await createTypeGpuRenderer(gpu, {} as TextDocument);
+  const result = await createTypeGpuRenderer(gpu, {} as TextDocument, workers);
   expect(result._unsafeUnwrapErr()).toMatchObject({ kind: 'document' });
   expect(resource.destroy).toHaveBeenCalledOnce();
   expect(device.popErrorScope).toHaveBeenCalledOnce();
@@ -29,7 +30,7 @@ it('pops the validation scope and releases partial allocations when preparation 
     keep(resource);
     throw new Error('Pipeline compilation failed');
   });
-  const result = await createTypeGpuRenderer(gpu, {} as TextDocument);
+  const result = await createTypeGpuRenderer(gpu, {} as TextDocument, workers);
   expect(result._unsafeUnwrapErr()).toMatchObject({ code: 'device', message: 'Pipeline compilation failed' });
   expect(device.popErrorScope).toHaveBeenCalledOnce();
   expect(resource.destroy).toHaveBeenCalledOnce();
@@ -49,7 +50,7 @@ it('cancels an in-flight document without destroying its borrowed device', async
     keep(late);
     return err(documentError('invalid-data', 'Late result'));
   });
-  const result = createTypeGpuRenderer(gpu, {} as TextDocument, abort.signal);
+  const result = createTypeGpuRenderer(gpu, {} as TextDocument, workers, abort.signal);
   // safeTry advances an async generator before entering document preparation.
   for (let i = 0; i < 10; i++) await Promise.resolve();
   expect(prepareDocument).toHaveBeenCalledOnce();
@@ -67,7 +68,7 @@ it('destroys a successful document repeatedly without releasing the device or ca
     keep(resource);
     return ok({ resourceBytes: 10 } as never);
   });
-  const renderer = (await createTypeGpuRenderer(gpu, {} as TextDocument))._unsafeUnwrap();
+  const renderer = (await createTypeGpuRenderer(gpu, {} as TextDocument, workers))._unsafeUnwrap();
   renderer.destroy();
   renderer.destroy();
   expect(resource.destroy).toHaveBeenCalledOnce();
@@ -75,6 +76,62 @@ it('destroys a successful document repeatedly without releasing the device or ca
   expect(device.destroy).not.toHaveBeenCalled();
   expect(root.destroy).not.toHaveBeenCalled();
   expect(context.unconfigure).not.toHaveBeenCalled();
+});
+
+it('keeps validation scopes paired with their own document during concurrent preparation', async () => {
+  const { gpu, device } = fixture();
+  const scopes: (GPUError | null)[] = [];
+  device.pushErrorScope.mockImplementation(() => {
+    scopes.push(null);
+  });
+  vi.mocked(gpu.device.popErrorScope).mockImplementation(async () => scopes.pop()!);
+  let resume!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  vi.mocked(prepareDocument)
+    .mockImplementationOnce(async () => {
+      await pending;
+      return ok({ resourceBytes: 1 } as never);
+    })
+    .mockImplementationOnce(async () => {
+      scopes[scopes.length - 1] = { message: 'Second document validation failed' };
+      return ok({ resourceBytes: 2 } as never);
+    });
+  const first = createTypeGpuRenderer(gpu, {} as TextDocument, workers);
+  const second = createTypeGpuRenderer(gpu, {} as TextDocument, workers);
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  expect(prepareDocument).toHaveBeenCalledOnce();
+  expect(scopes).toHaveLength(1);
+  resume();
+  const [a, b] = await Promise.all([first, second]);
+  expect(a.isOk()).toBe(true);
+  expect(b._unsafeUnwrapErr()).toMatchObject({ code: 'validation', message: 'Second document validation failed' });
+  expect(scopes).toHaveLength(0);
+  a._unsafeUnwrap().destroy();
+});
+
+it('skips queued preparations cancelled before they acquire the device', async () => {
+  const { gpu, device } = fixture();
+  const abort = new AbortController();
+  let resume!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    resume = resolve;
+  });
+  vi.mocked(prepareDocument).mockImplementationOnce(async () => {
+    await pending;
+    throw new Error('First preparation failed');
+  });
+  const first = createTypeGpuRenderer(gpu, {} as TextDocument, workers);
+  const second = createTypeGpuRenderer(gpu, {} as TextDocument, workers, abort.signal);
+  for (let i = 0; i < 30; i++) await Promise.resolve();
+  abort.abort();
+  resume();
+  expect((await first).isErr()).toBe(true);
+  expect((await second)._unsafeUnwrapErr()).toMatchObject({ kind: 'aborted' });
+  expect(prepareDocument).toHaveBeenCalledOnce();
+  expect(device.pushErrorScope).toHaveBeenCalledOnce();
+  expect(device.popErrorScope).toHaveBeenCalledOnce();
 });
 
 function fixture() {
@@ -96,3 +153,8 @@ function fixture() {
   } as unknown as GpuContext;
   return { gpu, device, root, context, resource: { destroy: vi.fn() } };
 }
+
+const workers: DocumentWorkers = {
+  coverage: vi.fn(),
+  raster: { decode: vi.fn(), destroy: vi.fn() }
+};

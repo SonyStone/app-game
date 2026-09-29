@@ -112,9 +112,9 @@ try {
         marker.style.transform = `translateX(${i % 100}px)`;
       }
       marker.remove();
-      const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');
-      const { layoutPages } = await import('/src/features/document/document.ts');
-      const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+      const { readGdoc } = await import('/tests/browser/workerHarness.tsx');
+      const { layoutPages } = await import('/src/features/document/layoutPages.ts');
+      const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
       const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
       const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
       console.log('BENCH decode');

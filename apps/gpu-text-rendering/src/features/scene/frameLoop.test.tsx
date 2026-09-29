@@ -111,6 +111,34 @@ it('cancels scheduled callbacks when the JSX tree is disposed', async () => {
   expect(calls).toEqual([]);
 });
 
+it('resumes once after repeated same-turn pauses and resumes', async () => {
+  const { loop, calls } = mount();
+
+  for (let i = 0; i < 3; i++) {
+    loop.setActive(false);
+    expect(frames.size).toBe(0);
+    loop.setActive(true);
+    loop.invalidate();
+    expect(frames.size).toBe(1);
+  }
+
+  flush();
+  await tick();
+  expect(calls).toEqual(['update', 'draw']);
+  expect(frames.size).toBe(0);
+});
+
+it('cancels a same-turn restart when disposed', async () => {
+  const { loop, dispose, calls } = mount();
+  loop.setActive(false);
+  loop.setActive(true);
+  dispose();
+  flush();
+  await tick();
+  expect(frames.size).toBe(0);
+  expect(calls).toEqual([]);
+});
+
 it('preserves a new invalidation requested from a frame callback', async () => {
   const { calls } = mount(true);
   await tick();

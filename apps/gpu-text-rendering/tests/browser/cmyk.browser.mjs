@@ -22,10 +22,7 @@ page.on('console', (message) => {
 });
 
 try {
-  await page.route('**/cmyk-check', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<html><body style="margin:0"></body></html>' })
-  );
-  await page.goto(`${baseURL}/cmyk-check`);
+  await page.goto(`${baseURL}/tests/browser/empty.html`);
   for (const name of ['cmyk', 'ycck']) {
     const jpeg = await readFile(new URL(`../fixtures/jpeg/pdf-${name}.jpg`, import.meta.url));
     const placeholder = 'x'.repeat(jpeg.length);
@@ -40,11 +37,11 @@ try {
     jpeg.copy(pdf, pdf.indexOf(placeholder));
     const codec = await page.evaluate(
       async (bytes) => {
-        const { convertPdf } = await import('/src/features/document/pdf/convertPdf.ts');
-        const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');
-        const { layoutPages } = await import('/src/features/document/document.ts');
+        const { convertPdf } = await import('/tests/browser/workerHarness.tsx');
+        const { readGdoc } = await import('/tests/browser/workerHarness.tsx');
+        const { layoutPages } = await import('/src/features/document/layoutPages.ts');
         const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
-        const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+        const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
         const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
         const encoded = (await convertPdf(new Uint8Array(bytes).buffer))._unsafeUnwrap();
         const data = (await readGdoc(encoded))._unsafeUnwrap();

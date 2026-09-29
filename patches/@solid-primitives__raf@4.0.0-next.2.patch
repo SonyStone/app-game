@@ -1,0 +1,27 @@
+diff --git a/dist/index.js b/dist/index.js
+index e3c0e4251e5b8e22a7a71e39d7e7dacef5a8ee54..b61ae3a11157f0c1d1249641eb90a6902201c121 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -24,17 +24,21 @@ function createRAF(callback) {
+ 		noop
+ 	];
+ 	const [running, setRunning] = createSignal(false, { ownedWrite: true });
++	// Solid batches signal writes; scheduling needs a synchronous guard.
++	let active = false;
+ 	let requestID = 0;
+ 	const loop = (timeStamp) => {
+ 		requestID = requestAnimationFrame(loop);
+ 		callback(timeStamp);
+ 	};
+ 	const start = () => {
+-		if (running()) return;
++		if (active) return;
++		active = true;
+ 		setRunning(true);
+ 		requestID = requestAnimationFrame(loop);
+ 	};
+ 	const stop = () => {
++		active = false;
+ 		setRunning(false);
+ 		cancelAnimationFrame(requestID);
+ 	};

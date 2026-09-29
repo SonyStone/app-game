@@ -2,30 +2,25 @@ import { d } from 'typegpu';
 import type { GpuContext } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { TextDocument } from '../../document';
-import { runDocumentWorker } from '../../runDocumentWorker';
+import { documentWorkerError } from '../../documentWorkerError';
+import type { DocumentWorkers } from '../DocumentWorkers';
 import { uploadBuffer } from '../uploadBuffer';
-import type { CoverageTables } from './buildCoverageTables';
 import { coverageTableLayout } from './coverageTable';
 
 /** Prepares area integrals once; source cubics remain authoritative at magnification. */
 export async function prepareCoverageTables(
   gpu: GpuContext,
   document: Extract<TextDocument, { kind: 'curves' }>,
-  keep: KeepGpuResource
+  keep: KeepGpuResource,
+  request: DocumentWorkers['coverage']
 ) {
-  const abort = new AbortController();
-  keep({ destroy: () => abort.abort() });
-  // File loaders already compute these alongside decoding. Standalone callers use
-  // a separate worker; their geometry stays owned by the caller throughout.
+  // File loaders may supply these alongside decoding. Otherwise request them from
+  // the renderer owner; source geometry stays owned by the caller throughout.
   const tables =
     document.coverage ??
-    (
-      await runDocumentWorker<CoverageTables>(
-        () => new Worker(new URL('./coverage.worker.ts', import.meta.url), { type: 'module' }),
-        { instances: document.instances, curves: document.curves },
-        abort.signal
-      )
-    )._unsafeUnwrap();
+    (await request({ instances: document.instances, curves: document.curves }))
+      .mapErr(documentWorkerError)
+      ._unsafeUnwrap();
   const active = gpu.checkActive();
   if (active.isErr()) throw new Error(active.error.message);
   // These are staging buffers. A later renderer can rebuild them in a worker;
