@@ -1,12 +1,8 @@
-import { render } from '@solidjs/web';
 import { createRoot, createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
-import { Viewport, useViewport } from './Viewport';
+import { createViewport } from './createViewport';
 import { measureViewport } from './measureViewport';
 
-vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
-let gpu: ReturnType<typeof gpuFixture>['gpu'];
 const cleanups: (() => void)[] = [];
 
 afterEach(() => {
@@ -38,8 +34,6 @@ it('reacts to resize, DPR and cap changes; converts pointer coordinates and clea
   const canvas = document.createElement('canvas');
   let rect = { left: 30, top: 50, width: 800, height: 600 };
   canvas.getBoundingClientRect = () => rect as DOMRect;
-  gpu = gpuFixture().gpu;
-  Object.assign(gpu.context, { canvas });
 
   let resize!: ResizeObserverCallback;
   const disconnect = vi.fn();
@@ -61,30 +55,20 @@ it('reacts to resize, DPR and cap changes; converts pointer coordinates and clea
     return query as MediaQueryList;
   });
   vi.stubGlobal('devicePixelRatio', 3);
-  let viewport!: ReturnType<typeof useViewport>;
-
-  function Probe() {
-    viewport = useViewport();
-    return null;
-  }
-
-  const mounted = createRoot((disposeState) => {
+  const mounted = createRoot((dispose) => {
     const [cap, setCap] = createSignal(2);
-    const disposeView = render(
-      () => (
-        <Viewport maxDpr={cap()}>
-          <Probe />
-        </Viewport>
-      ),
-      document.createElement('div')
-    );
-    const dispose = () => {
-      disposeView();
-      disposeState();
-    };
+    const [target, setTarget] = createSignal<HTMLCanvasElement>();
+    const viewport = createViewport(target, { maxDpr: cap });
     cleanups.push(dispose);
-    return { setCap, dispose };
+    return { viewport, setCap, setTarget, dispose };
   });
+  const { viewport } = mounted;
+
+  flush();
+  expect(viewport.size().css).toEqual({ width: 1, height: 1 });
+  expect(viewport.clientToScreen({ x: 70, y: 80 })).toEqual({ x: 70, y: 80 });
+
+  mounted.setTarget(canvas);
 
   flush();
   expect([canvas.width, canvas.height]).toEqual([1600, 1200]);

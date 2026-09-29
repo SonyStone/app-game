@@ -4,16 +4,15 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
 import { FrameLoop } from '../scene/FrameLoop';
 import { ScreenSpace } from '../scene/SceneSpace';
+import type { Viewport } from '../viewport/createViewport';
 import { Rectangle } from './Rectangle';
 import { Rectangles } from './Rectangles';
 
-vi.mock('../viewport/Viewport', () => ({
-  useViewport: () => ({
-    size: () => ({ css: { width: 800, height: 600 } }),
-    screenToClip: (point: { x: number; y: number }) => point,
-    clientToScreen: (point: { x: number; y: number }) => point
-  })
-}));
+const viewport = {
+  size: () => ({ css: { width: 800, height: 600 }, pixels: { width: 800, height: 600 }, dpr: 1 }),
+  clientToScreen: (point: { x: number; y: number }) => point,
+  screenToClip: (point: { x: number; y: number }) => point
+} as Viewport;
 vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
 
 let gpu: ReturnType<typeof gpuFixture>['gpu'];
@@ -94,7 +93,11 @@ it('shares one pipeline per root and uploads replaced items before drawing, real
 function mount(children: () => ReturnType<typeof ScreenSpace>) {
   const dispose = createRoot((disposeRoot) => {
     const disposeView = render(
-      () => <FrameLoop onError={vi.fn()}>{children()}</FrameLoop>,
+      () => (
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
+          {children()}
+        </FrameLoop>
+      ),
       document.createElement('div')
     );
 

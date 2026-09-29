@@ -2,7 +2,7 @@ import { createMemo, createSignal } from 'solid-js';
 import type { GpuError, ViewerError } from '../../shared/errors';
 import type { DocumentSource } from '../document/createDocumentSource';
 import type { DocumentProgress } from '../document/documentProgress';
-import type { DocumentRendererProvider } from '../document/rendering/DocumentRendererProvider';
+import type { DocumentRenderer } from '../document/rendering/DocumentRenderer';
 
 /**
  * Derives display status from independent GPU, source and preparation state.
@@ -11,7 +11,7 @@ import type { DocumentRendererProvider } from '../document/rendering/DocumentRen
  */
 export function createViewerStatus(source: DocumentSource) {
   const [gpuError, setGpuError] = createSignal<GpuError | undefined>(undefined, { ownedWrite: true });
-  type ReadyInfo = Parameters<NonNullable<Parameters<typeof DocumentRendererProvider>[0]['onReady']>>[0];
+  type ReadyInfo = Parameters<NonNullable<Parameters<typeof DocumentRenderer>[0]['onReady']>>[0];
   const [preparation, setPreparation] = createSignal<ReadyInfo | undefined>(
     () => {
       source.prepared();
@@ -70,7 +70,7 @@ export function createViewerStatus(source: DocumentSource) {
       return null;
     },
     /**
-     * Records the current renderer's successful preparation. DocumentRendererProvider stops reporting once its
+     * Records the current renderer's successful preparation. DocumentRenderer stops reporting once its
      * document is replaced, cancelled or failed, and error/cancelled phases outrank ready.
      */
     reportReady(info: ReadyInfo) {

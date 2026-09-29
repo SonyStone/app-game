@@ -1,4 +1,5 @@
 import { err, ok } from 'neverthrow';
+import type { ResultValue } from '../../../../shared/errors';
 import type { GpuContext } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { TextDocument } from '../../document';
@@ -39,7 +40,42 @@ export async function prepareCurveDocument(
   workers: DocumentWorkers,
   initialFrame?: SceneFrame
 ) {
-  const { root, device, format } = gpu;
+  const uploaded = await uploadCurveResources(gpu, document, keep, workers);
+  if (uploaded.isErr()) {
+    return err(uploaded.error);
+  }
+
+  const resources = uploaded.value;
+  const initialPages = initialFrame?.visible.map(({ index }) => index);
+
+  const prewarmed = await prewarmInitialImages(gpu, resources, initialPages);
+  if (prewarmed.isErr()) {
+    return err(prewarmed.error);
+  }
+
+  const engine = createPaintEngine(gpu, document, keep, resources);
+
+  const previews = await engine.tileCache.prepare(
+    initialPages?.filter((page) => engine.policy.useComposedPage(page, initialFrame!))
+  );
+  if (previews.isErr()) {
+    return err(previews.error);
+  }
+
+  return ok(createCurveDrawing(resources, engine));
+}
+
+/**
+ * Stage 1, upload: coverage tables, raster images, the paint plan, outline geometry, page paper and the curve
+ * pipelines, compiled before the first frame. Coverage failures resolve before any other allocation.
+ */
+async function uploadCurveResources(
+  gpu: GpuContext,
+  document: Extract<TextDocument, { kind: 'curves' }>,
+  keep: KeepGpuResource,
+  workers: DocumentWorkers
+) {
+  const { root, format } = gpu;
   const coverage = await prepareCoverageTables(gpu, document, keep, workers.coverage);
 
   if (coverage.isErr()) {
@@ -47,16 +83,15 @@ export async function prepareCurveDocument(
   }
 
   const raster = prepareRasterImages(gpu, document.rasterImages, document.instances, keep, workers.raster);
-  const preparation = document.preparation ?? buildCurvePreparation(document);
+  const plan = document.preparation ?? buildCurvePreparation(document);
   delete document.preparation;
-  const { runs, trees, composition, indexed } = preparation;
   const compositor = createGroupCompositor(gpu, keep);
   const spatial = createPaintBounds(
     document.instances,
     document.pages,
-    matchesLayout(preparation.placements, document.pages) ? preparation.spatial : undefined
+    matchesLayout(plan.placements, document.pages) ? plan.spatial : undefined
   );
-  const geometry = await uploadCurveGeometry(gpu, document, indexed, keep);
+  const geometry = await uploadCurveGeometry(gpu, document, plan.indexed, keep);
   const background = createPageBackground(gpu, document, keep);
   const pipelines = createCurvePipelines(root, format, {
     view: background.group,
@@ -67,19 +102,46 @@ export async function prepareCurveDocument(
   background.compile();
   pipelines.compile();
 
-  const initialPages = initialFrame?.visible.map(({ index }) => index);
+  return ok({ coverage: coverage.value, raster, plan, compositor, spatial, geometry, background, pipelines });
+}
+
+/** GPU resources and the paint plan uploaded by stage 1. */
+type CurveResources = ResultValue<Awaited<ReturnType<typeof uploadCurveResources>>>;
+
+/**
+ * Stage 2, prewarm: prepares low-resolution image fallbacks for the initial pages (every page when omitted), then
+ * waits for the uploads so the first frame does not stall.
+ */
+async function prewarmInitialImages(gpu: GpuContext, { raster, plan }: CurveResources, initialPages?: number[]) {
   const tails = await raster.prepareMipTails(
-    initialPages?.flatMap((page) => runs[page]!.flatMap(({ image }) => (image === undefined ? [] : [image])))
+    initialPages?.flatMap((page) => plan.runs[page]!.flatMap(({ image }) => (image === undefined ? [] : [image])))
   );
   if (tails.isErr()) {
     return err(tails.error);
   }
 
-  await device.queue.onSubmittedWorkDone();
+  await gpu.device.queue.onSubmittedWorkDone();
+
+  return ok();
+}
+
+/**
+ * Stage 3, paint engine: the page painter, the tile cache of composed page prefixes, and the policy that chooses
+ * between composed and direct drawing within a GPU cost budget. Streaming images and tile refinement dispatch
+ * `change` on the returned events.
+ */
+function createPaintEngine(
+  gpu: GpuContext,
+  document: Extract<TextDocument, { kind: 'curves' }>,
+  keep: KeepGpuResource,
+  resources: CurveResources
+) {
+  const { root, device, format } = gpu;
+  const { coverage, raster, plan, compositor, spatial, geometry, background, pipelines } = resources;
+  const { runs, trees, composition } = plan;
 
   const events = new EventTarget();
   const changed = () => events.dispatchEvent(new Event('change'));
-  const fullLayer: PageLayer = { trees: (page) => trees[page]!, bundles: true };
   const cachedLayer: PageLayer = { trees: (page) => composition.cached[page]!, bundles: false };
   // Images painted by a page's composed prefix gate its tile refinement and need fallback tails.
   const prefixImages = (page: number) => composition.images.get(page)!;
@@ -107,7 +169,7 @@ export async function prepareCurveDocument(
     curveBatches: curveRuns(
       [...trees, ...composition.cached, ...composition.direct],
       document.instances,
-      coverage.value.offsets
+      coverage.offsets
     ),
     pageBundle: createPageBundles(device, format, trees, keep),
     imageRevision
@@ -115,12 +177,21 @@ export async function prepareCurveDocument(
   const budget = keep(createCompositionBudget(() => device.queue.onSubmittedWorkDone(), changed));
   const policy = createComposedPagePolicy(document, composition, budget);
 
-  const previews = await tileCache.prepare(initialPages?.filter((page) => policy.useComposedPage(page, initialFrame!)));
-  if (previews.isErr()) {
-    return err(previews.error);
-  }
+  return { events, tileCache, painter, budget, policy, prefixImages };
+}
 
-  return ok<PreparedDocument>({
+/**
+ * Stage 4, drawing: each frame streams the visible images, then paints every page directly, or paints composed
+ * pages as cached prefix tiles under their direct foreground.
+ */
+function createCurveDrawing(
+  { coverage, raster, plan, compositor, geometry, background }: CurveResources,
+  { events, tileCache, painter, budget, policy, prefixImages }: ReturnType<typeof createPaintEngine>
+): PreparedDocument {
+  const { runs, trees, composition } = plan;
+  const fullLayer: PageLayer = { trees: (page) => trees[page]!, bundles: true };
+
+  return {
     events,
     get refinement() {
       return {
@@ -142,7 +213,7 @@ export async function prepareCurveDocument(
       return (
         geometry.resourceBytes +
         background.resourceBytes +
-        coverage.value.resourceBytes +
+        coverage.resourceBytes +
         raster.resourceBytes +
         painter.resourceBytes +
         tileCache.resourceBytes +
@@ -172,7 +243,7 @@ export async function prepareCurveDocument(
 
       policy.observeDirectCost(frame, composed);
     }
-  });
+  };
 }
 
 /** Whether worker-built spatial data used the same page placement as the live layout. */

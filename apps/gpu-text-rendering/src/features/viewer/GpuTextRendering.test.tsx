@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { documentError, gpuError, type DocumentError, type GpuError } from '../../shared/errors';
 import { runWorkerRequest } from '../../shared/worker/runWorkerRequest';
 import type { DecodedDocument } from '../document/format/types';
-import type { DocumentRendererProvider } from '../document/rendering/DocumentRendererProvider';
+import type { DocumentRenderer } from '../document/rendering/DocumentRenderer';
 import type { ViewerStatus } from './createViewerStatus';
 import GpuTextRendering from './GpuTextRendering';
 
@@ -21,18 +21,17 @@ vi.mock('../../shared/gpu/TypeGPURootProvider', () => ({
 vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({
   GpuCanvasProvider: (props: { children: JSX.Element }) => props.children
 }));
-vi.mock('../viewport/Viewport', () => ({ Viewport: (props: { children: JSX.Element }) => props.children }));
-vi.mock('../camera/DocumentCamera', () => ({ DocumentCamera: (props: { children: JSX.Element }) => props.children }));
-vi.mock('../camera/DocumentSpace', () => ({ DocumentSpace: (props: { children: JSX.Element }) => props.children }));
+vi.mock('../viewport/createViewport', () => ({
+  createViewport: () => ({ size: () => ({ css: { width: 800, height: 600 } }) })
+}));
 vi.mock('../camera/CameraControls', () => ({ CameraControls: () => null }));
 vi.mock('../camera/CameraTour', () => ({ CameraTour: () => null }));
-vi.mock('../camera/OverviewCamera', () => ({ OverviewCamera: () => null }));
 vi.mock('../scene/FrameLoop', () => ({ FrameLoop: (props: { children: JSX.Element }) => props.children }));
-type RendererProps = Parameters<typeof DocumentRendererProvider>[0];
+type RendererProps = Parameters<typeof DocumentRenderer>[0];
 const preparations: RendererProps[] = [];
 const released = vi.fn();
-vi.mock('../document/rendering/DocumentRendererProvider', () => ({
-  DocumentRendererProvider: (props: RendererProps) => {
+vi.mock('../document/rendering/DocumentRenderer', () => ({
+  DocumentRenderer: (props: RendererProps) => {
     preparations.push(props);
     onCleanup(() => released(props));
     return null;
@@ -218,7 +217,7 @@ it('hides the loading panel when ready and retains preparation time after reside
   expect(host.querySelector('[role="alert"]')?.textContent).toContain('Device lost');
 });
 
-// DocumentRendererProvider stops calling onReady/onResourceUsage once released (see documentRendererProvider.test).
+// DocumentRenderer's engine stops calling onReady/onResourceUsage once released (see documentRenderer.test).
 it('resets preparation after replacement and ignores the old document failure handler', async () => {
   const host = mount();
   await vi.waitFor(() => expect(preparations).toHaveLength(1));
@@ -234,7 +233,7 @@ it('resets preparation after replacement and ignores the old document failure ha
   await vi.waitFor(() => expect(finish).toBeDefined());
   expect(released).toHaveBeenCalledWith(previous);
   expect(statusText(host)).toBe('loading');
-  previous.error(gpuError('validation', 'Obsolete renderer failure'));
+  previous.onError(gpuError('validation', 'Obsolete renderer failure'));
   flush();
   expect(statusText(host)).toBe('loading');
   finish(ok(scene()));
@@ -257,7 +256,7 @@ it('keeps cancellation and renderer errors terminal for the current preparation'
   open();
   await vi.waitFor(() => expect(preparations).toHaveLength(2));
   const failed = preparations[1]!;
-  failed.error(gpuError('validation', 'Invalid GPU command'));
+  failed.onError(gpuError('validation', 'Invalid GPU command'));
   flush();
   failed.onReady!({ preparationMs: 25, resourceBytes: 512 });
   flush();

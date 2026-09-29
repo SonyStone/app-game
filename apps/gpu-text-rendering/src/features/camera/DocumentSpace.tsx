@@ -1,15 +1,19 @@
 import type { JSX } from '@solidjs/web';
 import { SceneSpaceProvider, type SceneSpace } from '../scene/SceneSpace';
-import { useViewport } from '../viewport/Viewport';
+import { useViewport } from '../viewport/createViewport';
 import { screenToWorld, worldToScreen } from './camera';
-import { useDocumentCamera } from './DocumentCamera';
+import type { DocumentCamera } from './createDocumentCamera';
 
 /**
- * Projects descendant graphics with DocumentCamera. Units match the document's first page, with y pointing up.
- * Spaces replace the parent coordinate system; they do not multiply nested transforms.
+ * Projects descendant graphics through a document camera. Units match the document's first page, with y pointing up.
+ * Spaces replace the parent coordinate system; they do not multiply nested transforms. Mount beneath FrameLoop.
  */
-export function DocumentSpace(props: { children: JSX.Element }) {
-  const { camera, pageAspect } = useDocumentCamera();
+export function DocumentSpace(props: {
+  /** Camera whose current value every projection reads; fixed for the subtree. */
+  camera: DocumentCamera;
+  children: JSX.Element;
+}) {
+  const { camera, pageAspect } = props.camera;
   const viewport = useViewport();
 
   const space: SceneSpace = {

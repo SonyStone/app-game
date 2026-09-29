@@ -8,23 +8,20 @@ import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
 import type { AbortedError, DocumentError } from '../../shared/errors';
 import { gpuError } from '../../shared/errors';
 import { maxDeviceRecoveries } from '../../shared/gpu/createGpuRoot';
-import { GpuCanvasProvider } from '../../shared/gpu/GpuCanvasProvider';
-import { TypeGPURootProvider } from '../../shared/gpu/TypeGPURootProvider';
+import { GpuCanvas } from '../../shared/gpu/GpuCanvas';
 import { runWorkerRequest } from '../../shared/worker/runWorkerRequest';
 import { CameraControls } from '../camera/CameraControls';
 import { CameraTour } from '../camera/CameraTour';
-import { DocumentCamera } from '../camera/DocumentCamera';
-import { DocumentSpace } from '../camera/DocumentSpace';
-import { OverviewCamera, type OverviewCameraRef } from '../camera/OverviewCamera';
+import { createDocumentCamera, pageAspectOf } from '../camera/createDocumentCamera';
 import { createDocumentSource } from '../document/createDocumentSource';
 import type { TextDocument } from '../document/document';
 import type { DecodedDocument } from '../document/format/types';
 import { readDocumentFile } from '../document/readDocumentFile';
-import { createTypeGpuRenderer, type TextRenderer } from '../document/rendering/createTypeGpuRenderer';
-import { DocumentLayer } from '../document/rendering/DocumentLayer';
-import { DocumentRendererProvider } from '../document/rendering/DocumentRendererProvider';
+import { createGlyphRenderer, type TextRenderer } from '../document/rendering/createTypeGpuRenderer';
+import { DocumentRenderer } from '../document/rendering/DocumentRenderer';
+import { GlyphText } from '../document/rendering/GlyphText';
 import { FrameLoop } from '../scene/FrameLoop';
-import { Viewport } from '../viewport/Viewport';
+import { createViewport } from '../viewport/createViewport';
 import { createViewerStatus } from './createViewerStatus';
 
 vi.mock('typegpu', () => ({ default: { initFromDevice: vi.fn() } }));
@@ -33,12 +30,12 @@ vi.mock('../document/readDocumentFile', () => ({ readDocumentFile: vi.fn() }));
 const readGdoc = vi.fn<(input: string | ArrayBuffer) => ResultAsync<DecodedDocument, DocumentError | AbortedError>>();
 const cancellations: ReturnType<typeof vi.fn>[] = [];
 let setProgress: (value: import('../document/documentProgress').DocumentProgress) => void;
-vi.mock('../document/rendering/createTypeGpuRenderer', () => ({ createTypeGpuRenderer: vi.fn() }));
+vi.mock('../document/rendering/createTypeGpuRenderer', () => ({ createGlyphRenderer: vi.fn() }));
 
 const cleanups: (() => void)[] = [];
 const frames = new Map<number, FrameRequestCallback>();
 let nextFrame = 0;
-const disconnect = vi.fn();
+const unobserve = vi.fn();
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -62,8 +59,8 @@ beforeEach(() => {
     'ResizeObserver',
     class {
       observe() {}
-      unobserve() {}
-      disconnect = disconnect;
+      unobserve = unobserve;
+      disconnect() {}
     }
   );
 });
@@ -80,14 +77,14 @@ describe('document viewer ownership and reactivity', () => {
     await settle();
     expect(readGdoc).toHaveBeenCalledOnce();
     expect(tgpu.initFromDevice).toHaveBeenCalledOnce();
-    expect(createTypeGpuRenderer).not.toHaveBeenCalled();
+    expect(createGlyphRenderer).not.toHaveBeenCalled();
     const state = viewer.state();
     dispose();
     expect(cancellations[0]).toHaveBeenCalled();
     const data = documentFixture();
     pending.resolve(ok(data));
     await settle();
-    expect(createTypeGpuRenderer).not.toHaveBeenCalled();
+    expect(createGlyphRenderer).not.toHaveBeenCalled();
     expect(viewer.state()).toEqual(state);
     expect(frames.size).toBe(0);
   });
@@ -124,7 +121,7 @@ describe('document viewer ownership and reactivity', () => {
   it('draws on demand, reacts to options and stops the tour on wheel input', async () => {
     const renderer = rendererFixture();
     vi.mocked(readGdoc).mockReturnValue(okAsync(documentFixture()));
-    vi.mocked(createTypeGpuRenderer).mockResolvedValue(ok(renderer));
+    vi.mocked(createGlyphRenderer).mockResolvedValue(ok(renderer));
     const { viewer, setCanvas } = setup();
     const canvas = makeCanvas();
     setCanvas(canvas);
@@ -162,7 +159,7 @@ describe('document viewer ownership and reactivity', () => {
     const data = documentFixture();
     data.pages.push({ ...data.pages[0]!, width: 1224, height: 1584, x: -3, y: 5 });
     vi.mocked(readGdoc).mockReturnValue(okAsync(data));
-    vi.mocked(createTypeGpuRenderer).mockResolvedValue(ok(renderer));
+    vi.mocked(createGlyphRenderer).mockResolvedValue(ok(renderer));
     const { viewer, setCanvas } = setup(padding);
     setCanvas(makeCanvas());
     await settle();
@@ -176,7 +173,7 @@ describe('document viewer ownership and reactivity', () => {
     const frame = vi.mocked(renderer.draw).mock.lastCall![1];
     expect(frame.visible).toHaveLength(2);
     expect(frame.rotation).toEqual([1, 0, -0, 1]);
-    for (const page of vi.mocked(createTypeGpuRenderer).mock.calls[0]![1].pages) {
+    for (const page of vi.mocked(createGlyphRenderer).mock.calls[0]![1].pages) {
       const left = (-page.x * frame.mul[0] + frame.add[0] + 1) * 400;
       const right = ((-page.x + page.width / 612) * frame.mul[0] + frame.add[0] + 1) * 400;
       const top = (1 - ((1 - page.y) * frame.mul[1] + frame.add[1])) * 300;
@@ -194,7 +191,7 @@ describe('document viewer ownership and reactivity', () => {
     const first = rendererFixture();
     const second = rendererFixture();
     vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture()));
-    vi.mocked(createTypeGpuRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
+    vi.mocked(createGlyphRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
     const { viewer, setCanvas } = setup();
     const oldCanvas = makeCanvas();
     setCanvas(oldCanvas);
@@ -203,12 +200,13 @@ describe('document viewer ownership and reactivity', () => {
     oldCanvas.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, pointerType: 'touch' }));
     flush();
     expect(viewer.dragging()).toBe(true);
-    setCanvas(makeCanvas());
+    const newCanvas = makeCanvas();
+    setCanvas(newCanvas);
     await settle();
     expect(viewer.dragging()).toBe(false);
     expect(oldCanvas.hasPointerCapture(1)).toBe(false);
     expect(first.destroy).toHaveBeenCalledOnce();
-    expect(disconnect).toHaveBeenCalledOnce();
+    expect(unobserve).toHaveBeenCalledExactlyOnceWith(oldCanvas);
     expect(cancellations[0]).not.toHaveBeenCalled();
     expect(readGdoc).toHaveBeenCalledOnce();
     await tick();
@@ -217,17 +215,17 @@ describe('document viewer ownership and reactivity', () => {
     setCanvas(undefined);
     flush();
     expect(second.destroy).toHaveBeenCalledOnce();
-    expect(disconnect).toHaveBeenCalledTimes(2);
+    expect(unobserve).toHaveBeenLastCalledWith(newCanvas);
     expect(frames.size).toBe(0);
   });
 
   it('ignores a late GPU result, which releases itself, without overwriting the replacement session', async () => {
-    const pending = deferred<Awaited<ReturnType<typeof createTypeGpuRenderer>>>();
+    const pending = deferred<Awaited<ReturnType<typeof createGlyphRenderer>>>();
     const late = rendererFixture();
     const current = rendererFixture();
     vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture()));
     // Like the real renderer, the late one destroys itself when its canvas detaches.
-    vi.mocked(createTypeGpuRenderer)
+    vi.mocked(createGlyphRenderer)
       .mockImplementationOnce((gpu) => {
         gpu.signal.addEventListener('abort', late.destroy, { once: true });
         return pending.promise;
@@ -236,12 +234,12 @@ describe('document viewer ownership and reactivity', () => {
     const { viewer, setCanvas } = setup();
     setCanvas(makeCanvas());
     await settle();
-    const oldGpu = vi.mocked(createTypeGpuRenderer).mock.calls[0]![0]!;
+    const oldGpu = vi.mocked(createGlyphRenderer).mock.calls[0]![0]!;
     setCanvas(makeCanvas());
     await settle();
     const state = viewer.state();
     expect(oldGpu.signal.aborted).toBe(true);
-    expect(vi.mocked(createTypeGpuRenderer).mock.calls[1]![0].device).toBe(oldGpu.device);
+    expect(vi.mocked(createGlyphRenderer).mock.calls[1]![0].device).toBe(oldGpu.device);
     expect(oldGpu.device.destroy).not.toHaveBeenCalled();
     expect(tgpu.initFromDevice).toHaveBeenCalledOnce();
     pending.resolve(ok(late));
@@ -258,16 +256,16 @@ describe('document viewer ownership and reactivity', () => {
     const first = rendererFixture();
     const second = rendererFixture();
     vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture()));
-    vi.mocked(createTypeGpuRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
+    vi.mocked(createGlyphRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
     const { setCanvas, setSession, dispose } = setup();
     setCanvas(makeCanvas());
     await settle();
-    const gpu = vi.mocked(createTypeGpuRenderer).mock.calls[0]![0]!;
+    const gpu = vi.mocked(createGlyphRenderer).mock.calls[0]![0]!;
     setSession({ file: new File(['pdf'], 'replacement.pdf') });
     await settle();
     expect(first.destroy).toHaveBeenCalledOnce();
     expect(cancellations[0]).toHaveBeenCalledOnce();
-    expect(vi.mocked(createTypeGpuRenderer).mock.calls[1]![0]).toBe(gpu);
+    expect(vi.mocked(createGlyphRenderer).mock.calls[1]![0]).toBe(gpu);
     expect(gpu.signal.aborted).toBe(false);
     expect(tgpu.initFromDevice).toHaveBeenCalledOnce();
     dispose();
@@ -278,7 +276,7 @@ describe('document viewer ownership and reactivity', () => {
   it('surfaces initialization errors, recovers from device loss, and surfaces repeated loss', async () => {
     vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture()));
     const renderer = rendererFixture();
-    vi.mocked(createTypeGpuRenderer)
+    vi.mocked(createGlyphRenderer)
       .mockResolvedValueOnce(err(gpuError('adapter', 'No WebGPU adapter')))
       .mockResolvedValue(ok(renderer));
     const { viewer, setCanvas, setSession } = setup();
@@ -289,7 +287,7 @@ describe('document viewer ownership and reactivity', () => {
     setSession({});
     await settle();
     await tick();
-    const gpu = vi.mocked(createTypeGpuRenderer).mock.calls[1]![0]!;
+    const gpu = vi.mocked(createGlyphRenderer).mock.calls[1]![0]!;
     loseDevice.get(gpu.device)!({ message: 'Device lost', reason: 'unknown' });
     await settle();
     expect(tgpu.initFromDevice).toHaveBeenCalledTimes(2);
@@ -312,12 +310,17 @@ function setup(padding = { top: 44, right: 24, bottom: 84, left: 24 }) {
     const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
     const [session, setSession] = createSignal<{ file?: File }>({});
     const documentSource = createDocumentSource(() => session().file);
+    const currentDocument = () => documentSource.prepared()?.data;
+    const viewport = createViewport(canvas, { maxDpr: 2 });
+    const camera = createDocumentCamera({
+      pageAspect: () => pageAspectOf(currentDocument()),
+      resetOn: currentDocument
+    });
     const { status: state, reportGpuError, reportReady, reportResourceUsage } = createViewerStatus(documentSource);
     const [dragging, setDragging] = createSignal(false, { ownedWrite: true });
     const [autoZoom, setAutoZoom] = createSignal(false, { ownedWrite: true });
     const [vectorOnly, setVectorOnly] = createSignal(false);
     const [grids, setGrids] = createSignal(false);
-    let overviewCamera: OverviewCameraRef | undefined;
     const viewer = {
       state,
       dragging,
@@ -328,57 +331,42 @@ function setup(padding = { top: 44, right: 24, bottom: 84, left: 24 }) {
       setVectorOnly,
       grids,
       setGrids,
-      setOverviewCamera(ref?: OverviewCameraRef) {
-        overviewCamera = ref;
-      },
       showOverview() {
-        setAutoZoom(false);
-        overviewCamera?.fitToDocument();
+        const pages = currentDocument()?.pages;
+
+        if (pages) {
+          setAutoZoom(false);
+          camera.fitToPages(pages, viewport.size().css, padding);
+        }
       }
     };
     const host = document.createElement('div');
     const disposeView = render(
       () => (
-        <>
-          <TypeGPURootProvider requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
-            <Show when={canvas()} keyed>
-              {(target) => (
-                <GpuCanvasProvider canvas={target} error={reportGpuError}>
-                  <Show when={documentSource.prepared()} keyed>
-                    {({ data, fail }) => (
-                      <Viewport>
-                        <FrameLoop onError={fail}>
-                          <DocumentCamera pageAspect={data.pages[0]!.width / data.pages[0]!.height}>
-                            <DocumentSpace>
-                              <CameraControls
-                                onInteraction={() => viewer.setAutoZoom(false)}
-                                onDraggingChange={viewer.setDragging}
-                              />
-
-                              <OverviewCamera document={data} ref={viewer.setOverviewCamera} padding={padding} />
-
-                              <CameraTour document={data} enabled={viewer.autoZoom()} />
-
-                              <DocumentRendererProvider
-                                document={data}
-                                initialFrame="viewport"
-                                onReady={reportReady}
-                                onResourceUsage={reportResourceUsage}
-                                error={fail}
-                              >
-                                <DocumentLayer vectorOnly={viewer.vectorOnly()} grids={viewer.grids()} />
-                              </DocumentRendererProvider>
-                            </DocumentSpace>
-                          </DocumentCamera>
-                        </FrameLoop>
-                      </Viewport>
-                    )}
-                  </Show>
-                </GpuCanvasProvider>
-              )}
-            </Show>
-          </TypeGPURootProvider>
-        </>
+        <GpuCanvas canvas={canvas()} requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
+          <Show when={documentSource.prepared()} keyed>
+            {({ data, fail }) => (
+              <FrameLoop viewport={viewport} onError={fail}>
+                <CameraControls
+                  camera={camera}
+                  onInteraction={() => viewer.setAutoZoom(false)}
+                  onDraggingChange={viewer.setDragging}
+                />
+                <CameraTour camera={camera} document={data} enabled={viewer.autoZoom()} />
+                <DocumentRenderer
+                  document={data}
+                  camera={camera}
+                  initialFrame="viewport"
+                  onReady={reportReady}
+                  onResourceUsage={reportResourceUsage}
+                  onError={fail}
+                >
+                  <GlyphText vectorOnly={viewer.vectorOnly()} grids={viewer.grids()} />
+                </DocumentRenderer>
+              </FrameLoop>
+            )}
+          </Show>
+        </GpuCanvas>
       ),
       host
     );

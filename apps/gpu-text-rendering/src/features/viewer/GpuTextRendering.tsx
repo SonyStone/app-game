@@ -14,21 +14,14 @@ import loaderIcon from '@tabler/icons/outline/loader-2.svg?url';
 import expand from '@tabler/icons/outline/maximize.svg?url';
 import collapse from '@tabler/icons/outline/minimize.svg?url';
 import closeIcon from '@tabler/icons/outline/x.svg?url';
-import { createSignal, Show } from 'solid-js';
-import { GpuCanvasProvider } from '../../shared/gpu/GpuCanvasProvider';
-import { TypeGPURootProvider } from '../../shared/gpu/TypeGPURootProvider';
-import { CameraControls } from '../camera/CameraControls';
-import { CameraTour } from '../camera/CameraTour';
-import { DocumentCamera } from '../camera/DocumentCamera';
-import { DocumentSpace } from '../camera/DocumentSpace';
-import { OverviewCamera, type OverviewCameraRef } from '../camera/OverviewCamera';
-import { createDocumentSource } from '../document/createDocumentSource';
+import { createSignal, Match, Show, Switch } from 'solid-js';
+import { GpuCanvas } from '../../shared/gpu';
+import { CameraControls, CameraTour, createDocumentCamera, pageAspectOf } from '../camera';
+import { createDocumentSource, DocumentRenderer, GlyphText, VectorArtwork } from '../document';
 import noticesUrl from '../document/pdf/wasm/third-party-notices.txt?url';
-import { DocumentLayer } from '../document/rendering/DocumentLayer';
-import { DocumentRendererProvider } from '../document/rendering/DocumentRendererProvider';
-import { Minimap } from '../minimap/Minimap';
-import { FrameLoop } from '../scene/FrameLoop';
-import { Viewport } from '../viewport/Viewport';
+import { Minimap } from '../minimap';
+import { FrameLoop } from '../scene';
+import { createViewport } from '../viewport';
 import { createDocumentDrop } from './createDocumentDrop';
 import { createDocumentExport } from './createDocumentExport';
 import { createFullscreenToggleButton } from './createFullscreenToggleButton';
@@ -38,11 +31,16 @@ import { createViewerI18n } from './i18n/createViewerI18n';
 import { LanguageMenu } from './LanguageMenu';
 import s from './viewer.module.scss';
 
-/** Displays a selected PDF/GDOC or the bundled document with TypeGPU and pointer-based navigation. */
+/**
+ * Displays a selected PDF/GDOC or the bundled document with TypeGPU and pointer-based navigation.
+ * The GPU scene is assembled here from independent modules: the document source, viewport and camera are created
+ * once, and each scene component receives the state it works on as props.
+ */
 export default function GpuTextRendering() {
   const i18n = createViewerI18n();
 
   const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
+  const viewport = createViewport(canvas, { maxDpr: 2 });
 
   const [fileSource, setFileSource] = createSignal<{ file?: File }>({});
   /** Selects a file, or reopens the bundled demo; a new selection object reloads even the same file. */
@@ -51,6 +49,9 @@ export default function GpuTextRendering() {
   }
 
   const documentSource = createDocumentSource(() => fileSource().file);
+  const currentDocument = () => documentSource.prepared()?.data;
+  // Each prepared document starts from the initial view.
+  const camera = createDocumentCamera({ pageAspect: () => pageAspectOf(currentDocument()), resetOn: currentDocument });
   const { status, isBusy, isReady, percent, reportGpuError, reportReady, reportResourceUsage } =
     createViewerStatus(documentSource);
   const documentExport = createDocumentExport(() => documentSource.prepared());
@@ -70,8 +71,17 @@ export default function GpuTextRendering() {
   const [vectorOnly, setVectorOnly] = createSignal(false);
   const [grids, setGrids] = createSignal(false);
   const [minimap, setMinimap] = createSignal(false);
+  const stopAutoZoom = () => setAutoZoom(false);
 
-  const [overviewCamera, setOverviewCamera] = createSignal<OverviewCameraRef>();
+  /** Stops the tour and fits every page between the toolbar and the canvas edges. */
+  function showOverview() {
+    const pages = currentDocument()?.pages;
+
+    if (pages) {
+      stopAutoZoom();
+      camera.fitToPages(pages, viewport.size().css, overviewPadding);
+    }
+  }
 
   return (
     <div ref={[fullscreen.setContainer, drop.ref]} class={s.viewer} lang={i18n.locale()} dir={i18n.direction()}>
@@ -84,45 +94,36 @@ export default function GpuTextRendering() {
         aria-busy={isBusy() ? 'true' : 'false'}
       />
 
-      <TypeGPURootProvider requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
-        <GpuCanvasProvider canvas={canvas()} error={reportGpuError}>
-          <Show when={documentSource.prepared()} keyed>
-            {({ data, fail }) => (
-              <Viewport>
-                <FrameLoop onError={fail}>
-                  <DocumentCamera pageAspect={data.pages[0]!.width / data.pages[0]!.height}>
-                    <DocumentSpace>
-                      <CameraControls onInteraction={() => setAutoZoom(false)} onDraggingChange={setDragging} />
-
-                      <OverviewCamera
-                        ref={setOverviewCamera}
-                        document={data}
-                        padding={{ top: 44, right: 24, bottom: 84, left: 24 }}
-                      />
-
-                      <CameraTour document={data} enabled={autoZoom()} />
-
-                      <DocumentRendererProvider
-                        document={data}
-                        initialFrame="viewport"
-                        onReady={reportReady}
-                        onResourceUsage={reportResourceUsage}
-                        error={fail}
-                      >
-                        <DocumentLayer vectorOnly={vectorOnly()} grids={grids()} />
-                      </DocumentRendererProvider>
-                    </DocumentSpace>
-
-                    <Show when={minimap()}>
-                      <Minimap document={data} onNavigate={() => setAutoZoom(false)} />
-                    </Show>
-                  </DocumentCamera>
-                </FrameLoop>
-              </Viewport>
-            )}
-          </Show>
-        </GpuCanvasProvider>
-      </TypeGPURootProvider>
+      <GpuCanvas canvas={canvas()} requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
+        <Show when={documentSource.prepared()} keyed>
+          {({ data, fail }) => (
+            <FrameLoop viewport={viewport} onError={fail}>
+              <CameraControls camera={camera} onInteraction={stopAutoZoom} onDraggingChange={setDragging} />
+              <CameraTour camera={camera} document={data} enabled={autoZoom()} />
+              <DocumentRenderer
+                document={data}
+                camera={camera}
+                initialFrame="viewport"
+                onReady={reportReady}
+                onResourceUsage={reportResourceUsage}
+                onError={fail}
+              >
+                <Switch>
+                  <Match when={data.kind === 'glyphs'}>
+                    <GlyphText vectorOnly={vectorOnly()} grids={grids()} />
+                  </Match>
+                  <Match when={data.kind === 'curves'}>
+                    <VectorArtwork vectorOnly={vectorOnly()} />
+                  </Match>
+                </Switch>
+              </DocumentRenderer>
+              <Show when={minimap()}>
+                <Minimap document={data} camera={camera} onNavigate={stopAutoZoom} />
+              </Show>
+            </FrameLoop>
+          )}
+        </Show>
+      </GpuCanvas>
 
       <Show when={drop.isOver()}>
         <div class={s.dropOverlay} role="status" data-testid="document-drop-overlay">
@@ -138,10 +139,7 @@ export default function GpuTextRendering() {
           aria-label={i18n.t('overview')}
           title={i18n.t('overview')}
           disabled={!isReady()}
-          onClick={() => {
-            setAutoZoom(false);
-            overviewCamera()?.fitToDocument();
-          }}
+          onClick={showOverview}
         >
           <img src={grid} alt="" />
         </Button>
@@ -263,6 +261,9 @@ export default function GpuTextRendering() {
     </div>
   );
 }
+
+/** CSS pixels kept clear of the toolbar and canvas edges when fitting the whole document. */
+const overviewPadding = { top: 44, right: 24, bottom: 84, left: 24 };
 
 /** Menu checkbox that flips `checked` through `onToggle` and keeps the menu open for further toggles. */
 function MenuToggle(props: {

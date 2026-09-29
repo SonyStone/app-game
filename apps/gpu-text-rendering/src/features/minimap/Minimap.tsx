@@ -1,26 +1,28 @@
 import { createMemo } from 'solid-js';
 import { documentBounds, pageRects, screenToWorld } from '../camera/camera';
-import { useDocumentCamera } from '../camera/DocumentCamera';
+import type { DocumentCamera } from '../camera/createDocumentCamera';
 import type { TextDocument } from '../document/document';
 import { Rectangle, type RectanglePointerEvent } from '../graphics/Rectangle';
 import { Rectangles } from '../graphics/Rectangles';
 import { AffineSpace } from '../scene/SceneSpace';
-import { useViewport } from '../viewport/Viewport';
+import { useViewport } from '../viewport/createViewport';
 
 /**
  * Outlines every page in the canvas's top-right corner and marks the area the camera shows. Pressing or dragging
- * on it centers the camera there; those presses do not reach camera controls. Mount beneath DocumentCamera,
- * Viewport and FrameLoop, outside DocumentSpace.
+ * on it centers the camera there; those presses do not reach camera controls. Mount beneath FrameLoop, outside
+ * DocumentSpace.
  */
 export function Minimap(props: {
   /** Laid-out pages to outline. */
   document: TextDocument;
+  /** Camera whose view is marked and which navigation moves; fixed for the component's lifetime. */
+  camera: DocumentCamera;
   /** Called after each navigation moves the camera. */
   onNavigate?: () => void;
   /** Painter order of the backdrop; pages and the view marker draw just above it. Default 100. */
   order?: number;
 }) {
-  const { camera, setCamera, pageAspect } = useDocumentCamera();
+  const { camera, setCamera, pageAspect } = props.camera;
   const viewport = useViewport();
   const order = () => props.order ?? 100;
 

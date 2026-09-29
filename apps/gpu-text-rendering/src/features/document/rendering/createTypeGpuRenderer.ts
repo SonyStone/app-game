@@ -19,25 +19,73 @@ import type { DocumentWorkers } from './DocumentWorkers';
 import { prepareGlyphDocument } from './prepareGlyphDocument';
 
 /**
- * Prepares a document using borrowed GPU resources. Disposal releases only this document's allocations.
- * An initial frame limits image/page prewarming to its visible pages; omitted prewarms the whole document.
- * New pages load on first visit. settle() waits for the current visible work, not every offscreen resource.
+ * Prepares a document with the engine for its kind, for callers outside JSX. In JSX, choose the engine explicitly
+ * with GlyphText or VectorArtwork beneath DocumentRenderer.
  */
-export async function createTypeGpuRenderer(
+export function createTypeGpuRenderer(
   gpu: GpuContext,
   document: TextDocument,
+  options: Parameters<typeof createCurveRenderer>[2]
+) {
+  return document.kind === 'curves'
+    ? createCurveRenderer(gpu, document, options)
+    : createGlyphRenderer(gpu, document, options);
+}
+
+/** Prepares a glyph document: instanced glyph quads sampled from a glyph atlas over the page paper. */
+export function createGlyphRenderer(
+  gpu: GpuContext,
+  document: Extract<TextDocument, { kind: 'glyphs' }>,
+  options: RendererOptions
+) {
+  return createDocumentRenderer(gpu, (gpu, keep) => prepareGlyphDocument(gpu, document, keep), options);
+}
+
+/**
+ * Prepares a curve document: vector outlines, streamed images, transparency groups and cached page tiles.
+ * An initial frame limits image/page prewarming to its visible pages; omitted prewarms the whole document.
+ * New pages load on first visit.
+ */
+export function createCurveRenderer(
+  gpu: GpuContext,
+  document: Extract<TextDocument, { kind: 'curves' }>,
   {
     workers,
-    signal,
-    initialFrame
-  }: {
+    initialFrame,
+    ...options
+  }: RendererOptions & {
     /** Workers owned by the caller; the renderer never destroys them. */
     workers: DocumentWorkers;
-    /** Aborting cancels preparation, or destroys the renderer once prepared. */
-    signal?: AbortSignal;
     /** Visible frame used to limit prewarming; omitted prewarms the whole document. */
     initialFrame?: SceneFrame;
   }
+) {
+  return createDocumentRenderer(
+    gpu,
+    (gpu, keep) => prepareCurveDocument(gpu, document, keep, workers, initialFrame),
+    options
+  );
+}
+
+/** Options shared by every document engine. */
+type RendererOptions = {
+  /** Aborting cancels preparation, or destroys the renderer once prepared. */
+  signal?: AbortSignal;
+};
+
+/**
+ * Runs one engine's preparation as a renderer session using borrowed GPU resources: one preparation per device at a
+ * time under a validation error scope, then drawing, settling and disposal. Disposal releases only this document's
+ * allocations. settle() waits for the current visible work, not every offscreen resource.
+ */
+async function createDocumentRenderer(
+  gpu: GpuContext,
+  /** Allocates through `keep` and resolves the engine's drawing; `gpu.checkActive` includes this session. */
+  prepare: (
+    gpu: GpuContext,
+    keep: KeepGpuResource
+  ) => ReturnType<typeof prepareCurveDocument | typeof prepareGlyphDocument>,
+  { signal }: RendererOptions
 ) {
   const { device } = gpu;
   const resources = makeGpuResources();
@@ -83,7 +131,7 @@ export async function createTypeGpuRenderer(
           device.pushErrorScope('validation');
 
           const prepared = await ResultAsync.fromThrowable(
-            () => prepareDocument({ ...gpu, checkActive }, document, resources.keep, workers, initialFrame),
+            () => prepare({ ...gpu, checkActive }, resources.keep),
             (cause) => gpuError('device', errorMessage(cause), cause)
           )();
 
@@ -168,19 +216,6 @@ export async function createTypeGpuRenderer(
 
 /** A prepared document renderer, independent of Solid and pointer input. */
 export type TextRenderer = ResultValue<Awaited<ReturnType<typeof createTypeGpuRenderer>>>;
-
-/** Dispatches to the document profile's renderer; both satisfy the `PreparedDocument` contract. */
-function prepareDocument(
-  gpu: GpuContext,
-  document: TextDocument,
-  keep: KeepGpuResource,
-  workers: DocumentWorkers,
-  initialFrame: SceneFrame | undefined
-) {
-  return document.kind === 'curves'
-    ? prepareCurveDocument(gpu, document, keep, workers, initialFrame)
-    : prepareGlyphDocument(gpu, document, keep);
-}
 
 /** Awaits a completion step, reporting a rejection as a typed render error. */
 function renderStep(step: () => Promise<void>) {

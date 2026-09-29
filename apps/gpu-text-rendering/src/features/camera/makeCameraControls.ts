@@ -1,9 +1,9 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { onCleanup } from 'solid-js';
 import type { Point } from '../scene/SceneSpace';
-import type { useViewport } from '../viewport/Viewport';
+import type { Viewport } from '../viewport/createViewport';
 import { moveCamera } from './camera';
-import type { useDocumentCamera } from './DocumentCamera';
+import type { DocumentCamera } from './createDocumentCamera';
 
 /**
  * Installs captured pointer gestures and wheel zoom for a fixed canvas; disposed with its Solid owner.
@@ -13,9 +13,9 @@ export function makeCameraControls(options: {
   /** Receives pointer and wheel events; pointers are captured while pressed. */
   canvas: HTMLCanvasElement;
   /** Replaced by gestures through its updater form; the page aspect is read on each camera move. */
-  camera: Pick<ReturnType<typeof useDocumentCamera>, 'setCamera' | 'pageAspect'>;
+  camera: Pick<DocumentCamera, 'setCamera' | 'pageAspect'>;
   /** Supplies the canvas CSS size and client-to-canvas conversion. */
-  viewport: Pick<ReturnType<typeof useViewport>, 'size' | 'clientToScreen'>;
+  viewport: Pick<Viewport, 'size' | 'clientToScreen'>;
   /** Runs once per gesture start, camera move and wheel event, after any camera update. */
   onInteraction: () => void;
   /** Reports whether any pointer is pressed. */

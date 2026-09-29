@@ -4,13 +4,17 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
 import { gpuError } from '../../shared/errors';
 import { serializeGpuPreparation } from '../../shared/gpu/serializeGpuPreparation';
-import { DocumentCamera, useDocumentCamera } from '../camera/DocumentCamera';
+import { createDocumentCamera, type DocumentCamera } from '../camera/createDocumentCamera';
+import type { Viewport } from '../viewport/createViewport';
 import { FrameLoop, useFrame, useFrameLoop } from './FrameLoop';
 import { RenderLayer } from './RenderLayer';
+import { ScreenSpace } from './SceneSpace';
 
-vi.mock('../viewport/Viewport', () => ({
-  useViewport: () => ({ size: () => ({ css: { width: 800, height: 600 } }) })
-}));
+const viewport = {
+  size: () => ({ css: { width: 800, height: 600 }, pixels: { width: 800, height: 600 }, dpr: 1 }),
+  clientToScreen: (point: { x: number; y: number }) => point,
+  screenToClip: (point: { x: number; y: number }) => point
+} as Viewport;
 
 vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
 
@@ -138,7 +142,7 @@ it('composes independently mounted layers, reacts to order and removes them with
     const [order, setOrder] = createSignal(-1);
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
           <RenderLayer
             draw={() => {
               calls.push('sibling');
@@ -211,7 +215,7 @@ it('mounts children once under the loop context and owns their subscriptions and
     const [visible, setVisible] = createSignal(true);
     const disposeView = render(
       () => (
-        <FrameLoop onError={onError}>
+        <FrameLoop viewport={viewport} onError={onError}>
           <Scene visible={visible()} />
         </FrameLoop>
       ),
@@ -254,9 +258,10 @@ it('follows JSX order for late siblings and keyed list reordering without recrea
   const calls: string[] = [];
   const mountedLayers: number[] = [];
   const disposedLayers: number[] = [];
+  let documentCamera!: DocumentCamera;
 
   function Layer(props: { id: number }) {
-    const { camera } = useDocumentCamera();
+    const { camera } = documentCamera;
     mountedLayers.push(props.id);
     onCleanup(() => disposedLayers.push(props.id));
 
@@ -272,15 +277,16 @@ it('follows JSX order for late siblings and keyed list reordering without recrea
   const mounted = createRoot((disposeState) => {
     const [early, setEarly] = createSignal(false);
     const [ids, setIds] = createSignal([1, 2]);
+    documentCamera = createDocumentCamera({ pageAspect: () => 1 });
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
-          <DocumentCamera pageAspect={1}>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
+          <ScreenSpace>
             <Show when={early()}>
               <Layer id={0} />
             </Show>
             <For each={ids()}>{(id) => <Layer id={id} />}</For>
-          </DocumentCamera>
+          </ScreenSpace>
         </FrameLoop>
       ),
       document.createElement('div')
@@ -327,7 +333,7 @@ it('reacts to replacing a token draw prop without remounting the layer', async (
     const [draw, setDraw] = createSignal(() => first);
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
           <RenderLayer draw={draw()} />
         </FrameLoop>
       ),
@@ -374,7 +380,7 @@ it('keeps independent animations running until the last enabled owner unsubscrib
 
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
           <AnimationA />
           <Show when={mountedB()}>
             <AnimationB />
@@ -430,7 +436,7 @@ it('pauses hidden pages, retains invalidation and resumes without advancing anim
 
   const dispose = render(
     () => (
-      <FrameLoop onError={vi.fn()}>
+      <FrameLoop viewport={viewport} onError={vi.fn()}>
         <Animation />
       </FrameLoop>
     ),
@@ -493,7 +499,7 @@ it('hides keyed layers without disposing resources and preserves owners when obj
     const [visible, setVisible] = createSignal(true);
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
           <For each={items()} keyed={(item) => item.id}>
             {(item) => <Graphic id={item().id} value={item().value} visible={visible()} />}
           </For>
@@ -544,7 +550,7 @@ it('turns a thrown frame callback failure into one typed error and stops submiss
 
   const dispose = render(
     () => (
-      <FrameLoop onError={onError}>
+      <FrameLoop viewport={viewport} onError={onError}>
         <Failure />
       </FrameLoop>
     ),
@@ -689,7 +695,11 @@ it('stops observing values that the latest frame no longer reads', async () => {
 function mountScene(children: () => JSX.Element) {
   const dispose = createRoot((disposeRoot) => {
     const disposeView = render(
-      () => <FrameLoop onError={vi.fn()}>{children()}</FrameLoop>,
+      () => (
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
+          {children()}
+        </FrameLoop>
+      ),
       document.createElement('div')
     );
 
@@ -730,7 +740,7 @@ function mount(invalidateFirstFrame = false) {
     const [draw, setDraw] = createSignal(true);
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
           <Show when={draw()}>
             <Draw />
           </Show>

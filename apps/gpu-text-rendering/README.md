@@ -50,67 +50,66 @@ tests/
 
 Unit tests live beside the feature they exercise. Browser fixtures remain outside `src` and are not exported by the package. No general `components`, `utils` or document-specific top-level `gpu` directory is needed.
 
-- Start with `features/viewer/GpuTextRendering.tsx` for the UI and full JSX composition. The viewer owns loading and connects ready GPU resources to the document, camera and scene.
-- `features/document/document.ts` exposes decoded data independent of the GPU. `rendering/DocumentRendererProvider.tsx` owns a prepared document's lifetime. `rendering/createTypeGpuRenderer.ts` remains usable outside Solid; buffers, shaders and batched draw commands are private to document rendering.
-- `features/camera` owns navigation and projection. Controls request frames after interaction; the tour owns its animation subscription. Camera motion does not require UI state updates.
-- `features/scene` owns one frame loop and one shared color pass for all graphics. It does not load documents or allocate their buffers. `resolveSceneChildren.ts` resolves render callbacks while preserving reactive lists and context ownership.
-- `features/viewport` measures the canvas and bounds its framebuffer. `features/graphics/Rectangle.tsx` demonstrates adding a drawable without modifying the document renderer.
+- Start with `features/viewer/GpuTextRendering.tsx`. It is the app's layout: it creates the document source, viewport and camera, then assembles the GPU scene and the DOM UI from feature modules, passing each the state it works on.
+- `features/document` loads documents (`createDocumentSource`) and draws prepared ones: `DocumentRenderer` holds a document's session, and its engine child draws it, `GlyphText` for glyph documents or `VectorArtwork` for curve documents such as PDFs. `rendering/createTypeGpuRenderer.ts` remains usable outside Solid and picks the engine by document kind; buffers, shaders and batched draw commands are private to document rendering. `curves/prepareCurveDocument.ts` reads top-down through the curve engine's stages: upload, image prewarm, paint engine and drawing.
+- `features/camera` owns camera state (`createDocumentCamera`), gestures, the tour, `DocumentSpace` and camera math. Camera motion does not require UI state updates.
+- `features/scene` owns one frame loop and one shared color pass for all graphics, plus coordinate spaces and per-frame uniforms. It does not load documents or allocate their buffers.
+- `features/viewport` measures the canvas and bounds its framebuffer. `features/graphics` and `features/minimap` show drawables added without modifying the document renderer.
 - `shared/gpu` owns the device and configured canvas; feature renderers borrow them. `shared/jsx/TokenContext.tsx` preserves draw tokens through native Solid context ownership. Shared implementation imports no feature modules.
 
-Keep feature-specific shaders, styles and tests with their feature. Move code into `shared` only when it represents infrastructure used by multiple features. The public package export is the viewer component; internal feature files do not need barrel re-exports.
+Each feature folder's `index.ts` lists its public API; consumers such as the layout import from the folder, while files inside a feature import each other directly. Keep feature-specific shaders, styles and tests with their feature. Move code into `shared` only when it represents infrastructure used by multiple features.
 
-## Composing JSX graphics
+## Composing the scene
 
-A document is one drawable in the scene. Add siblings without changing the document renderer:
+State that the app works with is created once and passed to modules explicitly. Scene infrastructure (the GPU canvas, the frame loop, the viewport and the nearest coordinate space) comes from context, so a scene component works wherever it is placed beneath `FrameLoop`:
 
 ```tsx
-<Viewport maxDpr={2}>
-  <FrameLoop onError={handleError}>
-    {(loop) => (
-      <DocumentCamera>
-        <CameraControls pageAspect={pageAspect} />
-        <CameraTour document={document} enabled={autoZoom()} />
+const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
+const viewport = createViewport(canvas, { maxDpr: 2 });
+const camera = createDocumentCamera({ pageAspect: () => pageAspectOf(document()), resetOn: document });
 
-        <DocumentSpace pageAspect={pageAspect}>
-          <DocumentRendererProvider
-            document={document}
-            error={(error) => {
-              loop.fail(error);
-              return null;
-            }}
-          >
-            <DocumentLayer visible={documentVisible()} />
-          </DocumentRendererProvider>
+<canvas ref={setCanvas} />
+<GpuCanvas canvas={canvas()} requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
+  <FrameLoop viewport={viewport} onError={fail}>
+    <CameraControls camera={camera} />
+    <DocumentRenderer document={document()} camera={camera} onError={fail}>
+      <Switch>
+        <Match when={document().kind === 'glyphs'}>
+          <GlyphText grids={grids()} />
+        </Match>
+        <Match when={document().kind === 'curves'}>
+          <VectorArtwork />
+        </Match>
+      </Switch>
+    </DocumentRenderer>
 
-          <For each={annotations()} keyed={(annotation) => annotation.id}>
-            {(annotation) => (
-              <Rectangle
-                x={annotation().x}
-                y={annotation().y}
-                width={annotation().width}
-                height={annotation().height}
-                color={[1, 0.8, 0, 0.3]}
-                visible={annotationsVisible()}
-                order={10}
-              />
-            )}
-          </For>
-        </DocumentSpace>
+    <DocumentSpace camera={camera}>
+      <For each={annotations()} keyed={(annotation) => annotation.id}>
+        {(annotation) => (
+          <Rectangle
+            x={annotation().x}
+            y={annotation().y}
+            width={annotation().width}
+            height={annotation().height}
+            color={[1, 0.8, 0, 0.3]}
+            order={10}
+          />
+        )}
+      </For>
+    </DocumentSpace>
 
-        <ScreenSpace>
-          <Rectangle x={20} y={20} width={40} height={40} color={[0, 0, 1, 1]} />
-        </ScreenSpace>
-      </DocumentCamera>
-    )}
+    <ScreenSpace>
+      <Rectangle x={20} y={20} width={40} height={40} color={[0, 0, 1, 1]} />
+    </ScreenSpace>
+
+    <Minimap document={document()} camera={camera} />
   </FrameLoop>
-</Viewport>
+</GpuCanvas>
 ```
 
-This subtree needs `TypeGPURootProvider` and `GpuCanvasProvider` above it. DOM UI belongs outside `FrameLoop`. CSS must give the canvas a display size independent of its width/height attributes.
+`GpuCanvas` combines `TypeGPURootProvider` and `GpuCanvasProvider`; use those directly to share one device between canvases. DOM UI belongs outside `FrameLoop`. CSS must give the canvas a display size independent of its width/height attributes. Because the camera and viewport live outside the scene, DOM controls can use them directly, for example `camera.fitToPages(pages, viewport.size().css, padding)` for an overview button.
 
-`FrameLoop` accepts JSX or `(loop) => JSX`. `DocumentRendererProvider` accepts JSX or a function receiving `{ document, renderer }` beneath its ready context. `resolveSceneChildren` keeps zero-argument reactive JSX accessors reactive and evaluates them with their provider owner; it also preserves single draw tokens. This matters for a single `<For>` child whose items reorder. Composition functions do not run per frame.
-
-`DocumentLayer` reads the document camera and shared viewport, owns draw invalidation, and declares its `RenderLayer`. Pass reactive options as values, for example `<DocumentLayer vectorOnly={vectorOnly()} grids={grids()} />`. GPU buffers and pipelines belong to `DocumentRendererProvider`.
+`DocumentRenderer` shares the document, camera and status callbacks with its engine. The engine prepares the document on the GPU, owns its renderer and draw invalidation, and declares its `RenderLayer`; `VectorArtwork` also owns the image decoder and coverage workers. Choosing the engine in JSX keeps the two rendering paths visible, along with the options each supports: `grids` exists only for glyphs. Pass reactive options as values, for example `<GlyphText vectorOnly={vectorOnly()} grids={grids()} />`. Replacing `document` remounts the engine and releases the previous renderer. The paper is part of each engine rather than a separate layer: curve documents composite transparency groups and blend modes against it.
 
 `RenderLayer.visible`, default true, skips drawing without unmounting its owner or releasing buffers. Use `<Show>` around the owning component/provider when removal should release its resources. Hiding the last visible layer clears the canvas once. A hidden layer keeps its position in JSX and returns to that position when shown.
 
@@ -118,11 +117,11 @@ Layers draw in ascending `order`, default 0. Equal values follow JSX order, incl
 
 ### Coordinates and viewport
 
-`useViewport().size()` exposes `{ css, pixels, dpr }`. The DPR cap defaults to 2 and is reactive; the GPU texture dimension limit can lower it further. CSS size is measured on resize rather than on every frame. Resolution media queries track DPR changes, including moving the window between displays. `clientToScreen`, `screenToPixel`, `pixelToScreen` and `screenToClip` centralize conversions. Pointer positioning reads the current canvas bounding rect so scrolling does not leave a stale origin.
+`viewport.size()` exposes `{ css, pixels, dpr }`; scene components read the same viewport through `useViewport()`. The DPR cap defaults to 2 and may be reactive; the 8192-pixel framebuffer limit can lower it further. CSS size is measured on resize rather than on every frame. Resolution media queries track DPR changes, including moving the window between displays. `clientToScreen` and `screenToClip` centralize conversions. Pointer positioning reads the current canvas bounding rect so scrolling does not leave a stale origin.
 
-`DocumentSpace` uses `DocumentCamera` and the first page's width/height ratio. Coordinates match document rendering, with y increasing upwards. `ScreenSpace` uses CSS pixels with y increasing downwards; its graphics keep their displayed size when the camera or DPR changes. Nested spaces replace the coordinate system rather than multiplying transforms. These components preserve JSX draw order and do not create GPU passes.
+`DocumentSpace` projects through its `camera` prop and that camera's first-page width/height ratio. Coordinates match document rendering, with y increasing upwards. `ScreenSpace` uses CSS pixels with y increasing downwards; its graphics keep their displayed size when the camera or DPR changes. Nested spaces replace the coordinate system rather than multiplying transforms. These components preserve JSX draw order and do not create GPU passes.
 
-`useSceneSpace()` provides `toScreen`, `fromScreen` and `toClip` for new graphics and future hit testing. Read them during drawing because camera values mutate between frames. `Rectangle` projects its corners with this contract, allowing the same shader to draw in either space. The document renderer remains specialized to the document camera; pass the same page aspect to its controls and `DocumentSpace`. Fractional framebuffer rounding does not change the CSS projection.
+`useSceneSpace()` provides `toScreen`, `fromScreen` and `toClip` for new graphics and future hit testing. Read them during drawing because camera values mutate between frames. `Rectangle` projects its corners with this contract, allowing the same shader to draw in either space. The document renderer remains specialized to the document camera; pass the same camera to its controls, layer and `DocumentSpace`. Fractional framebuffer rounding does not change the CSS projection.
 
 ### Animation and lifetime
 
@@ -398,7 +397,6 @@ local laptop, including conversion and initial GPU preparation. This does not ch
 input, image or GPU memory limits. External verification screenshots and metadata are
 in `Sync Folder/pdf-rendering-tests/star-wars-results`; the Rust image tests generate
 small ASCII85/ASCIIHex filter-chain regressions without including the book.
-
 
 Independent visual compatibility tests now cover a pinned 44-document PDF.js selection.
 They compare individual pages with Poppler and PDF.js 6.3. All 44 documents now open, and

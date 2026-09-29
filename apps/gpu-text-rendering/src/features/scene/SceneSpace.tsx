@@ -1,7 +1,7 @@
 import type { JSX } from '@solidjs/web';
 import { createContext, useContext } from 'solid-js';
 import { TokenContext } from '../../shared/jsx/TokenContext';
-import { useViewport } from '../viewport/Viewport';
+import { useViewport } from '../viewport/createViewport';
 
 /**
  * Provides a coordinate system to descendant graphics while preserving their draw tokens for FrameLoop.

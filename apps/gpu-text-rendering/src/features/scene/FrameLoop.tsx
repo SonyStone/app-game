@@ -1,13 +1,13 @@
 import { resolveTokens } from '@solid-primitives/jsx-tokenizer';
 import { createPageVisibility } from '@solid-primitives/page-utilities';
 import type { JSX } from '@solidjs/web';
-import { createContext, createEffect, createMemo, createReaction, useContext, type Accessor } from 'solid-js';
+import { createContext, createEffect, createMemo, createReaction, untrack, useContext, type Accessor } from 'solid-js';
 import type { ViewerError } from '../../shared/errors';
 import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
 import { onGpuRelease } from '../../shared/gpu/onGpuRelease';
 import { pendingGpuPreparation } from '../../shared/gpu/serializeGpuPreparation';
 import { runWithContext } from '../../shared/jsx/TokenContext';
-import { useViewport } from '../viewport/Viewport';
+import { ViewportContext, type Viewport } from '../viewport/createViewport';
 import { createFrameScheduler, type FrameSubscription } from './createFrameScheduler';
 import { makeGpuFrameGate } from './makeGpuFrameGate';
 import { makeScenePointerEvents } from './makeScenePointerEvents';
@@ -19,15 +19,18 @@ import { renderScene } from './renderScene';
  * Update callbacks precede drawing; equal layer orders follow JSX order. DOM UI belongs outside this subtree.
  * Reactive reads in render-phase callbacks and layer draws, such as the camera, request the next frame when they
  * change; non-reactive state such as renderer caches still needs an explicit invalidate.
+ * Scene components beneath it read the GPU canvas, this loop and the viewport from context.
  */
 export function FrameLoop(props: {
+  /** Canvas sizing from createViewport; read once and provided to descendants through useViewport. */
+  viewport: Viewport;
   /** Scene components, resolved once beneath this loop's context. */
   children: JSX.Element;
   /** Called once after stopping a failed rendering session. */
   onError: (error: ViewerError) => void;
 }) {
   const gpu = useGpuCanvas();
-  const viewport = useViewport();
+  const viewport = untrack(() => props.viewport);
   const visible = createPageVisibility();
   const track = trackFrames(() => loop.invalidate());
 
@@ -63,18 +66,20 @@ export function FrameLoop(props: {
   // Children resolve once beneath the loop's context. The provider's owner keeps the token and layer memos alive
   // for this component's lifetime; frames run from RAF callbacks, never during disposal, and the scheduler stops
   // with this owner.
-  const layers = runWithContext(FrameContext, loop, () => {
-    const tokens = resolveTokens(RenderLayer, () => props.children);
-    // Keep each token's props object: draws and pointer handlers are read when a frame or event happens.
-    return createMemo(() =>
-      tokens()
-        .map(({ data }) => data)
-        .filter((layer) => layer.visible !== false)
-        .map((layer, index) => ({ layer, index, order: layer.order ?? 0 }))
-        .sort((a, b) => a.order - b.order || a.index - b.index)
-        .map(({ layer }) => layer)
-    );
-  });
+  const layers = runWithContext(ViewportContext, viewport, () =>
+    runWithContext(FrameContext, loop, () => {
+      const tokens = resolveTokens(RenderLayer, () => props.children);
+      // Keep each token's props object: draws and pointer handlers are read when a frame or event happens.
+      return createMemo(() =>
+        tokens()
+          .map(({ data }) => data)
+          .filter((layer) => layer.visible !== false)
+          .map((layer, index) => ({ layer, index, order: layer.order ?? 0 }))
+          .sort((a, b) => a.order - b.order || a.index - b.index)
+          .map(({ layer }) => layer)
+      );
+    })
+  );
 
   makeScenePointerEvents(gpu.context.canvas as HTMLCanvasElement, layers, (event) =>
     viewport.clientToScreen({ x: event.clientX, y: event.clientY })

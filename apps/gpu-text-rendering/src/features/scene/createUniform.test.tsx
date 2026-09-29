@@ -3,13 +3,16 @@ import { createRoot, createSignal, flush } from 'solid-js';
 import { d } from 'typegpu';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
+import type { Viewport } from '../viewport/createViewport';
 import { createUniform } from './createUniform';
 import { FrameLoop } from './FrameLoop';
 import { RenderLayer } from './RenderLayer';
 
-vi.mock('../viewport/Viewport', () => ({
-  useViewport: () => ({ size: () => ({ css: { width: 800, height: 600 } }) })
-}));
+const viewport = {
+  size: () => ({ css: { width: 800, height: 600 }, pixels: { width: 800, height: 600 }, dpr: 1 }),
+  clientToScreen: (point: { x: number; y: number }) => point,
+  screenToClip: (point: { x: number; y: number }) => point
+} as Viewport;
 
 vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
 
@@ -70,7 +73,11 @@ it('writes the latest value before each drawn frame and redraws when a reactive 
 function mount(children: () => ReturnType<typeof RenderLayer>) {
   const dispose = createRoot((disposeRoot) => {
     const disposeView = render(
-      () => <FrameLoop onError={vi.fn()}>{children()}</FrameLoop>,
+      () => (
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
+          {children()}
+        </FrameLoop>
+      ),
       document.createElement('div')
     );
 
