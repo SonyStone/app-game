@@ -1,8 +1,10 @@
 //! Public-interface tests for untrusted files and native/GPU data fidelity.
 use gpu_document::{
     container::{self, Section},
+    curves::{self, Document, Page},
     error::DocumentError,
     quadratic,
+    raster::Images,
 };
 
 #[test]
@@ -70,6 +72,52 @@ fn every_truncated_prefix_fails_and_every_single_byte_mutation_is_panic_free() {
         let mut mutated = bytes.clone();
         mutated[offset] ^= 0xff;
         let _result = quadratic::decode(&mutated);
+    }
+}
+
+#[test]
+fn curve_profiles_survive_truncation_and_every_byte_mutation() {
+    for profile in [2, 3] {
+        let bytes = curves::encode(&scene(profile == 3)).unwrap();
+        assert_eq!(
+            u32::from_le_bytes(bytes[12..16].try_into().unwrap()),
+            profile
+        );
+        assert!(curves::decode_owned(bytes.clone()).is_ok());
+        for offset in 0..bytes.len() {
+            assert!(
+                curves::decode(&bytes[..offset]).is_err(),
+                "profile {profile} prefix {offset}"
+            );
+            let mut mutated = bytes.clone();
+            mutated[offset] ^= 0xff;
+            let _result = curves::decode(&mutated);
+            let _result = curves::decode_owned(mutated);
+        }
+    }
+}
+
+#[test]
+fn curve_profile_sections_reject_or_accept_every_mutation_without_panicking() {
+    // Container checksums hide most file-level mutations, so also mutate each decoded
+    // section and re-encode it with valid CRCs to reach the profile validators.
+    for profile in [2, 3] {
+        let bytes = curves::encode(&scene(profile == 3)).unwrap();
+        let sections = container::decode_profile(&bytes, profile).unwrap();
+        for (index, section) in sections.iter().enumerate() {
+            for offset in 0..section.data.len() {
+                for flip in [0x01, 0x80, 0xff] {
+                    let mut changed = sections.clone();
+                    changed[index].data[offset] ^= flip;
+                    let encoded = container::encode_profile(&changed, profile).unwrap();
+                    let _result = curves::decode(&encoded);
+                }
+            }
+            let mut truncated = sections.clone();
+            truncated[index].data.pop();
+            let encoded = container::encode_profile(&truncated, profile).unwrap();
+            let _result = curves::decode(&encoded);
+        }
     }
 }
 
@@ -223,6 +271,72 @@ fn fixture() -> Vec<Section> {
             data: prerender,
         },
     ]
+}
+
+/// A small valid scene: a clipped square outline in a group, plus (profile 3) a raw
+/// image and a tiled image drawn between vector draws.
+fn scene(images: bool) -> Document {
+    let mut curves = Vec::new();
+    let corners = [(0.0f32, 0.0f32), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)];
+    for i in 0..4 {
+        let (a, b) = (corners[i], corners[(i + 1) % 4]);
+        for t in [0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0] {
+            curves.extend_from_slice(&(a.0 + (b.0 - a.0) * t).to_le_bytes());
+            curves.extend_from_slice(&(a.1 + (b.1 - a.1) * t).to_le_bytes());
+        }
+    }
+    let draw = |first: u32, count: u32, kind: u32| {
+        let mut record = Vec::new();
+        for v in [0.5f32, 0.0, 0.0, 0.5, 0.25, 0.25] {
+            record.extend_from_slice(&v.to_le_bytes());
+        }
+        record.extend_from_slice(&[0; 8]);
+        for v in [1.0f32, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0] {
+            record.extend_from_slice(&v.to_le_bytes());
+        }
+        for v in [first, count, kind, 0] {
+            record.extend_from_slice(&v.to_le_bytes());
+        }
+        record
+    };
+    let mut instances = draw(0, 4, 0);
+    let mut table = Vec::new();
+    let mut pixels = Vec::new();
+    if images {
+        instances.extend(draw(0, 0, 2));
+        instances.extend(draw(1, 0, 2));
+        instances.extend(draw(0, 4, 1));
+        let raw = [255, 0, 0, 255, 0, 128, 0, 128, 0, 0, 0, 0, 10, 20, 30, 40];
+        let tiled = gpu_document::raster_tiles::encode(3, 3, &[64; 36]).unwrap();
+        for (w, h, payload, codec) in [(2u32, 2u32, &raw[..], 0u32), (3, 3, &tiled[..], 4)] {
+            for v in [w, h, pixels.len() as u32, payload.len() as u32, 1, codec] {
+                table.extend_from_slice(&v.to_le_bytes());
+            }
+            pixels.extend_from_slice(payload);
+        }
+    }
+    let count = (instances.len() / 80) as u32;
+    let mut groups = Vec::new();
+    for v in [0u32, count, 1.0f32.to_bits(), 0, 0, 0] {
+        groups.extend_from_slice(&v.to_le_bytes());
+    }
+    Document {
+        pages: vec![Page {
+            width: 100.0,
+            height: 100.0,
+            first: 0,
+            count,
+        }],
+        curves,
+        instances,
+        images: Images { table, pixels },
+        clips: Vec::new(),
+        bins: Vec::new(),
+        blends: vec![0; count as usize],
+        groups,
+        mask_transfers: Vec::new(),
+        radial_gradients: Vec::new(),
+    }
 }
 
 fn repair_crc(bytes: &mut [u8]) {

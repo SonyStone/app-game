@@ -19,6 +19,21 @@ pub fn decode(bytes: &[u8]) -> Result<Document, DocumentError> {
     decode_sections(container::decode_profile(bytes, profile)?, profile)
 }
 
+/// Like [`decode`], but consumes the file so its largest raw section (normally `PIXL`)
+/// reuses the input allocation instead of being copied. Used by the WASM decoder, whose
+/// input buffer would otherwise stay resident next to a full copy of the image payload.
+pub fn decode_owned(bytes: Vec<u8>) -> Result<Document, DocumentError> {
+    let profile = if bytes.len() >= 16 {
+        u32_at(&bytes, 12)
+    } else {
+        2
+    };
+    if !matches!(profile, 2 | 3) {
+        return Err(DocumentError::Unsupported("curve scene profile"));
+    }
+    decode_sections(container::decode_profile_owned(bytes, profile)?, profile)
+}
+
 // Both file decoding and direct PDF import pass through the same validation.
 fn decode_sections(mut sections: Vec<Section>, profile: u32) -> Result<Document, DocumentError> {
     if sections.iter().any(|s| {

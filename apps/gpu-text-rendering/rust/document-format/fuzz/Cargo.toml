@@ -1,0 +1,79 @@
+# Fuzz targets for untrusted GDOC and PDF input. Not built by the main crate or CI.
+#
+#   cargo +nightly fuzz run curves            # with cargo-fuzz installed
+#
+# Without cargo-fuzz, stable Rust can build libFuzzer binaries directly (no sanitizers):
+#   RUSTFLAGS="-Cpasses=sancov-module -Cllvm-args=-sanitizer-coverage-level=4 \
+#     -Cllvm-args=-sanitizer-coverage-inline-8bit-counters -Cllvm-args=-sanitizer-coverage-pc-table \
+#     -Cllvm-args=-sanitizer-coverage-trace-compares -Cdebug-assertions -Coverflow-checks \
+#     -Clink-arg=-Wl,-undefined,dynamic_lookup" \
+#     cargo +1.92.0 build --release --bins --target aarch64-apple-darwin --target-dir target/fuzz
+#   target/fuzz/aarch64-apple-darwin/release/curves corpus/curves -max_total_time=30
+# (`dynamic_lookup` is macOS-only; it lets the parent crate's cdylib link without libFuzzer.)
+
+[package]
+name = "gpu-document-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+gpu-document = { path = "..", features = ["pdf"] }
+
+# Patches in the parent manifest do not apply to dependents; repeat them here.
+[patch.crates-io]
+hayro-interpret = { path = "../../vendor/hayro-interpret-0.7.0" }
+hayro-syntax = { path = "../../vendor/hayro-syntax-0.7.2" }
+
+# Standalone workspace so the fuzz crate never joins the main package's build.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "container"
+path = "fuzz_targets/container.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "curves"
+path = "fuzz_targets/curves.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "quadratic"
+path = "fuzz_targets/quadratic.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "raster_tiles"
+path = "fuzz_targets/raster_tiles.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "raster_jpeg"
+path = "fuzz_targets/raster_jpeg.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pdf_import"
+path = "fuzz_targets/pdf_import.rs"
+test = false
+doc = false
+bench = false

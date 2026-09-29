@@ -28,6 +28,11 @@ pub(crate) fn decode(
         hayro_jbig2::Image::new_embedded(data, globals.as_deref()).ok()?
     };
 
+    // Local patch: one byte per pixel is allocated for non-indexed output.
+    if !crate::limits::image_fits(u64::from(image.width()), u64::from(image.height()), 1) {
+        return None;
+    }
+
     // Whenever possible (if we don't have an indexed color space), we convert
     // the data as 8-bit instead of 1-bit, so that it can be easier converted
     // into an RGBA8 image.

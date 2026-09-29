@@ -4,7 +4,18 @@ use crate::error::DocumentError;
 use kurbo::{BezPath, PathEl, Rect, Shape};
 
 /// Conservative bounds grouping preserves both winding rules, holes and translucent overlap.
+///
+/// Splitting is only an optimization: when the pairwise comparison budget is exhausted,
+/// every subpath that is not already known to be disjoint is kept in one final component,
+/// which renders identically to the unsplit path.
+///
+/// # Errors
+/// Rejects paths with more than 100,000 elements.
 pub(super) fn split(path: &BezPath) -> Result<Vec<BezPath>, DocumentError> {
+    split_with_budget(path, MAX_COMPARISONS)
+}
+
+fn split_with_budget(path: &BezPath, budget: usize) -> Result<Vec<BezPath>, DocumentError> {
     if path.elements().len() > 100_000 {
         return Err(DocumentError::Limit("path elements"));
     }
@@ -19,20 +30,29 @@ pub(super) fn split(path: &BezPath) -> Result<Vec<BezPath>, DocumentError> {
         }
     }
 
+    // Bounds are computed once per subpath, not in every sort comparison.
+    let mut parts: Vec<(Rect, BezPath)> = parts
+        .into_iter()
+        .map(|part| (part.bounding_box(), part))
+        .collect();
+    parts.sort_by(|a, b| a.0.x0.total_cmp(&b.0.x0));
+
     let mut groups: Vec<(Rect, BezPath)> = Vec::new();
-    parts.sort_by(|a, b| a.bounding_box().x0.total_cmp(&b.bounding_box().x0));
     let mut complete = Vec::new();
     let mut comparisons = 0usize;
+    let mut parts = parts.into_iter();
 
-    for path in parts {
-        let mut bounds = path.bounding_box();
-        let mut combined = path;
+    while let Some((mut bounds, mut combined)) = parts.next() {
         let mut index = 0;
-
         while index < groups.len() {
             comparisons += 1;
-            if comparisons > 10_000_000 {
-                return Err(DocumentError::Limit("path component comparisons"));
+            if comparisons > budget {
+                // Everything not yet completed may still overlap; keep it as one component.
+                for (_, path) in groups.drain(..).chain(parts.by_ref()) {
+                    combined.extend(path);
+                }
+                complete.push(combined);
+                return Ok(complete);
             }
 
             let other = groups[index].0;
@@ -57,4 +77,32 @@ pub(super) fn split(path: &BezPath) -> Result<Vec<BezPath>, DocumentError> {
 
     complete.extend(groups.into_iter().map(|(_, p)| p));
     Ok(complete)
+}
+
+const MAX_COMPARISONS: usize = 10_000_000;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exhausting_the_comparison_budget_keeps_remaining_subpaths_together() {
+        // 20,000 vertically stacked, x-overlapping rectangles force quadratic comparisons.
+        let mut path = BezPath::new();
+        for i in 0..20_000 {
+            let y = f64::from(i) * 2.0;
+            path.extend(&Rect::new(0.0, y, 10.0, y + 1.0).to_path(0.1));
+        }
+        let parts = split(&path).unwrap();
+        assert!(parts.len() < 20_000);
+        let total: usize = parts.iter().map(|p| p.elements().len()).sum();
+        assert_eq!(total, path.elements().len());
+
+        // Without the budget cap every disjoint rectangle stays separate.
+        let small: BezPath = path.elements()[..50].iter().copied().collect();
+        assert_eq!(split(&small).unwrap().len(), 10);
+        let capped = split_with_budget(&small, 3).unwrap();
+        assert!(capped.len() < 10);
+        assert_eq!(capped.iter().map(|p| p.elements().len()).sum::<usize>(), 50);
+    }
 }

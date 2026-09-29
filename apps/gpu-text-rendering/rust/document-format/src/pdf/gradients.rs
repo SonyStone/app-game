@@ -1,7 +1,18 @@
 //! Color functions are sampled once; clipping and radial circle geometry stay analytic.
-use super::{SceneDevice, geometry::ShapeRecord};
-use crate::{error::DocumentError, raster::MAX_ENCODED_IMAGE_BYTES};
-use hayro_interpret::{ClipPath, Device, FillRule, pattern::ShadingPattern, shading::ShadingType};
+//!
+//! Generated ramps are content-interned, so text or many paths painted with one shading
+//! share a single image resource instead of creating one per draw.
+use super::{
+    SceneDevice,
+    geometry::ShapeRecord,
+    images::{ImageCache, ResourceHeader},
+};
+use crate::{error::DocumentError, raster::Images};
+use hayro_interpret::{
+    ClipPath, Device, FillRule,
+    pattern::ShadingPattern,
+    shading::{ShadingFunction, ShadingType},
+};
 use kurbo::{Affine, BezPath};
 
 impl SceneDevice<'_> {
@@ -32,31 +43,39 @@ impl SceneDevice<'_> {
     }
 
     fn append_gradient(&mut self, pattern: &ShadingPattern) -> Result<(), DocumentError> {
-        if let ShadingType::FunctionBased {
-            domain,
-            matrix,
-            function,
-        } = pattern.shading.shading_type.as_ref()
-        {
-            return self.append_function_gradient(pattern, *domain, *matrix, function);
+        match pattern.shading.shading_type.as_ref() {
+            ShadingType::FunctionBased {
+                domain,
+                matrix,
+                function,
+            } => self.append_function_gradient(pattern, *domain, *matrix, function),
+            ShadingType::RadialAxial { axial: false, .. } => self.append_radial_gradient(pattern),
+            ShadingType::RadialAxial {
+                coords,
+                domain,
+                function,
+                extend,
+                axial: true,
+            } => self.append_axial_gradient(pattern, *coords, *domain, function, *extend),
+            ShadingType::Dummy => Ok(()),
+            _ => self.append_mesh_gradient(pattern),
         }
-        if let ShadingType::RadialAxial { axial: false, .. } = pattern.shading.shading_type.as_ref()
-        {
-            return self.append_radial_gradient(pattern);
-        }
-        let ShadingType::RadialAxial {
-            coords,
-            domain,
-            function,
-            extend,
-            axial: true,
-        } = pattern.shading.shading_type.as_ref()
-        else {
-            return match pattern.shading.shading_type.as_ref() {
-                ShadingType::Dummy => Ok(()),
-                _ => self.append_mesh_gradient(pattern),
-            };
-        };
+    }
+
+    /// Draws an axial shading as up to three non-overlapping image quads along its axis:
+    /// the extension before t = 0, a 4096-sample ramp spanning exactly t ∈ [0, 1], and the
+    /// extension after t = 1. Each extension is a solid 1×1 resource (the end color when
+    /// extended, otherwise the Background color or nothing). The ramp therefore keeps full
+    /// resolution however short the axis is relative to the clip, and it is shared by every
+    /// draw of the same shading.
+    fn append_axial_gradient(
+        &mut self,
+        pattern: &ShadingPattern,
+        coords: [f32; 6],
+        domain: [f32; 2],
+        function: &ShadingFunction,
+        extend: [bool; 2],
+    ) -> Result<(), DocumentError> {
         let dx = f64::from(coords[2] - coords[0]);
         let dy = f64::from(coords[3] - coords[1]);
         let axis = pattern.matrix
@@ -68,68 +87,54 @@ impl SceneDevice<'_> {
         if clip.width() <= 0.0 || clip.height() <= 0.0 {
             return Ok(());
         }
+        // x is the gradient parameter t; y runs across the axis.
         let bounds = axis.inverse().transform_rect_bbox(clip);
-        if self.document.images.table.len() / 24 >= 10_000
-            || self.document.images.pixels.len() + 4096 * 4 > MAX_ENCODED_IMAGE_BYTES
-        {
-            return Err(DocumentError::Limit("gradient image resources"));
-        }
-        let image = (self.document.images.table.len() / 24) as u32;
-        for value in [
-            4096,
-            1,
-            self.document.images.pixels.len() as u32,
-            4096 * 4,
-            1,
-            0,
-        ] {
-            self.document
-                .images
-                .table
-                .extend_from_slice(&value.to_le_bytes());
-        }
-        for i in 0..4096 {
-            let t = bounds.x0 + (f64::from(i) + 0.5) / 4096.0 * bounds.width();
-            let outside = (t < 0.0 && !extend[0]) || (t > 1.0 && !extend[1]);
-            let components = if outside {
-                pattern.shading.background.clone()
-            } else {
-                function.eval(
-                    &[domain[0] + t.clamp(0.0, 1.0) as f32 * (domain[1] - domain[0])]
-                        .into_iter()
-                        .collect(),
-                )
-            };
-            if let Some(components) = components {
-                let mut color =
-                    pattern
-                        .shading
-                        .color_space
-                        .to_rgba(&components, pattern.opacity, false);
-                if let Some(transfer) = &pattern.transfer_function {
-                    color = transfer.apply(&color);
+        let quad = |t0: f64, t1: f64| {
+            axis * Affine::translate((t0, bounds.y0))
+                * Affine::scale_non_uniform(t1 - t0, bounds.height())
+        };
+        let sample = |t: f32| {
+            function.eval(
+                &[domain[0] + t * (domain[1] - domain[0])]
+                    .into_iter()
+                    .collect(),
+            )
+        };
+
+        let (low, high) = (bounds.x0.max(0.0), bounds.x1.min(1.0));
+        if high - low > EPSILON {
+            if high - low >= 1.0 / 4096.0 {
+                let mut ramp = Vec::with_capacity(4096 * 4);
+                for i in 0..4096 {
+                    let components = sample((i as f32 + 0.5) / 4096.0)
+                        .ok_or(DocumentError::Invalid("gradient color function"))?;
+                    ramp.extend(shading_color(pattern, &components));
                 }
-                self.document
-                    .images
-                    .pixels
-                    .extend(color.premultiplied().map(|v| (v * 255.0 + 0.5) as u8));
-            } else if outside {
-                self.document.images.pixels.extend_from_slice(&[0; 4]);
+                let image = self.intern_gradient(ramp_header(), &ramp)?;
+                self.add_gradient_quad(image, quad(0.0, 1.0));
             } else {
-                return Err(DocumentError::Invalid("gradient color function"));
+                // Less than one ramp texel is visible; a solid quad avoids a huge [0, 1] quad.
+                let components = sample(((low + high) * 0.5) as f32)
+                    .ok_or(DocumentError::Invalid("gradient color function"))?;
+                self.add_solid_quad(shading_color(pattern, &components), quad(low, high))?;
             }
         }
-        self.add_instance(
-            ShapeRecord {
-                first: image,
-                count: 0,
-                from_unit: Affine::IDENTITY,
-            },
-            axis * Affine::translate((bounds.x0, bounds.y0))
-                * Affine::scale_non_uniform(bounds.width(), bounds.height()),
-            [1.0; 4],
-            2,
-        );
+        for (t0, t1, extended, end) in [
+            (bounds.x0, bounds.x1.min(0.0), extend[0], 0.0),
+            (bounds.x0.max(1.0), bounds.x1, extend[1], 1.0),
+        ] {
+            if t1 - t0 <= EPSILON {
+                continue;
+            }
+            let components = if extended {
+                Some(sample(end).ok_or(DocumentError::Invalid("gradient color function"))?)
+            } else {
+                pattern.shading.background.clone()
+            };
+            if let Some(components) = components {
+                self.add_solid_quad(shading_color(pattern, &components), quad(t0, t1))?;
+            }
+        }
         Ok(())
     }
 
@@ -153,24 +158,7 @@ impl SceneDevice<'_> {
         }
         let bounds = pattern.matrix.inverse().transform_rect_bbox(clip);
         let scale = bounds.width().max(bounds.height());
-        let image = (self.document.images.table.len() / 24) as u32;
-        if image >= 10_000 || self.document.images.pixels.len() + 4096 * 4 > MAX_ENCODED_IMAGE_BYTES
-        {
-            return Err(DocumentError::Limit("gradient image resources"));
-        }
-        for value in [
-            4096,
-            1,
-            self.document.images.pixels.len() as u32,
-            4096 * 4,
-            1,
-            0,
-        ] {
-            self.document
-                .images
-                .table
-                .extend_from_slice(&value.to_le_bytes());
-        }
+        let mut ramp = Vec::with_capacity(4096 * 4);
         for sample in 0..4096 {
             let components = function
                 .eval(
@@ -179,37 +167,15 @@ impl SceneDevice<'_> {
                         .collect(),
                 )
                 .ok_or(DocumentError::Invalid("gradient color function"))?;
-            let mut color =
-                pattern
-                    .shading
-                    .color_space
-                    .to_rgba(&components, pattern.opacity, false);
-            if let Some(transfer) = &pattern.transfer_function {
-                color = transfer.apply(&color);
-            }
-            self.document
-                .images
-                .pixels
-                .extend(color.premultiplied().map(|v| (v * 255.0 + 0.5) as u8));
+            ramp.extend(shading_color(pattern, &components));
         }
         let background = pattern
             .shading
             .background
             .as_ref()
             .map_or([0.0; 4], |components| {
-                let mut color =
-                    pattern
-                        .shading
-                        .color_space
-                        .to_rgba(components, pattern.opacity, false);
-                if let Some(transfer) = &pattern.transfer_function {
-                    color = transfer.apply(&color);
-                }
-                color.premultiplied()
+                shading_rgba(pattern, components).premultiplied()
             });
-        self.document
-            .radial_gradients
-            .resize(image as usize * 64, 0);
         let values = [
             (bounds.width() / scale) as f32,
             (bounds.height() / scale) as f32,
@@ -228,22 +194,25 @@ impl SceneDevice<'_> {
             background[2],
             background[3],
         ];
-        for value in values {
-            self.document
-                .radial_gradients
-                .extend_from_slice(&value.to_le_bytes());
+        let record: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let radial = &self.document.radial_gradients;
+        let image = self.images.intern(
+            &mut self.document.images,
+            ramp_header(),
+            &ramp,
+            "gradient image resources",
+            |index| radial.get(index as usize * 64..index as usize * 64 + 64) == Some(&record[..]),
+        )?;
+        let start = image as usize * 64;
+        if self.document.radial_gradients.len() <= start {
+            self.document.radial_gradients.resize(start, 0);
+            self.document.radial_gradients.extend_from_slice(&record);
         }
-        self.add_instance(
-            ShapeRecord {
-                first: image,
-                count: 0,
-                from_unit: Affine::IDENTITY,
-            },
+        self.add_gradient_quad(
+            image,
             pattern.matrix
                 * Affine::translate((bounds.x0, bounds.y0))
                 * Affine::scale_non_uniform(bounds.width(), bounds.height()),
-            [1.0; 4],
-            2,
         );
         Ok(())
     }
@@ -253,7 +222,7 @@ impl SceneDevice<'_> {
         pattern: &ShadingPattern,
         domain: [f32; 4],
         matrix: Affine,
-        function: &hayro_interpret::shading::ShadingFunction,
+        function: &ShadingFunction,
     ) -> Result<(), DocumentError> {
         let axis = pattern.matrix * matrix;
         let width = f64::from(domain[1] - domain[0]);
@@ -273,49 +242,122 @@ impl SceneDevice<'_> {
                 let components = function
                     .eval(&values)
                     .ok_or(DocumentError::Invalid("shading color function"))?;
-                let mut color =
-                    pattern
-                        .shading
-                        .color_space
-                        .to_rgba(&components, pattern.opacity, false);
-                if let Some(transfer) = &pattern.transfer_function {
-                    color = transfer.apply(&color);
-                }
-                pixels.extend(color.premultiplied().map(|v| (v * 255.0 + 0.5) as u8));
+                pixels.extend(shading_color(pattern, &components));
             }
         }
-        let image = (self.document.images.table.len() / 24) as u32;
         let payload = crate::raster_tiles::encode(512, 512, &pixels)?;
-        if image >= 10_000
-            || self.document.images.pixels.len() + payload.len() > MAX_ENCODED_IMAGE_BYTES
-        {
-            return Err(DocumentError::Limit("gradient image resources"));
+        let header = ResourceHeader {
+            width: 512,
+            height: 512,
+            interpolate: true,
+            codec: 4,
+        };
+        let image = self.intern_gradient(header, &payload)?;
+        self.add_gradient_quad(
+            image,
+            axis * Affine::translate((f64::from(domain[0]), f64::from(domain[2])))
+                * Affine::scale_non_uniform(width, height),
+        );
+        Ok(())
+    }
+
+    /// Interns a non-radial generated image; it may only share resources without RGRD geometry.
+    fn intern_gradient(
+        &mut self,
+        header: ResourceHeader,
+        payload: &[u8],
+    ) -> Result<u32, DocumentError> {
+        intern_plain(
+            &mut self.images,
+            &mut self.document.images,
+            &self.document.radial_gradients,
+            header,
+            payload,
+        )
+    }
+
+    fn add_solid_quad(&mut self, color: [u8; 4], transform: Affine) -> Result<(), DocumentError> {
+        if color[3] == 0 {
+            return Ok(());
         }
-        for value in [
-            512,
-            512,
-            self.document.images.pixels.len() as u32,
-            payload.len() as u32,
-            1,
-            4,
-        ] {
-            self.document
-                .images
-                .table
-                .extend_from_slice(&value.to_le_bytes());
-        }
-        self.document.images.pixels.extend_from_slice(&payload);
+        let header = ResourceHeader {
+            width: 1,
+            height: 1,
+            interpolate: false,
+            codec: 0,
+        };
+        let image = self.intern_gradient(header, &color)?;
+        self.add_gradient_quad(image, transform);
+        Ok(())
+    }
+
+    fn add_gradient_quad(&mut self, image: u32, transform: Affine) {
         self.add_instance(
             ShapeRecord {
                 first: image,
                 count: 0,
                 from_unit: Affine::IDENTITY,
             },
-            axis * Affine::translate((f64::from(domain[0]), f64::from(domain[2])))
-                * Affine::scale_non_uniform(width, height),
+            transform,
             [1.0; 4],
             2,
         );
-        Ok(())
     }
+}
+
+/// Interns an image that has no radial geometry, never matching a radial resource.
+pub(super) fn intern_plain(
+    cache: &mut ImageCache,
+    images: &mut Images,
+    radial: &[u8],
+    header: ResourceHeader,
+    payload: &[u8],
+) -> Result<u32, DocumentError> {
+    cache.intern(
+        images,
+        header,
+        payload,
+        "gradient image resources",
+        |index| {
+            radial
+                .get(index as usize * 64..index as usize * 64 + 64)
+                .is_none_or(|record| record.iter().all(|b| *b == 0))
+        },
+    )
+}
+
+// Parameters closer than this along the axis are treated as empty extension regions.
+const EPSILON: f64 = 1.0e-9;
+
+fn ramp_header() -> ResourceHeader {
+    ResourceHeader {
+        width: 4096,
+        height: 1,
+        interpolate: true,
+        codec: 0,
+    }
+}
+
+fn shading_rgba(
+    pattern: &ShadingPattern,
+    components: &hayro_interpret::color::ColorComponents,
+) -> hayro_interpret::color::AlphaColor {
+    let mut color = pattern
+        .shading
+        .color_space
+        .to_rgba(components, pattern.opacity, false);
+    if let Some(transfer) = &pattern.transfer_function {
+        color = transfer.apply(&color);
+    }
+    color
+}
+
+/// Premultiplied RGBA8 after the shading's opacity and transfer function.
+fn shading_color(
+    pattern: &ShadingPattern,
+    components: &hayro_interpret::color::ColorComponents,
+) -> [u8; 4] {
+    shading_rgba(pattern, components)
+        .premultiplied()
+        .map(|v| (v * 255.0 + 0.5) as u8)
 }

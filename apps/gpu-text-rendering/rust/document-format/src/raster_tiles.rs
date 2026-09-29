@@ -8,6 +8,16 @@ use crate::{
 
 /// Encodes premultiplied RGBA without changing full-resolution samples. Each mip includes a one-pixel neighbor border.
 pub fn encode(width: u32, height: u32, pixels: &[u8]) -> Result<Vec<u8>, DocumentError> {
+    encode_with_base(width, height, pixels).map(|(bytes, _)| bytes)
+}
+
+/// Like [`encode`], also returning the compressed byte count of the full-resolution level.
+/// Callers use it to judge mip/border storage overhead without compressing the image twice.
+pub(crate) fn encode_with_base(
+    width: u32,
+    height: u32,
+    pixels: &[u8],
+) -> Result<(Vec<u8>, usize), DocumentError> {
     if pixels.len() != pixel_bytes(width, height)? || !premultiplied(pixels) {
         return Err(DocumentError::Invalid("tile source pixels"));
     }
@@ -20,8 +30,10 @@ pub fn encode(width: u32, height: u32, pixels: &[u8]) -> Result<Vec<u8>, Documen
     put(&mut out, 0, TILE);
     put(&mut out, 4, shapes.len() as u32);
     put(&mut out, 8, count as u32);
-    let mut current = pixels.to_vec();
+    // Level 0 is read in place; only the (at most one-third size) mips are owned copies.
+    let mut current = std::borrow::Cow::Borrowed(pixels);
     let mut index = 0;
+    let mut base = 0;
     for (level, &(w, h)) in shapes.iter().enumerate() {
         for ty in 0..h.div_ceil(TILE) {
             for tx in 0..w.div_ceil(TILE) {
@@ -65,10 +77,13 @@ pub fn encode(width: u32, height: u32, pixels: &[u8]) -> Result<Vec<u8>, Documen
                     }
                 }
             }
-            current = next;
+            current = std::borrow::Cow::Owned(next);
+        }
+        if level == 0 {
+            base = out.len();
         }
     }
-    Ok(out)
+    Ok((out, base))
 }
 
 /// Checks canonical ordering, exact ranges, bounded inflation and premultiplication for every tile before worker access.

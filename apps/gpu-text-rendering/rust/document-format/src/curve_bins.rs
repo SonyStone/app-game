@@ -1,7 +1,7 @@
 //! Axis bins reduce fragment work without changing Bézier geometry or fill winding.
 
 use crate::{container::u32_at, curves::f32_at, error::DocumentError};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Adds row/column lookup tables for shared outlines with more than 64 monotone segments.
 pub(crate) fn build(
@@ -53,12 +53,20 @@ fn build_with_budget(
     Ok(if data.len() == 4 { Vec::new() } else { data })
 }
 
-/// Validates each shared lookup once. References must remain inside the owning outline.
+/// Validates every referenced lookup table in time linear in the BINS and record counts.
+///
+/// Each distinct table offset is summarized once (its longest row and the smallest and
+/// largest curve index it lists), and every row is checked in O(1) against a precomputed
+/// strictly-ascending run table. A draw or clip then only compares that summary with its own
+/// `first..first + count` curve range, so many records sharing or overlapping large row lists
+/// cannot multiply the scan cost.
 pub(crate) fn validate(data: &[u8], draws: &[u8], clips: &[u8]) -> Result<(), DocumentError> {
     if !data.len().is_multiple_of(4) || data.len() > MAX_BYTES {
         return Err(DocumentError::Limit("curve bins"));
     }
-    let mut checked = HashSet::new();
+    let words = data.len() / 4;
+    let mut runs = None;
+    let mut tables = HashMap::new();
 
     for record in draws.chunks_exact(80).chain(clips.chunks_exact(80)) {
         let offset = u32_at(record, 28) as usize;
@@ -70,30 +78,78 @@ pub(crate) fn validate(data: &[u8], draws: &[u8], clips: &[u8]) -> Result<(), Do
             }
             continue;
         }
-        if u32_at(record, 72) == 2 || offset > data.len() / 4 || 512 > data.len() / 4 - offset {
+        if u32_at(record, 72) == 2 || offset > words || 512 > words - offset {
             return Err(DocumentError::Invalid("curve bin table"));
         }
-        if !checked.insert((offset, first, count)) {
-            continue;
-        }
-
-        for row in 0..256 {
-            let start = u32_at(data, (offset + row * 2) * 4) as usize;
-            let len = u32_at(data, (offset + row * 2 + 1) * 4) as usize;
-            if start > data.len() / 4 || len > data.len() / 4 - start || len > count as usize {
-                return Err(DocumentError::Invalid("curve bin range"));
+        let summary = match tables.get(&offset) {
+            Some(summary) => *summary,
+            None => {
+                let runs = runs.get_or_insert_with(|| ascending_runs(data));
+                let summary = summarize(data, runs, offset)?;
+                tables.insert(offset, summary);
+                summary
             }
-            let mut previous = None;
-            for entry in data[start * 4..(start + len) * 4].chunks_exact(4) {
-                let index = u32_at(entry, 0);
-                if index < first || index - first >= count || previous.is_some_and(|p| index <= p) {
-                    return Err(DocumentError::Invalid("curve bin index"));
-                }
-                previous = Some(index);
-            }
+        };
+        if summary.longest > count as usize
+            || summary
+                .indices
+                .is_some_and(|(min, max)| min < first || max - first >= count)
+        {
+            return Err(DocumentError::Invalid("curve bin index"));
         }
     }
     Ok(())
+}
+
+/// Record-independent facts about one 256-row table; `indices` is `None` when every row is empty.
+#[derive(Clone, Copy)]
+struct TableSummary {
+    longest: usize,
+    indices: Option<(u32, u32)>,
+}
+
+/// Checks each row's range and strict ordering once, then keeps only its extreme indices.
+fn summarize(data: &[u8], runs: &[u32], offset: usize) -> Result<TableSummary, DocumentError> {
+    let words = data.len() / 4;
+    let mut summary = TableSummary {
+        longest: 0,
+        indices: None,
+    };
+    for row in 0..256 {
+        let start = u32_at(data, (offset + row * 2) * 4) as usize;
+        let len = u32_at(data, (offset + row * 2 + 1) * 4) as usize;
+        if start > words || len > words - start || len > 65536 {
+            return Err(DocumentError::Invalid("curve bin range"));
+        }
+        if len == 0 {
+            continue;
+        }
+        if start + len > runs[start] as usize {
+            return Err(DocumentError::Invalid("curve bin index"));
+        }
+        let (low, high) = (u32_at(data, start * 4), u32_at(data, (start + len - 1) * 4));
+        summary.longest = summary.longest.max(len);
+        summary.indices = Some(
+            summary
+                .indices
+                .map_or((low, high), |(min, max)| (min.min(low), max.max(high))),
+        );
+    }
+    Ok(summary)
+}
+
+/// For each word `i`, the exclusive end of the longest strictly ascending run starting at `i`.
+fn ascending_runs(data: &[u8]) -> Vec<u32> {
+    let words = data.len() / 4;
+    let mut runs = vec![0u32; words];
+    for i in (0..words).rev() {
+        runs[i] = if i + 1 < words && u32_at(data, i * 4) < u32_at(data, (i + 1) * 4) {
+            runs[i + 1]
+        } else {
+            (i + 1) as u32
+        };
+    }
+    runs
 }
 
 fn append(
@@ -178,5 +234,49 @@ mod tests {
             build_with_budget(&curves, &mut draw, &mut [], 4),
             Err(DocumentError::Limit("curve bins"))
         ));
+    }
+
+    #[test]
+    fn shared_and_overlapping_large_rows_are_validated_once() {
+        // 256 tables whose 256 rows each point into one 65,536-entry ascending list at a
+        // different start. The former per-(offset, first, count) scan needed ~4.3e9 checks.
+        let tables = 256usize;
+        let list = 1 + tables * 512;
+        let mut words = vec![0u32; list + 65536];
+        for (i, word) in words[list..].iter_mut().enumerate() {
+            *word = i as u32;
+        }
+        for table in 0..tables {
+            for row in 0..256 {
+                let at = 1 + table * 512 + row * 2;
+                words[at] = (list + table) as u32;
+                words[at + 1] = (65536 - table) as u32;
+            }
+        }
+        let data: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
+        let mut draws = vec![0u8; tables * 4 * 80];
+        for (index, draw) in draws.chunks_exact_mut(80).enumerate() {
+            draw[28..32].copy_from_slice(&((1 + (index % tables) * 512) as u32).to_le_bytes());
+            draw[68..72].copy_from_slice(&65536u32.to_le_bytes());
+        }
+        let started = std::time::Instant::now();
+        validate(&data, &draws, &[]).unwrap();
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+
+        // Indices outside a referencing draw's own range are still rejected.
+        draws[64..68].copy_from_slice(&1u32.to_le_bytes());
+        assert_eq!(
+            validate(&data, &draws, &[]),
+            Err(DocumentError::Invalid("curve bin index"))
+        );
+        // Non-ascending rows are rejected even when shared.
+        let mut unordered = data.clone();
+        let at = (list + 100) * 4;
+        unordered[at..at + 4].copy_from_slice(&0u32.to_le_bytes());
+        draws[64..68].copy_from_slice(&0u32.to_le_bytes());
+        assert_eq!(
+            validate(&unordered, &draws, &[]),
+            Err(DocumentError::Invalid("curve bin index"))
+        );
     }
 }

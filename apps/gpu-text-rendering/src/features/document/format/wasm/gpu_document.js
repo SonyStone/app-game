@@ -89,6 +89,9 @@ export function decodeCmykJpeg(bytes, width, height) {
 
 /**
  * Decode synchronously inside a dedicated Worker; cancellation terminates that Worker.
+ *
+ * Takes ownership of the copied input so a raw image payload can be decoded in place
+ * (JavaScript still passes a `Uint8Array`; only WASM-side ownership changes).
  * @param {Uint8Array} bytes
  * @returns {DecodeOutcome}
  */

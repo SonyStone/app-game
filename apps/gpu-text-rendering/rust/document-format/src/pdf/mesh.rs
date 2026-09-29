@@ -1,8 +1,13 @@
 //! Mesh colors are sampled in their original color space, before transfer/opacity.
 //! Only the shading is rasterized; its surrounding vector content and clip chain stay intact.
 
-use super::{SceneDevice, geometry::ShapeRecord};
-use crate::{error::DocumentError, raster::MAX_ENCODED_IMAGE_BYTES};
+use super::{
+    SceneDevice,
+    budget::{TRIANGLE_WORK, WorkBudget},
+    geometry::ShapeRecord,
+    images::ResourceHeader,
+};
+use crate::error::DocumentError;
 use hayro_interpret::{
     color::ColorComponents,
     pattern::ShadingPattern,
@@ -60,6 +65,7 @@ impl SceneDevice<'_> {
             width,
             height,
             samples: background.repeat(width as usize * height as usize * 4),
+            work: self.work,
         };
         match shading {
             ShadingType::TriangleMesh { triangles, .. } => {
@@ -106,26 +112,21 @@ impl SceneDevice<'_> {
             }
             _ => return Err(DocumentError::Invalid("mesh shading type")),
         }
+        self.work = raster.work;
         let pixels = raster.resolve();
         let payload = crate::raster_tiles::encode(width, height, &pixels)?;
-        let images = &mut self.document.images;
-        if images.table.len() / 24 >= 10_000
-            || payload.len() > MAX_ENCODED_IMAGE_BYTES.saturating_sub(images.pixels.len())
-        {
-            return Err(DocumentError::Limit("mesh image resources"));
-        }
-        let image = (images.table.len() / 24) as u32;
-        for value in [
+        let header = ResourceHeader {
             width,
             height,
-            images.pixels.len() as u32,
-            payload.len() as u32,
-            1,
-            4,
-        ] {
-            images.table.extend_from_slice(&value.to_le_bytes());
-        }
-        images.pixels.extend_from_slice(&payload);
+            interpolate: true,
+            codec: 4,
+        };
+        let image = self.images.push(
+            &mut self.document.images,
+            header,
+            &payload,
+            "mesh image resources",
+        )?;
         self.add_instance(
             ShapeRecord {
                 first: image,
@@ -209,6 +210,8 @@ struct MeshRaster {
     width: u32,
     height: u32,
     samples: Vec<u8>,
+    /// Charged before each triangle scan and patch refinement pass.
+    work: WorkBudget,
 }
 
 impl MeshRaster {
@@ -227,6 +230,11 @@ impl MeshRaster {
         let y0 = bounds.y0.floor().max(0.0) as u32;
         let x1 = bounds.x1.ceil().min(f64::from(self.width)) as u32;
         let y1 = bounds.y1.ceil().min(f64::from(self.height)) as u32;
+        // Every sample in the clipped bounding box is tested, so charge them up front:
+        // many overlapping page-sized triangles fail before scanning, not after.
+        let samples = u64::from(x1.saturating_sub(x0)) * u64::from(y1.saturating_sub(y0)) * 4;
+        self.work
+            .charge(samples + TRIANGLE_WORK, "mesh shading samples")?;
         for y in y0..y1 {
             for x in x0..x1 {
                 for (sample, (dx, dy)) in [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)]
@@ -256,7 +264,13 @@ impl MeshRaster {
         // A uniform grid per patch avoids T junctions. Increase resolution until
         // mapped midpoints are within 1/4 output pixel of the linear cells.
         let mut steps = 8;
-        while steps < 256 && patch_error(&map, steps) > 0.25 {
+        loop {
+            // Five mapped midpoints per cell are evaluated at this refinement level.
+            self.work
+                .charge((steps * steps * 5) as u64, "mesh shading samples")?;
+            if steps >= 256 || patch_error(&map, steps) <= 0.25 {
+                break;
+            }
             steps *= 2;
         }
         for y in 0..steps {
@@ -334,6 +348,7 @@ mod tests {
             width: 8,
             height: 8,
             samples: vec![0; 8 * 8 * 16],
+            work: WorkBudget::new(1 << 20),
         };
         let color = |_| Ok([128, 0, 0, 128]);
         raster
@@ -370,6 +385,7 @@ mod tests {
             width: 1,
             height: 1,
             samples: vec![0; 16],
+            work: WorkBudget::new(1 << 20),
         };
         raster
             .triangle(
@@ -389,5 +405,36 @@ mod tests {
             )
             .unwrap();
         assert_eq!(raster.resolve(), [128, 64, 64, 255]);
+    }
+
+    #[test]
+    fn overlapping_page_sized_triangles_exhaust_the_budget_before_scanning() {
+        // Each triangle's bounding box covers 64² pixels × 4 samples; admit three.
+        let per_triangle = 64 * 64 * 4 + TRIANGLE_WORK;
+        let mut raster = MeshRaster {
+            width: 64,
+            height: 64,
+            samples: vec![0; 64 * 64 * 16],
+            work: WorkBudget::new(per_triangle * 3 + per_triangle / 2),
+        };
+        let page = [
+            Point::new(-10.0, -10.0),
+            Point::new(1000.0, -10.0),
+            Point::new(-10.0, 1000.0),
+        ];
+        let evaluated = std::cell::Cell::new(0u64);
+        let mut error = None;
+        for _ in 0..1000 {
+            if let Err(e) = raster.triangle(page, |_| {
+                evaluated.set(evaluated.get() + 1);
+                Ok([0; 4])
+            }) {
+                error = Some(e);
+                break;
+            }
+        }
+        assert_eq!(error, Some(DocumentError::Limit("mesh shading samples")));
+        // Three full scans of 64² × 4 samples; the fourth triangle was never scanned.
+        assert_eq!(evaluated.get(), 3 * 64 * 64 * 4);
     }
 }
