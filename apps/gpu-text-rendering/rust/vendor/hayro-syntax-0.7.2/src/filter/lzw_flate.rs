@@ -769,6 +769,24 @@ impl PredictorParams {
 }
 
 fn apply_predictor(data: Vec<u8>, params: &PredictorParams) -> Option<Vec<u8>> {
+    let bytes_per_pixel =
+        (u32::from(params.colors) * u32::from(params.bits_per_component)).div_ceil(8) as usize;
+
+    if params.predictor >= 10
+        && matches!(params.bits_per_component, 1 | 2 | 4 | 8 | 16)
+        && let Some(row_len) = params.row_length_in_bytes()
+        // Rows that hold whole pixels can be unfiltered bytewise, as in PNG.
+        && row_len > 0
+        && row_len.is_multiple_of(bytes_per_pixel)
+    {
+        return Some(unfilter_png_rows(&data, row_len, bytes_per_pixel));
+    }
+
+    apply_predictor_bits(data, params)
+}
+
+/// Generic predictor path for TIFF predictors and rows that are not whole pixels.
+fn apply_predictor_bits(data: Vec<u8>, params: &PredictorParams) -> Option<Vec<u8>> {
     match params.predictor {
         1 => Some(data),
         i => {
@@ -883,6 +901,164 @@ fn apply_predictor(data: Vec<u8>, params: &PredictorParams) -> Option<Vec<u8>> {
     }
 }
 
+/// Undo per-row PNG filters (None, Sub, Up, Average, Paeth) on byte-aligned samples.
+///
+/// Produces the same bytes as the generic `BitChunks` path when `row_len` is a positive
+/// multiple of `bytes_per_pixel`; unknown filter types copy the row. A trailing partial
+/// row is dropped.
+fn unfilter_png_rows(data: &[u8], row_len: usize, bytes_per_pixel: usize) -> Vec<u8> {
+    match bytes_per_pixel {
+        1 => unfilter_png_rows_with::<1>(data, row_len),
+        2 => unfilter_png_rows_with::<2>(data, row_len),
+        3 => unfilter_png_rows_with::<3>(data, row_len),
+        4 => unfilter_png_rows_with::<4>(data, row_len),
+        6 => unfilter_png_rows_with::<6>(data, row_len),
+        8 => unfilter_png_rows_with::<8>(data, row_len),
+        _ => unfilter_png_rows_dynamic(data, row_len, bytes_per_pixel),
+    }
+}
+
+/// Pixel-at-a-time unfiltering for common pixel sizes; the left and upper-left pixels stay
+/// in registers instead of being re-read from the output row.
+fn unfilter_png_rows_with<const BPP: usize>(data: &[u8], row_len: usize) -> Vec<u8> {
+    let rows = data.chunks_exact(row_len + 1);
+    let mut out = vec![0; rows.len() * row_len];
+    let zero_row = vec![0; row_len];
+
+    for (index, in_row) in rows.enumerate() {
+        let (done, rest) = out.split_at_mut(index * row_len);
+        let prev = if index == 0 {
+            &zero_row[..]
+        } else {
+            &done[done.len() - row_len..]
+        };
+        let cur = &mut rest[..row_len];
+        let src = &in_row[1..];
+        let pixels = cur
+            .chunks_exact_mut(BPP)
+            .zip(src.chunks_exact(BPP))
+            .zip(prev.chunks_exact(BPP));
+
+        match in_row[0] {
+            1 => {
+                let mut left = [0u8; BPP];
+
+                for ((cur, src), _) in pixels {
+                    for i in 0..BPP {
+                        left[i] = src[i].wrapping_add(left[i]);
+                        cur[i] = left[i];
+                    }
+                }
+            }
+            2 => {
+                for ((cur, src), up) in cur.iter_mut().zip(src).zip(prev) {
+                    *cur = src.wrapping_add(*up);
+                }
+            }
+            3 => {
+                let mut left = [0u8; BPP];
+
+                for ((cur, src), up) in pixels {
+                    for i in 0..BPP {
+                        let average = ((u16::from(left[i]) + u16::from(up[i])) / 2) as u8;
+                        left[i] = src[i].wrapping_add(average);
+                        cur[i] = left[i];
+                    }
+                }
+            }
+            4 => {
+                let mut left = [0u8; BPP];
+                let mut up_left = [0u8; BPP];
+
+                for ((cur, src), up) in pixels {
+                    for i in 0..BPP {
+                        left[i] = src[i].wrapping_add(paeth_byte(left[i], up[i], up_left[i]));
+                        up_left[i] = up[i];
+                        cur[i] = left[i];
+                    }
+                }
+            }
+            _ => cur.copy_from_slice(src),
+        }
+    }
+
+    out
+}
+
+/// Bytewise unfiltering for uncommon pixel sizes (for example 5 or 7 channels).
+fn unfilter_png_rows_dynamic(data: &[u8], row_len: usize, bytes_per_pixel: usize) -> Vec<u8> {
+    let rows = data.chunks_exact(row_len + 1);
+    let mut out = vec![0; rows.len() * row_len];
+    let zero_row = vec![0; row_len];
+
+    for (index, in_row) in rows.enumerate() {
+        let (done, rest) = out.split_at_mut(index * row_len);
+        let prev = if index == 0 {
+            &zero_row[..]
+        } else {
+            &done[done.len() - row_len..]
+        };
+        let cur = &mut rest[..row_len];
+        let src = &in_row[1..];
+        let bpp = bytes_per_pixel;
+
+        match in_row[0] {
+            1 => {
+                cur[..bpp].copy_from_slice(&src[..bpp]);
+
+                for i in bpp..row_len {
+                    cur[i] = src[i].wrapping_add(cur[i - bpp]);
+                }
+            }
+            2 => {
+                for ((cur, src), prev) in cur.iter_mut().zip(src).zip(prev) {
+                    *cur = src.wrapping_add(*prev);
+                }
+            }
+            3 => {
+                for i in 0..bpp {
+                    cur[i] = src[i].wrapping_add(prev[i] / 2);
+                }
+
+                for i in bpp..row_len {
+                    let average = (u16::from(cur[i - bpp]) + u16::from(prev[i])) / 2;
+                    cur[i] = src[i].wrapping_add(average as u8);
+                }
+            }
+            4 => {
+                for i in 0..bpp {
+                    cur[i] = src[i].wrapping_add(prev[i]);
+                }
+
+                for i in bpp..row_len {
+                    let predicted = paeth_byte(cur[i - bpp], prev[i], prev[i - bpp]);
+                    cur[i] = src[i].wrapping_add(predicted);
+                }
+            }
+            _ => cur.copy_from_slice(src),
+        }
+    }
+
+    out
+}
+
+/// PNG Paeth predictor. `p - left == up - up_left` and `p - up == left - up_left`, so no
+/// intermediate `p` is needed; ties prefer left, then up, as the specification requires.
+#[inline(always)]
+fn paeth_byte(left: u8, up: u8, up_left: u8) -> u8 {
+    let (a, b, c) = (i16::from(left), i16::from(up), i16::from(up_left));
+    let pa = (b - c).abs();
+    let pb = (a - c).abs();
+    let pc = (a + b - 2 * c).abs();
+    let up_or_up_left = if pb <= pc { up } else { up_left };
+
+    if pa <= pb && pa <= pc {
+        left
+    } else {
+        up_or_up_left
+    }
+}
+
 fn apply<'a, T: Predictor>(
     prev_row: BitChunks<'a>,
     mut prev_col: BitChunk,
@@ -975,7 +1151,7 @@ impl Predictor for Paeth {
 #[cfg(test)]
 #[rustfmt::skip]
 mod tests {
-    use crate::filter::lzw_flate::{PredictorParams, apply_predictor, flate, lzw};
+    use crate::filter::lzw_flate::{PredictorParams, apply_predictor, flate, lzw, unfilter_png_rows};
     use crate::object::Dict;
 
     #[test]
@@ -1088,5 +1264,44 @@ mod tests {
                 4, 3, 1, 252, 5, 253, 6, 1, 229, 254,
             ],
         );
+    }
+
+    #[test]
+    fn png_fast_path_matches_generic_predictor() {
+        // Pseudo-random rows with every filter type, including unknown ones.
+        let mut seed = 0x2545_f491_u32;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed as u8
+        };
+
+        for (colors, bits_per_component, columns) in
+            [(1, 8, 17), (3, 8, 9), (4, 8, 5), (3, 16, 7), (4, 16, 3), (5, 8, 4), (1, 1, 21), (2, 4, 6), (1, 16, 3)]
+        {
+            let params = PredictorParams {
+                predictor: 15,
+                colors,
+                bits_per_component,
+                columns,
+                early_change: false,
+            };
+            let row_len = params.row_length_in_bytes().unwrap();
+            let bytes_per_pixel = (colors * bits_per_component).div_ceil(8) as usize;
+            let mut input = Vec::new();
+
+            for row in 0..12 {
+                input.push((row % 7) as u8);
+                input.extend((0..row_len).map(|_| next()));
+            }
+
+            // Trailing partial row, dropped by both paths.
+            input.extend([1, 2]);
+
+            let generic = super::apply_predictor_bits(input.clone(), &params).unwrap();
+            assert_eq!(generic, unfilter_png_rows(&input, row_len, bytes_per_pixel));
+            assert_eq!(generic, apply_predictor(input, &params).unwrap());
+        }
     }
 }

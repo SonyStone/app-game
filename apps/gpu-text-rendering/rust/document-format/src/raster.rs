@@ -14,6 +14,17 @@ pub struct Images {
 impl Images {
     /// Checks all byte ranges and dimensions before transferring or allocating GPU resources.
     pub fn validate(&self) -> Result<(), DocumentError> {
+        self.check(true)
+    }
+
+    /// Like [`validate`](Self::validate), but trusts payloads encoded in this process by the PDF
+    /// importer: raw, zlib and tiled pixels are not re-read. Inflating every tile of a scanned
+    /// book again costs about a quarter of its import time.
+    pub(crate) fn validate_layout(&self) -> Result<(), DocumentError> {
+        self.check(false)
+    }
+
+    fn check(&self, decode_payloads: bool) -> Result<(), DocumentError> {
         if !self.table.len().is_multiple_of(24) || self.table.len() / 24 > 10_000 {
             return Err(DocumentError::Invalid("image table"));
         }
@@ -31,7 +42,9 @@ impl Images {
             }
             let payload = &self.pixels[next..next + stored];
             if codec == 4 {
-                crate::raster_tiles::validate(u32_at(record, 0), u32_at(record, 4), payload)?;
+                if decode_payloads {
+                    crate::raster_tiles::validate(u32_at(record, 0), u32_at(record, 4), payload)?;
+                }
                 next += stored;
                 continue;
             }
@@ -39,6 +52,10 @@ impl Images {
                 if jpeg_dimensions(payload) != Some((u32_at(record, 0), u32_at(record, 4))) {
                     return Err(DocumentError::Invalid("JPEG dimensions/header"));
                 }
+                next += stored;
+                continue;
+            }
+            if !decode_payloads {
                 next += stored;
                 continue;
             }

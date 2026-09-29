@@ -22,6 +22,9 @@ Local changes:
 - `hayro-syntax/src/filter/lzw_flate.rs`: Flate (flate2 and fallback), LZW and predictor
   output stop at the stream cap; an oversized zlib result is final instead of retrying the
   raw-deflate/fallback decoders. Predictor row length uses checked arithmetic.
+  PNG predictors on rows of whole pixels are unfiltered bytewise instead of through
+  `BitChunks` (byte-identical, ~3x faster imports of Flate+Predictor 15 scans); TIFF
+  predictors and sub-byte rows with partial pixels keep the generic path.
 - `hayro-syntax/src/filter/run_length.rs`: enforce the stream cap.
 - `hayro-syntax/src/filter/{dct,jpx,jbig2,ccitt}.rs`: check frame dimensions (and component
   bytes) against the caps after parsing headers, before sample allocation. CCITT also stops

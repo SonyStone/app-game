@@ -30,7 +30,9 @@ if (version !== 'wasm-bindgen 0.2.100') {
 }
 
 if (!optimizer) {
-  console.warn('wasm-opt not found (or WASM_OPT=0); skipping Binaryen optimization. Install binaryen to shrink the modules.');
+  console.warn(
+    'wasm-opt not found (or WASM_OPT=0); skipping Binaryen optimization. Install binaryen to shrink the modules.'
+  );
 }
 
 // The decoder favors speed; the much larger PDF importer favors download size.
@@ -54,7 +56,11 @@ for (const [features, directory, level] of [
       '--features',
       features
     ],
-    { stdio: 'inherit' }
+    // WebGPU browsers all support WASM SIMD; it speeds up checksums, filters and copies (~10% on scanned-book import).
+    {
+      stdio: 'inherit',
+      env: { ...process.env, CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS: '-C target-feature=+simd128' }
+    }
   );
 
   mkdirSync(output, { recursive: true });
@@ -75,7 +81,7 @@ for (const [features, directory, level] of [
 
   if (optimizer) {
     const wasm = `${output}/gpu_document_bg.wasm`;
-    // Rust 1.92's wasm32 defaults use these post-MVP features; Binaryen must accept, not add, them.
+    // Rust 1.92's wasm32 defaults plus SIMD use these post-MVP features; Binaryen must accept, not add, them.
     execFileSync(
       'wasm-opt',
       [
@@ -86,6 +92,7 @@ for (const [features, directory, level] of [
         '--enable-reference-types',
         '--enable-multivalue',
         '--enable-sign-ext',
+        '--enable-simd',
         wasm,
         '-o',
         wasm

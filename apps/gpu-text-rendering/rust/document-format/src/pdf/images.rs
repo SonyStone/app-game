@@ -209,22 +209,21 @@ impl ImageCache {
         pixels
             .try_reserve_exact(size)
             .map_err(|_| DocumentError::Limit("image storage memory"))?;
-        for i in 0..size / 4 {
-            let (rgb, a) = match data {
-                ImageData::Rgb(data) => (
-                    [data.data[i * 3], data.data[i * 3 + 1], data.data[i * 3 + 2]],
-                    255,
-                ),
-                ImageData::Luma(data) if stencil => ([255; 3], data.data[i]),
-                ImageData::Luma(data) => ([data.data[i]; 3], 255),
-            };
-            let a = alpha.map_or(a, |mask| {
-                sample_mask(mask, i as u32 % width, i as u32 / width, width, height)
-            });
-            for c in rgb {
-                pixels.push(((u16::from(c) * u16::from(a) + 127) / 255) as u8);
+        match (data, alpha) {
+            // Opaque premultiplication is the identity; whole-page scans take this path.
+            (ImageData::Rgb(data), None) => {
+                pixels.resize(size, 255);
+                for (rgba, rgb) in pixels.chunks_exact_mut(4).zip(data.data.chunks_exact(3)) {
+                    rgba[..3].copy_from_slice(rgb);
+                }
             }
-            pixels.push(a);
+            (ImageData::Luma(data), None) if !stencil => {
+                pixels.resize(size, 255);
+                for (rgba, &luma) in pixels.chunks_exact_mut(4).zip(&data.data) {
+                    rgba[..3].fill(luma);
+                }
+            }
+            _ => premultiply_into(&mut pixels, data, alpha, stencil, width, height),
         }
         let (codec, payload) = self.encode_pixels(images, width, height, pixels);
         let header = ResourceHeader {
@@ -303,6 +302,34 @@ fn u32_at(bytes: &[u8], offset: usize) -> u32 {
 }
 
 // PDF soft masks can have a different resolution. Sample their pixel centers in image UV space.
+/// Converts masked, stencil or gray-with-alpha samples to premultiplied RGBA8, per pixel.
+fn premultiply_into(
+    pixels: &mut Vec<u8>,
+    data: &ImageData,
+    alpha: Option<&LumaData>,
+    stencil: bool,
+    width: u32,
+    height: u32,
+) {
+    for i in 0..(width * height) as usize {
+        let (rgb, a) = match data {
+            ImageData::Rgb(data) => (
+                [data.data[i * 3], data.data[i * 3 + 1], data.data[i * 3 + 2]],
+                255,
+            ),
+            ImageData::Luma(data) if stencil => ([255; 3], data.data[i]),
+            ImageData::Luma(data) => ([data.data[i]; 3], 255),
+        };
+        let a = alpha.map_or(a, |mask| {
+            sample_mask(mask, i as u32 % width, i as u32 / width, width, height)
+        });
+        for c in rgb {
+            pixels.push(((u16::from(c) * u16::from(a) + 127) / 255) as u8);
+        }
+        pixels.push(a);
+    }
+}
+
 fn sample_mask(mask: &LumaData, x: u32, y: u32, width: u32, height: u32) -> u8 {
     let px = (f64::from(x) + 0.5) * f64::from(mask.width) / f64::from(width) - 0.5;
     let py = (f64::from(y) + 0.5) * f64::from(mask.height) / f64::from(height) - 0.5;

@@ -1,5 +1,9 @@
 //! Independently compressed, guttered RGBA tiles with a complete mip pyramid.
 
+use miniz_oxide::deflate::core::{
+    CompressorOxide, TDEFLFlush, TDEFLStatus, compress, create_comp_flags_from_zip_params,
+};
+
 use crate::{
     container::u32_at,
     error::DocumentError,
@@ -32,20 +36,20 @@ pub(crate) fn encode_with_base(
     put(&mut out, 8, count as u32);
     // Level 0 is read in place; only the (at most one-third size) mips are owned copies.
     let mut current = std::borrow::Cow::Borrowed(pixels);
+    let mut compressor = TileCompressor::new();
     let mut index = 0;
     let mut base = 0;
     for (level, &(w, h)) in shapes.iter().enumerate() {
         for ty in 0..h.div_ceil(TILE) {
             for tx in 0..w.div_ceil(TILE) {
                 let tile = guttered_tile(&current, w, h, tx, ty);
-                let packed = miniz_oxide::deflate::compress_to_vec_zlib(&tile, TILE_LEVEL);
-                if packed.len() > MAX_PIXEL_BYTES.saturating_sub(out.len()) {
+                let offset = out.len();
+                let packed = compressor.append(&tile, &mut out);
+                if out.len() > MAX_PIXEL_BYTES {
                     return Err(DocumentError::Limit("encoded tile pyramid"));
                 }
-                let offset = out.len() as u32;
-                put(&mut out, 16 + index * 8, offset);
-                put(&mut out, 20 + index * 8, packed.len() as u32);
-                out.extend_from_slice(&packed);
+                put(&mut out, 16 + index * 8, offset as u32);
+                put(&mut out, 20 + index * 8, packed as u32);
                 index += 1;
             }
         }
@@ -57,6 +61,43 @@ pub(crate) fn encode_with_base(
         }
     }
     Ok((out, base))
+}
+
+/// Zlib compressor reused across tiles. A fresh one allocates and zeroes several hundred KiB
+/// of match state, which cost more than compressing a 130×130 tile at [`TILE_LEVEL`].
+struct TileCompressor(CompressorOxide);
+
+impl TileCompressor {
+    fn new() -> Self {
+        let flags = create_comp_flags_from_zip_params(TILE_LEVEL.into(), 1, 0);
+        Self(CompressorOxide::new(flags))
+    }
+
+    /// Appends one complete zlib stream for `input` to `out` and returns its length. Output is
+    /// identical to `compress_to_vec_zlib` because `reset` clears all match history.
+    fn append(&mut self, mut input: &[u8], out: &mut Vec<u8>) -> usize {
+        self.0.reset();
+        let start = out.len();
+        let mut end = start;
+        out.resize(start + (input.len() / 2).max(64), 0);
+        loop {
+            let (status, read, written) =
+                compress(&mut self.0, input, &mut out[end..], TDEFLFlush::Finish);
+            end += written;
+            match status {
+                TDEFLStatus::Done => break,
+                TDEFLStatus::Okay => {
+                    input = &input[read..];
+                    if out.len() - end < 64 {
+                        out.resize(out.len() + (out.len() - start).max(64), 0);
+                    }
+                }
+                _ => unreachable!("in-memory deflate with Finish cannot fail"),
+            }
+        }
+        out.truncate(end);
+        end - start
+    }
 }
 
 /// Copies one tile with a one-pixel border, repeating edge pixels outside the image.
@@ -84,25 +125,54 @@ fn guttered_tile(pixels: &[u8], w: u32, h: u32, tx: u32, ty: u32) -> Vec<u8> {
 
 /// Box-filters one mip level; each target pixel averages its (2 or 3)² source block, rounded.
 fn downsample(pixels: &[u8], w: u32, h: u32, nw: u32, nh: u32) -> Vec<u8> {
-    let mut next = Vec::with_capacity((nw * nh * 4) as usize);
-    for y in 0..nh {
+    let (w, h, nw, nh) = (w as usize, h as usize, nw as usize, nh as usize);
+    // Each level halves (rounding down, at least 1), so blocks are 1–3 pixels per side.
+    let columns: Vec<_> = (0..nw).map(|x| (x * w / nw, (x + 1) * w / nw)).collect();
+    let mut next = vec![0; nw * nh * 4];
+    for (y, target) in next.chunks_exact_mut(nw * 4).enumerate() {
         let (top, bottom) = (y * h / nh, (y + 1) * h / nh);
-        for x in 0..nw {
-            let (left, right) = (x * w / nw, (x + 1) * w / nw);
-            let count = (right - left) * (bottom - top);
-            let mut sum = [0u32; 4];
-            for sy in top..bottom {
-                let row = &pixels[((sy * w + left) * 4) as usize..((sy * w + right) * 4) as usize];
-                for pixel in row.chunks_exact(4) {
-                    for (total, &value) in sum.iter_mut().zip(pixel) {
-                        *total += u32::from(value);
-                    }
-                }
-            }
-            next.extend(sum.map(|total| ((total + count / 2) / count) as u8));
+        let row = |r: usize| &pixels[(top + r) * w * 4..(top + r + 1) * w * 4];
+        match bottom - top {
+            1 => average_row([row(0)], &columns, target),
+            2 => average_row([row(0), row(1)], &columns, target),
+            _ => average_row([row(0), row(1), row(2)], &columns, target),
         }
     }
     next
+}
+
+/// Writes one target row. Block sizes are compile-time constants, so the rounded division
+/// becomes a multiply; almost every block is 2×2 or 2×3.
+fn average_row<const ROWS: usize>(
+    rows: [&[u8]; ROWS],
+    columns: &[(usize, usize)],
+    target: &mut [u8],
+) {
+    for (pixel, &(left, right)) in target.chunks_exact_mut(4).zip(columns) {
+        let average = match right - left {
+            1 => average_block::<ROWS, 1>(&rows, left),
+            2 => average_block::<ROWS, 2>(&rows, left),
+            _ => average_block::<ROWS, 3>(&rows, left),
+        };
+        pixel.copy_from_slice(&average);
+    }
+}
+
+#[inline(always)]
+fn average_block<const ROWS: usize, const COLUMNS: usize>(
+    rows: &[&[u8]; ROWS],
+    left: usize,
+) -> [u8; 4] {
+    let count = (ROWS * COLUMNS) as u32;
+    let mut sum = [0u32; 4];
+    for row in rows {
+        for pixel in row[left * 4..(left + COLUMNS) * 4].chunks_exact(4) {
+            for (total, &value) in sum.iter_mut().zip(pixel) {
+                *total += u32::from(value);
+            }
+        }
+    }
+    sum.map(|total| ((total + count / 2) / count) as u8)
 }
 
 /// Checks canonical ordering, exact ranges, bounded inflation and premultiplication for every tile before worker access.
@@ -164,10 +234,11 @@ fn shapes(mut w: u32, mut h: u32) -> Vec<(u32, u32)> {
     result
 }
 
+// Branch-free per pixel so the scan vectorizes; images are checked whole anyway.
 fn premultiplied(pixels: &[u8]) -> bool {
-    pixels
-        .chunks_exact(4)
-        .all(|p| p[..3].iter().all(|c| *c <= p[3]))
+    pixels.chunks_exact(4).fold(true, |ok, p| {
+        ok & (p[0] <= p[3]) & (p[1] <= p[3]) & (p[2] <= p[3])
+    })
 }
 
 fn put(bytes: &mut [u8], offset: usize, value: u32) {

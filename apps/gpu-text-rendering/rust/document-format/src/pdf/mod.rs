@@ -68,8 +68,10 @@ fn interpret_pdf(bytes: Vec<u8>, progress: &mut impl FnMut(usize, usize)) -> Res
     let image_budget = crate::limits::MAX_WORKING_BYTES
         .saturating_sub(bytes.len())
         .min(crate::raster::MAX_ENCODED_IMAGE_BYTES);
+    // Scanned books re-encode to about twice their size (lossless tiles plus mips). Growing a
+    // near-gigabyte arena later needs the old and new blocks at once and can exhaust 4 GiB.
     let image_capacity = if bytes.len() > 512 * 1024 * 1024 {
-        (bytes.len() + bytes.len() / 2).min(image_budget)
+        image_budget
     } else {
         0
     };

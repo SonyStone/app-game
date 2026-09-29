@@ -16,7 +16,7 @@ pub fn decode(bytes: &[u8]) -> Result<Document, DocumentError> {
     if !matches!(profile, 2 | 3) {
         return Err(DocumentError::Unsupported("curve scene profile"));
     }
-    decode_sections(container::decode_profile(bytes, profile)?, profile)
+    decode_sections(container::decode_profile(bytes, profile)?, profile, true)
 }
 
 /// Like [`decode`], but consumes the file so its largest raw section (normally `PIXL`)
@@ -31,11 +31,20 @@ pub fn decode_owned(bytes: Vec<u8>) -> Result<Document, DocumentError> {
     if !matches!(profile, 2 | 3) {
         return Err(DocumentError::Unsupported("curve scene profile"));
     }
-    decode_sections(container::decode_profile_owned(bytes, profile)?, profile)
+    decode_sections(
+        container::decode_profile_owned(bytes, profile)?,
+        profile,
+        true,
+    )
 }
 
-// Both file decoding and direct PDF import pass through the same validation.
-fn decode_sections(mut sections: Vec<Section>, profile: u32) -> Result<Document, DocumentError> {
+// Both file decoding and direct PDF import pass through the same validation, except that
+// importer-encoded image payloads (`decode_image_payloads == false`) are not re-read.
+fn decode_sections(
+    mut sections: Vec<Section>,
+    profile: u32,
+    decode_image_payloads: bool,
+) -> Result<Document, DocumentError> {
     if sections.iter().any(|s| {
         s.required
             && !matches!(
@@ -92,7 +101,11 @@ fn decode_sections(mut sections: Vec<Section>, profile: u32) -> Result<Document,
     {
         return Err(DocumentError::Invalid("missing tiled image extension"));
     }
-    images.validate()?;
+    if decode_image_payloads {
+        images.validate()?;
+    } else {
+        images.validate_layout()?;
+    }
     let curves = take(&mut sections, *b"CURV")?;
     let instances = take(&mut sections, *b"DRAW")?;
     if curves.len() % 32 != 0 || instances.len() % 80 != 0 {
@@ -331,7 +344,8 @@ pub fn encode_owned(document: Document) -> Result<Vec<u8>, DocumentError> {
 }
 
 /// Builds acceleration data and validates importer buffers without serializing a GDOC.
-/// Images are validated once, by `decode_sections`; inflating every tile is costly.
+/// Image payloads come from this process's encoders, so only their table layout is checked;
+/// files saved from them are fully validated when decoded.
 pub fn prepare_owned(document: Document) -> Result<Document, DocumentError> {
     let (sections, profile) = scene_sections(document)?;
     let mut total = 0usize;
@@ -341,7 +355,7 @@ pub fn prepare_owned(document: Document) -> Result<Document, DocumentError> {
         }
         total += section.data.len();
     }
-    decode_sections(sections, profile)
+    decode_sections(sections, profile, false)
 }
 
 fn scene_sections(mut document: Document) -> Result<(Vec<Section>, u32), DocumentError> {
