@@ -46,15 +46,21 @@ export function FrameLoop(props: {
 
   let resized = false;
   const loop = createFrameScheduler(
-    () =>
-      gate.draw(
+    () => {
+      let submitted = false;
+      const drawn = gate.draw(
         () =>
           renderScene(
             gpu,
             layers().map((layer) => layer.draw)
-          ),
+          ).map(() => {
+            submitted = true;
+          }),
         { resized }
-      ),
+      );
+
+      return drawn.map(() => submitted);
+    },
     (error) => props.onError(error),
     track
   );
@@ -122,12 +128,15 @@ export function useFrameLoop() {
 
 /**
  * Registers synchronous work for this Solid owner. Options are reactive through accessors.
- * A continuous subscription keeps the loop alive only while enabled. Both phases precede GPU draws.
+ * A continuous subscription keeps the loop alive only while enabled.
  */
 export function useFrame(
   callback: FrameSubscription['callback'],
   options: {
-    /** Update precedes render; both precede the GPU pass. Default render. */
+    /**
+     * Update precedes render; both precede the GPU pass. Present follows a submitted pass, while the canvas image is
+     * readable, and is skipped for frames the GPU gate defers. Default render.
+     */
     phase?: FrameSubscription['phase'];
     /** Reactive participation flag, default true. Disabling unsubscribes this callback. */
     enabled?: Accessor<boolean>;

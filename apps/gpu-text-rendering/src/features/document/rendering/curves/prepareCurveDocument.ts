@@ -224,22 +224,27 @@ function createCurveDrawing(
     createView() {
       // Identifies this view's requests to the image and tile caches.
       const view = {};
+      /** Pages this view draws from composed tiles, updated by the policy's `enterComposedPages`. */
+      const composed = new Set<number>();
 
       return {
         draw(pass: GPURenderPassEncoder, frame: SceneFrame) {
-          const composed = policy.composedPages(frame);
+          const wanted = policy.composedPages(frame);
           raster.update(
             frame.visible.flatMap((item) => runs[item.index]!),
             frame,
-            [...composed].flatMap((page) => [...prefixImages(page)]),
+            [...wanted].flatMap((page) => [...prefixImages(page)]),
             view
           );
 
-          if (frame.vectorOnly || composed.size === 0) {
+          if (frame.vectorOnly || wanted.size === 0) {
             // Diagnostic vector rendering and reading-scale frames draw every page directly.
+            composed.clear();
             tileCache.pause(view);
             painter.paintPages(pass, frame, fullLayer);
           } else {
+            tileCache.request({ ...frame, visible: frame.visible.filter(({ index }) => wanted.has(index)) }, view);
+            policy.enterComposedPages(composed, wanted, (page) => tileCache.covers(page, view));
             const tiles = { ...frame, visible: frame.visible.filter(({ index }) => composed.has(index)) };
             painter.paintPages(pass, frame, {
               trees: (page) => (composed.has(page) ? composition.direct[page]! : trees[page]!),

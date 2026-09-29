@@ -9,6 +9,11 @@ export function pageTileKey(tile: PageTile) {
   return `${tile.page}:${tile.level}:${tile.x}:${tile.y}`;
 }
 
+/** The tile one level coarser that contains `tile`; `tile` must not be level zero. */
+export function parentTile(tile: PageTile): PageTile {
+  return { page: tile.page, level: tile.level - 1, x: Math.floor(tile.x / 2), y: Math.floor(tile.y / 2) };
+}
+
 /** World rectangle, with y measured upward and texture v measured downward. */
 export function pageTileRect(document: TextDocument, tile: PageTile) {
   const page = document.pages[tile.page]!;

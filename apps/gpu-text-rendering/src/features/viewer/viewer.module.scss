@@ -375,3 +375,141 @@
     accent-color: #efa93f;
   }
 }
+
+.savedViews {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 66px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  // Shrink to the thumbnails, up to about ten of them; the list scrolls beyond that or on narrow screens.
+  width: max-content;
+  max-width: min(calc(100% - 32px), 720px);
+  box-sizing: border-box;
+  padding: 6px;
+  border: 1px solid #ffffff20;
+  border-radius: 16px;
+  background: #25292cf5;
+  color: #f5f5f5;
+  box-shadow: 0 6px 22px #0003;
+  ~ .notices {
+    bottom: calc(160px + env(safe-area-inset-bottom));
+  }
+}
+
+.tourButton,
+.removeSavedView {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  img {
+    filter: invert(1);
+    pointer-events: none;
+  }
+  &:focus-visible {
+    outline: 2px solid #efa93f;
+    outline-offset: 1px;
+  }
+}
+
+.tourButton {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 56px;
+  border-radius: 10px;
+  background: transparent;
+  img {
+    width: 23px;
+    height: 23px;
+  }
+  &:hover {
+    background: #ffffff16;
+  }
+  &[aria-pressed='true'] {
+    background: #ffffff25;
+  }
+}
+
+.savedViewList {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 2px 2px 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff40 transparent;
+  touch-action: pan-x;
+  cursor: grab;
+  &.scrubbing {
+    cursor: grabbing;
+    user-select: none;
+    .savedViewThumbnail {
+      cursor: grabbing;
+    }
+  }
+}
+
+.savedView {
+  position: relative;
+  flex: 0 0 auto;
+  &:hover .removeSavedView,
+  &:focus-within .removeSavedView {
+    opacity: 1;
+  }
+}
+
+.savedViewThumbnail {
+  display: block;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: #a0a9af;
+  cursor: pointer;
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  &:hover {
+    border-color: #ffffff60;
+  }
+  &:focus-visible {
+    outline: 2px solid #efa93f;
+    outline-offset: 1px;
+  }
+  [aria-current='true'] > & {
+    border-color: #efa93f;
+  }
+}
+
+.removeSavedView {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #25292ce6;
+  opacity: 0;
+  img {
+    width: 14px;
+    height: 14px;
+  }
+  @media (hover: none) {
+    opacity: 1;
+  }
+}

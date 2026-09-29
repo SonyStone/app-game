@@ -33,6 +33,7 @@ src/
     scene/               Frame scheduling, JSX layers and shared pass submission
     viewport/            Canvas measurements, DPR and pixel conversions
     graphics/            Independent graphics, currently Rectangle
+    performance/         GPU frame-cost panel and window/dev-server reports for agents
   shared/
     gpu/                 Device/root and canvas lifetimes, owned resource cleanup
     jsx/                 Token-preserving Solid context support
@@ -490,6 +491,22 @@ The default demo retains all 1,273 pages and its golden byte-parity check.
 `tests/performance/compare.browser.mjs /absolute/document.gdoc` compares overview, reading scale and overview return in two dev servers. Set `GPU_TEXT_BASELINE_URL` and `GPU_TEXT_URL`; optionally set `GPU_TEXT_OUTPUT` and `GPU_TEXT_BROWSER_CHANNEL`.
 
 `tests/performance/startup.browser.mjs [/absolute/document.pdf]` compares cold-browser startup and optional PDF import in two production preview servers with the same URL variables. `GPU_TEXT_SAMPLES` defaults to 3. It records readiness, a first-frame GPU fence and main-thread long tasks. This does not measure completion of all offscreen resources or physical presentation FPS.
+
+### Live frame costs
+
+The Performance item in the ⋯ menu, or `?performance` in the URL, mounts a GPU-drawn `PerformanceMonitor` in each pane. It records every presented frame, including single on-demand frames during a drag: main-thread milliseconds from frame start to submission (`cpuMs`), and milliseconds from submission until the GPU finished its queue (`gpuMs`, which includes queueing and is not a timestamp-query measurement). Frame rate is reported only for frames drawn back to back. Each monitor keeps its latest 3,600 frames.
+
+Agents and scripts can read the same data without screenshots:
+
+```sh
+# With the standalone dev server running and the viewer open at http://localhost:3180/?performance
+curl -X POST localhost:3180/__performance/reset   # forget recorded frames in every open tab
+# …interact, or let a user reproduce the slow case…
+curl localhost:3180/__performance                 # summaries per tab and pane
+curl 'localhost:3180/__performance?samples'       # plus per-frame records
+```
+
+The endpoint exists only during `vite dev` in this app; it relays requests over Vite's HMR websocket to every open tab and waits at most one second for answers. In a page driven by Playwright or another browser tool, `window.gpuPerformance.reset()` and `window.gpuPerformance.report({ samples: true })` return the same report directly, in any build. Each monitor reports `label` (`pane 1`, `pane 2`), canvas size, `idle`, `frames`, `spanMs`, `fps`, mean/p50/p95/max of `cpuMs`, `gpuMs` and `totalMs`, and `overBudget` frames above 16.7 ms. Absent statistics are `null`. See `src/features/performance/performanceReports.ts` for the types.
 
 ### Lossless instance packing and worker preparation
 

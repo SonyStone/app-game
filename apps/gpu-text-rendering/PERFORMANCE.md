@@ -535,8 +535,10 @@ tile job at a time. Continuously animated views can therefore remain coarser unt
 the animation pauses. Source curves are retained, and settled views choose at least
 1.25 texels per physical pixel along both page axes, within the supported tile levels.
 Refinement is not preemptible once submitted; one expensive job can still overlap
-a newly started gesture. The Solid frame loop also admits at most one unfinished
-scene frame and coalesces blocked requests into the latest camera state.
+a newly started gesture. The Solid frame loop also admits at most two unfinished
+scene frames and coalesces blocked requests into the latest camera state. With one,
+completion latency above a refresh interval (common on 5K displays, where
+`onSubmittedWorkDone` includes presentation) skipped every other frame.
 
 Each run below uses 120 animation frames and 10 synchronized completion samples.
 Desktop: Chromium 148, Apple Metal, 1920×1200. Android: Wacom MovinkPad 14,

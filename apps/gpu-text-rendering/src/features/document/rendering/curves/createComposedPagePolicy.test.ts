@@ -27,6 +27,33 @@ describe('createComposedPagePolicy', () => {
     expect(policy.useComposedPage(7, frame([0, 1, 2, 3, 7], 1))).toBe(false);
   });
 
+  it('enters optional pages only once their tiles cover the view', () => {
+    const { policy } = setup();
+    const drawn = new Set([6]);
+    const covered = new Set<number>();
+
+    policy.enterComposedPages(drawn, new Set([0, 5]), (page) => covered.has(page));
+    expect([...drawn]).toEqual([0]);
+
+    covered.add(5);
+    policy.enterComposedPages(drawn, new Set([0, 5]), (page) => covered.has(page));
+    expect([...drawn].sort()).toEqual([0, 5]);
+
+    // Entered pages stay composed while refinement replaces their tiles.
+    covered.clear();
+    policy.enterComposedPages(drawn, new Set([0, 5]), (page) => covered.has(page));
+    expect([...drawn].sort()).toEqual([0, 5]);
+  });
+
+  it('lets at most four uncovered optional pages wait for their tiles', () => {
+    const pages = new Set([0, 1, 2, 3, 4, 5, 6, 7]);
+    const policy = createComposedPagePolicy(document, { pages, overview: pages }, { has: () => false, observe() {} });
+    const drawn = new Set<number>();
+
+    policy.enterComposedPages(drawn, pages, () => false);
+    expect([...drawn]).toEqual([4, 5, 6, 7]);
+  });
+
   it('keeps budget-retained overview pages composed at any scale', () => {
     const { policy, budget } = setup();
     budget.has.mockImplementation((page) => page === 6);

@@ -11,6 +11,7 @@ import { Resizable, ResizableHandle, ResizablePanel } from '@app-game/components
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
+import bookmarkIcon from '@tabler/icons/outline/bookmark-plus.svg?url';
 import dots from '@tabler/icons/outline/dots.svg?url';
 import splitIcon from '@tabler/icons/outline/layout-columns.svg?url';
 import grid from '@tabler/icons/outline/layout-grid.svg?url';
@@ -20,19 +21,22 @@ import collapse from '@tabler/icons/outline/minimize.svg?url';
 import closeIcon from '@tabler/icons/outline/x.svg?url';
 import { createSignal, For, Match, onCleanup, Show, Switch, untrack } from 'solid-js';
 import { GpuCanvasProvider, TypeGPURootProvider } from '../../shared/gpu';
-import { CameraControls, CameraTour } from '../camera';
+import { CameraControls, CameraTour, ViewCapture, ViewTour } from '../camera';
 import { createDocumentSource, DocumentRenderer, GlyphText, VectorArtwork } from '../document';
 import noticesUrl from '../document/pdf/wasm/third-party-notices.txt?url';
 import { Minimap } from '../minimap';
+import { PerformanceMonitor } from '../performance';
 import { FrameLoop } from '../scene';
 import { createDocumentDrop } from './createDocumentDrop';
 import { createDocumentExport } from './createDocumentExport';
 import { createFullscreenToggleButton } from './createFullscreenToggleButton';
+import { createSavedViews } from './createSavedViews';
 import { createViewerStatus, type ViewerStatus } from './createViewerStatus';
 import { createViewPane, type ViewPane } from './createViewPane';
 import { DocumentPicker } from './DocumentPicker';
 import { createViewerI18n } from './i18n/createViewerI18n';
 import { LanguageMenu } from './LanguageMenu';
+import { SavedViewStrip } from './SavedViewStrip';
 import s from './viewer.module.scss';
 
 /**
@@ -86,7 +90,42 @@ export default function GpuTextRendering() {
   const [vectorOnly, setVectorOnly] = createSignal(false);
   const [grids, setGrids] = createSignal(false);
   const [minimap, setMinimap] = createSignal(false);
-  const stopAutoZoom = () => setAutoZoom(false);
+  // `?performance` opens the viewer with the monitor on, for agents reading window.gpuPerformance or /__performance.
+  const [performanceMonitor, setPerformanceMonitor] = createSignal(
+    new URLSearchParams(location.search).has('performance')
+  );
+
+  // Saved views belong to the displayed document and the single-pane layout; split view hides and pauses them.
+  const savedViews = createSavedViews(fileSource);
+
+  /** Stops both camera tours and any flight to a saved view, for user navigation. */
+  const stopAutoZoom = () => {
+    setAutoZoom(false);
+    savedViews.stop();
+  };
+
+  /** Enables or disables the automatic tour, which replaces a saved-view tour. */
+  function toggleAutoZoom(enabled: boolean) {
+    savedViews.stop();
+    setAutoZoom(enabled);
+  }
+
+  /** Moves the focused pane to a scrubbed position between saved views, stopping both tours. */
+  function scrubViews(position: number) {
+    const camera = savedViews.scrub(position);
+    const pane = focused();
+
+    if (camera && pane) {
+      setAutoZoom(false);
+      pane.camera.setCamera(camera);
+    }
+  }
+
+  /** Starts or stops the saved-view tour, which replaces the automatic tour. */
+  function toggleViewTour() {
+    setAutoZoom(false);
+    savedViews.toggleTour();
+  }
 
   /** Stops the tour and fits every page in the focused pane, between the toolbar and the canvas edges. */
   function showOverview() {
@@ -107,6 +146,7 @@ export default function GpuTextRendering() {
       first.camera.setCamera(second.camera.camera());
     }
 
+    savedViews.stop();
     setFocusedPane(undefined);
     setPaneCount(split() ? 1 : 2);
   }
@@ -177,6 +217,18 @@ export default function GpuTextRendering() {
                         onDraggingChange={pane.setDragging}
                       />
                       <CameraTour camera={pane.camera} document={data} enabled={autoZoom() && focused() === pane} />
+                      <ViewTour
+                        camera={pane.camera}
+                        stops={savedViews.stops()}
+                        route={savedViews.route()}
+                        onVisit={savedViews.reportVisit}
+                        onFinish={savedViews.stop}
+                      />
+                      <ViewCapture
+                        camera={pane.camera}
+                        pending={savedViews.capturing() && focused() === pane}
+                        onCapture={savedViews.capture}
+                      />
                       <Switch>
                         <Match when={data.kind === 'glyphs'}>
                           <GlyphText camera={pane.camera} vectorOnly={vectorOnly()} grids={grids()} />
@@ -187,6 +239,9 @@ export default function GpuTextRendering() {
                       </Switch>
                       <Show when={minimap()}>
                         <Minimap document={data} camera={pane.camera} onNavigate={stopAutoZoom} />
+                      </Show>
+                      <Show when={performanceMonitor()}>
+                        <PerformanceMonitor label={`pane ${panes().indexOf(pane) + 1}`} />
                       </Show>
                     </FrameLoop>
                   </GpuCanvasProvider>
@@ -202,6 +257,9 @@ export default function GpuTextRendering() {
           <div>{i18n.t('dropHint')}</div>
         </div>
       </Show>
+      <Show when={!split() && isReady() && savedViews.views().length > 0}>
+        <SavedViewStrip i18n={i18n} savedViews={savedViews} onToggleTour={toggleViewTour} onScrub={scrubViews} />
+      </Show>
       <div id="toolbar" class={s.toolbar} role="group" aria-label={i18n.t('controls')}>
         <DocumentPicker label={i18n.t('open')} hint={i18n.t('openHint')} onOpen={open} />
         <Button
@@ -214,6 +272,17 @@ export default function GpuTextRendering() {
           onClick={showOverview}
         >
           <img src={grid} alt="" />
+        </Button>
+        <Button
+          class={s.iconButton}
+          variant="ghost"
+          size="icon"
+          aria-label={i18n.t('saveView')}
+          title={i18n.t('saveView')}
+          disabled={!isReady() || split()}
+          onClick={() => savedViews.save()}
+        >
+          <img src={bookmarkIcon} alt="" />
         </Button>
         <Button
           class={s.iconButton}
@@ -258,11 +327,14 @@ export default function GpuTextRendering() {
                     </DropdownMenuItem>
                   </Show>
                   <DropdownMenuSeparator class={s.separator} />
-                  <MenuToggle checked={autoZoom()} onToggle={setAutoZoom}>
+                  <MenuToggle checked={autoZoom()} onToggle={toggleAutoZoom}>
                     {i18n.t('autoZoom')}
                   </MenuToggle>
                   <MenuToggle checked={minimap()} onToggle={setMinimap}>
                     {i18n.t('minimap')}
+                  </MenuToggle>
+                  <MenuToggle checked={performanceMonitor()} onToggle={setPerformanceMonitor}>
+                    {i18n.t('performance')}
                   </MenuToggle>
                   <Show when={documentSource.prepared()?.data.kind === 'glyphs'}>
                     <MenuToggle checked={grids()} onToggle={setGrids}>

@@ -594,6 +594,53 @@ it('defers submission while preparation holds a validation scope on the device, 
   expect(gpu.device.queue.submit).toHaveBeenCalledTimes(2);
 });
 
+it('presents only after a submitted frame, and not while submission is deferred', async () => {
+  const calls: string[] = [];
+  const [presenting, setPresenting] = createSignal(false);
+
+  function Present() {
+    useFrame(() => calls.push('update'), { phase: 'update' });
+    useFrame(() => calls.push(`present after ${vi.mocked(gpu.device.queue.submit).mock.calls.length} submits`), {
+      phase: 'present',
+      enabled: presenting
+    });
+    return null;
+  }
+
+  const dispose = render(
+    () => (
+      <FrameLoop viewport={viewport} onError={vi.fn()}>
+        <Present />
+      </FrameLoop>
+    ),
+    document.createElement('div')
+  );
+  cleanups.push(dispose);
+  flush();
+  await tick();
+  expect(calls).toEqual(['update']);
+
+  let finish!: () => void;
+  const preparation = serializeGpuPreparation(
+    gpu.device,
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+  );
+  calls.length = 0;
+  setPresenting(true);
+  flush();
+  await tick();
+  expect(calls).toEqual(['update']);
+
+  finish();
+  await preparation;
+  await tick();
+  await tick();
+  expect(calls).toEqual(['update', 'update', 'present after 2 submits']);
+});
+
 it('requests a frame when a value read by a draw or render callback changes, but not by an update', async () => {
   const [color, setColor] = createSignal(0);
   const [scale, setScale] = createSignal(1);

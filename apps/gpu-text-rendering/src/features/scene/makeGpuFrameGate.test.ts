@@ -3,10 +3,12 @@ import { expect, it, vi } from 'vitest';
 import { gpuError } from '../../shared/errors';
 import { makeGpuFrameGate } from './makeGpuFrameGate';
 
-it('coalesces blocked frames and reads fresh state when the GPU finishes', async () => {
-  const work = deferred();
+it('admits two unfinished frames, coalesces later requests and reads fresh state when a frame finishes', async () => {
+  const first = deferred();
+  const second = deferred();
   const invalidate = vi.fn();
-  const gate = makeGpuFrameGate(options({ complete: () => work.promise, invalidate }));
+  const complete = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  const gate = makeGpuFrameGate(options({ complete, invalidate }));
   let camera = 1;
   const submitted: number[] = [];
   const render = () => {
@@ -19,18 +21,20 @@ it('coalesces blocked frames and reads fresh state when the GPU finishes', async
   gate.draw(render);
   camera = 3;
   gate.draw(render);
-  expect(submitted).toEqual([1]);
-  work.resolve();
+  camera = 4;
+  gate.draw(render);
+  expect(submitted).toEqual([1, 2]);
+  first.resolve();
   await vi.waitFor(() => expect(invalidate).toHaveBeenCalledOnce());
   gate.draw(render);
-  expect(submitted).toEqual([1, 3]);
+  expect(submitted).toEqual([1, 2, 4]);
   gate.destroy();
 });
 
-it('admits a resized frame while another is unfinished, but still waits for blocking work', async () => {
-  const first = deferred();
-  const second = deferred();
-  const complete = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+it('admits a resized frame at the limit, but still waits for blocking work', async () => {
+  const frames = [deferred(), deferred(), deferred()];
+  const complete = vi.fn();
+  frames.forEach((frame) => complete.mockReturnValueOnce(frame.promise));
   // No preparation blocks frames until the last check.
   let blocker: Promise<void> | undefined = undefined;
   const invalidate = vi.fn();
@@ -38,21 +42,22 @@ it('admits a resized frame while another is unfinished, but still waits for bloc
   const render = vi.fn(() => ok());
 
   gate.draw(render);
-  gate.draw(render, { resized: true });
-  expect(render).toHaveBeenCalledTimes(2);
-
-  // An ordinary frame waits until every unfinished frame completes.
   gate.draw(render);
-  first.resolve();
+  gate.draw(render, { resized: true });
+  expect(render).toHaveBeenCalledTimes(3);
+
+  // An ordinary frame waits until fewer than two frames are unfinished.
+  gate.draw(render);
+  frames[0]!.resolve();
   await Promise.resolve();
   await Promise.resolve();
   expect(invalidate).not.toHaveBeenCalled();
-  second.resolve();
+  frames[1]!.resolve();
   await vi.waitFor(() => expect(invalidate).toHaveBeenCalledOnce());
 
   blocker = new Promise(() => {});
   gate.draw(render, { resized: true });
-  expect(render).toHaveBeenCalledTimes(2);
+  expect(render).toHaveBeenCalledTimes(3);
   gate.destroy();
 });
 
@@ -72,12 +77,13 @@ it('ignores completion after disposal, including queued redraw requests', async 
   const render = vi.fn(() => ok());
   gate.draw(render);
   gate.draw(render);
+  gate.draw(render);
   gate.destroy();
   work.resolve();
   await new Promise((resolve) => setTimeout(resolve, 0));
   gate.draw(render);
   expect(invalidate).not.toHaveBeenCalled();
-  expect(render).toHaveBeenCalledOnce();
+  expect(render).toHaveBeenCalledTimes(2);
 });
 
 it('reports a rejected GPU fence once and preserves typed draw failures', async () => {

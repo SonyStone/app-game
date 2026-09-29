@@ -3,7 +3,7 @@ import { viewLayout } from '../bindings';
 import { project } from '../pageShader';
 
 import { Cubic, CurveInstance, curveLayout, shapeOnlySlot } from './curveBindings';
-import { outlineCoverage } from './curveCoverage';
+import { clipOutlineCoverage, outlineCoverage } from './curveCoverage';
 
 /** Expands bounds by the pixel's half footprint, including a small rounding margin. */
 export const curveVertex = tgpu.vertexFn({
@@ -108,7 +108,7 @@ export function clipCoverage(reference: number, point: d.v2f, dx: d.v2f, dy: d.v
     const local = transformed(clip, point);
     const localDx = d.vec2f(clip.matrix.x * dx.x + clip.matrix.z * dx.y, clip.matrix.y * dx.x + clip.matrix.w * dx.y);
     const localDy = d.vec2f(clip.matrix.x * dy.x + clip.matrix.z * dy.y, clip.matrix.y * dy.x + clip.matrix.w * dy.y);
-    coverage = std.min(coverage, outlineCoverage(clip, local, localDx, localDy));
+    coverage = std.min(coverage, clipOutlineCoverage(clip, local, localDx, localDy));
     next = clip.info.w;
   }
 

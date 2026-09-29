@@ -24,6 +24,58 @@ fn preserves_internal_neighbors_odd_edges_and_terminal_mips() {
 }
 
 #[test]
+fn every_tile_matches_clamped_sampling_of_its_box_filtered_level() {
+    for (w, h) in [(1, 1), (2, 3), (128, 128), (129, 130), (300, 257), (517, 5)] {
+        let mut seed: u32 = w * 7919 + h;
+        let pixels: Vec<u8> = (0..w * h)
+            .flat_map(|_| {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                let a = (seed >> 24) as u8;
+                [(seed >> 4) as u8, (seed >> 8) as u8, (seed >> 16) as u8, a].map(|c| c.min(a))
+            })
+            .collect();
+        let packed = raster_tiles::encode(w, h, &pixels).unwrap();
+        let (mut level, mut lw, mut lh, mut index) = (pixels, w, h, 0);
+        loop {
+            for ty in 0..lh.div_ceil(128) {
+                for tx in 0..lw.div_ceil(128) {
+                    let (tw, th) = ((lw - tx * 128).min(128) + 2, (lh - ty * 128).min(128) + 2);
+                    let expected: Vec<u8> = (0..th)
+                        .flat_map(|y| (0..tw).map(move |x| (x, y)))
+                        .flat_map(|(x, y)| {
+                            let sx = (tx * 128 + x).saturating_sub(1).min(lw - 1);
+                            let sy = (ty * 128 + y).saturating_sub(1).min(lh - 1);
+                            let at = ((sy * lw + sx) * 4) as usize;
+                            level[at..at + 4].to_vec()
+                        })
+                        .collect();
+                    assert_eq!(tile(&packed, index), expected, "{w}x{h} tile {index}");
+                    index += 1;
+                }
+            }
+            if lw == 1 && lh == 1 {
+                break;
+            }
+            let (nw, nh) = ((lw / 2).max(1), (lh / 2).max(1));
+            level = (0..nw * nh * 4)
+                .map(|i| {
+                    let (x, y, c) = (i / 4 % nw, i / 4 / nw, i % 4);
+                    let (xs, ys) = (x * lw / nw..(x + 1) * lw / nw, y * lh / nh..(y + 1) * lh / nh);
+                    let count = xs.len() as u32 * ys.len() as u32;
+                    let sum: u32 = ys
+                        .flat_map(|sy| xs.clone().map(move |sx| (sx, sy)))
+                        .map(|(sx, sy)| u32::from(level[((sy * lw + sx) * 4 + c) as usize]))
+                        .sum();
+                    ((sum + count / 2) / count) as u8
+                })
+                .collect();
+            (lw, lh) = (nw, nh);
+        }
+        assert_eq!(index, u32_at(&packed, 8) as usize);
+    }
+}
+
+#[test]
 fn rejects_truncated_headers_ranges_expansion_and_nonpremultiplied_pixels() {
     let packed = raster_tiles::encode(2, 2, &[255; 16]).unwrap();
     for offset in [0, 4, 8, 12, 16, 20] {

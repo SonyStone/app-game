@@ -27,6 +27,34 @@ export function createComposedPagePolicy(
       return composed;
     },
     /**
+     * Updates a view's `drawn` composed pages from this frame's `wanted` ones. Pages no longer wanted leave at once.
+     * Up to {@link maxWaitingPages} optional pages, in `wanted` order, enter only once `covered` reports that their
+     * tiles cover the view and keep drawing directly until then: switching on the pinned whole-page fallback would
+     * briefly show blocky image tails and soft text. Other pages enter immediately, which bounds direct drawing
+     * during fast zooms across many pages, where each page is small on screen.
+     */
+    enterComposedPages(drawn: Set<number>, wanted: ReadonlySet<number>, covered: (page: number) => boolean) {
+      for (const page of drawn) {
+        if (!wanted.has(page)) {
+          drawn.delete(page);
+        }
+      }
+
+      let waiting = 0;
+
+      for (const page of wanted) {
+        if (drawn.has(page)) {
+          continue;
+        }
+
+        if (!composition.overview.has(page) || covered(page) || waiting >= maxWaitingPages) {
+          drawn.add(page);
+        } else {
+          waiting++;
+        }
+      }
+    },
+    /**
      * Samples the GPU cost of optional prefixes that `composed` bypassed this frame, so slow pages can switch
      * to composition. Vector-only diagnostic frames are never sampled.
      */
@@ -59,3 +87,6 @@ export function createComposedPagePolicy(
     return frame.visible.length > 4 && screenHeight <= 512;
   }
 }
+
+/** Optional pages a view may keep drawing directly while their composed tiles refine; the policy's reading scale. */
+const maxWaitingPages = 4;

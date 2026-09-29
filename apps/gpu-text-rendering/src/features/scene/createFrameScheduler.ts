@@ -7,10 +7,12 @@ import { errorMessage, gpuError, type ViewerError } from '../../shared/errors';
  * Owns one demand-driven clock. Subscriptions can keep it running independently of one another.
  * Reactive writes from update callbacks, and the effects they trigger, settle before the render phase, so render
  * callbacks and `draw` observe them in the same frame. `track` wraps the render phase and draw of each frame, so a caller can observe their
- * reactive reads; update callbacks run outside it.
+ * reactive reads; update and present callbacks run outside it. Present callbacks run only after `draw` reports a
+ * submitted frame.
  */
 export function createFrameScheduler(
-  draw: () => Result<void, ViewerError>,
+  /** Draws the frame, returning whether it submitted one rather than deferring it. */
+  draw: () => Result<boolean, ViewerError>,
   onError: (error: ViewerError) => void,
   track: (record: () => void) => void
 ) {
@@ -126,15 +128,19 @@ export function createFrameScheduler(
     // This render reads current state, so it satisfies every request so far, including those caused by updates.
     invalidated = false;
 
-    let rendered: Result<void, ViewerError> = ok();
+    let rendered: Result<boolean, ViewerError> = ok(false);
 
     track(() => {
-      rendered = runPhase('render', frame);
+      rendered = runPhase('render', frame).map(() => false);
 
       if (rendered.isOk() && !stopped) {
         rendered = draw();
       }
     });
+
+    if (rendered.isOk() && rendered.value && !stopped) {
+      rendered = runPhase('present', frame).map(() => true);
+    }
 
     if (rendered.isErr()) {
       loop.fail(rendered.error);
@@ -180,9 +186,12 @@ export type FrameTime = {
   time: number;
 };
 
-/** Updates run before render callbacks; both phases precede the shared GPU pass. */
+/**
+ * Updates run before render callbacks; both phases precede the shared GPU pass. Present callbacks follow a submitted
+ * pass in the same task, while the canvas still holds the frame's image.
+ */
 export type FrameSubscription = {
   callback: (frame: FrameTime) => void;
-  phase: 'update' | 'render';
+  phase: 'update' | 'render' | 'present';
   continuous: boolean;
 };

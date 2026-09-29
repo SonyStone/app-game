@@ -107,11 +107,12 @@ const cases = [
     samples: [
       [25, 50, [35, 82, 86]],
       [75, 50, [255, 186, 0]],
-      [50, 50, [174, 181, 13]],
+      // (50, 50) and (30, 50) lie on shape edges, so they follow the composed tiles' filtering; pdf.js agrees.
+      [50, 50, [186, 182, 0]],
       [20, 20, [0, 186, 255]],
       [5, 5, [0, 255, 255]],
       [12, 50, [73, 119, 124]],
-      [30, 50, [5, 106, 114]]
+      [30, 50, [2, 109, 118]]
     ],
     // Nested backdrop removal used to double per level (2,058 passes at depth 8).
     maxPasses: 250

@@ -2,9 +2,9 @@ import { ok, ResultAsync, type Result } from 'neverthrow';
 import { errorMessage, gpuError, type ViewerError } from '../../shared/errors';
 
 /**
- * Admits at most one unfinished scene frame, and none while `blocked` returns pending work. Skipped requests
- * coalesce into one invalidation, so the next draw reads the latest camera rather than replaying old frames.
- * The caller owns disposal; camera updates can continue while GPU work is pending.
+ * Admits at most {@link maxUnfinishedFrames} unfinished scene frames, and none while `blocked` returns pending work.
+ * Skipped requests coalesce into one invalidation, so the next draw reads the latest camera rather than replaying
+ * old frames. The caller owns disposal; camera updates can continue while GPU work is pending.
  */
 export function makeGpuFrameGate(options: {
   /** Resolves when the GPU has finished the frame just submitted; a rejection fails the gate once. */
@@ -16,7 +16,7 @@ export function makeGpuFrameGate(options: {
   /** Reports a failed completion; the gate then admits no further frames. */
   fail: (error: ViewerError) => void;
 }) {
-  /** Submitted frames the GPU has not finished; a resize can admit a second one. */
+  /** Submitted frames the GPU has not finished; a resize can admit one beyond the limit. */
   let unfinished = 0;
   let requested = false;
   let disposed = false;
@@ -24,7 +24,7 @@ export function makeGpuFrameGate(options: {
   return {
     /**
      * Runs `render` unless the gate is closed; a skipped draw returns Ok and redraws when the gate reopens.
-     * `resized` admits a frame even while another is unfinished: resizing the canvas discarded that frame's image, and
+     * `resized` admits a frame even at the limit: resizing the canvas discarded the latest frame's image, and
      * waiting would present the cleared canvas. `blocked` work still defers it.
      */
     draw(render: () => Result<void, ViewerError>, { resized = false } = {}): Result<void, ViewerError> {
@@ -32,7 +32,7 @@ export function makeGpuFrameGate(options: {
         return ok();
       }
 
-      const pending = unfinished > 0 && !resized;
+      const pending = unfinished >= maxUnfinishedFrames && !resized;
       const blocker = pending ? undefined : options.blocked();
 
       if (pending || blocker) {
@@ -67,7 +67,7 @@ export function makeGpuFrameGate(options: {
     }
   };
 
-  /** Holds the gate closed until `work` settles, then fails or, once no frame is unfinished, replays a skipped request. */
+  /** Counts `work` as unfinished until it settles, then fails or, once below the limit, replays a skipped request. */
   function wait(work: PromiseLike<Result<void, ViewerError>>) {
     unfinished++;
 
@@ -84,11 +84,19 @@ export function makeGpuFrameGate(options: {
         return;
       }
 
-      // A skipped request replays once the last unfinished frame completes; earlier it would be skipped again.
-      if (requested && unfinished === 0) {
+      // A skipped request replays once a frame slot frees; earlier it would be skipped again.
+      if (requested && unfinished < maxUnfinishedFrames) {
         requested = false;
         options.invalidate();
       }
     });
   }
 }
+
+/**
+ * Frames the GPU may still be working on when the next one is submitted. `onSubmittedWorkDone` resolves after the
+ * frame is presented, which on large displays can take longer than one refresh interval even when the GPU work is a
+ * few milliseconds. Admitting only one frame then skipped every other refresh, halving the frame rate. A second
+ * frame keeps the queue full; latency grows by at most one frame, and only while the GPU is behind.
+ */
+const maxUnfinishedFrames = 2;
