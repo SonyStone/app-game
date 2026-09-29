@@ -1,0 +1,113 @@
+# createOptimisticStore
+
+The store equivalent of `createOptimistic`. Writes inside an
+`action` transition are tentative — they show up immediately but
+auto-revert (or reconcile to the action's resolved value) once the
+transition finishes.
+
+Use this for optimistic UI on collection-shaped data. For
+single-value optimistic state, prefer `createOptimistic`.
+
+* **Plain form** — `createOptimisticStore(initialValue, options?)`.
+* **Derived form** — `createOptimisticStore(fn, seed, options?)`:
+  a projection store whose authoritative value is recomputed by
+  `fn` and whose optimistic overlay reverts after each action.
+
+In the derived form, `options.key` defaults to `"id"`; specify it only when your data
+uses a different identity field (e.g. `{ key: "uuid" }` or
+`{ key: t => t.slug }`). Restating the default adds noise.
+
+## Import
+
+```ts
+import { createOptimisticStore } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function createOptimisticStore<T extends object = {}>(
+	initialValue: T | Store<T>,
+	options?: StoreOptions
+): [get: Store<T>, set: StoreSetter<T>];
+function createOptimisticStore<T extends object = {}>(
+	fn: (draft: T) => void | T | Promise<void | T> | AsyncIterable<void | T>,
+	seed: Partial<T> | Store<T>,
+	options?: ProjectionOptions
+): [get: Store<T>, set: StoreSetter<T>];
+```
+
+## Parameters
+
+### `initialValue`
+
+* **Type:** `T | Store<T>`
+
+Plain object or array to wrap.
+
+### `options`
+
+* **Type:** `StoreOptions | ProjectionOptions`
+* Optional
+
+`name` and `shallow` in the plain form; the derived form also accepts `key`, `seedLoadingValue`, `deferStream`, and `ssrSource`.
+
+### `fn`
+
+* **Type:** `(draft: T) => void | T | Promise<void | T> | AsyncIterable<void | T>`
+
+Derive function that produces the authoritative contents. Optimistic writes overlay its result and revert when the action settles.
+
+### `seed`
+
+* **Type:** `Partial<T> | Store<T>`
+
+Initial contents of the derived form.
+
+## Return value
+
+`[store: Store<T>, setStore: StoreSetter<T>]`
+
+A tuple with the same shape as `createStore`. Writes made inside an action are tentative and revert when the action settles.
+
+## Examples
+
+```ts
+const [todos, setTodos] = createOptimisticStore<Todo[]>([]);
+
+// Mutation: optimistic add, then in-place reconcile to the saved row.
+const addTodo = action(function* (text: string) {
+	const tempId = crypto.randomUUID();
+	setTodos((t) => {
+		t.push({ id: tempId, text, pending: true });
+	});
+	const saved = yield api.createTodo(text);
+	setTodos((t) => {
+		const i = t.findIndex((x) => x.id === tempId);
+		if (i >= 0) t[i] = saved;
+	});
+});
+
+// Return form: filter is the natural shape for removal.
+const removeTodo = action(function* (id: string) {
+	setTodos((t) => t.filter((x) => x.id !== id));
+	yield api.removeTodo(id);
+});
+```
+
+**Hydration:** the derived form accepts `ProjectionOptions`, including
+an `ssrSource` field
+(`"server"` | `"hybrid"` | `"client"`). See the `ssrSource` option.
+
+## Caveats
+
+* Make optimistic writes inside an `action`. The action's settle is what reverts the overlay or reconciles it to the resolved value.
+* Write the saved row into the draft inside the action to keep it; the overlay itself does not persist.
+* In the derived form, `key` defaults to `"id"`. Set it when the identity field differs.
+
+## Learn more
+
+* [Optimistic stores](../concepts/stores.md#optimistic-stores)
+* [Move the cart to the server](../concepts/mutations.md#move-the-cart-to-the-server)
+* [Stores](../concepts/stores.md)
+* [Lists](../guides/lists.md)

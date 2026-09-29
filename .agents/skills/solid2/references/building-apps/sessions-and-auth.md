@@ -1,0 +1,314 @@
+# Sessions and auth
+
+The store's account area has an orders page.
+A request for it arrives with a `Cookie` header, and before the page renders or a server function returns a single order, the server has to answer two questions: who is this, and may they see this record.
+
+Solid supplies the HTTP exchange those answers are built on: the incoming request, a `locals` bag, and the outgoing response headers, all on the request event.
+It does not supply a session store or an authentication framework.
+The `fullstack` template composes a signed cookie from `@remix-run/cookie` with that event, and this page builds the account area on the same shape.
+
+Most apps need the two middle sections: the signed cookie session and the authorization check in every server function.
+The two short sections before them say what is Solid's and what is the library's, for when you choose a different library.
+
+This page assumes a `fullstack` project with [server functions](server-functions.md) enabled, because a session is read on the server and most reads happen inside a server function or [middleware](middleware-and-api-routes.md).
+
+## What the platform supplies
+
+Code running under start mode reads the current request event with `getRequestEvent()` from `@solidjs/web`.
+The event exposes:
+
+* `request`, including its `Cookie`, `Authorization`, and other request headers.
+* `locals`, where middleware can place request-scoped state such as an authenticated customer.
+* `response`, whose headers collect outgoing `Set-Cookie` values before the response head commits.
+
+`@solidjs/web` also exports `parseCookieHeader()` and `serializeCookie()` for unsigned cookie encoding.
+Those functions do not sign, encrypt, rotate, persist, or revoke anything.
+
+## What a session library supplies
+
+A cookie or session library defines the application-level protocol: signing or encryption, secret rotation, expiration and renewal, storage-backed session identifiers, and cookie serialization options.
+
+The `fullstack` template uses `@remix-run/cookie`.
+Its session cookie is signed and tamper-evident, and it is not encrypted, so the payload is readable by the browser.
+
+:::danger[A signed cookie is not a secret]
+Anything placed in the session payload can be read by the person holding the cookie.
+Store an identifier such as `userId` and look the rest up on the server; never store a password hash, an API key, or another customer's data.
+:::
+
+## A signed cookie session
+
+The following module follows the template's `src/server/session.ts`:
+
+```ts
+// src/server/session.ts
+import { createCookie } from "@remix-run/cookie";
+import {
+	getRequestEvent,
+	type RequestEvent,
+	type ResponseStub,
+} from "@solidjs/web";
+import { env } from "virtual:env/server";
+
+interface SessionData {
+	userId?: string;
+}
+
+const maxAge = 60 * 60 * 24 * 7;
+
+const sessionCookie = createCookie("session", {
+	secrets: env.SESSION_SECRET.split(","),
+	httpOnly: true,
+	secure: true,
+	sameSite: "Lax",
+	maxAge,
+});
+
+function event(): RequestEvent & { response: ResponseStub } {
+	const event = getRequestEvent();
+	if (!event) throw new Error("Missing request event");
+	return event as RequestEvent & { response: ResponseStub };
+}
+
+export async function getSession(): Promise<SessionData | null> {
+	const raw = await sessionCookie.parse(event().request.headers.get("cookie"));
+	if (!raw) return null;
+
+	try {
+		const { data, exp } = JSON.parse(raw);
+		return Date.now() < exp * 1000 ? data : null;
+	} catch {
+		return null;
+	}
+}
+
+export async function setSession(data: SessionData): Promise<void> {
+	const exp = Math.floor(Date.now() / 1000) + maxAge;
+	event().response.headers.append(
+		"set-cookie",
+		await sessionCookie.serialize(JSON.stringify({ data, exp }))
+	);
+}
+
+export async function clearSession(): Promise<void> {
+	event().response.headers.append(
+		"set-cookie",
+		await sessionCookie.serialize("", { maxAge: 0 })
+	);
+}
+```
+
+Call `setSession({ userId })` inside a server function and the response that leaves carries a `Set-Cookie` header.
+Call `getSession()` on the next request and it returns `{ userId }`; an absent, tampered, or expired cookie returns `null`.
+
+Three decisions in that file are deliberate.
+The cookie attributes are set explicitly, because the library's defaults may not match the application's requirements.
+The signing secret comes from `virtual:env/server`, which [Environment](environment.md) keeps out of the browser bundle; the first secret in the list signs new cookies and every listed secret verifies existing ones, so rotation is prepending a new secret and dropping the old one after `maxAge` has passed.
+The payload carries its own `exp`, because the browser's `Max-Age` is a request to the browser and a client is free to replay an old cookie past it.
+
+:::caution[A write does not change what this request read]
+`getSession()` reads the `Cookie` header that arrived with the request.
+`setSession()` appends to the outgoing response.
+Calling `setSession()` and then `getSession()` in the same request returns the old session, because the new cookie is on its way to the browser and has not come back yet.
+:::
+
+## Sign in and sign out
+
+Signing in is a server function that checks the credentials, writes the session, and redirects:
+
+```ts
+// src/data/account.ts
+import { markSafeError, redirect } from "@solidjs/web";
+import { clearSession, setSession } from "../server/session";
+import { verifyCredentials } from "../server/customers";
+
+export async function signIn(form: FormData) {
+	"use server";
+	const customer = await verifyCredentials(
+		String(form.get("email") ?? ""),
+		String(form.get("password") ?? "")
+	);
+	if (!customer) {
+		throw markSafeError(new Error("Email or password did not match"));
+	}
+
+	await setSession({ userId: customer.id });
+	throw redirect("/account");
+}
+
+export async function signOut() {
+	"use server";
+	await clearSession();
+	throw redirect("/");
+}
+```
+
+Submit the sign-in form and the response is a redirect to `/account` with the session cookie attached.
+The cookie write and the thrown `redirect()` ride the same response; start mode folds `Set-Cookie` values from the event onto page responses, middleware responses, API responses, and server-function responses alike.
+The failed-credentials error is wrapped in `markSafeError` so its message reaches the form; a plain thrown `Error` is replaced with `Internal Server Error` in production.
+[Mutations and responses](server-functions-mutations-and-responses.md) covers `redirect()`, `reload()`, and which thrown errors reach the browser.
+
+## Authorize on the server
+
+Authentication identifies the caller.
+Authorization decides whether that caller may perform an operation.
+Both decisions belong in server code, and the caller's identity comes from the session, never from an argument:
+
+```ts
+// Avoid: the browser names the customer
+export async function getOrders(customerId: string) {
+	"use server";
+	return database.orders.forCustomer(customerId);
+}
+
+// Prefer: the session names the customer
+export async function getOrders() {
+	"use server";
+	const session = await getSession();
+	if (!session?.userId) throw redirect("/sign-in");
+	return database.orders.forCustomer(session.userId);
+}
+```
+
+A server function is an HTTP endpoint, so the `Avoid` version returns any customer's orders to any caller who puts that customer's id in the request body.
+[Arguments and security](server-functions-arguments-and-security.md) covers what a caller controls and what the request event vouches for.
+
+Validate the arguments the caller does control the same way, then authorize access to the specific record:
+
+::::tab-group[validation-library]
+:::tab[Valibot]
+```ts
+import { redirect } from "@solidjs/web";
+import * as v from "valibot";
+
+const AccountName = v.pipe(
+	v.string(),
+	v.trim(),
+	v.minLength(1),
+	v.maxLength(100)
+);
+
+export async function renameAccount(form: FormData) {
+	"use server";
+	const session = await getSession();
+	if (!session?.userId) throw redirect("/sign-in");
+
+	const name = v.parse(AccountName, form.get("name"));
+	await database.customers.rename(session.userId, name);
+}
+```
+:::
+
+:::tab[Zod]
+```ts
+import { redirect } from "@solidjs/web";
+import { z } from "zod";
+
+const AccountName = z.string().trim().min(1).max(100);
+
+export async function renameAccount(form: FormData) {
+	"use server";
+	const session = await getSession();
+	if (!session?.userId) throw redirect("/sign-in");
+
+	const name = AccountName.parse(form.get("name"));
+	await database.customers.rename(session.userId, name);
+}
+```
+:::
+::::
+
+Hiding the rename form from signed-out visitors does not protect `renameAccount`; the check inside the function is the gate.
+Repeat it at every protected server entry point: server functions, API route handlers, and the page render.
+
+### Authenticate once in middleware
+
+When many entry points need the same answer, a [middleware](middleware-and-api-routes.md#add-a-middleware) can read the session once and place the result on `event.locals`:
+
+```ts
+// src/middleware.ts
+import { getRequestEvent } from "@solidjs/web";
+import { getSession } from "./server/session";
+
+async function attachCustomer(
+	_request: Request,
+	next: () => Promise<Response>
+) {
+	const session = await getSession();
+	getRequestEvent()!.locals.userId = session?.userId;
+	return next();
+}
+```
+
+Server functions, API handlers, and the page render for that request read that request's event, so `locals.userId` set here is visible to all of them; a server function called during the render gets a derived event with a copy of `locals`, so what it writes stays with the call.
+Augment `RequestEventLocals` from `@solidjs/web` when the application wants a precise type for those fields:
+
+```ts
+declare module "@solidjs/web" {
+	interface RequestEventLocals {
+		userId?: string;
+	}
+}
+```
+
+## Response behavior
+
+Session writes append `Set-Cookie` to the event's response stub, and start mode folds those headers onto whatever response leaves, a thrown `redirect()` included.
+
+Write cookies before the response head commits.
+During streaming server rendering, the head commits when the shell flushes; for a server-function call or an API route, it commits when the handler folds the event onto the outgoing response, after the function has returned.
+A header write after that point throws in development and, in production, reports the error and leaves the response unchanged.
+
+:::note[Cookie-backed or storage-backed]
+A cookie-backed session keeps its payload in the browser and is limited by cookie size.
+A storage-backed session puts an opaque identifier in the cookie and keeps revocable data in a database or key-value store, which is what you want when signing out must invalidate other devices.
+Solid supplies the same request and response seam for either.
+:::
+
+## Common problems
+
+### `getSession()` returns `null` right after `setSession()`
+
+Both calls ran in the same request.
+The read sees the `Cookie` header that arrived; the write is on the outgoing response.
+Redirect after the write, as `signIn` does, and the next request carries the new cookie.
+
+### The cookie is set but never comes back
+
+Compare the `Set-Cookie` attributes in the response with the request that follows.
+A `secure` cookie is not sent over plain `http://`, a `path` that does not cover the endpoint is not sent to it, and a `domain` that does not match the host is dropped.
+Set the attributes explicitly rather than relying on library defaults.
+
+### `/sign-in` and `/account` redirect to each other forever
+
+The sign-in check runs on the sign-in page too, or the session cookie never comes back (see above) so every protected request redirects again.
+Guard only the routes that need a session, and confirm the cookie arrives on the request to `/account`.
+
+### `Response header write dropped: headers.append("set-cookie") ran after the response head was sent`
+
+`setSession()` or `clearSession()` ran after the shell flushed, for example from a component that rendered behind a `Loading` boundary.
+Move the write into a server function or middleware, or run it before the first flush.
+
+### `Missing request event`
+
+`getRequestEvent()` returned `undefined`.
+It is defined only on the server, inside a request: not in the browser, not at module scope, and not in a test that did not provide an event.
+Call the session helpers from a server function, middleware, or the page render.
+
+## Recap
+
+* Read the request and write `Set-Cookie` through `getRequestEvent()`; the session protocol comes from a cookie library.
+* Sign the cookie with a secret from `virtual:env/server`, set `httpOnly`, `secure`, and `sameSite` explicitly, and carry an expiry in the payload.
+* A signed cookie is readable by the browser; store an id, not data.
+* `getSession()` reads the request and `setSession()` writes the response; the two do not meet in one request.
+* Take the customer's identity from the session, never from an argument, and check it in every server function and API handler.
+* Read the session once in middleware and put the result on `event.locals` when many entry points need it.
+* Write cookies before the shell flushes or the function returns; a later write is dropped and reported.
+
+## Next steps
+
+* [Arguments and security](server-functions-arguments-and-security.md): why the identity must come from the request event and never from a server-function argument.
+* [Mutations and responses](server-functions-mutations-and-responses.md): `redirect()` and `reload()` after a sign-in or sign-out, and which errors reach the browser.
+* [Middleware and API routes](middleware-and-api-routes.md): where the session read goes so every request sees `event.locals.userId`.
+* [Environment](environment.md): declaring `SESSION_SECRET` so the build fails if it would ship to the browser.
+* [Protected routes](../guides/protected-routes.md): the route guard and middleware that sit in front of the server-function checks on this page.

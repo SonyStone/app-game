@@ -1,0 +1,85 @@
+# httpStatus
+
+Declares the HTTP response status (and optional status text) for the
+lifetime of the current reactive scope during SSR — call it bare in a
+component or reactive-scope body where the status is decided (a 404
+route, an error fallback). Client build: a no-op — the response head was
+sent long ago.
+
+Naming note — this is a scope-tied *declaration*, not a mutation: "while
+this reactive scope is live, the response has this status." Solid
+reserves `set*` verbs for event-time mutation; like
+`createSignal`/`onCleanup` this is called in scope bodies and un-declares
+on scope disposal.
+
+Retraction semantics (server): the write snapshots the previous
+`event.response` status at write time and restores it when the owning
+scope is disposed — so a boundary that errored, declared a status, and
+then recovered retracts its write instead of stomping a status a
+surviving part of the tree legitimately set. Once the response head is
+`committed` (head derived/sent — the shell flush of a piped
+`renderToStream`, the completion of an awaited one or of
+`renderToString`), writes and retractions are no-ops.
+
+## Import
+
+```ts
+import { httpStatus } from "@solidjs/web";
+```
+
+## Type signature
+
+```ts
+function httpStatus(code: number, text?: string): void;
+```
+
+## Parameters
+
+### `code`
+
+* **Type:** `number`
+
+HTTP status code.
+
+### `text`
+
+* **Type:** `string`
+* Optional
+
+Optional status text.
+
+## Examples
+
+### Return 404 from a not-found route
+
+```tsx
+function NotFound() {
+	httpStatus(404);
+	return <h1>Page not found</h1>;
+}
+```
+
+### Report a failed render
+
+```tsx
+<Errored
+	fallback={(error) => {
+		httpStatus(500);
+		return <p>Something went wrong.</p>;
+	}}
+>
+	<Page />
+</Errored>
+```
+
+## Caveats
+
+* Call it in the scope that decides the status, such as a not-found route or an error fallback. It is a no-op in the browser.
+* A scope that disposes retracts its status, so an error boundary that recovers does not leave a 500 behind.
+* Writes after the response head is committed are ignored.
+
+## Learn more
+
+* [Who owns the document](../concepts/rendering-and-ssr.md#who-owns-the-document)
+* [Rendering and SSR](../concepts/rendering-and-ssr.md)
+* [Choose a rendering mode](../guides/choose-a-rendering-mode.md)

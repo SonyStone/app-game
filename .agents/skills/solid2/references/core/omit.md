@@ -1,0 +1,104 @@
+# omit
+
+Returns a reactive proxy of `props` with the listed keys hidden. Tracking
+on the remaining keys is preserved.
+
+Use it to forward "rest" props to a child element while pulling out the
+keys your component handles itself — the equivalent of `splitProps(p, ["a","b"])[1]`.
+
+The result is a live VIEW of `props`, not a copy: nothing is read or
+materialized until a key is used, and a spread (`{...rest}`) or a later
+`merge()` walks the underlying object directly. A predicate hides keys by
+rule instead of by name — `omit(props, k => k[0] === "$")` — without
+enumerating first.
+
+## Import
+
+```ts
+import { omit } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function omit<T extends Record<any, any>, K extends readonly (keyof T)[]>(
+	props: T,
+	...keys: K
+): Omit<T, K>;
+function omit<T extends Record<any, any>>(
+	props: T,
+	hidden: (key: keyof T & (string | symbol)) => boolean
+): Partial<T>;
+```
+
+## Parameters
+
+### `props`
+
+* **Type:** `T`
+
+The props object to read from.
+
+### `keys`
+
+* **Type:** `K`
+
+Property names to hide from the returned proxy.
+
+### `hidden`
+
+* **Type:** `(key: keyof T & (string | symbol)) => boolean`
+
+## Return value
+
+A reactive proxy of `props` without the listed keys.
+
+## Examples
+
+```tsx
+function Input(
+	props: {
+		label: string;
+		value: string;
+		onInput: (v: string) => void;
+	} & JSX.HTMLAttributes<HTMLInputElement>
+) {
+	const rest = omit(props, "label", "value", "onInput");
+
+	return (
+		<label>
+			{props.label}
+			<input
+				{...rest}
+				value={props.value}
+				onInput={(e) => props.onInput(e.currentTarget.value)}
+			/>
+		</label>
+	);
+}
+```
+
+## Caveats
+
+* Do not destructure the result. Spread it onto an element or read properties through it.
+* Keys are evaluated once. Hide a dynamic set of keys by building a wrapper object instead.
+
+## Common problems
+
+* [A child does not update when the parent's signal changes](../concepts/components-and-jsx.md#a-child-does-not-update-when-the-parents-signal-changes)
+
+## Learn more
+
+* [Props](../concepts/components-and-jsx.md#props)
+* [Stores](../concepts/stores.md)
+* [Lists](../guides/lists.md)
+
+## Related types
+
+### `Omit`
+
+```ts
+type Omit<T, K extends readonly (keyof T)[]> = {
+	[P in keyof T as Exclude<P, K[number]>]: T[P];
+};
+```

@@ -1,0 +1,421 @@
+# Deployment
+
+The first deploy of a `fullstack` project usually fails in one of two ways.
+The HTML arrives but every `/assets/*.js` and `.css` request returns 404, so the page is unstyled and never hydrates.
+Or the home page works and refreshing `/account/orders` returns the host's 404 page.
+Both mean the host is serving one half of the build: `dist/client` is a directory of static files, `dist/server/server.js` is a request handler, and the host has to put the first in front of the second.
+
+A `bare` or `basic` project builds to `dist/client` alone, and any static host serves it.
+This page is about a project with `ssr: true` or server functions, which builds to static assets plus a server handler.
+[Project shapes](../getting-started/project-shapes.md) says which shape produces which output; [App structure](app-structure.md) explains the entries the handler runs.
+
+Most apps need the request handler section and one of the host sections after it: Node with the emitted `dist/server/node.js`, or one provider plugin.
+The rest is for checking a detail or wiring a host that is not listed.
+
+## What the build produces
+
+Run the configured Vite build:
+
+```bash
+pnpm build
+```
+
+With `start` and `ssr: true`, one build produces:
+
+* `dist/client`, containing browser JavaScript, CSS, images, and other static assets, with hashed file names.
+* `dist/server/server.js`, containing the server entry and its exported request handler.
+
+When server functions are enabled, the server bundle also dispatches their endpoint, `/_server` by default.
+Pages and server functions are one deployment: a render calls a server function directly, in the same process, with the request event and its `locals` in hand, so the server bundle cannot be split with pages on one host and functions on another.
+
+Without `ssr: true`, start mode writes the empty document shell to `dist/client/index.html` and removes `dist/server` when the application has no server functions.
+If server functions are enabled, deploy `dist/client` for pages and keep `dist/server` running for the function endpoint.
+The two can live on different hosts.
+The simplest arrangement keeps one origin: route `/_server/*` from the CDN or proxy that serves the pages to the function host, and nothing changes in the app.
+When the pages must be served from another origin, such as a static site on its own domain or a WebView whose local server owns every path on its hostname, point the client at the function host with `configureServerFunctionsClient({ endpoint: "https://api.example.com/_server" })` and list the page origin on the server with `configureServerFunctionsServer({ csrf: { origin: ["https://app.example.com"] } })`.
+Same-origin callers are admitted by default; a listed origin is the opt-in for a cross-origin caller, which the server then answers with the CORS headers the browser needs.
+Authenticate such a client with a bearer token through the client's `prepareRequest` rather than cookies; cookies cross origins only with `credentials: "include"` on the fetch, `SameSite=None; Secure` on the cookie, and `csrf: { allowCredentials: true }` on the server.
+
+## The request handler
+
+The built server entry exports the handler in two forms:
+
+```ts
+import app, { handleRequest } from "./dist/server/server.js";
+
+const response = await handleRequest(request);
+const sameResponse = await app.fetch(request);
+```
+
+`handleRequest(Request)` is the direct Solid API.
+The default export follows the Fetchable module convention used by Workers, Nitro, Netlify Functions, Bun, and `deno serve`:
+
+```ts
+export default {
+	fetch(request: Request) {
+		return handleRequest(request);
+	},
+};
+```
+
+The wrapper accepts only the request on purpose.
+Some hosts call `fetch` with additional environment or execution-context arguments, which are not Solid handler options.
+
+The handler creates the request event, runs the configured middleware, dispatches the server-function endpoint when enabled, renders pages, and commits response metadata.
+It also resolves the built client entry and stylesheet URLs through the client build manifest.
+
+Static files go first:
+
+```ts
+// Avoid: every request goes to the handler, assets included
+const server = createServer(async (req, res) => {
+	const response = await handleRequest(webRequest(req));
+	await sendWebResponse(res, response);
+});
+
+// Prefer: serve dist/client, then hand the rest to the handler
+const server = createServer(async (req, res) => {
+	if (await serveStatic("dist/client", req, res)) return;
+	const response = await handleRequest(webRequest(req));
+	await sendWebResponse(res, response);
+});
+```
+
+With the `Avoid` version, a request for `/assets/app-BpJ2g.js` renders the HTML page, because in production every request that reaches the end of the middleware chain renders; the browser receives a document where it expected a script.
+With `start.node`, the emitted Node entry is the `Prefer` version; the rest of this section is for a bridge you write.
+
+When adapting a host request, preserve the URL, method, headers, and the body of any request that is not `GET` or `HEAD`.
+When adapting the result, preserve the status, the headers, each `Set-Cookie` value separately, and the streamed body.
+
+:::caution[Set-Cookie must not be comma-joined]
+A response can carry several `Set-Cookie` headers, and joining them into one comma-separated value corrupts every cookie in it.
+The emitted Node entry reads them with `headers.getSetCookie()` and passes the array to Node; a bridge for another server needs the same care.
+:::
+
+## Node
+
+Node has no server API that accepts a Fetchable module, so the plugin emits the Node server.
+Set `start.node` and the build writes `dist/server/node.js` next to `dist/server/server.js`:
+
+```ts title="vite.config.ts"
+import { defineConfig } from "vite";
+import solid from "@solidjs/vite-plugin";
+
+export default defineConfig({
+	plugins: [
+		solid({
+			start: { node: true },
+			ssr: true,
+		}),
+	],
+});
+```
+
+`server.js` does not change: `handleRequest` and the default `{ fetch }` export are the same as without the option, so a provider integration or a Fetch runtime keeps working from that file.
+
+Build, then run the emitted file:
+
+```bash
+pnpm build
+node dist/server/node.js
+```
+
+The server listens on `PORT`, defaulting to `3000`, and binds to `HOST` when it is set.
+Those two variables are the only runtime configuration.
+The fullstack templates point their start script at the file:
+
+```json
+{
+	"scripts": {
+		"start": "node --env-file-if-exists=.env dist/server/node.js"
+	}
+}
+```
+
+Any Node host that runs that command with `PORT` and the server environment set is done.
+
+The emitted entry is the `Prefer` version from [the request handler section](#the-request-handler), with the details a production bridge needs:
+
+* It serves `dist/client` first.
+  Hashed files under `assets/` get `Cache-Control: public, max-age=31536000, immutable`; other files get `public, max-age=0, must-revalidate` and a `Last-Modified` header.
+  A path containing `..` cannot leave the directory, and a path with a dot segment such as `.vite/manifest.json` is never served.
+* It passes every request that matched no file to `handleRequest(request, { event: { nativeEvent: req } })` through the same Node-to-web bridge that `vite dev` and `vite preview` use.
+  The bridge streams the request body for methods other than `GET` and `HEAD`, forwards each `Set-Cookie` header separately, answers `HEAD` without a body, aborts the render when the client disconnects, and waits for the socket to drain before writing more.
+* In client start mode with server functions, it serves `dist/client/index.html` for HTML-accepting `GET` requests that match no file, and routes the server-function endpoint to the handler.
+* It speaks plain HTTP.
+  Terminate TLS and compress at a reverse proxy or CDN in front of it, or mount it in Express behind `compression()` as shown below.
+
+:::tip[The raw request is one option away]
+The emitted entry passes the Node request into the event with `handleRequest(request, { event: { nativeEvent: req } })`, so `getRequestEvent().nativeEvent` is the Node `IncomingMessage`.
+Middleware and server functions read it for platform details such as the socket's remote address.
+Behind a proxy, read the forwarding headers off `getRequestEvent().request` instead, and only when the proxy is trusted.
+:::
+
+### Your own Node server
+
+Keep a hand-written entry when the app needs compression, a custom `http` server, or a place inside an existing Express or Fastify app.
+`dist/server/node.js` exports three things for that: `listener`, the `(req, res)` function the emitted server runs; `createListener(options)`, which builds a listener with options; and `serve(options)`, which creates and starts an `http.Server` on `PORT` and `HOST` and returns it.
+Importing the file does not start a server; only running it directly does.
+
+```js
+// server.js
+import { createServer } from "node:http";
+import { listener } from "./dist/server/node.js";
+
+createServer(listener).listen(process.env.PORT || 3000);
+```
+
+With Express, either put compression in front and let the listener serve everything:
+
+```js
+// server.js
+import express from "express";
+import compression from "compression";
+import { listener } from "./dist/server/node.js";
+
+const app = express();
+app.use(compression());
+app.use(listener); // static files, pages, server functions
+app.listen(process.env.PORT || 3000);
+```
+
+Or let Express own the static files and keep only the bridge:
+
+```js
+// server.js
+import express from "express";
+import { createListener } from "./dist/server/node.js";
+
+const app = express();
+app.use(express.static("dist/client", { immutable: true, maxAge: "1y" }));
+app.use(createListener({ static: false }));
+app.listen(process.env.PORT || 3000);
+```
+
+`static: false` skips the file lookup and, in client start mode, the `index.html` history fallback; Express owns both.
+`createListener({ event: (req) => ({ ...fields }) })` merges extra fields next to `nativeEvent` in the request event, and `serve()` accepts `static` and `event` alongside `port` and `host`.
+
+A bridge written against `handleRequest` from `dist/server/server.js` is the last resort, for a server that cannot mount a Node request listener.
+It must meet the requirements in [the request handler section](#the-request-handler): stream the request body for methods other than `GET` and `HEAD`, forward multiple `Set-Cookie` headers as separate values, and pass the Node request as `event.nativeEvent`.
+
+## Preview the production artifact
+
+The start-mode integration configures `vite preview` to serve `dist/client` and dispatch the remaining requests through the built handler:
+
+```bash
+pnpm build
+pnpm exec vite preview
+```
+
+The official fullstack templates name the Vite preview script `serve` and reserve `start` for the emitted Node server.
+Preview verifies the built handler and static assets together; it does not replace a test on the target host.
+
+## Provider integrations
+
+Provider Vite plugins can add platform development features and prepare deployment output.
+The normal `ssr` environment exposes the default Fetchable handler as its `index` service entry in development and production, so a provider plugin can adopt that environment, supply its runtime and build orchestration, and use the Solid entry without a custom source file or explicit Rollup input.
+
+The integrations below adopt the normal `ssr` environment.
+Use `start.external` instead when a custom host controls a differently named or independently configured server environment.
+External mode leaves the server build and development HTTP serving to that host while Solid continues to provide its generated entries, manifest, and virtual request handler.
+
+### Netlify
+
+The Netlify Vite plugin consumes Solid's normal `ssr` build and turns its Fetchable server entry into a streaming Netlify Function.
+
+```sh
+npm i @netlify/vite-plugin -D
+pnpm i @netlify/vite-plugin -D
+yarn add @netlify/vite-plugin -D
+bun i @netlify/vite-plugin -d
+deno add npm:@netlify/vite-plugin -D
+```
+
+Add the Netlify plugin after `solid()` and enable its build support:
+
+```ts title="vite.config.ts"
+import netlify from "@netlify/vite-plugin";
+import { defineConfig } from "vite";
+import solid from "@solidjs/vite-plugin";
+
+export default defineConfig({
+	plugins: [
+		solid({
+			start: true,
+			ssr: true,
+		}),
+		netlify({
+			build: {
+				enabled: true,
+			},
+		}),
+	],
+});
+```
+
+Keep the normal Solid server build enabled so Netlify can consume its `ssr` environment.
+
+Set the direct-plugin build defaults explicitly:
+
+```toml title="netlify.toml"
+[build]
+command = "pnpm build"
+publish = "dist/client"
+```
+
+The Netlify plugin generates the catch-all function, gives static files precedence, and preserves streaming responses.
+It also emulates Netlify platform features during `vite dev`.
+No handwritten Netlify Function is required.
+
+### Nitro
+
+[Nitro v3](https://nitro.build/) adopts Solid's `ssr` environment so its presets, route rules, tasks, and runtime features apply to the Solid handler.
+
+```sh
+npm i nitro
+pnpm i nitro
+yarn add nitro
+bun i nitro
+deno add npm:nitro
+```
+
+Add `nitro()` after `solid()`:
+
+```tsx title="vite.config.ts"
+import { nitro } from "nitro/vite";
+import { defineConfig } from "vite";
+import solid from "@solidjs/vite-plugin";
+
+export default defineConfig({
+	plugins: [
+		solid({
+			start: true,
+			ssr: true,
+		}),
+		nitro({ serverEntry: false }),
+	],
+});
+```
+
+Nitro discovers the Fetchable handler through the environment's `index` service entry.
+No custom server entry or Rollup input is required.
+
+Use the top-level `nitro` property for deployment presets, prerendering, tasks, WebSockets, and other Nitro options; see the [Nitro configuration reference](https://nitro.build/config).
+
+### Cloudflare Workers
+
+The [Cloudflare Vite plugin](https://developers.cloudflare.com/workers/vite-plugin/) runs the server build in the Workers runtime during development and prepares it for deployment to Cloudflare.
+
+```sh
+npm i @cloudflare/vite-plugin wrangler -D
+pnpm i @cloudflare/vite-plugin wrangler -D
+yarn add @cloudflare/vite-plugin wrangler -D
+bun i @cloudflare/vite-plugin wrangler -d
+deno add npm:@cloudflare/vite-plugin wrangler -D
+```
+
+Map the Worker to Solid's `ssr` environment:
+
+```tsx title="vite.config.ts"
+import { cloudflare } from "@cloudflare/vite-plugin";
+import { defineConfig } from "vite";
+import solid from "@solidjs/vite-plugin";
+
+export default defineConfig({
+	plugins: [
+		cloudflare({ viteEnvironment: { name: "ssr" } }),
+		solid({ start: true, ssr: true }),
+	],
+});
+```
+
+Cloudflare comes before `solid()` in the plugin list, matching Cloudflare's framework-integration order.
+It associates the Worker with the `ssr` environment before Solid supplies the application entry.
+
+Point the Worker at Solid's generated virtual handler in `wrangler.jsonc`:
+
+```jsonc
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "solid-store",
+	"main": "virtual:solid-ssr-handler",
+	"compatibility_date": "2026-07-22",
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"directory": "./dist/client",
+		"binding": "ASSETS",
+	},
+	"observability": {
+		"enabled": true,
+	},
+}
+```
+
+The `viteEnvironment` option merges the Workers runtime configuration with Solid's server environment.
+The Cloudflare plugin resolves the environment's Fetchable `index` entry and runs it in workerd.
+No custom Worker source entry is required.
+Follow the Cloudflare guide to add any platform bindings.
+
+## Other Fetch runtimes
+
+When a runtime accepts a default Fetchable module, point it at `dist/server/server.js` and configure its static asset service for `dist/client`.
+Bun and `deno serve`, for example, start modules that default-export an object with a `fetch` method.
+The runtime still needs the server bundle's production dependencies and environment variables.
+
+## Common problems
+
+### A `public/` file 404s in production
+
+The host is not serving `dist/client` for that path.
+The build copies `public/` into `dist/client`, so whatever serves the hashed assets serves this file too; check that the static directory is `dist/client`, not `dist` or `public`.
+
+### Every `/assets/*` request 404s or returns HTML
+
+The host is not serving `dist/client` in front of the handler.
+A 404 means nothing serves the directory; HTML means every request reaches `handleRequest`, which renders a page at any URL that gets that far.
+Serve `dist/client` first and pass only unmatched requests to the handler.
+
+### Refreshing a client route returns the host's 404 page
+
+Under `ssr: true`, requests for pages are not reaching `handleRequest`; the host is serving only the static directory.
+Route every request that is not a file to the handler.
+For a static-shell project, there is no handler: configure the host to serve `dist/client/index.html` for paths that are not files, as any single-page app needs.
+
+### `Cannot find module 'dist/server/node.js'`
+
+The build writes `dist/server/node.js` only when `start.node` is `true`.
+Set `start: { node: true }` in `vite.config.ts` and run the build again; `server.js` alone is the handler, not a server.
+If `dist/server` is missing altogether, see the next problem.
+
+### `Cannot find module './dist/server/server.js'`
+
+The build did not produce a server directory.
+Without `ssr: true` and without server functions, start mode removes `dist/server` after writing the shell; there is nothing to run, so deploy `dist/client` as static files.
+With `start.external`, the provider owns the server build and its output lands where that provider puts it.
+
+### The server exits at boot with `server env validation failed at boot`
+
+A `server` variable declared in `env.ts` is missing or invalid in the process environment.
+Server values are read at boot, not at build, so set them in the host's environment or secret settings; [Environment](environment.md) has the rules.
+Client `VITE_` values are the opposite: set them on the machine that runs `vite build`.
+
+### Sign-in works locally but the session is missing in production
+
+The bridge joined several `Set-Cookie` headers into one comma-separated value, which corrupts them.
+Forward them as separate headers, the way the emitted Node entry does with `getSetCookie()`.
+
+## Recap
+
+* Serve `dist/client` as static files first and pass every other request to `handleRequest`.
+* `handleRequest(request)` and the default `{ fetch }` export are the same handler; the default export ignores host arguments after the request.
+* Preserve the method, headers, and streamed body on the way in, and the status, headers, separate `Set-Cookie` values, and streamed body on the way out.
+* Set `start.node` and run `node dist/server/node.js` on any Node host; `PORT` and `HOST` are its only configuration.
+* Set `server` environment variables on the host, because they are read at boot; `VITE_` values are fixed at build time.
+* A provider plugin adopts the `ssr` environment; reach for `start.external` only when the host names or configures its server environment differently.
+* `vite preview` runs the built handler and assets together, and does not replace a test on the target host.
+
+## Next steps
+
+* [Environment](environment.md): which variables the host must supply at boot and which are fixed at build time.
+* [Choose a rendering mode](../guides/choose-a-rendering-mode.md): whether the project needs a server handler at all, or a prerendered site would do.
+* [Middleware and API routes](middleware-and-api-routes.md): the code that runs inside the handler before a page renders.

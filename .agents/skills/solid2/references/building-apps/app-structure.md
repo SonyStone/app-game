@@ -1,0 +1,253 @@
+# App structure
+
+Open the project the [Quick start](../getting-started/quick-start.md) created and two things are missing that every Vite template has: there is no `index.html`, and no file calls `render()` or `hydrate()`.
+What is there is `src/App.tsx`, `src/Document.tsx`, and a `vite.config.ts` with `start: true`.
+
+Those two components are the whole application surface.
+`App` is the component every page renders inside; `Document` is the HTML shell around it.
+The plugin's start mode generates the rest: the server entry that renders `<Document><App /></Document>`, the client entry that mounts or hydrates it, and the request handler that serves both.
+
+Most apps need only `App.tsx` and `Document.tsx`, and the first two sections below are about those files.
+The sections on generated entries and `start.setup` are for projects that need to change the defaults, such as an authored server entry or a router that must load before the render starts.
+
+## Three rendering modes, one layout
+
+Start mode is turned on by `start: true` (or `start: {}` to pass options), and `ssr` decides how the generated entries behave:
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import solid from "@solidjs/vite-plugin";
+
+export default defineConfig({
+	plugins: [solid({ start: true, ssr: true })],
+});
+```
+
+The three modes the [Choose a rendering mode](../guides/choose-a-rendering-mode.md) guide compares all use the same `App` and `Document` files:
+
+* A static shell rendered in the browser, the default without `ssr`.
+  The build writes `Document` without the app into `dist/client/index.html`, and the generated client entry calls `render()` to mount `App` into `document.body`.
+  Without server functions the build removes `dist/server`, so `dist/client` deploys to any static host.
+* Streaming server rendering, with `ssr: true`.
+  Each request renders `<Document><App /></Document>` on the server and streams it; the generated client entry calls `hydrate()` on the same tree.
+  The build emits `dist/client` and a request handler in `dist/server`.
+* Prerendered at build time.
+  The `prerender-crawler` plugin, added next to `solid()`, runs the server build once per reachable page and writes HTML into `dist/client`.
+  It is a plugin, not a start-mode setting, and it renders the same two files.
+
+Flipping `ssr` changes what the build produces and what the host runs.
+It does not change `App.tsx`, `Document.tsx`, or the routes, which is why the [project shapes](../getting-started/project-shapes.md) are the same layout with different options.
+
+:::note[Server functions keep the server handler]
+With `serverFunctions` on and `ssr` off, pages are still static files, but the `/_server` endpoint that answers server-function calls lives in `dist/server`, so the build keeps that directory and the host has to run it.
+[Choose a rendering mode](../guides/choose-a-rendering-mode.md#what-the-host-runs) weighs that against prerendering.
+:::
+
+## The app component
+
+`src/App.tsx` default-exports the root component.
+In the `bare` template that is the whole app; in `basic` and `fullstack` it mounts the router and holds the site-wide layout:
+
+```tsx
+// src/App.tsx
+import { createSignal } from "solid-js";
+import logo from "./logo.svg";
+import "./App.css";
+
+export default function App() {
+	const [count, setCount] = createSignal(0);
+
+	return (
+		<header class="header">
+			<img src={logo} class="logo" alt="Solid logo" />
+			<button onClick={() => setCount(count() + 1)}>Clicks: {count()}</button>
+		</header>
+	);
+}
+```
+
+Start the dev server, and the page shows the header with the counter.
+Nothing in this file knows which mode it runs in: with `ssr: true` the same component renders once on the server and once in the browser.
+
+Anything that should appear on every page belongs here: the router, navigation, a default `<Title>`, a `Loading` boundary around the routed content.
+Anything that belongs to one page belongs in that page's route module.
+
+The plugin looks for `src/App` with `.tsx`, `.jsx`, `.ts`, then `.js`, and falls back to lowercase `src/app` with the same extensions when no uppercase stem matches.
+Set `start.app` to point at a different module inside the Vite root.
+
+## The document component
+
+`src/Document.tsx` default-exports the full HTML document.
+It receives the app as `props.children`, and it is where site-wide head tags such as the charset, viewport, and favicon go:
+
+```tsx
+// src/Document.tsx
+import type { ParentProps } from "solid-js";
+import { HydrationScript } from "@solidjs/web";
+
+export default function Document(props: ParentProps) {
+	return (
+		<html lang="en">
+			<head>
+				<meta charset="utf-8" />
+				<meta name="viewport" content="width=device-width, initial-scale=1" />
+				<link rel="icon" href="/favicon.ico" />
+				<title>Solid App</title>
+				<HydrationScript />
+			</head>
+			<body>{props.children}</body>
+		</html>
+	);
+}
+```
+
+View the page source and this is the markup around the app.
+The plugin injects the client entry `<script>` into the head; you do not write that tag.
+
+Two lines in this file carry rules:
+
+```tsx
+// Avoid: a document with no hydration script under ssr: true
+<head>
+	<meta charset="utf-8" />
+</head>
+
+// Prefer: HydrationScript once, before the app markup
+<head>
+	<meta charset="utf-8" />
+	<HydrationScript />
+</head>
+```
+
+With the `Avoid` version, clicks and input that happen between the HTML arriving and the client bundle hydrating are lost; [Rendering and SSR](../concepts/rendering-and-ssr.md#the-page-renders-but-the-first-clicks-do-nothing) describes the symptom.
+Keep `<HydrationScript />` in the document even in a static-shell project: the handler strips its output from the prerendered shell, so it costs nothing until you turn `ssr` on.
+
+The other rule is `{props.children}`.
+The generated server entry renders `<Document><App /></Document>`, so a body that does not render its children never renders the app.
+
+The plugin looks for `src/Document.tsx`, then `src/Document.jsx`; `start.document` names another module and takes precedence.
+Delete the file and the generated entries use a built-in shell with a charset, a viewport tag, and the hydration script.
+The static `<title>Solid App</title>` is the fallback when no page has mounted a `<Title>`; [Head and metadata](head-and-metadata.md) explains how per-page tags replace it.
+
+## Generated and authored entries
+
+:::advanced[When to read this section]
+The generated entries cover every project shape, including the routers in the official templates.
+Author your own entries when the server render must return something the generated one cannot, such as a custom `Response` per request or a document assembled by another host.
+:::
+
+An entry pair is selected in this order: explicit `start.entryServer` and `start.entryClient` paths, then the conventional `src/entry-server.*` and `src/entry-client.*` files (probed as `.tsx`, `.jsx`, `.ts`, `.js`, then `.mjs`), then the generated pair built from `App` and `Document`.
+
+Under `ssr: true`, authored entries come in pairs, because both sides must render the same document tree for hydration to match.
+The server entry exports `render(request, context)`, which may return a `renderToStream` result, an HTML string, or a `Response`.
+The client entry owns hydration, and the server document owns its own client `<script>` element: `context.clientEntry` carries the resolved client entry URL, and the production handler also rewrites a literal root-relative reference to the authored client entry.
+Authored entries bypass the `App` and `Document` conventions; those two modules belong to the generated entries.
+
+Without `ssr`, the server entry is always generated, because it renders the shell for dev serving and the build-time prerender.
+An authored client entry can stand alone in that mode and owns the browser mount; `start.entryServer` and any `src/entry-server.*` file are ignored, and the selected `Document` still supplies the shell.
+
+Providing one authored entry without the other under `ssr: true` is a configuration error, and the message names the missing file.
+
+## Mounting a router
+
+Start mode does not select a router.
+Mount the router or its provider inside `App`, the way both router variants of the templates do, and route modules and route-table generation stay with the router you chose.
+
+Some routers need an instance bound to the current request so they can load the matched routes before the server render begins.
+`start.setup` names a server-only module for that:
+
+```ts
+// vite.config.ts
+solid({
+	start: {
+		setup: "./src/setup.tsx",
+	},
+	ssr: true,
+});
+```
+
+The module default-exports a function that receives the request event and the `App` component.
+The generated server entry calls it after the middleware chain has dispatched to the page render and before `renderToStream()` starts.
+It may return a component, nothing, or a promise of either: a returned component renders in `App`'s place inside `Document`, and no return keeps `<App />`.
+The browser-side `App` must produce the same router tree, or hydration will not match.
+
+`start.setup` runs only for page renders made by a generated server entry under `ssr: true`.
+It is ignored without `ssr`, and combining it with an authored server entry is an error.
+
+[Integrate a router](../routing/integrate-a-router.md) shows how the two supported routers use this hook and when a project needs it at all.
+
+## Common problems
+
+### `the start option needs an app root`
+
+There is no `src/App.tsx` (or `.jsx`, `.ts`, `.js`, or a lowercase `app` variant) and `start.app` is not set.
+Add the file or set `start.app`; under `ssr: true`, an authored `src/entry-server.*` and `src/entry-client.*` pair is the other way to satisfy it.
+
+### `found entry-server but no entry-client; entry files come in pairs`
+
+One authored entry exists under `ssr: true`.
+Add the matching entry, or remove the one you have to go back to the generated pair.
+
+### The body is empty on a server-rendered page
+
+`Document` does not render `props.children`.
+The app is passed in as children; a body that hardcodes its content never renders it.
+
+### Production shows a 500 page where development showed the error
+
+Production builds wrap the generated entries in a default error boundary that logs the error with `console.error` on the server and renders `500 | Internal Server Error` with a 500 status; development builds have no such boundary.
+Read the server log for the real error.
+Set `start.errorBoundary: false` when middleware owns error handling; [Middleware and API routes](middleware-and-api-routes.md#catching-errors) shows that middleware.
+
+### `start.setup only applies to generated entries`
+
+The project has an authored `src/entry-server.*` (or `start.entryServer`) and `start.setup` at the same time.
+Call the setup step from your own `render()` and remove `start.setup`, or remove the authored entry.
+
+## Loading instrumentation first
+
+An error monitor or a tracing SDK on the server patches `node:http` and the other modules it observes, so it has to run before those modules are imported.
+Writing `import "./instrument"` at the top of an entry does not achieve that in ESM: static imports are hoisted and evaluated in dependency order, so the entry's own dependencies load first.
+`start.instrument` names a server-only module the plugin awaits before anything else in the server graph:
+
+```ts
+// vite.config.ts
+solid({
+	start: {
+		instrument: "./src/instrument.ts",
+	},
+	ssr: true,
+});
+```
+
+```ts
+// src/instrument.ts
+import * as monitor from "my-monitor/server";
+
+monitor.init({ dsn: process.env.MONITOR_DSN });
+```
+
+The generated handler entry becomes `await import(instrument); await import(handler)`, so the module runs to completion — top-level `await` included — before the app, the middleware, `@solidjs/web`, or any dependency evaluates.
+The plugin honors it on every surface: `vite dev`, `vite build`, `vite preview`, and a host importing the handler entry directly, which replaces a `node --import` flag per host.
+The module needs no exports.
+Keep code splitting on in the server build (the default); inlining dynamic imports would hoist the handler graph back above the instrument.
+
+## Recap
+
+* Edit `src/App.tsx` for what every page shares and `src/Document.tsx` for the HTML shell; the plugin generates the entries around them.
+* The static shell, streaming SSR, and prerendering all use the same two files; `ssr` and the crawler plugin change the build and the host, not the code.
+* Keep `<HydrationScript />` in `Document`; without it, input before hydration is lost, and the static shell strips it for free.
+* Render `{props.children}` in the document body, or the app never appears on the server.
+* The static `<title>` in `Document` is the fallback; per-page titles come from head metadata.
+* Author `entry-server` and `entry-client` together, and only when the generated pair cannot produce the response you need.
+* Use `start.setup` when a router must load against the request before the server render; it applies only to generated entries under `ssr: true`.
+* Use `start.instrument` for a module that must run before the server graph loads, such as a monitoring SDK's `init()`; a static import at the top of an entry does not run first.
+
+## Next steps
+
+* [Styling and assets](styling-and-assets.md): where CSS and images go now that there is no `index.html` to link them from.
+* [Head and metadata](head-and-metadata.md): per-page titles and meta tags on top of the `Document` shell.
+* [Choose a rendering mode](../guides/choose-a-rendering-mode.md): which of the three modes fits the project, by what the user sees and what the host runs.
+* [Deployment](deployment.md): what to do with `dist/client` and `dist/server` on the first deploy.
+* [Observability](../guides/observability.md): what the instrument module hooks into, and the `observe` build that carries records and traces in production.

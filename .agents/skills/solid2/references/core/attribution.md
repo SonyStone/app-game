@@ -1,0 +1,2321 @@
+# attribution / costs / feedback / formatOrigin / formatRerun / graphSize / subscriptions / why
+
+The attribution engine from `solid-js/attribution`: take a hold with `enable()`, read its interaction, navigation, hold, and re-run records on `OBSERVE.records.subscribe(type, …)` or from `history(type)`, and fold them with `costs()`, `feedback()`, `why()`, and `subscriptions()`. Inert in a production build.
+
+## Import
+
+```ts
+import {
+	attribution,
+	costs,
+	feedback,
+	formatOrigin,
+	formatRerun,
+	graphSize,
+	subscriptions,
+	why,
+} from "solid-js/attribution";
+```
+
+## `attribution`
+
+### Type signature
+
+```ts
+const attribution: Attribution;
+```
+
+## `costs`
+
+Aggregated cost tables since `enable()`: `scopes` ranked by self-time
+(with `wastedMs` = time spent on unchanged-value runs), `writes` ranked by
+total downstream re-run time each root write caused.
+
+### Type signature
+
+```ts
+function costs(): AttributionCostTables;
+```
+
+## `feedback`
+
+What the user waited on, folded from holds and the interaction on each
+re-run: `sources` ranks async sources by the silent time writes spent held
+behind them (with which affordances answered, how often, and which
+interactions were held); `interactions` ranks user events by the total time
+they cost — re-run work caused (long-flush hazard) beside time held
+(silent-hold hazard). Facts at every duration; SILENT\_HOLD is the
+thresholded verdict. Three more tables round out the picture: `navigations`
+ranks routes by the time spent held navigating to them (folded from settled
+navigations), `flights` counts each async source's flights and how many
+were abandoned before landing (the re-ask storm), and `fallbacks` measures
+how long each loading boundary showed its fallback and how often that was a
+flash.
+
+### Type signature
+
+```ts
+function feedback(): AttributionFeedbackTables;
+```
+
+## `formatOrigin`
+
+`click on button#next "Next →"`, `effect "syncTitle"`, `action "save"`, `navigation to /users/:id`, …
+
+### Type signature
+
+```ts
+function formatOrigin(origin: ChangeOrigin): string;
+```
+
+### Parameters
+
+#### `origin`
+
+* **Type:** `ChangeOrigin`
+
+## `formatRerun`
+
+formatRerun API reference.
+
+### Type signature
+
+```ts
+function formatRerun(event: RerunEvent): string;
+```
+
+### Parameters
+
+#### `event`
+
+* **Type:** `RerunEvent`
+
+## `graphSize`
+
+The live graph's size — a walk, not a counter: nothing is charged at node
+creation, disposal, write or re-run; the engine asks at a navigation's
+settle. Two passes. The owner tree from the registered top-level roots
+gives `owners` and seeds the computations. Then each computation's
+dependency links give `edges` and the `signals` and computations they
+reach, and each newly met source's subscriber list gives the computations
+that read it — including one created with no owner, which no chain holds
+and only its sources keep alive: the subscription leak a heap snapshot
+finds. Measured at 5–10 ns per link; a 50k-owner graph walks in under a
+millisecond. Dormant nodes are spliced out of their chain and are not
+counted unless a subscription still reaches them.
+
+### Type signature
+
+```ts
+function graphSize(): GraphSize;
+```
+
+## `subscriptions`
+
+Current dependency names of one scope — the devtools subscription view.
+Read from the graph, not a record, so it answers with or without an
+audience for re-run records (and with the engine disabled).
+
+### Type signature
+
+```ts
+function subscriptions(target: unknown): string[];
+```
+
+### Parameters
+
+#### `target`
+
+* **Type:** `unknown`
+
+## `why`
+
+Re-run history for one scope — pass a memo/effect accessor or raw node,
+or a scope's name as a string (an out-of-process consumer such as the
+diagnostics bridge holds no node, only the `nodeName` the records
+carry). Records name their scope by `nodeId`; a node that has never run
+under the engine has none, and no history. By name, every scope of that
+name answers. A view of `history("rerun")`, so it shares that buffer's
+gate: runs nothing wanted a record of (no `rerun` listener, fold or log
+at the time) left no record and are not here — a console session that
+wants them subscribes or imports a fold first.
+
+### Type signature
+
+```ts
+function why(target: unknown): RerunEvent[];
+```
+
+### Parameters
+
+#### `target`
+
+* **Type:** `unknown`
+
+## Learn more
+
+* [Something updates too often](../guides/debugging-reactivity.md#something-updates-too-often)
+* [What each interaction cost](../guides/observability.md#what-each-interaction-cost)
+* [Build an observability adapter](../guides/observability-adapters.md)
+* [Performance](../guides/performance.md)
+* [The screen looks dead after a click](../guides/debugging-reactivity.md#the-screen-looks-dead-after-a-click)
+* [Debugging reactivity](../guides/debugging-reactivity.md)
+
+## Related types
+
+### `Acknowledgement`
+
+One way the screen acknowledged a hold. `reader` is where it was painted —
+the owner path of the first effect the census found reading the
+affordance (`["<App>", "<Feed>", "effect"]`), so a consumer can say WHICH
+screen answered, not only that one did. Absent when the affordance was
+registered but the census found no reader through the graph (an optimistic
+store: its readers are proxy traps, not nodes). `feedback()` ranks
+acknowledgements by `kind:source` (`isPending:posts`).
+
+```ts
+interface Acknowledgement {
+	kind: "isPending" | "latest" | "optimistic" | "affects";
+	source: string;
+	reader?: string[];
+}
+```
+
+#### `kind`
+
+* **Type:** `"isPending" | "latest" | "optimistic" | "affects"`
+
+#### `source`
+
+* **Type:** `string`
+
+The node the affordance hangs on — the async source for `isPending`/`latest`, the optimistic/affected node otherwise.
+
+#### `reader`
+
+* **Type:** `string[]`
+
+### `Attribution`
+
+The engine: turn it on and read its ring buffers. Its records are
+delivered on the core's channel — `OBSERVE.records.subscribe("rerun" |
+"hold" | "interaction" | "navigation" | "create" | "effect" | "flush" |
+"flight" | "fallback" | "graph", (event, live) => …)` — the same place
+the runtimes' records arrive, so a consumer has one subscribe. The folds
+over those records — `costs()`, `feedback()` — and the point queries —
+`why()`, `subscriptions()` — and the formatters — `formatRerun()`,
+`formatOrigin()` — are named exports of `@solidjs/signals/attribution`
+rather than methods here, so a consumer that only wants records (a
+production adapter) does not ship the tables a console or an agent reads;
+importing a fold is what turns its accounting on.
+
+```ts
+interface Attribution {
+	enable(opts?: AttributionOptions): () => void;
+	disable(): void;
+	history<K extends HistoryType>(type: K): readonly HistoryRecords[K][];
+	markFlight(flight: object, startedAt?: number): void;
+}
+```
+
+#### `enable`
+
+* **Type:** `() => void`
+
+Install the engine, or take one more hold on it, and return the release
+for that hold. The engine is shared by every consumer in the page — a
+profiler track, an APM adapter, a diagnostics capture — so each
+`enable()` is a hold: the first installs the hooks and resets
+everything; one taken while already enabled opens a fresh window over
+the ring buffers and folds (`history(type)`, `costs()`, `feedback()` …
+read from here on) without disturbing the live tracking state or
+anyone's subscriptions, so a capture begun beside a running consumer
+still measures only its own scenario.
+
+Options combine across holds by the most demanding value per key: a
+hold's `opts` say what it wants (the defaults fill what it leaves
+unsaid), and the engine does whatever any holder asked for — the log
+prints while any holder wants it, a check runs while any holder wants
+it and at the most sensitive threshold requested, `historyLimit` is the
+largest. A hold can add to what another asked for, never take it away,
+so the result does not depend on the order holds were taken; releasing
+a hold withdraws its requests — a track enabled with `log: false` beside
+a console session never silences it, and a capture with tight
+thresholds beside a records-only adapter runs the checks for its own
+duration. One key runs the other way: `values` combines to the LEAST
+permissive level any holder asked for, so an adapter that must not see
+user data (`values: "none"`) is honoured beside a console session that
+wants everything. The release is idempotent; the last release uninstalls the
+hooks and clears every ring buffer. A consumer that re-`enable()`s to
+reopen its window must release both holds (or `disable()`).
+
+Subscriptions are not the engine's: its records arrive on
+`OBSERVE.records`, whose listeners outlive any hold — subscribe before
+or after `enable()`, and unsubscribe with the function `subscribe`
+returned.
+
+#### `disable`
+
+* **Type:** `void`
+
+Tear the engine down whatever holds are outstanding: drops every hold,
+uninstalls the hooks and clears every ring buffer. The console's and a
+test harness's reset — a consumer sharing the page with others releases
+its own hold with the function `enable()` returned instead. Idempotent;
+a `disable()` with nothing enabled is a no-op reset. Listeners on
+`OBSERVE.records` are untouched: they are the channel's.
+
+#### `history`
+
+* **Type:** `readonly HistoryRecords[K][]`
+
+The ring buffer of `type` since `enable()` — the last `historyLimit`
+records (default 200), oldest first; the same objects the channel
+delivered. Facts, not verdicts: each is recorded regardless of the
+thresholds the findings apply to it.
+
+* `"rerun"` — every re-run recorded (see `RerunEvent`). Kept only while
+  a record had an audience — a `rerun` listener, an imported fold
+  (`costs`/`feedback`), or the console log; a records-only consumer
+  that wants none of those pays for none, and reads an empty buffer.
+* `"waterfall"` — every graph-provable sequential flight chain, warned
+  or not: the ASYNC\_WATERFALL finding is the duration-gated view.
+* `"hold"` — every settled transition hold that staged at least one root
+  write, acknowledged or not: SILENT\_HOLD / LONG\_HOLD are the
+  thresholded verdicts (`HoldEvent.silent` / `.long` carry them).
+* `"navigation"` — every navigation a router declared via `withOrigin`,
+  settled or not: what route, under which interaction, how many writes,
+  and — once its writes are through — how long that took and how
+  (`committed`, `held` with the `HoldEvent` attached, `superseded`).
+* `"interaction"` — every user interaction a runtime declared via
+  `withInteraction`, settled or not: what was dispatched, when, what it
+  wrote, the re-runs and creations it caused, the holds its writes
+  waited in and the navigations it performed — and, once through, how
+  long the person waited (`settledMs`) and how it ended. The
+  per-dispatch record `feedback().interactions` folds by name.
+
+#### `markFlight`
+
+* **Type:** `void`
+
+Cooperative preload declaration: stamp a flight object (promise or async
+iterable) with its true kickoff time BEFORE the reactive graph sees it.
+A route preloader or query cache calls this on the promise it hands out
+(on the WRAPPER it mints, with the original kickoff time — wrapping
+defeats identity tracking otherwise); any dependent that later awaits it
+is then judged against the real start — work already in the air when its
+upstream landed is parallel, never a waterfall link. Callable while
+attribution is disabled (marks made at navigation time must survive a
+later enable()).
+
+### `AttributionCostTables`
+
+```ts
+interface AttributionCostTables {
+	scopes: ScopeCost[];
+	writes: WriteCost[];
+}
+```
+
+#### `scopes`
+
+* **Type:** `ScopeCost[]`
+
+Ranked by self-time.
+
+#### `writes`
+
+* **Type:** `WriteCost[]`
+
+Ranked by the total downstream re-run time each root write caused.
+
+### `AttributionFeedbackTables`
+
+```ts
+interface AttributionFeedbackTables {
+	sources: FeedbackSource[];
+	interactions: FeedbackInteraction[];
+	navigations: FeedbackNavigation[];
+	flights: FlightStats[];
+	fallbacks: FallbackStats[];
+}
+```
+
+#### `sources`
+
+* **Type:** `FeedbackSource[]`
+
+#### `interactions`
+
+* **Type:** `FeedbackInteraction[]`
+
+#### `navigations`
+
+* **Type:** `FeedbackNavigation[]`
+
+Routes ranked by the time spent held navigating to them, then by total settle time.
+
+#### `flights`
+
+* **Type:** `FlightStats[]`
+
+Async sources ranked by abandoned flights, then by flights.
+
+#### `fallbacks`
+
+* **Type:** `FallbackStats[]`
+
+Loading boundaries ranked by flashes, then by time shown.
+
+### `AttributionOptions`
+
+```ts
+interface AttributionOptions {
+	log?: boolean;
+	values?: AttributionValues;
+	checks?: boolean;
+	stacks?: boolean;
+	historyLimit?: number;
+	hotRuns?: { count: number; windowMs: number } | false;
+	wideDeps?: number | false;
+	hotTime?: { budgetMs: number; windowMs: number } | false;
+	unstableMemos?: number | false;
+	wastedRecompute?:
+		| { minRuns: number; ratio: number; budgetMs: number; windowMs: number }
+		| false;
+	fanOut?: number | false;
+	waterfalls?: { minFlightMs: number } | false;
+	holds?: { infoMs: number; warnMs: number } | false;
+	longHolds?: { infoMs: number; warnMs: number } | false;
+	graphGrowth?: { visits: number; ratio: number } | false;
+	abandonedFlights?: { count: number; windowMs: number } | false;
+	fallbackFlashes?: boolean;
+	stackedHolds?: { count: number } | false;
+	optimisticReverts?: boolean;
+}
+```
+
+#### `log`
+
+* **Type:** `boolean`
+
+Pretty-print each re-run to the console (default true).
+
+#### `values`
+
+* **Type:** `AttributionValues`
+
+What user data records carry. Default per build tier: `"full"` in dev
+builds, `"none"` in observe builds — a production observability
+artifact carries no user data unless a holder asks for it. Records name things —
+owner paths, `name` options, store paths, route patterns — and are
+otherwise numbers, kinds and outcomes; this option governs the fields
+that quote application data: the value previews on a root write
+(`ChangeRecord.prev`/`value`, and the `HeldWrite.prev`/`value` copied
+from them), the text of the element an interaction hit
+(`ChangeOrigin.target` / `InteractionEvent.target` — the `"Next →"` in
+`button#next "Next →"`), and every sentence built from those (the
+console log, `formatRerun`, `formatOrigin`, the SILENT\_HOLD / LONG\_HOLD
+/ STACKED\_HOLDS verdicts naming the interaction, OPTIMISTIC\_REVERTED's
+shown and settled values). Applied where the record is BUILT, so
+nothing downstream — a ring buffer, a fold, a listener, an exporter —
+ever holds what the level excludes.
+
+* `"full"` — previews of the written values (strings quoted and cut at
+  40 characters, numbers and booleans verbatim, everything else a type
+  tag such as `Array(12)`) and the element's text: what makes dev
+  output readable.
+* `"labels"` — no value previews; element text kept only on a `button`
+  or an `a` (the control's caption — what the person pressed is the
+  point of an interaction record) and dropped for anything else (the
+  text of a `div` or a `td` is content).
+* `"none"` — no value previews, no element text: names, numbers, kinds
+  and outcomes only. What an observe-tier holder that carries records
+  out of the process (an APM adapter) should pass.
+
+Across holds the LEAST permissive level wins — the one key that
+combines the other way from the rest, where a hold can only ask for
+more: a holder that must not see user data is not overruled by one
+that wants it. A holder that names no level asks for the tier's
+default, so in an observe build it tightens to `"none"` beside anyone;
+a single holder passing `"full"` there gets `"full"`, and an explicit
+`"full"` never loosens what another holder demanded. Governs what is
+built from the moment the level is in effect; records already in a
+ring buffer keep what they carried. A
+navigation's concrete paths and params (`ChangeOrigin.to`/`from`/
+`params`) are the router's description and are not governed here.
+
+#### `checks`
+
+* **Type:** `boolean`
+
+Run the cost checks — the thresholded findings over the engine's own
+accounting: `hotRuns`, `hotTime`, `wideDeps`, `unstableMemos`,
+`fanOut`, `wastedRecompute` (default true). `false` turns all six off at once, whatever
+their individual settings, so a consumer that wants records only (an
+exporter, a profiler track) pays for none of their per-node bookkeeping.
+Hold, long-hold and waterfall tracking are records with verdicts on top,
+not checks, and are unaffected; disable those through their own options.
+
+#### `stacks`
+
+* **Type:** `boolean`
+
+Capture the user stack frame of each write — slow (default false).
+
+#### `historyLimit`
+
+* **Type:** `number`
+
+Ring-buffer size for each `history(type)` buffer (default 200).
+
+#### `hotRuns`
+
+* **Type:** `{ count: number; windowMs: number } | false`
+
+Hot-scope warning: emit a diagnostic when one scope re-runs `count`
+times within `windowMs` (default 120 runs / 1000ms — deliberately above
+animation-frame cadence, so a legitimate rAF-driven scope at 60/s does
+not cry wolf). `false` disables.
+
+#### `wideDeps`
+
+* **Type:** `number | false`
+
+Wide-scope warning: emit a diagnostic when a scope's dependency count
+reaches this (default 30) — the coarse-read / helper-leak signature.
+Re-warns only if the count then grows by another 50%. `false` disables.
+
+#### `hotTime`
+
+* **Type:** `{ budgetMs: number; windowMs: number } | false`
+
+Time-budget warning: emit a diagnostic when one scope's summed self-time
+inside `windowMs` exceeds `budgetMs` (default 8ms / 1000ms — half a frame
+spent in one scope). Unlike `hotRuns` this catches the few-but-expensive
+scope that run counts miss. `false` disables.
+
+#### `unstableMemos`
+
+* **Type:** `number | false`
+
+Unstable-output warning: emit a diagnostic when a memo commits a
+referentially-new but shallowly-equivalent plain object/array on this
+many consecutive runs (default 4). Such a memo's equality gate never
+closes — every subscriber re-runs on every upstream change — which makes
+it a fan-out amplifier that is otherwise only findable by profiling.
+`false` disables.
+
+#### `wastedRecompute`
+
+* **Type:** `{ minRuns: number; ratio: number; budgetMs: number; windowMs: number } | false`
+
+Wasted-recompute warning: emit WASTED\_RECOMPUTE when a scope re-ran at
+least `minRuns` times within `windowMs` and `ratio` or more of those
+runs produced an unchanged value while costing `budgetMs` or more of
+compute in all (default 5 runs / 80% / 2ms / 1000ms). The equality gate
+closed every time: the scope's inputs changed without changing its
+result, so the runs were pure cost — the profiler-shaped fact
+`costs().wastedMs` sums, as a finding. Held and overlay runs are not
+counted (they may be replayed). Once per window per scope. `false`
+disables.
+
+#### `fanOut`
+
+* **Type:** `number | false`
+
+HUGE\_FAN\_OUT threshold while the engine is enabled: emit the finding
+when a committed root invalidation (write, refresh, async landing)
+reaches a node with at least this many subscribers (default 250). The
+same code the always-on core check emits from GRAPH\_SIZE\_WARN\_AT (2000)
+up, with `data.write` naming the invalidation; the engine hands over to
+the core there, so one change never carries two findings. Once per
+node, re-warning once the count has grown by another 500. `false`
+leaves only the always-on threshold.
+
+#### `waterfalls`
+
+* **Type:** `{ minFlightMs: number } | false`
+
+Async-waterfall warning: emit a diagnostic when an async flight that
+could only start after an upstream flight resolved (its recompute's
+cause chain reaches the upstream's async landing, and its origin
+post-dates that landing) forms a sequential chain of 2+ flights, each
+of which took at least `minFlightMs` (default 50ms). The duration gate
+is one safety valve for what the graph cannot see: a settled
+preload/cache hit resolves fast and never warns. In-flight preloads are
+absolved by origin: `markFlight()` stamps (and first-seen identity)
+prove work predated the upstream landing — parallel, not sequential.
+Chains of 2 emit at `info` severity, structured channel only (a
+dependent fetch is sometimes intrinsic, and unmarked external preloads
+are invisible); 3+ escalate to `warn` with console output. `false`
+disables.
+
+#### `holds`
+
+* **Type:** `{ infoMs: number; warnMs: number } | false`
+
+Silent-hold warning: emit a diagnostic when a user's writes were held
+behind async work for at least `infoMs` (default 100ms — RAIL's "feels
+instant" ceiling) and the screen never acknowledged the wait — no
+`isPending()`/`latest()` reader downstream of the held writes or their
+blockers, no optimistic value, no `affects()` mark, and no lane effect
+painted while held. Below `warnMs`
+(default 200ms — the INP "good" ceiling) the event is advisory
+(structured channel only); at or above it the console gets the finding.
+The engine measures to the commit, not the paint, so every number is a
+floor on what the user saw; the thresholds sit at the strict end of the
+band on purpose. Holds that staged no root write (initial loads, bare
+`refresh()`) are never judged: nothing the user did went unanswered.
+`false` disables hold tracking altogether (`longHolds` included).
+
+#### `longHolds`
+
+* **Type:** `{ infoMs: number; warnMs: number } | false`
+
+Long-hold warning: emit a diagnostic when a hold's quiescent tail — the
+time from the LAST write to join it until it committed — reached
+`infoMs` (default 500ms), `warn` from `warnMs` (default 1000ms, where
+RAIL says the user loses the thread). Measured from the last join so a
+hold that keeps taking input (typing) is judged by each wait, not by its
+lifetime. A hold this long is past what a stale screen should carry,
+acknowledged or not: the honest UI is a fallback, which a `Loading`
+boundary gives only when it has not revealed yet or its `on` prop
+changed. Reported as LONG\_HOLD when the hold was acknowledged; a silent
+long hold stays one SILENT\_HOLD with the boundary repair appended.
+`false` disables.
+
+#### `graphGrowth`
+
+* **Type:** `{ visits: number; ratio: number } | false`
+
+Graph-growth warning: emit GRAPH\_GROWTH when the live owner count at the
+settle of the same route has climbed on `visits` consecutive visits
+(default 3) to `ratio` or more of the first (default 1.25) — a root or a
+subscription each visit leaves behind, the leak class a heap snapshot
+finds. The count is a walk at settle, never per node. `false` disables.
+
+#### `abandonedFlights`
+
+* **Type:** `{ count: number; windowMs: number } | false`
+
+Abandoned-flights warning: emit ABANDONED\_FLIGHTS when one async source
+abandons `count` flights within `windowMs` — each superseded by the
+next before it landed (default 3 / 1000ms: the request-per-keystroke
+signature, every input asking again and the answers discarded). Once
+per window per source. `false` disables.
+
+#### `fallbackFlashes`
+
+* **Type:** `boolean`
+
+Fallback-flash finding: emit FALLBACK\_FLASH (`info`) when a `Loading`
+boundary's fallback shows for less than `FALLBACK_FLASH_MS` (150ms) — a
+spinner that appeared and vanished, too much feedback for too little
+wait (default true). `false` disables.
+
+#### `stackedHolds`
+
+* **Type:** `{ count: number } | false`
+
+Stacked-holds warning: emit STACKED\_HOLDS when `count` or more
+interactions are waiting in one hold when it commits (default 3) — the
+person kept clicking or typing while the first answer was in the air,
+and every one of them waited on the same source. `false` disables.
+
+#### `optimisticReverts`
+
+* **Type:** `boolean`
+
+Optimistic-revert finding: emit OPTIMISTIC\_REVERTED (`info`) when an
+optimistic value the screen showed is replaced by a different one —
+reverted at settle, or superseded by the truth (default true). The
+runtime's own optimistic nodes — `isPending`/`latest` companions and
+derived overrides — are never judged: they are the acknowledgement
+machinery, not a guess the person saw. `false` disables.
+
+### `AttributionValues`
+
+What user data the engine's records carry — see `AttributionOptions.values`.
+Ordered: `"full"` carries the most, `"none"` the least.
+
+```ts
+type AttributionValues = "full" | "labels" | "none";
+```
+
+### `ChangeKind`
+
+"Why did this run" attribution — the engine behind
+`@solidjs/signals/attribution`.
+
+The runtime already knows the full dependency set of every scope; this
+module surfaces it. Every value commit stamps its node with a ChangeRecord
+(a write, an async landing, a refresh() invalidation, or a derived change
+whose `causes` chain back to root writes). When a computation re-executes,
+the deps whose stamp is newer than the node's last run are its causes, so
+each re-run can be explained as a chain down to the originating write:
+
+\[why-run] effect "docTitle" ran (run 4)
+← memo "userLabel" changed (#6)
+← signal "notifications" write (#5) 2 → 3
+
+This module is the attribution ENGINE: all semantics live here, and it is
+decoupled from the core. `enable()` installs it into the core's narrow
+observe-tier hook points (attribution-hooks.ts); core's only obligation is
+to call those hooks with true facts. Disabled cost is one null check per
+hook site; prod builds fold the sites out entirely. Nothing in the core
+imports this module — it is reachable only through the package's
+`./attribution` entry, so an observe build that never imports it never
+ships it. The same hook surface is the intended substrate for external
+consumers (devtools) — one mechanism, two front-ends.
+
+```ts
+type ChangeKind = "write" | "derived" | "async" | "refresh";
+```
+
+### `ChangeOrigin`
+
+Provenance of a root change: the imperative frame that performed it.
+
+* `interaction` — a user event handler (the web runtime marks dispatch via
+  `withInteraction`). `name` is the event type, `target` the element hit
+  (`button#next "Next →"` — the quoted text as `AttributionOptions.values`
+  allows), `at` the dispatch time on the `performance.now()` clock — the
+  base every feedback-latency number is measured from.
+* `effect` — an effect callback (`name` = the effect's name; `run` = the
+  compute run whose effect phase performed the write, when that run was
+  recorded — so a write can be joined to the re-run that produced it).
+* `action` — a step of an `action()` generator (`name` = the generator's
+  name, when it has one). Writes after an `await` (not a `yield`) run in a
+  bare microtask and stamp `external` — the documented escape.
+* `async` — an async landing (`name` = the node whose flight landed).
+* `navigation` — a router's navigation, declared via `withOrigin` around
+  the location write (`name` = the matched route pattern `/users/:id`;
+  `to`/`from` the concrete paths; `params` what the pattern bound; `at`
+  when it was requested). The router-agnostic seam: any router that wraps
+  its write gets navigations named by route in every hold, re-run and
+  verdict, with no per-router knowledge anywhere in the engine.
+* `external` — none of the above: timers, sockets, promise callbacks, setup.
+
+`interaction` on a non-interaction frame is the user event the frame runs
+under — an action started by a click, an effect whose run was caused by a
+click's write, a landing whose flight a click started, a navigation a link
+click performed. It is what lets every downstream cost be keyed by the
+interaction that paid for it.
+
+```ts
+interface ChangeOrigin {
+	kind:
+		"interaction" | "effect" | "action" | "async" | "navigation" | "external";
+	name?: string;
+	target?: string;
+	at?: number;
+	interaction?: ChangeOrigin;
+	run?: number;
+	to?: string;
+	from?: string;
+	params?: Readonly<Record<string, string | undefined>>;
+}
+```
+
+#### `kind`
+
+* **Type:** `"interaction" | "effect" | "action" | "async" | "navigation" | "external"`
+
+#### `name`
+
+* **Type:** `string`
+
+#### `target`
+
+* **Type:** `string`
+
+#### `at`
+
+* **Type:** `number`
+
+When the frame opened (`performance.now()` clock). Always set for
+`interaction` and `navigation`; set on an `effect` frame only while an
+`effect` record listener exists (the callback's timed start).
+
+#### `interaction`
+
+* **Type:** `ChangeOrigin`
+
+#### `run`
+
+* **Type:** `number`
+
+`effect` only: the `RerunEvent.run` of the compute run this callback belongs to.
+
+#### `to`
+
+* **Type:** `string`
+
+`navigation` only: concrete destination and departure paths, and the bound params.
+
+#### `from`
+
+* **Type:** `string`
+
+#### `params`
+
+* **Type:** `Readonly<Record<string, string | undefined>>`
+
+### `ChangeRecord`
+
+```ts
+interface ChangeRecord {
+	seq: number;
+	kind: ChangeKind;
+	name: string;
+	nodeId?: number;
+	prev?: string;
+	value?: string;
+	stack?: string[];
+	causes?: ChangeRecord[];
+	origin?: ChangeOrigin;
+	at?: number;
+}
+```
+
+#### `seq`
+
+* **Type:** `number`
+
+Global monotonic change sequence — orders causes across the app.
+
+#### `kind`
+
+* **Type:** `ChangeKind`
+
+#### `name`
+
+* **Type:** `string`
+
+#### `nodeId`
+
+* **Type:** `number`
+
+Identity of the node that changed — the signal written, the memo whose
+value changed — in the same id space as `RerunEvent.nodeId`, so a
+derived cause joins the run that produced it and repeated writes to
+one signal join each other where `name` alone would merge every
+unnamed `signal`. Stamped on every record the engine makes; optional
+for a record built elsewhere (a `HeldWrite`, a deserialized artifact).
+
+#### `prev`
+
+* **Type:** `string`
+
+Short previews of the value transition (writes only) — present under
+`AttributionOptions.values: "full"`, never carried otherwise.
+
+#### `value`
+
+* **Type:** `string`
+
+#### `stack`
+
+* **Type:** `string[]`
+
+First user frames of the triggering write's stack (opt-in).
+
+#### `causes`
+
+* **Type:** `ChangeRecord[]`
+
+For derived changes: the upstream changes that produced this one.
+
+#### `origin`
+
+* **Type:** `ChangeOrigin`
+
+Root changes only: who performed the write.
+
+#### `at`
+
+* **Type:** `number`
+
+Root changes only: when the write was stamped (`performance.now()` clock).
+
+### `CreateEvent`
+
+A computation's creation run — the first run, the one with no causes to
+explain (a `RerunEvent` is every run after it). The same measurements as a
+re-run, less the causal fields a first run cannot have, and `interaction`
+inherited from whatever built the node: the enclosing recompute (a
+parent's fn creating children) or the handler/effect frame at the top of
+the stack. Creation time is already charged to the interaction record's
+`created`; this is the per-node face of that sum.
+
+```ts
+interface CreateEvent {
+	at: number;
+	nodeKind: "effect" | "memo";
+	nodeName: string;
+	nodeId: number;
+	depCount: number;
+	selfMs: number;
+	totalMs: number;
+	phase: "plain" | "held" | "optimistic";
+	held: boolean;
+	interaction?: ChangeOrigin;
+}
+```
+
+#### `at`
+
+* **Type:** `number`
+
+When the run started (`performance.now()` clock).
+
+#### `nodeKind`
+
+* **Type:** `"effect" | "memo"`
+
+#### `nodeName`
+
+* **Type:** `string`
+
+#### `nodeId`
+
+* **Type:** `number`
+
+Same id space as `RerunEvent.nodeId` — the node's later re-runs join here.
+
+#### `depCount`
+
+* **Type:** `number`
+
+Dependency count after this run.
+
+#### `selfMs`
+
+* **Type:** `number`
+
+Wall time of this run excluding nested recomputes (ms) — children created inside report their own.
+
+#### `totalMs`
+
+* **Type:** `number`
+
+Wall time of this run including nested recomputes (ms).
+
+#### `phase`
+
+* **Type:** `"plain" | "held" | "optimistic"`
+
+Posture the run executed under — see `RerunEvent.phase`.
+
+#### `held`
+
+* **Type:** `boolean`
+
+The value was parked in `_pendingValue` rather than committed — see `RerunEvent.held`.
+
+#### `interaction`
+
+* **Type:** `ChangeOrigin`
+
+The interaction whose handler or flush built this node, if any.
+
+### `EffectRunEvent`
+
+One run of an effect's imperative half — the callback that touches the DOM
+or the outside world — timed from entry to exit, cleanup included, whether
+or not it threw. The compute half is the `RerunEvent`/`CreateEvent` with
+the same `nodeId` that preceded it in the flush; `run` joins the two for a
+re-run and is absent for a creation's first callback.
+
+```ts
+interface EffectRunEvent {
+	at: number;
+	durationMs: number;
+	nodeId: number;
+	nodeName: string;
+	run?: number;
+	interaction?: ChangeOrigin;
+}
+```
+
+#### `at`
+
+* **Type:** `number`
+
+When the callback started (`performance.now()` clock).
+
+#### `durationMs`
+
+* **Type:** `number`
+
+Wall time of the callback, nested runs included (ms).
+
+#### `nodeId`
+
+* **Type:** `number`
+
+#### `nodeName`
+
+* **Type:** `string`
+
+#### `run`
+
+* **Type:** `number`
+
+`RerunEvent.run` of the compute run whose effect phase this is; absent for a creation.
+
+#### `interaction`
+
+* **Type:** `ChangeOrigin`
+
+The interaction the preceding compute run traced to, if any.
+
+### `FallbackEvent`
+
+One showing of a loading boundary's fallback, delivered when it stops
+showing. `ownerPath` names the boundary by its subtree's owner chain
+(`["<App>", "<Feed>"]`); absent when the subtree never reported a path.
+The fold in `feedback().fallbacks` is this record summed per boundary,
+with the flash verdict.
+
+```ts
+interface FallbackEvent {
+	ownerPath?: string[];
+	at: number;
+	shownMs: number;
+	interaction?: ChangeOrigin;
+}
+```
+
+#### `ownerPath`
+
+* **Type:** `string[]`
+
+#### `at`
+
+* **Type:** `number`
+
+When the fallback appeared (`performance.now()` clock).
+
+#### `shownMs`
+
+* **Type:** `number`
+
+How long it stayed (ms).
+
+#### `interaction`
+
+* **Type:** `ChangeOrigin`
+
+The interaction whose work the boundary was waiting on, if the engine could tell.
+
+### `FallbackStats`
+
+Per loading boundary: how long, and how briefly, it showed its fallback.
+
+```ts
+interface FallbackStats {
+	boundary: string;
+	shows: number;
+	shownMs: number;
+	worstMs: number;
+	flashes: number;
+}
+```
+
+#### `boundary`
+
+* **Type:** `string`
+
+The boundary's owner path (`<App> › <Feed>`), or `boundary` when unnamed.
+
+#### `shows`
+
+* **Type:** `number`
+
+Times the fallback was shown.
+
+#### `shownMs`
+
+* **Type:** `number`
+
+Summed and worst fallback duration (ms) across completed shows.
+
+#### `worstMs`
+
+* **Type:** `number`
+
+#### `flashes`
+
+* **Type:** `number`
+
+Shows shorter than the flash window (default 150ms): a spinner that
+appeared and vanished — the other end of the SILENT\_HOLD spectrum, too
+much feedback for too little wait. A preload, a cache, or lifting the
+fetch above the boundary removes the flash.
+
+### `FeedbackInteraction`
+
+```ts
+interface FeedbackInteraction {
+	interaction: string;
+	dispatches: number;
+	runs: number;
+	selfMs: number;
+	worstDispatchMs: number;
+	holds: number;
+	heldMs: number;
+	silentMs: number;
+	worstHoldMs: number;
+}
+```
+
+#### `interaction`
+
+* **Type:** `string`
+
+`click on button#next "Next →"` — type and target; repeated dispatches fold together.
+
+#### `dispatches`
+
+* **Type:** `number`
+
+Distinct dispatches seen (by dispatch time).
+
+#### `runs`
+
+* **Type:** `number`
+
+Re-runs traced back to this interaction, and their summed self-time.
+
+#### `selfMs`
+
+* **Type:** `number`
+
+#### `worstDispatchMs`
+
+* **Type:** `number`
+
+The most re-run self-time a single dispatch caused — the long-flush hazard.
+
+#### `holds`
+
+* **Type:** `number`
+
+Holds this interaction's writes waited in — the silent-hold hazard.
+
+#### `heldMs`
+
+* **Type:** `number`
+
+#### `silentMs`
+
+* **Type:** `number`
+
+#### `worstHoldMs`
+
+* **Type:** `number`
+
+### `FeedbackNavigation`
+
+Per route: what navigating to it cost, folded from settled
+`NavigationEvent`s — the route-level view a router integration used to
+have to build itself, from the runtime's own facts.
+
+```ts
+interface FeedbackNavigation {
+	name: string;
+	navigations: number;
+	settledMs: number;
+	worstMs: number;
+	held: number;
+	heldMs: number;
+	silent: number;
+	superseded: number;
+	redirected: number;
+}
+```
+
+#### `name`
+
+* **Type:** `string`
+
+The route pattern (`/users/:id`), or the concrete `to` when the router gave no pattern.
+
+#### `navigations`
+
+* **Type:** `number`
+
+#### `settledMs`
+
+* **Type:** `number`
+
+Summed and worst request-to-settle time (ms) across settled navigations.
+
+#### `worstMs`
+
+* **Type:** `number`
+
+#### `held`
+
+* **Type:** `number`
+
+Navigations whose writes waited in a hold, and the time they waited.
+
+#### `heldMs`
+
+* **Type:** `number`
+
+#### `silent`
+
+* **Type:** `number`
+
+Held navigations the screen acknowledged nothing for — the SILENT\_HOLD signature.
+
+#### `superseded`
+
+* **Type:** `number`
+
+Navigations overwritten by a later one before they landed.
+
+#### `redirected`
+
+* **Type:** `number`
+
+Navigations a redirect sent elsewhere on the way (keyed by where they ended up).
+
+### `FeedbackSource`
+
+```ts
+interface FeedbackSource {
+	sources: string[];
+	holds: number;
+	heldMs: number;
+	worstMs: number;
+	silent: number;
+	silentMs: number;
+	latestOnly: number;
+	long: number;
+	longMs: number;
+	acknowledgedBy: { by: string; holds: number }[];
+	interactions: { interaction: string; holds: number }[];
+	writes: string[];
+	actions: number;
+}
+```
+
+#### `sources`
+
+* **Type:** `string[]`
+
+The async nodes the holds waited on; empty when an action alone kept them open.
+
+#### `holds`
+
+* **Type:** `number`
+
+#### `heldMs`
+
+* **Type:** `number`
+
+Summed wait across the holds (ms).
+
+#### `worstMs`
+
+* **Type:** `number`
+
+#### `silent`
+
+* **Type:** `number`
+
+Holds with no acknowledgment at all — the SILENT\_HOLD signature, at any duration.
+
+#### `silentMs`
+
+* **Type:** `number`
+
+#### `latestOnly`
+
+* **Type:** `number`
+
+Holds whose only acknowledgment was a `latest()` shadow: the input showed, nothing said "loading".
+
+#### `long`
+
+* **Type:** `number`
+
+Holds whose quiescent tail (last write to join → commit) reached
+`longHolds.infoMs`, acknowledged or not — the LONG\_HOLD signature at the
+table level. The affordance is not the whole answer there: a fallback
+(`Loading` keyed with `on`), a preload, a cache, or a faster source is.
+`longMs` sums the tails.
+
+#### `longMs`
+
+* **Type:** `number`
+
+#### `acknowledgedBy`
+
+* **Type:** `{ by: string; holds: number }[]`
+
+Which affordances answered, and in how many holds — ranked.
+
+#### `interactions`
+
+* **Type:** `{ interaction: string; holds: number }[]`
+
+Interactions whose writes were held here, ranked by holds.
+
+#### `writes`
+
+* **Type:** `string[]`
+
+Distinct root writes that were held.
+
+#### `actions`
+
+* **Type:** `number`
+
+Holds an action opened or joined.
+
+### `FlightEvent`
+
+One async flight — a promise or async iterable an async computation
+registered — from its origin (the earliest the engine knows: a
+`markFlight` preload mark, or first sight at registration) to the moment
+it landed or was superseded by the node's next flight (`abandoned` — the
+answer will be discarded). A flight whose node is disposed mid-air
+produces no record.
+
+```ts
+interface FlightEvent {
+	nodeId: number;
+	nodeName: string;
+	ownerPath?: string[];
+	at: number;
+	durationMs: number;
+	outcome: "landed" | "abandoned";
+	interaction?: ChangeOrigin;
+}
+```
+
+#### `nodeId`
+
+* **Type:** `number`
+
+#### `nodeName`
+
+* **Type:** `string`
+
+#### `ownerPath`
+
+* **Type:** `string[]`
+
+Owner-chain labels of the async node, root first, when the node is owned.
+
+#### `at`
+
+* **Type:** `number`
+
+When the flight started (`performance.now()` clock).
+
+#### `durationMs`
+
+* **Type:** `number`
+
+Wall time in the air (ms).
+
+#### `outcome`
+
+* **Type:** `"landed" | "abandoned"`
+
+#### `interaction`
+
+* **Type:** `ChangeOrigin`
+
+The interaction whose write started the flight, if any.
+
+### `FlightLink`
+
+One landed flight: its node name, wall duration, and upstream chain.
+
+```ts
+interface FlightLink {
+	name: string;
+	ms: number;
+}
+```
+
+#### `name`
+
+* **Type:** `string`
+
+#### `ms`
+
+* **Type:** `number`
+
+### `FlightStats`
+
+Per async source: how many flights it started, and how many it threw away.
+
+```ts
+interface FlightStats {
+	source: string;
+	flights: number;
+	landed: number;
+	abandoned: number;
+	landedMs: number;
+	worstMs: number;
+}
+```
+
+#### `source`
+
+* **Type:** `string`
+
+#### `flights`
+
+* **Type:** `number`
+
+Flights registered (a recompute that produced a new promise/iterable).
+
+#### `landed`
+
+* **Type:** `number`
+
+Flights that landed (whether or not the value changed).
+
+#### `abandoned`
+
+* **Type:** `number`
+
+Flights superseded by a newer one before landing — the search-as-you-type
+signature when large: every keystroke asked, most answers were discarded.
+A debounced/equality-gated derivation between input and fetch is the repair.
+
+#### `landedMs`
+
+* **Type:** `number`
+
+Summed and worst wall time of landed flights (ms).
+
+#### `worstMs`
+
+* **Type:** `number`
+
+### `FlushEvent`
+
+One `flush()` drain: from the scheduler picking up scheduled work until
+every batch it processed has committed (effects ran) or been parked in a
+held update. The unit React's "Scheduler" track paints; the engine's
+`flushEnd` settles interactions and navigations on the same instant.
+Counts cover the runs the engine recorded inside the drain (excluded
+scopes not counted).
+
+```ts
+interface FlushEvent {
+	at: number;
+	durationMs: number;
+	runs: number;
+	created: number;
+	held: boolean;
+	interaction?: ChangeOrigin;
+}
+```
+
+#### `at`
+
+* **Type:** `number`
+
+When the drain started (`performance.now()` clock).
+
+#### `durationMs`
+
+* **Type:** `number`
+
+Wall time of the drain (ms).
+
+#### `runs`
+
+* **Type:** `number`
+
+Re-runs recorded during the drain.
+
+#### `created`
+
+* **Type:** `number`
+
+Creation runs during the drain.
+
+#### `held`
+
+* **Type:** `boolean`
+
+A transition was judged incomplete during the drain — some of its writes stayed staged.
+
+#### `interaction`
+
+* **Type:** `ChangeOrigin`
+
+The interaction every recorded run of the drain traced to, when there
+was exactly one; absent when none did, or when runs for several
+interactions shared the drain.
+
+### `GraphEvent`
+
+The live graph's size at a navigation's settle — the moment an app has
+finished moving between two screens, so a count that climbs visit after
+visit is a root or a subscription the previous screen left behind.
+Delivered on `OBSERVE.records.subscribe("graph", …)` per settled
+navigation; a walk of the owner tree from the registered top-level roots,
+made only when something listens or `graphGrowth` is on.
+
+```ts
+interface GraphEvent extends GraphSize {
+	at: number;
+	route?: string;
+	navigation: NavigationEvent;
+}
+```
+
+#### `at`
+
+* **Type:** `number`
+
+When the navigation settled (`performance.now()` clock).
+
+#### `route`
+
+* **Type:** `string`
+
+The route pattern the navigation matched (`name`), else its `to`.
+
+#### `navigation`
+
+* **Type:** `NavigationEvent`
+
+The navigation this count belongs to.
+
+### `GraphSize`
+
+The live reactive graph's size, as `graphSize()` counts it: the owner tree
+from the registered top-level roots, then every computation and signal
+reachable from it through dependencies and subscriptions — which is how
+an ownerless effect (created with no owner, kept alive by its sources)
+is found — and the edges between them.
+
+```ts
+interface GraphSize {
+	roots: number;
+	owners: number;
+	computations: number;
+	signals: number;
+	edges: number;
+}
+```
+
+#### `roots`
+
+* **Type:** `number`
+
+Top-level roots alive (`render()`'s, module-scope `createRoot()`s, panels).
+
+#### `owners`
+
+* **Type:** `number`
+
+Owners in the tree: roots, component owners, owned computations.
+
+#### `computations`
+
+* **Type:** `number`
+
+Computations (memos, effects, boundaries), owned or reached through a subscription.
+
+#### `signals`
+
+* **Type:** `number`
+
+Signals reached through a computation's dependencies.
+
+#### `edges`
+
+* **Type:** `number`
+
+Dependency links — each computation's sources, counted once.
+
+### `HeldWrite`
+
+```ts
+interface HeldWrite {
+	name: string;
+	prev?: string;
+	value?: string;
+	origin?: ChangeOrigin;
+}
+```
+
+#### `name`
+
+* **Type:** `string`
+
+#### `prev`
+
+* **Type:** `string`
+
+#### `value`
+
+* **Type:** `string`
+
+#### `origin`
+
+* **Type:** `ChangeOrigin`
+
+### `HistoryRecords`
+
+The ring buffers `attribution.history(type)` reads, by type. Four of the
+five are the channel's records kept since the window opened; `waterfall`
+is a fact the engine keeps but never emits — a graph-provable sequential
+flight chain (`WaterfallRecord`), of which the ASYNC\_WATERFALL finding is
+the thresholded view.
+
+```ts
+interface HistoryRecords {
+	rerun: RerunEvent;
+	waterfall: WaterfallRecord;
+	hold: HoldEvent;
+	navigation: NavigationEvent;
+	interaction: InteractionEvent;
+}
+```
+
+#### `rerun`
+
+* **Type:** `RerunEvent`
+
+#### `waterfall`
+
+* **Type:** `WaterfallRecord`
+
+#### `hold`
+
+* **Type:** `HoldEvent`
+
+#### `navigation`
+
+* **Type:** `NavigationEvent`
+
+#### `interaction`
+
+* **Type:** `InteractionEvent`
+
+### `HistoryType`
+
+```ts
+type HistoryType = keyof HistoryRecords;
+```
+
+### `HoldEvent`
+
+```ts
+interface HoldEvent {
+	at: number;
+	holdMs: number;
+	tailMs: number;
+	interaction?: ChangeOrigin;
+	origin?: ChangeOrigin;
+	flushes: number;
+	heldWrites: HeldWrite[];
+	blockers: string[];
+	acknowledgements: Acknowledgement[];
+	paintedDuringHold: number;
+	action: boolean;
+	silent: boolean;
+	long: boolean;
+}
+```
+
+#### `at`
+
+* **Type:** `number`
+
+When the wait began (`performance.now()` clock): the interaction that
+performed the held writes when one is known (`interaction.at`) or the
+first flush that parked them, whichever is earlier. `at + holdMs` is the
+commit.
+
+#### `holdMs`
+
+* **Type:** `number`
+
+Wall time the user waited: `at` to the commit.
+
+#### `tailMs`
+
+* **Type:** `number`
+
+The quiescent tail: from the LAST held write to join (the user's final
+input) to the commit. Equal to `holdMs` for a single write; shorter when
+the hold kept taking input. The LONG\_HOLD measure.
+
+#### `interaction`
+
+* **Type:** `ChangeOrigin`
+
+The user interaction whose writes were held, when the stamp is known.
+
+#### `origin`
+
+* **Type:** `ChangeOrigin`
+
+The declared unit of work the held writes belong to — the `navigation`
+a router described via `withOrigin` — when one is known. What names the
+hold by route (`navigation to /users/:id`) rather than by signal; the
+same object as `NavigationEvent.origin`, so the two join by identity.
+
+#### `flushes`
+
+* **Type:** `number`
+
+Flushes that ended with the hold still open.
+
+#### `heldWrites`
+
+* **Type:** `HeldWrite[]`
+
+Root signal writes staged behind the hold (the user's unanswered input).
+
+#### `blockers`
+
+* **Type:** `string[]`
+
+Async nodes the hold waited on (union across its parked flushes).
+
+#### `acknowledgements`
+
+* **Type:** `Acknowledgement[]`
+
+Feedback the graph provably rendered for this hold — an `isPending()`
+reader, a `latest()` shadow, an optimistic value, an `affects()` mark —
+one entry per affordance, in the order found. Empty and
+`paintedDuringHold === 0` is the SILENT\_HOLD signature.
+
+#### `paintedDuringHold`
+
+* **Type:** `number`
+
+Effect callbacks that ran inside the hold's parked flushes. Mainline
+effects are stashed while a hold is open, so these are lane effects —
+readers of optimistic values and of `isPending()`/`latest()` companions,
+i.e. the screen changing in response to the hold. An unrelated effect
+cannot land here: it waits with everything else.
+
+#### `action`
+
+* **Type:** `boolean`
+
+The hold was opened (or joined) by an `action()`.
+
+#### `silent`
+
+* **Type:** `boolean`
+
+The engine's silent-hold verdict, stamped at settle: no affordance
+acknowledged the wait (`acknowledgements` empty) and nothing painted
+while it was open (`paintedDuringHold === 0`). Duration-free — the
+SILENT\_HOLD finding is this above `holds.infoMs` — so a consumer can
+flag every silent wait or apply its own floor, and a record that left
+the process still carries the verdict.
+
+#### `long`
+
+* **Type:** `boolean`
+
+The engine's long-hold verdict, stamped at settle: the quiescent tail
+(`tailMs`) reached `longHolds.infoMs` under the options in effect;
+`false` when long-hold tracking is off. The LONG\_HOLD finding is this
+verdict, tiered by `warnMs`.
+
+### `InteractionEvent`
+
+```ts
+interface InteractionEvent {
+	name: string;
+	target?: string;
+	at: number;
+	inputDelayMs?: number;
+	handlerMs: number;
+	writes: number;
+	runs: number;
+	created: number;
+	runMs: number;
+	holds: HoldEvent[];
+	navigations: NavigationEvent[];
+	settledMs?: number;
+	outcome?: "idle" | "committed" | "held";
+	continuationMs?: number;
+	origin: ChangeOrigin;
+}
+```
+
+#### `name`
+
+* **Type:** `string`
+
+Event type — `click`, `keydown`, `input`…
+
+#### `target`
+
+* **Type:** `string`
+
+The element hit, as the runtime described it — `button#next "Next →"`.
+
+#### `at`
+
+* **Type:** `number`
+
+When the interaction began (`performance.now()` clock): the browser event's
+own timestamp when the runtime supplied it, else the moment the handler
+frame opened. Joins `PerformanceEventTiming.startTime` for the same event.
+
+#### `inputDelayMs`
+
+* **Type:** `number`
+
+Browser event creation to handler entry (ms) — the queueing the browser's
+INP counts as input delay. Present only when `at` predates the frame.
+
+#### `handlerMs`
+
+* **Type:** `number`
+
+Wall time of the handler itself, entry to return.
+
+#### `writes`
+
+* **Type:** `number`
+
+Root writes attributed to the frame: the handler's, and those of frames it opened (a navigation).
+
+#### `runs`
+
+* **Type:** `number`
+
+Re-runs traced back to this interaction while the record was open.
+
+#### `created`
+
+* **Type:** `number`
+
+Computations created in those runs or in the frame's flushes (the "create 1,000 rows" work).
+
+#### `runMs`
+
+* **Type:** `number`
+
+Summed self-time of `runs` and `created` (ms). Quantized per run; `settledMs` is the wall clock.
+
+#### `holds`
+
+* **Type:** `HoldEvent[]`
+
+Holds its writes waited in, in settle order.
+
+#### `navigations`
+
+* **Type:** `NavigationEvent[]`
+
+Navigations performed under it, in open order.
+
+#### `settledMs`
+
+* **Type:** `number`
+
+Dispatch to settle: the handler's return when it wrote nothing, the end of
+the drain that committed its writes, or the commit of the last hold they
+waited in — whichever came last. `undefined` while unsettled.
+
+#### `outcome`
+
+* **Type:** `"idle" | "committed" | "held"`
+
+#### `continuationMs`
+
+* **Type:** `number`
+
+The handler returned a thenable (`async () => { await save(); … }`) and
+the record waited for it: handler return → the promise settling, in
+milliseconds, capped at `ASYNC_HANDLER_CAP_MS`. The continuation runs
+with no frame on the stack, so writes it makes are not attributed to
+this interaction — only its duration is. Absent when the handler
+returned synchronously.
+
+#### `origin`
+
+* **Type:** `ChangeOrigin`
+
+The frame object every downstream fact carries — `ChangeOrigin.interaction`
+on writes and frames, `RerunEvent.interaction`, `HoldEvent.interaction`,
+`NavigationEvent.interaction`. Join key, by identity.
+
+### `InteractionRef`
+
+A user interaction, as a rendering runtime describes it to `withInteraction`.
+
+```ts
+interface InteractionRef {
+	type: string;
+	target?: string;
+	at?: number;
+}
+```
+
+#### `type`
+
+* **Type:** `string`
+
+Event type — `click`, `keydown`, `input`…
+
+#### `target`
+
+* **Type:** `string`
+
+The element hit, e.g. `button#next "Next →"` — the tag, then `#id` or
+`[name=…]`, then the element's text in quotes. Describe fully; the
+engine keeps the quoted text as its `values` option allows (the
+record's `target` is its own string, this one is never mutated).
+
+#### `at`
+
+* **Type:** `number`
+
+Dispatch time on the `performance.now()` clock; defaults to now.
+
+### `NavigationEvent`
+
+```ts
+interface NavigationEvent {
+	name?: string;
+	to?: string;
+	from?: string;
+	params?: Readonly<Record<string, string | undefined>>;
+	at: number;
+	interaction?: ChangeOrigin;
+	writes: number;
+	redirects?: NavigationHop[];
+	settledMs?: number;
+	outcome?: "committed" | "held" | "superseded";
+	hold?: HoldEvent;
+	origin: ChangeOrigin;
+}
+```
+
+#### `name`
+
+* **Type:** `string`
+
+The matched route pattern the router gave — `/users/:id`. After a redirect, the final one.
+
+#### `to`
+
+* **Type:** `string`
+
+#### `from`
+
+* **Type:** `string`
+
+#### `params`
+
+* **Type:** `Readonly<Record<string, string | undefined>>`
+
+#### `at`
+
+* **Type:** `number`
+
+When the navigation was requested (`performance.now()` clock).
+
+#### `interaction`
+
+* **Type:** `ChangeOrigin`
+
+The user interaction it ran under, when known — a link click.
+
+#### `writes`
+
+* **Type:** `number`
+
+Root writes the frame performed, redirect hops included.
+
+#### `redirects`
+
+* **Type:** `NavigationHop[]`
+
+Destinations abandoned along the way, in order — present only when a redirect occurred.
+
+#### `settledMs`
+
+* **Type:** `number`
+
+Wall time from the request to settle: the end of the drain that committed
+its writes, or the commit of the hold they waited in. `undefined` while
+unsettled.
+
+#### `outcome`
+
+* **Type:** `"committed" | "held" | "superseded"`
+
+#### `hold`
+
+* **Type:** `HoldEvent`
+
+The hold its writes waited in, when hold tracking recorded one.
+
+#### `origin`
+
+* **Type:** `ChangeOrigin`
+
+The frame object its writes were stamped with — `ChangeRecord.origin` on
+each, `HoldEvent.origin` on the hold. Join key, by identity.
+
+### `NavigationHop`
+
+A destination a navigation abandoned when a redirect sent it elsewhere.
+
+```ts
+interface NavigationHop {
+	name?: string;
+	to?: string;
+	params?: Readonly<Record<string, string | undefined>>;
+	at: number;
+}
+```
+
+#### `name`
+
+* **Type:** `string`
+
+#### `to`
+
+* **Type:** `string`
+
+#### `params`
+
+* **Type:** `Readonly<Record<string, string | undefined>>`
+
+#### `at`
+
+* **Type:** `number`
+
+When the redirect away from it was declared (`performance.now()` clock).
+
+### `NavigationRef`
+
+A navigation, as a router describes it to `withOrigin` around the location
+write it is about to perform — what `withOrigin` accepts: a declared unit
+of work whose writes the engine attributes as a whole, discriminated by
+`kind` so another kind (a form submission, a tab switch) can join without
+the seam changing shape; the engine knows `navigation` today. Match
+eagerly and describe before writing: the engine keys the work the write
+causes — the hold behind route data, the re-runs, the verdicts — to this
+record, and names it by the parametrized route so occurrences fold
+together.
+
+The engine keeps the object and reads `name`, `to` and `params` again when
+the navigation settles (and when a hold on it is judged), so a router whose
+match is not final at write time — a lazy route subtree that resolves inside
+the hold — may describe coarsely (`/admin/*`) and assign the exact pattern
+and params onto the same object once it knows them. `from` and `at` are
+read once, when the frame opens.
+
+```ts
+interface NavigationRef {
+	kind: "navigation";
+	name?: string;
+	to?: string;
+	from?: string;
+	params?: Readonly<Record<string, string | undefined>>;
+	at?: number;
+	redirect?: number;
+}
+```
+
+#### `kind`
+
+* **Type:** `"navigation"`
+
+#### `name`
+
+* **Type:** `string`
+
+The matched route pattern — `/users/:id`. The name every consumer groups by.
+
+#### `to`
+
+* **Type:** `string`
+
+Concrete destination path.
+
+#### `from`
+
+* **Type:** `string`
+
+Concrete path being left.
+
+#### `params`
+
+* **Type:** `Readonly<Record<string, string | undefined>>`
+
+Route params the pattern bound — `{ id: "42" }` (optional params unbound: `undefined`).
+
+#### `at`
+
+* **Type:** `number`
+
+When the navigation was requested on the `performance.now()` clock;
+defaults to now. A router whose request predates the write (loaders
+awaited before the location moves) passes its own start here.
+
+#### `redirect`
+
+* **Type:** `number`
+
+`>= 1`: this frame is the Nth redirect hop of the navigation still
+pending — a guard or loader sent it elsewhere before it landed — not a
+new navigation. The engine folds it onto that pending record: the record
+keeps the user's request time and interaction, its destination becomes
+this one, and the abandoned destination is kept in `redirects`. Without
+a pending navigation to fold onto it opens a navigation of its own.
+
+### `RerunEvent`
+
+```ts
+interface RerunEvent {
+	run: number;
+	at: number;
+	nodeRuns: number;
+	nodeKind: "effect" | "memo";
+	nodeName: string;
+	nodeId: number;
+	causes: ChangeRecord[];
+	depCount: number;
+	depsAdded: string[];
+	depsRemoved: string[];
+	selfMs: number;
+	totalMs: number;
+	changed: boolean;
+	phase: "plain" | "held" | "optimistic";
+	held: boolean;
+	interaction?: ChangeOrigin;
+}
+```
+
+#### `run`
+
+* **Type:** `number`
+
+Global monotonic run sequence.
+
+#### `at`
+
+* **Type:** `number`
+
+When the run started (`performance.now()` clock).
+
+#### `nodeRuns`
+
+* **Type:** `number`
+
+How many times this node has re-run since attribution was enabled.
+
+#### `nodeKind`
+
+* **Type:** `"effect" | "memo"`
+
+#### `nodeName`
+
+* **Type:** `string`
+
+#### `nodeId`
+
+* **Type:** `number`
+
+Identity of the scope that ran, stable for the node's lifetime within
+the process: every run of one memo/effect carries the same `nodeId`, so
+runs join to a scope after the record has left the process (where
+`nodeName` alone would merge every unnamed `effect`). The engine's own
+per-node id, also what `ChangeOrigin.run` and the cycle/relay checks
+key on; not meaningful across processes or sessions. In-process
+consumers get the live node as the `live` argument beside the record
+(`OBSERVE.records.subscribe("rerun", (event, node) => …)`).
+
+#### `causes`
+
+* **Type:** `ChangeRecord[]`
+
+The deps that changed since this node's previous run. Empty means the
+re-run was not triggered by a tracked value change (creation-adjacent
+pull, error retry, or a cause this prototype does not stamp yet).
+
+#### `depCount`
+
+* **Type:** `number`
+
+Dependency count after this run.
+
+#### `depsAdded`
+
+* **Type:** `string[]`
+
+Names of deps this run subscribed to that the previous run did not.
+
+#### `depsRemoved`
+
+* **Type:** `string[]`
+
+Names of deps the previous run had that this run dropped.
+
+#### `selfMs`
+
+* **Type:** `number`
+
+Wall time of this run excluding nested recomputes (ms).
+
+#### `totalMs`
+
+* **Type:** `number`
+
+Wall time of this run including nested recomputes (ms).
+
+#### `changed`
+
+* **Type:** `boolean`
+
+Whether the run produced a changed value. A PLAIN memo run with
+`changed: false` was pure waste — the equality cutoff stopped it from
+notifying anyone. Effects run with `_equals: false` in core (their
+effect phase re-fires on every recompute), so the engine derives this
+fact itself: an effect run whose compute output is identical to the
+previous run's reports `changed: false` — the phase re-fired with the
+same input, pure waste. Side-effect-only computes (`undefined` output)
+are exempt: identity of `undefined` proves nothing about their work.
+Summed as `wastedMs` in costs() (plain, non-held runs only — see
+`phase`).
+
+#### `phase`
+
+* **Type:** `"plain" | "held" | "optimistic"`
+
+Which posture this run executed under. "optimistic" = under an
+optimistic lane (overlay recompute); "held" = a hold was open or owns
+the node (the run may be replayed/settled later); "plain" = an ordinary
+committed run. Overlay runs are real work (they count toward time
+budgets) but are never blamed as waste, and costs() reports their time
+separately as `overlayMs`.
+
+#### `held`
+
+* **Type:** `boolean`
+
+The changed value was parked in `_pendingValue` (held) rather than
+committed directly; its reveal happens on the hold's own schedule. Held
+runs are excluded from waste accounting.
+
+#### `interaction`
+
+* **Type:** `ChangeOrigin`
+
+The user interaction this run traces back to through its causes, if any.
+
+### `ScopeCost`
+
+```ts
+interface ScopeCost {
+	name: string;
+	kind: "effect" | "memo";
+	runs: number;
+	selfMs: number;
+	wastedMs: number;
+	overlayMs: number;
+}
+```
+
+#### `name`
+
+* **Type:** `string`
+
+#### `kind`
+
+* **Type:** `"effect" | "memo"`
+
+#### `runs`
+
+* **Type:** `number`
+
+#### `selfMs`
+
+* **Type:** `number`
+
+#### `wastedMs`
+
+* **Type:** `number`
+
+Self-time of PLAIN, non-held runs that produced an unchanged value —
+the recoverable number. Overlay runs (optimistic/transition) are never
+counted here: an optimistic recompute landing back on the committed
+value is the mechanism working, not waste.
+
+#### `overlayMs`
+
+* **Type:** `number`
+
+Self-time spent in optimistic/transition (overlay) runs.
+
+### `WaterfallRecord`
+
+```ts
+interface WaterfallRecord {
+	chain: FlightLink[];
+	sequentialMs: number;
+}
+```
+
+#### `chain`
+
+* **Type:** `FlightLink[]`
+
+Sequential flights, oldest first, ending at the flight that landed.
+
+#### `sequentialMs`
+
+* **Type:** `number`
+
+Summed wall time of the chain — the serialized cost.
+
+### `WriteCost`
+
+```ts
+interface WriteCost {
+	name: string;
+	runs: number;
+	downstreamMs: number;
+}
+```
+
+#### `name`
+
+* **Type:** `string`
+
+Root cause name (a signal write, async landing, or refresh target).
+
+#### `runs`
+
+* **Type:** `number`
+
+Number of downstream re-runs this root triggered.
+
+#### `downstreamMs`
+
+* **Type:** `number`
+
+Summed self-time of every downstream re-run it caused.

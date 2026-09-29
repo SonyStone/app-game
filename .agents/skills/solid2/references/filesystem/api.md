@@ -1,0 +1,123 @@
+# filesystem-routing/api
+
+`filesystem-routing/api` matches HTTP handler refs from the flat route manifest.
+
+## `createAPIHandler`
+
+```ts
+import { createAPIHandler } from "filesystem-routing/api";
+
+function createAPIHandler(
+	routes: readonly FileRouteHandlers[],
+	options?: APIHandlerOptions
+): (
+	request: Request,
+	next: (request?: Request) => Response | Promise<Response>
+) => Promise<Response>;
+```
+
+Returns fetch-style middleware.
+The middleware loads eager and lazy handler refs, writes matched parameters to the request event, and calls the method export.
+
+```ts
+import routes from "virtual:file-routes";
+import { createAPIHandler } from "filesystem-routing/api";
+
+export default [createAPIHandler(routes)];
+```
+
+Unmatched paths and methods call `next()`.
+`HEAD` uses `HEAD` when exported and otherwise uses `GET`.
+
+The adapter converts handler results as follows:
+
+* A `Response` is returned unchanged.
+* A string becomes `new Response(value)`.
+* Other defined values become `Response.json(value)`.
+* `undefined` from a non-`GET` handler throws.
+* `undefined` from a page module's `GET` calls `next()`.
+* `undefined` from a handler-only module's `GET` returns a `404` response.
+
+## `APIHandlerOptions`
+
+```ts
+interface APIHandlerOptions {
+	base?: string;
+	getEvent?: () => APIEvent;
+}
+```
+
+### `base`
+
+* **Type:** `string`
+* **Default:** `"/"`
+
+Specifies a leading URL path to remove before matching.
+
+### `getEvent`
+
+* **Type:** `() => APIEvent`
+* **Default:** Reads the current `solid.RequestContext` store
+
+Supplies the event passed to handlers.
+The default throws when dispatch runs outside a request-event scope.
+
+## `createAPIMatcher`
+
+```ts
+function createAPIMatcher(
+	routes: readonly FileRouteHandlers[]
+): (path: string, method: string) => APIMatch | undefined;
+```
+
+Builds a radix matcher over entries with handler refs.
+The matcher removes route groups, encodes static segments, maps `*rest` catch-alls, and returns matched params.
+
+The matcher rejects optional parameter paths.
+The matcher also rejects paths that become duplicates after group removal.
+
+## `stripPathBase`
+
+```ts
+function stripPathBase(path: string, base: string): string;
+```
+
+Removes `base` only when it equals the path or forms a complete leading segment.
+An exact match returns `/`.
+
+## Types
+
+```ts
+interface APIEvent {
+	request: Request;
+	params?: Record<string, string>;
+	[key: string]: unknown;
+}
+
+type APIHandler = (event: APIEvent) => unknown;
+
+type APIHandlerRef =
+	| { import(): Promise<Record<string, APIHandler>> }
+	| { require(): Record<string, APIHandler> };
+
+interface FileRouteHandlers {
+	path: string;
+	page?: boolean;
+	$component?: unknown;
+	$HEAD?: APIHandlerRef;
+	$GET?: APIHandlerRef;
+	$POST?: APIHandlerRef;
+	$PUT?: APIHandlerRef;
+	$PATCH?: APIHandlerRef;
+	$DELETE?: APIHandlerRef;
+	[key: string]: unknown;
+}
+
+interface APIMatch {
+	handler: APIHandlerRef;
+	params?: Record<string, string>;
+	isPage: boolean;
+}
+```
+
+`isPage` is `true` only when the matched entry has `page: true` and a defined `$component`.

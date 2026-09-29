@@ -1,0 +1,48 @@
+# runWithOwner
+
+Executes `fn` with the given `owner` set as the current owner. Any reactive
+primitives (`createSignal`, `createMemo`, `createEffect`, `onCleanup`,
+`cleanup`, etc.) created inside `fn` are attached to that owner, so they
+are disposed when the owner is disposed.
+
+The classic pattern: capture the current owner with `getOwner()` inside a
+component, then re-enter it from a callback (event handler, async resolve,
+setTimeout) so disposables created in the callback get cleaned up with the
+component.
+
+## Import
+
+```ts
+import { runWithOwner } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function runWithOwner<T>(owner: Owner | null, fn: () => T): T;
+```
+
+## Parameters
+
+### `owner`
+
+* **Type:** `Owner | null`
+
+### `fn`
+
+* **Type:** `() => T`
+
+## Examples
+
+```ts
+function delayed<T>(ms: number, fn: () => T) {
+	const owner = getOwner();
+	setTimeout(() => runWithOwner(owner, fn), ms);
+}
+```
+
+## Learn more
+
+* [Run outside a component](../guides/custom-primitives.md#run-outside-a-component)
+* [Ownership](../concepts/reactivity.md#ownership)
+* [Custom primitives](../guides/custom-primitives.md)

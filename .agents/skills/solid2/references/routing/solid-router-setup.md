@@ -1,0 +1,173 @@
+# Setup
+
+A project created from the `bare` shape has an `<a href="/products/mug">` in its header, and clicking it reloads the whole document: the cart signal resets, the scroll position is lost, and the page flashes white.
+The router is what turns that click into a client-side navigation that keeps the app alive.
+
+The `basic` and `fullstack` templates from `npm create solid` already install and mount Solid Router, so if you started from one of them, skip to [Configure the router](#configure-the-router) when you need to change an option.
+The rest of this page adds the router to a project that does not have it, such as the `bare` shape or an existing Vite app.
+
+## Install and create the router
+
+Install the package:
+
+```sh
+pnpm add @solidjs/router@next
+```
+
+Define the route tree and create the router at module scope.
+This is the same `src/router.ts` as the [introduction](solid-router.md#one-app-three-pages):
+
+```tsx
+// src/router.ts
+import { lazy } from "solid-js";
+import { createRouter } from "@solidjs/router";
+
+export const Router = createRouter({
+	routes: [
+		{ path: "/", component: lazy(() => import("./pages/Home")) },
+		{ path: "/products/:id", component: lazy(() => import("./pages/Product")) },
+		{ path: "*404", component: lazy(() => import("./pages/NotFound")) },
+	],
+});
+
+export const { paths } = Router;
+```
+
+[`createRouter`](../router/router-factory.md#createrouter) returns both the provider component and the application-wide static routing instance.
+The instance members `routes`, `config`, `paths`, and `match()` describe the route tree, not one visitor's current location.
+Session-specific state comes from routing primitives inside the provider.
+
+## Mount it at the application root
+
+```tsx
+// src/App.tsx
+import { Loading } from "solid-js";
+import { paths, Router } from "./router";
+
+export default function App() {
+	return (
+		<Router>
+			{(props) => (
+				<>
+					<header>
+						<a href={paths()}>Store</a>
+						<a href={paths.products("mug")}>Featured</a>
+					</header>
+					<Loading fallback={<main>Loading…</main>}>
+						<main>{props.children}</main>
+					</Loading>
+				</>
+			)}
+		</Router>
+	);
+}
+```
+
+Click **Featured** now and the URL changes without a reload: the header keeps its DOM and any state it holds.
+
+The function child is the app shell.
+It is never part of a route match, so it stays mounted for the life of the app while matched route components render through `props.children`.
+The `Loading` boundary gives the first page load a fallback while a lazy page or its data is pending; later navigations keep the current page on screen without it.
+If the router config has a top-level `preload`, its return value is available as `props.data`.
+In start mode, the generated client and server entries render `src/App.tsx`, so this is the whole mount.
+
+:::pitfall[A second router inside the first]
+A section that wants its own routes sometimes gets its own `<Router>`:
+
+```tsx
+// Avoid: a nested router fights the outer one for the URL
+<Router>
+	{(props) => <AdminRouter>{(admin) => admin.children}</AdminRouter>}
+</Router>;
+
+// Prefer: one route tree, with the section as a child route or a lazy subtree
+export const Router = createRouter({
+	routes: [
+		{ path: "/", component: Home },
+		{
+			path: "/admin",
+			component: AdminLayout,
+			children: () => import("./admin/routes"),
+		},
+	],
+});
+```
+
+Run the `Avoid` version and development warns `Mounting a router inside another router is not supported. Compose route trees in one createRouter config instead.`, and link clicks can show stale content because two routers each try to own the navigation.
+[Lazy route subtrees](solid-router-route-definitions.md#load-a-route-subtree-lazily) are how a section keeps its own route file.
+:::
+
+### Mount without start mode
+
+For a transform-only Vite application, render the same application component from a client entry:
+
+```tsx
+// src/index.tsx
+import { render } from "@solidjs/web";
+import App from "./App";
+
+render(() => <App />, document.getElementById("app")!);
+```
+
+## Configure the router
+
+Most apps pass only `routes`.
+The other options exist for a specific situation each:
+
+| Option              | Reach for it when                                                                                                                 |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `base`              | The app is served under a prefix such as `/app`; matching and `paths` both include it.                                            |
+| `history`           | The app is not a normal page: an Electron shell or `file://` needs `hashHistory()`, tests need `memoryHistory()`.                 |
+| `preload`           | The root layout needs data of its own; it runs once per mount or server request and reaches the function child as `props.data`.   |
+| `preloadLinks`      | Hover and focus preloading costs more than it saves; set `false` and use `preload="false"` per link for finer control.            |
+| `explicitLinks`     | Some anchors inside the router must stay as full page loads; only anchors with a `link` attribute are then handled by the router. |
+| `scrollRestoration` | The app manages scroll itself; set `false` to stop the router restoring the position on back and forward (on by default).         |
+| `transformUrl`      | Incoming pathnames need rewriting before matching, for example to strip a locale prefix.                                          |
+| `singleFlight`      | The router's server-function data consumer should be off; it is `true` by default.                                                |
+| `actionBase`        | Server actions are served from a prefix other than the default `/_server`.                                                        |
+
+The router uses browser history by default on the client and the current request URL on the server, so `history` is rarely set in a web app:
+
+```tsx
+import { createRouter, hashHistory } from "@solidjs/router";
+
+export const Router = createRouter({
+	routes,
+	history: hashHistory(),
+	base: "/app",
+});
+```
+
+:::advanced[Options that pair with the server]
+`singleFlight` and `actionBase` only matter in a `fullstack` project.
+The first turns off the consumer that seeds the `query` cache from a mutation response; the second must match the server-function endpoint if it was moved off `/_server`.
+[Server rendering and hydration](solid-router-server-rendering.md#one-round-trip-for-a-mutation) explains both.
+:::
+
+## Common problems
+
+### `'use' router primitives can be only used inside a Route`
+
+A component that calls `useNavigate`, `useLocation`, or another router primitive is rendered outside the `<Router>`, for example next to it in `App` or in `Document.tsx`.
+Move the component into the function child, where every router primitive works, or pass the value it needs down as a prop.
+
+### Clicking a link still reloads the page
+
+The anchor is outside the `<Router>`, has a `target` or `rel="external"`, or points to another origin.
+With `explicitLinks: true`, it is missing the `link` attribute.
+[Navigation and typed paths](solid-router-navigation.md#links-are-anchors) lists every attribute that makes the router leave an anchor alone.
+
+## Recap
+
+* Create the router once at module scope and export `Router` and `paths` from `src/router.ts`.
+* Mount `<Router>` once, at the application root; the function child is the root layout.
+* Wrap `props.children` in a `Loading` boundary so the first load has a fallback.
+* Do not nest a `<Router>` inside another; compose one route tree, with lazy subtrees for sections.
+* Pass only `routes` unless you have a specific reason for `base`, `history`, or a preloading option.
+* Keep `actionBase` in step with the server-function endpoint if that endpoint moves.
+
+## Next steps
+
+* [Route definitions](solid-router-route-definitions.md): path patterns, parameter filters, metadata, and lazy subtrees for the `routes` array you passed in.
+* [Nested routes and layouts](solid-router-nested-routes.md): layouts that stay mounted while the page inside them changes.
+* [Navigation and typed paths](solid-router-navigation.md): links, typed `paths`, and search parameters.

@@ -1,0 +1,353 @@
+# DEV
+
+Dev tier (devtools hooks, graph traversal, console reporting): dev builds only.
+
+## Import
+
+```ts
+import { DEV } from "solid-js";
+```
+
+## Type signature
+
+```ts
+const DEV: Dev | undefined;
+```
+
+## Learn more
+
+* [Debugging reactivity](../guides/debugging-reactivity.md)
+
+## Related types
+
+### `Dev`
+
+The dev tier: devtools hooks, graph traversal, and the console face of the
+diagnostics channel. Present only in dev builds (`__DEV__`).
+
+```ts
+interface Dev {
+	hooks: DevHooks;
+	getChildren: typeof getChildren;
+	getSignals: typeof getSignals;
+	getParent: typeof getParent;
+	getSources: typeof getSources;
+	getObservers: typeof getObservers;
+	report(entry: DiagnosticEvent): void;
+	guideUrl(code: DiagnosticCode): string;
+}
+```
+
+#### `hooks`
+
+* **Type:** `DevHooks`
+
+#### `getChildren`
+
+* **Type:** `typeof getChildren`
+
+#### `getSignals`
+
+* **Type:** `typeof getSignals`
+
+#### `getParent`
+
+* **Type:** `typeof getParent`
+
+#### `getSources`
+
+* **Type:** `typeof getSources`
+
+#### `getObservers`
+
+* **Type:** `typeof getObservers`
+
+#### `report`
+
+* **Type:** `void`
+
+Console face of an emitted event — see `reportDiagnostic`.
+
+#### `guideUrl`
+
+* **Type:** `string`
+
+The stable URL of `code`'s section in the repair guide — the
+`reactivity-diagnostics` skill shipped with `solid-js`, one section per
+code. The one place the URL is built: the console footer prints it and
+the performance tracks' Insights link (`learnMoreUrl`) reads it, so both
+name the same section. Dev-tier: it is guidance for a developer, and a
+URL string on a retained object is a cost every observe build would pay.
+
+### `DevHooks`
+
+```ts
+interface DevHooks {
+	onOwner?: (owner: Owner) => void;
+	onGraph?: (value: any, owner: Owner | null) => void;
+	onUpdate?: () => void;
+	onStoreNodeUpdate?: (
+		state: any,
+		property: PropertyKey,
+		value: any,
+		prev: any
+	) => void;
+}
+```
+
+#### `onOwner`
+
+* **Type:** `(owner: Owner) => void`
+
+#### `onGraph`
+
+* **Type:** `(value: any, owner: Owner | null) => void`
+
+#### `onUpdate`
+
+* **Type:** `() => void`
+
+#### `onStoreNodeUpdate`
+
+* **Type:** `(state: any, property: PropertyKey, value: any, prev: any) => void`
+
+### `DiagnosticCapture`
+
+```ts
+interface DiagnosticCapture {
+	readonly events: readonly DiagnosticEvent[];
+	clear(): void;
+	stop(): DiagnosticEvent[];
+}
+```
+
+#### `events`
+
+* **Type:** `readonly DiagnosticEvent[]`
+
+#### `clear`
+
+* **Type:** `void`
+
+#### `stop`
+
+* **Type:** `DiagnosticEvent[]`
+
+### `DiagnosticCode`
+
+```ts
+type DiagnosticCode =
+	| "STRICT_READ_UNTRACKED"
+	| "PENDING_ASYNC_UNTRACKED_READ"
+	| "PENDING_ASYNC_FORBIDDEN_SCOPE"
+	| "REACTIVE_WRITE_IN_OWNED_SCOPE"
+	| "ASYNC_STORE_SETTER"
+	| "ACTION_CALLED_IN_OWNED_SCOPE"
+	| "RUN_WITH_DISPOSED_OWNER"
+	| "NO_OWNER_CLEANUP"
+	| "CLEANUP_IN_FORBIDDEN_SCOPE"
+	| "SETTLED_CLEANUP_UNOWNED"
+	| "SETTLE_WALK_UNINITIALIZED_SOURCE"
+	| "FLUSH_IN_EFFECT_CALLBACK"
+	| "PRIMITIVE_IN_FORBIDDEN_SCOPE"
+	| "NO_OWNER_EFFECT"
+	| "NO_OWNER_BOUNDARY"
+	| "ASYNC_OUTSIDE_LOADING_BOUNDARY"
+	| "LOADING_ON_OUTSIDE_HOLD"
+	| "INVALID_REFRESH_TARGET"
+	| "INVALID_AFFECTS_TARGET"
+	| "MISSING_EFFECT_FN"
+	| "SYNC_NODE_RECEIVED_ASYNC"
+	| "UNTRACKED_READ_AFTER_AWAIT"
+	| "REACTIVITY_HALTED"
+	| "INVARIANT_VIOLATION"
+	| "HUGE_FAN_OUT"
+	| "HUGE_FAN_IN"
+	| "GRAPH_GROWTH"
+	| "HOT_SCOPE_RERUNS"
+	| "HOT_SCOPE_TIME"
+	| "WIDE_SCOPE_DEPS"
+	| "UNSTABLE_MEMO_OUTPUT"
+	| "WASTED_RECOMPUTE"
+	| "ASYNC_WATERFALL"
+	| "HOT_SCOPE_FANOUT"
+	| "SILENT_HOLD"
+	| "LONG_HOLD"
+	| "UNTRACKED_ASYNC_HANDLER"
+	| "ABANDONED_FLIGHTS"
+	| "FALLBACK_FLASH"
+	| "STACKED_HOLDS"
+	| "OPTIMISTIC_REVERTED"
+	| "EFFECT_WRITES_OWN_SOURCE"
+	| "EFFECT_RELAY_TEAR"
+	| "IMMUTABLE_UPDATE_IN_STORE"
+	| "UNSTABLE_LIST_IDENTITY"
+	// Server / SSR — emitted by the server runtimes (`solid-js`'s server
+	// facade, `@solidjs/web`'s server entries) through `OBSERVE.diagnostics.emit`.
+	| "SSR_RENDER_ERROR_CONTAINED"
+	| "SSR_SUBTREE_ABANDONED"
+	| "SSR_STREAM_ABANDONED"
+	| "SSR_CLIENT_CONTENT_MASKED"
+	| "LATE_HEADER_WRITE"
+	| "SERVER_ERROR_SANITIZED"
+	| "SSR_BOUNDARY_WATERFALL"
+	| "SSR_UNDECLARED_LIVE_SOURCE"
+	| "SERVER_WRITE"
+	| "REVEAL_IN_RENDER_TO_STRING"
+	| "LAZY_ASSET_UNMAPPED"
+	| "PRELOAD_DESCRIPTOR_INVALID"
+	| "HEAD_TAG_INVALID"
+	| "UNRECOGNIZED_INSERT_VALUE"
+	| "UNSCOPED_HOLE_ALLOCATED_IDS"
+	| "BEHAVIOR_CLAIM_DROPPED"
+	| "FRAME_MARKER_CORRUPTED"
+	| "DYNAMIC_ASYNC_COMPONENT";
+```
+
+### `DiagnosticEvent`
+
+```ts
+interface DiagnosticEvent {
+	sequence: number;
+	code: DiagnosticCode;
+	kind: DiagnosticKind;
+	severity: DiagnosticSeverity;
+	message: string;
+	ownerId?: string;
+	ownerName?: string;
+	nodeName?: string;
+	ownerPath?: string[];
+	data?: Record<string, unknown>;
+}
+```
+
+#### `sequence`
+
+* **Type:** `number`
+
+#### `code`
+
+* **Type:** `DiagnosticCode`
+
+#### `kind`
+
+* **Type:** `DiagnosticKind`
+
+#### `severity`
+
+* **Type:** `DiagnosticSeverity`
+
+#### `message`
+
+* **Type:** `string`
+
+#### `ownerId`
+
+* **Type:** `string`
+
+#### `ownerName`
+
+* **Type:** `string`
+
+#### `nodeName`
+
+* **Type:** `string`
+
+#### `ownerPath`
+
+* **Type:** `string[]`
+
+Root-first chain of named owners enclosing the subject of the event —
+component roots as `<Name>`, computations by their `name` option (or
+the `effect`/`computed` default) — e.g. `["<App>", "<TodoRow>", "effect"]`.
+Unnamed owners (plain roots) are skipped. Absent when the subject has no
+named owner at all (a top-level scope, or an unowned primitive — which
+is usually the finding itself).
+
+#### `data`
+
+* **Type:** `Record<string, unknown>`
+
+### `DiagnosticKind`
+
+```ts
+type DiagnosticKind =
+	| "strict-read"
+	| "async"
+	| "write"
+	| "lifecycle"
+	| "owner"
+	| "error"
+	| "perf"
+	| "graph"
+	| "responsiveness"
+	| "ssr"
+	| "head"
+	| "render";
+```
+
+### `DiagnosticListener`
+
+A findings listener. `subject` is the live node the event is about, when
+the emitter located one — passed BESIDE the serializable event, the way
+the records channel passes `live` — for an in-process consumer that goes
+from a finding to the scope (devtools, a console task lookup);
+`undefined` for an event with no location, or a host event whose owners
+are not signals' owners.
+
+```ts
+type DiagnosticListener = (
+	event: DiagnosticEvent,
+	subject: DiagnosticSubject | undefined
+) => void;
+```
+
+### `Diagnostics`
+
+```ts
+interface Diagnostics {
+	subscribe(listener: DiagnosticListener): () => void;
+	capture(): DiagnosticCapture;
+	emit(
+		event: Omit<DiagnosticEvent, "sequence">,
+		subject?: DiagnosticSubject | null
+	): DiagnosticEvent;
+}
+```
+
+#### `subscribe`
+
+* **Type:** `() => void`
+
+#### `capture`
+
+* **Type:** `DiagnosticCapture`
+
+#### `emit`
+
+* **Type:** `DiagnosticEvent`
+
+Records an event on the channel from outside the reactive core — a host
+runtime reporting its own findings (hydration mismatches, server render
+faults) so consumers see one stream. `subject` locates it like the
+internal sites do; a host whose owners are not signals' owners passes
+`ownerPath` on the event instead and it is used as-is.
+
+### `DiagnosticSeverity`
+
+`info` is the advisory tier: a structural fact worth surfacing that is not
+presumptively a bug (e.g. a 2-deep sequential fetch chain, which may be an
+intrinsic data dependency). Budget/assertion consumers should treat only
+`warn`/`error` as failures unless they opt in to `info`.
+
+```ts
+type DiagnosticSeverity = "info" | "warn" | "error";
+```
+
+### `DiagnosticSubject`
+
+Anything a diagnostic can be about: an owner (root, computed, effect) or a signal.
+
+```ts
+type DiagnosticSubject = Owner | Signal<any> | Computed<any>;
+```

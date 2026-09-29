@@ -1,0 +1,84 @@
+# dynamic
+
+Creates a stable component whose rendered component comes from a reactive source. The source can return a component, an intrinsic element name, a promise, or no component.
+
+> `dynamic()` is the canonical API. It returns a stable component identity and composes with `lazy()` and routing.
+
+## Import
+
+```ts
+import { dynamic } from "@solidjs/web";
+```
+
+## Type signature
+
+```ts
+function dynamic<T extends ValidComponent>(
+	source: () => T | Promise<T> | AsyncIterable<T> | null | undefined | false,
+	options?: DynamicOptions
+): Component<ComponentProps<T>>;
+```
+
+## Parameters
+
+### `source`
+
+* **Type:** `() => T | Promise<T> | AsyncIterable<T> | null | undefined | false`
+
+Reactive function that returns the component to render: a component function, an intrinsic element name, a promise of either, or a falsy value to render nothing.
+
+### `options`
+
+* **Type:** `DynamicOptions`
+* Optional
+
+`deferStream` holds the SSR shell until the source settles.
+
+## Return value
+
+A stable component. Render it as `<Component />` and pass the target component's props to it.
+
+## Examples
+
+```tsx
+const CurrentPage = dynamic(() => pages[route()]);
+
+return <CurrentPage />;
+```
+
+## Caveats
+
+* The returned component is stable; render it once and let `source` change. Creating it inside the render path recreates the subtree.
+
+## Learn more
+
+* [Dynamic components](../concepts/components-and-jsx.md#dynamic-components)
+* [Components and JSX](../concepts/components-and-jsx.md)
+
+## Related types
+
+### `DynamicOptions`
+
+```ts
+interface DynamicOptions {
+	deferStream?: boolean;
+	static?: boolean;
+}
+```
+
+#### `deferStream`
+
+* **Type:** `boolean`
+
+SSR only: hold the document's first flush until the source settles, so
+the resolved component renders into the shell instead of streaming in
+behind its boundary's fallback. Same meaning as `createMemo`'s
+`deferStream`. Ignored on the client.
+
+#### `static`
+
+* **Type:** `boolean`
+
+The source cannot change: call it once, untracked, now, and render the
+result with no computation per instance (see `dynamic`). The source must
+resolve synchronously.

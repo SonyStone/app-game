@@ -1,0 +1,170 @@
+# serverFunctions
+
+`serverFunctions` provides the standalone `"use server"` compiler plugins.
+The `serverFunctions` option on `solidPlugin` uses the same compiler and can also install endpoint middleware.
+See the [server functions guide](../building-apps/server-functions.md) for application usage and the [`@solidjs/web/server-functions` reference](../web/server-functions.md) for the generated runtime.
+
+## Import
+
+```ts
+import {
+	serverFunctions,
+	type ServerFunctionsFilter,
+	type ServerFunctionsOptions,
+} from "@solidjs/vite-plugin";
+```
+
+## Signature
+
+```ts
+function serverFunctions(options?: ServerFunctionsOptions): Plugin[];
+```
+
+The standalone export does not install development endpoint middleware.
+Use the standalone export in hosts that control plugin ordering and request dispatch.
+
+## `ServerFunctionsOptions`
+
+```ts
+interface ServerFunctionsOptions {
+	runtime?: {
+		server: string;
+		client: string;
+	};
+	manifest?: string;
+	filter?: ServerFunctionsFilter;
+	directive?: string;
+	endpoint?: string;
+	devMiddleware?: boolean;
+	configure?: string;
+	components?: boolean;
+}
+
+interface ServerFunctionsFilter {
+	include?: FilterPattern;
+	exclude?: FilterPattern;
+}
+```
+
+### `runtime`
+
+* **Type:** `{ server: string; client: string }`
+* **Default:** Both fields are `"@solidjs/web/server-functions"`
+
+Specifies the runtime imports emitted by the compiler.
+The server runtime must export `registerServerReference`, `createServerReference`, `handleServerFunctionRequest`, and `configureServerFunctionsServer`.
+The client runtime must export `registerServerReference` and `createServerReference`.
+The client runtime must also export `configureServerFunctionsClient` when the resolved endpoint differs from the default.
+
+### `manifest`
+
+* **Type:** `string`
+* **Default:** `"virtual:solid-server-function-manifest"`
+
+Specifies the virtual module that side-effect imports every module containing a compiled server function.
+Production handlers import this module so registrations survive tree shaking.
+
+### `filter`
+
+* **Type:** `ServerFunctionsFilter`
+* **Default include:** `"src/**/*.{jsx,tsx,ts,js,mjs,cjs}"`
+* **Default exclude:** `"node_modules/**/*.{jsx,tsx,ts,js,mjs,cjs}"`
+
+Limits directive compilation with Vite filter patterns.
+Relative patterns resolve against the Vite root.
+
+### `directive`
+
+* **Type:** `string`
+* **Default:** `"use server"`
+
+Specifies the directive text recognized by the compiler.
+
+### `endpoint`
+
+* **Type:** `string`
+* **Default:** `"/_server"`
+
+Specifies the request path.
+The plugin adds a missing leading slash, then prefixes Vite's `base`.
+When the resolved path differs from `/_server`, compiled modules configure both runtime sides with that resolved endpoint.
+
+### `devMiddleware`
+
+* **Type:** `boolean`
+* **Default:** `true` through `solidPlugin({ serverFunctions })`
+
+Set `false` to leave development endpoint dispatch to another host.
+Compilation and both virtual modules remain enabled.
+The standalone `serverFunctions()` export never installs this middleware, regardless of the value.
+
+When dispatch is host-owned, the host loads `virtual:solid-server-function-handler`.
+The host's server entry should also import the manifest when functions referenced only by client code must register before dispatch.
+The host can configure request scope, origin checks, invocation policy, and result handling through [`configureServerFunctionsServer()`](../web/host-configuration.md).
+
+### `configure`
+
+* **Type:** `string`
+* **Default:** `undefined`
+
+Specifies a server-only module to import before handler configuration and dispatch.
+Relative paths resolve against the Vite root.
+The plugin rejects a missing file during configuration.
+
+```ts
+serverFunctions: {
+  configure: "./src/server-config.ts",
+}
+```
+
+### `components`
+
+* **Type:** `boolean`
+* **Default:** `false`
+* **Status:** Experimental
+
+Enables server-function results that contain components.
+The generated handler installs the frame response transforms.
+
+With generated SSR start-mode entries, the plugin also adds the document render plugin, bootstrap data, and client installation call.
+Without `start: true` and `ssr: true`, or with authored entries, application entry code supplies those document-level pieces.
+
+## Generated modules
+
+### `virtual:solid-server-function-manifest`
+
+A side-effect-only module that imports discovered server-function modules.
+The client build persists its discoveries under `dist/client/.vite/solid-server-functions.json` so a separate SSR build can include functions referenced only by client code.
+
+### `virtual:solid-server-function-handler`
+
+```ts
+export const endpoint: string;
+
+export function handleServerFunctionRequest(
+	request: Request,
+	options?: Record<string, unknown>
+): Promise<Response>;
+```
+
+`virtual:solid-server-function-handler` imports the configured setup module and the production manifest.
+The handler also configures request-event scoping and dispatches through the selected runtime.
+
+## Main plugin form
+
+```ts
+import solid from "@solidjs/vite-plugin";
+
+export default {
+	plugins: [
+		solid({
+			serverFunctions: {
+				endpoint: "/_server",
+				configure: "./src/server-config.ts",
+			},
+		}),
+	],
+};
+```
+
+With start mode, endpoint requests pass through `start.middleware` and share its request event.

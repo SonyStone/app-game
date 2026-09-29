@@ -1,0 +1,292 @@
+# Navigation and typed paths
+
+The first thing to look for in a new router is its `<Link>` component, and Solid Router does not have one.
+A link is an `<a>`, and the router turns clicks on same-origin anchors inside it into client-side navigations.
+That choice shapes this whole page: the URL is the API, and the router's job is to help you build URLs that are correct and react to the one the user is on.
+
+The examples continue the store from the [introduction](solid-router.md).
+
+## Links are anchors
+
+```tsx
+<nav>
+	<a href={paths()}>Store</a>
+	<a href={paths.products("mug")}>Featured</a>
+	<a href="https://github.com/solidjs/solid">Source</a>
+</nav>
+```
+
+Click **Featured** and the product page renders without a document reload; click **Source** and the browser leaves for GitHub as it would for any anchor.
+The router handles the first two and leaves the third alone because it is another origin.
+It also leaves an anchor alone when it has a `target`, `rel="external"`, a `download` attribute, or a non-HTTP scheme.
+Anything a browser would treat as "leave this page" still does.
+
+Because they are anchors, links work before JavaScript loads, in reader modes, and when opened in a new tab, and every accessibility tool already knows what they are.
+
+A few attributes adjust how the router treats one link:
+
+* `replace` replaces the current history entry instead of pushing.
+* `noscroll` keeps the scroll position after navigation.
+* `state` supplies a JSON value for `location.state` on the destination.
+* `preload="false"` skips the route-data preload on hover for this link; the code chunk still warms.
+* `link` marks an anchor for the router when `explicitLinks: true` is set, in apps where most anchors should stay full page loads.
+
+## Build URLs with `paths`
+
+The tempting way to write a link is the string you can see in the address bar:
+
+```tsx
+// Avoid: a string the type checker cannot connect to a route
+<a href={"/products/" + product.id}>{product.name}</a>
+
+// Prefer: a node from the route tree
+<a href={paths.products(product.id)}>{product.name}</a>
+```
+
+Both render the same `href` today.
+Rename the route to `/catalog/:id` and the `Avoid` version becomes a link to the `*404` page that nothing reports; the `Prefer` version stops compiling until every call site is updated.
+
+`paths` is a proxy inferred from the route tree:
+
+```tsx
+paths(); // "/"
+paths.products("mug"); // "/products/mug"
+paths.account.orders(42); // "/account/orders/42"
+paths.search({ q: "mug", page: 2 }, "results"); // "/search?q=mug&page=2#results"
+```
+
+Property access adds a static segment; a call binds the parameters of that segment.
+After the parameters come an optional search object and an optional hash string, mirroring the anatomy of a URL.
+
+Every node converts to a string when it lands in an `href`, `navigate()`, or `redirect()`, so a static route is written `paths.account`, not `paths.account()`.
+Call a node with no arguments only when an API insists on a plain `string`.
+
+The types follow the route definitions:
+
+* `matchFilters: { id: int }` makes `paths.products(id)` accept a number.
+  The component still receives `params.id` as a string, since that is what a URL holds.
+* A route `search` schema types the search object the path end accepts, covered [below](#type-search-parameters).
+
+## Navigate from code
+
+When the navigation is a link in the interface, use an anchor.
+When it is a consequence of something else, such as a saved form or a timeout, use `useNavigate`:
+
+```tsx
+import { useNavigate } from "@solidjs/router";
+import { paths } from "../router";
+
+function CheckoutButton() {
+	const navigate = useNavigate();
+
+	return (
+		<button onClick={() => navigate(paths.checkout, { replace: true })}>
+			Check out
+		</button>
+	);
+}
+```
+
+Click the button and the URL becomes `/checkout` with the cart page's history entry replaced, so **Back** returns to the page before the cart rather than to the cart.
+
+The options are the same as the link attributes: `replace`, `scroll`, and `state`, plus `resolve` for how a relative string is interpreted.
+A string starting with `/` resolves under the router's `base`; other strings resolve against the current location like a relative URL.
+A number moves through history: `navigate(-1)` is back.
+
+:::tip[Let the server decide where to go]
+A mutation that ends in a navigation does not need `useNavigate` at all.
+Return `redirect(paths.account.orders(id))` from the server function or action and the router navigates when the response arrives, in the same update as the revalidation; the [Data](solid-router-data.md#what-revalidates-after-a-mutation) page covers that path.
+:::
+
+## Read the location
+
+`useLocation()` returns a reactive object describing where the user is:
+
+```tsx
+const location = useLocation();
+
+location.pathname; // "/products/mug"
+location.search; // "?ref=home"
+location.query; // { ref: "home" }
+location.hash;
+location.state;
+location.key; // changes on every navigation
+```
+
+Each field is reactive on its own.
+A memo that reads `location.pathname` does not re-run when only the hash changes.
+
+`useParams()` returns the merged parameters of the current match, and a typed path narrows the keys:
+
+```tsx
+const params = useParams(Router.paths.products);
+params.id; // string
+```
+
+Inside a route component, `props.params` is the same object, already typed when the component is declared with `RouteProps`.
+
+## Type search parameters
+
+Search parameters are the right home for state that should survive a refresh and be shareable: a filter, a sort order, a page number.
+Read and write them with `useSearchParams`:
+
+```tsx
+const [search, setSearch] = useSearchParams();
+
+<button onClick={() => setSearch({ page: Number(search.page || 1) + 1 })}>
+	Next page
+</button>;
+```
+
+Click **Next page** and the URL gains `?page=2`, the page does not scroll, and a refresh lands on the same page of results.
+`setSearch` merges into the current query string and navigates without scrolling.
+Setting a key to `""`, `undefined`, or `null` removes it.
+
+Without a schema every value is a string or an array of strings, and `Number(search.page || 1)` is on you.
+Give the route a `search` schema, any synchronous Standard Schema validator, and pass the path node to get parsed, typed values:
+
+```tsx
+// src/router.ts
+import * as v from "valibot";
+
+{
+	path: "/search",
+	search: v.object({
+		q: v.optional(v.string(), ""),
+		page: v.optional(v.pipe(v.unknown(), v.transform(Number)), 1),
+	}),
+	component: Search,
+}
+```
+
+The query string only holds strings, so the schema is where `"2"` becomes `2`; a plain `v.number()` would reject every value.
+
+```tsx
+// src/pages/Search.tsx
+const [search, setSearch] = useSearchParams(Router.paths.search);
+
+search.page; // number
+setSearch({ page: search.page + 1 });
+```
+
+The router runs the schemas of every route in the current match, root to leaf, and merges the parsed outputs over the raw values.
+A schema that reports issues is skipped for that read, so the raw strings remain rather than the page throwing.
+
+:::caution[Schemas run synchronously]
+An asynchronous schema throws `Async Standard Schema validation is not supported for search params`.
+Keep search schemas to synchronous parsing and coercion; a value that needs a server round trip to validate is a query, not a search parameter.
+:::
+
+## Show active and pending links
+
+Click a link to a page whose data takes a moment.
+The current page stays on screen, and the clicked link gets a `data-pending` attribute until the destination is ready.
+That is the visible half of the held update described in [Async reactivity](../concepts/async-reactivity.md#settled-view-and-in-flight-work), and it is why an app without any loading spinner still feels responsive: the link itself shows that something is happening.
+
+The router sets three attributes on the anchors it handles:
+
+* `aria-current="page"` on an exact match.
+* `data-active` on an exact or descendant match, so the Account link is active on `/account/orders/42`.
+* `data-pending` on the target of an in-flight navigation.
+
+Style them in CSS with no component code:
+
+```css
+nav a[aria-current="page"] {
+	font-weight: 600;
+}
+
+nav a[data-active] {
+	color: var(--accent);
+}
+
+a[data-pending] {
+	opacity: 0.6;
+	cursor: progress;
+}
+```
+
+The root path `/` is active only on an exact match; otherwise it would be active everywhere.
+
+For a component that is not an anchor, or an anchor that needs the state in JSX, `useLinkState` returns the same three as accessors:
+
+```tsx
+import { useLinkState } from "@solidjs/router";
+
+function Tab(props: { href: string; children: JSX.Element }) {
+	const state = useLinkState(() => props.href, { end: true });
+
+	return (
+		<a href={props.href} data-selected={state.current() || undefined}>
+			{props.children}
+		</a>
+	);
+}
+```
+
+`end: true` asks for exact matching, the `aria-current` rule rather than the `data-active` rule.
+
+## Observe and guard navigation
+
+`useIsRouting()` is true while a navigation is waiting on route work.
+Use it for a top-of-page progress bar; for a single link, `data-pending` is already there.
+
+`useMatch(() => pattern)` tests a pattern against the current pathname without needing a route for it, and `useRouteMatches()` returns the matched route definitions with their `info`, which is how a breadcrumb reads route metadata.
+
+To stop the user leaving a page with unsaved changes, register a leave guard:
+
+```tsx
+import { useBeforeLeave } from "@solidjs/router";
+
+useBeforeLeave((event) => {
+	if (!dirty()) return;
+	event.preventDefault();
+	if (window.confirm("Discard unsaved changes?")) {
+		event.retry(true);
+	}
+});
+```
+
+Edit the checkout address, click **Store** in the header, and the confirm dialog appears; cancel it and the URL has not changed.
+The guard runs for router navigations and for the browser history traversal the router can intercept.
+`retry(true)` re-issues the navigation and skips the guards, so the confirmation does not appear twice.
+It cannot stop the user closing the tab; pair it with a `beforeunload` listener if that matters.
+
+## Common problems
+
+### Clicking a link reloads the whole page
+
+The anchor is outside the `<Router>`, has a `target`, or points to a different origin.
+With `explicitLinks: true`, it is missing the `link` attribute.
+
+### `paths.products` is a type error
+
+The route is `/products/:id`, so the node needs a call that binds the parameter: `paths.products(id)`.
+A static route is the bare node, `paths.account`; it converts to a string on its own, so the call is only needed when an API insists on a `string`.
+
+### The active style is on every link
+
+The style targets `data-active` on the `/` link, which is a parent of everything.
+Use `aria-current="page"` for the home link, or `useLinkState` with `end: true`.
+
+### `search.page` is a string
+
+There is no `search` schema on the route, or the path node was not passed to `useSearchParams`.
+Add the schema with a transform to `Number`, and read with `useSearchParams(Router.paths.search)`.
+
+## Recap
+
+* Write links as `<a href={...}>`; the router handles same-origin anchors inside it and leaves the rest to the browser.
+* Build every URL from `paths` so a route that moves fails to compile instead of linking to the 404 page.
+* Use `useNavigate` for navigation that is a consequence of something else; return `redirect()` from a mutation when the server knows the destination.
+* Read `useLocation()` fields individually; each is reactive on its own.
+* Put shareable state in search parameters, and give the route a synchronous `search` schema to get typed, parsed values.
+* Style `aria-current="page"`, `data-active`, and `data-pending` in CSS; the router sets them on the anchors it handles.
+* Guard unsaved changes with `useBeforeLeave`, and call `retry(true)` after the user confirms.
+
+## Next steps
+
+* [Nested routes and layouts](solid-router-nested-routes.md): where section navigation lives and what stays mounted across links.
+* [Data loading and mutations](solid-router-data.md): what the router preloads on hover, and `redirect()` from an action.
+* [State management](../guides/state-management.md#state-in-the-url): which page state belongs in the URL at all.
+* [Navigation API reference](../router/navigation.md): signatures for every primitive on this page.

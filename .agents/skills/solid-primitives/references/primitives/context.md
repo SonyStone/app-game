@@ -1,0 +1,186 @@
+# @solid-primitives/context
+
+Source version: `2.0.0-next.3`.
+
+[Upstream source](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/context/README.md) · [Skill catalogue](../catalogue.md#primitives-catalogue)
+
+
+Primitives simplifying the creation and use of SolidJS Context API.
+
+- [`createContextProvider`](context.md#createcontextprovider) - Create the Context Provider component and useContext function with types inferred from the factory function.
+- [`createOptionalContextProvider`](context.md#createoptionalcontextprovider) - Like `createContextProvider`, but returns `undefined` instead of throwing if the context is missing.
+- [`createLayeredContext`](context.md#createlayeredcontext) - Like `createContextProvider`, but each provider extends the parent context value rather than replacing it.
+- [`MultiProvider`](context.md#multiprovider) - A component that allows you to provide multiple contexts at once.
+
+## Installation
+
+```bash
+npm install @solid-primitives/context
+# or
+pnpm add @solid-primitives/context
+# or
+yarn add @solid-primitives/context
+```
+
+Requires `solid-js@^2.0.0-beta.13` and `@solidjs/web@^2.0.0-beta.13`.
+
+## `createContextProvider`
+
+Create the Context Provider component and useContext function with types inferred from the factory function.
+
+### How to use it
+
+Given a factory function, `createContextProvider` creates a SolidJS Context and returns both a Provider component for setting the context, and a useContext helper for getting the context. The factory function gets called when the provider component gets executed; all `props` of the provider component get passed into the factory function, and what it returns will be available in the contexts for all the underlying components. The types of the provider props and context are inferred from the factory function.
+
+```tsx
+import { createContextProvider } from "@solid-primitives/context";
+
+const [CounterProvider, useCounter] = createContextProvider((props: { initial: number }) => {
+  const [count, setCount] = createSignal(props.initial);
+  const increment = () => setCount(count() + 1);
+  return { count, increment };
+});
+
+// Provide the context
+<CounterProvider initial={1}>
+  <App />
+</CounterProvider>;
+
+// Use the context in a child component
+const ctx = useCounter();
+ctx; // T: { count: () => number; increment: () => void; }
+```
+
+### Providing context fallback
+
+The `createContextProvider` primitive takes a second, optional argument for providing context defaults for when the context wouldn't be provided higher in the component tree.
+If no fallback is provided, the `useContext` function will throw when the context is not provided.
+
+```ts
+const [CounterProvider, useCounter] = createContextProvider(
+  () => {
+    const [count, setCount] = createSignal(0);
+    const increment = () => setCount(count() + 1);
+    return { count, increment };
+  },
+  {
+    count: () => 0,
+    increment: () => {},
+  },
+);
+
+// then when using the context:
+const { count } = useCounter();
+```
+
+The `useContext` function always returns `Exclude<T, undefined>`. If the factory or fallback value is `undefined`, Solid treats the value as missing and `useContext` will throw instead of returning it.
+
+### Debug name
+
+An optional `name` can be passed as part of the third argument. It labels the context's Symbol for Solid DevTools and improves `ContextNotFoundError` stack traces (dev mode only).
+
+```ts
+const [ThemeProvider, useTheme] = createContextProvider(() => createTheme(), defaultTheme, {
+  name: "Theme",
+});
+```
+
+## `createOptionalContextProvider`
+
+Like `createContextProvider`, but the `useContext` function returns `undefined` when the context is missing or when the provider value is `undefined`.
+
+```tsx
+import { createOptionalContextProvider } from "@solid-primitives/context";
+
+const [GroupProvider, useGroup] = createOptionalContextProvider((props: { id: string }) => ({
+  groupId: props.id,
+}));
+
+const group = useGroup();
+group; // T: { groupId: string } | undefined
+```
+
+The fallback is returned when no provider is present. If a provider is present and its factory returns `undefined`, the `useContext` function returns `undefined`.
+
+An optional `name` can be passed as the third argument.
+
+## `createLayeredContext`
+
+Like `createContextProvider`, but each provider in the tree _extends_ the parent context value rather than replacing it entirely. The factory function receives the nearest parent's context value as its second argument.
+
+This is useful for incremental overrides such as themes, permissions layers, or i18n patches where a child provider should inherit what it does not explicitly change.
+
+```tsx
+import { createLayeredContext } from "@solid-primitives/context";
+
+const [ThemeProvider, useTheme] = createLayeredContext(
+  (props: { primary?: string; secondary?: string }, parent) => ({
+    ...parent,
+    primary: props.primary ?? parent.primary,
+    secondary: props.secondary ?? parent.secondary,
+  }),
+  { primary: "blue", secondary: "gray" }, // base defaults
+);
+
+// Root: { primary: "red", secondary: "gray" }
+<ThemeProvider primary="red">
+  {/* Nested: { primary: "green", secondary: "gray" } — secondary inherited */}
+  <ThemeProvider primary="green">
+    <App />
+  </ThemeProvider>
+</ThemeProvider>;
+```
+
+`createLayeredContext` always requires a `defaults` value (the base used when no parent provider wraps the component). The hook return type is always `T` (never `undefined`).
+
+## `MultiProvider`
+
+A component that allows you to provide multiple contexts at once.
+
+It will work exactly like nesting multiple providers as separate components, but it will save you from the nesting.
+
+### How to use it
+
+`MultiProvider` takes only a single `values` with a key-value pair of the context and the value to provide.
+
+> **Note**
+> Values list is evaluated in order, so the context values will be provided in the same way as if you were nesting the providers.
+
+```tsx
+import { MultiProvider } from "@solid-primitives/context";
+
+// before
+<FooContext value={"foo"}>
+  <BarContext value={"bar"}>
+    <BazContext value={"baz"}>
+      <MyCustomProviderComponent value={"hello-world"}>
+        <BoundContextProvider>
+          <App />
+        </BoundContextProvider>
+      </MyCustomProviderComponent>
+    </BazContext>
+  </BarContext>
+</FooContext>;
+
+// after
+<MultiProvider
+  values={[
+    [FooContext, "foo"],
+    [BarContext, "bar"],
+    [BazContext, "baz"],
+    // you can also provide a component, the value will be passed to a `value` prop
+    [MyCustomProviderComponent, "hello-world"],
+    // if you have a provider that doesn't accept a `value` prop, you can just pass a function
+    BoundContextProvider,
+  ]}
+>
+  <App />
+</MultiProvider>;
+```
+
+> **Warning**
+> Components and values passed to `MultiProvider` will be evaluated only once, so make sure that the structure is static. If it isn't, please use nested provider components instead.
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/context/CHANGELOG.md)

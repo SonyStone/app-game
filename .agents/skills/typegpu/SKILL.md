@@ -35,7 +35,7 @@ This skill targets TypeGPU `0.11.2`. If the user's project is on an older releas
 import tgpu, { d, std, common } from 'typegpu';
 
 const root = await tgpu.init();             // request a GPU device
-const root = tgpu.initFromDevice(device);   // or wrap an existing GPUDevice
+// or wrap an existing GPUDevice: const root = tgpu.initFromDevice(device);
 
 const context = root.configureContext({ canvas, alphaMode: 'premultiplied' });
 ```

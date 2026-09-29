@@ -1,0 +1,4 @@
+interface:
+  display_name: "Solid 2"
+  short_description: "Complete Solid 2 guides and API reference"
+  default_prompt: "Use $solid2 to implement or review this SolidJS 2 code against the bundled documentation and installed API."

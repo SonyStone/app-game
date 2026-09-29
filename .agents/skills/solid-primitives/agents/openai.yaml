@@ -1,0 +1,4 @@
+interface:
+  display_name: "Solid Primitives"
+  short_description: "Choose primitives from the bundled catalogue and docs"
+  default_prompt: "Use $solid-primitives to choose APIs from its searchable catalogue and bundled package documentation, then implement this feature with suitable primitives or small composable utilities."

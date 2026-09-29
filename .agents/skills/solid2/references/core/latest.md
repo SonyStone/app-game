@@ -1,0 +1,49 @@
+# latest
+
+Reads the freshest in-flight value available inside `fn`, falling back to the current settled value.
+
+## Import
+
+```ts
+import { latest } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function latest<T>(fn: () => T): T;
+```
+
+## Parameters
+
+### `fn`
+
+* **Type:** `() => T`
+
+Expression to read. In-flight values are returned in place of committed ones.
+
+## Return value
+
+The value `fn` returns when in-flight values are read in place of committed ones.
+
+## Examples
+
+```ts
+const preview = () => latest(user);
+```
+
+## Caveats
+
+* Use it on controls, not on content. Data read through `latest` can show a new answer before the rest of the update agrees with it.
+* Before any value exists, the read still suspends like a normal read.
+
+## Common problems
+
+* [The screen looks dead after a click](../guides/debugging-reactivity.md#the-screen-looks-dead-after-a-click)
+
+## Learn more
+
+* [Show the input now: `latest`](../concepts/async-reactivity.md#show-the-input-now-latest)
+* [Reactivity](../concepts/reactivity.md)
+* [Async reactivity](../concepts/async-reactivity.md)
+* [Debugging reactivity](../guides/debugging-reactivity.md)

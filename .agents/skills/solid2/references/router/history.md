@@ -1,0 +1,97 @@
+# History adapters
+
+## Import
+
+```ts
+import {
+	browserHistory,
+	hashHistory,
+	memoryHistory,
+	type MemoryHistoryAdapter,
+	type RouterHistory,
+} from "@solidjs/router";
+```
+
+## `RouterHistory`
+
+```ts
+interface RouterHistory {
+	get(): string | LocationChange;
+	set(next: LocationChange): void;
+	init?(notify: (value?: string | LocationChange) => void): () => void;
+	utils?: Partial<RouterUtils>;
+}
+```
+
+```ts
+interface LocationChange<S = unknown> {
+	value: string;
+	replace?: boolean;
+	scroll?: boolean;
+	state?: S;
+	rawPath?: string;
+}
+```
+
+Pass a history adapter as `createRouter({ history })`.
+On the server, the request URL or router `url` prop selects the location.
+
+## `browserHistory`
+
+```ts
+function browserHistory(): RouterHistory;
+```
+
+Uses `window.location`, `history.pushState`, `history.replaceState`, and `popstate`.
+The router creates this adapter by default on the client.
+
+## `hashHistory`
+
+```ts
+function hashHistory(): RouterHistory;
+```
+
+Stores the routed path after `#`.
+The `hashHistory` `renderPath` utility prefixes generated `Router.paths` values with `#`.
+
+```ts
+const Router = createRouter({
+	routes,
+	history: hashHistory(),
+});
+```
+
+## `memoryHistory`
+
+```ts
+function memoryHistory(initial?: string): MemoryHistoryAdapter;
+```
+
+`initial` defaults to `/`.
+
+```ts
+interface MemoryHistoryAdapter extends RouterHistory {
+	get(): string;
+	go(delta: number): void;
+	back(): void;
+	forward(): void;
+	listen(listener: (value: string) => void): () => void;
+}
+```
+
+```ts
+const history = memoryHistory("/users/42");
+const Router = createRouter({ routes, history });
+
+history.back();
+```
+
+## Scroll restoration
+
+`createRouter` wraps its default browser history with explicit scroll restoration unless `scrollRestoration` is false.
+A custom history adapter is not wrapped unless `scrollRestoration` is true.
+
+## Related
+
+* [`createRouter`](router-factory.md#createrouter)
+* [Navigation primitives](navigation.md)

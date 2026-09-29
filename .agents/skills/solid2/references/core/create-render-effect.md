@@ -1,0 +1,80 @@
+# createRenderEffect
+
+Creates a reactive computation that runs during the render phase as
+DOM elements are created and updated but not necessarily connected.
+
+Same compute/effect split as `createEffect` (`compute(prev)` tracks,
+`effect(next, prev?)` runs imperatively), but scheduled inside the
+render queue rather than after it. Reach for this only when
+authoring renderer plumbing — app code should use `createEffect`.
+
+```ts
+createRenderEffect<T>(compute, effectFn, options?: EffectOptions);
+```
+
+**Hydration:** `EffectOptions` accepts an `ssrSource` field
+(`"server"` | `"hybrid"` | `"client"`). See the `ssrSource` option.
+`transparent: true` makes the effect invisible to hydration entirely —
+it consumes no hydration id slot and its compute runs live rather than
+adopting the serialized server value — for client-only effects the
+server never created. An effect created with no owner, or under a
+root without an `id`, has no id slot to consume and takes that path on
+its own.
+
+## Import
+
+```ts
+import { createRenderEffect } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function createRenderEffect<T>(
+	compute: ComputeFunction<undefined | NoInfer<T>, T>,
+	effectFn: EffectFunction<NoInfer<T>, T>,
+	options?: EffectOptions
+): void;
+```
+
+## Parameters
+
+### `compute`
+
+* **Type:** `ComputeFunction<undefined | NoInfer<T>, T>`
+
+A function that receives its previous value and returns a new value used to react on a computation
+
+### `effectFn`
+
+* **Type:** `EffectFunction<NoInfer<T>, T>`
+
+A function that receives the new value and is used to perform side effects
+
+### `options`
+
+* **Type:** `EffectOptions`
+* Optional
+
+`EffectOptions` -- name, defer, schedule, transparent
+
+## Examples
+
+```ts
+// Custom directive: bind an element's textContent to a reactive source
+// synchronously during render. App code should use `createEffect` for
+// post-render side effects.
+function bindText(el: HTMLElement, source: () => string) {
+	createRenderEffect(
+		() => source(),
+		(value) => {
+			el.textContent = value;
+		}
+	);
+}
+```
+
+## Learn more
+
+* [Avoid unnecessary effects](../guides/avoid-unnecessary-effects.md)
+* [Debugging reactivity](../guides/debugging-reactivity.md)

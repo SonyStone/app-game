@@ -1,0 +1,232 @@
+# solidPlugin
+
+`solidPlugin` configures Solid compilation and returns the Vite plugins needed by the selected modes.
+
+## Import
+
+```ts
+import solidPlugin from "@solidjs/vite-plugin";
+```
+
+## Signature
+
+```ts
+function solidPlugin(options?: Partial<Options>): Plugin[];
+```
+
+## `Options`
+
+```ts
+interface Options {
+	include?: FilterPattern;
+	exclude?: FilterPattern;
+	dev?: boolean;
+	observe?: boolean;
+	diagnostics?: boolean;
+	ssr?: boolean;
+	start?: boolean | StartOptions;
+	compiler?: "babel" | "native";
+	hot?: boolean;
+	extensions?: (string | [string, ExtensionOptions])[];
+	babel?:
+		| babel.TransformOptions
+		| ((source: string, id: string, ssr: boolean) => babel.TransformOptions)
+		| ((
+				source: string,
+				id: string,
+				ssr: boolean
+		  ) => Promise<babel.TransformOptions>);
+	solid?: SolidOptions;
+	serverFunctions?: boolean | ServerFunctionsOptions;
+	refresh?: RefreshOptions;
+}
+```
+
+### `include`
+
+* **Type:** `FilterPattern`
+* **Default:** `undefined`
+
+Limits transformed files with Vite filter patterns.
+Relative patterns resolve against the Vite root.
+
+### `exclude`
+
+* **Type:** `FilterPattern`
+* **Default:** `undefined`
+
+Excludes files with Vite filter patterns.
+Relative patterns resolve against the Vite root.
+
+### `dev`
+
+* **Type:** `boolean`
+* **Default:** Enabled for Vite's `serve` command
+
+Selects the development exports of `solid-js` and `@solidjs/web`.
+Set `true` to select them outside `serve`, or `false` to disable that selection during `serve`.
+The same flag is passed to the compilers as `dev` and decides the default for [`solid.sourceNames`](#sourcenames).
+
+### `observe`
+
+* **Type:** `boolean`
+* **Default:** `false`
+
+Selects the observe exports of `solid-js` and `@solidjs/web`: the production-speed runtime that keeps the diagnostics and attribution channels (`OBSERVE`) alive.
+Adds the `observe` condition to every environment, client and server, and turns on every kind of [`solid.sourceNames`](#sourcenames) so graph labels survive minification.
+Applies to `build` and `preview`; during `serve` the `development` condition still wins.
+
+### `diagnostics`
+
+* **Type:** `boolean`
+* **Default:** `undefined` (detected from `package.json`)
+
+During `serve`, injects the in-page bridge from the app's `@solidjs/diagnostics` and serves a `/__solid/diagnostics` endpoint that forwards capture control, `whyDidRun`, and cost queries to the page over the Vite WebSocket.
+When omitted, the endpoint is enabled if the app declares `@solidjs/diagnostics` in its `package.json`.
+`true` requires the package and errors when it is missing; `false` disables the endpoint.
+Never active in test mode or on builds and previews.
+
+### `ssr`
+
+* **Type:** `boolean`
+* **Default:** `false`
+
+Enables hydratable client output and SSR output.
+With [`start`](start.md), `ssr: true` selects SSR start mode instead of client start mode.
+The plugin rejects an object value at configuration time.
+
+### `start`
+
+* **Type:** `boolean | StartOptions`
+* **Default:** `undefined`
+
+Enables start mode.
+`true` and `{}` are equivalent.
+See [`StartOptions`](start.md).
+
+### `compiler`
+
+* **Type:** `Compiler = "babel" | "native"`
+* **Default:** `"native"`
+
+Selects the JSX compiler.
+Both values use `@dom-expressions/compiler` for the `lazy()` module URL, refresh, and server-function passes.
+`"babel"` uses `babel-preset-solid` for the JSX pass.
+The native compiler loader uses its WebAssembly fallback when the platform has no native binary.
+
+### `hot`
+
+* **Type:** `boolean`
+* **Default:** `true` during development
+* **Deprecated:** Use `refresh.disabled`
+
+Set `false` to disable the refresh transform and runtime.
+Production output is unaffected.
+
+### `refresh`
+
+```ts
+interface RefreshOptions {
+	disabled?: boolean;
+	granular?: boolean;
+}
+```
+
+`disabled` disables the development refresh transform.
+`granular` controls component signature and dependency metadata and defaults to `true`.
+
+### `extensions`
+
+```ts
+interface ExtensionOptions {
+	typescript?: boolean;
+}
+```
+
+* **Type:** `(string | [string, ExtensionOptions])[]`
+* **Default:** No additional extensions
+
+Registers extensions in addition to `.jsx` and `.tsx`.
+A tuple marks an extension for TypeScript parsing.
+
+```ts
+solidPlugin({
+	extensions: [".mdx", [".page", { typescript: true }]],
+});
+```
+
+### `babel`
+
+* **Type:** `babel.TransformOptions` or a synchronous or asynchronous options factory
+* **Default:** `{}`
+
+Merges Babel options into the transform.
+With the native JSX compiler, providing this option adds a Babel support pass before native JSX compilation.
+The factory receives the source, clean file ID, and SSR-transform flag.
+
+### `solid`
+
+```ts
+type SolidOptions = Omit<
+	JsxCompilerOptions,
+	"filename" | "sourceMap" | "sourceNames"
+> & {
+	sourceNames?: boolean | SourceNamesOptions;
+};
+
+interface SourceNamesOptions {
+	components?: boolean;
+	bindings?: boolean;
+	primitives?: boolean;
+}
+```
+
+* **Default:** `{}`
+
+Overrides DOM Expressions compiler options after the plugin defaults.
+The defaults include `moduleName: "@solidjs/web"`, Solid's built-in components, custom-element context, conditional wrapping, mode-specific `generate` and `hydratable`, and the resolved development flag.
+
+#### `sourceNames`
+
+* **Type:** `boolean | SourceNamesOptions`
+* **Default:** Every kind on when [`dev`](#dev) or [`observe`](#observe) is set, off in production builds
+
+Selects which names written in source are carried into the output so the development and observe runtimes can label the reactive graph after minification.
+
+* `components` emits the tag name, so owners read `<Home>`.
+* `bindings` names compiled binding effects by what they write, such as `span.textContent` or `div.children`.
+* `primitives` names `createSignal`, `createMemo`, `createStore`, and the other primitives after the identifier they are declared as (`count`, `todos.title`), prefixed with the enclosing non-component function for composed primitives (`createCounter.value`).
+  An explicit `name` option is never overridden.
+
+`components` and `bindings` are passed to the selected JSX compiler as its `sourceNames` option.
+`primitives` runs `@solidjs/compiler`'s standalone `transformSourceNames` pass on every module outside `node_modules` that imports `solid-js` or `@solidjs/signals`, `.ts` and `.js` files included, with either JSX compiler.
+A `@solidjs/compiler` without that pass leaves primitives unnamed and warns once.
+
+| `sourceNames`          | `dev` or `observe`    | Production build       |
+| ---------------------- | --------------------- | ---------------------- |
+| Omitted                | Every kind on         | Every kind off         |
+| `true`                 | Every kind on         | Every kind on          |
+| `false`                | Every kind off        | Every kind off         |
+| `{ kind: true/false }` | As given; the rest on | As given; the rest off |
+
+The plugin always passes the resolved value to the compiler, so `sourceNames: false` disables names during `serve` rather than falling through to the compiler's own development default.
+
+### `serverFunctions`
+
+* **Type:** `boolean | ServerFunctionsOptions`
+* **Default:** `undefined`
+
+Enables `"use server"` compilation.
+`true` uses all defaults.
+See [`ServerFunctionsOptions`](server-functions.md).
+
+## Transform output
+
+* Plain client builds use DOM output without hydration markers.
+* `ssr: true` uses hydratable DOM output for client transforms and hydratable SSR output for server transforms.
+* Client start mode keeps application code non-hydratable.
+  Only the document shell receives an SSR transform.
+* Vitest defaults to client conditions, DOM output, and `jsdom`.
+  A project with `test.environment: "node"` or `"edge-runtime"` receives server conditions and SSR output.
+
+The plugin always installs the `server-only` and `client-only` boundary resolvers.

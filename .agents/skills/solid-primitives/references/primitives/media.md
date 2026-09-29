@@ -1,0 +1,219 @@
+# @solid-primitives/media
+
+Source version: `4.0.0-next.3`.
+
+[Upstream source](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/media/README.md) · [Skill catalogue](../catalogue.md#primitives-catalogue)
+
+
+Collection of reactive primitives to deal with media queries.
+
+- [`makeMediaQueryListener`](media.md#makemediaquerylistener) - Listen for changes to provided Media Query.
+- [`createMediaQuery`](media.md#createmediaquery) - Creates a very simple and straightforward media query monitor.
+- [`createBreakpoints`](media.md#createbreakpoints) - Creates a multi-breakpoint monitor to make responsive components easily.
+- [`createPrefersDark`](media.md#createprefersdark) - Provides a signal indicating if the user has requested dark color theme.
+
+## Installation
+
+```
+npm install @solid-primitives/media
+# or
+yarn add @solid-primitives/media
+# or
+pnpm add @solid-primitives/media
+```
+
+> **Requires Solid.js v2.0 (beta.7+)**
+
+## `makeMediaQueryListener`
+
+Attaches a MediaQuery listener to window, listeneing to changes to provided query
+
+```ts
+import { makeMediaQueryListener } from "@solid-primitives/media";
+
+const clear = makeMediaQueryListener("(max-width: 767px)", e => {
+  console.log(e.matches);
+});
+// remove listeners (will happen also on cleanup)
+clear();
+```
+
+## `createMediaQuery`
+
+Creates a very simple and straightforward media query monitor.
+
+```ts
+import { createMediaQuery } from "@solid-primitives/media";
+
+const isSmall = createMediaQuery("(max-width: 767px)");
+console.log(isSmall());
+```
+
+### Server fallback
+
+`createMediaQuery` accepts a `serverFallback` argument — value that should be returned on the server — defaults to `false`.
+
+```ts
+const isSmall = createMediaQuery("(max-width: 767px)", true);
+
+// will return true on the server and during hydration on the client
+console.log(isSmall());
+```
+
+## `createBreakpoints`
+
+Creates a multi-breakpoint monitor to make responsive components easily.
+
+```tsx
+import { createBreakpoints } from "@solid-primitives/media";
+
+const breakpoints = {
+  sm: "640px",
+  lg: "1024px",
+  xl: "1280px",
+};
+
+const Example: Component = () => {
+  const matches = createBreakpoints(breakpoints);
+
+  createEffect(
+    () => [matches.sm, matches.lg, matches.xl],
+    ([sm, lg, xl]) => {
+      console.log(sm); // true when screen width >= 640px
+      console.log(lg); // true when screen width >= 1024px
+      console.log(xl); // true when screen width >= 1280px
+    },
+  );
+
+  return (
+    <div
+      class={[
+        "text-tiny flex-column flex", // tiny text with flex column layout
+        matches.sm && "text-small", // small text with flex column layout
+        matches.lg && "flex-row text-base", // base text with flex row layout
+        matches.xl && "text-huge", // huge text with flex row layout
+      ]}
+    >
+      <Switch fallback={<div>Smallest</div>}>
+        <Match when={matches.xl}>Extra Large</Match>
+        <Match when={matches.lg}>Large</Match>
+        <Match when={matches.sm}>Small</Match>
+        {/* 
+          Instead of fallback, you can also use `!matches.sm`
+          <Match when={!matches.sm}>Smallest</Match>
+         */}
+      </Switch>
+    </div>
+  );
+};
+```
+
+### `.toString` method
+
+As a convenience feature, the return value of `createBreakpoints` also contains a non-enumerable `.key` property that will return the last matching breakpoint id to allow using it as an object key:
+
+```ts
+import { createBreakpoints } from "@solid-primitives/media";
+
+const breakpoints = {
+  sm: "640px",
+  lg: "1024px",
+  xl: "1280px",
+};
+
+const matches = createBreakpoints(breakpoints);
+
+const moduleSize = () =>
+  ({
+    sm: 2,
+    lg: 4,
+    xl: 6,
+  })[matches.key];
+```
+
+This can be very helpful for things like the `mapHeight` option in [`createMasonry`](https://solid-primitives.netlify.app/package/masonry#createMasonry).
+
+> **Warning** for this feature to work, the breakpoints needs to be ordered from small to large. If you cannot ensure this, use the `sortBreakpoints` helper.
+
+### `sortBreakpoints` helper
+
+If you cannot rely on the order of the breakpoints from smallest to largest, this small helper fixes it for you:
+
+```ts
+// unfortunately in the wrong order:
+const breakpoints = {
+  xl: "1280px",
+  lg: "1024px",
+  sm: "640px",
+};
+
+const matches = createBreakpoints(sortBreakpoints(breakpoints));
+
+const moduleSize = () =>
+  ({
+    sm: 2,
+    lg: 4,
+    xl: 6,
+  })[matches.key];
+```
+
+## `createPrefersDark`
+
+Provides a signal indicating if the user has requested dark color theme. The setting is being watched with a [Media Query](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-color-scheme).
+
+### How to use it
+
+```ts
+import { createPrefersDark } from "@solid-primitives/media";
+
+const prefersDark = createPrefersDark();
+createEffect(prefersDark, dark => console.log("prefers dark:", dark));
+```
+
+### Server fallback
+
+`createPrefersDark` accepts a `serverFallback` argument — value that should be returned on the server — defaults to `false`.
+
+```ts
+const prefersDark = createPrefersDark(true);
+// will return true on the server and during hydration on the client
+prefersDark();
+```
+
+### `usePrefersDark`
+
+This primitive provides a [singleton root](rootless.md#createsingletonroot) variant that will reuse the same signal and media query across the whole application.
+
+```ts
+import { usePrefersDark } from "@solid-primitives/media";
+
+const prefersDark = usePrefersDark();
+createEffect(prefersDark, dark => console.log("prefers dark:", dark));
+```
+
+> Note: `usePrefersDark` will deopt to `createPrefersDark` if used during hydration. (see issue [#310](https://github.com/solidjs-community/solid-primitives/issues/310))
+
+## Notes
+
+### iOS 13 Support & Deprecated `addListener`
+
+Due to older versions of [mobile Safari on iOS 13 not supporting](https://github.com/mdn/sprints/issues/858) `addEventListener` on the MediaQueryList API, this primitive will need to be polyfilled. If your application needs to support much older versions of the browser you should [use a polyfill utility](https://www.npmjs.com/package/matchmedia-polyfill) or patch the missing function like so:
+
+```ts
+if ((!"addEventListener") in MediaQueryList) {
+  MediaQueryList.prototype.addEventListener = function (type, callback) {
+    if (type === "change") this.addListener(callback);
+  };
+  MediaQueryList.prototype.removeEventListener = function (type, callback) {
+    if (type === "change") this.removeListener(callback);
+  };
+}
+```
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/media/CHANGELOG.md)
+
+## Contributors
+
+Thanks to Aditya Agarwal for contributing createBreakpoints.

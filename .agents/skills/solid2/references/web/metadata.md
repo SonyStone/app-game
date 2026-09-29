@@ -1,0 +1,149 @@
+# withMeta / getServerFunctionMetadata / isServerFunction
+
+Attaches declaration metadata to a server-function reference and returns the reference.
+
+## Import
+
+```ts
+import {
+	withMeta,
+	getServerFunctionMetadata,
+	isServerFunction,
+} from "@solidjs/web/server-functions";
+```
+
+## `withMeta`
+
+### Type signature
+
+```ts
+function withMeta<F extends (...args: any[]) => any>(
+	fn: F,
+	meta: ServerFunctionMetadata
+): F;
+```
+
+### Parameters
+
+#### `fn`
+
+* **Type:** `any`
+
+#### `meta`
+
+* **Type:** `any`
+
+### Examples
+
+```ts
+export const charge = withMeta(
+	async (amount: number) => {
+		"use server";
+		return payments.charge(amount);
+	},
+	{ requiresAuth: true }
+);
+```
+
+## `getServerFunctionMetadata`
+
+Returns the declaration metadata attached to a server-function reference.
+
+### Type signature
+
+```ts
+function getServerFunctionMetadata(
+	fn: unknown
+): ServerFunctionMetadata | undefined;
+```
+
+### Parameters
+
+#### `fn`
+
+* **Type:** `any`
+
+## `isServerFunction`
+
+Returns whether a value is a server-function reference.
+
+### Type signature
+
+```ts
+function isServerFunction(fn: unknown): fn is ServerFunction;
+```
+
+### Parameters
+
+#### `fn`
+
+* **Type:** `any`
+
+## Learn more
+
+* [Metadata and transport](../building-apps/server-functions-metadata-and-transport.md)
+* [Server functions](../building-apps/server-functions.md)
+
+## Related types
+
+### `ServerFunction`
+
+The public contract of a server function reference — what a `"use
+server"` import is at runtime on either side: an async callable plus its
+build-stable identity.
+
+```ts
+interface ServerFunction<A extends readonly any[] = any[], T = any> {
+	(...args: A): Promise<T>;
+	readonly id: string;
+	readonly url: string;
+}
+```
+
+#### `id`
+
+* **Type:** `string`
+
+The build-stable function id (stable across the client and server builds).
+
+#### `url`
+
+* **Type:** `string`
+
+The plain-HTTP address of this function — what a `<form action>` posts
+to without the runtime (the integration behind `action={fn}` reads it).
+Not where the reference's own call goes: that is `serverFunctionUrl(fn,
+...args)`, for a `GET()` reference — the url to preload or fetch.
+
+### `ServerFunctionMetadata`
+
+Declaration-static metadata attached to a server function reference
+through declaration wrappers (`GET`, `withMeta`). Read it with
+`getServerFunctionMetadata`; routers and integrations detect capability
+from here instead of property sniffing, and `prepareRequest` receives it
+as `context.meta`. Write through `withMeta` — later writes shallow-merge
+over earlier ones.
+
+```ts
+interface ServerFunctionMetadata {
+	readonly method?: "GET" | "POST";
+	readonly name?: string;
+	readonly [key: string]: unknown;
+}
+```
+
+#### `method`
+
+* **Type:** `"GET" | "POST"`
+
+The declared HTTP method. Undeclared references call over POST.
+
+#### `name`
+
+* **Type:** `string`
+
+A human-readable label for the function, seeded by development builds
+from the compiled function's source name (dev tooling — inspectors,
+logs). Dev-only: production builds emit no name. Not unique and not an
+identity key — use `id` for identity. Seeded as a default: an explicit
+`withMeta` write wins.

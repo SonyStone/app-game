@@ -1,0 +1,121 @@
+# Reveal
+
+Coordinates the reveal timing of sibling `<Loading>` boundaries.
+
+The `order` prop picks the reveal policy:
+
+* `"sequential"` (default) — boundaries reveal in registration order; later boundaries
+  stay on their fallback until earlier ones resolve.
+* `"together"` — every direct slot stays on its fallback until the whole group is
+  "minimally ready" (every direct slot has its own first visible content available),
+  then the group releases in one cohesive reveal.
+* `"natural"` — each boundary reveals as its own data resolves. At the top level
+  this is equivalent to omitting `<Reveal>`; the mode exists for nesting, where
+  the group registers as a single composite slot in an enclosing `<Reveal>`.
+
+The `collapsed` prop is only consulted when `order="sequential"` (the default);
+it is ignored under `"together"` and `"natural"`. When set, tail boundaries past
+the frontier suppress their own fallback output.
+
+Nested `<Reveal>` groups compose: the inner group is one slot in the outer order
+and is held on its fallbacks until the outer releases the slot. Once released, the
+inner group runs its own `order` locally over whatever is still pending. There is
+no escape hatch — nesting under an outer group means participating in its ordering.
+
+## Import
+
+```ts
+import { Reveal } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function Reveal(props: RevealProps): JSX.Element;
+```
+
+## Props
+
+### `order`
+
+* **Type:** `RevealOrder`
+* Optional
+
+`"sequential"` (default), `"together"`, or `"natural"`. See the summary for each policy.
+
+### `collapsed`
+
+* **Type:** `boolean`
+* Optional
+
+Only consulted under `"sequential"`. Boundaries past the frontier render nothing instead of their fallback.
+
+### `children`
+
+* **Type:** `JSX.Element`
+
+The `Loading` boundaries (or nested `Reveal` groups) to coordinate.
+
+## Examples
+
+```tsx
+// Default order is "sequential"; the inner group composes as one slot
+// and runs its own "natural" order locally once the outer releases it.
+<Reveal>
+	<Loading fallback={<Skeleton />}>
+		<ProfileHeader />
+	</Loading>
+	<Reveal order="natural">
+		<Loading fallback={<Skeleton />}>
+			<PostA />
+		</Loading>
+		<Loading fallback={<Skeleton />}>
+			<PostB />
+		</Loading>
+	</Reveal>
+	<Loading fallback={<Skeleton />}>
+		<Comments />
+	</Loading>
+</Reveal>
+```
+
+## Caveats
+
+* Nested groups always participate in the outer group's ordering; there is no opt out.
+* `collapsed` has no effect under `"together"` or `"natural"`.
+
+## Learn more
+
+* [Reveal order](../concepts/boundaries.md#reveal-order)
+* [Components and JSX](../concepts/components-and-jsx.md)
+* [Boundaries](../concepts/boundaries.md)
+
+## Related types
+
+### `RevealOrder`
+
+```ts
+type RevealOrder = "sequential" | "together" | "natural";
+```
+
+### `RevealProps`
+
+```ts
+type RevealProps = {
+	order?: RevealOrder;
+	collapsed?: boolean;
+	children: JSX.Element;
+};
+```
+
+#### `order`
+
+* **Type:** `RevealOrder`
+
+#### `collapsed`
+
+* **Type:** `boolean`
+
+#### `children`
+
+* **Type:** `SolidElement`

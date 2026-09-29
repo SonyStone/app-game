@@ -1,0 +1,156 @@
+# Component / ComponentProps / FlowComponent / FlowProps / ParentComponent / ParentProps / Ref / ValidComponent / VoidComponent / VoidProps
+
+A general `Component` has no implicit `children` prop. If desired, specify
+one explicitly, e.g. `Component<{ name: string; children: Element }>`.
+
+## Import
+
+```ts
+import type {
+	Component,
+	ComponentProps,
+	FlowComponent,
+	FlowProps,
+	ParentComponent,
+	ParentProps,
+	Ref,
+	ValidComponent,
+	VoidComponent,
+	VoidProps,
+} from "solid-js";
+```
+
+## `Component`
+
+### Type signature
+
+```ts
+type Component<P extends Record<string, any> = {}> = (props: P) => JSX.Element;
+```
+
+## `ComponentProps`
+
+Takes the props of the passed component and returns its type
+
+Intrinsic element prop extraction is renderer-specific and lives in renderer
+packages such as `@solidjs/web`.
+
+### Type signature
+
+```ts
+type ComponentProps<T extends ValidComponent> =
+	T extends Component<infer P> ? P : never;
+```
+
+## `FlowComponent`
+
+`FlowComponent` requires a `children` prop with the specified type.
+Use this for components where you need a specific child type,
+typically a function that receives specific argument types.
+
+### Type signature
+
+```ts
+type FlowComponent<
+	P extends Record<string, any> = {},
+	C = JSX.Element,
+> = Component<FlowProps<P, C>>;
+```
+
+## `FlowProps`
+
+Extend props to require a `children` prop with the specified type.
+Use this for components where you need a specific child type,
+typically a function that receives specific argument types.
+
+### Type signature
+
+```ts
+type FlowProps<P extends Record<string, any> = {}, C = JSX.Element> = P & {
+	children: C;
+};
+```
+
+## `ParentComponent`
+
+`ParentComponent` allows an optional `children` prop.
+Use this for components that you want to accept children.
+
+### Type signature
+
+```ts
+type ParentComponent<P extends Record<string, any> = {}> = Component<
+	ParentProps<P>
+>;
+```
+
+## `ParentProps`
+
+Extend props to allow optional Solid children.
+Use this for components that you want to accept children.
+
+### Type signature
+
+```ts
+type ParentProps<P extends Record<string, any> = {}> = P & {
+	children?: JSX.Element;
+};
+```
+
+## `Ref`
+
+Type of `props.ref`, for use in `Component` or `props` typing.
+
+### Type signature
+
+```ts
+type Ref<T> = T | ((val: T) => void) | undefined | Ref<T>[];
+```
+
+### Examples
+
+```ts
+Component<{ ref: Ref<Element> }>;
+```
+
+## `ValidComponent`
+
+ValidComponent API reference.
+
+### Type signature
+
+```ts
+type ValidComponent = Component<any>;
+```
+
+## `VoidComponent`
+
+`VoidComponent` forbids the `children` prop.
+Use this to prevent accidentally passing `children` to components that
+would silently throw them away.
+
+### Type signature
+
+```ts
+type VoidComponent<P extends Record<string, any> = {}> = Component<
+	VoidProps<P>
+>;
+```
+
+## `VoidProps`
+
+Extend props to forbid the `children` prop.
+Use this to prevent accidentally passing `children` to components that
+would silently throw them away.
+
+### Type signature
+
+```ts
+type VoidProps<P extends Record<string, any> = {}> = P & { children?: never };
+```
+
+## Learn more
+
+* [Type component props](../guides/typescript.md#type-component-props)
+* [Events and refs](../guides/typescript.md#events-and-refs)
+* [TypeScript](../guides/typescript.md)

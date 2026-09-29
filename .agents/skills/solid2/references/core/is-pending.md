@@ -1,0 +1,56 @@
+# isPending
+
+Returns whether the reactive reads inside `fn` depend on an in-flight value change that has not been revealed.
+
+## Import
+
+```ts
+import { isPending } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function isPending(fn: () => any): boolean;
+```
+
+## Parameters
+
+### `fn`
+
+* **Type:** `() => any`
+
+Expression to probe. Read the values in question inside it.
+
+## Return value
+
+`true` while a read inside `fn` depends on a change that has not committed yet.
+
+## Examples
+
+### Dim stale results while a new answer loads
+
+```tsx
+const [query, setQuery] = createSignal("");
+const results = createMemo(() => searchProducts(query()));
+
+<ul class={{ stale: isPending(results) }}>
+	<For each={results()}>{(product) => <li>{product.name}</li>}</For>
+</ul>;
+```
+
+## Caveats
+
+* Reports on updates to a value that exists. Before a first value, the read inside `fn` follows the surrounding `Loading` path.
+* A bare `refresh()` does not flip `isPending`; pair it with `affects()` to make the re-ask visible.
+
+## Common problems
+
+* [The screen looks dead after a click](../guides/debugging-reactivity.md#the-screen-looks-dead-after-a-click)
+
+## Learn more
+
+* [Another answer is coming: `isPending`](../concepts/async-reactivity.md#another-answer-is-coming-ispending)
+* [Reactivity](../concepts/reactivity.md)
+* [Async reactivity](../concepts/async-reactivity.md)
+* [Debugging reactivity](../guides/debugging-reactivity.md)

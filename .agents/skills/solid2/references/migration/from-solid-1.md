@@ -1,0 +1,419 @@
+# From Solid 1.x
+
+Solid 2 changes the execution model as well as the API names.
+Plan the migration as an application-level upgrade, then convert one subsystem at a time.
+
+## Migration order and compatibility boundary
+
+Upgrade the runtime, renderer, JSX compiler, and framework integrations together.
+Solid 2 does not provide the old `solid-js/web` or `solid-js/store` package exports, and `@solidjs/web` requires Solid 2 as a peer.
+A library that imports removed paths or depends on Solid 1 effect, store, or resource behavior needs a Solid 2-compatible release.
+
+Use this order:
+
+1. Create a migration branch and record the passing Solid 1 test, client-build, and server-render baselines.
+2. Upgrade `solid-js`, the renderer package, the Vite plugin (`@solidjs/vite-plugin` replaces `vite-plugin-solid`), and framework adapters as one dependency set.
+3. Move imports and JSX types until TypeScript and the production build resolve the new package boundary.
+4. Convert setter timing, effects, lifecycle code, and writes inside reactive scopes.
+5. Convert stores and store utilities.
+6. Replace resources, removed transition APIs, mutations, and async boundaries.
+7. Update client rendering, server-side rendering (SSR), hydration, and host integrations.
+8. Run tests in development mode to expose Solid 2 diagnostics, then verify production client and server builds.
+
+Do not use a passing type check as proof that an integration is compatible.
+Compiler transforms, root event delegation, hydration IDs, and async scheduling are runtime contracts.
+
+## Move packages and JSX ownership
+
+Web rendering and web JSX types moved out of `solid-js`.
+Store APIs moved in the other direction and are now exported from `solid-js`.
+
+```ts
+// Solid 1
+import { createStore, reconcile } from "solid-js/store";
+import { hydrate, render } from "solid-js/web";
+
+// Solid 2
+import { createStore, reconcile } from "solid-js";
+import { hydrate, render } from "@solidjs/web";
+```
+
+Update web projects to use the renderer as the JSX type owner:
+
+```json
+{
+	"compilerOptions": {
+		"jsx": "preserve",
+		"jsxImportSource": "@solidjs/web"
+	}
+}
+```
+
+Import DOM-specific `JSX` and `ComponentProps` types from `@solidjs/web`.
+Use renderer-neutral types such as `Component` and `Element` from `solid-js` when an API does not depend on DOM JSX.
+
+The alternate renderers also moved:
+
+* `solid-js/h` moved to `@solidjs/h`.
+* `solid-js/html` moved to `@solidjs/html`.
+* `solid-js/universal` moved to `@solidjs/universal`.
+* `solid-js/jsx-runtime` and `solid-js/jsx-dev-runtime` moved to renderer-owned entries such as `@solidjs/web/jsx-runtime`.
+
+Search source files, generated code, test configuration, package export maps, and declaration files for the old paths.
+
+## Convert signals and staged writes
+
+The getter and setter pair from [`createSignal`](../core/create-signal.md) remains.
+Setter visibility changed.
+Solid 2 stages ordinary writes and commits the reactive queue on the next microtask.
+A read immediately after a setter returns the last committed value.
+
+```ts
+const [count, setCount] = createSignal(0);
+
+setCount(1);
+count(); // 0
+
+flush();
+count(); // 1
+```
+
+Most event handlers need no explicit flush.
+Add [`flush()`](../core/flush.md) only at an imperative boundary that must observe updated reactive state or DOM before the next microtask.
+Tests are a common example.
+`flush(fn)` runs the writes in a synchronous flush scope and drains the queue before it returns.
+
+Remove `batch`.
+Consecutive writes already share the default microtask batch.
+Replacing each `batch` call with `flush` would change deferred work into synchronous work.
+
+Development mode also rejects writes in ordinary owned scopes such as component bodies and memo computations.
+Replace write-back derivations with [`createMemo`](../core/create-memo.md), and invoke setters from event handlers, actions, or effect effect functions.
+Reserve `ownedWrite: true` for an internal signal that intentionally accepts in-scope writes.
+
+Solid 2 warns when a component body reads a reactive value at top level because the read is outside a tracking scope.
+Keep reactive props and store properties inside JSX expressions or computations.
+Use [`untrack`](../core/untrack.md) only for an intentional one-time read.
+
+```tsx
+// Solid 1 code that loses reactivity in Solid 2
+function Heading({ title }: { title: string }) {
+	return <h1>{title}</h1>;
+}
+
+// Solid 2
+function Heading(props: { title: string }) {
+	return <h1>{props.title}</h1>;
+}
+```
+
+Function-form `createSignal(fn)` is new.
+It creates a writable derived signal and can replace a derivation that previously wrote back into another signal.
+
+## Split effects into compute and effect phases
+
+[`createEffect`](../core/create-effect.md) now separates dependency tracking from the side effect:
+
+```ts
+// Solid 1
+createEffect(() => {
+	document.title = title();
+});
+
+// Solid 2
+createEffect(
+	() => title(),
+	(value) => {
+		document.title = value;
+	}
+);
+```
+
+The compute function tracks reactive reads and must remain free of application writes.
+The effect function is untracked, may perform imperative work, and may return a cleanup function.
+Extract store properties in the compute phase instead of passing a store proxy through and reading it in the untracked effect phase.
+
+```ts
+createEffect(
+	() => ({ name: user.name, role: user.role }),
+	(value) => sendAnalytics(value.name, value.role)
+);
+```
+
+Return effect cleanup from the effect function:
+
+```ts
+createEffect(
+	() => roomId(),
+	(id) => {
+		const connection = connect(id);
+		return () => connection.close();
+	}
+);
+```
+
+The Solid 1 `initialValue` argument is removed from `createEffect` and `createMemo`.
+The compute function receives `prev`, which is `undefined` on its first run.
+Use a default parameter when the computation needs a first previous value.
+The second `createMemo` argument is now its options object.
+
+Replace common lifecycle and effect helpers as follows:
+
+* Replace `on(...)` with the compute function and use the effect `defer` option when needed.
+* Replace `onMount` with [`onSettled`](../core/on-settled.md) and return cleanup from its callback.
+* Replace effect-local `onCleanup` calls with cleanup returned from the effect function.
+* Use `createTrackedEffect` only when one tracked callback is required.
+  It and `onSettled` cannot create nested primitives.
+* Replace `catchError` or `onError` with an [`Errored`](../core/errored.md) boundary or the effect bundle `error` callback.
+
+## Convert stores to draft setters
+
+[`createStore`](../core/create-store.md) still returns a read-only store and its setter.
+The setter now receives a mutable draft.
+This preserves the property-level model from Solid 1 while making draft mutation the default update form.
+
+```ts
+// Solid 1
+setState("user", "address", "city", "Paris");
+
+// Solid 2
+setState((draft) => {
+	draft.user.address.city = "Paris";
+});
+```
+
+Delete `produce(...)` wrappers and pass the producer body directly to the setter.
+Replace `createMutable` and `modifyMutable` with `createStore` and explicit draft setters.
+Store writes follow the same staged-write timing as signals.
+
+[`storePath`](../core/store-path.md) is a migration helper for path setters that cannot be converted at once:
+
+```ts
+setState(storePath("user", "address", "city", "Paris"));
+```
+
+Prefer draft setters for new code.
+`storePath` also supports indexed, filtered, and ranged paths, so preserve the original path semantics when converting complex setters.
+
+`reconcile` now runs against the selected draft:
+
+```ts
+// Solid 1
+setState("todos", reconcile(serverTodos));
+
+// Solid 2
+setState((draft) => {
+	reconcile(serverTodos, "id")(draft.todos);
+});
+```
+
+Review these utility changes:
+
+* Replace `unwrap(store)` with [`snapshot(store)`](../core/snapshot.md) when serialization or external code needs a plain non-reactive value.
+* Replace `mergeProps` with [`merge`](../core/merge.md).
+  `undefined` is an explicit overriding value in `merge`.
+* Replace `splitProps(props, ["a", "b"])` with [`omit(props, "a", "b")`](../core/omit.md).
+* Replace selector-shaped state with [`createProjection`](../core/create-projection.md) or function-form `createStore`.
+
+Use [`deep(store)`](../core/deep.md) in an effect compute phase when the effect must subscribe to every nested property.
+Use `snapshot(store)` when the effect needs the current plain value without subscribing to the store.
+
+## Replace resources with async computations
+
+Solid 2 computations accept promises and async iterables.
+Replace a basic `createResource` with an async memo:
+
+```ts
+// Solid 1
+const [user] = createResource(userId, fetchUser);
+
+// Solid 2
+const user = createMemo(() => fetchUser(userId()));
+```
+
+Place reads that can be initially unresolved under [`Loading`](../core/loading.md):
+
+```tsx
+<Loading fallback={<UserSkeleton />}>
+	<UserProfile user={user()} />
+</Loading>
+```
+
+This is the primary first-load model.
+The boundary owns branch readiness and renders its fallback until the required reads settle.
+After content has rendered, a later update is held and keeps the committed content visible.
+
+:::caution[Async computations change when the screen updates]
+A write to an input of an async computation is held until that computation has its next answer, and everything else in the same update waits with it.
+Solid 1 resources and effect-based fetching never did this; each consumer updated on its own schedule.
+An application that converts all of its fetching at once inherits the new behavior everywhere, and a shared input such as a period selector then waits for the slowest fetch that reads it.
+[Data fetching from Solid 1](data-fetching-from-solid-1.md) shows how to keep each pattern working unchanged first, then convert one fetch at a time and choose the refetch behavior per fetch.
+:::
+
+The properties and actions on a Solid 1 resource become separate operations:
+
+* Replace `resource.loading` with a `Loading` boundary for initial readiness and [`isPending(() => resource())`](../core/is-pending.md) for an in-flight changed answer.
+* Replace `resource.error` with an `Errored` boundary or an effect `error` callback.
+* Replace `refetch()` with [`refresh(resource)`](../core/refresh.md).
+* Replace `mutate()` with an action and [`createOptimistic`](../core/create-optimistic.md) or [`createOptimisticStore`](../core/create-optimistic-store.md).
+* Replace `resource.latest` with [`latest(resource)`](../core/latest.md) when imperative code must inspect an in-flight value.
+
+A bare `refresh()` re-asks the same question without making `isPending` true.
+If the refresh must present as pending, call [`affects(target)`](../core/affects.md) in the surrounding action before `refresh(target)`.
+Use a mutation-specific optimistic flag when the UI needs to show the progress of the mutation itself.
+
+`loadingValue` and the store option `seedLoadingValue` declare a placeholder that answers for the source before its first result.
+Use them when provisional data should render through the same UI as the final data, or when a Solid 1 `undefined` check must stay in the JSX.
+The declared value prevents first-flight suspension and keeps `isPending` false until the first real answer arrives.
+Use `Loading` when provisional data cannot truthfully have the final value's shape.
+
+## Convert mutations and remove transition APIs
+
+Remove `startTransition` and `useTransition`.
+Solid 2 coordinates async computations through the graph.
+Use `Loading` for unresolved branches, `isPending` for an unrevealed changed answer, and optimistic primitives for tentative mutation state.
+
+[`action`](../core/action.md) is for imperative workflows whose writes cross an async gap.
+An action is a generator or async generator and returns a promise.
+Writes to ordinary signals and stores remain held by the transaction, while optimistic writes are visible and revert to their derived or base value when the transaction settles.
+
+```ts
+const [todos, setTodos] = createOptimisticStore(fetchTodos, []);
+
+const addTodo = action(function* (todo: Todo) {
+	setTodos((draft) => {
+		draft.push(todo);
+	});
+	yield saveTodo(todo);
+	refresh(todos);
+});
+```
+
+Yield promises to preserve the action transaction.
+If an async generator uses `await` for a typed result, add a bare `yield` before later writes to re-enter the transaction.
+Do not call `flush()` inside an action because it drains the transaction step.
+Invoke actions from event handlers or another imperative scope, not from a component or computation body.
+
+Read more about the unified model in [Async reactivity](../concepts/async-reactivity.md).
+
+## Update boundaries, control flow, and JSX
+
+Apply these direct UI migrations:
+
+* Replace `Suspense` with `Loading`.
+* Replace `ErrorBoundary` with `Errored`.
+  Its function fallback receives an error accessor, so read the error with `error()`.
+* Replace `SuspenseList` with [`Reveal`](../core/reveal.md).
+* Replace `Index` with [`For keyed={false}`](../core/for.md).
+  The item is an accessor and the index is a stable number in this mode.
+* Replace `Context.Provider` with the context component: `<Theme value={value}>`.
+* Replace `<Dynamic component={source} {...props} />` with a component from [`dynamic()`](../web/dynamic.md): `const Comp = dynamic(() => source)`, then `<Comp {...props} />`.
+  `Dynamic` is deprecated.
+  Create the component once, outside the JSX, and render it wherever it is needed; a falsy source renders nothing, as before.
+* Replace direct `createDynamic(source, props)` calls with `dynamic(source)`.
+
+Update removed JSX forms:
+
+* Replace `classList` with the object or array form of `class`.
+* Replace `use:directive` with a `ref` callback or directive factory, and use a `ref` array to compose callbacks.
+* Replace `on:` and `oncapture:` with camel-case Solid event props.
+  Use a `ref` callback and `addEventListener` when native listener options are required.
+* Replace `attr:` and `bool:` with standard attributes and boolean presence.
+* Remove `/*@once*/`.
+  Keep values reactive, use DOM default properties such as `defaultValue` for initial state, or take a narrow JavaScript snapshot with `untrack`.
+
+Rendering into nested roots, `ShadowRoot` instances, or portals needs integration testing.
+Solid 2 scopes delegated events to each render root and disposes those listeners with the root.
+Remove calls to the old document-global `clearDelegatedEvents` API.
+
+## Update client rendering and SSR
+
+Import [`render`](../web/render.md), [`hydrate`](../web/hydrate.md), and all server render functions from `@solidjs/web`.
+Continue to retain and call the dispose function returned by `render`.
+
+Choose the SSR entry point by the required result:
+
+* [`renderToString`](../web/render-to-string.md) is synchronous and renders `Loading` fallbacks for unresolved reads.
+* [`renderToStream`](../web/render-to-stream.md) emits the shell and then resolved async fragments.
+* Replace `renderToStringAsync` with `await renderToStream(() => <App />)` when a fully settled HTML string is required.
+* Use exactly one stream consumer: `pipe`, `pipeTo`, or `readable`.
+  The `readable` stream contains `Uint8Array` chunks and can be passed to a web `Response`.
+
+Review the `ssrSource` and `deferStream` options on every migrated resource.
+The default `ssrSource: "server"` adopts the serialized server result without repeating the initial client computation.
+Use `"hybrid"` or `"client"` only when the computation has verified client-specific behavior.
+
+Code that owns the HTTP exchange is an integration boundary.
+Solid 2 exposes request events, response-head helpers, server functions, and stream response utilities through `@solidjs/web`, but routing, middleware policy, sessions, and deployment adapters still need framework-specific migration work.
+Do not infer replacements for those APIs from similar names.
+Follow the integration's Solid 2 guide and verify its request, response, hydration, and serialization tests.
+
+## Replace removed APIs by intent
+
+The following list covers common application APIs and is not a complete export-diff table.
+Choose replacements by behavior:
+
+* `createComputed`: use `createMemo` for a derived value, split `createEffect` for a side effect, or function-form `createSignal` for writable derived state.
+* `batch`: rely on default batching; use `flush` only for synchronous observation.
+* `on`: put dependencies in the effect compute phase.
+* `onMount`: use `onSettled`.
+* `onError` and `catchError`: use `Errored` or an effect `error` callback.
+* `createResource`: use async computations and boundaries.
+* `createMutable` and `modifyMutable`: use `createStore` and draft setters.
+* `produce`: pass its draft callback directly to the store setter.
+* `createSelector`: use `createProjection` or function-form `createStore`.
+* `from` and `observable`: use async iterables for inbound streams or a split effect for outbound notifications.
+  A standard Observable adapter has no direct core replacement.
+* `createDeferred`: move the scheduling policy outside Solid.
+* `indexArray`: use `mapArray` with `{ keyed: false }`.
+* `resetErrorBoundaries`: remove it; error boundaries recover through their current graph state or explicit reset callback.
+* `enableScheduling` and `writeSignal`: remove internal or obsolete usage.
+
+Audit undocumented imports separately.
+An export that existed for compiler, renderer, devtools, or metaframework integration may have no application-level replacement.
+Treat those imports as host-integration work and confirm them against the owning package source.
+
+## Update tests
+
+Update test compilation to use the renderer's JSX runtime.
+For web component tests, resolve the browser and development package conditions so tests exercise `@solidjs/web` rather than the server entry.
+Keep Testing Library cleanup or call render disposers explicitly.
+
+Account for staged writes in unit tests:
+
+```ts
+setCount(2);
+flush();
+expect(count()).toBe(2);
+```
+
+Flush after effect creation before asserting the effect function.
+Flush after setters before asserting reactive values, effects, or DOM.
+Prefer `await user.click(...)` for user-level tests because event tooling also drains its event sequence.
+
+Use [`resolve(() => value())`](../core/resolve.md) when a test must wait for a reactive expression to settle.
+Await action calls before asserting their final committed or reverted state.
+Test the initial `Loading` fallback, the settled content, the held-update pending state, and error boundary as separate states.
+
+Run migration tests in development mode.
+Fix top-level reactive-read warnings, writes from owned scopes, actions called from computations, and async reads outside a `Loading` boundary instead of suppressing the diagnostics.
+Then run the same client, SSR, streaming, and hydration paths in production mode.
+
+See the [Testing guide](../guides/testing.md) for the current test environment split.
+
+## Final verification
+
+Before merging the migration:
+
+1. Search for old package paths and removed symbols.
+2. Run TypeScript, lint, and the production client build.
+3. Run unit and component tests with explicit flush points.
+4. Exercise initial load, a changed-input update, manual refresh, successful mutation, failed mutation, and boundary recovery.
+5. Compare SSR shell output, streamed completion, hydration, and event behavior with the recorded Solid 1 baseline.
+6. Verify each third-party primitive, renderer, router, and metaframework package against an explicit Solid 2-compatible release.
+
+## Next steps
+
+* [Data fetching from Solid 1](data-fetching-from-solid-1.md): convert resource and effect-based fetching one fetch at a time and choose the refetch behavior for each.
+* [From SolidStart](from-solid-start.md), [From Solid Router](from-solid-router.md), and [From Solid Meta](from-solid-meta.md): the framework-level migrations that build on this one.
+* [Async reactivity](../concepts/async-reactivity.md): the model behind held updates, `Loading`, `isPending`, and actions.

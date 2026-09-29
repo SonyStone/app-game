@@ -1,0 +1,61 @@
+# Overview
+
+:::note[These docs cover the release candidate]
+Solid 2.0 is in its release candidate (RC) phase.
+APIs may change before the stable release, and packages from the coordinated RC must use compatible versions.
+For Solid 1.x, SolidStart, and the current stable ecosystem, see the [current Solid documentation](https://docs.solidjs.com/).
+:::
+
+Solid is a framework for building user interfaces on the web.
+You write components in JSX, hold state in signals and stores, and Solid updates the exact parts of the page that read the values you changed.
+There is no virtual DOM and no component re-render: a component function runs once, and the reactive expressions inside it keep running as their inputs change.
+
+Solid 2.0 is a coordinated release of the whole platform.
+The core library, the DOM renderer, the router, head management, and the Vite plugin are designed to work together, and these docs describe them as one system.
+
+## Where to start
+
+If you have not written Solid before, start with the [Quick start](../getting-started/quick-start.md).
+It creates an app with the CLI, walks through the files it generates, and has you make your first change.
+Then read [Reactivity](../concepts/reactivity.md) and [Components and JSX](../concepts/components-and-jsx.md) in that order; they teach signals, derived values, effects, and the run-once component model, starting from the counter the Quick start left you with.
+
+If you are starting a project and already know Solid, the [Quick start](../getting-started/quick-start.md) is still the shortest path to a running app, and [Project shapes](../getting-started/project-shapes.md) explains which template to pick.
+
+If you already know React or Vue, read [Thinking in Solid](../guides/thinking-in-solid.md) after the Quick start.
+It builds one feature end to end and points out where Solid differs from what you would write in either framework.
+[From React](../migration/from-react.md) maps React concepts to Solid concepts one by one and explains the places where the same code means something different.
+Developers moving from Solid 1 or SolidStart have their own guides under [Migration](../migration/from-solid-1.md).
+
+If you know what you need and want the signature, go to the [Reference](reference.md).
+It is organized by import specifier, so `solid-js`, `@solidjs/web`, and `@solidjs/router` each have their own section.
+
+## A reading order
+
+The Learn pages build on each other.
+Read them in this order the first time through:
+
+1. [Quick start](../getting-started/quick-start.md): create a project and see how the pieces fit.
+2. [Thinking in Solid](../guides/thinking-in-solid.md): one feature built end to end, with the places where Solid differs from React and Vue pointed out as they come up.
+3. [Reactivity](../concepts/reactivity.md): what a signal is, why reads have to happen in the right place, and when updates land.
+4. [Components and JSX](../concepts/components-and-jsx.md): props, events, refs, lists, and conditional content.
+5. [Stores](../concepts/stores.md): objects and arrays whose properties update independently, and how to update them through a draft.
+6. [Avoid unnecessary effects](../guides/avoid-unnecessary-effects.md): the habit that separates working Solid code from fragile Solid code.
+7. [Async reactivity](../concepts/async-reactivity.md) and [Boundaries](../concepts/boundaries.md): loading data, showing fallbacks, and keeping the current screen visible while new data arrives.
+8. [Mutations](../concepts/mutations.md): writing to a server with actions and optimistic stores, without changing the components that render the data.
+9. [State management](../guides/state-management.md): where each piece of state lives, from a modal flag to the signed-in user.
+10. [Rendering and SSR](../concepts/rendering-and-ssr.md): what changes when the same components also run on a server.
+11. [App structure](../building-apps/app-structure.md) and the rest of Building apps: the Vite plugin, server functions, sessions, and deployment.
+12. [Routing](../routing/overview.md): how a router plugs in, then the guide for the router you chose.
+
+Each page ends with where to go next, so you can also follow the links instead of this list.
+
+## How these docs are organized
+
+The **Learn** tab holds the pages above: getting started, concepts, building apps, routing, guides, and migration.
+They explain how Solid works and how to accomplish tasks, with examples you can copy.
+The [Glossary](glossary.md) at the end of the tab defines Solid's own words, such as held update, owner, and projection, and links each to the page that teaches it.
+
+The **Reference** tab documents each exported API: its import, signature, parameters, and return value.
+Reference pages stay short on purpose and link back to the Learn page that explains the idea.
+
+If a page is missing something you needed, [open an issue](https://github.com/solidjs/solid-docs/issues) or ask in the [Discord chatroom](https://discord.com/invite/solidjs).

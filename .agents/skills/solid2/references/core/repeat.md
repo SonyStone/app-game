@@ -1,0 +1,75 @@
+# Repeat
+
+Creates a list of elements from a count.
+
+Receives a map function as its child that takes the index and returns a JSX
+element; if the count is zero, an optional `fallback` is rendered instead.
+
+> `Repeat` is positional list rendering over a store. It creates rows from numeric indexes without diffing array items or identities, so store reads remain fine-grained. Combine `from` and `count` for a sliding window; rows in the overlapping range are preserved.
+
+## Import
+
+```ts
+import { Repeat } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function Repeat<T extends JSX.Element>(props: {
+	count: number;
+	from?: number | undefined;
+	fallback?: JSX.Element;
+	children: ((index: number) => T) | T;
+}): JSX.Element;
+```
+
+## Props
+
+### `count`
+
+* **Type:** `number`
+
+Number of rows.
+
+### `from`
+
+* **Type:** `number | undefined`
+* Optional
+
+Index of the first row. Combine with `count` for a window over a larger list.
+
+### `fallback`
+
+* **Type:** `JSX.Element`
+* Optional
+
+Rendered when `count` is zero.
+
+### `children`
+
+* **Type:** `((index: number) => T) | T`
+
+A function from index to content, or static content repeated per index.
+
+## Examples
+
+```tsx
+<Repeat count={items.length} fallback={<div>No items</div>}>
+	{(index) => <div data-index={index}>{items[index]}</div>}
+</Repeat>
+```
+
+## Caveats
+
+* Rows are positional. Inserting an item in the middle of the source shifts the data every later row reads; use `For` when rows have identity.
+
+## Common problems
+
+* [A row shows the wrong index after reordering](../guides/lists.md#a-row-shows-the-wrong-index-after-reordering)
+
+## Learn more
+
+* [Render a window over a large list](../guides/lists.md#render-a-window-over-a-large-list)
+* [Components and JSX](../concepts/components-and-jsx.md)
+* [Boundaries](../concepts/boundaries.md)

@@ -1,0 +1,128 @@
+# respond / isResponseEnvelope
+
+A value paired with response metadata (status, headers, `revalidate`) —
+for the things a naked return can't express. Progressive enhancement
+stays invisible: the carried response holds a plain JSON body so
+consumers without the client runtime (no-JS form posts, direct HTTP)
+get real JSON, while integrations read `value` — no reparse.
+
+## Import
+
+```ts
+import { respond, isResponseEnvelope } from "@solidjs/web";
+```
+
+## `respond`
+
+### Type signature
+
+```ts
+function respond<T>(value: T, init?: ResponseHelperInit): ResponseEnvelope<T>;
+```
+
+### Parameters
+
+#### `value`
+
+* **Type:** `T`
+
+#### `init`
+
+* **Type:** `ResponseHelperInit`
+* Optional
+
+### Examples
+
+```ts
+return respond(user, {
+	status: 201,
+	headers: { "x-created-user": user.id },
+});
+```
+
+### Common problems
+
+* [`respond()` reaches the client as `Internal Server Error`](../guides/forms.md#respond-reaches-the-client-as-internal-server-error)
+* [Errors show for a moment and then vanish](../guides/forms.md#errors-show-for-a-moment-and-then-vanish)
+
+## `isResponseEnvelope`
+
+Returns whether a value is a response envelope, including across duplicated runtime modules.
+
+### Type signature
+
+```ts
+function isResponseEnvelope(value: unknown): value is ResponseEnvelope;
+```
+
+### Parameters
+
+#### `value`
+
+* **Type:** `unknown`
+
+## Learn more
+
+* [Mutations and responses](../building-apps/server-functions-mutations-and-responses.md)
+* [Forms](../guides/forms.md)
+* [Middleware and API routes](../building-apps/middleware-and-api-routes.md)
+
+## Related types
+
+### `ResponseEnvelope`
+
+Envelope pairing HTTP metadata with a value. Produced by `respond()` and
+by server-function `transformResult` implementations (e.g. single-flight
+payloads); the HTTP handler forwards `response`'s headers and
+(non-redirect) status and encodes `value` as the body through the codec,
+while client-only integrations read `value` directly — no reparse.
+
+```ts
+interface ResponseEnvelope<T = unknown> {
+	response: Response | undefined;
+	value: T;
+}
+```
+
+#### `response`
+
+* **Type:** `Response | undefined`
+
+#### `value`
+
+* **Type:** `T`
+
+### `ResponseHelperInit`
+
+`ResponseInit` accepted by the response helpers, plus `revalidate`.
+
+```ts
+interface ResponseHelperInit extends ResponseInit {
+	revalidate?: string | string[];
+}
+```
+
+#### `revalidate`
+
+* **Type:** `string | string[]`
+
+The cache keys the mutation invalidated, sent as the `X-Revalidate`
+header for the client's integrations to apply. Three declarations, three
+scopes: omitted sends no header — the host's default (Solid Router
+revalidates everything after an action; a router without that
+convention reloads only what it owns); an empty list sends an empty
+header — nothing, explicitly; `REVALIDATE_ALL` (`"*"`) — every entry,
+whatever the host's default. How named keys are matched (prefixes,
+namespaces) is each integration's business.
+
+### `REVALIDATE_ALL`
+
+The reserved `revalidate` key meaning every entry, in every cache: the
+host-independent spelling of "all" (as `Clear-Site-Data: "*"` spells it),
+for authors who mean it rather than a host's default. Stands alone —
+naming it beside other keys is refused, since "everything and also
+these" is a mistake, not a scope.
+
+```ts
+const REVALIDATE_ALL: "*";
+```

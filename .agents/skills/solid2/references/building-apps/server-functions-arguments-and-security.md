@@ -1,0 +1,301 @@
+# Arguments and security
+
+The account page lets a shopper change the name on their account.
+The component calls `updateAccountName(name)`, TypeScript checks that `name` is a string, and the function writes it to the database.
+
+Every server function is an HTTP endpoint, and the component is one caller among many:
+
+```bash
+curl -X POST 'https://shop.example/_server/<id>?args=%5B%7B%22admin%22%3Atrue%7D%5D' \
+	-H 'Origin: https://shop.example'
+```
+
+That request runs the same function with `{ admin: true }` where a string was expected.
+TypeScript types do not exist at runtime, the browser's `required` attribute was never involved, and the same-origin check passed because the request said it came from the shop.
+The function body is the only place that sees every request, so it is where validation and authorization live.
+
+Most applications need the [validation](#validate-caller-controlled-values) and [request context](#read-trusted-request-context) sections.
+The encoding sections matter when an argument is not a string, number, plain object, or `FormData`.
+
+## Default argument encoding
+
+The client sends an ordinary argument list as JSON.
+Strings, numbers, booleans, arrays, plain objects, and `null` need no setup.
+
+A single argument of one of these types is sent as itself, in its natural HTTP encoding, instead of being wrapped in JSON:
+
+* `string`
+* `URLSearchParams`
+* `FormData`
+* `Blob`
+* `File`
+* `ArrayBuffer`
+* `Uint8Array`
+
+That is what makes a server function a form target and an upload target with no extra code:
+
+```ts
+// src/data/account.ts
+export async function uploadAvatar(form: FormData) {
+	"use server";
+
+	const file = form.get("avatar");
+	if (!(file instanceof File)) {
+		throw respond({ error: "Select an image file" }, { status: 400 });
+	}
+
+	await avatarStore.save(file);
+}
+```
+
+Submit a form with `<input type="file" name="avatar">` and the function receives the `FormData` the browser assembled, file included.
+
+## Enable rich arguments
+
+JSON cannot carry a `Date`, `Map`, `Set`, typed array, or an object that refers to itself.
+Pass one of those in an argument list and the client throws before any request is made:
+
+```ts
+// Avoid: a Date in the argument list, with the default JSON encoding
+await listOrders({ since: new Date("2026-01-01") });
+
+// Prefer: a JSON-safe value, or enable the codec once at startup
+await listOrders({ since: "2026-01-01" });
+```
+
+The `Avoid` version throws `Server function arguments are sent as JSON by default and these arguments are not JSON-serializable. Call enableRichArguments() (from "@solidjs/web/server-functions/rich-args") once at startup to send Dates, Maps, Sets, typed arrays, etc. through the codec — or pass a single Blob/FormData/File argument, which has a native HTTP encoding.`
+
+When the application does send such values, call the helper once in the client entry:
+
+```ts
+// src/entry-client.tsx
+import { enableRichArguments } from "@solidjs/web/server-functions/rich-args";
+
+enableRichArguments();
+```
+
+Rich arguments use the server-function codec.
+Results already use the codec when a return value needs it, so the opt-in affects arguments only.
+
+:::deep-dive[Custom codec plugins]
+The codec accepts plugins for types it does not know, built with `createPlugin` from `@solidjs/web/serialization`.
+The client and server must be configured with matching plugins, or one side produces frames the other cannot read.
+An application that only sends the built-in rich types does not need a plugin.
+:::
+
+## Validate caller-controlled values
+
+Accept `unknown` where the boundary is not already a concrete web type such as `FormData`, and parse the value before using it:
+
+::::tab-group[validation-library]
+:::tab[Valibot]
+```ts
+// src/data/account.ts
+import { getRequestEvent, respond } from "@solidjs/web";
+import * as v from "valibot";
+
+const NameInput = v.object({
+	name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(100)),
+});
+
+export async function updateAccountName(input: unknown) {
+	"use server";
+
+	const parsed = v.safeParse(NameInput, input);
+	if (!parsed.success) {
+		throw respond(
+			{ name: "ValidationError", issues: parsed.issues },
+			{ status: 400 }
+		);
+	}
+
+	const userId = getRequestEvent()?.locals.userId;
+	if (!userId) {
+		throw respond({ error: "Unauthorized" }, { status: 401 });
+	}
+
+	await database.users.update(userId, parsed.output);
+}
+```
+:::
+
+:::tab[Zod]
+```ts
+// src/data/account.ts
+import { getRequestEvent, respond } from "@solidjs/web";
+import { z } from "zod";
+
+const NameInput = z.object({
+	name: z.string().trim().min(1).max(100),
+});
+
+export async function updateAccountName(input: unknown) {
+	"use server";
+
+	const parsed = NameInput.safeParse(input);
+	if (!parsed.success) {
+		throw respond(
+			{ name: "ValidationError", issues: parsed.error.issues },
+			{ status: 400 }
+		);
+	}
+
+	const userId = getRequestEvent()?.locals.userId;
+	if (!userId) {
+		throw respond({ error: "Unauthorized" }, { status: 401 });
+	}
+
+	await database.users.update(userId, parsed.data);
+}
+```
+:::
+::::
+
+Send the `curl` request from the top of the page at this function and it answers 400 with the issues as a JSON body; the database is not touched.
+The schema and the validation library are referenced only inside the `"use server"` body, so they are removed from the client build.
+
+Validation belongs in the body, not in a wrapper around the declaration:
+
+```ts
+// Avoid: a wrapper around the reference, so HTTP dispatch skips it
+export const updateAccountName = validated(NameInput, async (input) => {
+	"use server";
+	await database.users.update(getRequestEvent()?.locals.userId, input);
+});
+
+// Prefer: the check inside the body, where every call path runs
+export async function updateAccountName(input: unknown) {
+	"use server";
+	const parsed = v.safeParse(NameInput, input);
+	if (!parsed.success)
+		throw respond({ issues: parsed.issues }, { status: 400 });
+	await database.users.update(getRequestEvent()?.locals.userId, parsed.output);
+}
+```
+
+In the `Avoid` version, the registered server function is the inner arrow, and HTTP dispatch calls it by id.
+`validated` runs only for code that holds the exported reference, in the browser or during a render, so a `curl` request reaches the database unchecked.
+A wrapper inside a module-level `"use server"` module is different, because there the wrapper's return value is what gets registered; the [Server functions](server-functions.md#declare-a-server-module) page shows that form.
+
+## Read trusted request context
+
+`getRequestEvent()` from `@solidjs/web` returns the current request and the values middleware placed on `event.locals`:
+
+```ts
+import { getRequestEvent } from "@solidjs/web";
+
+export async function currentUserId() {
+	"use server";
+
+	const event = getRequestEvent();
+	if (!event) throw new Error("Missing request event");
+
+	return event.locals.userId;
+}
+```
+
+[Sessions and auth](sessions-and-auth.md) shows middleware that reads a signed cookie and sets `event.locals.userId` before any server function runs.
+
+Identity is one of those values, and never an argument:
+
+```ts
+// Avoid: the caller names the account to change
+export async function updateAccountName(userId: string, name: string) {
+	"use server";
+	await database.users.update(userId, { name });
+}
+
+// Prefer: the request event names the account
+export async function updateAccountName(name: string) {
+	"use server";
+	const userId = getRequestEvent()?.locals.userId;
+	if (!userId) throw respond({ error: "Unauthorized" }, { status: 401 });
+	await database.users.update(userId, { name });
+}
+```
+
+In the `Avoid` version, any caller can put any account id in the first argument, and the function renames that account.
+
+:::danger[A role or an id in an argument is a claim, not a fact]
+Anything the caller sends, including a `userId`, an `isAdmin` flag, or a price, is a claim the caller made about itself.
+Read identity and permissions from the request event, and look up prices and stock on the server.
+Authorize the requested operation against that context in every function that changes data.
+:::
+
+The request also carries its trace.
+When your host runs distributed tracing, an incoming `traceparent` header names the trace this request belongs to, and a server function that calls another service should pass it along so the tracing tool shows that call under the page or action that made it:
+
+```ts
+import { getTraceContext } from "@solidjs/web";
+
+export async function fetchInventory(sku: string) {
+	"use server";
+	return fetch(`https://inventory.internal/${sku}`, {
+		headers: { ...getTraceContext()?.entries },
+	});
+}
+```
+
+[`getTraceContext()`](../web/get-trace-context.md) returns the same object for every read in the request, so call it where you build the outbound request.
+When no `traceparent` came in, the runtime starts a trace of its own, so the header is always well formed; a downstream service that is not tracing ignores it.
+On the client, and outside any request, the function returns `undefined` and the spread adds nothing.
+
+## Same-origin protection
+
+The server-function handler checks where a state-changing request came from before running it.
+It reads `Sec-Fetch-Site`, then `Origin`, then `Referer`, and accepts the request when those say same-origin; a request with cross-origin metadata is refused with status 403 unless the host has listed that origin, and so is a request with none of the three headers.
+
+That gate stops a page on another site from submitting to your server functions with the visitor's cookies, which is the cross-site request forgery (CSRF) case.
+It does not stop a script that sets its own `Origin` header, which is why the `curl` request at the top of the page went through, and why the gate is no substitute for validation and authorization.
+
+A client that legitimately runs on another origin, such as a static build on its own domain or in a WebView, is admitted by listing its origin in `configureServerFunctionsServer({ csrf: { origin: [...] } })`; the server then answers it with the CORS headers the browser needs, and without cookies unless `allowCredentials` is also set.
+[Deployment](deployment.md#what-the-build-produces) shows the client side of that arrangement.
+
+`GET` and `HEAD` requests to a `GET()`-declared read skip the check, because a declared read is safe to run from any origin by contract and the check's `Vary` headers would fragment the shared caches the declaration exists to enable.
+Declare `GET()` only for a read that is safe and idempotent.
+
+:::caution[Keep the default unless the host already has a CSRF policy]
+A custom host can name the expected public origin, accept requests without origin metadata, or replace the check with one at a trusted outer layer.
+Each of those widens what reaches the function.
+Turn the default off only where an equivalent check already runs in front of the handler.
+:::
+
+## Common problems
+
+### The call throws `not JSON-serializable` before any request is made
+
+An argument contains a `Date`, `Map`, `Set`, typed array, or a cyclic object, and rich arguments are not enabled.
+Convert the value to a JSON-safe shape, or call `enableRichArguments()` once in the client entry.
+
+### A `curl` or script request is answered 403
+
+The request carried no `Sec-Fetch-Site`, `Origin`, or `Referer` header, or carried one naming another origin.
+A legitimate script sends an `Origin` header matching the site.
+A server-to-server integration that cannot do that runs behind a host with its own check and `allowRequestsWithoutOriginCheck` set, per [Host configuration](../web/host-configuration.md).
+A browser client served from another origin is a different case: list its origin in `csrf.origin`, as [Same-origin protection](#same-origin-protection) describes.
+
+### Validation runs in development but a raw request skipped it
+
+The check lives in a wrapper around the function-level declaration rather than inside the body.
+HTTP dispatch calls the registered function directly.
+Move the check into the `"use server"` body, or put the wrapper inside a module-level `"use server"` module.
+
+### `getRequestEvent()` returns `undefined`
+
+The function ran with no request in scope: at module load, from a timer, or in a test that did not provide an event.
+A server function called from a render, a middleware, or an HTTP request always has one; provide one in tests with [`provideRequestEvent`](../web/provide-request-event.md).
+
+## Recap
+
+* Strings, numbers, booleans, arrays, plain objects, and `null` travel as JSON; a single `FormData`, `File`, `Blob`, `URLSearchParams`, or binary argument travels as itself.
+* A `Date`, `Map`, `Set`, or typed array in the arguments throws until `enableRichArguments()` runs once in the client entry.
+* Type an argument as `unknown` and parse it with a schema inside the `"use server"` body; a wrapper around the declaration is skipped by HTTP dispatch.
+* Read identity and permissions from `getRequestEvent().locals`, never from an argument.
+* The same-origin check refuses cross-site browser requests; it does not refuse a script that sets its own `Origin` header.
+* Declare `GET()` only for reads that are safe from any origin, because declared reads skip the origin check.
+
+## Next steps
+
+* [Mutations and responses](server-functions-mutations-and-responses.md): what to return after a validated write, and how the 400 above reaches the caller.
+* [Sessions and auth](sessions-and-auth.md): the middleware that puts `userId` on `event.locals` from a signed cookie.
+* [Forms](../guides/forms.md): the checkout address form, validated in the browser and again in the server function.

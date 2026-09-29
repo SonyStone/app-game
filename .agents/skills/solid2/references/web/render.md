@@ -1,0 +1,108 @@
+# render
+
+Renders a component tree into a DOM element. Returns a dispose function
+that tears the tree down and cleans up reactive scopes when called.
+
+The top-level insert is queued via `{ schedule: true }` so its initial
+DOM attach goes through the effect queue rather than executing inline.
+This lets the mount participate in held updates: if an uncaught async
+read surfaces during the initial render (no `Loading` ancestor absorbs
+it), the mount is held and attaches atomically once
+all pending settles. On the no-async happy path the tail `flush()`
+drains the queued callback so the attach is synchronous by the time
+`render()` returns. The dev enforcement window scopes
+`ASYNC_OUTSIDE_LOADING_BOUNDARY` to the initial mount only.
+
+## Import
+
+```ts
+import { render } from "@solidjs/web";
+```
+
+## Type signature
+
+```ts
+function render(
+	code: () => JSX.Element,
+	element: MountableElement,
+	init?: JSX.Element,
+	options?: {
+		owner?: unknown;
+		renderId?: string;
+		/**
+		 * This root's client error hook, ahead of `configureClientErrors`':
+		 * every failure an error boundary under it renders a fallback for —
+		 * the one event no global handler sees (an uncaught error halts the
+		 * reactive system and reaches `reportError` / `window.onerror`). Once
+		 * per error object; no return — the client has no wire to map for.
+		 */
+		onError?: ClientErrorHook;
+	}
+): () => void;
+```
+
+## Parameters
+
+### `code`
+
+* **Type:** `() => JSX.Element`
+
+Function that returns the root JSX. It runs once inside a new reactive root.
+
+### `element`
+
+* **Type:** `MountableElement`
+
+DOM node to mount into. The tree is inserted as its children.
+
+### `init`
+
+* **Type:** `JSX.Element`
+* Optional
+
+Existing content to reuse as the initial children, for example from a static shell.
+
+### `options`
+
+* **Type:** `{ owner?: unknown; renderId?: string; onError?: ClientErrorHook; }`
+* Optional
+
+`owner` to parent the new root under an existing owner, and `renderId` for hydration id prefixes.
+
+## Return value
+
+A dispose function. Calling it removes the rendered DOM and disposes the reactive root.
+
+## Examples
+
+### Mount an app
+
+```tsx
+// src/entry-client.tsx
+import { render } from "@solidjs/web";
+import App from "./App";
+
+const dispose = render(() => <App />, document.getElementById("root")!);
+```
+
+### Unmount in a test
+
+```tsx
+const container = document.createElement("div");
+const dispose = render(() => <Counter />, container);
+
+// ...assert against container...
+
+dispose(); // removes the DOM and disposes the reactive root
+```
+
+## Caveats
+
+* `render` creates the reactive root. Calling reactive primitives outside it (module scope) has no owner and is never disposed.
+* Rendering into an element that already has server HTML does not reuse it; use `hydrate` for server-rendered pages.
+
+## Learn more
+
+* [Client rendering](../concepts/rendering-and-ssr.md#client-rendering)
+* [Rendering and SSR](../concepts/rendering-and-ssr.md)
+* [Choose a rendering mode](../guides/choose-a-rendering-mode.md)

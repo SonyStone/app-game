@@ -1,0 +1,106 @@
+# invoke
+
+Calls a server function with invocation-scoped `signal`, `keepalive`, or `priority` options.
+
+> See [Metadata and transport](../building-apps/server-functions-metadata-and-transport.md#configure-one-call) for invocation-scoped options.
+
+## Import
+
+```ts
+import { invoke } from "@solidjs/web/server-functions";
+```
+
+## Type signature
+
+```ts
+function invoke<A extends readonly any[], R>(
+	fn: (...args: A) => R,
+	options: InvokeOptions,
+	...args: A
+): R;
+```
+
+## Parameters
+
+### `fn`
+
+* **Type:** `(...args: A) => R`
+
+### `options`
+
+* **Type:** `InvokeOptions`
+
+### `args`
+
+* **Type:** `A`
+
+## Examples
+
+```ts
+const result = invoke(loadUser, { signal }, userId);
+```
+
+## Learn more
+
+* [Metadata and transport](../building-apps/server-functions-metadata-and-transport.md)
+* [Server functions](../building-apps/server-functions.md)
+
+## Related types
+
+### `InvokeOptions`
+
+Per-call, invocation-scoped options for `invoke` — things that vary
+between calls of the same function and cannot be declared (`GET`,
+`withMeta`) or configured (`prepareRequest`). On the server the call is
+in-process: `signal` still rejects the caller, the transport hints are
+no-ops (they describe a wire that does not exist).
+
+```ts
+interface InvokeOptions {
+	signal?: AbortSignal;
+	keepalive?: boolean;
+	priority?: "high" | "low" | "auto";
+}
+```
+
+#### `signal`
+
+* **Type:** `AbortSignal`
+
+The call's lifecycle. Aborting rejects the call with the signal's
+reason and cancels the request (firing `request.signal` server-side);
+a live source's iteration ends across reconnects. When provided, the
+signal owns the wire — timeouts compose through it
+(`AbortSignal.timeout`, `AbortSignal.any`).
+
+#### `keepalive`
+
+* **Type:** `boolean`
+
+Lets the request outlive the page — fire-and-forget calls during
+unload (`pagehide`). Maps to fetch's `keepalive`, body-size caps
+included.
+
+#### `priority`
+
+* **Type:** `"high" | "low" | "auto"`
+
+Fetch priority hint — speculative prefetch vs. Interaction fetch.
+
+### `ServerFunctionInvoker`
+
+A reference's invocation channel, carried under `SERVER_FUNCTION_INVOKE`:
+applies one call with per-call options. Declaration wrappers (`GET`,
+`live`) forward it mechanically — they keep the call mapping 1:1. A
+wrapper that shares calls (a deduping cache, a multicast channel) opts
+in deliberately, deciding first what a caller's abort means for shared
+work — or declines, leaving `invoke` to answer with a directed error.
+Options arrive already validated — `invoke` admits only
+invocation-scoped keys.
+
+```ts
+type ServerFunctionInvoker<A extends readonly any[] = any[], R = any> = (
+	args: A,
+	options?: InvokeOptions
+) => R;
+```

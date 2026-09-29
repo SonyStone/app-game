@@ -1,0 +1,94 @@
+# Show
+
+Conditionally renders its children when `when` is truthy, otherwise renders
+the optional `fallback`.
+
+The function-child form receives a narrowed value. Without `keyed`
+(default), it receives an accessor and the child is preserved across truthy
+values; with `keyed`, it receives the raw value and remounts whenever the
+value's identity changes.
+
+## Import
+
+```ts
+import { Show } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function Show<T>(props: {
+	when: T | undefined | null | false;
+	keyed?: false;
+	fallback?: JSX.Element;
+	children: JSX.Element | ((item: Accessor<NonNullable<T>>) => JSX.Element);
+}): JSX.Element;
+function Show<T>(props: {
+	when: T | undefined | null | false;
+	keyed: true;
+	fallback?: JSX.Element;
+	children: JSX.Element | ((item: NonNullable<T>) => JSX.Element);
+}): JSX.Element;
+```
+
+## Props
+
+### `when`
+
+* **Type:** `T | undefined | null | false`
+
+The condition. Children render when it is truthy.
+
+### `keyed`
+
+* **Type:** `boolean`
+* Optional
+
+When `true`, the function child receives the raw value and the content remounts whenever the value's identity changes. Default `false`: the function child receives an accessor and the content is kept across truthy values.
+
+### `fallback`
+
+* **Type:** `JSX.Element`
+* Optional
+
+Rendered when `when` is falsy.
+
+### `children`
+
+* **Type:** `JSX.Element | ((item) => JSX.Element)`
+
+Static content, or a function that receives the narrowed value (an `Accessor<NonNullable<T>>` by default, `NonNullable<T>` when keyed).
+
+## Examples
+
+```tsx
+<Show when={user()} fallback={<SignIn />}>
+	{(u) => <Greeting name={u().name} />}
+</Show>
+```
+
+### Remount when the identity changes
+
+```tsx
+// Without `keyed`, switching from one user to another keeps the DOM and
+// updates the accessor. With `keyed`, the content is re-created per user.
+<Show when={user()} keyed fallback={<SignIn />}>
+	{(u) => <Profile user={u} />}
+</Show>
+```
+
+## Caveats
+
+* A bare accessor as `when` (`when={user}`) is truthy because it is a function. Pass `when={user()}`.
+* Without `keyed`, changing `when` to another truthy value updates the accessor in place and keeps the DOM. With `keyed`, the content remounts.
+
+## Common problems
+
+* [`Show` renders the fallback even though the value is set](../concepts/components-and-jsx.md#show-renders-the-fallback-even-though-the-value-is-set)
+* [The page shows the words `function` or `() =>` instead of the value](../concepts/reactivity.md#the-page-shows-the-words-function-or---instead-of-the-value)
+
+## Learn more
+
+* [Conditional content](../concepts/components-and-jsx.md#conditional-content)
+* [Components and JSX](../concepts/components-and-jsx.md)
+* [Boundaries](../concepts/boundaries.md)

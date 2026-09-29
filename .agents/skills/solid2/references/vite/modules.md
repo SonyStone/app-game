@@ -1,0 +1,118 @@
+# Modules and manifest
+
+The plugin exposes one runtime helper, one manifest type, generated virtual modules, and two types-only package subpaths.
+
+## `@solidjs/vite-plugin`
+
+### `devStylePatch`
+
+```ts
+const devStylePatch: string;
+```
+
+An inline browser script that removes duplicate SSR and Vite development style elements with the same `data-vite-dev-id`.
+Start mode handlers inject `devStylePatch` automatically.
+Custom development hosts can inject the script when they render the document themselves.
+Application code does not call this helper.
+
+### `ViteManifest`
+
+```ts
+type ViteManifest = Record<
+	string,
+	{
+		file: string;
+		css?: string[];
+		isEntry?: boolean;
+		isDynamicEntry?: boolean;
+		imports?: string[];
+	}
+> & {
+	_base?: string;
+};
+```
+
+Describes the client asset manifest consumed by `virtual:solid-manifest`.
+The plugin adds `_base` and marks emitted lazy facades as dynamic entries.
+
+## `@solidjs/vite-plugin/virtual-solid-manifest`
+
+The types-only subpath declares the following modules:
+
+### `virtual:solid-manifest`
+
+```ts
+import type { ViteManifest } from "@solidjs/vite-plugin";
+
+const manifest: ViteManifest;
+export default manifest;
+```
+
+Development output provides a resolver-backed manifest for module JavaScript and CSS.
+Build output contains `dist/client/.vite/manifest.json` with the configured Vite base.
+
+### `virtual:solid-server-function-manifest`
+
+A side-effect-only module that registers all discovered server functions.
+
+### `virtual:solid-server-function-handler`
+
+Exports `endpoint` and `handleServerFunctionRequest`.
+See [`serverFunctions`](server-functions.md#virtualsolid-server-function-handler).
+
+### `virtual:solid-ssr-handler`
+
+```ts
+export function handleRequest(
+	request: Request,
+	options?: {
+		clientEntry?: string;
+		context?: Record<string, unknown>;
+		responseInit?: ResponseInit;
+		serverFunctions?: Record<string, unknown>;
+	}
+): Promise<Response>;
+```
+
+`virtual:solid-ssr-handler` is the start mode server build entry.
+The module creates a request event, runs configured middleware, dispatches the server-function endpoint when enabled, and returns the page response.
+Generated HTML resolves the client entry and CSS from `virtual:solid-manifest`.
+
+Reference the declarations from an environment declaration file:
+
+```ts
+/// <reference types="@solidjs/vite-plugin/virtual-solid-manifest" />
+```
+
+## Start mode environment modules
+
+When [`start.env`](start.md#env) is enabled, generated `solid-env.d.ts` declares:
+
+```ts
+import env, { env as namedEnv } from "virtual:env/client";
+import serverEnv from "virtual:env/server";
+```
+
+`virtual:env/client` contains the client schema keys.
+`virtual:env/server` contains both schema maps and is server-only.
+
+## Boundary marker modules
+
+The main plugin always resolves the bare marker specifiers:
+
+```ts
+import "server-only";
+import "client-only";
+```
+
+`server-only` is empty in server module graphs and fails when imported by a client graph.
+`client-only` is empty in client module graphs and fails when imported by a server graph.
+The error names the importing module.
+
+Add their ambient declarations with:
+
+```ts
+/// <reference types="@solidjs/vite-plugin/boundary-modules" />
+```
+
+The marker resolvers claim these bare specifiers even when packages with the same names are installed.

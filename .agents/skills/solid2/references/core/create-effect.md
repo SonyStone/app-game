@@ -1,0 +1,275 @@
+# createEffect
+
+Creates a reactive effect with **separate compute and effect phases**.
+
+* `compute(prev)` runs reactively — *put all reactive reads here*.
+  The returned value is passed to `effect` and is also the new
+  "previous" value for the next run.
+* `effect(next, prev?)` runs imperatively (untracked) after the
+  queue flushes. *Put DOM writes / fetch / logging / subscriptions
+  here.* It may return a cleanup function which runs before the
+  next effect or on disposal.
+
+Reactive reads inside `effect` will *not* re-trigger this effect —
+that's intentional. If you need a single-phase tracked effect, use
+`createTrackedEffect` (with the tradeoffs noted there).
+
+Pass an `EffectBundle` (`{ effect, error }`) instead of a plain
+function to intercept errors thrown from the compute or effect
+phases.
+
+```ts
+createEffect<T>(compute, effectFn | { effect, error }, options?: EffectOptions);
+```
+
+## Import
+
+```ts
+import { createEffect } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function createEffect<T>(
+	compute: ComputeFunction<undefined | NoInfer<T>, T>,
+	effectFn: EffectFunction<NoInfer<T>, T> | EffectBundle<NoInfer<T>, T>,
+	options?: EffectOptions
+): void;
+```
+
+## Parameters
+
+### `compute`
+
+* **Type:** `ComputeFunction<undefined | NoInfer<T>, T>`
+
+A function that receives its previous value and returns a new value used to react on a computation
+
+### `effectFn`
+
+* **Type:** `EffectFunction<NoInfer<T>, T> | EffectBundle<NoInfer<T>, T>`
+
+A function that receives the new value and is used to perform side effects (return a cleanup function), or an `EffectBundle` with `effect` and `error` handlers
+
+### `options`
+
+* **Type:** `EffectOptions`
+* Optional
+
+`name`, `defer`, `schedule`, `transparent`, `deferStream`, and `ssrSource`.
+
+## Return value
+
+Nothing. The effect is owned by the surrounding scope and disposed with it.
+
+## Examples
+
+```ts
+const [count, setCount] = createSignal(0);
+
+createEffect(
+	() => count(), // compute: tracks `count`
+	(value) => console.log(value) // effect: side effect
+);
+
+setCount(1); // logs 1 after the next flush
+```
+
+```ts
+createEffect(
+	() => userId(),
+	(id) => {
+		const ctrl = new AbortController();
+		fetch(`/users/${id}`, { signal: ctrl.signal });
+		return () => ctrl.abort(); // cleanup before next run / disposal
+	}
+);
+```
+
+**Hydration:** `EffectOptions` accepts an `ssrSource` field
+(`"server"` | `"hybrid"` | `"client"`). See the `ssrSource` option.
+`transparent: true` makes the effect invisible to hydration entirely —
+it consumes no hydration id slot and its compute runs live rather than
+adopting the serialized server value — for client-only effects the
+server never created. An effect created with no owner, or under a
+root without an `id`, has no id slot to consume and takes that path on
+its own.
+
+## Caveats
+
+* Only the `compute` phase tracks. Reads in `effectFn` do not subscribe, so an effect that reads a signal only in `effectFn` runs once.
+* The effect phase runs after the queue flushes, so DOM written by the same update is already in place.
+* Writing to a signal that the same effect tracks creates a loop. Derive the value with `createMemo` instead.
+* On the server, effects do not run.
+
+## Common problems
+
+* [`createEffect` throws `[MISSING_EFFECT_FN]`](../concepts/reactivity.md#createeffect-throws-missing_effect_fn)
+* [An effect copies one value into another and the copy lags](../concepts/reactivity.md#an-effect-copies-one-value-into-another-and-the-copy-lags)
+* [Something updates too often](../guides/debugging-reactivity.md#something-updates-too-often)
+* [A write on the server did nothing](../guides/debugging-reactivity.md#a-write-on-the-server-did-nothing)
+
+## Learn more
+
+* [Effects](../concepts/reactivity.md#effects)
+* [Avoid unnecessary effects](../guides/avoid-unnecessary-effects.md)
+* [Reactivity](../concepts/reactivity.md)
+* [Async reactivity](../concepts/async-reactivity.md)
+* [Debugging reactivity](../guides/debugging-reactivity.md)
+
+## Related types
+
+### `ComputeFunction`
+
+```ts
+type ComputeFunction<Prev, Next extends Prev = Prev> = (
+	v: Prev
+) => PromiseLike<Next> | AsyncIterable<Next> | Next;
+```
+
+### `EffectBundle`
+
+```ts
+type EffectBundle<Prev, Next extends Prev = Prev> = {
+	effect: EffectFunction<Prev, Next>;
+	error: (err: unknown, cleanup: () => void) => void;
+};
+```
+
+#### `effect`
+
+* **Type:** `EffectFunction<Prev, Next>`
+
+#### `error`
+
+* **Type:** `(err: unknown, cleanup: () => void) => void`
+
+Intercepts compute-phase errors (thrown by the compute function or arriving
+from upstream sources). Effect-phase throws are not routed here — they are
+your own imperative code and escalate to the nearest error boundary.
+
+This is the error arm of the effect phase: it runs on the same queue and
+in the same imperative, writable scope as `effect` (signal writes are
+legal), receives the error the user code threw, and observes settled
+outcomes — an error that recovers before the effect phase runs the
+`effect` arm instead, and a held update defers it like `effect`.
+
+### `EffectFunction`
+
+```ts
+type EffectFunction<Prev, Next extends Prev = Prev> = (
+	v: Next,
+	p?: Prev
+) => (() => void) | void;
+```
+
+### `EffectOptions`
+
+Options for effect primitives that support deferring/scheduling their initial run (`createEffect`, `createRenderEffect`, `createReaction`).
+
+```ts
+interface EffectOptions extends BaseEffectOptions {
+	defer?: boolean;
+	schedule?: boolean;
+	sync?: boolean;
+	transparent?: boolean;
+	deferStream?: boolean;
+	ssrSource?: "server" | "hybrid" | "client";
+}
+```
+
+#### `defer`
+
+* **Type:** `boolean`
+
+When true, defers the initial effect execution until the next change
+
+#### `schedule`
+
+* **Type:** `boolean`
+
+When true, enqueues the initial effect callback through the effect queue instead of running
+it synchronously at creation. Lets the initial run participate in held updates -- if any
+source throws `NotReadyError` during the compute phase, the callback is held until the
+pending work settles.
+
+Primarily for render effects that need async-aware initial mounts (e.g. the root
+`insert()` in `render()`).
+
+#### `sync`
+
+* **Type:** `boolean`
+
+Advanced. When true, asserts the compute function returns synchronous
+values only (never `PromiseLike` / `AsyncIterable`). Skips the
+async-shape probe in `recompute` for a small fixed-cost win per run.
+Intended for compiler emissions (`_$effect`) and library code that
+provably returns sync values. Returning a Promise or async iterable
+from a `sync: true` effect is undefined behavior — the value will be
+stored as-is and never awaited.
+
+#### `transparent`
+
+* **Type:** `boolean`
+
+Advanced (integration tier). When true, the effect is invisible to the
+hydration id scheme: it inherits its parent's id instead of consuming a
+child slot, and during hydration its compute runs live instead of
+adopting the serialized server value (its first run is not frozen to
+the server's decision).
+
+For **client-only effects created while hydrating** — effects with no
+server-rendered counterpart (a router wiring link state, scroll
+restoration, etc.). An id-consuming node the server never created would
+shift every later sibling's hydration id, making serialized lookups and
+template claims after it miss. `transparent` is also the supported
+alternative to branching on hydration state
+(`if (hydrating) createEffect(...)`), which freezes whatever the first
+run decided: create the effect unconditionally and let it observe live
+state instead.
+
+SSR ignores this option (a server-side effect always allocates its id
+slot), so only mark effects the server does not create. Outside
+hydration it is a no-op.
+
+#### `deferStream`
+
+* **Type:** `boolean`
+
+Defer the SSR stream flush until this primitive's first value is
+resolved. Lets late-resolving sources hold the document open
+rather than forcing the surrounding `<Loading>` boundary to render
+its fallback into the HTML. Server-only; ignored on the client.
+
+#### `ssrSource`
+
+* **Type:** `"server" | "hybrid" | "client"`
+
+Hydration policy. Decides what initial value the client uses and
+whether the compute re-runs.
+
+* `"server"` *(default)*: client uses the serialized server value
+  as initial state. Compute does **not** re-run for the initial
+  value — the serialized result is authoritative. Choose this when
+  the compute is deterministic from server-available inputs.
+* `"hybrid"`: client uses the serialized server value first; then,
+  for a compute that returns an **async iterable**, the client
+  continues the stream from it (the server consumed exactly one
+  yield; the client's first yield duplicates it and is discarded,
+  later yields update the node). For a sync or promise-shaped
+  compute, `"hybrid"` is identical to `"server"`: the serialized
+  value is adopted and the compute does not re-run until a
+  dependency changes or `refresh()`. Choose this for streaming
+  sources the client should keep consuming after hydration.
+* `"client"`: skip the server value entirely. Compute is deferred
+  until hydration completes, then runs as if first-mounted.
+  Choose this for client-only state where serialization is
+  meaningless. Two forms decide what the pre-compute window
+  renders: **bare** (structural) — the source suspends on the
+  server as a final hole and the nearest `<Loading>` boundary
+  renders its fallback, handing the position to the client; or a
+  **declared first value** — `loadingValue` on signal-family
+  sources (`loadingValue: undefined` is a valid declaration),
+  `seedLoadingValue: true` on store-family sources — which renders
+  provisional data with no boundary involvement.

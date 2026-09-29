@@ -1,0 +1,212 @@
+# filesystem-routing/vite
+
+`filesystem-routing/vite` exports the Vite delivery adapter and its lower-level building blocks.
+
+## `fileRoutes`
+
+```ts
+import { fileRoutes, type FileRoutesOptions } from "filesystem-routing/vite";
+
+function fileRoutes(options?: FileRoutesOptions): PluginOption[];
+```
+
+The returned plugins scan routes, serve the virtual manifest, tree-shake picked module exports, and update the manifest during development.
+
+## `FileRoutesOptions`
+
+```ts
+interface FileRoutesOptions {
+	dir?: string;
+	extensions?: string[];
+	components?: boolean;
+	httpMethods?: boolean | readonly string[];
+	toPath?: FileSystemRouterConfig["toPath"];
+	toRoute?: FileSystemRouterConfig["toRoute"];
+	router?: BaseFileSystemRouter;
+	routers?: Record<string, BaseFileSystemRouter>;
+	moduleId?: string;
+	buildInputs?: string | string[];
+	codeSplitting?: boolean;
+	optimizeDepsExclude?: string[];
+	types?: boolean | string;
+}
+```
+
+### `dir`
+
+* **Type:** `string`
+* **Default:** `"src/routes"`
+
+Specifies the route directory relative to the Vite root.
+
+### `extensions`
+
+* **Type:** `string[]`
+* **Default:** `["js", "jsx", "ts", "tsx"]`
+
+Specifies scanned extensions without leading dots.
+
+### `components`
+
+* **Type:** `boolean`
+* **Default:** `true`
+
+Controls whether page entries contain `$component` refs.
+Page status and eager `route` configuration refs remain when this is `false`.
+
+### `httpMethods`
+
+* **Type:** `boolean | readonly string[]`
+* **Default:** `false`
+
+`true` recognizes `HEAD`, `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, and `OPTIONS` exports.
+An array supplies a different recognized set.
+
+On a shared router, server-consumer environments receive handler refs.
+Client-consumer environments remove those refs and remove handler-only entries.
+The plugin delivers an explicit router in `routers` unchanged.
+
+### `toPath`
+
+Overrides the default filename-to-path function.
+Return `undefined` to skip the file.
+See [`FileSystemRouterConfig`](core.md#filesystemrouterconfig).
+
+### `toRoute`
+
+Overrides module-to-manifest conversion.
+Return `undefined` to skip the file.
+
+### `router`
+
+* **Type:** `BaseFileSystemRouter`
+* **Default:** A `PageFileSystemRouter` configured from the options above
+
+Supplies a scanner and convention for environments without an entry in `routers`.
+
+### `routers`
+
+* **Type:** `Record<string, BaseFileSystemRouter>`
+* **Default:** `undefined`
+
+Supplies routers keyed by Vite environment name.
+Use `router` as the fallback for missing environment names.
+The `client` router supplies generated literal-tuple types.
+
+### `moduleId`
+
+* **Type:** `string`
+* **Default:** `"virtual:file-routes"`
+
+Specifies the virtual manifest module ID.
+
+### `buildInputs`
+
+* **Type:** `string | string[]`
+* **Default:** `[]`
+
+Names Vite environments whose builds add every delivered lazy module ref as a Rollup input.
+The plugin retains existing inputs.
+Eager refs and handler refs removed from client consumers are not added.
+The option has no effect when `codeSplitting` is `false`.
+
+### `codeSplitting`
+
+* **Type:** `boolean`
+* **Default:** `true`
+
+Set `codeSplitting: true` to emit `$` refs as dynamic `import()` functions and separate route chunks.
+Set `codeSplitting: false` to emit static namespace imports behind `require()` functions.
+The generated module then contains no dynamic imports.
+
+With `@solidjs/router`, eager delivery requires a release newer than `2.0.0-next.14`.
+
+### `optimizeDepsExclude`
+
+* **Type:** `string[]`
+* **Default:** `[]`
+
+Adds packages to Vite's dependency prebundle exclusion list.
+Use it for packages that import the virtual module themselves.
+
+### `types`
+
+* **Type:** `boolean | string`
+* **Default:** `false`
+
+Writes a self-contained ambient declaration whose manifests are literal tuples.
+`true` writes `file-routes.d.ts` in the Vite root.
+A string sets another output path.
+
+Reference this generated declaration instead of `filesystem-routing/types`.
+
+## Output
+
+The generated module exports:
+
+```ts
+import routes, { pageRoutes } from "virtual:file-routes";
+```
+
+`routes` is the flat manifest.
+`pageRoutes` contains page entries nested by manifest path with route groups removed from URL paths.
+See [Manifest module](manifest.md).
+
+Route source IDs use `?pick=` queries so each ref contains only selected exports.
+JavaScript and TypeScript IDs end with a `lang.<extension>` marker so extension-based Vite plugins still match them.
+Route chunk names omit that query suffix.
+
+## Adapter-building exports
+
+These low-level exports support custom delivery adapters.
+Application configurations normally use `fileRoutes()` instead.
+
+### `DEFAULT_EXTENSIONS`
+
+```ts
+const DEFAULT_EXTENSIONS = ["js", "jsx", "ts", "tsx"];
+```
+
+### `moduleId`
+
+```ts
+const moduleId = "virtual:file-routes";
+```
+
+### `toPickId`
+
+```ts
+function toPickId(src: string, pick: string[]): string;
+```
+
+Builds a route-module ID containing one `pick` query for each selected export and a language marker for JavaScript and TypeScript extensions.
+
+### `sanitizeChunkFileName`
+
+```ts
+function sanitizeChunkFileName(name: string): string;
+```
+
+Removes the pick-query suffix from route chunk names, then applies Rollup-compatible invalid-character replacement.
+
+### `treeShake`
+
+```ts
+function treeShake(): Plugin;
+```
+
+Returns the pre-transform plugin that retains selected exports, their runtime dependencies, and selected CSS imports for `?pick=` module IDs.
+
+### `fileSystemWatcher`
+
+```ts
+function fileSystemWatcher(
+	getRouter: (environment: string) => BaseFileSystemRouter | undefined,
+	moduleId: string,
+	onReload?: () => void | Promise<void>
+): PluginOption;
+```
+
+Connects Vite's file watcher to per-environment routers.
+Route additions and removals reload the virtual module.
+Route content updates invalidate it and rely on the route module's hot update.

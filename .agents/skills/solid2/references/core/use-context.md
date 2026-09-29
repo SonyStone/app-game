@@ -1,0 +1,76 @@
+# useContext
+
+Reads the current value of a context.
+
+* For `createContext<T>()` (default-less): returns the value from the
+  nearest enclosing Provider, or throws `ContextNotFoundError` if none is
+  mounted. Return type is `T` (no narrowing required).
+* For `createContext<T>(defaultValue)`: returns the value from the nearest
+  enclosing Provider, or `defaultValue` if none is mounted.
+
+In Solid, `useContext` is the canonical way to read context. There is no
+need for a wrapper hook that throws on missing Provider — the default-less
+form already does that, and its return type is `T`.
+
+## Import
+
+```ts
+import { useContext } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function useContext<T>(context: Context<T>): T;
+```
+
+## Parameters
+
+### `context`
+
+* **Type:** `Context<T>`
+
+A context returned from `createContext`
+
+## Return value
+
+The value provided by the nearest enclosing Provider, or the
+default if one was supplied to `createContext`
+
+## Examples
+
+```tsx
+const TodosContext = createContext<TodosCtx>();
+
+function TodoList() {
+	const [todos, { addTodo }] = useContext(TodosContext); // throws if no Provider
+	// ...
+	return null;
+}
+```
+
+## Caveats
+
+* Call it in the component body or another owned scope. Calling it inside an event handler or after an `await` has no owner to read from.
+* The value is whatever the nearest provider passed. Pass signals or stores, not their current values, to keep it reactive.
+
+## Learn more
+
+* [Context](../concepts/components-and-jsx.md#context)
+* [Components and JSX](../concepts/components-and-jsx.md)
+
+## Related types
+
+### `ContextNotFoundError`
+
+```ts
+class ContextNotFoundError extends Error {
+	constructor() {
+		super(
+			__DEV__
+				? "Context must either be created with a default value or a value must be provided before accessing it."
+				: ""
+		);
+	}
+}
+```

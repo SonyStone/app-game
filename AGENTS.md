@@ -1,12 +1,24 @@
 ## Coding Style & Conventions
 
-### Solid Primitives reuse and design
+### SolidJS skills
 
-When implementing features, fixing bugs, or refactoring SolidJS code, read `~/.codex/skills/solid-primitives/SKILL.md`.
+When implementing features, fixing bugs, or refactoring SolidJS code, read these skills from the repository root:
+
+- `.agents/skills/solid-primitives/SKILL.md` to reuse Solid Primitives before writing custom reactive infrastructure.
+- `.agents/skills/solid-jsx-architecture/SKILL.md` for component, factory, context, and resource-lifetime boundaries.
+- `.agents/skills/solid2/SKILL.md` for Solid 2 API semantics; open only the bundled pages the task needs.
+
+### Simplification preference
+
+When simplifying existing code, establish required behavior from actual callers and explicit public contracts. A queue, forwarding layer, or separate factory needs a consumer requirement to justify keeping it. Remove unused machinery within the requested scope, but preserve externally promised behavior even when local callers do not exercise it. Explain retained complexity in terms of those requirements.
 
 ### Newspaper code structure preference
 
 Organize code so it reads top-down like a newspaper article. Put the public API, primary entry point, and important control flow first; place progressively lower-level helpers, implementation details, and constants later. Order helpers by first conceptual use so a reader can stop once they have enough detail.
+
+### Control-flow layout preference
+
+Separate logical blocks with blank lines. Write `if` bodies as multiline braced blocks, not single-line or brace-less statements.
 
 ### Types near use preference
 

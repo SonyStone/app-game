@@ -1,0 +1,86 @@
+# httpHeader
+
+Declares an HTTP response header (or with `append`, appends to one) for
+the lifetime of the current reactive scope during SSR — call it bare in a
+component or reactive-scope body. Client build: a no-op — the response
+head was sent long ago.
+
+Naming note — this is a scope-tied *declaration*, not a mutation: "while
+this reactive scope is live, the response has this header." Solid
+reserves `set*` verbs for event-time mutation; like
+`createSignal`/`onCleanup` this is called in scope bodies and un-declares
+on scope disposal.
+
+Retraction semantics (server): the header's prior value is snapshotted at
+write time and restored when the owning scope is disposed (deleted if
+there was none) — a boundary that errors or recovers retracts its writes.
+Once the response head is `committed` (head derived/sent — the shell
+flush of a piped `renderToStream`, the completion of an awaited one or
+of `renderToString`), writes and retractions are no-ops.
+
+## Import
+
+```ts
+import { httpHeader } from "@solidjs/web";
+```
+
+## Type signature
+
+```ts
+function httpHeader(
+	name: string,
+	value: string,
+	options?: { append?: boolean }
+): void;
+```
+
+## Parameters
+
+### `name`
+
+* **Type:** `string`
+
+Header name.
+
+### `value`
+
+* **Type:** `string`
+
+Header value.
+
+### `options`
+
+* **Type:** `{ append?: boolean }`
+* Optional
+
+`append: true` adds a value instead of replacing the header.
+
+## Examples
+
+### Set a cache policy for a page
+
+```tsx
+function ProductPage() {
+	httpHeader("Cache-Control", "public, max-age=60");
+	return <Product />;
+}
+```
+
+### Append a header
+
+```ts
+httpHeader("Link", "</fonts/inter.woff2>; rel=preload; as=font", {
+	append: true,
+});
+```
+
+## Caveats
+
+* Call it in a component or reactive-scope body during SSR. It is a no-op in the browser.
+* Writes after the response head is committed (the shell flush of a stream) are ignored.
+
+## Learn more
+
+* [Who owns the document](../concepts/rendering-and-ssr.md#who-owns-the-document)
+* [Rendering and SSR](../concepts/rendering-and-ssr.md)
+* [Choose a rendering mode](../guides/choose-a-rendering-mode.md)

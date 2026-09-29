@@ -1,0 +1,51 @@
+[
+  {
+    "group": "Copying",
+    "anchor": "copying",
+    "import": "@solid-primitives/utils/immutable",
+    "purpose": "Copy an array or object, or apply a mutating operation to a copy. Use when updating signal values while preserving the original data.",
+    "exports": ["shallowArrayCopy", "shallowObjectCopy", "shallowCopy", "withArrayCopy", "withObjectCopy", "withCopy"]
+  },
+  {
+    "group": "Array updates",
+    "anchor": "array",
+    "import": "@solid-primitives/utils/immutable",
+    "purpose": "Add, remove, replace, filter, sort, or flatten array items without mutating the input. Use these operations inside signal setters or data transformations.",
+    "exports": ["push", "drop", "dropRight", "filterOut", "filter", "sort", "sortBy", "map", "slice", "splice", "fill", "concat", "remove", "removeItems", "flatten", "filterInstance", "filterOutInstance"]
+  },
+  {
+    "group": "Object and nested updates",
+    "anchor": "object",
+    "import": "@solid-primitives/utils/immutable",
+    "purpose": "Select, omit, split, or merge object properties. Read a nested path or replace its value without mutating the original object or array.",
+    "exports": ["omit", "pick", "split", "merge", "get", "update"]
+  },
+  {
+    "group": "Arithmetic",
+    "anchor": "number",
+    "import": "@solid-primitives/utils/immutable",
+    "purpose": "Apply arithmetic operations or clamp a value to a range. Use as small functions when composing calculations and value updates.",
+    "exports": ["add", "substract", "multiply", "divide", "power", "clamp"]
+  },
+  {
+    "group": "String and message parsing",
+    "anchor": "string-transforms",
+    "import": "@solid-primitives/utils",
+    "purpose": "Convert incoming strings into JSON, NDJSON records, lines, or numbers. Compose parsers and provide a fallback on errors, for example in SSE or WebSocket message transforms.",
+    "exports": ["json", "ndjson", "lines", "number", "safe", "pipe"]
+  },
+  {
+    "group": "Signal and store helpers",
+    "anchor": "wrapsetter",
+    "import": "@solid-primitives/utils",
+    "purpose": "Wrap signal/store setters to run logic on writes, such as persistence. Create interactive state that uses a reactive signal in the browser and a plain mutable value during server rendering.",
+    "exports": ["wrapSetter", "createServerSafeSignal"]
+  },
+  {
+    "group": "Colors",
+    "anchor": "color-utilities",
+    "import": "@solid-primitives/utils/colors",
+    "purpose": "Parse and convert color formats, adjust or mix colors, check text/background contrast, and build color scales. Channel metadata and translated color names support color pickers and accessible labels.",
+    "exports": ["parseColor", "normalizeColor", "tryParseColor", "isValidColor", "detectColorFormat", "getColorChannels", "normalizeHue", "colorToOKLCH", "lighten", "darken", "saturate", "desaturate", "complement", "mix", "contrastRatio", "isReadable", "colorScale", "perceptualColorScale", "COLOR_INTL_TRANSLATIONS"]
+  }
+]

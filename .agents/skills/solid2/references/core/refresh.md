@@ -1,0 +1,85 @@
+# refresh
+
+Invalidates one reactive source, forcing it to re-execute even if its inputs
+haven't changed, and returns a promise for the target's next settled state — the re-ask (and anything that supersedes it) has settled.
+
+Pass either a Solid-created accessor or a projected store created from
+`createStore(fn, ...)` / `createProjection(...)`. `refresh()` is a
+write-like invalidation operation: it does not read the target's value, and
+refreshing a plain signal accessor is a no-op that resolves immediately.
+
+The returned promise is safe to ignore (fire-and-forget refresh is
+unchanged, and a failed refetch will not surface an unhandled rejection).
+Awaiting it gives imperative flows the settle point without a reactive
+read:
+
+* Accessor targets resolve with the settled value; store targets resolve
+  with the store node passed (reads through it are fresh after the await).
+* A failed re-ask rejects with the error (inside an action's generator,
+  `yield refresh(x)` throws back at the yield point and the action reverts
+  like any other failure).
+* Semantics are quiescence, not flight identity: if another refresh (or
+  any invalidation) supersedes this one mid-flight, the promise waits for
+  — and delivers — whatever finally lands.
+* Inside an action, truth landing into the held transaction is staged;
+  the promise still settles then (matching `until()`)
+  and delivers the staged value — the caller's own optimistic override is
+  never the delivered value.
+* The re-ask itself stays verdict-quiet exactly as before: `isPending`
+  does not flip for a bare refresh (pair with `affects()` for a visible
+  pending window).
+
+## Import
+
+```ts
+import { refresh } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function refresh<T>(
+	target: Refreshable<T>
+): Promise<T extends (...args: any) => infer V ? V : T>;
+```
+
+## Parameters
+
+### `target`
+
+* **Type:** `Refreshable<T>`
+
+A Solid-created accessor or a projection store. Plain signal accessors are a no-op.
+
+## Return value
+
+A promise for the target's next settled state. Safe to ignore; a failed re-ask rejects it but does not surface as an unhandled rejection when ignored.
+
+## Examples
+
+```ts
+const user = createMemo(async () => fetch(`/users/${id()}`).then(r => r.json()));
+
+// Fire-and-forget re-fetch
+<button onClick={() => refresh(user)}>Reload</button>;
+
+// Imperative settle point
+const fresh = await refresh(user);
+```
+
+## Caveats
+
+* Refreshing a plain signal accessor is a no-op that resolves immediately.
+* The re-ask is quiet: `isPending` does not flip. Call `affects()` first when the UI should show a pending state.
+* Inside an action, the resolved value is the staged truth, never the caller's own optimistic override.
+
+## Common problems
+
+* [The screen looks dead after a click](../guides/debugging-reactivity.md#the-screen-looks-dead-after-a-click)
+
+## Learn more
+
+* [Keep data fresh](../guides/data-fetching-patterns.md#keep-data-fresh)
+* [Mutate, then refetch](../guides/data-fetching-patterns.md#mutate-then-refetch)
+* [Async reactivity](../concepts/async-reactivity.md)
+* [Avoid unnecessary effects](../guides/avoid-unnecessary-effects.md)

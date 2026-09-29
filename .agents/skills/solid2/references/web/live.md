@@ -1,0 +1,88 @@
+# live
+
+Declares a server function whose async iterable represents one value that changes over time. The browser reconnects transiently failed streams and exposes connection state through `onstatus`.
+
+> See [Reads, streams, and live data](../building-apps/server-functions-reads-and-live-data.md#declare-a-live-source) for the source contract, reconnect behavior, and reactive consumption.
+
+## Import
+
+```ts
+import { live } from "@solidjs/web/server-functions";
+```
+
+## Type signature
+
+```ts
+function live<A extends readonly any[], R>(
+	fn: (...args: A) => R
+): LiveServerFunction<A, Awaited<R>>;
+```
+
+## Parameters
+
+### `fn`
+
+* **Type:** `(...args: A) => R`
+
+## Examples
+
+```ts
+export const stockPrice = live(async function* (symbol: string) {
+	"use server";
+	for await (const tick of market.subscribe(symbol)) {
+		yield tick.price;
+	}
+});
+```
+
+## Learn more
+
+* [Reads, streams, and live data](../building-apps/server-functions-reads-and-live-data.md)
+* [Server functions](../building-apps/server-functions.md)
+
+## Related types
+
+### `LiveServerFunction`
+
+```ts
+interface LiveServerFunction<A extends readonly any[] = any[], R = any> {
+	(...args: A): LiveSource<R>;
+	readonly id: string;
+	readonly url: string;
+}
+```
+
+#### `id`
+
+* **Type:** `string`
+
+The build-stable function id (stable across the client and server builds).
+
+#### `url`
+
+* **Type:** `string`
+
+URL invoking this function directly over HTTP.
+
+### `LiveSource`
+
+A live call's answer: the source's iterable, plus an optional `onstatus`
+side channel for the wire facts the reconnect loop erases from the value
+stream — `"connected"` on each successful (re)connect, `"reconnecting"`
+(with the error) on each transient post-connect death, `"closed"` when
+the source completes or the consumer ends it — with the error when the
+end was a definite rejection (4xx) failing fast instead of retrying.
+
+```ts
+type LiveSource<R> = R & {
+	onstatus?: (state: LiveSourceStatus, error?: unknown) => void;
+};
+```
+
+### `LiveSourceStatus`
+
+Wire-state transitions a live call's iterable can report.
+
+```ts
+type LiveSourceStatus = "connected" | "reconnecting" | "closed";
+```

@@ -1,0 +1,236 @@
+# @solid-primitives/date
+
+Source version: `3.0.0-next.4`.
+
+[Upstream source](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/date/README.md) · [Skill catalogue](../catalogue.md#primitives-catalogue)
+
+
+Collection of reactive primitives and utility functions, providing easier ways to deal with dates in SolidJS.
+
+- [`createDate`](date.md#createdate) - Creates a reactive `Date` signal.
+- [`createDateNow`](date.md#createdatenow) - Creates an autoupdating and reactive `new Date()`.
+- [`createTimeDifference`](date.md#createtimedifference) - Provides a reactive time difference _(in ms)_ signal.
+- [`createTimeDifferenceFromNow`](date.md#createtimedifferencefromnow) - Provides a autoupdating, reactive time difference _(in ms)_ from **now** as a signal.
+- [`createTimeAgo`](date.md#createtimeago) - Provides a reactive, formatted, autoupdating date difference in relation to **now**.
+- [`createCountdown`](date.md#createcountdown) - Provides a reactive broken down time remaining Store.
+- [`createCountdownFromNow`](date.md#createcountdownfromnow) - Provides a reactive, autoupdating _(from **now**)_, broken down "time remaining" as a Store.
+- \+ [some non-reactive date-related utility functions](date.md#utility-functions).
+
+## Installation
+
+```
+npm install @solid-primitives/date
+# or
+yarn add @solid-primitives/date
+# or
+pnpm add @solid-primitives/date
+```
+
+## Reactive Primitives:
+
+### `createDate`
+
+Creates a reactive `Date` signal.
+
+```ts
+const [date, setDate] = createDate(1641408329089);
+
+date(); // T: Date
+
+setDate("2020 1 11");
+
+// passed initial value can be reactive
+const [timestamp, setTimestamp] = createSignal(1641408329089);
+const [date, setDate] = createDate(timestamp);
+
+setTimestamp(1341708325070); // will update the date
+```
+
+### `createDateNow`
+
+Creates an autoupdating and reactive `new Date()`.
+
+```ts
+import { createDateNow } from "@solid-primitives/date";
+
+// updates every second:
+const [now] = createDateNow(1000);
+
+// reactive timeout value
+const [timeout, setTimeout] = createSignal(500);
+const [now] = createDateNow(timeout);
+
+// won't autoupdate:
+const [now, update] = createDateNow(() => false);
+
+// update manually:
+update();
+```
+
+### `createTimeDifference`
+
+Provides a reactive time difference _(in ms)_ signal.
+
+```ts
+// the arguments can be reactive
+const [target, setTarget] = createSignal(1641408329089);
+const [diff, { from, to }] = createTimeDifference("2020 1 11", target);
+diff(); // T: number
+from(); // T: Date
+to(); // T: Date
+```
+
+### `createTimeDifferenceFromNow`
+
+Provides a autoupdating, reactive time difference _(in ms)_ from **now** as a signal.
+
+```ts
+const [target, setTarget] = createSignal(1641408329089);
+const [diff, { target, now, update }] = createTimeDifferenceFromNow(target);
+diff(); // T: number
+target(); // T: Date
+now(); // T: Date
+// manual update (automatic one can be disabled by passing false)
+update();
+
+// you can pass a custom interval (number or function or false)
+createTimeDifferenceFromNow(target, diff => (diff > 100000 ? 30000 : 1000));
+```
+
+### `createTimeAgo`
+
+Provides a reactive, formatted date difference in relation to now.
+
+```ts
+import { createTimeAgo, createDate } from "@solid-primitives/date";
+
+const [myDate, setMyDate] = createDate("Jun 28, 2021");
+const [timeago, { target, now, update, difference }] = createTimeAgo(myDate);
+// => 5 months ago
+
+timeago(); // => 5 months ago
+difference(); // T: number
+target(); // T: Date
+now(); // T: Date
+// manual update (automatic one can be disabled by passing false)
+update();
+
+// use custom libraries to change formatting:
+import { formatRelative } from "date-fns";
+const [timeago] = createTimeAgo(1577836800000, {
+  min: 10000,
+  interval: 30000,
+  relativeFormatter: (target, now) => formatRelative(target, now),
+});
+// => last Monday at 9:25 AM
+```
+
+### `createCountdown`
+
+Provides a reactive broken down time remaining Store.
+
+```ts
+const [to, setTo] = createSignal(1641408329089);
+const countdown = createCountdown("2020 1 11", to);
+
+countdown.minutes; // e.g. 5
+countdown.hours; // e.g. 1
+countdown.seconds; // e.g. 48
+```
+
+### `createCountdownFromNow`
+
+Provides a reactive, autoupdating _(from **now**)_, broken down "time remaining" as a Store.
+
+```ts
+// target date may be reactive
+const [to, setTo] = createSignal(1641408329089);
+const [countdown, { now, target, update }] = createCountdownFromNow(to);
+
+countdown.minutes; // e.g. 5
+countdown.hours; // e.g. 1
+countdown.seconds; // e.g. 48
+
+target(); // T: Date
+now(); // T: Date
+// manual update (automatic one can be disabled by passing false)
+update();
+
+// you can pass a custom interval (number or function or false)
+createCountdownFromNow(to, diff => (diff > 100000 ? 30000 : 1000));
+```
+
+## Utility Functions
+
+### `getDate`
+
+```ts
+/**
+ * @param init timestamp `number` | date `string` | `Date` instance
+ * @returns `Date` instance
+ */
+const getDate = (init: DateInit): Date
+```
+
+### `getTime`
+
+```ts
+/**
+ * @param init timestamp `number` | date `string` | `Date` instance
+ * @returns timestamp `number`
+ */
+const getTime = (init: DateInit): number
+```
+
+### `getDateDifference`
+
+Get the time difference between two dates _[ms]_
+
+```ts
+const getDateDifference = (from: Date, to: Date): number
+```
+
+### `getCountdown`
+
+Provides broken down time remaining from a time difference.
+
+```ts
+/**
+ * @param difference time difference between two dates *[ms]*
+ * @returns countdown object with keys: `days`, `hours`, `minutes`, etc.
+ */
+const getCountdown = (difference: number): Countdown
+```
+
+### `formatDate`
+
+Apply basic formatting to a `Date` instance.
+
+```ts
+const formatDate = (date: Date): string
+
+// example
+const date = new Date("2020 1 11")
+formatDate(date) // => '2020-01-10'
+```
+
+### `formatDateRelative`
+
+Applies relative time formatting based on a time difference from **now**.
+
+```ts
+/**
+ * @param difference time difference between a date and now *[ms]*
+ * @param messages custom messages for changing formatting
+ * @returns formatted string, e.g. *"2 seconds ago"*, *"in 3 weeks"*...
+ */
+function formatDateRelative(difference: number, messages?: Partial<RelativeFormatMessages>): string;
+```
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/date/CHANGELOG.md)
+
+## Acknowledgement
+
+- [VueUse — useTimeAgo](https://vueuse.org/core/usetimeago/)
