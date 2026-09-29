@@ -1,4 +1,5 @@
-import type { PaintNode } from './paintTree';
+import { drawClip, drawFirst, drawKind, drawMatrix, imageKind } from '../../plan/drawRecord';
+import type { PaintNode } from '../../plan/paintTree';
 
 /** Splits only at shader requirements. Preserves source paint order while allowing a lighter shader for ordinary fills. */
 export function curveRuns(trees: PaintNode[][], instances: ArrayBuffer, coverageOffsets?: Uint32Array) {
@@ -29,18 +30,18 @@ export function curveRuns(trees: PaintNode[][], instances: ArrayBuffer, coverage
       let minimumScale = Infinity;
 
       for (let index = node.first; index < node.first + node.count; index++) {
-        const simple = records.getUint32(index * 80 + 24, true) === 0 && records.getUint32(index * 80 + 72, true) < 2;
-        const offset = simple ? coverageOffsets?.[records.getUint32(index * 80 + 64, true)] : 0;
+        const simple = drawClip(records, index) === 0 && drawKind(records, index) < imageKind;
+        const offset = simple ? coverageOffsets?.[drawFirst(records, index)] : 0;
         let cacheScale = Infinity;
 
         if (offset) {
           const size = offset & 0x80000000 ? 64 : offset & 0x40000000 ? 32 : 128;
           // Frobenius norm bounds the largest singular value, including shear and rotation.
           const norm = Math.hypot(
-            records.getFloat32(index * 80, true),
-            records.getFloat32(index * 80 + 4, true),
-            records.getFloat32(index * 80 + 8, true),
-            records.getFloat32(index * 80 + 12, true)
+            drawMatrix(records, index, 0),
+            drawMatrix(records, index, 1),
+            drawMatrix(records, index, 2),
+            drawMatrix(records, index, 3)
           );
           cacheScale = 2 ** Math.ceil(Math.log2(Math.max(norm / size, Number.MIN_VALUE)));
         }

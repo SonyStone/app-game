@@ -1,8 +1,8 @@
 import { err, ok, Result } from 'neverthrow';
 import { documentError, errorMessage, type DocumentError } from '../../../shared/errors';
-import { compactGlyphs } from '../rendering/compactGlyphs';
-import { buildCoverageTables } from '../rendering/curves/buildCoverageTables';
-import { buildCurvePreparation } from '../rendering/curves/buildCurvePreparation';
+import { buildCoverageTables } from '../plan/buildCoverageTables';
+import { buildCurvePreparation } from '../plan/buildCurvePreparation';
+import { compactGlyphs } from './compactGlyphs';
 import type { DecodedDocument } from './types';
 import type { DecodeOutcome } from './wasm/gpu_document';
 

@@ -1,6 +1,6 @@
 import { render } from '@solidjs/web';
 import { err, ok, okAsync, ResultAsync } from 'neverthrow';
-import { createRoot, createSignal, flush, Loading, Show } from 'solid-js';
+import { createRoot, createSignal, flush, Show } from 'solid-js';
 import tgpu from 'typegpu';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocumentSource } from '../../../tests/fixtures/DocumentSource';
@@ -14,8 +14,8 @@ import { runWorkerRequest } from '../../shared/worker/runWorkerRequest';
 import { CameraControls } from '../camera/CameraControls';
 import { CameraTour } from '../camera/CameraTour';
 import { DocumentCamera } from '../camera/DocumentCamera';
+import { DocumentSpace } from '../camera/DocumentSpace';
 import { OverviewCamera, type OverviewCameraRef } from '../camera/OverviewCamera';
-import { DocumentSpace } from '../camera/SceneSpace';
 import { createDocumentSource } from '../document/createDocumentSource';
 import type { TextDocument } from '../document/document';
 import type { DecodedDocument } from '../document/format/types';
@@ -76,7 +76,7 @@ describe('document viewer ownership and reactivity', () => {
   it('starts decoding without a canvas and ignores late decoding after disposal', async () => {
     const pending = deferred<Awaited<ReturnType<typeof readGdoc>>>();
     vi.mocked(readGdoc).mockReturnValue(new ResultAsync(pending.promise));
-    const { viewer, setCanvas, dispose } = setup();
+    const { viewer, dispose } = setup();
     await settle();
     expect(readGdoc).toHaveBeenCalledOnce();
     expect(tgpu.initFromDevice).toHaveBeenCalledOnce();
@@ -221,12 +221,18 @@ describe('document viewer ownership and reactivity', () => {
     expect(frames.size).toBe(0);
   });
 
-  it('destroys a late GPU result without overwriting the replacement session', async () => {
+  it('ignores a late GPU result, which releases itself, without overwriting the replacement session', async () => {
     const pending = deferred<Awaited<ReturnType<typeof createTypeGpuRenderer>>>();
     const late = rendererFixture();
     const current = rendererFixture();
     vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture()));
-    vi.mocked(createTypeGpuRenderer).mockReturnValueOnce(pending.promise).mockResolvedValueOnce(ok(current));
+    // Like the real renderer, the late one destroys itself when its canvas detaches.
+    vi.mocked(createTypeGpuRenderer)
+      .mockImplementationOnce((gpu) => {
+        gpu.signal.addEventListener('abort', late.destroy, { once: true });
+        return pending.promise;
+      })
+      .mockResolvedValueOnce(ok(current));
     const { viewer, setCanvas } = setup();
     setCanvas(makeCanvas());
     await settle();
@@ -306,7 +312,7 @@ function setup(padding = { top: 44, right: 24, bottom: 84, left: 24 }) {
     const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
     const [session, setSession] = createSignal<{ file?: File }>({});
     const documentSource = createDocumentSource(() => session().file);
-    const { status: state, reportGpuError, rendererCallbacks } = createViewerStatus(documentSource, session);
+    const { status: state, reportGpuError, reportReady, reportResourceUsage } = createViewerStatus(documentSource);
     const [dragging, setDragging] = createSignal(false, { ownedWrite: true });
     const [autoZoom, setAutoZoom] = createSignal(false, { ownedWrite: true });
     const [vectorOnly, setVectorOnly] = createSignal(false);
@@ -338,45 +344,35 @@ function setup(padding = { top: 44, right: 24, bottom: 84, left: 24 }) {
             <Show when={canvas()} keyed>
               {(target) => (
                 <GpuCanvasProvider canvas={target} error={reportGpuError}>
-                  <Show when={!documentSource.error()}>
-                    <Loading on={session()}>
-                      {documentSource.document()?.match(
-                        ({ data, signal }) => (
-                          <Viewport>
-                            <FrameLoop onError={documentSource.fail}>
-                              {(loop) => (
-                                <DocumentCamera>
-                                  <DocumentSpace pageAspect={data.pages[0]!.width / data.pages[0]!.height}>
-                                    <CameraControls
-                                      pageAspect={data.pages[0]!.width / data.pages[0]!.height}
-                                      onInteraction={() => viewer.setAutoZoom(false)}
-                                      onDraggingChange={viewer.setDragging}
-                                    />
+                  <Show when={documentSource.prepared()} keyed>
+                    {({ data, fail }) => (
+                      <Viewport>
+                        <FrameLoop onError={fail}>
+                          <DocumentCamera pageAspect={data.pages[0]!.width / data.pages[0]!.height}>
+                            <DocumentSpace>
+                              <CameraControls
+                                onInteraction={() => viewer.setAutoZoom(false)}
+                                onDraggingChange={viewer.setDragging}
+                              />
 
-                                    <OverviewCamera document={data} ref={viewer.setOverviewCamera} padding={padding} />
+                              <OverviewCamera document={data} ref={viewer.setOverviewCamera} padding={padding} />
 
-                                    <CameraTour document={data} enabled={viewer.autoZoom()} />
+                              <CameraTour document={data} enabled={viewer.autoZoom()} />
 
-                                    <DocumentRendererProvider
-                                      document={data}
-                                      initialFrame="viewport"
-                                      {...rendererCallbacks(signal)}
-                                      error={(error) => {
-                                        loop.fail(error);
-                                        return null;
-                                      }}
-                                    >
-                                      <DocumentLayer vectorOnly={viewer.vectorOnly()} grids={viewer.grids()} />
-                                    </DocumentRendererProvider>
-                                  </DocumentSpace>
-                                </DocumentCamera>
-                              )}
-                            </FrameLoop>
-                          </Viewport>
-                        ),
-                        documentSource.fail
-                      )}
-                    </Loading>
+                              <DocumentRendererProvider
+                                document={data}
+                                initialFrame="viewport"
+                                onReady={reportReady}
+                                onResourceUsage={reportResourceUsage}
+                                error={fail}
+                              >
+                                <DocumentLayer vectorOnly={viewer.vectorOnly()} grids={viewer.grids()} />
+                              </DocumentRendererProvider>
+                            </DocumentSpace>
+                          </DocumentCamera>
+                        </FrameLoop>
+                      </Viewport>
+                    )}
                   </Show>
                 </GpuCanvasProvider>
               )}

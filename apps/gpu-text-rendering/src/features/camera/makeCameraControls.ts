@@ -1,7 +1,9 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { onCleanup } from 'solid-js';
+import type { Point } from '../scene/SceneSpace';
 import type { useViewport } from '../viewport/Viewport';
-import { moveCamera, type Camera, type Point } from './camera';
+import { moveCamera } from './camera';
+import type { useDocumentCamera } from './DocumentCamera';
 
 /**
  * Installs captured pointer gestures and wheel zoom for a fixed canvas; disposed with its Solid owner.
@@ -10,18 +12,16 @@ import { moveCamera, type Camera, type Point } from './camera';
 export function makeCameraControls(options: {
   /** Receives pointer and wheel events; pointers are captured while pressed. */
   canvas: HTMLCanvasElement;
-  /** Mutated in place by gestures. */
-  camera: Camera;
-  /** Current page width divided by height; read on each camera move. */
-  pageAspect: () => number;
+  /** Replaced by gestures through its updater form; the page aspect is read on each camera move. */
+  camera: Pick<ReturnType<typeof useDocumentCamera>, 'setCamera' | 'pageAspect'>;
   /** Supplies the canvas CSS size and client-to-canvas conversion. */
   viewport: Pick<ReturnType<typeof useViewport>, 'size' | 'clientToScreen'>;
-  /** Runs once per gesture start, camera move and wheel event, after any camera mutation. */
+  /** Runs once per gesture start, camera move and wheel event, after any camera update. */
   onInteraction: () => void;
   /** Reports whether any pointer is pressed. */
   onDraggingChange?: (dragging: boolean) => void;
 }) {
-  const { canvas, camera, pageAspect, viewport, onInteraction, onDraggingChange = () => {} } = options;
+  const { canvas, camera, viewport, onInteraction, onDraggingChange = () => {} } = options;
   const pointers = new Map<number, Point>();
 
   const local = (event: PointerEvent | WheelEvent): Point =>
@@ -29,7 +29,9 @@ export function makeCameraControls(options: {
 
   const apply = (from: Point, to: Point, scale = 1, angle = 0) => {
     const { width, height } = viewport.size().css;
-    moveCamera(camera, from, to, scale, angle, width, height, pageAspect());
+    const pageAspect = camera.pageAspect();
+    // Several events can arrive before Solid applies a write; the updater moves the latest staged camera.
+    camera.setCamera((current) => moveCamera(current, from, to, scale, angle, width, height, pageAspect));
     onInteraction();
   };
 

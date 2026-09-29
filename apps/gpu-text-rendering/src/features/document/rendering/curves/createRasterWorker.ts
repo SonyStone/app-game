@@ -1,8 +1,8 @@
 import { debounce } from '@solid-primitives/scheduled';
 import { err, ok, Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';
-import { errorMessage, gpuError, type GpuError } from '../../../../shared/errors';
-import { createWorkerTransport, type WorkerTransport } from '../../../../shared/worker/createWorkerTransport';
+import { errorMessage, gpuError, type GpuError, type ResultValue } from '../../../../shared/errors';
+import { openWorker } from '../../../../shared/worker/openWorker';
 import type { WorkerFailure } from '../../../../shared/worker/workerProtocol';
 import RasterWorker from './raster.worker?worker';
 import type { RasterReply, RasterRequest, RasterWorkerReply } from './rasterWorkerTypes';
@@ -17,7 +17,7 @@ import type { RasterReply, RasterRequest, RasterWorkerReply } from './rasterWork
  * with a 'destroyed' error.
  */
 export function createRasterWorker(create: () => Worker = () => new RasterWorker()) {
-  let connection: WorkerTransport<RasterRequest, RasterWorkerReply> | undefined;
+  let connection: RasterConnection | undefined;
   let cachedImage: number | undefined;
   let active: ((result: RasterResult) => void) | undefined;
   let destroyed = false;
@@ -66,16 +66,16 @@ export function createRasterWorker(create: () => Worker = () => new RasterWorker
 
     cachedImage = request.id;
     return transport.value
-      .post({ ...request, bytes: bytes.value }, (input) => (input.bytes ? [input.bytes] : []))
+      .post({ ...request, bytes: bytes.value }, bytes.value ? [bytes.value] : [])
       .mapErr(transportError);
   }
 
-  function connect(): Result<WorkerTransport<RasterRequest, RasterWorkerReply>, GpuError> {
+  function connect(): Result<RasterConnection, GpuError> {
     if (connection) {
       return ok(connection);
     }
 
-    const created = createWorkerTransport<RasterRequest, RasterWorkerReply>(create, {
+    const created = openWorker<RasterRequest, RasterWorkerReply>(create, {
       message: ({ data }) => {
         if (!('progress' in data)) {
           settle(data.ok ? ok(data.value) : err(gpuError('render', data.error)));
@@ -110,7 +110,7 @@ export function createRasterWorker(create: () => Worker = () => new RasterWorker
 
   function release() {
     releaseAfterIdle.clear();
-    connection?.destroy();
+    connection?.close();
     connection = undefined;
     cachedImage = undefined;
   }
@@ -126,6 +126,9 @@ export function createRasterWorker(create: () => Worker = () => new RasterWorker
     release();
   }
 }
+
+/** The open worker; replaced by a fresh one after a failure or idle shutdown. */
+type RasterConnection = ResultValue<ReturnType<typeof openWorker<RasterRequest, RasterWorkerReply>>>;
 
 /** Decoded tiles, or a render/destroyed failure. */
 type RasterResult = Result<RasterReply, GpuError>;

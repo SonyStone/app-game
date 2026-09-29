@@ -23,16 +23,11 @@ vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({
 }));
 vi.mock('../viewport/Viewport', () => ({ Viewport: (props: { children: JSX.Element }) => props.children }));
 vi.mock('../camera/DocumentCamera', () => ({ DocumentCamera: (props: { children: JSX.Element }) => props.children }));
-vi.mock('../camera/SceneSpace', () => ({ DocumentSpace: (props: { children: JSX.Element }) => props.children }));
+vi.mock('../camera/DocumentSpace', () => ({ DocumentSpace: (props: { children: JSX.Element }) => props.children }));
 vi.mock('../camera/CameraControls', () => ({ CameraControls: () => null }));
 vi.mock('../camera/CameraTour', () => ({ CameraTour: () => null }));
 vi.mock('../camera/OverviewCamera', () => ({ OverviewCamera: () => null }));
-vi.mock('../scene/FrameLoop', () => ({
-  FrameLoop: (props: {
-    onError: (error: GpuError) => void;
-    children: (loop: { fail: (error: GpuError) => void }) => JSX.Element;
-  }) => props.children({ fail: (error) => props.onError(error) })
-}));
+vi.mock('../scene/FrameLoop', () => ({ FrameLoop: (props: { children: JSX.Element }) => props.children }));
 type RendererProps = Parameters<typeof DocumentRendererProvider>[0];
 const preparations: RendererProps[] = [];
 const released = vi.fn();
@@ -223,7 +218,8 @@ it('hides the loading panel when ready and retains preparation time after reside
   expect(host.querySelector('[role="alert"]')?.textContent).toContain('Device lost');
 });
 
-it('resets preparation and ignores old renderer callbacks after replacement', async () => {
+// DocumentRendererProvider stops calling onReady/onResourceUsage once released (see documentRendererProvider.test).
+it('resets preparation after replacement and ignores the old document failure handler', async () => {
   const host = mount();
   await vi.waitFor(() => expect(preparations).toHaveLength(1));
   const previous = preparations[0]!;
@@ -237,9 +233,8 @@ it('resets preparation and ignores old renderer callbacks after replacement', as
   open();
   await vi.waitFor(() => expect(finish).toBeDefined());
   expect(released).toHaveBeenCalledWith(previous);
+  expect(statusText(host)).toBe('loading');
   previous.error(gpuError('validation', 'Obsolete renderer failure'));
-  previous.onResourceUsage!(2048);
-  previous.onReady!({ preparationMs: 99, resourceBytes: 4096 });
   flush();
   expect(statusText(host)).toBe('loading');
   finish(ok(scene()));

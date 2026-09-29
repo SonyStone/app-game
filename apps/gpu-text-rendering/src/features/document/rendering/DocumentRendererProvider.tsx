@@ -1,17 +1,16 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
-import { createContext, createSignal, onCleanup, Show, untrack, useContext } from 'solid-js';
+import { createContext, createSignal, Show, untrack, useContext } from 'solid-js';
 import type { ViewerError } from '../../../shared/errors';
 import { useGpuCanvas } from '../../../shared/gpu/GpuCanvasProvider';
+import { onGpuRelease } from '../../../shared/gpu/onGpuRelease';
 import { TokenContext } from '../../../shared/jsx/TokenContext';
-import { runWorkerRequest } from '../../../shared/worker/runWorkerRequest';
 import { useDocumentCamera } from '../../camera/DocumentCamera';
-import { resolveSceneChildren } from '../../scene/resolveSceneChildren';
 import { useViewport } from '../../viewport/Viewport';
 import type { TextDocument } from '../document';
+import { buildCoverage } from '../documentWorkerProtocol';
 import { createFrame, type SceneFrame } from './createFrame';
 import { createTypeGpuRenderer, type TextRenderer } from './createTypeGpuRenderer';
-import CoverageWorker from './curves/coverage.worker?worker';
 import { createRasterWorker } from './curves/createRasterWorker';
 import type { DocumentWorkers } from './DocumentWorkers';
 
@@ -24,8 +23,8 @@ export function DocumentRendererProvider(props: {
   document: TextDocument;
   /** Initial pages to prepare. 'viewport' captures the enclosing camera and viewport once; omit to prewarm all pages. */
   initialFrame?: SceneFrame | 'viewport';
-  /** JSX or a function mounted only when ready, beneath the document context and owned by this session. */
-  children: JSX.Element | ((value: ReturnType<typeof useDocumentRenderer>) => JSX.Element);
+  /** Mounted only when ready, beneath the document context and owned by this session. */
+  children: JSX.Element;
   /** Shown while the document prepares. Default nothing. */
   loading?: JSX.Element;
   /** Renders a preparation failure in place of children; called once per failed document. */
@@ -47,12 +46,10 @@ export function DocumentRendererProvider(props: {
     const [prepared, setPrepared] = createSignal<Awaited<ReturnType<typeof createTypeGpuRenderer>>>();
     const raster = createRasterWorker();
     const abort = new AbortController();
-    const coverage: DocumentWorkers['coverage'] = (input) =>
-      runWorkerRequest(() => new CoverageWorker(), input, { signal: abort.signal });
+    const coverage: DocumentWorkers['coverage'] = (input) => buildCoverage(input, { signal: abort.signal });
     let renderer: TextRenderer | undefined;
 
-    onCleanup(dispose);
-    makeEventListener(gpu.signal, 'abort', dispose, { once: true });
+    onGpuRelease(gpu.signal, dispose);
 
     const started = performance.now();
     const initialFrame = untrack(() => {
@@ -60,14 +57,15 @@ export function DocumentRendererProvider(props: {
         return props.initialFrame;
       }
       const { pixels, css } = useViewport().size();
-      return createFrame(document, useDocumentCamera(), pixels.width, pixels.height, { displaySize: css });
+      return createFrame(document, useDocumentCamera().camera(), pixels.width, pixels.height, { displaySize: css });
     });
-    void createTypeGpuRenderer(gpu, document, { raster, coverage }, abort.signal, initialFrame).then((result) => {
-      if (abort.signal.aborted || gpu.signal.aborted) {
-        if (result.isOk()) {
-          result.value.destroy();
-        }
-
+    void createTypeGpuRenderer(gpu, document, {
+      workers: { raster, coverage },
+      signal: abort.signal,
+      initialFrame
+    }).then((result) => {
+      // A renderer destroys itself when its preparation signal or canvas aborts, and GPU abort disposes this session.
+      if (abort.signal.aborted) {
         return;
       }
 
@@ -91,7 +89,7 @@ export function DocumentRendererProvider(props: {
             });
             return (
               <TokenContext context={DocumentContext} value={value}>
-                {resolveSceneChildren(props.children, value)}
+                {props.children}
               </TokenContext>
             );
           }, props.error)

@@ -1,4 +1,4 @@
-import { createMemo, createSignal, type Accessor } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import type { GpuError, ViewerError } from '../../shared/errors';
 import type { DocumentSource } from '../document/createDocumentSource';
 import type { DocumentProgress } from '../document/documentProgress';
@@ -6,19 +6,20 @@ import type { DocumentRendererProvider } from '../document/rendering/DocumentRen
 
 /**
  * Derives display status from independent GPU, source and preparation state.
- * Changing selection resets preparation, including reopening the same file. GPU failures persist.
- * Requires the source's owner; async source results are observed without suspending the status UI.
+ * Each prepared document resets renderer preparation, including a reopened file. GPU failures persist.
+ * Requires the source's owner.
  */
-export function createViewerStatus(source: DocumentSource, selection: Accessor<unknown>) {
+export function createViewerStatus(source: DocumentSource) {
   const [gpuError, setGpuError] = createSignal<GpuError | undefined>(undefined, { ownedWrite: true });
   type ReadyInfo = Parameters<NonNullable<Parameters<typeof DocumentRendererProvider>[0]['onReady']>>[0];
   const [preparation, setPreparation] = createSignal<ReadyInfo | undefined>(
     () => {
-      selection();
+      source.prepared();
       return undefined;
     },
     { ownedWrite: true }
   );
+  // GPU failures take precedence over the source's loading failure.
   const error = createMemo(() => gpuError() ?? source.error());
 
   const status = createMemo<ViewerStatus>(() => {
@@ -57,12 +58,8 @@ export function createViewerStatus(source: DocumentSource, selection: Accessor<u
   return {
     /** Current display phase: error, cancelled, ready, preparing or loading with progress. */
     status,
-    /** Terminal GPU failure, else the source's loading failure; GPU failures take precedence. */
-    error,
     /** Whether the document is loading or preparing graphics. */
     isBusy,
-    /** Loading or preparation progress while busy; undefined otherwise. */
-    progress,
     /** Whole progress percentage in 0-100 when the total is known; undefined otherwise. */
     percent,
     /** Whether the renderer reported the current document as prepared. */
@@ -72,20 +69,16 @@ export function createViewerStatus(source: DocumentSource, selection: Accessor<u
       setGpuError(error);
       return null;
     },
-    /** Captures a document lifetime. Late callbacks after replacement, cancellation or failure are ignored. */
-    rendererCallbacks(signal: AbortSignal) {
-      return {
-        onReady(info: ReadyInfo) {
-          if (!signal.aborted) {
-            setPreparation(info);
-          }
-        },
-        onResourceUsage(resourceBytes: number) {
-          if (!signal.aborted) {
-            setPreparation((current) => current && { ...current, resourceBytes });
-          }
-        }
-      };
+    /**
+     * Records the current renderer's successful preparation. DocumentRendererProvider stops reporting once its
+     * document is replaced, cancelled or failed, and error/cancelled phases outrank ready.
+     */
+    reportReady(info: ReadyInfo) {
+      setPreparation(info);
+    },
+    /** Updates the ready renderer's GPU residency; ignored before readiness. */
+    reportResourceUsage(resourceBytes: number) {
+      setPreparation((current) => current && { ...current, resourceBytes });
     }
   };
 }

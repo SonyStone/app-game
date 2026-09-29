@@ -1,8 +1,7 @@
-import type { Result } from 'neverthrow';
 import { documentError, errorMessage, type AbortedError, type DocumentError } from '../../shared/errors';
-import type { WorkerFailure, WorkerReply } from '../../shared/worker/workerProtocol';
+import type { WorkerFailure } from '../../shared/worker/workerProtocol';
 
-/** Converts transport failures while preserving document errors and owner cancellation. */
+/** Converts transport failures while preserving document errors and cancellation. */
 export function documentWorkerError(
   failure: WorkerFailure | DocumentError | AbortedError
 ): DocumentError | AbortedError {
@@ -22,16 +21,9 @@ export function documentWorkerError(
 }
 
 /**
- * Adapts a worker-side result to its reply envelope. Errors keep only their kind, code and message:
+ * Keeps only a worker-side error's kind, code and message for its reply:
  * an external `cause` (for example a WASM exception) may not survive structured cloning.
  */
-export function documentReply<T>(
-  result: Result<T, DocumentError>
-): Exclude<WorkerReply<T, DocumentError>, { progress: unknown }> {
-  if (result.isErr()) {
-    const { kind, code, message } = result.error;
-    return { ok: false, error: { kind, code, message } };
-  }
-
-  return { ok: true, value: result.value };
+export function cloneableDocumentError({ kind, code, message }: DocumentError): DocumentError {
+  return { kind, code, message };
 }

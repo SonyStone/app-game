@@ -4,14 +4,12 @@ import { createMemo, createSignal, latest, onCleanup, type Accessor } from 'soli
 import { downloadFile } from '../../shared/downloadFile';
 import { documentError, errorMessage, type AbortedError, type DocumentError } from '../../shared/errors';
 import { readFileBytes } from '../../shared/readFileBytes';
-import { runWorkerRequest } from '../../shared/worker/runWorkerRequest';
 import type { PreparedDocument } from '../document/createDocumentSource';
-import { documentWorkerError } from '../document/documentWorkerError';
-import ConvertWorker from '../document/pdf/convert.worker?worker';
+import { convertDocument } from '../document/documentWorkerProtocol';
 
 /**
  * Provides an on-demand save command for the prepared PDF returned by an accessor.
- * Undefined disables export. Read status beneath Loading when the accessor depends on async loading.
+ * Undefined disables export.
  * Owns conversion workers and cached downloads; changing, cancelling or failing the source releases them.
  */
 export function createDocumentExport(document: Accessor<PreparedDocument | undefined>) {
@@ -86,12 +84,7 @@ function createPdfExport(file: File, signal: AbortSignal) {
               return ok();
             }
 
-            const converted = (
-              await runWorkerRequest<ArrayBuffer, ArrayBuffer, DocumentError>(() => new ConvertWorker(), bytes, {
-                signal: controller.signal,
-                transfer: [bytes]
-              })
-            ).mapErr(documentWorkerError);
+            const converted = await convertDocument(bytes, { signal: controller.signal });
             if (controller.signal.aborted) {
               return ok();
             }

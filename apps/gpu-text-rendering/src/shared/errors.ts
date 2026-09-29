@@ -53,9 +53,14 @@ export function gpuError(code: GpuError['code'], message: string, cause?: unknow
   return { kind: 'gpu', code, message, cause };
 }
 
+/** The shared cancellation outcome; cancelled operations resolve it rather than rejecting. */
+export function abortedError(): AbortedError {
+  return { kind: 'aborted', message: 'Operation cancelled' };
+}
+
 /** Checks cancellation without throwing the signal's untyped reason. */
 export function checkAborted(signal?: AbortSignal): Result<void, AbortedError> {
-  return signal?.aborted ? err({ kind: 'aborted', message: 'Operation cancelled' }) : ok();
+  return signal?.aborted ? err(abortedError()) : ok();
 }
 
 /**

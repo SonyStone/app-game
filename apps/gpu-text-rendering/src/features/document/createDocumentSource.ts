@@ -2,16 +2,12 @@ import { createAbortable } from '@solid-primitives/async';
 import { access, type MaybeAccessor } from '@solid-primitives/utils';
 import { err, ok } from 'neverthrow';
 import { createMemo, createSignal, latest, merge } from 'solid-js';
-import type { ResultValue, ViewerError } from '../../shared/errors';
-import { runWorkerRequest, type RunProtocolRequest } from '../../shared/worker/runWorkerRequest';
+import { abortedError, type ViewerError } from '../../shared/errors';
 import demoUrl from './assets/demo.gdoc?url';
 import type { TextDocument } from './document';
 import type { DocumentProgress } from './documentProgress';
-import { documentWorkerError } from './documentWorkerError';
-import type { DecodeInput, DocumentReply, ImportInput } from './documentWorkerProtocol';
-import DecodeWorker from './format/decode.worker?worker';
+import { decodeDocument, importDocument } from './documentWorkerProtocol';
 import { layoutPages } from './layoutPages';
-import ImportWorker from './pdf/import.worker?worker';
 import { readDocumentFile } from './readDocumentFile';
 
 /**
@@ -38,13 +34,9 @@ export function createDocumentSource(input: MaybeAccessor<File | undefined>) {
       }
       const { format, bytes } = input.value;
       report({ stage: 'loadingDecoder' });
-      const options = { signal, transfer: bytes instanceof ArrayBuffer ? [bytes] : [], onProgress: report };
-      const importDocument: RunProtocolRequest<ImportInput, DocumentReply> = runWorkerRequest;
-      const decodeDocument: RunProtocolRequest<DecodeInput, DocumentReply> = runWorkerRequest;
-      const result = await (format === 'pdf'
-        ? importDocument(() => new ImportWorker(), bytes, options)
-        : decodeDocument(() => new DecodeWorker(), bytes, options));
-      return result.mapErr(documentWorkerError).map((data) => ({ data, format }));
+      const options = { signal, onProgress: report };
+      const result = await (format === 'pdf' ? importDocument(bytes, options) : decodeDocument(bytes, options));
+      return result.map((data) => ({ data, format }));
     });
 
     const document = createMemo(() => {
@@ -58,7 +50,9 @@ export function createDocumentSource(input: MaybeAccessor<File | undefined>) {
         })
       );
     });
-    const ready = createMemo(() => document()?.isOk() ?? false, { loadingValue: false });
+    // Each selection builds fresh memos, so every load is a first flight served by `loadingValue`: readers see
+    // undefined instead of suspending, and a replacement never exposes the previous selection's document.
+    const prepared = createMemo(() => document()?.unwrapOr(undefined), { loadingValue: undefined });
     const decodeFailure = createMemo<ViewerError | undefined>(
       () =>
         document()?.match(
@@ -69,10 +63,13 @@ export function createDocumentSource(input: MaybeAccessor<File | undefined>) {
     );
 
     return {
-      /** Read beneath Loading while the selected file is loading. */
-      document,
-      /** Synchronous status, including when no Loading boundary is mounted. */
-      ready,
+      /**
+       * The laid-out document with its file, lifetime signal and `fail` handler; undefined while loading, after
+       * cancellation or on failure. Never suspends, so no Loading boundary is needed. A new object per selection.
+       */
+      prepared,
+      /** Whether the current selection has a prepared document. */
+      ready: () => prepared() !== undefined,
       // Progress must remain live while the decoded document holds an async update.
       progress: () => latest(progress),
       /** False after cancellation; a cancelled selection shows no error. */
@@ -87,7 +84,7 @@ export function createDocumentSource(input: MaybeAccessor<File | undefined>) {
         if (signal.aborted) {
           return;
         }
-        setFailure({ kind: 'aborted', message: 'Operation cancelled' });
+        setFailure(abortedError());
         abort();
       },
       /** Capture this handler so a late failure cannot affect a replacement selection. */
@@ -124,4 +121,4 @@ export type DocumentSource = ReturnType<typeof createDocumentSource>;
 const layoutAspect = 2;
 
 /** Prepared GPU data together with its original file metadata and lifetime signal. */
-export type PreparedDocument = ResultValue<NonNullable<ReturnType<DocumentSource['document']>>>;
+export type PreparedDocument = NonNullable<ReturnType<DocumentSource['prepared']>>;

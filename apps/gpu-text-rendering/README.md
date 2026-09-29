@@ -26,6 +26,7 @@ src/
       assets/            Bundled demo.gdoc
       format/            GDOC Worker, WASM adapter and generated decoder
       pdf/               PDF conversion Worker and its separately loaded WASM
+      plan/              GPU-free record accessors, paint plans and coverage tables
       rendering/         Document GPU resources, shaders, preparation and drawing
         curves/          Instanced cubic contour renderer for imported PDFs
     camera/              Camera math, pointer controls, tour and coordinate spaces

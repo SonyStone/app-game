@@ -1,5 +1,5 @@
 import type { GpuContext } from '../../../shared/gpu/context';
-import { deferRefinement } from './curves/deferRefinement';
+import { yieldToEventLoop } from './yieldToEventLoop';
 
 /**
  * Uploads aligned bytes in at most 4 MiB writes, yielding between large chunks.
@@ -28,13 +28,7 @@ export async function uploadBuffer(
       Math.min(chunkBytes, byteLength - offset)
     );
     if (offset + chunkBytes < byteLength) {
-      await new Promise<void>((resolve) => {
-        const task = deferRefinement(() => {
-          task.destroy();
-          resolve();
-        });
-        task.schedule(0);
-      });
+      await yieldToEventLoop();
     }
   }
 }

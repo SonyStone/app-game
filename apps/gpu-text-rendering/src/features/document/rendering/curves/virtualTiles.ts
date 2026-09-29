@@ -1,3 +1,5 @@
+import { drawMatrix, drawPage, drawTranslation } from '../../plan/drawRecord';
+import { imageCount, imageHeight, imageWidth } from '../../plan/imageRecord';
 import type { SceneFrame } from '../createFrame';
 
 /** Image metadata and packed, permanently resident mip tail. Levels use floor-sized WebGPU mip dimensions. */
@@ -24,9 +26,9 @@ export function packMipTails(table: DataView) {
     let rowHeight = 0;
     let width = 1;
 
-    for (let id = 0; id < table.byteLength / 24; id++) {
-      const w = table.getUint32(id * 24, true);
-      const h = table.getUint32(id * 24 + 4, true);
+    for (let id = 0; id < imageCount(table); id++) {
+      const w = imageWidth(table, id);
+      const h = imageHeight(table, id);
       const level = Math.max(0, Math.ceil(Math.log2(Math.max(w, h) / (h === 1 ? side * 16 : side))));
       let tailWidth = 0;
 
@@ -62,16 +64,15 @@ export function visibleImage(
   records: DataView,
   index: number,
   frame: SceneFrame,
-  page = frame.visible.find(({ index: page }) => page === records.getUint32(index * 80 + 76, true))?.page
+  page = frame.visible.find(({ index: page }) => page === drawPage(records, index))?.page
 ) {
-  const offset = index * 80;
   const m = frame.rotation;
-  const px = (records.getFloat32(offset + 16, true) - (page?.x ?? 0)) * frame.mul[0] + frame.add[0];
-  const py = (1 - records.getFloat32(offset + 20, true) - (page?.y ?? 0)) * frame.mul[1] + frame.add[1];
-  const ax = records.getFloat32(offset, true) * frame.mul[0];
-  const ay = -records.getFloat32(offset + 4, true) * frame.mul[1];
-  const bx = records.getFloat32(offset + 8, true) * frame.mul[0];
-  const by = -records.getFloat32(offset + 12, true) * frame.mul[1];
+  const px = (drawTranslation(records, index, 0) - (page?.x ?? 0)) * frame.mul[0] + frame.add[0];
+  const py = (1 - drawTranslation(records, index, 1) - (page?.y ?? 0)) * frame.mul[1] + frame.add[1];
+  const ax = drawMatrix(records, index, 0) * frame.mul[0];
+  const ay = -drawMatrix(records, index, 1) * frame.mul[1];
+  const bx = drawMatrix(records, index, 2) * frame.mul[0];
+  const by = -drawMatrix(records, index, 3) * frame.mul[1];
   const x = m[0]! * px + m[2]! * py;
   const y = m[1]! * px + m[3]! * py;
   const ux = m[0]! * ax + m[2]! * ay;

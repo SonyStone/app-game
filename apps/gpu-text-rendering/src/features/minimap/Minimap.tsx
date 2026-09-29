@@ -1,11 +1,10 @@
 import { createMemo } from 'solid-js';
-import { documentBounds, screenToWorld, type Point } from '../camera/camera';
+import { documentBounds, pageRects, screenToWorld } from '../camera/camera';
 import { useDocumentCamera } from '../camera/DocumentCamera';
-import { ScreenSpace } from '../camera/SceneSpace';
 import type { TextDocument } from '../document/document';
 import { Rectangle, type RectanglePointerEvent } from '../graphics/Rectangle';
 import { Rectangles } from '../graphics/Rectangles';
-import { useFrameLoop } from '../scene/FrameLoop';
+import { AffineSpace } from '../scene/SceneSpace';
 import { useViewport } from '../viewport/Viewport';
 
 /**
@@ -16,92 +15,70 @@ import { useViewport } from '../viewport/Viewport';
 export function Minimap(props: {
   /** Laid-out pages to outline. */
   document: TextDocument;
-  /** Called after each navigation moves the camera, before the frame is invalidated. */
+  /** Called after each navigation moves the camera. */
   onNavigate?: () => void;
   /** Painter order of the backdrop; pages and the view marker draw just above it. Default 100. */
   order?: number;
 }) {
-  const camera = useDocumentCamera();
+  const { camera, setCamera, pageAspect } = useDocumentCamera();
   const viewport = useViewport();
-  const loop = useFrameLoop();
   const order = () => props.order ?? 100;
 
-  const pageAspect = createMemo(() => props.document.pages[0]!.width / props.document.pages[0]!.height);
+  const pages = createMemo(() => pageRects(props.document.pages));
   const bounds = createMemo(() => documentBounds(props.document.pages));
 
-  // Screen box preserving the document's physical aspect: world x units are pageAspect times wider than y units.
-  const box = createMemo(() => {
+  // Places document units in the corner. World x units are pageAspect times wider than y units; y points up.
+  const layout = createMemo(() => {
     const { left, right, bottom, top } = bounds();
-    const width = (right - left) * pageAspect();
-    const height = top - bottom;
-    const scale = Math.min(maxSize.width / width, maxSize.height / height);
+    const unitX = pageAspect();
+    const scale = Math.min(maxSize.width / ((right - left) * unitX), maxSize.height / (top - bottom));
+    const x = viewport.size().css.width - margin - (right - left) * unitX * scale;
+    const padX = padding / (unitX * scale);
+    const padY = padding / scale;
 
     return {
-      x: viewport.size().css.width - margin - width * scale,
-      y: margin,
-      width: width * scale,
-      height: height * scale,
-      scale
+      transform: {
+        origin: { x: x - left * unitX * scale, y: margin + top * scale },
+        axisX: { x: unitX * scale, y: 0 },
+        axisY: { x: 0, y: -scale }
+      },
+      backdrop: { x: left - padX, y: bottom - padY, width: right - left + 2 * padX, height: top - bottom + 2 * padY }
     };
   });
 
-  const toMinimap = (point: Point): Point => ({
-    x: box().x + (point.x - bounds().left) * pageAspect() * box().scale,
-    y: box().y + (bounds().top - point.y) * box().scale
-  });
-
-  const fromMinimap = (point: Point): Point => ({
-    x: bounds().left + (point.x - box().x) / (pageAspect() * box().scale),
-    y: bounds().top - (point.y - box().y) / box().scale
-  });
-
-  const pages = createMemo(() => {
-    const first = props.document.pages[0]!;
-
-    return props.document.pages.map((page) => {
-      const corner = toMinimap({ x: -page.x, y: 1 - page.y });
-      return {
-        x: corner.x,
-        y: corner.y,
-        width: (page.width / first.width) * pageAspect() * box().scale,
-        height: (page.height / first.height) * box().scale
-      };
-    });
-  });
-
-  // The camera is not reactive: this runs while drawing, after whatever moved it requested the frame.
-  const view = () => {
+  // The area the camera shows, clipped to the pages' bounds.
+  const view = createMemo(() => {
     const { width, height } = viewport.size().css;
     const corners = [
       { x: 0, y: 0 },
       { x: width, y: 0 },
       { x: 0, y: height },
       { x: width, y: height }
-    ].map((corner) => toMinimap(screenToWorld(camera, corner, width, height, pageAspect())));
-    const { x, y, width: boxWidth, height: boxHeight } = box();
-    const left = Math.max(x, Math.min(...corners.map((corner) => corner.x)));
-    const right = Math.min(x + boxWidth, Math.max(...corners.map((corner) => corner.x)));
-    const top = Math.max(y, Math.min(...corners.map((corner) => corner.y)));
-    const bottom = Math.min(y + boxHeight, Math.max(...corners.map((corner) => corner.y)));
+    ].map((corner) => screenToWorld(camera(), corner, width, height, pageAspect()));
+    const { left, right, bottom, top } = bounds();
+    const x = Math.max(left, Math.min(...corners.map((corner) => corner.x)));
+    const y = Math.max(bottom, Math.min(...corners.map((corner) => corner.y)));
 
-    return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
-  };
+    return {
+      x,
+      y,
+      width: Math.max(0, Math.min(right, Math.max(...corners.map((corner) => corner.x))) - x),
+      height: Math.max(0, Math.min(top, Math.max(...corners.map((corner) => corner.y))) - y)
+    };
+  });
 
   function navigate(event: RectanglePointerEvent) {
-    const target = fromMinimap(event.point);
-    camera.x = target.x;
-    camera.y = target.y;
+    setCamera((current) => ({ ...current, x: event.point.x, y: event.point.y }));
     props.onNavigate?.();
-    loop.invalidate();
   }
 
   return (
-    <ScreenSpace>
+    <AffineSpace transform={layout().transform}>
       <Rectangle
-        x={box().x - padding}
-        y={box().y - padding}
-        width={box().width + padding * 2}
-        height={box().height + padding * 2}
+        x={layout().backdrop.x}
+        y={layout().backdrop.y}
+        width={layout().backdrop.width}
+        height={layout().backdrop.height}
         color={[0.08, 0.1, 0.12, 0.72]}
         order={order()}
         onPointerDown={navigate}
@@ -116,11 +93,13 @@ export function Minimap(props: {
         color={[1, 0.55, 0.1, 0.4]}
         order={order() + 2}
       />
-    </ScreenSpace>
+    </AffineSpace>
   );
 }
 
 /** Largest minimap size in CSS pixels, excluding padding. */
 const maxSize = { width: 180, height: 220 };
+/** Distance from the canvas's top and right edges in CSS pixels. */
 const margin = 16;
+/** Backdrop padding around the pages in CSS pixels. */
 const padding = 6;

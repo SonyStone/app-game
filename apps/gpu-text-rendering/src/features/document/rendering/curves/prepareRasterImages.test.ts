@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mountRendererWorkers } from '../../../../../tests/browser/workerHarness';
 import { gpuError } from '../../../../shared/errors';
 import type { GpuContext } from '../../../../shared/gpu/context';
-import { createGpuResources } from '../../../../shared/gpu/resources';
+import { makeGpuResources } from '../../../../shared/gpu/resources';
 import { isWorkerShutdown, type workerShutdown } from '../../../../shared/worker/workerProtocol';
 import type { SceneFrame } from '../createFrame';
 import { prepareRasterImages } from './prepareRasterImages';
@@ -30,8 +30,8 @@ describe('virtual image residency', () => {
     expect((await prepared).isOk()).toBe(true);
     const groups = fixture.ranges.map((run) => fixture.cache.get(run.image));
     expect(groups.every(Boolean)).toBe(true);
-    fixture.cache.update(fixture.instances, fixture.ranges.slice(0, 1), frame);
-    fixture.cache.update(fixture.instances, fixture.ranges, frame);
+    fixture.cache.update(fixture.ranges.slice(0, 1), frame);
+    fixture.cache.update(fixture.ranges, frame);
     // The very first overview draws all fallbacks even though no detail request has completed.
     expect(fixture.ranges.map((run) => fixture.cache.get(run.image))).toEqual(groups);
     fixture.owner.destroy();
@@ -47,7 +47,7 @@ describe('virtual image residency', () => {
     expect(fixture.cache.get(0)).toBeDefined();
     expect(fixture.cache.get(1)).toBeUndefined();
     expect(fixture.cache.get(2)).toBeUndefined();
-    fixture.cache.update(fixture.instances, fixture.ranges.slice(1, 2), frame);
+    fixture.cache.update(fixture.ranges.slice(1, 2), frame);
     await drain();
     await fixture.cache.settle();
     expect(fixture.cache.get(1)).toBeDefined();
@@ -81,7 +81,7 @@ describe('virtual image residency', () => {
     const fixture = setup(2, 4096, 4096);
     const changes: unknown[] = [];
     fixture.cache.events.addEventListener('change', (event) => changes.push((event as CustomEvent).detail?.image));
-    fixture.cache.update(fixture.instances, fixture.ranges, frame);
+    fixture.cache.update(fixture.ranges, frame);
     const worker = FakeWorker.all[0]!;
     const first = worker.requests.shift()!;
     worker.dispatchEvent(new MessageEvent('message', { data: { ok: false, error: 'Corrupt JPEG' } }));
@@ -93,7 +93,7 @@ describe('virtual image residency', () => {
     const other = 1 - first.id;
     expect(fixture.cache.get(other)).toBeDefined();
     expect(fixture.cache.isSettled(first.id)).toBe(true);
-    fixture.cache.update(fixture.instances, fixture.ranges, { ...frame, width: 1600, height: 1600 });
+    fixture.cache.update(fixture.ranges, { ...frame, width: 1600, height: 1600 });
     await Promise.resolve();
     const requested = FakeWorker.all.at(-1)!.requests.map(({ id }) => id);
     expect(requested).not.toContain(first.id);
@@ -107,7 +107,7 @@ describe('virtual image residency', () => {
     const fixture = setup(1, 4096, 4096);
     expect((await Promise.all([fixture.cache.prepareMipTails(), drain()]))[0].isOk()).toBe(true);
     const tail = fixture.cache.get(0);
-    fixture.cache.update(fixture.instances, fixture.ranges, frame);
+    fixture.cache.update(fixture.ranges, frame);
     const worker = FakeWorker.all.at(-1)!;
     expect(worker.requests.at(-1)!.tiles.length).toBeGreaterThan(0);
     worker.dispatchEvent(new MessageEvent('message', { data: { ok: false, error: 'Truncated scan' } }));
@@ -147,17 +147,17 @@ describe('virtual image residency', () => {
 
   it('keeps all shown images visible immediately through zoom in/out and offscreen eviction', async () => {
     const fixture = setup(16, 4096, 4096);
-    fixture.cache.update(fixture.instances, fixture.ranges, frame);
+    fixture.cache.update(fixture.ranges, frame);
     await drain();
     await fixture.cache.settle();
     const groups = fixture.ranges.map((run) => fixture.cache.get(run.image));
     expect(groups.every(Boolean)).toBe(true);
 
-    fixture.cache.update(fixture.instances, fixture.ranges.slice(0, 1), { ...frame, mul: [100, 100], add: [-50, -50] });
+    fixture.cache.update(fixture.ranges.slice(0, 1), { ...frame, mul: [100, 100], add: [-50, -50] });
     expect(fixture.cache.get(0)).toBe(groups[0]);
     await drain();
     await fixture.cache.settle();
-    fixture.cache.update(fixture.instances, fixture.ranges, frame);
+    fixture.cache.update(fixture.ranges, frame);
     expect(fixture.ranges.map((run) => fixture.cache.get(run.image))).toEqual(groups);
     expect(fixture.textures.every((texture) => texture.destroy.mock.calls.length === 0)).toBe(true);
     expect(fixture.cache.resourceBytes).toBeLessThan(96 * 1024 * 1024);
@@ -169,13 +169,13 @@ describe('virtual image residency', () => {
   it('reuses slots under pressure while retaining every image fallback', async () => {
     const fixture = setup(32, 4096, 4096);
     const large = { ...frame, width: 8000, height: 8000 };
-    fixture.cache.update(fixture.instances, fixture.ranges, large);
+    fixture.cache.update(fixture.ranges, large);
     await drain();
     const groups = fixture.ranges.map((run) => fixture.cache.get(run.image));
     const used = fixture.writeTexture.mock.calls.filter((call) => call[3][0] === tileExtent).length;
     expect(used).toBe(961);
 
-    fixture.cache.update(fixture.instances, fixture.ranges.slice(0, 1), large);
+    fixture.cache.update(fixture.ranges.slice(0, 1), large);
     await drain();
     const after = fixture.writeTexture.mock.calls.filter((call) => call[3][0] === tileExtent).length;
     expect(after).toBeGreaterThan(used);
@@ -186,11 +186,11 @@ describe('virtual image residency', () => {
 
   it('reuses resident tiles without decoding when returning to an already loaded view', async () => {
     const fixture = setup(1, 512, 512);
-    fixture.cache.update(fixture.instances, fixture.ranges, frame);
+    fixture.cache.update(fixture.ranges, frame);
     await drain();
     const workers = FakeWorker.all.length;
-    fixture.cache.update(fixture.instances, [], frame);
-    fixture.cache.update(fixture.instances, fixture.ranges, frame);
+    fixture.cache.update([], frame);
+    fixture.cache.update(fixture.ranges, frame);
     expect(FakeWorker.all).toHaveLength(workers);
     expect(fixture.cache.get(0)).toBeDefined();
     fixture.owner.destroy();
@@ -201,7 +201,7 @@ describe('virtual image residency', () => {
     const prepared = fixture.cache.prepareMipTails();
     await drain();
     await prepared;
-    fixture.cache.update(fixture.instances, fixture.ranges, { ...frame, width: 1600, height: 1600 });
+    fixture.cache.update(fixture.ranges, { ...frame, width: 1600, height: 1600 });
     const worker = FakeWorker.all.at(-1)!;
     const sources: number[] = [];
 
@@ -223,10 +223,10 @@ describe('virtual image residency', () => {
 
   it('keeps useful mip tails from superseded requests and prevents uploads after disposal', async () => {
     const fixture = setup(2, 64, 64);
-    fixture.cache.update(fixture.instances, fixture.ranges.slice(0, 1), frame);
+    fixture.cache.update(fixture.ranges.slice(0, 1), frame);
     const worker = FakeWorker.all[0]!;
     const first = worker.requests.shift()!;
-    fixture.cache.update(fixture.instances, fixture.ranges.slice(1), frame);
+    fixture.cache.update(fixture.ranges.slice(1), frame);
     await worker.reply(first);
     expect(fixture.cache.get(0)).toBeDefined();
     const second = worker.requests.shift()!;
@@ -289,7 +289,7 @@ describe('virtual image residency', () => {
   it('retains the decoder briefly, releases it after idle, and releases failures immediately', async () => {
     vi.useFakeTimers();
     const fixture = setup(1, 1, 8192);
-    fixture.cache.update(fixture.instances, fixture.ranges, frame);
+    fixture.cache.update(fixture.ranges, frame);
     await drain();
     await fixture.cache.settle();
     expect(FakeWorker.all.at(-1)!.terminated).toBe(false);
@@ -298,7 +298,7 @@ describe('virtual image residency', () => {
     fixture.owner.destroy();
 
     const failed = setup(1, 256, 256);
-    failed.cache.update(failed.instances, failed.ranges, frame);
+    failed.cache.update(failed.ranges, frame);
     const settled = failed.cache.settle();
     FakeWorker.all[0]!.dispatchEvent(new MessageEvent('message', { data: { ok: false, error: 'Broken image' } }));
     await settled;
@@ -353,15 +353,16 @@ function setup(count: number, width: number, height: number, worker?: unknown) {
       }
     }
   } as unknown as GpuContext;
-  const owner = createGpuResources();
+  const owner = makeGpuResources();
   const fixture = mountRendererWorkers();
   owner.keep({ destroy: fixture.dispose });
   const cache = prepareRasterImages(
     gpu,
     { table, pixels: new ArrayBuffer(0) },
+    instances,
     owner.keep,
     (worker as typeof fixture.workers.raster | undefined) ?? fixture.workers.raster
-  )._unsafeUnwrap();
+  );
   return { owner, cache, instances, ranges, textures, writeTexture };
 }
 

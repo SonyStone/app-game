@@ -4,7 +4,9 @@ import { DocumentLayer } from './DocumentLayer';
 import { useDocumentRenderer } from './DocumentRendererProvider';
 
 vi.mock('./DocumentRendererProvider', () => ({ useDocumentRenderer: vi.fn() }));
-vi.mock('../../camera/DocumentCamera', () => ({ useDocumentCamera: () => ({ x: 0, y: 0, zoom: 1, rotation: 0 }) }));
+vi.mock('../../camera/DocumentCamera', () => ({
+  useDocumentCamera: () => ({ camera: () => ({ x: 0, y: 0, zoom: 1, rotation: 0 }) })
+}));
 vi.mock('../../scene/FrameLoop', () => ({ useFrameLoop: () => ({ invalidate: vi.fn() }) }));
 vi.mock('../../viewport/Viewport', () => ({ useViewport: () => ({ size: () => ({ css: { width: 1, height: 1 } }) }) }));
 

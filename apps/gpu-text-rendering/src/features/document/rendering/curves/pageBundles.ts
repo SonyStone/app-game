@@ -1,5 +1,5 @@
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
-import type { PaintNode } from './paintTree';
+import type { PaintNode } from '../../plan/paintTree';
 
 type PaintLeaf = Exclude<PaintNode, { children: PaintNode[] }>;
 

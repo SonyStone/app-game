@@ -1,9 +1,11 @@
 import { err, ok } from 'neverthrow';
-import { afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import type { GpuContext } from '../../../shared/gpu/context';
 import { uploadBuffer } from './uploadBuffer';
+import { yieldToEventLoop } from './yieldToEventLoop';
 
-afterEach(() => vi.unstubAllGlobals());
+vi.mock('./yieldToEventLoop', () => ({ yieldToEventLoop: vi.fn() }));
+beforeEach(() => vi.resetAllMocks());
 
 it('yields between bounded writes and uploads the final partial chunk exactly once', async () => {
   const state = setup();
@@ -16,7 +18,7 @@ it('yields between bounded writes and uploads the final partial chunk exactly on
     [0, source, 0, 4 * 1024 * 1024],
     [4 * 1024 * 1024, source, 4 * 1024 * 1024, 12]
   ]);
-  expect(state.close).toHaveBeenCalledTimes(2);
+  expect(yieldToEventLoop).toHaveBeenCalledOnce();
 });
 
 it('uploads a source range without copying or reading neighboring records', async () => {
@@ -38,16 +40,9 @@ it('does not write to a destroyed renderer after yielding', async () => {
 
 function setup() {
   const jobs: (() => void)[] = [];
-  const close = vi.fn();
-  vi.stubGlobal(
-    'MessageChannel',
-    class {
-      port1 = { onmessage: undefined as ((event: { data: number }) => void) | undefined, close };
-      port2 = { postMessage: (data: number) => jobs.push(() => this.port1.onmessage?.({ data })), close };
-    }
-  );
+  vi.mocked(yieldToEventLoop).mockImplementation(() => new Promise<void>((resolve) => jobs.push(resolve)));
   const write = vi.fn();
   const active = vi.fn<GpuContext['checkActive']>(() => ok(undefined));
   const gpu = { device: { queue: { writeBuffer: write } }, checkActive: active } as unknown as GpuContext;
-  return { jobs, close, write, active, gpu, destination: {} as GPUBuffer };
+  return { jobs, write, active, gpu, destination: {} as GPUBuffer };
 }

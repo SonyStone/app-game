@@ -1,5 +1,5 @@
 import type { JSX } from '@solidjs/web';
-import { createEffect, Loading, Show } from 'solid-js';
+import { createEffect, Show } from 'solid-js';
 import { createDocumentSource } from '../../src/features/document/createDocumentSource';
 import type { TextDocument } from '../../src/features/document/document';
 import type { DocumentProgress } from '../../src/features/document/documentProgress';
@@ -18,7 +18,7 @@ export function DocumentSource(props: {
   ) => JSX.Element;
 }) {
   const source = createDocumentSource(() => props.file);
-  const output = createDocumentExport(() => source.document()?.unwrapOr(undefined));
+  const output = createDocumentExport(() => source.prepared());
   createEffect(
     () => source.progress(),
     (progress) => {
@@ -31,13 +31,10 @@ export function DocumentSource(props: {
       if (error) props.onError(error);
     }
   );
+  // Keyed Show children run untracked; the JSX hole keeps export availability reactive.
   return (
-    <Show when={!source.error()}>
-      <Loading>
-        {source.document()?.match(({ data }) => {
-          return props.children(data, source.fail, output.available() ? output : undefined);
-        }, source.fail)}
-      </Loading>
+    <Show when={source.prepared()} keyed>
+      {({ data, fail }) => <>{props.children(data, fail, output.available() ? output : undefined)}</>}
     </Show>
   );
 }

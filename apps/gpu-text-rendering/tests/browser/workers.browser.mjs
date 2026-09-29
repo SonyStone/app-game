@@ -99,7 +99,8 @@ try {
   assert.equal(result.coverage, true);
   assert.equal(result.cachedRaster, true);
   assert.equal(result.transferred, 6);
-  assert.ok(result.progress.includes('loadingDecoder'));
+  // The main thread reports loadingDecoder before posting; workers only report their own stages.
+  assert.ok(!result.progress.includes('loadingDecoder'));
   assert.ok(result.progress.includes('processingPages'));
   assert.ok(result.progress.includes('decodingDocument'));
   assert.deepEqual(errors, []);

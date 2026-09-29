@@ -1,12 +1,12 @@
 import { createToken } from '@solid-primitives/jsx-tokenizer';
-import type { Point } from '../camera/camera';
+import type { Point } from './SceneSpace';
 import type { SceneDraw } from './renderScene';
 
 /**
  * Describes a draw layer for FrameLoop's token resolver; performs no registration or DOM rendering.
  * Higher order draws on top, default 0. Equal orders follow JSX order, including late async children.
- * Prop changes and reactive reads inside draw request a new frame. Non-reactive state read inside draw,
- * such as the camera or renderer caches, needs an explicit invalidate.
+ * Prop changes and reactive reads inside draw, such as the camera, request a new frame. Non-reactive state read
+ * inside draw, such as renderer caches, needs an explicit invalidate.
  */
 export const RenderLayer = createToken<
   {

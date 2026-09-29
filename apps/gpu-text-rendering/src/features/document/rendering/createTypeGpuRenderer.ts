@@ -8,13 +8,15 @@ import {
   type ResultValue
 } from '../../../shared/errors';
 import type { GpuContext } from '../../../shared/gpu/context';
-import { createGpuResources } from '../../../shared/gpu/resources';
+import type { KeepGpuResource } from '../../../shared/gpu/resources';
+import { makeGpuResources } from '../../../shared/gpu/resources';
 import { serializeGpuPreparation } from '../../../shared/gpu/serializeGpuPreparation';
 import { renderScene } from '../../scene/renderScene';
 import type { TextDocument } from '../document';
 import type { SceneFrame } from './createFrame';
+import { prepareCurveDocument } from './curves/prepareCurveDocument';
 import type { DocumentWorkers } from './DocumentWorkers';
-import { prepareDocument } from './prepareDocument';
+import { prepareGlyphDocument } from './prepareGlyphDocument';
 
 /**
  * Prepares a document using borrowed GPU resources. Disposal releases only this document's allocations.
@@ -24,12 +26,21 @@ import { prepareDocument } from './prepareDocument';
 export async function createTypeGpuRenderer(
   gpu: GpuContext,
   document: TextDocument,
-  workers: DocumentWorkers,
-  signal?: AbortSignal,
-  initialFrame?: SceneFrame
+  {
+    workers,
+    signal,
+    initialFrame
+  }: {
+    /** Workers owned by the caller; the renderer never destroys them. */
+    workers: DocumentWorkers;
+    /** Aborting cancels preparation, or destroys the renderer once prepared. */
+    signal?: AbortSignal;
+    /** Visible frame used to limit prewarming; omitted prewarms the whole document. */
+    initialFrame?: SceneFrame;
+  }
 ) {
   const { device } = gpu;
-  const resources = createGpuResources();
+  const resources = makeGpuResources();
   let destroyed = false;
 
   const destroy = () => {
@@ -112,7 +123,7 @@ export async function createTypeGpuRenderer(
       },
       /** Optional composed-page counters for performance and in-motion quality diagnostics. */
       get refinement() {
-        return 'refinement' in preparation ? preparation.refinement : undefined;
+        return preparation.refinement;
       },
       /** Image uploads notify owner-managed frame subscriptions. */
       events,
@@ -122,32 +133,18 @@ export async function createTypeGpuRenderer(
 
       /** Waits for submitted GPU work and returns any completion or lifetime failure. */
       settle() {
-        return ResultAsync.fromThrowable(
-          async () => {
-            const active = checkActive();
+        return safeTry(async function* () {
+          yield* checkActive();
+          yield* await renderStep(() => preparation.settle());
 
-            if (active.isErr()) {
-              return active;
-            }
+          if (standaloneFrame && checkActive().isOk()) {
+            yield* renderScene(gpu, [({ pass }) => draw(pass, standaloneFrame!)]);
+          }
 
-            await preparation.settle();
-
-            if (standaloneFrame && checkActive().isOk()) {
-              const rendered = renderScene(gpu, [({ pass }) => draw(pass, standaloneFrame!)]);
-
-              if (rendered.isErr()) {
-                return rendered;
-              }
-            }
-
-            await device.queue.onSubmittedWorkDone();
-            return ok<void>(undefined);
-          },
-          (cause) => gpuError('render', errorMessage(cause), cause)
-        )()
-          .andThen((result) => result)
-          .andThen(() => checkActive())
-          .andThen(() => (preparation.failure ? err(preparation.failure) : ok<void>(undefined)));
+          yield* await renderStep(() => device.queue.onSubmittedWorkDone());
+          yield* checkActive();
+          return preparation.failure ? err(preparation.failure) : ok<void>(undefined);
+        });
       },
 
       /** Records document draws in a scene-owned pass without clearing, ending or submitting it. */
@@ -171,3 +168,21 @@ export async function createTypeGpuRenderer(
 
 /** A prepared document renderer, independent of Solid and pointer input. */
 export type TextRenderer = ResultValue<Awaited<ReturnType<typeof createTypeGpuRenderer>>>;
+
+/** Dispatches to the document profile's renderer; both satisfy the `PreparedDocument` contract. */
+function prepareDocument(
+  gpu: GpuContext,
+  document: TextDocument,
+  keep: KeepGpuResource,
+  workers: DocumentWorkers,
+  initialFrame: SceneFrame | undefined
+) {
+  return document.kind === 'curves'
+    ? prepareCurveDocument(gpu, document, keep, workers, initialFrame)
+    : prepareGlyphDocument(gpu, document, keep);
+}
+
+/** Awaits a completion step, reporting a rejection as a typed render error. */
+function renderStep(step: () => Promise<void>) {
+  return ResultAsync.fromThrowable(step, (cause) => gpuError('render', errorMessage(cause), cause))();
+}

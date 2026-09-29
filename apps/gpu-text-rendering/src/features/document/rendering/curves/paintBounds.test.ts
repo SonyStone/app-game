@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest';
+import { buildPaintBounds } from '../../plan/buildPaintBounds';
+import type { PaintNode } from '../../plan/paintTree';
 import type { SceneFrame } from '../createFrame';
-import { buildPaintBounds, createPaintBounds } from './paintBounds';
-import type { PaintNode } from './paintTree';
+import { createPaintBounds } from './paintBounds';
 
 const frame: SceneFrame = {
   width: 100,

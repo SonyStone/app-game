@@ -1,4 +1,3 @@
-import { createRoot } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import { runWorkerRequest } from './runWorkerRequest';
 import { workerShutdown } from './workerProtocol';
@@ -21,7 +20,7 @@ it('transfers input, forwards progress, and shuts the worker down before returni
   worker.dispatchEvent(new MessageEvent('message', { data: { ok: true, value: 10 } }));
   expect((await result)._unsafeUnwrap()).toBe(10);
   expectShutdown(worker);
-  expect(remove).toHaveBeenCalledWith('abort', expect.any(Function), { once: true });
+  expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
   worker.dispatchEvent(new MessageEvent('message', { data: { progress: 100 } }));
   controller.abort();
   expect(progress).toHaveBeenCalledOnce();
@@ -43,19 +42,6 @@ it('runs simultaneous calls independently without a queue or shared cancellation
   second.dispatchEvent(new MessageEvent('message', { data: { ok: true, value: 20 } }));
   expect((await other)._unsafeUnwrap()).toBe(20);
   expectShutdown(second);
-});
-
-it('settles cancellation and releases the worker when its Solid owner is disposed', async () => {
-  const worker = native();
-  const signal = new AbortController().signal;
-  const session = createRoot((dispose) => ({
-    dispose,
-    pending: runWorkerRequest(() => worker, 1, { signal })
-  }));
-  session.dispose();
-  expect(signal.aborted).toBe(false);
-  expectShutdown(worker);
-  expect((await session.pending)._unsafeUnwrapErr()).toMatchObject({ kind: 'aborted' });
 });
 
 it('does not create a worker for an already aborted signal', async () => {
@@ -115,7 +101,7 @@ it.each(['create', 'post', 'error', 'messageerror'] as const)(
     expect((await pending)._unsafeUnwrapErr()).toMatchObject({ kind });
     if (kind !== 'create') {
       expectShutdown(worker);
-      expect(remove).toHaveBeenCalledWith('abort', expect.any(Function), { once: true });
+      expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
     }
   }
 );

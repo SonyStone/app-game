@@ -1,11 +1,16 @@
+import {
+  buildPaintBounds,
+  emptyBounds,
+  leafBounds,
+  unionBounds,
+  type Bounds,
+  type BoundsBranch
+} from '../../plan/buildPaintBounds';
+import type { PaintNode } from '../../plan/paintTree';
 import type { SceneFrame } from '../createFrame';
-import type { PaintNode } from './paintTree';
 
 /** Integer framebuffer bounds, including the antialiasing fringe. */
 export type PixelRect = { x: number; y: number; width: number; height: number };
-
-/** Page-space box as left, bottom, right, top; empty when left > right. */
-type Bounds = readonly [number, number, number, number];
 
 /** A contiguous-range hierarchy preserves PDF paint order while skipping offscreen instances. */
 export function createPaintBounds(
@@ -44,7 +49,7 @@ export function createPaintBounds(
         visit(tree);
         return spans;
 
-        function visit(branch: Branch) {
+        function visit(branch: BoundsBranch) {
           const [left, bottom, right, top] = branch.bounds;
 
           if (branch.end <= first || branch.first >= end || !extent(left, bottom, right, top) || !overlaps()) {
@@ -148,95 +153,31 @@ export function createPaintBounds(
 
     const bounds =
       'children' in node
-        ? node.children.reduce<Bounds>((result, child) => union(result, nodeBounds(child)), empty)
+        ? node.children.reduce<Bounds>((result, child) => unionBounds(result, nodeBounds(child)), emptyBounds)
         : rangeBounds(tree, node.first, node.first + node.count);
     nodes.set(node, bounds);
     return bounds;
   }
 
-  function rangeBounds(branch: Branch, first: number, end: number): Bounds {
+  function rangeBounds(branch: BoundsBranch, first: number, end: number): Bounds {
     if (first <= branch.first && end >= branch.end) {
       return branch.bounds;
     }
 
     if (first >= branch.end || end <= branch.first) {
-      return empty;
+      return emptyBounds;
     }
 
     if (branch.children) {
-      return union(rangeBounds(branch.children[0], first, end), rangeBounds(branch.children[1], first, end));
+      return unionBounds(rangeBounds(branch.children[0], first, end), rangeBounds(branch.children[1], first, end));
     }
 
-    let result = empty;
+    let result = emptyBounds;
 
     for (let index = Math.max(first, branch.first); index < Math.min(end, branch.end); index++) {
-      result = union(result, at(index));
+      result = unionBounds(result, leafBounds(leaves, index));
     }
 
     return result;
   }
-
-  function at(index: number): Bounds {
-    return [leaves[index * 4]!, leaves[index * 4 + 1]!, leaves[index * 4 + 2]!, leaves[index * 4 + 3]!];
-  }
 }
-
-/** Instance range with its union bounds; leaves hold at most 32 instances. */
-type Branch = { first: number; end: number; bounds: Bounds; children?: [Branch, Branch] };
-
-/** Builds transferable spatial data once; query closures stay on the render thread. */
-export function buildPaintBounds(instances: ArrayBuffer, pages: { x: number; y: number }[]) {
-  const data = new DataView(instances);
-  const count = instances.byteLength / 80;
-  const leaves = new Float64Array(count * 4);
-
-  for (let index = 0; index < count; index++) {
-    const offset = index * 80;
-    const a = data.getFloat32(offset, true);
-    const b = data.getFloat32(offset + 4, true);
-    const c = data.getFloat32(offset + 8, true);
-    const d = data.getFloat32(offset + 12, true);
-    const tx = data.getFloat32(offset + 16, true);
-    const ty = data.getFloat32(offset + 20, true);
-    const page = pages[data.getUint32(offset + 76, true)]!;
-    // Include the whole outline; clipping its box before adding the pixel fringe can lose thin edges.
-    const left = tx + Math.min(0, a) + Math.min(0, c);
-    const right = tx + Math.max(0, a) + Math.max(0, c);
-    const top = ty + Math.min(0, b) + Math.min(0, d);
-    const bottom = ty + Math.max(0, b) + Math.max(0, d);
-    leaves.set([left - page.x, 1 - bottom - page.y, right - page.x, 1 - top - page.y], index * 4);
-  }
-
-  const tree = build(0, count);
-  return { leaves, tree };
-
-  function build(first: number, end: number): Branch {
-    if (end - first <= 32) {
-      let bounds = empty;
-
-      for (let index = first; index < end; index++) {
-        bounds = union(bounds, at(index));
-      }
-
-      return { first, end, bounds };
-    }
-
-    const middle = Math.floor((first + end) / 2);
-    const children: [Branch, Branch] = [build(first, middle), build(middle, end)];
-    return { first, end, children, bounds: union(children[0].bounds, children[1].bounds) };
-  }
-
-  function at(index: number): Bounds {
-    return [leaves[index * 4]!, leaves[index * 4 + 1]!, leaves[index * 4 + 2]!, leaves[index * 4 + 3]!];
-  }
-}
-
-function union(a: Bounds, b: Bounds): Bounds {
-  if (b[0] > b[2] || b[1] > b[3]) {
-    return a;
-  }
-
-  return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
-}
-
-const empty: Bounds = [Infinity, Infinity, -Infinity, -Infinity];

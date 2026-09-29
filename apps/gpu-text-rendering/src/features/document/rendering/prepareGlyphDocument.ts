@@ -1,44 +1,44 @@
 import { err, ok } from 'neverthrow';
 import { d, type TgpuBindGroup } from 'typegpu';
-import type { GpuError } from '../../../shared/errors';
 import type { GpuContext } from '../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../shared/gpu/resources';
-import { pageVertices, type TextDocument } from '../document';
-import { GlyphInstance, glyphInstanceLayout, pageLayout, View, viewLayout } from './bindings';
-import { compactGlyphs } from './compactGlyphs';
+import type { TextDocument } from '../document';
+import { compactGlyphs } from '../format/compactGlyphs';
+import { GlyphInstance, glyphInstanceLayout } from './bindings';
 import type { SceneFrame } from './createFrame';
-import { prepareCurveDocument } from './curves/prepareCurveDocument';
-import type { DocumentWorkers } from './DocumentWorkers';
+import { createPageBackground } from './createPageBackground';
 import { createGlyphAtlas } from './glyphAtlas';
 import { glyphFragment, glyphInstanceVertex } from './glyphShader';
-import { pageFragment, pageVertex } from './pageShader';
+import type { PreparedDocument } from './preparedDocument';
 import { uploadBuffer } from './uploadBuffer';
 
-/** Selects a profile renderer, uploads geometry and builds its pipelines. The renderer boundary captures TypeGPU exceptions. */
-export async function prepareDocument(
+/**
+ * Prepares a profile-1 glyph document: uploads packed glyph instances in storage-sized batches, the glyph atlas
+ * and page backgrounds, and compiles their pipelines. Legacy six-vertex (72-byte) glyph streams are packed here;
+ * loader-supplied 28-byte instances upload unchanged. Resolves a typed error when the GPU context became
+ * inactive; TypeGPU exceptions propagate to the renderer boundary.
+ */
+export async function prepareGlyphDocument(
   gpu: GpuContext,
-  document: TextDocument,
-  keep: KeepGpuResource,
-  workers: DocumentWorkers,
-  initialFrame?: SceneFrame
+  document: Extract<TextDocument, { kind: 'glyphs' }>,
+  keep: KeepGpuResource
 ) {
-  if (document.kind === 'curves') {
-    return prepareCurveDocument(gpu, document, keep, workers, initialFrame);
-  }
-
   const { root, device, format } = gpu;
 
   const glyphData =
     document.glyphEncoding === 'instances'
       ? document.glyphVertices
       : compactGlyphs(document.glyphVertices, document.pages);
-  const glyphCount = glyphData.byteLength / 28;
-  const batchSize = Math.floor(Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize) / 28);
+  const glyphBytes = d.sizeOf(GlyphInstance);
+  const glyphCount = glyphData.byteLength / glyphBytes;
+  const batchSize = Math.floor(
+    Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize) / glyphBytes
+  );
   const glyphBatches: { first: number; end: number; group: TgpuBindGroup }[] = [];
   for (let first = 0; first < Math.max(1, glyphCount); first += batchSize) {
     const count = Math.min(batchSize, glyphCount - first);
     const buffer = keep(root.createBuffer(d.arrayOf(GlyphInstance, Math.max(1, count)))).$usage('storage');
-    await uploadBuffer(gpu, buffer.buffer, glyphData, first * 28, count * 28);
+    await uploadBuffer(gpu, buffer.buffer, glyphData, first * glyphBytes, count * glyphBytes);
     glyphBatches.push({
       first,
       end: first + count,
@@ -46,20 +46,7 @@ export async function prepareDocument(
     });
   }
 
-  const pageData = pageVertices(document);
-  const pages = keep(
-    root.createBuffer(pageLayout.schemaForCount(pageData.length / 2), (buffer) => buffer.write(pageData.buffer))
-  ).$usage('vertex');
-
-  const offsets = keep(
-    root.createBuffer(
-      d.arrayOf(d.vec2f, document.pages.length),
-      document.pages.map((page) => d.vec2f(page.x, page.y))
-    )
-  ).$usage('storage');
-
-  const view = keep(root.createBuffer(View)).$usage('uniform');
-  const frameGroup = root.createBindGroup(viewLayout, { view, pages: offsets });
+  const background = createPageBackground(gpu, document, keep);
 
   const blend: GPUBlendState = {
     color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
@@ -80,44 +67,25 @@ export async function prepareDocument(
       targets: { format, blend },
       primitive: { topology: 'triangle-list' }
     })
-    .with(frameGroup)
+    .with(background.group)
     .with(atlasGroup);
-
-  const pagePipeline = root
-    .createRenderPipeline({
-      attribs: { position: pageLayout.attrib },
-      vertex: pageVertex,
-      fragment: pageFragment,
-      targets: { format },
-      primitive: { topology: 'triangle-strip' }
-    })
-    .with(frameGroup)
-    .with(pageLayout, pages);
 
   // Compile every pipeline before exposing the first frame.
   root.unwrap(glyphPipeline);
-  root.unwrap(pagePipeline);
+  background.compile();
   await device.queue.onSubmittedWorkDone();
 
-  const resourceBytes =
-    Math.max(28, glyphData.byteLength) + pageData.byteLength + document.pages.length * 8 + 48 + atlasBytes;
+  const resourceBytes = Math.max(glyphBytes, glyphData.byteLength) + background.resourceBytes + atlasBytes;
 
-  return ok({
+  return ok<PreparedDocument>({
     events: new EventTarget(),
     settle: async () => {},
-    failure: undefined as GpuError | undefined,
+    failure: undefined,
+    refinement: undefined,
     resourceBytes,
     draw(pass: GPURenderPassEncoder, frame: SceneFrame) {
-      view.write({
-        mul: frame.mul,
-        add: frame.add,
-        rotation: frame.rotation,
-        rasterTexel: [1 / rasterSize[0], 1 / rasterSize[1]],
-        debug: Number(frame.grids),
-        vectorOnly: Number(frame.vectorOnly)
-      });
-
-      pagePipeline.with(pass).draw(document.pages.length * 6);
+      background.writeView(frame, [1 / rasterSize[0], 1 / rasterSize[1]], Number(frame.grids));
+      background.draw(pass);
 
       const glyphs = glyphPipeline.with(pass);
 

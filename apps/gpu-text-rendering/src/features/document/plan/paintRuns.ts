@@ -1,3 +1,5 @@
+import { drawFirst, drawKind, imageKind } from './drawRecord';
+
 /** Only adjacent outlines may be batched: an intervening image must retain its PDF paint order. */
 export function paintRuns(instances: ArrayBuffer, first: number, end: number, blends = new ArrayBuffer(0)) {
   const records = new DataView(instances);
@@ -5,7 +7,7 @@ export function paintRuns(instances: ArrayBuffer, first: number, end: number, bl
   const runs: { first: number; count: number; image: number | undefined; blend: number }[] = [];
 
   for (let index = first; index < end; index++) {
-    const image = records.getUint32(index * 80 + 72, true) === 2 ? records.getUint32(index * 80 + 64, true) : undefined;
+    const image = drawKind(records, index) === imageKind ? drawFirst(records, index) : undefined;
     const previous = runs.at(-1);
     const blend = modes[index] ?? 0;
 

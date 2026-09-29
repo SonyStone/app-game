@@ -6,7 +6,7 @@ import { makeGpuFrameGate } from './makeGpuFrameGate';
 it('coalesces blocked frames and reads fresh state when the GPU finishes', async () => {
   const work = deferred();
   const invalidate = vi.fn();
-  const gate = makeGpuFrameGate(() => work.promise, invalidate, vi.fn());
+  const gate = makeGpuFrameGate(options({ complete: () => work.promise, invalidate }));
   let camera = 1;
   const submitted: number[] = [];
   const render = () => {
@@ -29,7 +29,7 @@ it('coalesces blocked frames and reads fresh state when the GPU finishes', async
 
 it('does not turn a completed demand-driven draw into an endless animation', async () => {
   const invalidate = vi.fn();
-  const gate = makeGpuFrameGate(async () => {}, invalidate, vi.fn());
+  const gate = makeGpuFrameGate(options({ invalidate }));
   gate.draw(() => ok());
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(invalidate).not.toHaveBeenCalled();
@@ -39,7 +39,7 @@ it('does not turn a completed demand-driven draw into an endless animation', asy
 it('ignores completion after disposal, including queued redraw requests', async () => {
   const work = deferred();
   const invalidate = vi.fn();
-  const gate = makeGpuFrameGate(() => work.promise, invalidate, vi.fn());
+  const gate = makeGpuFrameGate(options({ complete: () => work.promise, invalidate }));
   const render = vi.fn(() => ok());
   gate.draw(render);
   gate.draw(render);
@@ -55,7 +55,7 @@ it('reports a rejected GPU fence once and preserves typed draw failures', async 
   const failure = gpuError('render', 'bad draw');
   const complete = vi.fn(() => Promise.reject(new Error('lost device')));
   const fail = vi.fn();
-  const gate = makeGpuFrameGate(complete, vi.fn(), fail);
+  const gate = makeGpuFrameGate(options({ complete, fail }));
   expect(gate.draw(() => err(failure))).toEqual(err(failure));
   expect(complete).not.toHaveBeenCalled();
   gate.draw(() => ok());
@@ -64,6 +64,29 @@ it('reports a rejected GPU fence once and preserves typed draw failures', async 
   gate.draw(() => ok());
   expect(complete).toHaveBeenCalledOnce();
 });
+
+it('skips frames while unrelated work blocks submission, then redraws once', async () => {
+  const preparation = deferred();
+  const invalidate = vi.fn();
+  let blocked: Promise<void> | undefined = preparation.promise;
+  const gate = makeGpuFrameGate(options({ blocked: () => blocked, invalidate }));
+  const render = vi.fn(() => ok());
+
+  gate.draw(render);
+  gate.draw(render);
+  expect(render).not.toHaveBeenCalled();
+  blocked = undefined;
+  preparation.resolve();
+  await vi.waitFor(() => expect(invalidate).toHaveBeenCalledOnce());
+  gate.draw(render);
+  expect(render).toHaveBeenCalledOnce();
+  gate.destroy();
+});
+
+/** Gate options that complete at once, never block and ignore failures, overridden per test. */
+function options(overrides: Partial<Parameters<typeof makeGpuFrameGate>[0]>): Parameters<typeof makeGpuFrameGate>[0] {
+  return { complete: async () => {}, blocked: () => undefined, invalidate: vi.fn(), fail: vi.fn(), ...overrides };
+}
 
 function deferred() {
   let resolve!: () => void;

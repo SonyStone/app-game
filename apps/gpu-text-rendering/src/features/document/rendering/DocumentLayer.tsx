@@ -29,7 +29,7 @@ export function DocumentLayer(props: {
   if (import.meta.env.DEV) {
     claimRenderer(renderer);
   }
-  const camera = useDocumentCamera();
+  const { camera } = useDocumentCamera();
   const loop = useFrameLoop();
   const viewport = useViewport();
 
@@ -38,7 +38,7 @@ export function DocumentLayer(props: {
   const draw: SceneDraw = ({ pass, width, height }) =>
     renderer.draw(
       pass,
-      createFrame(document, camera, width, height, {
+      createFrame(document, camera(), width, height, {
         vectorOnly: props.vectorOnly,
         grids: props.grids,
         displaySize: viewport.size().css

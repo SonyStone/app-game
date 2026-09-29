@@ -3,7 +3,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createContext, createEffect, createMemo, createSignal, useContext } from 'solid-js';
 import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
-import type { Point } from '../camera/camera';
+import type { Point } from '../scene/SceneSpace';
 import { measureViewport } from './measureViewport';
 
 /** Owns canvas sizing. Place above FrameLoop; CSS must determine the canvas display size. */

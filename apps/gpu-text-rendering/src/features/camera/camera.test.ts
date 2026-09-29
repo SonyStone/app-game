@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { moveCamera, rotationMatrix, screenToWorld, worldToScreen, type Camera } from './camera';
+import {
+  documentBounds,
+  fitCamera,
+  moveCamera,
+  pageRects,
+  rotationMatrix,
+  screenToWorld,
+  worldToScreen,
+  type Camera
+} from './camera';
 
 describe('camera geometry', () => {
   it.each([0, Math.PI / 2, -2.8])('round-trips document and screen points at rotation %s', (rotation) => {
@@ -22,8 +31,9 @@ describe('camera geometry', () => {
     const from = { x: 310, y: 180 };
     const to = { x: 420, y: 240 };
     const anchor = screenToWorld(camera, from, 1200, 700, 612 / 792);
-    moveCamera(camera, from, to, 1.7, 0.43, 1200, 700, 612 / 792);
-    const result = screenToWorld(camera, to, 1200, 700, 612 / 792);
+    const moved = moveCamera(camera, from, to, 1.7, 0.43, 1200, 700, 612 / 792);
+    expect(camera).toEqual({ x: 0.5, y: 0.5, zoom: 2, rotation });
+    const result = screenToWorld(moved, to, 1200, 700, 612 / 792);
     expect(result.x).toBeCloseTo(anchor.x, 12);
     expect(result.y).toBeCloseTo(anchor.y, 12);
   });
@@ -42,21 +52,61 @@ describe('camera geometry', () => {
   it('pans from a large-document overview without snapping to the normal zoom limit', () => {
     const camera = { x: 20, y: -10, zoom: 120, rotation: 0 };
     const anchor = screenToWorld(camera, { x: 100, y: 200 }, 390, 844, 612 / 792);
-    moveCamera(camera, { x: 100, y: 200 }, { x: 120, y: 230 }, 1, 0, 390, 844, 612 / 792);
-    expect(camera.zoom).toBe(120);
-    const moved = screenToWorld(camera, { x: 120, y: 230 }, 390, 844, 612 / 792);
+    const panned = moveCamera(camera, { x: 100, y: 200 }, { x: 120, y: 230 }, 1, 0, 390, 844, 612 / 792);
+    expect(panned.zoom).toBe(120);
+    const moved = screenToWorld(panned, { x: 120, y: 230 }, 390, 844, 612 / 792);
     expect(moved.x).toBeCloseTo(anchor.x);
     expect(moved.y).toBeCloseTo(anchor.y);
-    moveCamera(camera, { x: 120, y: 230 }, { x: 120, y: 230 }, 1.2, 0, 390, 844, 612 / 792);
-    expect(camera.zoom).toBe(100);
+    expect(moveCamera(panned, { x: 120, y: 230 }, { x: 120, y: 230 }, 1.2, 0, 390, 844, 612 / 792).zoom).toBe(100);
   });
 
   it('clamps magnification without losing the cursor anchor', () => {
     const camera = { x: 0, y: 0, zoom: 1, rotation: 1 };
     const point = { x: 20, y: 30 };
     const anchor = screenToWorld(camera, point, 800, 600, 1);
-    moveCamera(camera, point, point, 1e20, 0, 800, 600, 1);
-    expect(camera.zoom).toBe(1 / 65536);
-    expect(screenToWorld(camera, point, 800, 600, 1).x).toBeCloseTo(anchor.x);
+    const moved = moveCamera(camera, point, point, 1e20, 0, 800, 600, 1);
+    expect(moved.zoom).toBe(1 / 65536);
+    expect(screenToWorld(moved, point, 800, 600, 1).x).toBeCloseTo(anchor.x);
+  });
+
+  it.each([0, -1, Infinity, NaN])('returns the same camera for scale %s', (scale) => {
+    const camera = { x: 0, y: 0, zoom: 1, rotation: 0 };
+    expect(moveCamera(camera, { x: 1, y: 1 }, { x: 2, y: 2 }, scale, 0, 800, 600, 1)).toBe(camera);
+    expect(moveCamera(camera, { x: 1, y: 1 }, { x: 2, y: 2 }, 1, 0, 0, 600, 1)).toBe(camera);
+  });
+
+  it('describes laid-out pages bottom-left first in first-page units and bounds them', () => {
+    const pages = [
+      { x: 0.5, y: 0.5, width: 612, height: 792 },
+      { x: -1.5, y: 0.25, width: 1224, height: 396 }
+    ];
+    expect(pageRects(pages)).toEqual([
+      { x: -0.5, y: -0.5, width: 1, height: 1 },
+      { x: 1.5, y: 0.25, width: 2, height: 0.5 }
+    ]);
+    expect(documentBounds(pages)).toEqual({ left: -0.5, right: 3.5, bottom: -0.5, top: 0.75 });
+  });
+
+  it.each([
+    { top: 0, right: 0, bottom: 0, left: 0 },
+    { top: 44, right: 24, bottom: 84, left: 24 },
+    { top: 10, right: 160, bottom: 90, left: 8 }
+  ])('fits bounds inside the viewport less padding %j, touching one pair of sides', (padding) => {
+    const bounds = { left: -1, right: 3.5, bottom: -2, top: 1 };
+    const aspect = 612 / 792;
+    const camera = fitCamera(bounds, { width: 800, height: 600 }, aspect, padding);
+    const corner = (x: number, y: number) => worldToScreen(camera, { x, y }, 800, 600, aspect);
+    const topLeft = corner(bounds.left, bounds.top);
+    const bottomRight = corner(bounds.right, bounds.bottom);
+    expect(camera.rotation).toBe(0);
+    expect(topLeft.x).toBeGreaterThanOrEqual(padding.left - 1e-9);
+    expect(topLeft.y).toBeGreaterThanOrEqual(padding.top - 1e-9);
+    expect(bottomRight.x).toBeLessThanOrEqual(800 - padding.right + 1e-9);
+    expect(bottomRight.y).toBeLessThanOrEqual(600 - padding.bottom + 1e-9);
+    const horizontal = topLeft.x - padding.left + (800 - padding.right - bottomRight.x);
+    const vertical = topLeft.y - padding.top + (600 - padding.bottom - bottomRight.y);
+    expect(Math.min(horizontal, vertical)).toBeCloseTo(0);
+    expect(topLeft.x - padding.left).toBeCloseTo(800 - padding.right - bottomRight.x);
+    expect(topLeft.y - padding.top).toBeCloseTo(600 - padding.bottom - bottomRight.y);
   });
 });

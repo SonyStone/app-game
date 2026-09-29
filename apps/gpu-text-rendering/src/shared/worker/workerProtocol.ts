@@ -2,13 +2,16 @@ import type { Result } from 'neverthrow';
 import type { AbortedError } from '../errors';
 
 /** A completed request, including domain errors, native worker failures, and cancellation. */
-export type WorkerResult<Output, Failure> = Result<Output, Failure | WorkerFailure | WorkerCancelled>;
+export type WorkerResult<Output, Failure> = Result<Output, Failure | WorkerFailure | AbortedError>;
 
 /** Wire protocol shared by request clients and worker handlers. Progress never completes a request. */
 export type WorkerReply<Output, Failure, Progress = never> =
   | { ok: true; value: Output }
   | { ok: false; error: Failure }
   | { progress: Progress };
+
+/** Any reply protocol; constrains helpers that derive their types from a declared protocol. */
+export type AnyWorkerReply = WorkerReply<unknown, unknown, unknown>;
 
 /** Terminal value type declared by a reply protocol. */
 export type ReplyOutput<Reply> = Reply extends { ok: true; value: infer Output } ? Output : never;
@@ -24,9 +27,6 @@ export type WorkerFailure =
   | { kind: 'create' | 'post'; cause: unknown }
   | { kind: 'error'; cause: ErrorEvent }
   | { kind: 'messageerror'; cause: MessageEvent };
-
-/** Cancellation settles requests normally, rather than rejecting their promises. */
-export type WorkerCancelled = AbortedError;
 
 /**
  * Control message sent by the main thread instead of a request. The worker disposes its Solid root, which aborts the

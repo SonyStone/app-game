@@ -1,3 +1,4 @@
+import { drawOffset, drawWords } from './drawRecord';
 import { outlineGrid } from './outlineGrid';
 
 /** CPU-only area integrals, computed in document workers before transferring geometry. */
@@ -5,10 +6,10 @@ export function buildCoverageTables(document: { instances: ArrayBuffer; curves: 
   const words = new Uint32Array(document.instances);
   const uses = new Map<number, { count: number; rule: number; uses: number }>();
 
-  for (let i = 0; i < words.length; i += 20) {
-    const start = words[i + 16]!;
-    const count = words[i + 17]!;
-    const rule = words[i + 18]!;
+  for (let i = 0; i < words.length; i += drawWords) {
+    const start = words[i + drawOffset.first / 4]!;
+    const count = words[i + drawOffset.count / 4]!;
+    const rule = words[i + drawOffset.kind / 4]!;
 
     if (rule > 1 || count > 512) {
       continue;

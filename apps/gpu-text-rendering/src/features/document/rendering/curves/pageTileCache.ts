@@ -13,18 +13,34 @@ import { selectPageTiles } from './selectPageTiles';
 /**
  * Retains composed PDF tiles across pan/zoom. Pinned page fallbacks prevent holes;
  * bounded refinement batches use the latest visible working set, including during motion.
+ * GPU resources are released through `keep`'s owner; `changed` is the owner's redraw notification.
  */
 export function createPageTileCache(
   gpu: GpuContext,
-  document: TextDocument,
-  pages: Set<number>,
-  keep: KeepGpuResource,
-  render: (pass: GPURenderPassEncoder, frame: SceneFrame) => void,
-  sourcesReady: (page: number) => boolean = () => true,
-  fallbacksReady: (page: number) => boolean = () => true
+  {
+    document,
+    pages,
+    keep,
+    render,
+    sourcesReady,
+    fallbacksReady,
+    changed
+  }: {
+    document: TextDocument;
+    /** Pages with a composed prefix; other pages are never cached. */
+    pages: ReadonlySet<number>;
+    keep: KeepGpuResource;
+    /** Records one page tile's composed prefix into `pass`, using the tile frame's transform. */
+    render: (pass: GPURenderPassEncoder, frame: SceneFrame) => void;
+    /** Whether every source texel the page's prefix needs is resident, so a refined tile is final. */
+    sourcesReady: (page: number) => boolean;
+    /** Whether every image fallback of the page is drawable, so a tile has no holes. */
+    fallbacksReady: (page: number) => boolean;
+    /** Requests a redraw after refined tiles land or while they fade in. Never called after disposal. */
+    changed: () => void;
+  }
 ) {
   const { root, device, format } = gpu;
-  const events = new EventTarget();
   const camera = keep(root.createBuffer(Camera)).$usage('uniform');
   const cameraGroup = root.createBindGroup(cameraLayout, { camera });
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
@@ -75,7 +91,6 @@ export function createPageTileCache(
   });
 
   return {
-    events,
     /** Read-only counters for navigation/quality diagnostics; no GPU synchronization. */
     get refinement() {
       const missing = [...wanted.values()].filter(needsRefinement);
@@ -111,8 +126,8 @@ export function createPageTileCache(
 
       return ok<void>(undefined);
     },
-    /** Keeps old pixels visible while image uploads invalidate only the affected pages. */
-    invalidate(changedPages: Iterable<number>) {
+    /** Keeps old pixels visible while image uploads invalidate only the affected pages; defaults to all pages. */
+    invalidate(changedPages: Iterable<number> = pages) {
       for (const page of changedPages) {
         revisions.set(page, (revisions.get(page) ?? 0) + 1);
       }
@@ -206,7 +221,7 @@ export function createPageTileCache(
         fadeTimer = setTimeout(() => {
           fadeTimer = undefined;
           if (!disposed) {
-            events.dispatchEvent(new Event('change'));
+            changed();
           }
         }, 16);
       }
@@ -234,13 +249,18 @@ export function createPageTileCache(
   }
 
   function canRefine(tile: PageTile) {
-    const moving = performance.now() - movedAt < 80;
-    const overdue = performance.now() - (requestedAt.get(pageTileKey(tile)) ?? performance.now()) >= maxDeferralMs;
+    const now = performance.now();
+    const overdue = now - (requestedAt.get(pageTileKey(tile)) ?? now) >= maxDeferralMs;
     return (
       needsRefinement(tile) &&
       fallbacksReady(tile.page) &&
-      (overdue || (sourcesReady(tile.page) && (!moving || (pageWorkMs.get(tile.page) ?? Infinity) <= 8)))
+      (overdue || (sourcesReady(tile.page) && (!isMoving(now) || (pageWorkMs.get(tile.page) ?? Infinity) <= 8)))
     );
+  }
+
+  /** Camera motion within the last {@link motionSettleMs}; refinement then yields to interaction. */
+  function isMoving(now: number) {
+    return now - movedAt < motionSettleMs;
   }
 
   function schedule() {
@@ -262,8 +282,9 @@ export function createPageTileCache(
         const deadline = Math.min(
           ...missing.map((tile) => (requestedAt.get(pageTileKey(tile)) ?? now) + maxDeferralMs)
         );
-        const idle = movedAt + 80;
-        deferred.schedule(Math.max(16, (idle > now ? Math.min(idle, deadline) : deadline) - now));
+        deferred.schedule(
+          Math.max(16, (isMoving(now) ? Math.min(movedAt + motionSettleMs, deadline) : deadline) - now)
+        );
       } else {
         finish();
       }
@@ -271,8 +292,8 @@ export function createPageTileCache(
     }
 
     pending = true;
-    const moving = performance.now() - movedAt < 80;
     const started = performance.now();
+    const moving = isMoving(started);
     const tiles = work()
       .filter(canRefine)
       // Fill missing surroundings before repeatedly refreshing a center tile as its images stream in.
@@ -296,7 +317,7 @@ export function createPageTileCache(
         schedule();
       }
 
-      events.dispatchEvent(new Event('change'));
+      changed();
     });
   }
 
@@ -422,6 +443,8 @@ export function createPageTileCache(
 
 /** Makes work eligible after this delay; completion still depends on queued CPU/GPU work. */
 const maxDeferralMs = 100;
+/** The camera counts as moving until this long after its last transform change. */
+const motionSettleMs = 80;
 
 const Camera = d.struct({ mul: d.vec2f, add: d.vec2f, rotation: d.vec4f, time: d.f32 });
 const Placement = d.struct({ rect: d.vec4f, uv: d.vec4f, readyAt: d.f32 });
@@ -457,7 +480,7 @@ const fragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) 
 });
 
 /** Targets 32 MiB for pinned fallbacks; large documents use smaller base tiles and deeper detail levels. */
-function fallbackSize(document: TextDocument, pages: Set<number>) {
+function fallbackSize(document: TextDocument, pages: ReadonlySet<number>) {
   const area = [...pages].reduce((sum, index) => {
     const { width, height } = document.pages[index]!;
     return sum + Math.min(width / height, height / width);

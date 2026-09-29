@@ -78,8 +78,8 @@ try {
   assert.notDeepEqual(await pixel(520, 300), [0, 255, 0]);
   assert.equal(
     await page.evaluate(() => scene.stats.destroyedBuffers),
-    before + 1,
-    'rectangle must release its buffer'
+    before + 2,
+    'rectangle must release its uniform and instance buffers'
   );
   assert.deepEqual(await pixel(340, 250), pagePixel, 'removing a rectangle must preserve the document');
 

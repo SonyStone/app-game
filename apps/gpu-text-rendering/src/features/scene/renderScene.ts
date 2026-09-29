@@ -3,7 +3,7 @@ import { errorMessage, gpuError, type ViewerError } from '../../shared/errors';
 import type { GpuContext } from '../../shared/gpu/context';
 
 /** Clears once, draws every layer into one pass, and submits once. A failed layer prevents submission. */
-export function renderScene(gpu: GpuContext, layers: readonly SceneDraw[], timestamp = 0): Result<void, ViewerError> {
+export function renderScene(gpu: GpuContext, layers: readonly SceneDraw[]): Result<void, ViewerError> {
   const active = gpu.checkActive();
 
   if (active.isErr()) {
@@ -26,7 +26,6 @@ export function renderScene(gpu: GpuContext, layers: readonly SceneDraw[], times
 
       const frame: DrawFrame = {
         pass,
-        timestamp,
         width: gpu.context.canvas.width,
         height: gpu.context.canvas.height
       };
@@ -54,7 +53,6 @@ export function renderScene(gpu: GpuContext, layers: readonly SceneDraw[], times
 /** Shared pass and framebuffer dimensions. Layers may record draws but must not end or submit this pass. */
 export type DrawFrame = {
   pass: GPURenderPassEncoder;
-  timestamp: number;
   width: number;
   height: number;
 };

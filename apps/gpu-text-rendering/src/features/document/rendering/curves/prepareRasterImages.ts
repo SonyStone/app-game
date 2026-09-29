@@ -4,8 +4,11 @@ import { errorMessage, gpuError, type GpuError } from '../../../../shared/errors
 import type { GpuContext } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { DecodedDocument } from '../../format/types';
+import { drawPage } from '../../plan/drawRecord';
+import { imageByteLength, imageCodec, imageInterpolation, imagePixelOffset } from '../../plan/imageRecord';
 import type { SceneFrame } from '../createFrame';
 import type { DocumentWorkers } from '../DocumentWorkers';
+import { claimAtlasSlot, encodeTileLookup, type ResidentTile } from './atlasSlots';
 import { RasterImage, rasterLayout } from './imageShader';
 import type { RasterReply, RasterRequest } from './rasterWorkerTypes';
 import { selectImageTiles } from './selectImageTiles';
@@ -15,9 +18,7 @@ import {
   lookupSize,
   mipSize,
   packMipTails,
-  tileAddress,
   tileExtent,
-  tileHash,
   tileKey,
   tileSize,
   visibleImage,
@@ -31,15 +32,18 @@ import {
  * Decoder failures are per image: a failed image keeps its tail if one was already uploaded (otherwise it
  * draws nothing), requests no further detail, and counts as settled so composition never waits on it.
  * Only upload/scheduling exceptions and non-decoder worker errors set `failure` and stop streaming.
+ * `instances` are the document's DRAW records; image placements in `update` ranges index into them.
  */
 export function prepareRasterImages(
   gpu: GpuContext,
   images: Extract<DecodedDocument, { kind: 'curves' }>['rasterImages'],
+  instances: ArrayBuffer,
   keep: KeepGpuResource,
   worker: DocumentWorkers['raster']
 ) {
   const { root, device } = gpu;
   const table = new DataView(images.table);
+  const records = new DataView(instances);
   const packed = packMipTails(table);
   const events = new EventTarget();
   const tilesForPlacement = createImageTileCache();
@@ -48,7 +52,7 @@ export function prepareRasterImages(
   const visible = new Map<number, number>();
   const missingImages = new Set<number>();
   const failedImages = new Map<number, GpuError>();
-  const resident = new Map<string, { tile: Tile; slot: number; used: number }>();
+  const resident = new Map<string, ResidentTile>();
   const totalTiles = packed.images.reduce((sum, image) => {
     for (let level = 0; level < image.level; level++) {
       sum += Math.ceil(mipSize(image.width, level) / tileSize) * Math.ceil(mipSize(image.height, level) / tileSize);
@@ -87,7 +91,7 @@ export function prepareRasterImages(
     }
   });
 
-  return ok({
+  return {
     events,
     /** A transport, GPU upload or scheduling failure that stopped all image streaming. */
     get failure() {
@@ -138,8 +142,11 @@ export function prepareRasterImages(
         await new Promise<void>((resolve) => waiters.add(resolve));
       }
     },
+    /**
+     * Selects the visible working set from the frame's image `ranges` and schedules decoding.
+     * `fallbackImages` additionally request tails for composed pages, without hidden detail.
+     */
     update(
-      instances: ArrayBuffer,
       ranges: { first: number; count: number; image: number | undefined }[],
       frame: SceneFrame,
       fallbackImages: Iterable<number> = []
@@ -150,7 +157,6 @@ export function prepareRasterImages(
 
       clock++;
       visible.clear();
-      const records = new DataView(instances);
       const pages = new Map(frame.visible.map(({ index, page }) => [index, page]));
       const candidates = new Map<string, Tile & { priority: number }>();
 
@@ -172,7 +178,7 @@ export function prepareRasterImages(
         }
 
         for (let i = run.first; i < run.first + run.count; i++) {
-          const region = visibleImage(records, i, frame, pages.get(records.getUint32(i * 80 + 76, true)));
+          const region = visibleImage(records, i, frame, pages.get(drawPage(records, i)));
 
           if (!region) {
             continue;
@@ -212,7 +218,7 @@ export function prepareRasterImages(
       refreshMissingImages();
       pump();
     }
-  });
+  };
 
   function nextImage() {
     if (nextTail !== undefined) {
@@ -268,12 +274,12 @@ export function prepareRasterImages(
     const scheduled = Result.fromThrowable(
       () => {
         const image = packed.images[id]!;
-        const offset = table.getUint32(id * 24 + 8, true);
+        const offset = imagePixelOffset(table, id);
         const request: Omit<RasterRequest, 'bytes'> = {
           id,
           width: image.width,
           height: image.height,
-          codec: table.getUint32(id * 24 + 20, true),
+          codec: imageCodec(table, id),
           tailLevel: ready.has(id) ? undefined : image.level,
           decodeLevel:
             nextTail !== undefined
@@ -293,7 +299,7 @@ export function prepareRasterImages(
         lastImage = id;
         pending = true;
         void worker
-          .decode(request, () => images.pixels.slice(offset, offset + table.getUint32(id * 24 + 12, true)))
+          .decode(request, () => images.pixels.slice(offset, offset + imageByteLength(table, id)))
           .then((result) => {
             if (destroyed || failure) {
               return;
@@ -342,7 +348,7 @@ export function prepareRasterImages(
               id,
               tailLevel: image.level,
               tailOrigin: [image.x, image.y],
-              interpolate: table.getUint32(id * 24 + 16, true)
+              interpolate: imageInterpolation(table, id)
             })
           ).$usage('uniform');
           groups.set(
@@ -359,17 +365,10 @@ export function prepareRasterImages(
             continue;
           }
 
-          let slot = free.pop();
+          const slot = claimAtlasSlot(free, resident, wanted);
 
           if (slot === undefined) {
-            const oldest = [...resident].filter(([key]) => !wanted.has(key)).sort((a, b) => a[1].used - b[1].used)[0];
-
-            if (!oldest) {
-              continue;
-            }
-
-            slot = oldest[1].slot;
-            resident.delete(oldest[0]);
+            continue;
           }
 
           device.queue.writeTexture(
@@ -385,20 +384,7 @@ export function prepareRasterImages(
         }
 
         // Update indirection after uploads, before the next render submission. No stale address can sample a reused slot.
-        const entries = new Uint32Array(lookupSize * 4);
-
-        for (const { tile, slot } of resident.values()) {
-          const address = tileAddress(tile);
-          let hash = tileHash(tile.image, address);
-
-          while (entries[hash * 4]) {
-            hash = (hash + 1) & (lookupSize - 1);
-          }
-
-          entries.set([tile.image + 1, address, slot % columns, Math.floor(slot / columns)], hash * 4);
-        }
-
-        lookup.write(entries.buffer);
+        lookup.write(encodeTileLookup(resident.values(), columns).buffer);
       },
       (cause) => gpuError('render', errorMessage(cause))
     )();

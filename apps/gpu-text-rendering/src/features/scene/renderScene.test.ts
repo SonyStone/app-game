@@ -9,12 +9,12 @@ it('clears once and records all layers into the same pass before submitting once
   const first = vi.fn();
   const second = vi.fn();
 
-  expect(renderScene(gpu, [first, second], 123).isOk()).toBe(true);
+  expect(renderScene(gpu, [first, second]).isOk()).toBe(true);
   expect(encoder.beginRenderPass).toHaveBeenCalledOnce();
   expect(encoder.beginRenderPass).toHaveBeenCalledWith({
     colorAttachments: [expect.objectContaining({ loadOp: 'clear', storeOp: 'store' })]
   });
-  expect(first).toHaveBeenCalledWith({ pass, timestamp: 123, width: 800, height: 600 });
+  expect(first).toHaveBeenCalledWith({ pass, width: 800, height: 600 });
   expect(second).toHaveBeenCalledWith(first.mock.calls[0]![0]);
   expect(first.mock.invocationCallOrder[0]).toBeLessThan(second.mock.invocationCallOrder[0]!);
   expect(pass.end).toHaveBeenCalledOnce();

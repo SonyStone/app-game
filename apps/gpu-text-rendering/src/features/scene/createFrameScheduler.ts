@@ -1,22 +1,22 @@
 import { createRAF } from '@solid-primitives/raf';
 import { ok, Result } from 'neverthrow';
-import { onCleanup, untrack } from 'solid-js';
+import { flush, onCleanup, untrack } from 'solid-js';
 import { errorMessage, gpuError, type ViewerError } from '../../shared/errors';
 
 /**
  * Owns one demand-driven clock. Subscriptions can keep it running independently of one another.
- * `track` wraps the render phase and draw of each frame, so a caller can observe their reactive reads;
- * update callbacks run outside it. Default: runs the frame untracked.
+ * Reactive writes from update callbacks, and the effects they trigger, settle before the render phase, so render
+ * callbacks and `draw` observe them in the same frame. `track` wraps the render phase and draw of each frame, so a caller can observe their
+ * reactive reads; update callbacks run outside it.
  */
 export function createFrameScheduler(
-  draw: (frame: FrameTime) => Result<void, ViewerError>,
+  draw: () => Result<void, ViewerError>,
   onError: (error: ViewerError) => void,
-  track: (record: () => void) => void = (record) => record()
+  track: (record: () => void) => void
 ) {
   const subscriptions = new Set<FrameSubscription>();
   let stopped = false;
   let active = true;
-  let continuous = false;
   let invalidated = false;
   let previous: number | undefined;
   let time = 0;
@@ -46,12 +46,6 @@ export function createFrameScheduler(
       } else {
         pause();
       }
-    },
-
-    /** Optional scene-wide override. Components normally request continuous frames through useFrame. */
-    setContinuous(value: boolean) {
-      continuous = value;
-      loop.invalidate();
     },
 
     /** Permanently stops this session. Subsequent invalidations and subscriptions have no effect. */
@@ -95,19 +89,25 @@ export function createFrameScheduler(
       return;
     }
 
-    invalidated = false;
-
     const delta = previous === undefined ? 0 : Math.min(0.1, Math.max(0, (timestamp - previous) / 1000));
     previous = timestamp;
     time += delta;
 
     const frame = { timestamp, delta, time };
-    const updated = runPhase('update', frame);
+    // Solid stages writes until a microtask. Settling them and their effects now lets this frame render the update.
+    const updated = flush(() => runPhase('update', frame));
 
     if (updated.isErr()) {
       loop.fail(updated.error);
       return;
     }
+
+    if (stopped) {
+      return;
+    }
+
+    // This render reads current state, so it satisfies every request so far, including those caused by updates.
+    invalidated = false;
 
     let rendered: Result<void, ViewerError> = ok();
 
@@ -115,7 +115,7 @@ export function createFrameScheduler(
       rendered = runPhase('render', frame);
 
       if (rendered.isOk() && !stopped) {
-        rendered = draw(frame);
+        rendered = draw();
       }
     });
 
@@ -124,7 +124,7 @@ export function createFrameScheduler(
       return;
     }
 
-    if (!continuous && !invalidated && ![...subscriptions].some((subscription) => subscription.continuous)) {
+    if (!invalidated && ![...subscriptions].some((subscription) => subscription.continuous)) {
       pause();
     }
   }

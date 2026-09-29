@@ -1,29 +1,65 @@
-import { createMemo, createRenderEffect, Errored, Loading, Show, untrack, type Accessor } from 'solid-js';
-import type { WorkerRequest } from './createWorkerRequests';
-import type { WorkerReply } from './workerProtocol';
+import { makeEventListener } from '@solid-primitives/event-listener';
+import type { Result } from 'neverthrow';
+import {
+  createMemo,
+  createRenderEffect,
+  createSignal,
+  Errored,
+  flush,
+  Loading,
+  onCleanup,
+  Show,
+  untrack
+} from 'solid-js';
+import type { AnyWorkerReply, ReplyFailure, ReplyOutput, ReplyProgress } from './workerProtocol';
 
-/** Runs each queued request in its own Solid scope. Handles async completion, typed failures and output transfers. */
-export function WorkerTasks<Input, Output, Failure, Progress = never>(props: {
-  /** The active request from createWorkerRequests; each value mounts a fresh task scope. */
-  request: Accessor<WorkerRequest<Input, WorkerReply<Output, Failure, Progress>> | undefined>;
-  /** Called once in the request's owner. Return undefined only after cancellation; progress stops with the request. */
+/**
+ * Serves requests arriving on a worker endpoint one at a time, each in its own Solid scope.
+ * A request that arrives while another is active gets a "busy" failure reply instead of being queued; callers are
+ * single-flight. The result of execute, a thrown exception or a rejection becomes exactly one terminal reply.
+ * Disposal (mountWorker's cooperative shutdown) aborts the active request and suppresses its late messages.
+ */
+export function WorkerTasks<Input, Reply extends AnyWorkerReply>(props: {
+  /** Receives requests and replies. Default `self`, the dedicated worker global. */
+  endpoint?: WorkerEndpoint;
+  /**
+   * Called once in the request's owner. Its cleanups run before the next request starts. Progress and replies are
+   * dropped once the signal aborts, so work may stop by throwing, for example with `signal.throwIfAborted()`.
+   */
   execute: (
     input: Input,
-    context: { signal: AbortSignal; progress: (value: Progress) => void }
-  ) => Outcome<Output, Failure> | undefined | PromiseLike<Outcome<Output, Failure> | undefined>;
-  /** Maps a thrown exception or rejection to a cloneable failure reply. Must not throw. */
-  error: (cause: unknown) => Failure;
+    context: { signal: AbortSignal; progress: (value: ReplyProgress<Reply>) => void }
+  ) => TaskResult<Reply> | PromiseLike<TaskResult<Reply>>;
+  /** Maps a thrown exception, rejection or busy refusal to a cloneable failure. Must not throw. */
+  error: (cause: unknown) => ReplyFailure<Reply>;
   /** Buffers in a successful output to transfer rather than clone. Default none. */
-  transfer?: (output: Output) => Transferable[];
+  transfer?: (output: ReplyOutput<Reply>) => Transferable[];
 }) {
+  const endpoint = props.endpoint ?? (self as WorkerEndpoint);
+  const [request, setRequest] = createSignal<ActiveRequest<Input>>();
+  let active: ActiveRequest<Input> | undefined;
+
+  // mountWorker registers its shutdown listener first; disposing from it removes this listener before it runs.
+  makeEventListener<{ message: MessageEvent<Input> }>(endpoint, 'message', ({ data }) => {
+    if (active) {
+      send({ ok: false, error: props.error(new Error('The worker is busy with another request')) });
+      return;
+    }
+    active = { data, abort: new AbortController() };
+    setRequest(active);
+  });
+  onCleanup(() => {
+    active?.abort.abort();
+    active = undefined;
+  });
+
   return (
-    <Show when={props.request()} keyed>
+    <Show when={request()} keyed>
       {(request) => (
         <Errored
           // Errored is the only boundary that observes both synchronous throws and async memo rejections.
-          // Replying from its fallback is the terminal reply; createWorkerRequests defers the scope swap.
           fallback={(error) => {
-            request.reply({ ok: false, error: props.error(error()) });
+            finish(request, { ok: false, error: props.error(error()) });
             return null;
           }}
         >
@@ -35,26 +71,70 @@ export function WorkerTasks<Input, Output, Failure, Progress = never>(props: {
     </Show>
   );
 
-  function Task(task: { request: NonNullable<ReturnType<typeof props.request>> }) {
-    const request = task.request;
-    const result = createMemo(async () => {
-      if (request.signal.aborted) {
+  function Task(task: { request: ActiveRequest<Input> }) {
+    const { data, abort } = task.request;
+    const { signal } = abort;
+    const result = createMemo(async () =>
+      untrack(() =>
+        props.execute(data, {
+          signal,
+          progress: (progress) => {
+            if (!signal.aborted) {
+              send({ progress });
+            }
+          }
+        })
+      )
+    );
+    createRenderEffect(result, (result) =>
+      finish(
+        task.request,
+        result.match<TerminalReply<Reply>>(
+          (value) => ({ ok: true, value }),
+          (error) => ({ ok: false, error })
+        )
+      )
+    );
+    return null;
+  }
+
+  /** Sends the terminal reply once, then frees the slot. Aborting marks completion and stops leftover work. */
+  function finish(request: ActiveRequest<Input>, reply: TerminalReply<Reply>) {
+    if (request.abort.signal.aborted) {
+      return;
+    }
+    request.abort.abort();
+    send(reply, reply.ok ? (props.transfer?.(reply.value) ?? []) : []);
+    // finish runs inside the request scope's own render effect or Errored fallback; replacing the keyed scope from
+    // there would dispose it mid-mount, so defer to a microtask. Microtasks drain before the next message task, so a
+    // caller replying to this message with a new request never sees "busy".
+    queueMicrotask(() => {
+      if (active !== request) {
         return;
       }
-      return await untrack(() =>
-        props.execute(request.data, {
-          signal: request.signal,
-          progress: (progress) => request.post({ progress })
-        })
-      );
+      setRequest(undefined);
+      // Signal writes are batched; flush commits the old scope's disposal (and its cleanups) before the next
+      // request can acquire resources such as a decoder heap.
+      flush();
+      active = undefined;
     });
-    createRenderEffect(result, (reply) => {
-      if (reply && !request.signal.aborted) {
-        request.reply(reply, reply.ok ? (props.transfer?.(reply.value) ?? []) : []);
-      }
-    });
-    return null;
+  }
+
+  function send(message: TerminalReply<Reply> | { progress: ReplyProgress<Reply> }, transfer: Transferable[] = []) {
+    endpoint.postMessage(message, { transfer });
   }
 }
 
-type Outcome<Output, Failure> = Exclude<WorkerReply<Output, Failure>, { progress: never }>;
+/** The worker global, or a test double, that receives requests and replies. */
+export type WorkerEndpoint = EventTarget & {
+  postMessage(message: unknown, options: { transfer: Transferable[] }): void;
+};
+
+/** The outcome of one request; the failure must survive structured cloning. */
+type TaskResult<Reply extends AnyWorkerReply> = Result<ReplyOutput<Reply>, ReplyFailure<Reply>>;
+
+type TerminalReply<Reply extends AnyWorkerReply> =
+  | { ok: true; value: ReplyOutput<Reply> }
+  | { ok: false; error: ReplyFailure<Reply> };
+
+type ActiveRequest<Input> = { data: Input; abort: AbortController };

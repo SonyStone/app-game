@@ -1,13 +1,12 @@
 import { createEffect, untrack } from 'solid-js';
 import type { TextDocument } from '../document/document';
-import { useFrameLoop } from '../scene/FrameLoop';
 import { useViewport } from '../viewport/Viewport';
-import { documentBounds } from './camera';
+import { documentBounds, fitCamera } from './camera';
 import { useDocumentCamera } from './DocumentCamera';
 
 /** Commands exposed to the parent while OverviewCamera is mounted. */
 export type OverviewCameraRef = {
-  /** Fits all pages within the padded viewport, resets rotation and schedules one frame. */
+  /** Fits all pages within the padded viewport and resets rotation. */
   fitToDocument: () => void;
 };
 
@@ -18,11 +17,10 @@ export function OverviewCamera(props: {
   /** Pages to fit; read only when a fit is requested. */
   document: TextDocument;
   /** Reserved CSS pixels on each side. Defaults to zero. */
-  padding?: { top: number; right: number; bottom: number; left: number };
+  padding?: Parameters<typeof fitCamera>[3];
 }) {
-  const camera = useDocumentCamera();
+  const { setCamera, pageAspect } = useDocumentCamera();
   const viewport = useViewport();
-  const loop = useFrameLoop();
 
   createEffect(
     () => props.ref,
@@ -32,24 +30,11 @@ export function OverviewCamera(props: {
     }
   );
 
-  /** Fits the current pages and schedules one frame without starting continuous camera movement. */
+  /** Replaces the camera once without starting continuous camera movement. */
   function fitToDocument() {
-    const document = untrack(() => props.document);
-    const first = document.pages[0]!;
-    const { left, right, bottom, top } = documentBounds(document.pages);
-    const { width, height } = untrack(viewport.size).css;
-    const aspect = first.width / first.height;
-    const padding = untrack(() => props.padding) ?? { top: 0, right: 0, bottom: 0, left: 0 };
-    const availableHeight = Math.max(1, height - padding.top - padding.bottom);
-    camera.zoom =
-      Math.max(
-        ((right - left) * height) / Math.max(1, width - padding.left - padding.right),
-        ((top - bottom) * height) / (aspect * availableHeight)
-      ) / 2;
-    camera.x = (left + right) / 2 + ((padding.right - padding.left) * camera.zoom) / Math.max(1, height);
-    camera.y = (bottom + top) / 2 - ((padding.bottom - padding.top) * camera.zoom * aspect) / Math.max(1, height);
-    camera.rotation = 0;
-    loop.invalidate();
+    setCamera(
+      untrack(() => fitCamera(documentBounds(props.document.pages), viewport.size().css, pageAspect(), props.padding))
+    );
   }
 
   return null;

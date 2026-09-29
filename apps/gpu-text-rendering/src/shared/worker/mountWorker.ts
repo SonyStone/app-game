@@ -11,6 +11,7 @@ import { isWorkerShutdown } from './workerProtocol';
 export function mountWorker(assembly: () => JSX.Element, scope?: WorkerScope) {
   return createRoot((dispose) => {
     if (scope) {
+      // Registered before the tree mounts, so disposal removes request listeners before they see this message.
       makeEventListener<{ message: MessageEvent }>(scope, 'message', ({ data }) => {
         if (isWorkerShutdown(data)) {
           dispose();

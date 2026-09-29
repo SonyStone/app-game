@@ -1,5 +1,5 @@
 import { err, ok, ResultAsync } from 'neverthrow';
-import { checkAborted, documentError, errorMessage } from '../../shared/errors';
+import { abortedError, checkAborted, documentError, errorMessage } from '../../shared/errors';
 import { readFileBytes } from '../../shared/readFileBytes';
 import type { OnDocumentProgress } from './documentProgress';
 import { documentFileLimitMessage, maxDocumentFileBytes } from './limits';
@@ -19,10 +19,7 @@ export async function readDocumentFile(file: File, signal?: AbortSignal, onProgr
       signal,
       onProgress: (completed, total) => onProgress?.({ stage: 'readingFile', completed, total })
     }),
-    (cause) =>
-      signal?.aborted
-        ? { kind: 'aborted' as const, message: 'Operation cancelled' }
-        : documentError('load', errorMessage(cause))
+    (cause) => (signal?.aborted ? abortedError() : documentError('load', errorMessage(cause)))
   );
 
   return read

@@ -3,7 +3,6 @@ import { d } from 'typegpu';
 import type { GpuContext } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { TextDocument } from '../../document';
-import { documentWorkerError } from '../../documentWorkerError';
 import type { DocumentWorkers } from '../DocumentWorkers';
 import { uploadBuffer } from '../uploadBuffer';
 import { coverageTableLayout } from './coverageTable';
@@ -28,7 +27,7 @@ export async function prepareCoverageTables(
   // the renderer owner; source geometry stays owned by the caller throughout.
   const tables = document.coverage
     ? ok(document.coverage)
-    : (await request({ instances: document.instances, curves: document.curves })).mapErr(documentWorkerError);
+    : await request({ instances: document.instances, curves: document.curves });
   if (tables.isErr()) {
     return err(tables.error);
   }

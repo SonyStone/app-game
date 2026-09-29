@@ -23,42 +23,45 @@ afterEach(() => {
   cleanups.splice(0).forEach((dispose) => dispose());
 });
 
-it.each(['jsx', 'render'] as const)(
-  'replaces %s children and releases the old renderer while retaining the GPU',
-  async (mode) => {
-    const first = rendererFixture();
-    const second = rendererFixture();
-    vi.mocked(createTypeGpuRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
+it('replaces children and releases the old renderer while retaining the GPU', async () => {
+  const first = rendererFixture();
+  const second = rendererFixture();
+  vi.mocked(createTypeGpuRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
 
-    const mounted = mount(mode);
-    await settle();
-    expect(mounted.bindings.map((value) => value.renderer)).toEqual([first]);
+  const mounted = mount();
+  await settle();
+  expect(mounted.bindings.map((value) => value.renderer)).toEqual([first]);
 
-    const next = documentFixture();
-    mounted.setDocument(next);
-    await settle();
+  const next = documentFixture();
+  mounted.setDocument(next);
+  await settle();
 
-    expect(first.destroy).toHaveBeenCalledOnce();
-    expect(second.destroy).not.toHaveBeenCalled();
-    expect(mounted.detached).toHaveBeenCalledOnce();
-    expect(mounted.bindings[1]).toEqual({ document: next, renderer: second });
-    expect(mounted.onReady).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(createTypeGpuRenderer).mock.calls.every(([context]) => context === gpu)).toBe(true);
-  }
-);
+  expect(first.destroy).toHaveBeenCalledOnce();
+  expect(second.destroy).not.toHaveBeenCalled();
+  expect(mounted.detached).toHaveBeenCalledOnce();
+  expect(mounted.bindings[1]).toEqual({ document: next, renderer: second });
+  expect(mounted.onReady).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(createTypeGpuRenderer).mock.calls.every(([context]) => context === gpu)).toBe(true);
+});
 
-it.each(['jsx', 'render'] as const)('cancels preparation without mounting stale %s children', async (mode) => {
+it('cancels preparation without mounting stale children, leaving a late renderer to release itself', async () => {
   let resolve!: (result: Awaited<ReturnType<typeof createTypeGpuRenderer>>) => void;
   const pending = new Promise<Awaited<ReturnType<typeof createTypeGpuRenderer>>>((done) => {
     resolve = done;
   });
   const late = rendererFixture();
   const current = rendererFixture();
-  vi.mocked(createTypeGpuRenderer).mockReturnValueOnce(pending).mockResolvedValueOnce(ok(current));
+  // Like the real renderer, the late one destroys itself when its preparation signal aborts.
+  vi.mocked(createTypeGpuRenderer)
+    .mockImplementationOnce((_gpu, _document, { signal }) => {
+      signal!.addEventListener('abort', late.destroy, { once: true });
+      return pending;
+    })
+    .mockResolvedValueOnce(ok(current));
 
-  const mounted = mount(mode);
+  const mounted = mount();
   await settle();
-  const signal = vi.mocked(createTypeGpuRenderer).mock.calls[0]![3]!;
+  const signal = vi.mocked(createTypeGpuRenderer).mock.calls[0]![2].signal!;
   expect(mounted.bindings).toEqual([]);
 
   mounted.setDocument(documentFixture());
@@ -80,7 +83,7 @@ it('observes only the current renderer and detaches residency listeners on GPU a
   const first = rendererFixture();
   const second = rendererFixture();
   vi.mocked(createTypeGpuRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
-  const mounted = mount('jsx');
+  const mounted = mount();
   await settle();
   first.events.dispatchEvent(new Event('change'));
   expect(mounted.onResourceUsage).toHaveBeenCalledWith(1024);
@@ -105,12 +108,18 @@ it('replaces loading with a failure without mounting the ready branch', async ()
   );
   const host = document.createElement('div');
   const onError = vi.fn(() => null);
-  const ready = vi.fn(() => <span>Ready</span>);
+  const ready = vi.fn();
+
+  function Ready() {
+    ready();
+    return <span>Ready</span>;
+  }
+
   cleanups.push(
     render(
       () => (
         <DocumentRendererProvider document={documentFixture()} loading="Preparing" error={onError}>
-          {ready}
+          <Ready />
         </DocumentRendererProvider>
       ),
       host
@@ -126,7 +135,7 @@ it('replaces loading with a failure without mounting the ready branch', async ()
   expect(ready).not.toHaveBeenCalled();
 });
 
-function mount(mode: 'jsx' | 'render') {
+function mount() {
   const bindings: ReturnType<typeof useDocumentRenderer>[] = [];
   const detached = vi.fn();
   const onReady = vi.fn();
@@ -150,15 +159,7 @@ function mount(mode: 'jsx' | 'render') {
           onReady={onReady}
           onResourceUsage={onResourceUsage}
         >
-          {mode === 'render' ? (
-            (value) => {
-              expect(value).toBe(useDocumentRenderer());
-
-              return <Consumer />;
-            }
-          ) : (
-            <Consumer />
-          )}
+          <Consumer />
         </DocumentRendererProvider>
       ),
       host

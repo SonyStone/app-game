@@ -1,3 +1,5 @@
+import { drawOffset, drawWords, evenOddKind } from './drawRecord';
+
 /**
  * Adds GPU-only horizontal lookup rows for small outlines omitted by the file's large-path index.
  * Prioritizes repeated outlines within 32 MiB of additional storage; geometry and source bytes stay intact.
@@ -13,11 +15,11 @@ export function prepareCurveBins(document: {
   for (const source of [document.instances, document.clips]) {
     const words = new Uint32Array(source);
 
-    for (let i = 0; i < words.length; i += 20) {
-      const first = words[i + 16]!;
-      const count = words[i + 17]!;
+    for (let i = 0; i < words.length; i += drawWords) {
+      const first = words[i + drawOffset.first / 4]!;
+      const count = words[i + drawOffset.count / 4]!;
 
-      if (words[i + 7] !== 0 || words[i + 18]! > 1 || count <= 8) {
+      if (words[i + drawOffset.bins / 4] !== 0 || words[i + drawOffset.kind / 4]! > evenOddKind || count <= 8) {
         continue;
       }
 
@@ -84,9 +86,10 @@ export function prepareCurveBins(document: {
     const copy = source.slice(0);
     const words = new Uint32Array(copy);
 
-    for (let i = 0; i < words.length; i += 20) {
-      if (words[i + 7] === 0 && words[i + 18]! <= 1) {
-        words[i + 7] = known.get(`${words[i + 16]}:${words[i + 17]}`)?.offset ?? 0;
+    for (let i = 0; i < words.length; i += drawWords) {
+      if (words[i + drawOffset.bins / 4] === 0 && words[i + drawOffset.kind / 4]! <= evenOddKind) {
+        words[i + drawOffset.bins / 4] =
+          known.get(`${words[i + drawOffset.first / 4]}:${words[i + drawOffset.count / 4]}`)?.offset ?? 0;
       }
     }
 

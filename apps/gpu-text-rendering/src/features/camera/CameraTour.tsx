@@ -1,8 +1,8 @@
 import { createEffect } from 'solid-js';
 import type { TextDocument } from '../document/document';
 import { useFrame } from '../scene/FrameLoop';
-import { createCameraTour } from './createCameraTour';
 import { useDocumentCamera } from './DocumentCamera';
+import { makeCameraTour } from './makeCameraTour';
 
 /** Advances the optional camera tour before drawing. Enabling it again starts from the current camera. */
 export function CameraTour(props: {
@@ -11,8 +11,8 @@ export function CameraTour(props: {
   /** Runs the tour continuously while true; each change restarts the next leg from the current camera. */
   enabled: boolean;
 }) {
-  const camera = useDocumentCamera();
-  const tour = createCameraTour(camera);
+  const { setCamera } = useDocumentCamera();
+  const tour = makeCameraTour();
 
   createEffect(
     () => props.enabled,
@@ -21,7 +21,7 @@ export function CameraTour(props: {
 
   useFrame(
     ({ time }) => {
-      tour.update(time * 1000, props.document);
+      setCamera((camera) => tour.update(time * 1000, props.document, camera));
     },
     { phase: 'update', enabled: () => props.enabled, continuous: true }
   );

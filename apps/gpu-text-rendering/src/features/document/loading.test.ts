@@ -1,7 +1,7 @@
 import { flush } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { convertPdf, loadDocument, readGdoc } from '../../../tests/browser/workerHarness';
-import { workerShutdownGraceMs } from '../../shared/worker/createWorkerTransport';
+import { workerShutdownGraceMs } from '../../shared/worker/openWorker';
 import { isWorkerShutdown } from '../../shared/worker/workerProtocol';
 import type { DecodeReply, DecodedDocument } from './format/types';
 

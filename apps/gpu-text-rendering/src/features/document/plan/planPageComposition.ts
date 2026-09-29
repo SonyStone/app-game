@@ -1,3 +1,13 @@
+import {
+  drawClip,
+  drawCount,
+  drawKind,
+  drawMatrix,
+  drawPage,
+  drawSegments,
+  evenOddKind,
+  hairlineKind
+} from './drawRecord';
 import type { PaintNode } from './paintTree';
 
 /**
@@ -17,11 +27,11 @@ export function planPageComposition(
 ) {
   const records = new DataView(instances);
   const clipRecords = new DataView(clips);
-  const denseClips = new Uint8Array(clips.byteLength / 80 + 1);
-  for (let index = 0; index < clips.byteLength / 80; index++) {
+  const denseClips = new Uint8Array(drawCount(clipRecords) + 1);
+  for (let index = 0; index < drawCount(clipRecords); index++) {
+    // A CLIP record's page field holds its parent clip reference.
     denseClips[index + 1] = Number(
-      clipRecords.getUint32(index * 80 + 68, true) > 512 ||
-        denseClips[clipRecords.getUint32(index * 80 + 76, true)] === 1
+      drawSegments(clipRecords, index) > 512 || denseClips[drawPage(clipRecords, index)] === 1
     );
   }
   const pages = new Set<number>();
@@ -33,19 +43,15 @@ export function planPageComposition(
   const direct: PaintNode[][] = [];
 
   for (const [page, nodes] of trees.entries()) {
-    const densePath = (index: number) =>
-      denseOutline(records, index) || denseClips[records.getUint32(index * 80 + 24, true)] === 1;
+    const densePath = (index: number) => denseOutline(records, index) || denseClips[drawClip(records, index)] === 1;
     const dense = containsOutline(nodes, densePath);
     const cost = compositeCost(nodes);
     const expensive = cost >= 8 || dense;
     const largePath = (index: number) => costlyOutline(records, index, pageAreas?.[page] ?? 1);
-    const cachedPath = (index: number) =>
-      densePath(index) || largePath(index) || records.getUint32(index * 80 + 24, true) !== 0;
+    const cachedPath = (index: number) => densePath(index) || largePath(index) || drawClip(records, index) !== 0;
     const overviewOnly =
       !expensive &&
-      (imageCount(nodes) >= 8 ||
-        containsOutline(nodes, cachedPath) ||
-        (compositeDocument && containsImage(nodes)));
+      (imageCount(nodes) >= 8 || containsOutline(nodes, cachedPath) || (compositeDocument && containsImage(nodes)));
     const boundary =
       nodes.findLastIndex(
         (node) =>
@@ -102,7 +108,7 @@ function imageCount(nodes: PaintNode[]): number {
 
 /** Dense fills bypass the small-outline area tables and can dominate a minified frame. */
 function denseOutline(records: DataView, index: number) {
-  return records.getUint32(index * 80 + 72, true) <= 1 && records.getUint32(index * 80 + 68, true) > 512;
+  return drawKind(records, index) <= evenOddKind && drawSegments(records, index) > 512;
 }
 
 function containsOutline(nodes: PaintNode[], costly: (index: number) => boolean): boolean {
@@ -121,13 +127,12 @@ function containsOutline(nodes: PaintNode[], costly: (index: number) => boolean)
 
 /** Large curve fills cost per covered pixel; ordinary body glyphs stay far below this area. */
 function costlyOutline(records: DataView, index: number, pageArea: number) {
-  const offset = index * 80;
-  if (records.getUint32(offset + 72, true) > 1 || records.getUint32(offset + 68, true) < 16) {
+  if (drawKind(records, index) > evenOddKind || drawSegments(records, index) < 16) {
     return false;
   }
   const area = Math.abs(
-    records.getFloat32(offset, true) * records.getFloat32(offset + 12, true) -
-      records.getFloat32(offset + 4, true) * records.getFloat32(offset + 8, true)
+    drawMatrix(records, index, 0) * drawMatrix(records, index, 3) -
+      drawMatrix(records, index, 1) * drawMatrix(records, index, 2)
   );
   return area >= pageArea * 0.02;
 }
@@ -147,7 +152,7 @@ function containsHairline(nodes: PaintNode[], records: DataView): boolean {
     }
 
     for (let index = node.first; index < node.first + node.count; index++) {
-      if (records.getUint32(index * 80 + 72, true) >= 3) {
+      if (drawKind(records, index) >= hairlineKind) {
         return true;
       }
     }

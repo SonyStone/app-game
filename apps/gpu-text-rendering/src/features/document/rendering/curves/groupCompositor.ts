@@ -1,9 +1,9 @@
 import tgpu, { common, d, std, type TgpuBindGroup } from 'typegpu';
 import type { GpuContext } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
+import { alphaMaskBlend, isMask, luminosityMaskBlend, type PaintNode } from '../../plan/paintTree';
 import { blendColor } from './blendColor';
 import type { PixelRect } from './paintBounds';
-import { alphaMaskBlend, isMask, luminosityMaskBlend, type PaintNode } from './paintTree';
 
 /**
  * Composes PDF transparency groups, including inherited backdrops, knockout shapes and soft masks.
@@ -23,11 +23,10 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
   const outputs = new Map<string, { surface: Surface; usedAt: number }>();
   const outputParameters: ReturnType<typeof makeOutputParameters>[] = [];
   const pairs = new Map<string, { group: TgpuBindGroup; surfaces: number[] }>();
-  let pool: Pool | undefined;
+  /** One composed page's scratch: its surface pool and the screen region (origin, quantized size) it covers. */
+  type PageScratch = PixelRect & { pool: Pool };
   let clock = 0;
   let nextSurfaceId = 0;
-  let width = 0;
-  let height = 0;
   const identityTransfer = keep(
     root.createBuffer(
       d.arrayOf(d.f32, 256),
@@ -86,23 +85,21 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
      * @param size Output size in physical pixels.
      * @param pages Paint trees of the pages to compose, in draw order.
      * @param bounds Screen-space bounds of a node, or `undefined` when it is not visible.
-     * @param preparePage Called before a page renders with its page index, visible screen region and
-     *   quantized scratch size; paint callbacks then draw relative to that region.
-     * @param background Paints behind all composed pages into `pass`.
-     * @param paint Draws one leaf into the given scratch pass; `shapeOnly` requests knockout shape coverage.
+     * @param painter Renderer callbacks that draw pages, leaves and the background.
      */
     draw(
       pass: GPURenderPassEncoder,
-      size: { width: number; height: number },
-      pages: PaintNode[][],
-      bounds: (node: PaintNode) => PixelRect | undefined,
-      preparePage: (index: number, region: PixelRect, width: number, height: number) => void,
-      background: (pass: GPURenderPassEncoder) => void,
-      paint: (
-        pass: GPURenderPassEncoder,
-        node: Exclude<PaintNode, { children: PaintNode[] }>,
-        shapeOnly?: boolean
-      ) => void
+      {
+        size,
+        pages,
+        bounds,
+        painter
+      }: {
+        size: { width: number; height: number };
+        pages: PaintNode[][];
+        bounds: (node: PaintNode) => PixelRect | undefined;
+        painter: CompositePainter;
+      }
     ) {
       clock++;
       const outputKey = `${size.width}:${size.height}`;
@@ -111,80 +108,78 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
       outputs.set(outputKey, output);
       const combined = output.surface;
       const encoder = device.createCommandEncoder();
-      begin(combined, true, { x: 0, y: 0, width: size.width, height: size.height }).end();
-      let originX = 0;
-      let originY = 0;
+      const screen: PixelRect = { x: 0, y: 0, width: size.width, height: size.height };
+      begin(combined, true, screen).end();
 
-      for (const [index, nodes] of pages.entries()) {
-        originX = originY = 0;
-        width = size.width;
-        height = size.height;
-        const rect = region(nodes);
+      for (const [position, nodes] of pages.entries()) {
+        const rect = region(nodes, screen);
 
         if (!rect) {
           continue;
         }
 
         // Quantized scratch sizes prevent allocation churn while keeping small pages small.
-        width = Math.ceil(rect.width / 64) * 64;
-        height = Math.ceil(rect.height / 64) * 64;
-        originX = rect.x;
-        originY = rect.y;
+        const width = Math.ceil(rect.width / 64) * 64;
+        const height = Math.ceil(rect.height / 64) * 64;
         const key = `${width}:${height}`;
-        pool = pools.get(key) ?? makePool(width, height);
+        const pool = pools.get(key) ?? makePool(width, height);
         pools.set(key, pool);
         pool.usedAt = clock;
         pool.free = pool.surfaces.slice().reverse();
-        preparePage(index, rect, width, height);
+        const page: PageScratch = { pool, x: rect.x, y: rect.y, width, height };
+        painter.preparePage(position, rect, width, height);
         begin(pool.empty, true, { x: 0, y: 0, width, height }).end();
-        const page = render(nodes);
-        const settings = (outputParameters[index] ??= makeOutputParameters());
+        const composed = render(nodes, page);
+        const settings = (outputParameters[position] ??= makeOutputParameters());
         settings.buffer.write([rect.x, rect.y]);
         const accumulation = begin(combined, false, rect);
-        placedCopy.with(accumulation).with(page.sample).with(settings.group).draw(3);
+        placedCopy.with(accumulation).with(composed.sample).with(settings.group).draw(3);
         accumulation.end();
-        release(page);
+        release(page, composed);
       }
 
       device.queue.submit([encoder.finish()]);
-      background(pass);
+      painter.background(pass);
       copy.with(pass).with(combined.sample).draw(3);
       evictIdle(pools, (pool) => [pool.empty, ...pool.surfaces]);
       evictIdle(outputs, ({ surface }) => [surface]);
 
       /**
-       * Renders `items` into a newly acquired surface that the caller must release.
-       * `backdrop` is borrowed; `alphaOnly` renders descendants as isolated because only alpha is consumed.
+       * Renders `items` into a newly acquired surface of `page` that the caller must release.
+       * `backdrop` is borrowed. `mode` 'shape' paints knockout shape coverage only; 'alpha' renders
+       * descendants as isolated because only alpha is consumed.
        */
       function render(
         items: PaintNode[],
-        backdrop?: Surface,
-        knockout = false,
-        shapeOnly = false,
-        alphaOnly = false
+        page: PageScratch,
+        {
+          backdrop,
+          knockout = false,
+          mode = 'color'
+        }: { backdrop?: Surface; knockout?: boolean; mode?: 'color' | 'shape' | 'alpha' } = {}
       ): Surface {
-        const empty = pool!.empty;
-        let target = acquire();
-        const rect = region(items) ?? { x: 0, y: 0, width: 1, height: 1 };
+        const empty = page.pool.empty;
+        let target = acquire(page);
+        const rect = region(items, page) ?? { x: 0, y: 0, width: 1, height: 1 };
         let outputPass = begin(target, true, rect);
 
         if (backdrop) {
           copy.with(outputPass).with(backdrop.sample).draw(3);
         }
 
-        if (shapeOnly) {
+        if (mode === 'shape') {
           paintShapes(items, outputPass);
           outputPass.end();
           return target;
         }
 
         for (const node of items) {
-          if (isMask(node) || !localBounds(node)) {
+          if (isMask(node) || !localBounds(node, page)) {
             continue;
           }
 
           if (!knockout && !('children' in node) && node.blend === 0) {
-            paint(outputPass, node);
+            painter.paint(outputPass, node);
             continue;
           }
 
@@ -194,22 +189,20 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
           // nested backdrop removal; otherwise every non-isolated level would double the work.
           const child =
             'children' in node
-              ? render(
-                  node.children,
-                  node.isolated || alphaOnly ? undefined : groupBackdrop,
-                  node.knockout,
-                  false,
-                  alphaOnly
-                )
-              : render([{ ...node, blend: 0 }]);
-          const shape = knockout ? render('children' in node ? node.children : [node], undefined, false, true) : empty;
-          const destination = acquire();
+              ? render(node.children, page, {
+                  backdrop: node.isolated || mode === 'alpha' ? undefined : groupBackdrop,
+                  knockout: node.knockout,
+                  mode
+                })
+              : render([{ ...node, blend: 0 }], page);
+          const shape = knockout ? render('children' in node ? node.children : [node], page, { mode: 'shape' }) : empty;
+          const destination = acquire(page);
           const opacity = 'children' in node ? node.opacity : 1;
           const settings = settingsFor(opacity, node.blend, knockout ? knockoutOperation : blendOperation);
           const compositePass = begin(destination, true, rect);
           // Preserve the parent's pixels outside this group's affected region.
           copy.with(compositePass).with(target.sample).draw(3);
-          const affected = localBounds(node)!;
+          const affected = localBounds(node, page)!;
           compositePass.setScissorRect(affected.x, affected.y, affected.width, affected.height);
           composite
             .with(compositePass)
@@ -217,13 +210,13 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
             .with(settings)
             .draw(3);
           compositePass.end();
-          release(child);
+          release(page, child);
 
           if (shape !== empty) {
-            release(shape);
+            release(page, shape);
           }
 
-          release(target);
+          release(page, target);
           target = destination;
           outputPass = begin(target, false, rect);
         }
@@ -235,12 +228,10 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
           // contribution before applying its own mask/opacity, without counting the backdrop twice.
           const alpha = render(
             items.filter((node) => !isMask(node)),
-            undefined,
-            knockout,
-            false,
-            true
+            page,
+            { knockout, mode: 'alpha' }
           );
-          const extracted = acquire();
+          const extracted = acquire(page);
           const extractPass = begin(extracted, true, rect);
           composite
             .with(extractPass)
@@ -248,16 +239,16 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
             .with(settingsFor(1, 0, removeBackdropOperation))
             .draw(3);
           extractPass.end();
-          release(alpha);
-          release(target);
+          release(page, alpha);
+          release(page, target);
           target = extracted;
         }
 
         const mask = items.find(isMask);
 
         if (mask && 'children' in mask) {
-          const maskSurface = render(mask.children);
-          const destination = acquire();
+          const maskSurface = render(mask.children, page);
+          const destination = acquire(page);
           let settings = maskParameters.get(mask);
 
           if (!settings) {
@@ -272,8 +263,8 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
             .with(settings)
             .draw(3);
           maskedPass.end();
-          release(maskSurface);
-          release(target);
+          release(page, maskSurface);
+          release(page, target);
           target = destination;
         }
 
@@ -289,7 +280,7 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
           if ('children' in node) {
             paintShapes(node.children, pass);
           } else {
-            paint(pass, node, true);
+            painter.paint(pass, node, true);
           }
         }
       }
@@ -304,28 +295,30 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
         return pass;
       }
 
-      function localBounds(node: PaintNode): PixelRect | undefined {
+      /** A node's bounds relative to `area`'s origin, clipped to its size; `undefined` when outside. */
+      function localBounds(node: PaintNode, area: PixelRect): PixelRect | undefined {
         const value = bounds(node);
 
         if (!value) {
           return undefined;
         }
 
-        const x = Math.max(0, value.x - originX);
-        const y = Math.max(0, value.y - originY);
-        const right = Math.min(width, value.x + value.width - originX);
-        const bottom = Math.min(height, value.y + value.height - originY);
+        const x = Math.max(0, value.x - area.x);
+        const y = Math.max(0, value.y - area.y);
+        const right = Math.min(area.width, value.x + value.width - area.x);
+        const bottom = Math.min(area.height, value.y + value.height - area.y);
         return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : undefined;
       }
 
-      function region(items: PaintNode[]): PixelRect | undefined {
-        let left = width;
-        let top = height;
+      /** Union of the items' {@link localBounds} within `area`. */
+      function region(items: PaintNode[], area: PixelRect): PixelRect | undefined {
+        let left = area.width;
+        let top = area.height;
         let right = 0;
         let bottom = 0;
 
         for (const node of items) {
-          const rect = localBounds(node);
+          const rect = localBounds(node, area);
 
           if (rect) {
             left = Math.min(left, rect.x);
@@ -342,23 +335,22 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
     }
   };
 
-  /** Takes a scratch surface of the current page size; its contents are undefined until cleared. */
-  function acquire() {
-    const current = pool!;
-    const reused = current.free.pop();
+  /** Takes a scratch surface of the page's size; its contents are undefined until cleared. */
+  function acquire({ pool }: PageScratch) {
+    const reused = pool.free.pop();
 
     if (reused) {
       return reused;
     }
 
-    const surface = makeSurface(current.empty.width, current.empty.height);
-    current.surfaces.push(surface);
+    const surface = makeSurface(pool.empty.width, pool.empty.height);
+    pool.surfaces.push(surface);
     return surface;
   }
 
   /** Returns a surface for later passes of the same encoder; the caller must not sample it afterwards. */
-  function release(surface: Surface) {
-    pool!.free.push(surface);
+  function release({ pool }: PageScratch, surface: Surface) {
+    pool.free.push(surface);
   }
 
   function makePool(w: number, h: number): Pool {
@@ -468,6 +460,19 @@ export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
     return root.createBindGroup(parameterLayout, { values, transfer: samples });
   }
 }
+
+/** Renderer callbacks for one {@link createGroupCompositor} draw. */
+export type CompositePainter = {
+  /**
+   * Called before a page renders with its position in the draw's `pages` list (not its document page index),
+   * its visible screen region and its quantized scratch size; later `paint` calls draw relative to that region.
+   */
+  preparePage: (position: number, region: PixelRect, width: number, height: number) => void;
+  /** Paints behind all composed pages into the scene pass. */
+  background: (pass: GPURenderPassEncoder) => void;
+  /** Draws one leaf into the given scratch pass; `shapeOnly` requests knockout shape coverage. */
+  paint: (pass: GPURenderPassEncoder, node: Exclude<PaintNode, { children: PaintNode[] }>, shapeOnly?: boolean) => void;
+};
 
 /** Idle draws before an unused scratch-size pool or output surface is destroyed. */
 const idleFrames = 120;

@@ -1,19 +1,10 @@
-import { makeEventListener } from '@solid-primitives/event-listener';
 import { resolveTokens } from '@solid-primitives/jsx-tokenizer';
 import { createPageVisibility } from '@solid-primitives/page-utilities';
 import type { JSX } from '@solidjs/web';
-import { ok } from 'neverthrow';
-import {
-  createContext,
-  createEffect,
-  createMemo,
-  createReaction,
-  onCleanup,
-  useContext,
-  type Accessor
-} from 'solid-js';
+import { createContext, createEffect, createMemo, createReaction, useContext, type Accessor } from 'solid-js';
 import type { ViewerError } from '../../shared/errors';
 import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
+import { onGpuRelease } from '../../shared/gpu/onGpuRelease';
 import { pendingGpuPreparation } from '../../shared/gpu/serializeGpuPreparation';
 import { runWithContext } from '../../shared/jsx/TokenContext';
 import { useViewport } from '../viewport/Viewport';
@@ -22,73 +13,58 @@ import { makeGpuFrameGate } from './makeGpuFrameGate';
 import { makeScenePointerEvents } from './makeScenePointerEvents';
 import { RenderLayer } from './RenderLayer';
 import { renderScene } from './renderScene';
-import { resolveSceneChildren } from './resolveSceneChildren';
 
 /**
  * Owns one demand-driven RAF loop and resolves draw tokens from a scene-only JSX subtree.
  * Update callbacks precede drawing; equal layer orders follow JSX order. DOM UI belongs outside this subtree.
- * Reactive reads in render-phase callbacks and layer draws request the next frame when they change;
- * non-reactive state such as the camera still needs an explicit invalidate.
+ * Reactive reads in render-phase callbacks and layer draws, such as the camera, request the next frame when they
+ * change; non-reactive state such as renderer caches still needs an explicit invalidate.
  */
 export function FrameLoop(props: {
-  /** JSX or a render function evaluated beneath this loop's context, preserving component ownership. */
-  children: JSX.Element | ((loop: ReturnType<typeof useFrameLoop>) => JSX.Element);
-  /** Scene-wide override, default false. Prefer independent continuous useFrame subscriptions for animations. */
-  continuous?: boolean;
+  /** Scene components, resolved once beneath this loop's context. */
+  children: JSX.Element;
   /** Called once after stopping a failed rendering session. */
   onError: (error: ViewerError) => void;
 }) {
   const gpu = useGpuCanvas();
   const viewport = useViewport();
   const visible = createPageVisibility();
-  let deferred = false;
   const track = trackFrames(() => loop.invalidate());
 
   const loop = createFrameScheduler(
-    ({ timestamp }) => {
-      // Document preparation holds a device-wide validation error scope across awaits. A frame submitted meanwhile
-      // would have its validation errors attributed to preparation and hidden from uncapturederror, so wait instead.
-      const preparing = pendingGpuPreparation(gpu.device);
-      if (preparing) {
-        if (!deferred) {
-          deferred = true;
-          void preparing.then(() => {
-            deferred = false;
-            loop.invalidate();
-          });
-        }
-        return ok();
-      }
-      return gate.draw(() =>
+    () =>
+      gate.draw(() =>
         renderScene(
           gpu,
-          layers().map((layer) => layer.draw),
-          timestamp
+          layers().map((layer) => layer.draw)
         )
-      );
-    },
+      ),
     (error) => props.onError(error),
     track
   );
 
-  const gate = makeGpuFrameGate(() => gpu.device.queue.onSubmittedWorkDone(), loop.invalidate, loop.fail);
-  onCleanup(gate.destroy);
-  makeEventListener(gpu.signal, 'abort', gate.destroy, { once: true });
+  const gate = makeGpuFrameGate({
+    complete: () => gpu.device.queue.onSubmittedWorkDone(),
+    // Document preparation holds a device-wide validation error scope across awaits. A frame submitted meanwhile
+    // would have its validation errors attributed to preparation and hidden from uncapturederror, so wait instead.
+    blocked: () => pendingGpuPreparation(gpu.device),
+    invalidate: loop.invalidate,
+    fail: loop.fail
+  });
+
+  onGpuRelease(gpu.signal, () => {
+    gate.destroy();
+    loop.stop();
+  });
 
   createEffect(visible, loop.setActive);
-  createEffect(() => props.continuous ?? false, loop.setContinuous);
   createEffect(viewport.size, () => loop.invalidate());
-  makeEventListener(gpu.signal, 'abort', loop.stop, { once: true });
-
-  if (gpu.signal.aborted) {
-    loop.stop();
-  }
 
   // Children resolve once beneath the loop's context. The provider's owner keeps the token and layer memos alive
   // for this component's lifetime; frames run from RAF callbacks, never during disposal, and the scheduler stops
   // with this owner.
   const layers = runWithContext(FrameContext, loop, () => {
-    const tokens = resolveTokens(RenderLayer, () => resolveSceneChildren(props.children, loop));
+    const tokens = resolveTokens(RenderLayer, () => props.children);
     // Keep each token's props object: draws and pointer handlers are read when a frame or event happens.
     return createMemo(() =>
       tokens()

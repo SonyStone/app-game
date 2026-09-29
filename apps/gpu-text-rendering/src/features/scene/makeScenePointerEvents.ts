@@ -1,7 +1,7 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { onCleanup } from 'solid-js';
-import type { Point } from '../camera/camera';
 import type { ScenePointerEvent, ScenePointerHandlers } from './RenderLayer';
+import type { Point } from './SceneSpace';
 
 /**
  * Dispatches canvas pointer events to scene layers; disposed with its Solid owner.

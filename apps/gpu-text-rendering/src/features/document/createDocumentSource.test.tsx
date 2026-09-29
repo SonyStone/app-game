@@ -1,6 +1,6 @@
 import { render } from '@solidjs/web';
 import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
-import { createRoot, createSignal, flush, Loading } from 'solid-js';
+import { createRoot, createSignal, flush, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DocumentSource } from '../../../tests/fixtures/DocumentSource';
 import type { AbortedError, DocumentError } from '../../shared/errors';
@@ -48,7 +48,7 @@ it.each([undefined, new File(['GDOC\r\n\x1a\n'], 'direct.gdoc')])(
       return createDocumentSource(file);
     });
     await vi.waitFor(() => expect(source.ready()).toBe(true));
-    const document = source.document()!._unsafeUnwrap();
+    const document = source.prepared()!;
     expect(document.file).toBe(file);
     expect(document.signal.aborted).toBe(false);
     source.cancel();
@@ -56,7 +56,7 @@ it.each([undefined, new File(['GDOC\r\n\x1a\n'], 'direct.gdoc')])(
     expect(document.signal.aborted).toBe(true);
     expect(source.active()).toBe(false);
     expect(source.ready()).toBe(false);
-    expect(source.document()).toBeUndefined();
+    expect(source.prepared()).toBeUndefined();
     expect(source.error()).toBeUndefined();
     expect(readGdoc).toHaveBeenCalledOnce();
   }
@@ -83,7 +83,7 @@ it('renders progress and cancellation while a replacement document is pending', 
       return (
         <>
           <output>{!source.active() ? 'cancelled' : source.ready() ? 'ready' : source.progress()?.stage}</output>
-          <Loading on={file()}>{source.document()?.isOk() ? 'document' : ''}</Loading>
+          <span>{source.prepared() ? 'document' : ''}</span>
         </>
       );
     }, host)
@@ -208,7 +208,7 @@ it('cancels without changing the selection and loads the next selection', async 
   session.source.cancel();
   flush();
   expect(session.source.active()).toBe(false);
-  expect(session.source.document()).toBeUndefined();
+  expect(session.source.prepared()).toBeUndefined();
   expect(session.cancelled).toHaveBeenCalledOnce();
   expect(readGdoc).toHaveBeenCalledOnce();
   session.select(new File(['GDOC\r\n\x1a\n'], 'next.gdoc'));
@@ -236,7 +236,7 @@ it('ignores late completion after cancel and restarts when the demo is selected 
   await new Promise((resolve) => setTimeout(resolve, 0));
   flush();
   expect(session.source.active()).toBe(false);
-  expect(session.source.document()).toBeUndefined();
+  expect(session.source.prepared()).toBeUndefined();
   expect(session.ready).not.toHaveBeenCalled();
   expect(readGdoc).toHaveBeenCalledOnce();
   session.select(undefined);
@@ -285,7 +285,7 @@ it('derives readiness without a loading boundary and resets it for each selectio
   await vi.waitFor(() => expect(readGdoc).toHaveBeenCalledOnce());
   complete(ok(scene()));
   await vi.waitFor(() => expect(fixture.source.ready()).toBe(true));
-  const previous = fixture.source.document()!._unsafeUnwrap();
+  const previous = fixture.source.prepared()!;
   fixture.select({});
   flush();
   expect(previous.signal.aborted).toBe(true);
@@ -296,7 +296,7 @@ it('derives readiness without a loading boundary and resets it for each selectio
   await new Promise((resolve) => setTimeout(resolve, 0));
   flush();
   expect(fixture.source.ready()).toBe(false);
-  expect(fixture.source.document()).toBeUndefined();
+  expect(fixture.source.prepared()).toBeUndefined();
 });
 
 it('publishes loading failures even when only synchronous status is observed', async () => {
@@ -319,7 +319,7 @@ it('derives decode errors from the document and records external failures separa
   await vi.waitFor(() => expect(failed.error()?.message).toBe('Broken document'));
   // Deriving the error no longer cancels the selection or hides the failed result.
   expect(failed.active()).toBe(true);
-  expect(failed.document()?._unsafeUnwrapErr().message).toBe('Broken document');
+  expect(failed.prepared()).toBeUndefined();
 
   readGdoc.mockReturnValueOnce(okAsync(scene()));
   const loaded = createRoot((dispose) => {
@@ -327,11 +327,11 @@ it('derives decode errors from the document and records external failures separa
     return createDocumentSource(() => undefined);
   });
   await vi.waitFor(() => expect(loaded.ready()).toBe(true));
-  const prepared = loaded.document()!._unsafeUnwrap();
+  const prepared = loaded.prepared()!;
   prepared.fail({ kind: 'gpu', code: 'render', message: 'Renderer failed' });
   flush();
   expect(prepared.signal.aborted).toBe(true);
-  expect(loaded.document()).toBeUndefined();
+  expect(loaded.prepared()).toBeUndefined();
   expect(loaded.error()?.message).toBe('Renderer failed');
 });
 
@@ -351,12 +351,12 @@ function mountReactive() {
     select = (file) => setFile({ file });
     source = createDocumentSource(() => file().file);
     return (
-      <Loading on={file()}>
-        {source.document()?.match(({ data }) => {
+      <Show when={source.prepared()} keyed>
+        {({ data }) => {
           ready(data);
           return null;
-        }, source.fail)}
-      </Loading>
+        }}
+      </Show>
     );
   }, document.createElement('div'));
   cleanups.push(dispose);

@@ -1,20 +1,18 @@
+import { ok } from 'neverthrow';
 import { documentError, errorMessage } from '../../../../shared/errors';
-import { createWorkerRequests } from '../../../../shared/worker/createWorkerRequests';
 import { mountWorker } from '../../../../shared/worker/mountWorker';
 import { WorkerTasks } from '../../../../shared/worker/WorkerTasks';
 import type { CoverageInput, CoverageReply } from '../../documentWorkerProtocol';
-import { buildCoverageTables } from './buildCoverageTables';
+import { buildCoverageTables } from '../../plan/buildCoverageTables';
 
-// Receives one request per worker. The shared request scope still provides typed failure replies, transfers
-// and cooperative shutdown, so the idle FIFO queue is kept rather than duplicating that handling here.
-mountWorker(() => {
-  const request = createWorkerRequests<CoverageInput, CoverageReply>(self);
-  return (
-    <WorkerTasks
-      request={request}
-      execute={(input) => ({ ok: true, value: buildCoverageTables(input) })}
+// Receives one request per worker; WorkerTasks supplies typed failure replies, transfers and cooperative shutdown.
+mountWorker(
+  () => (
+    <WorkerTasks<CoverageInput, CoverageReply>
+      execute={(input) => ok(buildCoverageTables(input))}
       error={(cause) => documentError('decode', errorMessage(cause))}
       transfer={(value) => [value.offsets.buffer, value.areas.buffer, value.grids.buffer]}
     />
-  );
-}, self);
+  ),
+  self
+);

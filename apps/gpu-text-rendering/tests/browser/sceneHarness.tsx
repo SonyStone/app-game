@@ -1,15 +1,16 @@
 import { render } from '@solidjs/web';
 import { createRoot, createSignal, For, onCleanup, Show } from 'solid-js';
-import type { Camera, Point } from '../../src/features/camera/camera';
+import type { Camera } from '../../src/features/camera/camera';
 import { CameraControls } from '../../src/features/camera/CameraControls';
 import { DocumentCamera, useDocumentCamera } from '../../src/features/camera/DocumentCamera';
-import { DocumentSpace, ScreenSpace, useSceneSpace } from '../../src/features/camera/SceneSpace';
+import { DocumentSpace } from '../../src/features/camera/DocumentSpace';
 import type { TextDocument } from '../../src/features/document/document';
 import { DocumentLayer } from '../../src/features/document/rendering/DocumentLayer';
 import { DocumentRendererProvider } from '../../src/features/document/rendering/DocumentRendererProvider';
 import { Rectangle } from '../../src/features/graphics/Rectangle';
 import { Rectangles } from '../../src/features/graphics/Rectangles';
 import { FrameLoop, useFrame } from '../../src/features/scene/FrameLoop';
+import { ScreenSpace, useSceneSpace, type Point } from '../../src/features/scene/SceneSpace';
 import { useViewport, Viewport } from '../../src/features/viewport/Viewport';
 import type { ViewerError } from '../../src/shared/errors';
 import { GpuCanvasProvider, useGpuCanvas } from '../../src/shared/gpu/GpuCanvasProvider';
@@ -29,7 +30,6 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
     const [pageAspect, setPageAspect] = createSignal(document.pages[0]!.width / document.pages[0]!.height);
     let project!: (point: Point) => Point;
     let viewport!: ReturnType<typeof useViewport>;
-    let invalidate!: () => void;
     const [order, setOrder] = createSignal(0);
     const [x, setX] = createSignal(360);
     const [color, setColor] = createSignal<[number, number, number, number]>([1, 0, 0, 1]);
@@ -90,74 +90,62 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
           <GpuCanvasProvider canvas={canvas} error={fail}>
             <Viewport maxDpr={maxDpr()}>
               <FrameLoop onError={fail}>
-                {(loop) => {
-                  invalidate = loop.invalidate;
-                  return (
-                    <DocumentCamera>
-                      <DocumentSpace pageAspect={pageAspect()}>
-                        <Probe />
-                        <CameraControls pageAspect={document.pages[0]!.width / document.pages[0]!.height} />
-                        <Show when={showDocument()}>
-                          <DocumentRendererProvider
-                            document={document}
-                            onReady={() => stats.ready++}
-                            error={(error) => {
-                              loop.fail(error);
-                              return null;
-                            }}
-                          >
-                            <DocumentLayer visible={documentVisible()} order={documentOrder()} />
-                          </DocumentRendererProvider>
-                        </Show>
-                        <For each={annotations()} keyed={(item) => item.id}>
-                          {(item) => (
-                            <Rectangle
-                              x={item().x}
-                              y={item().y}
-                              width={0.2}
-                              height={0.2}
-                              color={[1, 0, 1, 1]}
-                              visible={worldVisible()}
-                              order={30}
-                            />
-                          )}
-                        </For>
-                      </DocumentSpace>
-                      <ScreenSpace>
-                        <Show when={showRectangle()}>
-                          <Rectangle
-                            x={x()}
-                            y={260}
-                            width={80}
-                            height={80}
-                            color={color()}
-                            order={order()}
-                            visible={rectangleVisible()}
-                          />
-                        </Show>
+                <DocumentCamera pageAspect={pageAspect()}>
+                  <DocumentSpace>
+                    <Probe />
+                    <CameraControls />
+                    <Show when={showDocument()}>
+                      <DocumentRendererProvider document={document} onReady={() => stats.ready++} error={fail}>
+                        <DocumentLayer visible={documentVisible()} order={documentOrder()} />
+                      </DocumentRendererProvider>
+                    </Show>
+                    <For each={annotations()} keyed={(item) => item.id}>
+                      {(item) => (
                         <Rectangle
-                          x={20}
-                          y={20}
-                          width={40}
-                          height={40}
-                          color={[0, 0, 1, 1]}
-                          order={20}
-                          onPointerDown={() => stats.presses++}
-                          onPointerMove={() => stats.moves++}
-                          onPointerUp={() => stats.releases++}
+                          x={item().x}
+                          y={item().y}
+                          width={0.2}
+                          height={0.2}
+                          color={[1, 0, 1, 1]}
+                          visible={worldVisible()}
+                          order={30}
                         />
-                        <Rectangles
-                          items={[
-                            { x: 700, y: 20, width: 40, height: 40 },
-                            { x: 700, y: 80, width: 40, height: 40 }
-                          ]}
-                          color={[0, 1, 0, 1]}
-                          order={20}
-                        />
-                      </ScreenSpace>
-                    </DocumentCamera>
-                  );
-                }}
+                      )}
+                    </For>
+                  </DocumentSpace>
+                  <ScreenSpace>
+                    <Show when={showRectangle()}>
+                      <Rectangle
+                        x={x()}
+                        y={260}
+                        width={80}
+                        height={80}
+                        color={color()}
+                        order={order()}
+                        visible={rectangleVisible()}
+                      />
+                    </Show>
+                    <Rectangle
+                      x={20}
+                      y={20}
+                      width={40}
+                      height={40}
+                      color={[0, 0, 1, 1]}
+                      order={20}
+                      onPointerDown={() => stats.presses++}
+                      onPointerMove={() => stats.moves++}
+                      onPointerUp={() => stats.releases++}
+                    />
+                    <Rectangles
+                      items={[
+                        { x: 700, y: 20, width: 40, height: 40 },
+                        { x: 700, y: 80, width: 40, height: 40 }
+                      ]}
+                      color={[0, 1, 0, 1]}
+                      order={20}
+                    />
+                  </ScreenSpace>
+                </DocumentCamera>
               </FrameLoop>
             </Viewport>
           </GpuCanvasProvider>
@@ -175,8 +163,7 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
       project: (point: Point) => project(point),
       viewport: () => viewport.size(),
       setCamera(value: Partial<Camera>) {
-        Object.assign(camera!, value);
-        invalidate();
+        camera!.setCamera((current) => ({ ...current, ...value }));
       },
       setShowDocument,
       setDocumentVisible,
@@ -187,7 +174,7 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
       setColor,
       stats,
       errors,
-      camera: () => camera,
+      camera: () => camera?.camera(),
       dispose() {
         disposeView();
         disposeState();

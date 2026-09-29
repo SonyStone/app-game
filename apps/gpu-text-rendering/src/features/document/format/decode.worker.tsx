@@ -1,10 +1,9 @@
-import { err, ok, ResultAsync, type Result } from 'neverthrow';
-import { documentError, errorMessage, type DocumentError } from '../../../shared/errors';
-import { createWorkerRequests } from '../../../shared/worker/createWorkerRequests';
+import { err, ok, okAsync, ResultAsync } from 'neverthrow';
+import { documentError, errorMessage } from '../../../shared/errors';
 import { mountWorker } from '../../../shared/worker/mountWorker';
 import { WorkerTasks } from '../../../shared/worker/WorkerTasks';
 import type { OnDocumentProgress } from '../documentProgress';
-import { documentReply } from '../documentWorkerError';
+import { cloneableDocumentError } from '../documentWorkerError';
 import type { DecodeInput, DocumentReply } from '../documentWorkerProtocol';
 import { documentFileLimitMessage, maxDocumentFileBytes } from '../limits';
 import { decodeGdoc } from './decodeGdoc';
@@ -13,42 +12,33 @@ import init from './wasm/gpu_document';
 import wasmUrl from './wasm/gpu_document_bg.wasm?url';
 
 // One document per worker: the main thread shuts it down to release the WASM heap.
-mountWorker(() => {
-  const request = createWorkerRequests<DecodeInput, DocumentReply>(self);
-  return (
-    <WorkerTasks
-      request={request}
-      execute={async (input, { signal, progress }) => {
-        // Stages stay monotonic: a URL reports its download while the decoder loads concurrently;
-        // local bytes only wait for the decoder.
-        if (typeof input !== 'string') {
-          progress({ stage: 'loadingDecoder' });
-        }
-        const loading = typeof input === 'string' ? readUrl(input, signal, progress) : Promise.resolve(ok(input));
-        try {
-          await init({ module_or_path: wasmUrl });
-        } catch (cause) {
-          return {
-            ok: false as const,
-            error: documentError('decode', `Unable to load document decoder: ${errorMessage(cause)}`)
-          };
-        }
-        const bytes: Result<ArrayBuffer, DocumentError> = await loading;
-        if (signal.aborted) {
-          return;
-        }
-        return documentReply(
-          bytes.andThen((value) => {
+// The main thread reports loadingDecoder before posting; a URL then reports its download while the decoder loads.
+mountWorker(
+  () => (
+    <WorkerTasks<DecodeInput, DocumentReply>
+      execute={(input, { signal, progress }) => {
+        const bytes = typeof input === 'string' ? readUrl(input, signal, progress) : okAsync(input);
+        return loadDecoder()
+          .andThen(() => bytes)
+          .andThen((value) => {
+            signal.throwIfAborted();
             progress({ stage: 'decodingDocument' });
             return decodeGdoc(new Uint8Array(value));
           })
-        );
+          .mapErr(cloneableDocumentError);
       }}
       error={(cause) => documentError('decode', errorMessage(cause))}
       transfer={(value) => documentTransfers({ ok: true, value })}
     />
+  ),
+  self
+);
+
+function loadDecoder() {
+  return ResultAsync.fromPromise(init({ module_or_path: wasmUrl }), (cause) =>
+    documentError('decode', `Unable to load document decoder: ${errorMessage(cause)}`)
   );
-}, self);
+}
 
 function readUrl(url: string, signal: AbortSignal, progress: OnDocumentProgress) {
   return ResultAsync.fromThrowable(

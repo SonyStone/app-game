@@ -3,17 +3,18 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { TextDocument } from '../document/document';
 import { OverviewCamera, type OverviewCameraRef } from './OverviewCamera';
 
-vi.mock('./DocumentCamera', () => ({ useDocumentCamera: () => camera }));
+vi.mock('./DocumentCamera', () => ({
+  useDocumentCamera: () => ({ camera, setCamera, pageAspect: () => 612 / 792 })
+}));
 vi.mock('../viewport/Viewport', () => ({
   useViewport: () => ({ size: () => ({ css: { width: 800, height: 600 } }) })
 }));
-vi.mock('../scene/FrameLoop', () => ({ useFrameLoop: () => ({ invalidate }) }));
-const camera = { x: 0.5, y: 0.5, zoom: 2, rotation: 0 };
-const invalidate = vi.fn();
+const [camera, writeCamera] = createSignal({ x: 0.5, y: 0.5, zoom: 2, rotation: 0 });
+const setCamera = vi.fn(writeCamera);
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   cleanups.splice(0).forEach((dispose) => dispose());
-  invalidate.mockClear();
+  setCamera.mockClear();
 });
 
 it('fits on direct calls and reads the current document without fitting automatically', () => {
@@ -32,18 +33,22 @@ it('fits on direct calls and reads the current document without fitting automati
     return setDocument;
   });
   flush();
-  expect(invalidate).not.toHaveBeenCalled();
+  expect(setCamera).not.toHaveBeenCalled();
   cameraRef!.fitToDocument();
-  const firstFit = camera.zoom;
-  camera.zoom = 100;
-  cameraRef!.fitToDocument();
-  expect(camera.zoom).toBe(firstFit);
-  expect(invalidate).toHaveBeenCalledTimes(2);
-  setDocument({ ...scene(), pages: [{ ...scene().pages[0]!, height: 1584 }] });
   flush();
-  expect(invalidate).toHaveBeenCalledTimes(2);
+  const firstFit = camera();
+  expect(firstFit.rotation).toBe(0);
+  writeCamera({ ...firstFit, zoom: 100, rotation: 1 });
   cameraRef!.fitToDocument();
-  expect(camera.zoom).not.toBe(firstFit);
+  flush();
+  expect(camera()).toEqual(firstFit);
+  expect(setCamera).toHaveBeenCalledTimes(2);
+  setDocument({ ...scene(), pages: [...scene().pages, { ...scene().pages[0]!, x: -1 }] });
+  flush();
+  expect(setCamera).toHaveBeenCalledTimes(2);
+  cameraRef!.fitToDocument();
+  flush();
+  expect(camera().zoom).not.toBe(firstFit.zoom);
 });
 
 it('clears the previous ref callback on replacement and the current callback on unmount', () => {

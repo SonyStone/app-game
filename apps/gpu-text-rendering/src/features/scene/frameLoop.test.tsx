@@ -1,5 +1,5 @@
 import { render, type JSX } from '@solidjs/web';
-import { createRoot, createSignal, flush, For, onCleanup, Show, untrack } from 'solid-js';
+import { createEffect, createRoot, createSignal, flush, For, onCleanup, Show, untrack } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
 import { gpuError } from '../../shared/errors';
@@ -68,25 +68,6 @@ it('unsubscribes removed components and redraws the remaining scene once', async
   await tick();
 
   expect(calls).toEqual(['update', 'draw']);
-  expect(frames.size).toBe(0);
-});
-
-it('switches between continuous rendering and idle without creating duplicate RAF loops', async () => {
-  const { setContinuous, loop } = mount();
-  await tick();
-
-  setContinuous(true);
-  flush();
-  loop.invalidate();
-  loop.invalidate();
-  expect(frames.size).toBe(1);
-
-  await tick();
-  expect(frames.size).toBe(1);
-
-  setContinuous(false);
-  flush();
-  await tick();
   expect(frames.size).toBe(0);
 });
 
@@ -206,32 +187,32 @@ it('composes independently mounted layers, reacts to order and removes them with
   expect(gpu.device.queue.submit).toHaveBeenCalledTimes(4);
 });
 
-it('evaluates render children under the loop context and owns their subscriptions and cleanup', async () => {
+it('mounts children once under the loop context and owns their subscriptions and cleanup', async () => {
   const cleanup = vi.fn();
   const callback = vi.fn();
   const onError = vi.fn();
   let loop!: ReturnType<typeof useFrameLoop>;
   let mounts = 0;
 
+  function Scene(props: { visible: boolean }) {
+    mounts++;
+    loop = useFrameLoop();
+    useFrame(callback, { phase: 'update' });
+    onCleanup(cleanup);
+
+    return (
+      <Show when={props.visible}>
+        <RenderLayer draw={() => {}} />
+      </Show>
+    );
+  }
+
   const mounted = createRoot((disposeState) => {
-    const [continuous, setContinuous] = createSignal(false);
     const [visible, setVisible] = createSignal(true);
     const disposeView = render(
       () => (
-        <FrameLoop continuous={continuous()} onError={onError}>
-          {(value) => {
-            mounts++;
-            loop = value;
-            expect(useFrameLoop()).toBe(value);
-            useFrame(callback, { phase: 'update' });
-            onCleanup(cleanup);
-
-            return (
-              <Show when={visible()}>
-                <RenderLayer draw={() => {}} />
-              </Show>
-            );
-          }}
+        <FrameLoop onError={onError}>
+          <Scene visible={visible()} />
         </FrameLoop>
       ),
       document.createElement('div')
@@ -243,14 +224,13 @@ it('evaluates render children under the loop context and owns their subscription
     };
 
     cleanups.push(dispose);
-    return { setContinuous, setVisible, dispose };
+    return { setVisible, dispose };
   });
 
   flush();
   await tick();
   expect(callback).toHaveBeenCalledOnce();
 
-  mounted.setContinuous(true);
   mounted.setVisible(false);
   flush();
   await tick();
@@ -276,14 +256,14 @@ it('follows JSX order for late siblings and keyed list reordering without recrea
   const disposedLayers: number[] = [];
 
   function Layer(props: { id: number }) {
-    const camera = useDocumentCamera();
+    const { camera } = useDocumentCamera();
     mountedLayers.push(props.id);
     onCleanup(() => disposedLayers.push(props.id));
 
     return (
       <RenderLayer
         draw={() => {
-          calls.push(`${props.id}:${camera.zoom}`);
+          calls.push(`${props.id}:${camera().zoom}`);
         }}
       />
     );
@@ -295,7 +275,7 @@ it('follows JSX order for late siblings and keyed list reordering without recrea
     const disposeView = render(
       () => (
         <FrameLoop onError={vi.fn()}>
-          <DocumentCamera>
+          <DocumentCamera pageAspect={1}>
             <Show when={early()}>
               <Layer id={0} />
             </Show>
@@ -382,6 +362,11 @@ it('keeps independent animations running until the last enabled owner unsubscrib
     const [enabledB, setB] = createSignal(true);
     const [mountedB, mountB] = createSignal(true);
 
+    function AnimationA() {
+      useFrame(a, { enabled: enabledA, continuous: true });
+      return null;
+    }
+
     function AnimationB() {
       useFrame(b, { enabled: enabledB, continuous: true });
       return null;
@@ -390,14 +375,10 @@ it('keeps independent animations running until the last enabled owner unsubscrib
     const disposeView = render(
       () => (
         <FrameLoop onError={vi.fn()}>
-          {() => {
-            useFrame(a, { enabled: enabledA, continuous: true });
-            return (
-              <Show when={mountedB()}>
-                <AnimationB />
-              </Show>
-            );
-          }}
+          <AnimationA />
+          <Show when={mountedB()}>
+            <AnimationB />
+          </Show>
         </FrameLoop>
       ),
       document.createElement('div')
@@ -440,14 +421,17 @@ it('pauses hidden pages, retains invalidation and resumes without advancing anim
   const callback = vi.fn();
   let loop!: ReturnType<typeof useFrameLoop>;
   const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+
+  function Animation() {
+    loop = useFrameLoop();
+    useFrame(callback, { continuous: true });
+    return null;
+  }
+
   const dispose = render(
     () => (
       <FrameLoop onError={vi.fn()}>
-        {(value) => {
-          loop = value;
-          useFrame(callback, { continuous: true });
-          return null;
-        }}
+        <Animation />
       </FrameLoop>
     ),
     document.createElement('div')
@@ -552,13 +536,16 @@ it('hides keyed layers without disposing resources and preserves owners when obj
 
 it('turns a thrown frame callback failure into one typed error and stops submission', async () => {
   const onError = vi.fn();
+
+  function Failure() {
+    useFrame(() => JSON.parse('invalid JSON'), { continuous: true });
+    return null;
+  }
+
   const dispose = render(
     () => (
       <FrameLoop onError={onError}>
-        {() => {
-          useFrame(() => JSON.parse('invalid JSON'), { continuous: true });
-          return null;
-        }}
+        <Failure />
       </FrameLoop>
     ),
     document.createElement('div')
@@ -643,6 +630,40 @@ it('requests a frame when a value read by a draw or render callback changes, but
   expect(frames.size).toBe(0);
 });
 
+it('settles update-phase writes and their effects before rendering, without requesting another frame', async () => {
+  const [position, setPosition] = createSignal(0);
+  const [moving, setMoving] = createSignal(false);
+  const drawn: number[][] = [];
+  // Non-reactive state kept in sync by an effect, like a cache that a draw reads.
+  let mirrored = 0;
+
+  function Motion() {
+    createEffect(position, (value) => {
+      mirrored = value;
+    });
+    useFrame(() => setPosition((value) => value + 1), { phase: 'update', enabled: moving });
+    return null;
+  }
+
+  mountScene(() => (
+    <>
+      <Motion />
+      <RenderLayer draw={() => void drawn.push([position(), mirrored])} />
+    </>
+  ));
+  await tick();
+  expect(drawn).toEqual([[0, 0]]);
+
+  setMoving(true);
+  flush();
+  await tick();
+  expect(drawn).toEqual([
+    [0, 0],
+    [1, 1]
+  ]);
+  expect(frames.size).toBe(0);
+});
+
 it('stops observing values that the latest frame no longer reads', async () => {
   const [useColor, setUseColor] = createSignal(true);
   const [color, setColor] = createSignal(0);
@@ -707,10 +728,9 @@ function mount(invalidateFirstFrame = false) {
 
   const result = createRoot((disposeState) => {
     const [draw, setDraw] = createSignal(true);
-    const [continuous, setContinuous] = createSignal(false);
     const disposeView = render(
       () => (
-        <FrameLoop continuous={continuous()} onError={vi.fn()}>
+        <FrameLoop onError={vi.fn()}>
           <Show when={draw()}>
             <Draw />
           </Show>
@@ -727,7 +747,7 @@ function mount(invalidateFirstFrame = false) {
 
     cleanups.push(dispose);
 
-    return { setDraw, setContinuous, dispose };
+    return { setDraw, dispose };
   });
 
   flush();

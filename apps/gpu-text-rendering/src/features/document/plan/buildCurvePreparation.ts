@@ -1,5 +1,5 @@
-import { layoutPages } from '../../layoutPages';
-import { buildPaintBounds } from './paintBounds';
+import { layoutPages } from '../layoutPages';
+import { buildPaintBounds } from './buildPaintBounds';
 import { paintRuns } from './paintRuns';
 import { paintTree } from './paintTree';
 import { planPageComposition } from './planPageComposition';
