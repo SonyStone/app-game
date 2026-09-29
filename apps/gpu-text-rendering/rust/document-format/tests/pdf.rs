@@ -540,3 +540,154 @@ fn direct_preparation_keeps_instance_validation() {
     scene.instances[32..36].copy_from_slice(&2.0_f32.to_le_bytes());
     assert!(curves::prepare_owned(scene).is_err());
 }
+
+#[test]
+fn nested_empty_pattern_cells_hit_the_page_work_budget_immediately() {
+    // ~10,000 outer cells each repeat an inner fill of ~10,000 empty cells: 1e8 cells that
+    // never produce a draw. The budget rejects the first inner fill instead of running them.
+    let stream = |content: &str, bbox: &str, step: &str, resources: &str| {
+        format!(
+            "<< /Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [{bbox}] /XStep {step} /YStep {step} /Resources << {resources} >> /Length {} >>\nstream\n{content}\nendstream",
+            content.len()
+        )
+    };
+    let outer = stream(
+        "/Pattern cs /P2 scn 0 0 1 1 re f",
+        "0 0 1 1",
+        "1",
+        "/Pattern << /P2 7 0 R >>",
+    );
+    let inner = stream("0 0 0 0 re f", "0 0 0.01 0.01", "0.01", "");
+    let started = std::time::Instant::now();
+    let error = pdf::convert(&fixture_resources(
+        "/Pattern cs /P1 scn 0 0 100 100 re f",
+        "",
+        "/Pattern << /P1 6 0 R >>",
+        &[outer, inner],
+    ))
+    .unwrap_err();
+    assert_eq!(
+        error,
+        gpu_document::error::DocumentError::PdfLimit {
+            page: 1,
+            reason: "pattern cells"
+        }
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(2));
+}
+
+#[test]
+fn short_axial_axes_keep_full_ramp_resolution_and_solid_extensions() {
+    // A 1 pt axis inside a 100 pt clip: the ramp spans only t ∈ [0, 1].
+    let bytes = pdf::convert(&fixture_resources("/S sh", "",
+        "/Shading << /S << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [50 0 51 0] /Extend [true true] /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> >>", &[])).unwrap();
+    let scene = curves::decode(&bytes).unwrap();
+    assert_eq!(scene.images.table.len(), 3 * 24);
+    assert_eq!(scene.pages[0].count, 3);
+    let ramp = (0..3)
+        .find(|i| read_u32(&scene.images.table, i * 24) == 4096)
+        .unwrap();
+    let offset = read_u32(&scene.images.table, ramp * 24 + 8) as usize;
+    let pixels = &scene.images.pixels[offset..offset + 4096 * 4];
+    assert!(pixels[0] > 250 && pixels[2] < 5);
+    assert!(pixels[4095 * 4] < 5 && pixels[4095 * 4 + 2] > 250);
+    let distinct: std::collections::HashSet<_> = pixels.chunks_exact(4).collect();
+    assert!(distinct.len() > 200, "ramp has {} colors", distinct.len());
+    // Extensions are opaque 1×1 end colors on either side of the ramp quad.
+    let solids: Vec<&[u8]> = (0..3)
+        .filter(|i| *i != ramp)
+        .map(|i| {
+            let at = read_u32(&scene.images.table, i * 24 + 8) as usize;
+            &scene.images.pixels[at..at + 4]
+        })
+        .collect();
+    assert!(solids.contains(&&[255, 0, 0, 255][..]) && solids.contains(&&[0, 0, 255, 255][..]));
+    // The ramp quad is exactly one axis length (1 pt of a 100 pt page) wide.
+    let quad = (0..3)
+        .map(|i| &scene.instances[i * 80..i * 80 + 80])
+        .find(|d| read_u32(d, 64) as usize == ramp)
+        .unwrap();
+    assert!((read_f32(quad, 0) - 0.01).abs() < 1e-6);
+}
+
+#[test]
+fn soft_masked_gradient_text_shares_one_mask_group_and_one_ramp() {
+    let glyphs = "I".repeat(40);
+    let mask = "0.5 g 0 0 100 100 re f";
+    let mask = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /CS /DeviceRGB >> /Resources << >> /Length {} >>\nstream\n{mask}\nendstream",
+        mask.len()
+    );
+    let pattern = "<< /Type /Pattern /PatternType 2 /Shading << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Extend [true true] /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> >>".to_owned();
+    let bytes = pdf::convert(&fixture_resources(
+        &format!("/GS gs /Pattern cs /P scn BT /F1 4 Tf 2 50 Td ({glyphs}) Tj ET"),
+        "",
+        "/ExtGState << /GS << /SMask << /S /Luminosity /G 6 0 R >> >> >> /Pattern << /P 7 0 R >>",
+        &[mask, pattern],
+    ))
+    .unwrap();
+    let scene = curves::decode(&bytes).unwrap();
+    // One paint group, its mask child and the mask form's own group, instead of three per glyph.
+    assert_eq!(scene.groups.len(), 3 * 24);
+    assert_eq!(read_u32(&scene.groups, 24 + 12), 3);
+    // All glyphs draw the same deduplicated ramp.
+    assert_eq!(scene.images.table.len(), 24);
+    let draws = scene
+        .instances
+        .chunks_exact(80)
+        .filter(|d| read_u32(d, 72) == 2)
+        .count();
+    assert_eq!(draws, 40);
+    assert_eq!(
+        read_u32(&scene.groups, 4) as usize,
+        scene.instances.len() / 80
+    );
+}
+
+#[test]
+fn luminosity_and_alpha_masks_over_one_group_never_share_a_mask_run() {
+    let mask = "0.5 g 0 0 100 100 re f";
+    let mask = format!(
+        "<< /Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /CS /DeviceRGB >> /Resources << >> /Length {} >>\nstream\n{mask}\nendstream",
+        mask.len()
+    );
+    let bytes = pdf::convert(&fixture_resources(
+        "q /Lum gs 1 0 0 rg 10 10 30 30 re f Q q /Alpha gs 0 1 0 rg 60 10 30 30 re f Q",
+        "",
+        "/ExtGState << /Lum << /SMask << /S /Luminosity /G 6 0 R >> >> /Alpha << /SMask << /S /Alpha /G 6 0 R >> >> >>",
+        &[mask],
+    ))
+    .unwrap();
+    let scene = curves::decode(&bytes).unwrap();
+    let mut kinds: Vec<u32> = scene
+        .groups
+        .chunks_exact(24)
+        .map(|group| read_u32(group, 12))
+        .filter(|kind| matches!(kind, 2 | 3))
+        .collect();
+    kinds.sort_unstable();
+    // Both draws keep their own mask even though the masks share a form and bounds do not overlap.
+    assert_eq!(kinds, [2, 3]);
+}
+
+#[test]
+fn transparency_group_limit_is_enforced_while_interpreting_with_its_page() {
+    let form = "<< /Type /XObject /Subtype /Form /BBox [0 0 1 1] /Group << /S /Transparency >> /Length 0 >>\nstream\n\nendstream".to_owned();
+    let content = "/G Do ".repeat(100_001);
+    let started = std::time::Instant::now();
+    let error = pdf::convert(&fixture_resources(
+        &content,
+        "",
+        "/XObject << /G 6 0 R >>",
+        &[form],
+    ))
+    .unwrap_err();
+    assert_eq!(
+        error,
+        gpu_document::error::DocumentError::PdfLimit {
+            page: 1,
+            reason: "transparency group records"
+        }
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+}

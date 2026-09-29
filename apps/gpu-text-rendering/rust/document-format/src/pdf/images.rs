@@ -6,11 +6,20 @@ use crate::{
 };
 use hayro_interpret::{CacheKey, Image, ImageData, LumaData, Paint};
 use kurbo::Affine;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 
-/// Deduplicates raster resources independently of placement and stencil paint.
-#[derive(Default)]
-pub(super) struct ImageCache(HashMap<u128, ImageRecord>);
+/// Deduplicates raster resources independently of placement and stencil paint, and owns the
+/// document's encoded-image budget.
+pub(super) struct ImageCache {
+    records: HashMap<u128, ImageRecord>,
+    /// Content hash of interned generated resources (gradient ramps, solid fills) to indices.
+    generated: HashMap<u64, Vec<u32>>,
+    /// Maximum PIXL bytes: the format limit, reduced so input plus images fit WASM memory.
+    budget: usize,
+}
 
 /// The decoded pixels' unit square, mapped back into Hayro's image-pixel coordinates.
 #[derive(Clone, Copy)]
@@ -19,16 +28,47 @@ pub(super) struct ImageRecord {
     pub from_unit: Affine,
 }
 
+/// Header fields of one generated image resource; `interpolate` and `codec` follow IMAG.
+#[derive(Clone, Copy)]
+pub(super) struct ResourceHeader {
+    pub width: u32,
+    pub height: u32,
+    pub interpolate: bool,
+    pub codec: u32,
+}
+
 impl ImageCache {
+    /// Creates a cache whose encoded payload may not exceed `budget` bytes (capped at the
+    /// format's 1536 MiB limit).
+    pub fn new(budget: usize) -> Self {
+        Self {
+            records: HashMap::new(),
+            generated: HashMap::new(),
+            budget: budget.min(MAX_ENCODED_IMAGE_BYTES),
+        }
+    }
+
+    /// Bytes still available in the image arena.
+    pub fn remaining(&self, images: &Images) -> usize {
+        self.budget.saturating_sub(images.pixels.len())
+    }
+
+    /// Converts a PDF image once per stream. Cached stencils only re-read their paint.
+    ///
+    /// # Errors
+    /// `Limit` for oversized images/resources, `Unsupported` for pattern-painted stencils,
+    /// `Invalid` when Hayro cannot decode the image.
     pub fn resolve(
         &mut self,
         image: Image<'_, '_>,
         images: &mut Images,
     ) -> Result<(ImageRecord, [f32; 4]), DocumentError> {
         let key = image.cache_key();
-        let cached = self.0.get(&key).copied();
-        if let (Image::Raster(_), Some(record)) = (&image, cached) {
-            return Ok((record, [1.0; 4]));
+        if let Some(record) = self.records.get(&key).copied() {
+            return match &image {
+                Image::Raster(_) => Ok((record, [1.0; 4])),
+                Image::Stencil(stencil) => stencil_tint(stencil.paint()).map(|tint| (record, tint)),
+            };
         }
         pixel_bytes(image.width(), image.height())?;
         // Very wide/tall JPEGs exceed browser Canvas2D limits. Decode them here into
@@ -36,134 +76,230 @@ impl ImageCache {
         if let Image::Raster(raster) = &image
             && image.width() <= 16384
             && image.height() <= 16384
-            && let Some(record) = retain_jpeg(raster, images)?
+            && let Some(record) = self.retain_jpeg(raster, images)?
         {
-            self.0.insert(key, record);
+            self.records.insert(key, record);
             return Ok((record, [1.0; 4]));
         }
         let mut result = Err(DocumentError::Invalid("PDF image could not be decoded"));
         match image {
             Image::Raster(image) => image.with_rgba(
                 |data, alpha| {
-                    result = append(images, &data, alpha.as_ref(), false).map(|r| (r, [1.0; 4]));
+                    result = self
+                        .append(images, &data, alpha.as_ref(), false)
+                        .map(|r| (r, [1.0; 4]));
                 },
                 None,
             ),
-            Image::Stencil(image) => image.with_stencil(
-                |mask, paint| {
-                    let Paint::Color(color) = paint else {
-                        result = Err(DocumentError::Unsupported("pattern-painted image masks"));
-                        return;
-                    };
-                    let mut tint = color.to_rgba().components();
-                    // Hayro wraps image draws in a group with this same non-stroking alpha.
-                    // Apply it at group pop, once, just as for ordinary raster images.
-                    tint[3] = 1.0;
-                    result = cached
-                        .map_or_else(|| append(images, &ImageData::Luma(mask), None, true), Ok)
-                        .map(|r| (r, tint));
-                },
-                None,
-            ),
+            Image::Stencil(image) => {
+                let tint = stencil_tint(image.paint())?;
+                image.with_stencil(
+                    |mask, _| {
+                        result = self
+                            .append(images, &ImageData::Luma(mask), None, true)
+                            .map(|r| (r, tint));
+                    },
+                    None,
+                );
+            }
         }
         let (record, tint) = result?;
-        self.0.insert(key, record);
+        self.records.insert(key, record);
         Ok((record, tint))
     }
-}
 
-fn append(
-    images: &mut Images,
-    data: &ImageData,
-    alpha: Option<&LumaData>,
-    stencil: bool,
-) -> Result<ImageRecord, DocumentError> {
-    let (width, height) = (data.width(), data.height());
-    let size = pixel_bytes(width, height)?;
-    if images.table.len() / 24 >= 10_000 {
-        return Err(DocumentError::Limit("decoded image pixels/resources"));
-    }
-    if let Some(mask) = alpha {
-        pixel_bytes(mask.width, mask.height)?;
-    }
-    let index = (images.table.len() / 24) as u32;
-    let mut pixels = Vec::with_capacity(size);
-    for i in 0..size / 4 {
-        let (rgb, a) = match data {
-            ImageData::Rgb(data) => (
-                [data.data[i * 3], data.data[i * 3 + 1], data.data[i * 3 + 2]],
-                255,
-            ),
-            ImageData::Luma(data) if stencil => ([255; 3], data.data[i]),
-            ImageData::Luma(data) => ([data.data[i]; 3], 255),
-        };
-        let a = alpha.map_or(a, |mask| {
-            sample_mask(mask, i as u32 % width, i as u32 / width, width, height)
-        });
-        for c in rgb {
-            pixels.push(((u16::from(c) * u16::from(a) + 127) / 255) as u8);
+    /// Stores a generated resource, or returns an identical earlier one.
+    ///
+    /// A candidate is reused only when its header and payload bytes match and `same`
+    /// accepts its index (callers use this to compare per-image side tables such as RGRD).
+    ///
+    /// # Errors
+    /// `Limit(reason)` when the image table or arena budget is exhausted.
+    pub fn intern(
+        &mut self,
+        images: &mut Images,
+        header: ResourceHeader,
+        payload: &[u8],
+        reason: &'static str,
+        same: impl Fn(u32) -> bool,
+    ) -> Result<u32, DocumentError> {
+        let mut hasher = DefaultHasher::new();
+        (
+            header.width,
+            header.height,
+            header.interpolate,
+            header.codec,
+        )
+            .hash(&mut hasher);
+        payload.hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(candidates) = self.generated.get(&hash) {
+            for &index in candidates {
+                let record = &images.table[index as usize * 24..index as usize * 24 + 24];
+                let offset = u32_at(record, 8) as usize;
+                let stored = u32_at(record, 12) as usize;
+                if [
+                    u32_at(record, 0),
+                    u32_at(record, 4),
+                    u32_at(record, 16),
+                    u32_at(record, 20),
+                ] == [
+                    header.width,
+                    header.height,
+                    u32::from(header.interpolate),
+                    header.codec,
+                ] && images.pixels.get(offset..offset + stored) == Some(payload)
+                    && same(index)
+                {
+                    return Ok(index);
+                }
+            }
         }
-        pixels.push(a);
+        let index = self.push(images, header, payload, reason)?;
+        self.generated.entry(hash).or_default().push(index);
+        Ok(index)
     }
-    let mut codec = u32::from(size > 256 * 1024);
-    let mut payload = if codec == 1 {
-        miniz_oxide::deflate::compress_to_vec_zlib(&pixels, 6)
-    } else {
-        pixels.clone()
-    };
-    // Keep retained JPEGs unchanged. For decoded images, use independent tiles when their
-    // lossless pyramid fits the remaining document budget without excessive storage amplification.
-    if size > 256 * 1024
-        && let Ok(tiled) = crate::raster_tiles::encode(width, height, &pixels)
-        && tiled.len() <= payload.len().saturating_mul(2).max(16 * 1024)
-        && tiled.len() <= MAX_ENCODED_IMAGE_BYTES.saturating_sub(images.pixels.len())
-    {
-        codec = 4;
-        payload = tiled;
+
+    /// Appends one table record and its payload without deduplication.
+    ///
+    /// # Errors
+    /// `Limit(reason)` when the image table or arena budget is exhausted.
+    pub fn push(
+        &self,
+        images: &mut Images,
+        header: ResourceHeader,
+        payload: &[u8],
+        reason: &'static str,
+    ) -> Result<u32, DocumentError> {
+        if images.table.len() / 24 >= 10_000 || payload.len() > self.remaining(images) {
+            return Err(DocumentError::Limit(reason));
+        }
+        let index = (images.table.len() / 24) as u32;
+        let offset = images.pixels.len() as u32;
+        self.append_payload(images, payload)?;
+        for n in [
+            header.width,
+            header.height,
+            offset,
+            payload.len() as u32,
+            u32::from(header.interpolate),
+            header.codec,
+        ] {
+            images.table.extend_from_slice(&n.to_le_bytes());
+        }
+        Ok(index)
     }
-    if payload.len() > MAX_ENCODED_IMAGE_BYTES.saturating_sub(images.pixels.len()) {
-        return Err(DocumentError::Limit("encoded image resources"));
+
+    fn append(
+        &self,
+        images: &mut Images,
+        data: &ImageData,
+        alpha: Option<&LumaData>,
+        stencil: bool,
+    ) -> Result<ImageRecord, DocumentError> {
+        let (width, height) = (data.width(), data.height());
+        let size = pixel_bytes(width, height)?;
+        if images.table.len() / 24 >= 10_000 {
+            return Err(DocumentError::Limit("decoded image pixels/resources"));
+        }
+        if let Some(mask) = alpha {
+            pixel_bytes(mask.width, mask.height)?;
+        }
+        let mut pixels = Vec::new();
+        pixels
+            .try_reserve_exact(size)
+            .map_err(|_| DocumentError::Limit("image storage memory"))?;
+        for i in 0..size / 4 {
+            let (rgb, a) = match data {
+                ImageData::Rgb(data) => (
+                    [data.data[i * 3], data.data[i * 3 + 1], data.data[i * 3 + 2]],
+                    255,
+                ),
+                ImageData::Luma(data) if stencil => ([255; 3], data.data[i]),
+                ImageData::Luma(data) => ([data.data[i]; 3], 255),
+            };
+            let a = alpha.map_or(a, |mask| {
+                sample_mask(mask, i as u32 % width, i as u32 / width, width, height)
+            });
+            for c in rgb {
+                pixels.push(((u16::from(c) * u16::from(a) + 127) / 255) as u8);
+            }
+            pixels.push(a);
+        }
+        let (codec, payload) = self.encode_pixels(images, width, height, pixels);
+        let header = ResourceHeader {
+            width,
+            height,
+            interpolate: data.interpolate(),
+            codec,
+        };
+        let index = self.push(images, header, &payload, "encoded image resources")?;
+        let (sx, sy) = data.scale_factors();
+        Ok(ImageRecord {
+            index,
+            from_unit: Affine::scale_non_uniform(
+                f64::from(width) * f64::from(sx),
+                f64::from(height) * f64::from(sy),
+            ),
+        })
     }
-    for n in [
-        width,
-        height,
-        images.pixels.len() as u32,
-        payload.len() as u32,
-        u32::from(data.interpolate()),
-        codec,
-    ] {
-        images.table.extend_from_slice(&n.to_le_bytes());
+
+    /// Small images stay raw. Larger ones use independent tiles when their lossless pyramid
+    /// is at most twice its full-resolution tiles (16 KiB minimum allowance) and fits the
+    /// remaining budget; only otherwise is the whole image zlib-compressed.
+    fn encode_pixels(
+        &self,
+        images: &Images,
+        width: u32,
+        height: u32,
+        pixels: Vec<u8>,
+    ) -> (u32, Vec<u8>) {
+        if pixels.len() <= 256 * 1024 {
+            return (0, pixels);
+        }
+        if let Ok((tiled, base)) = crate::raster_tiles::encode_with_base(width, height, &pixels)
+            && tiled.len() <= base.saturating_mul(2).max(16 * 1024)
+            && tiled.len() <= self.remaining(images)
+        {
+            return (4, tiled);
+        }
+        (1, miniz_oxide::deflate::compress_to_vec_zlib(&pixels, 6))
     }
-    append_payload(images, &payload)?;
-    let (sx, sy) = data.scale_factors();
-    Ok(ImageRecord {
-        index,
-        from_unit: Affine::scale_non_uniform(
-            f64::from(width) * f64::from(sx),
-            f64::from(height) * f64::from(sy),
-        ),
-    })
+
+    // Avoid geometric Vec growth: a 600 MiB payload must not reserve a 1.2 GiB block
+    // while the input PDF and the previous allocation still occupy the WASM heap.
+    fn append_payload(&self, images: &mut Images, payload: &[u8]) -> Result<(), DocumentError> {
+        let needed = images
+            .pixels
+            .len()
+            .checked_add(payload.len())
+            .filter(|needed| *needed <= self.budget)
+            .ok_or(DocumentError::Limit("encoded image resources"))?;
+        if needed > images.pixels.capacity() {
+            let capacity = needed.next_multiple_of(16 * 1024 * 1024).min(self.budget);
+            images
+                .pixels
+                .try_reserve_exact(capacity.saturating_sub(images.pixels.len()))
+                .map_err(|_| DocumentError::Limit("image storage memory"))?;
+        }
+        images.pixels.extend_from_slice(payload);
+        Ok(())
+    }
 }
 
-// Avoid geometric Vec growth: a 600 MiB payload must not reserve a 1.2 GiB block
-// while the input PDF and the previous allocation still occupy the WASM heap.
-fn append_payload(images: &mut Images, payload: &[u8]) -> Result<(), DocumentError> {
-    let needed = images
-        .pixels
-        .len()
-        .checked_add(payload.len())
-        .ok_or(DocumentError::Limit("encoded image resources"))?;
-    if needed > images.pixels.capacity() {
-        let capacity = needed
-            .next_multiple_of(16 * 1024 * 1024)
-            .min(MAX_ENCODED_IMAGE_BYTES);
-        images
-            .pixels
-            .try_reserve_exact(capacity.saturating_sub(images.pixels.len()))
-            .map_err(|_| DocumentError::Limit("image storage memory"))?;
-    }
-    images.pixels.extend_from_slice(payload);
-    Ok(())
+/// Stencils draw premultiplied white; the PDF color becomes the draw tint. Hayro wraps image
+/// draws in a group with the same non-stroking alpha, applied once at group pop.
+fn stencil_tint(paint: &Paint<'_>) -> Result<[f32; 4], DocumentError> {
+    let Paint::Color(color) = paint else {
+        return Err(DocumentError::Unsupported("pattern-painted image masks"));
+    };
+    let mut tint = color.to_rgba().components();
+    tint[3] = 1.0;
+    Ok(tint)
+}
+
+fn u32_at(bytes: &[u8], offset: usize) -> u32 {
+    crate::container::u32_at(bytes, offset)
 }
 
 // PDF soft masks can have a different resolution. Sample their pixel centers in image UV space.
@@ -185,110 +321,113 @@ fn sample_mask(mask: &LumaData, x: u32, y: u32, width: u32, height: u32) -> u8 {
     (top * (1.0 - fy) + bottom * fy).round() as u8
 }
 
-// Retains JPEG samples only when their PDF color space can travel with the image and no masks/Decode mappings apply.
-fn retain_jpeg(
-    image: &hayro_interpret::RasterImage<'_>,
-    images: &mut Images,
-) -> Result<Option<ImageRecord>, DocumentError> {
-    use hayro_interpret::hayro_syntax::{
-        Filter,
-        object::{Array, Name, Stream},
-    };
-    let stream = image.stream();
-    let dict = stream.dict();
-    let color = dict
-        .get::<Name<'_>>(b"ColorSpace")
-        .or_else(|| dict.get::<Name<'_>>(b"CS"));
-    let cmyk = color
-        .as_ref()
-        .is_some_and(|name| matches!(name.as_ref(), b"DeviceCMYK" | b"CMYK"));
-    let mut profile = if cmyk {
-        Some(include_bytes!("../../assets/CGATS001Compat-v2-micro.icc").to_vec())
-    } else {
-        None
-    };
-    let mut compatible = color.is_some_and(|name| {
-        matches!(
-            name.as_ref(),
-            b"DeviceRGB" | b"DeviceGray" | b"RGB" | b"G" | b"DeviceCMYK" | b"CMYK"
-        )
-    });
-    if let Some(array) = dict.get::<Array<'_>>(b"ColorSpace") {
-        let mut values = array.flex_iter();
-        if values
-            .next::<Name<'_>>()
-            .is_some_and(|name| name.as_ref() == b"ICCBased")
-            && let Some(icc) = values.next::<Stream<'_>>()
-            && matches!(icc.dict().get::<u32>(b"N"), Some(1 | 3 | 4))
-        {
-            profile = icc.decoded().ok().map(|data| data.into_owned());
-            compatible = profile
-                .as_ref()
-                .is_some_and(|data| data.len() <= 4 * 1024 * 1024);
+impl ImageCache {
+    // Retains JPEG samples only when their PDF color space can travel with the image and no masks/Decode mappings apply.
+    fn retain_jpeg(
+        &self,
+        image: &hayro_interpret::RasterImage<'_>,
+        images: &mut Images,
+    ) -> Result<Option<ImageRecord>, DocumentError> {
+        use hayro_interpret::hayro_syntax::{
+            Filter,
+            object::{Array, Name, Stream},
+        };
+        let stream = image.stream();
+        let dict = stream.dict();
+        let color = dict
+            .get::<Name<'_>>(b"ColorSpace")
+            .or_else(|| dict.get::<Name<'_>>(b"CS"));
+        let cmyk = color
+            .as_ref()
+            .is_some_and(|name| matches!(name.as_ref(), b"DeviceCMYK" | b"CMYK"));
+        let mut profile = if cmyk {
+            Some(include_bytes!("../../assets/CGATS001Compat-v2-micro.icc").to_vec())
+        } else {
+            None
+        };
+        // The JPEG's own component count must match the PDF color space; otherwise a browser
+        // or the CMYK decoder would interpret the samples differently from DCTDecode.
+        let mut components = color.and_then(|name| match name.as_ref() {
+            b"DeviceGray" | b"G" => Some(1),
+            b"DeviceRGB" | b"RGB" => Some(3),
+            b"DeviceCMYK" | b"CMYK" => Some(4),
+            _ => None,
+        });
+        if let Some(array) = dict.get::<Array<'_>>(b"ColorSpace") {
+            let mut values = array.flex_iter();
+            if values
+                .next::<Name<'_>>()
+                .is_some_and(|name| name.as_ref() == b"ICCBased")
+                && let Some(icc) = values.next::<Stream<'_>>()
+                && let Some(n @ (1 | 3 | 4)) = icc.dict().get::<u8>(b"N")
+            {
+                profile = icc.decoded().ok().map(|data| data.into_owned());
+                components = profile
+                    .as_ref()
+                    .is_some_and(|data| data.len() <= 4 * 1024 * 1024)
+                    .then_some(n);
+            }
         }
+        let Some(components) = components else {
+            return Ok(None);
+        };
+        let filters = stream.filters();
+        let Some((Filter::DctDecode, wrappers)) = filters.split_last() else {
+            return Ok(None);
+        };
+        // ASCII wrappers do not alter JPEG samples. Leave other filter chains on the
+        // general decoder path, including any predictor or color-transform parameters.
+        if !wrappers
+            .iter()
+            .all(|filter| matches!(filter, Filter::Ascii85Decode | Filter::AsciiHexDecode))
+            || [
+                b"Decode".as_slice(),
+                b"D",
+                b"Mask",
+                b"SMask",
+                b"DecodeParms",
+                b"DP",
+            ]
+            .iter()
+            .any(|key| dict.contains_key(key))
+        {
+            return Ok(None);
+        }
+        let raw = stream
+            .decoded_prefix(wrappers.len())
+            .map_err(|_| DocumentError::Invalid("PDF JPEG wrapper could not be decoded"))?;
+        let Some(frame) = crate::raster::jpeg_frame(&raw).filter(|f| f.components == components)
+        else {
+            return Ok(None);
+        };
+        let (width, height) = (frame.width, frame.height);
+        pixel_bytes(width, height)?;
+        let mut payload = strip_jpeg_metadata(&raw);
+        let codec = if let Some(profile) = profile {
+            payload = with_jpeg_profile(&payload, &profile);
+            3
+        } else {
+            2
+        };
+        let interpolate = dict
+            .get::<bool>(b"Interpolate")
+            .or_else(|| dict.get::<bool>(b"I"))
+            .unwrap_or(false);
+        let header = ResourceHeader {
+            width,
+            height,
+            interpolate,
+            codec,
+        };
+        let index = self.push(images, header, &payload, "encoded image resources")?;
+        Ok(Some(ImageRecord {
+            index,
+            from_unit: Affine::scale_non_uniform(
+                f64::from(image.width()),
+                f64::from(image.height()),
+            ),
+        }))
     }
-    let filters = stream.filters();
-    let Some((Filter::DctDecode, wrappers)) = filters.split_last() else {
-        return Ok(None);
-    };
-    // ASCII wrappers do not alter JPEG samples. Leave other filter chains on the
-    // general decoder path, including any predictor or color-transform parameters.
-    if !wrappers
-        .iter()
-        .all(|filter| matches!(filter, Filter::Ascii85Decode | Filter::AsciiHexDecode))
-        || !compatible
-        || [
-            b"Decode".as_slice(),
-            b"D",
-            b"Mask",
-            b"SMask",
-            b"DecodeParms",
-            b"DP",
-        ]
-        .iter()
-        .any(|key| dict.contains_key(key))
-    {
-        return Ok(None);
-    }
-    let raw = stream
-        .decoded_prefix(wrappers.len())
-        .map_err(|_| DocumentError::Invalid("PDF JPEG wrapper could not be decoded"))?;
-    let Some((width, height)) = crate::raster::jpeg_dimensions(&raw) else {
-        return Ok(None);
-    };
-    pixel_bytes(width, height)?;
-    let mut payload = strip_jpeg_metadata(&raw);
-    let codec = if let Some(profile) = profile {
-        payload = with_jpeg_profile(&payload, &profile);
-        3
-    } else {
-        2
-    };
-    if payload.len() > MAX_ENCODED_IMAGE_BYTES.saturating_sub(images.pixels.len())
-        || images.table.len() / 24 >= 10_000
-    {
-        return Err(DocumentError::Limit("encoded image resources"));
-    }
-    let index = (images.table.len() / 24) as u32;
-    let interpolate = dict
-        .get::<bool>(b"Interpolate")
-        .or_else(|| dict.get::<bool>(b"I"))
-        .unwrap_or(false);
-    for value in [
-        width,
-        height,
-        images.pixels.len() as u32,
-        payload.len() as u32,
-        u32::from(interpolate),
-        codec,
-    ] {
-        images.table.extend_from_slice(&value.to_le_bytes());
-    }
-    append_payload(images, &payload)?;
-    Ok(Some(ImageRecord {
-        index,
-        from_unit: Affine::scale_non_uniform(f64::from(image.width()), f64::from(image.height())),
-    }))
 }
 
 // PDF controls orientation and color space. EXIF/ICC metadata must not override it in a browser decoder.

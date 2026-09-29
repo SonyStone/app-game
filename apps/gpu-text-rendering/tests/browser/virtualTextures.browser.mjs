@@ -21,14 +21,12 @@ page.on('console', (message) => {
 });
 
 try {
-  await page.route('**/virtual-texture-check', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<html><body style="margin:0"></body></html>' })
-  );
-  await page.goto(`${baseURL}/virtual-texture-check`);
+  // Serve a real page so Chromium gives worker HMR sockets the correct local-network origin.
+  await page.goto(`${baseURL}/tests/browser/empty.html`);
   await page.evaluate(async () => {
-    const { layoutPages } = await import('/src/features/document/document.ts');
+    const { layoutPages } = await import('/src/features/document/layoutPages.ts');
     const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
-    const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+    const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
     const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
     const width = 1025;
     const height = 513;
@@ -58,7 +56,7 @@ try {
     values.setUint32(72, 2, true);
     const doc = {
       kind: 'curves',
-      pages: layoutPages([{ width, height, beginVertex: 0, endVertex: 6, images: [] }], 2)._unsafeUnwrap(),
+      pages: layoutPages([{ width, height, beginVertex: 0, endVertex: 6 }], 2)._unsafeUnwrap(),
       positions: { x: new Float32Array([0.5]), y: new Float32Array([0.5]) },
       curves: new ArrayBuffer(0),
       instances,
@@ -68,9 +66,7 @@ try {
       groups: new ArrayBuffer(0),
       maskTransfers: new ArrayBuffer(0),
       radialGradients: new ArrayBuffer(0),
-      rasterImages: { table, pixels: pixels.buffer },
-      images: new Map(),
-      imageVertices: new ArrayBuffer(0)
+      rasterImages: { table, pixels: pixels.buffer }
     };
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -213,7 +209,7 @@ try {
   assert.deepEqual(packed, baseline, 'Independent GDOC tiles must exactly preserve source pixels and borders');
   await page.evaluate(() => finishVirtual());
   const jpegDetail = await page.evaluate(async () => {
-    const { default: RasterWorker } = await import('/src/features/document/rendering/curves/raster.worker.ts?worker');
+    const { default: RasterWorker } = await import('/src/features/document/rendering/curves/raster.worker.tsx?worker');
     const { tilePixels } = await import('/src/features/document/rendering/curves/rasterPixels.ts');
     const source = new OffscreenCanvas(513, 513);
     const context = source.getContext('2d');

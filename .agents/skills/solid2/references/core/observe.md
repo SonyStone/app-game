@@ -1,0 +1,1275 @@
+# OBSERVE
+
+The observe tier's wiring: the records channel the runtimes and the attribution engine deliver on, the diagnostics channel, the attribution slot, `ownerPath()`, and on the server the trace-provider slot. `undefined` in a production build; an object in the observe and dev builds.
+
+## Import
+
+```ts
+import { OBSERVE } from "solid-js";
+```
+
+## Type signature
+
+```ts
+const OBSERVE: Observe | undefined;
+```
+
+## Learn more
+
+* [Observability](../guides/observability.md)
+* [Build an observability adapter](../guides/observability-adapters.md)
+* [Debugging reactivity](../guides/debugging-reactivity.md)
+
+## Related types
+
+### `AttributionSlot`
+
+The core's side of attribution: the slot the engine installs into, and
+the interaction frame the rendering runtime opens around event dispatch.
+The engine itself — "why did this run", costs, holds, feedback — is
+`@solidjs/signals/attribution`, a separate entry so an observe build pays
+for it only when something imports it; enabling it is what installs.
+
+```ts
+interface AttributionSlot {
+	readonly installed: object | null;
+	withInteraction<T>(ref: InteractionRef, fn: () => T): T;
+	withOrigin<T>(ref: NavigationRef, fn: () => T): T;
+	currentOrigin(): ChangeOrigin | undefined;
+}
+```
+
+#### `installed`
+
+* **Type:** `object | null`
+
+The installed engine, or `null` when none is enabled — the one fact a
+runtime reads off the slot (`solid-js` opens a `console.createTask` per
+component only while an engine is there to attribute to it). The
+object is the engine's hook table, opaque here: the hook contract is
+between the core and its engine, not public surface.
+
+#### `withInteraction`
+
+* **Type:** `T`
+
+Run `fn` as a user interaction's handler: root writes inside stamp it as
+their origin, and actions/effects/flights it causes carry it. The web
+runtime wraps every event dispatch in this; custom renderers and test
+harnesses call it themselves. `fn()` when no engine is installed.
+
+#### `withOrigin`
+
+* **Type:** `T`
+
+Run `fn` as a declared unit of work — a router's navigation, described
+by the parametrized route it matched: root writes inside are attributed
+to it (under the enclosing interaction, if any), so the hold behind the
+route's data, the re-runs and the verdicts carry the route's name. Any
+router calls this around its location write; nothing else is
+router-specific. `fn()` when no engine is installed.
+
+#### `currentOrigin`
+
+* **Type:** `ChangeOrigin | undefined`
+
+The provenance a root write performed now would be stamped with — the
+interaction whose handler is running, the navigation or effect or action
+frame open, or inside a recompute the origin of the change that caused
+it — as the installed engine sees it; `undefined` with no engine, or when
+nothing is in effect (external). For a runtime recording a fact of its
+own beside the engine's records: `@solidjs/web` stamps its `"call"`
+record with this, so a server-function call joins the interaction or
+navigation it ran for by the identity of the object, not by time.
+
+### `BoundaryEvent`
+
+One `<Loading>` boundary that WAITED during a server render — discovered
+with pending async, then settled — delivered on
+`OBSERVE.records.subscribe("boundary", …)` once it settled and, when a
+`<Reveal>` group held its swap, once it was revealed. A boundary whose
+content rendered on its first pass emits nothing: there was no wait to
+attribute, the same rule as the client's `hold` records.
+
+```ts
+interface BoundaryEvent {
+	id: string;
+	at: number;
+	durationMs: number;
+	heldMs: number;
+	passes: number;
+	outcome: "settled" | "fallback" | "client" | "error";
+	streamed: boolean;
+	revealGroup?: string;
+	ownerPath?: string[];
+}
+```
+
+#### `id`
+
+* **Type:** `string`
+
+The boundary's hydration id — the id `SSR_RENDER_ERROR_CONTAINED` names
+in `data.boundary`, and the `<template id="pl-…">` placeholder's.
+
+#### `at`
+
+* **Type:** `number`
+
+`performance.now()` at discovery: the first render pass began.
+
+#### `durationMs`
+
+* **Type:** `number`
+
+Discovery → settle, in milliseconds: from the first render pass to the
+content being complete (`"settled"`), or to the decision that the
+server will not produce it (the other outcomes).
+
+#### `heldMs`
+
+* **Type:** `number`
+
+Settle → reveal: how long a `<Reveal>` group held the finished content
+back for its siblings (`order="together"`, a sequential tail). `0` when
+the swap was issued as the boundary settled, including every boundary
+outside a group.
+
+#### `passes`
+
+* **Type:** `number`
+
+Render passes over the boundary's content: the discovery pass plus one
+per wait. `2` is one round of async; a higher count is a sequential
+chain — a read that depended on the answer to the previous one.
+
+#### `outcome`
+
+* **Type:** `"settled" | "fallback" | "client" | "error"`
+
+`"settled"` — the content rendered on the server and swapped in.
+`"fallback"` — the renderer had no stream to settle into
+(`renderToString`, or a collapsed slot under it): the fallback shipped
+final and the client renders the content. `"client"` — the content is
+client-only (`ssrSource: "client"`): the client renders it after
+hydration. `"error"` — the content threw; `live.error` is the value as
+thrown, and the paired `SSR_RENDER_ERROR_CONTAINED` finding says where
+it went.
+
+#### `streamed`
+
+* **Type:** `boolean`
+
+`true` when the outcome reached the client after the shell had flushed
+— the user saw the fallback, then the swap. `false` when the boundary
+settled in time to inline into the shell (or never streamed at all).
+
+#### `revealGroup`
+
+* **Type:** `string`
+
+The `<Reveal>` group coordinating this boundary's swap, if any.
+
+#### `ownerPath`
+
+* **Type:** `string[]`
+
+Root-first component labels enclosing the boundary, as on diagnostics.
+
+### `BoundaryListener`
+
+```ts
+type BoundaryListener = (event: BoundaryEvent, live: BoundaryLive) => void;
+```
+
+### `BoundaryLive`
+
+The live half of a boundary record.
+
+```ts
+interface BoundaryLive {
+	error?: unknown;
+}
+```
+
+#### `error`
+
+* **Type:** `unknown`
+
+The thrown value, when `outcome` is `"error"`.
+
+### `CallEvent`
+
+One server-function call made from the browser — the fetch and its
+decode, as the caller awaited it — delivered on
+`OBSERVE.records.subscribe("call", …)` once it settled. The client twin
+of the server's `"invocation"` record: the two join by `id` (this is the
+call; that is the execution it caused), and the difference between their
+durations is the wire. A call an integration answered locally (a
+handler's `intercept`, at t = 0) made no request and emits nothing.
+
+```ts
+interface CallEvent {
+	id: string;
+	at: number;
+	durationMs: number;
+	method: "GET" | "POST";
+	outcome: "ok" | "error";
+	status?: number;
+	origin?: ChangeOrigin;
+	deferred?: true;
+}
+```
+
+#### `id`
+
+* **Type:** `string`
+
+The function id — the same `id` the server's `"invocation"` record carries.
+
+#### `at`
+
+* **Type:** `number`
+
+`performance.now()` when the call was made.
+
+#### `durationMs`
+
+* **Type:** `number`
+
+Call → settle, in milliseconds: the request built and sent, the
+response received and decoded (or claimed by the configured
+`responseHandler`) — the whole await the caller saw. A streaming
+result settles at handoff — see `deferred`.
+
+#### `method`
+
+* **Type:** `"GET" | "POST"`
+
+`GET` for a GET-encoded read (`GET(fn)`), `POST` otherwise.
+
+#### `outcome`
+
+* **Type:** `"ok" | "error"`
+
+#### `status`
+
+* **Type:** `number`
+
+The response's HTTP status, once one arrived. Absent when the call
+failed before a response (the fetch itself rejected).
+
+#### `origin`
+
+* **Type:** `ChangeOrigin`
+
+What the call ran for, when the attribution engine
+(`solid-js/attribution`) is enabled and knows: the interaction whose
+handler made it (`kind: "interaction"`), the navigation whose data
+needed it (`kind: "navigation"`, its `interaction` the click), the
+effect or action step, the async landing whose recompute called again —
+the engine's own origin object, so it IS `InteractionEvent.origin` /
+`NavigationEvent.origin` / `HoldEvent.origin` by identity: an observer
+puts the call under the interaction's record without a time join. Read
+at dispatch, so a call made after an `await` in a handler stamps
+nothing (the same escape a write there has). Absent without an engine.
+
+#### `deferred`
+
+* **Type:** `true`
+
+The settled value is a body the caller drives — an async iterable
+(a `live()` source, a generator result) — so `durationMs` covers the
+call that produced it, not its consumption.
+
+### `CallListener`
+
+```ts
+type CallListener = (event: CallEvent, live: CallLive) => void;
+```
+
+### `CallLive`
+
+The live half of a call, for in-process consumers. `response` is the
+transport's own object, not a clone: its status and headers are
+readable, its body is the decode's (already consumed, or being consumed
+by the caller for a streaming result). `error` is the value as thrown to
+the caller — a decoded server error, or the transport's own failure.
+
+```ts
+interface CallLive {
+	args: unknown[];
+	response?: Response;
+	result?: unknown;
+	error?: unknown;
+}
+```
+
+#### `args`
+
+* **Type:** `unknown[]`
+
+#### `response`
+
+* **Type:** `Response`
+
+#### `result`
+
+* **Type:** `unknown`
+
+The settled value, when `outcome` is `"ok"`.
+
+#### `error`
+
+* **Type:** `unknown`
+
+The thrown value, when `outcome` is `"error"`.
+
+### `DiagnosticCapture`
+
+```ts
+interface DiagnosticCapture {
+	readonly events: readonly DiagnosticEvent[];
+	clear(): void;
+	stop(): DiagnosticEvent[];
+}
+```
+
+#### `events`
+
+* **Type:** `readonly DiagnosticEvent[]`
+
+#### `clear`
+
+* **Type:** `void`
+
+#### `stop`
+
+* **Type:** `DiagnosticEvent[]`
+
+### `DiagnosticCode`
+
+```ts
+type DiagnosticCode =
+	| "STRICT_READ_UNTRACKED"
+	| "PENDING_ASYNC_UNTRACKED_READ"
+	| "PENDING_ASYNC_FORBIDDEN_SCOPE"
+	| "REACTIVE_WRITE_IN_OWNED_SCOPE"
+	| "ASYNC_STORE_SETTER"
+	| "ACTION_CALLED_IN_OWNED_SCOPE"
+	| "RUN_WITH_DISPOSED_OWNER"
+	| "NO_OWNER_CLEANUP"
+	| "CLEANUP_IN_FORBIDDEN_SCOPE"
+	| "SETTLED_CLEANUP_UNOWNED"
+	| "SETTLE_WALK_UNINITIALIZED_SOURCE"
+	| "FLUSH_IN_EFFECT_CALLBACK"
+	| "PRIMITIVE_IN_FORBIDDEN_SCOPE"
+	| "NO_OWNER_EFFECT"
+	| "NO_OWNER_BOUNDARY"
+	| "ASYNC_OUTSIDE_LOADING_BOUNDARY"
+	| "LOADING_ON_OUTSIDE_HOLD"
+	| "INVALID_REFRESH_TARGET"
+	| "INVALID_AFFECTS_TARGET"
+	| "MISSING_EFFECT_FN"
+	| "SYNC_NODE_RECEIVED_ASYNC"
+	| "UNTRACKED_READ_AFTER_AWAIT"
+	| "REACTIVITY_HALTED"
+	| "INVARIANT_VIOLATION"
+	| "HUGE_FAN_OUT"
+	| "HUGE_FAN_IN"
+	| "GRAPH_GROWTH"
+	| "HOT_SCOPE_RERUNS"
+	| "HOT_SCOPE_TIME"
+	| "WIDE_SCOPE_DEPS"
+	| "UNSTABLE_MEMO_OUTPUT"
+	| "WASTED_RECOMPUTE"
+	| "ASYNC_WATERFALL"
+	| "HOT_SCOPE_FANOUT"
+	| "SILENT_HOLD"
+	| "LONG_HOLD"
+	| "UNTRACKED_ASYNC_HANDLER"
+	| "ABANDONED_FLIGHTS"
+	| "FALLBACK_FLASH"
+	| "STACKED_HOLDS"
+	| "OPTIMISTIC_REVERTED"
+	| "EFFECT_WRITES_OWN_SOURCE"
+	| "EFFECT_RELAY_TEAR"
+	| "IMMUTABLE_UPDATE_IN_STORE"
+	| "UNSTABLE_LIST_IDENTITY"
+	// Server / SSR — emitted by the server runtimes (`solid-js`'s server
+	// facade, `@solidjs/web`'s server entries) through `OBSERVE.diagnostics.emit`.
+	| "SSR_RENDER_ERROR_CONTAINED"
+	| "SSR_SUBTREE_ABANDONED"
+	| "SSR_STREAM_ABANDONED"
+	| "SSR_CLIENT_CONTENT_MASKED"
+	| "LATE_HEADER_WRITE"
+	| "SERVER_ERROR_SANITIZED"
+	| "SSR_BOUNDARY_WATERFALL"
+	| "SSR_UNDECLARED_LIVE_SOURCE"
+	| "SERVER_WRITE"
+	| "REVEAL_IN_RENDER_TO_STRING"
+	| "LAZY_ASSET_UNMAPPED"
+	| "PRELOAD_DESCRIPTOR_INVALID"
+	| "HEAD_TAG_INVALID"
+	| "UNRECOGNIZED_INSERT_VALUE"
+	| "UNSCOPED_HOLE_ALLOCATED_IDS"
+	| "BEHAVIOR_CLAIM_DROPPED"
+	| "FRAME_MARKER_CORRUPTED"
+	| "DYNAMIC_ASYNC_COMPONENT";
+```
+
+### `DiagnosticEvent`
+
+```ts
+interface DiagnosticEvent {
+	sequence: number;
+	code: DiagnosticCode;
+	kind: DiagnosticKind;
+	severity: DiagnosticSeverity;
+	message: string;
+	ownerId?: string;
+	ownerName?: string;
+	nodeName?: string;
+	ownerPath?: string[];
+	data?: Record<string, unknown>;
+}
+```
+
+#### `sequence`
+
+* **Type:** `number`
+
+#### `code`
+
+* **Type:** `DiagnosticCode`
+
+#### `kind`
+
+* **Type:** `DiagnosticKind`
+
+#### `severity`
+
+* **Type:** `DiagnosticSeverity`
+
+#### `message`
+
+* **Type:** `string`
+
+#### `ownerId`
+
+* **Type:** `string`
+
+#### `ownerName`
+
+* **Type:** `string`
+
+#### `nodeName`
+
+* **Type:** `string`
+
+#### `ownerPath`
+
+* **Type:** `string[]`
+
+Root-first chain of named owners enclosing the subject of the event —
+component roots as `<Name>`, computations by their `name` option (or
+the `effect`/`computed` default) — e.g. `["<App>", "<TodoRow>", "effect"]`.
+Unnamed owners (plain roots) are skipped. Absent when the subject has no
+named owner at all (a top-level scope, or an unowned primitive — which
+is usually the finding itself).
+
+#### `data`
+
+* **Type:** `Record<string, unknown>`
+
+### `DiagnosticKind`
+
+```ts
+type DiagnosticKind =
+	| "strict-read"
+	| "async"
+	| "write"
+	| "lifecycle"
+	| "owner"
+	| "error"
+	| "perf"
+	| "graph"
+	| "responsiveness"
+	| "ssr"
+	| "head"
+	| "render";
+```
+
+### `DiagnosticListener`
+
+A findings listener. `subject` is the live node the event is about, when
+the emitter located one — passed BESIDE the serializable event, the way
+the records channel passes `live` — for an in-process consumer that goes
+from a finding to the scope (devtools, a console task lookup);
+`undefined` for an event with no location, or a host event whose owners
+are not signals' owners.
+
+```ts
+type DiagnosticListener = (
+	event: DiagnosticEvent,
+	subject: DiagnosticSubject | undefined
+) => void;
+```
+
+### `Diagnostics`
+
+```ts
+interface Diagnostics {
+	subscribe(listener: DiagnosticListener): () => void;
+	capture(): DiagnosticCapture;
+	emit(
+		event: Omit<DiagnosticEvent, "sequence">,
+		subject?: DiagnosticSubject | null
+	): DiagnosticEvent;
+}
+```
+
+#### `subscribe`
+
+* **Type:** `() => void`
+
+#### `capture`
+
+* **Type:** `DiagnosticCapture`
+
+#### `emit`
+
+* **Type:** `DiagnosticEvent`
+
+Records an event on the channel from outside the reactive core — a host
+runtime reporting its own findings (hydration mismatches, server render
+faults) so consumers see one stream. `subject` locates it like the
+internal sites do; a host whose owners are not signals' owners passes
+`ownerPath` on the event instead and it is used as-is.
+
+### `DiagnosticSeverity`
+
+`info` is the advisory tier: a structural fact worth surfacing that is not
+presumptively a bug (e.g. a 2-deep sequential fetch chain, which may be an
+intrinsic data dependency). Budget/assertion consumers should treat only
+`warn`/`error` as failures unless they opt in to `info`.
+
+```ts
+type DiagnosticSeverity = "info" | "warn" | "error";
+```
+
+### `DiagnosticSubject`
+
+Anything a diagnostic can be about: an owner (root, computed, effect) or a signal.
+
+```ts
+type DiagnosticSubject = Owner | Signal<any> | Computed<any>;
+```
+
+### `FrameAppliedEvent`
+
+The client half of a `"frame"` record: one frame stream applied — a
+frame-stream response read chunk by chunk into the frame host
+(`applyFrameResponse`), from its `start` to its `complete` — delivered
+once the stream ended. A single-flight response carries one stream per
+frame it refreshed; each is its own record, as on the server.
+
+```ts
+interface FrameAppliedEvent extends FrameEventBase {
+	side: "client";
+	address?: string;
+	outcome: "complete" | "truncated" | "error";
+}
+```
+
+#### `side`
+
+* **Type:** `"client"`
+
+#### `address`
+
+* **Type:** `string`
+
+The local id the chunks were applied under, when the consumer remapped
+the producer's root id onto its own boundary (`applyFrameResponse`'s
+`as` — the call's address, for the server-component transport).
+Absent when applied under the wire id.
+
+#### `outcome`
+
+* **Type:** `"complete" | "truncated" | "error"`
+
+`complete` — the `complete` chunk arrived; `truncated` — the body ended
+before it (the connection dropped, the producer abandoned the stream);
+`error` — the read failed (a malformed chunk, a body error), with the
+failure in `live.error`.
+
+### `FrameEvent`
+
+One frame stream, from whichever end observed it — delivered on
+`OBSERVE.records.subscribe("frame", …)`; `side` says which. The two
+halves share their shape (the same census, the same timings measured
+where each stands), so a consumer joins them by `id` and `version` and
+the difference is the wire.
+
+```ts
+type FrameEvent = FrameProducedEvent | FrameAppliedEvent;
+```
+
+### `FrameListener`
+
+```ts
+type FrameListener = (event: FrameEvent, live: FrameLive) => void;
+```
+
+### `FrameLive`
+
+The live half of a frame record.
+
+```ts
+interface FrameLive {
+	error?: unknown;
+	response?: Response;
+}
+```
+
+#### `error`
+
+* **Type:** `unknown`
+
+The value thrown: the server's sync failure, or the client's read failure.
+
+#### `response`
+
+* **Type:** `Response`
+
+Client only: the response the stream was read from.
+
+### `FrameProducedEvent`
+
+The server half of a `"frame"` record: one frame stream produced — a
+server component rendered to the frame transport
+(`renderServerComponent` / `renderToFrameStream`), from its `start`
+chunk to its `complete` — delivered once it completed.
+
+```ts
+interface FrameProducedEvent extends FrameEventBase {
+	side: "server";
+	outcome: "complete" | "error";
+}
+```
+
+#### `side`
+
+* **Type:** `"server"`
+
+#### `outcome`
+
+* **Type:** `"complete" | "error"`
+
+`complete` — the render ran to the end (fragment failures, if any, are
+in `errors`); `error` — the render threw synchronously, the stream
+carried the failure as its only content and completed.
+
+### `HostRecordTypes`
+
+The record types host runtimes declare — see `RecordTypes`.
+
+```ts
+interface HostRecordTypes {}
+```
+
+### `InvocationEvent`
+
+One server function execution, delivered on
+`OBSERVE.records.subscribe("invocation", …)` once it settled.
+Serializable — the live handles (`event`, `args`, the thrown error)
+travel beside it in `InvocationLive`, not on it.
+
+```ts
+interface InvocationEvent {
+	id: string;
+	direct: boolean;
+	at: number;
+	durationMs: number;
+	outcome: "ok" | "error";
+	deferred?: true;
+	boundary?: string;
+}
+```
+
+#### `id`
+
+* **Type:** `string`
+
+The function id — the name a span or a log line carries.
+
+#### `direct`
+
+* **Type:** `boolean`
+
+`true` for an in-process call during SSR, `false` for HTTP dispatch.
+
+#### `at`
+
+* **Type:** `number`
+
+`performance.now()` when the execution started.
+
+#### `durationMs`
+
+* **Type:** `number`
+
+Start → settle of the execution, in milliseconds. The execution is the
+`wrapInvocation`-wrapped run: what the request spent on the call,
+policy included (auth guards, per-function middleware). A generator or
+stream body settles at handoff — see `deferred`.
+
+#### `outcome`
+
+* **Type:** `"ok" | "error"`
+
+#### `deferred`
+
+* **Type:** `true`
+
+The settled value is a body the caller drives — a generator, a
+`ReadableStream` — so `durationMs` covers the call that produced it,
+not its consumption.
+
+#### `boundary`
+
+* **Type:** `string`
+
+Direct calls only: the hydration id of the `<Loading>` boundary whose
+render pass made the call — the `id` of that boundary's `"boundary"`
+record — so a boundary's wait can be read as the server-function calls
+it consisted of. Absent for a call outside any boundary's pass (the
+shell, or HTTP dispatch).
+
+### `InvocationListener`
+
+```ts
+type InvocationListener = (
+	event: InvocationEvent,
+	live: InvocationLive
+) => void;
+```
+
+### `InvocationLive`
+
+The live half of an invocation, for in-process consumers. Not part of the
+record: `args` and `result` are application data (name/PII policy belongs
+to the consumer), `error` is the value AS THROWN — before the HTTP
+handler's production sanitization replaces it on the wire — and `event`
+is the request event the call ran under (the per-call derived event for
+direct calls).
+
+```ts
+interface InvocationLive {
+	event: RequestEvent;
+	request?: Request;
+	args: unknown[];
+	result?: unknown;
+	error?: unknown;
+}
+```
+
+#### `event`
+
+* **Type:** `RequestEvent`
+
+#### `request`
+
+* **Type:** `Request`
+
+HTTP dispatch only; absent for direct calls.
+
+#### `args`
+
+* **Type:** `unknown[]`
+
+#### `result`
+
+* **Type:** `unknown`
+
+The settled value, when `outcome` is `"ok"`.
+
+#### `error`
+
+* **Type:** `unknown`
+
+The thrown value, when `outcome` is `"error"`.
+
+### `Observe`
+
+The observe tier: the structured channel and the attribution wiring —
+everything a production observability consumer needs, and nothing that
+assumes a developer at a console. Present in dev and observe builds
+(`__OBSERVE__`); `undefined` in prod.
+
+```ts
+interface Observe {
+	diagnostics: Diagnostics;
+	records: Records;
+	attribution: AttributionSlot;
+	server: ServerObserve;
+	exclude(owner: Owner): void;
+	isExcluded(subject: DiagnosticSubject | null | undefined): boolean;
+	ownerPath(
+		subject: DiagnosticSubject | null | undefined
+	): string[] | undefined;
+}
+```
+
+#### `diagnostics`
+
+* **Type:** `Diagnostics`
+
+#### `records`
+
+* **Type:** `Records`
+
+Completed records from the runtimes, by type — see `Records`.
+
+#### `attribution`
+
+* **Type:** `AttributionSlot`
+
+The attribution hook slot and interaction frame — see `AttributionSlot`.
+
+#### `server`
+
+* **Type:** `ServerObserve`
+
+The server runtime's surface — see `ServerObserve`.
+
+#### `exclude`
+
+* **Type:** `void`
+
+Marks `owner`'s subtree as the observer's own. A consumer that renders
+inside the app it watches — an APM adapter's panel, devtools — would
+otherwise see its own effects, stores and holds reported as findings about
+the app. Under an excluded owner: diagnostics whose subject sits in the
+subtree are neither delivered nor reported (the entry is still built, so
+a site that throws its message still throws), and the attribution engine
+records no runs for its computations. Mark the root as it is created
+(`createRoot(() => { OBSERVE.exclude(getOwner()!); … })`); the signals
+and stores created under it are excluded subjects wherever their writes
+come from (a click handler, an adapter callback), so writes need no
+`runWithOwner` — and must not use one: a write under an owner is a write
+in an owned scope (REACTIVE\_WRITE\_IN\_OWNED\_SCOPE). Irrevocable for the
+owner's lifetime.
+
+#### `isExcluded`
+
+* **Type:** `boolean`
+
+Whether `subject` sits under an excluded owner (itself included).
+
+#### `ownerPath`
+
+* **Type:** `string[] | undefined`
+
+Root-first names of the owners enclosing `subject` (inclusive when the
+subject is itself a named owner) — component roots as `<Name>`,
+computations by their `name` option — the labels every finding and
+record carries as `ownerPath` (`["<App>", "<TodoRow>", "label"]`), from
+the one walk that stamps them, so a consumer locating a live node it
+was handed (`live`, a diagnostic's `subject`) reads the same path.
+Signals hop to their registering owner; unnamed owners are skipped;
+`undefined` when nothing on the chain is named. Names exist only in the
+observing tiers, which is why the walk lives here and not on the prod
+surface.
+
+### `RecordEvent`
+
+```ts
+type RecordEvent<K extends RecordType> = RecordTypes[K] extends {
+	event: infer E;
+}
+	? E
+	: never;
+```
+
+### `RecordListener`
+
+```ts
+type RecordListener<K extends RecordType> = (
+	event: RecordEvent<K>,
+	live: RecordLive<K>
+) => void;
+```
+
+### `RecordLive`
+
+```ts
+type RecordLive<K extends RecordType> = RecordTypes[K] extends { live: infer L }
+	? L
+	: never;
+```
+
+### `Records`
+
+The records channel — `OBSERVE.records`, on either platform: one place a
+consumer (an APM adapter's `init()`, devtools, the diagnostics harness)
+subscribes to the completed, serializable summaries of the things the
+runtimes did — a `<Loading>` boundary that waited on the server, a
+server-function execution or call, a frame stream produced or applied,
+and the attribution engine's: a re-run, a hold, an interaction — each
+delivered synchronously the moment it is complete, with its live handle
+passed BESIDE it. Any number of listeners; none can alter what it
+observes; one that throws is reported and the rest run. The engine's
+records are declared here and emitted only while the engine
+(`@solidjs/signals/attribution`, a separate entry the observe build pays
+for only when imported) is enabled; `observed(type)` is the one gate an
+emitter of either kind checks before building a record.
+
+The object is created once per PROCESS under a registered symbol, so a
+subscription made before the emitting runtime has loaded, or from a
+second bundled copy of the core, reaches the same listener set. Absent in
+prod with the rest of `OBSERVE`.
+
+```ts
+interface Records {
+	subscribe<K extends RecordType>(
+		type: K,
+		listener: RecordListener<K>
+	): () => void;
+	observed(type: RecordType): boolean;
+	emit<K extends RecordType>(
+		type: K,
+		event: RecordEvent<K>,
+		live: RecordLive<K>
+	): void;
+}
+```
+
+#### `subscribe`
+
+* **Type:** `() => void`
+
+Deliver `type` records as they complete; returns the unsubscribe. The
+subscription is the channel's, not any emitter's: it outlives the
+attribution engine's `enable()`/`disable()` cycles and is dropped only
+by its own unsubscribe.
+
+#### `observed`
+
+* **Type:** `boolean`
+
+Whether anything is subscribed to `type` — an emitter's pre-check, so
+a record nobody will hear costs nothing to not build (no clock read).
+
+#### `emit`
+
+* **Type:** `void`
+
+Delivers a completed record to `type`'s listeners, synchronously: how a
+runtime publishes. Snapshot semantics without a snapshot — the listener
+list is replaced, never mutated, on subscribe/unsubscribe — so a
+listener unsubscribing mid-delivery neither skips nor double-calls
+anyone this round, and delivery allocates nothing.
+
+### `RecordType`
+
+```ts
+type RecordType = keyof RecordTypes & string;
+```
+
+### `RecordTypes`
+
+The records delivered on `OBSERVE.records`, by type — each entry
+`{ event, live }`: the serializable record and the live handle (the node
+that ran, a thrown error, a request) an in-process consumer may want
+beside it. This package declares the attribution engine's records here —
+the engine ships in this package, behind its own entry, and emits on the
+same channel as every runtime — and the runtimes that emit declare theirs
+by augmentation, so the union of record types is whatever loaded.
+`solid-js` augments THIS interface (its `"boundary"` and `"recovery"`
+records); the runtimes above it — `@solidjs/web`'s `"invocation"`,
+`"frame"` and `"call"`, a router's — augment `HostRecordTypes`, reached
+through the `solid-js` re-export, which this interface extends so the
+channel sees one catalogue.
+
+Two interfaces, one augmenter each, by design: TypeScript merges an
+augmentation into a re-exported interface by following the alias, and
+two augmentations reaching the same interface through DIFFERENT aliases
+(`"@solidjs/signals"` from solid-js, `"solid-js"` from web) merge
+order-dependently — one set is lost. So each layer augments an interface
+of its own, through one module name.
+
+The engine's records (`@solidjs/signals/attribution`; none is emitted
+until `attribution.enable()`): `live` is the computation the record is
+about where there is one — the node that ran for `rerun`, `create` and
+`effect`, the async node for `flight`, the boundary's subtree for
+`fallback` (when the boundary reported one), the first held root signal
+for `hold` (the subject the SILENT\_HOLD finding names) — and `undefined`
+for the records with no single subject (`flush`, `interaction`,
+`navigation`, `graph`). The records are the same objects the engine's
+ring buffers hold (`attribution.history(type)`), delivered synchronously
+the moment each is complete — a re-run at recompute end, a hold, a
+navigation, an interaction when it settles, bottom-up — so a listener
+runs inside the engine and must not write signals. The timeline records
+(`create`, `effect`, `flush`, `flight`, `fallback`) and `graph` enter no
+ring buffer and are built only while `observed(type)`: subscribing is
+what turns them on. `rerun` is built while something wants it — a
+listener, an imported fold (`costs`/`feedback`) or the console log; the
+engine's own checks read the facts, not the record.
+
+```ts
+interface RecordTypes extends HostRecordTypes {
+	rerun: { event: RerunEvent; live: Computed<any> };
+	create: { event: CreateEvent; live: Computed<any> };
+	effect: { event: EffectRunEvent; live: Computed<any> };
+	flush: { event: FlushEvent; live: undefined };
+	flight: { event: FlightEvent; live: Computed<any> };
+	fallback: { event: FallbackEvent; live: Computed<any> | undefined };
+	interaction: { event: InteractionEvent; live: undefined };
+	hold: { event: HoldEvent; live: Signal<any> };
+	navigation: { event: NavigationEvent; live: undefined };
+	graph: { event: GraphEvent; live: undefined };
+}
+```
+
+#### `rerun`
+
+* **Type:** `{ event: RerunEvent; live: Computed<any> }`
+
+#### `create`
+
+* **Type:** `{ event: CreateEvent; live: Computed<any> }`
+
+#### `effect`
+
+* **Type:** `{ event: EffectRunEvent; live: Computed<any> }`
+
+#### `flush`
+
+* **Type:** `{ event: FlushEvent; live: undefined }`
+
+#### `flight`
+
+* **Type:** `{ event: FlightEvent; live: Computed<any> }`
+
+#### `fallback`
+
+* **Type:** `{ event: FallbackEvent; live: Computed<any> | undefined }`
+
+#### `interaction`
+
+* **Type:** `{ event: InteractionEvent; live: undefined }`
+
+#### `hold`
+
+* **Type:** `{ event: HoldEvent; live: Signal<any> }`
+
+#### `navigation`
+
+* **Type:** `{ event: NavigationEvent; live: undefined }`
+
+#### `graph`
+
+* **Type:** `{ event: GraphEvent; live: undefined }`
+
+### `RecoveryEvent`
+
+The client's side of a server hand-off: a `<Loading>` boundary whose
+fragment the server could not produce — its async rejected after the shell
+flushed (`handling: "client"` on the server error hook, `outcome:
+"client"` on the server's `"boundary"` record), or the stream was cut
+before the fragment arrived — renders its children as fresh client DOM
+instead of adopting server markup. One record per such boundary, on
+`OBSERVE.records.subscribe("recovery", …)`, delivered when the fresh
+render has committed. Joins the server's record by `id`.
+
+```ts
+interface RecoveryEvent {
+	id: string;
+	at: number;
+	waitedMs: number;
+	renderMs: number;
+}
+```
+
+#### `id`
+
+* **Type:** `string`
+
+The boundary's hydration id — the server `"boundary"` record's `id`.
+
+#### `at`
+
+* **Type:** `number`
+
+When the boundary registered against the fragment on the client (`performance.now()` clock).
+
+#### `waitedMs`
+
+* **Type:** `number`
+
+Registration → the rejection reaching the client, in milliseconds: the
+fallback the person looked at while the server was still trying. 0 when
+the rejection had already arrived by the time the boundary hydrated.
+
+#### `renderMs`
+
+* **Type:** `number`
+
+The fresh client render of the children, in milliseconds: from the rejection to the content committed.
+
+### `RecoveryListener`
+
+```ts
+type RecoveryListener = (event: RecoveryEvent, live: RecoveryLive) => void;
+```
+
+### `RecoveryLive`
+
+Live handles beside a `"recovery"` record — none today; the error stayed on the server.
+
+```ts
+interface RecoveryLive {}
+```
+
+### `RenderEvent`
+
+One server render — a `renderToString` or a `renderToStream` (a document,
+or a frame stream over the same core) — delivered on
+`OBSERVE.records.subscribe("render", …)` once it ended: the document
+returned, the stream's last fragment written, or the render torn down.
+The server-side account of the head's timing: what the shell cost, and
+how many `<Loading>` boundaries it waited on (each also a `"boundary"`
+record) — the facts the response's `Server-Timing` `solid-shell` metric
+is projected from. Serializable; the request the render served and its
+trace ride beside it in `RenderLive`.
+
+```ts
+interface RenderEvent {
+	mode: "string" | "stream";
+	at: number;
+	shellMs?: number;
+	durationMs: number;
+	boundaries: number;
+	outcome: "complete" | "abandoned" | "error";
+}
+```
+
+#### `mode`
+
+* **Type:** `"string" | "stream"`
+
+`"string"` for `renderToString`, `"stream"` for `renderToStream`.
+
+#### `at`
+
+* **Type:** `number`
+
+`performance.now()` when the render began.
+
+#### `shellMs`
+
+* **Type:** `number`
+
+Render start → the shell complete, in milliseconds: for a stream, the
+head and shell handed to the sink (the head is frozen from here — a
+fragment can no longer add to it); for a string, the document assembled
+(the whole render). What `solid-shell` carries. Absent when the render
+ended before its shell — torn down or failed pre-shell.
+
+#### `durationMs`
+
+* **Type:** `number`
+
+Render start → the render's end, in milliseconds: the document
+returned (`"string"`, equal to `shellMs`), the stream complete (every
+fragment written), or the teardown for the other outcomes.
+
+#### `boundaries`
+
+* **Type:** `number`
+
+`<Loading>` boundaries the shell waited on — discovered with pending
+async and settled before the shell completed, each a `"boundary"`
+record with `streamed: false` and a `solid-boundary` metric. A boundary
+that settled after the shell streamed as a fragment and is not counted
+here (its own record says `streamed: true`). Counted from the
+`"boundary"` records the render filed, under that record's gate: in an
+observe build with a `"render"` listener but no `"boundary"` listener
+the boundaries are not measured and this is `0`.
+
+#### `outcome`
+
+* **Type:** `"complete" | "abandoned" | "error"`
+
+`"complete"` — the render ran to its end; `"abandoned"` — the consumer
+left mid-stream (the sink threw, the readable was cancelled — the
+`SSR_STREAM_ABANDONED` finding is that request's account) and the
+render was torn down; `"error"` — the render failed: a string render
+threw, a stream's uncontained failure wound it down through `onError`.
+
+### `RenderListener`
+
+```ts
+type RenderListener = (event: RenderEvent, live: RenderLive) => void;
+```
+
+### `RenderLive`
+
+The live half of a render record.
+
+```ts
+interface RenderLive {
+	event?: RequestEvent;
+	trace: TraceContext;
+}
+```
+
+#### `event`
+
+* **Type:** `RequestEvent`
+
+The request event the render ran under; absent for a render outside a request scope.
+
+#### `trace`
+
+* **Type:** `TraceContext`
+
+The trace the render belongs to — `getTraceContext()`'s answer for it.
+
+### `ServerObserve`
+
+The server runtime's observe surface — where a server-side consumer
+installs what only the server has: the trace-context provider slot.
+Declared EMPTY here and typed by the runtime that owns the surface:
+`solid-js`'s server entry augments this interface with `trace:
+ServerTrace`, an interface of its own that `@solidjs/web`'s server
+entries fill in (`provide`) — so the core never learns that shape and
+the consumer still finds it on the one `OBSERVE`. One augmenter per
+interface: see `RecordTypes` for why.
+
+The OBJECT behind it is not the core's either: the core has one artifact
+per tier for both platforms, and the client would carry it for nothing.
+`solid-js`'s server entry replaces this empty literal with the
+process-wide slot the moment it evaluates (see `serverSlots` in
+solid-js/src/server/observe.ts), so a consumer that imports only
+`solid-js` can provide before the web runtime that reads it has loaded,
+and from a second copy when a host bundles one. On the client this stays
+`{}`.
+
+```ts
+interface ServerObserve {}
+```
+
+### `ServerTrace`
+
+The trace-provider slot — `OBSERVE.server.trace`. The CONTAINER is this
+runtime's (a single replaceable provider, see `serverSlots`); what a
+provider is — its argument, its answer — is the web runtime's, which
+augments this interface with `provide` (`trace.ts` in `@solidjs/web`).
+Declared empty here so that runtime has one place to type it.
+
+```ts
+interface ServerTrace {}
+```

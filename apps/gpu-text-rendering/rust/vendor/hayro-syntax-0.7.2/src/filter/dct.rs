@@ -30,6 +30,14 @@ pub(crate) fn decode(
     let mut decoder = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(&*data), options);
     decoder.decode_headers().ok()?;
 
+    // Local patch: bound the decoded frame before zune-jpeg allocates its samples.
+    let (frame_width, frame_height) = decoder.dimensions()?;
+    let frame_components = decoder.info().map_or(4, |info| u64::from(info.components));
+    if !crate::limits::image_fits(frame_width as u64, frame_height as u64, frame_components.max(3))
+    {
+        return None;
+    }
+
     let color_transform = params.get::<u8>(COLOR_TRANSFORM);
     let input_color_space = decoder.input_colorspace().unwrap();
 

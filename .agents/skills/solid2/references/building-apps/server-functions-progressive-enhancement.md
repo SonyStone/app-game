@@ -1,0 +1,199 @@
+# Progressive enhancement
+
+A shopper on a slow connection opens the product page and clicks Add to cart before the client bundle has arrived.
+If the button's only wiring is an `onClick` handler, nothing happens, and the click is lost.
+If the button is inside a form whose `action` is a URL, the browser posts the form, the server runs the function, and the shopper lands on the cart.
+
+A server function has a URL, so the second version is available to every mutation on this cluster's pages.
+The server-function runtime recognizes a browser form post at that URL, decodes the body as one `FormData` argument, and answers in a way the browser can follow with no script.
+
+Application code reaches this through a router.
+Solid Router's `action()` wraps the server function in a value that serializes to that URL, so the same `<form action={...}>` works before hydration and is taken over by the router after it.
+Most applications need only the [router action](#post-a-form-through-a-router-action) section; the rest of the page is the transport underneath, for forms outside the router and for integrations that build their own form helpers.
+
+## Post a form through a router action
+
+Declare a server function that takes one `FormData` argument, and wrap it with `action` from `@solidjs/router`:
+
+```ts
+// src/data/cart.ts
+import { redirect, respond } from "@solidjs/web";
+
+export async function addToCart(form: FormData) {
+	"use server";
+
+	const productId = String(form.get("productId") ?? "");
+	const quantity = Number(form.get("quantity") ?? 1);
+	if (!productId || !Number.isInteger(quantity) || quantity < 1) {
+		throw respond({ error: "Enter a whole number" }, { status: 400 });
+	}
+
+	await database.cart.add(currentSessionId(), productId, quantity);
+	return redirect("/cart", { revalidate: "cart" });
+}
+```
+
+```tsx
+// src/pages/Product.tsx
+import { action } from "@solidjs/router";
+import { addToCart } from "../data/cart";
+
+const addToCartAction = action(addToCart);
+
+<form method="post" action={addToCartAction}>
+	<input type="hidden" name="productId" value={props.id} />
+	<input type="number" name="quantity" value="1" min="1" />
+	<button type="submit">Add to cart</button>
+</form>;
+```
+
+Load the page with JavaScript disabled and submit.
+The browser posts to the function's URL, the server runs `addToCart`, and the redirect it answers sends the browser to `/cart`.
+With JavaScript on, the router intercepts the submit, calls the function over the transport, and navigates to `/cart` without a page load.
+
+The wiring that makes this work is the form, not the handler:
+
+```tsx
+// Avoid: the mutation exists only in a click handler
+<button onClick={() => addToCart(new FormData(formElement))}>Add to cart</button>
+
+// Prefer: a form whose action is the function's URL
+<form method="post" action={addToCartAction}>
+	<button type="submit">Add to cart</button>
+</form>
+```
+
+Before hydration, the `Avoid` version has no handler attached, so the click does nothing; the `Prefer` version posts.
+
+Everything the hydrated page does with a submission is a layer over that post.
+Once the router is running it intercepts the submit, calls the same function over the server-function transport, sets `aria-busy` on the form while the call runs, records the result in `useSubmissions`, and runs any `.onSubmit` hook before the call is sent, which is where an [optimistic write](../routing/solid-router-data.md#before-the-server-confirms) goes.
+None of that changes the HTML or the server function, so a shopper whose bundle has not arrived gets the post and a fresh page, and a shopper whose bundle has arrived gets the same result painted before the server answers.
+
+The [Forms guide](../guides/forms.md) builds the checkout address form on this shape, with validation messages, pending state, and an address list that updates before the server confirms.
+
+## Submit a GET form
+
+A GET form replaces the action URL's query string with the form's fields.
+When that query is not an encoded argument list, the handler passes it to the function as one `URLSearchParams` argument.
+
+`GET()` returns a typed `ServerFunction` reference, so its `url` is available in TypeScript:
+
+```ts
+// src/data/search.ts
+import { GET } from "@solidjs/web/server-functions";
+
+export const searchProducts = GET(async (params: URLSearchParams) => {
+	"use server";
+	return database.products.search(String(params.get("q") ?? ""));
+});
+```
+
+```tsx
+<form method="get" action={searchProducts.url}>
+	<input name="q" />
+	<button type="submit">Search</button>
+</form>
+```
+
+Type "mug" and submit: the browser navigates to `/_server/<id>?q=mug`, and the function receives `params.get("q") === "mug"`.
+
+:::caution[A GET form describes a URL, not a mutation]
+A `GET()` function must be safe and idempotent, because a `GET` request is not origin-checked and is replayed by caches, prefetchers, and link checkers.
+Post mutations with `method="post"`.
+:::
+
+## The reference URL
+
+Every server-function reference carries `id` and `url` at runtime, on the client stub and on the server-side callable alike.
+`url` is the plain-HTTP address of the function, `<endpoint>/<id>`, and is what the router serializes into the form attribute.
+The client runtime's own calls go to a sibling address, `<endpoint>/data/<id>`, so a cache never serves one caller kind the other's answer.
+
+Whether TypeScript knows about `url` depends on how the function was declared:
+
+* References returned by `GET()` and `live()` are typed as `ServerFunction`, which declares `id` and `url`.
+* A bare `"use server"` function keeps its declared function type.
+  `url` is present at runtime and absent from the type, so `addToCart.url` is a type error.
+
+For a form post, use a router action rather than the URL.
+An integration that must read the address from a bare declaration narrows it to `ServerFunction` from `@solidjs/web/server-functions` after checking `isServerFunction(fn)`.
+
+## Bind leading arguments
+
+The function id lives in the URL path.
+An integration can add JSON-safe bound arguments in the reserved `args` query parameter, while the submitted form remains the final `FormData` argument.
+Solid Router's `action.with(...)` does this for application code; with a `removeFromCart(productId: string, form: FormData)` action, the product id is bound and the form supplies the rest:
+
+```tsx
+<form method="post" action={removeFromCart.with(line.productId)}>
+	<button>Remove</button>
+</form>
+```
+
+`serverFunctionUrl(id, boundArgs)` builds that URL for a router, form helper, or custom host:
+
+```ts
+import { serverFunctionUrl } from "@solidjs/web/server-functions";
+
+const address = serverFunctionUrl(removeFromCart.id, [line.productId]);
+```
+
+Bound arguments must be JSON-safe, because the no-JavaScript convention has no codec.
+A `Date` or `Map` in `boundArgs` throws `Bound arguments in an action url must be JSON-safe`.
+
+## Keep the checks in the function
+
+A no-JavaScript submission reaches the same implementation as a scripted one, with the same `FormData`.
+Validation and authorization inside the function cover both; a check in the component covers neither, because the component did not run.
+
+:::deep-dive[What core owns and what the router owns]
+Core owns the transport.
+It decides by address whether a request came from the client runtime, decodes URL and form arguments, and provides the default `createNoJSHandler()` response for a browser form post: a 303 back to the page, with a non-`Response` outcome stored in a one-shot flash cookie.
+It exposes `handleNoJS` so an integration can replace that policy, and it preserves response status, headers, bodies, redirects, and revalidation metadata on every path.
+
+The router owns submission behavior.
+It reads and clears the flash cookie during the next server render, turns the decoded outcome into submission state, and connects revalidation metadata to its query cache.
+
+The core default applies when a custom host dispatches through `handleServerFunctionRequest()`.
+A host can configure `createNoJSHandler()` with a base path or supply another `handleNoJS`; [server-function progressive-enhancement APIs](../web/progressive-enhancement.md) lists those hooks.
+[Server rendering and hydration](../routing/solid-router-server-rendering.md) covers the router setup.
+:::
+
+## Common problems
+
+### `Property 'url' does not exist` on a server function
+
+The function is a bare `"use server"` declaration, whose type is the function's own.
+Pass it through the router's `action()` for a form, or, in integration code, narrow it to `ServerFunction` after `isServerFunction(fn)`.
+
+### `Bound arguments in an action url must be JSON-safe`
+
+A value bound with `.with()` or passed to `serverFunctionUrl()` was a `Date`, `Map`, `Set`, or another value JSON cannot carry.
+Bind a string or number and convert inside the function, or pass the value through the form body.
+
+### The form submits but the page reloads instead of staying put
+
+The router is not mounted around the form, so nothing intercepts the submit and the browser follows the `action` URL as a full-page navigation.
+The result is still correct, because the function ran and the redirect was followed; mount the form inside the `Router` to get the scripted path.
+
+### The 400 shows nothing after a no-JavaScript submit
+
+The outcome travelled back in the flash cookie, and something has to read it.
+Solid Router reads the cookie on the next server render and records the submission; without the router, a custom host reads it through its own `handleNoJS`.
+[Pass 3 of the Forms guide](../guides/forms.md#pass-3-inline-errors-and-pending-state) shows the router reading it.
+
+## Recap
+
+* Put every mutation behind `<form method="post" action={...}>` so the browser can submit it before the client bundle runs.
+* Wrap the server function with the router's `action()`; it serializes to the function's plain-HTTP URL and takes over after hydration.
+* Pending state, `useSubmissions`, and `.onSubmit` optimistic writes are layers the hydrated page adds; the HTML and the server function stay the same.
+* A browser form post follows a returned redirect; any other outcome is answered with a 303 back to the page and a flash cookie, which the router turns into a submission on the next render.
+* Use `method="get"` and `fn.url` only for a `GET()` read; the function receives the fields as `URLSearchParams`.
+* `url` is on every reference at runtime and only on `GET()` and `live()` references in the type.
+* Bound arguments travel in the `args` query parameter and must be JSON-safe.
+* Validate and authorize inside the function; a no-JavaScript request never ran the component.
+
+## Next steps
+
+* [Forms](../guides/forms.md): the checkout address form, working before hydration and adding inline messages and an optimistic address list after it.
+* [Data loading and mutations](../routing/solid-router-data.md): what `action()` adds on top of this transport, including `.with()`, submissions, and revalidation.
+* [Sessions and auth](sessions-and-auth.md): the sign-in form, the most common no-JavaScript submission in a storefront.

@@ -1,0 +1,582 @@
+# configureServerFunctionsServer / handleServerFunctionRequest
+
+Configures request scoping, invocation policy, result transforms, no-JavaScript handling, origin checks, and codecs for server functions.
+
+## Import
+
+```ts
+import {
+	configureServerFunctionsServer,
+	handleServerFunctionRequest,
+} from "@solidjs/web/server-functions/server";
+```
+
+## `configureServerFunctionsServer`
+
+### Type signature
+
+```ts
+function configureServerFunctionsServer(
+	config?: ServerFunctionsServerConfig
+): void;
+```
+
+### Parameters
+
+#### `config`
+
+* **Type:** `ServerFunctionsServerConfig`
+* Optional
+
+## `handleServerFunctionRequest`
+
+Dispatches one web-standard `Request` to a registered server function and returns its encoded `Response`.
+
+### Type signature
+
+```ts
+function handleServerFunctionRequest(
+	request: Request,
+	options?: HandleServerFunctionOptions
+): Promise<Response>;
+```
+
+### Parameters
+
+#### `request`
+
+* **Type:** `Request`
+
+#### `options`
+
+* **Type:** `HandleServerFunctionOptions`
+* Optional
+
+### Examples
+
+```ts
+import { handleServerFunctionRequest } from "@solidjs/web/server-functions/server";
+import "virtual:solid-server-function-manifest";
+
+// in the server's request handling:
+if (url.pathname.startsWith("/_server")) {
+	return handleServerFunctionRequest(request);
+}
+```
+
+## Related types
+
+### `HandleServerFunctionOptions`
+
+Hooks layering framework policy onto `handleServerFunctionRequest`.
+All are optional — the bare handler dispatches, scopes events, and
+encodes results on its own.
+
+```ts
+interface HandleServerFunctionOptions {
+	createEvent?(request: Request): ServerFunctionEvent;
+	provideEvent?<T>(event: ServerFunctionEvent, fn: () => T): T;
+	wrapInvocation?: WrapInvocationHook;
+	onError?: ServerErrorHook;
+	transformResult?(
+		event: ServerFunctionEvent,
+		result: unknown,
+		context: {
+			id: string;
+			args: unknown[];
+			request: Request;
+			thrown?: boolean;
+		}
+	): unknown | ResponseEnvelope | Promise<unknown | ResponseEnvelope>;
+	collectFlightData?: CollectFlightDataHook;
+	transformFlightResult?(
+		event: ServerFunctionEvent,
+		outcome: { value: unknown; data: unknown },
+		context: { id: string; args: unknown[]; request: Request }
+	): Response | undefined | Promise<Response | undefined>;
+	handleNoJS?(
+		result: unknown,
+		request: Request,
+		args: unknown[],
+		thrown?: boolean
+	): Response | Promise<Response>;
+	csrf?: boolean | ServerFunctionCSRFOptions;
+	codec?: JSONCodecOptions;
+	bodySizeLimit?: number;
+	maxArguments?: number;
+}
+```
+
+#### `createEvent`
+
+* **Type:** `ServerFunctionEvent`
+
+Builds the request event a call runs under (default: bare
+`{ request, locals: {} }`). Integrations supply their richer event
+(cookies, response helpers, platform handles).
+
+`request` is a standards-shaped `Request` — url, method, headers,
+signal, readable body — and nothing more. Enforcing `bodySizeLimit`
+puts the runtime between the host's stream and the decoder, so the
+object handed here may be one the runtime rebuilt; host-specific
+fields on the inbound object (`request.cf`, srvx's `runtime`, `ip`,
+`waitUntil`) are not carried. The host has its own request in closure
+when it calls the handler: read platform handles there and put them on
+the event (`locals`) rather than through `request`.
+
+#### `provideEvent`
+
+* **Type:** `T`
+
+Overrides the configured event provider for this handler — same
+contract as the `provideEvent` config option.
+
+#### `wrapInvocation`
+
+* **Type:** `WrapInvocationHook`
+
+Overrides the configured per-invocation wrap for this handler — same
+contract as the `wrapInvocation` config option (see
+`WrapInvocationHook`), except it is entry-only: it wraps exactly the
+invocation the request addressed. Nested direct server-function calls
+made by the dispatched body are not re-wrapped by it — they consult
+only the configured hook, which is ambient and wraps every direct call
+(a per-request option can't see direct SSR calls). Policy that must
+cover every hop belongs on `configureServerFunctionsServer`'s
+`wrapInvocation`, not here.
+
+#### `onError`
+
+* **Type:** `ServerErrorHook`
+
+This request's server error hook, ahead of `configureServerErrors`' (see
+`ServerErrorHook` in `@solidjs/web`): the function's throw
+(`handling: "thrown"`) and a failure escaping through its result graph
+(`"channel"`), once per error, before the wire policy applies. Entry-only
+like `wrapInvocation`: a direct call the body makes during a render
+reports through the ambient hook.
+
+#### `transformResult`
+
+* **Type:** `unknown | ResponseEnvelope | Promise<unknown | ResponseEnvelope>`
+
+Observes or replaces the function's result before encoding — the
+extension point for response metadata policies (headers, statuses,
+substituted results). Runs for returned and thrown results alike
+(`context.thrown` distinguishes). The context carries the call's
+identity — the function `id` and the parsed `args` the implementation
+was invoked with — matching the direct-call mirror
+(`transformDirectResult`), so a policy keying state by the call works
+over either dispatch path; `context.request` tells a scripted call (the
+`/data/` address) from a bare-address one. Return the result
+unchanged to pass through, or a `ResponseEnvelope` (exposed through
+the core entry) to send HTTP metadata plus a structured payload. Runs
+before `collectFlightData`, so the flight hook sees the transformed
+outcome — use `collectFlightData`, not this, to fold data into the
+response.
+
+#### `collectFlightData`
+
+* **Type:** `CollectFlightDataHook`
+
+Overrides the configured single-flight hook for this handler — same
+contract as the `collectFlightData` config option (see
+`CollectFlightDataHook`).
+
+#### `transformFlightResult`
+
+* **Type:** `Response | undefined | Promise<Response | undefined>`
+
+Overrides the configured single-flight fold policy for this handler —
+same contract as the `transformFlightResult` config option.
+
+#### `handleNoJS`
+
+* **Type:** `Response | Promise<Response>`
+
+Builds the response for calls made without the client runtime (at
+the bare address — no-JS form posts, direct HTTP). Receives the
+(transformed) result, the request, and the decoded arguments; `thrown`
+is set when the result was thrown rather than returned.
+
+Overrides the configured hook, which in turn overrides the built-in
+`createNoJSHandler()` applied to browser form posts. Other
+bare-address callers get the normal serialized response.
+
+#### `csrf`
+
+* **Type:** `boolean | ServerFunctionCSRFOptions`
+
+Overrides same-origin protection for this handler. Set to `false` only
+when another trusted layer protects the endpoint.
+
+#### `codec`
+
+* **Type:** `JSONCodecOptions`
+
+Overrides the configured codec options for this handler.
+
+#### `bodySizeLimit`
+
+* **Type:** `number`
+
+Overrides the configured argument payload bound for this handler (see
+`ServerFunctionsServerConfig.bodySizeLimit`).
+
+#### `maxArguments`
+
+* **Type:** `number`
+
+Overrides the configured argument count bound for this handler (see
+`ServerFunctionsServerConfig.maxArguments`).
+
+### `ServerFunctionCSRFOptions`
+
+Same-origin validation options for server function requests.
+
+```ts
+interface ServerFunctionCSRFOptions {
+	origin?: ServerFunctionOriginMatcher;
+	allowCredentials?: boolean;
+	allowRequestsWithoutOriginCheck?: boolean;
+	protectDeclaredReads?: boolean;
+}
+```
+
+#### `origin`
+
+* **Type:** `ServerFunctionOriginMatcher`
+
+The origins allowed to call server functions: a single origin, a list,
+or a matcher `(origin, request) => boolean` (async allowed; anything
+but a literal `true` refuses, #3169) for multi-tenant hosts. Defaults
+to the incoming request URL's origin, which admits same-origin callers
+only.
+
+Listing an origin OTHER than the deployment's own is the opt-in for a
+cross-origin client — a static build in a WebView
+(`capacitor://localhost`), an embedded widget, a marketing site calling
+the app's API — whose `configureServerFunctionsClient({ endpoint })`
+names this handler's absolute URL. A `Sec-Fetch-Site: cross-site` (or
+`same-site`) request carrying a browser-set `Origin` is decided by this
+matcher, and an admitted cross-origin caller gets the CORS answer the
+browser needs to read the response: `Access-Control-Allow-Origin`
+echoing its exact `Origin` (with `Vary: Origin`), the protocol's
+response headers exposed, and the `OPTIONS` preflight answered for the
+transport's methods and headers. Without a configured matcher no
+cross-origin caller is admitted (#3538); `Sec-Fetch-Site: none` and a
+request carrying no `Origin` at all stay refused whatever is listed.
+Configuring a matcher also puts `Vary: Origin` on every `GET`-declared
+read (the one cacheable answer): its answer now depends on who asked,
+and a shared cache must not serve one caller's variant to another.
+
+The trust decision is the same one this option always claimed: a
+browser sets `Origin` and a page cannot forge it, so a listed origin's
+pages may call — with the user's cookies only if `allowCredentials`
+says so. A cross-origin client should prefer bearer tokens through the
+client's `prepareRequest`.
+
+#### `allowCredentials`
+
+* **Type:** `boolean`
+
+Sends `Access-Control-Allow-Credentials: true` to an admitted
+cross-origin caller, letting a `credentials: "include"` fetch carry
+and receive cookies. Off by default so that listing an origin never
+silently turns on cookie sharing; a cookie that is meant to travel
+cross-site also needs `SameSite=None; Secure`. Has no effect on
+same-origin responses.
+
+#### `allowRequestsWithoutOriginCheck`
+
+* **Type:** `boolean`
+
+Allows requests without `Sec-Fetch-Site`, `Origin`, or `Referer`.
+Cross-origin metadata is still decided by `origin`: an unlisted origin
+stays refused.
+
+#### `protectDeclaredReads`
+
+* **Type:** `boolean`
+
+Applies the origin gate to GET-declared reads as well. By default the
+gate is skipped for declared reads: same-origin policy already keeps a
+cross-site caller from reading the response, and the gate's `Vary`
+fragments (or, on CDNs that ignore Vary, poisons) the shared-cache
+entries the `GET` helper exists to enable (#3071). The premise that
+skip rests on is `GET()`'s safety contract — declared reads are safe
+to execute from any origin (#3114). A deployment that does not rely
+on shared caches can enable this to gate its reads too.
+
+### `ServerFunctionEvent`
+
+The request event a server function call runs under: the base
+`RequestEvent` (request + locals) with `serverOnly` added, set when the
+call is an in-process SSR invocation whose result never serializes to a
+client.
+
+```ts
+interface ServerFunctionEvent extends RequestEvent {
+	serverOnly?: boolean;
+}
+```
+
+#### `serverOnly`
+
+* **Type:** `boolean`
+
+### `ServerFunctionOriginMatcher`
+
+```ts
+type ServerFunctionOriginMatcher =
+	| string
+	| readonly string[]
+	| ((origin: string, request: Request) => boolean | Promise<boolean>);
+```
+
+### `ServerFunctionsServerConfig`
+
+Options for `configureServerFunctionsServer`.
+
+```ts
+interface ServerFunctionsServerConfig {
+	provideEvent?: <T>(event: ServerFunctionEvent, fn: () => T) => T;
+	wrapInvocation?: WrapInvocationHook;
+	collectFlightData?: CollectFlightDataHook;
+	transformResult?(
+		event: ServerFunctionEvent,
+		result: unknown,
+		context: {
+			id: string;
+			args: unknown[];
+			request: Request;
+			thrown?: boolean;
+		}
+	): unknown | ResponseEnvelope | Promise<unknown | ResponseEnvelope>;
+	transformFlightResult?(
+		event: ServerFunctionEvent,
+		outcome: { value: unknown; data: unknown },
+		context: { id: string; args: unknown[]; request: Request }
+	): Response | undefined | Promise<Response | undefined>;
+	transformDirectResult?(
+		value: unknown,
+		options: { id: string; args: unknown[]; event: ServerFunctionEvent }
+	): unknown;
+	handleNoJS?:
+		| ((
+				result: unknown,
+				request: Request,
+				args: unknown[],
+				thrown?: boolean
+		  ) => Response | Promise<Response>)
+		| null;
+	endpoint?: string;
+	csrf?: boolean | ServerFunctionCSRFOptions;
+	codec?: JSONCodecOptions;
+	bodySizeLimit?: number;
+	maxArguments?: number;
+	secret?: string;
+	chaosReconnectEvery?: number;
+}
+```
+
+#### `provideEvent`
+
+* **Type:** `<T>(event: ServerFunctionEvent, fn: () => T) => T`
+
+Establishes the request-event scope for a call — the function passed
+runs with `event` visible to `getRequestEvent()`. Wire it to
+`provideRequestEvent` from `@solidjs/web/storage` (or the framework's
+equivalent). When omitted, falls back to the AsyncLocalStorage instance
+an established request scope parks on the global.
+
+#### `wrapInvocation`
+
+* **Type:** `WrapInvocationHook`
+
+Wraps every server function execution — HTTP dispatch and direct SSR
+calls alike — with the invocation identity already established (see
+`WrapInvocationHook`). The per-invocation seam for framework policies:
+per-function middleware, auth, logging, error mapping. A per-request
+option overrides it for HTTP dispatch.
+
+#### `collectFlightData`
+
+* **Type:** `CollectFlightDataHook`
+
+The unnamed single-flight hook: produces the data payload folded into
+responses of calls that opted in (see `CollectFlightDataHook`).
+Registered once by the integration that owns data production (a
+router); per-handler `collectFlightData` options override it. Other
+integrations contribute additively through
+`registerFlightDataSource(id, hook)` instead of competing for this
+slot.
+
+#### `transformResult`
+
+* **Type:** `unknown | ResponseEnvelope | Promise<unknown | ResponseEnvelope>`
+
+Server-wide default for the handler's `transformResult` (same contract
+— see `HandleServerFunctionRequestOptions`); a per-request option
+overrides it. Registering it here makes result policies (e.g. frames'
+`frameTransformResult`) work through generic dispatchers that call
+`handleServerFunctionRequest(request)` with no options.
+
+#### `transformFlightResult`
+
+* **Type:** `Response | undefined | Promise<Response | undefined>`
+
+`transformResult`'s counterpart for the single-flight fold: when a
+call's flight payload needs a body only a policy knows how to build
+(frames' `frameTransformFlightResult` — an invalidated entry is
+markup), this gets first refusal on the `{ value, data }` outcome.
+Return a `Response` to carry the outcome (call headers and cookies are
+copied onto it), or `undefined` to decline and keep the plain
+serialized envelope. A per-request option overrides it.
+
+#### `transformDirectResult`
+
+* **Type:** `unknown`
+
+The in-process mirror of `transformResult` for direct (same-server)
+calls during document SSR — e.g. frames' `frameTransformDirectResult`.
+
+#### `handleNoJS`
+
+* **Type:** `| (( result: unknown, request: Request, args: unknown[], thrown?: boolean ) => Response | Promise<Response>) | null`
+
+Server-wide response builder for calls made without the client runtime
+(see `handleNoJS` in `HandleServerFunctionRequestOptions`); a
+per-request option overrides it. Set it to `createNoJSHandler({ base })`
+to apply the convention to every non-scripted call rather than only to
+browser form posts, to a handler of your own to replace it, or to
+`null` to disable the built-in convention and answer form posts with
+the plain serialized response.
+
+#### `endpoint`
+
+* **Type:** `string`
+
+Mount path the HTTP handler answers on. Must match the client
+configuration — the id travels as the segment after it, a request whose
+path does not start with it is not a call, and SSR'd reference `url`s
+(e.g. form actions) derive from it. Prefix it when the app serves from
+a base path (e.g. `` `${BASE_URL}_server` ``).
+
+#### `csrf`
+
+* **Type:** `boolean | ServerFunctionCSRFOptions`
+
+Same-origin protection for HTTP server function calls. Enabled by
+default. Set to `false` only when another trusted layer protects the
+endpoint. `{ origin }` lists the origins allowed to call — the opt-in
+for a cross-origin client, answered with CORS (see
+`ServerFunctionCSRFOptions`).
+
+#### `codec`
+
+* **Type:** `JSONCodecOptions`
+
+Codec options (extra plugins etc.) for decoding arguments and encoding
+results — must match the client's. Stored in the shared layer, so
+`decodeResponse` sees them too. When `serializeErrorStacks` is omitted,
+the server-function boundary defaults it from this module's compiled
+development variant.
+
+#### `bodySizeLimit`
+
+* **Type:** `number`
+
+Upper bound, in bytes, on a call's argument payload — the POST body,
+or the `?args=` query encoding. The payload is buffered and decoded
+before dispatch, so its cost is paid before application code can
+decline it; the bound is enforced up front and a request over it is
+refused with `413` before any decoding (#3115). Raise it for functions
+that accept large uploads, or set `Infinity` to remove the bound.
+
+#### `maxArguments`
+
+* **Type:** `number`
+
+Upper bound on the number of arguments a call may carry. The decoded
+argument array is spread into the function call, so an unbounded list
+forces a range error out of any function regardless of what it does;
+past the bound the request is refused with `400` (#3115).
+
+#### `secret`
+
+* **Type:** `string`
+
+The deployment secret: one value per deployment, from which any feature
+that needs a key derives its own (domain-separated, so per-purpose keys
+share no material). Today one feature does — the no-JS flash cookie
+(#3239): the flash carries the submitted form input — whatever the user
+typed — so its payload is always AES-GCM encrypted; it never rides the
+wire or rests in the cookie jar as plaintext. Every instance that can
+serve the render after a form post must share the secret (behind a load
+balancer, a per-instance secret would silently lose outcomes), so there
+is no generated fallback here: when this is not set, the secret falls
+back to the one the Solid bundler plugin injects into the server build
+(a fresh value per build), and with neither present the outcome is
+not flashed — the form post still redirects cleanly, and dev
+builds warn once.
+
+Use a high-entropy value, 32 bytes or more, and keep it out of source
+control:
+
+```sh
+node -e "console.log(crypto.randomBytes(32).toString('base64url'))"
+```
+
+A captured cookie is an offline oracle for this value. Key derivation
+stretches it (PBKDF2-HMAC-SHA-256), which raises the price of a guess
+but does not make a guessable secret safe, and recovering it means
+reading every flash payload and forging new ones. A passphrase, an app
+name, or anything else a person would think up is not enough.
+
+Rotating it (or redeploying with the plugin's value) invalidates
+in-flight flashes. They are 60-second one-shot cookies, so the next
+render reads "no flash".
+
+#### `chaosReconnectEvery`
+
+* **Type:** `number`
+
+DEV ONLY — the chaos knob: end every live response this many
+milliseconds after it opens, the way a dying connection ends it (the
+body breaks off with the stream still open). The client's `live` loop
+reads it as a death and reconnects — backoff, `Last-Event-ID`, the
+digest-equal skip, `onstatus` — so the reconnect path is exercised
+continuously without a network to break. Applies to every event-stream
+response the live address answers, data and frames alike. Ignored
+outside the dev build; `0`/`undefined` is off.
+
+### `WrapInvocationHook`
+
+Wraps a server function execution — the per-invocation seam for
+framework policies (per-function middleware, auth, logging, error
+mapping). Called inside the call's event scope with the invocation
+identity already established: `getServerFunctionInvocation()` answers
+before, during and after `run()`. Must return (or resolve to) `run()`'s
+result — replacing it replaces the function's result; throwing routes
+through the handler's normal error encoding.
+
+The context carries the call's identity (`id`, parsed `args`), its
+`event`, and how it arrived: `direct` is `true` for in-process SSR calls
+(where `request` is absent) and `false` for HTTP dispatch. On the direct
+path the wrapper must stay transparent for synchronous functions —
+return `run()`'s value, not an unconditional promise, unless it needs to
+be async.
+
+```ts
+type WrapInvocationHook = (
+	run: () => unknown,
+	context: {
+		id: string;
+		args: unknown[];
+		event: ServerFunctionEvent;
+		request?: Request;
+		direct: boolean;
+	}
+) => unknown;
+```

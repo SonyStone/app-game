@@ -1,6 +1,7 @@
 //! Tiling patterns reuse the same vector/image interpreter under the painted shape's clip.
 
-use super::SceneDevice;
+use super::{SceneDevice, budget::PATTERN_CELL_WORK};
+use crate::error::DocumentError;
 use hayro_interpret::{
     ClipPath, Device, FillRule,
     pattern::{Pattern, TilingPattern},
@@ -62,6 +63,22 @@ impl<'a> SceneDevice<'a> {
             self.reject("pattern cell count");
             return;
         }
+        // Empty or zero-area cells produce no draws, so output limits cannot bound them.
+        // Charge this fill's cells now, and reject up front when repeating it in every cell
+        // of the enclosing patterns could not fit the page budget (nested-pattern blowup).
+        let cells = ((x1 - x0 + 1.0) * (y1 - y0 + 1.0)).max(0.0) as u64;
+        let predicted = cells
+            .saturating_mul(self.pattern_multiplicity)
+            .saturating_mul(PATTERN_CELL_WORK);
+        if !self.work.fits(predicted) {
+            self.error = Some(DocumentError::Limit("pattern cells"));
+            return;
+        }
+        if !self.charge(cells * PATTERN_CELL_WORK, "pattern cells") {
+            return;
+        }
+        let multiplicity = self.pattern_multiplicity;
+        self.pattern_multiplicity = multiplicity.saturating_mul(cells.max(1));
 
         let depth = self.clips.len();
         let blend = self.blend;
@@ -86,6 +103,7 @@ impl<'a> SceneDevice<'a> {
             }
         }
         self.pattern_depth -= 1;
+        self.pattern_multiplicity = multiplicity;
         self.clips.truncate(depth);
         self.blend = blend;
     }

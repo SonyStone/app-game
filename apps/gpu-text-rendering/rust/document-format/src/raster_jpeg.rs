@@ -43,14 +43,7 @@ pub fn decode(bytes: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Document
     // Match PDF DCTDecode: YCCK becomes CMYK, while K and the PDF's default Decode range stay unchanged.
     if input == ColorSpace::YCCK {
         for pixel in components.chunks_exact_mut(4) {
-            let (y, cb, cr) = (
-                f32::from(pixel[0]),
-                f32::from(pixel[1]),
-                f32::from(pixel[2]),
-            );
-            pixel[0] = (434.456 - y - 1.402 * cr) as u8;
-            pixel[1] = (119.541 - y + 0.344 * cb + 0.714 * cr) as u8;
-            pixel[2] = (481.816 - y - 1.772 * cb) as u8;
+            ycck_to_cmyk(pixel);
         }
     }
     let profile = embedded_profile(bytes)?;
@@ -79,6 +72,19 @@ pub fn decode(bytes: &[u8], width: u32, height: u32) -> Result<Vec<u8>, Document
         rgba[3] = 255;
     }
     Ok(components)
+}
+
+/// Converts YCC to inverted CMY in place (K is unchanged), rounding to the nearest sample.
+/// Float-to-u8 casts saturate, clamping out-of-gamut results to 0..=255.
+fn ycck_to_cmyk(pixel: &mut [u8]) {
+    let (y, cb, cr) = (
+        f32::from(pixel[0]),
+        f32::from(pixel[1]),
+        f32::from(pixel[2]),
+    );
+    pixel[0] = (434.456 - y - 1.402 * cr).round() as u8;
+    pixel[1] = (119.541 - y + 0.344 * cb + 0.714 * cr).round() as u8;
+    pixel[2] = (481.816 - y - 1.772 * cb).round() as u8;
 }
 
 fn embedded_profile(bytes: &[u8]) -> Result<Vec<u8>, DocumentError> {
@@ -123,4 +129,20 @@ fn embedded_profile(bytes: &[u8]) -> Result<Vec<u8>, DocumentError> {
         .values()
         .flat_map(|chunk| chunk.iter().copied())
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ycck_to_cmyk;
+
+    #[test]
+    fn ycck_conversion_rounds_instead_of_truncating() {
+        // 481.816 - 250 = 231.816 and 119.541 - 250 + 0.714 * 200 = 12.341.
+        let mut pixel = [250, 0, 200, 7];
+        ycck_to_cmyk(&mut pixel);
+        assert_eq!(pixel, [0, 12, 232, 7]);
+        let mut saturated = [0, 0, 0, 0];
+        ycck_to_cmyk(&mut saturated);
+        assert_eq!(saturated, [255, 120, 255, 0]);
+    }
 }

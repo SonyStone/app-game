@@ -1,0 +1,69 @@
+# Style
+
+`Style` adds a [`<style>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style) element with an inline body to the document head.
+
+## Import
+
+```tsx
+import { Style } from "@solidjs/meta";
+```
+
+## Type
+
+```tsx
+const Style: Component<
+	JSX.StyleHTMLAttributes<HTMLStyleElement> & { key?: string }
+>;
+```
+
+## Props
+
+Accepts attributes for [`<style>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style).
+
+### `children`
+
+* **Type:** `JSX.Element`
+* **Optional:** Yes
+
+CSS text of the `style` element.
+Applied via `textContent`, so it is always escaped — markup cannot be injected through it.
+Can be a reactive expression.
+
+### `key`
+
+* **Type:** `string`
+* **Optional:** Yes
+
+Overrides the default identity used for deduplication.
+
+## Behavior
+
+* Keyless `<Style>` instances are append-only: each one adds its own element, and unmounting removes it.
+* Give a `key` to make one replaceable — later registrations with the same `key` override it, and unmounting restores the previous body.
+
+## Examples
+
+### Basic usage
+
+```tsx
+import { Style } from "@solidjs/meta";
+
+export default function Page() {
+	return <Style>{`.hero { background: papayawhip; }`}</Style>;
+}
+```
+
+### Replaceable themed style
+
+```tsx
+import { Style } from "@solidjs/meta";
+
+export default function Theme(props: { accent: () => string }) {
+	return <Style key="theme">{`:root { --accent: ${props.accent()}; }`}</Style>;
+}
+```
+
+## Related
+
+* [`Stylesheet`](stylesheet.md)
+* [`Script`](script.md)

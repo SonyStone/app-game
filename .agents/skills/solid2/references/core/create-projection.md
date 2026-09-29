@@ -1,0 +1,182 @@
+# createProjection
+
+Creates a derived (projected) store — `createMemo` for stores. The
+derive function receives a mutable draft and either mutates it in
+place (canonical) or returns a new value. Either way the result is
+reconciled against the previous draft by `options.key` (default
+`"id"`), so surviving items keep their proxy identity — only
+added/removed items are created/disposed.
+
+Returns the projected store directly (no setter — reads only).
+
+Reach for this when you want the structural-sharing / per-property
+tracking of a store on top of a derived computation. For simple
+read-only derivations, `createMemo` is lighter.
+
+## Import
+
+```ts
+import { createProjection } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function createProjection<T extends object = {}>(
+	fn: (draft: T) => void | T | Promise<void | T> | AsyncIterable<void | T>,
+	seed: Partial<T> | Store<T>,
+	options?: ProjectionOptions
+): Store<T>;
+```
+
+## Parameters
+
+### `fn`
+
+* **Type:** `(draft: T) => void | T | Promise<void | T> | AsyncIterable<void | T>`
+
+Derive function. Receives a draft and either mutates it or returns a new value; may be sync, async, or an `AsyncIterable`. The result is reconciled by `options.key`.
+
+### `seed`
+
+* **Type:** `Partial<T> | Store<T>`
+
+Initial contents and the draft the first derive receives. With an async `fn`, readers see the seed before the first result only when `seedLoadingValue` is set; otherwise they suspend.
+
+### `options`
+
+* **Type:** `ProjectionOptions`
+* Optional
+
+`key` (default `"id"`), `seedLoadingValue`, `name`, `shallow`, `deferStream`, and `ssrSource`.
+
+## Return value
+
+The projected store. There is no setter; write through the derive function's inputs.
+
+## Examples
+
+```ts
+// Mutation form — update individual fields on the draft.
+const summary = createProjection<{ total: number; active: number }>(
+	(draft) => {
+		draft.total = users().length;
+		draft.active = users().filter((u) => u.active).length;
+	},
+	{ total: 0, active: 0 }
+);
+
+// Return form — produce a derived collection. Reconciled by `id`
+// so each surviving user keeps the same store identity.
+const activeUsers = createProjection<User[]>(
+	() => allUsers().filter((u) => u.active),
+	[]
+);
+```
+
+**Hydration:** `ProjectionOptions` accepts an `ssrSource` field
+(`"server"` | `"hybrid"` | `"client"`) for the same client-vs-server tradeoffs as the other primitives.
+
+## Caveats
+
+* There is no setter. The derive function's reactive inputs are the way to change the result.
+* Rows survive between derives only when `key` matches them. Data without an `id` needs an explicit `key` or `key: null` for positional matching.
+* With an async derive, readers suspend until the first result unless `seedLoadingValue` is set; then the seed shows first.
+
+## Common problems
+
+* [Rows lose focus or animation when the list changes](../guides/lists.md#rows-lose-focus-or-animation-when-the-list-changes)
+
+## Learn more
+
+* [Derive a store with a projection](../concepts/stores.md#derive-a-store-with-a-projection)
+* [Stores](../concepts/stores.md)
+* [Lists](../guides/lists.md)
+
+## Related types
+
+### `ProjectionOptions`
+
+Options for derived/projected stores created with
+`createStore(fn, seed, options?)`, `createProjection(fn, seed, options?)`,
+or `createOptimisticStore(fn, seed, options?)`.
+
+```ts
+interface ProjectionOptions extends StoreOptions {
+	key?: string | ((item: NonNullable<any>) => any) | null;
+	seedLoadingValue?: boolean;
+	deferStream?: boolean;
+	ssrSource?: "server" | "hybrid" | "client";
+}
+```
+
+#### `key`
+
+* **Type:** `string | ((item: NonNullable<any>) => any) | null`
+
+Key property name or function for reconciliation identity; `null` merges positionally
+
+#### `seedLoadingValue`
+
+* **Type:** `boolean`
+
+Treat the seed as the first committed value: the store is born committed with the seed's
+contents, shown until the derive's first real answer lands. While that
+first answer is in flight, reads serve the seed everywhere — nothing
+suspends to a `<Loading>` boundary, no update is held, and
+`isPending` stays false (the seed answers by declaration; first-load
+affordances belong to the data, e.g. a `skeleton: true` field in the
+seed). Once the first answer lands (reconciled into the seed), refetches
+use normal pending semantics with `isPending` true.
+
+The store equivalent of `MemoOptions.loadingValue`; the seed already
+carries the placeholder shape, so this option is the only opt-in needed.
+
+#### `deferStream`
+
+* **Type:** `boolean`
+
+Defer the SSR stream flush until this primitive's first value is
+resolved. Lets late-resolving sources hold the document open
+rather than forcing the surrounding `<Loading>` boundary to render
+its fallback into the HTML. Server-only; ignored on the client.
+
+#### `ssrSource`
+
+* **Type:** `"server" | "hybrid" | "client"`
+
+Hydration policy. Decides what initial value the client uses and
+whether the compute re-runs.
+
+* `"server"` *(default)*: client uses the serialized server value
+  as initial state. Compute does **not** re-run for the initial
+  value — the serialized result is authoritative. Choose this when
+  the compute is deterministic from server-available inputs.
+* `"hybrid"`: client uses the serialized server value first; then,
+  for a compute that returns an **async iterable**, the client
+  continues the stream from it (the server consumed exactly one
+  yield; the client's first yield duplicates it and is discarded,
+  later yields update the node). For a sync or promise-shaped
+  compute, `"hybrid"` is identical to `"server"`: the serialized
+  value is adopted and the compute does not re-run until a
+  dependency changes or `refresh()`. Choose this for streaming
+  sources the client should keep consuming after hydration.
+* `"client"`: skip the server value entirely. Compute is deferred
+  until hydration completes, then runs as if first-mounted.
+  Choose this for client-only state where serialization is
+  meaningless. Two forms decide what the pre-compute window
+  renders: **bare** (structural) — the source suspends on the
+  server as a final hole and the nearest `<Loading>` boundary
+  renders its fallback, handing the position to the client; or a
+  **declared first value** — `loadingValue` on signal-family
+  sources (`loadingValue: undefined` is a valid declaration),
+  `seedLoadingValue: true` on store-family sources — which renders
+  provisional data with no boundary involvement.
+
+### `ProjectionStoreReturn`
+
+Tuple returned by the derived `createStore(fn, seed, options?)` form.
+
+```ts
+type ProjectionStoreReturn<T> = [get: Store<T>, set: StoreSetter<T>];
+```

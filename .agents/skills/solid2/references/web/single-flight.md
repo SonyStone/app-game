@@ -1,0 +1,271 @@
+# decodeResponse / registerFlightDataSource / subscribeFlightData
+
+Decodes a server-function response, including response envelopes and single-flight payloads.
+
+## Import
+
+```ts
+import {
+	decodeResponse,
+	subscribeFlightData,
+} from "@solidjs/web/server-functions";
+import { registerFlightDataSource } from "@solidjs/web/server-functions/server";
+```
+
+## `decodeResponse`
+
+### Type signature
+
+```ts
+function decodeResponse<T = unknown>(
+	response: Response,
+	codecOptions?: JSONCodecOptions
+): Promise<T | undefined>;
+```
+
+### Parameters
+
+#### `response`
+
+* **Type:** `Response`
+
+#### `codecOptions`
+
+* **Type:** `JSONCodecOptions`
+* Optional
+
+## `registerFlightDataSource`
+
+Registers a named single-flight data source (the server half of
+`subscribeFlightData(source, consumer)`); returns an unregister
+function.
+
+### Type signature
+
+```ts
+function registerFlightDataSource(
+	source: string,
+	hook: CollectFlightDataHook
+): () => void;
+```
+
+### Parameters
+
+#### `source`
+
+* **Type:** `string`
+
+#### `hook`
+
+* **Type:** `CollectFlightDataHook`
+
+## `subscribeFlightData`
+
+Registers the integration that receives data folded into a mutation response.
+
+### Type signature
+
+```ts
+function subscribeFlightData<D = unknown>(
+	consumer: FlightDataConsumer<D>
+): () => void;
+function subscribeFlightData<D = unknown>(
+	source: string,
+	consumer: FlightDataConsumer<D>
+): () => void;
+```
+
+### Parameters
+
+#### `consumer`
+
+* **Type:** `FlightDataConsumer<D>`
+
+#### `source`
+
+* **Type:** `string`
+
+## Related types
+
+### `CollectFlightDataHook`
+
+The single-flight server hook: given the request event and the function's
+outcome, optionally produce a data payload (possibly async) to fold into
+the response alongside the return value. Data production is a black box
+to the protocol — render data-only, run route preloads, query a cache,
+whatever the integration chooses; the payload must be
+codec-serializable. Return undefined to send the response unchanged
+(byte-identical to a call without the hook).
+
+Runs after `transformResult`, only for scripted calls that sent
+`SINGLE_FLIGHT_HEADER` on the request, on returned results and thrown
+`Response`/`ResponseEnvelope` control-flow signals alike (plain thrown
+errors never collect, and neither do raw body-carrying `Response` values
+— those are the caller's verbatim payload). The handler owns the
+enveloping: contributed data ships as `{ value, data }` under the
+single-flight response header. The generic halves of collection arrive
+pre-digested on the outcome (`targetUrl`, `revalidateKeys`,
+`foldedHeaders`); the hook supplies only the data strategy.
+
+```ts
+type CollectFlightDataHook = (
+	event: ServerFunctionEvent,
+	outcome: ServerFunctionOutcome
+) => unknown | Promise<unknown>;
+```
+
+### `FlightDataConsumer`
+
+Consumer receiving single-flight data on the client: `data` is the
+integration-produced payload (opaque to the protocol), `context` carries
+the envelope metadata. `data` is `undefined` when the response carried
+integration metadata (a redirect, revalidation keys) but the server
+folded no slice for this source — the consumer still runs, to apply the
+metadata. Async consumers are awaited before the function value is
+returned to the caller, so caches are seeded first.
+
+```ts
+type FlightDataConsumer<D = unknown> = (
+	data: D | undefined,
+	context: FlightDataContext
+) => void | Promise<void>;
+```
+
+### `FlightDataContext`
+
+Envelope context delivered alongside single-flight data: the transport
+response, whose headers carry the integration metadata (the redirect
+carrier for redirect-with-data, `X-Revalidate` keys) and status. The
+body is already consumed — read `data` and `value` from the delivery,
+not from here.
+
+```ts
+interface FlightDataContext {
+	response: Response;
+}
+```
+
+#### `response`
+
+* **Type:** `Response`
+
+The HTTP response the data arrived on (metadata only).
+
+### `ServerFunctionOutcome`
+
+What a server function call resolved to, as seen by the single-flight
+hook — enough context for any data-production strategy without core
+assuming one.
+
+```ts
+interface ServerFunctionOutcome {
+	id: string;
+	value: unknown;
+	response: Response | undefined;
+	request: Request;
+	thrown: boolean;
+	targetUrl: string | undefined;
+	revalidateKeys: string[] | undefined;
+	foldedHeaders: Headers;
+}
+```
+
+#### `id`
+
+* **Type:** `string`
+
+The build-stable id of the function that ran.
+
+#### `value`
+
+* **Type:** `unknown`
+
+The value the caller will receive: the raw return for plain results,
+the unwrapped `value` for `ResponseEnvelope`s, `null` for body-less
+control-flow `Response`s (redirect/reload).
+
+#### `response`
+
+* **Type:** `Response | undefined`
+
+The `Response` carrying the result's HTTP metadata, when there is one
+(from a returned/thrown `Response` or a `ResponseEnvelope`). Read
+`Location` here for redirect-with-data — the data should describe the
+destination route — and `X-Revalidate` for the invalidated keys.
+Undefined for plain values.
+
+#### `request`
+
+* **Type:** `Request`
+
+The original HTTP request, untouched: headers the client integration
+sent (referrer, custom route context) ride here for the hook to read —
+core assigns them no meaning.
+
+#### `thrown`
+
+* **Type:** `boolean`
+
+Whether the result was thrown rather than returned.
+
+#### `targetUrl`
+
+* **Type:** `string | undefined`
+
+The URL the client will show after the mutation — the redirect
+`Location` when the outcome carries one (resolved against the request
+URL, as a browser would), the referring page otherwise. Undefined
+without a usable referer (a non-browser caller has no page to produce
+data for) and for redirects leaving the app's origin: produce no data
+when this is undefined.
+
+#### `revalidateKeys`
+
+* **Type:** `string[] | undefined`
+
+The outcome's `X-Revalidate` keys, split — the invalidation scope the
+mutation declared. Undefined when the outcome carries none (integrations
+typically collect everything for the target in that case); `[""]` for
+an empty declaration (nothing); `["*"]` for `REVALIDATE_ALL`, delivered
+as declared so a collector can tell "everything" from named keys.
+
+#### `foldedHeaders`
+
+* **Type:** `Headers`
+
+The request headers with the mutation's cookie effects applied: the
+event response's `Set-Cookie`s (set during the call), then the
+outcome's own (e.g. `redirect(to, { headers })`), later winning on
+conflict, deletions honored. Build the data-collection request from
+these so re-run reads observe post-mutation cookie state.
+
+### `SingleFlightPayload`
+
+The standardized body of a single-flight response (a response tagged with
+`SINGLE_FLIGHT_HEADER`): the function's return `value` plus the
+integration-produced `data` payload, folded into one round trip by the
+HTTP handler. Integrations decoding passthrough responses themselves (no
+registered consumer) see this shape from `decodeResponse`. The top level
+is reserved for the protocol — integration payload lives entirely under
+`data`, the envelope keyed by source id (the unnamed registration's
+slice rides under the reserved id "true"); each slice can be any
+codec-serializable value.
+
+```ts
+interface SingleFlightPayload<T = unknown, D = unknown> {
+	value: T;
+	data: D;
+}
+```
+
+#### `value`
+
+* **Type:** `T`
+
+The server function's return (or thrown) value.
+
+#### `data`
+
+* **Type:** `D`
+
+The integration-produced data payload, keyed by source id.

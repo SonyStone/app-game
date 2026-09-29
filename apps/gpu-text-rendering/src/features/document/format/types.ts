@@ -1,10 +1,10 @@
 import type { DocumentError } from '../../../shared/errors';
-import type { CoverageTables } from '../rendering/curves/buildCoverageTables';
-import type { buildCurvePreparation } from '../rendering/curves/buildCurvePreparation';
+import type { CoverageTables } from '../plan/buildCoverageTables';
+import type { buildCurvePreparation } from '../plan/buildCurvePreparation';
 
 /** Validated CPU data from the Rust decoder, before viewer layout or GPU allocation. */
 export type DecodedDocument = {
-  pages: { width: number; height: number; beginVertex: number; endVertex: number; images: [] }[];
+  pages: { width: number; height: number; beginVertex: number; endVertex: number }[];
   positions: { x: Float32Array<ArrayBuffer>; y: Float32Array<ArrayBuffer> };
 } & (
   | {

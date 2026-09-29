@@ -4,15 +4,24 @@ import type { TextDocument } from '../document';
 /** Transforms, visible pages and drawing options for one frame. */
 export type SceneFrame = ReturnType<typeof createFrame>;
 
-/** Creates page transforms and culls rotated pages. CSS display size keeps overlays aligned at fractional DPR. */
+/** Creates page transforms and culls rotated pages for a framebuffer of width x height pixels. */
 export function createFrame(
   document: TextDocument,
   camera: Camera,
   width: number,
   height: number,
-  vectorOnly = false,
-  grids = false,
-  displaySize = { width, height }
+  {
+    vectorOnly = false,
+    grids = false,
+    displaySize = { width, height }
+  }: {
+    /** Draw only vectors instead of the glyph atlas. Default false. */
+    vectorOnly?: boolean;
+    /** Show the glyph grid overlay. Default false. */
+    grids?: boolean;
+    /** CSS display size; keeps overlays aligned at fractional DPR. Default the framebuffer size. */
+    displaySize?: { width: number; height: number };
+  } = {}
 ) {
   const aspect = displaySize.height / displaySize.width;
   const zoomY = (camera.zoom * document.pages[0]!.width) / document.pages[0]!.height;

@@ -3,6 +3,14 @@
   "open": "Open document",
   "openHint": "Open PDF or GDOC",
   "overview": "Show entire document",
+  "splitView": "Split view",
+  "saveView": "Save view",
+  "savedViews": "Saved views",
+  "savedView": "View {{number}}",
+  "removeView": "Remove view {{number}}",
+  "playTour": "Play saved views",
+  "stopTour": "Stop tour",
+  "resizePanes": "Resize panes",
   "enterFullscreen": "Fullscreen",
   "exitFullscreen": "Exit fullscreen",
   "fullscreenUnsupported": "Fullscreen is unavailable in this browser",
@@ -14,6 +22,8 @@
   "download": "Download GDOC",
   "back": "Back to demo",
   "autoZoom": "Auto zoom",
+  "minimap": "Minimap",
+  "performance": "Performance",
   "grids": "Grids",
   "vectorOnly": "Vector only",
   "help": "Drag to pan. Scroll or pinch to zoom. Use two fingers to rotate.",
@@ -40,5 +50,6 @@
   "preparingGraphics": "Preparing graphics…",
   "cancelLoading": "Cancel loading",
   "cancelled": "Loading cancelled. Open another document.",
-  "pageProgress": "{{completed}} of {{total}} pages"
+  "pageProgress": "{{completed}} of {{total}} pages",
+  "dismiss": "Dismiss"
 }

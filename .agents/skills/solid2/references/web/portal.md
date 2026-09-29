@@ -1,0 +1,65 @@
+# Portal
+
+Renders its children into a different part of the DOM (modal roots,
+tooltips, layers that need to escape an `overflow: hidden` ancestor).
+
+If `mount` is omitted, the portal attaches to `document.body`. The portal
+still participates in the parent's reactive scope and disposes when the
+parent does.
+
+Portals are client-only islands: the server renders nothing for them, and
+under hydration the children render fresh once hydration settles. Async
+read inside a portal therefore starts on the client — data that should be
+fetched on the server belongs above the portal (hoist the read, not the
+render), and async UI inside one wants its own `<Loading>` boundary.
+
+## Import
+
+```ts
+import { Portal } from "@solidjs/web";
+```
+
+## Type signature
+
+```ts
+function Portal(props: { mount?: Element; children: JSX.Element }): JSX.Element;
+```
+
+## Props
+
+### `mount`
+
+* **Type:** `Element`
+* Optional
+
+Element to render into. Defaults to `document.body`.
+
+### `children`
+
+* **Type:** `JSX.Element`
+
+Content to render at the mount point.
+
+## Examples
+
+```tsx
+<Portal mount={document.getElementById("modal-root")!}>
+	<Dialog />
+</Portal>
+```
+
+## Caveats
+
+* The server renders nothing for a portal; its children render on the client after hydration settles.
+* Async reads inside a portal start on the client. Fetch above the portal and pass the data down, and give async content inside its own `Loading` boundary.
+* The portal shares its parent's reactive scope and disposes with it.
+
+## Common problems
+
+* [An effect or `onCleanup` inside a `ref` callback never runs](../concepts/components-and-jsx.md#an-effect-or-oncleanup-inside-a-ref-callback-never-runs)
+
+## Learn more
+
+* [Server and client boundaries](../concepts/rendering-and-ssr.md#server-and-client-boundaries)
+* [Render Solid into a foreign container](../guides/integrate-non-solid-code.md#render-solid-into-a-foreign-container)
+* [Components and JSX](../concepts/components-and-jsx.md)

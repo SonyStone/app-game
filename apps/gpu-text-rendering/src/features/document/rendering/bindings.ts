@@ -52,20 +52,3 @@ export const glyphInstanceLayout = tgpu.bindGroupLayout({
 
 /** Page backgrounds retain the shared triangle-strip geometry. */
 export const pageLayout = tgpu.vertexLayout(d.disarrayOf(d.float32x2));
-
-/** Image records are padded to twelve bytes because WebGPU vertex strides must be multiples of four. */
-export const imageLayout = tgpu.vertexLayout(
-  d.disarrayOf(
-    d.unstruct({
-      position: d.unorm16x2,
-      uv: d.unorm16x2,
-      alphaInvert: d.unorm8x4
-    })
-  )
-);
-
-/** Image content is independent from glyph atlases. */
-export const imageTextureLayout = tgpu.bindGroupLayout({
-  image: { texture: d.texture2d(d.f32) },
-  sampler: { sampler: 'filtering' }
-});

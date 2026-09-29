@@ -1,0 +1,117 @@
+# createNoJSHandler
+
+Creates the default response handler for browser form submissions made without the client runtime.
+
+> See [Progressive enhancement](../building-apps/server-functions-progressive-enhancement.md) for form behavior and the router ownership boundary.
+
+## Import
+
+```ts
+import { createNoJSHandler } from "@solidjs/web/server-functions/server";
+```
+
+## Type signature
+
+```ts
+function createNoJSHandler(
+	options?: NoJSHandlerOptions
+): (
+	result: unknown,
+	request: Request,
+	args: unknown[],
+	thrown?: boolean
+) => Promise<Response>;
+```
+
+## Parameters
+
+### `options`
+
+* **Type:** `NoJSHandlerOptions`
+* Optional
+
+## Common problems
+
+* [The form submits, but the page reloads instead of staying put](../guides/forms.md#the-form-submits-but-the-page-reloads-instead-of-staying-put)
+* [The server function receives an empty object](../guides/forms.md#the-server-function-receives-an-empty-object)
+
+## Learn more
+
+* [Progressive enhancement](../building-apps/server-functions-progressive-enhancement.md)
+* [Forms](../guides/forms.md)
+
+## Related types
+
+### `FlashSubmission`
+
+The outcome of a call made without the client runtime, as it rides the
+flash cookie: what was submitted, where, and what came back. `result` and
+`error` are mutually exclusive — a thrown outcome fills `error`, a
+returned one fills `result` — mirroring the split a scripted call sees.
+
+```ts
+interface FlashSubmission {
+	input: any[];
+	url: string;
+	result?: any;
+	error?: any;
+	truncated?: boolean;
+}
+```
+
+#### `input`
+
+* **Type:** `any[]`
+
+The arguments the call was made with (files are dropped).
+
+#### `url`
+
+* **Type:** `string`
+
+The call's url: the unbound function base — the server function
+request's pathname (`<endpoint>/<id>`), without the `?args=` query a
+`.with()`-bound form's action carries (or any other query decoration).
+Matches what the scripted road records as a submission's url, so
+integrations can match flash and scripted submissions with the same
+`s.url === fn.base` test; bound arguments arrive in `input` instead,
+prepended exactly like a scripted call's.
+
+#### `result`
+
+* **Type:** `any`
+
+The returned value, when the call returned.
+
+#### `error`
+
+* **Type:** `any`
+
+The thrown value, when the call threw.
+
+#### `truncated`
+
+* **Type:** `boolean`
+
+Set when the outcome was too large for the cookie's 4 KB ceiling and
+was degraded to fit (#3137): the input echo is dropped, and `result` /
+`error` may carry a bounded prefix — or the bare outcome flag `true` —
+rather than the full value. The submission still says what happened
+and where; integrations should render it as "succeeded (result too
+large to display)" rather than replaying the value.
+
+### `NoJSHandlerOptions`
+
+Options for `createNoJSHandler`.
+
+```ts
+interface NoJSHandlerOptions {
+	base?: string;
+}
+```
+
+#### `base`
+
+* **Type:** `string`
+
+The app's mount path, for resolving a relative redirect `Location`.

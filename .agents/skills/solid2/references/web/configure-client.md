@@ -1,0 +1,216 @@
+# configureServerFunctionsClient
+
+Configures the browser server-function endpoint, codec, request preparation, and response integration.
+
+## Import
+
+```ts
+import { configureServerFunctionsClient } from "@solidjs/web/server-functions";
+```
+
+## Type signature
+
+```ts
+function configureServerFunctionsClient(
+	config?: ServerFunctionsClientConfig
+): void;
+```
+
+## Parameters
+
+### `config`
+
+* **Type:** `ServerFunctionsClientConfig`
+* Optional
+
+## Examples
+
+```ts
+configureServerFunctionsClient({
+	prepareRequest(init) {
+		const headers = new Headers(init.headers);
+		headers.set("authorization", `Bearer ${session.token()}`);
+		return { ...init, headers };
+	},
+});
+```
+
+## Learn more
+
+* [Metadata and transport](../building-apps/server-functions-metadata-and-transport.md)
+* [Server functions](../building-apps/server-functions.md)
+
+## Related types
+
+### `PrepareRequestContext`
+
+The context `prepareRequest` receives alongside the outgoing RequestInit.
+
+```ts
+interface PrepareRequestContext {
+	id: string;
+	meta: ServerFunctionMetadata | undefined;
+}
+```
+
+#### `id`
+
+* **Type:** `string`
+
+The build-stable id of the function being called.
+
+#### `meta`
+
+* **Type:** `ServerFunctionMetadata | undefined`
+
+The reference's declaration metadata (e.g. `method: "GET"` for
+`GET(fn)` references). Plain references carry an empty object.
+
+### `PrepareRequestHook`
+
+Client-side session-dynamic transport hook: runs before every
+server-function fetch. Return (or mutate and return) the RequestInit the
+transport will use — the hook sees the final init, transport headers
+included. The motivating case is dynamic credentials that rotate during
+a session and apply uniformly to every call (OAuth bearer tokens); it is
+the client-side symmetric of the server handler hooks. Single hook, not
+a chain — compose by wrapping functions in userland.
+
+```ts
+type PrepareRequestHook = (
+	init: RequestInit,
+	context: PrepareRequestContext
+) => RequestInit | Promise<RequestInit>;
+```
+
+### `ServerFunctionsClientConfig`
+
+Options for `configureServerFunctionsClient`.
+
+```ts
+interface ServerFunctionsClientConfig {
+	endpoint?: string;
+	codec?: JSONCodecOptions;
+	fetch?:
+		| ((address: string, init: RequestInit) => Response | Promise<Response>)
+		| null;
+	prepareRequest?: PrepareRequestHook;
+	responseHandler?: {
+		capture?(info: { id: string; meta: unknown }): unknown;
+		handle(
+			response: Response,
+			ctx: { id: string; meta: unknown; args: unknown[]; context: unknown }
+		): unknown;
+		resume?(info: {
+			id: string;
+			meta: unknown;
+			args: unknown[];
+		}): { position?: string; headers?: Record<string, string> } | undefined;
+	};
+	serializeArgs?(args: unknown[]): string | Promise<string>;
+}
+```
+
+#### `endpoint`
+
+* **Type:** `string`
+
+Mount path the server's HTTP handler answers on. Must match the server
+configuration — the id travels as the segment after it, and SSR'd
+reference `url`s (e.g. form actions) and client fetches both derive
+from it. Prefix it when the app serves from a base path
+(e.g. `` `${BASE_URL}_server` ``).
+
+An absolute URL (`"https://api.example.com/_server"`) targets a handler
+on another origin — for a client-only build served from elsewhere: a
+static site, a browser extension, a WebView (`capacitor://localhost`)
+whose local server owns every path on its own hostname. The call is
+then cross-origin, and the server admits it only when its
+`configureServerFunctionsServer({ csrf: { origin } })` allowlist names
+the page's origin; it answers with the CORS headers the browser needs
+(`Access-Control-Allow-Origin`, the preflight, the protocol's headers
+exposed). Authenticate such a client with a bearer token through
+`prepareRequest` rather than cookies; cookies travel cross-site only
+with a `credentials: "include"` init, `SameSite=None; Secure` on the
+cookie, and `csrf.allowCredentials` on the server.
+
+#### `codec`
+
+* **Type:** `JSONCodecOptions`
+
+Codec options (extra plugins etc.) for encoding arguments and decoding
+results — must match the server's. Stored in the shared layer, so
+`decodeResponse` sees them too.
+
+#### `fetch`
+
+* **Type:** `((address: string, init: RequestInit) => Response | Promise<Response>) | null`
+
+Sends every server-function request — retries, telemetry, a test
+double, or an app's own route. Always called as `(address, init)`, the
+address relative to the document as the global one receives it, so
+`parseServerFunctionActionUrl` reads the id back out for telemetry. `null`
+restores the global.
+
+```ts
+configureServerFunctionsClient({
+	fetch: (address, init) => fetch(rewrite(address), init),
+});
+```
+
+Forward `init` — the call's `signal` rides on it, and dropping it voids
+both the caller's abort and the teardown a live source's `break`
+performs. Keep the call on the configured `endpoint`'s origin: a send
+to any other is stamped `Sec-Fetch-Site: cross-site`, and the handler
+admits it only when its `csrf.origin` allowlist names the page's
+origin (see `endpoint`). Hand back what the peer answered, unread.
+
+A retrying wrapper may re-send a request that got NO response; it must
+never replay one whose response ended. A response that dies mid-body may
+have executed (mutations are not idempotent), and reconnecting a live
+source is the runtime's job — a replay would race it.
+
+The wrapper replaces delivery for the requests the runtime chooses to
+send; the call-to-request mapping itself is not contractual.
+
+#### `prepareRequest`
+
+* **Type:** `PrepareRequestHook`
+
+Runs before every server-function fetch. Return (or mutate and return)
+the RequestInit the transport will use; `context.meta` is the
+reference's declaration metadata (e.g. method). For session-dynamic
+cross-cutting concerns — bearer tokens, tracing headers:
+
+```ts
+configureServerFunctionsClient({
+	prepareRequest(init) {
+		return {
+			...init,
+			headers: { ...init.headers, Authorization: `Bearer ${session.token()}` },
+		};
+	},
+});
+```
+
+#### `responseHandler`
+
+* **Type:** ``{ capture?(info: { id: string; meta: unknown }): unknown; handle( response: Response, ctx: { id: string; meta: unknown; args: unknown[]; context: unknown } ): unknown; /** * What a `live` (re)connect of the call resumes from, when the handler * shows it: `position` becomes the request's `Last-Event-ID`, `headers` * ride beside it (a frames handler's have-list). Asked per connect; * `undefined` when the handler holds nothing for the call. */ resume?(info: { id: string; meta: unknown; args: unknown[]; }): { position?: string; headers?: Record<string, string> } | undefined; }``
+
+Response-side integration seam — the client mirror of the handler's
+`transformResult`. `handle(response, ctx)` sees every response before
+the transport decodes it; returning anything but undefined resolves the
+call with that value. `capture(info)` runs synchronously at the call
+site (before any await) and its return arrives as `ctx.context`, so
+ambient per-call state (e.g. a reactive owner) survives to response
+time. See `createServerComponentHandler` in frame-transport for the
+canonical implementation.
+
+#### `serializeArgs`
+
+* **Type:** `string | Promise<string>`
+
+Encoder for argument lists JSON can't carry faithfully. JSON-safe args
+always go as plain JSON (no codec in the bundle); anything else throws
+unless this is set. Installed by `enableRichArguments()` from the
+rich-args entry — set directly only for custom wire encodings.

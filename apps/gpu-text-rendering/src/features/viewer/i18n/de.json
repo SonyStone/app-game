@@ -3,6 +3,14 @@
   "open": "Dokument öffnen",
   "openHint": "PDF oder GDOC öffnen",
   "overview": "Gesamtes Dokument anzeigen",
+  "splitView": "Geteilte Ansicht",
+  "saveView": "Ansicht speichern",
+  "savedViews": "Gespeicherte Ansichten",
+  "savedView": "Ansicht {{number}}",
+  "removeView": "Ansicht {{number}} entfernen",
+  "playTour": "Gespeicherte Ansichten abspielen",
+  "stopTour": "Rundgang beenden",
+  "resizePanes": "Bereichsgröße ändern",
   "enterFullscreen": "Vollbild",
   "exitFullscreen": "Vollbild verlassen",
   "fullscreenUnsupported": "Vollbild ist in diesem Browser nicht verfügbar",
@@ -14,6 +22,8 @@
   "download": "GDOC herunterladen",
   "back": "Zurück zum Beispiel",
   "autoZoom": "Automatischer Zoom",
+  "minimap": "Übersichtskarte",
+  "performance": "Leistung",
   "grids": "Raster",
   "vectorOnly": "Nur Vektoren",
   "help": "Zum Verschieben ziehen. Mit dem Mausrad oder zwei Fingern zoomen. Mit zwei Fingern drehen.",
@@ -40,5 +50,6 @@
   "preparingGraphics": "Grafik wird vorbereitet…",
   "cancelLoading": "Laden abbrechen",
   "cancelled": "Laden abgebrochen. Öffnen Sie ein anderes Dokument.",
-  "pageProgress": "{{completed}} von {{total}} Seiten"
+  "pageProgress": "{{completed}} von {{total}} Seiten",
+  "dismiss": "Schließen"
 }

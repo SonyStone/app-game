@@ -1,0 +1,109 @@
+# @solid-primitives/marker
+
+Source version: `2.0.0-next.3`.
+
+[Upstream source](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/marker/README.md) · [Skill catalogue](../catalogue.md#primitives-catalogue)
+
+
+A reactive primitive for marking parts of a string that match a regular expression. Useful for highlighting search results.
+
+## Installation
+
+```bash
+npm install @solid-primitives/marker
+# or
+yarn add @solid-primitives/marker
+# or
+pnpm add @solid-primitives/marker
+```
+
+Requires `solid-js` `^2.0.0-beta.10`.
+
+## How to use it
+
+`createMarker` creates a function for marking parts of a string that match a regex. Each match will be mapped by `mapMatch` callback and returned as an array of strings and mapped values.
+
+```tsx
+import { createMarker } from "@solid-primitives/marker";
+
+const highlight = createMarker(matchedText => {
+  // matchedText param is the sting matched by regex
+  // it's an accessor, because each mapped value is reused between marker calls
+  return <mark>{matchedText()}</mark>;
+});
+
+<p>
+  {highlight("Hello world!", /\w+/g)} {/* <mark>Hello</mark> <mark>world</mark>! */}
+</p>;
+```
+
+## Mapping matches
+
+The `mapMatch` callback is **not** reactive. The value returned by it is cached and reused between marker calls. This is useful for performance reasons, but it also means that the callback should handle the matched text as an accessor.
+
+It behaves similarly to the `mapFn` param of `mapArray`, where the returned element is reused for different values.
+
+Any computations created in that callback will be disposed when `createMarker` gets disposed, not on each marker call, because the results are cached between calls.
+
+```tsx
+const mark = createMarker(text => {
+  // you can safely create computations here
+  createEffect(
+    () => text(),
+    t => console.log(t),
+  );
+
+  return <mark>{text()}</mark>;
+});
+```
+
+> **Note:** In Solid 2.0, `createEffect` requires a split `(compute, apply)` signature.
+> Reading `text()` in JSX is reactive — it updates automatically when the match text changes.
+
+## Caching
+
+The marker callback is cached between calls.
+
+This way returned elements are reused as much as possible.
+
+But every cache needs a limit. By default, the cache size is 100. You can change it by passing the `cacheSize` option to `createMarker`.
+
+```tsx
+const mark = createMarker(text => <mark>{text()}</mark>, { cacheSize: 1000 });
+```
+
+The marker will still be able to handle more than 1000 different regexes, but it will start to dispose the unused ones that exceed the limit.
+
+## Search highlighting
+
+`createMarker` is very useful for highlighting the searched text in a search results list.
+
+But when used alone, it can be easy to forget to escape the regex special characters. This can lead to unexpected results.
+
+To avoid this, you can use the `makeSearchRegex` helper function to create a regex that will match the searched text.
+
+```tsx
+import { createMarker, makeSearchRegex } from "@solid-primitives/marker";
+
+const [search, setSearch] = createSignal("");
+
+const regex = createMemo(() => makeSearchRegex(search()));
+
+const highlight = createMarker(text => <mark>{text()}</mark>);
+
+<>
+  <input onInput={e => setSearch(e.target.value)} />
+  <p>{highlight(textToHighlight, regex())}</p>
+</>;
+```
+
+Regex returned by `makeSearchRegex` will:
+
+- match the searched text case-insensitively
+- escape all regex special characters (only words can be matched)
+- trim the searched text
+- match multiple words independently
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/marker/CHANGELOG.md)

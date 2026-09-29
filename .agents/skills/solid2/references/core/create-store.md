@@ -1,0 +1,277 @@
+# createStore
+
+Creates a deeply-reactive store backed by a Proxy. Reads track each
+property accessed; only the parts that change trigger updates.
+
+Store properties hold **plain values**, not accessors. The proxy
+already tracks reads per-property — wrapping a value in
+`() => state.foo` produces a getter that *won't* track when called,
+which looks like a reactivity bug but is a category error. If
+you have a signal-shaped piece of state, make it a property of the
+store (`{ foo: 1 }`) rather than nesting an accessor inside
+(`{ foo: () => signal() }`).
+
+The setter takes a **draft-mutating** function — mutate the draft
+in place (canonical). The callback may also return a new value:
+arrays are replaced by index (length adjusted), objects are
+shallow-diffed at the top level (keys present in the returned value
+are written, missing keys deleted). Use the return form for shapes
+where mutation is awkward — most commonly removing items via
+`filter`. The setter does **not** do keyed reconciliation; for
+that, use the derived/projection form (or `createProjection`).
+
+* **Plain form** — `createStore(initialValue, options?)`: wraps a value in a
+  reactive proxy.
+* **Derived form** — `createStore(fn, seed, options?)`: a
+  *projection store* whose contents are computed by `fn(draft)`.
+  `fn` may be sync, async, or an `AsyncIterable`; the projection's
+  result reconciles against the existing store by `options.key`
+  (default `"id"`) for stable identity.
+
+## Import
+
+```ts
+import { createStore } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function createStore<T extends object = {}>(
+	initialValue: T | Store<T>,
+	options?: StoreOptions
+): [get: Store<T>, set: StoreSetter<T>];
+function createStore<T extends object = {}>(
+	fn: (draft: T) => void | T | Promise<void | T> | AsyncIterable<void | T>,
+	seed: Partial<T> | Store<T>,
+	options?: ProjectionOptions
+): [get: Store<T>, set: StoreSetter<T>];
+```
+
+## Parameters
+
+### `initialValue`
+
+* **Type:** `T | Store<T>`
+
+Plain object or array to wrap, or an existing store to share.
+
+### `options`
+
+* **Type:** `StoreOptions | ProjectionOptions`
+* Optional
+
+`name` and `shallow` in the plain form; the derived form also accepts `key`, `seedLoadingValue`, `deferStream`, and `ssrSource`.
+
+### `fn`
+
+* **Type:** `(draft: T) => void | T | Promise<void | T> | AsyncIterable<void | T>`
+
+Derive function for the projection form. Receives a draft and either mutates it or returns a new value; may be sync, async, or an `AsyncIterable`.
+
+### `seed`
+
+* **Type:** `Partial<T> | Store<T>`
+
+Initial contents of the projection store and the draft the first derive receives. With an async `fn`, readers see the seed before the first result only when `seedLoadingValue` is set; otherwise they suspend.
+
+## Return value
+
+`[store: Store<T>, setStore: StoreSetter<T>]`
+
+A tuple. The store is a read-only proxy that tracks each property you read; the setter receives a draft to mutate, and the changes commit when it returns.
+
+## Examples
+
+```ts
+const [state, setState] = createStore({
+	user: { name: "Ada", age: 36 },
+	todos: [] as { id: string; text: string; done: boolean }[],
+});
+
+// Canonical: mutate the draft in place.
+setState((s) => {
+	s.user.age = 37;
+});
+setState((s) => {
+	s.todos.push({ id: "1", text: "x", done: false });
+});
+
+// Return form: reach for it when mutation is awkward.
+setState((s) => s.todos.filter((t) => !t.done)); // remove items
+setState((s) => ({ ...s, user: { name: "Grace", age: 85 } })); // shallow replace
+```
+
+```ts
+// Derived store — auto-fetches & reconciles by `id`.
+const [users] = createStore(
+	async () => fetch("/users").then((r) => r.json()),
+	[] as User[]
+);
+```
+
+**Hydration:** the derived form accepts `ProjectionOptions`, including
+an `ssrSource` field
+(`"server"` | `"hybrid"` | `"client"`). See the `ssrSource` option.
+
+## Caveats
+
+* Store properties hold plain values. Nesting an accessor inside a store (`{ count: () => count() }`) does not track when read.
+* Mutating the store outside the setter (`state.items.push(x)`) is not reactive. Write through the setter's draft.
+* The setter does not reconcile by key. Replacing an array replaces rows by index; use `reconcile()` or the derived form to keep row identity.
+* Plain objects, arrays, and class instances are wrapped. Built-in objects such as `Map`, `Date`, and frozen objects are stored raw; the property that holds them still tracks reassignment.
+
+## Common problems
+
+* [`items.push(item)` does nothing](../guides/lists.md#itemspushitem-does-nothing)
+* [Editing one item rebuilds the whole list](../guides/lists.md#editing-one-item-rebuilds-the-whole-list)
+* [Something does not update](../guides/debugging-reactivity.md#something-does-not-update)
+
+## Learn more
+
+* [Create nested state](../concepts/stores.md#create-nested-state)
+* [Update with a draft](../concepts/stores.md#update-with-a-draft)
+* [Stores](../concepts/stores.md)
+* [Lists](../guides/lists.md)
+
+## Related types
+
+### `ProjectionOptions`
+
+Options for derived/projected stores created with
+`createStore(fn, seed, options?)`, `createProjection(fn, seed, options?)`,
+or `createOptimisticStore(fn, seed, options?)`.
+
+```ts
+interface ProjectionOptions extends StoreOptions {
+	key?: string | ((item: NonNullable<any>) => any) | null;
+	seedLoadingValue?: boolean;
+	deferStream?: boolean;
+	ssrSource?: "server" | "hybrid" | "client";
+}
+```
+
+#### `key`
+
+* **Type:** `string | ((item: NonNullable<any>) => any) | null`
+
+Key property name or function for reconciliation identity; `null` merges positionally
+
+#### `seedLoadingValue`
+
+* **Type:** `boolean`
+
+Treat the seed as the first committed value: the store is born committed with the seed's
+contents, shown until the derive's first real answer lands. While that
+first answer is in flight, reads serve the seed everywhere — nothing
+suspends to a `<Loading>` boundary, no update is held, and
+`isPending` stays false (the seed answers by declaration; first-load
+affordances belong to the data, e.g. a `skeleton: true` field in the
+seed). Once the first answer lands (reconciled into the seed), refetches
+use normal pending semantics with `isPending` true.
+
+The store equivalent of `MemoOptions.loadingValue`; the seed already
+carries the placeholder shape, so this option is the only opt-in needed.
+
+#### `deferStream`
+
+* **Type:** `boolean`
+
+Defer the SSR stream flush until this primitive's first value is
+resolved. Lets late-resolving sources hold the document open
+rather than forcing the surrounding `<Loading>` boundary to render
+its fallback into the HTML. Server-only; ignored on the client.
+
+#### `ssrSource`
+
+* **Type:** `"server" | "hybrid" | "client"`
+
+Hydration policy. Decides what initial value the client uses and
+whether the compute re-runs.
+
+* `"server"` *(default)*: client uses the serialized server value
+  as initial state. Compute does **not** re-run for the initial
+  value — the serialized result is authoritative. Choose this when
+  the compute is deterministic from server-available inputs.
+* `"hybrid"`: client uses the serialized server value first; then,
+  for a compute that returns an **async iterable**, the client
+  continues the stream from it (the server consumed exactly one
+  yield; the client's first yield duplicates it and is discarded,
+  later yields update the node). For a sync or promise-shaped
+  compute, `"hybrid"` is identical to `"server"`: the serialized
+  value is adopted and the compute does not re-run until a
+  dependency changes or `refresh()`. Choose this for streaming
+  sources the client should keep consuming after hydration.
+* `"client"`: skip the server value entirely. Compute is deferred
+  until hydration completes, then runs as if first-mounted.
+  Choose this for client-only state where serialization is
+  meaningless. Two forms decide what the pre-compute window
+  renders: **bare** (structural) — the source suspends on the
+  server as a final hole and the nearest `<Loading>` boundary
+  renders its fallback, handing the position to the client; or a
+  **declared first value** — `loadingValue` on signal-family
+  sources (`loadingValue: undefined` is a valid declaration),
+  `seedLoadingValue: true` on store-family sources — which renders
+  provisional data with no boundary involvement.
+
+### `ProjectionStoreReturn`
+
+Tuple returned by the derived `createStore(fn, seed, options?)` form.
+
+```ts
+type ProjectionStoreReturn<T> = [get: Store<T>, set: StoreSetter<T>];
+```
+
+### `StoreOptions`
+
+Options shared by all store primitives.
+
+```ts
+interface StoreOptions {
+	name?: string;
+	shallow?: boolean;
+}
+```
+
+#### `name`
+
+* **Type:** `string`
+
+Debug name (dev and observe builds). Property nodes are labelled
+`<name>.<key>` in attribution output (`todos.title`); a derived store's
+projection node carries the name itself.
+
+#### `shallow`
+
+* **Type:** `boolean`
+
+Single-layer store: root keys reactive, values raw records replaced by reference
+
+### `StoreReturn`
+
+Tuple returned by the plain `createStore(initialValue, options?)` form.
+
+```ts
+type StoreReturn<T> = [get: Store<T>, set: StoreSetter<T>];
+```
+
+### `StoreSetter`
+
+A store setter. The callback receives a writable **draft** of the store.
+
+* **Mutate in place (canonical):** `s.foo = 1`, `s.list.push(x)`,
+  `s.list.splice(i, 1)`. This is the default form for most updates.
+* **Return a new value:** for shapes where mutation is awkward, most
+  commonly removing items (`s => s.list.filter(...)`). Arrays are replaced
+  by index (length adjusted); objects are shallow-diffed at the top level
+  (keys present in the returned value are written, missing keys deleted).
+
+The setter does **not** perform keyed reconciliation. If you need surviving
+items to keep their store identity across full-array replacement, use the
+projection form — `createStore(fn, seed, { key })` or
+`createProjection(fn, seed, { key })` — whose derive function reconciles
+its return by `options.key`.
+
+```ts
+type StoreSetter<T> = (fn: (state: T) => T | void) => void;
+```

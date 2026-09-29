@@ -38,6 +38,12 @@ pub(crate) fn decode(
     // the data as 8-bit instead of 1-bit, so that it can be easier converted
     // into an RGBA8 image.
 
+    // Local patch: bound declared dimensions, then stop buffering at the shared cap if
+    // rows are absent or the data keeps producing lines.
+    if !crate::limits::image_fits(u64::from(settings.columns), u64::from(rows.max(1)), 1) {
+        return None;
+    }
+
     let (decoded, bpc) = if image_params.is_indexed {
         struct BitPackDecoder {
             output: Vec<u8>,
@@ -71,10 +77,15 @@ pub(crate) fn decode(
 
         impl Decoder for BitPackDecoder {
             fn push_pixel(&mut self, white: bool) {
-                self.push_bit(white);
+                if self.output.len() <= crate::limits::MAX_DECODED_STREAM_BYTES {
+                    self.push_bit(white);
+                }
             }
 
             fn push_pixel_chunk(&mut self, white: bool, chunk_count: u32) {
+                if self.output.len() > crate::limits::MAX_DECODED_STREAM_BYTES {
+                    return;
+                }
                 let byte = if white { 0xFF } else { 0x00 };
                 self.output
                     .extend(iter::repeat_n(byte, chunk_count as usize));
@@ -101,6 +112,10 @@ pub(crate) fn decode(
             return None;
         }
 
+        if decoder.output.len() > crate::limits::MAX_DECODED_STREAM_BYTES {
+            return None;
+        }
+
         (decoder.output, 1)
     } else {
         struct Luma8Decoder {
@@ -110,10 +125,15 @@ pub(crate) fn decode(
 
         impl Decoder for Luma8Decoder {
             fn push_pixel(&mut self, white: bool) {
-                self.output.push(if white { 0xFF } else { 0x00 });
+                if self.output.len() <= crate::limits::MAX_DECODED_STREAM_BYTES {
+                    self.output.push(if white { 0xFF } else { 0x00 });
+                }
             }
 
             fn push_pixel_chunk(&mut self, white: bool, chunk_count: u32) {
+                if self.output.len() > crate::limits::MAX_DECODED_STREAM_BYTES {
+                    return;
+                }
                 let byte = if white { 0xFF } else { 0x00 };
                 self.output
                     .extend(iter::repeat_n(byte, chunk_count as usize * 8));
@@ -132,6 +152,10 @@ pub(crate) fn decode(
         let result = hayro_ccitt::decode(data, &mut decoder, &mut context);
 
         if result.is_err() && decoder.decoded_rows == 0 {
+            return None;
+        }
+
+        if decoder.output.len() > crate::limits::MAX_DECODED_STREAM_BYTES {
             return None;
         }
 

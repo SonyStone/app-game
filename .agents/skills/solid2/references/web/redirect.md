@@ -1,0 +1,111 @@
+# redirect / isHref
+
+Creates a redirect `Response` (status 302 by default). Pass `revalidate` to name the cache keys the mutation invalidated so the client refetches them after following the redirect.
+
+## Import
+
+```ts
+import { redirect, isHref } from "@solidjs/web";
+```
+
+## `redirect`
+
+### Type signature
+
+```ts
+function redirect(
+	url: string | Href,
+	init?: number | ResponseHelperInit
+): Response;
+```
+
+### Parameters
+
+#### `url`
+
+* **Type:** `string | Href`
+
+#### `init`
+
+* **Type:** `number | ResponseHelperInit`
+* Optional
+
+### Examples
+
+```ts
+return redirect("/dashboard", { revalidate: "session" });
+```
+
+### Common problems
+
+* [The form submits, but the page reloads instead of staying put](../guides/forms.md#the-form-submits-but-the-page-reloads-instead-of-staying-put)
+
+## `isHref`
+
+Whether `value` is an `Href`-branded URL-bearing value.
+
+### Type signature
+
+```ts
+function isHref(value: unknown): value is Href;
+```
+
+### Parameters
+
+#### `value`
+
+* **Type:** `unknown`
+
+## Learn more
+
+* [Mutations and responses](../building-apps/server-functions-mutations-and-responses.md)
+* [Middleware and API routes](../building-apps/middleware-and-api-routes.md)
+
+## Related types
+
+### `Href`
+
+```ts
+interface Href {
+	[HREF]: true | string;
+	toString(): string;
+}
+```
+
+#### `[HREF]`
+
+* **Type:** `true | string`
+
+The brand doubles as a channel: when the slot holds a string it is the
+value's *logical* path — the routable pathname before an integration's
+display rendering (for example, a hash router's `#` prefix). `redirect()` prefers
+it over coercion so Location headers carry routable paths; `toString()`
+remains the display href for the DOM. `true` brands a value whose
+string form is already logical.
+
+#### `toString`
+
+* **Type:** `string`
+
+### `ResponseHelperInit`
+
+`ResponseInit` accepted by the response helpers, plus `revalidate`.
+
+```ts
+interface ResponseHelperInit extends ResponseInit {
+	revalidate?: string | string[];
+}
+```
+
+#### `revalidate`
+
+* **Type:** `string | string[]`
+
+The cache keys the mutation invalidated, sent as the `X-Revalidate`
+header for the client's integrations to apply. Three declarations, three
+scopes: omitted sends no header — the host's default (Solid Router
+revalidates everything after an action; a router without that
+convention reloads only what it owns); an empty list sends an empty
+header — nothing, explicitly; `REVALIDATE_ALL` (`"*"`) — every entry,
+whatever the host's default. How named keys are matched (prefixes,
+namespaces) is each integration's business.

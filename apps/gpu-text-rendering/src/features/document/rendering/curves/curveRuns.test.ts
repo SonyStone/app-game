@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
+import { paintTree } from '../../plan/paintTree';
 import { curveRuns } from './curveRuns';
-import { paintTree } from './paintTree';
 
 it('keeps paint order and separates analytic clips and hairlines from ordinary fills', () => {
   const instances = new ArrayBuffer(6 * 80);

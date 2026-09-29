@@ -92,6 +92,8 @@ pub(crate) mod trivia;
 pub(crate) mod util;
 
 pub mod content;
+/// Local patch: decode-size caps.
+pub mod limits;
 mod crypto;
 pub mod metadata;
 pub mod object;

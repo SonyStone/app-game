@@ -1,5 +1,5 @@
 /** Tracks one owner's allocations, including partial preparation and allocations after cancellation. */
-export function createGpuResources() {
+export function makeGpuResources() {
   const resources = new Set<{ destroy(): void }>();
   let destroyed = false;
 
@@ -27,4 +27,4 @@ export function createGpuResources() {
 }
 
 /** Registers a buffer or texture without widening its TypeGPU type. */
-export type KeepGpuResource = ReturnType<typeof createGpuResources>['keep'];
+export type KeepGpuResource = ReturnType<typeof makeGpuResources>['keep'];

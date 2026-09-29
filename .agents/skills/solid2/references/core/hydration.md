@@ -1,0 +1,46 @@
+# Hydration
+
+Re-enables hydration within a `<NoHydration>` zone (passthrough on the
+client). Use it to opt a subtree back into hydration when the surrounding
+region was opted out.
+
+## Import
+
+```ts
+import { Hydration } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function Hydration(props: { id?: string; children: JSX.Element }): JSX.Element;
+```
+
+## Props
+
+### `id`
+
+* **Type:** `string`
+* Optional
+
+### `children`
+
+* **Type:** `JSX.Element`
+
+## Examples
+
+```tsx
+// Inside a `<NoHydration>` region, re-enable hydration for one inner
+// subtree that does need to match a server-rendered fragment.
+<NoHydration>
+	<ClientOnlyShell>
+		<Hydration>
+			<ServerHydratedWidget />
+		</Hydration>
+	</ClientOnlyShell>
+</NoHydration>
+```
+
+## Learn more
+
+* [Controlling hydration](../concepts/rendering-and-ssr.md#controlling-hydration)

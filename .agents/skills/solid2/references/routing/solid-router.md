@@ -1,0 +1,233 @@
+# Solid Router
+
+The store has one page.
+It needs a product page at `/products/mug`, a header that stays put while pages change under it, links that do not reload the document, and product data that starts loading as soon as a link is clicked rather than after the page renders.
+
+Solid Router is the router the `basic` and `fullstack` project shapes ship with, published as `@solidjs/router`.
+It is optional: a Solid application can use [another router](overview.md#pick-a-router) or none.
+This page builds the store above in four steps, using the parts an application touches most days; the pages after it cover each part in depth.
+
+## One app, three pages
+
+A home page, a product page with a dynamic segment, and a catch-all for everything else.
+Routes are objects, and the tree is created once at module scope:
+
+```tsx
+// src/router.ts
+import { lazy } from "solid-js";
+import { createRouter } from "@solidjs/router";
+
+export const Router = createRouter({
+	routes: [
+		{ path: "/", component: lazy(() => import("./pages/Home")) },
+		{ path: "/products/:id", component: lazy(() => import("./pages/Product")) },
+		{ path: "*404", component: lazy(() => import("./pages/NotFound")) },
+	],
+});
+
+export const { paths } = Router;
+```
+
+`createRouter` returns a component, `Router`, with a set of static helpers on it.
+`paths` is the one that appears everywhere: `paths()` is `/`, and `paths.products("mug")` is `/products/mug`.
+Because the route tree is a literal, `paths.products()` without an argument is a type error, and so is `paths.produts`.
+
+`lazy` splits each page into its own chunk.
+The router loads a chunk when a link to it is hovered or when the route is matched, whichever comes first.
+
+## Mount it and add a layout
+
+`App` renders the router.
+The function child is the root layout; it stays mounted while pages change underneath it:
+
+```tsx
+// src/App.tsx
+import { Loading } from "solid-js";
+import { paths, Router } from "./router";
+
+export default function App() {
+	return (
+		<Router>
+			{(props) => (
+				<>
+					<header>
+						<a href={paths()}>Store</a>
+						<a href={paths.products("mug")}>Featured</a>
+					</header>
+					<Loading fallback={<main>Loading…</main>}>
+						<main>{props.children}</main>
+					</Loading>
+				</>
+			)}
+		</Router>
+	);
+}
+```
+
+Click **Featured**.
+The URL becomes `/products/mug`, the `<main>` contents change, and the `<header>` keeps its DOM; the document did not reload.
+
+Links are ordinary anchors.
+The router listens for clicks on same-origin anchors inside it and turns them into client-side navigations, so there is no `Link` component to import.
+
+:::note[Why the fallback shows only on the first load]
+When the user clicks a link to a page whose data is still loading, Solid keeps the current page on screen and marks the pending link instead of swapping in the fallback.
+The fallback appears only when there is no previous page to hold, such as the first load.
+[Async reactivity](../concepts/async-reactivity.md) explains the mechanism; [Show active and pending links](solid-router-navigation.md#show-active-and-pending-links) shows how to style the pending state.
+:::
+
+## Read the URL in a page
+
+A page component receives `params`, `location`, `data`, and `children` as props.
+Type them from the route so a typo in a param name is caught:
+
+```tsx
+// src/pages/Product.tsx
+import type { RouteProps } from "@solidjs/router";
+import type { Router } from "../router";
+
+export default function Product(
+	props: RouteProps<typeof Router.paths.products>
+) {
+	return <h1>Product {props.params.id}</h1>;
+}
+```
+
+Navigate from `/products/mug` to `/products/bowl`.
+`Product` does not remount; the heading changes to "Product bowl" because it reads `props.params.id` inside JSX.
+
+The habit from other routers is to pull the id out once at the top of the component:
+
+```tsx
+// Avoid: the body runs once, so this is the first id forever
+export default function Product(
+	props: RouteProps<typeof Router.paths.products>
+) {
+	const id = props.params.id;
+	return <h1>Product {id}</h1>;
+}
+
+// Prefer: read the param where it is displayed
+export default function Product(
+	props: RouteProps<typeof Router.paths.products>
+) {
+	return <h1>Product {props.params.id}</h1>;
+}
+```
+
+Run the `Avoid` version and the heading still says "Product mug" after navigating to `/products/bowl`; development prints `[STRICT_READ_UNTRACKED]` naming `Product`, which [Debugging reactivity](../guides/debugging-reactivity.md#is-the-read-inside-a-tracking-scope) covers.
+This is the same rule as everywhere else in Solid: read the value where you use it, and the component does not need to run again.
+The [Reactivity](../concepts/reactivity.md) page has the full explanation.
+
+## Load data for a page
+
+Route data follows the same pattern as any async value in Solid.
+Declare a cached read with `query`, start it in the route's `preload` so it begins as soon as navigation starts, and read it from the component through a memo:
+
+```ts
+// src/data/products.ts
+import { query } from "@solidjs/router";
+
+export const getProduct = query(async (id: string) => {
+	const response = await fetch(`/api/products/${id}`);
+	return (await response.json()) as { name: string; price: number };
+}, "product");
+```
+
+```tsx
+// src/router.ts
+import { lazy } from "solid-js";
+import { createRouter } from "@solidjs/router";
+import { getProduct } from "./data/products";
+
+export const Router = createRouter({
+	routes: [
+		{ path: "/", component: lazy(() => import("./pages/Home")) },
+		{
+			path: "/products/:id",
+			component: lazy(() => import("./pages/Product")),
+			preload: ({ params }) => void getProduct(params.id),
+		},
+		{ path: "*404", component: lazy(() => import("./pages/NotFound")) },
+	],
+});
+
+export const { paths } = Router;
+```
+
+```tsx
+// src/pages/Product.tsx
+import { createMemo } from "solid-js";
+import type { RouteProps } from "@solidjs/router";
+import { getProduct } from "../data/products";
+import type { Router } from "../router";
+
+export default function Product(
+	props: RouteProps<typeof Router.paths.products>
+) {
+	const product = createMemo(() => getProduct(props.params.id));
+	return (
+		<>
+			<h1>{product().name}</h1>
+			<p>${product().price}</p>
+		</>
+	);
+}
+```
+
+Hover **Featured** and watch the network tab: the product request starts before the click.
+Click, and the page renders with the data already there.
+
+`query` caches by its key and the arguments, so the preload and the memo share one request.
+While the promise is pending, the memo is pending, and the `Loading` boundary in `App` decides what the user sees.
+With the file-system adapter below, the same `preload` moves into the route module's `route` export.
+
+In a `fullstack` project the function inside `query` is usually a [server function](../building-apps/server-functions.md), so the fetch above becomes a direct database call that never ships to the browser.
+
+## Where the file-system adapter fits
+
+The CLI templates do not write the route tree by hand.
+`filesystem-routing` scans `src/routes` and `@solidjs/router/fs` converts its manifest into the same route objects shown above:
+
+```ts
+// src/router.ts
+import { pageRoutes } from "virtual:file-routes";
+import { createRouter } from "@solidjs/router";
+import { fileRoutes } from "@solidjs/router/fs";
+
+export const Router = createRouter({ routes: fileRoutes(pageRoutes) });
+
+export const { paths } = Router;
+```
+
+`src/routes/products/[id].tsx` becomes `/products/:id`, `src/routes/[...404].tsx` becomes the catch-all, and a `products.tsx` next to a `products/` directory becomes a layout for everything inside it.
+Everything else on these pages applies unchanged; the adapter only produces the route objects.
+[Convert a file-system manifest](solid-router-route-definitions.md#convert-a-file-system-manifest) shows where `preload` and the other route fields go in a route file.
+
+:::deep-dive[What the package entries are for]
+`@solidjs/router` contains the router factory, route and navigation primitives, history adapters, queries, and actions, and is the only entry most applications import.
+`@solidjs/router/fs` converts a `file-routes` manifest into route definitions.
+`@solidjs/router/server` provides the single-flight data collector for a server-function handler, which the [Server rendering and hydration](solid-router-server-rendering.md) page installs.
+The [Solid Router API reference](../router/overview.md) has signatures and option details for all three.
+:::
+
+## Recap
+
+* Create the router once at module scope with `createRouter`, and export `Router` and `paths` from `src/router.ts`.
+* Build every URL with `paths`, so a route that moves is a compile error instead of a dead link.
+* Put the app shell in the `<Router>` function child and render pages through `props.children` inside a `Loading` boundary.
+* Write links as plain `<a>` elements; the router handles same-origin anchors inside it.
+* Read `props.params` inside JSX or a memo, not once in the component body.
+* Wrap async reads in `query`, start them in the route's `preload`, and read them through a memo in the page.
+* Use the file-system adapter or a hand-written array; the route objects and every page are the same either way.
+
+## Next steps
+
+Read these in order if you are new to Solid Router, or jump to the one you need:
+
+1. [Setup](solid-router-setup.md): add the router to a project that does not have it, and the options for `base`, history, and preloading.
+2. [Route definitions](solid-router-route-definitions.md): path patterns, parameter filters, route metadata, lazy subtrees, and the file-system manifest.
+3. [Nested routes and layouts](solid-router-nested-routes.md): an account section with its own frame that stays mounted while its pages change.
+4. [Navigation and typed paths](solid-router-navigation.md): `paths`, `useNavigate`, search parameters with a schema, active and pending links, and leave guards.
+5. [Data loading and mutations](solid-router-data.md): `preload`, `query`, `action`, optimistic updates, and what revalidates after a mutation.
+6. [Server rendering and hydration](solid-router-server-rendering.md): what the server adds when the app renders there, and how a mutation returns fresh data in one round trip.

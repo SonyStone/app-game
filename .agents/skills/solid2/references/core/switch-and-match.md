@@ -1,0 +1,196 @@
+# Switch / Match
+
+Switches between content based on mutually exclusive conditions. Renders
+the first `<Match>` whose `when` is truthy; falls back to `fallback` when
+none match.
+
+## Import
+
+```ts
+import { Switch, Match } from "solid-js";
+```
+
+## `Switch`
+
+### Type signature
+
+```ts
+function Switch(props: {
+	fallback?: JSX.Element;
+	children: JSX.Element;
+}): JSX.Element;
+```
+
+### Props
+
+#### `fallback`
+
+* **Type:** `JSX.Element`
+* Optional
+
+Rendered when no `Match` condition is truthy.
+
+#### `children`
+
+* **Type:** `JSX.Element`
+
+One or more `Match` elements.
+
+### Examples
+
+```tsx
+<Switch fallback={<FourOhFour />}>
+	<Match when={state.route === "home"}>
+		<Home />
+	</Match>
+	<Match when={state.route === "settings"}>
+		<Settings />
+	</Match>
+</Switch>
+```
+
+#### Narrow the matched value
+
+```tsx
+<Switch fallback={<p>Loading…</p>}>
+	<Match when={error()}>{(e) => <p>Error: {e().message}</p>}</Match>
+	<Match when={data()}>{(d) => <Table rows={d().rows} />}</Match>
+</Switch>
+```
+
+### Caveats
+
+* Only `Match` elements are meaningful children; other content has no `when` and never renders.
+* The first truthy `Match` wins; order the branches from most to least specific.
+
+## `Match`
+
+A branch inside a `<Switch>`. The first `<Match>` whose `when` is truthy
+wins; remaining matches are skipped.
+
+Like `<Show>`, `<Match>` supports a function child. Non-keyed children
+receive an accessor for the narrowed value; keyed children receive the raw
+narrowed value.
+
+### Type signature
+
+```ts
+function Match<T>(props: {
+	when: T | undefined | null | false;
+	keyed?: false;
+	children: JSX.Element | ((item: Accessor<NonNullable<T>>) => JSX.Element);
+}): JSX.Element;
+function Match<T>(props: {
+	when: T | undefined | null | false;
+	keyed: true;
+	children: JSX.Element | ((item: NonNullable<T>) => JSX.Element);
+}): JSX.Element;
+```
+
+### Props
+
+#### `when`
+
+* **Type:** `T | undefined | null | false`
+
+The branch condition. The first truthy `Match` in a `Switch` renders.
+
+#### `keyed`
+
+* **Type:** `boolean`
+* Optional
+
+Same meaning as on `Show`: keyed content remounts when the value's identity changes.
+
+#### `children`
+
+* **Type:** `JSX.Element | ((item) => JSX.Element)`
+
+Static content, or a function that receives the narrowed value.
+
+### Examples
+
+```tsx
+<Switch fallback={<NotFound />}>
+	<Match when={user()}>{(u) => <Profile name={u().name} />}</Match>
+	<Match when={loading()}>
+		<Spinner />
+	</Match>
+</Switch>
+```
+
+### Caveats
+
+* A `Match` outside a `Switch` renders nothing useful; it reports its condition to the enclosing `Switch`.
+
+## Learn more
+
+* [Conditional content](../concepts/components-and-jsx.md#conditional-content)
+* [Components and JSX](../concepts/components-and-jsx.md)
+* [Boundaries](../concepts/boundaries.md)
+
+## Related types
+
+### `AnyMatchProps`
+
+```ts
+type AnyMatchProps<T> =
+	| MatchProps<T>
+	| KeyedMatchProps<T>
+	| {
+			when: T | undefined | null | false;
+			keyed?: boolean;
+			children: JSX.Element;
+	  };
+```
+
+### `KeyedMatchProps`
+
+```ts
+type KeyedMatchProps<
+	T,
+	F extends KeyedConditionalRenderCallback<T> =
+		KeyedConditionalRenderCallback<T>,
+> = {
+	when: T | undefined | null | false;
+	keyed: true;
+	children: KeyedConditionalRenderChildren<T, F>;
+};
+```
+
+#### `when`
+
+* **Type:** `T | undefined | null | false`
+
+#### `keyed`
+
+* **Type:** `true`
+
+#### `children`
+
+* **Type:** `KeyedConditionalRenderChildren<T, F>`
+
+### `MatchProps`
+
+```ts
+type MatchProps<
+	T,
+	F extends ConditionalRenderCallback<T> = ConditionalRenderCallback<T>,
+> = {
+	when: T | undefined | null | false;
+	keyed?: false;
+	children: ConditionalRenderChildren<T, F>;
+};
+```
+
+#### `when`
+
+* **Type:** `T | undefined | null | false`
+
+#### `keyed`
+
+* **Type:** `false`
+
+#### `children`
+
+* **Type:** `ConditionalRenderChildren<T, F>`

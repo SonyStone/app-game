@@ -1,38 +1,38 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import { onCleanup } from 'solid-js';
-import { moveCamera, type Camera, type Point } from './camera';
+import type { Point } from '../scene/SceneSpace';
+import type { Viewport } from '../viewport/createViewport';
+import { moveCamera } from './camera';
+import type { DocumentCamera } from './createDocumentCamera';
 
 /**
  * Installs captured pointer gestures and wheel zoom for a fixed canvas; disposed with its Solid owner.
- * Interaction starts before camera mutation; changes follow it. Drag state resets on release, blur or disposal.
+ * Drag state resets on release, blur or disposal.
  */
-export function makeCameraControls(
-  canvas: HTMLCanvasElement,
-  camera: Camera,
-  pageAspect: () => number,
-  onInteraction: (phase: 'start' | 'change') => void,
-  onDraggingChange: (dragging: boolean) => void = () => {},
-  viewport?: {
-    size: () => { css: { width: number; height: number } };
-    clientToScreen: (point: Point) => Point;
-  }
-) {
+export function makeCameraControls(options: {
+  /** Receives pointer and wheel events; pointers are captured while pressed. */
+  canvas: HTMLCanvasElement;
+  /** Replaced by gestures through its updater form; the page aspect is read on each camera move. */
+  camera: Pick<DocumentCamera, 'setCamera' | 'pageAspect'>;
+  /** Supplies the canvas CSS size and client-to-canvas conversion. */
+  viewport: Pick<Viewport, 'size' | 'clientToScreen'>;
+  /** Runs once per gesture start, camera move and wheel event, after any camera update. */
+  onInteraction: () => void;
+  /** Reports whether any pointer is pressed. */
+  onDraggingChange?: (dragging: boolean) => void;
+}) {
+  const { canvas, camera, viewport, onInteraction, onDraggingChange = () => {} } = options;
   const pointers = new Map<number, Point>();
 
-  const local = (event: PointerEvent | WheelEvent): Point => {
-    if (viewport) {
-      return viewport.clientToScreen({ x: event.clientX, y: event.clientY });
-    }
-
-    const rect = canvas.getBoundingClientRect();
-
-    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
-  };
+  const local = (event: PointerEvent | WheelEvent): Point =>
+    viewport.clientToScreen({ x: event.clientX, y: event.clientY });
 
   const apply = (from: Point, to: Point, scale = 1, angle = 0) => {
-    const rect = viewport?.size().css ?? canvas.getBoundingClientRect();
-    moveCamera(camera, from, to, scale, angle, rect.width, rect.height, pageAspect());
-    onInteraction('change');
+    const { width, height } = viewport.size().css;
+    const pageAspect = camera.pageAspect();
+    // Several events can arrive before Solid applies a write; the updater moves the latest staged camera.
+    camera.setCamera((current) => moveCamera(current, from, to, scale, angle, width, height, pageAspect));
+    onInteraction();
   };
 
   makeEventListener(canvas, 'pointerdown', (event) => {
@@ -44,7 +44,7 @@ export function makeCameraControls(
     canvas.setPointerCapture(event.pointerId);
     pointers.set(event.pointerId, local(event));
     onDraggingChange(true);
-    onInteraction('start');
+    onInteraction();
   });
 
   makeEventListener(canvas, 'pointermove', (event) => {
@@ -84,6 +84,7 @@ export function makeCameraControls(
     if (canvas.hasPointerCapture(event.pointerId)) {
       canvas.releasePointerCapture(event.pointerId);
     }
+
     if (!pointers.size) {
       onDraggingChange(false);
     }
@@ -113,10 +114,8 @@ export function makeCameraControls(
     'wheel',
     (event) => {
       event.preventDefault();
-      onInteraction('start');
 
-      const unit =
-        event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? (viewport?.size().css.height ?? canvas.clientHeight) : 1;
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewport.size().css.height : 1;
       const scale = Math.exp(-Math.max(-500, Math.min(500, event.deltaY * unit)) * 0.002);
       const point = local(event);
 

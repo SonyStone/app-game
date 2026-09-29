@@ -3,6 +3,14 @@
   "open": "Открыть документ",
   "openHint": "Открыть PDF или GDOC",
   "overview": "Показать весь документ",
+  "splitView": "Разделить экран",
+  "saveView": "Сохранить вид",
+  "savedViews": "Сохранённые виды",
+  "savedView": "Вид {{number}}",
+  "removeView": "Удалить вид {{number}}",
+  "playTour": "Воспроизвести сохранённые виды",
+  "stopTour": "Остановить тур",
+  "resizePanes": "Изменить размер панелей",
   "enterFullscreen": "Во весь экран",
   "exitFullscreen": "Выйти из полного экрана",
   "fullscreenUnsupported": "Полный экран недоступен в этом браузере",
@@ -14,6 +22,8 @@
   "download": "Скачать GDOC",
   "back": "Вернуться к демо",
   "autoZoom": "Автомасштаб",
+  "minimap": "Мини-карта",
+  "performance": "Производительность",
   "grids": "Сетка",
   "vectorOnly": "Только вектор",
   "help": "Перетаскивайте для перемещения. Колёсико или щипок для масштаба. Два пальца для поворота.",
@@ -40,5 +50,6 @@
   "preparingGraphics": "Подготовка графики…",
   "cancelLoading": "Отменить загрузку",
   "cancelled": "Загрузка отменена. Откройте другой документ.",
-  "pageProgress": "{{completed}} из {{total}} страниц"
+  "pageProgress": "{{completed}} из {{total}} страниц",
+  "dismiss": "Закрыть"
 }

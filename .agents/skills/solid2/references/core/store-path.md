@@ -1,0 +1,138 @@
+# storePath
+
+Creates a path-based store update for code that still uses Solid 1.x setter paths. Prefer draft-mutating store setters in new code.
+
+## Import
+
+```ts
+import { storePath } from "@solidjs/signals";
+```
+
+## Type signature
+
+```ts
+interface StorePath {
+	<T>(setter: PathSetter<T>): (state: T) => void;
+	<T, K extends keyof T>(
+		key: Part<T, K>,
+		setter: PathSetter<T[K]>
+	): (state: T) => void;
+	readonly DELETE: typeof DELETE;
+}
+
+const storePath: StorePath;
+```
+
+## Parameters
+
+### `k1`
+
+* **Type:** `Part<W<T>, K1>`
+
+### `k2`
+
+* **Type:** `Part<W<W<T>[K1]>, K2>`
+
+### `k3`
+
+* **Type:** `Part<W<W<W<T>[K1]>[K2]>, K3>`
+
+### `k4`
+
+* **Type:** `Part<W<W<W<W<T>[K1]>[K2]>[K3]>, K4>`
+
+### `k5`
+
+* **Type:** `Part<W<W<W<W<W<T>[K1]>[K2]>[K3]>[K4]>, K5>`
+
+### `k6`
+
+* **Type:** `Part<W<W<W<W<W<W<T>[K1]>[K2]>[K3]>[K4]>[K5]>, K6>`
+
+### `k7`
+
+* **Type:** `Part<W<W<W<W<W<W<W<T>[K1]>[K2]>[K3]>[K4]>[K5]>[K6]>, K7>`
+
+### `setter`
+
+* **Type:** `PathSetter<W<W<W<W<W<W<W<T>[K1]>[K2]>[K3]>[K4]>[K5]>[K6]>[K7]> | PathSetter<W<W<W<W<W<W<T>[K1]>[K2]>[K3]>[K4]>[K5]>[K6]> | PathSetter<W<W<W<W<W<T>[K1]>[K2]>[K3]>[K4]>[K5]> | PathSetter<W<W<W<W<T>[K1]>[K2]>[K3]>[K4]> | PathSetter<W<W<W<T>[K1]>[K2]>[K3]> | PathSetter<W<W<T>[K1]>[K2]> | PathSetter<W<T>[K1]> | PathSetter<T>`
+
+## Properties
+
+### `DELETE`
+
+* **Type:** `typeof DELETE`
+
+## Examples
+
+```ts
+const [state, setState] = createStore({ user: { name: "Ada" }, todos: [] });
+
+setState(storePath("user", "name", "Grace"));
+setState(storePath("todos", (t) => !t.done, "done", true)); // mark all undone as done
+setState(storePath("user", "nickname", storePath.DELETE));
+```
+
+```ts
+setState(storePath("user", "name", "Grace"));
+setState(storePath("todos", (todo) => !todo.done, "done", true));
+setState(storePath("user", "nickname", storePath.DELETE));
+```
+
+## Learn more
+
+* [Stores](../concepts/stores.md)
+
+## Related types
+
+### `ArrayFilterFn`
+
+```ts
+type ArrayFilterFn<T> = (item: T, index: number) => boolean;
+```
+
+### `CustomPartial`
+
+```ts
+type CustomPartial<T> = T extends readonly unknown[]
+	? "0" extends keyof T
+		? { [K in Extract<keyof T, `${number}`>]?: T[K] }
+		: { [x: number]: T[number] }
+	: Partial<T>;
+```
+
+### `Part`
+
+```ts
+type Part<T, K extends KeyOf<T> = KeyOf<T>> =
+	| K
+	| ([K] extends [never] ? never : readonly K[])
+	| ([T] extends [readonly unknown[]]
+			? ArrayFilterFn<T[number]> | StorePathRange
+			: never);
+```
+
+### `PathSetter`
+
+```ts
+type PathSetter<T> =
+	T | CustomPartial<T> | ((prev: T) => T | CustomPartial<T>) | typeof DELETE;
+```
+
+### `StorePathRange`
+
+```ts
+type StorePathRange = { from?: number; to?: number; by?: number };
+```
+
+#### `from`
+
+* **Type:** `number`
+
+#### `to`
+
+* **Type:** `number`
+
+#### `by`
+
+* **Type:** `number`

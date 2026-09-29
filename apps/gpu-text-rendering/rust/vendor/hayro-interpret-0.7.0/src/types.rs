@@ -46,6 +46,12 @@ impl<'a, 'b> StencilImage<'a, 'b> {
         }
     }
 
+    /// Local patch: the paint applied through the stencil, available without decoding it,
+    /// so callers can reuse an already converted mask.
+    pub fn paint(&self) -> &Paint<'a> {
+        &self.paint
+    }
+
     // These are hidden since clients are supposed to call get the
     // width/height from `LumaData` instead.
     #[doc(hidden)]

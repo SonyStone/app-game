@@ -1,0 +1,134 @@
+# parseCookieHeader / serializeCookie
+
+Parses a `Cookie` request header into a name → value map. Names and
+values are `decodeURIComponent`-decoded (falling back to the raw text
+when decoding throws — cookies set by other producers are not
+necessarily percent-encoded); a quoted value keeps its content, per the
+RFC 6265 grammar. `null`/empty input parses to an empty map.
+
+The read half of the platform gap — the blessed request-cookie read is
+`parseCookieHeader(event.request.headers.get("cookie"))`.
+
+## Import
+
+```ts
+import { parseCookieHeader, serializeCookie } from "@solidjs/web";
+```
+
+## `parseCookieHeader`
+
+### Type signature
+
+```ts
+function parseCookieHeader(
+	header: string | null | undefined
+): Record<string, string>;
+```
+
+### Parameters
+
+#### `header`
+
+* **Type:** `string | null | undefined`
+
+## `serializeCookie`
+
+serializeCookie API reference.
+
+### Type signature
+
+```ts
+function serializeCookie(
+	name: string,
+	value: string,
+	options: CookieOptions = {}
+): string;
+```
+
+### Parameters
+
+#### `name`
+
+* **Type:** `string`
+
+#### `value`
+
+* **Type:** `string`
+
+#### `options`
+
+* **Type:** `CookieOptions`
+* Optional
+
+## Learn more
+
+* [Sessions and auth](../building-apps/sessions-and-auth.md)
+* [Mutations and responses](../building-apps/server-functions-mutations-and-responses.md)
+* [Middleware and API routes](../building-apps/middleware-and-api-routes.md)
+
+## Related types
+
+### `CookieOptions`
+
+```ts
+interface CookieOptions {
+	path?: string;
+	domain?: string;
+	maxAge?: number;
+	expires?: Date;
+	httpOnly?: boolean;
+	secure?: boolean;
+	sameSite?: "lax" | "strict" | "none" | "Lax" | "Strict" | "None";
+	partitioned?: boolean;
+}
+```
+
+#### `path`
+
+* **Type:** `string`
+
+Cookie `Path` attribute. Defaults to `/`.
+
+#### `domain`
+
+* **Type:** `string`
+
+Cookie `Domain` attribute. Emitted only when provided.
+
+#### `maxAge`
+
+* **Type:** `number`
+
+Cookie `Max-Age` attribute, in seconds (truncated to an integer).
+
+#### `expires`
+
+* **Type:** `Date`
+
+Cookie `Expires` attribute.
+
+#### `httpOnly`
+
+* **Type:** `boolean`
+
+Emit the `HttpOnly` attribute.
+
+#### `secure`
+
+* **Type:** `boolean`
+
+Emit the `Secure` attribute.
+
+#### `sameSite`
+
+* **Type:** `"lax" | "strict" | "none" | "Lax" | "Strict" | "None"`
+
+Cookie `SameSite` attribute, any case.
+
+#### `partitioned`
+
+* **Type:** `boolean`
+
+Emit the `Partitioned` attribute (CHIPS): a third-party cookie keyed to
+the top-level site it was set under — the only third-party cookie that
+keeps working as browsers finish removing the rest. Requires `secure`.

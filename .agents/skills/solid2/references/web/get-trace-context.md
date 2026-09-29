@@ -1,0 +1,118 @@
+# getTraceContext
+
+The trace the current request belongs to — continued from the incoming
+W3C `traceparent` when there was one, originated by the runtime
+otherwise; in observe/dev builds, merged with the installed provider's
+answer (`OBSERVE.server.trace`). Same object for every read within the
+request, direct server-function calls included. For a render outside a
+request scope, the render's own trace. `undefined` outside both, and on
+the client. Forward it downstream from a server function with
+`getTraceContext()?.entries.traceparent`.
+
+## Import
+
+```ts
+import { getTraceContext } from "@solidjs/web";
+```
+
+## Type signature
+
+```ts
+function getTraceContext(): TraceContext | undefined;
+```
+
+## Examples
+
+```ts
+await fetch(url, { headers: { ...getTraceContext()?.entries } });
+```
+
+## Learn more
+
+* [Read trusted request context](../building-apps/server-functions-arguments-and-security.md#read-trusted-request-context)
+* [Follow a request into the browser](../guides/observability.md#follow-a-request-into-the-browser)
+* [Mutations and responses](../building-apps/server-functions-mutations-and-responses.md)
+* [Middleware and API routes](../building-apps/middleware-and-api-routes.md)
+
+## Related types
+
+### `TraceContext`
+
+The trace the current request belongs to — continued from the incoming
+W3C `traceparent` when there was one, originated by the runtime
+otherwise. Read with `getTraceContext()`.
+
+```ts
+interface TraceContext {
+	traceId: string;
+	spanId: string;
+	parentId?: string;
+	sampled?: boolean;
+	state?: string;
+	baggage?: string;
+	entries: Record<string, string>;
+}
+```
+
+#### `traceId`
+
+* **Type:** `string`
+
+32 lowercase hex — the whole trace.
+
+#### `spanId`
+
+* **Type:** `string`
+
+16 lowercase hex — this request's span: runtime-generated unless a provider supplied it.
+
+#### `parentId`
+
+* **Type:** `string`
+
+The incoming parent span, when the request continued a trace.
+
+#### `sampled`
+
+* **Type:** `boolean`
+
+The incoming `traceparent` sampled flag (bit 0); `undefined` when the runtime originated.
+
+#### `state`
+
+* **Type:** `string`
+
+The incoming `tracestate` header, verbatim.
+
+#### `baggage`
+
+* **Type:** `string`
+
+The incoming `baggage` header, verbatim.
+
+#### `entries`
+
+* **Type:** `Record<string, string>`
+
+Named entries handed to the browser on the first response — emitted
+both as `Server-Timing` entries (`<name>;desc="<value>"`) and, for HTML
+documents, as `<meta name="<name>" content="<value>">` in the shell.
+The runtime fills `traceparent`; a provider adds its vendor pair
+(`sentry-trace`, `baggage`). Also what application code forwards
+downstream: `fetch(url, { headers: { traceparent: entries.traceparent } })`.
+
+### `TraceProvider`
+
+An observer's answer for the trace a request belongs to, merged over the
+runtime's default derivation: fields it returns replace the derived
+ones (`traceId`/`spanId` from an APM's active span), its `entries` merge
+by name over the runtime's. Called once per request (or per render, for
+a render outside a request scope — `request` is then `undefined`), at
+shell flush or the first `getTraceContext()`, whichever comes first.
+Return `undefined` to leave the derivation alone.
+
+```ts
+type TraceProvider = (
+	request: Request | undefined
+) => Partial<TraceContext> | undefined;
+```

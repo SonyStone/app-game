@@ -3,6 +3,14 @@
   "open": "Abrir documento",
   "openHint": "Abrir PDF o GDOC",
   "overview": "Mostrar todo el documento",
+  "splitView": "Vista dividida",
+  "saveView": "Guardar vista",
+  "savedViews": "Vistas guardadas",
+  "savedView": "Vista {{number}}",
+  "removeView": "Quitar vista {{number}}",
+  "playTour": "Reproducir vistas guardadas",
+  "stopTour": "Detener recorrido",
+  "resizePanes": "Cambiar el tamaño de los paneles",
   "enterFullscreen": "Pantalla completa",
   "exitFullscreen": "Salir de pantalla completa",
   "fullscreenUnsupported": "La pantalla completa no está disponible en este navegador",
@@ -14,6 +22,8 @@
   "download": "Descargar GDOC",
   "back": "Volver al ejemplo",
   "autoZoom": "Zoom automático",
+  "minimap": "Minimapa",
+  "performance": "Rendimiento",
   "grids": "Cuadrícula",
   "vectorOnly": "Solo vectores",
   "help": "Arrastra para desplazarte. Usa la rueda o pellizca para ampliar. Usa dos dedos para girar.",
@@ -40,5 +50,6 @@
   "preparingGraphics": "Preparando gráficos…",
   "cancelLoading": "Cancelar carga",
   "cancelled": "Carga cancelada. Abre otro documento.",
-  "pageProgress": "{{completed}} de {{total}} páginas"
+  "pageProgress": "{{completed}} de {{total}} páginas",
+  "dismiss": "Cerrar"
 }

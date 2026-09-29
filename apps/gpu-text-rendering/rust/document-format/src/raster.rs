@@ -88,7 +88,27 @@ pub const MAX_PIXEL_BYTES: usize = 256 * 1024 * 1024;
 pub const MAX_ENCODED_IMAGE_BYTES: usize = 1536 * 1024 * 1024;
 
 /// Reads bounded JPEG frame dimensions without allocating decoded pixels.
+///
+/// Returns `None` unless the first frame header is baseline or extended/progressive
+/// Huffman DCT (SOF0–SOF2) with 8-bit samples and 1, 3 or 4 components. Lossless (SOF3),
+/// hierarchical and arithmetic-coded frames are rejected because browsers cannot decode them.
 pub fn jpeg_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    jpeg_frame(bytes).map(|frame| (frame.width, frame.height))
+}
+
+/// Dimensions and component count of a browser-decodable JPEG frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JpegFrame {
+    /// Width in pixels.
+    pub width: u32,
+    /// Height in pixels.
+    pub height: u32,
+    /// Color components: 1 gray, 3 RGB/YCbCr, 4 CMYK/YCCK.
+    pub components: u8,
+}
+
+/// Reads the first frame header with the same acceptance rules as [`jpeg_dimensions`].
+pub fn jpeg_frame(bytes: &[u8]) -> Option<JpegFrame> {
     if !bytes.starts_with(&[255, 216]) {
         return None;
     }
@@ -102,15 +122,19 @@ pub fn jpeg_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
         if length < 2 || length > bytes.len() - offset - 2 {
             return None;
         }
-        if matches!(marker, 0xc0..=0xc3)
-            && length >= 8
-            && bytes[offset + 4] == 8
-            && matches!(bytes[offset + 9], 1 | 3 | 4)
-        {
-            return Some((
-                u32::from(u16::from_be_bytes([bytes[offset + 7], bytes[offset + 8]])),
-                u32::from(u16::from_be_bytes([bytes[offset + 5], bytes[offset + 6]])),
-            ));
+        // Every other SOFn (lossless, hierarchical, arithmetic) is a frame we cannot decode.
+        if matches!(marker, 0xc3 | 0xc5..=0xc7 | 0xc9..=0xcb | 0xcd..=0xcf) {
+            return None;
+        }
+        if matches!(marker, 0xc0..=0xc2) {
+            return (length >= 8
+                && bytes[offset + 4] == 8
+                && matches!(bytes[offset + 9], 1 | 3 | 4))
+            .then(|| JpegFrame {
+                width: u32::from(u16::from_be_bytes([bytes[offset + 7], bytes[offset + 8]])),
+                height: u32::from(u16::from_be_bytes([bytes[offset + 5], bytes[offset + 6]])),
+                components: bytes[offset + 9],
+            });
         }
         offset += 2 + length;
     }
@@ -119,7 +143,7 @@ pub fn jpeg_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
 
 #[cfg(test)]
 mod tests {
-    use super::pixel_bytes;
+    use super::{JpegFrame, jpeg_dimensions, jpeg_frame, pixel_bytes};
 
     #[test]
     fn accepts_full_resolution_book_scans_with_bounded_allocation() {
@@ -128,5 +152,31 @@ mod tests {
         assert!(pixel_bytes(8192, 8193).is_err());
         assert!(pixel_bytes(0, 6650).is_err());
         assert!(pixel_bytes(65536, 1).is_err());
+    }
+
+    #[test]
+    fn accepts_only_browser_decodable_jpeg_frames() {
+        let frame = |marker: u8, components: u8| {
+            let mut jpeg = vec![255, 216, 255, marker, 0, 8 + 3 * components, 8, 0, 2, 0, 3];
+            jpeg.push(components);
+            jpeg.extend(std::iter::repeat_n(0, 3 * usize::from(components)));
+            jpeg.extend_from_slice(&[255, 217]);
+            jpeg
+        };
+        for marker in [0xc0, 0xc1, 0xc2] {
+            assert_eq!(
+                jpeg_frame(&frame(marker, 3)),
+                Some(JpegFrame {
+                    width: 3,
+                    height: 2,
+                    components: 3
+                })
+            );
+        }
+        // Lossless, hierarchical and arithmetic frames are rejected, not skipped.
+        for marker in [0xc3, 0xc5, 0xc9, 0xcf] {
+            assert_eq!(jpeg_dimensions(&frame(marker, 3)), None, "{marker:#x}");
+        }
+        assert_eq!(jpeg_dimensions(&frame(0xc0, 2)), None);
     }
 }

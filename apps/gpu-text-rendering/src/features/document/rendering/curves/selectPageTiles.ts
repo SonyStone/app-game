@@ -1,4 +1,4 @@
-import { pageTileKey, type PageTile } from './pageTiles';
+import { pageTileKey, parentTile, type PageTile } from './pageTiles';
 
 /** A resident composed tile; revisions change when source image detail changes. */
 export type ResidentPageTile = { tile: PageTile; revision: number; readyAt: number };
@@ -62,8 +62,4 @@ export function selectPageTiles<T extends ResidentPageTile>(
   }
 
   return [...selected.values()].sort((a, b) => a.tile.level - b.tile.level);
-}
-
-function parentTile(tile: PageTile): PageTile {
-  return { page: tile.page, level: tile.level - 1, x: Math.floor(tile.x / 2), y: Math.floor(tile.y / 2) };
 }

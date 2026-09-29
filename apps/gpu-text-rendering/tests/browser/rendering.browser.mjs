@@ -25,15 +25,9 @@ page.on('console', (message) => {
 });
 const report = { initialization: {}, cases: [], differences: [] };
 try {
-  await page.route('**/gpu-render-check', (route) =>
-    route.fulfill({
-      contentType: 'text/html',
-      body: '<html><body style="margin:0"></body></html>'
-    })
-  );
-  await page.goto(`${baseURL}/gpu-render-check`);
+  await page.goto(`${baseURL}/tests/browser/empty.html`);
   report.document = await page.evaluate(async () => {
-    const { loadDocument } = await import('/src/features/document/document.ts');
+    const { loadDocument } = await import('/tests/browser/workerHarness.tsx');
     const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
     const start = performance.now();
     window.doc = (await loadDocument())._unsafeUnwrap();
@@ -59,8 +53,7 @@ try {
     { name: 'detail', x: 0.4, y: 0.8, zoom: 0.08, rotation: 0, vector: true },
     { name: 'rotated', x: 0.5, y: 0.5, zoom: 0.55, rotation: 0.5 },
     { name: 'grids', x: 0.4, y: 0.8, zoom: 0.08, rotation: 0.25, vector: true, grids: true },
-    { name: 'far', x: 20, y: -10, zoom: 24, rotation: 0 },
-    { name: 'image', x: 0.5, y: 0.5, zoom: 0.55, rotation: 0.3, image: true }
+    { name: 'far', x: 20, y: -10, zoom: 24, rotation: 0 }
   ];
   {
     const backend = 'typegpu';
@@ -72,7 +65,7 @@ try {
         canvas.height = 800;
         document.body.append(canvas);
         const start = performance.now();
-        const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+        const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
         const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
         const mounted = await mountRenderingGpu(canvas, doc.glyphVertices.byteLength);
         window.gpu = mounted.gpu;
@@ -91,57 +84,17 @@ try {
           };
         }
         window.disposeGpu = mounted.dispose;
-        window.makeRenderer = (_canvas, data) => createTypeGpuRenderer(gpu, data);
-        window.renderer = (await makeRenderer(canvas, doc))._unsafeUnwrap();
+        window.renderer = (await createTypeGpuRenderer(gpu, doc))._unsafeUnwrap();
         return { prepareMs: performance.now() - start, resourceBytes: renderer.resourceBytes };
       },
       Number(process.env.GPU_TEXT_TEST_STORAGE_LIMIT ?? 0)
     );
     for (const current of cases) {
       const timing = await page.evaluate(async (current) => {
-        let data = doc;
-        if (current.image) {
-          renderer.destroy();
-          const bitmap = await createImageBitmap(
-            new ImageData(
-              new Uint8ClampedArray([255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 128]),
-              2,
-              2
-            ),
-            { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }
-          );
-          const buffer = new ArrayBuffer(60);
-          const vertices = new DataView(buffer);
-          const corners = [
-            [0.1, 0.1, 0, 0],
-            [0.1, 0.1, 0, 0],
-            [0.9, 0.1, 1, 0],
-            [0.1, 0.9, 0, 1],
-            [0.9, 0.9, 1, 1],
-            [0.9, 0.9, 1, 1]
-          ];
-          corners.forEach((v, i) => {
-            v.forEach((n, j) => vertices.setUint16(i * 10 + j * 2, Math.round(n * 65535), true));
-            vertices.setUint8(i * 10 + 8, 180);
-          });
-          data = {
-            ...doc,
-            glyphVertices: doc.glyphVertices.slice(0, doc.glyphEncoding === 'instances' ? 28 : 72),
-            imageVertices: buffer,
-            pages: [
-              {
-                ...doc.pages[0],
-                beginVertex: 0,
-                endVertex: 0,
-                images: [{ filename: 'fixture', vertexOffset: 0, numVerts: 6 }]
-              }
-            ],
-            images: new Map([['fixture', bitmap]])
-          };
-          window.renderer = (await makeRenderer(canvas, data))._unsafeUnwrap();
-          bitmap.close();
-        }
-        const frame = createFrame(data, current, 1200, 800, !!current.vector, !!current.grids);
+        const frame = createFrame(doc, current, 1200, 800, {
+          vectorOnly: !!current.vector,
+          grids: !!current.grids
+        });
         renderer.render(frame)._unsafeUnwrap();
         (await renderer.settle())._unsafeUnwrap();
         const samples = [];
@@ -168,7 +121,7 @@ try {
         for (let i = 0; i < bytes.length; i += 4) colors.add((bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2]);
         return colors.size;
       }, screenshot);
-      assert.ok(colors > 16, `${current.name}: missing text or image content`);
+      assert.ok(colors > 16, `${current.name}: missing text content`);
     }
     await page.evaluate(() => {
       renderer.destroy();

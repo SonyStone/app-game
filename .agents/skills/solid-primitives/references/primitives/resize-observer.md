@@ -1,0 +1,181 @@
+# @solid-primitives/resize-observer
+
+Source version: `4.0.0-next.4`.
+
+[Upstream source](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/resize-observer/README.md) · [Skill catalogue](../catalogue.md#primitives-catalogue)
+
+
+Reactive primitives for observing resizing of HTML elements.
+
+- [`makeResizeObserver`](resize-observer.md#makeresizeobserver) — Instantiate a new ResizeObserver that automatically get's disposed on cleanup.
+- [`createResizeObserver`](resize-observer.md#createresizeobserver) — Create resize observer instance, listening for changes to size of reactive element targets array.
+- [`createWindowSize`](resize-observer.md#createwindowsize) — Creates a reactive store-like object of current width and height dimensions of the browser window.
+- [`createElementSize`](resize-observer.md#createelementsize) — Creates a reactive store-like object of current width and height dimensions of html element.
+
+## Installation
+
+```bash
+npm install @solid-primitives/resize-observer
+# or
+pnpm add @solid-primitives/resize-observer
+# or
+yarn add @solid-primitives/resize-observer
+```
+
+## `makeResizeObserver`
+
+Instantiate a new ResizeObserver that automatically get's disposed on cleanup.
+
+### How to use it
+
+`makeResizeObserver` returns `observe` and `unobserve` functions for managing targets.
+
+```ts
+import { makeResizeObserver } from "@solid-primitives/resize-observer";
+
+const { observe, unobserve } = makeResizeObserver(handleObserverCallback, { box: "content-box" });
+observe(document.body);
+observe(ref);
+
+function handleObserverCallback(entries: ResizeObserverEntry[]) {
+  for (const entry of entries) {
+    console.log(entry.contentRect.width);
+  }
+}
+```
+
+#### Disposing
+
+`makeResizeObserver` will dispose itself with it's parent reactive owner.
+
+To dispose early, wrap the primitive with a [`createRoot`](https://www.solidjs.com/docs/latest/api#createroot).
+
+```ts
+const { dispose } = createRoot(dispose => {
+  const { observe, unobserve } = makeResizeObserver(handleObserverCallback);
+  return { dispose, observe, unobserve };
+});
+// dispose early
+dispose();
+```
+
+## `createResizeObserver`
+
+Create resize observer instance, listening for changes to size of reactive element targets array.
+
+Disposes automatically itself with it's parent reactive owner.
+
+### How to use it
+
+```tsx
+import { createResizeObserver } from "@solid-primitives/resize-observer";
+
+let ref!: HTMLDivElement;
+
+// can use onSettled if the target variable isn't yet populated
+onSettled(() => {
+  createResizeObserver(ref, ({ width, height }, el) => {
+    if (el === ref) console.log(width, height);
+  });
+});
+
+<div ref={ref} />;
+```
+
+#### Reactive targets
+
+The `targets` argument can be a reactive signal or top-level store array.
+
+```ts
+const [targets, setTargets] = createSignal([document.body]);
+createResizeObserver(targets, ({ width, height }, el) => {});
+// updating the signal will unobserve removed elements and observe added ones
+setTargets(p => [...p, element]);
+
+// createResizeObserver supports top-level store arrays too
+const [targets, setTargets] = createStore([document.body]);
+createResizeObserver(targets, ({ width, height }, el) => {});
+setTargets(prev => [...prev, element]);
+```
+
+## `createWindowSize`
+
+Creates a reactive store-like object of current width and height dimensions of the browser window.
+
+### How to use it
+
+```ts
+import { createWindowSize } from "@solid-primitives/resize-observer";
+
+const size = createWindowSize();
+
+createEffect(() => {
+  size.width; // => number
+  size.height; // => number
+});
+```
+
+### `useWindowSize`
+
+`useWindowSize` is a [singleton root](rootless.md#createsingletonroot) primitive. It is providing the same reactive object as `createWindowSize`, but the object instance, signals and event-listeners are shared between dependents, making it more optimized to use in multiple places at once.
+
+```ts
+import { useWindowSize } from "@solid-primitives/resize-observer";
+
+const size = useWindowSize();
+
+createEffect(() => {
+  size.width; // => number
+  size.height; // => number
+});
+```
+
+### Media Queries
+
+**The `createWindowSize` isn't meant to be used for creating media queries.**
+
+If you want a reactive interface for media-queries, please checkout [the media package](media.md).
+
+## `createElementSize`
+
+Creates a reactive store-like object of current width/height and clientWidth/clientHeight dimensions of html element.
+
+It uses `ResizeObserver` under the hood—to observe when the element size changes. `width`/`height` come from `getBoundingClientRect` (border-box, affected by CSS transforms); `clientWidth`/`clientHeight` come from the element's `clientWidth`/`clientHeight` properties (padding-box, excludes border/scrollbar, unaffected by CSS transforms).
+
+### How to use it
+
+`createElementSize` needs to be provided a target. It can be an HTML element, or a reactive signal returning one. Target also takes falsy values to disable tracking.
+
+```tsx
+import { createElementSize } from "@solid-primitives/resize-observer";
+
+const size = createElementSize(document.body);
+createEffect(() => {
+  size.width; // => number
+  size.height; // => number
+  size.clientWidth; // => number
+  size.clientHeight; // => number
+});
+
+// reactive target
+
+const [target, setTarget] = createSignal<HTMLElement>();
+
+const size = createElementSize(target);
+createEffect(() => {
+  size.width; // => number | null
+  size.height; // => number | null
+  size.clientWidth; // => number | null
+  size.clientHeight; // => number | null
+});
+
+<div ref={setTarget} />;
+```
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/resize-observer/CHANGELOG.md)
+
+## Contributors
+
+Thanks to Moshe Udimar for this contribution!

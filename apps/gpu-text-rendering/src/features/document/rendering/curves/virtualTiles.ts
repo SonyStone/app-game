@@ -1,3 +1,5 @@
+import { drawMatrix, drawPage, drawTranslation } from '../../plan/drawRecord';
+import { imageCount, imageHeight, imageWidth } from '../../plan/imageRecord';
 import type { SceneFrame } from '../createFrame';
 
 /** Image metadata and packed, permanently resident mip tail. Levels use floor-sized WebGPU mip dimensions. */
@@ -24,9 +26,9 @@ export function packMipTails(table: DataView) {
     let rowHeight = 0;
     let width = 1;
 
-    for (let id = 0; id < table.byteLength / 24; id++) {
-      const w = table.getUint32(id * 24, true);
-      const h = table.getUint32(id * 24 + 4, true);
+    for (let id = 0; id < imageCount(table); id++) {
+      const w = imageWidth(table, id);
+      const h = imageHeight(table, id);
       const level = Math.max(0, Math.ceil(Math.log2(Math.max(w, h) / (h === 1 ? side * 16 : side))));
       let tailWidth = 0;
 
@@ -62,16 +64,15 @@ export function visibleImage(
   records: DataView,
   index: number,
   frame: SceneFrame,
-  page = frame.visible.find(({ index: page }) => page === records.getUint32(index * 80 + 76, true))?.page
+  page = frame.visible.find(({ index: page }) => page === drawPage(records, index))?.page
 ) {
-  const offset = index * 80;
   const m = frame.rotation;
-  const px = (records.getFloat32(offset + 16, true) - (page?.x ?? 0)) * frame.mul[0] + frame.add[0];
-  const py = (1 - records.getFloat32(offset + 20, true) - (page?.y ?? 0)) * frame.mul[1] + frame.add[1];
-  const ax = records.getFloat32(offset, true) * frame.mul[0];
-  const ay = -records.getFloat32(offset + 4, true) * frame.mul[1];
-  const bx = records.getFloat32(offset + 8, true) * frame.mul[0];
-  const by = -records.getFloat32(offset + 12, true) * frame.mul[1];
+  const px = (drawTranslation(records, index, 0) - (page?.x ?? 0)) * frame.mul[0] + frame.add[0];
+  const py = (1 - drawTranslation(records, index, 1) - (page?.y ?? 0)) * frame.mul[1] + frame.add[1];
+  const ax = drawMatrix(records, index, 0) * frame.mul[0];
+  const ay = -drawMatrix(records, index, 1) * frame.mul[1];
+  const bx = drawMatrix(records, index, 2) * frame.mul[0];
+  const by = -drawMatrix(records, index, 3) * frame.mul[1];
   const x = m[0]! * px + m[2]! * py;
   const y = m[1]! * px + m[3]! * py;
   const ux = m[0]! * ax + m[2]! * ay;
@@ -116,7 +117,10 @@ export function imageTiles(image: VirtualImage, region: NonNullable<ReturnType<t
   });
 }
 
-/** Bounded placement cache. Membership changes only at LOD/tile boundaries; priorities remain exact each frame. */
+/**
+ * Bounded least-recently-used placement cache. Membership changes only at LOD/tile boundaries;
+ * priorities remain exact each frame.
+ */
 export function createImageTileCache(maxTiles = 16384) {
   const entries = new Map<number, { signature: string; tiles: ReturnType<typeof imageTiles> }>();
   let size = 0;
@@ -127,6 +131,9 @@ export function createImageTileCache(maxTiles = 16384) {
     const previous = entries.get(placement);
     if (previous?.signature === signature) {
       for (const tile of previous.tiles) tile.priority = imageTilePriority(image, region, tile);
+      // Map iteration order is insertion order; reinserting marks this placement most recently used.
+      entries.delete(placement);
+      entries.set(placement, previous);
       return previous.tiles;
     }
     if (previous) {
@@ -208,8 +215,14 @@ export function lastLevel(width: number, height: number) {
 
 /** Tile interior; one neighboring texel on each edge supports bilinear filtering without seams. */
 export const tileSize = 128;
+/** Stored tile side in atlas texels: the interior plus a one-texel border on each edge. */
 export const tileExtent = tileSize + 2;
-/** Physical detail atlas stays below 64 MiB. The mip-tail atlas has a separate 16 MiB ceiling. */
+/**
+ * Detail atlas slots per row and column; the physical detail atlas stays below 64 MiB.
+ * The mip-tail atlas has a separate 16 MiB ceiling.
+ */
 export const atlasColumns = 31;
+/** Resident detail tiles across all images (961 slots). */
 export const tileCapacity = atlasColumns ** 2;
+/** Open-addressing lookup table entries shared with the shader; a power of two so hashes can be masked. */
 export const lookupSize = 8192;

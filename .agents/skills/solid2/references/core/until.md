@@ -1,0 +1,123 @@
+# until
+
+Awaits a reactive predicate and resolves the first time it becomes truthy, with the narrowed value. A falsy result or a pending async read means not yet, so the subscription stays live and re-evaluates as sources change. A thrown error, a rejected async source, a timeout, or an abort rejects the promise.
+
+## Import
+
+```ts
+import { until } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function until<T>(fn: () => T, options?: UntilOptions): Promise<Truthy<T>>;
+```
+
+## Parameters
+
+### `fn`
+
+* **Type:** `() => T`
+
+A reactive predicate over authoritative state
+
+### `options`
+
+* **Type:** `UntilOptions`
+* Optional
+
+Optional `timeout` (ms) and abort `signal`
+
+## Return value
+
+A promise that resolves with the first truthy result of `fn`, narrowed by `Truthy<T>`.
+
+## Examples
+
+```ts
+const send = action(async function* (text: string) {
+	const clientId = crypto.randomUUID();
+	setMessages((m) => {
+		m.push({ clientId, text, pending: true });
+	}); // optimistic
+	await socket.send({ clientId, text }); // fire-and-forget transport
+	yield; // re-enter the transaction after the await
+	// Hold until the live source echoes the write (authoritative view —
+	// the optimistic row above cannot satisfy this):
+	yield until(() => messages.some((m) => m.clientId === clientId), {
+		timeout: 10_000,
+	});
+});
+```
+
+### Wait for a value before continuing
+
+```ts
+const user = createMemo(() => fetchUser(id()));
+
+async function exportReport() {
+	const u = await until(() => user()); // resolves once the user has loaded
+	download(buildReport(u));
+}
+```
+
+## Caveats
+
+* A falsy result keeps waiting. A thrown error, a rejected async source, a timeout, or an abort rejects the promise.
+* Reads inside the predicate see authoritative state, so an optimistic write cannot satisfy it.
+
+## Learn more
+
+* [Wait for the server to echo the write: `until`](../concepts/mutations.md#wait-for-the-server-to-echo-the-write-until)
+* [Async reactivity](../concepts/async-reactivity.md)
+* [Avoid unnecessary effects](../guides/avoid-unnecessary-effects.md)
+
+## Related types
+
+### `TimeoutError`
+
+Rejection value of `until(fn, { timeout })` when the predicate does not turn
+truthy within the window. Inside an `action()`, the rejection is thrown back
+in at the `yield` point — catchable there, or the action fails and its
+optimistic state reverts.
+
+```ts
+class TimeoutError extends Error {
+	constructor(message = "Timed out waiting for condition") {
+		super(message);
+		this.name = "TimeoutError";
+	}
+}
+```
+
+### `Truthy`
+
+Falsy values a truthy predicate result is narrowed against.
+
+```ts
+type Truthy<T> = Exclude<T, false | 0 | 0n | "" | null | undefined>;
+```
+
+### `UntilOptions`
+
+```ts
+interface UntilOptions {
+	timeout?: number;
+	signal?: AbortSignal;
+}
+```
+
+#### `timeout`
+
+* **Type:** `number`
+
+Reject with `TimeoutError` if the predicate has not turned truthy within
+this many milliseconds. Strongly recommended when the confirming truth
+arrives over a transport that can drop (sockets, subscriptions).
+
+#### `signal`
+
+* **Type:** `AbortSignal`
+
+Reject with `signal.reason` on abort.

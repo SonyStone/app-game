@@ -18,7 +18,18 @@ const cases = [
   },
   { name: 'thin rectangular frame', paint: '30 30 40 40 re 30.04 30.04 39.92 39.92 re f*', area: 6.3936 },
   { name: 'hole', paint: '30 30 40 40 re 30.1 30.1 39.8 39.8 re f*', area: 15.96 },
-  { name: 'curved lens', paint: '20 50 m 40 49.8 60 49.8 80 50 c 60 50.2 40 50.2 20 50 c f', area: 12 }
+  { name: 'curved lens', paint: '20 50 m 40 49.8 60 49.8 80 50 c 60 50.2 40 50.2 20 50 c f', area: 12 },
+  {
+    // Print PDFs split one image or shape across polygon clips; a shared axis-aligned edge must not leak paper.
+    name: 'abutting polygon clips',
+    paint:
+      'q 30 30 m 50.5 30 l 50.5 70 l 40 70 l 40 60 l 30 60 l h W n 0 0 100 100 re f Q ' +
+      'q 50.5 30 m 70 30 l 70 60 l 60 60 l 60 70 l 50.5 70 l h W n 0 0 100 100 re f Q',
+    area: 1400,
+    // Anti-aliasing both sides of the 40 pt seam leaks about 20; outer edges resolved at pixel centers move about 2.
+    tolerance: 6,
+    rotations: [0]
+  }
 ];
 const browser = await chromium.launch({
   channel: process.env.GPU_TEXT_BROWSER_CHANNEL || undefined,
@@ -30,29 +41,24 @@ await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
 const errors = [];
 page.on('pageerror', (error) => errors.push(error.message));
 try {
-  await page.route('**/coverage-check', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<body style="margin:0"></body>' })
-  );
   for (const test of cases) {
     await page.unroute('**/coverage.pdf');
     await page.route('**/coverage.pdf', (route) =>
       route.fulfill({ body: makePdf(test.paint, { width: 100, height: 100 }) })
     );
-    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://127.0.0.1:3180'}/coverage-check`);
+    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://127.0.0.1:3180'}/tests/browser/empty.html`);
     await page.evaluate(async () => {
-      const { convertPdf } = await import('/src/features/document/pdf/convertPdf.ts');
-      const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');
-      const { layoutPages } = await import('/src/features/document/document.ts');
-      const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+      const { convertPdf } = await import('/tests/browser/workerHarness.tsx');
+      const { readGdoc } = await import('/tests/browser/workerHarness.tsx');
+      const { layoutPages } = await import('/src/features/document/layoutPages.ts');
+      const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
       const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
       const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
       const converted = (await convertPdf(await (await fetch('/coverage.pdf')).arrayBuffer()))._unsafeUnwrap();
       const data = (await readGdoc(converted))._unsafeUnwrap();
       const doc = {
         ...data,
-        pages: layoutPages(data.pages, 2)._unsafeUnwrap(),
-        images: new Map(),
-        imageVertices: new ArrayBuffer(0)
+        pages: layoutPages(data.pages, 2)._unsafeUnwrap()
       };
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = 100;
@@ -72,7 +78,7 @@ try {
         dispose();
       };
     });
-    for (const rotation of [0, 0.37, 1.57]) {
+    for (const rotation of test.rotations ?? [0, 0.37, 1.57]) {
       await page.evaluate((rotation) => drawCoverage(rotation), rotation);
       const png = (await page.screenshot()).toString('base64');
       const ink = await page.evaluate(async (png) => {
@@ -93,7 +99,7 @@ try {
       }, png);
       console.log(test.name, rotation, { expected: test.area, ink });
       assert.ok(
-        Math.abs(ink - test.area) < Math.max(0.02, test.area * 0.04),
+        Math.abs(ink - test.area) < (test.tolerance ?? Math.max(0.02, test.area * 0.04)),
         `${test.name}: ink ${ink}, expected ${test.area}`
       );
     }

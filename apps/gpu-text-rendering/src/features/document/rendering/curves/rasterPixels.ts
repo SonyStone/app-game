@@ -1,7 +1,7 @@
 import { err, ok, type Result } from 'neverthrow';
 import { lastLevel, mipSize, tileExtent, tileSize, type Tile } from './virtualTiles';
 
-/** One independently decoded mip, with premultiplied RGBA8 samples. */
+/** One independently decoded mip, with straight (unpremultiplied) RGBA8 samples in row-major order. */
 export type RasterMip = { width: number; height: number; pixels: Uint8Array<ArrayBuffer> };
 
 /** Area reduction includes the final row/column of odd and narrow images. */
@@ -76,6 +76,39 @@ export function expandPackedTile(pixels: Uint8Array<ArrayBuffer>, width: number,
   }
 
   return expanded.buffer;
+}
+
+/**
+ * Reassembles one mip level from its packed gutter tiles, reading every tile the level spans.
+ * `readTile` returns a `tileExtent`² RGBA8 tile whose interior starts one texel inside its gutter.
+ */
+export async function assembleTiledMip(
+  width: number,
+  height: number,
+  readTile: (x: number, y: number) => Promise<Result<ArrayBuffer, string>>
+): Promise<Result<RasterMip, string>> {
+  const pixels = new Uint8Array(width * height * 4);
+
+  for (let ty = 0; ty < Math.ceil(height / tileSize); ty++) {
+    for (let tx = 0; tx < Math.ceil(width / tileSize); tx++) {
+      const tile = await readTile(tx, ty);
+
+      if (tile.isErr()) {
+        return err(tile.error);
+      }
+
+      const columns = Math.min(tileSize, width - tx * tileSize);
+      const rows = Math.min(tileSize, height - ty * tileSize);
+      const source = new Uint8Array(tile.value);
+
+      for (let y = 0; y < rows; y++) {
+        const from = ((y + 1) * tileExtent + 1) * 4;
+        pixels.set(source.subarray(from, from + columns * 4), ((ty * tileSize + y) * width + tx * tileSize) * 4);
+      }
+    }
+  }
+
+  return ok({ width, height, pixels });
 }
 
 /** Canonical level-major GDOC tile index. Image dimensions have already been validated by Rust. */

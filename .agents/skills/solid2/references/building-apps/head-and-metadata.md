@@ -1,0 +1,254 @@
+# Head and metadata
+
+Every product page in the store has the same browser tab title, "Solid App", because the only `<title>` is the one in `Document.tsx`.
+Paste a product link into a chat and the preview shows the same default image for every product.
+The component that knows the product name renders inside `<body>`; the tags that need it live in `<head>`, where a component cannot render.
+
+Solid ships a head registry in `@solidjs/web` for this.
+A component declares a title or a meta tag from wherever it lives, and the registry puts the tag in the document head, replaces it when a later component declares the same tag, and restores the earlier one when that component unmounts.
+`@solidjs/meta` wraps the registry in components.
+The `basic` and `fullstack` project shapes include it; a `bare` project adds it with:
+
+```sh
+npm i @solidjs/meta
+pnpm i @solidjs/meta
+yarn add @solidjs/meta
+bun i @solidjs/meta
+deno add npm:@solidjs/meta
+```
+
+There is no provider and no setup.
+Most apps need only the first two sections, a default title with a per-page override and a `<Meta>` or two per page; the rest covers grouping, the registry underneath, and what streams under server rendering.
+
+## A default and a per-page override
+
+Set a default in `App`, as the templates do, and override it in the page:
+
+```tsx
+// src/App.tsx
+import { Title } from "@solidjs/meta";
+
+<Title>Solid Store</Title>;
+```
+
+```tsx
+// src/routes/products/[id].tsx
+import { Title } from "@solidjs/meta";
+import type { RouteProps } from "@solidjs/router";
+
+export default function Product(props: RouteProps<"/products/:id">) {
+	return (
+		<>
+			<Title>{`Product ${props.params.id} - Solid Store`}</Title>
+			<h1>Product {props.params.id}</h1>
+		</>
+	);
+}
+```
+
+Open `/products/mug` and the tab reads "Product mug - Solid Store".
+Navigate to a page with no `<Title>` of its own and it reads "Solid Store" again.
+Navigate from `/products/mug` to `/products/tee` and the title updates in place.
+
+Three rules produce that behavior, and they apply to every tag.
+
+Later wins.
+Tags have an identity: `<Title>` is always the same one, and `<Meta name="description">` is identified by its `name`.
+The most recently mounted tag for an identity is the one in the document, so the page's `<Title>`, mounted after `App`'s, wins.
+
+Disposal restores.
+When the winning tag unmounts, the previous one comes back.
+Leaving the product page restores the store title with no cleanup code.
+
+Updates are reactive.
+Text children and attribute values can read signals, and an update applies in place without changing the tag's position in the override order.
+The param change updates the existing title rather than mounting a new one.
+
+Each component's reference page documents its identity rule; [`Title`](../meta/title.md) is the simplest.
+
+:::caution[Leave the tags the registry manages out of Document]
+The static `<title>Solid App</title>` in `Document.tsx` is the fallback for a render with no `<Title>` mounted at all, and the registry replaces it as soon as one mounts.
+Other tags do not get that treatment.
+
+```tsx
+// Avoid: a hardcoded description next to a rendered one
+<head>
+	<meta name="description" content="A store built with Solid" />
+</head>
+<Meta name="description" content={product().summary} />
+
+// Prefer: one default rendered through the registry
+<Meta name="description" content="A store built with Solid" />
+<Meta name="description" content={product().summary} />
+```
+
+The `Avoid` version puts two `<meta name="description">` tags in the document, because the registry leaves head tags it did not register alone.
+The `Prefer` version has one, and the product page's wins.
+:::
+
+### A title from loaded data
+
+A title often depends on data that is still loading.
+Read it the same way as any async value:
+
+```tsx
+import { Title } from "@solidjs/meta";
+import { Loading, createMemo } from "solid-js";
+import type { RouteProps } from "@solidjs/router";
+
+export default function Product(props: RouteProps<"/products/:id">) {
+	const product = createMemo(() => getProduct(props.params.id));
+	return (
+		<Loading fallback={<p>Loading…</p>}>
+			<Title>{product().name}</Title>
+			<h1>{product().name}</h1>
+		</Loading>
+	);
+}
+```
+
+Under streaming SSR the shell goes out with the fallback and `App`'s default title; when the product arrives, the title patch streams with the content.
+In the browser the same read updates the title when the data lands.
+Nothing about `<Title>` is special here; it is a component reading a memo.
+
+## Other tags
+
+`Meta`, `Link`, `Style`, `Script`, and `Base` follow the same rules:
+
+```tsx
+import { Link, Meta } from "@solidjs/meta";
+
+<Link rel="canonical" href={`https://example.com${location.pathname}`} />
+<Meta name="description" content={product().summary} />
+<Meta property="og:image" content={product().image} />
+```
+
+Every component accepts a `key` prop that overrides the default identity.
+Use it to make otherwise-distinct tags override each other, or to fork an identity that would otherwise collide:
+
+```tsx
+{/* These override each other despite different attributes: */}
+<Meta key="social-image" name="twitter:image" content="/twitter.png" />
+<Meta key="social-image" property="og:image" content="/og.png" />
+```
+
+## Group related tags
+
+Use [`<Head>`](../meta/head.md) when several tags form one replacement set.
+Tags with the same identity coexist inside a group.
+A later group replaces the earlier set as one unit, and unmounting the later group restores the earlier set.
+Group membership stays reactive as child tags mount and unmount.
+
+This layout provides two default social images:
+
+```tsx
+import { Head, Meta } from "@solidjs/meta";
+
+function SocialDefaults() {
+	return (
+		<Head>
+			<Meta property="og:image" content="/default-wide.png" />
+			<Meta property="og:image" content="/default-square.png" />
+		</Head>
+	);
+}
+```
+
+A product page can replace both defaults while it remains mounted:
+
+```tsx
+function ProductSocialTags(props: { image: string }) {
+	return (
+		<Head>
+			<Meta property="og:image" content={props.image} />
+			<Meta name="twitter:card" content="summary_large_image" />
+		</Head>
+	);
+}
+```
+
+Open a product and both default images are gone, replaced by the product image and the card type.
+Leave the page and the two defaults are back.
+
+An inner `<Head>` starts an independent group.
+Render bare `Meta` components from child components when those tags should join the surrounding group.
+
+:::deep-dive[The registry under the components]
+Solid Meta is a thin layer over `useHead` from `@solidjs/web`, and a library or an application can call that primitive directly for descriptor-level control:
+
+```tsx
+import { useHead } from "@solidjs/web";
+
+function ProductDescription(props: { description: string }) {
+	useHead({
+		tag: "meta",
+		props: {
+			name: "description",
+			content: () => props.description,
+		},
+	});
+
+	return null;
+}
+```
+
+Pass an array to register one replacement group, or a function to make the group's membership reactive; `<Head>` is that call with the group collected from context.
+The descriptor is registered under the current owner, so it is disposed with the component that called `useHead`.
+For application metadata, the components are easier to read in JSX; [`useHead`](../web/use-head.md) and [`HeadTag`](../web/head-tag.md) document the descriptor contract.
+:::
+
+## Server rendering
+
+In a start-mode project there is nothing to wire: the generated entries render `Document`, and the registry writes into its `<head>`.
+An authored server entry gets the same behavior from `renderToStream`, and can take the head markup itself through the `onHead` render option when it assembles the document by hand.
+
+On the wire:
+
+* Tags that are settled at the first flush are spliced into `<head>`, with `<base>` and `<meta charset>` right after `<head>` opens, resource links early, and the rest after.
+* Tags registered under a `Loading` boundary that settles later stream as patches and apply when the boundary reveals, which is how the data-driven title above works.
+* On the client, hydration adopts the server-rendered head tags in place, so there is no remove-and-reinsert flicker on load.
+
+## Common problems
+
+### The title still shows the previous page while the new one loads
+
+The new page's `<Title>` reads pending data, so the update is held with the rest of the page and the previous winner stays.
+That is the same [held update](../concepts/async-reactivity.md#settled-view-and-in-flight-work) the content gets.
+If the title does not need the data, render `<Title>` from a part of the page that does not read it.
+
+### Two `og:image` tags appear when only one was expected
+
+`<Meta name="og:image">` and `<Meta property="og:image">` have different identities.
+Use `property` for Open Graph, or give both the same `key`.
+
+### `Multiple <title> tags in one head group; the last one wins` in the console
+
+Two `<Title>` components rendered inside the same `<Head>` group.
+`<title>` has one identity that `key` cannot fork, so only the last one is in the document.
+Keep one `<Title>` per group.
+
+### A page's meta tags stay after navigating away
+
+They were registered with `useHead` outside a component owner, so nothing disposes them.
+Register from inside a component, or from a scope with an owner.
+
+### A layout's defaults disappear when a page overrides one of them
+
+The layout rendered its tags in a `<Head>` group and the page replaced the whole group.
+Render the defaults as bare components if the page should override them one at a time.
+
+## Recap
+
+* Render `<Title>` and `<Meta>` from the component that knows the value; there is no provider.
+* The most recently mounted tag with an identity wins, and unmounting it restores the previous one.
+* Read signals and async values in a tag as in any component; a pending value holds the title with the rest of the page.
+* Keep `Document.tsx` to the static `<title>` fallback, the charset, and tags the registry does not manage.
+* Use `key` to make distinct tags share an identity or to split one that would collide.
+* Wrap tags in `<Head>` when they must be replaced and restored as a set; render them bare when a page should override them one at a time.
+* Under streaming SSR, settled tags ship in the shell and late tags patch in with their boundary.
+
+## Next steps
+
+* [Server functions](server-functions.md): load the product the title reads from the server, and keep the read out of the browser bundle.
+* [Rendering and SSR](../concepts/rendering-and-ssr.md#who-owns-the-document): what `onHead` is for when another host owns the document.
+* [Migrate from Solid Meta 0.x](../migration/from-solid-meta.md): what changed from the provider-based versions.

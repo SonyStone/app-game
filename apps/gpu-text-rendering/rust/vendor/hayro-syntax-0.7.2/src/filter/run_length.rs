@@ -24,6 +24,11 @@ pub(crate) fn decode(data: &[u8]) -> Option<Vec<u8>> {
                 decoded.extend([reader.read_byte()?].repeat(length));
             }
         }
+
+        // Local patch: run-length output can expand 64x; enforce the shared cap.
+        if decoded.len() > crate::limits::MAX_DECODED_STREAM_BYTES {
+            return None;
+        }
     }
 
     Some(decoded)

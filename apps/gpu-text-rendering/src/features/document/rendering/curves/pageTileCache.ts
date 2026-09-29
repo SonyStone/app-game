@@ -1,30 +1,46 @@
 import { err, ok, ResultAsync } from 'neverthrow';
 import tgpu, { d, std } from 'typegpu';
 import { errorMessage, gpuError, type GpuError } from '../../../../shared/errors';
-import type { GpuContext } from '../../../../shared/gpu/context';
+import type { GpuDevice } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { TextDocument } from '../../document';
 import type { SceneFrame } from '../createFrame';
 import { deferRefinement } from './deferRefinement';
-import { pageTileFrame, pageTileKey, pageTileRect, visiblePageTiles, type PageTile } from './pageTiles';
+import { pageTileFrame, pageTileKey, pageTileRect, parentTile, visiblePageTiles, type PageTile } from './pageTiles';
 import { planPageRefinement } from './planPageRefinement';
 import { selectPageTiles } from './selectPageTiles';
 
 /**
  * Retains composed PDF tiles across pan/zoom. Pinned page fallbacks prevent holes;
  * bounded refinement batches use the latest visible working set, including during motion.
+ * GPU resources are released through `keep`'s owner; `changed` is the owner's redraw notification.
  */
 export function createPageTileCache(
-  gpu: GpuContext,
-  document: TextDocument,
-  pages: Set<number>,
-  keep: KeepGpuResource,
-  render: (pass: GPURenderPassEncoder, frame: SceneFrame) => void,
-  sourcesReady: (page: number) => boolean = () => true,
-  fallbacksReady: (page: number) => boolean = () => true
+  gpu: GpuDevice,
+  {
+    document,
+    pages,
+    keep,
+    render,
+    sourcesReady,
+    fallbacksReady,
+    changed
+  }: {
+    document: TextDocument;
+    /** Pages with a composed prefix; other pages are never cached. */
+    pages: ReadonlySet<number>;
+    keep: KeepGpuResource;
+    /** Records one page tile's composed prefix into `pass`, using the tile frame's transform. */
+    render: (pass: GPURenderPassEncoder, frame: SceneFrame) => void;
+    /** Whether every source texel the page's prefix needs is resident, so a refined tile is final. */
+    sourcesReady: (page: number) => boolean;
+    /** Whether every image fallback of the page is drawable, so a tile has no holes. */
+    fallbacksReady: (page: number) => boolean;
+    /** Requests a redraw after refined tiles land or while they fade in. Never called after disposal. */
+    changed: () => void;
+  }
 ) {
   const { root, device, format } = gpu;
-  const events = new EventTarget();
   const camera = keep(root.createBuffer(Camera)).$usage('uniform');
   const cameraGroup = root.createBindGroup(cameraLayout, { camera });
   const sampler = root.createSampler({ minFilter: 'linear', magFilter: 'linear', mipmapFilter: 'linear' });
@@ -49,17 +65,22 @@ export function createPageTileCache(
   const pageWorkMs = new Map<number, number>();
   const requestedAt = new Map<string, number>();
   const waiters = new Set<() => void>();
+  /** Tiles every view wants, taken from each view's center-first list in turn. */
   let wanted = new Map<string, PageTile>();
+  /** Each drawing view's latest wanted tiles and motion; views draw independently. */
+  const views = new Map<object, { wanted: Map<string, PageTile>; lastTransform?: number[] }>();
   let pending = false;
   let disposed = false;
   let clock = 0;
   let failure: GpuError | undefined;
   const deferred = deferRefinement(refine);
   let fadeTimer: ReturnType<typeof setTimeout> | undefined;
-  let lastTransform: number[] | undefined;
+  // Motion of any view defers refinement; zoomingOut follows the view that moved last.
   let movedAt = -Infinity;
   let zoomingOut = false;
   let nextBatchAt = 0;
+  // Fade times are f32 on the GPU; offsets from creation keep millisecond precision in long sessions.
+  const epoch = performance.now();
 
   keep({
     destroy() {
@@ -73,7 +94,6 @@ export function createPageTileCache(
   });
 
   return {
-    events,
     /** Read-only counters for navigation/quality diagnostics; no GPU synchronization. */
     get refinement() {
       const missing = [...wanted.values()].filter(needsRefinement);
@@ -85,9 +105,11 @@ export function createPageTileCache(
         pending
       };
     },
+    /** First GPU render error; once set, refinement stops and `settle` returns immediately. */
     get failure() {
       return failure;
     },
+    /** Estimated bytes of cached tile textures (including mips) and their uniforms. */
     get resourceBytes() {
       return [...entries.values()].reduce((sum, entry) => sum + entry.bytes, 48);
     },
@@ -107,20 +129,24 @@ export function createPageTileCache(
 
       return ok<void>(undefined);
     },
-    /** Keeps old pixels visible while image uploads invalidate only the affected pages. */
-    invalidate(changedPages: Iterable<number>) {
+    /** Keeps old pixels visible while image uploads invalidate only the affected pages; defaults to all pages. */
+    invalidate(changedPages: Iterable<number> = pages) {
       for (const page of changedPages) {
         revisions.set(page, (revisions.get(page) ?? 0) + 1);
       }
 
       schedule();
     },
-    /** Cancels queued refinement when the diagnostic direct path is selected. */
-    pause() {
-      wanted.clear();
-      requestedAt.clear();
-      deferred.cancel();
-      finish();
+    /** Drops `view`'s wanted tiles when it selects the diagnostic direct path; the last paused view cancels refinement. */
+    pause(view: object = defaultView) {
+      views.get(view)?.wanted.clear();
+      mergeWanted();
+    },
+    /** Forgets a view that stopped drawing, for example when its canvas closes. */
+    forgetView(view: object) {
+      if (views.delete(view)) {
+        mergeWanted();
+      }
     },
     /** Waits for requested detail, for deterministic screenshots; interactive drawing never waits. */
     async settle() {
@@ -132,22 +158,28 @@ export function createPageTileCache(
       // Offline capture waits for the short visual transition too; the interactive path never awaits it.
       if (!disposed && !failure) {
         const latest = [...entries.values()].reduce((latest, entry) => Math.max(latest, entry.readyAt), 0);
-        await new Promise((resolve) => setTimeout(resolve, Math.max(0, latest + 100 - performance.now())));
+        await new Promise((resolve) => setTimeout(resolve, Math.max(0, latest + fadeMs - performance.now())));
       }
     },
-    draw(pass: GPURenderPassEncoder, frame: SceneFrame) {
-      clock++;
+    /**
+     * Replaces `view`'s wanted tiles with those covering the frame's visible pages at its scale, center first, and
+     * schedules their refinement. Pages may be requested before they are drawn, so they can switch to composed
+     * tiles only once {@link covers} reports them ready. Callers drawing a single view may omit `view`.
+     */
+    request(frame: SceneFrame, view: object = defaultView) {
       const now = performance.now();
       const transform = [...frame.mul, ...frame.add, ...frame.rotation, frame.width, frame.height];
+      const state = views.get(view) ?? { wanted: new Map<string, PageTile>() };
+      const { lastTransform } = state;
 
-      if (lastTransform && transform.some((value, index) => value !== lastTransform![index])) {
+      if (lastTransform && transform.some((value, index) => value !== lastTransform[index])) {
         movedAt = now;
         zoomingOut = frame.mul[0] < lastTransform[0]!;
       }
 
-      lastTransform = transform;
-      wanted = new Map();
-      camera.write({ mul: frame.mul, add: frame.add, rotation: frame.rotation, time: now });
+      state.lastTransform = transform;
+      views.set(view, state);
+      const viewWanted = new Map<string, PageTile>();
 
       for (const { index } of frame.visible) {
         if (!pages.has(index)) {
@@ -159,12 +191,13 @@ export function createPageTileCache(
           previewTiles[0]?.level === 0 ? previewTiles : visiblePageTiles(document, index, frame, detailSize, 1);
 
         for (const tile of visibleTiles) {
-          wanted.set(pageTileKey(tile), tile);
+          viewWanted.set(pageTileKey(tile), tile);
         }
       }
 
       // Center-first detail reaches the area under inspection before peripheral pages.
-      wanted = new Map([...wanted].sort(([, a], [, b]) => distance(a) - distance(b)));
+      state.wanted = new Map([...viewWanted].sort(([, a], [, b]) => distance(a) - distance(b)));
+      wanted = mergeViews();
       for (const [key, tile] of wanted) {
         if (needsRefinement(tile) && !requestedAt.has(key)) {
           requestedAt.set(key, now);
@@ -179,7 +212,7 @@ export function createPageTileCache(
         }
       }
 
-      const selected = selectPageTiles(wanted, entries, revisions, now, 100);
+      schedule();
 
       function distance(tile: PageTile) {
         const rect = pageTileRect(document, tile);
@@ -187,6 +220,38 @@ export function createPageTileCache(
         const y = (rect.y - rect.height / 2) * frame.mul[1] + frame.add[1];
         return x * x + y * y;
       }
+    },
+    /**
+     * Whether every tile `view` last requested for `page` is resident and fully faded in, at its own level or one
+     * level coarser, possibly from an older image revision. Drawing the page from tiles is then at most twice
+     * under-resolved, like an ordinary refinement step, and never falls back to the coarse pinned base.
+     */
+    covers(page: number, view: object = defaultView) {
+      const now = performance.now();
+      const ready = (tile: PageTile) => {
+        const entry = entries.get(pageTileKey(tile));
+        return entry !== undefined && now - entry.readyAt >= fadeMs;
+      };
+
+      for (const tile of views.get(view)?.wanted.values() ?? []) {
+        if (tile.page === page && !ready(tile) && (tile.level <= 1 || !ready(parentTile(tile)))) {
+          return false;
+        }
+      }
+
+      return views.has(view);
+    },
+    /**
+     * Draws the best cached tiles of `view`'s latest {@link request} for the frame's visible pages into `pass`.
+     * Never waits for GPU work; newly refined tiles fade in over {@link fadeMs}.
+     */
+    draw(pass: GPURenderPassEncoder, frame: SceneFrame, view: object = defaultView) {
+      clock++;
+      const now = performance.now();
+      const drawn = new Set(frame.visible.map(({ index }) => index));
+      const viewWanted = new Map([...(views.get(view)?.wanted ?? [])].filter(([, tile]) => drawn.has(tile.page)));
+      camera.write({ mul: frame.mul, add: frame.add, rotation: frame.rotation, time: now - epoch });
+      const selected = selectPageTiles(viewWanted, entries, revisions, now, fadeMs);
 
       // Coarse ancestors paint first; ready descendants replace only their own opaque page region.
       for (const entry of selected) {
@@ -194,18 +259,47 @@ export function createPageTileCache(
         pipeline.with(pass).with(cameraGroup).with(entry.group).draw(4);
       }
 
-      if (fadeTimer === undefined && selected.some((entry) => now - entry.readyAt < 100)) {
+      if (fadeTimer === undefined && selected.some((entry) => now - entry.readyAt < fadeMs)) {
         fadeTimer = setTimeout(() => {
           fadeTimer = undefined;
           if (!disposed) {
-            events.dispatchEvent(new Event('change'));
+            changed();
           }
         }, 16);
       }
-
-      schedule();
     }
   };
+
+  /** Interleaves the views' center-first lists so every view's center refines before any view's periphery. */
+  function mergeViews() {
+    const merged = new Map<string, PageTile>();
+    const lists = [...views.values()].map((view) => [...view.wanted]);
+
+    for (let rank = 0; lists.some((list) => rank < list.length); rank++) {
+      for (const list of lists) {
+        const entry = list[rank];
+
+        if (entry && !merged.has(entry[0])) {
+          merged.set(entry[0], entry[1]);
+        }
+      }
+    }
+
+    return merged;
+  }
+
+  /** Rebuilds the merged wanted tiles after a view leaves or pauses; with none left, cancels queued refinement. */
+  function mergeWanted() {
+    wanted = mergeViews();
+
+    if (wanted.size === 0) {
+      requestedAt.clear();
+      deferred.cancel();
+      finish();
+    } else {
+      schedule();
+    }
+  }
 
   function next() {
     return work().find(canRefine);
@@ -226,13 +320,18 @@ export function createPageTileCache(
   }
 
   function canRefine(tile: PageTile) {
-    const moving = performance.now() - movedAt < 80;
-    const overdue = performance.now() - (requestedAt.get(pageTileKey(tile)) ?? performance.now()) >= maxDeferralMs;
+    const now = performance.now();
+    const overdue = now - (requestedAt.get(pageTileKey(tile)) ?? now) >= maxDeferralMs;
     return (
       needsRefinement(tile) &&
       fallbacksReady(tile.page) &&
-      (overdue || (sourcesReady(tile.page) && (!moving || (pageWorkMs.get(tile.page) ?? Infinity) <= 8)))
+      (overdue || (sourcesReady(tile.page) && (!isMoving(now) || (pageWorkMs.get(tile.page) ?? Infinity) <= 8)))
     );
+  }
+
+  /** Camera motion within the last {@link motionSettleMs}; refinement then yields to interaction. */
+  function isMoving(now: number) {
+    return now - movedAt < motionSettleMs;
   }
 
   function schedule() {
@@ -254,8 +353,9 @@ export function createPageTileCache(
         const deadline = Math.min(
           ...missing.map((tile) => (requestedAt.get(pageTileKey(tile)) ?? now) + maxDeferralMs)
         );
-        const idle = movedAt + 80;
-        deferred.schedule(Math.max(16, (idle > now ? Math.min(idle, deadline) : deadline) - now));
+        deferred.schedule(
+          Math.max(16, (isMoving(now) ? Math.min(movedAt + motionSettleMs, deadline) : deadline) - now)
+        );
       } else {
         finish();
       }
@@ -263,8 +363,8 @@ export function createPageTileCache(
     }
 
     pending = true;
-    const moving = performance.now() - movedAt < 80;
     const started = performance.now();
+    const moving = isMoving(started);
     const tiles = work()
       .filter(canRefine)
       // Fill missing surroundings before repeatedly refreshing a center tile as its images stream in.
@@ -288,7 +388,7 @@ export function createPageTileCache(
         schedule();
       }
 
-      events.dispatchEvent(new Event('change'));
+      changed();
     });
   }
 
@@ -338,7 +438,8 @@ export function createPageTileCache(
           }
 
           const readyAt = allocation.tile.level === 0 ? -1000 : performance.now();
-          allocation.placement.patch({ readyAt });
+          // Level-0 fallbacks keep the -1000 sentinel so they are always fully opaque.
+          allocation.placement.patch({ readyAt: allocation.tile.level === 0 ? -1000 : readyAt - epoch });
           entries.set(key, { ...allocation, readyAt, revision, used: clock });
           requestedAt.set(key, performance.now());
         }
@@ -411,8 +512,17 @@ export function createPageTileCache(
   }
 }
 
+/**
+ * Tiles hold 1.25–2.5 texels per screen pixel. Unbiased trilinear sampling always blended in the half-resolution
+ * mip, making composed pages visibly softer than directly drawn ones; this keeps sampling near the stored level.
+ */
+const tileLodBias = -1;
+/** Duration of a refined tile's fade-in over its coarser ancestor. */
+const fadeMs = 100;
 /** Makes work eligible after this delay; completion still depends on queued CPU/GPU work. */
 const maxDeferralMs = 100;
+/** The camera counts as moving until this long after its last transform change. */
+const motionSettleMs = 80;
 
 const Camera = d.struct({ mul: d.vec2f, add: d.vec2f, rotation: d.vec4f, time: d.f32 });
 const Placement = d.struct({ rect: d.vec4f, uv: d.vec4f, readyAt: d.f32 });
@@ -443,12 +553,12 @@ const vertex = tgpu.vertexFn({
 
 const fragment = tgpu.fragmentFn({ in: { uv: d.vec2f }, out: d.vec4f })((input) => {
   'use gpu';
-  const opacity = std.clamp((cameraLayout.$.camera.time - tileLayout.$.placement.readyAt) / 100, 0, 1);
-  return std.mul(std.textureSample(tileLayout.$.image, tileLayout.$.sampler, input.uv), opacity);
+  const opacity = std.clamp((cameraLayout.$.camera.time - tileLayout.$.placement.readyAt) / fadeMs, 0, 1);
+  return std.mul(std.textureSampleBias(tileLayout.$.image, tileLayout.$.sampler, input.uv, tileLodBias), opacity);
 });
 
 /** Targets 32 MiB for pinned fallbacks; large documents use smaller base tiles and deeper detail levels. */
-function fallbackSize(document: TextDocument, pages: Set<number>) {
+function fallbackSize(document: TextDocument, pages: ReadonlySet<number>) {
   const area = [...pages].reduce((sum, index) => {
     const { width, height } = document.pages[index]!;
     return sum + Math.min(width / height, height / width);
@@ -456,3 +566,6 @@ function fallbackSize(document: TextDocument, pages: Set<number>) {
   const side = Math.sqrt((32 * 1024 * 1024) / Math.max(1, area) / ((4 * 4) / 3)) - 4;
   return Math.max(8, Math.min(256, 2 ** Math.floor(Math.log2(Math.max(8, side)))));
 }
+
+/** View key for callers that draw a single view. */
+const defaultView = {};

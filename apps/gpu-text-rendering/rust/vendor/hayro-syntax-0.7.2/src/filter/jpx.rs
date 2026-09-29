@@ -31,6 +31,18 @@ pub(crate) fn decode(data: &[u8], params: &ImageDecodeParams) -> Option<FilterRe
 
     let width = image.width();
     let height = image.height();
+    // Local patch: bound the decoded bitmap before allocation.
+    let channels = match image.color_space() {
+        ColorSpace::Gray => 1,
+        ColorSpace::RGB => 3,
+        ColorSpace::CMYK => 4,
+        ColorSpace::Unknown { num_channels } | ColorSpace::Icc { num_channels, .. } => {
+            u64::from(*num_channels)
+        }
+    } + u64::from(image.has_alpha());
+    if !crate::limits::image_fits(u64::from(width), u64::from(height), channels) {
+        return None;
+    }
     let bpc = params.bpc.unwrap_or(image.original_bit_depth());
     let cs = match image.color_space() {
         ColorSpace::Gray => ImageColorSpace::Gray,

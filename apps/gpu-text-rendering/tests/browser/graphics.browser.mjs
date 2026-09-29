@@ -51,24 +51,19 @@ page.on('console', (m) => {
 });
 
 try {
-  await page.route('**/graphics-check', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<html><body style="margin:0"></body></html>' })
-  );
-  await page.goto(`${baseURL}/graphics-check`);
+  await page.goto(`${baseURL}/tests/browser/empty.html`);
   const stats = await page.evaluate(
     async (bytes) => {
-      const { convertPdf } = await import('/src/features/document/pdf/convertPdf.ts');
-      const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');
-      const { layoutPages } = await import('/src/features/document/document.ts');
+      const { convertPdf } = await import('/tests/browser/workerHarness.tsx');
+      const { readGdoc } = await import('/tests/browser/workerHarness.tsx');
+      const { layoutPages } = await import('/src/features/document/layoutPages.ts');
       const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
-      const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+      const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
       const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
       const data = (await readGdoc((await convertPdf(new Uint8Array(bytes).buffer))._unsafeUnwrap()))._unsafeUnwrap();
       const documentData = {
         ...data,
-        pages: layoutPages(data.pages, 2)._unsafeUnwrap(),
-        images: new Map(),
-        imageVertices: new ArrayBuffer(0)
+        pages: layoutPages(data.pages, 2)._unsafeUnwrap()
       };
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = 800;

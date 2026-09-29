@@ -1,0 +1,53 @@
+# repeat
+
+Reactively renders a callback `count` times, reusing previously-rendered
+entries when only the count changes. Underlying helper for `<Repeat>`.
+
+* `options.from` — start index (default `0`); useful for offset/windowed
+  rendering.
+* `options.fallback` — accessor returning a value to show when count is `0`.
+
+## Import
+
+```ts
+import { repeat } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function repeat(
+	count: Accessor<number>,
+	map: (index: number) => any,
+	options?: {
+		from?: Accessor<number | undefined>;
+		fallback?: Accessor<any>;
+		name?: string;
+	}
+): Accessor<any[]>;
+```
+
+## Parameters
+
+### `count`
+
+* **Type:** `Accessor<number>`
+
+### `map`
+
+* **Type:** `(index: number) => any`
+
+### `options`
+
+* **Type:** `{ from?: Accessor<number | undefined>; fallback?: Accessor<any>; name?: string; }`
+* Optional
+
+## Examples
+
+```ts
+const view = repeat(count, (i) => `Item ${i}`, { fallback: () => "empty" });
+```
+
+## Learn more
+
+* [Primitive forms](../concepts/boundaries.md#primitive-forms)

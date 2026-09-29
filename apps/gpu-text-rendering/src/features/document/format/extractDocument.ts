@@ -1,8 +1,8 @@
 import { err, ok, Result } from 'neverthrow';
 import { documentError, errorMessage, type DocumentError } from '../../../shared/errors';
-import { compactGlyphs } from '../rendering/compactGlyphs';
-import { buildCoverageTables } from '../rendering/curves/buildCoverageTables';
-import { buildCurvePreparation } from '../rendering/curves/buildCurvePreparation';
+import { buildCoverageTables } from '../plan/buildCoverageTables';
+import { buildCurvePreparation } from '../plan/buildCurvePreparation';
+import { compactGlyphs } from './compactGlyphs';
 import type { DecodedDocument } from './types';
 import type { DecodeOutcome } from './wasm/gpu_document';
 
@@ -29,8 +29,7 @@ export function extractDocument(outcome: DecodeOutcome): Result<DecodedDocument,
           width: records[i]!,
           height: records[i + 1]!,
           beginVertex: records[i + 2]! * 6,
-          endVertex: (records[i + 2]! + records[i + 3]!) * 6,
-          images: []
+          endVertex: (records[i + 2]! + records[i + 3]!) * 6
         });
       }
 

@@ -1,0 +1,156 @@
+# renderToStream
+
+Streams an HTML response, flushing the synchronous shell first and then
+progressively emitting async-resolved fragments as their `<Loading>`
+boundaries settle. Good for time-to-first-byte sensitive pages.
+
+Returns an object with `pipe`/`pipeTo` for piping to a Node `Writable` or
+a Web `WritableStream`, a lazy `readable` byte-stream view for
+`new Response(stream.readable)`, plus a thenable for awaiting full
+completion — `await renderToStream(...)` resolves with the settled HTML
+(the fully-resolved-string form of the render). `pipe`, `pipeTo`, and
+`readable` each consume the render — use exactly one of the three.
+
+## Import
+
+```ts
+import { renderToStream } from "@solidjs/web";
+```
+
+## Type signature
+
+```ts
+function renderToStream<T>(
+	fn: () => T,
+	options?: {
+		nonce?: CSPNonce;
+		renderId?: string;
+		noScripts?: boolean;
+		plugins?: any[];
+		manifest?: AssetManifest | AssetResolver | AssetResolverFn;
+		onCompleteShell?: (info: { write: (v: string) => void }) => void;
+		onCompleteAll?: (info: { write: (v: string) => void }) => void;
+		/** This render's server error hook, ahead of `configureServerErrors`' (see the server entry). */
+		onError?: ServerErrorHook;
+		/**
+		 * Embedded-render contract for hosts that own the document. When the
+		 * shell contains no `</head>`, everything head-bound at first flush
+		 * (resolved `useHead` winners, eager resources, tracked asset links,
+		 * inline styles) is delivered here as one HTML string — prelude first —
+		 * before the shell chunk is emitted, so the host can write its own
+		 * `<head>` ahead of piping the stream. Post-shell head updates flow
+		 * through the stream itself and apply in the browser. Not called when
+		 * the shell has a `</head>` (splicing is automatic then).
+		 */
+		onHead?: (head: string) => void;
+		/**
+		 * The request's lifecycle. Aborting tears the render down exactly as a
+		 * client disconnect does (`SSR_STREAM_ABANDONED`, `data.reason:
+		 * "signal"`); the one teardown handle for a host whose transport cannot
+		 * report a dead consumer through the sink or the readable view — pass
+		 * `request.signal`.
+		 */
+		signal?: AbortSignal;
+	}
+): {
+	/**
+	 * Awaiting the stream resolves with the complete HTML once every boundary
+	 * settles — the fully-settled-string form of the render. Render errors
+	 * route through `onError` and the promise resolves with whatever HTML the
+	 * render produced; it never rejects.
+	 */
+	then<TResult1 = string, TResult2 = never>(
+		onfulfilled?: ((html: string) => TResult1 | PromiseLike<TResult1>) | null,
+		onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+	): Promise<TResult1 | TResult2>;
+	pipe: (writable: { write: (v: string) => void; end: () => void }) => void;
+	pipeTo: (writable: WritableStream) => Promise<void>;
+	readonly readable: ReadableStream<Uint8Array>;
+};
+```
+
+## Parameters
+
+### `fn`
+
+* **Type:** `() => T`
+
+Function that returns the root JSX.
+
+### `options`
+
+* **Type:** `{ nonce?: CSPNonce; renderId?: string; noScripts?: boolean; plugins?: any[]; manifest?: AssetManifest | AssetResolver | AssetResolverFn; onCompleteShell?: (info: { write: (v: string) => void }) => void; onCompleteAll?: (info: { write: (v: string) => void }) => void; onError?: ServerErrorHook; onHead?: (head: string) => void; signal?: AbortSignal; }`
+* Optional
+
+The `renderToString` options plus `onCompleteShell` and `onCompleteAll` hooks.
+
+## Return value
+
+A stream object with `pipe`, `pipeTo`, and `readable`; awaiting it resolves with the fully settled HTML.
+
+## Examples
+
+```tsx
+import { renderToStream } from "@solidjs/web";
+
+// Node:
+renderToStream(() => <App />).pipe(res);
+
+// Web (Workers / Deno):
+return new Response(renderToStream(() => <App />).readable);
+
+// Fully settled string:
+const html = await renderToStream(() => <App />);
+```
+
+## Caveats
+
+* `pipe`, `pipeTo`, and `readable` each consume the render. Use exactly one of them, or await the stream for the settled string.
+* Render errors route through `onError`; the awaited promise never rejects.
+
+## Learn more
+
+* [Streaming rendering](../concepts/rendering-and-ssr.md#streaming-rendering)
+* [Rendering and SSR](../concepts/rendering-and-ssr.md)
+* [Choose a rendering mode](../guides/choose-a-rendering-mode.md)
+
+## Related types
+
+### `PreloadLink`
+
+An explicit `<link rel="preload">` emitted by the SSR asset pipeline.
+
+`as` is the HTML Standard's set of preload destinations exactly — anything
+else translates to null and the browser does nothing with the link.
+
+`imagesrcset` candidates must already be resolved by the integration: they
+are carried verbatim (a relative candidate resolves against the document URL, not the manifest base). Pair it with `imagesizes` whenever a candidate
+uses a width descriptor, which the spec requires — without it the source
+size falls back to `100vw` and the preload can miss the image the `<img>`
+selects. Omitting `href` is the spec's own recommendation for the source-set
+form: it would only serve browsers without `imagesrcset` support, and there
+it would likely preload the wrong candidate.
+
+```ts
+type PreloadLink = PreloadLinkAttributes &
+	(
+		| {
+				href: string;
+				as: Exclude<JSX.HTMLPreloadAs, "image">;
+				imagesrcset?: never;
+				imagesizes?: never;
+		  }
+		| {
+				href: string;
+				as: "image";
+				imagesrcset?: string;
+				imagesizes?: string;
+		  }
+		| {
+				href?: never;
+				as: "image";
+				imagesrcset: string;
+				imagesizes?: string;
+		  }
+	);
+```

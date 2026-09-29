@@ -20,7 +20,7 @@ page.on('console', (message) => {
 try {
   await page.goto(`${baseURL}/tests/browser/scene.html`);
   await page.evaluate(async () => {
-    const { loadDocument } = await import('/src/features/document/document.ts');
+    const { loadDocument } = await import('/tests/browser/workerHarness.tsx');
     const { mountScene } = await import('/tests/browser/sceneHarness.tsx');
     const document = (await loadDocument())._unsafeUnwrap();
     window.scene = mountScene(globalThis.document.querySelector('canvas'), document);
@@ -30,6 +30,9 @@ try {
   assert.deepEqual(await page.evaluate(() => scene.errors.map(({ kind, message }) => ({ kind, message }))), []);
   assert.deepEqual(await pixel(400, 300), [255, 0, 0]);
   assert.deepEqual(await pixel(40, 40), [0, 0, 255]);
+  assert.deepEqual(await pixel(720, 40), [0, 255, 0], 'instanced rectangles draw each item');
+  assert.deepEqual(await pixel(720, 100), [0, 255, 0]);
+  assert.deepEqual(await pixel(720, 70), [160, 169, 175], 'instanced rectangles leave gaps between items');
 
   await change(() => scene.setShowDocument(true));
   await page.waitForFunction(() => scene.stats.ready === 1 || scene.errors.length > 0);
@@ -37,6 +40,26 @@ try {
   assert.deepEqual(await pixel(400, 300), [255, 0, 0], 'late document must respect JSX order at equal layer order');
   const pagePixel = await pixel(340, 250);
   assert.notDeepEqual(pagePixel, [160, 169, 175], 'document content must share the canvas');
+
+  const documentBuffers = await page.evaluate(() => scene.stats.destroyedBuffers);
+  await change(() => scene.setDocumentVisible(false));
+  assert.deepEqual(await pixel(340, 250), [160, 169, 175], 'hidden document clears its content');
+  assert.deepEqual(await pixel(400, 300), [255, 0, 0], 'hiding a document preserves sibling layers');
+  assert.equal(await page.evaluate(() => scene.stats.destroyedBuffers), documentBuffers);
+  await change(() => scene.setDocumentVisible(true));
+  assert.deepEqual(await pixel(340, 250), pagePixel);
+  assert.equal(await page.evaluate(() => scene.stats.ready), 1, 'showing a document reuses its renderer');
+
+  await change(() => scene.setDocumentOrder(1));
+  assert.notDeepEqual(await pixel(400, 300), [255, 0, 0], 'document order reacts without rebuilding its renderer');
+  await change(() => scene.setDocumentOrder(0));
+  assert.deepEqual(await pixel(400, 300), [255, 0, 0]);
+
+  await change(() => scene.setPageMarkVisible(true));
+  const pageMark = await page.evaluate(() => scene.projectPage({ x: 120, y: 120 }));
+  assert.deepEqual(await pixel(pageMark.x, pageMark.y), [255, 255, 0], 'page overlays draw in page points');
+  await change(() => scene.setPageMarkVisible(false));
+  assert.notDeepEqual(await pixel(pageMark.x, pageMark.y), [255, 255, 0], 'hiding a page overlay restores the page');
 
   await change(() => scene.setOrder(-1));
   assert.notDeepEqual(await pixel(400, 300), [255, 0, 0], 'reactive order places the rectangle behind the page');
@@ -61,8 +84,8 @@ try {
   assert.notDeepEqual(await pixel(520, 300), [0, 255, 0]);
   assert.equal(
     await page.evaluate(() => scene.stats.destroyedBuffers),
-    before + 1,
-    'rectangle must release its buffer'
+    before + 2,
+    'rectangle must release its uniform and instance buffers'
   );
   assert.deepEqual(await pixel(340, 250), pagePixel, 'removing a rectangle must preserve the document');
 
@@ -76,6 +99,23 @@ try {
   await page.mouse.move(400, 300);
   await page.mouse.wheel(0, -100);
   await page.waitForFunction((oldZoom) => scene.camera().zoom !== oldZoom, oldZoom);
+
+  const held = await page.evaluate(() => ({ ...scene.camera() }));
+  await page.mouse.move(40, 40);
+  await page.mouse.down();
+  await page.mouse.move(200, 200, { steps: 4 });
+  await page.mouse.up();
+  assert.deepEqual(await page.evaluate(() => ({ presses: scene.stats.presses, releases: scene.stats.releases })), {
+    presses: 1,
+    releases: 1
+  });
+  assert.ok((await page.evaluate(() => scene.stats.moves)) >= 1, 'captured moves reach the pressed item');
+  assert.deepEqual(await page.evaluate(() => ({ ...scene.camera() })), held, 'a pressed item keeps the camera still');
+  await page.mouse.move(600, 500);
+  await page.mouse.down();
+  await page.mouse.move(650, 520, { steps: 3 });
+  await page.mouse.up();
+  assert.notEqual(await page.evaluate(() => scene.camera().x), held.x, 'presses beside items still pan the camera');
 
   await change(() => scene.setWorldVisible(true));
   await change(() => scene.setCamera({ x: 0.45, y: 0.45, zoom: 0.5, rotation: 0.7 }));
@@ -123,7 +163,7 @@ try {
   assert.deepEqual(await page.evaluate(() => scene.errors.map(({ kind, message }) => ({ kind, message }))), []);
   assert.deepEqual(errors, []);
   console.log(
-    'PASS: shared JSX scene, async document, ordering, reactive graphics, visibility, document/screen spaces, DPR, stable ids, disposal and idle loop'
+    'PASS: shared JSX scene, instanced rectangles, pointer capture, async document, ordering, reactive graphics, visibility, document/screen spaces, DPR, stable ids, disposal and idle loop'
   );
 } finally {
   await browser.close();

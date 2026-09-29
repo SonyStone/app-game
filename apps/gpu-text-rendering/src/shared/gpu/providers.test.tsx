@@ -4,7 +4,7 @@ import tgpu from 'typegpu';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { GpuContext } from './context';
 import { GpuCanvasProvider, useGpuCanvas } from './GpuCanvasProvider';
-import { TypeGPURootProvider } from './TypeGPURootProvider';
+import { TypeGPURootProvider, useTypeGPURoot } from './TypeGPURootProvider';
 
 vi.mock('typegpu', () => ({ default: { initFromDevice: vi.fn() } }));
 const cleanups: (() => void)[] = [];
@@ -76,6 +76,101 @@ it('replaces/removes canvas consumers without recreating their device', async ()
   dispose();
   expect(destroyRoot).toHaveBeenCalledOnce();
   expect(device.destroy).toHaveBeenCalledOnce();
+  expect(onError).not.toHaveBeenCalled();
+});
+
+it('replaces ready consumers when the GPU buffer requirement changes', async () => {
+  const devices = Array.from({ length: 2 }, () =>
+    Object.assign(new EventTarget(), { destroy: vi.fn(), lost: new Promise(() => {}) })
+  );
+  const requestDevice = vi.fn().mockResolvedValueOnce(devices[0]).mockResolvedValueOnce(devices[1]);
+  vi.stubGlobal('navigator', {
+    gpu: { requestAdapter: async () => ({ limits: { maxBufferSize: 2 ** 30 }, requestDevice }) }
+  });
+  vi.mocked(tgpu.initFromDevice).mockImplementation(
+    ({ device }) => ({ device, destroy: vi.fn() }) as unknown as ReturnType<typeof tgpu.initFromDevice>
+  );
+  const bindings: ReturnType<typeof useTypeGPURoot>[] = [];
+  const detached = vi.fn();
+  const onError = vi.fn(() => null);
+  let resize!: (bytes: number) => void;
+
+  function Consumer() {
+    bindings.push(useTypeGPURoot());
+    onCleanup(detached);
+    return null;
+  }
+
+  cleanups.push(
+    render(() => {
+      const [bytes, setBytes] = createSignal(1);
+      resize = setBytes;
+      return (
+        <TypeGPURootProvider requiredBufferBytes={bytes()} error={onError}>
+          <Consumer />
+        </TypeGPURootProvider>
+      );
+    }, document.createElement('div'))
+  );
+
+  await settle();
+  expect(bindings.map((gpu) => gpu.device)).toEqual([devices[0]]);
+  resize(512 * 1024 * 1024);
+  await settle();
+  expect(bindings.map((gpu) => gpu.device)).toEqual(devices);
+  expect(bindings[0]!.signal.aborted).toBe(true);
+  expect(devices[0]!.destroy).toHaveBeenCalledOnce();
+  expect(devices[1]!.destroy).not.toHaveBeenCalled();
+  expect(detached).toHaveBeenCalledOnce();
+  expect(onError).not.toHaveBeenCalled();
+});
+
+it('remounts ready consumers on a recovered device after device loss', async () => {
+  let lose!: (info: { reason: string; message: string }) => void;
+  const devices = [
+    Object.assign(new EventTarget(), {
+      destroy: vi.fn(),
+      lost: new Promise((resolve) => {
+        lose = resolve;
+      })
+    }),
+    Object.assign(new EventTarget(), { destroy: vi.fn(), lost: new Promise(() => {}) })
+  ];
+  const requestDevice = vi.fn().mockResolvedValueOnce(devices[0]).mockResolvedValueOnce(devices[1]);
+  vi.stubGlobal('navigator', {
+    gpu: { requestAdapter: async () => ({ limits: { maxBufferSize: 2 ** 30 }, requestDevice }) }
+  });
+  vi.mocked(tgpu.initFromDevice).mockImplementation(
+    ({ device }) => ({ device, destroy: vi.fn() }) as unknown as ReturnType<typeof tgpu.initFromDevice>
+  );
+  const bindings: ReturnType<typeof useTypeGPURoot>[] = [];
+  const detached = vi.fn();
+  const onError = vi.fn(() => null);
+
+  function Consumer() {
+    bindings.push(useTypeGPURoot());
+    onCleanup(detached);
+    return null;
+  }
+
+  cleanups.push(
+    render(
+      () => (
+        <TypeGPURootProvider requiredBufferBytes={1} error={onError}>
+          <Consumer />
+        </TypeGPURootProvider>
+      ),
+      document.createElement('div')
+    )
+  );
+
+  await settle();
+  lose({ reason: 'unknown', message: 'GPU reset' });
+  await settle();
+  expect(bindings.map((gpu) => gpu.device)).toEqual(devices);
+  expect(bindings[0]!.signal.aborted).toBe(true);
+  expect(devices[0]!.destroy).toHaveBeenCalledOnce();
+  expect(detached).toHaveBeenCalledOnce();
   expect(onError).not.toHaveBeenCalled();
 });
 

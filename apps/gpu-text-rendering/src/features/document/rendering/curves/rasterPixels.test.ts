@@ -1,5 +1,6 @@
+import { err, ok } from 'neverthrow';
 import { expect, it } from 'vitest';
-import { expandPackedTile, tilePixels } from './rasterPixels';
+import { assembleTiledMip, expandPackedTile, tilePixels } from './rasterPixels';
 import { tileExtent, tileSize } from './virtualTiles';
 
 it('transfers full packed tiles without copying or changing their pixels', () => {
@@ -43,4 +44,40 @@ it.each([
   }
 
   expect(actual).toEqual(expected);
+});
+
+it.each([
+  [500, 1],
+  [300, 200],
+  [128, 129]
+])('assembles a %i × %i mip from every gutter tile it spans', async (width, height) => {
+  const reads: string[] = [];
+  const mip = await assembleTiledMip(width, height, async (tx, ty) => {
+    reads.push(`${tx},${ty}`);
+    // Gutter texels are marked with zero; interior texels encode their image coordinates.
+    const tile = new Uint32Array(tileExtent * tileExtent);
+
+    for (let y = 1; y <= tileSize; y++) {
+      for (let x = 1; x <= tileSize; x++) {
+        tile[y * tileExtent + x] = (ty * tileSize + y - 1) * 65536 + tx * tileSize + x;
+      }
+    }
+
+    return ok(tile.buffer);
+  });
+  const pixels = new Uint32Array(mip._unsafeUnwrap().pixels.buffer);
+
+  expect(reads).toHaveLength(Math.ceil(width / tileSize) * Math.ceil(height / tileSize));
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      expect(pixels[y * width + x]).toBe(y * 65536 + x + 1);
+    }
+  }
+});
+
+it('propagates a failed tile read while assembling a mip', async () => {
+  const mip = await assembleTiledMip(300, 1, async (tx) =>
+    tx === 1 ? err('Broken tile') : ok(new ArrayBuffer(tileExtent * tileExtent * 4))
+  );
+  expect(mip._unsafeUnwrapErr()).toBe('Broken tile');
 });

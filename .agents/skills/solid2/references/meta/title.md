@@ -1,0 +1,66 @@
+# Title
+
+`Title` adds a [`<title>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/title) element that sets the document title.
+
+## Import
+
+```tsx
+import { Title } from "@solidjs/meta";
+```
+
+## Type
+
+```tsx
+const Title: Component<JSX.HTMLAttributes<HTMLTitleElement> & { key?: string }>;
+```
+
+## Props
+
+### `children`
+
+* **Type:** `JSX.Element`
+* **Optional:** Yes
+
+Text content of the `title` element.
+Applied via `textContent`, so it is always escaped.
+Can be a reactive expression.
+
+### `key`
+
+* **Type:** `string`
+* **Optional:** Yes
+
+Accepted as part of the shared Solid Meta head-tag props.
+It does not change title identity because the document title remains a singleton.
+
+## Behavior
+
+* `title` is a hard singleton: the last-registered `<Title>` wins regardless of attributes.
+* Unmounting the winning `<Title>` restores the previous one; a static `<title>` in your server shell is the final fallback.
+
+## Examples
+
+### Basic usage
+
+```tsx
+import { Title } from "@solidjs/meta";
+
+export default function Page() {
+	return <Title>Solid Docs</Title>;
+}
+```
+
+### Reactive title
+
+```tsx
+import { Title } from "@solidjs/meta";
+
+export default function Product(props: { name: () => string }) {
+	return <Title>{props.name()} | My Store</Title>;
+}
+```
+
+## Related
+
+* [`Meta`](meta.md)
+* [`Head`](head.md)

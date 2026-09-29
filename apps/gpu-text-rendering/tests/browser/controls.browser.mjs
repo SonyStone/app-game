@@ -112,15 +112,13 @@ for (const gpu of [true, false]) {
     await page.waitForFunction(
       () => document.querySelector('[role="menuitemcheckbox"]')?.getAttribute('aria-checked') === 'false'
     );
-    assert.equal(
-      await page.getByRole('menuitemcheckbox', { name: 'Auto zoom' }).getAttribute('aria-checked'),
-      'false'
-    );
+    assert.equal(await page.getByRole('menuitemcheckbox', { name: 'Auto zoom' }).getAttribute('aria-checked'), 'false');
     await page.waitForFunction(() => pendingFrames.size === 0);
     await page.setViewportSize({ width: 800, height: 600 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 800 * devicePixelRatio);
     await page.waitForFunction(() => pendingFrames.size === 0);
-    if (!(await page.getByRole('menu').isVisible())) await page.getByRole('button', { name: 'More', exact: true }).click();
+    if (!(await page.getByRole('menu').isVisible()))
+      await page.getByRole('button', { name: 'More', exact: true }).click();
     await page.getByRole('menuitemcheckbox', { name: 'Grids', exact: true }).click();
     await page.getByRole('menuitemcheckbox', { name: 'Vector only' }).click();
     await page.getByRole('button', { name: 'More', exact: true }).press('Escape');
@@ -134,6 +132,27 @@ for (const gpu of [true, false]) {
     await page.getByRole('button', { name: 'Show entire document' }).click();
     await page.waitForFunction(() => pendingFrames.size === 0);
     assert.ok(overview.equals(await snapshot()), 'overview must restore the exact fitted camera');
+    const toggleMinimap = async () => {
+      await page.getByRole('button', { name: 'More', exact: true }).click();
+      await page.getByRole('menuitemcheckbox', { name: 'Minimap' }).click();
+      await page.getByRole('button', { name: 'More', exact: true }).press('Escape');
+      await page.waitForFunction(() => pendingFrames.size === 0);
+    };
+    await toggleMinimap();
+    const withMinimap = await snapshot();
+    assert.ok(!overview.equals(withMinimap), 'the minimap draws over the document');
+    // The minimap sits in the top-right corner; a press there must navigate instead of starting a camera drag.
+    await page.mouse.move(760, 30);
+    await page.mouse.down();
+    assert.equal(await canvas.evaluate((node) => getComputedStyle(node).cursor), 'grab');
+    await page.mouse.move(770, 60, { steps: 3 });
+    await page.mouse.up();
+    await page.waitForFunction(() => pendingFrames.size === 0);
+    assert.ok(!withMinimap.equals(await snapshot()), 'minimap presses move the camera');
+    await toggleMinimap();
+    await page.getByRole('button', { name: 'Show entire document' }).click();
+    await page.waitForFunction(() => pendingFrames.size === 0);
+    assert.ok(overview.equals(await snapshot()), 'hiding the minimap restores the plain document');
     await page.getByRole('button', { name: 'Fullscreen', exact: true }).click();
     await page.waitForFunction(() => !!document.fullscreenElement);
     await page.getByRole('button', { name: 'Exit fullscreen' }).click();
@@ -161,7 +180,10 @@ for (const gpu of [true, false]) {
       await page.getByRole('button', { name: 'Show entire document' }).click();
       await page.waitForFunction(() => pendingFrames.size === 0);
       const box = await page.locator('#toolbar').boundingBox();
-      assert.ok(box.width <= 220 && box.height <= 60 && box.x >= 0 && box.y + box.height <= height);
+      // Five 44 px buttons (open, overview, split, fullscreen, more) must fit the narrowest supported screen.
+      assert.ok(
+        box.width <= 260 && box.height <= 60 && box.x >= 0 && box.x + box.width <= width && box.y + box.height <= height
+      );
       await page.mouse.move(10, 10);
       if (screenshots) await page.screenshot({ path: `${screenshots}/${width}x${height}.png` });
       await more.click();
@@ -191,4 +213,4 @@ for (const gpu of [true, false]) {
     await browser.close();
   }
 }
-console.log('PASS gestures, reactive options, idle RAF, resize, device loss and missing WebGPU');
+console.log('PASS gestures, reactive options, minimap navigation, idle RAF, resize, device loss and missing WebGPU');

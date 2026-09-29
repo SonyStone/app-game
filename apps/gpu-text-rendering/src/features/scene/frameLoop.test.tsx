@@ -1,15 +1,20 @@
-import { render } from '@solidjs/web';
-import { createRoot, createSignal, flush, For, onCleanup, Show, untrack } from 'solid-js';
+import { render, type JSX } from '@solidjs/web';
+import { createEffect, createRoot, createSignal, flush, For, onCleanup, Show, untrack } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
 import { gpuError } from '../../shared/errors';
-import { DocumentCamera, useDocumentCamera } from '../camera/DocumentCamera';
+import { serializeGpuPreparation } from '../../shared/gpu/serializeGpuPreparation';
+import { createDocumentCamera, type DocumentCamera } from '../camera/createDocumentCamera';
+import type { Viewport } from '../viewport/createViewport';
 import { FrameLoop, useFrame, useFrameLoop } from './FrameLoop';
 import { RenderLayer } from './RenderLayer';
+import { ScreenSpace } from './SceneSpace';
 
-vi.mock('../viewport/Viewport', () => ({
-  useViewport: () => ({ size: () => ({ css: { width: 800, height: 600 } }) })
-}));
+const viewport = {
+  size: () => ({ css: { width: 800, height: 600 }, pixels: { width: 800, height: 600 }, dpr: 1 }),
+  clientToScreen: (point: { x: number; y: number }) => point,
+  screenToClip: (point: { x: number; y: number }) => point
+} as Viewport;
 
 vi.mock('../../shared/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
 
@@ -70,25 +75,6 @@ it('unsubscribes removed components and redraws the remaining scene once', async
   expect(frames.size).toBe(0);
 });
 
-it('switches between continuous rendering and idle without creating duplicate RAF loops', async () => {
-  const { setContinuous, loop } = mount();
-  await tick();
-
-  setContinuous(true);
-  flush();
-  loop.invalidate();
-  loop.invalidate();
-  expect(frames.size).toBe(1);
-
-  await tick();
-  expect(frames.size).toBe(1);
-
-  setContinuous(false);
-  flush();
-  await tick();
-  expect(frames.size).toBe(0);
-});
-
 it('stops synchronously on GPU cancellation and ignores subsequent invalidations', async () => {
   const { loop, calls } = mount();
   expect(frames.size).toBe(1);
@@ -111,6 +97,34 @@ it('cancels scheduled callbacks when the JSX tree is disposed', async () => {
   expect(calls).toEqual([]);
 });
 
+it('resumes once after repeated same-turn pauses and resumes', async () => {
+  const { loop, calls } = mount();
+
+  for (let i = 0; i < 3; i++) {
+    loop.setActive(false);
+    expect(frames.size).toBe(0);
+    loop.setActive(true);
+    loop.invalidate();
+    expect(frames.size).toBe(1);
+  }
+
+  flush();
+  await tick();
+  expect(calls).toEqual(['update', 'draw']);
+  expect(frames.size).toBe(0);
+});
+
+it('cancels a same-turn restart when disposed', async () => {
+  const { loop, dispose, calls } = mount();
+  loop.setActive(false);
+  loop.setActive(true);
+  dispose();
+  flush();
+  await tick();
+  expect(frames.size).toBe(0);
+  expect(calls).toEqual([]);
+});
+
 it('preserves a new invalidation requested from a frame callback', async () => {
   const { calls } = mount(true);
   await tick();
@@ -128,7 +142,7 @@ it('composes independently mounted layers, reacts to order and removes them with
     const [order, setOrder] = createSignal(-1);
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
           <RenderLayer
             draw={() => {
               calls.push('sibling');
@@ -177,32 +191,32 @@ it('composes independently mounted layers, reacts to order and removes them with
   expect(gpu.device.queue.submit).toHaveBeenCalledTimes(4);
 });
 
-it('evaluates render children under the loop context and owns their subscriptions and cleanup', async () => {
+it('mounts children once under the loop context and owns their subscriptions and cleanup', async () => {
   const cleanup = vi.fn();
   const callback = vi.fn();
   const onError = vi.fn();
   let loop!: ReturnType<typeof useFrameLoop>;
   let mounts = 0;
 
+  function Scene(props: { visible: boolean }) {
+    mounts++;
+    loop = useFrameLoop();
+    useFrame(callback, { phase: 'update' });
+    onCleanup(cleanup);
+
+    return (
+      <Show when={props.visible}>
+        <RenderLayer draw={() => {}} />
+      </Show>
+    );
+  }
+
   const mounted = createRoot((disposeState) => {
-    const [continuous, setContinuous] = createSignal(false);
     const [visible, setVisible] = createSignal(true);
     const disposeView = render(
       () => (
-        <FrameLoop continuous={continuous()} onError={onError}>
-          {(value) => {
-            mounts++;
-            loop = value;
-            expect(useFrameLoop()).toBe(value);
-            useFrame(callback, { phase: 'update' });
-            onCleanup(cleanup);
-
-            return (
-              <Show when={visible()}>
-                <RenderLayer draw={() => {}} />
-              </Show>
-            );
-          }}
+        <FrameLoop viewport={viewport} onError={onError}>
+          <Scene visible={visible()} />
         </FrameLoop>
       ),
       document.createElement('div')
@@ -214,14 +228,13 @@ it('evaluates render children under the loop context and owns their subscription
     };
 
     cleanups.push(dispose);
-    return { setContinuous, setVisible, dispose };
+    return { setVisible, dispose };
   });
 
   flush();
   await tick();
   expect(callback).toHaveBeenCalledOnce();
 
-  mounted.setContinuous(true);
   mounted.setVisible(false);
   flush();
   await tick();
@@ -245,16 +258,17 @@ it('follows JSX order for late siblings and keyed list reordering without recrea
   const calls: string[] = [];
   const mountedLayers: number[] = [];
   const disposedLayers: number[] = [];
+  let documentCamera!: DocumentCamera;
 
   function Layer(props: { id: number }) {
-    const camera = useDocumentCamera();
+    const { camera } = documentCamera;
     mountedLayers.push(props.id);
     onCleanup(() => disposedLayers.push(props.id));
 
     return (
       <RenderLayer
         draw={() => {
-          calls.push(`${props.id}:${camera.zoom}`);
+          calls.push(`${props.id}:${camera().zoom}`);
         }}
       />
     );
@@ -263,15 +277,16 @@ it('follows JSX order for late siblings and keyed list reordering without recrea
   const mounted = createRoot((disposeState) => {
     const [early, setEarly] = createSignal(false);
     const [ids, setIds] = createSignal([1, 2]);
+    documentCamera = createDocumentCamera({ pageAspect: () => 1 });
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
-          <DocumentCamera>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
+          <ScreenSpace>
             <Show when={early()}>
               <Layer id={0} />
             </Show>
             <For each={ids()}>{(id) => <Layer id={id} />}</For>
-          </DocumentCamera>
+          </ScreenSpace>
         </FrameLoop>
       ),
       document.createElement('div')
@@ -318,7 +333,7 @@ it('reacts to replacing a token draw prop without remounting the layer', async (
     const [draw, setDraw] = createSignal(() => first);
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
           <RenderLayer draw={draw()} />
         </FrameLoop>
       ),
@@ -353,6 +368,11 @@ it('keeps independent animations running until the last enabled owner unsubscrib
     const [enabledB, setB] = createSignal(true);
     const [mountedB, mountB] = createSignal(true);
 
+    function AnimationA() {
+      useFrame(a, { enabled: enabledA, continuous: true });
+      return null;
+    }
+
     function AnimationB() {
       useFrame(b, { enabled: enabledB, continuous: true });
       return null;
@@ -360,15 +380,11 @@ it('keeps independent animations running until the last enabled owner unsubscrib
 
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
-          {() => {
-            useFrame(a, { enabled: enabledA, continuous: true });
-            return (
-              <Show when={mountedB()}>
-                <AnimationB />
-              </Show>
-            );
-          }}
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
+          <AnimationA />
+          <Show when={mountedB()}>
+            <AnimationB />
+          </Show>
         </FrameLoop>
       ),
       document.createElement('div')
@@ -411,14 +427,17 @@ it('pauses hidden pages, retains invalidation and resumes without advancing anim
   const callback = vi.fn();
   let loop!: ReturnType<typeof useFrameLoop>;
   const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+
+  function Animation() {
+    loop = useFrameLoop();
+    useFrame(callback, { continuous: true });
+    return null;
+  }
+
   const dispose = render(
     () => (
-      <FrameLoop onError={vi.fn()}>
-        {(value) => {
-          loop = value;
-          useFrame(callback, { continuous: true });
-          return null;
-        }}
+      <FrameLoop viewport={viewport} onError={vi.fn()}>
+        <Animation />
       </FrameLoop>
     ),
     document.createElement('div')
@@ -480,7 +499,7 @@ it('hides keyed layers without disposing resources and preserves owners when obj
     const [visible, setVisible] = createSignal(true);
     const disposeView = render(
       () => (
-        <FrameLoop onError={vi.fn()}>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
           <For each={items()} keyed={(item) => item.id}>
             {(item) => <Graphic id={item().id} value={item().value} visible={visible()} />}
           </For>
@@ -523,13 +542,16 @@ it('hides keyed layers without disposing resources and preserves owners when obj
 
 it('turns a thrown frame callback failure into one typed error and stops submission', async () => {
   const onError = vi.fn();
+
+  function Failure() {
+    useFrame(() => JSON.parse('invalid JSON'), { continuous: true });
+    return null;
+  }
+
   const dispose = render(
     () => (
-      <FrameLoop onError={onError}>
-        {() => {
-          useFrame(() => JSON.parse('invalid JSON'), { continuous: true });
-          return null;
-        }}
+      <FrameLoop viewport={viewport} onError={onError}>
+        <Failure />
       </FrameLoop>
     ),
     document.createElement('div')
@@ -542,6 +564,201 @@ it('turns a thrown frame callback failure into one typed error and stops submiss
   expect(gpu.device.queue.submit).not.toHaveBeenCalled();
   expect(frames.size).toBe(0);
 });
+
+it('defers submission while preparation holds a validation scope on the device, then draws once', async () => {
+  const { calls, loop } = mount();
+  await tick();
+  expect(gpu.device.queue.submit).toHaveBeenCalledOnce();
+  let finish!: () => void;
+  const preparation = serializeGpuPreparation(
+    gpu.device,
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+  );
+  calls.length = 0;
+  loop.invalidate();
+  await tick();
+  loop.invalidate();
+  await tick();
+  expect(calls).toEqual(['update', 'draw', 'update', 'draw']);
+  expect(gpu.device.queue.submit).toHaveBeenCalledOnce();
+  expect(frames.size).toBe(0);
+
+  finish();
+  await preparation;
+  await tick();
+  expect(frames.size).toBe(1);
+  await tick();
+  expect(gpu.device.queue.submit).toHaveBeenCalledTimes(2);
+});
+
+it('presents only after a submitted frame, and not while submission is deferred', async () => {
+  const calls: string[] = [];
+  const [presenting, setPresenting] = createSignal(false);
+
+  function Present() {
+    useFrame(() => calls.push('update'), { phase: 'update' });
+    useFrame(() => calls.push(`present after ${vi.mocked(gpu.device.queue.submit).mock.calls.length} submits`), {
+      phase: 'present',
+      enabled: presenting
+    });
+    return null;
+  }
+
+  const dispose = render(
+    () => (
+      <FrameLoop viewport={viewport} onError={vi.fn()}>
+        <Present />
+      </FrameLoop>
+    ),
+    document.createElement('div')
+  );
+  cleanups.push(dispose);
+  flush();
+  await tick();
+  expect(calls).toEqual(['update']);
+
+  let finish!: () => void;
+  const preparation = serializeGpuPreparation(
+    gpu.device,
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+  );
+  calls.length = 0;
+  setPresenting(true);
+  flush();
+  await tick();
+  expect(calls).toEqual(['update']);
+
+  finish();
+  await preparation;
+  await tick();
+  await tick();
+  expect(calls).toEqual(['update', 'update', 'present after 2 submits']);
+});
+
+it('requests a frame when a value read by a draw or render callback changes, but not by an update', async () => {
+  const [color, setColor] = createSignal(0);
+  const [scale, setScale] = createSignal(1);
+  const [speed, setSpeed] = createSignal(1);
+  const drawn: number[] = [];
+
+  function Callbacks() {
+    useFrame(() => scale());
+    useFrame(() => speed(), { phase: 'update' });
+    return null;
+  }
+
+  mountScene(() => (
+    <>
+      <Callbacks />
+      <RenderLayer draw={() => void drawn.push(color())} />
+    </>
+  ));
+  await tick();
+  expect(drawn).toEqual([0]);
+  expect(frames.size).toBe(0);
+
+  setColor(1);
+  flush();
+  // The change only schedules a frame: nothing draws outside the RAF callback.
+  expect(drawn).toEqual([0]);
+  expect(frames.size).toBe(1);
+  await tick();
+  expect(drawn).toEqual([0, 1]);
+  expect(frames.size).toBe(0);
+
+  setScale(2);
+  flush();
+  expect(frames.size).toBe(1);
+  await tick();
+  expect(drawn).toEqual([0, 1, 1]);
+
+  setSpeed(2);
+  flush();
+  expect(frames.size).toBe(0);
+});
+
+it('settles update-phase writes and their effects before rendering, without requesting another frame', async () => {
+  const [position, setPosition] = createSignal(0);
+  const [moving, setMoving] = createSignal(false);
+  const drawn: number[][] = [];
+  // Non-reactive state kept in sync by an effect, like a cache that a draw reads.
+  let mirrored = 0;
+
+  function Motion() {
+    createEffect(position, (value) => {
+      mirrored = value;
+    });
+    useFrame(() => setPosition((value) => value + 1), { phase: 'update', enabled: moving });
+    return null;
+  }
+
+  mountScene(() => (
+    <>
+      <Motion />
+      <RenderLayer draw={() => void drawn.push([position(), mirrored])} />
+    </>
+  ));
+  await tick();
+  expect(drawn).toEqual([[0, 0]]);
+
+  setMoving(true);
+  flush();
+  await tick();
+  expect(drawn).toEqual([
+    [0, 0],
+    [1, 1]
+  ]);
+  expect(frames.size).toBe(0);
+});
+
+it('stops observing values that the latest frame no longer reads', async () => {
+  const [useColor, setUseColor] = createSignal(true);
+  const [color, setColor] = createSignal(0);
+  const draw = vi.fn(() => {
+    if (useColor()) {
+      color();
+    }
+  });
+
+  mountScene(() => <RenderLayer draw={draw} />);
+  await tick();
+
+  setUseColor(false);
+  flush();
+  await tick();
+  expect(draw).toHaveBeenCalledTimes(2);
+
+  setColor(1);
+  flush();
+  expect(frames.size).toBe(0);
+});
+
+function mountScene(children: () => JSX.Element) {
+  const dispose = createRoot((disposeRoot) => {
+    const disposeView = render(
+      () => (
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
+          {children()}
+        </FrameLoop>
+      ),
+      document.createElement('div')
+    );
+
+    return () => {
+      disposeView();
+      disposeRoot();
+    };
+  });
+
+  cleanups.push(dispose);
+  flush();
+}
 
 function mount(invalidateFirstFrame = false) {
   const calls: string[] = [];
@@ -568,10 +785,9 @@ function mount(invalidateFirstFrame = false) {
 
   const result = createRoot((disposeState) => {
     const [draw, setDraw] = createSignal(true);
-    const [continuous, setContinuous] = createSignal(false);
     const disposeView = render(
       () => (
-        <FrameLoop continuous={continuous()} onError={vi.fn()}>
+        <FrameLoop viewport={viewport} onError={vi.fn()}>
           <Show when={draw()}>
             <Draw />
           </Show>
@@ -588,7 +804,7 @@ function mount(invalidateFirstFrame = false) {
 
     cleanups.push(dispose);
 
-    return { setDraw, setContinuous, dispose };
+    return { setDraw, dispose };
   });
 
   flush();

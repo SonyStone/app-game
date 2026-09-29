@@ -3,6 +3,14 @@
   "open": "ドキュメントを開く",
   "openHint": "PDF または GDOC を開く",
   "overview": "ドキュメント全体を表示",
+  "splitView": "分割表示",
+  "saveView": "ビューを保存",
+  "savedViews": "保存したビュー",
+  "savedView": "ビュー {{number}}",
+  "removeView": "ビュー {{number}} を削除",
+  "playTour": "保存したビューを再生",
+  "stopTour": "ツアーを停止",
+  "resizePanes": "ペインのサイズを変更",
   "enterFullscreen": "全画面表示",
   "exitFullscreen": "全画面表示を終了",
   "fullscreenUnsupported": "このブラウザーでは全画面表示を利用できません",
@@ -14,6 +22,8 @@
   "download": "GDOC をダウンロード",
   "back": "サンプルに戻る",
   "autoZoom": "自動ズーム",
+  "minimap": "ミニマップ",
+  "performance": "パフォーマンス",
   "grids": "グリッド",
   "vectorOnly": "ベクターのみ",
   "help": "ドラッグで移動、スクロールまたはピンチで拡大・縮小、2 本指で回転できます。",
@@ -40,5 +50,6 @@
   "preparingGraphics": "描画を準備中…",
   "cancelLoading": "読み込みをキャンセル",
   "cancelled": "読み込みをキャンセルしました。別のドキュメントを開いてください。",
-  "pageProgress": "{{total}}ページ中{{completed}}ページ"
+  "pageProgress": "{{total}}ページ中{{completed}}ページ",
+  "dismiss": "閉じる"
 }

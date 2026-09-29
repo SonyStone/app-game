@@ -1,55 +1,23 @@
-import { err, ok } from 'neverthrow';
 import type { ResultValue } from '../../shared/errors';
-import demoUrl from './assets/demo.gdoc?url';
-import type { OnDocumentProgress } from './documentProgress';
-import { readGdoc } from './format/readGdoc';
-import { layoutPages as layoutDocumentPages } from './layoutPages';
-import { readDocumentSource, type ExportDocument } from './readDocumentSource';
+import type { DecodedDocument } from './format/types';
+import type { layoutPages } from './layoutPages';
 
-/** Loads a selected PDF/GDOC or the bundled demo through Rust/WASM in a cancellable Worker, then lays out its pages. */
-export async function loadDocument(
-  signal?: AbortSignal,
-  file?: File,
-  onConverted?: (exportDocument: ExportDocument) => void,
-  onProgress?: OnDocumentProgress
-) {
-  const source = file ? await readDocumentSource(file, signal, onConverted, onProgress) : ok(demoUrl);
+/** Decoded document with viewer page positions. */
+export type TextDocument = PositionedDocument<DecodedDocument>;
 
-  if (source.isErr()) {
-    return err(source.error);
-  }
+type PositionedDocument<Data> = Data extends DecodedDocument
+  ? Omit<Data, 'pages'> & {
+      pages: ResultValue<ReturnType<typeof layoutPages>>;
+    }
+  : never;
 
-  const result =
-    typeof source.value === 'string' || source.value instanceof ArrayBuffer
-      ? await readGdoc(source.value, signal, onProgress)
-      : ok(source.value);
-
-  return result.andThen((data) =>
-    layoutPages(data.pages, 2).map((pages) => ({
-      ...data,
-      pages,
-      imageVertices: new ArrayBuffer(0),
-      images: new Map<string, ImageBitmap>()
-    }))
-  );
-}
-
-/** Decoded document in normalized page coordinates, independent of GPU resources. */
-export type TextDocument = ResultValue<Awaited<ReturnType<typeof loadDocument>>>;
-
-/** A page's contiguous vertex range and optional image draws. */
+/** A page's size and contiguous vertex range. */
 export type PageMetadata = {
   width: number;
   height: number;
   beginVertex: number;
   endVertex: number;
-  images: { filename: string; vertexOffset: number; numVerts: number }[];
 };
-
-/** Lays out every page without changing placement during viewport resizing. */
-export function layoutPages(metadata: readonly PageMetadata[], viewportAspect: number) {
-  return layoutDocumentPages(metadata, viewportAspect);
-}
 
 /** Produces page backgrounds as one triangle strip with degenerate joins. */
 export function pageVertices(document: TextDocument) {

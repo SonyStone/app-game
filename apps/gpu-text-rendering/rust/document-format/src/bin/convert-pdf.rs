@@ -20,7 +20,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let start = Instant::now();
     let bytes = gpu_document::pdf::convert_owned(fs::read(&args[0])?)?;
-    let document = gpu_document::curves::decode(&bytes)?;
+    // Same owned decoder and memory budget as the browser Worker.
+    let document = gpu_document::curves::decode_owned(bytes.clone())?;
     fs::write(&args[1], &bytes)?;
     println!(
         "{} pages, {} curves, {} draws, {} images, {} pixel bytes, {} file bytes, {:?}",

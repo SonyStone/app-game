@@ -4,6 +4,7 @@ import { createSignal } from 'solid-js';
 /** Receives one local PDF/GDOC without navigating away; invalid drops leave the document intact. */
 export function createDocumentDrop(open: (file: File) => void) {
   const [error, setError] = createSignal<'dropUnsupported' | 'dropMultiple'>();
+
   const drop = createNativeDroppable({
     accept: (event) => Array.from(event.dataTransfer?.types ?? []).includes('Files'),
     onEnter: (event) => {
@@ -11,7 +12,9 @@ export function createDocumentDrop(open: (file: File) => void) {
       setError(undefined);
     },
     onOver: (event) => {
-      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy';
+      }
     },
     onDrop: (event) => {
       const files = Array.from(event.dataTransfer?.files ?? []);
@@ -28,5 +31,13 @@ export function createDocumentDrop(open: (file: File) => void) {
       open(file);
     }
   });
-  return { ...drop, error, clearError: () => setError(undefined) };
+
+  return {
+    ref: drop.ref,
+    isOver: drop.isOver,
+    /** Rejected drop reason, cleared by the next drag entering, a valid drop or `dismissError`. */
+    error,
+    /** Hides the rejected drop reason. */
+    dismissError: () => setError(undefined)
+  };
 }

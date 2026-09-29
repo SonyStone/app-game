@@ -1,0 +1,127 @@
+# onSettled
+
+Schedules `callback` to run **once** after the reactive graph has fully
+settled — i.e. once every pending async read inside the current owner has
+resolved and the queue has flushed. Each call registers a single fire; it
+does not create an ongoing subscription.
+
+The canonical lifecycle primitive in 2.0. Three main usages:
+
+* **Component-level setup-and-teardown** *(the most common shape)*: run
+  setup after the component's first stable render and **return a cleanup
+  function** to dispose it on owner disposal. This is the replacement for
+  the 1.x `onMount` + `onCleanup` pairing — setup and teardown live in one
+  block, and `onCleanup` is no longer the right tool for component
+  bodies. (`onMount` no longer exists in 2.0.)
+* **Post-settle "ready" hook:** run once after a component's first stable
+  render — analytics ping, focus, scroll-into-view, etc. No cleanup needed.
+* **Inside an event handler:** schedule work to run after the action or held update triggered by the event has completed.
+
+Reactive reads inside the callback are *not* tracked — to react to
+subsequent settles, register a new `onSettled` each time.
+
+The callback runs during the settle flush itself, which gives it the same
+write semantics as every other effect-phase scope (the effect half of
+`createEffect`, event handlers):
+
+* **Writes** are queued into the same flush's continuation — dependent memos
+  and effects update before the flush returns — but reads inside the
+  callback keep returning the settled (pre-write) values. A callback never
+  observes its own unsettled write. Functional setters still compose:
+  `set(v => v + 1)` twice increments twice.
+* **`flush()` cannot be called** from inside the callback — the flush is
+  already running (dev throws; production is a no-op). To force a drain
+  after this settle, defer it: `queueMicrotask(() => flush())`.
+
+`onCleanup` is **not** allowed inside the callback — return a cleanup
+function instead. The returned cleanup runs on owner disposal.
+
+A cleanup return is only honored when `onSettled` is called from an **owned**
+scope (e.g. a component body). When it fires out of band from an *unowned*
+scope — an event handler, a tracked effect, or another `onSettled` — there is
+no owner lifecycle to bind a cleanup to; returning one is a dev-mode error
+(and is dropped in production). Use the post-settle/event-handler forms below
+for one-shot work, and keep setup-with-teardown in an owned scope.
+
+## Import
+
+```ts
+import { onSettled } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function onSettled(callback: () => void | (() => void)): void;
+```
+
+## Parameters
+
+### `callback`
+
+* **Type:** `() => void | (() => void)`
+
+Function to run; may return a cleanup function that fires
+on owner disposal
+
+## Examples
+
+```tsx
+// Component-level setup + teardown — replaces onMount + onCleanup.
+// Subscribe to an external source on mount, unsubscribe on dispose.
+function useViewportWidth() {
+	const [width, setWidth] = createSignal(window.innerWidth);
+	onSettled(() => {
+		const onResize = () => setWidth(window.innerWidth);
+		window.addEventListener("resize", onResize);
+		return () => window.removeEventListener("resize", onResize);
+	});
+	return width;
+}
+```
+
+```tsx
+// Post-settle "ready" hook — no cleanup needed.
+function Dashboard() {
+	const data = createMemo(async () => fetchData());
+
+	onSettled(() => {
+		analytics.track("dashboard.ready");
+	});
+
+	return (
+		<Loading fallback={<Spinner />}>
+			<pre>{data()}</pre>
+		</Loading>
+	);
+}
+```
+
+```tsx
+// Event-handler — runs after the action settles.
+function SaveButton() {
+	const save = action(function* () {
+		yield api.save();
+	});
+
+	const handleClick = () => {
+		save();
+		onSettled(() => toast("Saved!"));
+	};
+
+	return <button onClick={handleClick}>Save</button>;
+}
+```
+
+## Caveats
+
+* Reads inside the callback are not tracked. To react to later settles, register again.
+* Returning a cleanup only works from an owned scope, such as a component body. From an event handler it is a development error and is dropped in production.
+* `onCleanup` and `flush()` are not allowed inside the callback.
+
+## Learn more
+
+* [Use an effect at an imperative boundary](../guides/avoid-unnecessary-effects.md#use-an-effect-at-an-imperative-boundary)
+* [Ownership](../concepts/reactivity.md#ownership)
+* [Async reactivity](../concepts/async-reactivity.md)
+* [Avoid unnecessary effects](../guides/avoid-unnecessary-effects.md)

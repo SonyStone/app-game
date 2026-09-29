@@ -82,14 +82,11 @@ try {
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
-    await page.route('**/mesh-check', (route) =>
-      route.fulfill({ contentType: 'text/html', body: '<body style="margin:0">' })
-    );
     await page.route('**/compatibility-input.pdf', (route) =>
       route.fulfill({ body: entry.pdf, contentType: 'application/pdf' })
     );
     await writeFile(`${output}/${entry.name}.pdf`, entry.pdf);
-    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/mesh-check`);
+    await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/tests/browser/empty.html`);
     await page.evaluate(installHarness);
     const result = await page.evaluate(() => compatibility.open());
     assert.equal(result.ok, true, JSON.stringify(result));

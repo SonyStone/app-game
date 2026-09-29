@@ -1,0 +1,76 @@
+# onCleanup
+
+Low-level reactive-cleanup primitive. Registers a callback that runs when
+the surrounding owner is disposed.
+
+**In 2.0 user code this is rare.** The two cases where you might reach for
+it have better-shaped tools:
+
+* **Component lifecycle (mount/unmount, listeners, intervals):** use
+  [onSettled](on-settled.md) and **return** a cleanup function. Setup and teardown
+  stay paired in one block. This replaces the 1.x `onMount` + `onCleanup`
+  pairing.
+* **Cleanup tied to an effect run:** `onCleanup` does not belong in
+  `createEffect`'s apply phase. If a compute phase genuinely needs per-run
+  teardown, that's usually a sign the work should be a memo/projection
+  instead, or moved to `onSettled` if it's lifecycle-shaped.
+
+Where `onCleanup` is the right tool is **library / custom-primitive
+internals** — coordinating disposal inside a `createRoot` body, or wiring
+cleanup to a captured owner via `runWithOwner` from a custom factory.
+Application code rarely needs to write any of those shapes directly.
+
+Must be called inside an owner. Calling outside an owner is a no-op (with a
+dev-mode warning).
+
+Cannot be used inside `createTrackedEffect` or `onSettled` — return a
+cleanup function from the callback body instead.
+
+Cleanups run in unwind order: an owner's children are disposed before its
+own cleanups, and within one owner later registrations run before earlier
+ones. In production a component body shares its enclosing owner, so
+register cleanup before creating children when the order between them
+matters.
+
+> For component setup and teardown in Solid 2.0, prefer `onSettled` and return a cleanup function. Keep `onCleanup` for advanced owner and custom primitive internals.
+
+## Import
+
+```ts
+import { onCleanup } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function onCleanup(fn: Disposable): Disposable;
+```
+
+## Parameters
+
+### `fn`
+
+* **Type:** `Disposable`
+
+## Examples
+
+```ts
+// Library shape: thread a resource's disposal into a *captured* owner
+// from a factory that has no settle-phase setup of its own. `onSettled`
+// would queue a callback we don't need; `onCleanup` is the leaner
+// primitive when the only job is "register disposal on this owner".
+function bindToOwner<T extends { dispose(): void }>(
+	owner: Owner,
+	resource: T
+): T {
+	runWithOwner(owner, () => onCleanup(() => resource.dispose()));
+	return resource;
+}
+```
+
+## Learn more
+
+* [Clean up what you start](../guides/custom-primitives.md#clean-up-what-you-start)
+* [Ownership](../concepts/reactivity.md#ownership)
+* [Avoid unnecessary effects](../guides/avoid-unnecessary-effects.md)
+* [Debugging reactivity](../guides/debugging-reactivity.md)

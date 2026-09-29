@@ -1,0 +1,203 @@
+# @solid-primitives/props
+
+Source version: `4.0.0-next.4`.
+
+[Upstream source](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/props/README.md) · [Skill catalogue](../catalogue.md#primitives-catalogue)
+
+
+Library of primitives focused around component props.
+
+- [`combineProps`](props.md#combineprops) - Reactively merges multiple props objects together while smartly combining some of Solid's JSX/DOM attributes.
+- [`combineHandlers`](props.md#combinehandlers) - Chains multiple event handlers into a single handler.
+- [`filterProps`](props.md#filterprops) - Create a new props object with only the property names that match the predicate.
+- [`partitionProps`](props.md#partitionprops) - Split a props object into two reactive views based on a predicate.
+
+## Installation
+
+```bash
+npm install @solid-primitives/props
+# or
+yarn add @solid-primitives/props
+# or
+pnpm add @solid-primitives/props
+```
+
+## `combineProps`
+
+A helper that reactively merges multiple props objects together while smartly combining some of Solid's JSX/HTML attributes.
+
+Event handlers _(onClick, onclick, onMouseMove, onSomething)_, and refs _(props.ref)_ are chained.
+
+`class`, `className`, and `style` are combined.
+
+For all other props, the last prop object overrides all previous ones. Similarly to Solid's `merge`.
+
+### How to use it
+
+```tsx
+import { combineProps } from "@solid-primitives/props";
+
+const MyButton: Component<ButtonProps> = props => {
+  // primitives of a lot of headless ui libraries will provide props to spread
+  const { buttonProps } = createButton();
+  // they can be combined with user's props easily
+  const combined = combineProps(props, buttonProps);
+
+  return <button {...combined} />;
+};
+
+// component consumer can provide button props
+// they will be combined with those provided by createButton() primitive
+<MyButton style={{ margin: "24px" }} />;
+```
+
+#### Chaining of event listeners
+
+Every function property with `on___` name gets chained. That could potentially include properties that are not actually event-listeners — such as `only` or `once`. Hence you should remove them from the props (with Solid's `omit`).
+
+Chained functions will always return `void`. If you want to get the returned value from a callback, you have to split those props and handle them yourself.
+
+**Warning:** The types for event-listeners often won't correctly represent the values. Chaining is meant only for DOM Events spreading to an element.
+
+```ts
+const combined = combineProps(
+  {
+    onClick: e => {},
+    onclick: e => {},
+  },
+  {
+    onClick: [(n, e) => {}, 123],
+  },
+);
+// combined.onClick() will call all 3 of the functions above
+```
+
+The default order of execution is left-to-right. If you want to change it, you can use an options object as the last argument: (`reverseEventHandlers: true`)
+
+```ts
+const combined = combineProps(
+  // props need to be passed in an array
+  [{ onClick: () => console.log("parent") }, { onClick: () => console.log("child") }],
+  {
+    reverseEventHandlers: true,
+  },
+);
+combined.onClick(); // "child" "parent"
+```
+
+##### For better reference of how exactly `combineProps` works, see the [TESTS](https://github.com/solidjs-community/solid-primitives/blob/main/packages/props/test/combineProps.test.ts)
+
+### Additional helpers
+
+A couple of lower-lever helpers that power `combineProps`:
+
+#### `stringStyleToObject`
+
+```ts
+const styles = stringStyleToObject("margin: 24px; border: 1px solid #121212");
+styles; // { margin: "24px", border: "1px solid #121212" }
+```
+
+#### `combineStyle`
+
+```ts
+const styles = combineStyle("margin: 24px; border: 1px solid #121212", {
+  margin: "2rem",
+  padding: "16px",
+});
+styles; // { margin: "2rem", border: "1px solid #121212", padding: "16px" }
+```
+
+## `combineHandlers`
+
+Chains multiple event handlers into a single handler that calls each in order. Handlers that are `null`, `undefined`, or `false` are silently skipped.
+
+When used inline in JSX, reads from Solid's reactive props proxy are tracked through the render context automatically — no explicit signal unwrapping is needed. For a standalone signal holding a handler, read it before passing (`handler()`) or wrap the whole call in a `createMemo`.
+
+```tsx
+import { combineHandlers } from "@solid-primitives/props";
+
+const MyButton: Component<ButtonProps> = props => {
+  // Merge an internal handler with whatever the consumer provides
+  return <button onClick={combineHandlers(props.onClick, () => console.log("clicked"))} />;
+};
+```
+
+Conditional handlers can be passed inline — `null`/`false` entries are skipped safely:
+
+```tsx
+<div onKeyDown={combineHandlers(props.onKeyDown, isOpen() ? closeOnEsc : null)} />
+```
+
+## `filterProps`
+
+A helper that creates a new props object with only the property names that match the predicate.
+
+An alternative primitive to Solid's `omit` that splits props lazily (per-read) — the predicate is not evaluated upfront, so the set of included keys can change dynamically.
+
+The `predicate` is run for every property read lazily — any signal accessed within the `predicate` will be tracked, and `predicate` re-executed if changed.
+
+### How to use it
+
+Params:
+
+- `props` — The props object to filter.
+- `predicate` — A function that returns `true` if the property should be included in the filtered object.
+
+Returns A new props object with only the properties that match the predicate.
+
+```tsx
+import { filterProps } from "@solid-primitives/props";
+
+const MyComponent = props => {
+  const dataProps = filterProps(props, key => key.startsWith("data-"));
+
+  return <div {...dataProps} />;
+};
+```
+
+### `createPropsPredicate`
+
+Creates a predicate function that can be used to filter props by the prop name dynamically.
+
+The provided `predicate` function get's wrapped with a cache layer to prevent unnecessary re-evaluation. If one property is requested multiple times, the `predicate` will only be evaluated once.
+
+The cache is only cleared when the keys of the props object change. _(when spreading props from a signal)_ This also means that any signal accessed within the `predicate` won't be tracked.
+
+```tsx
+import { filterProps, createPropsPredicate } from "@solid-primitives/props";
+
+const MyComponent = props => {
+  const predicate = createPropsPredicate(props, key => key.startsWith("data-"));
+  const dataProps = filterProps(props, predicate);
+
+  return <div {...dataProps} />;
+};
+```
+
+## `partitionProps`
+
+Splits a props object into two reactive views: one containing only the keys that match the predicate, and one containing the rest. Both views are lazy proxies — the predicate runs per property read, not eagerly.
+
+```tsx
+import { partitionProps } from "@solid-primitives/props";
+
+const MyButton = (props: ButtonProps & JSX.HTMLAttributes<HTMLButtonElement>) => {
+  const [ownProps, htmlProps] = partitionProps(props, key =>
+    ["label", "variant", "size"].includes(key as string),
+  );
+
+  return <button {...htmlProps}>{ownProps.label}</button>;
+};
+```
+
+For an expensive predicate, pass a [`createPropsPredicate`](props.md#createpropspredicate) result to share a single cache across both views:
+
+```tsx
+const pred = createPropsPredicate(props, key => expensiveCheck(key));
+const [ownProps, htmlProps] = partitionProps(props, pred);
+```
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/props/CHANGELOG.md)

@@ -106,7 +106,7 @@ async function checkFile(index) {
           });
           await page.locator('input[type=file]').setInputFiles(path.join(directory, name));
           await page.getByRole('button', { name: 'More', exact: true }).click();
-          await page.getByText(name, { exact: true }).waitFor();
+          await page.getByLabel('Document menu').getByText(name, { exact: true }).waitFor();
           await page.keyboard.press('Escape');
           await page.waitForFunction(
             () => document.querySelector('#beziercanvas')?.getAttribute('aria-busy') === 'false',

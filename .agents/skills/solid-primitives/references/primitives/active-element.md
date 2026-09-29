@@ -1,0 +1,150 @@
+# @solid-primitives/active-element
+
+Source version: `3.0.0-next.3`.
+
+[Upstream source](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/active-element/README.md) · [Skill catalogue](../catalogue.md#primitives-catalogue)
+
+
+##### Non-reactive primitives:
+
+- [`makeActiveElementListener`](active-element.md#makeactiveelementlistener) - Listen for changes to the `document.activeElement`.
+- [`makeFocusListener`](active-element.md#makefocuslistener) - Attaches "blur" and "focus" event listeners to the element.
+
+##### Reactive primitives:
+
+- [`createActiveElement`](active-element.md#createactiveelement) - Provides reactive signal of `document.activeElement`.
+- [`createFocusSignal`](active-element.md#createfocussignal) - Provides a signal representing element's focus state.
+
+##### Directives:
+
+- [`focus`](active-element.md#focus) - A directive that notifies you when the element becomes active or inactive.
+
+## Installation
+
+```bash
+npm install @solid-primitives/active-element
+# or
+yarn add @solid-primitives/active-element
+# or
+pnpm add @solid-primitives/active-element
+```
+
+## `makeActiveElementListener`
+
+###### Added id `@2.0.0`
+
+Attaches event listeners to window, listening for the changes of the `document.activeElement`.
+
+```ts
+import { makeActiveElementListener } from "@solid-primitives/active-element";
+
+const [activeElement, setActiveElement] = createSignal(null);
+const clear = makeActiveElementListener(el => setActiveElement(el));
+
+// remove listeners (happens also on cleanup)
+clear();
+```
+
+#### Definition
+
+```ts
+function makeActiveElementListener(callback: (element: Element | null) => void): VoidFunction;
+```
+
+## `makeFocusListener`
+
+###### Added id `@2.0.0`
+
+Attaches "blur" and "focus" event listeners to the element.
+
+```ts
+import { makeFocusListener } from "@solid-primitives/active-element";
+
+const [isFocused, setIsFocused] = createSignal(false);
+const clear = makeFocusListener(focused => setIsFocused(focused));
+
+// remove listeners (happens also on cleanup)
+clear();
+```
+
+#### Definition
+
+```ts
+function makeFocusListener(
+  target: Element,
+  callback: (isActive: boolean) => void,
+  useCapture?: boolean,
+): VoidFunction;
+```
+
+## `createActiveElement`
+
+Provides reactive signal of `document.activeElement`. Check which element is currently focused.
+
+#### How to use it
+
+```ts
+import { createActiveElement } from "@solid-primitives/active-element";
+
+const activeEl = createActiveElement();
+
+createEffect(() => {
+  console.log(activeEl()); // T: Element | null
+});
+```
+
+#### Definition
+
+```ts
+function createActiveElement(): Accessor<Element | null>;
+```
+
+## `createFocusSignal`
+
+Provides a signal representing element's focus state.
+
+#### How to use it
+
+```tsx
+import { createFocusSignal } from "@solid-primitives/active-element";
+
+const isFocused = createFocusSignal(el);
+isFocused(); // T: boolean
+
+// you can also use signals for ref
+const [ref, setRef] = createSignal<Element>(el);
+const isFocused = createFocusSignal(ref);
+// this way if the element changes,
+// the "isFocused" will start checking the new element
+
+// is targeting a ref from jsx, pass it as a function
+// or wrap primitive in onMount, so that it is accessed once mounted
+let ref;
+createFocusSignal(() => ref);
+<div ref={ref} />;
+```
+
+#### Definition
+
+```ts
+function createFocusSignal(target: MaybeAccessor<Element>): Accessor<boolean>;
+```
+
+## `focus`
+
+A ref factory that notifies you when the element becomes active or inactive.
+
+```tsx
+const [active, setActive] = createSignal(false)
+<input ref={focus(setActive)} />
+```
+
+#### Definition
+
+```ts
+function focus(callback: (isActive: boolean) => void): (target: Element) => void;
+```
+
+## Changelog
+
+See [CHANGELOG.md](https://github.com/solidjs-community/solid-primitives/blob/134c5cac19cc5f53dd5a394ecb42252184e8706b/packages/active-element/CHANGELOG.md)

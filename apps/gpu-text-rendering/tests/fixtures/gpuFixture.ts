@@ -7,6 +7,8 @@ export function gpuFixture(signal = new AbortController().signal) {
   const pass = { end: vi.fn() };
   const command = {};
   const encoder = { beginRenderPass: vi.fn(() => pass), finish: vi.fn(() => command) };
+  // A real element, so scene pointer dispatch can attach listeners and capture pointers.
+  const canvas = Object.assign(document.createElement('canvas'), { width: 800, height: 600 });
   const gpu = {
     signal,
     checkActive: vi.fn(() => ok()),
@@ -16,7 +18,7 @@ export function gpuFixture(signal = new AbortController().signal) {
       queue: { submit: vi.fn(), onSubmittedWorkDone: vi.fn(async () => {}) }
     },
     context: {
-      canvas: { width: 800, height: 600 },
+      canvas,
       getCurrentTexture: vi.fn(() => ({ createView: vi.fn(() => ({})) }))
     }
   } as unknown as GpuContext;

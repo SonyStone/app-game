@@ -36,15 +36,12 @@ try {
     }
   });
   await page.route('**/selective.pdf', (route) => route.fulfill({ body: pdf }));
-  await page.route('**/selective-check', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<body style="margin:0"></body>' })
-  );
-  await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/selective-check`);
+  await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/tests/browser/empty.html`);
   const result = await page.evaluate(async () => {
-    const { convertPdf } = await import('/src/features/document/pdf/convertPdf.ts');
-    const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');
-    const { layoutPages } = await import('/src/features/document/document.ts');
-    const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+    const { convertPdf } = await import('/tests/browser/workerHarness.tsx');
+    const { readGdoc } = await import('/tests/browser/workerHarness.tsx');
+    const { layoutPages } = await import('/src/features/document/layoutPages.ts');
+    const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
     const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
     const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
     const data = (
@@ -52,9 +49,7 @@ try {
     )._unsafeUnwrap();
     const doc = {
       ...data,
-      pages: layoutPages(data.pages, 2)._unsafeUnwrap(),
-      images: new Map(),
-      imageVertices: new ArrayBuffer(0)
+      pages: layoutPages(data.pages, 2)._unsafeUnwrap()
     };
     const canvas = document.createElement('canvas');
     canvas.width = 800;
@@ -81,7 +76,7 @@ try {
     window.MessageChannel = NativeChannel;
 
     const capture = async (camera, vectorOnly, settle = false) => {
-      const frame = createFrame(doc, camera, canvas.width, canvas.height, vectorOnly);
+      const frame = createFrame(doc, camera, canvas.width, canvas.height, { vectorOnly });
       renderer.render(frame)._unsafeUnwrap();
       if (settle) {
         (await renderer.settle())._unsafeUnwrap();

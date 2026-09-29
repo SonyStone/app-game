@@ -1,6 +1,6 @@
 import { resolveTemplate, translator } from '@solid-primitives/i18n';
 import { useSearchParams } from '@solidjs/router';
-import type { ViewerStatus } from '../createViewerState';
+import type { ViewerStatus } from '../createViewerStatus';
 import de from './de.json';
 import en from './en.json';
 import es from './es.json';
@@ -21,23 +21,25 @@ export function createViewerI18n() {
     /** Pushes a navigable history entry without scrolling or reloading the current document. */
     setLocale(value: string) {
       const next = resolveLocale(value);
-      if (next !== locale() || (next === 'en' && params.lang !== undefined))
+      if (next !== locale() || (next === 'en' && params.lang !== undefined)) {
         setParams({ lang: next === 'en' ? undefined : next }, { replace: false, scroll: false });
+      }
     },
     /** Localizes UI progress; original library errors remain available as technical details. */
     status(status: ViewerStatus) {
-      if (status.phase === 'cancelled') return t('cancelled');
-      if ((status.phase === 'loading' || status.phase === 'preparing') && status.progress)
-        return t(status.progress.stage);
-      if (status.phase === 'loading') return t('loading');
-      if (status.phase === 'preparing') return t('preparing');
-      if (status.phase === 'error') return t('error');
-      if (status.phase !== 'ready') return status.message;
-      if (status.resourceBytes === undefined) return status.message;
-      const memory = (status.resourceBytes / 1048576).toFixed(1);
-      return status.preparationMs === undefined
-        ? t('resources', { memory })
-        : t('prepared', { memory, time: String(Math.round(status.preparationMs)) });
+      switch (status.phase) {
+        case 'loading':
+        case 'preparing':
+          return t(status.progress?.stage ?? status.phase);
+        case 'cancelled':
+        case 'error':
+          return t(status.phase);
+        case 'ready':
+          return t('prepared', {
+            memory: (status.resourceBytes / 1048576).toFixed(1),
+            time: String(Math.round(status.preparationMs))
+          });
+      }
     }
   };
 }

@@ -1,0 +1,34 @@
+# getObserver
+
+Returns the currently-tracking observer (the computation that subscribes to
+reactive reads at this point), or `null` if reads here would be untracked.
+Used by reactive primitives that need to know whether they're inside a
+tracking scope. App code rarely needs this — see `getOwner()` for the
+lifecycle owner instead.
+
+## Import
+
+```ts
+import { getObserver } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function getObserver(): Owner | null;
+```
+
+## Examples
+
+```ts
+// Library predicate: only register a hot-path subscription when the
+// caller is inside a tracking scope (memo / effect compute / JSX).
+function trackIfTracked(source: () => unknown) {
+	if (getObserver()) source();
+}
+```
+
+## Learn more
+
+* [Ownership](../concepts/reactivity.md#ownership)
+* [Custom primitives](../guides/custom-primitives.md)

@@ -1,0 +1,1791 @@
+{
+  "captured_at": "2026-09-27T17:12:54.940680+00:00",
+  "index_url": "https://v2.solidjs.com/llms.txt",
+  "corpus_url": "https://v2.solidjs.com/llms-full.txt",
+  "index_sha256": "1eb896209df7e066cbfbf62475dcc850bf0a2368175a3a9bdc6b01ca49a8b101",
+  "corpus_sha256": "6d1c42bcf8f58a4528c0c0428ee8477b01ac91eea5874c0ffe2458fa55c17d4f",
+  "page_count": 196,
+  "pages": [
+    {
+      "title": "Overview",
+      "path": "references/overview/index.md",
+      "route": "/",
+      "description": "What Solid is, what these docs cover, and where to start reading.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/index.md",
+      "source_path": "index.md"
+    },
+    {
+      "title": "Quick start",
+      "path": "references/getting-started/quick-start.md",
+      "route": "/getting-started/quick-start",
+      "description": "Go from an empty directory to a running Solid app with a change of your own in it, and meet the ideas the rest of the docs build on.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/getting-started/quick-start.md",
+      "source_path": "getting-started/quick-start.md"
+    },
+    {
+      "title": "Project shapes",
+      "path": "references/getting-started/project-shapes.md",
+      "route": "/getting-started/project-shapes",
+      "description": "Pick between the bare, basic, and fullstack templates by what your app needs on day one, knowing that moving up later changes configuration, not your code.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/getting-started/project-shapes.md",
+      "source_path": "getting-started/project-shapes.md"
+    },
+    {
+      "title": "Reactivity",
+      "path": "references/concepts/reactivity.md",
+      "route": "/concepts/reactivity",
+      "description": "Signals, memos, and effects: how Solid tracks reads, why a component runs once, and how to tell when a value will update.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/concepts/reactivity.md",
+      "source_path": "concepts/reactivity.md"
+    },
+    {
+      "title": "Components and JSX",
+      "path": "references/concepts/components-and-jsx.md",
+      "route": "/concepts/components-and-jsx",
+      "description": "Components as functions that run once: props, children, control flow, refs, and the JSX rules that follow from that.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/concepts/components-and-jsx.md",
+      "source_path": "concepts/components-and-jsx.md"
+    },
+    {
+      "title": "Stores",
+      "path": "references/concepts/stores.md",
+      "route": "/concepts/stores",
+      "description": "Hold a cart, a form, or any nested object in a store: update one property through a draft, derive filtered views with a projection, and load server data into the same proxy.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/concepts/stores.md",
+      "source_path": "concepts/stores.md"
+    },
+    {
+      "title": "Async reactivity",
+      "path": "references/concepts/async-reactivity.md",
+      "route": "/concepts/async-reactivity",
+      "description": "Read a promise like a value: how async memos hold updates, when Loading shows a fallback, and how mutations settle.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/concepts/async-reactivity.md",
+      "source_path": "concepts/async-reactivity.md"
+    },
+    {
+      "title": "Boundaries",
+      "path": "references/concepts/boundaries.md",
+      "route": "/concepts/boundaries",
+      "description": "Decide which part of the page shows a spinner, which part shows an error, and in what order regions appear, by placing Loading, Errored, and Reveal around the right subtree.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/concepts/boundaries.md",
+      "source_path": "concepts/boundaries.md"
+    },
+    {
+      "title": "Mutations",
+      "path": "references/concepts/mutations.md",
+      "route": "/concepts/mutations",
+      "description": "Move the cart's add, remove, and set-quantity writes to a server without changing the UI: actions, optimistic stores, refresh, and how a failed request undoes itself.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/concepts/mutations.md",
+      "source_path": "concepts/mutations.md"
+    },
+    {
+      "title": "Rendering and SSR",
+      "path": "references/concepts/rendering-and-ssr.md",
+      "route": "/concepts/rendering-and-ssr",
+      "description": "Run the same components in the browser and on the server: keep browser-only code off the server, get matching HTML for hydration, and choose between string and streaming rendering.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/concepts/rendering-and-ssr.md",
+      "source_path": "concepts/rendering-and-ssr.md"
+    },
+    {
+      "title": "App structure",
+      "path": "references/building-apps/app-structure.md",
+      "route": "/building-apps/app-structure",
+      "description": "Know which two files in a start-mode project you edit, what the plugin generates around them, and when to replace a generated entry or hook a router into the server render.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/app-structure.md",
+      "source_path": "building-apps/app-structure.md"
+    },
+    {
+      "title": "Styling and assets",
+      "path": "references/building-apps/styling-and-assets.md",
+      "route": "/building-apps/styling-and-assets",
+      "description": "Style a component with global CSS, a CSS module, Tailwind, or an inline style object, toggle classes without string building, and reference images so the built URL is hashed.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/styling-and-assets.md",
+      "source_path": "building-apps/styling-and-assets.md"
+    },
+    {
+      "title": "Head and metadata",
+      "path": "references/building-apps/head-and-metadata.md",
+      "route": "/building-apps/head-and-metadata",
+      "description": "Give each page its own title and meta tags from the component that owns them, let a layout's defaults return when the page unmounts, and read a title from data that is still loading.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/head-and-metadata.md",
+      "source_path": "building-apps/head-and-metadata.md"
+    },
+    {
+      "title": "Server functions",
+      "path": "references/building-apps/server-functions.md",
+      "route": "/building-apps/server-functions",
+      "description": "Move a database query or a secret out of the browser by marking a function with \"use server\", and recognize what that call becomes on the wire.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/server-functions.md",
+      "source_path": "building-apps/server-functions.md"
+    },
+    {
+      "title": "Reads, streams, and live data",
+      "path": "references/building-apps/server-functions-reads-and-live-data.md",
+      "route": "/building-apps/server-functions/reads-and-live-data",
+      "description": "Declare a product read that HTTP caches can store, stream order events from a server function, and keep a stock level connected when another shopper changes it.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/server-functions/reads-and-live-data.md",
+      "source_path": "building-apps/server-functions/reads-and-live-data.md"
+    },
+    {
+      "title": "Arguments and security",
+      "path": "references/building-apps/server-functions-arguments-and-security.md",
+      "route": "/building-apps/server-functions/arguments-and-security",
+      "description": "Send arguments a server function can decode, and validate and authorize every call as if it came from a terminal, because it can.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/server-functions/arguments-and-security.md",
+      "source_path": "building-apps/server-functions/arguments-and-security.md"
+    },
+    {
+      "title": "Mutations and responses",
+      "path": "references/building-apps/server-functions-mutations-and-responses.md",
+      "route": "/building-apps/server-functions/mutations-and-responses",
+      "description": "Return a value, a redirect, a reload, or a 400 from a cart or account mutation, and control what a thrown error reveals in production.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/server-functions/mutations-and-responses.md",
+      "source_path": "building-apps/server-functions/mutations-and-responses.md"
+    },
+    {
+      "title": "Metadata and transport",
+      "path": "references/building-apps/server-functions-metadata-and-transport.md",
+      "route": "/building-apps/server-functions/metadata-and-transport",
+      "description": "Read a server-function request in the network tab, attach a header to every call, move the endpoint, and cancel one call in flight.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/server-functions/metadata-and-transport.md",
+      "source_path": "building-apps/server-functions/metadata-and-transport.md"
+    },
+    {
+      "title": "Progressive enhancement",
+      "path": "references/building-apps/server-functions-progressive-enhancement.md",
+      "route": "/building-apps/server-functions/progressive-enhancement",
+      "description": "Make the Add to cart form post to a server function before JavaScript loads, and know which part of that exchange core owns and which the router adds.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/server-functions/progressive-enhancement.md",
+      "source_path": "building-apps/server-functions/progressive-enhancement.md"
+    },
+    {
+      "title": "Sessions and auth",
+      "path": "references/building-apps/sessions-and-auth.md",
+      "route": "/building-apps/sessions-and-auth",
+      "description": "Build a signed cookie session on the request event, sign customers in and out from server functions, and authorize every server entry point against that session.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/sessions-and-auth.md",
+      "source_path": "building-apps/sessions-and-auth.md"
+    },
+    {
+      "title": "Environment",
+      "path": "references/building-apps/environment.md",
+      "route": "/building-apps/environment",
+      "description": "Declare environment variables once, read secrets on the server and public values in the browser through typed modules, and let the build fail when a secret would leak.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/environment.md",
+      "source_path": "building-apps/environment.md"
+    },
+    {
+      "title": "Middleware and API routes",
+      "path": "references/building-apps/middleware-and-api-routes.md",
+      "route": "/building-apps/middleware-and-api-routes",
+      "description": "Run code in front of every request with fetch-style middleware, share state with pages and server functions through the request event, and answer HTTP requests from route modules.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/middleware-and-api-routes.md",
+      "source_path": "building-apps/middleware-and-api-routes.md"
+    },
+    {
+      "title": "Deployment",
+      "path": "references/building-apps/deployment.md",
+      "route": "/building-apps/deployment",
+      "description": "Put a start-mode build on a host: serve dist/client as static files, route everything else to the built request handler, supply the server environment at boot, and pick a Node server or a provider adapter.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/building-apps/deployment.md",
+      "source_path": "building-apps/deployment.md"
+    },
+    {
+      "title": "Routing overview",
+      "path": "references/routing/overview.md",
+      "route": "/routing/overview",
+      "description": "Choose between Solid Router and TanStack Router for a Solid app, mount the router in App, and decide whether routes come from an array or from files under src/routes.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/routing/overview.md",
+      "source_path": "routing/overview.md"
+    },
+    {
+      "title": "Solid Router",
+      "path": "references/routing/solid-router.md",
+      "route": "/routing/solid-router",
+      "description": "Build a small routed store with Solid Router: a product page that reads its id from the URL, a header that stays mounted, typed links, and route data that starts loading before the page renders.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/routing/solid-router.md",
+      "source_path": "routing/solid-router.md"
+    },
+    {
+      "title": "Setup",
+      "path": "references/routing/solid-router-setup.md",
+      "route": "/routing/solid-router/setup",
+      "description": "Add Solid Router to a project that does not have it, mount one router at the application root, and set the options for a base path, hash history, or preloading.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/routing/solid-router/setup.md",
+      "source_path": "routing/solid-router/setup.md"
+    },
+    {
+      "title": "Route definitions",
+      "path": "references/routing/solid-router-route-definitions.md",
+      "route": "/routing/solid-router/route-definitions",
+      "description": "Write the route objects Solid Router matches against: path patterns with required, optional, and wildcard segments, typed parameters, match filters, metadata, lazy subtrees, and the file-system manifest.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/routing/solid-router/route-definitions.md",
+      "source_path": "routing/solid-router/route-definitions.md"
+    },
+    {
+      "title": "Nested routes and layouts",
+      "path": "references/routing/solid-router-nested-routes.md",
+      "route": "/routing/solid-router/nested-routes",
+      "description": "Wrap a group of pages in a shared layout, keep it mounted while pages change, share parameters down the tree, and load data at every level without a waterfall.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/routing/solid-router/nested-routes.md",
+      "source_path": "routing/solid-router/nested-routes.md"
+    },
+    {
+      "title": "Navigation and typed paths",
+      "path": "references/routing/solid-router-navigation.md",
+      "route": "/routing/solid-router/navigation",
+      "description": "Link between pages with plain anchors, build URLs the compiler checks, navigate from code, read the location and search parameters, show active and pending links, and guard against leaving a page.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/routing/solid-router/navigation.md",
+      "source_path": "routing/solid-router/navigation.md"
+    },
+    {
+      "title": "Data loading and mutations",
+      "path": "references/routing/solid-router-data.md",
+      "route": "/routing/solid-router/data",
+      "description": "Start route data early with preloads, cache and share reads with query, submit mutations with actions, show optimistic state, and control what revalidates.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/routing/solid-router/data.md",
+      "source_path": "routing/solid-router/data.md"
+    },
+    {
+      "title": "Server rendering and hydration",
+      "path": "references/routing/solid-router-server-rendering.md",
+      "route": "/routing/solid-router/server-rendering",
+      "description": "Render Solid Router on the server: read the URL from the request, hydrate query results without a second fetch, return fresh data from a mutation in one round trip, and keep forms working without JavaScript.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/routing/solid-router/server-rendering.md",
+      "source_path": "routing/solid-router/server-rendering.md"
+    },
+    {
+      "title": "TanStack Router",
+      "path": "references/routing/tanstack.md",
+      "route": "/routing/tanstack",
+      "description": "Use TanStack Router and TanStack Query with Solid's server functions, streaming SSR, and single-flight mutations, as the fullstack-tanstack project shape does.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/routing/tanstack.md",
+      "source_path": "routing/tanstack.md"
+    },
+    {
+      "title": "Integrate a router",
+      "path": "references/routing/integrate-a-router.md",
+      "route": "/routing/integrate-a-router",
+      "description": "Wire a router that Solid does not ship into start mode: give it the request URL and a per-request instance, and connect it to the single-flight mutation transport.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/routing/integrate-a-router.md",
+      "source_path": "routing/integrate-a-router.md"
+    },
+    {
+      "title": "Thinking in Solid",
+      "path": "references/guides/thinking-in-solid.md",
+      "route": "/guides/thinking-in-solid",
+      "description": "Build the storefront's product search end to end, and at each step see what a React or Vue developer would reach for and what Solid does instead.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/thinking-in-solid.md",
+      "source_path": "guides/thinking-in-solid.md"
+    },
+    {
+      "title": "Avoid unnecessary effects",
+      "path": "references/guides/avoid-unnecessary-effects.md",
+      "route": "/guides/avoid-unnecessary-effects",
+      "description": "Recognize the effect that copies one reactive value into another, replace it with a direct, memoized, async, or writable derivation, and keep createEffect for the imperative boundary.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/avoid-unnecessary-effects.md",
+      "source_path": "guides/avoid-unnecessary-effects.md"
+    },
+    {
+      "title": "Custom primitives",
+      "path": "references/guides/custom-primitives.md",
+      "route": "/guides/custom-primitives",
+      "description": "Move repeated reactive setup into a createX function that runs inside an owner, accepts accessors, returns accessors, cleans up what it starts, and stays correct during server rendering.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/custom-primitives.md",
+      "source_path": "guides/custom-primitives.md"
+    },
+    {
+      "title": "State management",
+      "path": "references/guides/state-management.md",
+      "route": "/guides/state-management",
+      "description": "Decide where each piece of storefront state lives: a component, a context provider, the URL, or the server, and keep it out of module scope in code that also runs on the server.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/state-management.md",
+      "source_path": "guides/state-management.md"
+    },
+    {
+      "title": "Forms",
+      "path": "references/guides/forms.md",
+      "route": "/guides/forms",
+      "description": "Build a form with a server function and a Solid Router action: it works before JavaScript loads, validates on the server, and after hydration shows pending state, inline errors, and the saved result before the server confirms.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/forms.md",
+      "source_path": "guides/forms.md"
+    },
+    {
+      "title": "Lists",
+      "path": "references/guides/lists.md",
+      "route": "/guides/lists",
+      "description": "Render, edit, filter, sort, select in, and window lists without rebuilding rows, and read the diagnostics that tell you when you are.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/lists.md",
+      "source_path": "guides/lists.md"
+    },
+    {
+      "title": "Data fetching patterns",
+      "path": "references/guides/data-fetching-patterns.md",
+      "route": "/guides/data-fetching-patterns",
+      "description": "Load data for search, detail pages, pagination, shared state, and dashboards without loading flags, request counters, or abort controllers, and decide where each request and each boundary goes.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/data-fetching-patterns.md",
+      "source_path": "guides/data-fetching-patterns.md"
+    },
+    {
+      "title": "Protected routes",
+      "path": "references/guides/protected-routes.md",
+      "route": "/guides/protected-routes",
+      "description": "Require a signed-in customer for the account area at the data, route, and request layers, redirect a signed-out visitor to sign-in on the server and in the browser, and send them back where they were going.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/protected-routes.md",
+      "source_path": "guides/protected-routes.md"
+    },
+    {
+      "title": "SSR-safe code",
+      "path": "references/guides/ssr-safe-code.md",
+      "route": "/guides/ssr-safe-code",
+      "description": "Keep browser APIs, per-run values, and client-only data out of the server render, and read each hydration warning to find the line that made the server and the browser disagree.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/ssr-safe-code.md",
+      "source_path": "guides/ssr-safe-code.md"
+    },
+    {
+      "title": "Choose a rendering mode",
+      "path": "references/guides/choose-a-rendering-mode.md",
+      "route": "/guides/choose-a-rendering-mode",
+      "description": "Decide between a static shell, streaming server rendering, and build-time prerendering for a start-mode project, and what each one costs.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/choose-a-rendering-mode.md",
+      "source_path": "guides/choose-a-rendering-mode.md"
+    },
+    {
+      "title": "Debugging reactivity",
+      "path": "references/guides/debugging-reactivity.md",
+      "route": "/guides/debugging-reactivity",
+      "description": "Find out why a value does not update, why it updates too often, and how to read Solid's development diagnostics.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/debugging-reactivity.md",
+      "source_path": "guides/debugging-reactivity.md"
+    },
+    {
+      "title": "Performance",
+      "path": "references/guides/performance.md",
+      "route": "/guides/performance",
+      "description": "Measure a slow catalog page with the browser profiler and Solid's attribution tables, then fix the cause each measurement points at: hot derivations, wide writes, rebuilt rows, waterfalls, unsplit code, and a blocked streaming shell.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/performance.md",
+      "source_path": "guides/performance.md"
+    },
+    {
+      "title": "TypeScript",
+      "path": "references/guides/typescript.md",
+      "route": "/guides/typescript",
+      "description": "Replace the any annotations in a storefront with the types Solid exports for props, children, accessors, store drafts, event handlers, refs, server function results, and typed routes.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/typescript.md",
+      "source_path": "guides/typescript.md"
+    },
+    {
+      "title": "Integrate non-Solid code",
+      "path": "references/guides/integrate-non-solid-code.md",
+      "route": "/guides/integrate-non-solid-code",
+      "description": "Drive a charting library, a map, a web component, or an analytics script from Solid state: get the DOM node at the right time, create the instance once, update it in an effect, and keep browser-only imports off the server.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/integrate-non-solid-code.md",
+      "source_path": "guides/integrate-non-solid-code.md"
+    },
+    {
+      "title": "Testing",
+      "path": "references/guides/testing.md",
+      "route": "/guides/testing",
+      "description": "Write a component test that clicks a button and asserts the label, run it in jsdom or a real browser, and test fullstack server code in a separate Node project.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/testing.md",
+      "source_path": "guides/testing.md"
+    },
+    {
+      "title": "Observability",
+      "path": "references/guides/observability.md",
+      "route": "/guides/observability",
+      "description": "Report the errors your boundaries catch in production, follow a request from the server into the browser, and see what each user interaction cost, without wrapping a component.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/observability.md",
+      "source_path": "guides/observability.md"
+    },
+    {
+      "title": "Build an observability adapter",
+      "path": "references/guides/observability-adapters.md",
+      "route": "/guides/observability-adapters",
+      "description": "Connect an error monitor or a tracing SDK to a Solid app through the runtime's hooks and channels, with nothing wrapped, patched, or rewritten.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/guides/observability-adapters.md",
+      "source_path": "guides/observability-adapters.md"
+    },
+    {
+      "title": "From Solid 1.x",
+      "path": "references/migration/from-solid-1.md",
+      "route": "/migration/from-solid-1",
+      "description": "Migrate a Solid 1.x application to Solid 2, including package imports, reactivity, effects, stores, async data, rendering, and tests.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/migration/from-solid-1.md",
+      "source_path": "migration/from-solid-1.md"
+    },
+    {
+      "title": "Data fetching from Solid 1",
+      "path": "references/migration/data-fetching-from-solid-1.md",
+      "route": "/migration/data-fetching-from-solid-1",
+      "description": "Move Solid 1 data loading patterns to async computations one fetch at a time, and decide per fetch whether an update should wait, dim, or show a placeholder.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/migration/data-fetching-from-solid-1.md",
+      "source_path": "migration/data-fetching-from-solid-1.md"
+    },
+    {
+      "title": "From SolidStart",
+      "path": "references/migration/from-solid-start.md",
+      "route": "/migration/from-solid-start",
+      "description": "Move a SolidStart 1 or released SolidStart 2 application to Solid 2 through @solidjs/vite-plugin start mode.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/migration/from-solid-start.md",
+      "source_path": "migration/from-solid-start.md"
+    },
+    {
+      "title": "From Solid Router 0.x/1.x",
+      "path": "references/migration/from-solid-router.md",
+      "route": "/migration/from-solid-router",
+      "description": "Migrate JSX routes and the Solid Router 0.x/1.x data APIs to a Solid Router 2 createRouter instance.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/migration/from-solid-router.md",
+      "source_path": "migration/from-solid-router.md"
+    },
+    {
+      "title": "From Solid Meta 0.x",
+      "path": "references/migration/from-solid-meta.md",
+      "route": "/migration/from-solid-meta",
+      "description": "Migrate your application from @solidjs/meta 0.x to 1.0.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/migration/from-solid-meta.md",
+      "source_path": "migration/from-solid-meta.md"
+    },
+    {
+      "title": "From React",
+      "path": "references/migration/from-react.md",
+      "route": "/migration/from-react",
+      "description": "Map familiar React concepts to their closest Solid concepts, with equivalent examples and the semantic differences that matter during migration.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/migration/from-react.md",
+      "source_path": "migration/from-react.md"
+    },
+    {
+      "title": "Glossary",
+      "path": "references/overview/glossary.md",
+      "route": "/glossary",
+      "description": "Solid's own words, each defined in a few sentences and linked to the page that teaches it.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/glossary.md",
+      "source_path": "glossary.md"
+    },
+    {
+      "title": "Reference",
+      "path": "references/overview/reference.md",
+      "route": "/reference",
+      "description": "API reference for Solid: the reactive core, the web renderer, Solid Router, Solid Meta, the Vite plugin, and filesystem routing.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference.md",
+      "source_path": "reference.md"
+    },
+    {
+      "title": "solid-js",
+      "path": "references/core/overview.md",
+      "route": "/reference/solid-js",
+      "description": "Reference for the solid-js package: reactive primitives, stores, actions, context, flow components, and the public types.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js.md",
+      "source_path": "reference/solid-js.md"
+    },
+    {
+      "title": "createEffect",
+      "path": "references/core/create-effect.md",
+      "route": "/reference/solid-js/reactivity/create-effect",
+      "description": "Creates a reactive effect with separate compute and effect phases.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/reactivity/create-effect.md",
+      "source_path": "reference/solid-js/reactivity/create-effect.md"
+    },
+    {
+      "title": "createMemo",
+      "path": "references/core/create-memo.md",
+      "route": "/reference/solid-js/reactivity/create-memo",
+      "description": "Creates a readonly derived reactive memoized signal.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/reactivity/create-memo.md",
+      "source_path": "reference/solid-js/reactivity/create-memo.md"
+    },
+    {
+      "title": "createOptimistic",
+      "path": "references/core/create-optimistic.md",
+      "route": "/reference/solid-js/reactivity/create-optimistic",
+      "description": "Creates an optimistic signal — a `Signal<T>` whose writes are tentative inside an `action`: they show up immediately, then auto-revert (or reconcile to the action's resolved value) once the pending work settles.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/reactivity/create-optimistic.md",
+      "source_path": "reference/solid-js/reactivity/create-optimistic.md"
+    },
+    {
+      "title": "createSignal",
+      "path": "references/core/create-signal.md",
+      "route": "/reference/solid-js/reactivity/create-signal",
+      "description": "Creates a simple reactive state with a getter and setter.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/reactivity/create-signal.md",
+      "source_path": "reference/solid-js/reactivity/create-signal.md"
+    },
+    {
+      "title": "flush",
+      "path": "references/core/flush.md",
+      "route": "/reference/solid-js/reactivity/flush",
+      "description": "Synchronously processes the pending reactive queue, or runs `fn` in a synchronous flush scope before draining the queue.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/reactivity/flush.md",
+      "source_path": "reference/solid-js/reactivity/flush.md"
+    },
+    {
+      "title": "isPending",
+      "path": "references/core/is-pending.md",
+      "route": "/reference/solid-js/reactivity/is-pending",
+      "description": "Returns whether the reactive reads inside `fn` depend on an in-flight value change that has not been revealed.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/reactivity/is-pending.md",
+      "source_path": "reference/solid-js/reactivity/is-pending.md"
+    },
+    {
+      "title": "latest",
+      "path": "references/core/latest.md",
+      "route": "/reference/solid-js/reactivity/latest",
+      "description": "Reads the freshest in-flight value available inside `fn`, falling back to the current settled value.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/reactivity/latest.md",
+      "source_path": "reference/solid-js/reactivity/latest.md"
+    },
+    {
+      "title": "untrack",
+      "path": "references/core/untrack.md",
+      "route": "/reference/solid-js/reactivity/untrack",
+      "description": "Runs `fn` outside of any reactive tracking — reads inside `fn` will not subscribe the current scope. Returns whatever `fn` returns.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/reactivity/untrack.md",
+      "source_path": "reference/solid-js/reactivity/untrack.md"
+    },
+    {
+      "title": "createOptimisticStore",
+      "path": "references/core/create-optimistic-store.md",
+      "route": "/reference/solid-js/stores/create-optimistic-store",
+      "description": "The store equivalent of `createOptimistic`.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/stores/create-optimistic-store.md",
+      "source_path": "reference/solid-js/stores/create-optimistic-store.md"
+    },
+    {
+      "title": "createProjection",
+      "path": "references/core/create-projection.md",
+      "route": "/reference/solid-js/stores/create-projection",
+      "description": "Creates a derived (projected) store — `createMemo` for stores. The derive function receives a mutable draft and either mutates it in place (canonical) or returns a new value.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/stores/create-projection.md",
+      "source_path": "reference/solid-js/stores/create-projection.md"
+    },
+    {
+      "title": "createStore",
+      "path": "references/core/create-store.md",
+      "route": "/reference/solid-js/stores/create-store",
+      "description": "Creates a deeply-reactive store backed by a Proxy. Reads track each property accessed; only the parts that change trigger updates.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/stores/create-store.md",
+      "source_path": "reference/solid-js/stores/create-store.md"
+    },
+    {
+      "title": "merge",
+      "path": "references/core/merge.md",
+      "route": "/reference/solid-js/stores/merge",
+      "description": "Merges multiple props-like objects into a single proxy that preserves reactivity.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/stores/merge.md",
+      "source_path": "reference/solid-js/stores/merge.md"
+    },
+    {
+      "title": "omit",
+      "path": "references/core/omit.md",
+      "route": "/reference/solid-js/stores/omit",
+      "description": "Returns a reactive proxy of `props` with the listed keys hidden. Tracking on the remaining keys is preserved.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/stores/omit.md",
+      "source_path": "reference/solid-js/stores/omit.md"
+    },
+    {
+      "title": "reconcile",
+      "path": "references/core/reconcile.md",
+      "route": "/reference/solid-js/stores/reconcile",
+      "description": "Creates a store setter callback that merges new data into the existing store by key.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/stores/reconcile.md",
+      "source_path": "reference/solid-js/stores/reconcile.md"
+    },
+    {
+      "title": "action",
+      "path": "references/core/action.md",
+      "route": "/reference/solid-js/lifecycle-actions/action",
+      "description": "The primitive for mutations: imperative async workflows whose writes span an async gap — optimistic write, server round-trip, reconciling write — where intermediate state must not leak and failure must revert cleanly (pair with `createOptimistic` / `createOptimisticStore`).",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/lifecycle-actions/action.md",
+      "source_path": "reference/solid-js/lifecycle-actions/action.md"
+    },
+    {
+      "title": "affects",
+      "path": "references/core/affects.md",
+      "route": "/reference/solid-js/lifecycle-actions/affects",
+      "description": "Marks a reactive source or store location as pending while work that will change it is in flight.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/lifecycle-actions/affects.md",
+      "source_path": "reference/solid-js/lifecycle-actions/affects.md"
+    },
+    {
+      "title": "onSettled",
+      "path": "references/core/on-settled.md",
+      "route": "/reference/solid-js/lifecycle-actions/on-settled",
+      "description": "Schedules `callback` to run once after the reactive graph has fully settled — i.e. once every pending async read inside the current owner has resolved and the queue has flushed.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/lifecycle-actions/on-settled.md",
+      "source_path": "reference/solid-js/lifecycle-actions/on-settled.md"
+    },
+    {
+      "title": "refresh",
+      "path": "references/core/refresh.md",
+      "route": "/reference/solid-js/lifecycle-actions/refresh",
+      "description": "Invalidates one reactive source, forcing it to re-execute even if its inputs haven't changed, and returns a promise for the target's next settled state — the re-ask (and anything that supersedes it) has settled.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/lifecycle-actions/refresh.md",
+      "source_path": "reference/solid-js/lifecycle-actions/refresh.md"
+    },
+    {
+      "title": "until",
+      "path": "references/core/until.md",
+      "route": "/reference/solid-js/lifecycle-actions/until",
+      "description": "Awaits a reactive predicate and resolves the first time it becomes truthy, with the narrowed value.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/lifecycle-actions/until.md",
+      "source_path": "reference/solid-js/lifecycle-actions/until.md"
+    },
+    {
+      "title": "children",
+      "path": "references/core/children.md",
+      "route": "/reference/solid-js/components-context/children",
+      "description": "Resolves a `children` accessor and exposes the result as an accessor with a `.toArray()` helper.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-context/children.md",
+      "source_path": "reference/solid-js/components-context/children.md"
+    },
+    {
+      "title": "createContext",
+      "path": "references/core/create-context.md",
+      "route": "/reference/solid-js/components-context/create-context",
+      "description": "Creates a Context for sharing state with descendants of a Provider in the component tree.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-context/create-context.md",
+      "source_path": "reference/solid-js/components-context/create-context.md"
+    },
+    {
+      "title": "createUniqueId",
+      "path": "references/core/create-unique-id.md",
+      "route": "/reference/solid-js/components-context/create-unique-id",
+      "description": "Returns a stable id string that matches between server-rendered and client-hydrated trees. Use it for `<label for>`, `aria-labelledby`, and other attributes that need consistent ids across SSR.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-context/create-unique-id.md",
+      "source_path": "reference/solid-js/components-context/create-unique-id.md"
+    },
+    {
+      "title": "lazy",
+      "path": "references/core/lazy.md",
+      "route": "/reference/solid-js/components-context/lazy",
+      "description": "Defines a code-split component. The returned component triggers its dynamic import on first render and suspends through any enclosing `<Loading>` boundary while the chunk is in flight.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-context/lazy.md",
+      "source_path": "reference/solid-js/components-context/lazy.md"
+    },
+    {
+      "title": "useContext",
+      "path": "references/core/use-context.md",
+      "route": "/reference/solid-js/components-context/use-context",
+      "description": "Reads the current value of a context.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-context/use-context.md",
+      "source_path": "reference/solid-js/components-context/use-context.md"
+    },
+    {
+      "title": "Errored",
+      "path": "references/core/errored.md",
+      "route": "/reference/solid-js/components-jsx/errored",
+      "description": "Catches uncaught errors inside its subtree and renders fallback content instead.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-jsx/errored.md",
+      "source_path": "reference/solid-js/components-jsx/errored.md"
+    },
+    {
+      "title": "For",
+      "path": "references/core/for.md",
+      "route": "/reference/solid-js/components-jsx/for",
+      "description": "Creates a list of elements from a list.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-jsx/for.md",
+      "source_path": "reference/solid-js/components-jsx/for.md"
+    },
+    {
+      "title": "Loading",
+      "path": "references/core/loading.md",
+      "route": "/reference/solid-js/components-jsx/loading",
+      "description": "Renders a `fallback` while pending async reads inside the subtree settle.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-jsx/loading.md",
+      "source_path": "reference/solid-js/components-jsx/loading.md"
+    },
+    {
+      "title": "Repeat",
+      "path": "references/core/repeat.md",
+      "route": "/reference/solid-js/components-jsx/repeat",
+      "description": "Creates a list of elements from a count.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-jsx/repeat.md",
+      "source_path": "reference/solid-js/components-jsx/repeat.md"
+    },
+    {
+      "title": "Reveal",
+      "path": "references/core/reveal.md",
+      "route": "/reference/solid-js/components-jsx/reveal",
+      "description": "Coordinates the reveal timing of sibling `<Loading>` boundaries.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-jsx/reveal.md",
+      "source_path": "reference/solid-js/components-jsx/reveal.md"
+    },
+    {
+      "title": "Show",
+      "path": "references/core/show.md",
+      "route": "/reference/solid-js/components-jsx/show",
+      "description": "Conditionally renders its children when `when` is truthy, otherwise renders the optional `fallback`.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-jsx/show.md",
+      "source_path": "reference/solid-js/components-jsx/show.md"
+    },
+    {
+      "title": "Switch / Match",
+      "path": "references/core/switch-and-match.md",
+      "route": "/reference/solid-js/components-jsx/switch-and-match",
+      "description": "Switches between content based on mutually exclusive conditions. Renders the first `<Match>` whose `when` is truthy; falls back to `fallback` when none match.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/components-jsx/switch-and-match.md",
+      "source_path": "reference/solid-js/components-jsx/switch-and-match.md"
+    },
+    {
+      "title": "createRoot",
+      "path": "references/core/create-root.md",
+      "route": "/reference/solid-js/advanced/owner-introspection/create-root",
+      "description": "Creates a reactive root — an owner scope with its own `dispose()`.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/owner-introspection/create-root.md",
+      "source_path": "reference/solid-js/advanced/owner-introspection/create-root.md"
+    },
+    {
+      "title": "getObserver",
+      "path": "references/core/get-observer.md",
+      "route": "/reference/solid-js/advanced/owner-introspection/get-observer",
+      "description": "Returns the currently-tracking observer (the computation that subscribes to reactive reads at this point), or `null` if reads here would be untracked.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/owner-introspection/get-observer.md",
+      "source_path": "reference/solid-js/advanced/owner-introspection/get-observer.md"
+    },
+    {
+      "title": "getOwner",
+      "path": "references/core/get-owner.md",
+      "route": "/reference/solid-js/advanced/owner-introspection/get-owner",
+      "description": "Returns the current reactive owner — the lifecycle node that the next `cleanup()` / `onCleanup()` / `createSignal()` etc. Will be attached to.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/owner-introspection/get-owner.md",
+      "source_path": "reference/solid-js/advanced/owner-introspection/get-owner.md"
+    },
+    {
+      "title": "isDisposed",
+      "path": "references/core/is-disposed.md",
+      "route": "/reference/solid-js/advanced/owner-introspection/is-disposed",
+      "description": "Returns `true` when an owner has been disposed. Use it to ignore late work after the owner’s component or reactive scope has been removed.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/owner-introspection/is-disposed.md",
+      "source_path": "reference/solid-js/advanced/owner-introspection/is-disposed.md"
+    },
+    {
+      "title": "runWithOwner",
+      "path": "references/core/run-with-owner.md",
+      "route": "/reference/solid-js/advanced/owner-introspection/run-with-owner",
+      "description": "Executes `fn` with the given `owner` set as the current owner.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/owner-introspection/run-with-owner.md",
+      "source_path": "reference/solid-js/advanced/owner-introspection/run-with-owner.md"
+    },
+    {
+      "title": "createReaction",
+      "path": "references/core/create-reaction.md",
+      "route": "/reference/solid-js/advanced/specialized-reactivity/create-reaction",
+      "description": "Creates a reactive computation that runs after the render phase with flexible tracking.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/specialized-reactivity/create-reaction.md",
+      "source_path": "reference/solid-js/advanced/specialized-reactivity/create-reaction.md"
+    },
+    {
+      "title": "createRenderEffect",
+      "path": "references/core/create-render-effect.md",
+      "route": "/reference/solid-js/advanced/specialized-reactivity/create-render-effect",
+      "description": "Creates a reactive computation that runs during the render phase as DOM elements are created and updated but not necessarily connected.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/specialized-reactivity/create-render-effect.md",
+      "source_path": "reference/solid-js/advanced/specialized-reactivity/create-render-effect.md"
+    },
+    {
+      "title": "createTrackedEffect",
+      "path": "references/core/create-tracked-effect.md",
+      "route": "/reference/solid-js/advanced/specialized-reactivity/create-tracked-effect",
+      "description": "Creates a tracked reactive effect where dependency tracking and side effects happen in the same scope.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/specialized-reactivity/create-tracked-effect.md",
+      "source_path": "reference/solid-js/advanced/specialized-reactivity/create-tracked-effect.md"
+    },
+    {
+      "title": "onCleanup",
+      "path": "references/core/on-cleanup.md",
+      "route": "/reference/solid-js/advanced/specialized-reactivity/on-cleanup",
+      "description": "Low-level reactive-cleanup primitive. Registers a callback that runs when the surrounding owner is disposed.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/specialized-reactivity/on-cleanup.md",
+      "source_path": "reference/solid-js/advanced/specialized-reactivity/on-cleanup.md"
+    },
+    {
+      "title": "deep",
+      "path": "references/core/deep.md",
+      "route": "/reference/solid-js/advanced/store-advanced/deep",
+      "description": "Subscribes the surrounding scope to every reachable level of a store value, then returns its plain view.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/store-advanced/deep.md",
+      "source_path": "reference/solid-js/advanced/store-advanced/deep.md"
+    },
+    {
+      "title": "isWrappable",
+      "path": "references/core/is-wrappable.md",
+      "route": "/reference/solid-js/advanced/store-advanced/is-wrappable",
+      "description": "Returns whether a value would be wrapped in a store proxy.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/store-advanced/is-wrappable.md",
+      "source_path": "reference/solid-js/advanced/store-advanced/is-wrappable.md"
+    },
+    {
+      "title": "snapshot",
+      "path": "references/core/snapshot.md",
+      "route": "/reference/solid-js/advanced/store-advanced/snapshot",
+      "description": "Returns the plain, unwrapped view of a store value without tracking, for serialization or for passing to code that must not observe the store.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/store-advanced/snapshot.md",
+      "source_path": "reference/solid-js/advanced/store-advanced/snapshot.md"
+    },
+    {
+      "title": "storePath",
+      "path": "references/core/store-path.md",
+      "route": "/reference/solid-js/advanced/store-advanced/store-path",
+      "description": "x setter paths. Prefer draft-mutating store setters in new code.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/store-advanced/store-path.md",
+      "source_path": "reference/solid-js/advanced/store-advanced/store-path.md"
+    },
+    {
+      "title": "createErrorBoundary",
+      "path": "references/core/create-error-boundary.md",
+      "route": "/reference/solid-js/advanced/jsx-component-primitives/create-error-boundary",
+      "description": "Lower-level primitive that backs the `<Errored>` flow control. Catches thrown errors inside `fn` and invokes `fallback(error, reset)` instead.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/jsx-component-primitives/create-error-boundary.md",
+      "source_path": "reference/solid-js/advanced/jsx-component-primitives/create-error-boundary.md"
+    },
+    {
+      "title": "createLoadingBoundary",
+      "path": "references/core/create-loading-boundary.md",
+      "route": "/reference/solid-js/advanced/jsx-component-primitives/create-loading-boundary",
+      "description": "Lower-level primitive that backs the `<Loading>` flow control. Catches pending async reads inside `fn` and renders `fallback` until they settle.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/jsx-component-primitives/create-loading-boundary.md",
+      "source_path": "reference/solid-js/advanced/jsx-component-primitives/create-loading-boundary.md"
+    },
+    {
+      "title": "createRevealOrder",
+      "path": "references/core/create-reveal-order.md",
+      "route": "/reference/solid-js/advanced/jsx-component-primitives/create-reveal-order",
+      "description": "Coordinate the reveal timing of sibling loading boundaries.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/jsx-component-primitives/create-reveal-order.md",
+      "source_path": "reference/solid-js/advanced/jsx-component-primitives/create-reveal-order.md"
+    },
+    {
+      "title": "mapArray",
+      "path": "references/core/map-array.md",
+      "route": "/reference/solid-js/advanced/jsx-component-primitives/map-array",
+      "description": "Reactively maps an array, reusing the previously-mapped value for unchanged items.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/jsx-component-primitives/map-array.md",
+      "source_path": "reference/solid-js/advanced/jsx-component-primitives/map-array.md"
+    },
+    {
+      "title": "repeat",
+      "path": "references/core/repeat-primitive.md",
+      "route": "/reference/solid-js/advanced/jsx-component-primitives/repeat",
+      "description": "Reactively renders a callback `count` times, reusing previously-rendered entries when only the count changes. Underlying helper for `<Repeat>`.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/jsx-component-primitives/repeat.md",
+      "source_path": "reference/solid-js/advanced/jsx-component-primitives/repeat.md"
+    },
+    {
+      "title": "Hydration",
+      "path": "references/core/hydration.md",
+      "route": "/reference/solid-js/advanced/manual-hydration/hydration",
+      "description": "Re-enables hydration within a `<NoHydration>` zone (passthrough on the client). Use it to opt a subtree back into hydration when the surrounding region was opted out.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/manual-hydration/hydration.md",
+      "source_path": "reference/solid-js/advanced/manual-hydration/hydration.md"
+    },
+    {
+      "title": "NoHydration",
+      "path": "references/core/no-hydration.md",
+      "route": "/reference/solid-js/advanced/manual-hydration/no-hydration",
+      "description": "Disables hydration for its children on the client. During hydration, skips the subtree entirely (returns undefined so DOM is left untouched).",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/manual-hydration/no-hydration.md",
+      "source_path": "reference/solid-js/advanced/manual-hydration/no-hydration.md"
+    },
+    {
+      "title": "enableExternalSource",
+      "path": "references/core/enable-external-source.md",
+      "route": "/reference/solid-js/advanced/interop-async/enable-external-source",
+      "description": "Registers an adapter that lets Solid track reads from a non-Solid reactive system, such as MobX or Vue reactivity, inside its computations.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/interop-async/enable-external-source.md",
+      "source_path": "reference/solid-js/advanced/interop-async/enable-external-source.md"
+    },
+    {
+      "title": "flatten",
+      "path": "references/core/flatten.md",
+      "route": "/reference/solid-js/advanced/interop-async/flatten",
+      "description": "Resolves a children value to its renderable form: unwraps zero-arg functions (accessors), recursively flattens arrays, and optionally skips non-rendering values (`null`, `undefined`, `true`, `false`, `\"\"`).",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/interop-async/flatten.md",
+      "source_path": "reference/solid-js/advanced/interop-async/flatten.md"
+    },
+    {
+      "title": "NotReadyError",
+      "path": "references/core/not-ready-error.md",
+      "route": "/reference/solid-js/advanced/interop-async/not-ready-error",
+      "description": "Represents a read from an async reactive source before its first value is ready. Application code should normally let `Loading` and `Errored` boundaries handle this control flow.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/interop-async/not-ready-error.md",
+      "source_path": "reference/solid-js/advanced/interop-async/not-ready-error.md"
+    },
+    {
+      "title": "resolve",
+      "path": "references/core/resolve.md",
+      "route": "/reference/solid-js/advanced/interop-async/resolve",
+      "description": "Awaits a reactive expression and returns its first fully-settled value as a `Promise`.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/interop-async/resolve.md",
+      "source_path": "reference/solid-js/advanced/interop-async/resolve.md"
+    },
+    {
+      "title": "attribution / costs / feedback / formatOrigin / formatRerun / graphSize / subscriptions / why",
+      "path": "references/core/attribution.md",
+      "route": "/reference/solid-js/advanced/diagnostics-dev-hooks/attribution",
+      "description": "The attribution engine from `solid-js/attribution`: take a hold with `enable()`, read its interaction, navigation, hold, and re-run records on `OBSERVE.records.subscribe(type, …)` or from `history(type)`, and fold them with `costs()`, `feedback()`, `why()`, and `subscriptions()`.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/diagnostics-dev-hooks/attribution.md",
+      "source_path": "reference/solid-js/advanced/diagnostics-dev-hooks/attribution.md"
+    },
+    {
+      "title": "configureClientErrors",
+      "path": "references/core/configure-client-errors.md",
+      "route": "/reference/solid-js/advanced/diagnostics-dev-hooks/configure-client-errors",
+      "description": "Registers the ambient client error hook: called once per error object when an error boundary renders its fallback, with where the error was thrown and where it was met.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/diagnostics-dev-hooks/configure-client-errors.md",
+      "source_path": "reference/solid-js/advanced/diagnostics-dev-hooks/configure-client-errors.md"
+    },
+    {
+      "title": "DEV",
+      "path": "references/core/dev.md",
+      "route": "/reference/solid-js/advanced/diagnostics-dev-hooks/dev",
+      "description": "Dev tier (devtools hooks, graph traversal, console reporting): dev builds only.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/diagnostics-dev-hooks/dev.md",
+      "source_path": "reference/solid-js/advanced/diagnostics-dev-hooks/dev.md"
+    },
+    {
+      "title": "OBSERVE",
+      "path": "references/core/observe.md",
+      "route": "/reference/solid-js/advanced/diagnostics-dev-hooks/observe",
+      "description": "The observe tier's wiring: the records channel the runtimes and the attribution engine deliver on, the diagnostics channel, the attribution slot, `ownerPath()`, and on the server the trace-provider slot.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/advanced/diagnostics-dev-hooks/observe.md",
+      "source_path": "reference/solid-js/advanced/diagnostics-dev-hooks/observe.md"
+    },
+    {
+      "title": "Component / ComponentProps / FlowComponent / FlowProps / ParentComponent / ParentProps / Ref / ValidComponent / VoidComponent / VoidProps",
+      "path": "references/core/component-types.md",
+      "route": "/reference/solid-js/types/component-types",
+      "description": "A general `Component` has no implicit `children` prop. If desired, specify one explicitly, e.g. `Component<{ name: string; children: Element }>`.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/types/component-types.md",
+      "source_path": "reference/solid-js/types/component-types.md"
+    },
+    {
+      "title": "Context / ContextProviderComponent",
+      "path": "references/core/context-types.md",
+      "route": "/reference/solid-js/types/context-types",
+      "description": "Context API reference.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/types/context-types.md",
+      "source_path": "reference/solid-js/types/context-types.md"
+    },
+    {
+      "title": "JSX",
+      "path": "references/core/jsx-types.md",
+      "route": "/reference/solid-js/types/jsx-types",
+      "description": "Selected public types from the `JSX` namespace. Element-specific attributes are available through `JSX.IntrinsicElements`.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/types/jsx-types.md",
+      "source_path": "reference/solid-js/types/jsx-types.md"
+    },
+    {
+      "title": "Owner",
+      "path": "references/core/owner.md",
+      "route": "/reference/solid-js/types/owner",
+      "description": "Represents the owner of a reactive scope. Treat its structure as opaque and use the public owner APIs to inspect or run code in that scope.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/types/owner.md",
+      "source_path": "reference/solid-js/types/owner.md"
+    },
+    {
+      "title": "Accessor / Setter / Signal / SourceAccessor",
+      "path": "references/core/reactive-types.md",
+      "route": "/reference/solid-js/types/reactive-types",
+      "description": "A zero-arg getter for a reactive value. Calling it inside a tracking scope (memo, effect compute, JSX expression) subscribes the scope to changes.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/types/reactive-types.md",
+      "source_path": "reference/solid-js/types/reactive-types.md"
+    },
+    {
+      "title": "Store / SolidStore",
+      "path": "references/core/store-types.md",
+      "route": "/reference/solid-js/types/store-types",
+      "description": "A reactive view of a store's value. Update it through the paired `StoreSetter`.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/types/store-types.md",
+      "source_path": "reference/solid-js/types/store-types.md"
+    },
+    {
+      "title": "@solidjs/web",
+      "path": "references/web/overview.md",
+      "route": "/reference/solid-web",
+      "description": "Reference for @solidjs/web: DOM and HTML rendering, hydration, the head registry, DOM components, JSX properties, server functions, the request event, and the Performance panel tracks.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web.md",
+      "source_path": "reference/solid-web.md"
+    },
+    {
+      "title": "clientOnly",
+      "path": "references/web/client-only.md",
+      "route": "/reference/solid-web/rendering-ssr/client-only",
+      "description": "Creates a component that renders only in the browser. The server renders the fallback, and the client keeps that fallback through hydration before mounting the imported component.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/rendering-ssr/client-only.md",
+      "source_path": "reference/solid-web/rendering-ssr/client-only.md"
+    },
+    {
+      "title": "httpHeader",
+      "path": "references/web/http-header.md",
+      "route": "/reference/solid-web/rendering-ssr/http-header",
+      "description": "Declares an HTTP response header (or with `append`, appends to one) for the lifetime of the current reactive scope during SSR — call it bare in a component or reactive-scope body.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/rendering-ssr/http-header.md",
+      "source_path": "reference/solid-web/rendering-ssr/http-header.md"
+    },
+    {
+      "title": "httpStatus",
+      "path": "references/web/http-status.md",
+      "route": "/reference/solid-web/rendering-ssr/http-status",
+      "description": "Declares the HTTP response status (and optional status text) for the lifetime of the current reactive scope during SSR — call it bare in a component or reactive-scope body where the status is decided (a 404 route, an error fallback).",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/rendering-ssr/http-status.md",
+      "source_path": "reference/solid-web/rendering-ssr/http-status.md"
+    },
+    {
+      "title": "hydrate",
+      "path": "references/web/hydrate.md",
+      "route": "/reference/solid-web/rendering-ssr/hydrate",
+      "description": "Attaches a Solid component tree to server-rendered DOM and returns a function that disposes the hydrated tree.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/rendering-ssr/hydrate.md",
+      "source_path": "reference/solid-web/rendering-ssr/hydrate.md"
+    },
+    {
+      "title": "isDev",
+      "path": "references/web/is-dev.md",
+      "route": "/reference/solid-web/rendering-ssr/is-dev",
+      "description": "Build-time constant that is `true` in development output and `false` in production output.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/rendering-ssr/is-dev.md",
+      "source_path": "reference/solid-web/rendering-ssr/is-dev.md"
+    },
+    {
+      "title": "isServer",
+      "path": "references/web/is-server.md",
+      "route": "/reference/solid-web/rendering-ssr/is-server",
+      "description": "Build-time constant that is `true` in server output and `false` in browser output.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/rendering-ssr/is-server.md",
+      "source_path": "reference/solid-web/rendering-ssr/is-server.md"
+    },
+    {
+      "title": "renderToStream",
+      "path": "references/web/render-to-stream.md",
+      "route": "/reference/solid-web/rendering-ssr/render-to-stream",
+      "description": "Streams an HTML response, flushing the synchronous shell first and then progressively emitting async-resolved fragments as their `<Loading>` boundaries settle.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/rendering-ssr/render-to-stream.md",
+      "source_path": "reference/solid-web/rendering-ssr/render-to-stream.md"
+    },
+    {
+      "title": "renderToString",
+      "path": "references/web/render-to-string.md",
+      "route": "/reference/solid-web/rendering-ssr/render-to-string",
+      "description": "Renders a component tree synchronously to an HTML string. Async reads inside `<Loading>` boundaries emit their `fallback` content; for full-graph resolution await `renderToStream` instead.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/rendering-ssr/render-to-string.md",
+      "source_path": "reference/solid-web/rendering-ssr/render-to-string.md"
+    },
+    {
+      "title": "render",
+      "path": "references/web/render.md",
+      "route": "/reference/solid-web/rendering-ssr/render",
+      "description": "Renders a component tree into a DOM element. Returns a dispose function that tears the tree down and cleans up reactive scopes when called.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/rendering-ssr/render.md",
+      "source_path": "reference/solid-web/rendering-ssr/render.md"
+    },
+    {
+      "title": "useHead",
+      "path": "references/web/use-head.md",
+      "route": "/reference/solid-web/head/use-head",
+      "description": "Registers one or more head tag descriptors with Solid's ambient head registry.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/head/use-head.md",
+      "source_path": "reference/solid-web/head/use-head.md"
+    },
+    {
+      "title": "HeadTag",
+      "path": "references/web/head-tag.md",
+      "route": "/reference/solid-web/head/head-tag",
+      "description": "Describes a tag registered with Solid's ambient head registry.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/head/head-tag.md",
+      "source_path": "reference/solid-web/head/head-tag.md"
+    },
+    {
+      "title": "dynamic",
+      "path": "references/web/dynamic.md",
+      "route": "/reference/solid-web/components/dynamic",
+      "description": "Creates a stable component whose rendered component comes from a reactive source. The source can return a component, an intrinsic element name, a promise, or no component.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/components/dynamic.md",
+      "source_path": "reference/solid-web/components/dynamic.md"
+    },
+    {
+      "title": "Portal",
+      "path": "references/web/portal.md",
+      "route": "/reference/solid-web/components/portal",
+      "description": "Renders its children into a different part of the DOM (modal roots, tooltips, layers that need to escape an `overflow: hidden` ancestor).",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/components/portal.md",
+      "source_path": "reference/solid-web/components/portal.md"
+    },
+    {
+      "title": "ref",
+      "path": "references/web/ref.md",
+      "route": "/reference/solid-web/jsx-properties/ref",
+      "description": "Receives a DOM element or composes several callbacks that apply behavior to it.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/jsx-properties/ref.md",
+      "source_path": "reference/solid-web/jsx-properties/ref.md"
+    },
+    {
+      "title": "class",
+      "path": "references/web/class.md",
+      "route": "/reference/solid-web/jsx-properties/class",
+      "description": "Sets static and conditional class names from strings, objects, or nested arrays.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/jsx-properties/class.md",
+      "source_path": "reference/solid-web/jsx-properties/class.md"
+    },
+    {
+      "title": "style",
+      "path": "references/web/style.md",
+      "route": "/reference/solid-web/jsx-properties/style",
+      "description": "Sets an element's inline styles from a CSS string or an object of declarations.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/jsx-properties/style.md",
+      "source_path": "reference/solid-web/jsx-properties/style.md"
+    },
+    {
+      "title": "textContent",
+      "path": "references/web/text-content.md",
+      "route": "/reference/solid-web/jsx-properties/text-content",
+      "description": "Writes plain text as an element's complete contents through an optimized text-only path.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/jsx-properties/text-content.md",
+      "source_path": "reference/solid-web/jsx-properties/text-content.md"
+    },
+    {
+      "title": "innerHTML",
+      "path": "references/web/inner-html.md",
+      "route": "/reference/solid-web/jsx-properties/inner-html",
+      "description": "Parses an HTML string as an element's complete contents.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/jsx-properties/inner-html.md",
+      "source_path": "reference/solid-web/jsx-properties/inner-html.md"
+    },
+    {
+      "title": "Server functions",
+      "path": "references/web/server-functions.md",
+      "route": "/reference/solid-web/server-functions",
+      "description": "Reference for Solid's server-function declarations, transport, and host integration.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions.md",
+      "source_path": "reference/solid-web/server-functions.md"
+    },
+    {
+      "title": "parseServerFunctionActionUrl / serverFunctionActionUrl / serverFunctionUrl",
+      "path": "references/web/addressing.md",
+      "route": "/reference/solid-web/server-functions/addressing",
+      "description": "Reads the function id back out of a server-rendered action url.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/addressing.md",
+      "source_path": "reference/solid-web/server-functions/addressing.md"
+    },
+    {
+      "title": "configureServerFunctionsClient",
+      "path": "references/web/configure-client.md",
+      "route": "/reference/solid-web/server-functions/configure-client",
+      "description": "Configures the browser server-function endpoint, codec, request preparation, and response integration.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/configure-client.md",
+      "source_path": "reference/solid-web/server-functions/configure-client.md"
+    },
+    {
+      "title": "GET",
+      "path": "references/web/get.md",
+      "route": "/reference/solid-web/server-functions/get",
+      "description": "Declares that a server-function read can use HTTP GET. Calls use a cacheable URL when the encoded arguments fit and fall back to a read-only POST when they do not.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/get.md",
+      "source_path": "reference/solid-web/server-functions/get.md"
+    },
+    {
+      "title": "configureServerFunctionsServer / handleServerFunctionRequest",
+      "path": "references/web/host-configuration.md",
+      "route": "/reference/solid-web/server-functions/host-configuration",
+      "description": "Configures request scoping, invocation policy, result transforms, no-JavaScript handling, origin checks, and codecs for server functions.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/host-configuration.md",
+      "source_path": "reference/solid-web/server-functions/host-configuration.md"
+    },
+    {
+      "title": "getServerFunctionInvocation",
+      "path": "references/web/invocation-context.md",
+      "route": "/reference/solid-web/server-functions/invocation-context",
+      "description": "Returns the identity of the server function that is currently executing.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/invocation-context.md",
+      "source_path": "reference/solid-web/server-functions/invocation-context.md"
+    },
+    {
+      "title": "invoke",
+      "path": "references/web/invoke.md",
+      "route": "/reference/solid-web/server-functions/invoke",
+      "description": "Calls a server function with invocation-scoped `signal`, `keepalive`, or `priority` options.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/invoke.md",
+      "source_path": "reference/solid-web/server-functions/invoke.md"
+    },
+    {
+      "title": "live",
+      "path": "references/web/live.md",
+      "route": "/reference/solid-web/server-functions/live",
+      "description": "Declares a server function whose async iterable represents one value that changes over time.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/live.md",
+      "source_path": "reference/solid-web/server-functions/live.md"
+    },
+    {
+      "title": "withMeta / getServerFunctionMetadata / isServerFunction",
+      "path": "references/web/metadata.md",
+      "route": "/reference/solid-web/server-functions/metadata",
+      "description": "Attaches declaration metadata to a server-function reference and returns the reference.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/metadata.md",
+      "source_path": "reference/solid-web/server-functions/metadata.md"
+    },
+    {
+      "title": "createNoJSHandler",
+      "path": "references/web/progressive-enhancement.md",
+      "route": "/reference/solid-web/server-functions/progressive-enhancement",
+      "description": "Creates the default response handler for browser form submissions made without the client runtime.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/progressive-enhancement.md",
+      "source_path": "reference/solid-web/server-functions/progressive-enhancement.md"
+    },
+    {
+      "title": "enableRichArguments",
+      "path": "references/web/rich-arguments.md",
+      "route": "/reference/solid-web/server-functions/rich-arguments",
+      "description": "Enables codec encoding for server-function arguments that JSON cannot preserve.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/rich-arguments.md",
+      "source_path": "reference/solid-web/server-functions/rich-arguments.md"
+    },
+    {
+      "title": "decodeResponse / registerFlightDataSource / subscribeFlightData",
+      "path": "references/web/single-flight.md",
+      "route": "/reference/solid-web/server-functions/single-flight",
+      "description": "Decodes a server-function response, including response envelopes and single-flight payloads.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/server-functions/single-flight.md",
+      "source_path": "reference/solid-web/server-functions/single-flight.md"
+    },
+    {
+      "title": "Request and response",
+      "path": "references/web/request-response.md",
+      "route": "/reference/solid-web/request-response",
+      "description": "Reference for request context, response metadata, cookies, redirects, and errors.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/request-response.md",
+      "source_path": "reference/solid-web/request-response.md"
+    },
+    {
+      "title": "configureServerErrors",
+      "path": "references/web/configure-server-errors.md",
+      "route": "/reference/solid-web/request-response/configure-server-errors",
+      "description": "Registers the ambient server error hook: called once per error object for every failure the server runtime handles or fails on, with the site that met it; the return value, when given, replaces what the client receives.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/request-response/configure-server-errors.md",
+      "source_path": "reference/solid-web/request-response/configure-server-errors.md"
+    },
+    {
+      "title": "parseCookieHeader / serializeCookie",
+      "path": "references/web/cookies.md",
+      "route": "/reference/solid-web/request-response/cookies",
+      "description": "Parses a `Cookie` request header into a name → value map.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/request-response/cookies.md",
+      "source_path": "reference/solid-web/request-response/cookies.md"
+    },
+    {
+      "title": "getRequestEvent",
+      "path": "references/web/get-request-event.md",
+      "route": "/reference/solid-web/request-response/get-request-event",
+      "description": "Returns the request event for the current server render, middleware chain, or server-function call.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/request-response/get-request-event.md",
+      "source_path": "reference/solid-web/request-response/get-request-event.md"
+    },
+    {
+      "title": "getTraceContext",
+      "path": "references/web/get-trace-context.md",
+      "route": "/reference/solid-web/request-response/get-trace-context",
+      "description": "The trace the current request belongs to — continued from the incoming W3C `traceparent` when there was one, originated by the runtime otherwise; in observe/dev builds, merged with the installed provider's answer (`OBSERVE.server.trace`).",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/request-response/get-trace-context.md",
+      "source_path": "reference/solid-web/request-response/get-trace-context.md"
+    },
+    {
+      "title": "provideRequestEvent",
+      "path": "references/web/provide-request-event.md",
+      "route": "/reference/solid-web/request-response/provide-request-event",
+      "description": "Runs a callback in a server request-event scope backed by `AsyncLocalStorage`.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/request-response/provide-request-event.md",
+      "source_path": "reference/solid-web/request-response/provide-request-event.md"
+    },
+    {
+      "title": "redirect / isHref",
+      "path": "references/web/redirect.md",
+      "route": "/reference/solid-web/request-response/redirect",
+      "description": "Creates a redirect `Response` (status 302 by default). Pass `revalidate` to name the cache keys the mutation invalidated so the client refetches them after following the redirect.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/request-response/redirect.md",
+      "source_path": "reference/solid-web/request-response/redirect.md"
+    },
+    {
+      "title": "reload",
+      "path": "references/web/reload.md",
+      "route": "/reference/solid-web/request-response/reload",
+      "description": "Creates an empty `Response` that asks the client to revalidate the named cache keys without navigating.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/request-response/reload.md",
+      "source_path": "reference/solid-web/request-response/reload.md"
+    },
+    {
+      "title": "respond / isResponseEnvelope",
+      "path": "references/web/respond.md",
+      "route": "/reference/solid-web/request-response/respond",
+      "description": "A value paired with response metadata (status, headers, `revalidate`) — for the things a naked return can't express.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/request-response/respond.md",
+      "source_path": "reference/solid-web/request-response/respond.md"
+    },
+    {
+      "title": "markSafeError / isSafeError",
+      "path": "references/web/safe-errors.md",
+      "route": "/reference/solid-web/request-response/safe-errors",
+      "description": "Marks `error` as safe to serialize to the client verbatim, opting it out of production error sanitization (see `handleServerFunctionRequest`).",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/request-response/safe-errors.md",
+      "source_path": "reference/solid-web/request-response/safe-errors.md"
+    },
+    {
+      "title": "enablePerformanceTracks",
+      "path": "references/web/enable-performance-tracks.md",
+      "route": "/reference/solid-web/performance-tracks/enable-performance-tracks",
+      "description": "Paint the attribution engine's records — and the web runtime's server-function `call` and `frame` records, with the server's own timing for each response under them (its `Server-Timing` metrics, placed by the browser's resource timing; the document's at enable) — as tracks in the Chrome Performance panel, from now until the returned function is called.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-web/performance-tracks/enable-performance-tracks.md",
+      "source_path": "reference/solid-web/performance-tracks/enable-performance-tracks.md"
+    },
+    {
+      "title": "@solidjs/router",
+      "path": "references/router/overview.md",
+      "route": "/reference/solid-router",
+      "description": "API reference for Solid Router 2, including router creation, navigation, data, history, file routes, and server integration.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-router.md",
+      "source_path": "reference/solid-router.md"
+    },
+    {
+      "title": "Router factory",
+      "path": "references/router/router-factory.md",
+      "route": "/reference/solid-router/router-factory",
+      "description": "Reference for createRouter, defineRoute, defineRoutes, router configuration, and router instances.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-router/router-factory.md",
+      "source_path": "reference/solid-router/router-factory.md"
+    },
+    {
+      "title": "Routes and typed paths",
+      "path": "references/router/routes-and-paths.md",
+      "route": "/reference/solid-router/routes-and-paths",
+      "description": "Reference for route definitions, path patterns, typed path nodes, match filters, and router matching.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-router/routes-and-paths.md",
+      "source_path": "reference/solid-router/routes-and-paths.md"
+    },
+    {
+      "title": "Navigation primitives",
+      "path": "references/router/navigation.md",
+      "route": "/reference/solid-router/navigation",
+      "description": "Reference for Solid Router location, navigation, matching, search, preloading, link state, and leave guards.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-router/navigation.md",
+      "source_path": "reference/solid-router/navigation.md"
+    },
+    {
+      "title": "Data APIs",
+      "path": "references/router/data.md",
+      "route": "/reference/solid-router/data",
+      "description": "Reference for Solid Router query caching, revalidation, actions, action invocation, and settled submissions.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-router/data.md",
+      "source_path": "reference/solid-router/data.md"
+    },
+    {
+      "title": "History adapters",
+      "path": "references/router/history.md",
+      "route": "/reference/solid-router/history",
+      "description": "Reference for Solid Router browser, hash, and memory history adapters.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-router/history.md",
+      "source_path": "reference/solid-router/history.md"
+    },
+    {
+      "title": "File-system adapter",
+      "path": "references/router/filesystem.md",
+      "route": "/reference/solid-router/filesystem",
+      "description": "Reference for converting a file-routes manifest and typing Solid Router route-module configuration.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-router/filesystem.md",
+      "source_path": "reference/solid-router/filesystem.md"
+    },
+    {
+      "title": "Server integration",
+      "path": "references/router/server.md",
+      "route": "/reference/solid-router/server",
+      "description": "Reference for the Solid Router server-function flight-data collector.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-router/server.md",
+      "source_path": "reference/solid-router/server.md"
+    },
+    {
+      "title": "Types",
+      "path": "references/router/types.md",
+      "route": "/reference/solid-router/types",
+      "description": "Inventory of application-facing types exported by Solid Router 2.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-router/types.md",
+      "source_path": "reference/solid-router/types.md"
+    },
+    {
+      "title": "@solidjs/meta",
+      "path": "references/meta/overview.md",
+      "route": "/reference/solid-meta",
+      "description": "Reference for @solidjs/meta: components that set the document title, meta tags, links, scripts, and styles from anywhere in the tree.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-meta.md",
+      "source_path": "reference/solid-meta.md"
+    },
+    {
+      "title": "Base",
+      "path": "references/meta/base.md",
+      "route": "/reference/solid-meta/base",
+      "description": "Base sets the document base URL through Solid Meta during server rendering.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-meta/base.md",
+      "source_path": "reference/solid-meta/base.md"
+    },
+    {
+      "title": "Head",
+      "path": "references/meta/head.md",
+      "route": "/reference/solid-meta/head",
+      "description": "Head groups its child head tags into one replacement set through Solid Meta.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-meta/head.md",
+      "source_path": "reference/solid-meta/head.md"
+    },
+    {
+      "title": "Link",
+      "path": "references/meta/link.md",
+      "route": "/reference/solid-meta/link",
+      "description": "Link adds a link element to the document head through Solid Meta.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-meta/link.md",
+      "source_path": "reference/solid-meta/link.md"
+    },
+    {
+      "title": "Meta",
+      "path": "references/meta/meta.md",
+      "route": "/reference/solid-meta/meta",
+      "description": "Meta adds a meta element to the document head through Solid Meta.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-meta/meta.md",
+      "source_path": "reference/solid-meta/meta.md"
+    },
+    {
+      "title": "Script",
+      "path": "references/meta/script.md",
+      "route": "/reference/solid-meta/script",
+      "description": "Script adds a script element to the document head through Solid Meta.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-meta/script.md",
+      "source_path": "reference/solid-meta/script.md"
+    },
+    {
+      "title": "Style",
+      "path": "references/meta/style.md",
+      "route": "/reference/solid-meta/style",
+      "description": "Style adds an inline style element to the document head through Solid Meta.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-meta/style.md",
+      "source_path": "reference/solid-meta/style.md"
+    },
+    {
+      "title": "Stylesheet",
+      "path": "references/meta/stylesheet.md",
+      "route": "/reference/solid-meta/stylesheet",
+      "description": "Stylesheet adds a stylesheet link element to the document head through Solid Meta.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-meta/stylesheet.md",
+      "source_path": "reference/solid-meta/stylesheet.md"
+    },
+    {
+      "title": "Title",
+      "path": "references/meta/title.md",
+      "route": "/reference/solid-meta/title",
+      "description": "Title sets the document title through Solid Meta.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-meta/title.md",
+      "source_path": "reference/solid-meta/title.md"
+    },
+    {
+      "title": "@solidjs/vite-plugin",
+      "path": "references/vite/overview.md",
+      "route": "/reference/vite-plugin-solid",
+      "description": "Public exports and generated modules provided by @solidjs/vite-plugin 3.0 for Solid 2.0.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/vite-plugin-solid.md",
+      "source_path": "reference/vite-plugin-solid.md"
+    },
+    {
+      "title": "solidPlugin",
+      "path": "references/vite/options.md",
+      "route": "/reference/vite-plugin-solid/options",
+      "description": "Configures Solid JSX compilation and the optional serving and server-function modes.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/vite-plugin-solid/options.md",
+      "source_path": "reference/vite-plugin-solid/options.md"
+    },
+    {
+      "title": "StartOptions",
+      "path": "references/vite/start.md",
+      "route": "/reference/vite-plugin-solid/start",
+      "description": "Configures @solidjs/vite-plugin client or SSR start mode.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/vite-plugin-solid/start.md",
+      "source_path": "reference/vite-plugin-solid/start.md"
+    },
+    {
+      "title": "serverFunctions",
+      "path": "references/vite/server-functions.md",
+      "route": "/reference/vite-plugin-solid/server-functions",
+      "description": "Compiles use-server directives and emits server-function manifest and handler modules.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/vite-plugin-solid/server-functions.md",
+      "source_path": "reference/vite-plugin-solid/server-functions.md"
+    },
+    {
+      "title": "Modules and manifest",
+      "path": "references/vite/modules.md",
+      "route": "/reference/vite-plugin-solid/modules",
+      "description": "Reference for @solidjs/vite-plugin manifest types, virtual modules, and boundary marker modules.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/vite-plugin-solid/modules.md",
+      "source_path": "reference/vite-plugin-solid/modules.md"
+    },
+    {
+      "title": "filesystem-routing",
+      "path": "references/filesystem/overview.md",
+      "route": "/reference/filesystem-routing",
+      "description": "Public exports for filesystem-routing scanning, conventions, Vite delivery, and API dispatch.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/filesystem-routing.md",
+      "source_path": "reference/filesystem-routing.md"
+    },
+    {
+      "title": "filesystem-routing core",
+      "path": "references/filesystem/core.md",
+      "route": "/reference/filesystem-routing/core",
+      "description": "Reference for the bundler-neutral scanner, manifest types, and module analysis exports.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/filesystem-routing/core.md",
+      "source_path": "reference/filesystem-routing/core.md"
+    },
+    {
+      "title": "Route conventions",
+      "path": "references/filesystem/conventions.md",
+      "route": "/reference/filesystem-routing/conventions",
+      "description": "Reference for nested and flat route filename conventions.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/filesystem-routing/conventions.md",
+      "source_path": "reference/filesystem-routing/conventions.md"
+    },
+    {
+      "title": "filesystem-routing/tree",
+      "path": "references/filesystem/tree.md",
+      "route": "/reference/filesystem-routing/tree",
+      "description": "Builds nested route trees and removes route-group segments.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/filesystem-routing/tree.md",
+      "source_path": "reference/filesystem-routing/tree.md"
+    },
+    {
+      "title": "filesystem-routing/vite",
+      "path": "references/filesystem/vite.md",
+      "route": "/reference/filesystem-routing/vite",
+      "description": "Configures Vite delivery of a file-system route manifest.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/filesystem-routing/vite.md",
+      "source_path": "reference/filesystem-routing/vite.md"
+    },
+    {
+      "title": "filesystem-routing/api",
+      "path": "references/filesystem/api.md",
+      "route": "/reference/filesystem-routing/api",
+      "description": "Matches manifest HTTP handlers and dispatches them as fetch-style middleware.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/filesystem-routing/api.md",
+      "source_path": "reference/filesystem-routing/api.md"
+    },
+    {
+      "title": "Manifest module",
+      "path": "references/filesystem/manifest.md",
+      "route": "/reference/filesystem-routing/manifest",
+      "description": "Reference for virtual:file-routes runtime output and TypeScript declarations.",
+      "source_url": "https://v2-rebuild--solid-docs-v2.netlify.app/reference/filesystem-routing/manifest.md",
+      "source_path": "reference/filesystem-routing/manifest.md"
+    }
+  ],
+  "assets": {
+    "/images/diagrams/async-update-timeline.svg": "assets/diagrams-async-update-timeline.svg",
+    "/images/diagrams/middleware-chain.svg": "assets/diagrams-middleware-chain.svg",
+    "/images/diagrams/nested-routes-what-stays-mounted.svg": "assets/diagrams-nested-routes-what-stays-mounted.svg",
+    "/images/diagrams/router-three-data-pieces.svg": "assets/diagrams-router-three-data-pieces.svg",
+    "/images/diagrams/single-flight-mutation.svg": "assets/diagrams-single-flight-mutation.svg",
+    "/images/diagrams/derived-state-effects-sequence.svg": "assets/diagrams-derived-state-effects-sequence.svg"
+  },
+  "files": {
+    "assets/diagrams-async-update-timeline.svg": "263f76f27d0681e624b18e3b2b594c040632692e26746faac03d4d7dad4d8190",
+    "assets/diagrams-derived-state-effects-sequence.svg": "9de8794bd56bf3b0bc0df1727f1d40cbd01cda03f6a21d8a1b4725649a68db9a",
+    "assets/diagrams-middleware-chain.svg": "545d1fb06d7a78ecef7e24a3e5b79fcfa15f7c449e658186d3fe8e6f14c883d8",
+    "assets/diagrams-nested-routes-what-stays-mounted.svg": "5c4305e87ba05699cbe746af8d0ac9b3a622c8e31e3bb57bfbec2bd602bb5a16",
+    "assets/diagrams-router-three-data-pieces.svg": "3b716879405cf7c46fd90fcad80927ebe66d107b53cabf5b8b450b0a41bda4b1",
+    "assets/diagrams-single-flight-mutation.svg": "8f35d212b81213903b13152a4755c7767b9a7cc21becb0734db21fb43bf327c5",
+    "references/building-apps/app-structure.md": "0635d1f4295990e3e4d7cd96002746b4b2c89435bf8049617870114aa08e9e1e",
+    "references/building-apps/deployment.md": "f022fcb80c0191efff5d0b5a1aa62e32d033358255b0dce3c29525d3c01e2718",
+    "references/building-apps/environment.md": "69b879058d1ed939ac8baad1571d4444f47a01f5d431e2dc4eb5b0d97f28525a",
+    "references/building-apps/head-and-metadata.md": "534d931aa9a58fe4cc5e68a9b9555dae4dfa9400955e33bb6d4979dab3b0c1fc",
+    "references/building-apps/middleware-and-api-routes.md": "aa0e57f778caf9f78bd12560e897a716e3264b9dd604f1f3feeda819dafbbb59",
+    "references/building-apps/server-functions-arguments-and-security.md": "880c11c8c0031b8083d0348248a08a0c7bfc49f1b78c13ae9722520beb0889d8",
+    "references/building-apps/server-functions-metadata-and-transport.md": "029c56a3c57fda32f235e61fd48c61e46dad8cc9de285f90a85a711377adf7fe",
+    "references/building-apps/server-functions-mutations-and-responses.md": "19c4fae52b3b0f9f03d0820163529f804722ae5c43e68f3190dc0dd78a0c023f",
+    "references/building-apps/server-functions-progressive-enhancement.md": "3cf320270406983d78b4d9feb5814ba4536bc1e4fecc2941023178d707a89438",
+    "references/building-apps/server-functions-reads-and-live-data.md": "b36b9dd407401be3c0ef48408fa34aaa7365b1c758a85351cc09547744fbf3c3",
+    "references/building-apps/server-functions.md": "0a1500b98ac8510482c611c252c89f321667301d3629adfc396a814e6ab3d969",
+    "references/building-apps/sessions-and-auth.md": "4d07d1ddc07f3a6ec0685e99b530c3b6bc4fd5f56687b8e74ada07ffd9e36728",
+    "references/building-apps/styling-and-assets.md": "1f1e5d0a531a849f8e01386cd993ee3ac9d8fbb15945b9e9e6d29b20dd68495b",
+    "references/concepts/async-reactivity.md": "436620795cb16f06b864c63de2a42e1ec105ebc7c12ce0188d2c2a5a6ccb32d6",
+    "references/concepts/boundaries.md": "73bab32be65b82905c99fb10ef8d4f01dfea953e3ead9cbc93a2b2bdc0efd33f",
+    "references/concepts/components-and-jsx.md": "a727d27e199830ae71dca07bd058e61b5cbb87d67d76f995ae682f4a4f4c72c1",
+    "references/concepts/mutations.md": "a2eab43439a77d18d099c28c2776577469304f54898cf9a5af9dad95f3873c34",
+    "references/concepts/reactivity.md": "51b3e8844bca39de5fbc22070ed645ce5cd52fad21ef7b25f1e8f4a8294d0bfd",
+    "references/concepts/rendering-and-ssr.md": "506fe8feb048fcc84294ea78c1700c7dbfab2a3db73661a352fcca62135075b6",
+    "references/concepts/stores.md": "74daa5ba9538112f4f198879fb2e0b8e137e881c04f90a60dc553ea7661c7d82",
+    "references/core/action.md": "8bc4e7f39e7c095a55162f1a26f7adc5d4bbc11b736d08ab62060540895dba7c",
+    "references/core/affects.md": "800ad3ca5b61d4774d40565bf7234ac2735c27f07f17542d18dead27cae9f097",
+    "references/core/attribution.md": "94d6fc298d6049fd7f0cac30c6ba0252057b272b283344812c31390936d83596",
+    "references/core/children.md": "aa48a2ea3f09a2552a837740e034a567b56f63e0bcad321a526b08fe14041dc3",
+    "references/core/component-types.md": "69bc899dcc257188738a82284f3adb8ef74a010251c21f102e2974cea483e499",
+    "references/core/configure-client-errors.md": "952bf3de1f3e379f758597fc525b0acdd3639770c40d18ba98ce3177c4ac9af7",
+    "references/core/context-types.md": "c0e801e9f166a7788a6da57e6608bb8cdfbecc638ba1a1496797a57cd87ede23",
+    "references/core/create-context.md": "593310c8d59852f7486018b99e3da6bb7455778d177f5142cd9f08425d29c81c",
+    "references/core/create-effect.md": "17709882cf66c2ed8b46cbdf89403e8ee021b9493202f402318f15f978dc4932",
+    "references/core/create-error-boundary.md": "0c14900a5916b4c73c170319ce9157e02dda1c8dcc2951c87c30c76567149a9f",
+    "references/core/create-loading-boundary.md": "84d9beb07a7a5c8f16cc4d09855d5660261c033e7318198c797b0492f4fc45ca",
+    "references/core/create-memo.md": "86d1c19b2b86030d695ce9eac8914febecb2fb5580f335366475789e5acc5c77",
+    "references/core/create-optimistic-store.md": "d8bc44da05e44a4e47568ae653c064d783c2141782b97532d6cb5b4a01b1f3ad",
+    "references/core/create-optimistic.md": "9aeef7685165a4599e968a805c3e0d7750fbb2ff739f54844ad89337e3b7147f",
+    "references/core/create-projection.md": "4e0fa9880ba36e40140457056a36ce5f85892b65e3eae55fde9e078edba2df89",
+    "references/core/create-reaction.md": "de8242cc6f1c40839880440e5499a921e747c802e08a3b73655d3000f8856d11",
+    "references/core/create-render-effect.md": "d7644fd3fb874d7862c5a41adcd6afa86688e7702189e58581ffa196a3ed09ee",
+    "references/core/create-reveal-order.md": "87fa6777aa99ee141dea1afc5d5ce323df1e7ccf53add3b752f717a9269f4bfb",
+    "references/core/create-root.md": "05a7297071e11c6c4e2592d5b43f6d8cfaacbdf0de2f263f251fef9cb71a17fa",
+    "references/core/create-signal.md": "05dcd565c432668cc79a74293d71baeae386e359f0643ad53578fe7d96b18642",
+    "references/core/create-store.md": "c4da7bb13aa5a5f472d4935072504d9c56be982a59b047877c888bd9c58dea92",
+    "references/core/create-tracked-effect.md": "9c5de5f9a15d846391f40ea3da73f12cebc444fa52d251f0f3216b5a096d2430",
+    "references/core/create-unique-id.md": "97cb235587d389286c73e0620697529616e00f0422dc0813431260e28bebb821",
+    "references/core/deep.md": "d97b9c63c59528ce77b1a363e575148ccb96eb1b9b4b16ccd5547b619d125c66",
+    "references/core/dev.md": "2274095bc276aea5c0defbccb0444d908e6faf7774272fb52733df7aca317ba1",
+    "references/core/enable-external-source.md": "8828736fe27cf0b577604156623b4d45de4476c59dac5a9d63a36cff88c55b17",
+    "references/core/errored.md": "4b91b6e844bcea2515b22c5259093d2b92f1739680c5173ce8e4eaa69772676b",
+    "references/core/flatten.md": "e47f2094172d70b86f98506271ed0781f71197f0f1ef10b2df4df9a48da02372",
+    "references/core/flush.md": "63c05f4e775c6ec8bc9d20d8ccfcaa472fc75c172d1cea6a79f6c09e2646e4c4",
+    "references/core/for.md": "cee5b2b5fb492cdbc4abfac426a19cb55c027a06cf81e4dc8e49a52e7c5ee3b1",
+    "references/core/get-observer.md": "04bdd80cb701bce3570db38efa1c0eb039a2f3641d284750e4d11d83a415804d",
+    "references/core/get-owner.md": "0bebbb73805b76c5a66023b9a8ac664139de2c29da8639b618a9e2dd9299420c",
+    "references/core/hydration.md": "1a0f042d5e9f4df23442a383a69da786983efa10ddcfd7f43c4d57dbed95a8da",
+    "references/core/is-disposed.md": "f3429006599e8afaf77be7478479e62c9c30f18f24663cdba5053997570b3670",
+    "references/core/is-pending.md": "0ae36c5e0ceac75305fefb31b782d14b563f2759de2c0b452f09cbc0d87ed8d5",
+    "references/core/is-wrappable.md": "a8fd73dcede675718377d36be33a74d30d164078f2e7c3ff230608efbc31b303",
+    "references/core/jsx-types.md": "9e3c48f16d7a4c2387abe40a9a5f3ad3d16f0af3329ebd947a8aacf9ec6014ce",
+    "references/core/latest.md": "05497cd95f4230774bb5a431fdf02215436fff01e0477a5f5b5857919a46ff53",
+    "references/core/lazy.md": "5dbc2d1dccf5318c3d364de17d55d12f012a43954376a1e9c1ade68fa920322b",
+    "references/core/loading.md": "6865fe92830ffb17083d0c357c739b84d4b3530b92322b01f209532cf874a10a",
+    "references/core/map-array.md": "ca1019658f612eede14d867dfc2c582b9048628e7277b9a3e65c22bd84cea830",
+    "references/core/merge.md": "e01d30113224071cd82e128d9f4964731b5c489b10f11bad9b36f9266959ab13",
+    "references/core/no-hydration.md": "afd625f644bb105ac0243e7c5be007165aae2700a10c3643a3f6cd597b84a7c8",
+    "references/core/not-ready-error.md": "a7c4c248dff50352fa55f5fdd1aa457658de6aa093ab81131ab5c659866338ca",
+    "references/core/observe.md": "4f0bcd4ef2a9a0a5ab2a55257b4c4cdb38ed8aa6bd89ebdab401bf64b02f1966",
+    "references/core/omit.md": "c33e079ee7c5846638b50d4b8dd7478e3c39fe10c8f6e7f89c0e4fa34cdaf49f",
+    "references/core/on-cleanup.md": "a0e4181803a2cf06e38095efd18afaa7d8f7d04ae151ffd97fcc36f6a41a7506",
+    "references/core/on-settled.md": "71dc6cdde7619829f7dc8ff88e77d1eb690974056f96af2304244c945b51dda3",
+    "references/core/overview.md": "20ddb7172989d22c209b67ebd9c8e52c3d7e98ac64628975606bf58f11c4f636",
+    "references/core/owner.md": "b091c2768e565d80281b1a0fe7658c1f7e0c1c5c33d40bd73f21114164ffdafb",
+    "references/core/reactive-types.md": "88218091b3ac33976042bf06cc652ab25ee6b70875a04d71756b8660070ddbe5",
+    "references/core/reconcile.md": "c488d4bdf5da1ee310028136e673f1cfa74c6b0cc68321b355f8b163aae4c860",
+    "references/core/refresh.md": "89b3663b879691303cc54d7a1e861233ef48d2165c8ea7e117dafae26619f31c",
+    "references/core/repeat-primitive.md": "9e6cabd879d3467bcf4060a5f56a41200c669ba528d0f5de0b5f833a87d092db",
+    "references/core/repeat.md": "6ad8f48e941f70ffc07ad3f0c691b13d2d08a848a21b3ac260110354f6ed2b14",
+    "references/core/resolve.md": "595c90486cf4c58166e19a377aa3adca4513a4d336f6aa9fe6c29363138727f4",
+    "references/core/reveal.md": "22fb812b5c8c13f470bd87a5f1470be311c0be09370a36498be4a84afe7023f1",
+    "references/core/run-with-owner.md": "fcdb2b3392d66372a303a5c41b28fa95092673d7aad36c1e5ebdca53927d963d",
+    "references/core/show.md": "2dc8729a8f2d6245f4147bf8eee4a0e34a199552e437e2a7cf17d0bac2db10f8",
+    "references/core/snapshot.md": "5dc0b8dbfcc2c9254db2575731d37e710361f570e5bcdba6b9d5c8bfa7bb7fb5",
+    "references/core/store-path.md": "e67a8e29d9881cbd1a45f30fb69948cc48d3c2ed44bab31ec1772db86ea17e7f",
+    "references/core/store-types.md": "399b9edbc973bfcb93be7b830117be9e1849dd8a470324749491f6b242de4a70",
+    "references/core/switch-and-match.md": "611597218580ab4dbfe17b49e616f6196f38efee407bc96cb6d410de734ff0b0",
+    "references/core/until.md": "e93525b026eb50a49fc2f2719ffb8f409eb8a33e1abad1628c7f3c7d3a2b602a",
+    "references/core/untrack.md": "ecc8c2576e8409a83c645c55c4e1102cf7a94b84aa74bff0aaf75cb10bc8d11e",
+    "references/core/use-context.md": "a3cea8ee7a05834860a51a8aa6760955fd3d036b6f26ba4b91e8a17df6811e08",
+    "references/filesystem/api.md": "60b616aeb905b5dcba0d467c60b10c0dfa779cb7865a383d9538e2b469898e23",
+    "references/filesystem/conventions.md": "7462daf899283f83c2ddbffddeb47ef32c1cb208c97eecdcf62334ec39adfeef",
+    "references/filesystem/core.md": "4090d24a45f49d7f86a0a8bd09e2d2e6d05381fa90c2d509acdd4e84f14fa11d",
+    "references/filesystem/manifest.md": "5d9f990b6a1d5452e1fe9cca567c3f2b48209c8c9967745419ecbd2a47af6c1b",
+    "references/filesystem/overview.md": "d85529b03f673029f779685cfad832e6c0d77be971db31148b0ae3d41571d8f4",
+    "references/filesystem/tree.md": "cc59795d2b83d8ae7539f97db8802747b0bff54ec10fb81751176518651e596a",
+    "references/filesystem/vite.md": "7ff51a0b317772244a96b5dc3779878864d543a81081f6d06993bde9128454fe",
+    "references/getting-started/project-shapes.md": "f3f9dc3335919bc706d6f2f18b4c7173cdeaf8dfff042835ac8bf54ad3708be8",
+    "references/getting-started/quick-start.md": "c50243de9115fcef8dc02c6552be3234c4fe76d2c2cb8979a3a8cb15ec4aa5ef",
+    "references/guides/avoid-unnecessary-effects.md": "029b44aa6d386c829e1bb3ffde21bb3b22a107c18dc8e268a44bfa7df5844af4",
+    "references/guides/choose-a-rendering-mode.md": "39aac42dabf1125c14fa528cb9fff9c9fa36baf45a3f70e3243388d3e26873fe",
+    "references/guides/custom-primitives.md": "c03784448bfa23817e5d54d548f38e9fc7d02f4b62cd79db74da8dd7a7778408",
+    "references/guides/data-fetching-patterns.md": "062e34773686544cb2e3b5b5c7234d663fcff96052246d3de538e803cb361ba9",
+    "references/guides/debugging-reactivity.md": "c625f1fa6ac7a9a882613815398eb9ecc96f28b85e1a8dff5b4cf013d8856ca9",
+    "references/guides/forms.md": "641ca928af3c6a7c12bc2b37e4d8d8544ad9a61782ba6488812017f1c45bc491",
+    "references/guides/integrate-non-solid-code.md": "e0ccbf98a6e82b441b6089d154f44a6a0dcb874a77c61574e096deff7054f2ff",
+    "references/guides/lists.md": "44fac9e120ca54585938fc1ed36863b3b4589e8e25c1bb392022cf37dcf2974e",
+    "references/guides/observability-adapters.md": "d09ba9e9c18eaae82222eb9e89ad7a4b7d9ca7ff4326e3aa2c69050080783d0a",
+    "references/guides/observability.md": "0df43a7a085f621203863c70d06ada996183d64f9ac025edd9234221cdaa66a6",
+    "references/guides/performance.md": "04a3f9e3ab67a384e3e13a41fb68b5b8bbe1f38981264d7abc1be95ff921cc31",
+    "references/guides/protected-routes.md": "e3187ba8ea2822be2c2581f0438c1d5f17014127cec1480989d1f3ab28c3e376",
+    "references/guides/ssr-safe-code.md": "1e49dc7927360b47d97267f65c69c9b27eb475f21161d803323594c731e56629",
+    "references/guides/state-management.md": "d438a3ba9692c4bf844b74a572de1e89c36409627ac231788fe0b662b33b2dbe",
+    "references/guides/testing.md": "d8598abd9f0b3e8ac0819ccfdadd606f139a5f52f4026c72b83f0376f1181a4a",
+    "references/guides/thinking-in-solid.md": "41419d526cc44146d242ffbe0f0000297531e012f25c5b706e6860c52275df4c",
+    "references/guides/typescript.md": "c26037e6af27dfd1643143aea266ea2c0c3662d39ef12bd2283f39c85eb335ef",
+    "references/index.md": "3b0d834c5beb3bb9fe927902cad27c9877f0df88806826ae7bf773bf00db28f8",
+    "references/meta/base.md": "b016928ebfb72610813aba7fa67b4e2262b8d2e86eafb47a869d5a18982383b3",
+    "references/meta/head.md": "8a5e3fbfdf25754b5c791f08711908acd1239224a988a9dc7e55457b675411a8",
+    "references/meta/link.md": "45172f517a482e692257075bf1ff836c83229efbc9b93da3e7a65a59acfb1d52",
+    "references/meta/meta.md": "dd1a744eb5f51c0959a38991ca2d780a05953e7a9e74a7efb527e42a740701d2",
+    "references/meta/overview.md": "302a78c9d419c4a5a35122ee6ca7bd65b0043ad7580baeb2f26635c55706c198",
+    "references/meta/script.md": "f19270ae7adbb64d26b88f7d7c2383050a62adc298892408fdc5782cbe3ab179",
+    "references/meta/style.md": "f00ba94008ebe90b7773901484b61f26b8c717647a68852daaa9e82fa86ad266",
+    "references/meta/stylesheet.md": "b30db86bceafa2b6e5f462f621e0fe5f94d7bcd008b6291cceadccb64bf7f684",
+    "references/meta/title.md": "5002988f801ca7ebac6a24e451855278c79b1f1772143ab817ee2771702c1048",
+    "references/migration/data-fetching-from-solid-1.md": "aeaf5cf938b07e9ba49e4cc6e1f9e67f4247ce9b252ad057678514dff0e8164d",
+    "references/migration/from-react.md": "1bc30038ac624c55ef61cf1b16f4f375c65748e22c380b37cd86e469959c8512",
+    "references/migration/from-solid-1.md": "2e243b54164a8df549dc9f966599736b699f6fc655addb7a77e273ac11b708ea",
+    "references/migration/from-solid-meta.md": "7885a6c457f00566b45224335e74b359e62e91c3eaa7592b1056fb23e5f77936",
+    "references/migration/from-solid-router.md": "4f755f6a691b86880642fd639aac0b6b8874fc71e0a4521a959f06cba5c4646e",
+    "references/migration/from-solid-start.md": "e23bcda7ab98a9960ca731a75ee3d3384a10c75b67f155ba2016a8a116043b82",
+    "references/overview/glossary.md": "4d0a181af1c440f228b04ee7175584a59f8696cc2afe87ed11f5a2d8da1d92f5",
+    "references/overview/index.md": "f022a770f70c42eae380246db42c6c3595e013972e72f352988fd9573d599b8d",
+    "references/overview/reference.md": "f1de58883fdc7ec085d14261af7f1ce6f0992d0e7603493ef18acce1a418ad6a",
+    "references/router/data.md": "dd413593f049743a451f1cf1216babcfb612364e4ecb6667f77df64e5bb1f563",
+    "references/router/filesystem.md": "de37038d7f3d334c4c6431e98a80d6af09916490a3b20627e4fff4df5ab9a2b0",
+    "references/router/history.md": "f5ea4e3595ad98c1831aa6ee01fb412bec32d6b74aee8a084c06bcf9c9099bcf",
+    "references/router/navigation.md": "b5a916dffeb258cbe55f3aafff02270234aa1d9ca4a51876bf365fd1961427bb",
+    "references/router/overview.md": "253b89dff70e21da1e8283cf2b8006a96331c0ba01a63ce594313338301a9515",
+    "references/router/router-factory.md": "d8def7df8f295ac5ca8ecc331a7c276a9bd93304f62393d3a055c877262a894e",
+    "references/router/routes-and-paths.md": "344bce877dc99a9f4e4341156fda716705f84ab7d9578fbfd7935e313276e03f",
+    "references/router/server.md": "7897a61a1960f1534a6cce9104dfae587799f04ed98b49732f061fb91d932d8a",
+    "references/router/types.md": "713b27f378a0cc6a963c05a177882472fec9307dffaca6d390291d5c8b4e146a",
+    "references/routing/integrate-a-router.md": "ca252bcd1dd05af78c310669bceea1493d59527007467a5aa8cbf53f178543ee",
+    "references/routing/overview.md": "ef0aebb5cfca39d37fd260e870ac553d4360f60a67d4e315c281d9dd813c6d43",
+    "references/routing/solid-router-data.md": "7830ef3c824a9488afd913181ccd62c03a656184aa6a787ac0c9540f2fe50022",
+    "references/routing/solid-router-navigation.md": "cee227c39db3bf9e404eec0353be66bee9cc18ee916bfec18577d53bf279e775",
+    "references/routing/solid-router-nested-routes.md": "3db61fd72ad72555230e8c87f57ec48b21bcbcf8babe84b69a896a07a4679d1f",
+    "references/routing/solid-router-route-definitions.md": "2fc823cc42db99590f12dde62abc86cc57c49999a26ebf49af6dfb92a19280b2",
+    "references/routing/solid-router-server-rendering.md": "0ab4b5285d921c92c946cb714d4cccbd606f9a1285812542e7ab1bc1fd675339",
+    "references/routing/solid-router-setup.md": "8bbba201be0ab24e029bbb0d713acd79bbb60f9128778867e8a50c54c6a9a040",
+    "references/routing/solid-router.md": "6666981eb5e7c42631b64930c8cbedcb483b6352570cdaad18b1f9fcfdb2e107",
+    "references/routing/tanstack.md": "e4ea7dae808f7fd63d75db66dc2d932269db78ae2293618eeffa018b7998202a",
+    "references/vite/modules.md": "f6c83e7debffe6651be323c9e4e3ebe331bf3e5887d916f9bfe38344ac379ba7",
+    "references/vite/options.md": "0c33950fbbf3b7f01261995a83cf0fd22f8290116062e177fc11d8f2ff55d96b",
+    "references/vite/overview.md": "1a444ea835259d2a0071c64a5d694183cfd7693281258f60b3dd37a9e28712d9",
+    "references/vite/server-functions.md": "a6b2e2c580f243da6b0799c96184a8f4be08d4d1075bd25e8db904e8c6de8c86",
+    "references/vite/start.md": "ac138ba21ef24340f82ded6077956c9c31853197fb6a9504e809e3f7be9c10a4",
+    "references/web/addressing.md": "5458b41c7ba9c815a15c79c202654666c7135df89fc9b5a2b41e97dec0f3ac5d",
+    "references/web/class.md": "e3da0001a6879d96656856e6aef1b26ba7f62188923f7a0d886c5c80b7b09177",
+    "references/web/client-only.md": "6feaee4f2902735a1cdf5c82d105691684d2c6ddf70c415b2519562f8ae936aa",
+    "references/web/configure-client.md": "0a006de815b92d063c63c52695a3e93ea59052e432f0e9fb8a20ae17666f66b3",
+    "references/web/configure-server-errors.md": "bc0d58b5faa0b9e4cc8401201ac046caf1ad8f243fd8d74a20f9d0e3f559689a",
+    "references/web/cookies.md": "4857d3a6a54f21c90e817c93bbc50c74b918ea1fa4b42cf9300bb6024a1032d3",
+    "references/web/dynamic.md": "79ee9c72f781ccabc27cdd72cd9df0a64d607d1b7afffd6f47d910d8ad9583fc",
+    "references/web/enable-performance-tracks.md": "2bddd4c3bb4e60cb22a61109927786797b61e74902403822651a0d9e423f2b6e",
+    "references/web/get-request-event.md": "7ea9d9d562f3d67a2fea49135c851049d95ab275ce7d1f65a9fe1b865449ad38",
+    "references/web/get-trace-context.md": "b7472550559091952cababd9c242017072582eefd3631c66cd26f7d38680e5c5",
+    "references/web/get.md": "a53ec7728bb116387f50d544f2769e607840d85e9499917ff32f4c6581bc0bf4",
+    "references/web/head-tag.md": "e16e0c8508b6126f9ea75e0ea078320b364689046973c9cf4955480218c33ff5",
+    "references/web/host-configuration.md": "385ec6049a04aca91d8c0e676015d4f152e5a732c1e56ef398753304d6a75238",
+    "references/web/http-header.md": "54764198ce482b8858ee1ae9e1bd2822b6c96513cff73d17a9c4e3204b04b6c9",
+    "references/web/http-status.md": "3cb3712862cbb145863b7082e12ffd2479e0bbc15310493aa9aea26448bc1ca4",
+    "references/web/hydrate.md": "dc55c0dbf456d42235eadb85ca5ca922cbf918d57ba1b463f1532b4502d43007",
+    "references/web/inner-html.md": "de80853cbcf3c75d1ae50346509d489b90c8982bf3d4ee6f0b48296cfdf13c26",
+    "references/web/invocation-context.md": "2767bad4c8c8492daf26639b3337a936fad000abe629095e1fa489ff1cba5897",
+    "references/web/invoke.md": "ec24a816d2a2dc102c5a35a29d2cd358af72f93e818c9f93f8b3dc6c9d265c44",
+    "references/web/is-dev.md": "aa2d7d382c1fbcf269ccbab06b6d759e0b9eda47c89702e943eadb362c6c42eb",
+    "references/web/is-server.md": "c0edce7baaba10fdb374b07a481b92b2f0f140d182fac2c3b59c1d57c3bb9b95",
+    "references/web/live.md": "5432db528069b587f27ccccb28dfbdc34a246368a8a4f17015ac7689fc1c7fee",
+    "references/web/metadata.md": "c6afda8b0c4e10eacca2a329896a81527c42fa1c5146993141d13a374d53f0a0",
+    "references/web/overview.md": "c2c0f001500931d7ea2516240069172396a89591aa8b2638fa97475008972cce",
+    "references/web/portal.md": "8b3e2e7503a2a092f5803680b2de0aeecd256a4a6ec687f85dd19d4a4e8e86b8",
+    "references/web/progressive-enhancement.md": "2bc5409efafd2f08fd2429c9cbf138fa63012f36bc81e326247175b59e83e185",
+    "references/web/provide-request-event.md": "cb94af4ad65a43702df615107d92ef43e4542e1ca26360b8da759ef5c46d1ac8",
+    "references/web/redirect.md": "43cfd2aac0c8073fb33e2e5bba32c5c7b5427075e02662092dcfba318479fb78",
+    "references/web/ref.md": "a6c1df1de8690f45e1dddecb58de0cd9a5d6387197123e93381ff19de507a8ed",
+    "references/web/reload.md": "4d1e6a7069ea3fbcfec0e591ebe743d9f4881e08515caa16844f1297073cea17",
+    "references/web/render-to-stream.md": "cc1be0588c6172b3ee8967f6345672f372e7bf2f012b19781bcd49784bdfbd5b",
+    "references/web/render-to-string.md": "699b219571419d382d00acf2409520333cda8b048765ef79c70184c443858e4c",
+    "references/web/render.md": "57a3f4a990b448108e0f94fc1a462eea4bff996d2d18789b67c71617452a96fa",
+    "references/web/request-response.md": "f0e69919a54fac09daae28cefa57f6fda595b6eecbaa9acf0c1af0029a4c8971",
+    "references/web/respond.md": "2a93ef85302355214b9e1eb149aff47518b575ac7f24d4d1a318f1b194cbd641",
+    "references/web/rich-arguments.md": "4f773bec6f7a606436123837c21842c562227720ff59c61b9eb13303bbd60876",
+    "references/web/safe-errors.md": "faec98bc44333a24c6b34036778dc533c259adc1cd67019925a12be4e97f0ec1",
+    "references/web/server-functions.md": "76fe1cbb692387471272baf7843c25bdeaf44ac5ef6dacab876e3874299d2d2b",
+    "references/web/single-flight.md": "9b91cf44ebbc6ba713bd7d064a34c006a903c51b4b88875d9bd6e0bb40c381b1",
+    "references/web/style.md": "049eeb42e3126208b70938c90648565632a9acbd4a8a746c7b27cfad8c804454",
+    "references/web/text-content.md": "a1342b26a80e00905d26a03696a87787c25fc6e99516d3f75f576f729b201153",
+    "references/web/use-head.md": "1bf9ad639099c3f2d7a7177d30fef4b020b19a8558c47b93dc4795f1dc2bb3aa"
+  }
+}

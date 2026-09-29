@@ -1,0 +1,86 @@
+# merge
+
+Merges multiple props-like objects into a single proxy that *preserves
+reactivity*. Reads are forwarded to the right-most source that defines the
+property, so later sources override earlier ones (like `Object.assign`).
+
+Function arguments are treated as memo-backed sources — useful for passing
+derived defaults whose computation should track reactively.
+
+The result is a live VIEW of its sources, never a copy: creating it costs
+nothing per key, every read goes to the source that owns the key (a getter
+runs there, a data property is read live), and writing to it is a no-op.
+A single non-function source is returned as is. To own a mutable object,
+copy it: `{ ...merged }` snapshots the current values.
+
+Use this in component bodies to merge defaults / overrides without losing
+Solid's per-property tracking.
+
+Reading props, here and anywhere: a prop's getter is defined only for a
+read through its own object (`props.x`, `{ ...props }`, `Reflect.get`,
+these views). Forwarding its descriptor onto another object and reading it
+there is not supported — the compiler's server-side props keep their state
+on the instance, so the getter needs its object as receiver. A copy that
+must stay live defines its own getter that reads through the source, as
+the no-Proxy paths of merge() and omit() do.
+
+## Import
+
+```ts
+import { merge } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function merge<T extends unknown[]>(...sources: T): Merge<T>;
+```
+
+## Parameters
+
+### `sources`
+
+* **Type:** `T`
+
+Props-like objects, or functions that return them. Later sources override earlier ones.
+
+## Return value
+
+A reactive proxy over the merged sources. Property reads track the source that supplies them.
+
+## Examples
+
+```tsx
+function Button(_props: { label: string; type?: string; disabled?: boolean }) {
+	const props = merge({ type: "button", disabled: false }, _props);
+
+	return (
+		<button type={props.type} disabled={props.disabled}>
+			{props.label}
+		</button>
+	);
+}
+```
+
+## Caveats
+
+* Do not destructure the result; reading a property through the proxy is what keeps it reactive.
+* A function source is treated as a memo-backed source, so its computation tracks. Pass plain objects when that is not intended.
+
+## Common problems
+
+* [A child does not update when the parent's signal changes](../concepts/components-and-jsx.md#a-child-does-not-update-when-the-parents-signal-changes)
+
+## Learn more
+
+* [Props](../concepts/components-and-jsx.md#props)
+* [Stores](../concepts/stores.md)
+* [Lists](../guides/lists.md)
+
+## Related types
+
+### `Merge`
+
+```ts
+type Merge<T extends unknown[]> = Simplify<_Merge<T>>;
+```

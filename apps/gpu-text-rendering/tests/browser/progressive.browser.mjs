@@ -10,14 +10,11 @@ try {
   const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.route('**/progressive-check', (route) =>
-    route.fulfill({ contentType: 'text/html', body: '<body style="margin:0"></body>' })
-  );
-  await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/progressive-check`);
+  await page.goto(`${process.env.GPU_TEXT_URL ?? 'http://localhost:3180'}/tests/browser/empty.html`);
   const results = await page.evaluate(async () => {
-    const { layoutPages } = await import('/src/features/document/document.ts');
+    const { layoutPages } = await import('/src/features/document/layoutPages.ts');
     const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
-    const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+    const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
     const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
     const canvas = document.createElement('canvas');
     canvas.width = 800;
@@ -61,8 +58,7 @@ try {
               width: 100,
               height: 100,
               beginVertex: i * repeats * 6,
-              endVertex: (i + 1) * repeats * 6,
-              images: []
+              endVertex: (i + 1) * repeats * 6
             })),
             2
           )._unsafeUnwrap(),
@@ -75,9 +71,7 @@ try {
           groups: new ArrayBuffer(0),
           maskTransfers: new ArrayBuffer(0),
           radialGradients: new ArrayBuffer(0),
-          rasterImages: { table, pixels: pixels.buffer },
-          images: new Map(),
-          imageVertices: new ArrayBuffer(0)
+          rasterImages: { table, pixels: pixels.buffer }
         };
         const initial = createFrame(doc, { x: 0.5, y: 0.5, zoom: 0.4, rotation: 0 }, 800, 600);
         const overview = createFrame(doc, { x: 2.5, y: -1.5, zoom: 4, rotation: 0 }, 800, 600);

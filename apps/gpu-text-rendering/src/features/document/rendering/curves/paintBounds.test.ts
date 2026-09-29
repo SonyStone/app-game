@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest';
+import { buildPaintBounds } from '../../plan/buildPaintBounds';
+import type { PaintNode } from '../../plan/paintTree';
 import type { SceneFrame } from '../createFrame';
-import { buildPaintBounds, createPaintBounds } from './paintBounds';
-import type { PaintNode } from './paintTree';
+import { createPaintBounds } from './paintBounds';
 
 const frame: SceneFrame = {
   width: 100,
@@ -83,3 +84,75 @@ it('preserves queries after worker spatial data is cloned and transferred', () =
     expect(transferred(view).ranges(0, 100)).toEqual(direct(view).ranges(0, 100));
   }
 });
+
+it('matches per-instance corner projection when accepting fully visible branches wholesale', () => {
+  const count = 2000;
+  const instances = new ArrayBuffer(count * 80);
+  const data = new DataView(instances);
+  let seed = 7;
+  const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+
+  for (let i = 0; i < count; i++) {
+    data.setFloat32(i * 80, random() * 0.05, true);
+    data.setFloat32(i * 80 + 4, (random() - 0.5) * 0.02, true);
+    data.setFloat32(i * 80 + 12, random() * 0.05, true);
+    // Clustered runs make some branches fully visible and others straddle the viewport edge.
+    data.setFloat32(i * 80 + 16, Math.floor(i / 64) / 16 - 0.5 + random() * 0.02, true);
+    data.setFloat32(i * 80 + 20, random() * 1.4 - 0.2, true);
+  }
+
+  const pages = [{ x: 0, y: 0 }];
+  const bounds = createPaintBounds(instances, pages);
+  const { leaves } = buildPaintBounds(instances, pages);
+
+  const views: SceneFrame[] = [
+    frame,
+    { ...frame, width: 173, height: 91, mul: [1.7, 2.3], add: [-0.9, -1.2] },
+    { ...frame, rotation: [Math.cos(0.4), Math.sin(0.4), -Math.sin(0.4), Math.cos(0.4)] }
+  ];
+
+  for (const view of views) {
+    const expected: { first: number; count: number }[] = [];
+
+    for (let index = 100; index < 1900; index++) {
+      if (cornerRect(view, leaves.subarray(index * 4, index * 4 + 4))) {
+        const previous = expected.at(-1);
+
+        if (previous && previous.first + previous.count === index) {
+          previous.count++;
+        } else {
+          expected.push({ first: index, count: 1 });
+        }
+      }
+    }
+
+    expect(expected.length).toBeGreaterThan(0);
+    expect(bounds(view).ranges(100, 1800)).toEqual(expected);
+  }
+});
+
+/** Reference projection of all four corners, including the two-pixel fringe and viewport clamp. */
+function cornerRect(view: SceneFrame, [left, bottom, right, top]: Float64Array) {
+  const [a, b, c, d] = view.rotation;
+  const xs: number[] = [];
+  const ys: number[] = [];
+
+  for (const [x, y] of [
+    [left!, bottom!],
+    [right!, bottom!],
+    [left!, top!],
+    [right!, top!]
+  ] as const) {
+    const px = x * view.mul[0] + view.add[0];
+    const py = y * view.mul[1] + view.add[1];
+    xs.push(((a * px + c * py + 1) * view.width) / 2);
+    ys.push(((1 - b * px - d * py) * view.height) / 2);
+  }
+
+  const x = Math.max(0, Math.floor(Math.min(...xs) - 2));
+  const y = Math.max(0, Math.floor(Math.min(...ys) - 2));
+  return (
+    Math.min(view.width, Math.ceil(Math.max(...xs) + 2)) > x &&
+    Math.min(view.height, Math.ceil(Math.max(...ys) + 2)) > y
+  );
+}

@@ -342,3 +342,57 @@ fn writes_tiled_mips_with_a_required_extension_and_rejects_missing_capability() 
     sections.retain(|s| s.tag != *b"VTEX");
     assert!(curves::decode(&container::encode_profile(&sections, 3).unwrap()).is_err());
 }
+
+#[test]
+fn rejects_oversized_soft_masks_and_predictor_rows_before_allocating() {
+    // A 60,000² one-bit SMask used to expand into ~7 GiB of u16/f32 samples in Hayro.
+    let mask = image(
+        "/Width 60000 /Height 60000 /ColorSpace /DeviceGray /BitsPerComponent 1",
+        "00",
+    );
+    let data = fixture(
+        "/Im Do",
+        &image(
+            "/Width 1 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask 6 0 R",
+            "FF0000",
+        ),
+        &[mask],
+    );
+    let started = std::time::Instant::now();
+    assert_eq!(pdf::convert(&data).unwrap_err().code(), "unsupported-pdf");
+
+    // Hostile predictor /Columns used to size a multi-gigabyte row buffer.
+    let packed = miniz_oxide::deflate::compress_to_vec_zlib(&[2, 0, 0, 0], 6);
+    let hex: String = packed
+        .iter()
+        .map(|b| format!("{b:02X}"))
+        .collect::<String>()
+        + ">";
+    let object = format!(
+        "<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter [/ASCIIHexDecode /FlateDecode] /DecodeParms [null << /Predictor 12 /Columns 4000000000 /Colors 4 /BitsPerComponent 16 >>] /Length {} >>\nstream\n{hex}\nendstream",
+        hex.len()
+    );
+    let data = fixture("/Im Do", &object, &[]);
+    // The undecodable image surfaces as the importer's decode failure.
+    assert_eq!(pdf::convert(&data).unwrap_err().code(), "invalid-data");
+    assert!(started.elapsed() < std::time::Duration::from_secs(2));
+}
+
+#[test]
+fn retains_jpeg_only_when_its_components_match_the_pdf_color_space() {
+    let jpeg = include_bytes!("../../../tests/fixtures/jpeg/pdf-cmyk.jpg");
+    let cmyk =
+        curves::decode(&pdf::convert(&jpeg_fixture("/DCTDecode", jpeg, "")).unwrap()).unwrap();
+    assert_eq!(u32_at(&cmyk.images.table, 20), 3);
+    // A four-component JPEG labeled DeviceRGB must not become a codec-2 browser JPEG.
+    let mut source = jpeg_fixture("/DCTDecode", jpeg, "");
+    let at = source
+        .windows(b"/DeviceCMYK".len())
+        .position(|w| w == b"/DeviceCMYK")
+        .unwrap();
+    source.splice(at..at + 11, b"/DeviceRGB ".iter().copied());
+    if let Ok(bytes) = pdf::convert(&source) {
+        let scene = curves::decode(&bytes).unwrap();
+        assert!(!matches!(u32_at(&scene.images.table, 20), 2 | 3));
+    }
+}

@@ -1,0 +1,120 @@
+import { expect, it, vi } from 'vitest';
+import { runWorkerRequest } from './runWorkerRequest';
+import { workerShutdown } from './workerProtocol';
+
+it('transfers input, forwards progress, and shuts the worker down before returning its result', async () => {
+  const worker = native();
+  const controller = new AbortController();
+  const remove = vi.spyOn(controller.signal, 'removeEventListener');
+  const progress = vi.fn();
+  const bytes = new ArrayBuffer(8);
+  const result = runWorkerRequest<ArrayBuffer, number, string, number>(() => worker, bytes, {
+    signal: controller.signal,
+    transfer: [bytes],
+    onProgress: progress
+  });
+  expect(worker.postMessage).toHaveBeenCalledWith(bytes, [bytes]);
+  worker.dispatchEvent(new MessageEvent('message', { data: { progress: 50 } }));
+  expect(progress).toHaveBeenCalledWith(50);
+  expect(worker.postMessage).toHaveBeenCalledOnce();
+  worker.dispatchEvent(new MessageEvent('message', { data: { ok: true, value: 10 } }));
+  expect((await result)._unsafeUnwrap()).toBe(10);
+  expectShutdown(worker);
+  expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+  worker.dispatchEvent(new MessageEvent('message', { data: { progress: 100 } }));
+  controller.abort();
+  expect(progress).toHaveBeenCalledOnce();
+  expectShutdown(worker);
+});
+
+it('runs simultaneous calls independently without a queue or shared cancellation', async () => {
+  const first = native();
+  const second = native();
+  const abort = new AbortController();
+  const pending = runWorkerRequest(() => first, 1, { signal: abort.signal });
+  const other = runWorkerRequest(() => second, 2, { signal: new AbortController().signal });
+  expect(first.postMessage).toHaveBeenCalledWith(1, []);
+  expect(second.postMessage).toHaveBeenCalledWith(2, []);
+  abort.abort();
+  expectShutdown(first);
+  expect((await pending)._unsafeUnwrapErr()).toMatchObject({ kind: 'aborted' });
+  first.dispatchEvent(new MessageEvent('message', { data: { ok: true, value: 99 } }));
+  second.dispatchEvent(new MessageEvent('message', { data: { ok: true, value: 20 } }));
+  expect((await other)._unsafeUnwrap()).toBe(20);
+  expectShutdown(second);
+});
+
+it('does not create a worker for an already aborted signal', async () => {
+  const create = vi.fn(() => native());
+  const result = await runWorkerRequest(create, 1, { signal: AbortSignal.abort() });
+  expect(result._unsafeUnwrapErr()).toMatchObject({ kind: 'aborted' });
+  expect(create).not.toHaveBeenCalled();
+});
+
+it('shuts down without posting the request if cancellation happens during creation', async () => {
+  const controller = new AbortController();
+  const worker = native();
+  const result = await runWorkerRequest(
+    () => {
+      controller.abort();
+      return worker;
+    },
+    1,
+    { signal: controller.signal }
+  );
+  expect(result._unsafeUnwrapErr()).toMatchObject({ kind: 'aborted' });
+  expect(worker.postMessage.mock.calls).toEqual([[workerShutdown]]);
+});
+
+it('returns domain failures and permits a fresh request with the same signal', async () => {
+  const signal = new AbortController().signal;
+  const worker = native();
+  const result = runWorkerRequest(() => worker, 1, { signal });
+  worker.dispatchEvent(new MessageEvent('message', { data: { ok: false, error: 'broken' } }));
+  expect((await result)._unsafeUnwrapErr()).toBe('broken');
+  expectShutdown(worker);
+  const retry = native();
+  const retried = runWorkerRequest(() => retry, 2, { signal });
+  retry.dispatchEvent(new MessageEvent('message', { data: { ok: true, value: 20 } }));
+  expect((await retried)._unsafeUnwrap()).toBe(20);
+});
+
+it.each(['create', 'post', 'error', 'messageerror'] as const)(
+  'settles transport failure %s and releases its worker and abort listener',
+  async (kind) => {
+    const worker = native();
+    const controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, 'removeEventListener');
+    worker.postMessage.mockImplementation(() => {
+      if (kind === 'post') throw new Error('clone');
+    });
+    const pending = runWorkerRequest(
+      () => {
+        if (kind === 'create') throw new Error('blocked');
+        return worker;
+      },
+      1,
+      { signal: controller.signal }
+    );
+    if (kind === 'error') worker.dispatchEvent(new ErrorEvent('error', { message: 'failed', cancelable: true }));
+    if (kind === 'messageerror') worker.dispatchEvent(new MessageEvent('messageerror'));
+    expect((await pending)._unsafeUnwrapErr()).toMatchObject({ kind });
+    if (kind !== 'create') {
+      expectShutdown(worker);
+      expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+    }
+  }
+);
+
+/** Cooperative shutdown is the last message; terminate() only follows after the grace period. */
+function expectShutdown(worker: ReturnType<typeof native>) {
+  expect(worker.postMessage).toHaveBeenLastCalledWith(workerShutdown);
+  expect(worker.postMessage.mock.calls.filter(([message]) => message === workerShutdown)).toHaveLength(1);
+}
+
+function native() {
+  return Object.assign(new EventTarget() as Worker, {
+    postMessage: vi.fn<(input: unknown, transfer: Transferable[]) => void>(),
+    terminate: vi.fn()
+  });
+}

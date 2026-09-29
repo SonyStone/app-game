@@ -1,10 +1,10 @@
 /** Installs the real conversion/renderer pipeline in an isolated browser page. */
 export async function installHarness() {
-  const { convertPdf } = await import('/src/features/document/pdf/convertPdf.ts');
-  const { readGdoc } = await import('/src/features/document/format/readGdoc.ts');
-  const { layoutPages } = await import('/src/features/document/document.ts');
+  const { convertPdf } = await import('/tests/browser/workerHarness.tsx');
+  const { readGdoc } = await import('/tests/browser/workerHarness.tsx');
+  const { layoutPages } = await import('/src/features/document/layoutPages.ts');
   const { createFrame } = await import('/src/features/document/rendering/createFrame.ts');
-  const { createTypeGpuRenderer } = await import('/src/features/document/rendering/createTypeGpuRenderer.ts');
+  const { createTypeGpuRenderer } = await import('/tests/browser/workerHarness.tsx');
   const { mountRenderingGpu } = await import('/tests/browser/renderingHarness.ts');
   let encoded;
   let current;
@@ -35,9 +35,7 @@ export async function installHarness() {
       const data = decoded.value;
       const doc = {
         ...data,
-        pages: layoutPages(data.pages, 2)._unsafeUnwrap(),
-        images: new Map(),
-        imageVertices: new ArrayBuffer(0)
+        pages: layoutPages(data.pages, 2)._unsafeUnwrap()
       };
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = 800;

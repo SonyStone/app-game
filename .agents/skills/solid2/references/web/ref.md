@@ -1,0 +1,65 @@
+# ref
+
+`ref` provides access to a DOM element after Solid creates it.
+It accepts an assignable variable, a callback, or a nested array of callbacks.
+
+## Type
+
+```ts
+type RefCallback<T> = (element: T) => void;
+type Ref<T> = T | RefCallback<T> | undefined | Ref<T>[];
+```
+
+`ref` is available on intrinsic DOM elements.
+It does not require an import.
+
+## Assign an element
+
+Pass an assignable variable to store the element:
+
+```tsx
+function SearchField() {
+	let input!: HTMLInputElement;
+
+	return (
+		<>
+			<input ref={input} type="search" />
+			<button type="button" onClick={() => input.select()}>
+				Select query
+			</button>
+		</>
+	);
+}
+```
+
+A callback receives the same element:
+
+```tsx
+<input ref={(element) => (input = element)} />
+```
+
+## Compose callbacks
+
+Pass an array when several independent behaviors need the element:
+
+```tsx
+function autofocus(element: HTMLInputElement) {
+	element.autofocus = true;
+}
+
+<input
+	ref={[(element) => (input = element), autofocus, registerAnalytics("search")]}
+/>;
+```
+
+Solid recursively flattens nested ref arrays and invokes each callback in order.
+This composes element access, reusable directives, and third-party integrations without a wrapper callback.
+
+## Ownership and cleanup
+
+Ref callbacks run untracked and without a reactive owner.
+Their return values are ignored.
+Do not create owned reactive primitives or return cleanup functions from a ref callback.
+
+When a reusable directive needs setup and cleanup, create those primitives in an owned factory and return only the callback that receives the element.
+See [Refs and directives](../concepts/components-and-jsx.md#refs-and-directives) for the complete pattern, and [Integrate non-Solid code](../guides/integrate-non-solid-code.md) for a chart, a map, and a web component driven through refs.

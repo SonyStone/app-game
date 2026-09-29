@@ -1,8 +1,9 @@
+import { flush } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadDocument } from './document';
-import { readGdoc } from './format/readGdoc';
+import { convertPdf, loadDocument, readGdoc } from '../../../tests/browser/workerHarness';
+import { workerShutdownGraceMs } from '../../shared/worker/openWorker';
+import { isWorkerShutdown } from '../../shared/worker/workerProtocol';
 import type { DecodeReply, DecodedDocument } from './format/types';
-import { convertPdf } from './pdf/convertPdf';
 
 let workers: WorkerDouble[];
 
@@ -17,23 +18,44 @@ afterEach(() => {
 });
 
 describe('document worker ownership', () => {
-  it('lays out decoded pages and terminates its worker on completion', async () => {
+  it.each(['gdoc', 'pdf'] as const)('reports %s startup before the worker responds', async (format) => {
+    const progress = vi.fn();
+    const pending = loadDocument(
+      undefined,
+      format === 'pdf' ? new File(['%PDF-1.7'], 'file.pdf') : undefined,
+      progress
+    );
+    await vi.waitFor(() => expect(workers).toHaveLength(1));
+    flush();
+    expect(progress).toHaveBeenCalledWith({ stage: 'loadingDecoder' });
+    workers[0]!.dispatchEvent(
+      new MessageEvent('message', { data: { progress: { stage: 'processingPages', completed: 1, total: 2 } } })
+    );
+    flush();
+    expect(progress).toHaveBeenCalledWith({ stage: 'processingPages', completed: 1, total: 2 });
+    workers[0]!.reply({ ok: true, value: fixture() });
+    expect((await pending).isOk()).toBe(true);
+  });
+
+  it('lays out decoded pages and shuts its worker down on completion', async () => {
     const pending = loadDocument();
+    await vi.waitFor(() => expect(workers).toHaveLength(1));
     const worker = workers[0]!;
     expect(worker.postMessage).toHaveBeenCalledWith(expect.stringContaining('demo.gdoc'), []);
     worker.reply({ ok: true, value: fixture() });
     const document = (await pending)._unsafeUnwrap();
     expect(document.pages[0]).toMatchObject({ width: 612, height: 792, x: -0, y: 0 });
-    expect(worker.terminate).toHaveBeenCalledOnce();
+    expect(released(worker)).toBe(true);
   });
 
   it.each(['http', 'load', 'unsupported-format', 'checksum', 'document-limit', 'invalid-data'] as const)(
     'preserves the typed %s error from the worker',
     async (code) => {
       const pending = loadDocument();
+      await vi.waitFor(() => expect(workers).toHaveLength(1));
       workers[0]!.reply({ ok: false, error: { kind: 'document', code, message: 'Details' } });
       expect((await pending)._unsafeUnwrapErr()).toMatchObject({ kind: 'document', code });
-      expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+      expect(released(workers[0]!)).toBe(true);
     }
   );
 
@@ -42,21 +64,24 @@ describe('document worker ownership', () => {
     expect(workers).toHaveLength(0);
   });
 
-  it('terminates active decoding on cancellation and ignores late messages', async () => {
+  it('shuts active decoding down on cancellation and ignores late messages', async () => {
     const abort = new AbortController();
     const remove = vi.spyOn(abort.signal, 'removeEventListener');
     const pending = loadDocument(abort.signal);
+    await vi.waitFor(() => expect(workers).toHaveLength(1));
     abort.abort();
     workers[0]!.reply({ ok: true, value: fixture() });
     expect((await pending)._unsafeUnwrapErr().kind).toBe('aborted');
-    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+    expect(released(workers[0]!)).toBe(true);
     expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
   });
 
   it('cancels only the replaced document session', async () => {
     const abort = new AbortController();
     const previous = loadDocument(abort.signal);
+    await vi.waitFor(() => expect(workers).toHaveLength(1));
     const next = loadDocument();
+    await vi.waitFor(() => expect(workers).toHaveLength(2));
     abort.abort();
     workers[1]!.reply({ ok: true, value: fixture() });
     expect((await previous).isErr()).toBe(true);
@@ -65,11 +90,12 @@ describe('document worker ownership', () => {
 
   it('contains worker construction, posting and execution failures', async () => {
     const pending = loadDocument();
-    const preventDefault = vi.fn();
-    workers[0]!.onerror?.({ message: 'WASM failed', preventDefault } as unknown as ErrorEvent);
+    await vi.waitFor(() => expect(workers).toHaveLength(1));
+    const event = new ErrorEvent('error', { message: 'WASM failed', cancelable: true });
+    workers[0]!.dispatchEvent(event);
     expect((await pending)._unsafeUnwrapErr()).toMatchObject({ code: 'decode', message: 'WASM failed' });
-    expect(preventDefault).toHaveBeenCalledOnce();
-    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+    expect(event.defaultPrevented).toBe(true);
+    expect(released(workers[0]!)).toBe(true);
 
     vi.stubGlobal(
       'Worker',
@@ -80,7 +106,7 @@ describe('document worker ownership', () => {
       }
     );
     expect((await readGdoc(new ArrayBuffer(1)))._unsafeUnwrapErr()).toMatchObject({ code: 'load' });
-    expect(workers[1]!.terminate).toHaveBeenCalledOnce();
+    expect(released(workers[1]!)).toBe(true);
 
     vi.stubGlobal(
       'Worker',
@@ -96,11 +122,14 @@ describe('document worker ownership', () => {
   it('allows decoding to finish after the former 60-second deadline', async () => {
     vi.useFakeTimers();
     const pending = readGdoc(new ArrayBuffer(1));
+    flush();
     await vi.advanceTimersByTimeAsync(180_000);
 
-    expect(workers[0]!.terminate).not.toHaveBeenCalled();
+    expect(released(workers[0]!)).toBe(false);
     workers[0]!.reply({ ok: true, value: fixture() });
     expect((await pending).isOk()).toBe(true);
+    expect(released(workers[0]!)).toBe(true);
+    await vi.advanceTimersByTimeAsync(workerShutdownGraceMs);
     expect(workers[0]!.terminate).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -108,13 +137,14 @@ describe('document worker ownership', () => {
   it('allows PDF conversion to complete after several minutes', async () => {
     vi.useFakeTimers();
     const pending = convertPdf(new ArrayBuffer(1));
+    flush();
     await vi.advanceTimersByTimeAsync(600_000);
 
-    expect(workers[0]!.terminate).not.toHaveBeenCalled();
+    expect(released(workers[0]!)).toBe(false);
     const converted = new ArrayBuffer(8);
-    workers[0]!.onmessage?.({ data: { ok: true, value: converted } } as MessageEvent);
+    workers[0]!.dispatchEvent(new MessageEvent('message', { data: { ok: true, value: converted } }));
     expect((await pending)._unsafeUnwrap()).toBe(converted);
-    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+    expect(released(workers[0]!)).toBe(true);
   });
 
   it('cancels a long PDF conversion and ignores its late completion', async () => {
@@ -122,43 +152,51 @@ describe('document worker ownership', () => {
     const abort = new AbortController();
     const remove = vi.spyOn(abort.signal, 'removeEventListener');
     const pending = convertPdf(new ArrayBuffer(1), abort.signal);
+    flush();
     await vi.advanceTimersByTimeAsync(180_000);
     abort.abort();
-    workers[0]!.onmessage?.({ data: { ok: true, value: new ArrayBuffer(8) } } as MessageEvent);
+    workers[0]!.dispatchEvent(new MessageEvent('message', { data: { ok: true, value: new ArrayBuffer(8) } }));
 
     expect((await pending)._unsafeUnwrapErr()).toMatchObject({ kind: 'aborted' });
-    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+    expect(released(workers[0]!)).toBe(true);
     expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
   });
 
   it('consumes supplied bytes through the transfer list', async () => {
     const bytes = new ArrayBuffer(4);
     const pending = readGdoc(bytes);
+    flush();
     expect(workers[0]!.postMessage).toHaveBeenCalledWith(bytes, [bytes]);
     workers[0]!.reply({ ok: true, value: fixture() });
     expect((await pending).isOk()).toBe(true);
   });
 });
 
-class WorkerDouble {
-  onmessage?: (event: MessageEvent<DecodeReply>) => void;
-  onerror?: (event: ErrorEvent) => void;
-  onmessageerror?: () => void;
+class WorkerDouble extends EventTarget {
   terminate = vi.fn();
   postMessage = vi.fn();
 
   constructor() {
+    super();
     workers.push(this);
   }
 
   reply(data: DecodeReply) {
-    this.onmessage?.({ data } as MessageEvent<DecodeReply>);
+    this.dispatchEvent(new MessageEvent('message', { data }));
   }
+}
+
+/** Cooperative shutdown posts a control message; terminate() alone means the message could not be sent. */
+function released(worker: WorkerDouble) {
+  return (
+    worker.postMessage.mock.calls.some(([message]) => isWorkerShutdown(message)) ||
+    worker.terminate.mock.calls.length > 0
+  );
 }
 
 function fixture(): DecodedDocument {
   return {
-    pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6, images: [] }],
+    pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6 }],
     kind: 'glyphs',
     glyphVertices: new ArrayBuffer(72),
     positions: { x: new Float32Array(1), y: new Float32Array(1) },

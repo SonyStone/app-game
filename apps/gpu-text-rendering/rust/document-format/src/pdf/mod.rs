@@ -2,6 +2,7 @@
 //! Unsupported drawing features fail the entire import, with their page number.
 
 mod blend;
+mod budget;
 mod clipping;
 mod components;
 mod geometry;
@@ -62,8 +63,13 @@ fn interpret_pdf(bytes: Vec<u8>, progress: &mut impl FnMut(usize, usize)) -> Res
     if bytes.len() > crate::limits::MAX_FILE_BYTES {
         return Err(DocumentError::Limit("PDF file size"));
     }
+    // The source stays resident during interpretation, so it shares the working budget with
+    // the image arena. Exceeding it is a `document-limit` error rather than a WASM OOM trap.
+    let image_budget = crate::limits::MAX_WORKING_BYTES
+        .saturating_sub(bytes.len())
+        .min(crate::raster::MAX_ENCODED_IMAGE_BYTES);
     let image_capacity = if bytes.len() > 512 * 1024 * 1024 {
-        (bytes.len() + bytes.len() / 2).min(crate::raster::MAX_ENCODED_IMAGE_BYTES)
+        (bytes.len() + bytes.len() / 2).min(image_budget)
     } else {
         0
     };
@@ -80,7 +86,7 @@ fn interpret_pdf(bytes: Vec<u8>, progress: &mut impl FnMut(usize, usize)) -> Res
     let normalization =
         Affine::scale_non_uniform(1.0 / f64::from(first.0), 1.0 / f64::from(first.1));
     let cache = InterpreterCache::new();
-    let mut device = SceneDevice::new(normalization);
+    let mut device = SceneDevice::new(normalization, image_budget);
     // Large image-heavy PDFs need one contiguous arena before temporary decoding
     // allocations fragment the 32-bit WASM address space. This is CPU storage only.
     device
@@ -98,6 +104,8 @@ fn interpret_pdf(bytes: Vec<u8>, progress: &mut impl FnMut(usize, usize)) -> Res
             return Err(DocumentError::Invalid("PDF page dimensions"));
         }
         device.page = index;
+        device.work = budget::WorkBudget::new(budget::PAGE_WORK);
+        device.mask_run = None;
         device.clips = vec![clipping::ClipState {
             bounds: Rect::new(0.0, 0.0, width, height),
             ..Default::default()
@@ -153,6 +161,12 @@ fn interpret_pdf(bytes: Vec<u8>, progress: &mut impl FnMut(usize, usize)) -> Res
 struct SceneDevice<'a> {
     document: Document,
     images: images::ImageCache,
+    /// Interpretation work left on the current page.
+    work: budget::WorkBudget,
+    /// Product of the enclosing tiling patterns' cell counts (1 outside patterns).
+    pattern_multiplicity: u64,
+    /// The most recent soft-mask group, which later disjoint draws may join.
+    mask_run: Option<MaskRun>,
     groups: Vec<usize>,
     blend: BlendMode,
     soft_mask: Option<SoftMask<'a>>,
@@ -166,7 +180,7 @@ struct SceneDevice<'a> {
 }
 
 impl<'a> SceneDevice<'a> {
-    fn new(normalization: Affine) -> Self {
+    fn new(normalization: Affine, image_budget: usize) -> Self {
         Self {
             document: Document {
                 pages: Vec::new(),
@@ -180,7 +194,10 @@ impl<'a> SceneDevice<'a> {
                 mask_transfers: Vec::new(),
                 radial_gradients: Vec::new(),
             },
-            images: Default::default(),
+            images: images::ImageCache::new(image_budget),
+            work: budget::WorkBudget::new(budget::PAGE_WORK),
+            pattern_multiplicity: 1,
+            mask_run: None,
             groups: Vec::new(),
             blend: BlendMode::Normal,
             soft_mask: None,
@@ -198,6 +215,20 @@ impl<'a> SceneDevice<'a> {
         DocumentError::PdfUnsupported {
             page: self.page + 1,
             reason: reason.to_owned(),
+        }
+    }
+
+    /// Charges page work, recording the limit error on exhaustion. Returns whether to proceed.
+    fn charge(&mut self, units: u64, reason: &'static str) -> bool {
+        if self.error.is_some() {
+            return false;
+        }
+        match self.work.charge(units, reason) {
+            Ok(()) => true,
+            Err(error) => {
+                self.error = Some(error);
+                false
+            }
         }
     }
 
@@ -237,12 +268,7 @@ impl<'a> SceneDevice<'a> {
             return;
         }
         if let Some(mask) = self.soft_mask.take() {
-            let blend = self.blend;
-            self.push_transparency_group(1.0, Some(mask.clone()), blend);
-            self.blend = BlendMode::Normal;
-            self.add_instance(shape, transform, color, kind);
-            self.pop_transparency_group();
-            self.blend = blend;
+            self.add_masked_instance(&mask, shape, transform, color, kind);
             self.soft_mask = Some(mask);
             return;
         }
@@ -301,7 +327,7 @@ impl<'a> Device<'a> for SceneDevice<'a> {
         paint: &Paint<'a>,
         mode: &PathDrawMode,
     ) {
-        if self.error.is_some() {
+        if !self.charge(budget::DRAW_WORK, "drawing operations") {
             return;
         }
         if let PathDrawMode::Stroke(props) = mode
@@ -364,7 +390,9 @@ impl<'a> Device<'a> for SceneDevice<'a> {
         paint: &Paint<'a>,
         mode: &GlyphDrawMode,
     ) {
-        if self.error.is_some() || matches!(mode, GlyphDrawMode::Invisible) {
+        if matches!(mode, GlyphDrawMode::Invisible)
+            || !self.charge(budget::DRAW_WORK, "drawing operations")
+        {
             return;
         }
         let Glyph::Outline(glyph) = glyph else {
@@ -471,7 +499,7 @@ impl<'a> Device<'a> for SceneDevice<'a> {
     }
 
     fn draw_image(&mut self, image: Image<'a, '_>, transform: Affine) {
-        if self.error.is_some() {
+        if !self.charge(budget::DRAW_WORK, "drawing operations") {
             return;
         }
         match self.images.resolve(image, &mut self.document.images) {
@@ -530,9 +558,7 @@ impl<'a> SceneDevice<'a> {
             return;
         };
         // Reuse stroke validation and the dash-expansion budget before invoking the dash iterator.
-        let mut validation = props.clone();
-        validation.line_width = 1.0;
-        if let Err(error) = strokes::outline(path, &validation) {
+        if let Err(error) = strokes::validate_hairline(path, props) {
             self.error = Some(error);
             return;
         }
@@ -567,6 +593,11 @@ impl<'a> SceneDevice<'a> {
 impl<'a> SceneDevice<'a> {
     fn begin_group(&mut self, opacity: f32, kind: u32) {
         let index = self.document.groups.len() / 24;
+        // Enforced while interpreting so the error names this page; the record is still
+        // pushed to keep Hayro's balanced push/pop calls consistent until the page ends.
+        if index >= MAX_GROUPS && self.error.is_none() {
+            self.error = Some(DocumentError::Limit("transparency group records"));
+        }
         let parent = self.groups.last().map_or(0, |index| *index as u32 + 1);
         for n in [
             (self.document.instances.len() / 80) as u32,
@@ -608,6 +639,10 @@ impl<'a> SceneDevice<'a> {
         let previous = self.soft_mask.take();
         let blend = self.blend;
         let clips = self.clips.clone();
+        // The mask only multiplies its paint group, whose draws carry their own clips, so
+        // mask content outside them never contributes. Emitting it under the page clip
+        // lets later draws with different clips reuse this mask (see `MaskRun`).
+        self.clips.truncate(1);
         self.blend = BlendMode::Normal;
         mask.interpret(self);
         self.soft_mask = previous;
@@ -615,4 +650,111 @@ impl<'a> SceneDevice<'a> {
         self.clips = clips;
         self.pop_transparency_group();
     }
+}
+
+/// Matches GRUP's reader limit.
+const MAX_GROUPS: usize = 100_000;
+
+/// Draws that share one graphics-state soft mask and blend mode.
+///
+/// PDF applies the mask to each object separately. For objects whose bounds do not
+/// overlap, compositing them inside one masked group is pixel-identical, so the mask
+/// content is emitted once per run rather than once per glyph or gradient part.
+struct MaskRun {
+    /// Soft mask identity; `None` never joins another draw.
+    key: Option<MaskRunKey>,
+    blend: u8,
+    /// Parent group index on the stack when the run started.
+    parent: Option<usize>,
+    /// The run's paint group record.
+    group: usize,
+    /// DRAW and GRUP counts right after the run's last draw.
+    instances: usize,
+    groups: usize,
+    /// Normalized page-space bounds of each draw in the run.
+    bounds: Vec<Rect>,
+}
+
+/// Longest run before a new mask group starts, bounding the overlap test.
+const MAX_MASK_RUN: usize = 256;
+
+impl<'a> SceneDevice<'a> {
+    fn add_masked_instance(
+        &mut self,
+        mask: &SoftMask<'a>,
+        shape: ShapeRecord,
+        transform: Affine,
+        color: [f32; 4],
+        kind: u32,
+    ) {
+        let clip = self.clips.last().copied().unwrap_or_default();
+        // Clipped draw bounds; runs only join draws whose visible areas cannot overlap.
+        let bounds = (self.normalization * transform * shape.from_unit)
+            .transform_rect_bbox(Rect::new(0.0, 0.0, 1.0, 1.0))
+            .intersect(self.normalization.transform_rect_bbox(clip.bounds));
+        let key = mask_run_key(mask);
+        let blend = self.blend;
+        let joins = key.is_some() && self.mask_run.as_ref().is_some_and(|run| {
+            run.key == key
+                && run.blend == blend::encode(blend)
+                && run.parent == self.groups.last().copied()
+                && run.instances == self.document.instances.len() / 80
+                && run.groups == self.document.groups.len() / 24
+                && run.bounds.len() < MAX_MASK_RUN
+                && run.bounds.iter().all(|other| !overlaps(*other, bounds))
+        });
+        let group = if joins {
+            let group = self.mask_run.as_ref().map_or(0, |run| run.group);
+            self.groups.push(group);
+            group
+        } else {
+            let group = self.document.groups.len() / 24;
+            self.push_transparency_group(1.0, Some(mask.clone()), blend);
+            group
+        };
+        self.blend = BlendMode::Normal;
+        self.add_instance(shape, transform, color, kind);
+        self.pop_transparency_group();
+        self.blend = blend;
+
+        let mut run = match self.mask_run.take() {
+            Some(run) if joins => run,
+            _ => MaskRun {
+                key,
+                blend: blend::encode(blend),
+                parent: self.groups.last().copied(),
+                group,
+                instances: 0,
+                groups: 0,
+                bounds: Vec::new(),
+            },
+        };
+        run.instances = self.document.instances.len() / 80;
+        run.groups = self.document.groups.len() / 24;
+        run.bounds.push(bounds);
+        self.mask_run = Some(run);
+    }
+}
+
+/// Everything that determines a soft mask's output: group and transform, type and backdrop.
+type MaskRunKey = (u128, bool, [u32; 3]);
+
+/// Hayro's cache key covers only the mask group and its transform, so Luminosity and Alpha masks
+/// over one group collide; add the type and backdrop. A transfer function has no comparable
+/// identity, so such masks never share a run.
+fn mask_run_key(mask: &SoftMask<'_>) -> Option<MaskRunKey> {
+    if mask.transfer_function().is_some() {
+        return None;
+    }
+    let [r, g, b, _] = mask.background_color().to_rgba().components();
+    Some((
+        mask.cache_key(),
+        mask.mask_type() == hayro_interpret::MaskType::Luminosity,
+        [r.to_bits(), g.to_bits(), b.to_bits()],
+    ))
+}
+
+// Positive-area intersection; draws that merely touch can share a group.
+fn overlaps(a: Rect, b: Rect) -> bool {
+    a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
 }

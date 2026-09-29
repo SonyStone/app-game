@@ -1,4 +1,4 @@
-import { createCameraTour } from '../../src/features/camera/createCameraTour';
+import { makeCameraTour } from '../../src/features/camera/makeCameraTour';
 import type { TextDocument } from '../../src/features/document/document';
 import { createFrame } from '../../src/features/document/rendering/createFrame';
 import type { TextRenderer } from '../../src/features/document/rendering/createTypeGpuRenderer';
@@ -14,24 +14,25 @@ export async function measureAutoZoom(
   focus: { x: number; y: number },
   page: number
 ) {
-  const camera = { ...focus, zoom: 1 / 128, rotation: 0 };
-  const tour = createCameraTour(camera);
+  let camera = { ...focus, zoom: 1 / 128, rotation: 0 };
+  const tour = makeCameraTour();
   const tourDocument = { ...document, pages: [document.pages[page - 1]!] };
   const random = Math.random;
   Math.random = () => 0.5;
-  tour.update(0, tourDocument);
+  camera = tour.update(0, tourDocument, camera);
   Math.random = random;
   let current = createFrame(document, camera, canvas.width, canvas.height);
   renderer.render(current)._unsafeUnwrap();
   (await renderer.settle())._unsafeUnwrap();
   let failure: unknown;
-  const gate = makeGpuFrameGate(
-    () => gpu.device.queue.onSubmittedWorkDone(),
-    () => {},
-    (error) => {
+  const gate = makeGpuFrameGate({
+    complete: () => gpu.device.queue.onSubmittedWorkDone(),
+    blocked: () => undefined,
+    invalidate: () => {},
+    fail: (error) => {
       failure = error;
     }
-  );
+  });
   const captures: { at: number; frame: typeof current; moving: string; refinement: typeof renderer.refinement }[] = [];
   const marks = [1000, 2500, 4500, 6500];
   const intervals: number[] = [];
@@ -43,7 +44,7 @@ export async function measureAutoZoom(
     const now = await new Promise<number>(requestAnimationFrame);
     intervals.push(now - previous);
     previous = now;
-    tour.update(now - start, tourDocument);
+    camera = tour.update(now - start, tourDocument, camera);
     gate
       .draw(() => {
         current = createFrame(document, camera, canvas.width, canvas.height);

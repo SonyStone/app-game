@@ -14,25 +14,31 @@ pub(crate) mod flate {
         use flate2::read::{DeflateDecoder, ZlibDecoder};
         use std::io::Read;
 
-        fn zlib_stream(data: &[u8]) -> Option<Vec<u8>> {
-            let mut decoder = ZlibDecoder::new(data);
+        // Local patch: `Err(true)` means the output cap was exceeded. That is final;
+        // retrying with another decoder would only repeat the oversized expansion.
+        fn bounded(reader: impl Read) -> Result<Vec<u8>, bool> {
+            let limit = crate::limits::MAX_DECODED_STREAM_BYTES;
             let mut result = Vec::new();
-            decoder.read_to_end(&mut result).ok().map(|_| result)
+            match reader.take(limit as u64 + 1).read_to_end(&mut result) {
+                Ok(_) if result.len() > limit => Err(true),
+                Ok(_) => Ok(result),
+                Err(_) => Err(false),
+            }
         }
 
-        fn deflate_stream(data: &[u8]) -> Option<Vec<u8>> {
-            let mut decoder = DeflateDecoder::new(data);
-            let mut result = Vec::new();
-            decoder.read_to_end(&mut result).ok().map(|_| result)
-        }
+        let decoded = match bounded(ZlibDecoder::new(data)) {
+            Ok(decoded) => decoded,
+            Err(true) => return None,
+            Err(false) => match bounded(DeflateDecoder::new(data)) {
+                Ok(decoded) => decoded,
+                Err(true) => return None,
+                Err(false) => {
+                    warn!("flate stream is broken, decoding with fallback");
 
-        let decoded = zlib_stream(data)
-            .or_else(|| deflate_stream(data))
-            .or_else(|| {
-                warn!("flate stream is broken, decoding with fallback");
-
-                fallback::decode(data)
-            })?;
+                    fallback::decode(data)?
+                }
+            },
+        };
         let params = PredictorParams::from_params(params);
         apply_predictor(decoded, &params)
     }
@@ -96,6 +102,10 @@ pub(crate) mod flate {
             fn decode(&mut self) -> Option<Vec<u8>> {
                 while !self.eof && self.pos < self.data.len() {
                     self.read_block();
+                    // Local patch: stop expanding once the shared output cap is exceeded.
+                    if self.output.len() > crate::limits::MAX_DECODED_STREAM_BYTES {
+                        return None;
+                    }
                 }
 
                 Some(core::mem::take(&mut self.output))
@@ -273,6 +283,10 @@ pub(crate) mod flate {
                 };
 
                 loop {
+                    if self.output.len() > crate::limits::MAX_DECODED_STREAM_BYTES {
+                        self.eof = true;
+                        return;
+                    }
                     let code1 = match self.get_code(&lit_code_table) {
                         Some(c) => c,
                         None => {
@@ -631,6 +645,11 @@ pub(crate) mod lzw {
                         return None;
                     }
 
+                    if decoded.len() > crate::limits::MAX_DECODED_STREAM_BYTES {
+                        warn!("LZW stream exceeds the decoded size limit");
+                        return None;
+                    }
+
                     bit_size = table.code_length();
                     prev = Some(new);
                 }
@@ -716,12 +735,12 @@ struct PredictorParams {
 }
 
 impl PredictorParams {
-    fn bits_per_pixel(&self) -> u8 {
-        self.bits_per_component * self.colors
-    }
-
-    fn row_length_in_bytes(&self) -> usize {
-        (self.columns * self.bits_per_pixel() as usize).div_ceil(8)
+    // Local patch: checked, so hostile /Columns cannot overflow or size a huge row buffer.
+    fn row_length_in_bytes(&self) -> Option<usize> {
+        let bits = self
+            .columns
+            .checked_mul(usize::from(self.bits_per_component) * usize::from(self.colors))?;
+        Some(bits.div_ceil(8)).filter(|len| *len <= crate::limits::MAX_DECODED_STREAM_BYTES)
     }
 }
 
@@ -755,7 +774,7 @@ fn apply_predictor(data: Vec<u8>, params: &PredictorParams) -> Option<Vec<u8>> {
         i => {
             let is_png_predictor = i >= 10;
 
-            let row_len = params.row_length_in_bytes();
+            let row_len = params.row_length_in_bytes()?;
 
             let total_row_len = if is_png_predictor {
                 // + 1 Because each row must start with the predictor that is used for PNG predictors.

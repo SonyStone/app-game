@@ -1,0 +1,74 @@
+# reconcile
+
+Creates a store setter callback that merges new data into the existing store by key. Items whose key matches keep their store identity, so rows keep DOM, focus, and animation state across a full replacement; only added and removed items change.
+
+## Import
+
+```ts
+import { reconcile } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function reconcile<T extends U, U>(
+	value: T,
+	key: string | ((item: NonNullable<any>) => any) | null = "id"
+): (state: U) => T;
+```
+
+## Parameters
+
+### `value`
+
+* **Type:** `T`
+
+The new data. It is merged into the existing store rather than replacing it.
+
+### `key`
+
+* **Type:** `string | ((item: NonNullable<any>) => any) | null`
+* Optional
+
+Property name or function that identifies an item so matched items keep their store identity. Pass `null` to match by position.
+
+## Return value
+
+A setter callback. Pass it to a store setter: `setState(reconcile(next))`.
+
+## Examples
+
+### Replace a list from the server and keep row identity
+
+```ts
+const [todos, setTodos] = createStore<Todo[]>([]);
+
+async function refetch() {
+	const next = await fetch("/api/todos").then((r) => r.json());
+	// Rows whose `id` matches keep their store proxy, so <For> keeps their DOM.
+	setTodos(reconcile(next));
+}
+```
+
+### Use a different identity field
+
+```ts
+setProducts(reconcile(nextProducts, "sku"));
+setRows(reconcile(nextRows, (row) => row.region + row.year));
+```
+
+## Caveats
+
+* When the store root is a keyed object, the new value must carry the same key; a different key throws `Cannot reconcile states with different identity`. Replace the whole value through the setter instead.
+* Items without a key fall back to positional matching, and a type change at any level replaces that subtree.
+
+## Common problems
+
+* [Rows lose focus or animation when the list changes](../guides/lists.md#rows-lose-focus-or-animation-when-the-list-changes)
+* [Editing one item rebuilds the whole list](../guides/lists.md#editing-one-item-rebuilds-the-whole-list)
+
+## Learn more
+
+* [Keep row identity across updates](../guides/lists.md#keep-row-identity-across-updates)
+* [Stores](../concepts/stores.md)
+* [Lists](../guides/lists.md)

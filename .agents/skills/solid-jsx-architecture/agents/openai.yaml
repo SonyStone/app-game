@@ -1,0 +1,4 @@
+interface:
+  display_name: "SolidJS JSX architecture"
+  short_description: "Visible JSX composition and useful component boundaries"
+  default_prompt: "Use $solid-jsx-architecture to build or refactor this SolidJS feature with visible JSX composition."

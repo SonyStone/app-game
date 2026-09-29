@@ -3,7 +3,7 @@ import { viewLayout } from '../bindings';
 import { project } from '../pageShader';
 
 import { Cubic, CurveInstance, curveLayout, shapeOnlySlot } from './curveBindings';
-import { outlineCoverage } from './curveCoverage';
+import { clipOutlineCoverage, outlineCoverage } from './curveCoverage';
 
 /** Expands bounds by the pixel's half footprint, including a small rounding margin. */
 export const curveVertex = tgpu.vertexFn({
@@ -108,7 +108,7 @@ export function clipCoverage(reference: number, point: d.v2f, dx: d.v2f, dy: d.v
     const local = transformed(clip, point);
     const localDx = d.vec2f(clip.matrix.x * dx.x + clip.matrix.z * dx.y, clip.matrix.y * dx.x + clip.matrix.w * dx.y);
     const localDy = d.vec2f(clip.matrix.x * dy.x + clip.matrix.z * dy.y, clip.matrix.y * dy.x + clip.matrix.w * dy.y);
-    coverage = std.min(coverage, outlineCoverage(clip, local, localDx, localDy));
+    coverage = std.min(coverage, clipOutlineCoverage(clip, local, localDx, localDy));
     next = clip.info.w;
   }
 
@@ -169,6 +169,10 @@ function hairlineCoverage(item: d.Infer<typeof CurveInstance>, point: d.v2f, dx:
       }
     }
 
+    // Endpoints repeated as control points (PDF `l`, `v`, `y`) have zero speed, making them
+    // stationary points that Newton cannot leave even when a nearby interior point is closer.
+    best = std.clamp(best, 1 / 32, 31 / 32);
+
     for (let step = 0; step < 6; step++) {
       const p = at(curve, best);
       const tangent = std.mul(
@@ -195,8 +199,8 @@ function hairlineCoverage(item: d.Infer<typeof CurveInstance>, point: d.v2f, dx:
     }
 
     let candidate = std.length(at(curve, best));
-    const startDirection = std.normalize(std.sub(curve.p1, curve.p0));
-    const endDirection = std.normalize(std.sub(curve.p3, curve.p2));
+    const startDirection = endpointTangent(curve.p0, curve.p1, curve.p2, curve.p3);
+    const endDirection = std.mul(endpointTangent(curve.p3, curve.p2, curve.p1, curve.p0), -1);
 
     if (item.info.z === 3) {
       candidate = std.max(
@@ -223,4 +227,28 @@ function pixelPosition(p: d.v2f, origin: d.v2f, dx: d.v2f, dy: d.v2f, determinan
   'use gpu';
   const delta = std.sub(p, origin);
   return d.vec2f((delta.x * dy.y - delta.y * dy.x) / determinant, (dx.x * delta.y - dx.y * delta.x) / determinant);
+}
+
+/**
+ * Unit pixel-space tangent leaving `from`, using the first control point at least 0.01 px away.
+ * PDF `l`/`v`/`y` curves repeat an endpoint as a control point; after f32 transforms the copy may differ
+ * by rounding noise, whose direction is meaningless and would otherwise misplace butt/square caps.
+ */
+function endpointTangent(from: d.v2f, first: d.v2f, second: d.v2f, last: d.v2f) {
+  'use gpu';
+  let delta = std.sub(first, from);
+
+  if (std.dot(delta, delta) <= 1e-4) {
+    delta = std.sub(second, from);
+  }
+
+  if (std.dot(delta, delta) <= 1e-4) {
+    delta = std.sub(last, from);
+  }
+
+  if (std.dot(delta, delta) <= 1e-4) {
+    return d.vec2f(1, 0);
+  }
+
+  return std.normalize(delta);
 }

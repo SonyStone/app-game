@@ -3,6 +3,14 @@
   "open": "פתיחת מסמך",
   "openHint": "פתיחת PDF או GDOC",
   "overview": "הצגת המסמך כולו",
+  "splitView": "תצוגה מפוצלת",
+  "saveView": "שמירת תצוגה",
+  "savedViews": "תצוגות שמורות",
+  "savedView": "תצוגה {{number}}",
+  "removeView": "הסרת תצוגה {{number}}",
+  "playTour": "הפעלת התצוגות השמורות",
+  "stopTour": "עצירת הסיור",
+  "resizePanes": "שינוי גודל החלוניות",
   "enterFullscreen": "מסך מלא",
   "exitFullscreen": "יציאה ממסך מלא",
   "fullscreenUnsupported": "מסך מלא אינו זמין בדפדפן הזה",
@@ -14,6 +22,8 @@
   "download": "הורדת GDOC",
   "back": "חזרה לדוגמה",
   "autoZoom": "זום אוטומטי",
+  "minimap": "מפה מוקטנת",
+  "performance": "ביצועים",
   "grids": "רשת",
   "vectorOnly": "וקטורים בלבד",
   "help": "גררו כדי להזיז. גללו או צבטו כדי לשנות את הזום. השתמשו בשתי אצבעות כדי לסובב.",
@@ -40,5 +50,6 @@
   "preparingGraphics": "מכין גרפיקה…",
   "cancelLoading": "ביטול טעינה",
   "cancelled": "הטעינה בוטלה. ניתן לפתוח מסמך אחר.",
-  "pageProgress": "{{completed}} מתוך {{total}} עמודים"
+  "pageProgress": "{{completed}} מתוך {{total}} עמודים",
+  "dismiss": "סגירה"
 }

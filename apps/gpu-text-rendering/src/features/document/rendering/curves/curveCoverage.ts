@@ -10,6 +10,22 @@ import { rectangleCoverage } from './rectangleCoverage';
  */
 export function outlineCoverage(item: d.Infer<typeof CurveInstance>, point: d.v2f, dx: d.v2f, dy: d.v2f) {
   'use gpu';
+  return coverage(item, point, dx, dy, false);
+}
+
+/**
+ * Coverage of a clip outline. Like {@link outlineCoverage}, except that a single straight edge parallel to the
+ * pixel's sides is resolved at the pixel center instead of anti-aliased. Print PDFs draw one image or shape several
+ * times under abutting clip polygons; anti-aliasing both sides of a shared edge leaves about a quarter of the
+ * paper visible, a light hairline. Curved, diagonal and rotated edges, and corners, stay anti-aliased.
+ */
+export function clipOutlineCoverage(item: d.Infer<typeof CurveInstance>, point: d.v2f, dx: d.v2f, dy: d.v2f) {
+  'use gpu';
+  return coverage(item, point, dx, dy, true);
+}
+
+function coverage(item: d.Infer<typeof CurveInstance>, point: d.v2f, dx: d.v2f, dy: d.v2f, snapAxisEdges: boolean) {
+  'use gpu';
   const rectangle = rectangleCoverage(item, point, dx, dy);
 
   if (rectangle >= 0) {
@@ -24,10 +40,16 @@ export function outlineCoverage(item: d.Infer<typeof CurveInstance>, point: d.v2
     indexed.bins = 0;
   }
 
-  return integratedCoverage(indexed, point, dx, dy);
+  return integratedCoverage(indexed, point, dx, dy, snapAxisEdges);
 }
 
-function integratedCoverage(item: d.Infer<typeof CoverageOutline>, point: d.v2f, dx: d.v2f, dy: d.v2f) {
+function integratedCoverage(
+  item: d.Infer<typeof CoverageOutline>,
+  point: d.v2f,
+  dx: d.v2f,
+  dy: d.v2f,
+  snapAxisEdges: boolean
+) {
   'use gpu';
   const pixelArea = std.abs(dx.x * dy.y - dx.y * dy.x);
   const halfHeight = (std.abs(dx.y) + std.abs(dy.y)) * 0.5;
@@ -46,19 +68,38 @@ function integratedCoverage(item: d.Infer<typeof CoverageOutline>, point: d.v2f,
 
   let area = d.f32(0);
   const height = (top - bottom) / 16;
+  // Per-scanline covered fractions of the pixel width. A vertical edge covers every scanline equally;
+  // a horizontal one covers each scanline fully or not at all.
+  const width = std.abs(dx.x) + std.abs(dy.x);
+  let lowest = d.f32(1);
+  let highest = d.f32(0);
+  let partial = false;
 
   for (let band = 0; band < 16; band++) {
     const middle = bottom + (d.f32(band) + 0.5) * height;
     const offset = height * 0.2886751345948129;
-    area += height * 0.5 * scanlineArea(item, point, dx, dy, middle - offset);
-    area += height * 0.5 * scanlineArea(item, point, dx, dy, middle + offset);
+    const first = scanlineArea(item, point, dx, dy, middle - offset);
+    const second = scanlineArea(item, point, dx, dy, middle + offset);
+    area += height * 0.5 * (first + second);
+    const a = first / std.max(width, 1e-20);
+    const b = second / std.max(width, 1e-20);
+    lowest = std.min(lowest, std.min(a, b));
+    highest = std.max(highest, std.max(a, b));
+    partial = partial || (a > 0.001 && a < 0.999) || (b > 0.001 && b < 0.999);
   }
 
-  return std.clamp(area / pixelArea, 0, 1);
+  const result = std.clamp(area / pixelArea, 0, 1);
+  const aligned = std.min(std.abs(dx.y) + std.abs(dy.x), std.abs(dx.x) + std.abs(dy.y)) <= width * 0.001;
+
+  if (snapAxisEdges && aligned && (highest - lowest < 0.001 || !partial)) {
+    return std.select(d.f32(0), d.f32(1), result >= 0.5);
+  }
+
+  return result;
 }
 
 // Pixels whose bounds contain no contour boundary are entirely filled or empty.
-// Endpoint bounds are conservative because the importer splits at both axes' extrema.
+// The importer splits curves at both axes' extrema, so every segment is monotonic in x and y.
 function uniformPixelCoverage(item: d.Infer<typeof CoverageOutline>, point: d.v2f, dx: d.v2f, dy: d.v2f) {
   'use gpu';
   const extent = std.mul(std.add(std.abs(dx), std.abs(dy)), 0.5);
@@ -93,12 +134,26 @@ function uniformPixelCoverage(item: d.Infer<typeof CoverageOutline>, point: d.v2
       const curve = curveLayout.$.curves[index]!;
       const minimum = std.min(curve.p0, curve.p3);
       const maximum = std.max(curve.p0, curve.p3);
+      let left = maximum.x <= point.x;
 
       if (minimum.x <= high.x && maximum.x >= low.x && minimum.y <= high.y && maximum.y >= low.y) {
-        return d.f32(-1);
+        // A magnified curve's bounds can cover much of the screen. Within the pixel's rows, a monotonic segment
+        // spans only the x between its crossings at the band's ends; outside that range it passes beside the pixel.
+        if (maximum.y <= minimum.y) {
+          return d.f32(-1);
+        }
+
+        const a = crossingX(curve, std.clamp(low.y, minimum.y, maximum.y));
+        const b = crossingX(curve, std.clamp(high.y, minimum.y, maximum.y));
+
+        if (std.min(a, b) <= high.x && std.max(a, b) >= low.x) {
+          return d.f32(-1);
+        }
+
+        left = std.max(a, b) < low.x;
       }
 
-      if (row === middle && maximum.x <= point.x && point.y >= minimum.y && point.y < maximum.y) {
+      if (row === middle && left && point.y >= minimum.y && point.y < maximum.y) {
         winding += std.select(d.i32(-1), d.i32(1), curve.p3.y > curve.p0.y);
       }
     }

@@ -14,6 +14,9 @@ export function convertPdf(bytes: Uint8Array): ConvertOutcome;
 export function decodeCmykJpeg(bytes: Uint8Array, width: number, height: number): RasterOutcome;
 /**
  * Decode synchronously inside a dedicated Worker; cancellation terminates that Worker.
+ *
+ * Takes ownership of the copied input so a raw image payload can be decoded in place
+ * (JavaScript still passes a `Uint8Array`; only WASM-side ownership changes).
  */
 export function decodeDocument(bytes: Uint8Array): DecodeOutcome;
 /**

@@ -1,0 +1,77 @@
+# createTrackedEffect
+
+Creates a tracked reactive effect where dependency tracking and side effects happen
+in the same scope.
+
+> Deprecated: Do not use in new code. For a side effect that follows reactive
+> state, use `createEffect(compute, effect)` — it separates tracking from the
+> side effect, knows its dependencies before it runs, and participates in
+> async and transitions. For one-time DOM work after render (measuring,
+> attaching third-party widgets to a ref), use `onSettled`. Tracking from
+> inside the effect phase — the only thing this primitive adds — is retained
+> solely to ease 1.x migration: it runs beside user-effect callbacks after
+> values commit, never holds a transition, and cannot observe a write staged
+> earlier in the same flush by a signal it has not read yet.
+
+Because tracking and effects happen in the same scope, this primitive
+may run multiple times for a single change or show tearing (reading inconsistent
+state). Use only when dynamic subscription patterns require same-scope tracking.
+
+The callback runs during the flush itself: writes made inside it are queued
+into the same flush's continuation and are never visible to the callback's
+own reads (reads return settled values, as in every effect-phase scope), and
+`flush()` cannot be called from inside it (dev throws; production is a
+no-op) — defer with `queueMicrotask(() => flush())` if needed.
+
+```typescript
+createTrackedEffect(compute, options?: { name?: string });
+```
+
+## Import
+
+```ts
+import { createTrackedEffect } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function createTrackedEffect(
+	compute: () => void | (() => void),
+	options?: BaseEffectOptions
+): void;
+```
+
+## Parameters
+
+### `compute`
+
+* **Type:** `() => void | (() => void)`
+
+A function that contains reactive reads to track and returns an optional cleanup function to run on disposal or before next execution
+
+### `options`
+
+* **Type:** `BaseEffectOptions`
+* Optional
+
+\-- name
+
+## Examples
+
+```ts
+createTrackedEffect(() => {
+	const target = focusedNode();
+	if (!target) return;
+
+	const handler = () => log(target.value());
+	target.on("change", handler);
+
+	return () => target.off("change", handler);
+});
+```
+
+## Learn more
+
+* [Avoid unnecessary effects](../guides/avoid-unnecessary-effects.md)
+* [Debugging reactivity](../guides/debugging-reactivity.md)

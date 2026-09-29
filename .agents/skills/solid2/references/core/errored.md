@@ -1,0 +1,67 @@
+# Errored
+
+Catches uncaught errors inside its subtree and renders fallback content
+instead. The `fallback` prop can be a JSX element, or a callback that
+receives the error and a `reset()` function for retry affordances.
+
+Errors thrown from the fallback itself can be caught by a parent
+`<Errored>`.
+
+## Import
+
+```ts
+import { Errored } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function Errored(props: {
+	fallback:
+		JSX.Element | ((err: ErrorAccessor, reset: () => void) => JSX.Element);
+	children: JSX.Element;
+}): JSX.Element;
+```
+
+## Props
+
+### `fallback`
+
+* **Type:** `JSX.Element | ((err: ErrorAccessor, reset: () => void) => JSX.Element)`
+
+Content to render in place of the subtree, or a function that receives the error accessor and a `reset()` function that retries the subtree.
+
+### `children`
+
+* **Type:** `JSX.Element`
+
+The subtree to guard.
+
+## Examples
+
+```tsx
+<Errored
+	fallback={(err, reset) => (
+		<div onClick={reset}>Error: {err().toString()}</div>
+	)}
+>
+	<MyComp />
+</Errored>
+```
+
+## Caveats
+
+* The boundary catches errors thrown while rendering its subtree and errors that travel through the reactive graph, including rejected async reads. Handle errors in event handlers where they happen.
+* `reset()` recomputes the failing sources. If the cause persists, the boundary errors again.
+* Errors thrown from the fallback itself go to the parent `Errored`.
+
+## Common problems
+
+* [Every update stopped after an error](../guides/debugging-reactivity.md#every-update-stopped-after-an-error)
+
+## Learn more
+
+* [Error boundaries](../concepts/boundaries.md#error-boundaries)
+* [Work rejects: `Errored`](../concepts/async-reactivity.md#work-rejects-errored)
+* [Components and JSX](../concepts/components-and-jsx.md)
+* [Boundaries](../concepts/boundaries.md)

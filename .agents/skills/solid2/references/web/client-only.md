@@ -1,0 +1,70 @@
+# clientOnly
+
+Creates a component that renders only in the browser. The server renders the fallback, and the client keeps that fallback through hydration before mounting the imported component.
+
+> With the supported bundler transform, server rendering can emit preload hints for the component's JavaScript and CSS. The server does not run the importer or render the imported component.
+
+## Import
+
+```ts
+import { clientOnly } from "@solidjs/web";
+```
+
+## Type signature
+
+```ts
+function clientOnly<M extends Record<string, any>, K extends keyof M & string>(
+	fn: () => Promise<M>,
+	options: { lazy?: boolean; export: K }
+): Component<ComponentProps<M[K]> & { fallback?: JSX.Element }>;
+function clientOnly<T extends Component<any>>(
+	fn: () => Promise<{ default: T }>,
+	options?: { lazy?: boolean; export?: string }
+): Component<ComponentProps<T> & { fallback?: JSX.Element }>;
+```
+
+## Parameters
+
+### `fn`
+
+* **Type:** `() => Promise<M> | () => Promise<{ default: T }>`
+
+Dynamic import that resolves the component's module.
+
+### `options`
+
+* **Type:** `{ lazy?: boolean; export: K } | { lazy?: boolean; export?: string }`
+* Optional
+
+`export` names which export is the component. `lazy` defers the import until first render instead of starting it on the client immediately.
+
+### `moduleUrl`
+
+* **Type:** `string`
+* Optional
+
+Module specifier injected by the bundler integration; used for preload hints and error messages.
+
+## Return value
+
+A component with the imported component's props plus an optional `fallback`.
+
+## Examples
+
+```tsx
+const Chart = clientOnly(() => import("./Chart.jsx"));
+// <Chart fallback={<div>Loading chart…</div>} data={data()} />
+```
+
+## Caveats
+
+* The server renders only the fallback, and the client keeps it through hydration before mounting the component.
+* Async reads inside the imported component start on the client; hoist data that should be fetched on the server above the boundary.
+
+## Learn more
+
+* [Server and client boundaries](../concepts/rendering-and-ssr.md#server-and-client-boundaries)
+* [Keep it off the server](../guides/integrate-non-solid-code.md#keep-it-off-the-server)
+* [SSR-safe code](../guides/ssr-safe-code.md)
+* [Rendering and SSR](../concepts/rendering-and-ssr.md)
+* [Choose a rendering mode](../guides/choose-a-rendering-mode.md)

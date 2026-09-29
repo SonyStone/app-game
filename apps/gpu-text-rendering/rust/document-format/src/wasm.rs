@@ -4,8 +4,11 @@ use crate::{container::u32_at, curves, error::DocumentError, quadratic};
 use wasm_bindgen::prelude::*;
 
 /// Decode synchronously inside a dedicated Worker; cancellation terminates that Worker.
+///
+/// Takes ownership of the copied input so a raw image payload can be decoded in place
+/// (JavaScript still passes a `Uint8Array`; only WASM-side ownership changes).
 #[wasm_bindgen(js_name = decodeDocument)]
-pub fn decode_document(bytes: &[u8]) -> DecodeOutcome {
+pub fn decode_document(bytes: Vec<u8>) -> DecodeOutcome {
     match decode(bytes) {
         Ok(document) => DecodeOutcome {
             document: Some(document),
@@ -218,12 +221,13 @@ impl DecodedDocument {
     }
 }
 
-fn decode(bytes: &[u8]) -> Result<DecodedDocument, DocumentError> {
-    if bytes.len() >= 16 && matches!(u32_at(bytes, 12), 2 | 3) {
-        let scene = curves::decode(bytes)?;
-        Ok(from_scene(scene, u32_at(bytes, 12)))
+fn decode(bytes: Vec<u8>) -> Result<DecodedDocument, DocumentError> {
+    if bytes.len() >= 16 && matches!(u32_at(&bytes, 12), 2 | 3) {
+        let profile = u32_at(&bytes, 12);
+        let scene = curves::decode_owned(bytes)?;
+        Ok(from_scene(scene, profile))
     } else {
-        let document = quadratic::decode(bytes)?;
+        let document = quadratic::decode(&bytes)?;
         Ok(DecodedDocument {
             profile: 1,
             pages: document

@@ -1,5 +1,5 @@
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
-import type { PaintNode } from './paintTree';
+import type { PaintNode } from '../../plan/paintTree';
 
 type PaintLeaf = Exclude<PaintNode, { children: PaintNode[] }>;
 
@@ -10,10 +10,10 @@ export function createPageBundles(
   trees: PaintNode[][],
   keep: KeepGpuResource
 ) {
-  // Pan reuses commands. Crossing a shader-selection scale band replaces only the affected
-  // page's variant. Keep ordinary books resident instead of evicting them every overview frame.
+  // Pan reuses commands. Crossing a shader-selection scale band records the page's new variant; views at different
+  // scales keep one variant each. Keep ordinary books resident instead of evicting them every overview frame.
   const capacity = Math.max(512, Math.min(trees.length, 2048));
-  const cache = new Map<number, { variant: string | number; bundle: GPURenderBundle }>();
+  const cache = new Map<string, GPURenderBundle>();
   keep({ destroy: () => cache.clear() });
 
   return (
@@ -21,9 +21,9 @@ export function createPageBundles(
     paint: (encoder: GPURenderBundleEncoder, node: PaintLeaf) => void,
     variant: string | number = 0
   ) => {
-    const previous = cache.get(page);
-    let bundle = previous?.variant === variant ? previous.bundle : undefined;
-    cache.delete(page);
+    const key = `${page}/${variant}`;
+    let bundle = cache.get(key);
+    cache.delete(key);
 
     if (!bundle) {
       const encoder = device.createRenderBundleEncoder({ colorFormats: [format] });
@@ -37,7 +37,7 @@ export function createPageBundles(
       bundle = encoder.finish();
     }
 
-    cache.set(page, { variant, bundle });
+    cache.set(key, bundle);
 
     if (cache.size > capacity) {
       cache.delete(cache.keys().next().value!);

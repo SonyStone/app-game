@@ -418,6 +418,16 @@ fn decode_context<'a>(
         height: obj.height,
     };
 
+    // Local patch: reject oversized dictionary dimensions (including SMask/Mask images the
+    // caller never sees) before any filter runs.
+    let too_large = |width: u32, height: u32| {
+        u64::from(width) * u64::from(height) > hayro_syntax::limits::MAX_IMAGE_PIXELS
+    };
+    if too_large(obj.width, obj.height) {
+        (obj.warning_sink)(InterpreterWarning::ImageDecodeFailure);
+        return None;
+    }
+
     let decoded = obj
         .stream
         .decoded_image(&decode_params)
@@ -436,6 +446,10 @@ fn decode_context<'a>(
             (d.width, d.height)
         })
         .unwrap_or((obj.width, obj.height));
+    if too_large(width, height) {
+        (obj.warning_sink)(InterpreterWarning::ImageDecodeFailure);
+        return None;
+    }
 
     let color_space = color_space
         .or_else(|| {
@@ -923,6 +937,16 @@ fn get_components(
     color_space: &ColorSpace,
     bits_per_component: u8,
 ) -> Option<Vec<u16>> {
+    // Local patch: the generic path allocates u16 and f32 samples for every declared pixel,
+    // even when the stream is short. Bound that expansion before allocating.
+    let samples = u64::from(width)
+        .checked_mul(u64::from(height))?
+        .checked_mul(u64::from(color_space.num_components()))?;
+    if samples > hayro_syntax::limits::MAX_IMAGE_PIXELS {
+        warn!("image exceeds the decoded sample limit");
+        return None;
+    }
+
     let result = match bits_per_component {
         1..8 | 9..16 => {
             let mut buf = vec![];

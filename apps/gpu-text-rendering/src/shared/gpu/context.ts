@@ -1,15 +1,14 @@
 import { err, ok, Result } from 'neverthrow';
-import { onCleanup } from 'solid-js';
 import { errorMessage, gpuError, type AbortedError, type GpuError, type ResultValue } from '../errors';
 import type { GpuRoot } from './createGpuRoot';
+import { onGpuRelease } from './onGpuRelease';
 
 /** Configures a borrowed device's canvas for the current Solid owner. Does not destroy the device/root. */
 export function createGpuCanvas(gpu: GpuRoot, canvas: HTMLCanvasElement) {
   const abort = new AbortController();
   let context: GPUCanvasContext | null = null;
 
-  onCleanup(destroy);
-  gpu.signal.addEventListener('abort', destroy, { once: true });
+  onGpuRelease(gpu.signal, destroy);
 
   const active = gpu.checkActive();
   if (active.isErr()) {
@@ -59,10 +58,15 @@ export function createGpuCanvas(gpu: GpuRoot, canvas: HTMLCanvasElement) {
     }
 
     abort.abort();
-    gpu.signal.removeEventListener('abort', destroy);
     context?.unconfigure();
   }
 }
 
 /** Borrowed rendering resources; the root and canvas providers own their lifetimes. */
 export type GpuContext = ResultValue<ReturnType<typeof createGpuCanvas>>;
+
+/**
+ * The device-level part of a GPU context: enough to allocate resources and compile pipelines for canvases configured
+ * with `format`, without a canvas. Resources prepared with it can be drawn into any canvas of the same device.
+ */
+export type GpuDevice = Pick<GpuContext, 'root' | 'device' | 'format' | 'signal' | 'checkActive'>;

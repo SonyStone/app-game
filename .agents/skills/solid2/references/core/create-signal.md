@@ -1,0 +1,340 @@
+# createSignal
+
+Creates a simple reactive state with a getter and setter.
+
+* **Plain form** — `createSignal(value, options?: SignalOptions<T>)`:
+  stores a value; the setter writes a new value or applies an
+  updater `(prev) => next`.
+* **Function form (writable memo)** —
+  `createSignal(fn, options?: SignalOptions<T> & MemoOptions<T>)`:
+  the value is computed by `fn` like a memo, but the setter can
+  locally override it (useful for optimistic edits over a derived
+  default).
+
+```ts
+// Plain
+const [count, setCount] = createSignal(0);
+
+count(); // 0
+setCount(1); // explicit value
+setCount((c) => c + 1); // updater
+
+// Writable memo: derives from `fn()` and can be written like a signal.
+// Within the frame the write wins over a same-tick recompute; the next
+// change to `userId` re-derives (the compute receives the written value
+// as `prev`). While a transaction holds a re-derived value, a write from
+// outside it does not replace that derivation — it becomes its `prev`.
+const [user, setUser] = createSignal(() => fetchUser(userId()));
+setUser({ ...user(), name: "Alice" });
+```
+
+**Hydration:** in the function form, `SignalOptions & MemoOptions`
+accepts an `ssrSource` field (`"server"` | `"hybrid"` | `"client"`)
+that controls what initial value the client uses and whether `fn` re-runs. `transparent: true` and the
+ownerless / id-less cases behave as for `createMemo`.
+
+## Import
+
+```ts
+import { createSignal } from "solid-js";
+```
+
+## Type signature
+
+```ts
+function createSignal<T>(): Signal<T | undefined>;
+function createSignal<T>(
+	value: Exclude<T, Function>,
+	options?: SignalOptions<T>
+): Signal<T>;
+function createSignal<T>(
+	fn: ComputeFunction<NoInfer<T>, T>,
+	options: SignalOptions<T> & MemoOptions<T> & { loadingValue: T }
+): Signal<T>;
+function createSignal<T>(
+	fn: ComputeFunction<undefined | NoInfer<T>, T>,
+	options?: SignalOptions<T> & MemoOptions<T>
+): Signal<T>;
+```
+
+## Parameters
+
+### `value`
+
+* **Type:** `Exclude<T, Function>`
+
+Initial value. Pass a function through the `fn` form instead; a function here is rejected by the types.
+
+### `options`
+
+* **Type:** `SignalOptions<T>`
+* Optional
+
+Debug `name` and `equals` comparator. The function form also accepts `MemoOptions<T>`, including `loadingValue`.
+
+### `fn`
+
+* **Type:** `ComputeFunction<T | undefined, T>`
+
+Compute function for the writable-memo form: `(prev) => next`, where `next` may also be a promise or an `AsyncIterable`. The signal starts as `fn()`, recomputes when tracked sources change, and the setter overrides the value locally until the next recompute.
+
+## Return value
+
+`[state: Accessor<T>, setState: Setter<T>]`
+
+A tuple. The accessor reads the value and tracks it in the surrounding scope; the setter takes a new value or an updater `(prev) => next`.
+
+## Examples
+
+```ts
+const [count, setCount] = createSignal(0);
+
+count(); // 0
+setCount(1); // explicit value
+setCount((c) => c + 1); // updater
+```
+
+```ts
+// Writable memo: derives from `fn()` and can be written like a signal.
+const [user, setUser] = createSignal(() => fetchUser(userId()));
+
+// Within the frame the write wins over a same-tick recompute; the next
+// change to `userId` re-derives (the compute receives the written value
+// as `prev`). While a transaction holds a re-derived value, a write from
+// outside it does not replace that derivation — it becomes its `prev`.
+setUser({ ...user(), name: "Alice" });
+```
+
+## Caveats
+
+* Passing a function to the setter treats it as an updater. To store a function as the value, wrap it: `setHandler(() => fn)`.
+* A read right after a write returns the old value until the queue flushes. Derive the value you need instead of reading it back, or call `flush()` in tests.
+* In the function form, a local override lasts until `fn` recomputes; the next tracked change replaces it.
+
+## Common problems
+
+* [The page shows the words `function` or `() =>` instead of the value](../concepts/reactivity.md#the-page-shows-the-words-function-or---instead-of-the-value)
+* [A value renders once and never updates](../concepts/reactivity.md#a-value-renders-once-and-never-updates)
+* [Reading a signal right after setting it gives the old value](../concepts/reactivity.md#reading-a-signal-right-after-setting-it-gives-the-old-value)
+
+## Learn more
+
+* [Signals](../concepts/reactivity.md#signals)
+* [Reactivity](../concepts/reactivity.md)
+* [Async reactivity](../concepts/async-reactivity.md)
+* [Debugging reactivity](../guides/debugging-reactivity.md)
+
+## Related types
+
+### `isEqual`
+
+```ts
+function isEqual<T>(a: T, b: T): boolean;
+```
+
+### `MemoOptions`
+
+:::deep-dive[MemoOptions members]
+Options for read-only memos created with `createMemo`.
+Also used in combination with `SignalOptions` for writable memos
+(`createSignal(fn)` / `createOptimistic(fn)`).
+
+```ts
+interface MemoOptions<T> {
+	id?: string;
+	name?: string;
+	transparent?: boolean;
+	_plumbing?: boolean;
+	equals?: false | ((prev: T, next: T) => boolean);
+	unobserved?: () => void;
+	lazy?: boolean;
+	sync?: boolean;
+	loadingValue?: T;
+	deferStream?: boolean;
+	ssrSource?: "server" | "hybrid" | "client";
+}
+```
+
+**`id`** — `string`
+
+Stable identifier for the owner hierarchy
+
+**`name`** — `string`
+
+Debug name (dev mode only)
+
+**`transparent`** — `boolean`
+
+Advanced (integration tier). When true, the memo is invisible to the
+hydration id scheme: it inherits its parent's id instead of consuming a
+child slot, and during hydration it computes live instead of adopting
+the serialized server value. For client-only memos with no
+server-rendered counterpart — see `EffectOptions.transparent` for
+the full semantics. No-op outside hydration.
+
+**`_plumbing`** — `boolean`
+
+**`equals`** — `false | ((prev: T, next: T) => boolean)`
+
+Custom equality function, or `false` to always notify subscribers.
+Defaults to reference equality (`isEqual`). Pass a comparator (e.g.
+`(a, b) => a.id === b.id`) for value-based equality, or `false` to
+notify on every recompute regardless of equality.
+
+**`unobserved`** — `() => void`
+
+Callback invoked when the computed loses all subscribers
+
+**`lazy`** — `boolean`
+
+When true, defers the initial computation until the value is first read,
+**and** opts the memo into autodisposal — once it has no remaining
+subscribers it is torn down and recomputed from scratch on the next read.
+Use it for compute-on-demand values that should not retain state across
+idle periods. Non-lazy owned memos live for their owner's lifetime and
+never autodispose.
+
+**`sync`** — `boolean`
+
+Advanced. When true, asserts the compute function returns synchronous
+values only (never `PromiseLike` / `AsyncIterable`). Skips the
+async-shape probe in `recompute` for a small fixed-cost win per run.
+Intended for compiler emissions and library code that
+provably returns sync values. Returning a Promise or async iterable
+from a `sync: true` memo is undefined behavior — the value will be
+stored as-is and never awaited.
+
+**`loadingValue`** — `T`
+
+First committed value: a value the memo is born with, shown until the
+compute's first real answer lands. While that first answer is in flight
+the memo reads as a settled value everywhere — nothing suspends to a
+`<Loading>` boundary, no update is held (first-flight work is
+loading-class, like a boundary fallback), and `isPending(memo)` stays
+**false**: the declared first value answers the question by declaration, so first-load
+affordances are driven from the value itself (a `null` placeholder, a
+`skeleton: true` field, etc.). Once the first answer lands, the loading
+value leaves the lineage forever: refetches use normal pending semantics
+(stale value shown, `isPending` true, and the runtime coordinates the update)
+— the canonical guard is `data.skeleton || isPending(data)`, whose two
+terms cover the two disjoint states.
+
+Typed strictly as `T`: to use `null`/`undefined` as the placeholder,
+declare it in the memo's type (e.g. `createMemo<User | null>(...)`), so
+every consumer sees the nullable window honestly. If the placeholder is
+shaped data standing in for real data, encode its provenance in the data
+(e.g. a `skeleton: true` field) rather than letting it impersonate truth.
+
+The loading value is also the compute's first `prev`, so `prev`-based
+memos fold from it.
+
+**`deferStream`** — `boolean`
+
+Defer the SSR stream flush until this primitive's first value is
+resolved. Lets late-resolving sources hold the document open
+rather than forcing the surrounding `<Loading>` boundary to render
+its fallback into the HTML. Server-only; ignored on the client.
+
+**`ssrSource`** — `"server" | "hybrid" | "client"`
+
+Hydration policy. Decides what initial value the client uses and
+whether the compute re-runs.
+
+* `"server"` *(default)*: client uses the serialized server value
+  as initial state. Compute does **not** re-run for the initial
+  value — the serialized result is authoritative. Choose this when
+  the compute is deterministic from server-available inputs.
+* `"hybrid"`: client uses the serialized server value first; then,
+  for a compute that returns an **async iterable**, the client
+  continues the stream from it (the server consumed exactly one
+  yield; the client's first yield duplicates it and is discarded,
+  later yields update the node). For a sync or promise-shaped
+  compute, `"hybrid"` is identical to `"server"`: the serialized
+  value is adopted and the compute does not re-run until a
+  dependency changes or `refresh()`. Choose this for streaming
+  sources the client should keep consuming after hydration.
+* `"client"`: skip the server value entirely. Compute is deferred
+  until hydration completes, then runs as if first-mounted.
+  Choose this for client-only state where serialization is
+  meaningless. Two forms decide what the pre-compute window
+  renders: **bare** (structural) — the source suspends on the
+  server as a final hole and the nearest `<Loading>` boundary
+  renders its fallback, handing the position to the client; or a
+  **declared first value** — `loadingValue` on signal-family
+  sources (`loadingValue: undefined` is a valid declaration),
+  `seedLoadingValue: true` on store-family sources — which renders
+  provisional data with no boundary involvement.
+:::
+
+### `SignalOptions`
+
+:::deep-dive[SignalOptions members]
+Options for plain signals created with `createSignal(value)` or `createOptimistic(value)`.
+
+```ts
+interface SignalOptions<T> {
+	name?: string;
+	equals?: false | ((prev: T, next: T) => boolean);
+	ownedWrite?: boolean;
+	unobserved?: () => void;
+	deferStream?: boolean;
+	ssrSource?: "server" | "hybrid" | "client";
+}
+```
+
+**`name`** — `string`
+
+Debug name (dev mode only)
+
+**`equals`** — `false | ((prev: T, next: T) => boolean)`
+
+Custom equality function, or `false` to always notify subscribers.
+Defaults to reference equality (`isEqual`). Pass a comparator (e.g.
+`(a, b) => a.id === b.id`) for value-based equality, or `false` to
+notify on every write regardless of equality.
+
+**`ownedWrite`** — `boolean`
+
+Suppress dev-mode warnings when writing inside an owned scope
+
+**`unobserved`** — `() => void`
+
+Callback invoked when the signal loses all subscribers
+
+**`deferStream`** — `boolean`
+
+Defer the SSR stream flush until this primitive's first value is
+resolved. Lets late-resolving sources hold the document open
+rather than forcing the surrounding `<Loading>` boundary to render
+its fallback into the HTML. Server-only; ignored on the client.
+
+**`ssrSource`** — `"server" | "hybrid" | "client"`
+
+Hydration policy. Decides what initial value the client uses and
+whether the compute re-runs.
+
+* `"server"` *(default)*: client uses the serialized server value
+  as initial state. Compute does **not** re-run for the initial
+  value — the serialized result is authoritative. Choose this when
+  the compute is deterministic from server-available inputs.
+* `"hybrid"`: client uses the serialized server value first; then,
+  for a compute that returns an **async iterable**, the client
+  continues the stream from it (the server consumed exactly one
+  yield; the client's first yield duplicates it and is discarded,
+  later yields update the node). For a sync or promise-shaped
+  compute, `"hybrid"` is identical to `"server"`: the serialized
+  value is adopted and the compute does not re-run until a
+  dependency changes or `refresh()`. Choose this for streaming
+  sources the client should keep consuming after hydration.
+* `"client"`: skip the server value entirely. Compute is deferred
+  until hydration completes, then runs as if first-mounted.
+  Choose this for client-only state where serialization is
+  meaningless. Two forms decide what the pre-compute window
+  renders: **bare** (structural) — the source suspends on the
+  server as a final hole and the nearest `<Loading>` boundary
+  renders its fallback, handing the position to the client; or a
+  **declared first value** — `loadingValue` on signal-family
+  sources (`loadingValue: undefined` is a valid declaration),
+  `seedLoadingValue: true` on store-family sources — which renders
+  provisional data with no boundary involvement.
+:::

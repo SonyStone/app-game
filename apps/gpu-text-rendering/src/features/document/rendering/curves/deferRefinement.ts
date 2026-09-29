@@ -1,6 +1,7 @@
 /**
  * Yields to browser events between bounded GPU batches without nested setTimeout's delay.
  * Each instance owns one pending callback; cancel/dispose also invalidate already posted messages.
+ * A request with an earlier deadline replaces a queued later one; later requests are coalesced.
  */
 export function deferRefinement(run: () => void) {
   const channel = new MessageChannel();
@@ -8,6 +9,7 @@ export function deferRefinement(run: () => void) {
   let queued = false;
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let deadline = 0;
 
   channel.port1.onmessage = (event: MessageEvent<number>) => {
     if (disposed || !queued || event.data !== generation) {
@@ -20,11 +22,18 @@ export function deferRefinement(run: () => void) {
 
   return {
     schedule(delay: number) {
-      if (queued || disposed) {
+      const at = performance.now() + Math.max(0, delay);
+
+      if (disposed || (queued && at >= deadline)) {
         return;
       }
 
+      if (queued) {
+        cancel();
+      }
+
       queued = true;
+      deadline = at;
       const ticket = ++generation;
       if (delay > 0) {
         timer = setTimeout(() => channel.port2.postMessage(ticket), delay);

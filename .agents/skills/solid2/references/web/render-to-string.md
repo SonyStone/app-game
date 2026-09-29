@@ -1,0 +1,82 @@
+# renderToString
+
+Renders a component tree synchronously to an HTML string. Async reads inside
+`<Loading>` boundaries emit their `fallback` content; for full-graph
+resolution await `renderToStream` instead.
+
+Pair the returned HTML with `hydrate()` on the client.
+
+## Import
+
+```ts
+import { renderToString } from "@solidjs/web";
+```
+
+## Type signature
+
+```ts
+function renderToString<T>(
+	fn: () => T,
+	options?: {
+		nonce?: CSPNonce;
+		renderId?: string;
+		noScripts?: boolean;
+		plugins?: any[];
+		manifest?: AssetManifest | AssetResolver | AssetResolverFn;
+		/** This render's server error hook, ahead of `configureServerErrors`' (see the server entry). */
+		onError?: ServerErrorHook;
+		/**
+		 * Embedded-render contract for hosts that own the document. When the
+		 * render output contains no `</head>`, everything head-bound (resolved
+		 * `useHead` winners, eager resources, tracked asset links, inline
+		 * styles) is delivered here as one HTML string — prelude (charset/base)
+		 * first — for the host to splice into its own `<head>` template, instead
+		 * of being dropped. Called synchronously before `renderToString`
+		 * returns; not called when the output has a `</head>` (splicing is
+		 * automatic then).
+		 */
+		onHead?: (head: string) => void;
+	}
+): string;
+```
+
+## Parameters
+
+### `fn`
+
+* **Type:** `() => T`
+
+Function that returns the root JSX.
+
+### `options`
+
+* **Type:** `{ nonce?: CSPNonce; renderId?: string; noScripts?: boolean; plugins?: any[]; manifest?: AssetManifest | AssetResolver | AssetResolverFn; onError?: ServerErrorHook; onHead?: (head: string) => void; }`
+* Optional
+
+`nonce` for CSP, `renderId` for hydration id prefixes, `noScripts` to omit the hydration script, `manifest` for asset resolution, `onError`, and `onHead` for hosts that own the document.
+
+## Return value
+
+The rendered HTML string.
+
+## Examples
+
+```tsx
+import { renderToString } from "@solidjs/web";
+
+const html = renderToString(() => <App />);
+res.send(
+	`<!doctype html><html><body><div id="root">${html}</div></body></html>`
+);
+```
+
+## Caveats
+
+* Async reads inside `Loading` boundaries emit their fallback. Await `renderToStream` when the output must include settled data.
+* Pair the result with `hydrate()` on the client, and keep `renderId` consistent between the two when several roots share a page.
+
+## Learn more
+
+* [Synchronous string rendering](../concepts/rendering-and-ssr.md#synchronous-string-rendering)
+* [Rendering and SSR](../concepts/rendering-and-ssr.md)
+* [Choose a rendering mode](../guides/choose-a-rendering-mode.md)

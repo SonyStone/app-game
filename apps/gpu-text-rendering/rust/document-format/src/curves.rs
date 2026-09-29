@@ -19,6 +19,21 @@ pub fn decode(bytes: &[u8]) -> Result<Document, DocumentError> {
     decode_sections(container::decode_profile(bytes, profile)?, profile)
 }
 
+/// Like [`decode`], but consumes the file so its largest raw section (normally `PIXL`)
+/// reuses the input allocation instead of being copied. Used by the WASM decoder, whose
+/// input buffer would otherwise stay resident next to a full copy of the image payload.
+pub fn decode_owned(bytes: Vec<u8>) -> Result<Document, DocumentError> {
+    let profile = if bytes.len() >= 16 {
+        u32_at(&bytes, 12)
+    } else {
+        2
+    };
+    if !matches!(profile, 2 | 3) {
+        return Err(DocumentError::Unsupported("curve scene profile"));
+    }
+    decode_sections(container::decode_profile_owned(bytes, profile)?, profile)
+}
+
 // Both file decoding and direct PDF import pass through the same validation.
 fn decode_sections(mut sections: Vec<Section>, profile: u32) -> Result<Document, DocumentError> {
     if sections.iter().any(|s| {
@@ -310,11 +325,13 @@ pub fn encode(document: &Document) -> Result<Vec<u8>, DocumentError> {
 /// Checks image resources and curve bins while encoding. Callers must decode/validate the
 /// resulting file before rendering; the browser does this in a fresh disposable Worker.
 pub fn encode_owned(document: Document) -> Result<Vec<u8>, DocumentError> {
+    document.images.validate()?;
     let (sections, profile) = scene_sections(document)?;
     container::encode_profile_owned(sections, profile)
 }
 
 /// Builds acceleration data and validates importer buffers without serializing a GDOC.
+/// Images are validated once, by `decode_sections`; inflating every tile is costly.
 pub fn prepare_owned(document: Document) -> Result<Document, DocumentError> {
     let (sections, profile) = scene_sections(document)?;
     let mut total = 0usize;
@@ -367,7 +384,6 @@ fn scene_sections(mut document: Document) -> Result<(Vec<Section>, u32), Documen
     } else {
         3
     };
-    document.images.validate()?;
     if profile == 3 {
         sections.push(Section {
             tag: *b"IMAG",

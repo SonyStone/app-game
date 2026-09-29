@@ -2,7 +2,7 @@ import { createRoot, createSignal, flush } from 'solid-js';
 import tgpu from 'typegpu';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGpuCanvas } from './context';
-import { createGpuRoot } from './createGpuRoot';
+import { createGpuRoot, maxDeviceRecoveries } from './createGpuRoot';
 
 vi.mock('typegpu', () => ({ default: { initFromDevice: vi.fn() } }));
 const cleanups: (() => void)[] = [];
@@ -149,8 +149,8 @@ describe('GPU provider ownership and typed states', () => {
     expect(ready(owner).checkActive().isOk()).toBe(true);
   });
 
-  it('propagates device loss while idle and cleans up once', async () => {
-    const { canvas, context, device, destroyRoot, lose } = setup();
+  it('recovers from device loss on a new device and rebuilds dependents', async () => {
+    const { canvas, context, device, destroyRoot, lose, requestDevice } = setup();
     const owner = mount();
     await settle();
     const root = ready(owner);
@@ -158,15 +158,45 @@ describe('GPU provider ownership and typed states', () => {
       cleanups.push(dispose);
       return createGpuCanvas(root, canvas)._unsafeUnwrap();
     });
+    const replacement = lostDevice();
+    requestDevice.mockResolvedValueOnce(replacement.device);
     lose({ message: 'GPU removed', reason: 'unknown' });
     await settle();
-    expect(owner.state()).toMatchObject({ status: 'error', error: { code: 'lost' } });
+    expect(root.signal.aborted).toBe(true);
+    expect(root.checkActive()._unsafeUnwrapErr()).toMatchObject({ code: 'lost' });
     expect(gpu.signal.aborted).toBe(true);
-    expect(gpu.checkActive()._unsafeUnwrapErr()).toMatchObject({ code: 'lost' });
-    owner.dispose();
+    expect(context.unconfigure).toHaveBeenCalledOnce();
     expect(device.destroy).toHaveBeenCalledOnce();
     expect(destroyRoot).toHaveBeenCalledOnce();
-    expect(context.unconfigure).toHaveBeenCalledOnce();
+    expect(ready(owner).device).toBe(replacement.device);
+    expect(ready(owner).checkActive().isOk()).toBe(true);
+    owner.dispose();
+    expect(replacement.device.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('reports loss as terminal after bounded recoveries', async () => {
+    const { requestDevice } = setup();
+    const devices = Array.from({ length: maxDeviceRecoveries + 1 }, lostDevice);
+    devices.forEach(({ device }) => requestDevice.mockResolvedValueOnce(device));
+    const owner = mount();
+    await settle();
+    for (const { lose } of devices) {
+      lose({ message: 'GPU removed', reason: 'unknown' });
+      await settle();
+    }
+    expect(owner.state()).toMatchObject({ status: 'error', error: { code: 'lost' } });
+    expect(requestDevice).toHaveBeenCalledTimes(maxDeviceRecoveries + 1);
+    expect(devices.every(({ device }) => vi.mocked(device.destroy).mock.calls.length === 1)).toBe(true);
+  });
+
+  it('reports an external destroy() as terminal loss without recovery', async () => {
+    const { lose, requestDevice } = setup();
+    const owner = mount();
+    await settle();
+    lose({ message: 'Destroyed', reason: 'destroyed' });
+    await settle();
+    expect(owner.state()).toMatchObject({ status: 'error', error: { code: 'lost' } });
+    expect(requestDevice).toHaveBeenCalledOnce();
   });
 
   it('does not report intentional destruction as device loss', async () => {
@@ -222,6 +252,17 @@ function setup() {
   const canvas = document.createElement('canvas');
   vi.spyOn(canvas, 'getContext').mockReturnValue(context as unknown as GPUCanvasContext);
   return { canvas, context, device, destroyRoot, adapter, requestAdapter, requestDevice, lose };
+}
+
+function lostDevice() {
+  let lose!: (info: Pick<GPUDeviceLostInfo, 'message' | 'reason'>) => void;
+  const device = Object.assign(new EventTarget(), {
+    destroy: vi.fn(),
+    lost: new Promise((resolve) => {
+      lose = resolve;
+    })
+  }) as unknown as GPUDevice;
+  return { device, lose };
 }
 
 function deferred<T>() {

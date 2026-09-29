@@ -1,0 +1,604 @@
+# Components and JSX
+
+A Solid component is a function that runs once.
+It sets up state, returns JSX, and is not called again for the life of the component.
+If you come from a framework where components re-render, this is the fact to hold on to while reading this page: every rule about props, children, and control flow below exists because the function body will not run a second time.
+
+The [Reactivity](reactivity.md) page explains how the JSX inside a component keeps updating after the function has returned.
+This page covers the rest of what a component does: receiving props, handling events, reaching the DOM, rendering lists and conditions, and composing with other components.
+The examples continue the shopping cart from that page.
+
+## How JSX executes
+
+JSX keeps element structure and JavaScript expressions in the same source.
+Use curly braces to place an expression inside an element.
+Lowercase JSX names describe native elements, while names that begin with a capital letter refer to components.
+
+Solid compiles JSX into renderer operations.
+In a browser build, those operations create or claim DOM nodes and connect reactive expressions to them.
+In a server build, the same JSX source compiles to server-rendering operations.
+There is no virtual DOM value that Solid repeatedly rebuilds and compares.
+
+The compiled code calls a component function once, through `createComponent`, and it runs the function untracked so reactive reads in the body do not subscribe the parent.
+Each JSX expression the component returns is its own tracking scope with its own dependencies.
+
+```tsx
+import { createSignal } from "solid-js";
+
+function LineItem() {
+	const [quantity, setQuantity] = createSignal(1);
+
+	return (
+		<button type="button" onClick={() => setQuantity(quantity() + 1)}>
+			Quantity: {quantity()}
+		</button>
+	);
+}
+```
+
+`LineItem` runs once and returns a button.
+The expression `{quantity()}` is tracked, so the text updates on every click; the function around it does not run again.
+
+## Props
+
+Parents pass data to children through JSX attributes, and the child receives them as one `props` object.
+Here a cart passes each line item its product:
+
+```tsx
+type Product = { id: string; name: string; price: number };
+
+function LineItem(props: { product: Product; quantity: number }) {
+	return (
+		<li>
+			{props.product.name} × {props.quantity} = $
+			{props.product.price * props.quantity}
+		</li>
+	);
+}
+
+function Cart() {
+	const [quantity, setQuantity] = createSignal(1);
+	return (
+		<ul>
+			<LineItem
+				product={{ id: "mug", name: "Mug", price: 12 }}
+				quantity={quantity()}
+			/>
+		</ul>
+	);
+}
+```
+
+`quantity={quantity()}` looks like it reads the signal once, when `Cart` runs.
+It does not.
+The compiler turns a dynamic attribute into a getter on the props object, so the read of `quantity()` happens when `LineItem` reads `props.quantity`, inside its JSX, in a tracking scope.
+That is why `props.quantity` in the child updates when the parent's signal changes, even though neither function runs again.
+
+This works only as long as the read stays on the props object.
+
+:::pitfall[Destructuring props reads them once]
+The shortcut that works on a plain object is the one that breaks here:
+
+```tsx
+// Avoid: both read props.quantity in the component body, once
+function LineItem({ product, quantity }: LineItemProps) {
+	return <li>{quantity}</li>;
+}
+
+function LineItem(props: LineItemProps) {
+	const quantity = props.quantity;
+	return <li>{quantity}</li>;
+}
+
+// Prefer: read the prop where it is used
+function LineItem(props: LineItemProps) {
+	return <li>{props.quantity}</li>;
+}
+```
+
+Change the quantity in the parent and the `Avoid` versions keep showing the first value; development warns with `[STRICT_READ_UNTRACKED]` and the component name.
+Keep `props` intact and read `props.quantity` inside the JSX.
+:::
+
+When a derived value from props needs its own identity, wrap it in `createMemo`:
+
+```tsx
+import { createMemo } from "solid-js";
+
+function LineItem(props: { product: Product; quantity: number }) {
+	const lineTotal = createMemo(() => props.product.price * props.quantity);
+	return (
+		<li>
+			{props.product.name} × {props.quantity} = ${lineTotal()}
+		</li>
+	);
+}
+```
+
+:::deep-dive[What the compiler does with a dynamic prop]
+For `<LineItem product={{ id: "mug", name: "Mug", price: 12 }} quantity={quantity()} />`, the compiler emits a call in this shape:
+
+```js
+createComponent(LineItem, {
+	product: { id: "mug", name: "Mug", price: 12 },
+	get quantity() {
+		return quantity();
+	},
+});
+```
+
+A static value becomes a plain property.
+An expression that could change becomes a getter, so `quantity()` runs each time the child reads `props.quantity`, in whatever tracking scope that read happens.
+Destructuring calls the getter once in the component body; reading `props.quantity` inside JSX calls it inside a tracking scope.
+:::
+
+Props are read-only from the child's side.
+When a child needs to change a value, the parent passes a function as a prop and the child calls it from an event handler, as `onSave` does in the next section.
+When a child needs a local, editable copy of a prop, see [Use a writable derivation for a local override](../guides/avoid-unnecessary-effects.md#use-a-writable-derivation-for-a-local-override).
+
+See the [`Component`, `ParentProps`, and `FlowProps` types](../core/component-types.md) for typing component contracts.
+
+## Handling events
+
+Pass a function to a camelCase event prop such as `onClick` or `onInput`.
+Solid delegates supported events through the owning render or hydration root.
+The handler runs when the browser dispatches the event, so reactive reads inside the handler use current values.
+
+```tsx
+function SaveButton(props: { onSave: () => void }) {
+	return (
+		<button type="button" onClick={() => props.onSave()}>
+			Save
+		</button>
+	);
+}
+```
+
+Use a `ref` directive with `addEventListener` when you need native listener options such as capture or passive handling.
+
+## Refs and directives
+
+A `ref` callback receives an element after Solid creates it.
+Use the callback to keep an element reference or apply behavior that needs the DOM node.
+[Integrate non-Solid code](../guides/integrate-non-solid-code.md) applies this to a chart, a map, and a web component.
+
+```tsx
+function SearchField() {
+	let input!: HTMLInputElement;
+
+	return (
+		<>
+			<input ref={(element) => (input = element)} type="search" />
+			<button type="button" onClick={() => input.select()}>
+				Select query
+			</button>
+		</>
+	);
+}
+```
+
+A directive is a function you pass to `ref`; there is no separate directive syntax.
+A directive factory creates owned reactive primitives during component setup and returns the callback that applies the directive to an element.
+
+Ref callbacks run untracked and without an owner.
+Do not create effects or register cleanup inside the returned callback.
+Create them in the factory, where they belong to the component owner.
+
+```tsx
+import { onSettled } from "solid-js";
+
+function listen(
+	type: string,
+	listener: EventListener,
+	options?: AddEventListenerOptions
+) {
+	let element: HTMLElement | undefined;
+
+	onSettled(() => {
+		const target = element;
+		if (!target) return;
+
+		target.addEventListener(type, listener, options);
+		return () => target.removeEventListener(type, listener, options);
+	});
+
+	return (next: HTMLElement) => {
+		element = next;
+	};
+}
+```
+
+The factory registers setup and cleanup while it has an owner.
+The returned callback only stores the element for the settled work.
+
+The `ref` prop also accepts an array.
+Solid recursively flattens the array and calls each callback in order, so separate directives can share one element.
+
+```tsx
+function autofocus(element: HTMLInputElement) {
+	element.autofocus = true;
+}
+
+function SearchField(props: { onInput: EventListener }) {
+	let input!: HTMLInputElement;
+
+	return (
+		<>
+			<input
+				type="search"
+				ref={[
+					(element) => (input = element),
+					autofocus,
+					listen("input", props.onInput, { passive: true }),
+				]}
+			/>
+			<button type="button" onClick={() => input.select()}>
+				Select query
+			</button>
+		</>
+	);
+}
+```
+
+Use a ref array to compose element access, reusable directives, and third-party integrations without creating one wrapper callback.
+Ref callback return values are ignored; register cleanup through an owned primitive such as `onSettled`.
+See the [`ref` reference](../web/ref.md) for its accepted values and callback behavior.
+
+## Classes
+
+Use the `class` prop for static and conditional class names.
+It accepts strings, objects, and nested arrays:
+
+```tsx
+function SaveButton(props: {
+	class?: string;
+	active: boolean;
+	saving: boolean;
+}) {
+	return (
+		<button
+			class={[
+				"button",
+				props.class,
+				{
+					active: props.active,
+					"saving muted": props.saving,
+				},
+			]}
+		>
+			Save
+		</button>
+	);
+}
+```
+
+* A string supplies the complete class value or one always-present array entry.
+* An object adds each key whose value is truthy.
+  A key can contain several space-separated class names.
+* An array combines strings, objects, and other arrays.
+
+Put conditional names in an object instead of constructing a string with concatenation, `filter(Boolean)`, or `join`.
+Solid can then add and remove the affected class tokens directly.
+See the [`class` reference](../web/class.md) for each supported value form.
+
+## Children and composition
+
+A component accepts children only when its props type includes a `children` property.
+Use `ParentProps` for optional element children or write a specific children type for a render callback.
+
+Most wrapper components can render `props.children` directly.
+
+```tsx
+import type { ParentProps } from "solid-js";
+
+function Panel(props: ParentProps<{ title: string }>) {
+	return (
+		<section>
+			<h2>{props.title}</h2>
+			<div>{props.children}</div>
+		</section>
+	);
+}
+```
+
+Use the [`children` helper](../core/children.md) when a component must resolve, inspect, or iterate over its children.
+It returns an accessor and adds `toArray()` for iteration.
+
+```tsx
+import { children, type ParentProps } from "solid-js";
+
+function Stack(props: ParentProps) {
+	const resolved = children(() => props.children);
+	return <div class="stack">{resolved.toArray()}</div>;
+}
+```
+
+Composition can also use a function child when the parent needs to provide a value to the nested JSX.
+The control-flow components use this pattern for narrowed values and list rows.
+
+## Context
+
+Context passes a value through a component subtree without forwarding it through every intermediate component.
+Use it when a value belongs to one subtree and several descendants need that value, including application-wide state: a provider at the root of `App` reaches every component.
+Prefer this over a module-scope signal or store.
+Module-scope state has no owner, and on the server one module instance is shared across requests; a context value is created per app, or per request.
+[Share state between components](reactivity.md#share-state-between-components) shows the provider plus `useX` primitive pattern, and [State management](../guides/state-management.md#share-with-context) covers what to put in `value` and when a default is appropriate.
+[`createContext`](../core/create-context.md) returns a context that is also its provider component.
+[`useContext`](../core/use-context.md) reads the value associated with the current owner.
+
+```tsx
+import { createContext, useContext, type ParentProps } from "solid-js";
+
+type Theme = "light" | "dark";
+
+const ThemeContext = createContext<Theme>("light");
+
+function ThemeProvider(props: ParentProps<{ value: Theme }>) {
+	return <ThemeContext value={props.value}>{props.children}</ThemeContext>;
+}
+
+function ThemeButton() {
+	const theme = useContext(ThemeContext);
+	return <button class={theme}>Save</button>;
+}
+```
+
+When a context has a default value, `useContext` returns that value outside a matching provider.
+When it has no default, reading it outside a matching provider throws `ContextNotFoundError`.
+Providers create a scoped owner, so nested providers can replace a value for their own descendants.
+
+## Rendering lists
+
+Use [`For`](../core/for.md) when rows come from an array.
+Its default keyed mode reuses the mapped row for an item with the same identity.
+The callback receives the raw item and a reactive index accessor.
+
+```tsx
+import { For, createSignal } from "solid-js";
+
+type Todo = { id: number; text: string };
+
+function TodoList() {
+	const [todos] = createSignal<Todo[]>([
+		{ id: 1, text: "Read the guide" },
+		{ id: 2, text: "Build an example" },
+	]);
+
+	return (
+		<ul>
+			<For each={todos()} fallback={<li>No tasks</li>}>
+				{(todo, index) => (
+					<li>
+						{index() + 1}. {todo.text}
+					</li>
+				)}
+			</For>
+		</ul>
+	);
+}
+```
+
+Set `keyed={false}` for position-based mapping.
+That form receives an item accessor and a stable numeric index.
+Pass a key function when identity should come from part of each item; that form provides accessors for both the item and index.
+
+Use [`Repeat`](../core/repeat.md) for positional rendering over a store.
+`Repeat` creates rows from a numeric range instead of diffing an array or item identities.
+Each row reads its store position directly, so a store update can notify only the expressions that read the changed properties.
+
+Set `from` and `count` to render a sliding window without creating a sliced array.
+When the window moves, `Repeat` preserves rows whose indexes remain in range, disposes rows that leave it, and creates rows for the new indexes.
+
+```tsx
+import { Repeat, createSignal, createStore } from "solid-js";
+
+function ActivityLog() {
+	const [rows] = createStore(
+		Array.from({ length: 1_000 }, (_, id) => ({
+			id,
+			message: `Activity ${id}`,
+		}))
+	);
+	const [from, setFrom] = createSignal(0);
+	const size = 20;
+
+	return (
+		<>
+			<button
+				onClick={() =>
+					setFrom((index) => Math.min(index + 1, rows.length - size))
+				}
+			>
+				Next
+			</button>
+			<ul>
+				<Repeat from={from()} count={Math.min(size, rows.length - from())}>
+					{(index) => <li>{rows[index].message}</li>}
+				</Repeat>
+			</ul>
+		</>
+	);
+}
+```
+
+The [Lists guide](../guides/lists.md) covers editing, filtering, selection, and keeping row identity across server refetches.
+
+## Conditional content
+
+[`Show`](../core/show.md) renders its children when `when` is truthy and renders `fallback` otherwise.
+Its default function-child form receives an accessor for the narrowed value and preserves the child while `when` remains truthy.
+
+```tsx
+import { Show, createSignal } from "solid-js";
+
+type User = { name: string };
+
+function Account() {
+	const [user] = createSignal<User | undefined>({ name: "Ada" });
+
+	return (
+		<Show when={user()} fallback={<a href="/sign-in">Sign in</a>}>
+			{(current) => <p>Signed in as {current().name}</p>}
+		</Show>
+	);
+}
+```
+
+With `keyed`, the callback receives the raw narrowed value and the child remounts when that value changes identity.
+
+Use [`Switch` and `Match`](../core/switch-and-match.md) when several conditions are mutually exclusive.
+`Switch` renders the first truthy `Match`, or its fallback when none match.
+Function children follow the same keyed and non-keyed value rules as `Show`.
+
+```tsx
+import { Match, Switch } from "solid-js";
+
+function Status(props: { code: number }) {
+	return (
+		<Switch fallback={<p>Unknown status</p>}>
+			<Match when={props.code === 200}>
+				<p>Ready</p>
+			</Match>
+			<Match when={props.code === 404}>
+				<p>Not found</p>
+			</Match>
+		</Switch>
+	);
+}
+```
+
+## Dynamic components
+
+Import `dynamic` from `@solidjs/web`.
+`dynamic()` is the canonical API for selecting a component or native element from a reactive source.
+It returns a stable component reference that forwards props and children.
+
+```tsx
+import { createSignal, type Component } from "solid-js";
+import { dynamic } from "@solidjs/web";
+
+const Compact: Component<{ value: string }> = (props) => (
+	<span>{props.value}</span>
+);
+const Detailed: Component<{ value: string }> = (props) => (
+	<strong>{props.value}</strong>
+);
+
+const [detailed, setDetailed] = createSignal(false);
+const Result = dynamic(() => (detailed() ? Detailed : Compact));
+
+export function Preview() {
+	return (
+		<>
+			<button onClick={() => setDetailed((value) => !value)}>
+				Toggle detail
+			</button>
+			<Result value="Current result" />
+		</>
+	);
+}
+```
+
+The source may also resolve to a native tag name or an async component.
+See the [`dynamic()` reference](../web/dynamic.md).
+
+## Try it: remove a line from the cart
+
+Take the `Cart` and `LineItem` components from the [Props](#props) section and make the cart hold several items in a signal.
+Render one `LineItem` per item with `For`, add a **Remove** button to each row, and have the click remove that item from the cart.
+
+Decide first which component owns the items and how the child tells the parent which item to remove.
+
+:::solution[Remove a line from the cart]
+```tsx
+import { For, createSignal } from "solid-js";
+
+type Product = { id: string; name: string; price: number };
+type Line = { product: Product; quantity: number };
+
+function LineItem(props: Line & { onRemove: (id: string) => void }) {
+	return (
+		<li>
+			{props.product.name} × {props.quantity} = $
+			{props.product.price * props.quantity}
+			<button type="button" onClick={() => props.onRemove(props.product.id)}>
+				Remove
+			</button>
+		</li>
+	);
+}
+
+function Cart() {
+	const [lines, setLines] = createSignal<Line[]>([
+		{ product: { id: "mug", name: "Mug", price: 12 }, quantity: 1 },
+		{ product: { id: "tee", name: "T-shirt", price: 20 }, quantity: 2 },
+	]);
+	const remove = (id: string) =>
+		setLines((list) => list.filter((line) => line.product.id !== id));
+
+	return (
+		<ul>
+			<For each={lines()} fallback={<li>Your cart is empty</li>}>
+				{(line) => (
+					<LineItem
+						product={line.product}
+						quantity={line.quantity}
+						onRemove={remove}
+					/>
+				)}
+			</For>
+		</ul>
+	);
+}
+```
+
+`Cart` owns the list, so `Cart` is the only place that writes it.
+`LineItem` gets a function prop and calls it with its own id; it never touches the list.
+`For` keys rows by the line object, so removing the T-shirt disposes that one row and leaves the Mug row untouched.
+When the last line goes, the `fallback` renders.
+:::
+
+## Common problems
+
+### A child does not update when the parent's signal changes
+
+The child read the prop in its body or destructured its parameters.
+Read `props.name` inside the JSX instead.
+See [Props](#props).
+
+### A list re-creates every row on each change
+
+`For` reuses rows by item identity.
+If each update produces new objects for the same rows, for example by mapping over a fetched array on every read, every row is new and `For` rebuilds them.
+Keep item identity stable, pass a key function that reads an `id`, or use a [store](stores.md) so that changes land on the existing objects.
+
+### `Show` renders the fallback even though the value is set
+
+`when` is checked for truthiness.
+A value of `0` or an empty string is falsy and shows the fallback.
+Compare explicitly, for example `when={count() !== undefined}`, or use `Switch` and `Match` when there are several cases.
+
+### An effect or `onCleanup` inside a `ref` callback never runs
+
+Ref callbacks run untracked and without an owner, so primitives created there are never disposed.
+Create the effect in a directive factory during component setup and return the callback that stores the element.
+See [Refs and directives](#refs-and-directives).
+
+## Recap
+
+* A component runs once; the JSX expressions it returns keep running.
+* Keep `props` whole and read `props.name` where it is used; destructuring reads once.
+* A child changes shared state by calling a function the parent passed, never by writing to props.
+* Pass a `ref` callback, or an array of them, to reach the element; create effects and cleanup in the factory that returns the callback, not in the callback.
+* Put conditional class names in an object under `class` instead of building a string.
+* Use `For` for rows from an array and `Show`, `Switch`, and `Match` for conditions; keep item identity stable so rows are reused.
+* Provide shared state through context created inside a component, not from a module-scope signal.
+
+## Next steps
+
+* [Stores](stores.md) hold the cart itself: an array of items where each property is tracked on its own, so editing one quantity does not rebuild the row.
+* [Async reactivity](async-reactivity.md) covers components that read data from a promise, why the current view stays on screen while the next one loads, and when `Loading` shows a fallback instead.
+* [Boundaries](boundaries.md) explains `Loading`, `Errored`, and where to place them in the tree.
+* [Avoid unnecessary effects](../guides/avoid-unnecessary-effects.md) is the guide to read before adding an effect to a component.
+* [TypeScript](../guides/typescript.md) types the props, children, refs, and events on this page, including generic components.
+* [App structure](../building-apps/app-structure.md) shows where `App` and the document shell fit around the components you write.
