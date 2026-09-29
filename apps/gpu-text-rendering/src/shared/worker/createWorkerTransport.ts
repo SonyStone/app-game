@@ -2,11 +2,14 @@ import { makeEventListenerStack, preventDefault } from '@solid-primitives/event-
 import { createSubRoot } from '@solid-primitives/rootless';
 import { err, ok, Result } from 'neverthrow';
 import { getOwner, isDisposed, onCleanup, untrack } from 'solid-js';
-import type { WorkerFailure } from './workerProtocol';
+import type { ResultValue } from '../errors';
+import { workerShutdown, type WorkerFailure } from './workerProtocol';
 
 /**
  * Owns a worker and its listeners in a disposable Solid scope. Parent disposal also closes it.
  * When called without an owner, the caller must destroy the transport.
+ * Closing removes listeners at once and asks the worker to shut down cooperatively, so its Solid cleanups run
+ * and its active request is aborted; terminate() follows after a short grace period for busy workers.
  */
 export function createWorkerTransport<Input, Reply>(create: () => Worker, handlers: WorkerHandlers<Reply>) {
   const startWorker = Result.fromThrowable(
@@ -22,7 +25,7 @@ export function createWorkerTransport<Input, Reply>(create: () => Worker, handle
   return createSubRoot((dispose) => {
     const owner = getOwner()!;
     const [listen] = makeEventListenerStack<WorkerEvents<Reply>>(worker);
-    onCleanup(() => worker.terminate());
+    onCleanup(() => shutdown(worker));
 
     listen('message', handlers.message);
     listen('error', preventDefault(reportError));
@@ -30,7 +33,7 @@ export function createWorkerTransport<Input, Reply>(create: () => Worker, handle
 
     return ok({
       post,
-      /** Removes listeners and terminates the worker. Repeated disposal is safe. */
+      /** Removes listeners and shuts the worker down. Repeated disposal is safe. */
       destroy: dispose
     });
 
@@ -54,6 +57,26 @@ export function createWorkerTransport<Input, Reply>(create: () => Worker, handle
       handlers.error({ kind: 'messageerror', cause });
     }
   });
+}
+
+/** A live transport returned by createWorkerTransport. */
+export type WorkerTransport<Input, Reply> = ResultValue<ReturnType<typeof createWorkerTransport<Input, Reply>>>;
+
+/** Milliseconds a worker may take to run its cleanups before it is terminated. */
+export const workerShutdownGraceMs = 1_000;
+
+/**
+ * Requests cooperative shutdown. A worker busy in synchronous work (for example WASM decoding) cannot read the
+ * message, so terminate() is the fallback; terminating an already closed worker is harmless.
+ */
+function shutdown(worker: Worker) {
+  try {
+    worker.postMessage(workerShutdown);
+  } catch {
+    worker.terminate();
+    return;
+  }
+  setTimeout(() => worker.terminate(), workerShutdownGraceMs);
 }
 
 /** Messages and failures reported by a live transport. Callbacks must not throw. */

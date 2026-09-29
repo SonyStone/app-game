@@ -14,6 +14,7 @@
   "download": "下载 GDOC",
   "back": "返回示例",
   "autoZoom": "自动缩放",
+  "minimap": "小地图",
   "grids": "网格",
   "vectorOnly": "仅矢量",
   "help": "拖动以平移。滚动或双指捏合以缩放。双指旋转。",
@@ -40,5 +41,6 @@
   "preparingGraphics": "正在准备图形…",
   "cancelLoading": "取消加载",
   "cancelled": "加载已取消。请打开其他文档。",
-  "pageProgress": "已处理 {{completed}} / {{total}} 页"
+  "pageProgress": "已处理 {{completed}} / {{total}} 页",
+  "dismiss": "关闭"
 }

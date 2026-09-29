@@ -2,19 +2,33 @@ import { makeEventListener } from '@solid-primitives/event-listener';
 import { resolveTokens } from '@solid-primitives/jsx-tokenizer';
 import { createPageVisibility } from '@solid-primitives/page-utilities';
 import type { JSX } from '@solidjs/web';
-import { createContext, createEffect, createMemo, onCleanup, untrack, useContext, type Accessor } from 'solid-js';
+import { ok } from 'neverthrow';
+import {
+  createContext,
+  createEffect,
+  createMemo,
+  createReaction,
+  onCleanup,
+  useContext,
+  type Accessor
+} from 'solid-js';
 import type { ViewerError } from '../../shared/errors';
 import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
+import { pendingGpuPreparation } from '../../shared/gpu/serializeGpuPreparation';
+import { runWithContext } from '../../shared/jsx/TokenContext';
 import { useViewport } from '../viewport/Viewport';
 import { createFrameScheduler, type FrameSubscription } from './createFrameScheduler';
 import { makeGpuFrameGate } from './makeGpuFrameGate';
+import { makeScenePointerEvents } from './makeScenePointerEvents';
 import { RenderLayer } from './RenderLayer';
-import { renderScene, type SceneDraw } from './renderScene';
+import { renderScene } from './renderScene';
 import { resolveSceneChildren } from './resolveSceneChildren';
 
 /**
  * Owns one demand-driven RAF loop and resolves draw tokens from a scene-only JSX subtree.
  * Update callbacks precede drawing; equal layer orders follow JSX order. DOM UI belongs outside this subtree.
+ * Reactive reads in render-phase callbacks and layer draws request the next frame when they change;
+ * non-reactive state such as the camera still needs an explicit invalidate.
  */
 export function FrameLoop(props: {
   /** JSX or a render function evaluated beneath this loop's context, preserving component ownership. */
@@ -27,11 +41,34 @@ export function FrameLoop(props: {
   const gpu = useGpuCanvas();
   const viewport = useViewport();
   const visible = createPageVisibility();
-  let layers: Accessor<SceneDraw[]> = () => [];
+  let deferred = false;
+  const track = trackFrames(() => loop.invalidate());
 
   const loop = createFrameScheduler(
-    ({ timestamp }) => gate.draw(() => renderScene(gpu, layers(), timestamp)),
-    (error) => props.onError(error)
+    ({ timestamp }) => {
+      // Document preparation holds a device-wide validation error scope across awaits. A frame submitted meanwhile
+      // would have its validation errors attributed to preparation and hidden from uncapturederror, so wait instead.
+      const preparing = pendingGpuPreparation(gpu.device);
+      if (preparing) {
+        if (!deferred) {
+          deferred = true;
+          void preparing.then(() => {
+            deferred = false;
+            loop.invalidate();
+          });
+        }
+        return ok();
+      }
+      return gate.draw(() =>
+        renderScene(
+          gpu,
+          layers().map((layer) => layer.draw),
+          timestamp
+        )
+      );
+    },
+    (error) => props.onError(error),
+    track
   );
 
   const gate = makeGpuFrameGate(() => gpu.device.queue.onSubmittedWorkDone(), loop.invalidate, loop.fail);
@@ -42,31 +79,32 @@ export function FrameLoop(props: {
   createEffect(() => props.continuous ?? false, loop.setContinuous);
   createEffect(viewport.size, () => loop.invalidate());
   makeEventListener(gpu.signal, 'abort', loop.stop, { once: true });
-  onCleanup(() => {
-    layers = () => [];
-  });
 
   if (gpu.signal.aborted) {
     loop.stop();
   }
 
-  const resolveLayers = () => {
+  // Children resolve once beneath the loop's context. The provider's owner keeps the token and layer memos alive
+  // for this component's lifetime; frames run from RAF callbacks, never during disposal, and the scheduler stops
+  // with this owner.
+  const layers = runWithContext(FrameContext, loop, () => {
     const tokens = resolveTokens(RenderLayer, () => resolveSceneChildren(props.children, loop));
-
-    layers = createMemo(() =>
+    // Keep each token's props object: draws and pointer handlers are read when a frame or event happens.
+    return createMemo(() =>
       tokens()
-        .filter(({ data }) => data.visible !== false)
-        .map(({ data }) => ({ draw: data.draw, order: data.order ?? 0 }))
-        .sort((a, b) => a.order - b.order)
-        .map(({ draw }) => draw)
+        .map(({ data }) => data)
+        .filter((layer) => layer.visible !== false)
+        .map((layer, index) => ({ layer, index, order: layer.order ?? 0 }))
+        .sort((a, b) => a.order - b.order || a.index - b.index)
+        .map(({ layer }) => layer)
     );
+  });
 
-    createEffect(layers, () => loop.invalidate());
+  makeScenePointerEvents(gpu.context.canvas as HTMLCanvasElement, layers, (event) =>
+    viewport.clientToScreen({ x: event.clientX, y: event.clientY })
+  );
 
-    return null;
-  };
-
-  return <FrameContext value={loop}>{untrack(resolveLayers)}</FrameContext>;
+  return null;
 }
 
 /** Reads frame invalidation and stopping controls beneath FrameLoop. */
@@ -102,3 +140,28 @@ export function useFrame(
 }
 
 const FrameContext = createContext<ReturnType<typeof createFrameScheduler>>();
+
+/**
+ * Records a frame's reactive reads and calls `changed` once when any of them changes. Each recorded frame
+ * replaces the previous subscription, so it observes exactly what the latest frame read.
+ */
+function trackFrames(changed: () => void) {
+  const reaction = createReaction(changed);
+  let recording = false;
+
+  return (record: () => void) => {
+    recording = true;
+
+    try {
+      // Solid re-runs a reaction's tracking function when a source changes, before calling `changed`.
+      // Only a scheduled frame may record; that re-run must not draw outside the RAF callback.
+      reaction(() => {
+        if (recording) {
+          record();
+        }
+      });
+    } finally {
+      recording = false;
+    }
+  };
+}

@@ -2,13 +2,20 @@ import { createEffect, untrack } from 'solid-js';
 import type { TextDocument } from '../document/document';
 import { useFrameLoop } from '../scene/FrameLoop';
 import { useViewport } from '../viewport/Viewport';
+import { documentBounds } from './camera';
 import { useDocumentCamera } from './DocumentCamera';
 
-export type OverviewCameraRef = { fitToDocument: () => void };
+/** Commands exposed to the parent while OverviewCamera is mounted. */
+export type OverviewCameraRef = {
+  /** Fits all pages within the padded viewport, resets rotation and schedules one frame. */
+  fitToDocument: () => void;
+};
 
 /** Fits document bounds on each request event. Reads document and padding only when requested. */
 export function OverviewCamera(props: {
+  /** Receives the command API on mount and undefined on unmount or ref replacement. */
   ref?: (ref?: OverviewCameraRef) => void;
+  /** Pages to fit; read only when a fit is requested. */
   document: TextDocument;
   /** Reserved CSS pixels on each side. Defaults to zero. */
   padding?: { top: number; right: number; bottom: number; left: number };
@@ -29,17 +36,7 @@ export function OverviewCamera(props: {
   function fitToDocument() {
     const document = untrack(() => props.document);
     const first = document.pages[0]!;
-    let left = Infinity;
-    let right = -Infinity;
-    let bottom = Infinity;
-    let top = -Infinity;
-
-    for (const page of document.pages) {
-      left = Math.min(left, -page.x);
-      right = Math.max(right, -page.x + page.width / first.width);
-      bottom = Math.min(bottom, 1 - page.y - page.height / first.height);
-      top = Math.max(top, 1 - page.y);
-    }
+    const { left, right, bottom, top } = documentBounds(document.pages);
     const { width, height } = untrack(viewport.size).css;
     const aspect = first.width / first.height;
     const padding = untrack(() => props.padding) ?? { top: 0, right: 0, bottom: 0, left: 0 };

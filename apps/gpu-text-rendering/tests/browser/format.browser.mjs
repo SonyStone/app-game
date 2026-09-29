@@ -60,6 +60,9 @@ try {
     const cancelled = readGdoc(original, abort.signal);
     abort.abort();
     const aborted = (await cancelled)._unsafeUnwrapErr().kind;
+    // Workers first shut down cooperatively (running their Solid cleanups); terminate() follows after a grace period.
+    const { workerShutdownGraceMs } = await import('/src/shared/worker/createWorkerTransport.ts');
+    await new Promise((resolve) => setTimeout(resolve, workerShutdownGraceMs + 100));
 
     return {
       largeBufferPages,

@@ -1,8 +1,14 @@
 import { createRoot } from 'solid-js';
-import { expect, it, vi } from 'vitest';
-import { createWorkerTransport } from './createWorkerTransport';
+import { afterEach, expect, it, vi } from 'vitest';
+import { createWorkerTransport, workerShutdownGraceMs } from './createWorkerTransport';
+import { workerShutdown } from './workerProtocol';
 
-it('sends repeated messages with transfers and detaches callbacks before termination', () => {
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+it('sends repeated messages with transfers and detaches callbacks before shutdown', () => {
+  vi.useFakeTimers();
   const native = Object.assign(new EventTarget(), { postMessage: vi.fn(), terminate: vi.fn() });
   const message = vi.fn();
   const error = vi.fn();
@@ -19,19 +25,23 @@ it('sends repeated messages with transfers and detaches callbacks before termina
   ]);
   native.dispatchEvent(new MessageEvent('message', { data: 42 }));
   expect(message).toHaveBeenCalledOnce();
-  native.terminate.mockImplementation(() => {
+  native.postMessage.mockImplementationOnce(() => {
     native.dispatchEvent(new MessageEvent('message', { data: 43 }));
   });
   transport.destroy();
   transport.destroy();
   transport.post(data);
-  expect(native.postMessage).toHaveBeenCalledTimes(2);
+  expect(native.postMessage).toHaveBeenCalledTimes(3);
+  expect(native.postMessage).toHaveBeenLastCalledWith(workerShutdown);
   expect(message).toHaveBeenCalledOnce();
+  expect(native.terminate).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(workerShutdownGraceMs);
   expect(native.terminate).toHaveBeenCalledOnce();
   expect(error).not.toHaveBeenCalled();
 });
 
-it('removes listeners and terminates with its Solid owner', () => {
+it('removes listeners and shuts down with its Solid owner', () => {
+  vi.useFakeTimers();
   const native = Object.assign(new EventTarget(), { postMessage: vi.fn(), terminate: vi.fn() });
   const message = vi.fn();
   const session = createRoot((dispose) => ({
@@ -43,7 +53,23 @@ it('removes listeners and terminates with its Solid owner', () => {
   session.transport.post(1);
   session.transport.destroy();
   expect(message).not.toHaveBeenCalled();
-  expect(native.postMessage).not.toHaveBeenCalled();
+  expect(native.postMessage.mock.calls).toEqual([[workerShutdown]]);
+  vi.advanceTimersByTime(workerShutdownGraceMs);
+  expect(native.terminate).toHaveBeenCalledOnce();
+});
+
+it('terminates at once when the shutdown message cannot be sent', () => {
+  const native = Object.assign(new EventTarget(), {
+    postMessage: vi.fn(() => {
+      throw new Error('Worker closed');
+    }),
+    terminate: vi.fn()
+  });
+  const transport = createWorkerTransport(() => native as unknown as Worker, {
+    message: vi.fn(),
+    error: vi.fn()
+  })._unsafeUnwrap();
+  transport.destroy();
   expect(native.terminate).toHaveBeenCalledOnce();
 });
 

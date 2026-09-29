@@ -19,14 +19,18 @@ export function readFileBytes(
     const cleanup = () => signal?.removeEventListener('abort', abort);
     reader.onprogress = (event) => report(event.loaded);
     reader.onload = () => {
-      if (report(file.size)) resolve(reader.result as ArrayBuffer);
+      if (report(file.size)) {
+        resolve(reader.result as ArrayBuffer);
+      }
     };
     reader.onerror = () => reject(reader.error);
     reader.onabort = () => reject(signal?.reason ?? new DOMException('Operation cancelled', 'AbortError'));
     reader.onloadend = cleanup;
     signal?.addEventListener('abort', abort, { once: true });
     try {
-      if (report(0)) reader.readAsArrayBuffer(file);
+      if (report(0)) {
+        reader.readAsArrayBuffer(file);
+      }
     } catch (cause) {
       cleanup();
       reject(cause);

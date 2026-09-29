@@ -73,12 +73,10 @@ it('clears the previous ref callback on replacement and the current callback on 
 function scene(): TextDocument {
   return {
     kind: 'glyphs',
-    pages: [{ width: 612, height: 792, x: 0, y: 0, beginVertex: 0, endVertex: 6, images: [] }],
+    pages: [{ width: 612, height: 792, x: 0, y: 0, beginVertex: 0, endVertex: 6 }],
     positions: { x: new Float32Array(), y: new Float32Array() },
     glyphVertices: new ArrayBuffer(0),
     atlas: { buf: new ArrayBuffer(0), width: 1, height: 1 },
-    atlasVertices: { buf: new ArrayBuffer(0), width: 1, height: 1 },
-    imageVertices: new ArrayBuffer(0),
-    images: new Map()
+    atlasVertices: { buf: new ArrayBuffer(0), width: 1, height: 1 }
   };
 }

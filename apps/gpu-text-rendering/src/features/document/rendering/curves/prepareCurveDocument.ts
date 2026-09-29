@@ -25,7 +25,14 @@ import { prepareCoverageTables } from './prepareCoverageTables';
 import { prepareRasterImages } from './prepareRasterImages';
 import { RadialGradient, radialLayout } from './radialGradient';
 
-/** Uploads reusable cubic outlines; instances remain in PDF paint order within each visible page. */
+/**
+ * Uploads reusable cubic outlines; instances remain in PDF paint order within each visible page.
+ *
+ * Consumes the document's loader-built staging data: `document.coverage` and `document.preparation`
+ * are deleted from the caller's object after use so the live document does not pin them on the CPU.
+ * A later preparation of the same document rebuilds them (coverage via `workers.coverage`, paint plans
+ * on the calling thread). Resolves typed coverage-worker, GPU-lifetime and image-cache errors.
+ */
 export async function prepareCurveDocument(
   gpu: GpuContext,
   document: Extract<TextDocument, { kind: 'curves' }>,
@@ -34,7 +41,13 @@ export async function prepareCurveDocument(
   initialFrame?: SceneFrame
 ) {
   const { root, device, format } = gpu;
-  const coverage = await prepareCoverageTables(gpu, document, keep, workers.coverage);
+  const coverageResult = await prepareCoverageTables(gpu, document, keep, workers.coverage);
+
+  if (coverageResult.isErr()) {
+    return err(coverageResult.error);
+  }
+
+  const coverage = coverageResult.value;
   const rasterResult = prepareRasterImages(gpu, document.rasterImages, keep, workers.raster);
 
   if (rasterResult.isErr()) {
@@ -146,7 +159,10 @@ export async function prepareCurveDocument(
   const tails = await raster.prepareMipTails(
     initialPages?.flatMap((page) => runs[page]!.flatMap(({ image }) => (image === undefined ? [] : [image])))
   );
-  if (tails.isErr()) return err(tails.error);
+  if (tails.isErr()) {
+    return err(tails.error);
+  }
+
   await device.queue.onSubmittedWorkDone();
 
   const cachedPages = composition.pages;
@@ -157,7 +173,7 @@ export async function prepareCurveDocument(
     keep,
     (pass, frame) => drawDirect(pass, frame, 'cached'),
     (page) => [...composition.images.get(page)!].every((image) => raster.isSettled(image)),
-    (page) => [...composition.images.get(page)!].every((image) => !!raster.get(image))
+    (page) => [...composition.images.get(page)!].every((image) => raster.hasFallback(image))
   );
   const directBudget = keep(
     createCompositionBudget(
@@ -166,7 +182,9 @@ export async function prepareCurveDocument(
     )
   );
   const previews = await tileCache.prepare(initialPages?.filter((page) => useComposedPage(page, initialFrame!)));
-  if (previews.isErr()) return err(previews.error);
+  if (previews.isErr()) {
+    return err(previews.error);
+  }
 
   const imagePages = new Map<number, Set<number>>();
   const readyImages = new Set<number>();
@@ -174,7 +192,10 @@ export async function prepareCurveDocument(
 
   for (const [index, pageRuns] of runs.entries()) {
     for (const { image } of pageRuns) {
-      if (image === undefined) continue;
+      if (image === undefined) {
+        continue;
+      }
+
       const pages = imagePages.get(image) ?? new Set<number>();
       pages.add(index);
       imagePages.set(image, pages);
@@ -183,10 +204,14 @@ export async function prepareCurveDocument(
 
   const uploaded = (event: Event) => {
     const image = (event as CustomEvent<{ image: number }>).detail?.image;
-    if (image !== undefined && raster.get(image) && !readyImages.has(image)) {
+    if (image !== undefined && raster.hasFallback(image) && !readyImages.has(image)) {
       readyImages.add(image);
-      for (const page of imagePages.get(image) ?? []) imageRevisions[page]!++;
+
+      for (const page of imagePages.get(image) ?? []) {
+        imageRevisions[page]!++;
+      }
     }
+
     tileCache.invalidate(image === undefined ? cachedPages : (imagePages.get(image) ?? []));
     tileCache.events.dispatchEvent(new Event('change'));
   };

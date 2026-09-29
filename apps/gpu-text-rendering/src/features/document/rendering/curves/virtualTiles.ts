@@ -116,7 +116,10 @@ export function imageTiles(image: VirtualImage, region: NonNullable<ReturnType<t
   });
 }
 
-/** Bounded placement cache. Membership changes only at LOD/tile boundaries; priorities remain exact each frame. */
+/**
+ * Bounded least-recently-used placement cache. Membership changes only at LOD/tile boundaries;
+ * priorities remain exact each frame.
+ */
 export function createImageTileCache(maxTiles = 16384) {
   const entries = new Map<number, { signature: string; tiles: ReturnType<typeof imageTiles> }>();
   let size = 0;
@@ -127,6 +130,9 @@ export function createImageTileCache(maxTiles = 16384) {
     const previous = entries.get(placement);
     if (previous?.signature === signature) {
       for (const tile of previous.tiles) tile.priority = imageTilePriority(image, region, tile);
+      // Map iteration order is insertion order; reinserting marks this placement most recently used.
+      entries.delete(placement);
+      entries.set(placement, previous);
       return previous.tiles;
     }
     if (previous) {
@@ -208,8 +214,14 @@ export function lastLevel(width: number, height: number) {
 
 /** Tile interior; one neighboring texel on each edge supports bilinear filtering without seams. */
 export const tileSize = 128;
+/** Stored tile side in atlas texels: the interior plus a one-texel border on each edge. */
 export const tileExtent = tileSize + 2;
-/** Physical detail atlas stays below 64 MiB. The mip-tail atlas has a separate 16 MiB ceiling. */
+/**
+ * Detail atlas slots per row and column; the physical detail atlas stays below 64 MiB.
+ * The mip-tail atlas has a separate 16 MiB ceiling.
+ */
 export const atlasColumns = 31;
+/** Resident detail tiles across all images (961 slots). */
 export const tileCapacity = atlasColumns ** 2;
+/** Open-addressing lookup table entries shared with the shader; a power of two so hashes can be masked. */
 export const lookupSize = 8192;

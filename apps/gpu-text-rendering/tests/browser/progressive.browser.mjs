@@ -58,8 +58,7 @@ try {
               width: 100,
               height: 100,
               beginVertex: i * repeats * 6,
-              endVertex: (i + 1) * repeats * 6,
-              images: []
+              endVertex: (i + 1) * repeats * 6
             })),
             2
           )._unsafeUnwrap(),
@@ -72,9 +71,7 @@ try {
           groups: new ArrayBuffer(0),
           maskTransfers: new ArrayBuffer(0),
           radialGradients: new ArrayBuffer(0),
-          rasterImages: { table, pixels: pixels.buffer },
-          images: new Map(),
-          imageVertices: new ArrayBuffer(0)
+          rasterImages: { table, pixels: pixels.buffer }
         };
         const initial = createFrame(doc, { x: 0.5, y: 0.5, zoom: 0.4, rotation: 0 }, 800, 600);
         const overview = createFrame(doc, { x: 2.5, y: -1.5, zoom: 4, rotation: 0 }, 800, 600);

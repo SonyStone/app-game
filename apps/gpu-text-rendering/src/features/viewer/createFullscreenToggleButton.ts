@@ -26,22 +26,34 @@ export function createFullscreenToggleButton(t: ReturnType<typeof createViewerI1
       get disabled() {
         return !document.fullscreenEnabled;
       },
-      onClick: () => void toggle()
+      /** Toggles fullscreen from the click gesture; resolves after the browser request settles. */
+      onClick: toggle
     } satisfies Pick<ButtonProps, 'aria-label' | 'title' | 'disabled' | 'onClick'>,
+    /** Sets or clears the element that enters fullscreen. */
     setContainer,
+    /** Whether the container is currently fullscreen. */
     isActive,
+    /** Latest rejected browser request; cleared by a successful toggle or `dismissError`. */
     error,
-    toggle
+    /** Hides the latest fullscreen failure. */
+    dismissError: () => setError(undefined)
   };
 
   /** Must run from a user gesture. Browser failures become observable errors; disposal ignores late results. */
   async function toggle() {
-    if (isDisposed(owner)) return;
+    if (isDisposed(owner)) {
+      return;
+    }
+
     try {
       await (isActive() ? exit() : enter());
-      if (!isDisposed(owner)) setError(undefined);
+      if (!isDisposed(owner)) {
+        setError(undefined);
+      }
     } catch (cause) {
-      if (!isDisposed(owner)) setError({ kind: 'fullscreen', message: errorMessage(cause), cause });
+      if (!isDisposed(owner)) {
+        setError({ kind: 'fullscreen', message: errorMessage(cause), cause });
+      }
     }
   }
 }

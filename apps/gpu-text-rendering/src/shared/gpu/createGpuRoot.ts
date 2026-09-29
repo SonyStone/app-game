@@ -3,11 +3,34 @@ import { createEffect, createSignal, type Accessor } from 'solid-js';
 import tgpu, { type TgpuRoot } from 'typegpu';
 import { errorMessage, gpuError, type GpuError } from '../errors';
 
-/** Owns one device/root per buffer requirement. Late devices are destroyed after disposal or replacement. */
+/**
+ * Owns one device/root per buffer requirement. Late devices are destroyed after disposal or replacement.
+ * Unexpected device loss aborts the old root, returns to loading and requests a new device, so dependents remount
+ * on the new root. After maxDeviceRecoveries losses for one buffer requirement, loss becomes a terminal error.
+ * An external device.destroy() and uncaptured validation errors are terminal.
+ */
 export function createGpuRoot(requiredBufferBytes: Accessor<number>) {
   const [state, setState] = createSignal<GpuRootState>({ status: 'loading' }, { ownedWrite: true });
+  // Bumped to re-run initialization after device loss; reset with each buffer requirement.
+  const [attempt, setAttempt] = createSignal(0, { ownedWrite: true });
+  let recoveries = 0;
+  let recoveredBytes: number | undefined;
 
-  createEffect(requiredBufferBytes, (bufferBytes) => {
+  createEffect(
+    () => ({ bufferBytes: requiredBufferBytes(), attempt: attempt() }),
+    ({ bufferBytes }) => {
+      if (bufferBytes !== recoveredBytes) {
+        recoveredBytes = bufferBytes;
+        recoveries = 0;
+      }
+      return initializeRoot(bufferBytes);
+    }
+  );
+
+  return state;
+
+  /** Requests an adapter, device and root. Returns the disposer that releases them. */
+  function initializeRoot(bufferBytes: number) {
     const abort = new AbortController();
     let device: GPUDevice | undefined;
     let root: TgpuRoot | undefined;
@@ -50,7 +73,7 @@ export function createGpuRoot(requiredBufferBytes: Accessor<number>) {
       root = tgpu.initFromDevice({ device });
 
       device.addEventListener('uncapturederror', handleError);
-      void device.lost.then((info) => fail(gpuError('lost', info.message || 'WebGPU device lost', info)));
+      void device.lost.then(handleLoss);
 
       setState({
         status: 'ready',
@@ -67,6 +90,26 @@ export function createGpuRoot(requiredBufferBytes: Accessor<number>) {
           }
         }
       });
+    }
+
+    function handleLoss(info: GPUDeviceLostInfo) {
+      // Our own disposal or replacement aborts first, so its 'destroyed' loss is ignored.
+      if (abort.signal.aborted) {
+        return;
+      }
+
+      // An external destroy() is deliberate; only unexpected loss is worth a new device.
+      const error = gpuError('lost', info.message || 'WebGPU device lost', info);
+      if (info.reason === 'destroyed' || recoveries >= maxDeviceRecoveries) {
+        fail(error);
+        return;
+      }
+
+      recoveries++;
+      // Stop dependents at once; the re-run effect disposes this attempt and publishes loading, then a new root.
+      failure = error;
+      destroy();
+      setAttempt((value) => value + 1);
     }
 
     function handleError(event: GPUUncapturedErrorEvent) {
@@ -95,10 +138,11 @@ export function createGpuRoot(requiredBufferBytes: Accessor<number>) {
       root?.destroy();
       device?.destroy();
     }
-  });
-
-  return state;
+  }
 }
+
+/** Device losses recovered per buffer requirement before loss is reported as a terminal error. */
+export const maxDeviceRecoveries = 3;
 
 /** Only ready roots enter the provider context; loading and failure stay in JSX branches. */
 export type GpuRootState =
@@ -108,8 +152,12 @@ export type GpuRootState =
 
 /** Borrowed device/root. The provider retains ownership; consumers observe cancellation through signal. */
 export type GpuRoot = {
+  /** TypeGPU root created from device. */
   root: TgpuRoot;
+  /** The device; destroyed when this root is replaced, lost or disposed. */
   device: GPUDevice;
+  /** Aborts synchronously before the device is released, including on loss. */
   signal: AbortSignal;
+  /** Err with the loss/validation failure, or 'destroyed' after replacement or disposal. */
   checkActive: () => Result<void, GpuError>;
 };

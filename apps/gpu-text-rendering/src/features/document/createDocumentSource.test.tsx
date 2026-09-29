@@ -6,7 +6,7 @@ import { DocumentSource } from '../../../tests/fixtures/DocumentSource';
 import type { AbortedError, DocumentError } from '../../shared/errors';
 import { documentError } from '../../shared/errors';
 import { runWorkerRequest } from '../../shared/worker/runWorkerRequest';
-import type { DocumentExport } from '../viewer/createDocumentExport';
+import type { createDocumentExport } from '../viewer/createDocumentExport';
 import { createDocumentSource } from './createDocumentSource';
 import type { TextDocument } from './document';
 import type { DecodedDocument } from './format/types';
@@ -119,10 +119,6 @@ it('decodes GDOC without offering PDF export', async () => {
   await vi.waitFor(() => expect(session.loaded).toHaveBeenCalledOnce());
   expect(importPdf).not.toHaveBeenCalled();
   expect(session.converted).not.toHaveBeenCalled();
-  const close = vi.fn();
-  session.loaded.mock.calls[0]![0].images.set('image', { close } as unknown as ImageBitmap);
-  session.dispose();
-  expect(close).toHaveBeenCalledOnce();
 });
 
 it('ignores an import that finishes after disposal', async () => {
@@ -169,21 +165,15 @@ it('does not start an export after disposal', async () => {
   expect(convertPdf).not.toHaveBeenCalled();
 });
 
-it('unmounts the ready branch on downstream failure and releases its images once', async () => {
+it('unmounts the ready branch on downstream failure and reports it once', async () => {
   readGdoc.mockReturnValue(okAsync(scene()));
   const session = mount(new File(['GDOC\r\n\x1a\n'], 'example.gdoc'));
   await vi.waitFor(() => expect(session.loaded).toHaveBeenCalledOnce());
-  const close = vi.fn();
-  const [data, fail] = session.children.mock.calls[0]!;
-  data.images.set('image', { close } as unknown as ImageBitmap);
+  const [, fail] = session.children.mock.calls[0]!;
   fail(documentError('decode', 'Downstream failure'));
   flush();
-  expect(close).toHaveBeenCalledOnce();
-  expect(data.images.size).toBe(0);
   fail(documentError('decode', 'Late failure'));
   expect(session.error).toHaveBeenCalledOnce();
-  session.dispose();
-  expect(close).toHaveBeenCalledOnce();
 });
 
 it('replaces a pending file and ignores its late result and captured failure handler', async () => {
@@ -211,18 +201,15 @@ it('replaces a pending file and ignores its late result and captured failure han
   expect(session.source.error()).toBeUndefined();
 });
 
-it('cancels without changing the selection, releases images, and loads the next selection', async () => {
+it('cancels without changing the selection and loads the next selection', async () => {
   readGdoc.mockImplementation(() => okAsync(scene()));
   const session = mountReactive();
   await vi.waitFor(() => expect(session.ready).toHaveBeenCalledOnce());
-  const close = vi.fn();
-  session.ready.mock.calls[0]![0].images.set('image', { close } as unknown as ImageBitmap);
   session.source.cancel();
   flush();
   expect(session.source.active()).toBe(false);
   expect(session.source.document()).toBeUndefined();
   expect(session.cancelled).toHaveBeenCalledOnce();
-  expect(close).toHaveBeenCalledOnce();
   expect(readGdoc).toHaveBeenCalledOnce();
   session.select(new File(['GDOC\r\n\x1a\n'], 'next.gdoc'));
   await vi.waitFor(() => expect(session.ready).toHaveBeenCalledTimes(2));
@@ -323,6 +310,31 @@ it('publishes loading failures even when only synchronous status is observed', a
   expect(source.ready()).toBe(false);
 });
 
+it('derives decode errors from the document and records external failures separately', async () => {
+  readGdoc.mockReturnValueOnce(errAsync(documentError('decode', 'Broken document')));
+  const failed = createRoot((dispose) => {
+    cleanups.push(dispose);
+    return createDocumentSource(() => undefined);
+  });
+  await vi.waitFor(() => expect(failed.error()?.message).toBe('Broken document'));
+  // Deriving the error no longer cancels the selection or hides the failed result.
+  expect(failed.active()).toBe(true);
+  expect(failed.document()?._unsafeUnwrapErr().message).toBe('Broken document');
+
+  readGdoc.mockReturnValueOnce(okAsync(scene()));
+  const loaded = createRoot((dispose) => {
+    cleanups.push(dispose);
+    return createDocumentSource(() => undefined);
+  });
+  await vi.waitFor(() => expect(loaded.ready()).toBe(true));
+  const prepared = loaded.document()!._unsafeUnwrap();
+  prepared.fail({ kind: 'gpu', code: 'render', message: 'Renderer failed' });
+  flush();
+  expect(prepared.signal.aborted).toBe(true);
+  expect(loaded.document()).toBeUndefined();
+  expect(loaded.error()?.message).toBe('Renderer failed');
+});
+
 function mountReactive() {
   const cancelled = vi.fn();
   vi.mocked(runWorkerRequest)
@@ -353,7 +365,7 @@ function mountReactive() {
 
 function mount(file: File) {
   const loaded = vi.fn<(document: TextDocument) => void>();
-  const converted = vi.fn<(exporter: DocumentExport) => void>();
+  const converted = vi.fn<(exporter: ReturnType<typeof createDocumentExport>) => void>();
   const error = vi.fn();
   const children = vi.fn<Parameters<typeof DocumentSource>[0]['children']>((data, _fail, exporter) => {
     loaded(data);
@@ -376,7 +388,7 @@ function mount(file: File) {
 function scene(): DecodedDocument {
   return {
     kind: 'glyphs',
-    pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6, images: [] }],
+    pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6 }],
     positions: { x: new Float32Array(), y: new Float32Array() },
     glyphVertices: new ArrayBuffer(0),
     atlas: { buf: new ArrayBuffer(0), width: 1, height: 1 },

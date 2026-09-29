@@ -104,6 +104,11 @@ describe('local document drop', () => {
       dispatch(target, 'dragenter');
       flush();
       expect(drop.error()).toBeUndefined();
+      dispatch(target, 'drop');
+      flush();
+      drop.dismissError();
+      flush();
+      expect(drop.error()).toBeUndefined();
     } finally {
       dispose();
     }

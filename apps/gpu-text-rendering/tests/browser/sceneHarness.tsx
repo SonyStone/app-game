@@ -8,6 +8,7 @@ import type { TextDocument } from '../../src/features/document/document';
 import { DocumentLayer } from '../../src/features/document/rendering/DocumentLayer';
 import { DocumentRendererProvider } from '../../src/features/document/rendering/DocumentRendererProvider';
 import { Rectangle } from '../../src/features/graphics/Rectangle';
+import { Rectangles } from '../../src/features/graphics/Rectangles';
 import { FrameLoop, useFrame } from '../../src/features/scene/FrameLoop';
 import { useViewport, Viewport } from '../../src/features/viewport/Viewport';
 import type { ViewerError } from '../../src/shared/errors';
@@ -33,7 +34,16 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
     const [x, setX] = createSignal(360);
     const [color, setColor] = createSignal<[number, number, number, number]>([1, 0, 0, 1]);
     const errors: ViewerError[] = [];
-    const stats = { frames: 0, ready: 0, cameraMounts: 0, cameraDisposals: 0, destroyedBuffers: 0 };
+    const stats = {
+      frames: 0,
+      ready: 0,
+      cameraMounts: 0,
+      cameraDisposals: 0,
+      destroyedBuffers: 0,
+      presses: 0,
+      moves: 0,
+      releases: 0
+    };
     let camera: ReturnType<typeof useDocumentCamera> | undefined;
 
     function Probe() {
@@ -125,7 +135,25 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
                             visible={rectangleVisible()}
                           />
                         </Show>
-                        <Rectangle x={20} y={20} width={40} height={40} color={[0, 0, 1, 1]} order={20} />
+                        <Rectangle
+                          x={20}
+                          y={20}
+                          width={40}
+                          height={40}
+                          color={[0, 0, 1, 1]}
+                          order={20}
+                          onPointerDown={() => stats.presses++}
+                          onPointerMove={() => stats.moves++}
+                          onPointerUp={() => stats.releases++}
+                        />
+                        <Rectangles
+                          items={[
+                            { x: 700, y: 20, width: 40, height: 40 },
+                            { x: 700, y: 80, width: 40, height: 40 }
+                          ]}
+                          color={[0, 1, 0, 1]}
+                          order={20}
+                        />
                       </ScreenSpace>
                     </DocumentCamera>
                   );

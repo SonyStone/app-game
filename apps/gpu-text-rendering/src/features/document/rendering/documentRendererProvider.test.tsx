@@ -33,19 +33,17 @@ it.each(['jsx', 'render'] as const)(
     const mounted = mount(mode);
     await settle();
     expect(mounted.bindings.map((value) => value.renderer)).toEqual([first]);
-    expect(mounted.initial.close).toHaveBeenCalledOnce();
 
     const next = documentFixture();
-    mounted.setDocument(next.document);
+    mounted.setDocument(next);
     await settle();
 
     expect(first.destroy).toHaveBeenCalledOnce();
     expect(second.destroy).not.toHaveBeenCalled();
     expect(mounted.detached).toHaveBeenCalledOnce();
-    expect(mounted.bindings[1]).toEqual({ document: next.document, renderer: second });
+    expect(mounted.bindings[1]).toEqual({ document: next, renderer: second });
     expect(mounted.onReady).toHaveBeenCalledTimes(2);
     expect(vi.mocked(createTypeGpuRenderer).mock.calls.every(([context]) => context === gpu)).toBe(true);
-    expect(next.close).toHaveBeenCalledOnce();
   }
 );
 
@@ -63,10 +61,9 @@ it.each(['jsx', 'render'] as const)('cancels preparation without mounting stale 
   const signal = vi.mocked(createTypeGpuRenderer).mock.calls[0]![3]!;
   expect(mounted.bindings).toEqual([]);
 
-  mounted.setDocument(documentFixture().document);
+  mounted.setDocument(documentFixture());
   await settle();
   expect(signal.aborted).toBe(true);
-  expect(mounted.initial.close).toHaveBeenCalledOnce();
 
   resolve(ok(late));
   await settle();
@@ -87,7 +84,7 @@ it('observes only the current renderer and detaches residency listeners on GPU a
   await settle();
   first.events.dispatchEvent(new Event('change'));
   expect(mounted.onResourceUsage).toHaveBeenCalledWith(1024);
-  mounted.setDocument(documentFixture().document);
+  mounted.setDocument(documentFixture());
   await settle();
   mounted.onResourceUsage.mockClear();
   first.events.dispatchEvent(new Event('change'));
@@ -99,21 +96,25 @@ it('observes only the current renderer and detaches residency listeners on GPU a
   expect(mounted.onResourceUsage).toHaveBeenCalledOnce();
 });
 
-it('replaces loading with a failure and releases images without mounting the ready branch', async () => {
+it('replaces loading with a failure without mounting the ready branch', async () => {
   let finish!: (result: Awaited<ReturnType<typeof createTypeGpuRenderer>>) => void;
-  vi.mocked(createTypeGpuRenderer).mockReturnValue(new Promise((resolve) => {
-    finish = resolve;
-  }));
-  const initial = documentFixture();
+  vi.mocked(createTypeGpuRenderer).mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    })
+  );
   const host = document.createElement('div');
   const onError = vi.fn(() => null);
   const ready = vi.fn(() => <span>Ready</span>);
   cleanups.push(
-    render(() => (
-      <DocumentRendererProvider document={initial.document} loading="Preparing" error={onError}>
-        {ready}
-      </DocumentRendererProvider>
-    ), host)
+    render(
+      () => (
+        <DocumentRendererProvider document={documentFixture()} loading="Preparing" error={onError}>
+          {ready}
+        </DocumentRendererProvider>
+      ),
+      host
+    )
   );
   expect(host.textContent).toBe('Preparing');
 
@@ -123,11 +124,9 @@ it('replaces loading with a failure and releases images without mounting the rea
   expect(host.textContent).toBe('');
   expect(onError).toHaveBeenCalledExactlyOnceWith(failure);
   expect(ready).not.toHaveBeenCalled();
-  expect(initial.close).toHaveBeenCalledOnce();
 });
 
 function mount(mode: 'jsx' | 'render') {
-  const initial = documentFixture();
   const bindings: ReturnType<typeof useDocumentRenderer>[] = [];
   const detached = vi.fn();
   const onReady = vi.fn();
@@ -141,7 +140,7 @@ function mount(mode: 'jsx' | 'render') {
   }
 
   const result = createRoot((disposeState) => {
-    const [document, setDocument] = createSignal(initial.document);
+    const [document, setDocument] = createSignal(documentFixture());
     const host = globalThis.document.createElement('div');
     const disposeView = render(
       () => (
@@ -173,14 +172,11 @@ function mount(mode: 'jsx' | 'render') {
     return { setDocument };
   });
 
-  return { ...result, initial, bindings, detached, onReady, onError, onResourceUsage };
+  return { ...result, bindings, detached, onReady, onError, onResourceUsage };
 }
 
 function documentFixture() {
-  const close = vi.fn();
-  const document = { images: new Map([['image', { close }]]) } as unknown as TextDocument;
-
-  return { document, close };
+  return {} as TextDocument;
 }
 
 function rendererFixture(): TextRenderer {

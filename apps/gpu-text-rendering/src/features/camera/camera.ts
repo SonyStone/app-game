@@ -31,6 +31,27 @@ export function worldToScreen(camera: Camera, point: Point, width: number, heigh
   };
 }
 
+/**
+ * Bounds of laid-out pages in DocumentSpace units: x in first-page widths, y in first-page heights, y up.
+ * Pages must be non-empty and positioned by layoutPages.
+ */
+export function documentBounds(pages: readonly { x: number; y: number; width: number; height: number }[]) {
+  const first = pages[0]!;
+  let left = Infinity;
+  let right = -Infinity;
+  let bottom = Infinity;
+  let top = -Infinity;
+
+  for (const page of pages) {
+    left = Math.min(left, -page.x);
+    right = Math.max(right, -page.x + page.width / first.width);
+    bottom = Math.min(bottom, 1 - page.y - page.height / first.height);
+    top = Math.max(top, 1 - page.y);
+  }
+
+  return { left, right, bottom, top };
+}
+
 /** Applies pan, pinch and rotation together, keeping the old focal point beneath the new one. */
 export function moveCamera(
   camera: Camera,

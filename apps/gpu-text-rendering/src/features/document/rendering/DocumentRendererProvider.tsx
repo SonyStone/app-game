@@ -1,7 +1,7 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
 import { createContext, createSignal, onCleanup, Show, untrack, useContext } from 'solid-js';
-import type { DocumentError, ViewerError } from '../../../shared/errors';
+import type { ViewerError } from '../../../shared/errors';
 import { useGpuCanvas } from '../../../shared/gpu/GpuCanvasProvider';
 import { TokenContext } from '../../../shared/jsx/TokenContext';
 import { runWorkerRequest } from '../../../shared/worker/runWorkerRequest';
@@ -11,13 +11,14 @@ import { useViewport } from '../../viewport/Viewport';
 import type { TextDocument } from '../document';
 import { createFrame, type SceneFrame } from './createFrame';
 import { createTypeGpuRenderer, type TextRenderer } from './createTypeGpuRenderer';
-import type { buildCoverageTables, CoverageTables } from './curves/buildCoverageTables';
 import CoverageWorker from './curves/coverage.worker?worker';
 import { createRasterWorker } from './curves/createRasterWorker';
+import type { DocumentWorkers } from './DocumentWorkers';
 
 /**
  * Prepares each document once; replacement disposes its renderer and all child frame subscriptions.
- * Takes ownership of decoded bitmaps, closing them after upload or cancellation.
+ * Supports one DocumentLayer: the renderer writes a single view uniform per draw, so mount another provider
+ * to draw the same document twice.
  */
 export function DocumentRendererProvider(props: {
   document: TextDocument;
@@ -25,10 +26,13 @@ export function DocumentRendererProvider(props: {
   initialFrame?: SceneFrame | 'viewport';
   /** JSX or a function mounted only when ready, beneath the document context and owned by this session. */
   children: JSX.Element | ((value: ReturnType<typeof useDocumentRenderer>) => JSX.Element);
+  /** Shown while the document prepares. Default nothing. */
   loading?: JSX.Element;
+  /** Renders a preparation failure in place of children; called once per failed document. */
   error: (error: ViewerError) => JSX.Element;
   /** Reports residency changes as visible images enter or leave the GPU cache. */
   onResourceUsage?: (bytes: number) => void;
+  /** Called once when preparation succeeds, with its duration and estimated GPU bytes. */
   onReady?: (info: { preparationMs: number; resourceBytes: number }) => void;
 }) {
   return (
@@ -43,10 +47,8 @@ export function DocumentRendererProvider(props: {
     const [prepared, setPrepared] = createSignal<Awaited<ReturnType<typeof createTypeGpuRenderer>>>();
     const raster = createRasterWorker();
     const abort = new AbortController();
-    const coverage = (input: Parameters<typeof buildCoverageTables>[0]) =>
-      runWorkerRequest<typeof input, CoverageTables, DocumentError>(() => new CoverageWorker(), input, {
-        signal: abort.signal
-      });
+    const coverage: DocumentWorkers['coverage'] = (input) =>
+      runWorkerRequest(() => new CoverageWorker(), input, { signal: abort.signal });
     let renderer: TextRenderer | undefined;
 
     onCleanup(dispose);
@@ -58,7 +60,7 @@ export function DocumentRendererProvider(props: {
         return props.initialFrame;
       }
       const { pixels, css } = useViewport().size();
-      return createFrame(document, useDocumentCamera(), pixels.width, pixels.height, false, false, css);
+      return createFrame(document, useDocumentCamera(), pixels.width, pixels.height, { displaySize: css });
     });
     void createTypeGpuRenderer(gpu, document, { raster, coverage }, abort.signal, initialFrame).then((result) => {
       if (abort.signal.aborted || gpu.signal.aborted) {
@@ -73,7 +75,6 @@ export function DocumentRendererProvider(props: {
         dispose();
       } else {
         renderer = result.value;
-        closeImages();
         props.onReady?.({ preparationMs: performance.now() - started, resourceBytes: renderer.resourceBytes });
       }
 
@@ -106,12 +107,6 @@ export function DocumentRendererProvider(props: {
       abort.abort();
       raster.destroy();
       renderer?.destroy();
-      closeImages();
-    }
-
-    function closeImages() {
-      document.images.forEach((image) => image.close());
-      document.images.clear();
     }
   }
 }

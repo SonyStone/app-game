@@ -1,5 +1,6 @@
+import type { Result } from 'neverthrow';
 import { documentError, errorMessage, type AbortedError, type DocumentError } from '../../shared/errors';
-import type { WorkerFailure } from '../../shared/worker/workerProtocol';
+import type { WorkerFailure, WorkerReply } from '../../shared/worker/workerProtocol';
 
 /** Converts transport failures while preserving document errors and owner cancellation. */
 export function documentWorkerError(
@@ -18,4 +19,19 @@ export function documentWorkerError(
     case 'messageerror':
       return documentError('decode', 'Unable to transfer document data');
   }
+}
+
+/**
+ * Adapts a worker-side result to its reply envelope. Errors keep only their kind, code and message:
+ * an external `cause` (for example a WASM exception) may not survive structured cloning.
+ */
+export function documentReply<T>(
+  result: Result<T, DocumentError>
+): Exclude<WorkerReply<T, DocumentError>, { progress: unknown }> {
+  if (result.isErr()) {
+    const { kind, code, message } = result.error;
+    return { ok: false, error: { kind, code, message } };
+  }
+
+  return { ok: true, value: result.value };
 }

@@ -4,22 +4,26 @@ import { createWorkerRequests } from '../../../shared/worker/createWorkerRequest
 import { mountWorker } from '../../../shared/worker/mountWorker';
 import { WorkerTasks } from '../../../shared/worker/WorkerTasks';
 import type { OnDocumentProgress } from '../documentProgress';
+import { documentReply } from '../documentWorkerError';
 import type { DecodeInput, DocumentReply } from '../documentWorkerProtocol';
 import { documentFileLimitMessage, maxDocumentFileBytes } from '../limits';
 import { decodeGdoc } from './decodeGdoc';
 import { documentTransfers } from './documentTransfers';
-import type { DecodeReply } from './types';
 import init from './wasm/gpu_document';
 import wasmUrl from './wasm/gpu_document_bg.wasm?url';
 
-// One document per worker: the main thread terminates it to release the WASM heap.
+// One document per worker: the main thread shuts it down to release the WASM heap.
 mountWorker(() => {
   const request = createWorkerRequests<DecodeInput, DocumentReply>(self);
   return (
     <WorkerTasks
       request={request}
       execute={async (input, { signal, progress }) => {
-        progress({ stage: 'loadingDecoder' });
+        // Stages stay monotonic: a URL reports its download while the decoder loads concurrently;
+        // local bytes only wait for the decoder.
+        if (typeof input !== 'string') {
+          progress({ stage: 'loadingDecoder' });
+        }
         const loading = typeof input === 'string' ? readUrl(input, signal, progress) : Promise.resolve(ok(input));
         try {
           await init({ module_or_path: wasmUrl });
@@ -29,37 +33,22 @@ mountWorker(() => {
             error: documentError('decode', `Unable to load document decoder: ${errorMessage(cause)}`)
           };
         }
-        if (signal.aborted) return;
-        return read(loading, progress);
+        const bytes: Result<ArrayBuffer, DocumentError> = await loading;
+        if (signal.aborted) {
+          return;
+        }
+        return documentReply(
+          bytes.andThen((value) => {
+            progress({ stage: 'decodingDocument' });
+            return decodeGdoc(new Uint8Array(value));
+          })
+        );
       }}
       error={(cause) => documentError('decode', errorMessage(cause))}
       transfer={(value) => documentTransfers({ ok: true, value })}
     />
   );
-});
-
-async function read(
-  loading: PromiseLike<Result<ArrayBuffer, DocumentError>>,
-  progress: OnDocumentProgress
-): Promise<DecodeReply> {
-  const bytes = await loading;
-
-  if (bytes.isErr()) {
-    return { ok: false, error: bytes.error };
-  }
-
-  progress({ stage: 'decodingDocument' });
-  const result = decodeGdoc(new Uint8Array(bytes.value));
-
-  if (result.isErr()) {
-    // The displayable message and stable code are transferable even for a non-cloneable external cause.
-    const { kind, code, message } = result.error;
-
-    return { ok: false, error: { kind, code, message } };
-  }
-
-  return { ok: true, value: result.value };
-}
+}, self);
 
 function readUrl(url: string, signal: AbortSignal, progress: OnDocumentProgress) {
   return ResultAsync.fromThrowable(

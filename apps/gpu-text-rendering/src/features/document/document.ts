@@ -2,24 +2,21 @@ import type { ResultValue } from '../../shared/errors';
 import type { DecodedDocument } from './format/types';
 import type { layoutPages } from './layoutPages';
 
-/** Decoded document with viewer page positions and owned image resources. */
+/** Decoded document with viewer page positions. */
 export type TextDocument = PositionedDocument<DecodedDocument>;
 
 type PositionedDocument<Data> = Data extends DecodedDocument
   ? Omit<Data, 'pages'> & {
       pages: ResultValue<ReturnType<typeof layoutPages>>;
-      imageVertices: ArrayBuffer;
-      images: Map<string, ImageBitmap>;
     }
   : never;
 
-/** A page's contiguous vertex range and optional image draws. */
+/** A page's size and contiguous vertex range. */
 export type PageMetadata = {
   width: number;
   height: number;
   beginVertex: number;
   endVertex: number;
-  images: { filename: string; vertexOffset: number; numVerts: number }[];
 };
 
 /** Produces page backgrounds as one triangle strip with degenerate joins. */

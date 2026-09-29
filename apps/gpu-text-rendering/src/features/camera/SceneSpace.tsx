@@ -1,7 +1,6 @@
 import type { JSX } from '@solidjs/web';
-import { createContext, createEffect, useContext } from 'solid-js';
+import { createContext, useContext } from 'solid-js';
 import { TokenContext } from '../../shared/jsx/TokenContext';
-import { useFrameLoop } from '../scene/FrameLoop';
 import { useViewport } from '../viewport/Viewport';
 import { screenToWorld, worldToScreen, type Point } from './camera';
 import { useDocumentCamera } from './DocumentCamera';
@@ -13,12 +12,6 @@ import { useDocumentCamera } from './DocumentCamera';
 export function DocumentSpace(props: { pageAspect: number; children: JSX.Element }) {
   const camera = useDocumentCamera();
   const viewport = useViewport();
-  const loop = useFrameLoop();
-
-  createEffect(
-    () => props.pageAspect,
-    () => loop.invalidate()
-  );
 
   const space: SceneSpace = {
     toScreen(point) {

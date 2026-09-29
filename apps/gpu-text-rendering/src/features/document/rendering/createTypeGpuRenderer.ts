@@ -62,7 +62,13 @@ export async function createTypeGpuRenderer(
       () =>
         serializeGpuPreparation(device, async () => {
           const active = checkActive();
-          if (active.isErr()) return err(active.error);
+          if (active.isErr()) {
+            return err(active.error);
+          }
+          // The scope stays open across preparation's awaits; scopes are device-wide, so it would also capture
+          // unrelated work. Wrapping only synchronous segments would reach into every preparation step, so
+          // instead serializeGpuPreparation keeps one preparation per device and FrameLoop defers frames
+          // until it settles (pendingGpuPreparation).
           device.pushErrorScope('validation');
 
           const prepared = await ResultAsync.fromThrowable(

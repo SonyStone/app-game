@@ -1,6 +1,8 @@
 import { flush } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { convertPdf, loadDocument, readGdoc } from '../../../tests/browser/workerHarness';
+import { workerShutdownGraceMs } from '../../shared/worker/createWorkerTransport';
+import { isWorkerShutdown } from '../../shared/worker/workerProtocol';
 import type { DecodeReply, DecodedDocument } from './format/types';
 
 let workers: WorkerDouble[];
@@ -35,7 +37,7 @@ describe('document worker ownership', () => {
     expect((await pending).isOk()).toBe(true);
   });
 
-  it('lays out decoded pages and terminates its worker on completion', async () => {
+  it('lays out decoded pages and shuts its worker down on completion', async () => {
     const pending = loadDocument();
     await vi.waitFor(() => expect(workers).toHaveLength(1));
     const worker = workers[0]!;
@@ -43,7 +45,7 @@ describe('document worker ownership', () => {
     worker.reply({ ok: true, value: fixture() });
     const document = (await pending)._unsafeUnwrap();
     expect(document.pages[0]).toMatchObject({ width: 612, height: 792, x: -0, y: 0 });
-    expect(worker.terminate).toHaveBeenCalledOnce();
+    expect(released(worker)).toBe(true);
   });
 
   it.each(['http', 'load', 'unsupported-format', 'checksum', 'document-limit', 'invalid-data'] as const)(
@@ -53,7 +55,7 @@ describe('document worker ownership', () => {
       await vi.waitFor(() => expect(workers).toHaveLength(1));
       workers[0]!.reply({ ok: false, error: { kind: 'document', code, message: 'Details' } });
       expect((await pending)._unsafeUnwrapErr()).toMatchObject({ kind: 'document', code });
-      expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+      expect(released(workers[0]!)).toBe(true);
     }
   );
 
@@ -62,7 +64,7 @@ describe('document worker ownership', () => {
     expect(workers).toHaveLength(0);
   });
 
-  it('terminates active decoding on cancellation and ignores late messages', async () => {
+  it('shuts active decoding down on cancellation and ignores late messages', async () => {
     const abort = new AbortController();
     const remove = vi.spyOn(abort.signal, 'removeEventListener');
     const pending = loadDocument(abort.signal);
@@ -70,7 +72,7 @@ describe('document worker ownership', () => {
     abort.abort();
     workers[0]!.reply({ ok: true, value: fixture() });
     expect((await pending)._unsafeUnwrapErr().kind).toBe('aborted');
-    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+    expect(released(workers[0]!)).toBe(true);
     expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
   });
 
@@ -93,7 +95,7 @@ describe('document worker ownership', () => {
     workers[0]!.dispatchEvent(event);
     expect((await pending)._unsafeUnwrapErr()).toMatchObject({ code: 'decode', message: 'WASM failed' });
     expect(event.defaultPrevented).toBe(true);
-    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+    expect(released(workers[0]!)).toBe(true);
 
     vi.stubGlobal(
       'Worker',
@@ -104,7 +106,7 @@ describe('document worker ownership', () => {
       }
     );
     expect((await readGdoc(new ArrayBuffer(1)))._unsafeUnwrapErr()).toMatchObject({ code: 'load' });
-    expect(workers[1]!.terminate).toHaveBeenCalledOnce();
+    expect(released(workers[1]!)).toBe(true);
 
     vi.stubGlobal(
       'Worker',
@@ -123,9 +125,11 @@ describe('document worker ownership', () => {
     flush();
     await vi.advanceTimersByTimeAsync(180_000);
 
-    expect(workers[0]!.terminate).not.toHaveBeenCalled();
+    expect(released(workers[0]!)).toBe(false);
     workers[0]!.reply({ ok: true, value: fixture() });
     expect((await pending).isOk()).toBe(true);
+    expect(released(workers[0]!)).toBe(true);
+    await vi.advanceTimersByTimeAsync(workerShutdownGraceMs);
     expect(workers[0]!.terminate).toHaveBeenCalledOnce();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -136,11 +140,11 @@ describe('document worker ownership', () => {
     flush();
     await vi.advanceTimersByTimeAsync(600_000);
 
-    expect(workers[0]!.terminate).not.toHaveBeenCalled();
+    expect(released(workers[0]!)).toBe(false);
     const converted = new ArrayBuffer(8);
     workers[0]!.dispatchEvent(new MessageEvent('message', { data: { ok: true, value: converted } }));
     expect((await pending)._unsafeUnwrap()).toBe(converted);
-    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+    expect(released(workers[0]!)).toBe(true);
   });
 
   it('cancels a long PDF conversion and ignores its late completion', async () => {
@@ -154,7 +158,7 @@ describe('document worker ownership', () => {
     workers[0]!.dispatchEvent(new MessageEvent('message', { data: { ok: true, value: new ArrayBuffer(8) } }));
 
     expect((await pending)._unsafeUnwrapErr()).toMatchObject({ kind: 'aborted' });
-    expect(workers[0]!.terminate).toHaveBeenCalledOnce();
+    expect(released(workers[0]!)).toBe(true);
     expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
   });
 
@@ -182,9 +186,17 @@ class WorkerDouble extends EventTarget {
   }
 }
 
+/** Cooperative shutdown posts a control message; terminate() alone means the message could not be sent. */
+function released(worker: WorkerDouble) {
+  return (
+    worker.postMessage.mock.calls.some(([message]) => isWorkerShutdown(message)) ||
+    worker.terminate.mock.calls.length > 0
+  );
+}
+
 function fixture(): DecodedDocument {
   return {
-    pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6, images: [] }],
+    pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6 }],
     kind: 'glyphs',
     glyphVertices: new ArrayBuffer(72),
     positions: { x: new Float32Array(1), y: new Float32Array(1) },

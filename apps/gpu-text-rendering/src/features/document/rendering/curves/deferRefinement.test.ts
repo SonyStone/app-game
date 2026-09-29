@@ -29,6 +29,21 @@ it('ignores an already posted stale view after cancellation and rescheduling', (
   task.destroy();
 });
 
+it('replaces a queued long delay with a shorter one without running twice', () => {
+  vi.useFakeTimers();
+  const { jobs, run, task } = setup();
+  task.schedule(1000);
+  task.schedule(10);
+  task.schedule(500);
+  vi.advanceTimersByTime(10);
+  expect(jobs).toHaveLength(1);
+  jobs.shift()!();
+  expect(run).toHaveBeenCalledTimes(1);
+  vi.advanceTimersByTime(1000);
+  expect(jobs).toHaveLength(0);
+  task.destroy();
+});
+
 it('cancels delayed work and closes both ports on disposal', () => {
   vi.useFakeTimers();
   const { jobs, run, task, closes } = setup();

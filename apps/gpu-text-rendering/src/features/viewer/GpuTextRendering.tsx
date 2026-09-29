@@ -7,6 +7,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@app-game/components/ui/dropdown-menu';
+import type { JSX } from '@solidjs/web';
 import dots from '@tabler/icons/outline/dots.svg?url';
 import grid from '@tabler/icons/outline/layout-grid.svg?url';
 import loaderIcon from '@tabler/icons/outline/loader-2.svg?url';
@@ -25,6 +26,7 @@ import { createDocumentSource } from '../document/createDocumentSource';
 import noticesUrl from '../document/pdf/wasm/third-party-notices.txt?url';
 import { DocumentLayer } from '../document/rendering/DocumentLayer';
 import { DocumentRendererProvider } from '../document/rendering/DocumentRendererProvider';
+import { Minimap } from '../minimap/Minimap';
 import { FrameLoop } from '../scene/FrameLoop';
 import { Viewport } from '../viewport/Viewport';
 import { createDocumentDrop } from './createDocumentDrop';
@@ -65,9 +67,18 @@ export default function GpuTextRendering() {
   );
   const [vectorOnly, setVectorOnly] = createSignal(false);
   const [grids, setGrids] = createSignal(false);
+  const [minimap, setMinimap] = createSignal(false);
 
-  const { status, error: viewerError, isBusy, isReady, progress, percent, reportGpuError, rendererCallbacks } =
-    createViewerStatus(documentSource, fileSource);
+  const {
+    status,
+    error: viewerError,
+    isBusy,
+    isReady,
+    progress,
+    percent,
+    reportGpuError,
+    rendererCallbacks
+  } = createViewerStatus(documentSource, fileSource);
 
   /** Selects a file, or reopens the bundled demo. */
   function open(file?: File) {
@@ -81,12 +92,7 @@ export default function GpuTextRendering() {
   const [overviewCamera, setOverviewCamera] = createSignal<OverviewCameraRef>();
 
   return (
-    <div
-      ref={[fullscreen.setContainer, drop.ref]}
-      class={s.viewer}
-      lang={i18n.locale()}
-      dir={i18n.direction()}
-    >
+    <div ref={[fullscreen.setContainer, drop.ref]} class={s.viewer} lang={i18n.locale()} dir={i18n.direction()}>
       <canvas
         ref={setCanvas}
         id="beziercanvas"
@@ -101,44 +107,53 @@ export default function GpuTextRendering() {
           <Show when={documentSource.active() && !documentSource.error() && fileSource()} keyed>
             <Loading>
               {documentSource.document()?.match(
-                ({ data, signal, fail }) => (
-                  <Viewport>
-                    <FrameLoop onError={fail}>
-                      {(loop) => (
-                        <DocumentCamera>
-                          <DocumentSpace pageAspect={data.pages[0]!.width / data.pages[0]!.height}>
-                            <CameraControls
-                              pageAspect={data.pages[0]!.width / data.pages[0]!.height}
-                              onInteraction={() => setAutoZoom(false)}
-                              onDraggingChange={setDragging}
-                            />
+                ({ data, signal, fail }) => {
+                  const pageAspect = data.pages[0]!.width / data.pages[0]!.height;
 
-                            <OverviewCamera
-                              ref={setOverviewCamera}
-                              document={data}
-                              padding={{ top: 44, right: 24, bottom: 84, left: 24 }}
-                            />
+                  return (
+                    <Viewport>
+                      <FrameLoop onError={fail}>
+                        {(loop) => (
+                          <DocumentCamera>
+                            <DocumentSpace pageAspect={pageAspect}>
+                              <CameraControls
+                                pageAspect={pageAspect}
+                                onInteraction={() => setAutoZoom(false)}
+                                onDraggingChange={setDragging}
+                              />
 
-                            <CameraTour document={data} enabled={autoZoom()} />
+                              <OverviewCamera
+                                ref={setOverviewCamera}
+                                document={data}
+                                padding={{ top: 44, right: 24, bottom: 84, left: 24 }}
+                              />
 
-                            <DocumentRendererProvider
-                              document={data}
-                              initialFrame="viewport"
-                              {...rendererCallbacks(signal)}
-                              error={(error) => {
-                                loop.fail(error);
-                                return null;
-                              }}
-                            >
-                              <DocumentLayer vectorOnly={vectorOnly()} grids={grids()} />
-                            </DocumentRendererProvider>
-                          </DocumentSpace>
-                        </DocumentCamera>
-                      )}
-                    </FrameLoop>
-                  </Viewport>
-                ),
-                documentSource.fail
+                              <CameraTour document={data} enabled={autoZoom()} />
+
+                              <DocumentRendererProvider
+                                document={data}
+                                initialFrame="viewport"
+                                {...rendererCallbacks(signal)}
+                                error={(error) => {
+                                  loop.fail(error);
+                                  return null;
+                                }}
+                              >
+                                <DocumentLayer vectorOnly={vectorOnly()} grids={grids()} />
+                              </DocumentRendererProvider>
+                            </DocumentSpace>
+
+                            <Show when={minimap()}>
+                              <Minimap document={data} onNavigate={() => setAutoZoom(false)} />
+                            </Show>
+                          </DocumentCamera>
+                        )}
+                      </FrameLoop>
+                    </Viewport>
+                  );
+                },
+                // The source derives its error from failed results; the loading panel below displays it.
+                () => null
               )}
             </Loading>
           </Show>
@@ -149,13 +164,6 @@ export default function GpuTextRendering() {
         <div class={s.dropOverlay} role="status" data-testid="document-drop-overlay">
           <div>{i18n.t('dropHint')}</div>
         </div>
-      </Show>
-      <Show when={drop.error()}>
-        {(key) => (
-          <div class={s.notice} role="alert">
-            {i18n.t(key())}
-          </div>
-        )}
       </Show>
       <div id="toolbar" class={s.toolbar} role="group" aria-label={i18n.t('controls')}>
         <DocumentPicker label={i18n.t('open')} hint={i18n.t('openHint')} onOpen={open} />
@@ -216,6 +224,16 @@ export default function GpuTextRendering() {
                   >
                     {i18n.t('autoZoom')}
                   </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    class={s.menuItem}
+                    checked={minimap()}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setMinimap(!minimap());
+                    }}
+                  >
+                    {i18n.t('minimap')}
+                  </DropdownMenuCheckboxItem>
                   <Loading on={fileSource()}>
                     <Show when={preparedDocument()?.data.kind === 'glyphs'}>
                       <DropdownMenuCheckboxItem
@@ -270,21 +288,38 @@ export default function GpuTextRendering() {
       <output class={s.srOnly} aria-live="polite">
         {i18n.status(status())}
       </output>
-      <Loading on={fileSource()}>
-        <Show when={documentExport.pending()}>
-          <div class={s.notice} role="status">
-            {i18n.t('exporting')}
-          </div>
-        </Show>
-        <Show when={documentExport.error() || fullscreen.error()?.message}>
-          {(message) => (
-            <div class={s.notice} role="alert">
-              {documentExport.error() ? i18n.t('exportError') : i18n.t('fullscreenError')}
-              <div dir="auto">{message()}</div>
-            </div>
+      <div class={s.notices}>
+        <Show when={drop.error()}>
+          {(key) => (
+            <Notice dismissLabel={i18n.t('dismiss')} onDismiss={drop.dismissError}>
+              {i18n.t(key())}
+            </Notice>
           )}
         </Show>
-      </Loading>
+        <Show when={fullscreen.error()}>
+          {(error) => (
+            <Notice dismissLabel={i18n.t('dismiss')} onDismiss={fullscreen.dismissError}>
+              {i18n.t('fullscreenError')}
+              <div dir="auto">{error().message}</div>
+            </Notice>
+          )}
+        </Show>
+        <Loading on={fileSource()}>
+          <Show when={documentExport.pending()}>
+            <div class={s.notice} role="status">
+              {i18n.t('exporting')}
+            </div>
+          </Show>
+          <Show when={documentExport.error()}>
+            {(message) => (
+              <Notice dismissLabel={i18n.t('dismiss')} onDismiss={documentExport.dismissError}>
+                {i18n.t('exportError')}
+                <div dir="auto">{message()}</div>
+              </Notice>
+            )}
+          </Show>
+        </Loading>
+      </div>
       <Show when={!isReady()}>
         <div class={s.loadinginfo} role={viewerError() ? 'alert' : 'status'}>
           <div class={s.loadingHeading}>
@@ -332,11 +367,33 @@ export default function GpuTextRendering() {
               {fileSource().file?.name}
             </div>
           </Show>
-          <Show when={viewerError()}>
-            {(error) => <div dir="auto">{error().message}</div>}
-          </Show>
+          <Show when={viewerError()}>{(error) => <div dir="auto">{error().message}</div>}</Show>
         </div>
       </Show>
+    </div>
+  );
+}
+
+/** Dismissible alert for a failed user action; the owner of the error clears it through `onDismiss`. */
+function Notice(props: {
+  /** Accessible name of the dismiss button. */
+  dismissLabel: string;
+  /** Clears the displayed error. */
+  onDismiss: () => void;
+  children: JSX.Element;
+}) {
+  return (
+    <div class={s.notice} role="alert">
+      <div>{props.children}</div>
+      <button
+        type="button"
+        class={s.dismissNotice}
+        aria-label={props.dismissLabel}
+        title={props.dismissLabel}
+        onClick={() => props.onDismiss()}
+      >
+        <img src={closeIcon} alt="" />
+      </button>
     </div>
   );
 }

@@ -14,6 +14,7 @@
   "download": "Descargar GDOC",
   "back": "Volver al ejemplo",
   "autoZoom": "Zoom automático",
+  "minimap": "Minimapa",
   "grids": "Cuadrícula",
   "vectorOnly": "Solo vectores",
   "help": "Arrastra para desplazarte. Usa la rueda o pellizca para ampliar. Usa dos dedos para girar.",
@@ -40,5 +41,6 @@
   "preparingGraphics": "Preparando gráficos…",
   "cancelLoading": "Cancelar carga",
   "cancelled": "Carga cancelada. Abre otro documento.",
-  "pageProgress": "{{completed}} de {{total}} páginas"
+  "pageProgress": "{{completed}} de {{total}} páginas",
+  "dismiss": "Cerrar"
 }

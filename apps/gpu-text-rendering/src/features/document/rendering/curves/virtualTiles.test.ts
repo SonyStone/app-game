@@ -2,7 +2,15 @@ import { ok } from 'neverthrow';
 import { describe, expect, it } from 'vitest';
 import type { SceneFrame } from '../createFrame';
 import { mipTail, reduceMip, tilePixels } from './rasterPixels';
-import { imageTiles, packMipTails, tileAddress, tileExtent, visibleImage } from './virtualTiles';
+import {
+  createImageTileCache,
+  imageTiles,
+  packMipTails,
+  tileAddress,
+  tileExtent,
+  visibleImage,
+  type VirtualImage
+} from './virtualTiles';
 
 describe('virtual texture addressing', () => {
   it('packs every mip tail within a bounded atlas even for ten thousand large images', () => {
@@ -111,4 +119,16 @@ it('does not stream a color ramp because its constant one-texel axis is stretche
   expect(imageTiles(horizontal!, region)).toEqual([]);
   expect(imageTiles(vertical!, { ...region, width: 2048, height: 16 })).toEqual([]);
   expect(imageTiles(horizontal!, { ...region, width: 4096 }).some((tile) => tile.level === 0)).toBe(true);
+});
+
+it('evicts the least recently used image placement rather than the oldest insertion', () => {
+  const image: VirtualImage = { id: 0, width: 2048, height: 2048, level: 6, x: 0, y: 0, tailWidth: 1, tailHeight: 1 };
+  const region = { left: 0, right: 1, top: 0, bottom: 1, width: 256, height: 256, distance: 0 };
+  const cached = createImageTileCache(imageTiles(image, region).length * 2);
+  const first = cached(1, image, region);
+  const second = cached(2, image, region);
+  expect(cached(1, image, region)).toBe(first);
+  cached(3, image, region);
+  expect(cached(1, image, region)).toBe(first);
+  expect(cached(2, image, region)).not.toBe(second);
 });

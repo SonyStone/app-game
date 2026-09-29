@@ -14,6 +14,7 @@
   "download": "GDOC をダウンロード",
   "back": "サンプルに戻る",
   "autoZoom": "自動ズーム",
+  "minimap": "ミニマップ",
   "grids": "グリッド",
   "vectorOnly": "ベクターのみ",
   "help": "ドラッグで移動、スクロールまたはピンチで拡大・縮小、2 本指で回転できます。",
@@ -40,5 +41,6 @@
   "preparingGraphics": "描画を準備中…",
   "cancelLoading": "読み込みをキャンセル",
   "cancelled": "読み込みをキャンセルしました。別のドキュメントを開いてください。",
-  "pageProgress": "{{total}}ページ中{{completed}}ページ"
+  "pageProgress": "{{total}}ページ中{{completed}}ページ",
+  "dismiss": "閉じる"
 }

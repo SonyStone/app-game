@@ -4,7 +4,11 @@ import { clipCoverage, projected, transformed } from './curveShader';
 import { radialLayout, radialUv } from './radialGradient';
 import { lookupSize, tileExtent, tileSize } from './virtualTiles';
 
-/** Per-image addressing; all mip tails and detail tiles share two document-wide atlases. */
+/**
+ * Per-image addressing; all mip tails and detail tiles share two document-wide atlases.
+ * `size` is level-0 pixels, `id` keys the detail lookup, `tailLevel`/`tailOrigin` locate the first
+ * packed tail mip, and `interpolate` is 0 for nearest-neighbour source pixels.
+ */
 export const RasterImage = d.struct({
   size: d.vec2u,
   id: d.u32,
@@ -13,6 +17,10 @@ export const RasterImage = d.struct({
   interpolate: d.u32
 });
 
+/**
+ * Per-image bindings: detail-tile and mip-tail atlases, the shared open-addressing tile lookup
+ * (`[image id + 1, tile address, atlas column, atlas row]`, 0 marks an empty slot) and image metadata.
+ */
 export const rasterLayout = tgpu.bindGroupLayout({
   image: { texture: d.texture2d(d.f32) },
   tails: { texture: d.texture2d(d.f32) },
@@ -50,7 +58,14 @@ export const rasterFragment = tgpu.fragmentFn({
   const dy = std.mul(std.dpdy(sample.xy), size);
   const lod = std.max(0, std.log2(std.max(std.length(dx), std.length(dy))));
   const low = d.u32(std.floor(lod));
-  const ramp = std.mix(sampleVirtual(sample.xy, low), sampleVirtual(sample.xy, low + 1), std.fract(lod));
+  const weight = std.fract(lod);
+  let ramp = sampleVirtual(sample.xy, low);
+
+  // Magnified and exact-level pixels need one lookup; explicit-level sampling allows this branch.
+  if (weight > 0) {
+    ramp = std.mix(ramp, sampleVirtual(sample.xy, low + 1), weight);
+  }
+
   const pixel = std.mix(gradient.background, ramp, sample.z);
   let opacity = clipCoverage(
     item.clipReference,

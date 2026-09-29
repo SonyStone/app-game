@@ -26,13 +26,16 @@ export function createViewerStatus(source: DocumentSource, selection: Accessor<u
     if (failure) {
       return { phase: 'error', error: failure };
     }
+
     if (!source.active()) {
       return { phase: 'cancelled' };
     }
+
     const ready = preparation();
     if (ready) {
       return { phase: 'ready', ...ready };
     }
+
     if (source.ready()) {
       return { phase: 'preparing', progress: { stage: 'preparingGraphics' } };
     }
@@ -52,11 +55,17 @@ export function createViewerStatus(source: DocumentSource, selection: Accessor<u
   });
 
   return {
+    /** Current display phase: error, cancelled, ready, preparing or loading with progress. */
     status,
+    /** Terminal GPU failure, else the source's loading failure; GPU failures take precedence. */
     error,
+    /** Whether the document is loading or preparing graphics. */
     isBusy,
+    /** Loading or preparation progress while busy; undefined otherwise. */
     progress,
+    /** Whole progress percentage in 0-100 when the total is known; undefined otherwise. */
     percent,
+    /** Whether the renderer reported the current document as prepared. */
     isReady: createMemo(() => status().phase === 'ready'),
     /** Records a terminal failure of the shared GPU root or canvas; selecting another file cannot clear it. */
     reportGpuError(error: GpuError) {

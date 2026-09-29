@@ -61,9 +61,7 @@ try {
       )._unsafeUnwrap();
       const doc = {
         ...data,
-        pages: layoutPages(data.pages, 2)._unsafeUnwrap(),
-        images: new Map(),
-        imageVertices: new ArrayBuffer(0)
+        pages: layoutPages(data.pages, 2)._unsafeUnwrap()
       };
       const canvas = document.createElement('canvas');
       canvas.width = 800;
@@ -100,7 +98,7 @@ try {
               { x: -anchor.x + 0.1, y: 0.9 - anchor.y, zoom: 1 / 128, rotation: 0 },
               canvas.width,
               canvas.height,
-              false
+              { vectorOnly: false }
             )
           )
           ._unsafeUnwrap();
@@ -121,7 +119,7 @@ try {
                 },
                 canvas.width,
                 canvas.height,
-                false
+                { vectorOnly: false }
               )
             )
             ._unsafeUnwrap();
@@ -152,7 +150,7 @@ try {
           { x: -anchor.x + 0.5, y: 0.5 - anchor.y, zoom, rotation },
           canvas.width,
           canvas.height,
-          vectorOnly
+          { vectorOnly }
         );
         renderer.render(frame)._unsafeUnwrap();
         const firstDraws = draws;

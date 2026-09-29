@@ -32,5 +32,12 @@ export function createDocumentDrop(open: (file: File) => void) {
     }
   });
 
-  return { ref: drop.ref, isOver: drop.isOver, error };
+  return {
+    ref: drop.ref,
+    isOver: drop.isOver,
+    /** Rejected drop reason, cleared by the next drag entering, a valid drop or `dismissError`. */
+    error,
+    /** Hides the rejected drop reason. */
+    dismissError: () => setError(undefined)
+  };
 }

@@ -17,13 +17,16 @@ function setup() {
   canvas.releasePointerCapture = (id) => {
     captures.delete(id);
   };
-  canvas.getBoundingClientRect = () => ({ left: 100, top: 50, width: 800, height: 600 }) as DOMRect;
+  const viewport = {
+    size: () => ({ css: { width: 800, height: 600 } }),
+    clientToScreen: (point: { x: number; y: number }) => ({ x: point.x - 100, y: point.y - 50 })
+  } as Parameters<typeof makeCameraControls>[0]['viewport'];
   const camera = { x: 0.5, y: 0.5, zoom: 2, rotation: 0 };
   const changed = vi.fn();
   let dispose = () => {};
   createRoot((cleanup) => {
     dispose = cleanup;
-    makeCameraControls(canvas, camera, () => 1, changed);
+    makeCameraControls({ canvas, camera, pageAspect: () => 1, viewport, onInteraction: changed });
   });
   cleanups.push(dispose);
   const pointer = (type: string, id: number, x: number, y: number) => {
@@ -69,6 +72,7 @@ describe('pointer camera controls', () => {
     canvas.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
     expect(camera.zoom).toBeLessThan(2);
+    expect(changed).toHaveBeenCalledOnce();
     pointer('pointerdown', 1, 200, 200);
     dispose();
     expect(captures.size).toBe(0);

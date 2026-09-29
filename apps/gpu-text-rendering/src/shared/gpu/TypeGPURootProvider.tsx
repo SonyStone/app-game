@@ -4,11 +4,18 @@ import { createContext, useContext } from 'solid-js';
 import type { GpuError } from '../errors';
 import { createGpuRoot, type GpuRoot } from './createGpuRoot';
 
-/** Mounts children only with a ready GPU. Changing requiredBufferBytes replaces the entire GPU subtree. */
+/**
+ * Mounts children only with a ready GPU. Changing requiredBufferBytes, or recovering from device loss,
+ * replaces the entire GPU subtree.
+ */
 export function TypeGPURootProvider(props: {
+  /** Minimum maxBufferSize to request (at least 256 MiB). Changing it requests a new device. */
   requiredBufferBytes: number;
+  /** Mounted beneath the root context while a device is ready. */
   children: JSX.Element;
+  /** Shown while requesting an adapter/device, including during loss recovery. Default nothing. */
   loading?: JSX.Element;
+  /** Renders a terminal failure: no WebGPU/adapter, limits, validation, or unrecovered device loss. */
   error: (error: GpuError) => JSX.Element;
 }) {
   const state = createGpuRoot(() => props.requiredBufferBytes);

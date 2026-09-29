@@ -14,6 +14,7 @@
   "download": "GDOC herunterladen",
   "back": "Zurück zum Beispiel",
   "autoZoom": "Automatischer Zoom",
+  "minimap": "Übersichtskarte",
   "grids": "Raster",
   "vectorOnly": "Nur Vektoren",
   "help": "Zum Verschieben ziehen. Mit dem Mausrad oder zwei Fingern zoomen. Mit zwei Fingern drehen.",
@@ -40,5 +41,6 @@
   "preparingGraphics": "Grafik wird vorbereitet…",
   "cancelLoading": "Laden abbrechen",
   "cancelled": "Laden abgebrochen. Öffnen Sie ein anderes Dokument.",
-  "pageProgress": "{{completed}} von {{total}} Seiten"
+  "pageProgress": "{{completed}} von {{total}} Seiten",
+  "dismiss": "Schließen"
 }

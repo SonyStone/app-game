@@ -14,6 +14,7 @@
   "download": "Download GDOC",
   "back": "Back to demo",
   "autoZoom": "Auto zoom",
+  "minimap": "Minimap",
   "grids": "Grids",
   "vectorOnly": "Vector only",
   "help": "Drag to pan. Scroll or pinch to zoom. Use two fingers to rotate.",
@@ -40,5 +41,6 @@
   "preparingGraphics": "Preparing graphics…",
   "cancelLoading": "Cancel loading",
   "cancelled": "Loading cancelled. Open another document.",
-  "pageProgress": "{{completed}} of {{total}} pages"
+  "pageProgress": "{{completed}} of {{total}} pages",
+  "dismiss": "Dismiss"
 }

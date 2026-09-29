@@ -6,14 +6,12 @@ import { createFrame } from './rendering/createFrame';
 
 function documentFixture(): TextDocument {
   return {
-    pages: layoutPages([{ width: 612, height: 792, beginVertex: 0, endVertex: 12, images: [] }], 2)._unsafeUnwrap(),
+    pages: layoutPages([{ width: 612, height: 792, beginVertex: 0, endVertex: 12 }], 2)._unsafeUnwrap(),
     kind: 'glyphs',
     glyphVertices: new ArrayBuffer(144),
     positions: { x: new Float32Array(2), y: new Float32Array(2) },
     atlas: { buf: new ArrayBuffer(4), width: 1, height: 1 },
-    atlasVertices: { buf: new ArrayBuffer(72), width: 1, height: 1 },
-    imageVertices: new ArrayBuffer(0),
-    images: new Map()
+    atlasVertices: { buf: new ArrayBuffer(72), width: 1, height: 1 }
   };
 }
 
@@ -37,7 +35,7 @@ it('aligns document projection with CSS-space overlays at fractional DPR', () =>
   const document = documentFixture();
   const camera = { x: 0.3, y: 0.8, zoom: 0.2, rotation: 0.7 };
   const display = { width: 800.5, height: 600.5 };
-  const frame = createFrame(document, camera, 1001, 751, false, false, display);
+  const frame = createFrame(document, camera, 1001, 751, { displaySize: display });
   const point = { x: 0.4, y: 0.7 };
   const screen = worldToScreen(camera, point, display.width, display.height, 612 / 792);
   const x = point.x * frame.mul[0] + frame.add[0];
@@ -54,7 +52,7 @@ it('leaves space for larger pages in mixed-size PDF documents', () => {
     { width: 200, height: 300 },
     { width: 100, height: 100 },
     { width: 100, height: 100 }
-  ].map((size) => ({ ...size, beginVertex: 0, endVertex: 0, images: [] }));
+  ].map((size) => ({ ...size, beginVertex: 0, endVertex: 0 }));
   const pages = layoutPages(metadata, 1)._unsafeUnwrap();
 
   expect(pages.map(({ x, y }) => [x, y])).toEqual([

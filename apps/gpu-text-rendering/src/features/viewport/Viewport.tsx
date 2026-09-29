@@ -1,4 +1,4 @@
-import { makeEventListener } from '@solid-primitives/event-listener';
+import { createEventListener, makeEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createContext, createEffect, createMemo, createSignal, useContext } from 'solid-js';
@@ -29,15 +29,14 @@ export function useViewport() {
 
 function createViewport(canvas: HTMLCanvasElement, maxDpr: () => number, maxDimension: number) {
   const measured = createElementSize(canvas);
-  const [deviceDpr, setDeviceDpr] = createSignal(window.devicePixelRatio || 1, { ownedWrite: true });
+  // Written only by browser event listeners, outside any owned scope.
+  const [deviceDpr, setDeviceDpr] = createSignal(window.devicePixelRatio || 1);
   const refreshDpr = () => setDeviceDpr(window.devicePixelRatio || 1);
 
   makeEventListener(window, 'resize', refreshDpr);
 
-  createEffect(deviceDpr, (ratio) => {
-    const query = window.matchMedia(`(resolution: ${ratio}dppx)`);
-    return makeEventListener(query, 'change', refreshDpr);
-  });
+  // Re-queries the current resolution so the listener fires on the next DPR change, including zoom.
+  createEventListener(() => window.matchMedia(`(resolution: ${deviceDpr()}dppx)`), 'change', refreshDpr);
 
   const size = createMemo(() => measureViewport(measured.width, measured.height, deviceDpr(), maxDpr(), maxDimension));
 
@@ -52,24 +51,13 @@ function createViewport(canvas: HTMLCanvasElement, maxDpr: () => number, maxDime
   });
 
   const viewport = {
+    /** CSS size, framebuffer size and effective pixel ratio of the canvas. */
     size,
 
     /** Converts browser client coordinates to canvas-local CSS pixels, including the current scroll offset. */
     clientToScreen(point: Point): Point {
       const rect = canvas.getBoundingClientRect();
       return { x: point.x - rect.left, y: point.y - rect.top };
-    },
-
-    /** Converts canvas-local CSS pixels to actual framebuffer pixels, accounting for rounded dimensions. */
-    screenToPixel(point: Point): Point {
-      const { css, pixels } = size();
-      return { x: (point.x * pixels.width) / css.width, y: (point.y * pixels.height) / css.height };
-    },
-
-    /** Converts framebuffer pixels to canvas-local CSS pixels. */
-    pixelToScreen(point: Point): Point {
-      const { css, pixels } = size();
-      return { x: (point.x * css.width) / pixels.width, y: (point.y * css.height) / pixels.height };
     },
 
     /** Converts canvas-local CSS coordinates to WebGPU clip coordinates. */

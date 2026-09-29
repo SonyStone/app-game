@@ -11,13 +11,25 @@ it('reports browser failures and clears the error after a successful retry', asy
   const cause = new Error('Fullscreen denied');
   const request = vi.fn<() => Promise<void>>().mockRejectedValueOnce(cause).mockResolvedValueOnce();
   const { button } = setup(request);
-  await button.toggle();
+  await button.props.onClick();
   flush();
   expect(button.error()).toMatchObject({ kind: 'fullscreen', message: 'Fullscreen denied', cause });
-  await button.toggle();
+  await button.props.onClick();
   flush();
   expect(button.error()).toBeUndefined();
   expect(request).toHaveBeenCalledTimes(2);
+});
+
+it('dismisses a reported failure without another browser request', async () => {
+  const request = vi.fn<() => Promise<void>>().mockRejectedValueOnce(new Error('Fullscreen denied'));
+  const { button } = setup(request);
+  await button.props.onClick();
+  flush();
+  expect(button.error()).toBeDefined();
+  button.dismissError();
+  flush();
+  expect(button.error()).toBeUndefined();
+  expect(request).toHaveBeenCalledOnce();
 });
 
 it.each(['resolve', 'reject'] as const)(
@@ -37,14 +49,17 @@ it.each(['resolve', 'reject'] as const)(
           })
       );
     const { button, dispose } = setup(request);
-    await button.toggle();
+    await button.props.onClick();
     flush();
-    const pending = button.toggle();
+    const pending = button.props.onClick();
     dispose();
-    if (outcome === 'resolve') resolve();
-    else reject(new Error('Late failure'));
+    if (outcome === 'resolve') {
+      resolve();
+    } else {
+      reject(new Error('Late failure'));
+    }
     await pending;
-    await button.toggle();
+    await button.props.onClick();
     flush();
     expect(button.error()?.cause).toBe(previous);
     expect(request).toHaveBeenCalledTimes(2);

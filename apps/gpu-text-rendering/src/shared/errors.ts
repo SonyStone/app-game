@@ -58,9 +58,20 @@ export function checkAborted(signal?: AbortSignal): Result<void, AbortedError> {
   return signal?.aborted ? err({ kind: 'aborted', message: 'Operation cancelled' }) : ok();
 }
 
-/** Converts an external exception into a displayable message; callers retain its cause separately. */
+/**
+ * Converts an external exception into a displayable message; callers retain its cause separately.
+ * Uses a string `message` property from Error instances and plain error objects, otherwise `String(cause)`.
+ */
 export function errorMessage(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
+  if (cause instanceof Error) {
+    return cause.message;
+  }
+
+  if (typeof cause === 'object' && cause !== null && 'message' in cause && typeof cause.message === 'string') {
+    return cause.message;
+  }
+
+  return String(cause);
 }
 
 /** Extracts successful values when a public type is derived from a result-returning function. */

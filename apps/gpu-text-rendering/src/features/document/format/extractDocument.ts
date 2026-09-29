@@ -29,8 +29,7 @@ export function extractDocument(outcome: DecodeOutcome): Result<DecodedDocument,
           width: records[i]!,
           height: records[i + 1]!,
           beginVertex: records[i + 2]! * 6,
-          endVertex: (records[i + 2]! + records[i + 3]!) * 6,
-          images: []
+          endVertex: (records[i + 2]! + records[i + 3]!) * 6
         });
       }
 

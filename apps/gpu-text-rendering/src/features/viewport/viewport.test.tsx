@@ -34,7 +34,7 @@ it('caps DPR and GPU dimensions uniformly, including fractional sizes and invali
   });
 });
 
-it('reacts to resize, DPR and cap changes; shares inverse pointer conversions and cleans up observers', () => {
+it('reacts to resize, DPR and cap changes; converts pointer coordinates and cleans up observers', () => {
   const canvas = document.createElement('canvas');
   let rect = { left: 30, top: 50, width: 800, height: 600 };
   canvas.getBoundingClientRect = () => rect as DOMRect;
@@ -89,8 +89,6 @@ it('reacts to resize, DPR and cap changes; shares inverse pointer conversions an
   flush();
   expect([canvas.width, canvas.height]).toEqual([1600, 1200]);
   expect(viewport.clientToScreen({ x: 70, y: 80 })).toEqual({ x: 40, y: 30 });
-  expect(viewport.screenToPixel({ x: 40, y: 30 })).toEqual({ x: 80, y: 60 });
-  expect(viewport.pixelToScreen({ x: 80, y: 60 })).toEqual({ x: 40, y: 30 });
   expect(viewport.screenToClip({ x: 400, y: 300 })).toEqual({ x: 0, y: 0 });
 
   rect = { left: 10, top: 20, width: 400, height: 300 };
@@ -109,6 +107,13 @@ it('reacts to resize, DPR and cap changes; shares inverse pointer conversions an
   flush();
   expect(queries.at(-1)!.media).toBe('(resolution: 1.25dppx)');
   expect([canvas.width, canvas.height]).toEqual([500, 375]);
+
+  // The replaced media query no longer updates the DPR.
+  vi.stubGlobal('devicePixelRatio', 1);
+  queries[0]!.dispatchEvent(new Event('change'));
+  flush();
+  expect([canvas.width, canvas.height]).toEqual([500, 375]);
+  vi.stubGlobal('devicePixelRatio', 1.25);
 
   mounted.setCap(1);
   flush();

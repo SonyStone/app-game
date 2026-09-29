@@ -56,7 +56,7 @@ try {
     values.setUint32(72, 2, true);
     const doc = {
       kind: 'curves',
-      pages: layoutPages([{ width, height, beginVertex: 0, endVertex: 6, images: [] }], 2)._unsafeUnwrap(),
+      pages: layoutPages([{ width, height, beginVertex: 0, endVertex: 6 }], 2)._unsafeUnwrap(),
       positions: { x: new Float32Array([0.5]), y: new Float32Array([0.5]) },
       curves: new ArrayBuffer(0),
       instances,
@@ -66,9 +66,7 @@ try {
       groups: new ArrayBuffer(0),
       maskTransfers: new ArrayBuffer(0),
       radialGradients: new ArrayBuffer(0),
-      rasterImages: { table, pixels: pixels.buffer },
-      images: new Map(),
-      imageVertices: new ArrayBuffer(0)
+      rasterImages: { table, pixels: pixels.buffer }
     };
     const canvas = document.createElement('canvas');
     canvas.width = width;

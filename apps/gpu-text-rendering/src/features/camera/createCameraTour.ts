@@ -3,9 +3,10 @@ import type { Camera } from './camera';
 
 /** Owns the automatic tour separately from the renderer, retaining the displayed camera on interruption. */
 export function createCameraTour(camera: Camera) {
+  // The first update always starts a leg, assigning `from` and `target` before they are read.
   let start = -Infinity;
-  let from = { ...camera };
-  let target = { x: camera.x, y: camera.y };
+  let from: Camera;
+  let target: { x: number; y: number };
 
   return {
     stop() {

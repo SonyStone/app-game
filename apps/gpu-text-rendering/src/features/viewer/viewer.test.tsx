@@ -7,6 +7,7 @@ import { DocumentSource } from '../../../tests/fixtures/DocumentSource';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
 import type { AbortedError, DocumentError } from '../../shared/errors';
 import { gpuError } from '../../shared/errors';
+import { maxDeviceRecoveries } from '../../shared/gpu/createGpuRoot';
 import { GpuCanvasProvider } from '../../shared/gpu/GpuCanvasProvider';
 import { TypeGPURootProvider } from '../../shared/gpu/TypeGPURootProvider';
 import { runWorkerRequest } from '../../shared/worker/runWorkerRequest';
@@ -83,7 +84,7 @@ describe('document viewer ownership and reactivity', () => {
     const state = viewer.state();
     dispose();
     expect(cancellations[0]).toHaveBeenCalled();
-    const { data } = documentFixture();
+    const data = documentFixture();
     pending.resolve(ok(data));
     await settle();
     expect(createTypeGpuRenderer).not.toHaveBeenCalled();
@@ -112,7 +113,7 @@ describe('document viewer ownership and reactivity', () => {
     dispose();
     expect(cancellations[0]).toHaveBeenCalled();
     setProgress({ stage: 'processingPages', completed: 1, total: 2 });
-    const { data } = documentFixture();
+    const data = documentFixture();
     pending.resolve(ok(data));
     await settle();
     expect(onLoading).toHaveBeenCalledTimes(2);
@@ -122,7 +123,7 @@ describe('document viewer ownership and reactivity', () => {
 
   it('draws on demand, reacts to options and stops the tour on wheel input', async () => {
     const renderer = rendererFixture();
-    vi.mocked(readGdoc).mockReturnValue(okAsync(documentFixture().data));
+    vi.mocked(readGdoc).mockReturnValue(okAsync(documentFixture()));
     vi.mocked(createTypeGpuRenderer).mockResolvedValue(ok(renderer));
     const { viewer, setCanvas } = setup();
     const canvas = makeCanvas();
@@ -158,7 +159,7 @@ describe('document viewer ownership and reactivity', () => {
     { top: 10, right: 160, bottom: 90, left: 8 }
   ])('fits mixed-size pages with padding %j without reloading', async (padding) => {
     const renderer = rendererFixture();
-    const { data } = documentFixture();
+    const data = documentFixture();
     data.pages.push({ ...data.pages[0]!, width: 1224, height: 1584, x: -3, y: 5 });
     vi.mocked(readGdoc).mockReturnValue(okAsync(data));
     vi.mocked(createTypeGpuRenderer).mockResolvedValue(ok(renderer));
@@ -192,7 +193,7 @@ describe('document viewer ownership and reactivity', () => {
   it('releases old targets, pointer captures and observers on replacement and removal', async () => {
     const first = rendererFixture();
     const second = rendererFixture();
-    vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture().data));
+    vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture()));
     vi.mocked(createTypeGpuRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
     const { viewer, setCanvas } = setup();
     const oldCanvas = makeCanvas();
@@ -224,7 +225,7 @@ describe('document viewer ownership and reactivity', () => {
     const pending = deferred<Awaited<ReturnType<typeof createTypeGpuRenderer>>>();
     const late = rendererFixture();
     const current = rendererFixture();
-    vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture().data));
+    vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture()));
     vi.mocked(createTypeGpuRenderer).mockReturnValueOnce(pending.promise).mockResolvedValueOnce(ok(current));
     const { viewer, setCanvas } = setup();
     setCanvas(makeCanvas());
@@ -250,7 +251,7 @@ describe('document viewer ownership and reactivity', () => {
   it('reuses the device and canvas context while replacing the document and renderer', async () => {
     const first = rendererFixture();
     const second = rendererFixture();
-    vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture().data));
+    vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture()));
     vi.mocked(createTypeGpuRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
     const { setCanvas, setSession, dispose } = setup();
     setCanvas(makeCanvas());
@@ -268,12 +269,12 @@ describe('document viewer ownership and reactivity', () => {
     expect(gpu.device.destroy).toHaveBeenCalledOnce();
   });
 
-  it('surfaces initialization errors and device loss while idle', async () => {
-    vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture().data));
+  it('surfaces initialization errors, recovers from device loss, and surfaces repeated loss', async () => {
+    vi.mocked(readGdoc).mockImplementation(() => okAsync(documentFixture()));
     const renderer = rendererFixture();
     vi.mocked(createTypeGpuRenderer)
       .mockResolvedValueOnce(err(gpuError('adapter', 'No WebGPU adapter')))
-      .mockResolvedValueOnce(ok(renderer));
+      .mockResolvedValue(ok(renderer));
     const { viewer, setCanvas, setSession } = setup();
     setCanvas(makeCanvas());
     await settle();
@@ -285,8 +286,15 @@ describe('document viewer ownership and reactivity', () => {
     const gpu = vi.mocked(createTypeGpuRenderer).mock.calls[1]![0]!;
     loseDevice.get(gpu.device)!({ message: 'Device lost', reason: 'unknown' });
     await settle();
+    expect(tgpu.initFromDevice).toHaveBeenCalledTimes(2);
+
+    for (let loss = 0; loss < maxDeviceRecoveries; loss++) {
+      [...loseDevice.values()].at(-1)!({ message: 'Device lost', reason: 'unknown' });
+      await settle();
+    }
+
     expect(viewer.state()).toMatchObject({ phase: 'error', error: { kind: 'gpu', code: 'lost' } });
-    expect(renderer.destroy).toHaveBeenCalledOnce();
+    expect(renderer.destroy).toHaveBeenCalledTimes(maxDeviceRecoveries + 1);
     viewer.setGrids(true);
     flush();
     expect(frames.size).toBe(0);
@@ -437,18 +445,14 @@ function makeCanvas() {
 }
 
 function documentFixture() {
-  const close = vi.fn();
-  const data = {
-    pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6, images: [] as [], x: 0, y: 0 }],
+  return {
+    pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6, x: 0, y: 0 }],
     kind: 'glyphs',
     glyphVertices: new ArrayBuffer(72),
     positions: { x: new Float32Array([0.5]), y: new Float32Array([0.5]) },
     atlas: { buf: new ArrayBuffer(4), width: 1, height: 1 },
-    atlasVertices: { buf: new ArrayBuffer(72), width: 1, height: 1 },
-    imageVertices: new ArrayBuffer(0),
-    images: new Map([['image', { width: 1, height: 1, close }]])
+    atlasVertices: { buf: new ArrayBuffer(72), width: 1, height: 1 }
   } satisfies TextDocument;
-  return { data, close };
 }
 
 function rendererFixture(): TextRenderer {

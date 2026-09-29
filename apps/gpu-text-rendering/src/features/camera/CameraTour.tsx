@@ -5,12 +5,17 @@ import { createCameraTour } from './createCameraTour';
 import { useDocumentCamera } from './DocumentCamera';
 
 /** Advances the optional camera tour before drawing. Enabling it again starts from the current camera. */
-export function CameraTour(props: { document: TextDocument; enabled: boolean }) {
+export function CameraTour(props: {
+  /** Pages and glyph positions that tour targets are picked from; read on each frame. */
+  document: TextDocument;
+  /** Runs the tour continuously while true; each change restarts the next leg from the current camera. */
+  enabled: boolean;
+}) {
   const camera = useDocumentCamera();
   const tour = createCameraTour(camera);
 
   createEffect(
-    () => [props.enabled, props.document],
+    () => props.enabled,
     () => tour.stop()
   );
 

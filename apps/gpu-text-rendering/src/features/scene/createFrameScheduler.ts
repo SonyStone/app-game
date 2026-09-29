@@ -1,12 +1,17 @@
 import { createRAF } from '@solid-primitives/raf';
-import { Result } from 'neverthrow';
+import { ok, Result } from 'neverthrow';
 import { onCleanup, untrack } from 'solid-js';
 import { errorMessage, gpuError, type ViewerError } from '../../shared/errors';
 
-/** Owns one demand-driven clock. Subscriptions can keep it running independently of one another. */
+/**
+ * Owns one demand-driven clock. Subscriptions can keep it running independently of one another.
+ * `track` wraps the render phase and draw of each frame, so a caller can observe their reactive reads;
+ * update callbacks run outside it. Default: runs the frame untracked.
+ */
 export function createFrameScheduler(
   draw: (frame: FrameTime) => Result<void, ViewerError>,
-  onError: (error: ViewerError) => void
+  onError: (error: ViewerError) => void,
+  track: (record: () => void) => void = (record) => record()
 ) {
   const subscriptions = new Set<FrameSubscription>();
   let stopped = false;
@@ -97,33 +102,22 @@ export function createFrameScheduler(
     time += delta;
 
     const frame = { timestamp, delta, time };
-    const updated = Result.fromThrowable(
-      () => {
-        for (const phase of ['update', 'render'] as const) {
-          for (const subscription of subscriptions) {
-            if (stopped) {
-              return;
-            }
-
-            if (subscription.phase === phase) {
-              subscription.callback(frame);
-            }
-          }
-        }
-      },
-      (cause) => gpuError('render', errorMessage(cause), cause)
-    )();
+    const updated = runPhase('update', frame);
 
     if (updated.isErr()) {
       loop.fail(updated.error);
       return;
     }
 
-    if (stopped) {
-      return;
-    }
+    let rendered: Result<void, ViewerError> = ok();
 
-    const rendered = draw(frame);
+    track(() => {
+      rendered = runPhase('render', frame);
+
+      if (rendered.isOk() && !stopped) {
+        rendered = draw(frame);
+      }
+    });
 
     if (rendered.isErr()) {
       loop.fail(rendered.error);
@@ -133,6 +127,24 @@ export function createFrameScheduler(
     if (!continuous && !invalidated && ![...subscriptions].some((subscription) => subscription.continuous)) {
       pause();
     }
+  }
+
+  /** Runs one phase's callbacks in subscription order, stopping early if a callback stops the loop. */
+  function runPhase(phase: FrameSubscription['phase'], frame: FrameTime) {
+    return Result.fromThrowable(
+      () => {
+        for (const subscription of subscriptions) {
+          if (stopped) {
+            return;
+          }
+
+          if (subscription.phase === phase) {
+            subscription.callback(frame);
+          }
+        }
+      },
+      (cause) => gpuError('render', errorMessage(cause), cause)
+    )();
   }
 
   function pause() {
@@ -145,7 +157,9 @@ export function createFrameScheduler(
 export type FrameTime = {
   /** Raw RAF timestamp in milliseconds, for diagnostics rather than animation progress. */
   timestamp: number;
+  /** Seconds since the previous active frame: 0 after idle or resume, at most 0.1. */
   delta: number;
+  /** Accumulated active seconds; does not advance while idle or hidden. */
   time: number;
 };
 

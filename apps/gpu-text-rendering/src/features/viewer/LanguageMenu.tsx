@@ -17,12 +17,14 @@ export function LanguageMenu(props: {
   const [languageMenu, setLanguageMenu] = createSignal(false);
   let languageTrigger: HTMLButtonElement | undefined;
   let submenu: HTMLDivElement | undefined;
-  let wasOpen = false;
-  createEffect(languageMenu, (open) => {
-    if (open) submenu?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
-    else if (wasOpen) languageTrigger?.focus();
-    wasOpen = open;
+  createEffect(languageMenu, (open, wasOpen) => {
+    if (open) {
+      submenu?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+    } else if (wasOpen) {
+      languageTrigger?.focus();
+    }
   });
+
   return (
     <div
       onKeyDown={(event) => {

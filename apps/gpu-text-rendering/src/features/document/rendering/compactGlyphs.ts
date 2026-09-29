@@ -4,7 +4,9 @@
  * Page ranges retain their legacy vertex units.
  */
 export function compactGlyphs(vertices: ArrayBuffer, pages: readonly { beginVertex: number; endVertex: number }[]) {
-  if (vertices.byteLength % 72 !== 0) throw new Error('Invalid glyph vertex length');
+  if (vertices.byteLength % 72 !== 0) {
+    throw new Error('Invalid glyph vertex length');
+  }
   const source = new Uint32Array(vertices);
   const packed = new Uint32Array((vertices.byteLength / 72) * 7);
   for (const [pageIndex, page] of pages.entries()) {

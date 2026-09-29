@@ -1,5 +1,5 @@
 import tgpu, { d, std } from 'typegpu';
-import { imageTextureLayout, viewLayout } from './bindings';
+import { viewLayout } from './bindings';
 
 /** Maps page coordinates into clip space with rotation corrected for viewport aspect. */
 export function project(position: d.v2f, page: number) {
@@ -30,25 +30,4 @@ export const pageVertex = tgpu.vertexFn({ in: { position: d.vec2f }, out: { posi
 export const pageFragment = tgpu.fragmentFn({ out: d.vec4f })(() => {
   'use gpu';
   return d.vec4f(1);
-});
-
-/** Image geometry follows the same page transform as glyphs. */
-export const imageVertex = tgpu.vertexFn({
-  in: { position: d.vec2f, uv: d.vec2f, alphaInvert: d.vec4f, page: d.builtin.instanceIndex },
-  out: { position: d.builtin.position, uv: d.vec2f, alpha: d.f32 }
-})((input) => {
-  'use gpu';
-  return {
-    position: project(d.vec2f(input.position.x, 1 - input.position.y), input.page),
-    uv: d.vec2f(input.uv),
-    alpha: input.alphaInvert.x
-  };
-});
-
-/** Samples image color with straight-alpha compositing. */
-export const imageFragment = tgpu.fragmentFn({ in: { uv: d.vec2f, alpha: d.f32 }, out: d.vec4f })((input) => {
-  'use gpu';
-  const color = std.textureSample(imageTextureLayout.$.image, imageTextureLayout.$.sampler, input.uv);
-
-  return d.vec4f(color.rgb, color.a * input.alpha);
 });

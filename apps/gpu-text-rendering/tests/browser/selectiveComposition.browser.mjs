@@ -49,9 +49,7 @@ try {
     )._unsafeUnwrap();
     const doc = {
       ...data,
-      pages: layoutPages(data.pages, 2)._unsafeUnwrap(),
-      images: new Map(),
-      imageVertices: new ArrayBuffer(0)
+      pages: layoutPages(data.pages, 2)._unsafeUnwrap()
     };
     const canvas = document.createElement('canvas');
     canvas.width = 800;
@@ -78,7 +76,7 @@ try {
     window.MessageChannel = NativeChannel;
 
     const capture = async (camera, vectorOnly, settle = false) => {
-      const frame = createFrame(doc, camera, canvas.width, canvas.height, vectorOnly);
+      const frame = createFrame(doc, camera, canvas.width, canvas.height, { vectorOnly });
       renderer.render(frame)._unsafeUnwrap();
       if (settle) {
         (await renderer.settle())._unsafeUnwrap();

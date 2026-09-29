@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paintTree } from './paintTree';
+import { alphaMaskBlend, paintTree } from './paintTree';
 
 describe('transparency group composition', () => {
   it('keeps knockout siblings separate even when they use the same normal paint', () => {
@@ -19,6 +19,33 @@ describe('transparency group composition', () => {
     const tree = scene(256, [1, 4]);
     expect(tree.map((node) => node.blend)).toEqual([1, 4]);
     expect(tree.every((node) => !('children' in node))).toBe(true);
+  });
+
+  it('keeps an opaque non-isolated group whose soft mask must not mask earlier parent paint', () => {
+    const groups = new DataView(new ArrayBuffer(2 * 24));
+    groups.setUint32(0, 1, true);
+    groups.setUint32(4, 4, true);
+    groups.setFloat32(8, 1, true);
+    groups.setUint32(12, 256, true);
+    groups.setUint32(24, 1, true);
+    groups.setUint32(28, 2, true);
+    groups.setUint32(36, alphaMaskBlend, true);
+    groups.setUint32(40, 1, true);
+
+    const tree = paintTree(new ArrayBuffer(4 * 80), new ArrayBuffer(0), groups.buffer, [
+      { beginVertex: 0, endVertex: 24 }
+    ])[0]!;
+
+    expect(tree).toMatchObject([
+      { first: 0, count: 1, blend: 0 },
+      {
+        isolated: false,
+        children: [
+          { blend: alphaMaskBlend, children: [{ first: 1, count: 1 }] },
+          { first: 2, count: 2 }
+        ]
+      }
+    ]);
   });
 
   it('keeps an isolated group around children that must blend against transparency', () => {

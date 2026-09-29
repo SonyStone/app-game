@@ -14,6 +14,7 @@
   "download": "הורדת GDOC",
   "back": "חזרה לדוגמה",
   "autoZoom": "זום אוטומטי",
+  "minimap": "מפה מוקטנת",
   "grids": "רשת",
   "vectorOnly": "וקטורים בלבד",
   "help": "גררו כדי להזיז. גללו או צבטו כדי לשנות את הזום. השתמשו בשתי אצבעות כדי לסובב.",
@@ -40,5 +41,6 @@
   "preparingGraphics": "מכין גרפיקה…",
   "cancelLoading": "ביטול טעינה",
   "cancelled": "הטעינה בוטלה. ניתן לפתוח מסמך אחר.",
-  "pageProgress": "{{completed}} מתוך {{total}} עמודים"
+  "pageProgress": "{{completed}} מתוך {{total}} עמודים",
+  "dismiss": "סגירה"
 }

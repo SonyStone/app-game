@@ -1,7 +1,6 @@
 import { makeEventListener } from '@solid-primitives/event-listener';
-import { access, type MaybeAccessor } from '@solid-primitives/utils';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
-import { createMemo, createSignal, latest, onCleanup } from 'solid-js';
+import { createMemo, createSignal, latest, onCleanup, type Accessor } from 'solid-js';
 import { downloadFile } from '../../shared/downloadFile';
 import { documentError, errorMessage, type AbortedError, type DocumentError } from '../../shared/errors';
 import { readFileBytes } from '../../shared/readFileBytes';
@@ -11,14 +10,17 @@ import { documentWorkerError } from '../document/documentWorkerError';
 import ConvertWorker from '../document/pdf/convert.worker?worker';
 
 /**
- * Provides an on-demand save command for a prepared PDF value or reactive accessor.
+ * Provides an on-demand save command for the prepared PDF returned by an accessor.
  * Undefined disables export. Read status beneath Loading when the accessor depends on async loading.
  * Owns conversion workers and cached downloads; changing, cancelling or failing the source releases them.
  */
-export function createDocumentExport(document: MaybeAccessor<PreparedDocument | undefined>) {
+export function createDocumentExport(document: Accessor<PreparedDocument | undefined>) {
   const output = createMemo(() => {
-    const current = access(document);
-    if (!current || current.format !== 'pdf' || !current.file || current.signal.aborted) return undefined;
+    const current = document();
+    if (!current || current.format !== 'pdf' || !current.file || current.signal.aborted) {
+      return undefined;
+    }
+
     return createPdfExport(current.file, current.signal);
   });
 
@@ -29,13 +31,12 @@ export function createDocumentExport(document: MaybeAccessor<PreparedDocument | 
     pending: () => output()?.pending() ?? false,
     /** Latest save failure for the current document. */
     error: () => output()?.error(),
+    /** Hides the latest save failure without retrying. */
+    dismissError: () => output()?.dismissError(),
     /** Saves the current PDF; unavailable or duplicate saves succeed without work. */
     save: () => output()?.save() ?? Promise.resolve(ok())
   };
 }
-
-/** Reactive export status and an async save command, owned by the document session. */
-export type DocumentExport = ReturnType<typeof createDocumentExport>;
 
 /** Caches a converted download until its source is aborted or its reactive owner is disposed. */
 function createPdfExport(file: File, signal: AbortSignal) {
@@ -46,10 +47,15 @@ function createPdfExport(file: File, signal: AbortSignal) {
   let download: { url: string; name: string } | undefined;
 
   const dispose = () => {
-    if (controller.signal.aborted) return;
+    if (controller.signal.aborted) {
+      return;
+    }
+
     setActive(false);
     controller.abort();
-    if (download) URL.revokeObjectURL(download.url);
+    if (download) {
+      URL.revokeObjectURL(download.url);
+    }
   };
   makeEventListener(signal, 'abort', dispose, { once: true });
   onCleanup(dispose);
@@ -61,24 +67,39 @@ function createPdfExport(file: File, signal: AbortSignal) {
     pending: () => active() && pending(),
     /** Latest save failure; cleared when a new save starts or the source is aborted. */
     error: () => (active() ? error() : undefined),
+    /** Clears the latest save failure. */
+    dismissError: () => setError(undefined),
     /** Converts and downloads, or reuses the cached URL. Returns typed failures; ignored calls succeed without work. */
     async save() {
-      if (controller.signal.aborted || latest(pending)) return ok();
+      // `latest` sees a staged setPending(true) from a save started earlier in the same tick.
+      if (controller.signal.aborted || latest(pending)) {
+        return ok();
+      }
+
       setPending(true);
       setError(undefined);
       const result = await ResultAsync.fromThrowable(
         async (): Promise<Result<void, DocumentError | AbortedError>> => {
           if (!download) {
             const bytes = await readFileBytes(file, { signal: controller.signal });
-            if (controller.signal.aborted) return ok();
+            if (controller.signal.aborted) {
+              return ok();
+            }
+
             const converted = (
               await runWorkerRequest<ArrayBuffer, ArrayBuffer, DocumentError>(() => new ConvertWorker(), bytes, {
                 signal: controller.signal,
                 transfer: [bytes]
               })
             ).mapErr(documentWorkerError);
-            if (controller.signal.aborted) return ok();
-            if (converted.isErr()) return err(converted.error);
+            if (controller.signal.aborted) {
+              return ok();
+            }
+
+            if (converted.isErr()) {
+              return err(converted.error);
+            }
+
             const exported = new File([converted.value], file.name.replace(/\.[^.]+$/, '') + '.gdoc', {
               type: 'application/octet-stream'
             });
@@ -91,7 +112,9 @@ function createPdfExport(file: File, signal: AbortSignal) {
       )().andThen((result) => result);
       if (!controller.signal.aborted) {
         setPending(false);
-        if (result.isErr()) setError(result.error.message);
+        if (result.isErr()) {
+          setError(result.error.message);
+        }
       }
       return controller.signal.aborted ? ok() : result;
     }

@@ -68,15 +68,17 @@ export function paintTree(
       const opacity = records.getFloat32(index * 24 + 8, true);
       const blend = properties & 255;
 
+      // A group's soft mask applies only to that group; splicing it would mask the parent's paint too.
       if (
         !knockout &&
         !childKnockout &&
         opacity === 1 &&
         blend === 0 &&
+        !nested.some(isMask) &&
         (!isolated || nested.every((node) => node.blend === 0))
       ) {
         nodes.push(...nested);
-      } else if (nested.length > 0 || blend === 2 || blend === 3) {
+      } else if (nested.length > 0 || isMask({ blend })) {
         nodes.push({
           children: nested,
           opacity,
@@ -93,6 +95,17 @@ export function paintTree(
     nodes.push(...leaves(next, end, knockout));
     return knockout ? nodes : coalesceNormalPaint(nodes);
   }
+}
+
+/** GRUP kind of an alpha soft mask: its content's alpha scales the enclosing group. */
+export const alphaMaskBlend = 2;
+
+/** GRUP kind of a luminosity soft mask: its content's luminosity scales the enclosing group. */
+export const luminosityMaskBlend = 3;
+
+/** Whether a node is hidden soft-mask content for its parent group rather than painted output. */
+export function isMask(node: Pick<PaintNode, 'blend'>) {
+  return node.blend === alphaMaskBlend || node.blend === luminosityMaskBlend;
 }
 
 /** Flattened opaque groups no longer separate compatible draws, but paint order remains unchanged. */

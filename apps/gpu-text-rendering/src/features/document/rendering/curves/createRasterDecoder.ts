@@ -1,9 +1,17 @@
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
 import { onCleanup } from 'solid-js';
-import { decodePdfCmykJpeg, jpegComponents } from './decodeCmykJpeg';
-import { expandPackedTile, mipTail, packedTileIndex, reduceMip, tilePixels, type RasterMip } from './rasterPixels';
+import { decodePdfCmykJpeg, jpegComponents, stripJpegExif } from './decodeCmykJpeg';
+import {
+  assembleTiledMip,
+  expandPackedTile,
+  mipTail,
+  packedTileIndex,
+  reduceMip,
+  tilePixels,
+  type RasterMip
+} from './rasterPixels';
 import type { RasterReply, RasterRequest } from './rasterWorkerTypes';
-import { mipSize, tileExtent, tileSize, type Tile } from './virtualTiles';
+import { mipSize, tileSize, type Tile } from './virtualTiles';
 
 /** Owns an image and mip cache across serial requests. Create once under the worker's owner, outside request scopes. */
 export function createRasterDecoder() {
@@ -13,7 +21,12 @@ export function createRasterDecoder() {
   });
   return { decode };
 
-  function decode(request: RasterRequest) {
+  /**
+   * Decodes a request's mip tail and tiles. A request carrying `bytes` replaces the cached source and its
+   * decoded mips; a request without bytes reuses the cache and fails unless the cache holds the same image id.
+   * The reply's `id` always equals `request.id`. An aborted `signal` resolves an error between decoding steps.
+   */
+  function decode(request: RasterRequest, signal?: AbortSignal) {
     return ResultAsync.fromThrowable(
       async (): Promise<Result<RasterReply, string>> => {
         if (request.bytes) {
@@ -25,22 +38,13 @@ export function createRasterDecoder() {
         }
 
         const source = current;
+        const cancelled = () => err('Image decoding was cancelled');
         const getMip = async (level: number): Promise<Result<RasterMip, string>> => {
           if (request.codec === 4) {
-            const width = mipSize(request.width, level);
-            const height = mipSize(request.height, level);
-            const tile = await readTile({ image: request.id, level, x: 0, y: 0 });
-            if (tile.isErr()) {
-              return err(tile.error);
-            }
-
-            const pixels = new Uint8Array(width * height * 4);
-
-            for (let y = 0; y < height; y++) {
-              pixels.set(new Uint8Array(tile.value, ((y + 1) * tileExtent + 1) * 4, width * 4), y * width * 4);
-            }
-
-            return ok({ width, height, pixels });
+            // Tail mips of long, thin images can span several packed tiles.
+            return assembleTiledMip(mipSize(request.width, level), mipSize(request.height, level), (x, y) =>
+              signal?.aborted ? Promise.resolve(cancelled()) : readTile({ image: request.id, level, x, y })
+            );
           }
 
           const requestedLevel = Math.min(
@@ -57,6 +61,10 @@ export function createRasterDecoder() {
 
             if (decoded.isErr()) {
               return err(decoded.error);
+            }
+
+            if (signal?.aborted) {
+              return cancelled();
             }
 
             source.baseLevel = baseLevel;
@@ -98,6 +106,10 @@ export function createRasterDecoder() {
         const tiles: RasterReply['tiles'] = [];
 
         for (const tile of request.tiles) {
+          if (signal?.aborted) {
+            return cancelled();
+          }
+
           const decoded = await readTile(tile);
 
           if (decoded.isErr()) {
@@ -114,19 +126,27 @@ export function createRasterDecoder() {
   }
 }
 
+/** Decodes a whole source image at `level`; codecs 0/1 are raw/deflated RGBA8; 2/3 are JPEG, with 3 applying embedded color profiles. */
 async function decodeSource(request: RasterRequest, bytes: ArrayBuffer, level = 0): Promise<Result<RasterMip, string>> {
   const { width, height, codec } = request;
 
-  if (codec < 2) {
-    const pixels = codec === 1 ? await inflate(bytes, width * height * 4) : ok(new Uint8Array(bytes));
-    return pixels.map((pixels) => ({ width, height, pixels }));
+  if (codec === 1) {
+    return (await inflate(bytes, width * height * 4)).map((pixels) => ({ width, height, pixels }));
+  }
+
+  if (codec === 0) {
+    return bytes.byteLength === width * height * 4
+      ? ok({ width, height, pixels: new Uint8Array(bytes) })
+      : err('Image pixels do not match their declared dimensions');
   }
 
   if (jpegComponents(bytes) === 4) {
     return decodePdfCmykJpeg(bytes, width, height);
   }
 
-  const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }), {
+  // PDF ignores Exif orientation, but browsers apply it. imageOrientation 'none' is deprecated
+  // (treated as 'from-image' by current Chrome) and absent from the current enum, so strip Exif instead.
+  const bitmap = await createImageBitmap(new Blob([stripJpegExif(bytes)], { type: 'image/jpeg' }), {
     colorSpaceConversion: codec === 3 ? 'default' : 'none'
   });
   const targetWidth = mipSize(width, level);

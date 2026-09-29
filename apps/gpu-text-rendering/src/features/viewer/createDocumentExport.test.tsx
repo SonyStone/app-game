@@ -45,22 +45,12 @@ it('converts only after a click, reuses the file for later downloads and release
   expect(URL.revokeObjectURL).toHaveBeenCalledOnce();
 });
 
-it('accepts a prepared document value without a loader or accessor', async () => {
-  const convert = vi.fn<Convert>(() => okAsync(new ArrayBuffer(4)));
-  const session = setup(convert, new File(['pdf'], 'direct.pdf'), 'value');
-  expect(session.output.available()).toBe(true);
-  await session.output.save();
-  expect(downloadFile).toHaveBeenCalledWith('blob:export', 'direct.gdoc');
-  session.dispose();
-  expect(URL.revokeObjectURL).toHaveBeenCalledOnce();
-});
-
-it.each(['value', 'accessor'] as const)('reacts to abort without replacing the %s input', async (input) => {
+it('reacts to abort without replacing the accessor input', async () => {
   const file = new File(['pdf'], 'document.pdf');
   const read = vi.spyOn(FileReader.prototype, 'readAsArrayBuffer');
   const abortRead = vi.spyOn(FileReader.prototype, 'abort');
   const convert = vi.fn<Convert>();
-  const session = setup(convert, file, input);
+  const session = setup(convert, file);
   const saving = session.output.save();
   flush();
   expect(session.output.pending()).toBe(true);
@@ -81,7 +71,7 @@ it.each(['value', 'accessor'] as const)('reacts to abort without replacing the %
 
 it('releases a fixed document download on abort and stays unavailable', async () => {
   const convert = vi.fn<Convert>(() => okAsync(new ArrayBuffer(4)));
-  const session = setup(convert, new File(['pdf'], 'document.pdf'), 'value');
+  const session = setup(convert, new File(['pdf'], 'document.pdf'));
   await session.output.save();
   session.abort();
   flush();
@@ -157,6 +147,9 @@ it('reports file-read failures without starting conversion', async () => {
   expect(result.isErr() && result.error).toMatchObject({ kind: 'document', code: 'load', message: 'Read failed' });
   await vi.waitFor(() => expect(session.output.error()).toBe('Read failed'));
   expect(convert).not.toHaveBeenCalled();
+  session.output.dismissError();
+  flush();
+  expect(session.output.error()).toBeUndefined();
 });
 
 it('does not start conversion when disposed during the file read', async () => {
@@ -179,7 +172,10 @@ it.each(['throw', 'reject'] as const)('handles an unexpected conversion %s and a
   const convert = vi
     .fn<Convert>()
     .mockImplementationOnce(() => {
-      if (failure === 'throw') throw new Error('Unexpected failure');
+      if (failure === 'throw') {
+        throw new Error('Unexpected failure');
+      }
+
       return new ResultAsync(Promise.reject(new Error('Unexpected failure')));
     })
     .mockReturnValueOnce(okAsync(new ArrayBuffer(4)));
@@ -225,7 +221,7 @@ it.each(['cancel', 'fail'] as const)('suppresses a conversion completed after so
 
 type Convert = (bytes: ArrayBuffer) => ResultAsync<ArrayBuffer, DocumentError | AbortedError>;
 
-function setup(convert: Convert, file = new File(['pdf'], 'document.pdf'), input: 'value' | 'accessor' = 'accessor') {
+function setup(convert: Convert, file = new File(['pdf'], 'document.pdf')) {
   let output!: ReturnType<typeof createDocumentExport>;
   let select!: (file?: File) => void;
   let cancel!: () => void;
@@ -238,7 +234,7 @@ function setup(convert: Convert, file = new File(['pdf'], 'document.pdf'), input
   });
   const dispose = render(() => {
     const [document, setDocument] = createSignal<PreparedDocument | undefined>(prepared(file));
-    output = createDocumentExport(input === 'value' ? document() : document);
+    output = createDocumentExport(document);
     select = (file) => setDocument(file ? prepared(file) : undefined);
     cancel = () => {
       controller.abort();
@@ -268,8 +264,6 @@ function setup(convert: Convert, file = new File(['pdf'], 'document.pdf'), input
       data: {
         kind: 'glyphs',
         pages: [],
-        images: new Map(),
-        imageVertices: new ArrayBuffer(0),
         positions: { x: new Float32Array(), y: new Float32Array() },
         glyphVertices: new ArrayBuffer(0),
         atlas: { buf: new ArrayBuffer(0), width: 1, height: 1 },

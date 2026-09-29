@@ -1,17 +1,14 @@
 import { layoutPages } from '../../src/features/document/layoutPages';
-import { readGdoc } from '../browser/workerHarness';
 import { createFrame } from '../../src/features/document/rendering/createFrame';
-import { createTypeGpuRenderer } from '../browser/workerHarness';
 import { mountRenderingGpu } from '../browser/renderingHarness';
+import { createTypeGpuRenderer, readGdoc } from '../browser/workerHarness';
 
 /** Loads one external document and measures navigation with at most one outstanding frame. */
 export async function prepareCorpusNavigation(url: string) {
   const data = (await readGdoc(await (await fetch(url)).arrayBuffer()))._unsafeUnwrap();
   const document = {
     ...data,
-    pages: layoutPages(data.pages, 2)._unsafeUnwrap(),
-    images: new Map(),
-    imageVertices: new ArrayBuffer(0)
+    pages: layoutPages(data.pages, 2)._unsafeUnwrap()
   };
   const canvas = window.document.createElement('canvas');
   canvas.width = Math.round(innerWidth * devicePixelRatio);

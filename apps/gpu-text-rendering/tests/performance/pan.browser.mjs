@@ -121,9 +121,7 @@ try {
       const data = (await readGdoc(await (await fetch('/performance-input.gdoc')).arrayBuffer()))._unsafeUnwrap();
       const doc = {
         ...data,
-        pages: layoutPages(data.pages, 2)._unsafeUnwrap(),
-        images: new Map(),
-        imageVertices: new ArrayBuffer(0)
+        pages: layoutPages(data.pages, 2)._unsafeUnwrap()
       };
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(innerWidth * devicePixelRatio);
@@ -237,7 +235,7 @@ try {
           camera.y = (1 + bottom) / 2 + (focus.y - (1 + bottom) / 2) * progress;
         }
       };
-      const frame = () => createFrame(doc, camera, canvas.width, canvas.height, vectorOnly);
+      const frame = () => createFrame(doc, camera, canvas.width, canvas.height, { vectorOnly });
       moveCamera(0, frames);
       console.log('BENCH first render');
       const coldStart = performance.now();

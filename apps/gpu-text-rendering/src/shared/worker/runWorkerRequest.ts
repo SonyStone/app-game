@@ -3,10 +3,18 @@ import { createSubRoot } from '@solid-primitives/rootless';
 import { err, ok } from 'neverthrow';
 import { onCleanup } from 'solid-js';
 import { createWorkerTransport } from './createWorkerTransport';
-import type { WorkerCancelled, WorkerReply, WorkerResult } from './workerProtocol';
+import type {
+  ReplyFailure,
+  ReplyOutput,
+  ReplyProgress,
+  WorkerCancelled,
+  WorkerReply,
+  WorkerResult
+} from './workerProtocol';
 
 /**
  * Runs one request in a fresh worker. Completion, cancellation, or owner disposal closes the worker.
+ * Cancellation shuts the worker down cooperatively, aborting its request signal before termination.
  * Calls run independently and resolve typed results. Outside a Solid owner, the signal owns cancellation.
  */
 export function runWorkerRequest<Input, Output, Failure, Progress = never>(
@@ -69,6 +77,17 @@ export type WorkerRequestOptions<Progress = never> = {
 
 /** A request with its worker factory and cancellation signal supplied by the caller. */
 export type WorkerRequest<Input, Output, Failure> = (input: Input) => Promise<WorkerResult<Output, Failure>>;
+
+/** A request typed by the input and reply protocol a worker declares, so protocol changes fail at call sites. */
+export type ProtocolRequest<Input, Reply> = WorkerRequest<Input, ReplyOutput<Reply>, ReplyFailure<Reply>>;
+
+/** runWorkerRequest instantiated from a worker's declared protocol instead of restated generics. */
+export type RunProtocolRequest<Input, Reply> = typeof runWorkerRequest<
+  Input,
+  ReplyOutput<Reply>,
+  ReplyFailure<Reply>,
+  ReplyProgress<Reply>
+>;
 
 function cancelled(): WorkerCancelled {
   return { kind: 'aborted', message: 'Operation cancelled' };

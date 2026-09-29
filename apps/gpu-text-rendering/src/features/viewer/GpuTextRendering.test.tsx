@@ -161,6 +161,26 @@ it('shows progress and cancellation while loading and ignores a cancelled result
   expect(statusText(host)).toBe('preparing');
 });
 
+it('shows a dismissible fullscreen failure while a document is still loading', async () => {
+  decode = () => new Promise(() => {});
+  Object.defineProperty(document, 'fullscreenEnabled', { value: true, configurable: true });
+  HTMLElement.prototype.requestFullscreen = vi.fn(() => Promise.reject(new Error('Fullscreen denied')));
+  try {
+    const host = mount();
+    await vi.waitFor(() => expect(host.querySelector('[data-testid="document-loading"]')).not.toBeNull());
+    host.querySelector<HTMLButtonElement>('button[aria-label="enterFullscreen"]')!.click();
+    await vi.waitFor(() => expect(notice(host)?.textContent).toContain('Fullscreen denied'));
+    expect(notice(host)?.textContent).toContain('fullscreenError');
+    notice(host)!.querySelector<HTMLButtonElement>('button[aria-label="dismiss"]')!.click();
+    flush();
+    expect(notice(host)).toBeNull();
+    expect(host.querySelector('[data-testid="document-loading"]')).not.toBeNull();
+  } finally {
+    Reflect.deleteProperty(HTMLElement.prototype, 'requestFullscreen');
+    Reflect.deleteProperty(document, 'fullscreenEnabled');
+  }
+});
+
 it('retains GPU failure after decoding and selecting a replacement', async () => {
   gpuFailure = gpuError('unavailable', 'GPU unavailable');
   const host = mount();
@@ -266,13 +286,16 @@ function mount() {
   cleanups.push(render(() => <GpuTextRendering />, host));
   return host;
 }
+function notice(host: HTMLElement) {
+  return host.querySelector('[role="alert"]:has(button[aria-label="dismiss"])');
+}
 function button(host: HTMLElement, text: string) {
   return [...host.querySelectorAll('button')].find((button) => button.textContent === text);
 }
 function scene(): DecodedDocument {
   return {
     kind: 'glyphs',
-    pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6, images: [] }],
+    pages: [{ width: 612, height: 792, beginVertex: 0, endVertex: 6 }],
     positions: { x: new Float32Array(), y: new Float32Array() },
     glyphVertices: new ArrayBuffer(0),
     atlas: { buf: new ArrayBuffer(0), width: 1, height: 1 },

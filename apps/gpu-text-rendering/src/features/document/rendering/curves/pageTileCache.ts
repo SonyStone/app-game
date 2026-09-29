@@ -60,6 +60,8 @@ export function createPageTileCache(
   let movedAt = -Infinity;
   let zoomingOut = false;
   let nextBatchAt = 0;
+  // Fade times are f32 on the GPU; offsets from creation keep millisecond precision in long sessions.
+  const epoch = performance.now();
 
   keep({
     destroy() {
@@ -85,9 +87,11 @@ export function createPageTileCache(
         pending
       };
     },
+    /** First GPU render error; once set, refinement stops and `settle` returns immediately. */
     get failure() {
       return failure;
     },
+    /** Estimated bytes of cached tile textures (including mips) and their uniforms. */
     get resourceBytes() {
       return [...entries.values()].reduce((sum, entry) => sum + entry.bytes, 48);
     },
@@ -135,6 +139,10 @@ export function createPageTileCache(
         await new Promise((resolve) => setTimeout(resolve, Math.max(0, latest + 100 - performance.now())));
       }
     },
+    /**
+     * Draws the best cached tiles for the frame's visible pages into `pass` and schedules refinement.
+     * Never waits for GPU work; newly refined tiles fade in over 100 ms.
+     */
     draw(pass: GPURenderPassEncoder, frame: SceneFrame) {
       clock++;
       const now = performance.now();
@@ -147,7 +155,7 @@ export function createPageTileCache(
 
       lastTransform = transform;
       wanted = new Map();
-      camera.write({ mul: frame.mul, add: frame.add, rotation: frame.rotation, time: now });
+      camera.write({ mul: frame.mul, add: frame.add, rotation: frame.rotation, time: now - epoch });
 
       for (const { index } of frame.visible) {
         if (!pages.has(index)) {
@@ -338,7 +346,8 @@ export function createPageTileCache(
           }
 
           const readyAt = allocation.tile.level === 0 ? -1000 : performance.now();
-          allocation.placement.patch({ readyAt });
+          // Level-0 fallbacks keep the -1000 sentinel so they are always fully opaque.
+          allocation.placement.patch({ readyAt: allocation.tile.level === 0 ? -1000 : readyAt - epoch });
           entries.set(key, { ...allocation, readyAt, revision, used: clock });
           requestedAt.set(key, performance.now());
         }

@@ -5,7 +5,10 @@ import { paintTree } from './paintTree';
 import { planPageComposition } from './planPageComposition';
 import { prepareCurveBins } from './prepareCurveBins';
 
-/** Builds transferable paint plans and lookup buffers without importing GPU runtime code. */
+/**
+ * Builds transferable paint plans and lookup buffers without importing GPU runtime code.
+ * Never throws for an empty document: it has no page placements to prepare.
+ */
 export function buildCurvePreparation(
   document: Parameters<typeof prepareCurveBins>[0] & {
     pages: { beginVertex: number; endVertex: number; width: number; height: number }[];
@@ -24,10 +27,9 @@ export function buildCurvePreparation(
     document.pages.map((page) => (page.width * page.height) / (document.pages[0]!.width * document.pages[0]!.height)),
     document.clips
   );
-  const pages = layoutPages(
-    document.pages.map((page) => ({ ...page, images: [] })),
-    2
-  )._unsafeUnwrap();
+  // Layout rejects only a page-less document, whose preparation is empty. Renderer
+  // preparation compares these placements with the live layout and rebuilds on mismatch.
+  const pages = layoutPages(document.pages, 2).unwrapOr([]);
   const spatial = buildPaintBounds(document.instances, pages);
   return {
     runs,

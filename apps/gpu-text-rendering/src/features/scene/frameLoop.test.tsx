@@ -1,8 +1,9 @@
-import { render } from '@solidjs/web';
+import { render, type JSX } from '@solidjs/web';
 import { createRoot, createSignal, flush, For, onCleanup, Show, untrack } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gpuFixture } from '../../../tests/fixtures/gpuFixture';
 import { gpuError } from '../../shared/errors';
+import { serializeGpuPreparation } from '../../shared/gpu/serializeGpuPreparation';
 import { DocumentCamera, useDocumentCamera } from '../camera/DocumentCamera';
 import { FrameLoop, useFrame, useFrameLoop } from './FrameLoop';
 import { RenderLayer } from './RenderLayer';
@@ -570,6 +571,116 @@ it('turns a thrown frame callback failure into one typed error and stops submiss
   expect(gpu.device.queue.submit).not.toHaveBeenCalled();
   expect(frames.size).toBe(0);
 });
+
+it('defers submission while preparation holds a validation scope on the device, then draws once', async () => {
+  const { calls, loop } = mount();
+  await tick();
+  expect(gpu.device.queue.submit).toHaveBeenCalledOnce();
+  let finish!: () => void;
+  const preparation = serializeGpuPreparation(
+    gpu.device,
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      })
+  );
+  calls.length = 0;
+  loop.invalidate();
+  await tick();
+  loop.invalidate();
+  await tick();
+  expect(calls).toEqual(['update', 'draw', 'update', 'draw']);
+  expect(gpu.device.queue.submit).toHaveBeenCalledOnce();
+  expect(frames.size).toBe(0);
+
+  finish();
+  await preparation;
+  await tick();
+  expect(frames.size).toBe(1);
+  await tick();
+  expect(gpu.device.queue.submit).toHaveBeenCalledTimes(2);
+});
+
+it('requests a frame when a value read by a draw or render callback changes, but not by an update', async () => {
+  const [color, setColor] = createSignal(0);
+  const [scale, setScale] = createSignal(1);
+  const [speed, setSpeed] = createSignal(1);
+  const drawn: number[] = [];
+
+  function Callbacks() {
+    useFrame(() => scale());
+    useFrame(() => speed(), { phase: 'update' });
+    return null;
+  }
+
+  mountScene(() => (
+    <>
+      <Callbacks />
+      <RenderLayer draw={() => void drawn.push(color())} />
+    </>
+  ));
+  await tick();
+  expect(drawn).toEqual([0]);
+  expect(frames.size).toBe(0);
+
+  setColor(1);
+  flush();
+  // The change only schedules a frame: nothing draws outside the RAF callback.
+  expect(drawn).toEqual([0]);
+  expect(frames.size).toBe(1);
+  await tick();
+  expect(drawn).toEqual([0, 1]);
+  expect(frames.size).toBe(0);
+
+  setScale(2);
+  flush();
+  expect(frames.size).toBe(1);
+  await tick();
+  expect(drawn).toEqual([0, 1, 1]);
+
+  setSpeed(2);
+  flush();
+  expect(frames.size).toBe(0);
+});
+
+it('stops observing values that the latest frame no longer reads', async () => {
+  const [useColor, setUseColor] = createSignal(true);
+  const [color, setColor] = createSignal(0);
+  const draw = vi.fn(() => {
+    if (useColor()) {
+      color();
+    }
+  });
+
+  mountScene(() => <RenderLayer draw={draw} />);
+  await tick();
+
+  setUseColor(false);
+  flush();
+  await tick();
+  expect(draw).toHaveBeenCalledTimes(2);
+
+  setColor(1);
+  flush();
+  expect(frames.size).toBe(0);
+});
+
+function mountScene(children: () => JSX.Element) {
+  const dispose = createRoot((disposeRoot) => {
+    const disposeView = render(
+      () => <FrameLoop onError={vi.fn()}>{children()}</FrameLoop>,
+      document.createElement('div')
+    );
+
+    return () => {
+      disposeView();
+      disposeRoot();
+    };
+  });
+
+  cleanups.push(dispose);
+  flush();
+}
 
 function mount(invalidateFirstFrame = false) {
   const calls: string[] = [];

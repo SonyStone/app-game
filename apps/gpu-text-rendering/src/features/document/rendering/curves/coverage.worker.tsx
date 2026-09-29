@@ -5,6 +5,8 @@ import { WorkerTasks } from '../../../../shared/worker/WorkerTasks';
 import type { CoverageInput, CoverageReply } from '../../documentWorkerProtocol';
 import { buildCoverageTables } from './buildCoverageTables';
 
+// Receives one request per worker. The shared request scope still provides typed failure replies, transfers
+// and cooperative shutdown, so the idle FIFO queue is kept rather than duplicating that handling here.
 mountWorker(() => {
   const request = createWorkerRequests<CoverageInput, CoverageReply>(self);
   return (
@@ -15,4 +17,4 @@ mountWorker(() => {
       transfer={(value) => [value.offsets.buffer, value.areas.buffer, value.grids.buffer]}
     />
   );
-});
+}, self);

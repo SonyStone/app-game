@@ -47,9 +47,7 @@ try {
       const data = (await readGdoc(converted))._unsafeUnwrap();
       const doc = {
         ...data,
-        pages: layoutPages(data.pages, 2)._unsafeUnwrap(),
-        images: new Map(),
-        imageVertices: new ArrayBuffer(0)
+        pages: layoutPages(data.pages, 2)._unsafeUnwrap()
       };
       const canvas = document.createElement('canvas');
       canvas.width = canvas.height = 100;

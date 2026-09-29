@@ -6,26 +6,26 @@ import { makeCameraControls } from './makeCameraControls';
 
 /** Mounts pointer/wheel controls; unmounting removes listeners and releases captured pointers. */
 export function CameraControls(props: {
+  /** Page width divided by height; changes apply to the next gesture. */
   pageAspect: number;
+  /** Runs for each user gesture or camera move, before the frame is invalidated. */
   onInteraction?: () => void;
+  /** Reports whether any pointer is pressed, for cursor feedback. */
   onDraggingChange?: (dragging: boolean) => void;
 }) {
-  const canvas = useGpuCanvas().context.canvas as HTMLCanvasElement;
-  const viewport = useViewport();
-  const camera = useDocumentCamera();
   const { invalidate } = useFrameLoop();
 
-  makeCameraControls(
-    canvas,
-    camera,
-    () => props.pageAspect,
-    () => {
+  makeCameraControls({
+    canvas: useGpuCanvas().context.canvas as HTMLCanvasElement,
+    camera: useDocumentCamera(),
+    pageAspect: () => props.pageAspect,
+    viewport: useViewport(),
+    onInteraction: () => {
       props.onInteraction?.();
       invalidate();
     },
-    (dragging) => props.onDraggingChange?.(dragging),
-    viewport
-  );
+    onDraggingChange: (dragging) => props.onDraggingChange?.(dragging)
+  });
 
   return null;
 }

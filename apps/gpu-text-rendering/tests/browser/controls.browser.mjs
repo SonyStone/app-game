@@ -134,6 +134,27 @@ for (const gpu of [true, false]) {
     await page.getByRole('button', { name: 'Show entire document' }).click();
     await page.waitForFunction(() => pendingFrames.size === 0);
     assert.ok(overview.equals(await snapshot()), 'overview must restore the exact fitted camera');
+    const toggleMinimap = async () => {
+      await page.getByRole('button', { name: 'More', exact: true }).click();
+      await page.getByRole('menuitemcheckbox', { name: 'Minimap' }).click();
+      await page.getByRole('button', { name: 'More', exact: true }).press('Escape');
+      await page.waitForFunction(() => pendingFrames.size === 0);
+    };
+    await toggleMinimap();
+    const withMinimap = await snapshot();
+    assert.ok(!overview.equals(withMinimap), 'the minimap draws over the document');
+    // The minimap sits in the top-right corner; a press there must navigate instead of starting a camera drag.
+    await page.mouse.move(760, 30);
+    await page.mouse.down();
+    assert.equal(await canvas.evaluate((node) => getComputedStyle(node).cursor), 'grab');
+    await page.mouse.move(770, 60, { steps: 3 });
+    await page.mouse.up();
+    await page.waitForFunction(() => pendingFrames.size === 0);
+    assert.ok(!withMinimap.equals(await snapshot()), 'minimap presses move the camera');
+    await toggleMinimap();
+    await page.getByRole('button', { name: 'Show entire document' }).click();
+    await page.waitForFunction(() => pendingFrames.size === 0);
+    assert.ok(overview.equals(await snapshot()), 'hiding the minimap restores the plain document');
     await page.getByRole('button', { name: 'Fullscreen', exact: true }).click();
     await page.waitForFunction(() => !!document.fullscreenElement);
     await page.getByRole('button', { name: 'Exit fullscreen' }).click();
@@ -191,4 +212,4 @@ for (const gpu of [true, false]) {
     await browser.close();
   }
 }
-console.log('PASS gestures, reactive options, idle RAF, resize, device loss and missing WebGPU');
+console.log('PASS gestures, reactive options, minimap navigation, idle RAF, resize, device loss and missing WebGPU');

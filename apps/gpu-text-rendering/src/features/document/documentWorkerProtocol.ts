@@ -6,8 +6,12 @@ import type { buildCoverageTables, CoverageTables } from './rendering/curves/bui
 
 /** Local bytes or a URL fetched by the GDOC worker. */
 export type DecodeInput = string | ArrayBuffer;
+/** PDF bytes transferred to the import worker. */
+export type ImportInput = ArrayBuffer;
 /** Loading progress and the terminal decoded document shared by PDF and GDOC workers. */
 export type DocumentReply = WorkerReply<DecodedDocument, DocumentError, DocumentProgress>;
+/** PDF bytes transferred to the export worker. */
+export type ConvertInput = ArrayBuffer;
 /** PDF export returns encoded GDOC bytes. */
 export type ConvertReply = WorkerReply<ArrayBuffer, DocumentError>;
 /** Geometry borrowed by the renderer and cloned into the coverage worker. */

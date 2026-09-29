@@ -30,6 +30,9 @@ try {
   assert.deepEqual(await page.evaluate(() => scene.errors.map(({ kind, message }) => ({ kind, message }))), []);
   assert.deepEqual(await pixel(400, 300), [255, 0, 0]);
   assert.deepEqual(await pixel(40, 40), [0, 0, 255]);
+  assert.deepEqual(await pixel(720, 40), [0, 255, 0], 'instanced rectangles draw each item');
+  assert.deepEqual(await pixel(720, 100), [0, 255, 0]);
+  assert.deepEqual(await pixel(720, 70), [160, 169, 175], 'instanced rectangles leave gaps between items');
 
   await change(() => scene.setShowDocument(true));
   await page.waitForFunction(() => scene.stats.ready === 1 || scene.errors.length > 0);
@@ -91,6 +94,23 @@ try {
   await page.mouse.wheel(0, -100);
   await page.waitForFunction((oldZoom) => scene.camera().zoom !== oldZoom, oldZoom);
 
+  const held = await page.evaluate(() => ({ ...scene.camera() }));
+  await page.mouse.move(40, 40);
+  await page.mouse.down();
+  await page.mouse.move(200, 200, { steps: 4 });
+  await page.mouse.up();
+  assert.deepEqual(await page.evaluate(() => ({ presses: scene.stats.presses, releases: scene.stats.releases })), {
+    presses: 1,
+    releases: 1
+  });
+  assert.ok((await page.evaluate(() => scene.stats.moves)) >= 1, 'captured moves reach the pressed item');
+  assert.deepEqual(await page.evaluate(() => ({ ...scene.camera() })), held, 'a pressed item keeps the camera still');
+  await page.mouse.move(600, 500);
+  await page.mouse.down();
+  await page.mouse.move(650, 520, { steps: 3 });
+  await page.mouse.up();
+  assert.notEqual(await page.evaluate(() => scene.camera().x), held.x, 'presses beside items still pan the camera');
+
   await change(() => scene.setWorldVisible(true));
   await change(() => scene.setCamera({ x: 0.45, y: 0.45, zoom: 0.5, rotation: 0.7 }));
   const worldPoint = await page.evaluate(() => scene.project({ x: 0.55, y: 0.55 }));
@@ -137,7 +157,7 @@ try {
   assert.deepEqual(await page.evaluate(() => scene.errors.map(({ kind, message }) => ({ kind, message }))), []);
   assert.deepEqual(errors, []);
   console.log(
-    'PASS: shared JSX scene, async document, ordering, reactive graphics, visibility, document/screen spaces, DPR, stable ids, disposal and idle loop'
+    'PASS: shared JSX scene, instanced rectangles, pointer capture, async document, ordering, reactive graphics, visibility, document/screen spaces, DPR, stable ids, disposal and idle loop'
   );
 } finally {
   await browser.close();

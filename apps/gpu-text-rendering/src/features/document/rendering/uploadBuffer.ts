@@ -17,7 +17,9 @@ export async function uploadBuffer(
   const chunkBytes = 4 * 1024 * 1024;
   for (let offset = 0; offset < byteLength; offset += chunkBytes) {
     const active = gpu.checkActive();
-    if (active.isErr()) throw new Error(active.error.message);
+    if (active.isErr()) {
+      throw new Error(active.error.message);
+    }
     gpu.device.queue.writeBuffer(
       destination,
       offset,

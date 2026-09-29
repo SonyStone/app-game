@@ -1,7 +1,10 @@
+import { err } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mountRendererWorkers } from '../../../../../tests/browser/workerHarness';
+import { gpuError } from '../../../../shared/errors';
 import type { GpuContext } from '../../../../shared/gpu/context';
 import { createGpuResources } from '../../../../shared/gpu/resources';
+import { isWorkerShutdown, type workerShutdown } from '../../../../shared/worker/workerProtocol';
 import type { SceneFrame } from '../createFrame';
 import { prepareRasterImages } from './prepareRasterImages';
 import type { RasterRequest } from './rasterWorkerTypes';
@@ -52,7 +55,7 @@ describe('virtual image residency', () => {
     fixture.owner.destroy();
   });
 
-  it('settles initial LOD preparation on cancellation and preserves decoder failures', async () => {
+  it('settles initial LOD preparation on cancellation and isolates decoder failures per image', async () => {
     const fixture = setup(2, 64, 64);
     const prepared = fixture.cache.prepareMipTails();
     fixture.owner.destroy();
@@ -61,8 +64,85 @@ describe('virtual image residency', () => {
     const failed = setup(2, 64, 64);
     const preparation = failed.cache.prepareMipTails();
     FakeWorker.all[0]!.dispatchEvent(new MessageEvent('message', { data: { ok: false, error: 'Broken preview' } }));
-    expect((await preparation)._unsafeUnwrapErr().message).toContain('Broken preview');
+    await Promise.resolve();
+    await drain();
+    expect((await preparation).isOk()).toBe(true);
+    expect(failed.cache.failure).toBeUndefined();
+    expect(failed.cache.imageFailures.get(0)?.message).toContain('Broken preview');
+    // A failed image without a tail draws nothing, but never blocks composition or refinement.
+    expect(failed.cache.get(0)).toBeUndefined();
+    expect(failed.cache.hasFallback(0)).toBe(true);
+    expect(failed.cache.isSettled(0)).toBe(true);
+    expect(failed.cache.get(1)).toBeDefined();
     failed.owner.destroy();
+  });
+
+  it('keeps streaming other images and never re-requests a failed image', async () => {
+    const fixture = setup(2, 4096, 4096);
+    const changes: unknown[] = [];
+    fixture.cache.events.addEventListener('change', (event) => changes.push((event as CustomEvent).detail?.image));
+    fixture.cache.update(fixture.instances, fixture.ranges, frame);
+    const worker = FakeWorker.all[0]!;
+    const first = worker.requests.shift()!;
+    worker.dispatchEvent(new MessageEvent('message', { data: { ok: false, error: 'Corrupt JPEG' } }));
+    await Promise.resolve();
+    expect(changes).toContain(first.id);
+    await drain();
+    await fixture.cache.settle();
+
+    const other = 1 - first.id;
+    expect(fixture.cache.get(other)).toBeDefined();
+    expect(fixture.cache.isSettled(first.id)).toBe(true);
+    fixture.cache.update(fixture.instances, fixture.ranges, { ...frame, width: 1600, height: 1600 });
+    await Promise.resolve();
+    const requested = FakeWorker.all.at(-1)!.requests.map(({ id }) => id);
+    expect(requested).not.toContain(first.id);
+    await drain();
+    await fixture.cache.settle();
+    expect(fixture.cache.failure).toBeUndefined();
+    fixture.owner.destroy();
+  });
+
+  it('keeps drawing an uploaded tail when later detail decoding fails', async () => {
+    const fixture = setup(1, 4096, 4096);
+    expect((await Promise.all([fixture.cache.prepareMipTails(), drain()]))[0].isOk()).toBe(true);
+    const tail = fixture.cache.get(0);
+    fixture.cache.update(fixture.instances, fixture.ranges, frame);
+    const worker = FakeWorker.all.at(-1)!;
+    expect(worker.requests.at(-1)!.tiles.length).toBeGreaterThan(0);
+    worker.dispatchEvent(new MessageEvent('message', { data: { ok: false, error: 'Truncated scan' } }));
+    await fixture.cache.settle();
+    expect(fixture.cache.get(0)).toBe(tail);
+    expect(fixture.cache.isSettled(0)).toBe(true);
+    fixture.owner.destroy();
+  });
+
+  it('stops streaming with a failure when the transport rejects, instead of stalling', async () => {
+    const decode = vi.fn(() => Promise.reject(new Error('Transport exploded')));
+    const fixture = setup(2, 64, 64, { decode, destroy: vi.fn() });
+    const prepared = await fixture.cache.prepareMipTails();
+    expect(prepared._unsafeUnwrapErr().message).toBe('Transport exploded');
+    expect(fixture.cache.failure?.message).toBe('Transport exploded');
+    await fixture.cache.settle();
+    expect(decode).toHaveBeenCalledOnce();
+    fixture.owner.destroy();
+  });
+
+  it('stops streaming when its decoder was shut down by the owner', async () => {
+    const decode = vi.fn(async () => err(gpuError('destroyed', 'The image decoder has been destroyed')));
+    const fixture = setup(2, 64, 64, { decode, destroy: vi.fn() });
+    expect((await fixture.cache.prepareMipTails())._unsafeUnwrapErr().code).toBe('destroyed');
+    expect(decode).toHaveBeenCalledOnce();
+    fixture.owner.destroy();
+  });
+
+  it('never destroys the borrowed raster worker', async () => {
+    const destroy = vi.fn();
+    const decode = vi.fn(async () => err(gpuError('render', 'Broken image')));
+    const fixture = setup(1, 64, 64, { decode, destroy });
+    await fixture.cache.prepareMipTails();
+    fixture.owner.destroy();
+    expect(destroy).not.toHaveBeenCalled();
   });
 
   it('keeps all shown images visible immediately through zoom in/out and offscreen eviction', async () => {
@@ -160,29 +240,38 @@ describe('virtual image residency', () => {
     expect(fixture.cache.resourceBytes).toBe(0);
   });
 
-  it.each(['create', 'post'] as const)('settles preparation when worker %s fails', async (stage) => {
-    const fixture = setup(1, 64, 64);
-    vi.stubGlobal(
-      'Worker',
-      class extends FakeWorker {
-        constructor() {
-          super();
-          if (stage === 'create') throw new Error('Worker unavailable');
+  it.each(['create', 'post'] as const)(
+    'settles preparation and isolates the image when worker %s fails',
+    async (stage) => {
+      const fixture = setup(1, 64, 64);
+      vi.stubGlobal(
+        'Worker',
+        class extends FakeWorker {
+          constructor() {
+            super();
+            if (stage === 'create') throw new Error('Worker unavailable');
+          }
+          postMessage() {
+            throw new Error('Cannot transfer pixels');
+          }
         }
-        postMessage() {
-          throw new Error('Cannot transfer pixels');
-        }
+      );
+      const prepared = await fixture.cache.prepareMipTails();
+      if (stage === 'create') {
+        // A decoder that cannot start is 'unavailable', which stops the pipeline rather than one image.
+        expect(prepared._unsafeUnwrapErr()).toMatchObject({ code: 'unavailable' });
+        expect(prepared._unsafeUnwrapErr().message).toContain('Worker unavailable');
+      } else {
+        // An unsendable request is a per-image `render` failure; its worker is shut down and recreated on demand.
+        expect(prepared.isOk()).toBe(true);
+        expect(fixture.cache.imageFailures.get(0)?.message).toContain('Cannot transfer pixels');
+        expect(FakeWorker.all[0]!.terminated).toBe(true);
       }
-    );
-    const result = await fixture.cache.prepareMipTails();
-    expect(result._unsafeUnwrapErr().message).toContain(
-      stage === 'create' ? 'Worker unavailable' : 'Cannot transfer pixels'
-    );
-    if (stage === 'post') expect(FakeWorker.all[0]!.terminated).toBe(true);
-    fixture.owner.destroy();
-  });
+      fixture.owner.destroy();
+    }
+  );
 
-  it.each(['error', 'messageerror'])('releases the worker and settles preparation on %s', async (type) => {
+  it.each(['error', 'messageerror'])('releases the worker and stops preparation on %s', async (type) => {
     const fixture = setup(1, 64, 64);
     const prepared = fixture.cache.prepareMipTails();
     const worker = FakeWorker.all[0]!;
@@ -191,7 +280,8 @@ describe('virtual image residency', () => {
         ? new ErrorEvent('error', { message: 'Decoder crashed', cancelable: true })
         : new MessageEvent('messageerror')
     );
-    expect((await prepared).isErr()).toBe(true);
+    // A crashed or unreadable decoder is 'unavailable': a fatal stop rather than a per-image failure.
+    expect((await prepared)._unsafeUnwrapErr()).toMatchObject({ code: 'unavailable' });
     expect(worker.terminated).toBe(true);
     fixture.owner.destroy();
   });
@@ -212,13 +302,14 @@ describe('virtual image residency', () => {
     const settled = failed.cache.settle();
     FakeWorker.all[0]!.dispatchEvent(new MessageEvent('message', { data: { ok: false, error: 'Broken image' } }));
     await settled;
-    expect(failed.cache.failure?.message).toContain('Broken image');
+    expect(failed.cache.failure).toBeUndefined();
+    expect(failed.cache.imageFailures.get(0)?.message).toContain('Broken image');
     expect(FakeWorker.all[0]!.terminated).toBe(true);
     failed.owner.destroy();
   });
 });
 
-function setup(count: number, width: number, height: number) {
+function setup(count: number, width: number, height: number, worker?: unknown) {
   FakeWorker.all = [];
   vi.stubGlobal('Worker', FakeWorker);
   const table = new ArrayBuffer(count * 24);
@@ -269,7 +360,7 @@ function setup(count: number, width: number, height: number) {
     gpu,
     { table, pixels: new ArrayBuffer(0) },
     owner.keep,
-    fixture.workers.raster
+    (worker as typeof fixture.workers.raster | undefined) ?? fixture.workers.raster
   )._unsafeUnwrap();
   return { owner, cache, instances, ranges, textures, writeTexture };
 }
@@ -295,7 +386,12 @@ class FakeWorker extends EventTarget {
     FakeWorker.all.push(this);
   }
 
-  postMessage(request: RasterRequest) {
+  postMessage(request: RasterRequest | typeof workerShutdown) {
+    // Cooperative shutdown closes the worker before the terminate() fallback.
+    if (isWorkerShutdown(request)) {
+      this.terminated = true;
+      return;
+    }
     this.requests.push(request);
   }
 

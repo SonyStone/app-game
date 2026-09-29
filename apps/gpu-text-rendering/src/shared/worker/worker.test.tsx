@@ -2,6 +2,7 @@ import { createMemo, createRenderEffect, Errored, flush, Loading, onCleanup, Sho
 import { afterEach, expect, it, vi } from 'vitest';
 import { createWorkerRequests } from './createWorkerRequests';
 import { mountWorker } from './mountWorker';
+import { workerShutdown } from './workerProtocol';
 
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).forEach((dispose) => dispose()));
@@ -130,6 +131,35 @@ it.each([false, true])('continues after a failed computation, async = %s', async
   target.send(2);
   await settle();
   expect(target.postMessage.mock.calls.map(([value]) => value)).toEqual(['error', 2]);
+});
+
+it('shuts down on request: aborts active work, runs cleanups, then closes the worker', async () => {
+  const target = Object.assign(endpoint(), { close: vi.fn() });
+  const events: string[] = [];
+  let signal: AbortSignal | undefined;
+  mountWorker(() => {
+    const request = createWorkerRequests<number, unknown>(target);
+    onCleanup(() => events.push('worker cleanup'));
+    return (
+      <Show when={request()} keyed>
+        {(request) => {
+          signal = request.signal;
+          onCleanup(() => events.push(`stop ${request.data}`));
+          return null;
+        }}
+      </Show>
+    );
+  }, target);
+  target.send(1);
+  await settle();
+  target.close.mockImplementation(() => events.push('close'));
+  target.dispatchEvent(new MessageEvent('message', { data: workerShutdown }));
+  expect(signal?.aborted).toBe(true);
+  expect(events).toEqual(['stop 1', 'worker cleanup', 'close']);
+  target.send(2);
+  await settle();
+  expect(events).toHaveLength(3);
+  expect(target.postMessage).not.toHaveBeenCalled();
 });
 
 function endpoint() {

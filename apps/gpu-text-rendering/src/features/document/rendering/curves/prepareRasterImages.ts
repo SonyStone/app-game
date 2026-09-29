@@ -24,7 +24,14 @@ import {
   type Tile
 } from './virtualTiles';
 
-/** Software virtual textures: pinned mip tails, bounded detail atlas and LRU eviction independent of visibility. */
+/**
+ * Software virtual textures: pinned mip tails, bounded detail atlas and LRU eviction independent of visibility.
+ *
+ * `worker` is borrowed from the renderer's owner; disposal stops using it but never destroys it.
+ * Decoder failures are per image: a failed image keeps its tail if one was already uploaded (otherwise it
+ * draws nothing), requests no further detail, and counts as settled so composition never waits on it.
+ * Only upload/scheduling exceptions and non-decoder worker errors set `failure` and stop streaming.
+ */
 export function prepareRasterImages(
   gpu: GpuContext,
   images: Extract<DecodedDocument, { kind: 'curves' }>['rasterImages'],
@@ -40,6 +47,7 @@ export function prepareRasterImages(
   const ready = new Set<number>();
   const visible = new Map<number, number>();
   const missingImages = new Set<number>();
+  const failedImages = new Map<number, GpuError>();
   const resident = new Map<string, { tile: Tile; slot: number; used: number }>();
   const totalTiles = packed.images.reduce((sum, image) => {
     for (let level = 0; level < image.level; level++) {
@@ -76,14 +84,18 @@ export function prepareRasterImages(
       groups.clear();
       pending = false;
       finish();
-      worker.destroy();
     }
   });
 
   return ok({
     events,
+    /** A transport, GPU upload or scheduling failure that stopped all image streaming. */
     get failure() {
       return failure;
+    },
+    /** Images whose decoding failed, with their decoder errors. Other images continue streaming. */
+    get imageFailures(): ReadonlyMap<number, GpuError> {
+      return failedImages;
     },
     get resourceBytes() {
       return destroyed ? 0 : (atlasSide ** 2 + packed.width * packed.height) * 4 + lookupSize * 16 + groups.size * 32;
@@ -112,9 +124,13 @@ export function prepareRasterImages(
     get(index: number) {
       return ready.has(index) ? groups.get(index) : undefined;
     },
-    /** True when all requested source texels for this image are resident, so composition can reuse them. */
+    /** True when all requested source texels for this image are resident or its decoding failed, so composition can reuse them. */
     isSettled(image: number) {
-      return ready.has(image) && !missingImages.has(image);
+      return failedImages.has(image) || (ready.has(image) && !missingImages.has(image));
+    },
+    /** True once the image's permanent fallback is resolved: its tail is drawable, or decoding failed and it draws nothing. */
+    hasFallback(image: number) {
+      return ready.has(image) || failedImages.has(image);
     },
     /** Waits for the current visible working set, including tails, or for cancellation/failure. */
     async settle() {
@@ -145,6 +161,10 @@ export function prepareRasterImages(
 
         const image = packed.images[run.image]!;
 
+        if (failedImages.has(image.id)) {
+          continue;
+        }
+
         // All source levels of a small image are already pinned. Repeated 1x1
         // PDF color swatches need no per-placement projection or streaming work.
         if (image.level === 0 && ready.has(image.id)) {
@@ -173,7 +193,9 @@ export function prepareRasterImages(
       // A composed base covers the whole page, including source images outside
       // the current crop. Decode their tiny tails without requesting hidden detail.
       for (const image of fallbackImages) {
-        if (!ready.has(image) && !visible.has(image)) visible.set(image, Number.MAX_VALUE);
+        if (!ready.has(image) && !failedImages.has(image) && !visible.has(image)) {
+          visible.set(image, Number.MAX_VALUE);
+        }
       }
 
       // Coarse coverage wins before fine detail. Retained tiles win ties to avoid churn near equal priorities.
@@ -194,7 +216,10 @@ export function prepareRasterImages(
 
   function nextImage() {
     if (nextTail !== undefined) {
-      while (nextTail < initialImages.length && ready.has(initialImages[nextTail]!)) {
+      while (
+        nextTail < initialImages.length &&
+        (ready.has(initialImages[nextTail]!) || failedImages.has(initialImages[nextTail]!))
+      ) {
         nextTail++;
       }
 
@@ -209,12 +234,15 @@ export function prepareRasterImages(
     let missingTail: number | undefined;
     let distance = Infinity;
     for (const [id, priority] of visible) {
-      if (!ready.has(id) && priority < distance) {
+      if (!ready.has(id) && !failedImages.has(id) && priority < distance) {
         missingTail = id;
         distance = priority;
       }
     }
-    if (missingTail !== undefined) return missingTail;
+
+    if (missingTail !== undefined) {
+      return missingTail;
+    }
 
     // Finish visible work on the decoded source before switching images. Otherwise
     // interleaved mip priorities repeatedly decode the same large JPEG from scratch.
@@ -267,9 +295,23 @@ export function prepareRasterImages(
         void worker
           .decode(request, () => images.pixels.slice(offset, offset + table.getUint32(id * 24 + 12, true)))
           .then((result) => {
-            if (destroyed || failure) return;
-            if (result.isErr()) stop(result.error);
-            else receive(result.value);
+            if (destroyed || failure) {
+              return;
+            }
+
+            if (result.isOk()) {
+              receive(result.value);
+            } else if (isImageFailure(result.error)) {
+              markFailed(id, result.error);
+            } else {
+              stop(result.error);
+            }
+          })
+          // Streaming must not stall silently when the transport or a change listener throws.
+          .catch((cause: unknown) => {
+            if (!destroyed && !failure) {
+              stop(gpuError('render', errorMessage(cause), cause));
+            }
           });
       },
       (cause) => gpuError('render', errorMessage(cause))
@@ -371,6 +413,22 @@ export function prepareRasterImages(
     pump();
   }
 
+  /** Records a per-image decoder failure and continues with the remaining images. */
+  function markFailed(id: number, error: GpuError) {
+    pending = false;
+    failedImages.set(id, error);
+
+    for (const [key, tile] of wanted) {
+      if (tile.image === id) {
+        wanted.delete(key);
+      }
+    }
+
+    refreshMissingImages();
+    events.dispatchEvent(new CustomEvent('change', { detail: { image: id } }));
+    pump();
+  }
+
   function finish() {
     waiters.forEach((resolve) => resolve());
     waiters.clear();
@@ -389,7 +447,15 @@ export function prepareRasterImages(
     failure = error;
     pending = false;
     finish();
-    worker.destroy();
     events.dispatchEvent(new Event('change'));
   }
+}
+
+/**
+ * The raster worker reports decoder errors and failed sends as `render` errors, which only affect
+ * one image. Worker start failures, crashes and unreadable replies are `unavailable`, and `destroyed`
+ * means its owner has shut it down; both stop streaming.
+ */
+function isImageFailure(error: GpuError) {
+  return error.code === 'render';
 }
