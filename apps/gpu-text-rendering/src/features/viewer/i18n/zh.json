@@ -3,6 +3,8 @@
   "open": "打开文档",
   "openHint": "打开 PDF 或 GDOC",
   "overview": "显示整个文档",
+  "splitView": "分屏视图",
+  "resizePanes": "调整窗格大小",
   "enterFullscreen": "全屏",
   "exitFullscreen": "退出全屏",
   "fullscreenUnsupported": "此浏览器不支持全屏",

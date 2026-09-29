@@ -55,6 +55,12 @@ try {
   await change(() => scene.setDocumentOrder(0));
   assert.deepEqual(await pixel(400, 300), [255, 0, 0]);
 
+  await change(() => scene.setPageMarkVisible(true));
+  const pageMark = await page.evaluate(() => scene.projectPage({ x: 120, y: 120 }));
+  assert.deepEqual(await pixel(pageMark.x, pageMark.y), [255, 255, 0], 'page overlays draw in page points');
+  await change(() => scene.setPageMarkVisible(false));
+  assert.notDeepEqual(await pixel(pageMark.x, pageMark.y), [255, 255, 0], 'hiding a page overlay restores the page');
+
   await change(() => scene.setOrder(-1));
   assert.notDeepEqual(await pixel(400, 300), [255, 0, 0], 'reactive order places the rectangle behind the page');
 

@@ -1,5 +1,5 @@
 import { d } from 'typegpu';
-import type { GpuContext } from '../../../../shared/gpu/context';
+import type { GpuDevice } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { TextDocument } from '../../document';
 import type { buildCurvePreparation } from '../../plan/buildCurvePreparation';
@@ -15,7 +15,7 @@ import { RadialGradient, radialLayout } from './radialGradient';
  * Throws if the GPU context becomes inactive between chunks.
  */
 export async function uploadCurveGeometry(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   document: Extract<TextDocument, { kind: 'curves' }>,
   indexed: ReturnType<typeof buildCurvePreparation>['indexed'],
   keep: KeepGpuResource

@@ -7,40 +7,41 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@app-game/components/ui/dropdown-menu';
+import { Resizable, ResizableHandle, ResizablePanel } from '@app-game/components/ui/resizable';
+import { createEventListener } from '@solid-primitives/event-listener';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import dots from '@tabler/icons/outline/dots.svg?url';
+import splitIcon from '@tabler/icons/outline/layout-columns.svg?url';
 import grid from '@tabler/icons/outline/layout-grid.svg?url';
 import loaderIcon from '@tabler/icons/outline/loader-2.svg?url';
 import expand from '@tabler/icons/outline/maximize.svg?url';
 import collapse from '@tabler/icons/outline/minimize.svg?url';
 import closeIcon from '@tabler/icons/outline/x.svg?url';
-import { createSignal, Match, Show, Switch } from 'solid-js';
-import { GpuCanvas } from '../../shared/gpu';
-import { CameraControls, CameraTour, createDocumentCamera, pageAspectOf } from '../camera';
+import { createSignal, For, Match, onCleanup, Show, Switch, untrack } from 'solid-js';
+import { GpuCanvasProvider, TypeGPURootProvider } from '../../shared/gpu';
+import { CameraControls, CameraTour } from '../camera';
 import { createDocumentSource, DocumentRenderer, GlyphText, VectorArtwork } from '../document';
 import noticesUrl from '../document/pdf/wasm/third-party-notices.txt?url';
 import { Minimap } from '../minimap';
 import { FrameLoop } from '../scene';
-import { createViewport } from '../viewport';
 import { createDocumentDrop } from './createDocumentDrop';
 import { createDocumentExport } from './createDocumentExport';
 import { createFullscreenToggleButton } from './createFullscreenToggleButton';
 import { createViewerStatus, type ViewerStatus } from './createViewerStatus';
+import { createViewPane, type ViewPane } from './createViewPane';
 import { DocumentPicker } from './DocumentPicker';
 import { createViewerI18n } from './i18n/createViewerI18n';
 import { LanguageMenu } from './LanguageMenu';
 import s from './viewer.module.scss';
 
 /**
- * Displays a selected PDF/GDOC or the bundled document with TypeGPU and pointer-based navigation.
- * The GPU scene is assembled here from independent modules: the document source, viewport and camera are created
- * once, and each scene component receives the state it works on as props.
+ * Displays a selected PDF/GDOC or the bundled document with TypeGPU and pointer-based navigation, optionally in two
+ * independently navigated panes. The GPU scene is assembled here from independent modules: the document is prepared
+ * once on the device, and each pane's canvas draws it through its own viewport and camera.
  */
 export default function GpuTextRendering() {
   const i18n = createViewerI18n();
-
-  const [canvas, setCanvas] = createSignal<HTMLCanvasElement>();
-  const viewport = createViewport(canvas, { maxDpr: 2 });
 
   const [fileSource, setFileSource] = createSignal<{ file?: File }>({});
   /** Selects a file, or reopens the bundled demo; a new selection object reloads even the same file. */
@@ -50,8 +51,6 @@ export default function GpuTextRendering() {
 
   const documentSource = createDocumentSource(() => fileSource().file);
   const currentDocument = () => documentSource.prepared()?.data;
-  // Each prepared document starts from the initial view.
-  const camera = createDocumentCamera({ pageAspect: () => pageAspectOf(currentDocument()), resetOn: currentDocument });
   const { status, isBusy, isReady, percent, reportGpuError, reportReady, reportResourceUsage } =
     createViewerStatus(documentSource);
   const documentExport = createDocumentExport(() => documentSource.prepared());
@@ -59,8 +58,24 @@ export default function GpuTextRendering() {
   const drop = createDocumentDrop(open);
   const fullscreen = createFullscreenToggleButton(i18n.t);
 
-  // Camera controls report false when they unmount, so replacing, cancelling or failing the scene clears it.
-  const [dragging, setDragging] = createSignal(false);
+  // Each mounted pane registers itself in `panes`, in layout order; the GPU scene draws one canvas per pane.
+  const [paneCount, setPaneCount] = createSignal(1);
+  const [panes, setPanes] = createSignal<ViewPane[]>([], { ownedWrite: true });
+  const addPane = (pane: ViewPane) => setPanes((panes) => [...panes, pane]);
+  const removePane = (pane: ViewPane) => setPanes((panes) => panes.filter((other) => other !== pane));
+  const [focusedPane, setFocusedPane] = createSignal<ViewPane>();
+  /** The pane that the toolbar's overview and tour act on: the last one pressed or scrolled, else the first. */
+  const focused = () => {
+    const pane = focusedPane();
+    return pane && panes().includes(pane) ? pane : panes()[0];
+  };
+  const split = () => paneCount() > 1;
+
+  // Panes sit side by side when the viewer is wider than tall, and stack otherwise.
+  const [viewer, setViewer] = createSignal<HTMLElement>();
+  const viewerSize = createElementSize(viewer);
+  const orientation = () => ((viewerSize.width ?? 1) >= (viewerSize.height ?? 0) ? 'horizontal' : 'vertical');
+
   const [autoZoom, setAutoZoom] = createSignal(
     () => {
       fileSource();
@@ -73,57 +88,114 @@ export default function GpuTextRendering() {
   const [minimap, setMinimap] = createSignal(false);
   const stopAutoZoom = () => setAutoZoom(false);
 
-  /** Stops the tour and fits every page between the toolbar and the canvas edges. */
+  /** Stops the tour and fits every page in the focused pane, between the toolbar and the canvas edges. */
   function showOverview() {
     const pages = currentDocument()?.pages;
+    const pane = focused();
 
-    if (pages) {
+    if (pages && pane) {
       stopAutoZoom();
-      camera.fitToPages(pages, viewport.size().css, overviewPadding);
+      pane.camera.fitToPages(pages, pane.viewport.size().css, overviewPadding);
     }
   }
 
-  return (
-    <div ref={[fullscreen.setContainer, drop.ref]} class={s.viewer} lang={i18n.locale()} dir={i18n.direction()}>
-      <canvas
-        ref={setCanvas}
-        id="beziercanvas"
-        class={`${s.canvas} ${dragging() ? s.dragging : ''}`}
-        style={{ visibility: status().phase === 'cancelled' ? 'hidden' : undefined }}
-        aria-label={i18n.t('canvas')}
-        aria-busy={isBusy() ? 'true' : 'false'}
-      />
+  /** Opens a second pane on the focused pane's view, or closes it keeping the focused pane's view in the first. */
+  function toggleSplit() {
+    const [first, second] = panes();
 
-      <GpuCanvas canvas={canvas()} requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
+    if (split() && first && second && focused() === second) {
+      first.camera.setCamera(second.camera.camera());
+    }
+
+    setFocusedPane(undefined);
+    setPaneCount(split() ? 1 : 2);
+  }
+
+  return (
+    <div
+      ref={[fullscreen.setContainer, drop.ref, setViewer]}
+      class={s.viewer}
+      lang={i18n.locale()}
+      dir={i18n.direction()}
+    >
+      <Resizable orientation={orientation()} class={s.split}>
+        <For each={Array.from({ length: paneCount() }, (_, index) => index)}>
+          {(slot) => {
+            // A new pane opens on a snapshot of the focused pane's view; the first keeps the canvas id that tests use.
+            const pane = createViewPane(
+              currentDocument,
+              untrack(() => focused()?.camera.camera())
+            );
+            addPane(pane);
+            onCleanup(() => removePane(pane));
+            createEventListener(pane.canvas, ['pointerdown', 'wheel'], () => setFocusedPane(pane), {
+              capture: true,
+              passive: true
+            });
+
+            return (
+              <>
+                <Show when={slot > 0}>
+                  <ResizableHandle orientation={orientation()} class={s.divider} aria-label={i18n.t('resizePanes')} />
+                </Show>
+                <ResizablePanel
+                  class={`${s.pane} ${split() && focused() === pane ? s.focusedPane : ''}`}
+                  minSize={0.15}
+                >
+                  <canvas
+                    ref={pane.setCanvas}
+                    id={slot === 0 ? 'beziercanvas' : undefined}
+                    class={`${s.canvas} ${pane.dragging() ? s.dragging : ''}`}
+                    style={{ visibility: status().phase === 'cancelled' ? 'hidden' : undefined }}
+                    aria-label={i18n.t('canvas')}
+                    aria-busy={isBusy() ? 'true' : 'false'}
+                  />
+                </ResizablePanel>
+              </>
+            );
+          }}
+        </For>
+      </Resizable>
+
+      <TypeGPURootProvider requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
         <Show when={documentSource.prepared()} keyed>
           {({ data, fail }) => (
-            <FrameLoop viewport={viewport} onError={fail}>
-              <CameraControls camera={camera} onInteraction={stopAutoZoom} onDraggingChange={setDragging} />
-              <CameraTour camera={camera} document={data} enabled={autoZoom()} />
-              <DocumentRenderer
-                document={data}
-                camera={camera}
-                initialFrame="viewport"
-                onReady={reportReady}
-                onResourceUsage={reportResourceUsage}
-                onError={fail}
-              >
-                <Switch>
-                  <Match when={data.kind === 'glyphs'}>
-                    <GlyphText vectorOnly={vectorOnly()} grids={grids()} />
-                  </Match>
-                  <Match when={data.kind === 'curves'}>
-                    <VectorArtwork vectorOnly={vectorOnly()} />
-                  </Match>
-                </Switch>
-              </DocumentRenderer>
-              <Show when={minimap()}>
-                <Minimap document={data} camera={camera} onNavigate={stopAutoZoom} />
-              </Show>
-            </FrameLoop>
+            <DocumentRenderer
+              document={data}
+              initialView={panes()[0]}
+              onReady={reportReady}
+              onResourceUsage={reportResourceUsage}
+              onError={fail}
+            >
+              <For each={panes()}>
+                {(pane) => (
+                  <GpuCanvasProvider canvas={pane.canvas()} error={reportGpuError}>
+                    <FrameLoop viewport={pane.viewport} onError={fail}>
+                      <CameraControls
+                        camera={pane.camera}
+                        onInteraction={stopAutoZoom}
+                        onDraggingChange={pane.setDragging}
+                      />
+                      <CameraTour camera={pane.camera} document={data} enabled={autoZoom() && focused() === pane} />
+                      <Switch>
+                        <Match when={data.kind === 'glyphs'}>
+                          <GlyphText camera={pane.camera} vectorOnly={vectorOnly()} grids={grids()} />
+                        </Match>
+                        <Match when={data.kind === 'curves'}>
+                          <VectorArtwork camera={pane.camera} vectorOnly={vectorOnly()} />
+                        </Match>
+                      </Switch>
+                      <Show when={minimap()}>
+                        <Minimap document={data} camera={pane.camera} onNavigate={stopAutoZoom} />
+                      </Show>
+                    </FrameLoop>
+                  </GpuCanvasProvider>
+                )}
+              </For>
+            </DocumentRenderer>
           )}
         </Show>
-      </GpuCanvas>
+      </TypeGPURootProvider>
 
       <Show when={drop.isOver()}>
         <div class={s.dropOverlay} role="status" data-testid="document-drop-overlay">
@@ -142,6 +214,18 @@ export default function GpuTextRendering() {
           onClick={showOverview}
         >
           <img src={grid} alt="" />
+        </Button>
+        <Button
+          class={s.iconButton}
+          variant="ghost"
+          size="icon"
+          aria-label={i18n.t('splitView')}
+          aria-pressed={split() ? 'true' : 'false'}
+          title={i18n.t('splitView')}
+          disabled={!isReady()}
+          onClick={toggleSplit}
+        >
+          <img src={splitIcon} alt="" />
         </Button>
         <Button class={s.iconButton} {...fullscreen.props} variant="ghost" size="icon">
           <img src={fullscreen.isActive() ? collapse : expand} alt="" />

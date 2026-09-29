@@ -1,4 +1,4 @@
-import type { GpuContext } from '../../../shared/gpu/context';
+import type { GpuDevice } from '../../../shared/gpu/context';
 import { yieldToEventLoop } from './yieldToEventLoop';
 
 /**
@@ -8,7 +8,7 @@ import { yieldToEventLoop } from './yieldToEventLoop';
  * The caller owns the destination and must allocate it before calling.
  */
 export async function uploadBuffer(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   destination: GPUBuffer,
   source: ArrayBuffer,
   sourceOffset = 0,

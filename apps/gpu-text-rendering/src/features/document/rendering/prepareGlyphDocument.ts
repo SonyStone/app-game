@@ -1,6 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { d, type TgpuBindGroup } from 'typegpu';
-import type { GpuContext } from '../../../shared/gpu/context';
+import type { GpuDevice } from '../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../shared/gpu/resources';
 import type { TextDocument } from '../document';
 import { compactGlyphs } from '../format/compactGlyphs';
@@ -19,7 +19,7 @@ import { uploadBuffer } from './uploadBuffer';
  * inactive; TypeGPU exceptions propagate to the renderer boundary.
  */
 export async function prepareGlyphDocument(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   document: Extract<TextDocument, { kind: 'glyphs' }>,
   keep: KeepGpuResource
 ) {
@@ -83,21 +83,24 @@ export async function prepareGlyphDocument(
     failure: undefined,
     refinement: undefined,
     resourceBytes,
-    draw(pass: GPURenderPassEncoder, frame: SceneFrame) {
-      background.writeView(frame, [1 / rasterSize[0], 1 / rasterSize[1]], Number(frame.grids));
-      background.draw(pass);
+    // Glyph drawing keeps no per-view state: each draw writes the view uniform before its pass is submitted.
+    createView: () => ({ draw, destroy() {} })
+  });
 
-      const glyphs = glyphPipeline.with(pass);
+  function draw(pass: GPURenderPassEncoder, frame: SceneFrame) {
+    background.writeView(frame, [1 / rasterSize[0], 1 / rasterSize[1]], Number(frame.grids));
+    background.draw(pass);
 
-      for (const item of frame.visible) {
-        for (const batch of glyphBatches) {
-          const first = Math.max(batch.first, item.page.beginVertex / 6);
-          const end = Math.min(batch.end, item.page.endVertex / 6);
-          if (first < end) {
-            glyphs.with(batch.group).draw((end - first) * 6, 1, (first - batch.first) * 6);
-          }
+    const glyphs = glyphPipeline.with(pass);
+
+    for (const item of frame.visible) {
+      for (const batch of glyphBatches) {
+        const first = Math.max(batch.first, item.page.beginVertex / 6);
+        const end = Math.min(batch.end, item.page.endVertex / 6);
+        if (first < end) {
+          glyphs.with(batch.group).draw((end - first) * 6, 1, (first - batch.first) * 6);
         }
       }
     }
-  });
+  }
 }

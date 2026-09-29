@@ -1,5 +1,5 @@
 import tgpu, { common, d, std, type TgpuBindGroup } from 'typegpu';
-import type { GpuContext } from '../../../../shared/gpu/context';
+import type { GpuDevice } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import { alphaMaskBlend, isMask, luminosityMaskBlend, type PaintNode } from '../../plan/paintTree';
 import { blendColor } from './blendColor';
@@ -13,7 +13,7 @@ import type { PixelRect } from './paintBounds';
  * other sizes survive short gaps and are destroyed after `idleFrames` draws or beyond `idlePoolLimit`.
  * Uniform buffers are kept until the owning document's GPU resources are destroyed.
  */
-export function createGroupCompositor(gpu: GpuContext, keep: KeepGpuResource) {
+export function createGroupCompositor(gpu: GpuDevice, keep: KeepGpuResource) {
   const { root, device, format } = gpu;
   const sampler = root.createSampler({ minFilter: 'nearest', magFilter: 'nearest' });
   type Surface = ReturnType<typeof makeSurface>;

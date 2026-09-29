@@ -3,6 +3,8 @@
   "open": "Открыть документ",
   "openHint": "Открыть PDF или GDOC",
   "overview": "Показать весь документ",
+  "splitView": "Разделить экран",
+  "resizePanes": "Изменить размер панелей",
   "enterFullscreen": "Во весь экран",
   "exitFullscreen": "Выйти из полного экрана",
   "fullscreenUnsupported": "Полный экран недоступен в этом браузере",

@@ -1,5 +1,5 @@
 import { d } from 'typegpu';
-import type { GpuContext } from '../../../shared/gpu/context';
+import type { GpuDevice } from '../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../shared/gpu/resources';
 import type { TextDocument } from '../document';
 import { View, atlasLayout, glyphLayout, viewLayout } from './bindings';
@@ -7,7 +7,7 @@ import { glyphFragment, glyphVertex } from './glyphShader';
 
 /** Uploads curve metadata and prerenders mipmapped glyph coverage for small text. */
 export async function createGlyphAtlas(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   document: Extract<TextDocument, { kind: 'glyphs' }>,
   blend: GPUBlendState,
   keep: KeepGpuResource

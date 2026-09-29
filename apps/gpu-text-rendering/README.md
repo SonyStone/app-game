@@ -51,7 +51,7 @@ tests/
 Unit tests live beside the feature they exercise. Browser fixtures remain outside `src` and are not exported by the package. No general `components`, `utils` or document-specific top-level `gpu` directory is needed.
 
 - Start with `features/viewer/GpuTextRendering.tsx`. It is the app's layout: it creates the document source, viewport and camera, then assembles the GPU scene and the DOM UI from feature modules, passing each the state it works on.
-- `features/document` loads documents (`createDocumentSource`) and draws prepared ones: `DocumentRenderer` holds a document's session, and its engine child draws it, `GlyphText` for glyph documents or `VectorArtwork` for curve documents such as PDFs. `rendering/createTypeGpuRenderer.ts` remains usable outside Solid and picks the engine by document kind; buffers, shaders and batched draw commands are private to document rendering. `curves/prepareCurveDocument.ts` reads top-down through the curve engine's stages: upload, image prewarm, paint engine and drawing.
+- `features/document` loads documents (`createDocumentSource`) and draws prepared ones: `DocumentRenderer` prepares a document once per GPU device, and each canvas draws it through its own view, `GlyphText` for glyph documents or `VectorArtwork` for curve documents such as PDFs. `rendering/createTypeGpuRenderer.ts` remains usable outside Solid and picks the engine by document kind; buffers, shaders and batched draw commands are private to document rendering. `curves/prepareCurveDocument.ts` reads top-down through the curve engine's stages: upload, image prewarm, paint engine and drawing.
 - `features/camera` owns camera state (`createDocumentCamera`), gestures, the tour, `DocumentSpace` and camera math. Camera motion does not require UI state updates.
 - `features/scene` owns one frame loop and one shared color pass for all graphics, plus coordinate spaces and per-frame uniforms. It does not load documents or allocate their buffers.
 - `features/viewport` measures the canvas and bounds its framebuffer. `features/graphics` and `features/minimap` show drawables added without modifying the document renderer.
@@ -72,13 +72,13 @@ const camera = createDocumentCamera({ pageAspect: () => pageAspectOf(document())
 <GpuCanvas canvas={canvas()} requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
   <FrameLoop viewport={viewport} onError={fail}>
     <CameraControls camera={camera} />
-    <DocumentRenderer document={document()} camera={camera} onError={fail}>
+    <DocumentRenderer document={document()} onError={fail}>
       <Switch>
         <Match when={document().kind === 'glyphs'}>
-          <GlyphText grids={grids()} />
+          <GlyphText camera={camera} grids={grids()} />
         </Match>
         <Match when={document().kind === 'curves'}>
-          <VectorArtwork />
+          <VectorArtwork camera={camera} />
         </Match>
       </Switch>
     </DocumentRenderer>
@@ -109,7 +109,60 @@ const camera = createDocumentCamera({ pageAspect: () => pageAspectOf(document())
 
 `GpuCanvas` combines `TypeGPURootProvider` and `GpuCanvasProvider`; use those directly to share one device between canvases. DOM UI belongs outside `FrameLoop`. CSS must give the canvas a display size independent of its width/height attributes. Because the camera and viewport live outside the scene, DOM controls can use them directly, for example `camera.fitToPages(pages, viewport.size().css, padding)` for an overview button.
 
-`DocumentRenderer` shares the document, camera and status callbacks with its engine. The engine prepares the document on the GPU, owns its renderer and draw invalidation, and declares its `RenderLayer`; `VectorArtwork` also owns the image decoder and coverage workers. Choosing the engine in JSX keeps the two rendering paths visible, along with the options each supports: `grids` exists only for glyphs. Pass reactive options as values, for example `<GlyphText vectorOnly={vectorOnly()} grids={grids()} />`. Replacing `document` remounts the engine and releases the previous renderer. The paper is part of each engine rather than a separate layer: curve documents composite transparency groups and blend modes against it.
+`DocumentRenderer` prepares the document on the GPU device and owns the renderer, and for curve documents the image decoder and coverage workers. It needs only `TypeGPURootProvider` above it, so it can sit inside one canvas's `FrameLoop` or above several canvases. Its view children, `GlyphText` or `VectorArtwork`, each draw into their own canvas through their own camera, declare a `RenderLayer`, and request frames when streamed resources change. Choosing the view in JSX keeps the two rendering paths visible, along with the options each supports: `grids` exists only for glyphs. Pass reactive options as values, for example `<GlyphText camera={camera} vectorOnly={vectorOnly()} grids={grids()} />`. Replacing `document` releases the previous renderer and remounts the views; replacing a canvas remounts only its view. The paper is part of each engine rather than a separate layer: curve documents composite transparency groups and blend modes against it.
+
+### Split view
+
+The toolbar's split button opens a second pane on the focused pane's view; the divider drags, or moves with the arrow keys, Home and End. Panes sit side by side when the viewer is wider than tall and stack otherwise. The last pane pressed or scrolled has an outline, and the overview button and the automatic tour act on it; closing split view keeps that pane's view.
+
+The DOM declares the panes with `Resizable` from `@app-game/components`. Each `<For>` item creates its pane (canvas, viewport, camera) with `createViewPane` and registers it for the item's lifetime; registration lives in the item body because Solid 2 ref callbacks have no owner, so cleanup registered there would never run:
+
+```tsx
+<Resizable orientation={orientation()} class={s.split}>
+  <For each={paneSlots()}>
+    {(slot) => {
+      const pane = createViewPane(
+        currentDocument,
+        untrack(() => focused()?.camera.camera())
+      );
+      addPane(pane);
+      onCleanup(() => removePane(pane));
+
+      return (
+        <>
+          <Show when={slot > 0}>
+            <ResizableHandle orientation={orientation()} aria-label={t('resizePanes')} />
+          </Show>
+          <ResizablePanel minSize={0.15}>
+            <canvas ref={pane.setCanvas} />
+          </ResizablePanel>
+        </>
+      );
+    }}
+  </For>
+</Resizable>
+```
+
+The GPU scene draws the registered panes, sharing one device and one prepared document between them:
+
+```tsx
+<TypeGPURootProvider requiredBufferBytes={256 * 1024 * 1024} error={reportGpuError}>
+  <DocumentRenderer document={data} initialView={panes()[0]} onError={fail}>
+    <For each={panes()}>
+      {(pane) => (
+        <GpuCanvasProvider canvas={pane.canvas()} error={reportGpuError}>
+          <FrameLoop viewport={pane.viewport} onError={fail}>
+            <CameraControls camera={pane.camera} />
+            <GlyphText camera={pane.camera} />
+          </FrameLoop>
+        </GpuCanvasProvider>
+      )}
+    </For>
+  </DocumentRenderer>
+</TypeGPURootProvider>
+```
+
+Views share every GPU resource. The curve engine keeps what each view needs apart and merges it: streamed image tiles and refined page tiles take the best priority any view gives them, each view's motion is tracked separately, and retained page bundles keep one variant per zoom band, so panes at different zoom levels do not re-record each other's bundles. The view uniform is shared safely because each view writes it and submits its pass before the next view records.
 
 `RenderLayer.visible`, default true, skips drawing without unmounting its owner or releasing buffers. Use `<Show>` around the owning component/provider when removal should release its resources. Hiding the last visible layer clears the canvas once. A hidden layer keeps its position in JSX and returns to that position when shown.
 
@@ -120,6 +173,21 @@ Layers draw in ascending `order`, default 0. Equal values follow JSX order, incl
 `viewport.size()` exposes `{ css, pixels, dpr }`; scene components read the same viewport through `useViewport()`. The DPR cap defaults to 2 and may be reactive; the 8192-pixel framebuffer limit can lower it further. CSS size is measured on resize rather than on every frame. Resolution media queries track DPR changes, including moving the window between displays. `clientToScreen` and `screenToClip` centralize conversions. Pointer positioning reads the current canvas bounding rect so scrolling does not leave a stale origin.
 
 `DocumentSpace` projects through its `camera` prop and that camera's first-page width/height ratio. Coordinates match document rendering, with y increasing upwards. `ScreenSpace` uses CSS pixels with y increasing downwards; its graphics keep their displayed size when the camera or DPR changes. Nested spaces replace the coordinate system rather than multiplying transforms. These components preserve JSX draw order and do not create GPU passes.
+
+`Page` places graphics on one page of a `DocumentRenderer`'s document, in PDF points with the origin at the page's top-left corner and y pointing down. It draws nothing itself, so the engine keeps drawing every page in one batch and pages without overlays cost no GPU work:
+
+```tsx
+<DocumentRenderer document={data} onError={fail}>
+  <GlyphText camera={camera} />
+  <For each={data.pages}>
+    {(_, index) => (
+      <Page camera={camera} index={index()}>
+        <Rectangle x={72} y={72} width={200} height={20} color={[1, 0.8, 0, 0.3]} order={10} />
+      </Page>
+    )}
+  </For>
+</DocumentRenderer>
+```
 
 `useSceneSpace()` provides `toScreen`, `fromScreen` and `toClip` for new graphics and future hit testing. Read them during drawing because camera values mutate between frames. `Rectangle` projects its corners with this contract, allowing the same shader to draw in either space. The document renderer remains specialized to the document camera; pass the same camera to its controls, layer and `DocumentSpace`. Fractional framebuffer rounding does not change the CSS projection.
 

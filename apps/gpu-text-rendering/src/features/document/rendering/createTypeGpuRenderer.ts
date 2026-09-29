@@ -7,7 +7,7 @@ import {
   type GpuError,
   type ResultValue
 } from '../../../shared/errors';
-import type { GpuContext } from '../../../shared/gpu/context';
+import type { GpuContext, GpuDevice } from '../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../shared/gpu/resources';
 import { makeGpuResources } from '../../../shared/gpu/resources';
 import { serializeGpuPreparation } from '../../../shared/gpu/serializeGpuPreparation';
@@ -19,11 +19,20 @@ import type { DocumentWorkers } from './DocumentWorkers';
 import { prepareGlyphDocument } from './prepareGlyphDocument';
 
 /**
- * Prepares a document with the engine for its kind, for callers outside JSX. In JSX, choose the engine explicitly
- * with GlyphText or VectorArtwork beneath DocumentRenderer.
+ * Prepares a document with the engine for its kind on `gpu`'s device. `render` draws into `gpu`'s canvas for callers
+ * outside JSX; JSX views draw into their own scene passes.
  */
 export function createTypeGpuRenderer(
   gpu: GpuContext,
+  document: TextDocument,
+  options: Parameters<typeof createCurveRenderer>[2]
+) {
+  return createDeviceRenderer(gpu, document, { ...options, canvas: gpu });
+}
+
+/** Prepares a document with the engine for its kind on a device, to draw through views into any of its canvases. */
+export function createDeviceRenderer(
+  gpu: GpuDevice,
   document: TextDocument,
   options: Parameters<typeof createCurveRenderer>[2]
 ) {
@@ -34,7 +43,7 @@ export function createTypeGpuRenderer(
 
 /** Prepares a glyph document: instanced glyph quads sampled from a glyph atlas over the page paper. */
 export function createGlyphRenderer(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   document: Extract<TextDocument, { kind: 'glyphs' }>,
   options: RendererOptions
 ) {
@@ -47,7 +56,7 @@ export function createGlyphRenderer(
  * New pages load on first visit.
  */
 export function createCurveRenderer(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   document: Extract<TextDocument, { kind: 'curves' }>,
   {
     workers,
@@ -71,6 +80,8 @@ export function createCurveRenderer(
 type RendererOptions = {
   /** Aborting cancels preparation, or destroys the renderer once prepared. */
   signal?: AbortSignal;
+  /** Canvas for standalone `render`; without it, `render` fails and drawing goes through views. */
+  canvas?: GpuContext;
 };
 
 /**
@@ -79,13 +90,13 @@ type RendererOptions = {
  * allocations. settle() waits for the current visible work, not every offscreen resource.
  */
 async function createDocumentRenderer(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   /** Allocates through `keep` and resolves the engine's drawing; `gpu.checkActive` includes this session. */
   prepare: (
-    gpu: GpuContext,
+    gpu: GpuDevice,
     keep: KeepGpuResource
   ) => ReturnType<typeof prepareCurveDocument | typeof prepareGlyphDocument>,
-  { signal }: RendererOptions
+  { signal, canvas }: RendererOptions
 ) {
   const { device } = gpu;
   const resources = makeGpuResources();
@@ -146,23 +157,35 @@ async function createDocumentRenderer(
     )();
 
     const preparation = yield* prepared;
-    const { draw: drawDocument } = preparation;
     const events = preparation.events;
     let standaloneFrame: SceneFrame | undefined;
+    let defaultView: ReturnType<typeof createView> | undefined;
 
     yield* checkActive();
 
-    const draw = (pass: GPURenderPassEncoder, frame: SceneFrame) =>
-      checkActive().andThen(() => {
-        if (preparation.failure) {
-          return err(preparation.failure);
-        }
+    /** Wraps an engine view so drawing reports lifetime, streaming and TypeGPU failures as results. */
+    function createView() {
+      const view = preparation.createView();
 
-        return Result.fromThrowable(
-          () => drawDocument(pass, frame),
-          (cause) => gpuError('render', errorMessage(cause), cause)
-        )();
-      });
+      return {
+        /** Records this view's frame in a scene-owned pass without clearing, ending or submitting it. */
+        draw: (pass: GPURenderPassEncoder, frame: SceneFrame) =>
+          checkActive().andThen(() => {
+            if (preparation.failure) {
+              return err(preparation.failure);
+            }
+
+            return Result.fromThrowable(
+              () => view.draw(pass, frame),
+              (cause) => gpuError('render', errorMessage(cause), cause)
+            )();
+          }),
+        /** Stops streaming for this view; the renderer and other views are unaffected. */
+        destroy: () => view.destroy()
+      };
+    }
+
+    const draw = (pass: GPURenderPassEncoder, frame: SceneFrame) => (defaultView ??= createView()).draw(pass, frame);
 
     return ok({
       /** Estimated explicit buffer and texture bytes, excluding driver overhead and swapchain. */
@@ -176,7 +199,7 @@ async function createDocumentRenderer(
       /** Image uploads notify owner-managed frame subscriptions. */
       events,
 
-      /** Releases document buffers/textures. The providers retain their device and canvas. */
+      /** Releases document buffers/textures and ends every view. The providers retain their device and canvas. */
       destroy,
 
       /** Waits for submitted GPU work and returns any completion or lifetime failure. */
@@ -185,8 +208,8 @@ async function createDocumentRenderer(
           yield* checkActive();
           yield* await renderStep(() => preparation.settle());
 
-          if (standaloneFrame && checkActive().isOk()) {
-            yield* renderScene(gpu, [({ pass }) => draw(pass, standaloneFrame!)]);
+          if (canvas && standaloneFrame && checkActive().isOk()) {
+            yield* renderScene(canvas, [({ pass }) => draw(pass, standaloneFrame!)]);
           }
 
           yield* await renderStep(() => device.queue.onSubmittedWorkDone());
@@ -195,13 +218,20 @@ async function createDocumentRenderer(
         });
       },
 
-      /** Records document draws in a scene-owned pass without clearing, ending or submitting it. */
+      /** Creates an independent view, such as one canvas of a split screen; destroy it when its canvas closes. */
+      createView,
+
+      /** Records the default view's draws in a scene-owned pass, for callers that draw a single view. */
       draw,
 
-      /** Standalone rendering for callers outside JSX; the shared scene helper owns the pass. */
+      /** Standalone rendering into the `canvas` option for callers outside JSX; the scene helper owns the pass. */
       render(frame: SceneFrame) {
+        if (!canvas) {
+          return err(gpuError('canvas', 'This renderer has no canvas for standalone rendering'));
+        }
+
         standaloneFrame = frame;
-        return renderScene(gpu, [({ pass }) => draw(pass, frame)]);
+        return renderScene(canvas, [({ pass }) => draw(pass, frame)]);
       }
     });
   });

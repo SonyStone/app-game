@@ -3,9 +3,12 @@ import {
   documentBounds,
   fitCamera,
   moveCamera,
+  pageRect,
   pageRects,
+  pageToWorld,
   rotationMatrix,
   screenToWorld,
+  worldToPage,
   worldToScreen,
   type Camera
 } from './camera';
@@ -85,6 +88,20 @@ describe('camera geometry', () => {
       { x: 1.5, y: 0.25, width: 2, height: 0.5 }
     ]);
     expect(documentBounds(pages)).toEqual({ left: -0.5, right: 3.5, bottom: -0.5, top: 0.75 });
+  });
+
+  it('maps page points, top-left origin with y down, onto the page rectangle and back', () => {
+    const pages = [
+      { x: 0.5, y: 0.5, width: 612, height: 792 },
+      { x: -1.5, y: 0.25, width: 1224, height: 396 }
+    ];
+    const placement = { rect: pageRect(pages, 1), size: pages[1]! };
+
+    expect(pageToWorld(placement, { x: 0, y: 0 })).toEqual({ x: 1.5, y: 0.75 });
+    expect(pageToWorld(placement, { x: 1224, y: 396 })).toEqual({ x: 3.5, y: 0.25 });
+    expect(pageToWorld(placement, { x: 612, y: 198 })).toEqual({ x: 2.5, y: 0.5 });
+    expect(worldToPage(placement, { x: 2.5, y: 0.5 })).toEqual({ x: 612, y: 198 });
+    expect(() => pageRect(pages, 2)).toThrow(RangeError);
   });
 
   it.each([

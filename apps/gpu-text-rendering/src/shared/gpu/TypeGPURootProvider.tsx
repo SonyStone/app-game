@@ -2,6 +2,7 @@ import { MatchTag } from '@solid-primitives/match';
 import type { JSX } from '@solidjs/web';
 import { createContext, useContext } from 'solid-js';
 import type { GpuError } from '../errors';
+import type { GpuDevice } from './context';
 import { createGpuRoot, type GpuRoot } from './createGpuRoot';
 
 /**
@@ -39,6 +40,14 @@ export function TypeGPURootProvider(props: {
 /** Reads a ready root beneath TypeGPURootProvider. A missing provider is a programming error. */
 export function useTypeGPURoot() {
   return useContext(RootContext);
+}
+
+/**
+ * Reads the ready device beneath TypeGPURootProvider for resources shared by every canvas. Its format is the
+ * browser's preferred canvas format, which GpuCanvasProvider configures every canvas with.
+ */
+export function useGpuDevice(): GpuDevice {
+  return { ...useTypeGPURoot(), format: navigator.gpu.getPreferredCanvasFormat() };
 }
 
 const RootContext = createContext<GpuRoot>();

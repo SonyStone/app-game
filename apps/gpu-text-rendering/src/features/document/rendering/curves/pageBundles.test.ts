@@ -27,3 +27,21 @@ it('reuses pan commands and replaces the bundle after a shader-selection band ch
   bundles(0, paint, 'large');
   expect(create).toHaveBeenCalledTimes(3);
 });
+
+it('keeps one bundle per scale band, so views at different zoom levels do not re-record each frame', () => {
+  const finish = vi.fn(() => ({}) as GPURenderBundle);
+  const create = vi.fn(() => ({ finish }) as unknown as GPURenderBundleEncoder);
+  const bundles = createPageBundles(
+    { createRenderBundleEncoder: create } as unknown as GPUDevice,
+    'rgba8unorm',
+    [[{ first: 0, count: 1, image: undefined, blend: 0 }]],
+    (resource) => resource
+  );
+
+  for (let frame = 0; frame < 3; frame++) {
+    bundles(0, vi.fn(), 'overview');
+    bundles(0, vi.fn(), 'detail');
+  }
+
+  expect(create).toHaveBeenCalledTimes(2);
+});

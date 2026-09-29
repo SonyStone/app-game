@@ -1,30 +1,30 @@
-import { createGlyphRenderer } from './createTypeGpuRenderer';
-import { DocumentEngine } from './DocumentEngine';
+import type { DocumentCamera } from '../../camera/createDocumentCamera';
 import { useDocumentRenderer } from './DocumentRenderer';
+import { DocumentView } from './DocumentView';
 
 /**
- * Engine for glyph documents, such as the bundled demo: instanced glyph quads sampled from a glyph atlas over the
- * page paper. Mount beneath DocumentRenderer with a glyph document; other kinds are a programming error.
+ * Draws a glyph document, such as the bundled demo, into this FrameLoop's canvas: instanced glyph quads sampled from
+ * a glyph atlas over the page paper. Mount beneath DocumentRenderer and FrameLoop; other kinds are a programming error.
  */
 export function GlyphText(props: {
+  /** Camera of this canvas; fixed for the view's lifetime. */
+  camera: DocumentCamera;
   /** Evaluate glyph outlines directly instead of sampling the atlas. Default false. */
   vectorOnly?: boolean;
   /** Overlay each glyph's coverage grid and control points for debugging. Default false. */
   grids?: boolean;
   /** Higher values draw on top; equal values follow JSX order. Default 0. */
   order?: number;
-  /** Skip drawing while retaining the prepared renderer. Default true. */
+  /** Skip drawing while retaining the view. Default true. */
   visible?: boolean;
 }) {
-  const { document } = useDocumentRenderer();
-
-  if (document.kind !== 'glyphs') {
+  if (useDocumentRenderer().document.kind !== 'glyphs') {
     throw new Error('GlyphText draws glyph documents; use VectorArtwork for curve documents');
   }
 
   return (
-    <DocumentEngine
-      create={(gpu, { signal }) => createGlyphRenderer(gpu, document, { signal })}
+    <DocumentView
+      camera={props.camera}
       vectorOnly={props.vectorOnly}
       grids={props.grids}
       order={props.order}

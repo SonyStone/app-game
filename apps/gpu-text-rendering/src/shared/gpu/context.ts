@@ -64,3 +64,9 @@ export function createGpuCanvas(gpu: GpuRoot, canvas: HTMLCanvasElement) {
 
 /** Borrowed rendering resources; the root and canvas providers own their lifetimes. */
 export type GpuContext = ResultValue<ReturnType<typeof createGpuCanvas>>;
+
+/**
+ * The device-level part of a GPU context: enough to allocate resources and compile pipelines for canvases configured
+ * with `format`, without a canvas. Resources prepared with it can be drawn into any canvas of the same device.
+ */
+export type GpuDevice = Pick<GpuContext, 'root' | 'device' | 'format' | 'signal' | 'checkActive'>;

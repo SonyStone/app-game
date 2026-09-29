@@ -1,7 +1,7 @@
 import { err, ok, ResultAsync } from 'neverthrow';
 import tgpu, { d, std } from 'typegpu';
 import { errorMessage, gpuError, type GpuError } from '../../../../shared/errors';
-import type { GpuContext } from '../../../../shared/gpu/context';
+import type { GpuDevice } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { TextDocument } from '../../document';
 import type { SceneFrame } from '../createFrame';
@@ -16,7 +16,7 @@ import { selectPageTiles } from './selectPageTiles';
  * GPU resources are released through `keep`'s owner; `changed` is the owner's redraw notification.
  */
 export function createPageTileCache(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   {
     document,
     pages,
@@ -65,14 +65,17 @@ export function createPageTileCache(
   const pageWorkMs = new Map<number, number>();
   const requestedAt = new Map<string, number>();
   const waiters = new Set<() => void>();
+  /** Tiles every view wants, taken from each view's center-first list in turn. */
   let wanted = new Map<string, PageTile>();
+  /** Each drawing view's latest wanted tiles and motion; views draw independently. */
+  const views = new Map<object, { wanted: Map<string, PageTile>; lastTransform?: number[] }>();
   let pending = false;
   let disposed = false;
   let clock = 0;
   let failure: GpuError | undefined;
   const deferred = deferRefinement(refine);
   let fadeTimer: ReturnType<typeof setTimeout> | undefined;
-  let lastTransform: number[] | undefined;
+  // Motion of any view defers refinement; zoomingOut follows the view that moved last.
   let movedAt = -Infinity;
   let zoomingOut = false;
   let nextBatchAt = 0;
@@ -134,12 +137,16 @@ export function createPageTileCache(
 
       schedule();
     },
-    /** Cancels queued refinement when the diagnostic direct path is selected. */
-    pause() {
-      wanted.clear();
-      requestedAt.clear();
-      deferred.cancel();
-      finish();
+    /** Drops `view`'s wanted tiles when it selects the diagnostic direct path; the last paused view cancels refinement. */
+    pause(view: object = defaultView) {
+      views.get(view)?.wanted.clear();
+      mergeWanted();
+    },
+    /** Forgets a view that stopped drawing, for example when its canvas closes. */
+    forgetView(view: object) {
+      if (views.delete(view)) {
+        mergeWanted();
+      }
     },
     /** Waits for requested detail, for deterministic screenshots; interactive drawing never waits. */
     async settle() {
@@ -155,21 +162,25 @@ export function createPageTileCache(
       }
     },
     /**
-     * Draws the best cached tiles for the frame's visible pages into `pass` and schedules refinement.
-     * Never waits for GPU work; newly refined tiles fade in over 100 ms.
+     * Draws the best cached tiles for the frame's visible pages into `pass` and schedules refinement for the tiles
+     * every view wants. Never waits for GPU work; newly refined tiles fade in over 100 ms. Callers drawing a single
+     * view may omit `view`.
      */
-    draw(pass: GPURenderPassEncoder, frame: SceneFrame) {
+    draw(pass: GPURenderPassEncoder, frame: SceneFrame, view: object = defaultView) {
       clock++;
       const now = performance.now();
       const transform = [...frame.mul, ...frame.add, ...frame.rotation, frame.width, frame.height];
+      const state = views.get(view) ?? { wanted: new Map<string, PageTile>() };
+      const { lastTransform } = state;
 
-      if (lastTransform && transform.some((value, index) => value !== lastTransform![index])) {
+      if (lastTransform && transform.some((value, index) => value !== lastTransform[index])) {
         movedAt = now;
         zoomingOut = frame.mul[0] < lastTransform[0]!;
       }
 
-      lastTransform = transform;
-      wanted = new Map();
+      state.lastTransform = transform;
+      views.set(view, state);
+      let viewWanted = new Map<string, PageTile>();
       camera.write({ mul: frame.mul, add: frame.add, rotation: frame.rotation, time: now - epoch });
 
       for (const { index } of frame.visible) {
@@ -182,12 +193,14 @@ export function createPageTileCache(
           previewTiles[0]?.level === 0 ? previewTiles : visiblePageTiles(document, index, frame, detailSize, 1);
 
         for (const tile of visibleTiles) {
-          wanted.set(pageTileKey(tile), tile);
+          viewWanted.set(pageTileKey(tile), tile);
         }
       }
 
       // Center-first detail reaches the area under inspection before peripheral pages.
-      wanted = new Map([...wanted].sort(([, a], [, b]) => distance(a) - distance(b)));
+      viewWanted = new Map([...viewWanted].sort(([, a], [, b]) => distance(a) - distance(b)));
+      state.wanted = viewWanted;
+      wanted = mergeViews();
       for (const [key, tile] of wanted) {
         if (needsRefinement(tile) && !requestedAt.has(key)) {
           requestedAt.set(key, now);
@@ -202,7 +215,7 @@ export function createPageTileCache(
         }
       }
 
-      const selected = selectPageTiles(wanted, entries, revisions, now, 100);
+      const selected = selectPageTiles(viewWanted, entries, revisions, now, 100);
 
       function distance(tile: PageTile) {
         const rect = pageTileRect(document, tile);
@@ -229,6 +242,37 @@ export function createPageTileCache(
       schedule();
     }
   };
+
+  /** Interleaves the views' center-first lists so every view's center refines before any view's periphery. */
+  function mergeViews() {
+    const merged = new Map<string, PageTile>();
+    const lists = [...views.values()].map((view) => [...view.wanted]);
+
+    for (let rank = 0; lists.some((list) => rank < list.length); rank++) {
+      for (const list of lists) {
+        const entry = list[rank];
+
+        if (entry && !merged.has(entry[0])) {
+          merged.set(entry[0], entry[1]);
+        }
+      }
+    }
+
+    return merged;
+  }
+
+  /** Rebuilds the merged wanted tiles after a view leaves or pauses; with none left, cancels queued refinement. */
+  function mergeWanted() {
+    wanted = mergeViews();
+
+    if (wanted.size === 0) {
+      requestedAt.clear();
+      deferred.cancel();
+      finish();
+    } else {
+      schedule();
+    }
+  }
 
   function next() {
     return work().find(canRefine);
@@ -488,3 +532,6 @@ function fallbackSize(document: TextDocument, pages: ReadonlySet<number>) {
   const side = Math.sqrt((32 * 1024 * 1024) / Math.max(1, area) / ((4 * 4) / 3)) - 4;
   return Math.max(8, Math.min(256, 2 ** Math.floor(Math.log2(Math.max(8, side)))));
 }
+
+/** View key for callers that draw a single view. */
+const defaultView = {};

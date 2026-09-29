@@ -1,7 +1,7 @@
 import { err, ok, Result } from 'neverthrow';
 import { d, type TgpuBindGroup } from 'typegpu';
 import { errorMessage, gpuError, type GpuError } from '../../../../shared/errors';
-import type { GpuContext } from '../../../../shared/gpu/context';
+import type { GpuDevice } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { DecodedDocument } from '../../format/types';
 import { drawPage } from '../../plan/drawRecord';
@@ -35,7 +35,7 @@ import {
  * `instances` are the document's DRAW records; image placements in `update` ranges index into them.
  */
 export function prepareRasterImages(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   images: Extract<DecodedDocument, { kind: 'curves' }>['rasterImages'],
   instances: ArrayBuffer,
   keep: KeepGpuResource,
@@ -49,7 +49,10 @@ export function prepareRasterImages(
   const tilesForPlacement = createImageTileCache();
   const groups = new Map<number, TgpuBindGroup>();
   const ready = new Set<number>();
+  /** Merged visible images of every view, with their best priority. */
   const visible = new Map<number, number>();
+  /** Each view's latest requests; views draw independently and their working sets are merged. */
+  const viewRequests = new Map<object, ViewRequests>();
   const missingImages = new Set<number>();
   const failedImages = new Map<number, GpuError>();
   const resident = new Map<string, ResidentTile>();
@@ -143,20 +146,22 @@ export function prepareRasterImages(
       }
     },
     /**
-     * Selects the visible working set from the frame's image `ranges` and schedules decoding.
-     * `fallbackImages` additionally request tails for composed pages, without hidden detail.
+     * Replaces `view`'s visible working set with the frame's image `ranges` and schedules decoding for the merged
+     * working set of every view. `fallbackImages` additionally request tails for composed pages, without hidden
+     * detail. Callers drawing a single view may omit `view`.
      */
     update(
       ranges: { first: number; count: number; image: number | undefined }[],
       frame: SceneFrame,
-      fallbackImages: Iterable<number> = []
+      fallbackImages: Iterable<number> = [],
+      view: object = defaultView
     ) {
       if (destroyed || failure) {
         return;
       }
 
       clock++;
-      visible.clear();
+      const visible = new Map<number, number>();
       const pages = new Map(frame.visible.map(({ index, page }) => [index, page]));
       const candidates = new Map<string, Tile & { priority: number }>();
 
@@ -204,21 +209,48 @@ export function prepareRasterImages(
         }
       }
 
-      // Coarse coverage wins before fine detail. Retained tiles win ties to avoid churn near equal priorities.
-      wanted = selectImageTiles(candidates, capacity, resident);
-
-      for (const key of wanted.keys()) {
-        const entry = resident.get(key);
-
-        if (entry) {
-          entry.used = clock;
-        }
+      viewRequests.set(view, { visible, candidates });
+      select();
+    },
+    /** Drops `view`'s working set, for example when its canvas closes. */
+    forgetView(view: object) {
+      if (viewRequests.delete(view) && !destroyed && !failure) {
+        select();
       }
-
-      refreshMissingImages();
-      pump();
     }
   };
+
+  /** Merges every view's requests, keeping each image's and tile's best priority, then schedules decoding. */
+  function select() {
+    visible.clear();
+    const candidates = new Map<string, Tile & { priority: number }>();
+
+    for (const requests of viewRequests.values()) {
+      for (const [image, priority] of requests.visible) {
+        visible.set(image, Math.min(visible.get(image) ?? Infinity, priority));
+      }
+
+      for (const [key, tile] of requests.candidates) {
+        if (!candidates.has(key) || candidates.get(key)!.priority > tile.priority) {
+          candidates.set(key, tile);
+        }
+      }
+    }
+
+    // Coarse coverage wins before fine detail. Retained tiles win ties to avoid churn near equal priorities.
+    wanted = selectImageTiles(candidates, capacity, resident);
+
+    for (const key of wanted.keys()) {
+      const entry = resident.get(key);
+
+      if (entry) {
+        entry.used = clock;
+      }
+    }
+
+    refreshMissingImages();
+    pump();
+  }
 
   function nextImage() {
     if (nextTail !== undefined) {
@@ -445,3 +477,12 @@ export function prepareRasterImages(
 function isImageFailure(error: GpuError) {
   return error.code === 'render';
 }
+
+/** One view's visible images with their priority, and its candidate tiles. */
+type ViewRequests = {
+  visible: Map<number, number>;
+  candidates: Map<string, Tile & { priority: number }>;
+};
+
+/** View key for callers that draw a single view. */
+const defaultView = {};

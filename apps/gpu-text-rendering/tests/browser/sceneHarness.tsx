@@ -7,6 +7,7 @@ import { DocumentSpace } from '../../src/features/camera/DocumentSpace';
 import type { TextDocument } from '../../src/features/document/document';
 import { DocumentRenderer } from '../../src/features/document/rendering/DocumentRenderer';
 import { GlyphText } from '../../src/features/document/rendering/GlyphText';
+import { Page } from '../../src/features/document/rendering/Page';
 import { VectorArtwork } from '../../src/features/document/rendering/VectorArtwork';
 import { Rectangle } from '../../src/features/graphics/Rectangle';
 import { Rectangles } from '../../src/features/graphics/Rectangles';
@@ -23,6 +24,7 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
     const [showDocument, setShowDocument] = createSignal(false);
     const [documentVisible, setDocumentVisible] = createSignal(true);
     const [documentOrder, setDocumentOrder] = createSignal(0);
+    const [pageMarkVisible, setPageMarkVisible] = createSignal(false);
     const [showRectangle, setShowRectangle] = createSignal(true);
     const [rectangleVisible, setRectangleVisible] = createSignal(true);
     const [worldVisible, setWorldVisible] = createSignal(false);
@@ -30,6 +32,7 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
     const [maxDpr, setMaxDpr] = createSignal(2);
     const [pageAspect, setPageAspect] = createSignal(document.pages[0]!.width / document.pages[0]!.height);
     let project!: (point: Point) => Point;
+    let projectPage!: (point: Point) => Point;
     const viewport = createViewport(() => canvas, { maxDpr });
     const camera = createDocumentCamera({ pageAspect });
     const [order, setOrder] = createSignal(0);
@@ -46,6 +49,11 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
       moves: 0,
       releases: 0
     };
+
+    function PageProbe() {
+      projectPage = useSceneSpace().toScreen;
+      return null;
+    }
 
     function Probe() {
       stats.cameraMounts++;
@@ -92,12 +100,24 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
               <Probe />
               <CameraControls camera={camera} />
               <Show when={showDocument()}>
-                <DocumentRenderer document={document} camera={camera} onReady={() => stats.ready++} onError={fail}>
+                <DocumentRenderer document={document} onReady={() => stats.ready++} onError={fail}>
                   {document.kind === 'glyphs' ? (
-                    <GlyphText visible={documentVisible()} order={documentOrder()} />
+                    <GlyphText camera={camera} visible={documentVisible()} order={documentOrder()} />
                   ) : (
-                    <VectorArtwork visible={documentVisible()} order={documentOrder()} />
+                    <VectorArtwork camera={camera} visible={documentVisible()} order={documentOrder()} />
                   )}
+                  <Page camera={camera} index={0}>
+                    <PageProbe />
+                    <Rectangle
+                      x={100}
+                      y={100}
+                      width={40}
+                      height={40}
+                      color={[1, 1, 0, 1]}
+                      visible={pageMarkVisible()}
+                      order={40}
+                    />
+                  </Page>
                 </DocumentRenderer>
               </Show>
               <For each={annotations()} keyed={(item) => item.id}>
@@ -159,6 +179,8 @@ export function mountScene(canvas: HTMLCanvasElement, document: TextDocument) {
       setMaxDpr,
       setPageAspect,
       project: (point: Point) => project(point),
+      projectPage: (point: Point) => projectPage(point),
+      setPageMarkVisible,
       viewport: () => viewport.size(),
       setCamera(value: Partial<Camera>) {
         camera.setCamera((current) => ({ ...current, ...value }));

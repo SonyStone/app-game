@@ -27,6 +27,35 @@ it('coalesces blocked frames and reads fresh state when the GPU finishes', async
   gate.destroy();
 });
 
+it('admits a resized frame while another is unfinished, but still waits for blocking work', async () => {
+  const first = deferred();
+  const second = deferred();
+  const complete = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+  // No preparation blocks frames until the last check.
+  let blocker: Promise<void> | undefined = undefined;
+  const invalidate = vi.fn();
+  const gate = makeGpuFrameGate(options({ complete, blocked: () => blocker, invalidate }));
+  const render = vi.fn(() => ok());
+
+  gate.draw(render);
+  gate.draw(render, { resized: true });
+  expect(render).toHaveBeenCalledTimes(2);
+
+  // An ordinary frame waits until every unfinished frame completes.
+  gate.draw(render);
+  first.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(invalidate).not.toHaveBeenCalled();
+  second.resolve();
+  await vi.waitFor(() => expect(invalidate).toHaveBeenCalledOnce());
+
+  blocker = new Promise(() => {});
+  gate.draw(render, { resized: true });
+  expect(render).toHaveBeenCalledTimes(2);
+  gate.destroy();
+});
+
 it('does not turn a completed demand-driven draw into an endless animation', async () => {
   const invalidate = vi.fn();
   const gate = makeGpuFrameGate(options({ invalidate }));

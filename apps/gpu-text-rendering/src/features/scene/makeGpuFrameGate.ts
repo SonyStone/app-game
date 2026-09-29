@@ -16,17 +16,23 @@ export function makeGpuFrameGate(options: {
   /** Reports a failed completion; the gate then admits no further frames. */
   fail: (error: ViewerError) => void;
 }) {
-  let pending = false;
+  /** Submitted frames the GPU has not finished; a resize can admit a second one. */
+  let unfinished = 0;
   let requested = false;
   let disposed = false;
 
   return {
-    /** Runs `render` unless the gate is closed; a skipped draw returns Ok and redraws when the gate reopens. */
-    draw(render: () => Result<void, ViewerError>): Result<void, ViewerError> {
+    /**
+     * Runs `render` unless the gate is closed; a skipped draw returns Ok and redraws when the gate reopens.
+     * `resized` admits a frame even while another is unfinished: resizing the canvas discarded that frame's image, and
+     * waiting would present the cleared canvas. `blocked` work still defers it.
+     */
+    draw(render: () => Result<void, ViewerError>, { resized = false } = {}): Result<void, ViewerError> {
       if (disposed) {
         return ok();
       }
 
+      const pending = unfinished > 0 && !resized;
       const blocker = pending ? undefined : options.blocked();
 
       if (pending || blocker) {
@@ -61,12 +67,12 @@ export function makeGpuFrameGate(options: {
     }
   };
 
-  /** Closes the gate until `work` settles, then fails or replays one skipped request. */
+  /** Holds the gate closed until `work` settles, then fails or, once no frame is unfinished, replays a skipped request. */
   function wait(work: PromiseLike<Result<void, ViewerError>>) {
-    pending = true;
+    unfinished++;
 
     void work.then((completed) => {
-      pending = false;
+      unfinished--;
 
       if (disposed) {
         return;
@@ -78,7 +84,8 @@ export function makeGpuFrameGate(options: {
         return;
       }
 
-      if (requested) {
+      // A skipped request replays once the last unfinished frame completes; earlier it would be skipped again.
+      if (requested && unfinished === 0) {
         requested = false;
         options.invalidate();
       }

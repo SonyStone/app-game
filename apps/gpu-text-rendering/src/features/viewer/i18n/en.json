@@ -3,6 +3,8 @@
   "open": "Open document",
   "openHint": "Open PDF or GDOC",
   "overview": "Show entire document",
+  "splitView": "Split view",
+  "resizePanes": "Resize panes",
   "enterFullscreen": "Fullscreen",
   "exitFullscreen": "Exit fullscreen",
   "fullscreenUnsupported": "Fullscreen is unavailable in this browser",

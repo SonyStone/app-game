@@ -1,6 +1,6 @@
 import type { JSX } from '@solidjs/web';
 import { SceneSpaceProvider, type SceneSpace } from '../scene/SceneSpace';
-import { useViewport } from '../viewport/createViewport';
+import { useViewport, type Viewport } from '../viewport/createViewport';
 import { screenToWorld, worldToScreen } from './camera';
 import type { DocumentCamera } from './createDocumentCamera';
 
@@ -13,9 +13,19 @@ export function DocumentSpace(props: {
   camera: DocumentCamera;
   children: JSX.Element;
 }) {
-  const { camera, pageAspect } = props.camera;
-  const viewport = useViewport();
+  const space = makeDocumentSpace(props.camera, useViewport());
 
+  return <SceneSpaceProvider space={space}>{props.children}</SceneSpaceProvider>;
+}
+
+/**
+ * Creates the DocumentSpace projection for `camera` on `viewport`: first-page units with y pointing up. Every
+ * projection reads the current camera and viewport size, so drawing and hit testing follow their changes.
+ */
+export function makeDocumentSpace(
+  { camera, pageAspect }: Pick<DocumentCamera, 'camera' | 'pageAspect'>,
+  viewport: Pick<Viewport, 'size' | 'screenToClip'>
+): SceneSpace {
   const space: SceneSpace = {
     toScreen(point) {
       const { css } = viewport.size();
@@ -28,5 +38,5 @@ export function DocumentSpace(props: {
     toClip: (point) => viewport.screenToClip(space.toScreen(point))
   };
 
-  return <SceneSpaceProvider space={space}>{props.children}</SceneSpaceProvider>;
+  return space;
 }

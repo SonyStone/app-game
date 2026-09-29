@@ -196,6 +196,24 @@ describe('virtual image residency', () => {
     fixture.owner.destroy();
   });
 
+  it('streams the merged working set of several views and drops a forgotten view', async () => {
+    const fixture = setup(2, 4096, 4096);
+    const large = { ...frame, width: 8000, height: 8000 };
+    const [first, second] = [{}, {}];
+    fixture.cache.update(fixture.ranges.slice(0, 1), large, [], first);
+    fixture.cache.update(fixture.ranges.slice(1, 2), large, [], second);
+    const requested = await drainIds();
+
+    // Each view's detail streams in several batches; a single replaced working set would stop after one.
+    expect(requested.filter((id) => id === 0).length).toBeGreaterThan(1);
+    expect(requested.filter((id) => id === 1).length).toBeGreaterThan(1);
+
+    fixture.cache.forgetView(second);
+    fixture.cache.update(fixture.ranges.slice(0, 1), { ...large, mul: [4, 4], add: [-1, -1] }, [], first);
+    expect(await drainIds()).not.toContain(1);
+    fixture.owner.destroy();
+  });
+
   it('finishes requested tiles on the decoded image without repeatedly switching JPEG sources', async () => {
     const fixture = setup(3, 4096, 4096);
     const prepared = fixture.cache.prepareMipTails();
@@ -364,6 +382,21 @@ function setup(count: number, width: number, height: number, worker?: unknown) {
     (worker as typeof fixture.workers.raster | undefined) ?? fixture.workers.raster
   );
   return { owner, cache, instances, ranges, textures, writeTexture };
+}
+
+/** Replies to every pending decode request and returns the requested image ids in order. */
+async function drainIds() {
+  const worker = FakeWorker.all.at(-1)!;
+  const ids: number[] = [];
+
+  while (worker.requests.length) {
+    expect(ids.length).toBeLessThan(10000);
+    const request = worker.requests.shift()!;
+    ids.push(request.id);
+    await worker.reply(request);
+  }
+
+  return ids;
 }
 
 async function drain() {

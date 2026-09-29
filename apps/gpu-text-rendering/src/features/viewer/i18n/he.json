@@ -3,6 +3,8 @@
   "open": "פתיחת מסמך",
   "openHint": "פתיחת PDF או GDOC",
   "overview": "הצגת המסמך כולו",
+  "splitView": "תצוגה מפוצלת",
+  "resizePanes": "שינוי גודל החלוניות",
   "enterFullscreen": "מסך מלא",
   "exitFullscreen": "יציאה ממסך מלא",
   "fullscreenUnsupported": "מסך מלא אינו זמין בדפדפן הזה",

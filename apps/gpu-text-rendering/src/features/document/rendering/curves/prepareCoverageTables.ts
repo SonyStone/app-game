@@ -1,6 +1,6 @@
 import { err, ok } from 'neverthrow';
 import { d } from 'typegpu';
-import type { GpuContext } from '../../../../shared/gpu/context';
+import type { GpuDevice } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { TextDocument } from '../../document';
 import type { DocumentWorkers } from '../DocumentWorkers';
@@ -18,7 +18,7 @@ import { coverageTableLayout } from './coverageTable';
  * TypeGPU allocation exceptions still propagate to the renderer boundary.
  */
 export async function prepareCoverageTables(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   document: Extract<TextDocument, { kind: 'curves' }>,
   keep: KeepGpuResource,
   request: DocumentWorkers['coverage']

@@ -16,8 +16,19 @@ export type PreparedDocument = {
   readonly refinement: RefinementCounters | undefined;
   /** Resolves when the current visible working set is resident and refined. Never rejects for GPU errors. */
   settle(): Promise<void>;
+  /**
+   * Creates an independent view, such as one canvas of a split screen. Views share every GPU resource; streamed
+   * images and refined tiles follow the merged working set of all views.
+   */
+  createView(): PreparedView;
+};
+
+/** One view of a prepared document. */
+export type PreparedView = {
   /** Records the frame into a scene-owned pass without ending or submitting it. May throw TypeGPU errors. */
   draw(pass: GPURenderPassEncoder, frame: SceneFrame): void;
+  /** Stops requesting this view's images and tiles. */
+  destroy(): void;
 };
 
 /** Read-only composed-page diagnostics for performance and in-motion quality checks. */

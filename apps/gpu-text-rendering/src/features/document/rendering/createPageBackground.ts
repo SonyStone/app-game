@@ -1,5 +1,5 @@
 import { d } from 'typegpu';
-import type { GpuContext } from '../../../shared/gpu/context';
+import type { GpuDevice } from '../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../shared/gpu/resources';
 import { pageVertices, type TextDocument } from '../document';
 import { pageLayout, View, viewLayout } from './bindings';
@@ -11,7 +11,7 @@ import { pageFragment, pageVertex } from './pageShader';
  * Buffers are released through `keep`'s owner. The pipeline compiles lazily; call `compile` before exposing
  * the first frame.
  */
-export function createPageBackground(gpu: GpuContext, document: TextDocument, keep: KeepGpuResource) {
+export function createPageBackground(gpu: GpuDevice, document: TextDocument, keep: KeepGpuResource) {
   const { root, format } = gpu;
   const pageData = pageVertices(document);
   const pages = keep(

@@ -113,13 +113,46 @@ export function documentBounds(pages: readonly PageLayout[]) {
  * page's bottom-left corner. Pages must be non-empty and positioned by layoutPages.
  */
 export function pageRects(pages: readonly PageLayout[]) {
-  const first = pages[0]!;
+  return pages.map((_, index) => pageRect(pages, index));
+}
 
-  return pages.map((page) => {
-    const height = page.height / first.height;
+/** One page's rectangle in DocumentSpace units; see pageRects. Throws RangeError for a missing page. */
+export function pageRect(pages: readonly PageLayout[], index: number) {
+  const first = pages[0];
+  const page = pages[index];
 
-    return { x: -page.x, y: 1 - page.y - height, width: page.width / first.width, height };
-  });
+  if (!first || !page) {
+    throw new RangeError(`Page ${index} does not exist in a ${pages.length}-page document`);
+  }
+
+  const height = page.height / first.height;
+
+  return { x: -page.x, y: 1 - page.y - height, width: page.width / first.width, height };
+}
+
+/**
+ * Converts a point in a page's own units, PDF points with the origin at the page's top-left corner and y pointing
+ * down, to DocumentSpace units. `rect` comes from pageRect; `size` is the page's size in points.
+ */
+export function pageToWorld(
+  { rect, size }: { rect: ReturnType<typeof pageRect>; size: { width: number; height: number } },
+  point: Point
+): Point {
+  return {
+    x: rect.x + (point.x / size.width) * rect.width,
+    y: rect.y + rect.height - (point.y / size.height) * rect.height
+  };
+}
+
+/** Inverse of pageToWorld: converts DocumentSpace units to a page's top-left-origin points. */
+export function worldToPage(
+  { rect, size }: { rect: ReturnType<typeof pageRect>; size: { width: number; height: number } },
+  point: Point
+): Point {
+  return {
+    x: ((point.x - rect.x) / rect.width) * size.width,
+    y: ((rect.y + rect.height - point.y) / rect.height) * size.height
+  };
 }
 
 /** Page size in points and its layoutPages offset in first-page units. */

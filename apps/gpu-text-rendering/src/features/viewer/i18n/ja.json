@@ -3,6 +3,8 @@
   "open": "ドキュメントを開く",
   "openHint": "PDF または GDOC を開く",
   "overview": "ドキュメント全体を表示",
+  "splitView": "分割表示",
+  "resizePanes": "ペインのサイズを変更",
   "enterFullscreen": "全画面表示",
   "exitFullscreen": "全画面表示を終了",
   "fullscreenUnsupported": "このブラウザーでは全画面表示を利用できません",

@@ -1,6 +1,6 @@
 import { err, ok } from 'neverthrow';
 import type { ResultValue } from '../../../../shared/errors';
-import type { GpuContext } from '../../../../shared/gpu/context';
+import type { GpuDevice } from '../../../../shared/gpu/context';
 import type { KeepGpuResource } from '../../../../shared/gpu/resources';
 import type { TextDocument } from '../../document';
 import { buildCurvePreparation } from '../../plan/buildCurvePreparation';
@@ -34,7 +34,7 @@ import { uploadCurveGeometry } from './uploadCurveGeometry';
  * ({@link createComposedPagePolicy}) — cached prefix tiles under their direct foreground.
  */
 export async function prepareCurveDocument(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   document: Extract<TextDocument, { kind: 'curves' }>,
   keep: KeepGpuResource,
   workers: DocumentWorkers,
@@ -70,7 +70,7 @@ export async function prepareCurveDocument(
  * pipelines, compiled before the first frame. Coverage failures resolve before any other allocation.
  */
 async function uploadCurveResources(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   document: Extract<TextDocument, { kind: 'curves' }>,
   keep: KeepGpuResource,
   workers: DocumentWorkers
@@ -112,7 +112,7 @@ type CurveResources = ResultValue<Awaited<ReturnType<typeof uploadCurveResources
  * Stage 2, prewarm: prepares low-resolution image fallbacks for the initial pages (every page when omitted), then
  * waits for the uploads so the first frame does not stall.
  */
-async function prewarmInitialImages(gpu: GpuContext, { raster, plan }: CurveResources, initialPages?: number[]) {
+async function prewarmInitialImages(gpu: GpuDevice, { raster, plan }: CurveResources, initialPages?: number[]) {
   const tails = await raster.prepareMipTails(
     initialPages?.flatMap((page) => plan.runs[page]!.flatMap(({ image }) => (image === undefined ? [] : [image])))
   );
@@ -131,7 +131,7 @@ async function prewarmInitialImages(gpu: GpuContext, { raster, plan }: CurveReso
  * `change` on the returned events.
  */
 function createPaintEngine(
-  gpu: GpuContext,
+  gpu: GpuDevice,
   document: Extract<TextDocument, { kind: 'curves' }>,
   keep: KeepGpuResource,
   resources: CurveResources
@@ -181,8 +181,9 @@ function createPaintEngine(
 }
 
 /**
- * Stage 4, drawing: each frame streams the visible images, then paints every page directly, or paints composed
- * pages as cached prefix tiles under their direct foreground.
+ * Stage 4, drawing: each view's frame streams its visible images, then paints every page directly, or paints composed
+ * pages as cached prefix tiles under their direct foreground. Views share every resource; image streaming and tile
+ * refinement follow their merged working sets.
  */
 function createCurveDrawing(
   { coverage, raster, plan, compositor, geometry, background }: CurveResources,
@@ -220,28 +221,40 @@ function createCurveDrawing(
         compositor.resourceBytes
       );
     },
-    draw(pass: GPURenderPassEncoder, frame: SceneFrame) {
-      const composed = policy.composedPages(frame);
-      raster.update(
-        frame.visible.flatMap((item) => runs[item.index]!),
-        frame,
-        [...composed].flatMap((page) => [...prefixImages(page)])
-      );
+    createView() {
+      // Identifies this view's requests to the image and tile caches.
+      const view = {};
 
-      if (frame.vectorOnly || composed.size === 0) {
-        // Diagnostic vector rendering and reading-scale frames draw every page directly.
-        tileCache.pause();
-        painter.paintPages(pass, frame, fullLayer);
-      } else {
-        const tiles = { ...frame, visible: frame.visible.filter(({ index }) => composed.has(index)) };
-        painter.paintPages(pass, frame, {
-          trees: (page) => (composed.has(page) ? composition.direct[page]! : trees[page]!),
-          bundles: false,
-          underlay: () => tileCache.draw(pass, tiles)
-        });
-      }
+      return {
+        draw(pass: GPURenderPassEncoder, frame: SceneFrame) {
+          const composed = policy.composedPages(frame);
+          raster.update(
+            frame.visible.flatMap((item) => runs[item.index]!),
+            frame,
+            [...composed].flatMap((page) => [...prefixImages(page)]),
+            view
+          );
 
-      policy.observeDirectCost(frame, composed);
+          if (frame.vectorOnly || composed.size === 0) {
+            // Diagnostic vector rendering and reading-scale frames draw every page directly.
+            tileCache.pause(view);
+            painter.paintPages(pass, frame, fullLayer);
+          } else {
+            const tiles = { ...frame, visible: frame.visible.filter(({ index }) => composed.has(index)) };
+            painter.paintPages(pass, frame, {
+              trees: (page) => (composed.has(page) ? composition.direct[page]! : trees[page]!),
+              bundles: false,
+              underlay: () => tileCache.draw(pass, tiles, view)
+            });
+          }
+
+          policy.observeDirectCost(frame, composed);
+        },
+        destroy() {
+          raster.forgetView(view);
+          tileCache.forgetView(view);
+        }
+      };
     }
   };
 }

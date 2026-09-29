@@ -12,10 +12,15 @@ export function createDocumentCamera(options: {
   pageAspect: Accessor<number>;
   /** Returns the camera to its initial view whenever this value changes, such as the displayed document. */
   resetOn?: Accessor<unknown>;
+  /** Starting view, for example a copy of another pane's camera; later resets use the initial view. */
+  start?: Camera;
 }) {
+  let start = options.start;
   const [camera, setCamera] = createSignal<Camera>(() => {
     options.resetOn?.();
-    return { ...initialCamera };
+    const view = start ?? initialCamera;
+    start = undefined;
+    return { ...view };
   });
 
   return {

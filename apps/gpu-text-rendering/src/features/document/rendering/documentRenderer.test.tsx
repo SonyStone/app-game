@@ -1,9 +1,9 @@
 import { render } from '@solidjs/web';
 import { err, ok, okAsync } from 'neverthrow';
-import { createRoot, createSignal, flush, onCleanup } from 'solid-js';
+import { createRoot, createSignal, flush, onCleanup, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { gpuError } from '../../../shared/errors';
-import type { GpuContext } from '../../../shared/gpu/context';
+import type { GpuDevice } from '../../../shared/gpu/context';
 import type { DocumentCamera } from '../../camera/createDocumentCamera';
 import type { RenderLayer } from '../../scene/RenderLayer';
 import type { TextDocument } from '../document';
@@ -12,7 +12,7 @@ import { DocumentRenderer } from './DocumentRenderer';
 import { GlyphText } from './GlyphText';
 import { VectorArtwork } from './VectorArtwork';
 
-vi.mock('../../../shared/gpu/GpuCanvasProvider', () => ({ useGpuCanvas: () => gpu }));
+vi.mock('../../../shared/gpu/TypeGPURootProvider', () => ({ useGpuDevice: () => gpu }));
 vi.mock('./createTypeGpuRenderer', () => ({ createGlyphRenderer: vi.fn() }));
 vi.mock('../../scene/FrameLoop', () => ({ useFrameLoop: () => ({ invalidate }) }));
 vi.mock('../../viewport/createViewport', () => ({
@@ -29,20 +29,20 @@ vi.mock('../../scene/RenderLayer', () => ({
 
 const invalidate = vi.fn();
 
-let gpu: GpuContext;
+let gpu: GpuDevice;
 const cleanups: (() => void)[] = [];
 
 beforeEach(() => {
   vi.resetAllMocks();
-  renderers.length = 0;
-  gpu = { signal: new AbortController().signal } as GpuContext;
+  views.length = 0;
+  gpu = { signal: new AbortController().signal } as GpuDevice;
 });
 
 afterEach(() => {
   cleanups.splice(0).forEach((dispose) => dispose());
 });
 
-it('replaces the drawn layer and releases the old renderer while retaining the GPU', async () => {
+it('replaces the drawn view and releases the old renderer while retaining the GPU', async () => {
   const first = rendererFixture();
   const second = rendererFixture();
   vi.mocked(createGlyphRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
@@ -97,7 +97,7 @@ it('cancels preparation without drawing a stale renderer, leaving a late rendere
 
 it('observes only the current renderer, invalidates frames on changes, and detaches residency listeners on GPU abort', async () => {
   const abort = new AbortController();
-  gpu = { signal: abort.signal } as GpuContext;
+  gpu = { signal: abort.signal } as GpuDevice;
   const first = rendererFixture();
   const second = rendererFixture();
   vi.mocked(createGlyphRenderer).mockResolvedValueOnce(ok(first)).mockResolvedValueOnce(ok(second));
@@ -136,23 +136,42 @@ it('draws with the current camera and reactive options', async () => {
 
   const mounted = mount();
   await settle();
+  const view = views[0]!;
   mounted.layers[0]!.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1 });
-  expect(vi.mocked(renderer.draw).mock.lastCall![1]).toMatchObject({ grids: false });
+  expect(view.draw.mock.lastCall![1]).toMatchObject({ grids: false });
 
   mounted.setGrids(true);
   flush();
   mounted.layers[0]!.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1 });
-  expect(vi.mocked(renderer.draw).mock.lastCall![1]).toMatchObject({ grids: true });
+  expect(view.draw.mock.lastCall![1]).toMatchObject({ grids: true });
+});
+
+it('prepares once for several views and ends only the view that unmounts', async () => {
+  const renderer = rendererFixture();
+  vi.mocked(createGlyphRenderer).mockResolvedValue(ok(renderer));
+
+  const mounted = mount({ views: 2 });
+  await settle();
+  expect(createGlyphRenderer).toHaveBeenCalledOnce();
+  expect(views.map((view) => view.renderer)).toEqual([renderer, renderer]);
+  expect(mounted.drawnBy()).toEqual([renderer, renderer]);
+
+  mounted.setViewCount(1);
+  flush();
+  expect(views[1]!.destroy).toHaveBeenCalledOnce();
+  expect(views[0]!.destroy).not.toHaveBeenCalled();
+  expect(renderer.destroy).not.toHaveBeenCalled();
 });
 
 it('rejects an engine that does not match the document kind', () => {
+  vi.mocked(createGlyphRenderer).mockReturnValue(new Promise(() => {}));
   const mount = () =>
     createRoot((dispose) => {
       cleanups.push(dispose);
       render(
         () => (
-          <DocumentRenderer document={documentFixture()} camera={cameraFixture()} onError={vi.fn()}>
-            <VectorArtwork />
+          <DocumentRenderer document={documentFixture()} onError={vi.fn()}>
+            <VectorArtwork camera={cameraFixture()} />
           </DocumentRenderer>
         ),
         globalThis.document.createElement('div')
@@ -162,7 +181,7 @@ it('rejects an engine that does not match the document kind', () => {
   expect(mount).toThrow('VectorArtwork draws curve documents');
 });
 
-function mount() {
+function mount({ views: initialViews = 1 } = {}) {
   const layers: LayerProps[] = [];
   const detached = vi.fn();
   const onReady = vi.fn();
@@ -176,17 +195,16 @@ function mount() {
   const result = createRoot((disposeState) => {
     const [document, setDocument] = createSignal(documentFixture());
     const [grids, setGrids] = createSignal(false);
+    const [viewCount, setViewCount] = createSignal(initialViews);
+    const camera = cameraFixture();
     const host = globalThis.document.createElement('div');
     const disposeView = render(
       () => (
-        <DocumentRenderer
-          document={document()}
-          camera={cameraFixture()}
-          onError={onError}
-          onReady={onReady}
-          onResourceUsage={onResourceUsage}
-        >
-          <GlyphText grids={grids()} />
+        <DocumentRenderer document={document()} onError={onError} onReady={onReady} onResourceUsage={onResourceUsage}>
+          <GlyphText camera={camera} grids={grids()} />
+          <Show when={viewCount() > 1}>
+            <GlyphText camera={camera} grids={grids()} />
+          </Show>
         </DocumentRenderer>
       ),
       host
@@ -197,15 +215,15 @@ function mount() {
       disposeState();
     });
 
-    return { setDocument, setGrids };
+    return { setDocument, setGrids, setViewCount };
   });
 
-  /** The renderer each mounted layer draws with, found by drawing it once. */
+  /** The renderer each mounted layer draws with, found through the view it draws once. */
   function drawnBy() {
     return layers.map((layer) => {
-      renderers.forEach((renderer) => vi.mocked(renderer.draw).mockClear());
+      views.forEach((view) => view.draw.mockClear());
       layer.draw({ pass: {} as GPURenderPassEncoder, width: 1, height: 1 });
-      return renderers.find((renderer) => vi.mocked(renderer.draw).mock.calls.length > 0);
+      return views.find((view) => view.draw.mock.calls.length > 0)?.renderer;
     });
   }
 
@@ -220,20 +238,24 @@ function documentFixture() {
   return { kind: 'glyphs', pages: [{ width: 612, height: 792, x: 0, y: 0 }] } as TextDocument;
 }
 
-/** Renderers created by the current test, in creation order. */
-const renderers: TextRenderer[] = [];
+/** Views created by the current test, in creation order, with the renderer that created each. */
+const views: { renderer: TextRenderer; draw: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> }[] = [];
 
 function rendererFixture(): TextRenderer {
   const renderer: TextRenderer = {
     draw: vi.fn(() => ok()),
     render: vi.fn(() => ok()),
+    createView: vi.fn(() => {
+      const view = { renderer, draw: vi.fn(() => ok()), destroy: vi.fn() };
+      views.push(view);
+      return view;
+    }),
     destroy: vi.fn(),
     settle: vi.fn(() => okAsync()),
     events: new EventTarget(),
     resourceBytes: 1024,
     refinement: undefined
   };
-  renderers.push(renderer);
   return renderer;
 }
 

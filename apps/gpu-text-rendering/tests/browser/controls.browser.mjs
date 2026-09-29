@@ -112,15 +112,13 @@ for (const gpu of [true, false]) {
     await page.waitForFunction(
       () => document.querySelector('[role="menuitemcheckbox"]')?.getAttribute('aria-checked') === 'false'
     );
-    assert.equal(
-      await page.getByRole('menuitemcheckbox', { name: 'Auto zoom' }).getAttribute('aria-checked'),
-      'false'
-    );
+    assert.equal(await page.getByRole('menuitemcheckbox', { name: 'Auto zoom' }).getAttribute('aria-checked'), 'false');
     await page.waitForFunction(() => pendingFrames.size === 0);
     await page.setViewportSize({ width: 800, height: 600 });
     await page.waitForFunction(() => document.querySelector('canvas').width === 800 * devicePixelRatio);
     await page.waitForFunction(() => pendingFrames.size === 0);
-    if (!(await page.getByRole('menu').isVisible())) await page.getByRole('button', { name: 'More', exact: true }).click();
+    if (!(await page.getByRole('menu').isVisible()))
+      await page.getByRole('button', { name: 'More', exact: true }).click();
     await page.getByRole('menuitemcheckbox', { name: 'Grids', exact: true }).click();
     await page.getByRole('menuitemcheckbox', { name: 'Vector only' }).click();
     await page.getByRole('button', { name: 'More', exact: true }).press('Escape');
@@ -182,7 +180,10 @@ for (const gpu of [true, false]) {
       await page.getByRole('button', { name: 'Show entire document' }).click();
       await page.waitForFunction(() => pendingFrames.size === 0);
       const box = await page.locator('#toolbar').boundingBox();
-      assert.ok(box.width <= 220 && box.height <= 60 && box.x >= 0 && box.y + box.height <= height);
+      // Five 44 px buttons (open, overview, split, fullscreen, more) must fit the narrowest supported screen.
+      assert.ok(
+        box.width <= 260 && box.height <= 60 && box.x >= 0 && box.x + box.width <= width && box.y + box.height <= height
+      );
       await page.mouse.move(10, 10);
       if (screenshots) await page.screenshot({ path: `${screenshots}/${width}x${height}.png` });
       await more.click();

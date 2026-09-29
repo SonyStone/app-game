@@ -37,6 +37,18 @@ export function createFrameScheduler(
       }
     },
 
+    /**
+     * Renders the current state now, without advancing animation time, for work that must reach the next paint, such
+     * as redrawing a canvas whose resize just cleared it. Satisfies pending requests like a scheduled frame.
+     */
+    redraw() {
+      if (stopped || !active) {
+        return;
+      }
+
+      render({ timestamp: performance.now(), delta: 0, time });
+    },
+
     /** Pauses presentation and animation time while the page is hidden. */
     setActive(value: boolean) {
       active = value;
@@ -106,6 +118,11 @@ export function createFrameScheduler(
       return;
     }
 
+    render(frame);
+  }
+
+  /** Runs render callbacks and draws, then pauses unless a request arrived meanwhile or a subscription is continuous. */
+  function render(frame: FrameTime) {
     // This render reads current state, so it satisfies every request so far, including those caused by updates.
     invalidated = false;
 

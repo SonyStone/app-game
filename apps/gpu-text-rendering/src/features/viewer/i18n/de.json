@@ -3,6 +3,8 @@
   "open": "Dokument öffnen",
   "openHint": "PDF oder GDOC öffnen",
   "overview": "Gesamtes Dokument anzeigen",
+  "splitView": "Geteilte Ansicht",
+  "resizePanes": "Bereichsgröße ändern",
   "enterFullscreen": "Vollbild",
   "exitFullscreen": "Vollbild verlassen",
   "fullscreenUnsupported": "Vollbild ist in diesem Browser nicht verfügbar",

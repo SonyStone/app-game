@@ -1,7 +1,17 @@
 import { resolveTokens } from '@solid-primitives/jsx-tokenizer';
 import { createPageVisibility } from '@solid-primitives/page-utilities';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
-import { createContext, createEffect, createMemo, createReaction, untrack, useContext, type Accessor } from 'solid-js';
+import {
+  createContext,
+  createEffect,
+  createMemo,
+  createReaction,
+  flush,
+  untrack,
+  useContext,
+  type Accessor
+} from 'solid-js';
 import type { ViewerError } from '../../shared/errors';
 import { useGpuCanvas } from '../../shared/gpu/GpuCanvasProvider';
 import { onGpuRelease } from '../../shared/gpu/onGpuRelease';
@@ -34,13 +44,16 @@ export function FrameLoop(props: {
   const visible = createPageVisibility();
   const track = trackFrames(() => loop.invalidate());
 
+  let resized = false;
   const loop = createFrameScheduler(
     () =>
-      gate.draw(() =>
-        renderScene(
-          gpu,
-          layers().map((layer) => layer.draw)
-        )
+      gate.draw(
+        () =>
+          renderScene(
+            gpu,
+            layers().map((layer) => layer.draw)
+          ),
+        { resized }
       ),
     (error) => props.onError(error),
     track
@@ -62,6 +75,20 @@ export function FrameLoop(props: {
 
   createEffect(visible, loop.setActive);
   createEffect(viewport.size, () => loop.invalidate());
+
+  // Resizing the framebuffer clears the canvas after this frame's animation callbacks already ran, so the browser would
+  // paint it blank until the next frame. Redraw before that paint instead. The viewport's observer was created first,
+  // and observers are notified in creation order, so flushing applies its new size before this redraw.
+  createResizeObserver(gpu.context.canvas as HTMLCanvasElement, () => {
+    flush();
+    resized = true;
+
+    try {
+      loop.redraw();
+    } finally {
+      resized = false;
+    }
+  });
 
   // Children resolve once beneath the loop's context. The provider's owner keeps the token and layer memos alive
   // for this component's lifetime; frames run from RAF callbacks, never during disposal, and the scheduler stops
