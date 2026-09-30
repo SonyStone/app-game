@@ -9,11 +9,12 @@ Sources are consumed directly (no build step); the consuming app compiles them w
 
 ## Entry points
 
-| Import                       | Runs on                | Depends on                                                                                                                                    |
-| ---------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@app-game/solid-gpu/errors` | anywhere               | `neverthrow`                                                                                                                                  |
-| `@app-game/solid-gpu/gpu`    | main thread (DOM)      | `solid-js`, `@solidjs/web`, `typegpu`, primitives                                                                                             |
-| `@app-game/solid-gpu/worker` | main thread and worker | `solid-js`, `neverthrow`, `@solid-primitives/event-listener`; `WorkerTasks` JSX compiles to `@solidjs/web`'s `createComponent`. No DOM access |
+| Import                            | Runs on                | Depends on                                                                                                                                    |
+| --------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@app-game/solid-gpu/errors`      | anywhere               | `neverthrow`                                                                                                                                  |
+| `@app-game/solid-gpu/gpu`         | main thread (DOM)      | `solid-js`, `@solidjs/web`, `typegpu`, primitives                                                                                             |
+| `@app-game/solid-gpu/worker`      | main thread and worker | `solid-js`, `neverthrow`, `@solid-primitives/event-listener`; `WorkerTasks` JSX compiles to `@solidjs/web`'s `createComponent`. No DOM access |
+| `@app-game/solid-gpu/performance` | main thread            | nothing; reports read `location`                                                                                                              |
 
 Every module is also exported individually (for example `@app-game/solid-gpu/gpu/GpuCanvasProvider` or
 `@app-game/solid-gpu/worker/openWorker`). Prefer the barrels in application code; the per-module paths let a bundle
@@ -74,6 +75,17 @@ mountWorker(
 
 `workerProtocol` defines the shared wire types: `WorkerReply<Output, Failure, Progress>`, `ReplyOutput`,
 `ReplyFailure`, `ReplyProgress`, `WorkerFailure` (native transport failures) and `WorkerResult`.
+
+## `/performance`: frame-cost monitoring
+
+- `makeFrameCostHistory(capacity)` keeps recent frames' CPU and GPU milliseconds; `summarizeFrameCosts` derives the
+  headline cost range and the frame rate of back-to-back frames.
+- `layoutPerformancePanel(samples, idle, size)` lays out the panel as clip-space quads with a pixel font (`fontRows`)
+  for a GPU pass; `drawPerformancePanel(context, quads, pixels)` draws the same layout on a 2D canvas, sized by
+  `performancePanelSize`.
+- `makePerformanceReports()` is a page's monitor registry with `report({ samples? })` and `reset()`, for a `window`
+  automation API; `answerPerformanceRequests(import.meta.hot, reports, channel)` answers a dev-server bridge over
+  Vite's HMR websocket (`<channel>:request`, `<channel>:report`, `<channel>:reset`).
 
 ## `/errors`
 

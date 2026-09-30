@@ -14,6 +14,7 @@ import { BrushCursor, CanvasDebug, PaintCanvas, type CanvasInput } from '../canv
 import { createDeveloperSettings, DeveloperDialog } from '../developer';
 import { createPaintEngine } from '../engine';
 import { HistorySourceControl, LayersPanel } from '../layers';
+import { createPerformanceMonitor, PerformancePanel } from '../performance';
 import { createSelection, guardEdits, SelectionActions, syncSelectionView } from '../selection';
 import { createSymmetry, SymmetryGuide, SymmetryPanel } from '../symmetry';
 import { createFullscreenToggle } from './createFullscreenToggle';
@@ -45,13 +46,15 @@ export function PaintStudio(props: {
     settings: developer,
     onError: setError,
     onSelection: (event) => selection.receive(event),
-    prepare: () => presets.restore()
+    prepare: () => presets.restore(),
+    frames: { enabled: developer.performanceMonitor, receive: (event) => monitor.record(event) }
   });
   const selection = createSelection({ send: engine.send, document: engine.state, ready: engine.canEdit });
   syncSelectionView({ points: selection.points, ready: engine.canEdit, send: engine.send });
   /** Sends document commands, respecting a pending selection edit and clearing the outline where needed. */
   const edit = guardEdits(selection, engine.send);
   const size = createViewSize(stage);
+  const monitor = createPerformanceMonitor({ enabled: developer.performanceMonitor, label: engine.mode, size });
   const camera = createPaintCamera({
     restored: () => engine.restored()?.camera,
     size,
@@ -216,6 +219,9 @@ export function PaintStudio(props: {
             document={engine.state()}
             gpuBytes={engine.metrics().gpu}
           />
+        </Show>
+        <Show when={developer.performanceMonitor()}>
+          <PerformancePanel samples={monitor.samples()} idle={monitor.idle()} />
         </Show>
         <Show when={ready() && (engine.state().tileCount === 0 || needsPreset())}>
           <div class={styles.welcome}>

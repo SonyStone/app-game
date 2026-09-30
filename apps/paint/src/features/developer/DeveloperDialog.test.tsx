@@ -41,6 +41,7 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   const [liveTail, setLiveTail] = createSignal(true);
   const [showPenCursor, setShowPenCursor] = createSignal(false);
   const [rawReceived, setRawReceived] = createSignal(false);
+  const [performanceMonitor, setPerformanceMonitor] = createSignal(false);
   const close = vi.fn();
   const onWorkerEnabledChange = vi.fn();
   const settings = {
@@ -52,6 +53,8 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
     setLiveTail,
     showPenCursor,
     setShowPenCursor,
+    performanceMonitor,
+    setPerformanceMonitor,
     rawReceived,
     markRawReceived: () => setRawReceived(true)
   };
@@ -76,12 +79,13 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   setRawReceived(true);
   flush();
   expect(dialog.textContent).toContain(supported ? 'Receiving pen events' : 'Unavailable · using pointermove');
-  const [wireframe, tail, cursor, worker, quality] = [...dialog.querySelectorAll('input')];
+  const [wireframe, tail, cursor, worker, quality, monitor] = [...dialog.querySelectorAll('input')];
   wireframe!.click();
   tail!.click();
   cursor!.click();
   worker!.click();
   quality!.click();
+  monitor!.click();
   flush();
   expect(adaptiveQuality()).toBe(true);
   expect(onWorkerEnabledChange).toHaveBeenCalledWith(false);
@@ -90,6 +94,7 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   expect(debug()).toBe(true);
   expect(liveTail()).toBe(false);
   expect(showPenCursor()).toBe(true);
+  expect(performanceMonitor()).toBe(true);
   dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
   expect(close).toHaveBeenCalledOnce();
 });

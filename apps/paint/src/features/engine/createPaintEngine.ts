@@ -39,6 +39,11 @@ export function createPaintEngine(options: {
    * preset. Returns `undefined` when there is nothing to prepare. A failure keeps the engine paused.
    */
   prepare?: () => Promise<Result<void, PaintError>> | undefined;
+  /**
+   * Per-frame timing for the performance monitor. While `enabled`, every connection sends `frame` events, with its CPU
+   * submission time and its wait for submitted GPU work, to `receive` once the frame's GPU work has finished.
+   */
+  frames?: { enabled: Accessor<boolean>; receive: (event: FrameEvent) => void };
 }) {
   const [mode, setMode] = createSignal<ExecutionMode>(initialMode());
   const [switchTarget, setSwitchTarget] = createSignal<ExecutionMode>();
@@ -71,6 +76,11 @@ export function createPaintEngine(options: {
   syncWhenEditable(options.settings.adaptiveQuality, (enabled) => ({ type: 'adaptive-quality', enabled }));
   syncWhenEditable(options.settings.liveTail, (enabled) => ({ type: 'live-tail', enabled }));
   syncWhenEditable(options.settings.debug, (enabled) => ({ type: 'debug', enabled }));
+
+  if (options.frames) {
+    syncWhenEditable(options.frames.enabled, (enabled) => ({ type: 'diagnostics', enabled }));
+  }
+
   createEffect(options.settings.debug, (enabled) => {
     if (!enabled) {
       setDebugTiles([]);
@@ -190,6 +200,9 @@ export function createPaintEngine(options: {
           break;
         case 'download':
           downloadBlob(event.blob, event.name);
+          break;
+        case 'frame':
+          options.frames?.receive(event);
           break;
       }
     }
@@ -388,6 +401,9 @@ export function createPaintEngine(options: {
 
 /** The engine API used by editor features. */
 export type PaintEngine = ReturnType<typeof createPaintEngine>;
+
+/** A frame's engine timing, sent while frame timing is enabled. */
+export type FrameEvent = Extract<PaintEvent, { type: 'frame' }>;
 
 /** Storage, virtual texture and readback statistics from the latest state event. */
 export type EnginePaging = Pick<StateEvent, 'storage' | 'virtual' | 'debugPages' | 'rasterDraws' | 'readback'>;

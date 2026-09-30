@@ -93,6 +93,14 @@ export function DeveloperDialog(props: {
           />
           Adaptive brush quality
         </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={props.settings.performanceMonitor()}
+            onChange={(event) => props.settings.setPerformanceMonitor(event.currentTarget.checked)}
+          />
+          Performance monitor
+        </label>
       </div>
       <p class={styles.panelNote}>
         On by default for all brushes. Uses the canvas LOD to reduce work. New strokes may keep reduced detail; no
@@ -128,8 +136,8 @@ export function DeveloperDialog(props: {
         </div>
       </dl>
       <p class={styles.panelNote}>
-        Submission measures CPU preparation, not pen latency. Execution mode stays in the URL; other switches apply to
-        this session.
+        Submission measures CPU preparation, not pen latency. The performance monitor adds the wait for GPU work; the
+        <code>?performance</code> query opens it. Execution mode stays in the URL; other switches apply to this session.
       </p>
     </dialog>
   );
