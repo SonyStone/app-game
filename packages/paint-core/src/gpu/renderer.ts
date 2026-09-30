@@ -2,7 +2,16 @@ import type { AbrCoverageSnapshot } from '@app-game/abr-paint/gpu/coverage';
 import { capturePaintBounds, clipPaintBounds, type PaintBounds } from './paintBounds';
 import { expandToRasterGrid } from '@app-game/abr-paint/gpu/brushBatchSize';
 import { visibleTileKeys } from './visibleTileKeys';
-import { d, tgpu, type RenderFlag, type TgpuRoot, type TgpuTexture } from 'typegpu';
+import {
+  d,
+  tgpu,
+  type RenderFlag,
+  type TgpuBindGroup,
+  type TgpuBuffer,
+  type TgpuRoot,
+  type TgpuTexture,
+  type UniformFlag
+} from 'typegpu';
 import { attempt, unwrapResult, type Result } from '../asyncResult';
 import { TILE_SIZE, dabIntersectsTile, dabTiles, type Brush, type Dab } from '../brush';
 import { screenToWorld, type Camera, type Point, type ViewSize } from '../camera';
@@ -26,6 +35,7 @@ import { createAbrRetouch } from '@app-game/abr-paint/gpu/retouch';
 import { createViewDamage } from './viewDamage';
 import { createViewFallback } from './viewFallback';
 import { createVirtualTexture } from './virtualTexture';
+import { evictionVictims } from './evictionVictims';
 import { gpuError, type GpuError } from '@app-game/solid-gpu/errors';
 import { makeGpuResources, type KeepGpuResource } from '@app-game/solid-gpu/gpu/resources';
 
@@ -354,8 +364,15 @@ async function assemblePaintRenderer(
           : Promise.reject(new Error('Missing tile storage reader.'));
   const keyFor = (layer: Layer, key: string) => `${layer.id}/${key}`;
 
-  /** Evicts least-recently-used tiles. Active mask readback occurs only when the cache is full. */
-  const ensure = async (layer: Layer, key: string, batch?: ReturnType<typeof commandBatch>) => {
+  /** Evicts least-recently-used tiles. Active mask readback occurs only when the cache is full.
+   * `pinned` ids are loaded members of an undrawn render batch; they are never evicted to make room.
+   */
+  const ensure = async (
+    layer: Layer,
+    key: string,
+    batch?: ReturnType<typeof commandBatch>,
+    pinned?: ReadonlySet<string>
+  ) => {
     const id = keyFor(layer, key);
     let tile = cache.get(id);
     if (tile) {
@@ -367,7 +384,7 @@ async function assemblePaintRenderer(
       batch?.flush();
       // Amortize readback synchronization over a small LRU batch as the stroke grows.
       const count = evictionSize;
-      const victims = [...cache].sort((a, b) => a[1].used - b[1].used).slice(0, count);
+      const victims = evictionVictims(cache, count, pinned);
       // A tile loaded only for pickup still matches its saved snapshot. Reading it
       // back again makes large smudge footprints thrash the CPU/GPU boundary.
       const active = victims.filter(([id, tile]) => strokeTiles.has(id) && tile.strokeDirty);
@@ -1119,183 +1136,211 @@ async function assemblePaintRenderer(
       previewTileDraws = 0;
       sourceTileDraws = 0;
       viewportUpdate = { full: plan.full, pixels: region ? region.width * region.height : 0 };
-      const present = () => {
-        // Both passes target the same swapchain texture. The cached artwork never contains the outline.
-        const swapchain = context!.getCurrentTexture().createView();
-        const encoder = device.createCommandEncoder();
-        const pass = encoder.beginRenderPass({ colorAttachments: [{ view: swapchain, loadOp: 'clear', storeOp: 'store' }] });
-        pipelines.present.with(pass).with(view!.present).draw(3);
-        pass.end();
-        if (!exact)
-          targetState.lasso.render(
-            swapchain, camera, size, width, height, animateSelection ? performance.now() / 1000 : 0, encoder
-          );
-        device.queue.submit([encoder.finish()]);
-      };
-      if (!region) {
-        present();
-        damage.presented(plan);
-        return;
-      }
-      const left = (region.x * size.width) / width,
-        top = (region.y * size.height) / height;
-      const right = ((region.x + region.width) * size.width) / width,
-        bottom = ((region.y + region.height) * size.height) / height;
-      const corners = [
-        screenToWorld({ x: left, y: top }, camera, size),
-        screenToWorld({ x: right, y: top }, camera, size),
-        screenToWorld({ x: left, y: bottom }, camera, size),
-        screenToWorld({ x: right, y: bottom }, camera, size)
-      ];
-      const minX = Math.min(...corners.map((p) => p.x)),
-        maxX = Math.max(...corners.map((p) => p.x));
-      const minY = Math.min(...corners.map((p) => p.y)),
-        maxY = Math.max(...corners.map((p) => p.y));
-      const clear = device.createCommandEncoder();
-      clearAttachment(clear, view.aRender);
-      device.queue.submit([clear.finish()]);
-      const stream = virtual && layers.filter((layer) => layer.visible && layer.opacity > 0).length <= 24;
-      pages?.begin(layers);
-      let read = view.a,
-        write = view.b;
-      for (const layer of layers) {
-        if (!layer.visible || layer.opacity <= 0) continue;
-        const active = stroke?.layer.id === layer.id;
-        let streamed = false;
-        if (stream && !exact) {
-          const encoder = device.createCommandEncoder();
+      // One encoder holds the frame. It is submitted early only before resources referenced by encoded passes are
+      // recycled (tile eviction, display-cache replacement, tail scratch reuse, instance-range wrap) and before
+      // helpers that submit their own work which must follow encoded passes (fallback reprojection).
+      const frame = commandBatch(device);
+      try {
+        const present = () => {
+          // Both passes target the same swapchain texture. The cached artwork never contains the outline.
+          const swapchain = context!.getCurrentTexture().createView();
+          const encoder = frame.encoder();
           const pass = encoder.beginRenderPass({
-            colorAttachments: [{ view: view.layerRender, loadOp: 'clear', storeOp: 'store' }]
+            colorAttachments: [{ view: swapchain, loadOp: 'clear', storeOp: 'store' }]
+          });
+          pipelines.present.with(pass).with(view!.present).draw(3);
+          pass.end();
+          if (!exact)
+            targetState.lasso.render(
+              swapchain, camera, size, width, height, animateSelection ? performance.now() / 1000 : 0, encoder
+            );
+        };
+        if (!region) {
+          present();
+          frame.flush();
+          damage.presented(plan);
+          return;
+        }
+        const left = (region.x * size.width) / width,
+          top = (region.y * size.height) / height;
+        const right = ((region.x + region.width) * size.width) / width,
+          bottom = ((region.y + region.height) * size.height) / height;
+        const corners = [
+          screenToWorld({ x: left, y: top }, camera, size),
+          screenToWorld({ x: right, y: top }, camera, size),
+          screenToWorld({ x: left, y: bottom }, camera, size),
+          screenToWorld({ x: right, y: bottom }, camera, size)
+        ];
+        const minX = Math.min(...corners.map((p) => p.x)),
+          maxX = Math.max(...corners.map((p) => p.x));
+        const minY = Math.min(...corners.map((p) => p.y)),
+          maxY = Math.max(...corners.map((p) => p.y));
+        // The first composite reads this base only inside the damage region.
+        if (plan.full) clearAttachment(frame.encoder(), view.aRender);
+        else {
+          const pass = frame.encoder().beginRenderPass({
+            colorAttachments: [{ view: view.aRender, loadOp: 'load', storeOp: 'store' }]
           });
           pass.setScissorRect(region.x, region.y, region.width, region.height);
-          const covered = pages!.draw(layer, pass, camera, size, scale);
-          // A cold layer keeps the original complete-tile path until background coverage is ready.
-          streamed = !active || covered;
+          pipelines.clear.with(pass).draw(3);
           pass.end();
-          device.queue.submit([encoder.finish()]);
         }
-        if (!streamed || active) {
-          // Committed pixels already come from the pyramid. Only the active stroke's output
-          // replaces those pixels; scanning/loading every document tile here defeats virtual texturing.
-          const visible = visibleTileKeys(layer, active ? strokeTiles : undefined,
-            active && !exact ? tailTiles : undefined, streamed, { minX, maxX, minY, maxY });
-          if (!visible.length && !streamed) continue;
-          const batchSize = Math.min(
-            tailTiles.size && !exact ? 8 : 64,
-            Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES)
-          );
-          for (let offset = 0; offset < visible.length; offset += batchSize) {
-            const batch = [];
-            let tailSlot = 0;
-            for (const key of visible.slice(offset, offset + batchSize)) {
-              const [x, y] = coordinates(key);
-              const id = keyFor(layer, key);
-              // Display evicted active output without restoring its full-size brush mask/base.
-              // Only actual painting may bring that scratch state back into the working set.
-              const snapshot = strokeTiles.get(id);
-              // An evicted tile owns a pending snapshot, not an empty/committed replacement.
-              if (!cache.has(id) && snapshot?.pending) unwrapResult(await snapshot.pending);
-              const source = snapshot?.output ?? layer.tiles.get(key)!;
-              const tail = active && !exact ? tailTiles.get(key) : undefined;
-              let tile =
-                tail || cache.has(id) || options.displayCache === false
-                  ? await ensure(layer, key)
-                  : (displayCache.find(id, source, camera.zoom * scale) ??
-                    displayCache.get(id, (await readTile(source))!, camera.zoom * scale, source));
-              if (tail) tile = prepareTail(cache.get(id)!, !!snapshot, tail, tailSlot++, x, y);
-              tile.camera.write({
-                size: d.vec2f(size.width, size.height),
-                zoom: camera.zoom,
-                angle: camera.angle,
-                mirror: camera.mirrored ? -1 : 1,
-                padding: 0,
-                offset: d.vec2f(x * TILE_SIZE - camera.x, y * TILE_SIZE - camera.y)
-              });
-              batch.push(tile);
-            }
-            const encoder = device.createCommandEncoder();
-            // Load the entire bounded tile batch before encoding mipmaps. Loading can
-            // evict textures or submit tail updates; no unsubmitted mip writes may span it.
-            // The mip passes and their display reads then share one submission.
-            for (const tile of batch) {
-              // Magnified tiles sample level zero. Build the mip chain only when a view needs it.
-              const mipScale = camera.zoom * Math.min(width / size.width, height / size.height);
-              if (mipScale < 1) {
-                // Keep one level beyond the ideal LOD for trilinear filtering and viewport rounding.
-                // Coarse cache entries already represent fewer texels across the same document tile.
-                const required =
-                  options.adaptiveMipmaps === false
-                    ? 8
-                    : Math.ceil(Math.log2(tile.texture.props.size[0] / (TILE_SIZE * mipScale))) + 1;
-                ensureMipmaps(tile, required, options.batchViewMipmaps === false ? undefined : encoder);
-              }
-            }
-            const pass = encoder.beginRenderPass({
-              colorAttachments: [
-                { view: view.layerRender, loadOp: offset === 0 && !streamed ? 'clear' : 'load', storeOp: 'store' }
-              ]
+        const stream = virtual && layers.filter((layer) => layer.visible && layer.opacity > 0).length <= 24;
+        pages?.begin(layers);
+        let read = view.a,
+          write = view.b;
+        let slot = 0;
+        for (const layer of layers) {
+          if (!layer.visible || layer.opacity <= 0) continue;
+          const active = stroke?.layer.id === layer.id;
+          let streamed = false;
+          if (stream && !exact) {
+            const planned = pages!.plan(layer, camera, size, scale, frame.flush);
+            const pass = frame.encoder().beginRenderPass({
+              colorAttachments: [{ view: view.layerRender, loadOp: 'clear', storeOp: 'store' }]
             });
             pass.setScissorRect(region.x, region.y, region.width, region.height);
-            // No blending: output includes the pre-stroke base and may be completely transparent
-            // after erasing. Replace the layer pixels before applying its opacity/blend exactly once.
-            for (const tile of batch) pipelines.tile.with(pass).with(tile.viewGroup).draw(6);
-            for (const key of visible.slice(offset, offset + batchSize)) {
-              if (active && strokeTiles.has(keyFor(layer, key))) previewTileDraws++;
-              else sourceTileDraws++;
-            }
+            planned.draw(pass);
+            // A cold layer keeps the original complete-tile path until background coverage is ready.
+            streamed = !active || planned.covered;
             pass.end();
-            device.queue.submit([encoder.finish()]);
           }
+          if (!streamed || active) {
+            // Committed pixels already come from the pyramid. Only the active stroke's output
+            // replaces those pixels; scanning/loading every document tile here defeats virtual texturing.
+            const visible = visibleTileKeys(layer, active ? strokeTiles : undefined,
+              active && !exact ? tailTiles : undefined, streamed, { minX, maxX, minY, maxY });
+            if (!visible.length && !streamed) continue;
+            const batchSize = Math.min(
+              tailTiles.size && !exact ? 8 : 64,
+              Math.max(1, options.cacheTiles ?? MAX_RESIDENT_TILES)
+            );
+            for (let offset = 0; offset < visible.length; offset += batchSize) {
+              const batch = [];
+              // Loaded but undrawn members; loading the rest of the batch must not evict them.
+              const pinned = new Set<string>();
+              let tailSlot = 0;
+              for (const key of visible.slice(offset, offset + batchSize)) {
+                const [x, y] = coordinates(key);
+                const id = keyFor(layer, key);
+                // Display evicted active output without restoring its full-size brush mask/base.
+                // Only actual painting may bring that scratch state back into the working set.
+                const snapshot = strokeTiles.get(id);
+                // An evicted tile owns a pending snapshot, not an empty/committed replacement.
+                if (!cache.has(id) && snapshot?.pending) unwrapResult(await snapshot.pending);
+                const source = snapshot?.output ?? layer.tiles.get(key)!;
+                const tail = active && !exact ? tailTiles.get(key) : undefined;
+                let tile =
+                  tail || cache.has(id) || options.displayCache === false
+                    ? await ensure(layer, key, frame, pinned)
+                    : (displayCache.find(id, source, camera.zoom * scale, frame.flush) ??
+                      displayCache.get(id, (await readTile(source))!, camera.zoom * scale, source, frame.flush));
+                pinned.add(id);
+                if (tail) {
+                  // prepareTail submits its own copies: encoded source clears must run first, and earlier
+                  // batches may still sample the pooled tail tiles it rewrites.
+                  frame.flush();
+                  tile = prepareTail(cache.get(id)!, !!snapshot, tail, tailSlot++, x, y);
+                }
+                tile.camera.write({
+                  size: d.vec2f(size.width, size.height),
+                  zoom: camera.zoom,
+                  angle: camera.angle,
+                  mirror: camera.mirrored ? -1 : 1,
+                  padding: 0,
+                  offset: d.vec2f(x * TILE_SIZE - camera.x, y * TILE_SIZE - camera.y)
+                });
+                batch.push(tile);
+              }
+              // Load the entire bounded tile batch before encoding mipmaps. Loading can
+              // evict textures or submit tail updates; no unsubmitted mip writes may span it.
+              // The mip passes and their display reads then share the frame's submission.
+              for (const tile of batch) {
+                // Magnified tiles sample level zero. Build the mip chain only when a view needs it.
+                const mipScale = camera.zoom * Math.min(width / size.width, height / size.height);
+                if (mipScale < 1) {
+                  // Keep one level beyond the ideal LOD for trilinear filtering and viewport rounding.
+                  // Coarse cache entries already represent fewer texels across the same document tile.
+                  const required =
+                    options.adaptiveMipmaps === false
+                      ? 8
+                      : Math.ceil(Math.log2(tile.texture.props.size[0] / (TILE_SIZE * mipScale))) + 1;
+                  ensureMipmaps(tile, required, options.batchViewMipmaps === false ? undefined : frame.encoder());
+                }
+              }
+              const pass = frame.encoder().beginRenderPass({
+                colorAttachments: [
+                  { view: view.layerRender, loadOp: offset === 0 && !streamed ? 'clear' : 'load', storeOp: 'store' }
+                ]
+              });
+              pass.setScissorRect(region.x, region.y, region.width, region.height);
+              // No blending: output includes the pre-stroke base and may be completely transparent
+              // after erasing. Replace the layer pixels before applying its opacity/blend exactly once.
+              for (const tile of batch) pipelines.tile.with(pass).with(tile.viewGroup).draw(6);
+              for (const key of visible.slice(offset, offset + batchSize)) {
+                if (active && strokeTiles.has(keyFor(layer, key))) previewTileDraws++;
+                else sourceTileDraws++;
+              }
+              pass.end();
+            }
+          }
+          // Each composited layer owns a settings slot, so every composite pass can share the frame encoder.
+          const composite = view.composite(slot++);
+          composite.settings.write(
+            d.vec4f(layer.opacity, ['normal', 'multiply', 'screen', 'overlay', 'linear'].indexOf(layer.blend), 0, 0)
+          );
+          const pass = frame.encoder().beginRenderPass({
+            colorAttachments: [
+              { view: write === view.a ? view.aRender : view.bRender, loadOp: 'clear', storeOp: 'store' }
+            ]
+          });
+          pass.setScissorRect(region.x, region.y, region.width, region.height);
+          pipelines.composite
+            .with(pass)
+            .with(read === view.a ? composite.fromA : composite.fromB)
+            .draw(3);
+          pass.end();
+          [read, write] = [write, read];
         }
-        view.settings.write(
-          d.vec4f(layer.opacity, ['normal', 'multiply', 'screen', 'overlay', 'linear'].indexOf(layer.blend), 0, 0)
+        pages?.end();
+        // Keep the last brush preview until its updated overview is resident; navigation remains immediate.
+        if (
+          !exact &&
+          !stroke &&
+          holdPresentation === cameraSignature &&
+          pages?.debug().some((page) => !page.resident || page.fallback)
+        )
+          return;
+        const refining = !exact && pages?.debug().some((page) => !page.resident || page.fallback);
+        if (refining && !stroke && completeView) {
+          // Captures the previous composed image, which the copy below has not replaced yet.
+          viewFallback?.capture(root.unwrap(view.composed), completeView.camera, completeView.size);
+          completeView = undefined;
+        }
+        holdPresentation = '';
+        presentedCamera = cameraSignature;
+        const origin = { x: region.x, y: region.y };
+        frame.encoder().copyTextureToTexture(
+          { texture: root.unwrap(read), origin },
+          { texture: root.unwrap(view.composed), origin },
+          [region.width, region.height]
         );
-        const encoder = device.createCommandEncoder();
-        const pass = encoder.beginRenderPass({
-          colorAttachments: [
-            { view: write === view.a ? view.aRender : view.bRender, loadOp: 'clear', storeOp: 'store' }
-          ]
-        });
-        pass.setScissorRect(region.x, region.y, region.width, region.height);
-        pipelines.composite
-          .with(pass)
-          .with(read === view.a ? view.fromA : view.fromB)
-          .draw(3);
-        pass.end();
-        device.queue.submit([encoder.finish()]);
-        [read, write] = [write, read];
+        if (refining && !stroke) {
+          // Reprojection submits its own pass, which must draw over the copied region.
+          frame.flush();
+          viewFallback?.draw(root.unwrap(view.composed), camera, size);
+        }
+        if (!refining) {
+          completeView = { camera: { ...camera }, size: { ...size } };
+          viewFallback?.clear();
+        }
+        present();
+        frame.flush();
+        damage.presented(plan);
+      } finally {
+        // Encoded mip passes already advanced tile state; submit them even when the frame stops early or fails.
+        frame.flush();
       }
-      pages?.end();
-      // Keep the last brush preview until its updated overview is resident; navigation remains immediate.
-      if (
-        !exact &&
-        !stroke &&
-        holdPresentation === cameraSignature &&
-        pages?.debug().some((page) => !page.resident || page.fallback)
-      )
-        return;
-      const refining = !exact && pages?.debug().some((page) => !page.resident || page.fallback);
-      if (refining && !stroke && completeView) {
-        viewFallback?.capture(root.unwrap(view.composed), completeView.camera, completeView.size);
-        completeView = undefined;
-      }
-      holdPresentation = '';
-      presentedCamera = cameraSignature;
-      const copy = device.createCommandEncoder();
-      const origin = { x: region.x, y: region.y };
-      copy.copyTextureToTexture(
-        { texture: root.unwrap(read), origin },
-        { texture: root.unwrap(view.composed), origin },
-        [region.width, region.height]
-      );
-      device.queue.submit([copy.finish()]);
-      if (refining && !stroke) viewFallback?.draw(root.unwrap(view.composed), camera, size);
-      if (!refining) {
-        completeView = { camera: { ...camera }, size: { ...size } };
-        viewFallback?.clear();
-      }
-      present();
-      damage.presented(plan);
     },
     /** Applies GPU backpressure to the worker frame scheduler, without blocking incoming messages. */
     async submitted() {
@@ -1377,6 +1422,11 @@ function createPipelines(root: TgpuRoot, format: GPUTextureFormat) {
       vertex: shader.fullscreenVertex,
       fragment: shader.presentFragment,
       targets: { format }
+    }),
+    clear: root.createRenderPipeline({
+      vertex: shader.fullscreenVertex,
+      fragment: shader.clearFragment,
+      targets: { format: 'rgba8unorm' }
     })
   };
 }
@@ -1444,7 +1494,7 @@ function createView(root: TgpuRoot, width: number, height: number) {
     b = texture(),
     layer = texture(),
     composed = texture();
-  const settings = root.createBuffer(d.vec4f).$usage('uniform');
+  const slots: { settings: TgpuBuffer<d.Vec4f> & UniformFlag; fromA: TgpuBindGroup; fromB: TgpuBindGroup }[] = [];
   return {
     width,
     height,
@@ -1455,16 +1505,31 @@ function createView(root: TgpuRoot, width: number, height: number) {
     aRender: root.unwrap(a).createView(),
     bRender: root.unwrap(b).createView(),
     layerRender: root.unwrap(layer).createView(),
-    settings,
-    fromA: root.createBindGroup(shader.compositeLayout, { base: a, layer, settings }),
-    fromB: root.createBindGroup(shader.compositeLayout, { base: b, layer, settings }),
+    /** Composite bindings for the frame's `slot`-th visible layer. Distinct settings buffers let one encoder
+     * hold every layer's composite pass; slots are created on first use and reused by later frames.
+     */
+    composite(slot: number) {
+      const existing = slots[slot];
+      if (existing) {
+        return existing;
+      }
+
+      const settings = root.createBuffer(d.vec4f).$usage('uniform');
+      const created = {
+        settings,
+        fromA: root.createBindGroup(shader.compositeLayout, { base: a, layer, settings }),
+        fromB: root.createBindGroup(shader.compositeLayout, { base: b, layer, settings })
+      };
+      slots[slot] = created;
+      return created;
+    },
     present: root.createBindGroup(shader.presentLayout, { image: composed }),
     destroy() {
       a.destroy();
       b.destroy();
       layer.destroy();
       composed.destroy();
-      settings.destroy();
+      for (const slot of slots) slot.settings.destroy();
     }
   };
 }

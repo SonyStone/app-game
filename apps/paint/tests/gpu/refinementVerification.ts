@@ -34,7 +34,7 @@ export async function verifyRefinement(report: (message: string) => void) {
       colorAttachments: [{ view: root.unwrap(target).createView(), loadOp: 'clear', storeOp: 'store' }]
     });
     pass.setViewport(0, 0, side, side, 0, 1);
-    view.draw(document.active, pass, camera, { width: side, height: side }, 1);
+    view.plan(document.active, camera, { width: side, height: side }, 1, () => {}).draw(pass);
     pass.end();
     encoder.copyTextureToBuffer({ texture: root.unwrap(target) }, { buffer, bytesPerRow: 512 * 4 }, [512, 512]);
     root.device.queue.submit([encoder.finish()]);

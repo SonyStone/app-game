@@ -100,3 +100,9 @@ export const presentFragment = tgpu.fragmentFn({ in: { position: d.builtin.posit
   const color = std.textureLoad(presentLayout.$.image, d.vec2i(input.position.xy), 0);
   return d.vec4f(std.add(color.rgb, std.mul(d.vec3f(0.98, 0.974, 0.957), 1 - color.a)), 1);
 });
+
+/** Writes transparent pixels; with a scissor it clears only a damaged region instead of the whole attachment. */
+export const clearFragment = tgpu.fragmentFn({ out: d.vec4f })(() => {
+  'use gpu';
+  return d.vec4f(0);
+});

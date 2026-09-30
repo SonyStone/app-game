@@ -23,7 +23,10 @@ export function createVirtualTexture(
   const image = root.createTexture({ size: [PAGE_SIDE, PAGE_SIDE, capacity], format: 'rgba8unorm' }).$usage('sampled');
   const cameraBuffer = root.createBuffer(layout.entries.camera.uniform).$usage('uniform');
   // Each resident descendant adds at most three remainder quads per quadtree level.
-  const instances = root.createBuffer(d.arrayOf(instance, capacity * (3 * MAX_LEVEL + 1))).$usage('vertex');
+  const instanceCapacity = capacity * (3 * MAX_LEVEL + 1);
+  const instances = root.createBuffer(d.arrayOf(instance, instanceCapacity)).$usage('vertex');
+  // writeBuffer copies at call time, so one staging array serves every layer's upload.
+  const instanceData = new Float32Array(instanceCapacity * 8);
   const group = root.createBindGroup(layout, {
     image: image.createView(d.texture2dArray()),
     sampler: root.createSampler({ minFilter: 'linear', magFilter: 'linear' }),
@@ -157,7 +160,10 @@ export function createVirtualTexture(
   /** One target's frame state: its page requests, displayed sources and debug selection. */
   function createView(pageDemand: PageDemand<VirtualPage>) {
     let draws = 0,
-      fallback = 0;
+      fallback = 0,
+      // Next free instance in this frame; each layer draws its own range so one encoder can hold the frame.
+      cursor = 0,
+      cameraWritten = false;
     let selected: (VirtualPage & { resident: boolean; fallback: boolean })[] = [];
     // Actual source pages from the last frame, including cropped fallback sources.
     const displayed = new Map<string, VirtualPage>();
@@ -176,14 +182,18 @@ export function createVirtualTexture(
         pageDemand.begin(pinned);
         draws = 0;
         fallback = 0;
+        cursor = 0;
+        cameraWritten = false;
         selected = [];
         displayed.clear();
       },
-      /** Draws committed pages without waiting for reads. Returns true only when every occupied
-       * part of the selection has resident coverage. Empty branches need no texture.
-       * Active output can replace covered pixels in this layer target before layer compositing.
+      /** Selects committed pages without waiting for reads and uploads their instances into this frame's next
+       * range. `covered` is true only when every occupied part of the selection has resident coverage; empty
+       * branches need no texture. `draw` encodes the layer into an open pass; active output can then replace
+       * covered pixels before layer compositing. The camera must stay fixed for the frame. When the frame's
+       * instance range is exhausted, `flush` must submit every encoded draw before the range is reused.
        */
-      draw(layer: Layer, pass: GPURenderPassEncoder, camera: Camera, size: ViewSize, scale: number) {
+      plan(layer: Layer, camera: Camera, size: ViewSize, scale: number, flush: () => void) {
         const visible = pages.visible(layer.id, camera, size, scale, maxPages);
         const batch: { source: NonNullable<ReturnType<typeof entries.get>>; region: VirtualPage }[] = [];
         let resident: NonNullable<ReturnType<typeof entries.get>>[] | undefined;
@@ -218,27 +228,45 @@ export function createVirtualTexture(
             batch.push(match);
           }
         }
-        if (!batch.length) return covered;
-        cameraBuffer.write({
-          size: d.vec2f(size.width, size.height),
-          zoom: camera.zoom,
-          angle: camera.angle,
-          mirror: camera.mirrored ? -1 : 1,
-          pixelRatio: scale
-        });
-        const data = new Float32Array(batch.length * 8);
+        if (!batch.length) return { covered, draw() {} };
+        if (!cameraWritten) {
+          cameraBuffer.write({
+            size: d.vec2f(size.width, size.height),
+            zoom: camera.zoom,
+            angle: camera.angle,
+            mirror: camera.mirrored ? -1 : 1,
+            pixelRatio: scale
+          });
+          cameraWritten = true;
+        }
+        if (cursor + batch.length > instanceCapacity) {
+          flush();
+          cursor = 0;
+        }
         batch.forEach(({ source, region }, i) => {
           const span = 256 * 2 ** region.level;
           const crop = pageCrop(source.page, region);
-          data.set(
-            [region.x * span - camera.x, region.y * span - camera.y, span, source.slot, crop.x, crop.y, crop.scale, 0],
-            i * 8
-          );
+          const at = i * 8;
+          instanceData[at] = region.x * span - camera.x;
+          instanceData[at + 1] = region.y * span - camera.y;
+          instanceData[at + 2] = span;
+          instanceData[at + 3] = source.slot;
+          instanceData[at + 4] = crop.x;
+          instanceData[at + 5] = crop.y;
+          instanceData[at + 6] = crop.scale;
+          instanceData[at + 7] = 0;
         });
-        root.device.queue.writeBuffer(root.unwrap(instances), 0, data);
-        pipeline.with(pass).with(group).with(instanceLayout, instances).draw(6, batch.length);
+        const first = cursor,
+          count = batch.length;
+        root.device.queue.writeBuffer(root.unwrap(instances), first * 32, instanceData, 0, count * 8);
+        cursor += count;
         draws++;
-        return covered;
+        return {
+          covered,
+          draw(pass: GPURenderPassEncoder) {
+            pipeline.with(pass).with(group).with(instanceLayout, instances).draw(6, count, 0, first);
+          }
+        };
       },
       /** Visible detail is requested first. Idle capacity builds persistent coarse coverage,
        * even while the user stays zoomed in; navigation never cancels these requests.
