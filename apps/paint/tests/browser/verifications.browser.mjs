@@ -20,7 +20,7 @@ import { readAdobeBrushFixture } from '../../../../scripts/adobe-brush-fixture.m
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const timeout = Number(process.env.PAINT_VERIFY_TIMEOUT_MS ?? 5 * 60 * 1000);
 const output = process.env.PAINT_OUTPUT ?? path.join(os.tmpdir(), 'paint-verifications');
-const requested = process.argv.slice(2);
+const requested = process.argv.slice(2).filter((argument) => argument !== '--');
 
 await fs.mkdir(output, { recursive: true });
 const server = process.env.PAINT_URL ? undefined : await startServer();

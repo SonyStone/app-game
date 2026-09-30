@@ -7,12 +7,12 @@
 | JSX assembly, dependencies and swappable engines | `src/features/engine/StudioApplication.tsx`, [composition](./composition.md) | `PaintApplication.test.tsx`, Check execution modes |
 | Canvas targets and their lifecycle | `packages/paint-core/src/composition/CanvasTarget.tsx`, `packages/paint-core/src/gpu/targetView.ts` | Check canvas targets |
 | ABR preset import and selection | `src/features/abr/` (the embedded ABR viewer imports `.abr` files; `createAbrPresets.ts` uploads the chosen preset's resources before activating it) | `createAbrPresets.test.tsx`; import → draw → worker/main switch |
-| Panels, keyboard, UI state | `src/features/studio/PaintStudio.tsx` (layout), `src/features/studio/createPaintShortcuts.ts`, feature factories; engine connection and mode switch in `src/features/engine/createPaintEngine.ts` | `test:ui`, `createPaintEngine.test.tsx` |
+| Panels, keyboard, UI state | `src/features/studio/PaintStudio.tsx` (layout), `src/features/studio/createPaintShortcuts.ts`, feature factories; engine connection and mode switch in `src/features/engine/createPaintEngine.ts` | `test`, `createPaintEngine.test.tsx` |
 | Fullscreen | `src/features/studio/createFullscreenToggle.ts` (built on `@solid-primitives/fullscreen`) | enter/exit, external Escape, refusal, double click, unmount |
 | Puck gestures in 2D and 3D | `packages/navigation-puck/src/controller.ts` | package tests and puck DOM test |
 | Pen samples and stroke shape | `packages/paint-core/src/input.ts`, `packages/paint-core/src/strokeProcessors.ts`, `packages/paint-core/src/brush.ts` | node geometry tests, GPU brush check |
-| Command order, commit and autosave | `packages/paint-core/src/paintRuntime.ts` | `workerRecovery.test.ts`, Run worker checks |
-| Tiles, undo/redo, document version | `packages/paint-core/src/document.ts` | `core.test.ts`, export/restore |
+| Command order, commit and autosave | `packages/paint-core/src/paintRuntime.ts` | paint-core `runtimeRecovery.test.ts`, `runtimeHistory.test.ts`, worker checks |
+| Tiles, undo/redo, document version | `packages/paint-core/src/document.ts` | paint-core `document.test.ts`, `runtimeHistory.test.ts`, export/restore |
 | IndexedDB transactions and garbage collection | `packages/paint-core/src/tileStore.ts` | Run streaming checks, Run worker checks |
 | Rasterization and GPU tile eviction | `packages/paint-core/src/gpu/strokeRaster.ts`, `packages/paint-core/src/gpu/tileResidency.ts` | Check readback queue, Check brush batching |
 | Overviews, LOD, cancelling stale loads | `packages/paint-core/src/virtualPages.ts`, `packages/paint-core/src/pageWork.ts`, `packages/paint-core/src/gpu/virtualTexture.ts` | node page tests, Check saved low-res, Check cold zoom |
@@ -41,7 +41,7 @@ Measurement on 2026-09-08 in the local in-app browser: 235 stamps, submissions r
 
 `tile.strokeDirty` distinguishes a modified GPU tile from a tile loaded only for sampling. Re-evicting an unmodified tile uses the existing snapshot without readback. Smudge/Mixer/filters without Dual Brush keep only the output: their coverage is replaced by each dab. Normal brushes and Dual Brush keep the full accumulated state. **Check ABR presets** includes a repeated pickup of an unmodified active tile without new readbacks, eviction, and exact history restoration.
 
-`paintRuntime.addSamples` processes the backlog in batches of 16 points and shows an intermediate frame if the work took at least 8 ms. This is a soft budget: a single expensive dab can take longer. Points are not dropped; end/cancel commands and subsequent strokes stay in their original order. `workerLatency.test.ts` checks fast and slow backlogs, intermediate presentation, pressure, and that the finished stroke matches.
+`paintRuntime.addSamples` processes the backlog in batches of 16 points and shows an intermediate frame if the work took at least 8 ms. This is a soft budget: a single expensive dab can take longer. Points are not dropped; end/cancel commands and subsequent strokes stay in their original order. paint-core `runtimeLatency.test.ts` checks fast and slow backlogs, intermediate presentation, pressure, and that the finished stroke matches.
 
 ### Large footprint and Smooth color
 
@@ -148,11 +148,19 @@ From the repository root:
 ```sh
 pnpm --filter @app-game/paint typecheck
 pnpm --filter @app-game/paint test
-pnpm --filter @app-game/paint test:ui
+pnpm --filter @app-game/paint-core test
+pnpm --filter @app-game/abr-paint test
+pnpm --filter @app-game/paint test:browser
 pnpm --filter @app-game/paint build
 ```
 
-For GPU and IndexedDB, use `/paint-studio-qa.html` on the web playground dev server (`pnpm dev` at the repository root, port 3120 by default). QA creates isolated documents; do not draw test strokes in the user document on `localhost`. After changes to queues, Check readback queue and Run worker checks are mandatory. After changes to transactions, also Run streaming checks. GPU verification harnesses (`smudgePickupVerification.ts` and others) are in `apps/paint/tests/gpu/`, browser/worker harnesses in `apps/paint/tests/browser/`, and the brush benchmark is `apps/paint/tests/performance/brushPerformance.ts`.
+`test` runs the app's feature tests; component tests opt into jsdom with a `// @vitest-environment jsdom` docblock. Runtime, storage and renderer behavior is tested in `@app-game/paint-core`: `tests/fixtures/rendererDouble.ts` is the one renderer and storage double, and `tests/fixtures/studioRuntime.tsx` mounts the Studio recipe and waits on posted events. Tests that need real Adobe presets read the pinned packs through `@app-game/abr-brush/testing/adobeBrushes`; only abr-paint's `megapack.test.ts` parses the whole Megapack.
+
+`test:browser` (`tests/browser/verifications.browser.mjs`) starts a Vite dev server, opens `tests/browser/harness.html` in headless Chromium with WebGPU (ANGLE Metal on macOS) and runs every verification the harness exports in a fresh page: renderer, readback, streaming, ABR, textured brush, lasso, symmetry, pattern, execution-mode and worker checks. A verification fails when it throws, when the page logs an uncaught or console error, or after five minutes. Pass names to run a subset (`pnpm --filter @app-game/paint test:browser readback worker`); set `PAINT_URL` to use a running dev server and `PAINT_BROWSER_CHANNEL=chrome` for an installed Chrome. Logs and `report.json` are written to `$TMPDIR/paint-verifications`. CI has no WebGPU adapter, so run it locally after renderer, queue, storage or worker changes.
+
+Harnesses wait only through `tests/waits.ts`: await the operation, then an event the code emits (`onRefine`, posted paint events, gate arrivals), and poll (`until`) only for state exposed as a value. To prove that an operation is blocked, wait for the counter that shows it is waiting (`stats().readback.capacityWaits`, `snapshotWaits`, `settledSnapshots`), never for a fixed delay.
+
+The manual QA page `/paint-studio-qa.html` on the web playground dev server (`pnpm dev` at the repository root, port 3120 by default) calls the same functions and adds the benchmark buttons. QA creates isolated documents; do not draw test strokes in the user document on `localhost`. GPU verification harnesses (`smudgePickupVerification.ts` and others) are in `apps/paint/tests/gpu/`, browser/worker harnesses in `apps/paint/tests/browser/`, and the brush benchmark is `apps/paint/tests/performance/brushPerformance.ts`.
 
 Fullscreen DOM tests mock the browser API. A real request depends on browser support, document policy and user activation. `createFullscreenToggle.ts` reflects the actual `fullscreenElement` via `fullscreenchange`; the regular browser F11 fullscreen mode is not controlled by this API.
 
@@ -197,7 +205,7 @@ Smooth was measured after batching; the later limit on Classic pickup levels doe
 
 The renderer calls `onPaintProgress` only after a complete Smudge/Mixer/Filter dab and after all of its GPU writes are submitted. The runtime checks the shared 8 ms budget since the previous presentation and, if needed, calls `draw()` directly. Such a draw must not be enqueued behind the current paint: it would wait for the entire backlog. The callback may render/present, but not paint/finish/cancel/reset. Dabs and input/end/cancel keep their order. 8 ms is a soft budget; a single expensive dab and the presentation itself may take longer.
 
-The check after every 16 samples is kept for other engines. It did not cover sparse input: one segment can produce hundreds of dabs. Presentation no longer needs to wait for the whole segment to finish. `workerLatency.test.ts` checks frames within a segment and queued release; the GPU **Check ABR presets** compares full pixels/history with and without intermediate frames, Classic/Smooth, and a one-tile cache.
+The check after every 16 samples is kept for other engines. It did not cover sparse input: one segment can produce hundreds of dabs. Presentation no longer needs to wait for the whole segment to finish. paint-core `runtimeLatency.test.ts` checks frames within a segment and queued release; the GPU **Check ABR presets** compares full pixels/history with and without intermediate frames, Classic/Smooth, and a one-tile cache.
 
 **Measure Smudge responsiveness** uses a single 8192 px segment and checks that saved pixels match. Local warm measurement 2026-09-08: 512 px — first completed GPU frame 523.3 → 23.5 ms, maximum interval after enabling progress 25.1 ms; 2048 px — 2341.1 → 63.5 ms, maximum interval 63.5 ms. The extra frames increased total time from 523.3 to 605.5 ms and from 2341.1 to 2681.7 ms. This removes long gaps without intermediate frames; it is not a throughput speedup and not a measurement of physical stylus latency. In production, progress requests are limited by the shared runtime clock; QA reproduces this budget without the worker transport.
 

@@ -11,13 +11,13 @@ From the repository root:
 ```sh
 pnpm --filter @app-game/paint dev        # http://localhost:3030
 pnpm --filter @app-game/paint typecheck
-pnpm --filter @app-game/paint test       # node tests: engine requests, geometry, worker queue, storage
-pnpm --filter @app-game/paint test:ui    # jsdom tests: panels, dialogs, engine switch, PWA
+pnpm --filter @app-game/paint test          # feature tests: engine connection, panels, dialogs, input, PWA
+pnpm --filter @app-game/paint test:browser  # every real-GPU verification in headless Chromium with WebGPU
 pnpm --filter @app-game/paint build      # apps/paint/dist
 pnpm --filter @app-game/paint preview    # http://localhost:4030
 ```
 
-`src/main.tsx` mounts `PaintApp`, the standalone shell that adds PWA installation and build identity to the drawing menu. Importing the editor elsewhere never registers a service worker. Test harnesses are not exported: the GPU QA page `apps/web/paint-studio-qa.html` (served by `pnpm dev` at the repository root, http://localhost:3120/paint-studio-qa.html) imports them from `tests/` through dev-only paths.
+`src/main.tsx` mounts `PaintApp`, the standalone shell that adds PWA installation and build identity to the drawing menu. Importing the editor elsewhere never registers a service worker. Test harnesses are not exported. `tests/browser/harness.html` runs them for `test:browser` (see [Maintenance](docs/maintenance.md#verifying-a-change)); the manual GPU QA page `apps/web/paint-studio-qa.html` (served by `pnpm dev` at the repository root, http://localhost:3120/paint-studio-qa.html) imports the same functions and adds the benchmarks.
 
 ## Feature structure
 
@@ -34,6 +34,7 @@ src/
     brush/         Tool choice and brush settings, Mixer Brush commands, brush and color panels
     abr/           Embedded ABR viewer and preset uploads
     developer/     Developer switches and dialog
+    performance/   Live frame-cost panel, `window.paintPerformance` reports and the dev-server responder
     pwa/           Standalone shell: install prompt, offline status, build identity
   shared/
     errors.ts      PaintError contract (engine, brush, fullscreen and install kinds)
@@ -41,14 +42,15 @@ src/
     ui/            Sketch line icons
   main.tsx         Standalone entry
 tests/
-  browser/         Worker and main-thread harnesses for the QA page
-  gpu/             Real-GPU renderer checks for the QA page
+  browser/         Worker and main-thread harnesses, harness page and the test:browser runner
+  gpu/             Real-GPU renderer checks
+  waits.ts         The only waiting primitives harnesses use (events first, bounded polls last)
   performance/     Device brush benchmark (scripts/brush-performance.mjs)
 docs/              Editor behavior, maintenance, engine composition, design QA
 performance/       Accepted tablet brush baselines
 ```
 
-Unit tests live beside the feature they exercise. The tests in `src/*.test.ts`, `src/gpu/`, `src/composition/` and `src/performance/` exercise `@app-game/paint-core` and `@app-game/abr-paint` internals through the app and will move into those packages.
+Unit tests live beside the feature they exercise and cover only app code. Runtime, document, storage and renderer tests live in `@app-game/paint-core` (with shared renderer/storage doubles in `packages/paint-core/tests/fixtures`), ABR preset and GPU planning tests in `@app-game/abr-paint`, and preset sampling tests in `@app-game/abr-brush`. Real Adobe brush packs are downloaded once into `.tmp/adobe-brushes`, pinned by SHA-256 in `scripts/adobe-brush-fixtures.json`.
 
 - Start with `features/studio/PaintStudio.tsx`. It is the editor's layout: it creates the engine, camera, tools, selection, symmetry and preset uploads once, then composes the canvas and the UI from feature modules, passing each the values and callbacks it works on.
 - `features/engine` owns the drawing engine. `createPaintEngine` opens one connection per mounted canvas and reports document state, save state, metrics and the view stored with a document. The canvas is keyed on `engine.mode()`, so switching between worker and main thread checkpoints the document and renderer tools, disposes the engine and replaces only the canvas; brush, symmetry, panels and developer switches stay mounted. `openPaintTransport` starts the worker with `openWorker` from `@app-game/solid-gpu/worker` and transfers an OffscreenCanvas; `openLocalEngine` loads the same recipe on the main thread. Disconnecting sends `dispose`, which saves the document and closes storage before the transport is closed. `createEngineRequests` correlates brush-resource uploads and brush commands with their replies and times out waiting callers without posting duplicate resources.
@@ -73,6 +75,10 @@ const camera = createPaintCamera({ restored: () => engine.restored()?.camera, si
 ```
 
 The canvas connects the engine and attaches input from an owned effect once its element exists, and disconnects on cleanup. Side panels are a table of titles rendered through `<Switch>`; each panel receives plain values, for example `<LayersPanel state={engine.state()} ready={ready()} onAction={(action) => edit({ type: 'layer', action })} />`.
+
+## Performance monitor
+
+Open it with `?performance` or **Developer → Performance monitor**. The panel over the stage shows the engine's per-frame CPU submission time and wait for submitted GPU work (paint-core `frame` events), the frame rate and the 60 Hz budget. Scripts can call `window.paintPerformance.report({ samples: true })` or `reset()`. During `pnpm --filter @app-game/paint dev`, `GET /__performance[?samples]` collects reports from every open tab and `POST /__performance/reset` clears them. Device timing baselines are separate: see [Brush performance regression checks](performance/README.md).
 
 ## Install and offline use
 

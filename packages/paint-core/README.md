@@ -40,5 +40,7 @@ coverage snapshots as opaque stroke data. Engine selection and fused destination
 an engine adapter; these extractions alone do not make the renderer engine-neutral. Do not rename
 an ABR-specific contract to “universal” without a second engine exercising it.
 
-GPU integration checks live in `apps/paint/tests/gpu`. Existing app tests still exercise the extracted
-modules, and the tablet performance baseline stays in `apps/paint/performance`.
+Unit tests live beside the modules in `src/`; `tests/fixtures/rendererDouble.ts` is the shared renderer and
+storage double and `tests/fixtures/studioRuntime.tsx` mounts the Studio recipe around them. Real-GPU checks
+live in `apps/paint/tests/gpu` and run with `pnpm --filter @app-game/paint test:browser`; the tablet
+performance baseline stays in `apps/paint/performance`.
