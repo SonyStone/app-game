@@ -65,7 +65,7 @@ export function createMemoryStorage(): StorageFactory {
         const retain = (tile: TileData) => {
           if (!(tile instanceof Uint8Array)) keep.add(tile.storageId);
         };
-        for (const tile of live) retain(tile);
+        for (const tile of live()) retain(tile);
         for (const layer of document.checkpoint?.layers ?? []) for (const tile of layer.tiles) retain(tile.pixels);
         for (const id of document.tiles.keys()) if (!keep.has(id)) document.tiles.delete(id);
         for (const key of document.overviews.keys())

@@ -36,7 +36,7 @@ it('retains checkpoint and undo versions during collection and rejects invalid c
   doc.active.tiles.set('0,0', checkpoint);
   const snapshot = snapshotDocument(doc.layers, doc.active.id, defaultCamera());
   await storage.save(snapshot);
-  await storage.collect([undo]);
+  await storage.collect(() => [undo]);
   await expect(storage.read(checkpoint)).resolves.toHaveLength(TILE_BYTES);
   await expect(storage.read(undo)).resolves.toHaveLength(TILE_BYTES);
   await expect(storage.read(obsolete)).rejects.toThrow('could not be read');

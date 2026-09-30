@@ -13,7 +13,8 @@ export type PaintRenderer = Awaited<ReturnType<typeof createPaintRenderer>>;
 /** Renderer creation is scoped to a runtime/device lifetime, never to an individual target or stroke. */
 export type RendererFactory = typeof createPaintRenderer;
 
-/** Immutable tile versions plus atomic checkpoints. Adapters must preserve undo references during collect.
+/** Immutable tile versions plus atomic checkpoints. Adapters must preserve undo references during collect,
+ * reading its `live` callback when collection actually runs rather than when it is requested.
  * Save failures reject and retain staged pixels. close reports its outcome and releases resources.
  * Replication requires a separate ordered document-operation protocol, not just a storage adapter.
  */

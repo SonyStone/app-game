@@ -181,12 +181,22 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
         protectedOverviews = new Set(value.overviewKeys.filter((key): key is string => typeof key === 'string'));
       return value === undefined ? undefined : restoreDocument(value);
     },
-    /** Removes unreachable historical versions after a checkpoint; callers include live undo/redo references. */
-    collect(live: Iterable<TileData>) {
-      const keep = new Set([...live].flatMap((p) => (p instanceof Uint8Array ? [] : [p.storageId])));
+    /** Removes unreachable historical versions after a checkpoint.
+     * `live` returns current, undo/redo and clipboard references. It is read when the queued collection
+     * starts, so tiles captured while earlier saves were pending stay protected.
+     */
+    collect(live: () => Iterable<TileData>) {
       const task = queue.run(
         () =>
           new Promise<void>((resolve, reject) => {
+            const keep = new Set<string>();
+            for (const tile of live()) {
+              const id = tile instanceof Uint8Array ? identities.get(tile)?.storageId : tile.storageId;
+              if (id) {
+                keep.add(id);
+              }
+            }
+
             const tx = db.transaction(['tiles', 'documents', 'overviews', 'overviewIndex'], 'readwrite');
             const metadata = tx.objectStore('overviewIndex').getAll();
             const keys = tx.objectStore('overviewIndex').getAllKeys();

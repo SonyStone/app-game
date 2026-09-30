@@ -48,6 +48,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let redraw = false;
     let renderTimer: ReturnType<typeof setTimeout> | undefined;
     let collectTimer: ReturnType<typeof setTimeout> | undefined;
+    /** Read by storage when collection runs, after any saves queued ahead of it. */
+    const liveTiles = () => [...document.snapshots(), ...(clipboard?.tiles.values() ?? [])];
     let saveTimer: ReturnType<typeof setTimeout> | undefined;
     const queue = createTaskQueue();
     let active = true;
@@ -161,7 +163,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         clearTimeout(collectTimer);
         collectTimer = setTimeout(() => {
           if (!strokeSession && !importing && !editingSelection)
-            background(() => tileStore.collect([...document.snapshots(), ...(clipboard?.tiles.values() ?? [])]));
+            background(() => tileStore.collect(liveTiles));
         }, 5000);
       } finally {
         pendingSaves--;
@@ -286,15 +288,21 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     const startRenderer = async () => {
       renderer?.destroy();
+      // A failed restart must not leave the destroyed renderer reachable by draw, recover or cleanup.
+      renderer = undefined;
       renderer = await modules.renderer(
         canvas,
         (message) => {
           if (lost) return;
           lost = true;
           stopIdle();
-          const abandoned = strokeSession;
-          strokeSession = undefined;
-          if (abandoned) background(async () => abandoned.cancel());
+          // A paint command may be suspended inside the session. Cancelling here would release its
+          // renderer stroke mid-await, so the abandoned session is cancelled after that command ends.
+          enqueue(async () => {
+            const abandoned = strokeSession;
+            strokeSession = undefined;
+            abandoned?.cancel();
+          });
           failure(
             new Error(`${message} Your completed strokes are preserved. Restore the renderer to continue.`),
             true
@@ -606,7 +614,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               clearTimeout(collectTimer);
               collectTimer = setTimeout(() => {
                 if (!strokeSession && !importing && !editingSelection)
-                  background(() => tileStore.collect([...document.snapshots(), ...(clipboard?.tiles.values() ?? [])]));
+                  background(() => tileStore.collect(liveTiles));
               }, 5000);
               post({ type: 'selection', points, hasClipboard: !!clipboard });
             }

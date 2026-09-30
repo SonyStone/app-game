@@ -133,3 +133,73 @@ it.each(['paint', 'finish'] as const)(
     await wait((event) => event.type === 'checkpointed');
   }
 );
+
+it('cancels a stroke after device loss only once its suspended paint has finished', async () => {
+  let lose!: (message: string) => void;
+  let releasePaint: (() => void) | undefined;
+  const order: string[] = [];
+  const renderer = {
+    preview: vi.fn(),
+    setSelection: vi.fn(),
+    begin: vi.fn(),
+    cancel: vi.fn(() => order.push('cancel')),
+    paint: vi.fn(async () => {
+      if (!releasePaint) {
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        const release = releasePaint!;
+        releasePaint = () => {
+          release();
+          resolve();
+        };
+      });
+      order.push('paint');
+    }),
+    finish: vi.fn(async () => []),
+    reset: vi.fn(),
+    prepareOverview: vi.fn(async () => {}),
+    render: vi.fn(async () => {}),
+    submitted: vi.fn(async () => {}),
+    destroy: vi.fn(),
+    stats: () => ({ gpuBytes: 0, residentTiles: 0 }),
+    debugTiles: () => [],
+    debugPages: () => []
+  };
+  dependencies.renderer.mockImplementation(async (_canvas: unknown, lost: (message: string) => void) => {
+    lose = lost;
+    return renderer;
+  });
+  dependencies.store.mockResolvedValue({
+    load: async () => undefined,
+    capture: (pixels: unknown) => pixels,
+    save: vi.fn(async () => {}),
+    stats: () => undefined
+  });
+
+  const events: PaintEvent[] = [];
+  const worker = {
+    onmessage: undefined as ((event: MessageEvent<PaintCommand>) => void) | undefined,
+    postMessage: (event: PaintEvent) => events.push(event)
+  };
+  vi.stubGlobal('self', worker);
+  await import('./paint.worker');
+  const send = (command: PaintCommand) => worker.onmessage!({ data: command } as MessageEvent<PaintCommand>);
+  const settle = () => vi.waitFor(() => Promise.resolve());
+
+  send({ type: 'init', canvas: {} as OffscreenCanvas, size: { width: 256, height: 256 }, dpr: 1 });
+  await vi.waitFor(() => expect(events.some((event) => event.type === 'ready')).toBe(true));
+  send({ type: 'begin', brush: defaultBrush(), samples: [{ x: 128, y: 128, pressure: 1, time: 0 }] });
+  await vi.waitFor(() => expect(renderer.begin).toHaveBeenCalledOnce());
+
+  releasePaint = () => {};
+  send({ type: 'samples', samples: [{ x: 160, y: 128, pressure: 1, time: 16 }] });
+  await vi.waitFor(() => expect(renderer.paint).toHaveBeenCalledTimes(2));
+  lose('Simulated device loss.');
+  await settle();
+  expect(renderer.cancel).not.toHaveBeenCalled();
+
+  releasePaint();
+  await vi.waitFor(() => expect(order).toEqual(['paint', 'cancel']));
+  expect(events).toContainEqual(expect.objectContaining({ type: 'error', recoverable: true }));
+});

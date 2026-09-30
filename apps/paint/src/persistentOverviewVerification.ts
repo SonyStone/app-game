@@ -103,7 +103,7 @@ export async function verifyPersistentOverview(report: (message: string) => void
     await renderer.submitted();
     assert((await center(canvas))[0] === base[0], 'Undo reused stale low-resolution paint');
     assert(store.stats().reads === readsBeforeUndo, 'Undo rebuilt an already saved overview');
-    await store.collect(document.snapshots());
+    await store.collect(() => document.snapshots());
     assert(!errors.length, errors.join('\n'));
     report(
       'PASS: undo restores the old stored overview without reading high-resolution pixels; garbage collection preserves current roots'

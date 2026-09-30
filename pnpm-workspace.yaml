@@ -24,8 +24,8 @@ catalog:
   '@solid-primitives/jsx-tokenizer': 3.0.0-next.2
   '@solid-primitives/keyboard': 2.0.0-next.5
   '@solid-primitives/keyed': 3.0.0-next.2
-  '@solid-primitives/media': 4.0.0-next.2
   '@solid-primitives/match': 1.0.0-next.2
+  '@solid-primitives/media': 4.0.0-next.2
   '@solid-primitives/memo': 2.0.0-next.2
   '@solid-primitives/mouse': 4.0.0-next.3
   '@solid-primitives/page-utilities': 3.0.0-next.0
@@ -47,10 +47,12 @@ catalog:
   '@solidjs/router': 2.0.0-next.18
   '@tabler/icons': 3.34.1
   '@testing-library/jest-dom': ^6.9.1
+  '@types/node': 25.8.0
   '@unocss/reset': 66.6.8
   '@unocss/vite': 66.6.8
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
+  fake-indexeddb: ^6.2.5
   jsdom: ^29.1.1
   neverthrow: ^8.2.0
   pdfjs-dist: 6.3.289

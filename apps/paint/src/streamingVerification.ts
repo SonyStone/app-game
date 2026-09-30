@@ -60,7 +60,7 @@ export async function verifyStreaming(report: (message: string) => void) {
     );
     const ref = document.active.tiles.get('-16,-16')!;
     assert(unpackTile(await store.read(ref))[1] === 120, 'Evicted tile did not reload');
-    await store.collect(document.snapshots());
+    await store.collect(() => document.snapshots());
     assert((await store.read(ref)).byteLength === packed.byteLength, 'GC removed live undo/current pixels');
     await settle();
     const stats = renderer.stats().virtual!;

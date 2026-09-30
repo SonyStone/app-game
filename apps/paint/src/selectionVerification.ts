@@ -75,7 +75,7 @@ export async function verifySelection(report: (message: string) => void) {
     document.redo();
     await store.save(snapshotDocument(document.layers, document.active.id, defaultCamera()));
     // The clipboard must remain live even after collection evicts old tile versions.
-    await store.collect([...document.snapshots(), ...selected.tiles.values()]);
+    await store.collect(() => [...document.snapshots(), ...selected.tiles.values()]);
     const pasted = await editSelection({
       selection: selected,
       destination: document.active,
