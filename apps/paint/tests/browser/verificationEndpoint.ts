@@ -1,5 +1,5 @@
-import { createMainThreadEndpoint, type PaintEndpoint } from '../../src/mainThreadEndpoint';
-import Worker from '../../src/paint.worker?worker';
+import { createMainThreadEndpoint, type PaintEndpoint } from '../../src/features/engine/mainThreadEndpoint';
+import Worker from '../../src/features/engine/paint.worker?worker';
 import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/protocol';
 
 /** Uses the production transports with correlated ordered replies and bounded waits. */

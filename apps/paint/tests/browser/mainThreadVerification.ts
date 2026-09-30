@@ -7,8 +7,8 @@ import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/proto
 import { unpackTile } from '@app-game/paint-core/tilePixels';
 import { verifyBrushResourceTransport } from './resourceVerification';
 import { verifyEraserPersistence } from './eraserPersistenceVerification';
-import { createMainThreadEndpoint, type PaintEndpoint } from '../../src/mainThreadEndpoint';
-import Worker from '../../src/paint.worker?worker';
+import { createMainThreadEndpoint, type PaintEndpoint } from '../../src/features/engine/mainThreadEndpoint';
+import Worker from '../../src/features/engine/paint.worker?worker';
 import { verifySymmetryPersistence } from './symmetryPersistenceVerification';
 
 /** Verifies real DOM-canvas rendering and document exchange between both execution modes in an isolated database. */

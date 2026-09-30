@@ -1,7 +1,7 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createSignal, onCleanup, onSettled } from 'solid-js';
 import { attempt, type Result } from '@app-game/paint-core/asyncResult';
-import { SketchIcon } from './SketchIcon';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 
 /** Toggles the entire editor, including its controls. Reports browser refusal without changing drawing state. */
 export function FullscreenButton(props: { target: () => HTMLElement; onError: (message: string) => void }) {

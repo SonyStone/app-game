@@ -9,12 +9,12 @@ import { attachInput, editable } from '@app-game/paint-core/input';
 import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
 import { defaultPaintSymmetry, paintSymmetrySchema, type PaintSymmetry } from '@app-game/paint-core/symmetry';
 import { createSignal, createTrackedEffect, untrack } from 'solid-js';
-import { createBrushLibrary } from './brushLibrary/createBrushLibrary';
-import { createBrushCommands } from './composition/createBrushCommands';
-import { createSelection } from './createSelection';
+import { createBrushLibrary } from '../abr/createBrushLibrary';
+import { createBrushCommands } from '../brush/createBrushCommands';
+import { createSelection } from '../selection/createSelection';
 import { createMainThreadEndpoint, type PaintEndpoint } from './mainThreadEndpoint';
 import Worker from './paint.worker?worker';
-import { createPaintNavigation } from './paintNavigation';
+import { createPaintNavigation } from '../camera/paintNavigation';
 
 /** Scopes the selected engine transport, input and UI state to one editor mount. */
 export function createPaintSession(elements: { canvas: () => HTMLCanvasElement; stage: () => HTMLDivElement }) {

@@ -1,4 +1,4 @@
-@value workspace from '../../../abr-viewer/src/App.module.css';
+@value workspace from '../../../../abr-viewer/src/App.module.css';
 
 .abrViewer {
   margin: auto;

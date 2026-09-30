@@ -1,7 +1,7 @@
 import { createRoot, flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import { defaultBrush } from '@app-game/paint-core/brush';
-import type { PaintEndpoint } from '../mainThreadEndpoint';
+import type { PaintEndpoint } from '../engine/mainThreadEndpoint';
 import { createBrushCommands } from './createBrushCommands';
 
 it('correlates results, rejects concurrent actions and disconnects pending work on replacement/disposal', async () => {

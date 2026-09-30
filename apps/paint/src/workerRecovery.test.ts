@@ -65,7 +65,7 @@ it.each(['paint', 'finish'] as const)(
       postMessage: (event: PaintEvent) => events.push(event)
     };
     vi.stubGlobal('self', worker);
-    await import('./paint.worker');
+    await import('./features/engine/paint.worker');
     const send = (command: PaintCommand) => worker.onmessage!({ data: command } as MessageEvent<PaintCommand>);
     /** Wait only on the worker's Promise command queue; scheduled drawing/saving stays under fake time. */
     const wait = async (matches: (event: PaintEvent) => boolean) => {
@@ -183,7 +183,7 @@ it('cancels a stroke after device loss only once its suspended paint has finishe
     postMessage: (event: PaintEvent) => events.push(event)
   };
   vi.stubGlobal('self', worker);
-  await import('./paint.worker');
+  await import('./features/engine/paint.worker');
   const send = (command: PaintCommand) => worker.onmessage!({ data: command } as MessageEvent<PaintCommand>);
   const settle = () => vi.waitFor(() => Promise.resolve());
 
@@ -232,7 +232,7 @@ it('reports uncaptured validation errors as terminal validation failures, not de
     postMessage: (event: PaintEvent) => events.push(event)
   };
   vi.stubGlobal('self', worker);
-  await import('./paint.worker');
+  await import('./features/engine/paint.worker');
   worker.onmessage!({
     data: { type: 'init', canvas: {} as OffscreenCanvas, size: { width: 256, height: 256 }, dpr: 1 }
   } as MessageEvent<PaintCommand>);

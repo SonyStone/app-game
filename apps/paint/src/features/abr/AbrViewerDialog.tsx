@@ -1,6 +1,6 @@
 import { createEffect, lazy, onCleanup } from 'solid-js';
-import type { PaintSession } from '../createPaintSession';
-import { SketchIcon } from '../SketchIcon';
+import type { PaintSession } from '../engine/createPaintSession';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './AbrViewerDialog.module.css';
 
 const Viewer = lazy(() => import('@app-game/abr-viewer/editor').then((module) => ({ default: module.App })));

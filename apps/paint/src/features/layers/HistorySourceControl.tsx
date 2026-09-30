@@ -1,5 +1,5 @@
 import { For } from 'solid-js';
-import type { PaintSession } from './createPaintSession';
+import type { PaintSession } from '../engine/createPaintSession';
 import styles from './HistorySourceControl.module.css';
 
 /** Selects the immutable source used by ABR Erase to History without moving the undo cursor. */

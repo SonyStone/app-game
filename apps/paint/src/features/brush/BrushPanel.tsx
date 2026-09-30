@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import type { PaintSession } from './createPaintSession';
+import type { PaintSession } from '../engine/createPaintSession';
 import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
 import styles from './BrushPanel.module.css';
 

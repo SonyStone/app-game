@@ -1,4 +1,4 @@
-import type { PaintSession } from './createPaintSession';
+import type { PaintSession } from '../engine/createPaintSession';
 import styles from './SelectionActions.module.css';
 
 /** Mouse, pen, and keyboard users share the same undoable selection commands. */

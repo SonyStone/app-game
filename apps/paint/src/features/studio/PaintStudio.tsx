@@ -4,20 +4,20 @@ import { NavigationPuck } from '@app-game/navigation-puck';
 import { createEventListener } from '@solid-primitives/event-listener';
 import type { JSX } from '@solidjs/web';
 import { createSignal, For, onSettled, Show } from 'solid-js';
-import { AbrViewerDialog } from './brushLibrary/AbrViewerDialog';
-import { BrushPanel, ColorPanel } from './BrushPanel';
+import { AbrViewerDialog } from '../abr/AbrViewerDialog';
+import { BrushPanel, ColorPanel } from '../brush/BrushPanel';
 import { defaultCamera, transformAt } from '@app-game/paint-core/camera';
-import { CanvasDebug } from './CanvasDebug';
-import { createPaintSession, type PaintSession } from './createPaintSession';
-import { DeveloperDialog } from './DeveloperDialog';
+import { CanvasDebug } from '../canvas/CanvasDebug';
+import { createPaintSession, type PaintSession } from '../engine/createPaintSession';
+import { DeveloperDialog } from '../developer/DeveloperDialog';
 import { FullscreenButton } from './FullscreenButton';
-import { HistorySourceControl } from './HistorySourceControl';
-import { LayersPanel } from './LayersPanel';
-import { SelectionActions } from './SelectionActions';
-import { SketchIcon } from './SketchIcon';
+import { HistorySourceControl } from '../layers/HistorySourceControl';
+import { LayersPanel } from '../layers/LayersPanel';
+import { SelectionActions } from '../selection/SelectionActions';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './PaintStudio.module.css';
-import { SymmetryGuide } from './SymmetryGuide';
-import { SymmetryPanel } from './SymmetryPanel';
+import { SymmetryGuide } from '../symmetry/SymmetryGuide';
+import { SymmetryPanel } from '../symmetry/SymmetryPanel';
 
 /** Full-canvas workspace with on-demand controls; opening panels never resizes the drawing surface. */
 export default function PaintStudio(

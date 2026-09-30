@@ -42,6 +42,6 @@
     "workbox-window": "catalog:"
   },
   "exports": {
-    "./editor": "./src/PaintStudio.tsx"
+    "./editor": "./src/features/studio/PaintStudio.tsx"
   }
 }

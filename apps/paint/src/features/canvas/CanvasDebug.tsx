@@ -1,6 +1,6 @@
 import { TILE_SIZE } from '@app-game/paint-core/brush';
 import { worldToScreen, type Camera, type ViewSize } from '@app-game/paint-core/camera';
-import type { PaintSession } from './createPaintSession';
+import type { PaintSession } from '../engine/createPaintSession';
 import styles from './CanvasDebug.module.css';
 
 /** Opt-in overlay of occupied raster tiles and the same two triangles used by tileVertex.

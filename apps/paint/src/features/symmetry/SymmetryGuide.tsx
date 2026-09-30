@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
 import { worldToScreen } from '@app-game/paint-core/camera';
-import type { PaintSession } from './createPaintSession';
+import type { PaintSession } from '../engine/createPaintSession';
 import styles from './SymmetryGuide.module.css';
 import { supportsPaintSymmetry, symmetryGuide } from '@app-game/paint-core/symmetry';
 

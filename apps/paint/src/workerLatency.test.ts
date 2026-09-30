@@ -56,7 +56,7 @@ it('presents the first pen contact before a queued release can wait on readback'
     postMessage: (event: PaintEvent) => events.push(event)
   };
   vi.stubGlobal('self', worker);
-  await import('./paint.worker');
+  await import('./features/engine/paint.worker');
   const send = (command: PaintCommand) => worker.onmessage!({ data: command } as MessageEvent<PaintCommand>);
   // Do not advance timers: a fast tap must be visible without a scheduled frame behind end().
   const until = async (condition: () => boolean) => {
@@ -131,7 +131,7 @@ it.each([false, true])(
       postMessage: (event: PaintEvent) => events.push(event)
     };
     vi.stubGlobal('self', worker);
-    await import('./paint.worker');
+    await import('./features/engine/paint.worker');
     const send = (command: PaintCommand) => worker.onmessage!({ data: command } as MessageEvent<PaintCommand>);
     const until = async (condition: () => boolean) => {
       for (let i = 0; i < 500; i++) {
@@ -223,7 +223,7 @@ it('presents progress inside one expensive pointer segment without letting relea
     postMessage: (event: PaintEvent) => events.push(event)
   };
   vi.stubGlobal('self', worker);
-  await import('./paint.worker');
+  await import('./features/engine/paint.worker');
   const send = (command: PaintCommand) => worker.onmessage!({ data: command } as MessageEvent<PaintCommand>);
   const until = async (condition: () => boolean) => {
     for (let i = 0; i < 500; i++) {
@@ -272,7 +272,7 @@ it('overlaps two drawing frames, bounds the backlog, and reports completed input
   const worker = { onmessage: undefined as ((event: MessageEvent<PaintCommand>) => void) | undefined,
     postMessage: (event: PaintEvent) => events.push(event) };
   vi.stubGlobal('self', worker);
-  await import('./paint.worker');
+  await import('./features/engine/paint.worker');
   const send = (command: PaintCommand) => worker.onmessage!({ data: command } as MessageEvent<PaintCommand>);
   const until = async (condition: () => boolean) => {
     for (let i = 0; i < 500; i++) { if (condition()) return; await Promise.resolve(); }

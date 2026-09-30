@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
 import { registerSW } from 'virtual:pwa-register';
-import PaintStudio from '../PaintStudio';
+import PaintStudio from '../studio/PaintStudio';
 import styles from './PaintApp.module.css';
 import { createPwa } from './createPwa';
 import { paintBuild } from './buildInfo';

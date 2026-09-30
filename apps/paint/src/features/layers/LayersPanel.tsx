@@ -1,7 +1,7 @@
 import { For } from 'solid-js';
-import type { PaintSession } from './createPaintSession';
+import type { PaintSession } from '../engine/createPaintSession';
 import type { BlendMode } from '@app-game/paint-core/document';
-import { SketchIcon } from './SketchIcon';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './LayersPanel.module.css';
 
 /** Edits layer order and compositing properties through undoable document commands. */

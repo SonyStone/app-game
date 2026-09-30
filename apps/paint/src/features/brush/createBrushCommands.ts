@@ -1,7 +1,7 @@
 import { createSignal, onCleanup } from 'solid-js';
 import { attempt, type Result } from '@app-game/paint-core/asyncResult';
 import type { Brush } from '@app-game/paint-core/brush';
-import type { PaintEndpoint } from '../mainThreadEndpoint';
+import type { PaintEndpoint } from '../engine/mainThreadEndpoint';
 import type { PaintEvent } from '@app-game/paint-core/protocol';
 
 /** Correlates idle engine actions on the existing ordered transport, including local execution.

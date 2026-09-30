@@ -1,6 +1,6 @@
 import { render } from '@solidjs/web';
 import 'uno.css';
-import { PaintApp } from './pwa/PaintApp';
+import { PaintApp } from './features/pwa/PaintApp';
 
 /** Standalone entry uses the same editor that is mounted at /paint/studio in the playground. */
 const element = document.getElementById('app');

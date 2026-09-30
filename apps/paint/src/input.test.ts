@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera, screenToWorld } from '@app-game/paint-core/camera';
 import { attachInput } from '@app-game/paint-core/input';
-import { createPaintNavigation as createNavigationPuck } from './paintNavigation';
+import { createPaintNavigation as createNavigationPuck } from './features/camera/paintNavigation';
 import type { PaintCommand } from '@app-game/paint-core/protocol';
 
 const disposals: (() => void)[] = [];

@@ -1,7 +1,7 @@
 import { onSettled } from 'solid-js';
-import type { PaintSession } from './createPaintSession';
+import type { PaintSession } from '../engine/createPaintSession';
 import { supportsRawPointerUpdates } from '@app-game/paint-core/input';
-import { SketchIcon } from './SketchIcon';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './DeveloperDialog.module.css';
 
 /** Compact development controls; native modal focus containment keeps drawing shortcuts inactive. */

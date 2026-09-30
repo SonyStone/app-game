@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import type { PaintSession } from './createPaintSession';
+import type { PaintSession } from '../engine/createPaintSession';
 import styles from './SymmetryPanel.module.css';
 import { supportsPaintSymmetry, type PaintSymmetry } from '@app-game/paint-core/symmetry';
 
