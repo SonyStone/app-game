@@ -225,7 +225,8 @@ async function assemblePaintRenderer(
     presented: string;
     hold: string;
     damage: ReturnType<typeof createViewDamage>;
-    pages: ReturnType<ReturnType<typeof createVirtualTexture>['debug']>;
+    pages: ReturnType<NonNullable<typeof virtual>['view']> | undefined;
+    lasso: ReturnType<typeof lasso.target>;
   };
   const targets = new Map<typeof canvas, TargetState>();
   targets.set(canvas, {
@@ -236,7 +237,8 @@ async function assemblePaintRenderer(
     presented: '',
     hold: '',
     damage: createViewDamage(),
-    pages: []
+    pages: virtual?.view(),
+    lasso: lasso.target()
   });
   resources.keep({
     destroy() {
@@ -272,7 +274,8 @@ async function assemblePaintRenderer(
         presented: '',
         hold: '',
         damage: createViewDamage(),
-        pages: []
+        pages: virtual?.view(),
+        lasso: lasso.target()
       };
       targets.set(next, target);
     }
@@ -751,6 +754,8 @@ async function assemblePaintRenderer(
         target.view?.destroy();
         target.fallback?.destroy();
       }
+      target.pages?.release();
+      target.lasso.destroy();
       target.context.unconfigure();
       targets.delete(targetCanvas);
     },
@@ -807,7 +812,7 @@ async function assemblePaintRenderer(
           )
       };
     },
-    debugPages: () => targets.get(canvas)?.pages ?? [],
+    debugPages: () => targets.get(canvas)?.pages?.debug() ?? [],
     /** Occupied visible-layer tiles, including the active stroke, for the optional wireframe overlay. */
     debugTiles(layers: Layer[]) {
       const keys = new Set<string>();
@@ -1025,14 +1030,15 @@ async function assemblePaintRenderer(
       const cameraSignature = JSON.stringify([camera, size, width, height]);
       const signature = JSON.stringify([
         exact,
-        virtual?.stats().uploadedBytes,
+        virtual?.uploadedBytes(),
         camera,
         size,
         width,
         height,
         layers.map(({ id, visible, opacity, blend }) => [id, visible, opacity, blend])
       ]);
-      const damage = targets.get(canvas)!.damage;
+      const targetState = targets.get(canvas)!;
+      const { damage, pages } = targetState;
       const plan = damage.plan(signature, camera, size, { width, height });
       const region = plan.region;
       previewTileDraws = 0;
@@ -1040,9 +1046,16 @@ async function assemblePaintRenderer(
       viewportUpdate = { full: plan.full, pixels: region ? region.width * region.height : 0 };
       const present = () => {
         // Both passes target the same swapchain texture. The cached artwork never contains the outline.
-        const target = context!.getCurrentTexture().createView();
-        pipelines.present.with(view!.present).withColorAttachment({ view: target, loadOp: 'clear' }).draw(3);
-        if (!exact) lasso.render(target, camera, size, width, height, animateSelection ? performance.now() / 1000 : 0);
+        const swapchain = context!.getCurrentTexture().createView();
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginRenderPass({ colorAttachments: [{ view: swapchain, loadOp: 'clear', storeOp: 'store' }] });
+        pipelines.present.with(pass).with(view!.present).draw(3);
+        pass.end();
+        if (!exact)
+          targetState.lasso.render(
+            swapchain, camera, size, width, height, animateSelection ? performance.now() / 1000 : 0, encoder
+          );
+        device.queue.submit([encoder.finish()]);
       };
       if (!region) {
         present();
@@ -1067,7 +1080,7 @@ async function assemblePaintRenderer(
       clearAttachment(clear, view.aRender);
       device.queue.submit([clear.finish()]);
       const stream = virtual && layers.filter((layer) => layer.visible && layer.opacity > 0).length <= 24;
-      virtual?.begin(layers);
+      pages?.begin(layers);
       let read = view.a,
         write = view.b;
       for (const layer of layers) {
@@ -1080,7 +1093,7 @@ async function assemblePaintRenderer(
             colorAttachments: [{ view: view.layerRender, loadOp: 'clear', storeOp: 'store' }]
           });
           pass.setScissorRect(region.x, region.y, region.width, region.height);
-          const covered = virtual.draw(layer, pass, camera, size, scale);
+          const covered = pages!.draw(layer, pass, camera, size, scale);
           // A cold layer keeps the original complete-tile path until background coverage is ready.
           streamed = !active || covered;
           pass.end();
@@ -1177,17 +1190,16 @@ async function assemblePaintRenderer(
         device.queue.submit([encoder.finish()]);
         [read, write] = [write, read];
       }
-      virtual?.end();
-      targets.get(canvas)!.pages = virtual?.debug() ?? [];
+      pages?.end();
       // Keep the last brush preview until its updated overview is resident; navigation remains immediate.
       if (
         !exact &&
         !stroke &&
         holdPresentation === cameraSignature &&
-        virtual?.debug().some((page) => !page.resident || page.fallback)
+        pages?.debug().some((page) => !page.resident || page.fallback)
       )
         return;
-      const refining = !exact && virtual?.debug().some((page) => !page.resident || page.fallback);
+      const refining = !exact && pages?.debug().some((page) => !page.resident || page.fallback);
       if (refining && !stroke && completeView) {
         viewFallback?.capture(root.unwrap(view.composed), completeView.camera, completeView.size);
         completeView = undefined;

@@ -5,9 +5,12 @@ import { createVirtualPages, PAGE_SIDE, MAX_LEVEL, viewLod, type VirtualPage, ty
 import { type TileData } from '../tilePixels';
 import { pageCrop, pageFallback } from './pageFallback';
 import { createPageWork, ObsoletePageError } from '../pageWork';
+import { createPageRequests, type PageDemand } from './pageRequests';
 
 /** Software virtual texture with a shared array-page pool, CPU page selection and instanced draws.
  * Loading is asynchronous and reprioritized per viewport. Resident parents provide coarse fallback.
+ * Each canvas target draws through its own `view()`, so targets never cancel each other's loads or recycle each
+ * other's visible slots; the non-pinned atlas budget is divided between registered views.
  */
 export function createVirtualTexture(
   root: TgpuRoot,
@@ -38,21 +41,17 @@ export function createVirtualTexture(
   let coverageLayers: Layer[] | undefined;
   let coverage: VirtualPage[] = [];
   let pinned = new Set<string>();
-  let requests = new Map<string, { page: VirtualPage; priority: number }>();
-  let wanted = new Set<string>();
+  const demand = createPageRequests<VirtualPage>();
+  const views = new Set<ReturnType<typeof createView>>();
   const inflight = new Set<string>();
   let free = Array.from({ length: capacity }, (_, i) => i),
     frame = 0,
     disposed = false;
   let uploaded = 0,
-    draws = 0,
-    fallback = 0,
     maxPages = 128;
-  let selected: (VirtualPage & { resident: boolean; fallback: boolean })[] = [];
-  // Actual source pages from the last frame, including cropped fallback sources.
-  const displayed = new Map<string, VirtualPage>();
   const id = (page: VirtualPage) => `${page.layerId}/${page.level}/${page.x},${page.y}`;
-  const upload = (page: VirtualPage, token: string, pixels: Uint8Array) => {
+  /** Writes a loaded page into the atlas. Only a blocking `prepare` may recycle slots other targets display. */
+  const upload = (page: VirtualPage, token: string, pixels: Uint8Array, recycleVisible = false) => {
     const key = id(page);
     if (entries.get(key)?.token === token) return true;
 
@@ -61,7 +60,7 @@ export function createVirtualTexture(
     if (!entry) {
       if (!free.length) {
         let oldest = [...entries]
-          .filter(([key, value]) => !pinned.has(key) && value.used < frame)
+          .filter(([key]) => !pinned.has(key) && (recycleVisible || !demand.inUse(key)))
           .sort((a, b) => a[1].used - b[1].used)
           .at(0);
         // A newly built parent can replace one of its visible children atomically.
@@ -79,7 +78,7 @@ export function createVirtualTexture(
         oldest ??= [...entries].find(
           ([key, value]) =>
             !pinned.has(key) &&
-            !wanted.has(key) &&
+            !demand.wanted(key) &&
             coverage.some(
               (parent) =>
                 parent.layerId === value.page.layerId &&
@@ -109,18 +108,17 @@ export function createVirtualTexture(
   };
   const pump = () => {
     if (disposed) return;
-    while (inflight.size < 2 && requests.size) {
-      const reservation =
-        inflight.size === 1 && ![...inflight].some((key) => pinned.has(key))
-          ? [...requests].find(([key]) => pinned.has(key))
-          : undefined;
-      const [key, { page }] = reservation ?? [...requests].sort((a, b) => a[1].priority - b[1].priority)[0]!;
-      requests.delete(key);
+    while (inflight.size < 2) {
+      const reserve =
+        inflight.size === 1 && ![...inflight].some((key) => pinned.has(key)) ? (key: string) => pinned.has(key) : undefined;
+      const next = demand.take(reserve);
+      if (!next) break;
+      const { key, page } = next;
       if (inflight.has(key)) continue;
       const token = pages.token(page);
       if (entries.get(key)?.token === token) continue;
       inflight.add(key);
-      const valid = () => !disposed && wanted.has(key) && pages.token(page) === token;
+      const valid = () => !disposed && demand.wanted(key) && pages.token(page) === token;
       void work
         .task(async () => {
           const pixels = await pages.bordered(page, valid);
@@ -152,24 +150,123 @@ export function createVirtualTexture(
           : [];
       pinned = new Set(coverage.map(id));
     }
-    // Reserve the actual pinned coverage, then share the remaining slots among visible layers.
-    maxPages = Math.max(
-      4,
-      Math.floor((capacity - pinned.size) / Math.max(1, layers.filter((l) => l.visible && l.opacity > 0).length))
-    );
+    // Reserve the actual pinned coverage, then share the remaining slots among visible layers of every target.
+    const visible = Math.max(1, layers.filter((l) => l.visible && l.opacity > 0).length);
+    maxPages = Math.max(4, Math.floor((capacity - pinned.size) / (visible * Math.max(1, demand.targets))));
   };
-  const begin = (layers: Layer[], resetDisplayed = true) => {
-    sync(layers);
-    frame++;
-    requests = new Map();
-    wanted = new Set(pinned);
-    draws = 0;
-    fallback = 0;
-    selected = [];
-    if (resetDisplayed) displayed.clear();
-  };
+  /** One target's frame state: its page requests, displayed sources and debug selection. */
+  function createView(pageDemand: PageDemand<VirtualPage>) {
+    let draws = 0,
+      fallback = 0;
+    let selected: (VirtualPage & { resident: boolean; fallback: boolean })[] = [];
+    // Actual source pages from the last frame, including cropped fallback sources.
+    const displayed = new Map<string, VirtualPage>();
+    const view = {
+      displayed,
+      get draws() {
+        return draws;
+      },
+      get fallback() {
+        return fallback;
+      },
+      /** Starts this target's frame without disturbing other targets' requests or visible slots. */
+      begin(layers: Layer[]) {
+        sync(layers);
+        frame++;
+        pageDemand.begin(pinned);
+        draws = 0;
+        fallback = 0;
+        selected = [];
+        displayed.clear();
+      },
+      /** Draws committed pages without waiting for reads. Returns true only when every occupied
+       * part of the selection has resident coverage. Empty branches need no texture.
+       * Active output can replace covered pixels in this layer target before layer compositing.
+       */
+      draw(layer: Layer, pass: GPURenderPassEncoder, camera: Camera, size: ViewSize, scale: number) {
+        const visible = pages.visible(layer.id, camera, size, scale, maxPages);
+        const batch: { source: NonNullable<ReturnType<typeof entries.get>>; region: VirtualPage }[] = [];
+        let resident: NonNullable<ReturnType<typeof entries.get>>[] | undefined;
+        let covered = true;
+        for (const page of visible) {
+          const key = id(page);
+          pageDemand.want(key);
+          const entry = entries.get(key);
+          const exact = entry?.token === pages.token(page);
+          let matches = exact ? [{ source: entry, region: page }] : [];
+          if (!exact) {
+            resident ??= [...entries.values()].filter(
+              (candidate) => candidate.page.layerId === layer.id && candidate.token === pages.token(candidate.page)
+            );
+            matches = pageFallback(page, resident);
+            pageDemand.request(key, page, matches.length ? 2 : 0);
+            if (matches.length) fallback++;
+          }
+          if (
+            !pages.isCovered(
+              page,
+              matches.map(({ region }) => region)
+            )
+          )
+            covered = false;
+          selected.push({ ...page, resident: matches.length > 0, fallback: !exact && matches.length > 0 });
+          for (const match of matches) {
+            match.source.used = frame;
+            const sourceKey = id(match.source.page);
+            pageDemand.use(sourceKey);
+            displayed.set(sourceKey, match.source.page);
+            batch.push(match);
+          }
+        }
+        if (!batch.length) return covered;
+        cameraBuffer.write({
+          size: d.vec2f(size.width, size.height),
+          zoom: camera.zoom,
+          angle: camera.angle,
+          mirror: camera.mirrored ? -1 : 1,
+          pixelRatio: scale
+        });
+        const data = new Float32Array(batch.length * 8);
+        batch.forEach(({ source, region }, i) => {
+          const span = 256 * 2 ** region.level;
+          const crop = pageCrop(source.page, region);
+          data.set(
+            [region.x * span - camera.x, region.y * span - camera.y, span, source.slot, crop.x, crop.y, crop.scale, 0],
+            i * 8
+          );
+        });
+        root.device.queue.writeBuffer(root.unwrap(instances), 0, data);
+        pipeline.with(pass).with(group).with(instanceLayout, instances).draw(6, batch.length);
+        draws++;
+        return covered;
+      },
+      /** Visible detail is requested first. Idle capacity builds persistent coarse coverage,
+       * even while the user stays zoomed in; navigation never cancels these requests.
+       */
+      end() {
+        for (const page of coverage) {
+          const key = id(page);
+          if (entries.get(key)?.token !== pages.token(page)) pageDemand.request(key, page, 1);
+        }
+        pump();
+      },
+      /** Pages selected by this target's latest frame, with residency and fallback flags. */
+      debug: () => selected,
+      /** Detaches this target; its pending requests no longer keep loads valid. */
+      release() {
+        pageDemand.release();
+        views.delete(view);
+      }
+    };
+    return view;
+  }
   return {
-    begin,
+    /** Registers a canvas target. Each target begins, draws and ends its own frames. */
+    view() {
+      const view = createView(demand.demand());
+      views.add(view);
+      return view;
+    },
     /** Uses the same occupied-page budget as draw, without resetting a frame or following temporary fallback pages. */
     brushLod(layers: Layer[], layer: Layer, camera: Camera, size: ViewSize, scale: number) {
       sync(layers);
@@ -182,10 +279,12 @@ export function createVirtualTexture(
       // Stroke completion awaits this coverage before accepting the next contact.
       // Keep bounded cooperative chunks, but don't throttle them as background streaming.
       return work.blocking(async () => {
-        begin(layers, false);
+        sync(layers);
         await pages.retain(coverage);
         const refresh = new Map(
-          [...displayed].filter(([key, page]) => entries.has(key) && layers.some((layer) => layer.id === page.layerId))
+          [...views]
+            .flatMap((view) => [...view.displayed])
+            .filter(([key, page]) => entries.has(key) && layers.some((layer) => layer.id === page.layerId))
         );
         for (const page of coverage) refresh.set(id(page), page);
         const targets = [...refresh.values()];
@@ -198,81 +297,13 @@ export function createVirtualTexture(
               const valid = () => !disposed && pages.token(page) === token;
               await work.task(async () => {
                 const pixels = await pages.bordered(page, valid);
-                if (!(await work.run(() => upload(page, token, pixels), valid, pixels.byteLength)))
+                if (!(await work.run(() => upload(page, token, pixels, true), valid, pixels.byteLength)))
                   throw new Error('Could not prepare the drawing overview.');
               }, valid);
             })
           );
         }
       });
-    },
-    /** Draws committed pages without waiting for reads. Returns true only when every occupied
-     * part of the selection has resident coverage. Empty branches need no texture.
-     * Active output can replace covered pixels in this layer target before layer compositing.
-     */
-    draw(layer: Layer, pass: GPURenderPassEncoder, camera: Camera, size: ViewSize, scale: number) {
-      const visible = pages.visible(layer.id, camera, size, scale, maxPages);
-      const batch: { source: NonNullable<ReturnType<typeof entries.get>>; region: VirtualPage }[] = [];
-      let resident: NonNullable<ReturnType<typeof entries.get>>[] | undefined;
-      let covered = true;
-      for (const page of visible) {
-        const key = id(page);
-        wanted.add(key);
-        const entry = entries.get(key);
-        const exact = entry?.token === pages.token(page);
-        let matches = exact ? [{ source: entry, region: page }] : [];
-        if (!exact) {
-          resident ??= [...entries.values()].filter(
-            (candidate) => candidate.page.layerId === layer.id && candidate.token === pages.token(candidate.page)
-          );
-          matches = pageFallback(page, resident);
-          requests.set(key, { page, priority: matches.length ? 2 : 0 });
-          if (matches.length) fallback++;
-        }
-        if (
-          !pages.isCovered(
-            page,
-            matches.map(({ region }) => region)
-          )
-        )
-          covered = false;
-        selected.push({ ...page, resident: matches.length > 0, fallback: !exact && matches.length > 0 });
-        for (const match of matches) {
-          match.source.used = frame;
-          displayed.set(id(match.source.page), match.source.page);
-          batch.push(match);
-        }
-      }
-      if (!batch.length) return covered;
-      cameraBuffer.write({
-        size: d.vec2f(size.width, size.height),
-        zoom: camera.zoom,
-        angle: camera.angle,
-        mirror: camera.mirrored ? -1 : 1,
-        pixelRatio: scale
-      });
-      const data = new Float32Array(batch.length * 8);
-      batch.forEach(({ source, region }, i) => {
-        const span = 256 * 2 ** region.level;
-        const crop = pageCrop(source.page, region);
-        data.set(
-          [region.x * span - camera.x, region.y * span - camera.y, span, source.slot, crop.x, crop.y, crop.scale, 0],
-          i * 8
-        );
-      });
-      root.device.queue.writeBuffer(root.unwrap(instances), 0, data);
-      pipeline.with(pass).with(group).with(instanceLayout, instances).draw(6, batch.length);
-      draws++;
-      return covered;
-    },
-    end() {
-      // Visible detail is requested first. Idle capacity builds persistent coarse coverage,
-      // even while the user stays zoomed in; navigation never cancels these requests.
-      for (const page of coverage) {
-        const key = id(page);
-        if (entries.get(key)?.token !== pages.token(page)) requests.set(key, { page, priority: 1 });
-      }
-      pump();
     },
     invalidate() {
       coverageLayers = undefined;
@@ -284,17 +315,18 @@ export function createVirtualTexture(
       pages: entries.size,
       coveragePages: coverage.filter((page) => entries.get(id(page))?.token === pages.token(page)).length,
       coveragePending: coverage.filter((page) => entries.get(id(page))?.token !== pages.token(page)).length,
-      pending: requests.size + inflight.size,
+      pending: demand.pending() + inflight.size,
       uploadedBytes: uploaded,
-      drawCalls: draws,
-      fallbackPages: fallback,
+      drawCalls: [...views].reduce((sum, view) => sum + view.draws, 0),
+      fallbackPages: [...views].reduce((sum, view) => sum + view.fallback, 0),
       gpuBytes: capacity * PAGE_SIDE * PAGE_SIDE * 4
     }),
-    debug: () => selected,
+    /** Bytes uploaded so far; cheap enough to include in every frame's damage signature. */
+    uploadedBytes: () => uploaded,
     destroy() {
       disposed = true;
       work.dispose();
-      requests.clear();
+      demand.clear();
       pages.clear();
       image.destroy();
       cameraBuffer.destroy();

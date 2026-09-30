@@ -20,6 +20,7 @@ export async function verifyRefinement(report: (message: string) => void) {
     () => {},
     (error) => errors.push(String(error))
   );
+  const view = virtual.view();
   const target = root.createTexture({ size: [512, 512], format: 'rgba8unorm' }).$usage('render');
   const buffer = root.device.createBuffer({
     size: 512 * 512 * 4,
@@ -27,17 +28,17 @@ export async function verifyRefinement(report: (message: string) => void) {
   });
   const camera = { ...defaultCamera(), x: -384, y: -384 };
   const draw = (side: number, stream = true) => {
-    virtual.begin(document.layers);
+    view.begin(document.layers);
     const encoder = root.device.createCommandEncoder();
     const pass = encoder.beginRenderPass({
       colorAttachments: [{ view: root.unwrap(target).createView(), loadOp: 'clear', storeOp: 'store' }]
     });
     pass.setViewport(0, 0, side, side, 0, 1);
-    virtual.draw(document.active, pass, camera, { width: side, height: side }, 1);
+    view.draw(document.active, pass, camera, { width: side, height: side }, 1);
     pass.end();
     encoder.copyTextureToBuffer({ texture: root.unwrap(target) }, { buffer, bytesPerRow: 512 * 4 }, [512, 512]);
     root.device.queue.submit([encoder.finish()]);
-    if (stream) virtual.end();
+    if (stream) view.end();
   };
   const pixels = async () => {
     await buffer.mapAsync(GPUMapMode.READ);
@@ -56,7 +57,7 @@ export async function verifyRefinement(report: (message: string) => void) {
       await root.device.queue.onSubmittedWorkDone();
       await new Promise((resolve) => setTimeout(resolve, 16));
       check(performance.now() - start < 10000, 'Fine page failed to load');
-    } while (virtual.debug().some((page) => !page.resident || page.fallback));
+    } while (view.debug().some((page) => !page.resident || page.fallback));
     check(virtual.stats().pages === 2, 'Expected one coarse and one fine resident page');
     camera.x = -256;
     camera.y = -256;
@@ -76,7 +77,7 @@ export async function verifyRefinement(report: (message: string) => void) {
       await root.device.queue.onSubmittedWorkDone();
       await new Promise((resolve) => setTimeout(resolve, 16));
       check(performance.now() - start < 10000, 'Refinement failed to finish');
-    } while (virtual.debug().some((page) => !page.resident || page.fallback));
+    } while (view.debug().some((page) => !page.resident || page.fallback));
     const after = await pixels();
     check(pixel(after, 32, 32).join() === pixel(before, 32, 32).join(), 'Ready detail changed during refinement');
     check(pixel(after, 288, 32).join() === '128,0,0,128', 'Coarse remainder did not refine');

@@ -110,6 +110,7 @@ async function verifyShader(report: (message: string) => void) {
   const errors: string[] = [];
   device.addEventListener('uncapturederror', (event) => errors.push(event.error.message));
   const overlay = createLassoOverlay(root, 'rgba8unorm');
+  const overlayTarget = overlay.target();
   const view = { width: 128, height: 128 };
   const target = device.createTexture({
     size: [128, 128],
@@ -120,8 +121,8 @@ async function verifyShader(report: (message: string) => void) {
   const draw = async (seconds: number, camera = defaultCamera()) => {
     const encoder = device.createCommandEncoder();
     encoder.beginRenderPass({ colorAttachments: [{ view: targetView, loadOp: 'clear', storeOp: 'store' }] }).end();
+    overlayTarget.render(targetView, camera, view, view.width, view.height, seconds, encoder);
     device.queue.submit([encoder.finish()]);
-    overlay.render(targetView, camera, view, view.width, view.height, seconds);
     const buffer = device.createBuffer({
       size: 128 * 128 * 4,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ

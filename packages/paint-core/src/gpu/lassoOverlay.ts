@@ -4,11 +4,10 @@ import { worldToScreen, type Camera, type Point, type ViewSize } from '../camera
 /** TypeGPU port of the lasso example's filled mask and animated edge passes.
  * Uses the painting root/device and draws into its existing presentation attachment.
  * Stencil parity handles concave/crossing paths; animation reuses the mask until geometry or camera changes.
+ * Pipelines and world-space geometry are shared; each canvas target owns its screen-space points, mask and stencil,
+ * so presenting targets of different sizes or cameras never recreates or re-uploads another target's state.
  */
 export function createLassoOverlay(root: TgpuRoot, format: GPUTextureFormat) {
-  const pointsBuffer = root.createBuffer(d.arrayOf(d.vec2f, 4096)).$usage('storage');
-  const pointsGroup = root.createBindGroup(lassoPointsLayout, { points: pointsBuffer });
-  const settings = root.createBuffer(d.vec4f).$usage('uniform');
   const parity = root.createRenderPipeline({
     vertex: lassoVertex,
     fragment: lassoFill,
@@ -46,69 +45,122 @@ export function createLassoOverlay(root: TgpuRoot, format: GPUTextureFormat) {
     }
   });
   let points: readonly Point[] = [];
-  let lastPoints: readonly Point[] | undefined;
-  let signature = '';
-  let mask: ReturnType<typeof createMask> | undefined;
+  const targets = new Set<LassoTarget>();
+
   return {
     /** Replaces transient geometry only; resource updates happen in the renderer's serialized draw. */
     set(next: readonly Point[]) {
       points = next;
     },
-    /** Composites the outline after artwork presentation. Never writes into document/cache textures. */
-    render(target: GPUTextureView, camera: Camera, size: ViewSize, width: number, height: number, seconds: number) {
-      if (points.length < 3) {
-        mask?.destroy();
-        mask = undefined;
-        lastPoints = undefined;
-        signature = '';
-        return;
-      }
-      if (points.length > 4096) throw new Error('Lasso path exceeds its point budget.');
-      const nextSignature = JSON.stringify([camera, size, width, height]);
-      if (!mask || mask.width !== width || mask.height !== height) {
-        mask?.destroy();
-        mask = createMask(root, settings, width, height);
-        signature = '';
-      }
-      const encoder = root.device.createCommandEncoder();
-      if (lastPoints !== points || signature !== nextSignature) {
-        const data = new Float32Array(4096 * 2);
-        points.forEach((point, i) => {
-          const screen = worldToScreen(point, camera, size);
-          data[i * 2] = (screen.x / size.width) * 2 - 1;
-          data[i * 2 + 1] = 1 - (screen.y / size.height) * 2;
-        });
-        pointsBuffer.write(data);
-        const pass = encoder.beginRenderPass({
-          colorAttachments: [{ view: mask.render, loadOp: 'clear', storeOp: 'store' }],
-          depthStencilAttachment: {
-            view: mask.stencilView,
-            stencilClearValue: 0,
-            stencilLoadOp: 'clear',
-            stencilStoreOp: 'discard'
-          }
-        });
-        parity
-          .with(pass)
-          .with(pointsGroup)
-          .draw((points.length - 2) * 3);
-        fill.with(pass).withStencilReference(1).draw(3);
-        pass.end();
-        lastPoints = points;
-        signature = nextSignature;
-      }
-      settings.write(d.vec4f(seconds, width, height, width / size.width));
-      const pass = encoder.beginRenderPass({ colorAttachments: [{ view: target, loadOp: 'load', storeOp: 'store' }] });
-      edges.with(pass).with(mask.group).draw(3);
-      pass.end();
-      root.device.queue.submit([encoder.finish()]);
+    /** Creates one canvas target's overlay state. GPU resources are allocated on its first visible selection. */
+    target(): LassoTarget {
+      const target = createTarget();
+      targets.add(target);
+      return target;
     },
-    bytes: () => 4096 * 8 + 16 + (mask ? mask.width * mask.height * 2 : 0),
+    /** Bytes currently allocated by every target. */
+    bytes: () => [...targets].reduce((sum, target) => sum + target.bytes(), 0),
     destroy() {
-      mask?.destroy();
-      pointsBuffer.destroy();
-      settings.destroy();
+      for (const target of targets) target.destroy();
     }
+  };
+
+  function createTarget(): LassoTarget {
+    let state: ReturnType<typeof createTargetBuffers> | undefined;
+    let lastPoints: readonly Point[] | undefined;
+    let signature = '';
+    let mask: ReturnType<typeof createMask> | undefined;
+    const release = () => {
+      mask?.destroy();
+      mask = undefined;
+      lastPoints = undefined;
+      signature = '';
+    };
+    const target: LassoTarget = {
+      render(view, camera, size, width, height, seconds, encoder) {
+        if (points.length < 3) {
+          release();
+          return;
+        }
+        if (points.length > 4096) throw new Error('Lasso path exceeds its point budget.');
+        state ??= createTargetBuffers(root);
+        const nextSignature = `${camera.x},${camera.y},${camera.zoom},${camera.angle},${camera.mirrored},${size.width},${size.height},${width},${height}`;
+        if (!mask || mask.width !== width || mask.height !== height) {
+          mask?.destroy();
+          mask = createMask(root, state.settings, width, height);
+          signature = '';
+        }
+        if (lastPoints !== points || signature !== nextSignature) {
+          const data = new Float32Array(4096 * 2);
+          points.forEach((point, i) => {
+            const screen = worldToScreen(point, camera, size);
+            data[i * 2] = (screen.x / size.width) * 2 - 1;
+            data[i * 2 + 1] = 1 - (screen.y / size.height) * 2;
+          });
+          state.points.write(data);
+          const pass = encoder.beginRenderPass({
+            colorAttachments: [{ view: mask.render, loadOp: 'clear', storeOp: 'store' }],
+            depthStencilAttachment: {
+              view: mask.stencilView,
+              stencilClearValue: 0,
+              stencilLoadOp: 'clear',
+              stencilStoreOp: 'discard'
+            }
+          });
+          parity
+            .with(pass)
+            .with(state.pointsGroup)
+            .draw((points.length - 2) * 3);
+          fill.with(pass).withStencilReference(1).draw(3);
+          pass.end();
+          lastPoints = points;
+          signature = nextSignature;
+        }
+        state.settings.write(d.vec4f(seconds, width, height, width / size.width));
+        const pass = encoder.beginRenderPass({ colorAttachments: [{ view, loadOp: 'load', storeOp: 'store' }] });
+        edges.with(pass).with(mask.group).draw(3);
+        pass.end();
+      },
+      bytes: () => (state ? 4096 * 8 + 16 : 0) + (mask ? mask.width * mask.height * 2 : 0),
+      destroy() {
+        release();
+        state?.points.destroy();
+        state?.settings.destroy();
+        state = undefined;
+        targets.delete(target);
+      }
+    };
+    return target;
+  }
+}
+
+/** One canvas target's selection overlay. */
+export type LassoTarget = {
+  /**
+   * Encodes the outline after artwork presentation into `encoder`, which the caller submits. Never writes into
+   * document/cache textures. Updates this target's buffers, so submit before rendering the same target again.
+   */
+  render(
+    view: GPUTextureView,
+    camera: Camera,
+    size: ViewSize,
+    width: number,
+    height: number,
+    seconds: number,
+    encoder: GPUCommandEncoder
+  ): void;
+  bytes(): number;
+  /** Releases this target's buffers and mask; the shared overlay stays usable. */
+  destroy(): void;
+};
+
+/** Screen-space points and edge settings for one target; points depend on that target's camera. */
+function createTargetBuffers(root: TgpuRoot) {
+  const points = root.createBuffer(d.arrayOf(d.vec2f, 4096)).$usage('storage');
+  return {
+    points,
+    pointsGroup: root.createBindGroup(lassoPointsLayout, { points }),
+    settings: root.createBuffer(d.vec4f).$usage('uniform')
   };
 }
 
