@@ -5,10 +5,10 @@ import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEng
 import { readPaintFile } from '@app-game/paint-core/paintFile';
 import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/protocol';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
-import { verifyBrushResourceTransport } from './composition/resourceVerification';
+import { verifyBrushResourceTransport } from './resourceVerification';
 import { verifyEraserPersistence } from './eraserPersistenceVerification';
-import { createMainThreadEndpoint, type PaintEndpoint } from './mainThreadEndpoint';
-import Worker from './paint.worker?worker';
+import { createMainThreadEndpoint, type PaintEndpoint } from '../../src/mainThreadEndpoint';
+import Worker from '../../src/paint.worker?worker';
 import { verifySymmetryPersistence } from './symmetryPersistenceVerification';
 
 /** Verifies real DOM-canvas rendering and document exchange between both execution modes in an isolated database. */

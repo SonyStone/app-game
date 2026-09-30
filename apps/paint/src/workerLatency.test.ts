@@ -92,7 +92,7 @@ it.each([false, true])(
     vi.useFakeTimers();
     let elapsed = 0;
     vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
-    const { createSmoothStroke } = await import('./smoothStroke');
+    const { createSmoothStroke } = await import('../tests/smoothStroke');
     const brush = defaultBrush();
     const contact = { x: 0, y: 0, pressure: 0.2, time: 1 };
     const samples = Array.from({ length: 100 }, (_, i) => ({

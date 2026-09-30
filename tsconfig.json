@@ -54,7 +54,6 @@
       "@app-game/navigation-puck": ["./packages/navigation-puck/src/index.ts"],
       "@app-game/navigation-puck/*": ["./packages/navigation-puck/src/*"],
       "@app-game/paint/editor": ["./apps/paint/src/PaintStudio.tsx"],
-      "@app-game/paint/studio/*": ["./apps/paint/src/*"],
       "@app-game/paint-examples": ["./packages/paint"],
       "@app-game/paint-examples/*": ["./packages/paint/*"],
       "@app-game/penner-easing-equations": ["./packages/penner-easing-equations"],

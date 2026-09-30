@@ -1,11 +1,11 @@
 import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import { initAbr } from '@app-game/abr-parser';
 import { selectBrushFile } from '../../../abr-viewer/src/lib/select-brush-file';
-import { verifyAbrBrush } from '../../tests/gpu/abrBrushVerification';
-import { verifyAbrFilter } from '../../tests/gpu/abrFilterVerification';
-import { verifyAbrMixer } from '../../tests/gpu/abrMixerVerification';
-import { verifyAbrSmudge } from '../../tests/gpu/abrSmudgeVerification';
-import { verifySmudgePerformance } from '../../tests/gpu/smudgePerformanceVerification';
+import { verifyAbrBrush } from '../gpu/abrBrushVerification';
+import { verifyAbrFilter } from '../gpu/abrFilterVerification';
+import { verifyAbrMixer } from '../gpu/abrMixerVerification';
+import { verifyAbrSmudge } from '../gpu/abrSmudgeVerification';
+import { verifySmudgePerformance } from '../gpu/smudgePerformanceVerification';
 
 /** Device benchmark only. Uses isolated documents and downloaded Adobe presets; never opens saved artwork. */
 export async function measureBrushPerformance(report: (message: string) => void, fixture?: Blob) {

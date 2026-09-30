@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { defaultBrush, type Sample } from '@app-game/paint-core/brush';
-import { createSmoothStroke } from './smoothStroke';
+import { createSmoothStroke } from '../tests/smoothStroke';
 
 it.each(['none', 'studio', 'normal', 'smooth'] as const)(
   '%s previews do not change committed pressure, spacing or curve state',

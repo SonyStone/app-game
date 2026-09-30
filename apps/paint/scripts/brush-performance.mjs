@@ -27,7 +27,7 @@ try {
     if (!adapter) throw new Error('WebGPU unavailable. Unlock the tablet and leave Chrome visible.');
     const lock = await navigator.wakeLock.request('screen');
     try {
-      const { measureBrushPerformance, verifyBrushPerformanceOutput } = await import('/src/performance/brushPerformance.ts');
+      const { measureBrushPerformance, verifyBrushPerformanceOutput } = await import('/tests/performance/brushPerformance.ts');
       if (verify) await verifyBrushPerformanceOutput(message => window.reportBrushPerformance(message));
       return { schema: 1, environment: {
         userAgent: navigator.userAgent, dpr: devicePixelRatio, width: innerWidth, height: innerHeight,

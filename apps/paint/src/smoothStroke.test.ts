@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { defaultBrush, type Sample } from '@app-game/paint-core/brush';
-import { createSmoothStroke } from './smoothStroke';
+import { createSmoothStroke } from '../tests/smoothStroke';
 
 it('produces the same completed curve across arbitrary input batches', () => {
   const samples = Array.from({ length: 90 }, (_, i) => ({

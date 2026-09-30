@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultBrush, type Sample } from '@app-game/paint-core/brush';
 import { createStrokeFilter } from '@app-game/paint-core/leonardoStroke';
-import { createSmoothStroke } from './smoothStroke';
+import { createSmoothStroke } from '../tests/smoothStroke';
 import { defaultStrokeSettings, normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
 
 describe('recovered sample filter', () => {

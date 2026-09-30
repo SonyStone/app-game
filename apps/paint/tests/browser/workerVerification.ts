@@ -1,8 +1,8 @@
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera } from '@app-game/paint-core/camera';
-import { verifyBrushResourceTransport } from './composition/resourceVerification';
+import { verifyBrushResourceTransport } from './resourceVerification';
 import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
-import Worker from './paint.worker?worker';
+import Worker from '../../src/paint.worker?worker';
 import { readPaintFile } from '@app-game/paint-core/paintFile';
 import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
