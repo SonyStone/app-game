@@ -1,7 +1,7 @@
 import { commandBatch } from '@app-game/abr-paint/gpu/commandBatch';
 import { commandSlots } from '@app-game/abr-paint/gpu/commandSlots';
 import type { TgpuRoot } from 'typegpu';
-import { attempt, unwrapResult } from '../asyncResult';
+import { attempt, unwrapResult, type Result } from '../asyncResult';
 import type { Layer } from '../document';
 import { tileHasAlpha, unpackTile, type TileData } from '../tilePixels';
 import { evictionVictims } from './evictionVictims';
@@ -57,6 +57,9 @@ export function createTileResidency(
   const readbacks = createReadbackQueue(device, readbackBatch);
   let frame = 0;
   let disposed = false;
+  // Test hooks: GPU checks wait on these instead of sleeping to prove a consumer is blocked on readback.
+  let snapshotWaits = 0;
+  let settledSnapshots = 0;
 
   return {
     /** Evicts least-recently-used tiles. Active mask readback occurs only when the cache is full.
@@ -76,9 +79,7 @@ export function createTileResidency(
       }
 
       const active = stroke.tiles.get(id);
-      if (active?.pending) {
-        unwrapResult(await active.pending);
-      }
+      await awaitSnapshots([active?.pending]);
 
       const pixels = await readTile(active?.output ?? layer.tiles.get(key));
       tile = spareTiles.pop();
@@ -252,8 +253,10 @@ export function createTileResidency(
       readbacks.clear();
     },
 
+    awaitSnapshots,
+
     stats() {
-      const readback = readbacks.stats();
+      const readback = { ...readbacks.stats(), snapshotWaits, settledSnapshots };
       return {
         residentTiles: cache.size + spareTiles.length,
         samplingScratchTiles: samplingScratch.length,
@@ -320,6 +323,7 @@ export function createTileResidency(
       );
       const pending = attempt(async () => {
         const result = await job.ready;
+        settledSnapshots++;
         // Cancellation removes the snapshot; late outcomes belong to that discarded stroke.
         if (disposed || !snapshots.some(({ id, snapshot }) => stroke.tiles.get(id) === snapshot)) {
           return;
@@ -352,6 +356,23 @@ export function createTileResidency(
     for (const [id, tile] of victims) {
       spareTiles.push(tile);
       cache.delete(id);
+    }
+  }
+
+  /**
+   * Waits for evicted tiles' pending readbacks and throws the first failure. Every consumer that must not read a tile
+   * before its snapshot lands (revisit, pickup, display, finish) waits here; calls that actually wait are counted in
+   * `stats().readback.snapshotWaits`.
+   */
+  async function awaitSnapshots(pending: readonly (Promise<Result<void>> | undefined)[]) {
+    const waiting = pending.filter((snapshot) => snapshot !== undefined);
+
+    if (waiting.length) {
+      snapshotWaits++;
+    }
+
+    for (const result of await Promise.all(waiting)) {
+      unwrapResult(result);
     }
   }
 }

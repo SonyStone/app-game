@@ -2,6 +2,7 @@ import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera } from '@app-game/paint-core/camera';
 import { createDocument } from '@app-game/paint-core/document';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { createRefinements, drawUntil } from '../waits';
 
 /** Real GPU check: differently sized HTML/offscreen targets share one renderer and survive detach/replacement. */
 export async function verifyCanvasTargets(report: (message: string) => void) {
@@ -53,7 +54,11 @@ async function verifyIncrementalTargets(report: (message: string) => void, virtu
   const a = new OffscreenCanvas(1024, 1024),
     b = new OffscreenCanvas(1024, 1024);
   const errors: string[] = [];
-  const renderer = await createPaintRenderer(a, (message) => errors.push(message), { virtualTexture });
+  const refinements = createRefinements();
+  const renderer = await createPaintRenderer(a, (message) => errors.push(message), {
+    virtualTexture,
+    onRefine: refinements.notify
+  });
   const doc = createDocument();
   const size = { width: 1024, height: 1024 };
   const near = defaultCamera(),
@@ -113,12 +118,15 @@ async function verifyIncrementalTargets(report: (message: string) => void, virtu
     await render(b);
     doc.commit(await renderer.finish());
     await renderer.prepareOverview(doc.layers);
-    for (let i = 0; i < 30; i++) {
-      await render(a);
-      await render(b);
-      if (!renderer.stats().virtual?.pending) break;
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
+    await drawUntil(
+      async () => {
+        await render(a);
+        await render(b);
+      },
+      () => !renderer.stats().virtual?.pending,
+      'Streamed pages did not settle for both targets',
+      { refinements }
+    );
     await equivalentToFull(a);
     await equivalentToFull(b);
     if (errors.length) throw new Error(errors.join('\n'));

@@ -1,6 +1,5 @@
 import { commandBatch } from '@app-game/abr-paint/gpu/commandBatch';
 import { d, type TgpuRoot } from 'typegpu';
-import { unwrapResult } from '../asyncResult';
 import { TILE_SIZE } from '../brush';
 import { screenToWorld, type Camera, type ViewSize } from '../camera';
 import type { Layer } from '../document';
@@ -312,8 +311,8 @@ export function createFrameComposer(
         // Only actual painting may bring that scratch state back into the working set.
         const snapshot = stroke.tiles.get(id);
         // An evicted tile owns a pending snapshot, not an empty/committed replacement.
-        if (!residency.has(id) && snapshot?.pending) {
-          unwrapResult(await snapshot.pending);
+        if (!residency.has(id)) {
+          await residency.awaitSnapshots([snapshot?.pending]);
         }
 
         const source = snapshot?.output ?? layer.tiles.get(key)!;

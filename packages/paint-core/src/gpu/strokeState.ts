@@ -2,7 +2,7 @@ import type { AbrRasterSettings, createAbrStamps } from '@app-game/abr-paint/gpu
 import type { AbrCoverageSnapshot } from '@app-game/abr-paint/gpu/coverage';
 import type { createAbrRetouch } from '@app-game/abr-paint/gpu/retouch';
 import type { BrushResource } from '@app-game/abr-paint/resources';
-import { unwrapResult, type Result } from '../asyncResult';
+import type { Result } from '../asyncResult';
 import { dabTiles, type Brush, type Dab } from '../brush';
 import type { Layer, TileChange } from '../document';
 import { tileHasAlpha, type TileData } from '../tilePixels';
@@ -125,11 +125,7 @@ export function createStrokeState(
       }
 
       setTail([]);
-      for (const result of await Promise.all([...data.tiles.values()].map((snapshot) => snapshot.pending))) {
-        if (result) {
-          unwrapResult(result);
-        }
-      }
+      await residency.awaitSnapshots([...data.tiles.values()].map((snapshot) => snapshot.pending));
 
       const outputs = await residency.readBack([...data.tiles.keys()].filter((id) => residency.has(id)));
       const changes: TileChange[] = [];

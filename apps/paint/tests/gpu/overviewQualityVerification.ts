@@ -2,13 +2,16 @@ import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera } from '@app-game/paint-core/camera';
 import { createDocument } from '@app-game/paint-core/document';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { createRefinements, drawUntil } from '../waits';
 
 /** Compares thin curves at 5% in a large viewport with the full-resolution tile/mipmap path. */
 export async function verifyOverviewQuality(report: (message: string) => void) {
   const errors: string[] = [];
   const canvas = new OffscreenCanvas(1, 1);
+  const refinements = createRefinements();
   const renderer = await createPaintRenderer(canvas, (e) => errors.push(e), {
     virtualTexture: true,
+    onRefine: refinements.notify,
     onError: (e) => errors.push(String(e))
   });
   const document = createDocument();
@@ -27,17 +30,15 @@ export async function verifyOverviewQuality(report: (message: string) => void) {
     await renderer.render(document.layers, camera, size, 2, true);
     await renderer.submitted();
     const reference = await pixels(canvas);
-    let complete = false;
-    for (let i = 0; i < 300; i++) {
-      await renderer.render(document.layers, camera, size, 2);
-      await renderer.submitted();
-      if (renderer.debugPages().every((p) => p.resident && !p.fallback)) {
-        complete = true;
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    if (!complete) throw new Error('Overview did not finish refining');
+    await drawUntil(
+      async () => {
+        await renderer.render(document.layers, camera, size, 2);
+        await renderer.submitted();
+      },
+      () => renderer.debugPages().every((p) => p.resident && !p.fallback),
+      'Overview did not finish refining',
+      { refinements }
+    );
     const levels = [...new Set(renderer.debugPages().map((p) => p.level))];
     if (levels.length !== 1 || levels[0] !== 3) throw new Error(`Empty viewport area reduced detail to LOD ${levels}`);
     const actual = await pixels(canvas);

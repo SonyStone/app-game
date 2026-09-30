@@ -6,6 +6,7 @@ import { readPaintFile, writePaintFile } from '@app-game/paint-core/paintFile';
 import { snapshotDocument } from '@app-game/paint-core/storage';
 import { packTile, unpackTile } from '@app-game/paint-core/tilePixels';
 import { createTileStore } from '@app-game/paint-core/tileStore';
+import { createRefinements, drawUntil } from '../waits';
 
 /** Real IndexedDB and WebGPU checks, isolated from the user's drawing. */
 export async function verifyStreaming(report: (message: string) => void) {
@@ -14,8 +15,10 @@ export async function verifyStreaming(report: (message: string) => void) {
   const document = createDocument({ paged: true });
   const errors: string[] = [];
   const canvas = new OffscreenCanvas(512, 512);
+  const refinements = createRefinements();
   const renderer = await createPaintRenderer(canvas, (message) => errors.push(message), {
     virtualTexture: true,
+    onRefine: refinements.notify,
     readTile: store.read,
     onError: (error) => errors.push(String(error))
   });
@@ -25,14 +28,16 @@ export async function verifyStreaming(report: (message: string) => void) {
     if (!value) throw new Error(message);
   };
   const settle = async () => {
-    const start = performance.now();
-    do {
-      await renderer.render(document.layers, camera, size, 1);
-      await renderer.submitted();
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      assert(errors.length === 0, errors.join('\n'));
-      assert(performance.now() - start < 60000, 'Virtual pages did not settle');
-    } while (renderer.stats().virtual!.pending > 0);
+    await drawUntil(
+      async () => {
+        await renderer.render(document.layers, camera, size, 1);
+        await renderer.submitted();
+        assert(errors.length === 0, errors.join('\n'));
+      },
+      () => renderer.stats().virtual!.pending === 0,
+      'Virtual pages did not settle',
+      { refinements, ms: 60_000 }
+    );
     await renderer.render(document.layers, camera, size, 1);
     await renderer.submitted();
   };

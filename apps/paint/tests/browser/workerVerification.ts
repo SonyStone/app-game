@@ -6,43 +6,19 @@ import Worker from '../../src/features/engine/paint.worker?worker';
 import { readPaintFile } from '@app-game/paint-core/paintFile';
 import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
+import { createPaintEvents } from './paintEvents';
 
 /** Exercises the production worker protocol and IndexedDB using a unique disposable database. */
 export async function verifyWorker(report: (message: string) => void) {
   const storageName = `paint-studio-qa-${crypto.randomUUID()}`;
   let worker = new Worker();
   let latest: Extract<PaintEvent, { type: 'state' }> | undefined;
-  const wait = (predicate: (event: PaintEvent) => boolean) =>
-    new Promise<PaintEvent>((resolve, reject) => {
-      const current = worker;
-      const cleanup = () => {
-        clearTimeout(timer);
-        current.removeEventListener('message', receive);
-        current.removeEventListener('error', error);
-      };
-      const timer = setTimeout(() => {
-        cleanup();
-        reject(new Error('Worker response timed out.'));
-      }, 15_000);
-      const error = (event: ErrorEvent) => {
-        cleanup();
-        reject(new Error(event.message || 'Worker stopped.'));
-      };
-      const receive = (event: MessageEvent<PaintEvent>) => {
-        if (event.data.type === 'error') {
-          cleanup();
-          reject(new Error(event.data.message));
-        } else if (predicate(event.data)) {
-          cleanup();
-          resolve(event.data);
-        }
-      };
-      current.addEventListener('message', receive);
-      current.addEventListener('error', error);
-    });
+  const events = createPaintEvents();
+  const wait = (predicate: (event: PaintEvent) => boolean) => events.waitFor(predicate);
   const send = (command: PaintCommand) => worker.postMessage(command);
   const init = async () => {
     latest = undefined;
+    events.attach(worker);
     worker.addEventListener('message', (event: MessageEvent<PaintEvent>) => {
       if (event.data.type === 'state') latest = event.data;
     });

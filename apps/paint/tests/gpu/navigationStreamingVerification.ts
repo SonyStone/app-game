@@ -1,6 +1,7 @@
 import { defaultCamera, worldToScreen } from '@app-game/paint-core/camera';
 import { createDocument } from '@app-game/paint-core/document';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { createRefinements, drawUntil } from '../waits';
 
 /** Cold-transition regression. Deliberately stalls storage and verifies the very first zoomed frame. */
 export async function verifyColdNavigation(report: (message: string) => void) {
@@ -18,8 +19,10 @@ export async function verifyColdNavigation(report: (message: string) => void) {
   let gate = new Promise<void>((resolve) => {
     release = resolve;
   });
+  const refinements = createRefinements();
   const renderer = await createPaintRenderer(canvas, (error) => errors.push(error), {
     virtualTexture: true,
+    onRefine: refinements.notify,
     readTile: async () => {
       if (blocked) await gate;
       return pixels;
@@ -30,14 +33,16 @@ export async function verifyColdNavigation(report: (message: string) => void) {
     if (!value) throw new Error(message);
   };
   const settle = async () => {
-    const start = performance.now();
-    do {
-      await renderer.render(document.layers, camera, size, 1);
-      await renderer.submitted();
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      assert(performance.now() - start < 30000, 'Navigation page queue did not settle');
-      assert(!errors.length, errors.join('\n'));
-    } while (renderer.stats().virtual!.pending);
+    await drawUntil(
+      async () => {
+        await renderer.render(document.layers, camera, size, 1);
+        await renderer.submitted();
+        assert(!errors.length, errors.join('\n'));
+      },
+      () => !renderer.stats().virtual!.pending,
+      'Navigation page queue did not settle',
+      { refinements }
+    );
     await renderer.render(document.layers, camera, size, 1);
     await renderer.submitted();
   };

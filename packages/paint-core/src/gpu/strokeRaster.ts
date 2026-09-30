@@ -6,7 +6,6 @@ import { createSmudgeDepositBatch, planSmudgeDeposits } from '@app-game/abr-pain
 import { directStampBounds, stampBounds } from '@app-game/abr-paint/gpu/stampBounds';
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { d, type TgpuRoot } from 'typegpu';
-import { unwrapResult } from '../asyncResult';
 import { dabIntersectsTile, dabTiles, TILE_SIZE, type Brush, type Dab } from '../brush';
 import type { Layer } from '../document';
 import { isEmptyPackedTile } from '../tilePixels';
@@ -566,9 +565,7 @@ export function createStrokeRaster(
         // Pickup is read-only. Restoring brush scratch here evicts destination
         // tiles for every large footprint, causing repeated GPU readback/reupload.
         // Reuse the bounded immutable cache, always at full document resolution.
-        if (snapshot?.pending) {
-          unwrapResult(await snapshot.pending);
-        }
+        await residency.awaitSnapshots([snapshot?.pending]);
 
         const source = snapshot?.output ?? layer.tiles.get(key);
         // Only immutable nonresident snapshots may prove emptiness. Resident GPU

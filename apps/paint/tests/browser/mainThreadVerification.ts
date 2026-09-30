@@ -10,36 +10,17 @@ import { verifyEraserPersistence } from './eraserPersistenceVerification';
 import { createMainThreadEndpoint, type PaintEndpoint } from './mainThreadEndpoint';
 import Worker from '../../src/features/engine/paint.worker?worker';
 import { verifySymmetryPersistence } from './symmetryPersistenceVerification';
+import { createPaintEvents } from './paintEvents';
+import { elapse } from '../waits';
 
 /** Verifies real DOM-canvas rendering and document exchange between both execution modes in an isolated database. */
 export async function verifyMainThread(report: (message: string) => void) {
   await initAbr();
   const storageName = `paint-main-qa-${crypto.randomUUID()}`;
   let endpoint: PaintEndpoint = createMainThreadEndpoint();
-  const waiters = new Set<(event: PaintEvent) => void>();
-  const connect = () => {
-    endpoint.onmessage = ({ data }) => {
-      for (const receive of [...waiters]) receive(data);
-    };
-    endpoint.onerror = ({ message }) => {
-      for (const receive of [...waiters]) receive({ type: 'error', message, recoverable: false });
-    };
-  };
-  const wait = <T extends PaintEvent['type']>(type: T) =>
-    new Promise<Extract<PaintEvent, { type: T }>>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        waiters.delete(receive);
-        reject(new Error(`Timed out waiting for ${type}`));
-      }, 30_000);
-      const receive = (event: PaintEvent) => {
-        if (event.type !== type && event.type !== 'error') return;
-        clearTimeout(timer);
-        waiters.delete(receive);
-        if (event.type === 'error') reject(new Error(event.message));
-        else resolve(event as Extract<PaintEvent, { type: T }>);
-      };
-      waiters.add(receive);
-    });
+  const events = createPaintEvents();
+  const connect = () => events.attach(endpoint);
+  const wait = <T extends PaintEvent['type']>(type: T) => events.wait(type);
   const command = async <T extends PaintEvent['type']>(message: PaintRuntimeCommand, response: T) => {
     const result = wait(response);
     endpoint.postMessage(message);
@@ -518,7 +499,8 @@ export async function verifyMainThread(report: (message: string) => void) {
         engine: { ...preset.engine, settings: { ...preset.engine.settings, values } }
       };
       endpoint.postMessage({ type: 'begin', brush, samples: [{ x: 160, y: 1900, pressure: 1, time: 1 }] });
-      await new Promise((resolve) => setTimeout(resolve, 650));
+      // The pen stays still for 650 ms: build-up is derived from elapsed time, which is the input under test.
+      await elapse(650);
       const state = await command({ type: 'debug', enabled: false }, 'state');
       if (state.saveState !== 'unsaved') throw new Error('Airbrush started saving an active stroke.');
       endpoint.postMessage({ type: 'end' });
@@ -590,7 +572,8 @@ export async function verifyMainThread(report: (message: string) => void) {
           { x: mode === 'slack' ? 26 : 116, y: 1800, pressure: 1, time: 20 }
         ]
       });
-      if (mode === 'catch-up' || mode === 'pulled') await new Promise((resolve) => setTimeout(resolve, 1600));
+      // Held still for 1.6 s: catch-up advances with elapsed time, which is the input under test.
+      if (mode === 'catch-up' || mode === 'pulled') await elapse(1600);
       endpoint.postMessage({ type: 'end' });
       const file = (await command({ type: 'download' }, 'download')).blob;
       if (mode === 'slack') {
