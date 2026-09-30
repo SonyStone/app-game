@@ -1,41 +1,52 @@
-import type { PaintSession } from '../engine/createPaintSession';
+import type { SelectionAction } from '@app-game/paint-core/protocol';
 import styles from './SelectionActions.module.css';
 
-/** Mouse, pen, and keyboard users share the same undoable selection commands. */
-export function SelectionActions(props: { session: PaintSession }) {
-  const selection = props.session.selection;
-  const unavailable = () => !props.session.ready() || selection.busy() || selection.drawing();
-  const empty = () => unavailable() || selection.points().length < 3;
+/** Lasso commands for mouse and pen users; keyboard shortcuts run the same undoable commands. */
+export function SelectionActions(props: {
+  /** Commands are unavailable, for example before the engine is ready or during a lasso gesture. */
+  disabled: boolean;
+  /** A selection edit is applying. */
+  busy: boolean;
+  /** An outline with at least three points exists. */
+  selected: boolean;
+  /** Copied pixels are available to paste. */
+  hasClipboard: boolean;
+  onAction: (action: SelectionAction) => void;
+  onDeselect: () => void;
+}) {
+  const unavailable = () => props.disabled || props.busy;
+  const empty = () => unavailable() || !props.selected;
+
   return (
     <div class={styles.selectionActions} aria-label="Selection actions">
       <span role="status">
-        {selection.busy()
+        {props.busy
           ? 'Applying selection…'
-          : selection.points().length >= 3
+          : props.selected
             ? 'Drag inside to move. Pixels move on release.'
             : 'Draw around pixels on the active layer.'}
       </span>
       <div>
-        <button disabled={empty()} onClick={() => selection.action('copy')} title="Copy · ⌘/Ctrl C">
+        <button disabled={empty()} onClick={() => props.onAction('copy')} title="Copy · ⌘/Ctrl C">
           Copy
         </button>
-        <button disabled={empty()} onClick={() => selection.action('cut')} title="Cut · ⌘/Ctrl X">
+        <button disabled={empty()} onClick={() => props.onAction('cut')} title="Cut · ⌘/Ctrl X">
           Cut
         </button>
         <button
-          disabled={unavailable() || !selection.hasClipboard()}
-          onClick={() => selection.action('paste')}
+          disabled={unavailable() || !props.hasClipboard}
+          onClick={() => props.onAction('paste')}
           title="Paste into active layer · ⌘/Ctrl V"
         >
           Paste
         </button>
-        <button disabled={empty()} onClick={() => selection.action('new-layer')}>
+        <button disabled={empty()} onClick={() => props.onAction('new-layer')}>
           Move to new layer
         </button>
-        <button disabled={empty()} onClick={() => selection.action('delete')} title="Delete selected pixels">
+        <button disabled={empty()} onClick={() => props.onAction('delete')} title="Delete selected pixels">
           Delete
         </button>
-        <button disabled={empty()} onClick={() => selection.clear()} title="Deselect · Escape">
+        <button disabled={empty()} onClick={() => props.onDeselect()} title="Deselect · Escape">
           Deselect
         </button>
       </div>

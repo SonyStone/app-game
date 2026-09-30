@@ -7,7 +7,7 @@ import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/proto
 import { unpackTile } from '@app-game/paint-core/tilePixels';
 import { verifyBrushResourceTransport } from './resourceVerification';
 import { verifyEraserPersistence } from './eraserPersistenceVerification';
-import { createMainThreadEndpoint, type PaintEndpoint } from '../../src/features/engine/mainThreadEndpoint';
+import { createMainThreadEndpoint, type PaintEndpoint } from './mainThreadEndpoint';
 import Worker from '../../src/features/engine/paint.worker?worker';
 import { verifySymmetryPersistence } from './symmetryPersistenceVerification';
 

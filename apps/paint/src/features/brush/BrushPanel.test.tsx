@@ -1,7 +1,7 @@
+import { defaultBrush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { expect, it } from 'vitest';
-import { defaultBrush } from '@app-game/paint-core/brush';
 import { BrushPanel } from './BrushPanel';
 
 it('selects raw input without Leonardo controls and retains stabilization settings when switching back', () => {
@@ -9,7 +9,7 @@ it('selects raw input without Leonardo controls and retains stabilization settin
   const host = document.createElement('div');
   document.body.append(host);
   const dispose = render(
-    () => <BrushPanel brush={brush} updateBrush={(patch) => setBrush({ ...brush(), ...patch })} />,
+    () => <BrushPanel brush={brush()} onChange={(patch) => setBrush({ ...brush(), ...patch })} />,
     host
   );
   try {

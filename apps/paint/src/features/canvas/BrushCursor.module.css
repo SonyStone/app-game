@@ -1,0 +1,8 @@
+.brushCursor {
+  position: absolute;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #38444c9c;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}

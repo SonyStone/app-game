@@ -1,8 +1,11 @@
 import { attempt } from '@app-game/paint-core/asyncResult';
-import type { createStudioRuntime } from './StudioApplication';
 import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/protocol';
+import type { createStudioRuntime } from '../../src/features/engine/StudioApplication';
 
-/** Transport surface shared with Worker; a DOM canvas is accepted only by the local endpoint. */
+/**
+ * Worker-shaped message surface used by the browser checks, so one harness drives both execution modes. The editor
+ * itself uses `openPaintTransport`; this adapter only exists for the harnesses.
+ */
 export type PaintEndpoint = {
   onmessage: ((event: MessageEvent<PaintEvent>) => void) | null;
   onerror: ((event: ErrorEvent) => void) | null;
@@ -37,7 +40,7 @@ export function createMainThreadEndpoint(): PaintEndpoint {
     }
   };
   void attempt(async () => {
-    const { createStudioRuntime } = await import('./StudioApplication');
+    const { createStudioRuntime } = await import('../../src/features/engine/StudioApplication');
     if (closed) return;
     runtime = createStudioRuntime(
       (event) => {

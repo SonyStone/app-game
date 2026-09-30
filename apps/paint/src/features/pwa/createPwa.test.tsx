@@ -1,7 +1,7 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
 import type { registerSW } from 'virtual:pwa-register';
+import { afterEach, expect, it, vi } from 'vitest';
 import { createPwa } from './createPwa';
 
 let dispose: (() => void) | undefined;
@@ -49,11 +49,15 @@ it('consumes each install prompt once even before reactive updates flush', async
 it('reports install failure and removes listeners on disposal', async () => {
   const { state } = mount();
   const event = new Event('beforeinstallprompt', { cancelable: true });
-  Object.assign(event, { prompt: vi.fn(async () => { throw new Error('Denied'); }) });
+  Object.assign(event, {
+    prompt: vi.fn(async () => {
+      throw new Error('Denied');
+    })
+  });
   window.dispatchEvent(event);
   await state().install();
   flush();
-  expect(state().error()).toContain('Installation could not start');
+  expect(state().error()?.message).toContain('Installation could not start');
   dispose?.();
   dispose = undefined;
   const late = new Event('beforeinstallprompt', { cancelable: true });
@@ -70,10 +74,16 @@ function mount() {
   let callbacks!: NonNullable<Parameters<typeof registerSW>[0]>;
   let controller!: ReturnType<typeof createPwa>;
   const update = vi.fn(async () => undefined);
-  const register: typeof registerSW = (options) => { callbacks = options!; return update; };
+  const register: typeof registerSW = (options) => {
+    callbacks = options!;
+    return update;
+  };
   const host = document.createElement('div');
   document.body.append(host);
-  const unmount = render(() => { controller = createPwa(register); return <div />; }, host);
+  const unmount = render(() => {
+    controller = createPwa(register);
+    return <div />;
+  }, host);
   dispose = () => {
     unmount();
     if (previous) Object.defineProperty(navigator, 'serviceWorker', previous);

@@ -1,102 +1,135 @@
-import { createSignal } from 'solid-js';
 import type { Point } from '@app-game/paint-core/camera';
-import type { PaintCommand, PaintEvent, SelectionAction } from '@app-game/paint-core/protocol';
+import type { PaintCommand, SelectionAction, SelectionEvent } from '@app-game/paint-core/protocol';
 import { pointInSelection, translateSelection } from '@app-game/paint-core/selection';
+import { createSignal, latest } from 'solid-js';
 
-/** Owns transient lasso geometry and serializes pixel edits through the worker.
- * Dragging inside the polygon moves it; dragging outside replaces it. Pixels commit on release.
+/**
+ * Owns the transient lasso outline, in document coordinates, and serializes pixel edits through the engine.
+ * Dragging inside the outline moves it; dragging outside replaces it. Pixels move when the pointer is released.
+ * One selection edit runs at a time: `busy` stays true until the engine replies through `receive`.
  */
 export function createSelection(options: {
-  send: (command: PaintCommand) => void;
+  send: (command: Extract<PaintCommand, { type: 'selection' }>) => void;
+  /** Active layer and revision that a selection edit applies to. */
   document: () => { activeId: string; revision: number };
   ready: () => boolean;
 }) {
-  const [points, setPoints] = createSignal<Point[]>([], { ownedWrite: true });
-  const [busy, setBusy] = createSignal(false, { ownedWrite: true });
-  const [drawing, setDrawing] = createSignal(false, { ownedWrite: true });
-  const [hasClipboard, setHasClipboard] = createSignal(false, { ownedWrite: true });
-  let polygon: Point[] = [];
-  let pending = false;
+  const [points, setPoints] = createSignal<Point[]>([]);
+  const [busy, setBusy] = createSignal(false);
+  const [drawing, setDrawing] = createSignal(false);
+  const [hasClipboard, setHasClipboard] = createSignal(false);
+  /** The pointer gesture in progress; `previous`/`original` restore the outline when it is cancelled. */
   let gesture:
     | { kind: 'lasso'; previous: Point[] }
     | { kind: 'move'; start: Point; original: Point[]; offset: Point }
     | undefined;
-  const publish = (next: Point[]) => {
-    polygon = next;
-    setPoints(next);
-  };
-  const action = (action: SelectionAction, offset?: Point) => {
-    if (pending || gesture || !options.ready() || (action !== 'paste' && polygon.length < 3)) return;
-    pending = true;
-    setBusy(true);
-    const state = options.document();
-    options.send({
-      type: 'selection',
-      action,
-      points: polygon,
-      offset,
-      layerId: state.activeId,
-      revision: state.revision
-    });
-  };
-  const cancel = () => {
-    if (gesture) publish(gesture.kind === 'move' ? gesture.original : gesture.previous);
-    gesture = undefined;
-    setDrawing(false);
-  };
+  /** Outline including changes made earlier in the current event. */
+  const outline = () => latest(points);
+
   return {
+    /** Outline vertices; fewer than three means nothing is selected. */
     points,
+    /** A selection edit is waiting for the engine. */
     busy,
+    /** A lasso or move gesture is in progress. */
     drawing,
+    /** The engine holds copied pixels that Paste can insert. */
     hasClipboard,
+    /** Like `busy`, including an edit started earlier in the current event; for synchronous guards. */
+    isBusy: () => latest(busy),
     action,
-    /** Synchronous guard, also valid inside an event before Solid publishes signal writes. */
-    isBusy: () => pending,
+    /** Cancels a gesture and removes the outline, unless an edit is still applying. */
     clear() {
       cancel();
-      if (!pending) publish([]);
+      if (!latest(busy)) {
+        setPoints([]);
+      }
     },
     cancel,
+    /** Starts moving the outline when `point` is inside it, otherwise starts a new lasso. */
     begin(point: Point) {
-      if (pending) return;
-      if (pointInSelection(point, polygon)) {
-        gesture = { kind: 'move', start: point, original: polygon, offset: { x: 0, y: 0 } };
-      } else {
-        gesture = { kind: 'lasso', previous: polygon };
-        publish([point]);
+      if (latest(busy)) {
+        return;
       }
+
+      if (pointInSelection(point, outline())) {
+        gesture = { kind: 'move', start: point, original: outline(), offset: { x: 0, y: 0 } };
+      } else {
+        gesture = { kind: 'lasso', previous: outline() };
+        setPoints([point]);
+      }
+
       setDrawing(true);
     },
     move(point: Point) {
-      if (!gesture) return;
+      if (!gesture) {
+        return;
+      }
+
       if (gesture.kind === 'move') {
         gesture.offset = { x: Math.round(point.x - gesture.start.x), y: Math.round(point.y - gesture.start.y) };
-        publish(translateSelection(gesture.original, gesture.offset));
-      } else {
-        const last = polygon.at(-1)!;
-        if (last.x === point.x && last.y === point.y) return;
-        // Preserve a bounded path for long drags without truncating its endpoint.
-        const sampled = polygon.length >= 4095 ? polygon.filter((_, index) => index % 2 === 0) : polygon;
-        publish([...sampled, point]);
+        setPoints(translateSelection(gesture.original, gesture.offset));
+        return;
       }
+
+      const path = outline();
+      const last = path.at(-1)!;
+      if (last.x === point.x && last.y === point.y) {
+        return;
+      }
+
+      // Preserve a bounded path for long drags without truncating its endpoint.
+      const sampled = path.length >= 4095 ? path.filter((_, index) => index % 2 === 0) : path;
+      setPoints([...sampled, point]);
     },
+    /** Commits a move as one undoable edit, or closes the lasso; an outline needs at least three points. */
     end() {
       const finished = gesture;
       gesture = undefined;
       setDrawing(false);
       if (finished?.kind === 'move') {
-        publish(finished.original);
+        setPoints(finished.original);
         if (finished.offset.x || finished.offset.y) {
           action('move', finished.offset);
-          if (pending) publish(translateSelection(finished.original, finished.offset));
+          if (latest(busy)) {
+            setPoints(translateSelection(finished.original, finished.offset));
+          }
         }
-      } else if (polygon.length < 3) publish([]);
+      } else if (outline().length < 3) {
+        setPoints([]);
+      }
     },
-    receive(event: Extract<PaintEvent, { type: 'selection' }>) {
-      pending = false;
-      publish(event.points);
-      setHasClipboard(event.hasClipboard);
+    /** Applies the engine's outline and clipboard state after an edit, or a reset when the engine is replaced. */
+    receive(event: SelectionEvent) {
       setBusy(false);
+      setPoints(event.points);
+      setHasClipboard(event.hasClipboard);
     }
   };
+
+  /**
+   * Sends one pixel edit for the current outline on the active layer. Ignored while another edit is applying, during
+   * a gesture, before the engine is ready, or without an outline (except Paste).
+   */
+  function action(kind: SelectionAction, offset?: Point) {
+    if (latest(busy) || gesture || !options.ready() || (kind !== 'paste' && outline().length < 3)) {
+      return;
+    }
+
+    setBusy(true);
+    const { activeId, revision } = options.document();
+    options.send({ type: 'selection', action: kind, points: outline(), offset, layerId: activeId, revision });
+  }
+
+  function cancel() {
+    if (gesture) {
+      setPoints(gesture.kind === 'move' ? gesture.original : gesture.previous);
+    }
+
+    gesture = undefined;
+    setDrawing(false);
+  }
 }
+
+/** The lasso state and commands used by the editor. */
+export type Selection = ReturnType<typeof createSelection>;

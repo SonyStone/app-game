@@ -205,4 +205,8 @@
     flex-basis: 100%;
     margin: 0;
   }
+
+  > .mixerPick {
+    flex-basis: 100%;
+  }
 }

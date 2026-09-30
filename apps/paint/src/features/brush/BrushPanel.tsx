@@ -1,14 +1,16 @@
-import { For, Show } from 'solid-js';
-import type { PaintSession } from '../engine/createPaintSession';
+import type { Brush } from '@app-game/paint-core/brush';
 import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
+import { For, Show } from 'solid-js';
 import styles from './BrushPanel.module.css';
 
 /** Controls the captured settings of the next stroke, including independent flow and opacity. */
-export function BrushPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
-  const { brush, updateBrush } = props;
+export function BrushPanel(props: BrushControlsProps) {
+  const brush = () => props.brush;
+  const updateBrush = (patch: Partial<Brush>) => props.onChange(patch);
+
   return (
     <>
-      <StrokeControls brush={brush} updateBrush={updateBrush} />
+      <StrokeControls brush={props.brush} onChange={props.onChange} />
       <section>
         <div class={styles.sectionHeading}>
           <span>{brush().engine?.id === 'textured' ? 'Textured tip' : 'Soft round'}</span>
@@ -90,9 +92,11 @@ export function BrushPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
   );
 }
 
-/** Color controls open independently of the brush parameters. */
-export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
-  const { brush, updateBrush } = props;
+/** Foreground and background colors, opened independently of the brush parameters. */
+export function ColorPanel(props: BrushControlsProps) {
+  const brush = () => props.brush;
+  const updateBrush = (patch: Partial<Brush>) => props.onChange(patch);
+
   return (
     <>
       <section>
@@ -172,11 +176,20 @@ export function ColorPanel(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
   );
 }
 
+/** Props of the brush and color panels. */
+type BrushControlsProps = {
+  /** Settings captured by the next stroke. */
+  brush: Brush;
+  /** Receives changed settings; the caller merges them into the brush. */
+  onChange: (patch: Partial<Brush>) => void;
+};
+
 /** Selects raw input or curve smoothing for the next stroke; Leonardo retains independent filter settings. */
-function StrokeControls(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
-  const settings = () => props.brush().stroke;
+function StrokeControls(props: BrushControlsProps) {
+  const settings = () => props.brush.stroke;
   const update = (patch: Partial<StrokeSettings>) =>
-    props.updateBrush({ stroke: normalizeStrokeSettings({ ...settings(), ...patch }) });
+    props.onChange({ stroke: normalizeStrokeSettings({ ...settings(), ...patch }) });
+
   return (
     <section>
       <label class={styles.mixing}>
@@ -196,9 +209,7 @@ function StrokeControls(props: Pick<PaintSession, 'brush' | 'updateBrush'>) {
         </select>
       </label>
       <Show when={settings().mode === 'none'}>
-        <p class={styles.panelNote}>
-          No path smoothing or stabilization. Brush stamps connect input points directly.
-        </p>
+        <p class={styles.panelNote}>No path smoothing or stabilization. Brush stamps connect input points directly.</p>
       </Show>
       <Show when={settings().mode === 'normal' || settings().mode === 'smooth'}>
         <Range

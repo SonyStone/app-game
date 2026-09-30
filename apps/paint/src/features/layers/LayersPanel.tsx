@@ -1,18 +1,24 @@
+import type { BlendMode, createDocument, LayerAction } from '@app-game/paint-core/document';
 import { For } from 'solid-js';
-import type { PaintSession } from '../engine/createPaintSession';
-import type { BlendMode } from '@app-game/paint-core/document';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './LayersPanel.module.css';
 
 /** Edits layer order and compositing properties through undoable document commands. */
-export function LayersPanel(props: Pick<PaintSession, 'state' | 'ready' | 'layer'>) {
-  const { state, ready, layer } = props;
+export function LayersPanel(props: {
+  /** Document state reported by the engine; each report clones every layer record. */
+  state: DocumentState;
+  /** Adding layers waits for the engine. */
+  ready: boolean;
+  onAction: (action: LayerAction) => void;
+}) {
+  const state = () => props.state;
+  const layer = (action: LayerAction) => props.onAction(action);
   const selected = () => state().layers.find((item) => item.id === state().activeId)!;
   return (
     <section class="paint-layers">
       <div class={styles.sectionHeading}>
         <span>{state().layers.length} layers</span>
-        <button aria-label="Add layer" disabled={!ready()} onClick={() => layer({ type: 'add' })}>
+        <button aria-label="Add layer" disabled={!props.ready} onClick={() => layer({ type: 'add' })}>
           <SketchIcon name="plus" size={18} />
         </button>
       </div>
@@ -107,3 +113,6 @@ export function LayersPanel(props: Pick<PaintSession, 'state' | 'ready' | 'layer
     </section>
   );
 }
+
+/** Layers, history and the active layer as reported by the engine. */
+export type DocumentState = ReturnType<ReturnType<typeof createDocument>['state']>;

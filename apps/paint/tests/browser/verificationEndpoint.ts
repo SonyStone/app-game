@@ -1,4 +1,4 @@
-import { createMainThreadEndpoint, type PaintEndpoint } from '../../src/features/engine/mainThreadEndpoint';
+import { createMainThreadEndpoint, type PaintEndpoint } from './mainThreadEndpoint';
 import Worker from '../../src/features/engine/paint.worker?worker';
 import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/protocol';
 

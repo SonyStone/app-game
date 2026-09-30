@@ -40,13 +40,11 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   const [liveTail, setLiveTail] = createSignal(true);
   const [showPenCursor, setShowPenCursor] = createSignal(false);
   const [rawReceived, setRawReceived] = createSignal(false);
-  const [ready] = createSignal(true);
-  const [workerEnabled] = createSignal(true);
-  const [switchingRenderer] = createSignal(false);
-  const [metrics] = createSignal({ gpu: 1048576, tiles: 1, ms: 1.2 });
   const close = vi.fn();
-  const session = {
+  const onWorkerEnabledChange = vi.fn();
+  const settings = {
     debug,
+    setDebug,
     adaptiveQuality,
     setAdaptiveQuality,
     liveTail,
@@ -54,14 +52,22 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
     showPenCursor,
     setShowPenCursor,
     rawReceived,
-    ready,
-    toggleDebug: () => setDebug(!debug()),
-    metrics,
-    workerEnabled,
-    switchingRenderer,
-    setWorkerEnabled: vi.fn()
+    markRawReceived: () => setRawReceived(true)
   };
-  dispose = render(() => <DeveloperDialog session={session} close={close} />, document.body);
+  dispose = render(
+    () => (
+      <DeveloperDialog
+        settings={settings}
+        ready
+        workerEnabled
+        switching={false}
+        metrics={{ gpu: 1048576, ms: 1.2 }}
+        onWorkerEnabledChange={onWorkerEnabledChange}
+        close={close}
+      />
+    ),
+    document.body
+  );
   flush();
   const dialog = document.querySelector('dialog')!;
   expect(dialog.open).toBe(true);
@@ -77,7 +83,7 @@ it.each([true, false])('shows raw support (%s), switches controls and handles Es
   quality!.click();
   flush();
   expect(adaptiveQuality()).toBe(true);
-  expect(session.setWorkerEnabled).toHaveBeenCalledWith(false);
+  expect(onWorkerEnabledChange).toHaveBeenCalledWith(false);
   expect(dialog.textContent).toContain('Undo history and the selection clipboard reset');
   flush();
   expect(debug()).toBe(true);

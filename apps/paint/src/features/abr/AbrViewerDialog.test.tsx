@@ -1,8 +1,8 @@
 import type { App } from '@app-game/abr-viewer/editor';
+import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { expect, it, vi } from 'vitest';
-import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { AbrViewerDialog } from './AbrViewerDialog';
 
 vi.mock('@app-game/abr-viewer/editor', () => ({
@@ -41,7 +41,9 @@ it('closes and reopens the same viewer workspace without remounting it', async (
       <AbrViewerDialog
         open={open()}
         close={() => setOpen(false)}
-        session={{ useAbrBrush: vi.fn(), brush, updateBrush: (patch) => setBrush({ ...brush(), ...patch }) }}
+        mixing={brush().mixing}
+        onMixingChange={(mixing) => setBrush({ ...brush(), mixing })}
+        onUseBrush={vi.fn()}
       />
     );
   }, host);

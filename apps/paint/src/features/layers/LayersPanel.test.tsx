@@ -1,7 +1,7 @@
+import { createDocument } from '@app-game/paint-core/document';
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createDocument } from '@app-game/paint-core/document';
 import { LayersPanel } from './LayersPanel';
 import styles from './LayersPanel.module.css';
 
@@ -22,7 +22,7 @@ it('preserves controls across worker snapshots and reorders, keeping focus on pr
   const layer = vi.fn();
   const host = document.createElement('div');
   document.body.append(host);
-  dispose = render(() => <LayersPanel state={state} ready={ready} layer={layer} />, host);
+  dispose = render(() => <LayersPanel state={state()} ready={ready()} onAction={layer} />, host);
   flush();
 
   const eye = host.querySelector<HTMLButtonElement>(`[aria-label="Hide ${first.name}"]`)!;

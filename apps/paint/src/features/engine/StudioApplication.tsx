@@ -1,10 +1,6 @@
-import { createDocument } from '@app-game/paint-core/document';
-import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
-import { studioProcessors } from '@app-game/paint-core/strokeProcessors';
-import { createTileStore } from '@app-game/paint-core/tileStore';
+import { createBrushResources } from '@app-game/abr-paint/resources';
 import { abrBrush } from '@app-game/paint-core/composition/abrBrushEngine';
 import { createAbrProcessor } from '@app-game/paint-core/composition/abrStrokeProcessor';
-import { createBrushResources } from '@app-game/abr-paint/resources';
 import {
   BrushEngines,
   BrushResources,
@@ -18,8 +14,21 @@ import {
 } from '@app-game/paint-core/composition/PaintApplication';
 import { roundBrush } from '@app-game/paint-core/composition/roundBrushEngine';
 import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
+import { createDocument } from '@app-game/paint-core/document';
+import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
+import { studioProcessors } from '@app-game/paint-core/strokeProcessors';
+import { createTileStore } from '@app-game/paint-core/tileStore';
 
-/** The Studio recipe is shared by Vite's worker bundle and the local lazy-loaded endpoint. */
+/**
+ * Starts the Studio engine: mounts the recipe under its own Solid root and returns the command runtime. `post`
+ * delivers events to the editor and `close` ends the execution realm after a graceful `dispose`; both are supplied by
+ * the worker entry or the main-thread transport, which also own the canvas.
+ */
+export function createStudioRuntime(post: RuntimeBinding['post'], close: RuntimeBinding['close']) {
+  return createPaintApplication((binding) => <StudioApplication {...binding} />, post, close);
+}
+
+/** The Studio recipe: paged document, IndexedDB tiles, the WebGPU renderer, stroke processors and brush engines. */
 export function StudioApplication(props: RuntimeBinding) {
   return (
     <Document document={() => createDocument({ paged: true })}>
@@ -49,9 +58,4 @@ export function StudioApplication(props: RuntimeBinding) {
       </Storage>
     </Document>
   );
-}
-
-/** Starts the production recipe; transport details and canvas ownership are supplied by the caller. */
-export function createStudioRuntime(post: RuntimeBinding['post'], close: RuntimeBinding['close']) {
-  return createPaintApplication((binding) => <StudioApplication {...binding} />, post, close);
 }

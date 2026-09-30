@@ -1,7 +1,7 @@
 import { render } from '@solidjs/web';
 import { flush } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { FullscreenButton } from './FullscreenButton';
+import { createFullscreenToggle } from './createFullscreenToggle';
 
 let dispose: (() => void) | undefined;
 let fullscreenElement: Element | null = null;
@@ -58,7 +58,7 @@ it('reports refused requests and allows a retry', async () => {
   request.mockRejectedValueOnce(new Error('Fullscreen denied'));
   button.click();
   await settled();
-  expect(onError).toHaveBeenCalledWith('Fullscreen denied');
+  expect(onError).toHaveBeenCalledWith(expect.objectContaining({ kind: 'fullscreen', message: 'Fullscreen denied' }));
   expect(button.disabled).toBe(false);
   expect(button.getAttribute('aria-pressed')).toBe('false');
   button.click();
@@ -91,7 +91,10 @@ function mount() {
   const request = vi.fn(async () => change(editor));
   editor.requestFullscreen = request;
   const onError = vi.fn();
-  dispose = render(() => <FullscreenButton target={() => editor} onError={onError} />, editor);
+  dispose = render(() => {
+    const fullscreen = createFullscreenToggle(() => editor, onError);
+    return <button {...fullscreen.props} />;
+  }, editor);
   flush();
   return { editor, button: editor.querySelector('button')!, request, onError };
 }

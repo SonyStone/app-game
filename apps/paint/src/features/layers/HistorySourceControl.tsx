@@ -1,11 +1,16 @@
 import { For } from 'solid-js';
-import type { PaintSession } from '../engine/createPaintSession';
 import styles from './HistorySourceControl.module.css';
+import type { DocumentState } from './LayersPanel';
 
 /** Selects the immutable source used by ABR Erase to History without moving the undo cursor. */
-export function HistorySourceControl(props: Pick<PaintSession, 'state' | 'ready' | 'send'>) {
+export function HistorySourceControl(props: {
+  state: DocumentState;
+  ready: boolean;
+  /** Receives the id of the chosen history state. */
+  onChange: (id: number) => void;
+}) {
   const choices = () => {
-    const state = props.state();
+    const state = props.state;
     return state.historyStates.some((item) => item.id === state.historySource.id)
       ? state.historyStates
       : [state.historySource, ...state.historyStates];
@@ -16,15 +21,15 @@ export function HistorySourceControl(props: Pick<PaintSession, 'state' | 'ready'
         Erase to History source
         <select
           aria-label="Erase to History source"
-          disabled={!props.ready()}
-          value={props.state().historySource.id}
-          onChange={(event) => props.send({ type: 'history-source', id: Number(event.currentTarget.value) })}
+          disabled={!props.ready}
+          value={props.state.historySource.id}
+          onChange={(event) => props.onChange(Number(event.currentTarget.value))}
         >
           <For each={choices()} keyed={(item) => item.id}>
             {(item) => (
               <option value={item().id}>
                 {item().label}
-                {item().id === props.state().historyCurrentId ? ' (current)' : ''}
+                {item().id === props.state.historyCurrentId ? ' (current)' : ''}
               </option>
             )}
           </For>

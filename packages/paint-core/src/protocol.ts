@@ -51,10 +51,13 @@ export type PaintCommand =
   | { type: 'import'; text: string }
   | { type: 'import'; file: Blob };
 
+/** Starts a runtime on a transferred canvas; the first command of every worker connection. */
+export type InitCommand = Extract<PaintCommand, { type: 'init' }>;
+
 /** Local execution accepts a DOM canvas; the worker protocol only permits a transferable canvas. */
 export type PaintRuntimeCommand =
   | Exclude<PaintCommand, { type: 'init' }>
-  | (Omit<Extract<PaintCommand, { type: 'init' }>, 'canvas'> & { canvas: OffscreenCanvas | HTMLCanvasElement });
+  | (Omit<InitCommand, 'canvas'> & { canvas: OffscreenCanvas | HTMLCanvasElement });
 
 /** Lightweight status; pixel payloads are limited to explicit downloads and requested tool handoffs. */
 export type PaintEvent =
@@ -135,6 +138,15 @@ export type PaintEvent =
   /** `code` classifies renderer failures, for example `validation` versus a `lost` device. */
   | { type: 'error'; message: string; recoverable: boolean; code?: GpuError['code'] }
   | { type: 'download'; blob: Blob; name: string };
+
+/** Document, storage and performance status posted after changes and frames. */
+export type StateEvent = Extract<PaintEvent, { type: 'state' }>;
+
+/** Lasso outline and clipboard availability after a selection command. */
+export type SelectionEvent = Extract<PaintEvent, { type: 'selection' }>;
+
+/** Renderer tool state and the Erase to History source, handed from a checkpointed runtime to its replacement. */
+export type CheckpointedEvent = Extract<PaintEvent, { type: 'checkpointed' }>;
 
 /** Clipboard is private to this editor session; paste writes into the active layer at the copied coordinates. */
 export type SelectionAction = 'copy' | 'cut' | 'paste' | 'delete' | 'move' | 'new-layer';
