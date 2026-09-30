@@ -224,3 +224,27 @@ it('routes native Smudge options and isolates Strength from the host paint flow/
   expect(preset.flow).toBe(1);
   expect(preset.opacity).toBe(1);
 });
+
+it('derives stable resource IDs from the preset and its pixels', () => {
+  const brush = (id: string, hardness: number): Brush => ({
+    id,
+    name: 'Round',
+    preset: {
+      kind: 'brush',
+      sourceId: 'fixture',
+      tip: { kind: 'computed', diameter: pixels(16), spacing: percent(25), hardness: percent(hardness) }
+    },
+    resources: [],
+    source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
+  });
+  const first = prepareAbrBrush(brush('round', 50));
+  const again = prepareAbrBrush(brush('round', 50));
+
+  expect(again.resources.map((resource) => resource.id)).toEqual(first.resources.map((resource) => resource.id));
+  expect(again.engine.settings.tipId).toBe(first.engine.settings.tipId);
+  expect(again.resource.pixels).not.toBe(first.resource.pixels);
+
+  expect(prepareAbrBrush(brush('other', 50)).resource.id).not.toBe(first.resource.id);
+  expect(prepareAbrBrush(brush('round', 90)).resource.id).not.toBe(first.resource.id);
+  expect(first.resource.id.length).toBeLessThanOrEqual(512);
+});

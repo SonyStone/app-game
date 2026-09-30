@@ -135,6 +135,7 @@ export function previewStrokeSize(input: PreviewInput): number {
 /** Incremental, viewport-independent stamp placement. Coordinates and size are document pixels.
  * Random state, spacing and fade survive input batches; preview restores all state after sampling.
  * There is no total-stroke stamp cap. Callers should submit input batches regularly.
+ * The input is copied at creation; later mutations have no effect. Change colors with setColors.
  */
 export function createAbrStrokeSampler(
   input: Pick<
@@ -155,6 +156,8 @@ export function createAbrStrokeSampler(
   },
   tip: Pick<BrushTipImage, 'width' | 'height'>
 ) {
+  // Private copy: callers change colors only through setColors, never by mutating their input.
+  input = { ...input };
   const v = input.values,
     shape = v.tool.pressureOverridesSize
       ? {
@@ -204,8 +207,8 @@ export function createAbrStrokeSampler(
     saturation: channels.channel(10),
     brightness: channels.channel(11)
   };
-  const foreground16 = previewColor(input.color).map((c) => Math.round(c * 32768));
-  const background16 = previewColor(input.secondaryColor ?? '#477ca6').map((c) => Math.round(c * 32768));
+  let foreground16 = previewColor(input.color).map((c) => Math.round(c * 32768));
+  let background16 = previewColor(input.secondaryColor ?? '#477ca6').map((c) => Math.round(c * 32768));
   const size = input.size;
   let data: number[] = [];
   let mixing: number[] = [];
@@ -273,6 +276,17 @@ export function createAbrStrokeSampler(
   }
   return {
     add,
+    /** Replaces the foreground/background colors used by subsequent stamps, such as Pencil Auto Erase
+     * swapping them on first contact. Discards any whole-stroke color evaluated from the old pair.
+     * Placement, spacing and random streams are unaffected.
+     */
+    setColors(color: string, secondaryColor: string | undefined) {
+      input.color = color;
+      input.secondaryColor = secondaryColor;
+      foreground16 = previewColor(color).map((c) => Math.round(c * 32768));
+      background16 = previewColor(secondaryColor ?? '#477ca6').map((c) => Math.round(c * 32768));
+      strokeColor = undefined;
+    },
     /** Snapshot of the 24 native dynamics channels; legacy tool/noise streams are separate. */
     randomState: channels.snapshot,
     preview(points: readonly PreviewPoint[]) {
